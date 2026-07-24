@@ -60,7 +60,7 @@ export function DashboardFilterEditor({
           )}
           {list.map((f, i) => (
             <div key={f.id} className="space-y-2 rounded-md border border-border p-3">
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                 <div className="space-y-1">
                   <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">Variable ID</Label>
                   <Input

@@ -42,18 +42,22 @@ export function CanvasHeader(props: Props): JSX.Element {
   const { t } = useTranslation();
   const status = props.saveStatus;
   return (
-    <div className="flex h-10 shrink-0 items-center justify-between gap-2 border-b border-border px-3">
+    <div className="flex h-10 shrink-0 items-center justify-between gap-2 overflow-x-auto border-b border-border px-3">
       <div className="flex min-w-0 items-center gap-2">
         <Input value={props.name} onChange={(e) => props.onNameChange(e.target.value)}
-          aria-label={t('reportDesigner.reportName')} className="h-8 max-w-xs text-sm font-medium" />
+          aria-label={t('reportDesigner.reportName')} className="h-8 w-32 max-w-[40vw] text-sm font-medium sm:w-auto sm:max-w-xs" />
         <span data-testid="save-status"
           className={`flex shrink-0 items-center gap-1 text-[11px] ${status === 'error' ? 'text-destructive' : 'text-muted-foreground'}`}>
           {status === 'saved' && <Check className="h-3 w-3" />}
           {status === 'saving' && <Loader2 className="h-3 w-3 animate-spin" />}
-          {status === 'saved' && t('reportDesigner.saved')}
-          {status === 'saving' && t('reportDesigner.saving')}
-          {status === 'unsaved' && t('reportDesigner.unsaved')}
-          {status === 'error' && t('reportDesigner.saveFailed')}
+          {/* The verbose status label is hidden on phones (where header space is tight) — the
+              Saved/Saving icons still show; Unsaved/Failed surface fully from sm up. */}
+          <span className="hidden sm:inline">
+            {status === 'saved' && t('reportDesigner.saved')}
+            {status === 'saving' && t('reportDesigner.saving')}
+            {status === 'unsaved' && t('reportDesigner.unsaved')}
+            {status === 'error' && t('reportDesigner.saveFailed')}
+          </span>
         </span>
       </div>
 

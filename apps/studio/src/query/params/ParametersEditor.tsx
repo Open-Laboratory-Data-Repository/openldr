@@ -47,7 +47,7 @@ export function ParametersEditor({ open, parameters, onClose, onSave }: {
           {list.length === 0 && <p className="text-sm text-muted-foreground">{t('queryParams.empty')}</p>}
           {list.map((p, i) => (
             <div key={i} className="space-y-2 rounded-md border border-border p-3">
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                 <div className="space-y-1">
                   <Label className={labelCls}>{t('queryParams.variableId')}</Label>
                   <Input aria-label={`param-${i}-id`} className="h-8 text-xs" value={p.id}

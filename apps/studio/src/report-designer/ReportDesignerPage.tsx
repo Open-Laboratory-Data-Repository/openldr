@@ -406,7 +406,9 @@ export function ReportDesignerPage(): JSX.Element {
               <PageCanvas template={template} zoom={zoom} selectedIds={selectedIds} onSelect={setSelectedIds} onCommitRects={commitRects}
                 editingId={editingId} onEditStart={startEdit} onEditChange={editChange} onEditEnd={endEdit} />
             </div>
-            <div className="flex w-64 shrink-0 flex-col border-l border-border" data-testid="inspector">
+            {/* The inspector is hidden on phone-portrait so the canvas gets the full width; it
+                returns at md (landscape phone / tablet / desktop) where there's room for both. */}
+            <div className="hidden w-64 shrink-0 flex-col border-l border-border md:flex" data-testid="inspector">
               <InspectorTabs template={template} selectedIds={selectedIds} onSelect={setSelectedIds}
                 onPatchElement={patchElement} onPatchPage={patchPage} onPatchElements={patchElements} onPatchParameters={patchParameters} />
             </div>

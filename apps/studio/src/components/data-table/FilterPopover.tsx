@@ -190,7 +190,7 @@ export function FilterPopover<T>({ columns, filters, onApply }: FilterPopoverPro
                 if (!col) return null;
                 const ops = validOperators(col.type);
                 return (
-                  <li key={rule.id} className="flex items-center gap-1.5">
+                  <li key={rule.id} className="flex flex-wrap items-center gap-1.5">
                     <div className="w-14">
                       {idx === 0 ? (
                         <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
