@@ -2,60 +2,63 @@ import { describe, it, expect } from 'vitest';
 import { buildDefaultWorkflows } from './sample-workflow';
 
 describe('buildDefaultWorkflows', () => {
-  const [form, raw, reactive] = buildDefaultWorkflows({
+  const [ingest, reactive] = buildDefaultWorkflows({
     orderFormId: 'form-xyz',
-    formWebhookSecret: 'form-secret',
-    rawWebhookSecret: 'raw-secret',
+    webhookSecret: 'ingest-secret',
   });
 
-  it('returns Ingest-form + Ingest-raw + reactive with stable ids', () => {
-    expect(form.id).toBe('wf-ingest-form');
-    expect(raw.id).toBe('wf-ingest-raw');
+  it('returns exactly the Ingest + reactive workflows with stable ids', () => {
+    expect(buildDefaultWorkflows({ orderFormId: 'form-xyz', webhookSecret: 's' })).toHaveLength(2);
+    expect(ingest.id).toBe('wf-ingest');
+    expect(ingest.name).toBe('Ingest');
     expect(reactive.id).toBe('wf-sample-reactive');
-    expect(form.name).toBe('Ingest-form');
-    expect(raw.name).toBe('Ingest-raw');
   });
 
-  it('ships both ingest webhooks disabled and the reactive enabled', () => {
-    expect(form.enabled).toBe(false);
-    expect(raw.enabled).toBe(false);
+  it('ships the ingest webhook disabled and the reactive enabled', () => {
+    expect(ingest.enabled).toBe(false);
     expect(reactive.enabled).toBe(true);
   });
 
-  it('Ingest-form validates against the form; Ingest-raw unwraps a Bundle', () => {
-    const fv = form.definition.nodes.find((n) => n.data.action === 'form-validate');
-    expect(fv?.data.config).toMatchObject({ formId: 'form-xyz', sourcePath: 'body' });
-    const unwrap = raw.definition.nodes.find((n) => n.data.action === 'unwrap-bundle');
+  it('injects the secret + path onto the single webhook node', () => {
+    const hook = ingest.definition.nodes.find((n) => n.type === 'webhook');
+    expect(hook?.data).toMatchObject({ secret: 'ingest-secret', path: 'ingest', method: 'POST' });
+  });
+
+  it('routes with a Switch: fhir rule + form fallback', () => {
+    const route = ingest.definition.nodes.find((n) => n.type === 'condition');
+    expect(route?.id).toBe('route-1');
+    expect(route?.data.templateId).toBe('switch');
+    expect(route?.data.fallbackOutput).toBe('form');
+    const rules = route?.data.rules as Array<{ name: string; condition: string }>;
+    expect(rules).toHaveLength(1);
+    expect(rules[0].name).toBe('fhir');
+    expect(rules[0].condition).toBe(
+      "Array.isArray($json.body) || (!!$json.body && $json.body.resourceType === 'Bundle')",
+    );
+  });
+
+  it('has both branch nodes reading body, bound to the form id', () => {
+    const unwrap = ingest.definition.nodes.find((n) => n.data.action === 'unwrap-bundle');
     expect(unwrap?.data.config).toMatchObject({ sourcePath: 'body' });
-    expect(raw.definition.nodes.some((n) => n.data.action === 'form-validate')).toBe(false);
+    const fv = ingest.definition.nodes.find((n) => n.data.action === 'form-validate');
+    expect(fv?.data.config).toMatchObject({ formId: 'form-xyz', sourcePath: 'body' });
   });
 
-  it('injects each secret + path onto its own webhook node', () => {
-    const formHook = form.definition.nodes.find((n) => n.type === 'webhook');
-    expect(formHook?.data).toMatchObject({ secret: 'form-secret', path: 'lab-orders', method: 'POST' });
-    const rawHook = raw.definition.nodes.find((n) => n.type === 'webhook');
-    expect(rawHook?.data).toMatchObject({ secret: 'raw-secret', path: 'cdr-ingest', method: 'POST' });
-  });
-
-  it('wires each persist source; the reactive listens to the form source', () => {
-    const formPersist = form.definition.nodes.find((n) => n.data.action === 'persist-store');
-    const rawPersist = raw.definition.nodes.find((n) => n.data.action === 'persist-store');
+  it('wires one persist source; the reactive listens to it', () => {
+    const persist = ingest.definition.nodes.find((n) => n.data.action === 'persist-store');
+    expect(persist?.data.config).toMatchObject({ source: 'webhook-ingest' });
     const evt = reactive.definition.nodes.find((n) => n.data.triggerType === 'event');
-    expect(formPersist?.data.config).toMatchObject({ source: 'webhook-lab-orders' });
-    expect(rawPersist?.data.config).toMatchObject({ source: 'webhook-cdr-ingest' });
-    expect(evt?.data.config).toMatchObject({ source: 'webhook-lab-orders' });
+    expect(evt?.data.config).toMatchObject({ source: 'webhook-ingest' });
   });
 
-  it('connects each ingest chain trigger→(validate|split)→persist→log', () => {
-    expect(form.definition.edges.map((e) => `${e.source}->${e.target}`)).toEqual([
-      'trigger-1->form-validate-1',
-      'form-validate-1->persist-1',
-      'persist-1->log-1',
-    ]);
-    expect(raw.definition.edges.map((e) => `${e.source}->${e.target}`)).toEqual([
-      'trigger-1->unwrap-1',
-      'unwrap-1->persist-1',
-      'persist-1->log-1',
-    ]);
+  it('branch edges carry sourceHandle and both converge on persist', () => {
+    const edges = ingest.definition.edges;
+    const toUnwrap = edges.find((e) => e.target === 'unwrap-1');
+    const toForm = edges.find((e) => e.target === 'form-validate-1');
+    expect(toUnwrap).toMatchObject({ source: 'route-1', sourceHandle: 'fhir' });
+    expect(toForm).toMatchObject({ source: 'route-1', sourceHandle: 'form' });
+    const intoPersist = edges.filter((e) => e.target === 'persist-1').map((e) => e.source).sort();
+    expect(intoPersist).toEqual(['form-validate-1', 'unwrap-1']);
+    expect(edges.some((e) => e.source === 'persist-1' && e.target === 'log-1')).toBe(true);
   });
 });

@@ -1,68 +1,56 @@
 import type { Workflow } from './types';
 
-// The seeded default workflows for a fresh install. Two INGESTION patterns (split by the SHAPE of
-// the data the sender posts, NOT by resource type) plus one reactive demo:
+// The seeded default workflows for a fresh install: ONE unified ingestion workflow that
+// routes by the SHAPE of the posted payload, plus one reactive demo.
 //
-//   Ingest-form (wf-ingest-form, DISABLED):
-//     Webhook (POST /api/workflows/hooks/lab-orders, X-Webhook-Token)
-//       → Form Validate ("Lab order" form; sourcePath 'body' unwraps the webhook envelope
-//                        {method,body,headers,query} → answers → ServiceRequest/Observation)
-//       → Persist Store (source: webhook-lab-orders → emits data.persisted)
+//   Ingest (wf-ingest, DISABLED):
+//     Webhook (POST /api/workflows/hooks/ingest, X-Webhook-Token)
+//       → Switch  rule "fhir": body is a FHIR transaction Bundle OR a bare resource array
+//           ├─ handle "fhir" → Unwrap FHIR Bundle (sourcePath 'body'; entry[].resource →
+//           │                   one item per FHIR resource, tolerates a bare array)
+//           └─ fallback "form" → Form Validate ("Lab order" form; sourcePath 'body' →
+//                                 answers → ServiceRequest/Observation)
+//       → Persist Store (source: webhook-ingest → emits data.persisted)
 //       → Log
-//     Use this when the sender posts FORM ANSWERS (a form/UI-driven source), not FHIR.
-//
-//   Ingest-raw (wf-ingest-raw, DISABLED):
-//     Webhook (POST /api/workflows/hooks/cdr-ingest, X-Webhook-Token)
-//       → Unwrap FHIR Bundle (sourcePath 'body' — accepts a FHIR transaction Bundle, unwrapping
-//                             entry[].resource into one item per FHIR resource; still tolerates a
-//                             bare array of pre-built resources)
-//       → Persist Store (source: webhook-cdr-ingest → emits data.persisted)
-//       → Log
-//     Use this when the sender posts a FHIR transaction Bundle (or a bare array) of pre-built FHIR
-//     resources (e.g. the CDR toolchain). ONE webhook handles tests AND questionnaires together:
-//     Persist stores every resource and the projection routes each by resourceType
+//     ONE webhook handles BOTH form answers AND pre-built FHIR (e.g. the CDR toolchain); ONE
+//     persist stores every resource and the projection routes each by resourceType
 //     (Observation → lab_results, ServiceRequest → lab_requests,
 //     QuestionnaireResponse → questionnaire_responses, …).
 //
 //   Reactive (wf-sample-reactive, ENABLED):
-//     Event Trigger (data.persisted, source: webhook-lab-orders) → Log
+//     Event Trigger (data.persisted, source: webhook-ingest) → Log
 //
-// Both ingest webhooks ship DISABLED because each exposes a live HTTP endpoint — the operator opts
-// in (enable + copy the per-install secret). The reactive one ships ENABLED because it has no
-// external surface.
-//
-// This is a pure builder: the form id and the two webhook secrets are injected by the seed
-// (packages/bootstrap/src/seed.ts) at seed time — the seeded "Lab order" form gets a fresh random
-// id, and each secret is generated per-install so no secret is committed.
+// The ingest webhook ships DISABLED because it exposes a live HTTP endpoint — the operator
+// opts in (enable + copy the per-install secret). The reactive one ships ENABLED (no external
+// surface). Pure builder: the form id and the webhook secret are injected by the seed
+// (packages/bootstrap/src/seed.ts) at seed time so no secret is committed.
 
-/** Ingest-form webhook path. */
-const FORM_WEBHOOK_PATH = 'lab-orders';
-/** Ingest-raw webhook path — matches the CDR toolchain's default OPENLDR_CE_HOOK_PATH so the
- *  toolchain works against a fresh install once the operator copies the secret. */
-const RAW_WEBHOOK_PATH = 'cdr-ingest';
-/** Ingest-form Persist Store `source` — MUST match the reactive Event Trigger `source`. */
-const FORM_PERSIST_SOURCE = 'webhook-lab-orders';
-/** Ingest-raw Persist Store `source`. */
-const RAW_PERSIST_SOURCE = 'webhook-cdr-ingest';
+/** Ingest webhook path. The CDR toolchain sets OPENLDR_CE_HOOK_PATH=ingest to target it. */
+const INGEST_WEBHOOK_PATH = 'ingest';
+/** Ingest Persist Store `source` — MUST match the reactive Event Trigger `source`. */
+const INGEST_PERSIST_SOURCE = 'webhook-ingest';
+/** Switch rule: route a FHIR transaction Bundle or a bare resource array to the "fhir" branch. */
+const FHIR_ROUTE_CONDITION =
+  "Array.isArray($json.body) || (!!$json.body && $json.body.resourceType === 'Bundle')";
 
 export interface DefaultWorkflowInput {
-  /** Id of the seeded "Lab order" form the Ingest-form loop validates against. */
+  /** Id of the seeded "Lab order" form the ingest workflow's form branch validates against. */
   orderFormId: string;
-  /** Per-install shared secret for the Ingest-form webhook (sent as X-Webhook-Token). */
-  formWebhookSecret: string;
-  /** Per-install shared secret for the Ingest-raw webhook (sent as X-Webhook-Token). */
-  rawWebhookSecret: string;
+  /** Per-install shared secret for the ingest webhook (sent as X-Webhook-Token). */
+  webhookSecret: string;
 }
 
-export function buildDefaultWorkflows({ orderFormId, formWebhookSecret, rawWebhookSecret }: DefaultWorkflowInput): Workflow[] {
-  const ingestForm: Workflow = {
-    id: 'wf-ingest-form',
-    name: 'Ingest-form',
+export function buildDefaultWorkflows({ orderFormId, webhookSecret }: DefaultWorkflowInput): Workflow[] {
+  const ingest: Workflow = {
+    id: 'wf-ingest',
+    name: 'Ingest',
     description:
-      'Form-driven ingestion. POST form ANSWERS to /api/workflows/hooks/lab-orders with header ' +
-      'X-Webhook-Token → validate against the "Lab order" form → persist the extracted FHIR ' +
-      '(ServiceRequest/Observation) → emit data.persisted. Use this when the sender posts form ' +
-      'answers, not FHIR. Disabled by default: enable it and copy the webhook secret to accept requests.',
+      'Unified ingestion. POST to /api/workflows/hooks/ingest with header X-Webhook-Token → a ' +
+      'Switch routes by payload shape: a FHIR transaction Bundle (or bare resource array) is ' +
+      'unwrapped into one item per resource, while form ANSWERS are validated against the ' +
+      '"Lab order" form → both persist to the FHIR store (the projection routes each resource ' +
+      'by type) → emit data.persisted. Disabled by default: enable it and copy the webhook ' +
+      'secret to accept requests.',
     enabled: false,
     createdBy: null,
     definition: {
@@ -72,18 +60,42 @@ export function buildDefaultWorkflows({ orderFormId, formWebhookSecret, rawWebho
           type: 'webhook',
           position: { x: 60, y: 220 },
           data: {
-            label: 'Form ingest received',
-            path: FORM_WEBHOOK_PATH,
+            label: 'Ingest received',
+            path: INGEST_WEBHOOK_PATH,
             method: 'POST',
-            secret: formWebhookSecret,
+            secret: webhookSecret,
             templateId: 'webhook-trigger',
             iconName: 'Webhook',
           },
         },
         {
+          id: 'route-1',
+          type: 'condition',
+          position: { x: 360, y: 220 },
+          data: {
+            label: 'Route by payload shape',
+            rules: [{ name: 'fhir', condition: FHIR_ROUTE_CONDITION }],
+            fallbackOutput: 'form',
+            templateId: 'switch',
+            iconName: 'Split',
+          },
+        },
+        {
+          id: 'unwrap-1',
+          type: 'action',
+          position: { x: 660, y: 120 },
+          data: {
+            label: 'Unwrap FHIR Bundle',
+            action: 'unwrap-bundle',
+            config: { sourcePath: 'body' },
+            templateId: 'unwrap-bundle',
+            iconName: 'PackageOpen',
+          },
+        },
+        {
           id: 'form-validate-1',
           type: 'action',
-          position: { x: 360, y: 220 },
+          position: { x: 660, y: 320 },
           data: {
             label: 'Validate form answers',
             action: 'form-validate',
@@ -95,11 +107,11 @@ export function buildDefaultWorkflows({ orderFormId, formWebhookSecret, rawWebho
         {
           id: 'persist-1',
           type: 'action',
-          position: { x: 660, y: 220 },
+          position: { x: 960, y: 220 },
           data: {
             label: 'Persist store',
             action: 'persist-store',
-            config: { source: FORM_PERSIST_SOURCE },
+            config: { source: INGEST_PERSIST_SOURCE },
             templateId: 'persist-store',
             iconName: 'Database',
           },
@@ -107,11 +119,11 @@ export function buildDefaultWorkflows({ orderFormId, formWebhookSecret, rawWebho
         {
           id: 'log-1',
           type: 'action',
-          position: { x: 960, y: 220 },
+          position: { x: 1260, y: 220 },
           data: {
             label: 'Log persisted',
             action: 'log',
-            message: 'Persisted form ingest: {{ $json }}',
+            message: 'Persisted ingest: {{ $json }}',
             level: 'info',
             config: {},
             templateId: 'log',
@@ -120,95 +132,23 @@ export function buildDefaultWorkflows({ orderFormId, formWebhookSecret, rawWebho
         },
       ],
       edges: [
-        { id: 'e1', source: 'trigger-1', target: 'form-validate-1' },
-        { id: 'e2', source: 'form-validate-1', target: 'persist-1' },
-        { id: 'e3', source: 'persist-1', target: 'log-1' },
-      ],
-    },
-  };
-
-  const ingestRaw: Workflow = {
-    id: 'wf-ingest-raw',
-    name: 'Ingest-raw',
-    description:
-      'Raw FHIR ingestion. POST a FHIR transaction Bundle to /api/workflows/hooks/cdr-ingest with ' +
-      'header X-Webhook-Token → Unwrap FHIR Bundle unwraps entry[].resource (still tolerates a bare ' +
-      'array) → persist each resource → emit data.persisted. One webhook handles tests AND ' +
-      'questionnaires: the projection routes each by type (Observation→lab_results, ' +
-      'QuestionnaireResponse→questionnaire_responses, …). Use this when the sender posts pre-built ' +
-      'FHIR (e.g. the CDR toolchain). Disabled by default: enable it and copy the webhook secret to ' +
-      'accept requests.',
-    enabled: false,
-    createdBy: null,
-    definition: {
-      nodes: [
-        {
-          id: 'trigger-1',
-          type: 'webhook',
-          position: { x: 60, y: 220 },
-          data: {
-            label: 'Raw FHIR ingest received',
-            path: RAW_WEBHOOK_PATH,
-            method: 'POST',
-            secret: rawWebhookSecret,
-            templateId: 'webhook-trigger',
-            iconName: 'Webhook',
-          },
-        },
-        {
-          id: 'unwrap-1',
-          type: 'action',
-          position: { x: 360, y: 220 },
-          data: {
-            label: 'Unwrap FHIR Bundle',
-            action: 'unwrap-bundle',
-            config: { sourcePath: 'body' },
-            templateId: 'unwrap-bundle',
-            iconName: 'PackageOpen',
-          },
-        },
-        {
-          id: 'persist-1',
-          type: 'action',
-          position: { x: 660, y: 220 },
-          data: {
-            label: 'Persist store',
-            action: 'persist-store',
-            config: { source: RAW_PERSIST_SOURCE },
-            templateId: 'persist-store',
-            iconName: 'Database',
-          },
-        },
-        {
-          id: 'log-1',
-          type: 'action',
-          position: { x: 960, y: 220 },
-          data: {
-            label: 'Log persisted',
-            action: 'log',
-            message: 'Persisted raw FHIR: {{ $json }}',
-            level: 'info',
-            config: {},
-            templateId: 'log',
-            iconName: 'Terminal',
-          },
-        },
-      ],
-      edges: [
-        { id: 'e1', source: 'trigger-1', target: 'unwrap-1' },
-        { id: 'e2', source: 'unwrap-1', target: 'persist-1' },
-        { id: 'e3', source: 'persist-1', target: 'log-1' },
+        { id: 'e1', source: 'trigger-1', target: 'route-1' },
+        { id: 'e2', source: 'route-1', target: 'unwrap-1', sourceHandle: 'fhir' },
+        { id: 'e3', source: 'route-1', target: 'form-validate-1', sourceHandle: 'form' },
+        { id: 'e4', source: 'unwrap-1', target: 'persist-1' },
+        { id: 'e5', source: 'form-validate-1', target: 'persist-1' },
+        { id: 'e6', source: 'persist-1', target: 'log-1' },
       ],
     },
   };
 
   const reactive: Workflow = {
     id: 'wf-sample-reactive',
-    name: 'On Lab Order Persisted → Log',
+    name: 'On Ingest Persisted → Log',
     description:
-      'Reacts to the data.persisted event emitted when the Ingest-form loop stores a record (source ' +
-      'webhook-lab-orders) and logs a summary. Demonstrates the event-driven half of the ingestion ' +
-      'loop — enable "Ingest-form" and POST to see it fire.',
+      'Reacts to the data.persisted event emitted when the Ingest workflow stores a record ' +
+      '(source webhook-ingest) and logs a summary. Demonstrates the event-driven half of the ' +
+      'ingestion loop — enable "Ingest" and POST to see it fire.',
     enabled: true,
     createdBy: null,
     definition: {
@@ -220,7 +160,7 @@ export function buildDefaultWorkflows({ orderFormId, formWebhookSecret, rawWebho
           data: {
             label: 'On data persisted',
             triggerType: 'event',
-            config: { event: 'data.persisted', source: FORM_PERSIST_SOURCE, resourceType: '' },
+            config: { event: 'data.persisted', source: INGEST_PERSIST_SOURCE, resourceType: '' },
             templateId: 'event-trigger',
             iconName: 'Radio',
           },
@@ -244,5 +184,5 @@ export function buildDefaultWorkflows({ orderFormId, formWebhookSecret, rawWebho
     },
   };
 
-  return [ingestForm, ingestRaw, reactive];
+  return [ingest, reactive];
 }
