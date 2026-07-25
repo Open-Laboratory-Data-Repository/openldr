@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next';
 import {
   Plus, Minus, Eye, MoreHorizontal, Undo2, Redo2,
   FilePlus, Save, Download, FileText, FileSpreadsheet, ShieldCheck, Copy, Trash2,
-  Check, Loader2,
+  Check, Loader2, PanelRight,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -33,6 +33,8 @@ interface Props {
   onExportPdf(): void;
   onExportExcel(): void;
   onPublishAsReport(): void;
+  /** Toggle the inspector drawer (mobile only). */
+  onToggleInspector?(): void;
   onCheck(): void;
   onDuplicate(): void;
   onDelete(): void;
@@ -84,6 +86,14 @@ export function CanvasHeader(props: Props): JSX.Element {
             <Plus className="h-3.5 w-3.5" />
           </button>
         </div>
+
+        {/* Inspector toggle — only on phones, where the inspector is a drawer. */}
+        {props.onToggleInspector && (
+          <Button size="icon" variant="outline" className="md:hidden" onClick={props.onToggleInspector}
+            aria-label={t('reportDesigner.properties')}>
+            <PanelRight className="h-4 w-4" />
+          </Button>
+        )}
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

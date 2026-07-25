@@ -2,9 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
-import { Frame, PanelLeftOpen } from 'lucide-react';
+import { Frame, PanelLeftOpen, X } from 'lucide-react';
 import { AppShell } from '@/shell/AppShell';
 import { isNarrowViewport } from '@/lib/viewport';
+import { cn } from '@/lib/cn';
 import { Button } from '@/components/ui/button';
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -61,6 +62,9 @@ export function ReportDesignerPage(): JSX.Element {
   const [error, setError] = useState<string>();
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
+  // On phones the inspector is an off-canvas drawer (no room for a static column). It auto-opens
+  // when an element is selected so its properties are reachable, and can be toggled from the header.
+  const [inspectorOpen, setInspectorOpen] = useState(false);
   const [publishOpen, setPublishOpen] = useState(false);
   // Ids of unsaved (transient) designs created via "New template" — Save creates them server-side.
   const [transientIds, setTransientIds] = useState<Set<string>>(() => new Set());
@@ -372,6 +376,12 @@ export function ReportDesignerPage(): JSX.Element {
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
   }, [saveStatus]);
 
+  // Reveal the inspector whenever an element is selected so its properties are reachable on mobile
+  // (where the inspector is a drawer). On desktop the inspector is always visible, so this is inert.
+  useEffect(() => {
+    if (selectedIds.length > 0) setInspectorOpen(true);
+  }, [selectedIds]);
+
   return (
     <AppShell title={t('reportDesigner.title')} fullBleed>
       {error && <div className="shrink-0 border-b border-border px-4 py-2 text-xs text-destructive">{error}</div>}
@@ -402,13 +412,34 @@ export function ReportDesignerPage(): JSX.Element {
                 onZoomIn={() => zoomStep(1)} onZoomOut={() => zoomStep(-1)}
                 onPreview={() => setPreviewOpen(true)} onSave={() => { void onSave(); }} onExportPdf={() => { void onExportPdf(); }} onExportExcel={() => { void onExportExcel(); }}
                 onPublishAsReport={onPublishAsReport}
+                onToggleInspector={() => setInspectorOpen((o) => !o)}
                 onCheck={noop} onDuplicate={noop} onDelete={() => setConfirmDeleteOpen(true)} />
               <PageCanvas template={template} zoom={zoom} selectedIds={selectedIds} onSelect={setSelectedIds} onCommitRects={commitRects}
                 editingId={editingId} onEditStart={startEdit} onEditChange={editChange} onEditEnd={endEdit} />
             </div>
-            {/* The inspector is hidden on phone-portrait so the canvas gets the full width; it
-                returns at md (landscape phone / tablet / desktop) where there's room for both. */}
-            <div className="hidden w-64 shrink-0 flex-col border-l border-border md:flex" data-testid="inspector">
+            {/* Scrim behind the mobile inspector drawer. */}
+            {inspectorOpen && (
+              <div className="fixed inset-0 z-30 bg-black/50 md:hidden" aria-hidden="true" onClick={() => setInspectorOpen(false)} />
+            )}
+            {/* The inspector is a right-side overlay drawer on phones (toggled from the header and
+                auto-opened on selection) and a static column at md+ where there's room for both. */}
+            <div
+              className={cn(
+                'flex shrink-0 flex-col border-l border-border bg-background',
+                'fixed inset-y-0 right-0 z-40 w-80 max-w-[85vw] transform transition-transform duration-200',
+                inspectorOpen ? 'translate-x-0' : 'translate-x-full',
+                'md:static md:z-auto md:w-64 md:max-w-none md:translate-x-0',
+              )}
+              data-testid="inspector"
+            >
+              <button
+                type="button"
+                onClick={() => setInspectorOpen(false)}
+                aria-label={t('common.close')}
+                className="absolute right-2 top-2 z-10 rounded-md p-1 text-muted-foreground hover:bg-accent md:hidden"
+              >
+                <X className="h-4 w-4" />
+              </button>
               <InspectorTabs template={template} selectedIds={selectedIds} onSelect={setSelectedIds}
                 onPatchElement={patchElement} onPatchPage={patchPage} onPatchElements={patchElements} onPatchParameters={patchParameters} />
             </div>
