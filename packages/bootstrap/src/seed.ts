@@ -168,12 +168,13 @@ async function upsertPublishedForms(
   return { seeded, orderFormId };
 }
 
-// Seed the default workflows — the inbound lab-order ingestion loop + its reactive companion,
-// seeded once each (idempotent by stable id) so a fresh install ships a real, runnable example.
-// The inbound's Form Validate node is bound to the seeded "Lab order" form's actual id, and the
-// webhook secret is generated per-install (so no secret is committed and reseeds never rotate it).
-// Matched by id, not name, so operator-edited copies are never re-created. No-op (with a warning)
-// when the order form is absent, since the inbound loop can't be bound without it.
+// Seed the default workflows — the unified inbound ingestion workflow (wf-ingest) + its
+// reactive companion, seeded once each (idempotent by stable id) so a fresh install ships a
+// real, runnable example. The ingest workflow's Form Validate branch is bound to the seeded
+// "Lab order" form's actual id, and the webhook secret is generated per-install (so no secret
+// is committed and reseeds never rotate it). Matched by id, not name, so operator-edited copies
+// are never re-created. No-op (with a warning) when the order form is absent, since the form
+// branch can't be bound without it.
 async function seedDefaultWorkflowsFor(app: EssentialSeedTarget, orderFormId: string | null): Promise<number> {
   if (!orderFormId) {
     console.warn(`[seed] "${ORDER_FORM_NAME}" form not found — skipping default workflow seed`);
@@ -181,7 +182,7 @@ async function seedDefaultWorkflowsFor(app: EssentialSeedTarget, orderFormId: st
   }
   const existingWorkflows = await app.workflows.store.list();
   let seeded = 0;
-  const defaults = buildDefaultWorkflows({ orderFormId, formWebhookSecret: randomUUID(), rawWebhookSecret: randomUUID() });
+  const defaults = buildDefaultWorkflows({ orderFormId, webhookSecret: randomUUID() });
   for (const wf of defaults) {
     if (!existingWorkflows.some((w) => w.id === wf.id)) {
       await app.workflows.store.create(wf);
@@ -192,9 +193,9 @@ async function seedDefaultWorkflowsFor(app: EssentialSeedTarget, orderFormId: st
 }
 
 // The ALWAYS-seeded minimum, independent of SEED_ON_START: the Users-page form, the Lab order
-// form, and the inbound lab-order ingestion workflow (+ its reactive companion) bound to it. These
+// form, and the unified ingestion workflow (+ its reactive companion) bound to it. These
 // are NOT optional demo data — the Users page can't render without a published 'users'-targeted
-// form, and the ingestion loop can't validate without the "Lab order" form — so a fresh install
+// form, and the ingest workflow's form branch can't validate without the "Lab order" form — so a fresh install
 // with SEED_ON_START=false must still get them. Deliberately mirrors the unconditional
 // `roles.seedSystemRoles()` boot-time seed (see createAppContext): idempotent (forms deduped by
 // name, workflows by id), so it's safe to run on every boot and re-run alongside the full seed.
