@@ -18,24 +18,23 @@ to the workflow as its input, and **what gets stored is whatever the workflow do
 so you control the exact shape (a form submission, a vendor payload, or a FHIR Bundle you
 normalise inside the workflow).
 
-A fresh install ships **two** ingestion webhook workflows, split by the **shape** of the data the
-sender posts. **Both are disabled by default** — each exposes a live HTTP endpoint, so you opt in
-by enabling the one you need and copying its per-install secret:
+A fresh install ships **one** ingestion webhook workflow, **Ingest** (`wf-ingest`), that routes
+by the **shape** of the posted body. **It's disabled by default** — it exposes a live HTTP
+endpoint, so you opt in by enabling it and copying its per-install secret:
 
-| Workflow | Webhook path | Expects | Use when |
+| Workflow | Webhook path | Expects | Behavior |
 |---|---|---|---|
-| **Ingest-form** | `lab-orders` | **form answers** (a `{…}` object of field values) | a form/UI-driven source posts answers, not FHIR — validated against the seeded "Lab order" form, then persisted |
-| **Ingest-raw** | `cdr-ingest` | a **bare JSON array** of pre-built FHIR resources | an external system posts ready-made FHIR (e.g. the **CDR toolchain**) — each resource is persisted and the projection routes it by type |
+| **Ingest** | `ingest` | a FHIR transaction **Bundle**, a **bare array** of FHIR resources, or a plain `{…}` object of **form answers** | a **Switch** node checks the shape: Bundle/array → **Unwrap FHIR Bundle** (one item per resource, references resolved); object → **Form Validate** against the seeded "Lab order" form. Both branches persist through the same **Persist / Store** |
 
-To use either one:
+To use it:
 
-1. In the app, open **Workflows** and open **Ingest-form** or **Ingest-raw**.
-2. On its **Webhook** trigger, **enable** the workflow and **copy the secret**. Each trigger has a
-   fixed URL path (above) and a per-install secret generated at seed time.
+1. In the app, open **Workflows** and open **Ingest**.
+2. On its **Webhook** trigger, **enable** the workflow and **copy the secret**. The trigger has a
+   fixed URL path (`ingest`) and a per-install secret generated at seed time.
 3. Send the payload from your external system:
 
 ```bash
-curl -X POST https://your-host/api/workflows/hooks/lab-orders \
+curl -X POST https://your-host/api/workflows/hooks/ingest \
   -H "Content-Type: application/json" \
   -H "X-Webhook-Token: <the-webhook-secret>" \
   -d @order.json
@@ -47,28 +46,36 @@ password, and rotate it by editing the workflow's webhook trigger. A wrong or mi
 rejected with `401`; an unknown path returns `404`.
 
 You can also build your own webhook workflow (**Webhook → transform/validate → Persist / Store**)
-for any other payload shape — the two seeded ones are just the common cases.
+for any other payload shape — **Ingest** just covers the common cases out of the box.
+
+> **Upgrading an existing install?** Only fresh installs get the unified `wf-ingest` wiring. On a
+> deployment that already had the old workflows, the old `wf-ingest-form` / `wf-ingest-raw`
+> remain (disabled) and can be deleted manually, and the pre-existing reactive companion keeps
+> listening on the old event source.
 
 ### Post pre-built FHIR (the CDR toolchain)
 
-The **Ingest-raw** workflow is the front door for a system that already emits FHIR resources — most
-notably the **CDR toolchain**, whose default target path (`OPENLDR_CE_HOOK_PATH`) is exactly
-`/api/workflows/hooks/cdr-ingest`, so it lines up with a fresh install out of the box. The pipeline
-is **Webhook → Split Out (`body`) → Persist / Store → Log**:
+The **Ingest** workflow's FHIR branch is the front door for a system that already emits FHIR
+resources — most notably the **CDR toolchain**, which posts a **FHIR transaction Bundle**. Its
+default target path env var is `OPENLDR_CE_HOOK_PATH`, which previously pointed at the old
+`cdr-ingest` path; that path no longer exists on a fresh install, so you **must set
+`OPENLDR_CE_HOOK_PATH=ingest`** to target the unified webhook. The pipeline is
+**Webhook → Switch → Unwrap FHIR Bundle → Persist / Store → Log**:
 
-- The request body is a **bare JSON array** of FHIR resources. **Split Out** unwraps the webhook
-  envelope's `body` array into **one item per resource**, because **Persist / Store persists one
-  FHIR resource per input item** — the same write path (and **validation strictness gate**) the CLI
-  uses.
+- The request body is a **FHIR transaction Bundle** (or a bare array of FHIR resources). **Unwrap
+  FHIR Bundle** resolves internal references and unwraps it into **one item per resource**,
+  because **Persist / Store persists one FHIR resource per input item** — the same write path
+  (and **validation strictness gate**) the CLI uses.
 - **One webhook handles tests and questionnaires together.** Persist stores every resource, and the
   projection routes each by `resourceType` (`Observation` → `lab_results`, `ServiceRequest` →
   `lab_requests`, `QuestionnaireResponse` → `questionnaire_responses`, …).
 
-To point the CDR toolchain at a deployment, enable **Ingest-raw**, copy its secret, and set:
+To point the CDR toolchain at a deployment, enable **Ingest**, copy its secret, and set:
 
 ```bash
 OPENLDR_CE_URL=https://your-host        # base URL of the CE deployment
-OPENLDR_CE_WEBHOOK_TOKEN=<the-secret>   # the Ingest-raw webhook secret you copied
+OPENLDR_CE_WEBHOOK_TOKEN=<the-secret>   # the Ingest webhook secret you copied
+OPENLDR_CE_HOOK_PATH=ingest             # required — targets the unified webhook path
 OPENLDR_CE_TIMEZONE=+03:00              # UTC offset for DISA's unzoned timestamps (per country)
 ```
 
@@ -76,10 +83,10 @@ OPENLDR_CE_TIMEZONE=+03:00              # UTC offset for DISA's unzoned timestam
 with no zone, so an omitted offset would silently shift every clinical timestamp. Set it to the
 deployment's country (Tanzania `+03:00`; Mozambique/Zambia `+02:00`).
 
-> **A bare array is what the webhook wants — but not what the CLI wants.** The `cdr-ingest` webhook
-> expects a bare array of resources (Split Out expands it). The `openldr ingest` **CLI** below is the
-> opposite: it takes a FHIR **Bundle** (or one bare resource), not an array. Send each payload to the
-> path that matches its shape.
+> **A Bundle or array is what the webhook wants — but not what the CLI wants.** The `ingest`
+> webhook's FHIR branch accepts a transaction **Bundle** or a bare **array** of resources. The
+> `openldr ingest` **CLI** below is narrower: it takes a FHIR **Bundle** (or one bare resource),
+> not an array. Send each payload to the path that matches its shape.
 
 If you just have a Bundle file and a source checkout, `openldr ingest bundle.json` (below) is the
 turnkey path — it applies the same converter + strictness gate without building a workflow.
