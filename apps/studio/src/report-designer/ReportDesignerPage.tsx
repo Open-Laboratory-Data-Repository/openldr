@@ -417,18 +417,19 @@ export function ReportDesignerPage(): JSX.Element {
               <PageCanvas template={template} zoom={zoom} selectedIds={selectedIds} onSelect={setSelectedIds} onCommitRects={commitRects}
                 editingId={editingId} onEditStart={startEdit} onEditChange={editChange} onEditEnd={endEdit} />
             </div>
-            {/* Scrim behind the mobile inspector drawer. */}
-            {inspectorOpen && (
-              <div className="fixed inset-0 z-30 bg-black/50 md:hidden" aria-hidden="true" onClick={() => setInspectorOpen(false)} />
-            )}
             {/* The inspector is a right-side overlay drawer on phones (toggled from the header and
-                auto-opened on selection) and a static column at md+ where there's room for both. */}
+                auto-opened on selection) and a static column at md+ where there's room for both.
+                Deliberately NON-MODAL: no scrim, closed only by the X or the header toggle. A scrim
+                that auto-closed on outside taps would fire on the very tap that selected the element
+                (selection happens on pointerdown, which auto-opens the drawer), closing it again —
+                the open/close flicker. Leaving the canvas tappable also lets you pick another element
+                without dismissing the panel first. */}
             <div
               className={cn(
-                'flex shrink-0 flex-col border-l border-border bg-background',
+                'flex shrink-0 flex-col border-l border-border bg-background shadow-2xl',
                 'fixed inset-y-0 right-0 z-40 w-80 max-w-[85vw] transform transition-transform duration-200',
                 inspectorOpen ? 'translate-x-0' : 'translate-x-full',
-                'md:static md:z-auto md:w-64 md:max-w-none md:translate-x-0',
+                'md:static md:z-auto md:w-64 md:max-w-none md:translate-x-0 md:shadow-none',
               )}
               data-testid="inspector"
             >
