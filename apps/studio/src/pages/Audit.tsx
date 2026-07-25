@@ -346,7 +346,7 @@ export function Audit() {
               </Button>
             )}
             <div className="flex-1" />
-            <span className="text-xs text-muted-foreground">Newest events first. Sign-in history lives in Keycloak.</span>
+            <span className="hidden text-xs text-muted-foreground sm:inline">Newest events first. Sign-in history lives in Keycloak.</span>
             <Button
               type="button"
               variant="ghost"
@@ -365,7 +365,7 @@ export function Audit() {
         </form>
 
         <div className="flex flex-1 flex-col overflow-auto">
-          <Table>
+          <Table className="[&_td]:whitespace-nowrap [&_th]:whitespace-nowrap">
             <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow>
                 <TableHead className="w-48 text-xs uppercase">Timestamp</TableHead>

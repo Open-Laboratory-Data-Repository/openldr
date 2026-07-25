@@ -118,7 +118,7 @@ export function NotificationBell(): JSX.Element {
           )}
         </button>
       </PopoverTrigger>
-      <PopoverContent align="end" className="w-95 p-0">
+      <PopoverContent align="end" collisionPadding={12} className="w-95 max-w-[calc(100vw-1.5rem)] p-0">
         <div className="flex items-center justify-between border-b border-border px-3 py-2">
           <span className="text-sm font-medium">
             {t("notifications.title")}
