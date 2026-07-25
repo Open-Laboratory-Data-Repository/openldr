@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 // apps/studio/src/dashboard/template.ts for the established rule.
 import { recognizeSql } from '@openldr/dashboards/pure';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
+import { cn } from '@/lib/cn';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -217,6 +218,9 @@ export function WidgetEditorDialog({
   const [type, setType] = useState(initial?.type ?? 'kpi');
   const [sqlText, setSqlText] = useState(initialSql);
   const [mode, setMode] = useState<'builder' | 'sql'>(initial?.query.mode ?? 'builder');
+  // On phones the four editor panes don't fit side-by-side, so they become tabs (Build / Preview /
+  // Data / Style). Ignored at md+, where all four render in the 2×2 grid.
+  const [mobileTab, setMobileTab] = useState<'build' | 'preview' | 'data' | 'style'>('build');
   const [builderQuery, setBuilderQuery] = useState<BuilderQuery>(
     initial?.query.mode === 'builder'
       ? initial.query
@@ -482,11 +486,29 @@ export function WidgetEditorDialog({
         </div>
 
         {/* Body: 4 sections. On desktop they form a 2×2 grid (query + results on the left, preview +
-            config on the right) filling fixed halves. On phones that grid can't breathe, so the body
-            becomes a single scrolling column and each pane gets a usable min-height. */}
-        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3 md:gap-0 md:overflow-hidden">
-          <div className="flex min-h-0 flex-col gap-3 md:h-1/2 md:flex-row">
-            <div className="flex min-h-[260px] min-w-0 flex-[3] flex-col rounded-md border border-border md:min-h-0 md:rounded-b-none">
+            config on the right) filling fixed halves. On phones that grid can't breathe, so the four
+            panes become tabs (Build / Preview / Data / Style) and only the active one is shown. */}
+        <div className="flex min-h-0 flex-1 flex-col gap-2 p-3 md:gap-0 md:overflow-hidden">
+          {/* Mobile tab bar — switches the four panes on phones; hidden at md+ (2×2 grid shows all). */}
+          <div role="tablist" aria-label="Widget editor sections" className="flex shrink-0 gap-1 rounded-md border border-border p-1 md:hidden">
+            {([['build', 'Build'], ['preview', 'Preview'], ['data', 'Data'], ['style', 'Style']] as const).map(([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                aria-selected={mobileTab === id}
+                onClick={() => setMobileTab(id)}
+                className={cn(
+                  'flex-1 rounded px-2 py-1 text-xs font-medium transition-colors',
+                  mobileTab === id ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-accent',
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="contents md:flex md:h-1/2 md:min-h-0 md:flex-row md:gap-3">
+            <div className={cn('min-h-0 min-w-0 flex-col rounded-md border border-border md:flex md:flex-[3] md:rounded-b-none', mobileTab === 'build' ? 'flex flex-1' : 'hidden')}>
               {detectedVars.length > 0 && (
                 <div className="flex flex-wrap items-center gap-1 border-b border-border px-2 py-1.5">
                   {detectedVars.map((v) => {
@@ -574,13 +596,13 @@ export function WidgetEditorDialog({
                 </div>
               </div>
             </div>
-            <div className="min-h-[160px] min-w-0 flex-[2] overflow-hidden rounded-md border border-border p-3 md:min-h-0 md:rounded-b-none">
+            <div className={cn('min-h-0 min-w-0 overflow-hidden rounded-md border border-border p-3 md:block md:flex-[2] md:rounded-b-none', mobileTab === 'preview' ? 'flex-1' : 'hidden')}>
               {errorMsg ? <div className="text-sm text-destructive">{errorMsg}</div> : preview && preview.rows.length ? renderWidget(previewConfig, preview) : <EmptyPanel text={builderHasNoMeasure ? 'Add a measure to see results' : 'Run a query to see preview'} />}
             </div>
           </div>
 
-          <div className="flex min-h-0 flex-col gap-3 md:h-1/2 md:flex-row">
-            <div className="min-h-[200px] min-w-0 flex-[3] overflow-auto rounded-md border border-border md:min-h-0 md:rounded-t-none md:border-t-0">
+          <div className="contents md:flex md:h-1/2 md:min-h-0 md:flex-row md:gap-3">
+            <div className={cn('min-h-0 min-w-0 overflow-auto rounded-md border border-border md:block md:flex-[3] md:rounded-t-none md:border-t-0', mobileTab === 'data' ? 'flex-1' : 'hidden')}>
               {errorMsg ? (
                 <div className="p-3 text-sm text-destructive">{errorMsg}</div>
               ) : preview && preview.rows.length ? (
@@ -610,7 +632,7 @@ export function WidgetEditorDialog({
                 <EmptyPanel text="Run a query to see results" />
               )}
             </div>
-            <div className="min-h-[200px] min-w-0 flex-[2] overflow-y-auto rounded-md border border-border p-3 md:min-h-0 md:rounded-t-none md:border-t-0">
+            <div className={cn('min-h-0 min-w-0 overflow-y-auto rounded-md border border-border p-3 md:block md:flex-[2] md:rounded-t-none md:border-t-0', mobileTab === 'style' ? 'flex-1' : 'hidden')}>
               {columns.length > 0 ? (
                 <ConfigPanel widgetType={type} columns={columns} visual={visual} onVisualChange={setVisual} xKey={xKey} yKey={yKey} />
               ) : (
