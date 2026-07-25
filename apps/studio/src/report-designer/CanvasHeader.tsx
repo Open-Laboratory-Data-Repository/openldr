@@ -44,10 +44,12 @@ export function CanvasHeader(props: Props): JSX.Element {
   const { t } = useTranslation();
   const status = props.saveStatus;
   return (
-    <div className="flex h-10 shrink-0 items-center justify-between gap-2 overflow-x-auto border-b border-border px-3">
-      <div className="flex min-w-0 items-center gap-2">
+    <div className="flex h-10 shrink-0 items-center gap-2 overflow-x-auto border-b border-border px-3">
+      {/* Left group grows/shrinks; right group is pinned and shrink-0. Not `justify-between`, which
+          lets the two groups overlap in the middle once the canvas column gets narrow. */}
+      <div className="flex min-w-0 flex-1 items-center gap-2">
         <Input value={props.name} onChange={(e) => props.onNameChange(e.target.value)}
-          aria-label={t('reportDesigner.reportName')} className="h-8 w-32 max-w-[40vw] text-sm font-medium sm:w-auto sm:max-w-xs" />
+          aria-label={t('reportDesigner.reportName')} className="h-8 w-32 min-w-0 max-w-[40vw] text-sm font-medium sm:w-auto sm:max-w-xs" />
         <span data-testid="save-status"
           className={`flex shrink-0 items-center gap-1 text-[11px] ${status === 'error' ? 'text-destructive' : 'text-muted-foreground'}`}>
           {status === 'saved' && <Check className="h-3 w-3" />}
@@ -63,7 +65,7 @@ export function CanvasHeader(props: Props): JSX.Element {
         </span>
       </div>
 
-      <div className="flex items-center gap-1.5">
+      <div className="flex shrink-0 items-center gap-1.5">
         <div className="flex items-center rounded-md border border-border">
           <button onClick={props.onUndo} disabled={!props.canUndo} aria-label={t('reportDesigner.undo')}
             className="rounded-l-md p-1 text-muted-foreground hover:bg-accent disabled:opacity-40 disabled:hover:bg-transparent">
@@ -87,9 +89,9 @@ export function CanvasHeader(props: Props): JSX.Element {
           </button>
         </div>
 
-        {/* Inspector toggle — only on phones, where the inspector is a drawer. */}
+        {/* Inspector toggle — shown below lg, where the inspector is a drawer. */}
         {props.onToggleInspector && (
-          <Button size="icon" variant="outline" className="md:hidden" onClick={props.onToggleInspector}
+          <Button size="icon" variant="outline" className="lg:hidden" onClick={props.onToggleInspector}
             aria-label={t('reportDesigner.properties')}>
             <PanelRight className="h-4 w-4" />
           </Button>

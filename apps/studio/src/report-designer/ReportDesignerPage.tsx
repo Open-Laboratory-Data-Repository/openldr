@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
-import { Frame, PanelLeftOpen, X } from 'lucide-react';
+import { Frame, PanelLeftOpen } from 'lucide-react';
 import { AppShell } from '@/shell/AppShell';
 import { isNarrowViewport } from '@/lib/viewport';
 import { cn } from '@/lib/cn';
@@ -54,10 +54,11 @@ export function ReportDesignerPage(): JSX.Element {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [zoom, setZoom] = useState(0.75);
-  // Collapse the templates explorer by default on phone-width screens so the canvas / empty state
-  // gets the full width; desktop opens expanded as before.
+  // The report designer is a 3-pane layout (explorer + canvas + inspector). Below `lg` (1024px)
+  // there isn't room for all three, so the explorer starts collapsed to a rail and the canvas gets
+  // the width; at lg+ it opens expanded as before.
   const [collapsed, setCollapsed] = useState(
-    isNarrowViewport,
+    () => isNarrowViewport(1023),
   );
   const [error, setError] = useState<string>();
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
@@ -417,32 +418,25 @@ export function ReportDesignerPage(): JSX.Element {
               <PageCanvas template={template} zoom={zoom} selectedIds={selectedIds} onSelect={setSelectedIds} onCommitRects={commitRects}
                 editingId={editingId} onEditStart={startEdit} onEditChange={editChange} onEditEnd={endEdit} />
             </div>
-            {/* The inspector is a right-side overlay drawer on phones (toggled from the header and
-                auto-opened on selection) and a static column at md+ where there's room for both.
-                Deliberately NON-MODAL: no scrim, closed only by the X or the header toggle. A scrim
-                that auto-closed on outside taps would fire on the very tap that selected the element
-                (selection happens on pointerdown, which auto-opens the drawer), closing it again —
-                the open/close flicker. Leaving the canvas tappable also lets you pick another element
-                without dismissing the panel first. */}
+            {/* The inspector is a right-side overlay drawer below lg (toggled from the header and
+                auto-opened on selection) and a static column at lg+ where there's room for all three
+                panes. Deliberately NON-MODAL: no scrim, closed only by the X or the header toggle. A
+                scrim that auto-closed on outside taps would fire on the very tap that selected the
+                element (selection happens on pointerdown, which auto-opens the drawer), closing it
+                again — the open/close flicker. Leaving the canvas tappable also lets you pick another
+                element without dismissing the panel first. */}
             <div
               className={cn(
                 'flex shrink-0 flex-col border-l border-border bg-background shadow-2xl',
                 'fixed inset-y-0 right-0 z-40 w-80 max-w-[85vw] transform transition-transform duration-200',
                 inspectorOpen ? 'translate-x-0' : 'translate-x-full',
-                'md:static md:z-auto md:w-64 md:max-w-none md:translate-x-0 md:shadow-none',
+                'lg:static lg:z-auto lg:w-64 lg:max-w-none lg:translate-x-0 lg:shadow-none',
               )}
               data-testid="inspector"
             >
-              <button
-                type="button"
-                onClick={() => setInspectorOpen(false)}
-                aria-label={t('common.close')}
-                className="absolute right-2 top-2 z-10 rounded-md p-1 text-muted-foreground hover:bg-accent md:hidden"
-              >
-                <X className="h-4 w-4" />
-              </button>
               <InspectorTabs template={template} selectedIds={selectedIds} onSelect={setSelectedIds}
-                onPatchElement={patchElement} onPatchPage={patchPage} onPatchElements={patchElements} onPatchParameters={patchParameters} />
+                onPatchElement={patchElement} onPatchPage={patchPage} onPatchElements={patchElements} onPatchParameters={patchParameters}
+                onClose={() => setInspectorOpen(false)} />
             </div>
           </>
         ) : (

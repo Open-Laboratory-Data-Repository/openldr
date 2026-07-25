@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { X } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import type { ReportTemplate, TemplateParam } from './types';
 import { findElement } from './model';
@@ -17,9 +18,11 @@ interface Props {
   onPatchPage(patch: Partial<ReportTemplate>, opts?: { discrete?: boolean }): void;
   onPatchElements(ids: string[], patch: Partial<import('./types').DesignElement>, opts?: { discrete?: boolean }): void;
   onPatchParameters(next: TemplateParam[]): void;
+  /** When set, a close button is shown after the tabs (drawer mode, below lg). */
+  onClose?(): void;
 }
 
-export function InspectorTabs({ template, selectedIds, onSelect, onPatchElement, onPatchPage, onPatchElements, onPatchParameters }: Props): JSX.Element {
+export function InspectorTabs({ template, selectedIds, onSelect, onPatchElement, onPatchPage, onPatchElements, onPatchParameters, onClose }: Props): JSX.Element {
   const { t } = useTranslation();
   const [tab, setTab] = useState<TabKey>('properties');
   // Binding is a single-selection action; for 0/multi selection pass undefined so the tab shows its hint.
@@ -46,6 +49,18 @@ export function InspectorTabs({ template, selectedIds, onSelect, onPatchElement,
             </button>
           );
         })}
+        {/* Close the drawer (below lg). Sits after the tabs so the `divide-x` draws a separator
+            between the last tab and the button; hidden at lg+ where the inspector is a static column. */}
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label={t('common.close')}
+            className="flex shrink-0 items-center justify-center px-3 text-muted-foreground hover:bg-background/40 hover:text-foreground lg:hidden"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
       </div>
       <div className="min-h-0 flex-1 overflow-auto">
         {tab === 'properties' && <PropertiesTab template={template} selectedIds={selectedIds} onPatchElement={onPatchElement} onPatchPage={onPatchPage} onPatchElements={onPatchElements} />}
