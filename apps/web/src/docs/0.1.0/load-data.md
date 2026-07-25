@@ -56,11 +56,12 @@ for any other payload shape — **Ingest** just covers the common cases out of t
 ### Post pre-built FHIR (the CDR toolchain)
 
 The **Ingest** workflow's FHIR branch is the front door for a system that already emits FHIR
-resources — most notably the **CDR toolchain**, which posts a **FHIR transaction Bundle**. Its
-default target path env var is `OPENLDR_CE_HOOK_PATH`, which previously pointed at the old
-`cdr-ingest` path; that path no longer exists on a fresh install, so you **must set
-`OPENLDR_CE_HOOK_PATH=ingest`** to target the unified webhook. The pipeline is
-**Webhook → Switch → Unwrap FHIR Bundle → Persist / Store → Log**:
+resources — most notably the **CDR toolchain**, which posts a **FHIR transaction Bundle**. Current
+CDR toolchain versions **default** their target path (`OPENLDR_CE_HOOK_PATH`) to the unified
+webhook (`/api/workflows/hooks/ingest`), so no path config is needed out of the box. An **older
+toolchain — or one whose `.env` still pins the retired `cdr-ingest` path** — must set
+`OPENLDR_CE_HOOK_PATH=/api/workflows/hooks/ingest` (the **full** path, not bare `ingest`) to target
+it. The pipeline is **Webhook → Switch → Unwrap FHIR Bundle → Persist / Store → Log**:
 
 - The request body is a **FHIR transaction Bundle** (or a bare array of FHIR resources). **Unwrap
   FHIR Bundle** resolves internal references and unwraps it into **one item per resource**,
@@ -75,8 +76,8 @@ To point the CDR toolchain at a deployment, enable **Ingest**, copy its secret, 
 ```bash
 OPENLDR_CE_URL=https://your-host        # base URL of the CE deployment
 OPENLDR_CE_WEBHOOK_TOKEN=<the-secret>   # the Ingest webhook secret you copied
-OPENLDR_CE_HOOK_PATH=ingest             # required — targets the unified webhook path
 OPENLDR_CE_TIMEZONE=+03:00              # UTC offset for DISA's unzoned timestamps (per country)
+# OPENLDR_CE_HOOK_PATH=/api/workflows/hooks/ingest  # optional — this is already the default
 ```
 
 `OPENLDR_CE_TIMEZONE` is **required** and has no safe default: DISA stores local wall-clock times
