@@ -89,8 +89,8 @@ async function main(): Promise<void> {
     }
   } else {
     try {
-      const { formsSeeded, workflowsSeeded } = await seedEssentials(ctx);
-      logger.info({ formsSeeded, workflowsSeeded }, 'essential seed complete (SEED_ON_START off)');
+      const { formsSeeded, workflowsSeeded, connectorsSeeded } = await seedEssentials(ctx);
+      logger.info({ formsSeeded, workflowsSeeded, connectorsSeeded }, 'essential seed complete (SEED_ON_START off)');
     } catch (err) {
       logger.warn({ err }, 'essential seed failed (continuing)');
     }
