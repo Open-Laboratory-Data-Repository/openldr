@@ -174,7 +174,7 @@ export function AppShell({
           </Button>
         </div>
 
-        <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-2">
+        <nav aria-label={t('a11y.primaryNav', { defaultValue: 'Primary' })} className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-2">
           {NAV.filter((n) => !n.caps || n.caps.some((c) => hasCapability(c))).map(({ to, labelKey, end, icon: Icon }) => (
             <SidebarNavItem key={to} to={to} end={end} icon={Icon} label={t(labelKey)} collapsed={collapsed} onNavigate={() => setMobileOpen(false)} />
           ))}

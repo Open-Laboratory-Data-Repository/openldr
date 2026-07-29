@@ -337,7 +337,7 @@ export function UserDialog({ open, onOpenChange, user, onSaved }: UserDialogProp
                 id="user-username"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                autoComplete="off"
+                autoComplete="username"
               />
 
               <Label htmlFor="user-password" className="whitespace-nowrap">{t('users.password')}</Label>

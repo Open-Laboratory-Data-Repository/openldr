@@ -75,7 +75,7 @@ export function ResetPasswordDialog({ open, onOpenChange, user, onDone }: Props)
             </div>
             <div className="flex gap-2">
               <div className="relative flex-1">
-                <Input id="rp-new" type={reveal ? 'text' : 'password'} className="pr-9" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="off" placeholder={t('users.newPasswordPlaceholder')} />
+                <Input id="rp-new" type={reveal ? 'text' : 'password'} className="pr-9" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" placeholder={t('users.newPasswordPlaceholder')} />
                 <button
                   type="button"
                   onClick={() => setReveal((v) => !v)}
@@ -92,7 +92,7 @@ export function ResetPasswordDialog({ open, onOpenChange, user, onDone }: Props)
           </div>
           <div>
             <Label htmlFor="rp-confirm">{t('users.confirmPassword')}</Label>
-            <Input id="rp-confirm" type={reveal ? 'text' : 'password'} value={confirm} onChange={(e) => setConfirm(e.target.value)} autoComplete="off" />
+            <Input id="rp-confirm" type={reveal ? 'text' : 'password'} value={confirm} onChange={(e) => setConfirm(e.target.value)} autoComplete="new-password" />
           </div>
           <label className="flex items-center gap-2 text-sm text-foreground">
             <Checkbox checked={requireChange} onCheckedChange={(c) => setRequireChange(!!c)} />

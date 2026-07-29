@@ -52,13 +52,6 @@ export function FormRuntime({
     });
   };
 
-  const submit = async () => {
-    const nextErrors = validate(schema, answers);
-    setErrors(nextErrors);
-    if (Object.keys(nextErrors).length > 0) return;
-    await onSubmit(cleanAnswers(schema, answers));
-  };
-
   // Top-level visible fields (excluding group children, which are rendered inside their group).
   const topLevelFields = useMemo(
     () =>
@@ -137,10 +130,19 @@ export function FormRuntime({
     <TooltipProvider>
     <form
       id={formId}
+      // Field-level `required` (below) is declared for assistive tech, but native validation UI is
+      // disabled so the schema `validate()` wired into onSubmit drives the experience with the
+      // app's own inline error messages rather than native browser bubbles.
+      noValidate
       className="grid gap-0"
       onSubmit={(event) => {
         event.preventDefault();
-        void submit();
+        // Wire schema validation to submission: compute field errors, surface them, and only
+        // hand off to the caller's onSubmit when the form is valid.
+        const nextErrors = validate(schema, answers);
+        setErrors(nextErrors);
+        if (Object.keys(nextErrors).length > 0) return;
+        void onSubmit(cleanAnswers(schema, answers));
       }}
     >
       {sectionGroups ? (
@@ -282,7 +284,7 @@ function FieldControl({
       const current = value != null ? String(value) : '';
       return (
         <Select value={current} onValueChange={(v) => onChange(v)}>
-          <SelectTrigger id={field.id} className="w-full" aria-label={label}>
+          <SelectTrigger id={field.id} className="w-full" aria-label={label} aria-required={field.required || undefined}>
             <SelectValue placeholder={field.placeholder ?? 'Select...'} />
           </SelectTrigger>
           <SelectContent>
@@ -330,6 +332,7 @@ function FieldControl({
               onChange(n);
             }}
             aria-label={label}
+            required={field.required}
           />
           {field.unit ? <span className="text-xs text-muted-foreground">{field.unit}</span> : null}
         </div>
@@ -345,6 +348,7 @@ function FieldControl({
           placeholder={field.placeholder}
           onChange={(e) => onChange(e.target.value || undefined)}
           aria-label={label}
+          required={field.required}
         />
       );
 
@@ -357,6 +361,7 @@ function FieldControl({
           placeholder={field.placeholder}
           onChange={(e) => onChange(e.target.value || undefined)}
           aria-label={label}
+          required={field.required}
         />
       );
 
@@ -367,6 +372,7 @@ function FieldControl({
           type="file"
           onChange={(e) => onChange(e.target.files?.[0])}
           aria-label={label}
+          required={field.required}
         />
       );
 
@@ -383,6 +389,7 @@ function FieldControl({
           placeholder={field.placeholder ?? `Search ${field.fieldType}...`}
           onChange={(e) => onChange(e.target.value || undefined)}
           aria-label={label}
+          required={field.required}
         />
       );
 
@@ -396,6 +403,7 @@ function FieldControl({
           placeholder={field.placeholder}
           onChange={(e) => onChange(e.target.value || undefined)}
           aria-label={label}
+          required={field.required}
         />
       );
   }

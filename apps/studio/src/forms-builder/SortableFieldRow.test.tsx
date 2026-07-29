@@ -96,10 +96,9 @@ describe('SortableFieldRow', () => {
 
   it('calls onSelect when the label/select area is clicked', () => {
     const { onSelect } = renderRow();
-    // Click the card container (not the checkbox)
-    const card = screen.getByRole('checkbox').closest('[data-sortable-card]') ??
-      screen.getByText(/Patient name/).closest('div[class]');
-    if (card) fireEvent.click(card as HTMLElement);
+    // The field label is a real button so selection is keyboard-accessible and exposed to
+    // assistive tech (see SortableFieldRow); clicking it selects the field.
+    fireEvent.click(screen.getByRole('button', { name: 'Edit field Patient name' }));
     expect(onSelect).toHaveBeenCalled();
   });
 

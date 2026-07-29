@@ -49,7 +49,7 @@ export function ExcelTemplateForm({ node, update }: NodeFormProps) {
 
       <FormField label="Template (.xlsx)" hint="Upload the branded template once — the key below fills in automatically.">
         <div className="space-y-2">
-          <input ref={fileRef} type="file" accept={XLSX_ACCEPT} className="hidden" onChange={onFile} />
+          <input ref={fileRef} type="file" aria-label="Upload template file" accept={XLSX_ACCEPT} className="hidden" onChange={onFile} />
           <div className="flex items-center gap-2">
             <Button type="button" variant="outline" size="sm" disabled={uploading} onClick={() => fileRef.current?.click()}>
               {uploading ? <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> : <Upload className="mr-2 h-3.5 w-3.5" />}

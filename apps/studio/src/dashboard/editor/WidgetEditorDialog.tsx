@@ -101,7 +101,7 @@ function ColumnSelect({ label, value, columns, onChange }: { label: string; valu
   return (
     <Field label={label}>
       <Select value={value} onValueChange={onChange}>
-        <SelectTrigger className="h-8 text-xs">
+        <SelectTrigger aria-label={label} className="h-8 text-xs">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -469,7 +469,7 @@ export function WidgetEditorDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="flex h-[92vh] w-[95vw] max-w-[95vw] flex-col gap-0 p-0">
+      <DialogContent aria-label="Widget editor" className="flex h-[92vh] w-[95vw] max-w-[95vw] flex-col gap-0 p-0">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border px-4 py-2">
           <DialogTitle asChild>
@@ -477,7 +477,7 @@ export function WidgetEditorDialog({
               aria-label="Title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="w-full min-w-0 border-0 bg-transparent px-0 text-base font-semibold text-foreground outline-none focus:border-b focus:border-primary md:w-80"
+              className="w-full min-w-0 border-0 bg-transparent px-0 text-base font-semibold text-foreground outline-none focus:border-b focus:border-primary focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring md:w-80"
             />
           </DialogTitle>
           <Button variant="ghost" size="icon" className="h-7 w-7" aria-label="Close" onClick={onClose}>
@@ -721,7 +721,7 @@ export function WidgetEditorDialog({
                       <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-3 py-4">
                         <VarRow label="Type">
                           <Select value={def.type} onValueChange={(t) => updateDef({ type: t as WidgetVariableDef['type'] })}>
-                            <SelectTrigger className="h-7 text-xs">
+                            <SelectTrigger aria-label="Type" className="h-7 text-xs">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -734,13 +734,14 @@ export function WidgetEditorDialog({
                         </VarRow>
 
                         <VarRow label="Label">
-                          <Input value={def.label} onChange={(e) => updateDef({ label: e.target.value })} className="h-7 text-xs" placeholder="Display name" />
+                          <Input aria-label="Label" value={def.label} onChange={(e) => updateDef({ label: e.target.value })} className="h-7 text-xs" placeholder="Display name" />
                         </VarRow>
 
                         {def.type === 'text' && (
                           <>
                             <VarRow label="Options">
                               <Input
+                                aria-label="Options"
                                 value={def.options?.join(', ') ?? ''}
                                 onChange={(e) => {
                                   const val = e.target.value;
@@ -752,6 +753,7 @@ export function WidgetEditorDialog({
                             </VarRow>
                             <VarRow label="Options SQL">
                               <Input
+                                aria-label="Options SQL"
                                 value={def.optionsSql ?? ''}
                                 onChange={(e) => updateDef({ optionsSql: e.target.value || undefined })}
                                 className="h-7 font-mono text-xs"
@@ -773,7 +775,7 @@ export function WidgetEditorDialog({
                               })
                             }
                           >
-                            <SelectTrigger className="h-7 text-xs">
+                            <SelectTrigger aria-label="Dashboard filter" className="h-7 text-xs">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -806,6 +808,7 @@ export function WidgetEditorDialog({
                             />
                           ) : def.type === 'number' ? (
                             <Input
+                              aria-label="Test value"
                               type="number"
                               value={testValues[v] != null ? String(testValues[v]) : ''}
                               onChange={(e) => setTestValues((p) => ({ ...p, [v]: e.target.value ? Number(e.target.value) : null }))}
@@ -814,7 +817,7 @@ export function WidgetEditorDialog({
                             />
                           ) : (def.options?.length ?? 0) > 0 || (dynamicVarOptions[v]?.length ?? 0) > 0 ? (
                             <Select value={(testValues[v] as string) ?? '__all__'} onValueChange={(val) => setTestValues((p) => ({ ...p, [v]: val === '__all__' ? null : val }))}>
-                              <SelectTrigger className="h-7 text-xs">
+                              <SelectTrigger aria-label="Test value" className="h-7 text-xs">
                                 <SelectValue placeholder="All" />
                               </SelectTrigger>
                               <SelectContent>
@@ -828,6 +831,7 @@ export function WidgetEditorDialog({
                             </Select>
                           ) : (
                             <Input
+                              aria-label="Test value"
                               value={(testValues[v] as string) ?? ''}
                               onChange={(e) => setTestValues((p) => ({ ...p, [v]: e.target.value || null }))}
                               className="h-7 text-xs"

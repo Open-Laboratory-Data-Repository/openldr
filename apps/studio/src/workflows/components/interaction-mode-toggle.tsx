@@ -48,6 +48,7 @@ function ModeButton({
     <button
       type="button"
       onClick={onClick}
+      aria-label={title}
       title={title}
       className={cn(
         'flex h-8 w-8 items-center justify-center transition-colors first:rounded-l-md last:rounded-r-md',

@@ -70,12 +70,14 @@ function FilterValueInput({
           value={String(pair[0] ?? "")}
           onChange={(e) => onChange([e.target.value, String(pair[1] ?? "")])}
           placeholder={t("table.from")}
+          aria-label={t("table.from")}
         />
         <Input
           className="h-8 text-xs"
           value={String(pair[1] ?? "")}
           onChange={(e) => onChange([String(pair[0] ?? ""), e.target.value])}
           placeholder={t("table.to")}
+          aria-label={t("table.to")}
         />
       </div>
     );
@@ -97,7 +99,7 @@ function FilterValueInput({
         value={typeof value === "string" ? value : ""}
         onValueChange={(v) => onChange(v)}
       >
-        <SelectTrigger className="h-8 text-xs">
+        <SelectTrigger className="h-8 text-xs" aria-label={t("table.pickValue")}>
           <SelectValue placeholder={t("table.pickValue")} />
         </SelectTrigger>
         <SelectContent>
@@ -118,6 +120,7 @@ function FilterValueInput({
       value={Array.isArray(value) ? value.join(", ") : String(value ?? "")}
       onChange={(e) => onChange(e.target.value)}
       placeholder={operator === "in" ? t("table.commaSeparated") : t("table.enterValue")}
+      aria-label={operator === "in" ? t("table.commaSeparated") : t("table.enterValue")}
     />
   );
 }
@@ -177,7 +180,7 @@ export function FilterPopover<T>({ columns, filters, onApply }: FilterPopoverPro
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-[640px] p-0">
+      <PopoverContent align="start" className="w-[min(640px,calc(100vw-2rem))] p-0">
         <div className="max-h-[60vh] overflow-y-auto p-3">
           {draft.length === 0 ? (
             <p className="px-2 py-3 text-xs text-muted-foreground">
@@ -201,7 +204,7 @@ export function FilterPopover<T>({ columns, filters, onApply }: FilterPopoverPro
                           value={rule.combine}
                           onValueChange={(v) => updateFilter(rule.id, { combine: v as "and" | "or" })}
                         >
-                          <SelectTrigger className="h-8 text-xs">
+                          <SelectTrigger className="h-8 text-xs" aria-label={t("table.combine", { defaultValue: "Combine with" })}>
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -225,7 +228,7 @@ export function FilterPopover<T>({ columns, filters, onApply }: FilterPopoverPro
                         updateFilter(rule.id, { column: v, operator: nextOp, value: "" });
                       }}
                     >
-                      <SelectTrigger className="h-8 w-44 text-xs">
+                      <SelectTrigger className="h-8 w-44 text-xs" aria-label={t("table.columns")}>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -241,7 +244,7 @@ export function FilterPopover<T>({ columns, filters, onApply }: FilterPopoverPro
                       value={rule.operator}
                       onValueChange={(v) => updateFilter(rule.id, { operator: v as FilterOperator, value: "" })}
                     >
-                      <SelectTrigger className="h-8 w-32 text-xs">
+                      <SelectTrigger className="h-8 w-32 text-xs" aria-label={t("table.operator", { defaultValue: "Operator" })}>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>

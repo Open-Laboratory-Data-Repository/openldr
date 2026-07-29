@@ -51,6 +51,17 @@ interface TreeCtx {
   groupCountLabel: (label: string, count: number) => string;
 }
 
+function EmptyBranch({ depth }: { depth: number }): JSX.Element {
+  return (
+    <p
+      className="py-1 pr-2 text-xs italic text-muted-foreground"
+      style={{ paddingLeft: `${depth * 16 + 8}px` }}
+    >
+      No entries.
+    </p>
+  );
+}
+
 function renderChildren(parent: OntologyNode, children: OntologyNode[], depth: number, ctx: TreeCtx): JSX.Element {
   const renderRow = (child: OntologyNode): JSX.Element => (
     <TreeRow
@@ -68,7 +79,7 @@ function renderChildren(parent: OntologyNode, children: OntologyNode[], depth: n
   );
 
   const grouped = children.some((c) => c.group !== null);
-  if (!grouped) return <>{children.map(renderRow)}</>;
+  if (!grouped) return children.length === 0 ? <EmptyBranch depth={depth} /> : <>{children.map(renderRow)}</>;
 
   const order: string[] = [];
   const buckets = new Map<string, OntologyNode[]>();
@@ -91,6 +102,7 @@ function renderChildren(parent: OntologyNode, children: OntologyNode[], depth: n
           <Fragment key={key}>
             <button
               type="button"
+              aria-label={ctx.groupCountLabel(label, rows.length)}
               onClick={() => ctx.onToggleGroup(key)}
               className="flex w-full items-center gap-1.5 py-1 pr-2 text-left text-[10px] font-medium uppercase tracking-wide text-muted-foreground transition-colors hover:bg-[rgba(70,130,180,0.06)]"
               style={{ paddingLeft: `${depth * 16 + 8}px` }}
@@ -100,7 +112,7 @@ function renderChildren(parent: OntologyNode, children: OntologyNode[], depth: n
               </span>
               <TruncatedText text={ctx.groupCountLabel(label, rows.length)} className="min-w-0" />
             </button>
-            {!collapsed && rows.map(renderRow)}
+            {!collapsed && (rows.length === 0 ? <EmptyBranch depth={depth + 1} /> : rows.map(renderRow))}
           </Fragment>
         );
       })}

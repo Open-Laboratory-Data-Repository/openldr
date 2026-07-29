@@ -43,6 +43,7 @@ export function CustomEdge({
       {selected && (
         <EdgeLabelRenderer>
           <button
+            aria-label="Delete edge"
             className="nodrag nopan pointer-events-auto absolute flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-destructive-foreground shadow-sm"
             style={{
               transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,

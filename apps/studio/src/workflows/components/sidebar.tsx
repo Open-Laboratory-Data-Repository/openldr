@@ -211,6 +211,7 @@ export function Sidebar() {
         <button
           type="button"
           onClick={() => setCollapsed(false)}
+          aria-label="Expand node library"
           title="Expand node library"
           className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
         >
@@ -239,6 +240,7 @@ export function Sidebar() {
         <button
           type="button"
           onClick={() => setCollapsed(true)}
+          aria-label="Collapse node library"
           title="Collapse node library"
           className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
         >
@@ -250,6 +252,7 @@ export function Sidebar() {
           <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           <input
             type="text"
+            aria-label="Search nodes"
             placeholder="Search nodes…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -259,6 +262,7 @@ export function Sidebar() {
             <button
               type="button"
               onClick={() => setSearch('')}
+              aria-label="Clear search"
               title="Clear search"
               className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:bg-secondary hover:text-foreground"
             >

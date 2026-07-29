@@ -24,6 +24,8 @@ export function LayersTab({ template, selectedIds, onSelect }: Props): JSX.Eleme
         const active = selectedIds.includes(el.id);
         return (
           <button key={el.id} onClick={(e) => toggle(el.id, e.shiftKey)}
+            aria-label={el.name || t('reportDesigner.layer', { defaultValue: 'Layer' })}
+            aria-pressed={active}
             className={cn('flex w-full items-center gap-2 border-b border-border px-3 py-2.5 text-left text-sm transition-colors',
               active ? 'bg-accent text-accent-foreground' : 'hover:bg-muted')}>
             <Icon className="h-4 w-4 shrink-0" /> <TruncatedText text={el.name} className="min-w-0" />

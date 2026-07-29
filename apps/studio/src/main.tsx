@@ -12,13 +12,21 @@ import '@glideapps/glide-data-grid/dist/index.css';
 import './i18n';
 import { App } from './App';
 import { AuthProvider } from './auth/AuthProvider';
+import { ThemeProvider } from './shell/ThemeProvider';
+import { AppErrorBoundary } from './shell/ErrorBoundary';
+import { Toaster } from './components/ui/sonner';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <BrowserRouter basename="/studio">
-      <AuthProvider>
-        <App />
-      </AuthProvider>
-    </BrowserRouter>
+    <AppErrorBoundary>
+      <ThemeProvider>
+        <BrowserRouter basename="/studio">
+          <AuthProvider>
+            <App />
+          </AuthProvider>
+        </BrowserRouter>
+        <Toaster />
+      </ThemeProvider>
+    </AppErrorBoundary>
   </StrictMode>,
 );

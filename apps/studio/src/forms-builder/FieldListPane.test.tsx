@@ -162,9 +162,8 @@ describe('FieldListPane', () => {
 
   it('calls onSelect when a card label area is clicked', () => {
     const { onSelect } = renderPane();
-    // Click the first card — the outermost div with data-sortable-card
-    const card = screen.getByText('Patient name').closest('[data-sortable-card]');
-    if (card) fireEvent.click(card as HTMLElement);
+    // The field label is a real button (keyboard-accessible selection) — click it to select.
+    fireEvent.click(screen.getByRole('button', { name: 'Edit field Patient name' }));
     expect(onSelect).toHaveBeenCalled();
   });
 

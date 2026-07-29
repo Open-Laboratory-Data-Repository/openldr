@@ -56,12 +56,11 @@ export function SortableFieldRow({
       ref={setNodeRef}
       style={style}
       data-sortable-card
-      className={`group flex items-center gap-2 px-3 py-2 rounded-md border transition-colors cursor-pointer ${
+      className={`group flex items-center gap-2 px-3 py-2 rounded-md border transition-colors ${
         selected
           ? 'border-primary bg-primary/5'
           : 'border-border hover:border-muted-foreground/30'
       }`}
-      onClick={(e) => onSelect(field, e)}
     >
       {/* Drag handle */}
       <button
@@ -83,18 +82,26 @@ export function SortableFieldRow({
         aria-label={`Toggle enabled for ${field.displayLabel}`}
       />
 
-      {/* Label region */}
-      <div className="flex-1 min-w-0 leading-tight">
-        <p className="m-0 flex items-baseline gap-0.5 text-sm font-medium text-foreground leading-5">
+      {/* Label region — a real button so selecting a field works by click and keyboard
+          (Enter/Space) and is exposed to assistive tech, without making the whole row an
+          interactive element that would nest the drag/checkbox/⋯ controls inside it. */}
+      <button
+        type="button"
+        onClick={(e) => onSelect(field, e)}
+        aria-pressed={selected}
+        aria-label={`Edit field ${field.displayLabel}`}
+        className="flex-1 min-w-0 cursor-pointer text-left leading-tight"
+      >
+        <span className="m-0 flex items-baseline gap-0.5 text-sm font-medium text-foreground leading-5">
           <TruncatedText text={field.displayLabel} className="min-w-0 shrink" />
           {field.required && (
             <span className="text-destructive">*</span>
           )}
-        </p>
+        </span>
         {field.fhirPath && (
-          <TruncatedText text={field.fhirPath} className="m-0 text-[10px] text-muted-foreground font-mono leading-4" />
+          <TruncatedText as="span" text={field.fhirPath} className="block text-[10px] text-muted-foreground font-mono leading-4" />
         )}
-      </div>
+      </button>
 
       {/* Lint marker */}
       {lintIssue && (

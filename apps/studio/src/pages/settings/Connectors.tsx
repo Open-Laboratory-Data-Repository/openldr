@@ -455,7 +455,7 @@ export function Connectors() {
                       <Input id="connector-baseurl" data-testid="connector-baseurl" autoComplete="off" value={draft.baseUrl} onChange={(e) => setDraft({ ...draft, baseUrl: e.target.value })}
                         placeholder={draft.id === null ? 'https://external-system.example.org/api' : t('settings.connectors.secretSet')} />
                       <Label htmlFor="connector-username" className="whitespace-nowrap">{t('settings.connectors.fieldUsername')}</Label>
-                      <Input id="connector-username" data-testid="connector-username" autoComplete="off" value={draft.username} onChange={(e) => setDraft({ ...draft, username: e.target.value })}
+                      <Input id="connector-username" data-testid="connector-username" autoComplete="username" value={draft.username} onChange={(e) => setDraft({ ...draft, username: e.target.value })}
                         placeholder={draft.id === null ? '' : t('settings.connectors.secretSet')} />
                       <Label htmlFor="connector-password" className="whitespace-nowrap">{t('settings.connectors.fieldPassword')}</Label>
                       <Input id="connector-password" data-testid="connector-password" type="password" autoComplete="new-password" value={draft.password} onChange={(e) => setDraft({ ...draft, password: e.target.value })}

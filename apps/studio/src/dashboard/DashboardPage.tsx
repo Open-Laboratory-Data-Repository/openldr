@@ -126,6 +126,7 @@ export function DashboardPage() {
     <input
       ref={fileInput}
       type="file"
+      aria-label={t('dashboard.importDashboard')}
       accept="application/json,.json"
       className="hidden"
       onChange={(e) => {

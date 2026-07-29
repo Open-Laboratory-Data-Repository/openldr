@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" role="img" aria-label="OpenLDR Studio">
+  <rect width="1200" height="630" fill="#171717"/>
+  <rect x="0" y="0" width="1200" height="8" fill="#4682B4"/>
+  <g transform="translate(96 210)">
+    <rect width="120" height="120" rx="26" fill="#4682B4"/>
+    <path d="M60 24c14.6 17.3 22.5 28.9 22.5 39.8a22.5 22.5 0 0 1-45 0C37.5 52.9 45.4 41.3 60 24Z" fill="#ffffff"/>
+    <circle cx="50.3" cy="61.5" r="6" fill="#4682B4"/>
+  </g>
+  <text x="248" y="290" font-family="Inter, Segoe UI, sans-serif" font-size="76" font-weight="700" fill="#fafafa">OpenLDR Studio</text>
+  <text x="250" y="352" font-family="Inter, Segoe UI, sans-serif" font-size="34" font-weight="400" fill="#898989">Open Laboratory Data Repository — analytics &amp; administration</text>
+</svg>

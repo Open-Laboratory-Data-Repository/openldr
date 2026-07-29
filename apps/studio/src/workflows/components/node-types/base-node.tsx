@@ -126,6 +126,7 @@ export function NodeShell({
           variant="ghost"
           size="icon"
           onClick={() => setConfigNode(id)}
+          aria-label="Configure"
           title="Configure"
           className="h-7 w-7 shadow-md"
         >
@@ -136,6 +137,7 @@ export function NodeShell({
           variant="ghost"
           size="icon"
           onClick={() => removeNode(id)}
+          aria-label="Delete"
           title="Delete"
           className="h-7 w-7 shadow-md"
         >

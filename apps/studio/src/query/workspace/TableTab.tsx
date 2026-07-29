@@ -59,9 +59,10 @@ export function TableTab({ tab }: { tab: TableTabModel | DatasetTab }): JSX.Elem
         <TooltipProvider delayDuration={150}>
           <div className="flex items-center gap-2 border-b border-border px-3 py-2">
             <StatusIcon status={status} message={statusMessage} />
+            <span className="sr-only" role="status" aria-live="polite">{statusMessage}</span>
             {/* Read-only: the connector is fixed to the table this tab was opened from. */}
             <Select value={tab.connectorId} disabled>
-              <SelectTrigger className="h-8 w-56 text-xs"><SelectValue>{connectorName}</SelectValue></SelectTrigger>
+              <SelectTrigger aria-label="Connector" className="h-8 w-56 text-xs"><SelectValue>{connectorName}</SelectValue></SelectTrigger>
               <SelectContent>
                 {connectors.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
               </SelectContent>
