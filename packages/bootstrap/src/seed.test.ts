@@ -168,6 +168,9 @@ describe('seedEssentials — always-seeded minimum (SEED_ON_START off)', () => {
     expect(forms.every((f) => f.status === 'published')).toBe(true);
     // Both default workflows seeded; the Ingest workflow is bound to the seeded Lab order form's id.
     expect(res.workflowsSeeded).toBe(2);
+    // No TARGET_DATABASE_URL/SECRETS_ENCRYPTION_KEY in this fakeApp() → the default connector is
+    // self-guarded and skipped (0), without throwing.
+    expect(res.connectorsSeeded).toBe(0);
     expect(workflows.map((w) => w.id).sort()).toEqual(['wf-ingest', 'wf-sample-reactive']);
     const ingest = workflows.find((w) => w.id === 'wf-ingest');
     const def = ingest?.definition as { nodes: { data: { action?: string; config?: { formId?: string } } }[] };
@@ -185,12 +188,24 @@ describe('seedEssentials — always-seeded minimum (SEED_ON_START off)', () => {
     expect(workflows).toHaveLength(2);
   });
 
-  it('does not seed demo data (no connector, dashboard, or terminology writes)', async () => {
+  it('seeds the default connector (with config) but no dashboard/terminology demo data', async () => {
     const { app, connectors, dashboards, valueSets } = fakeApp({ SECRETS_ENCRYPTION_KEY: 'k', TARGET_DATABASE_URL: 'postgres://u:p@h:5432/d' });
-    await seedEssentials(app);
-    expect(connectors).toHaveLength(0);
+    const res = await seedEssentials(app);
+    // The connector is an essential — a fresh SEED_ON_START=false install must be able to query.
+    expect(res.connectorsSeeded).toBe(1);
+    expect(connectors).toHaveLength(1);
+    expect(connectors[0].name).toBe('Target Warehouse (Postgres)');
+    // Dashboards + terminology stay opt-in demo data, seeded only by the full SEED_ON_START seed.
     expect(dashboards).toHaveLength(0);
     expect(valueSets).toHaveLength(0);
+  });
+
+  it('seeds the connector idempotently by name — re-running the essentials adds nothing', async () => {
+    const { app, connectors } = fakeApp({ SECRETS_ENCRYPTION_KEY: 'k', TARGET_DATABASE_URL: 'postgres://u:p@h:5432/d' });
+    await seedEssentials(app);
+    const res2 = await seedEssentials(app);
+    expect(res2.connectorsSeeded).toBe(0);
+    expect(connectors).toHaveLength(1);
   });
 });
 

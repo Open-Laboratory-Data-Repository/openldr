@@ -65,21 +65,44 @@ const MSSQL_CONNECTOR_NAME = 'Target Warehouse (SQL Server)';
 // (Task 5), so a mysql install seeds the full data-driven report set just like Postgres/MSSQL.
 const MYSQL_CONNECTOR_NAME = 'Target Warehouse (MySQL/MariaDB)';
 
-// The forms + workflows surface the ALWAYS-seeded essentials need (see `seedEssentials`). Typed
-// against FormStore/WorkflowStore directly (not AppContext) to keep seed.ts from importing ./index,
-// which re-exports this module — that would be a circular dependency. AppContext satisfies it.
+// The forms + workflows + default connector surface the ALWAYS-seeded essentials need (see
+// `seedEssentials`). Typed against FormStore/WorkflowStore/ConnectorStore directly (not AppContext)
+// to keep seed.ts from importing ./index, which re-exports this module — that would be a circular
+// dependency. AppContext satisfies it.
 export interface EssentialSeedTarget {
   forms: Pick<FormStore, 'list' | 'create' | 'setStatus'>;
   workflows: { store: Pick<WorkflowStore, 'list' | 'create'> };
+  // Host connector store, threaded from AppContext so the seed can create the default
+  // target-warehouse connector — an essential (like the workflows) so a fresh install can query
+  // out of the box, not just when SEED_ON_START seeds the full demo set. AppContext satisfies it.
+  connectors: Pick<ConnectorStore, 'list' | 'create'>;
+  // Config the default-connector seed reads (which warehouse URL/adapter/credentials to parse).
+  // Lives here because the connector is now an essential; AppContext satisfies it.
+  cfg: {
+    TARGET_DATABASE_URL?: string;
+    SECRETS_ENCRYPTION_KEY?: string;
+    TARGET_STORE_ADAPTER?: 'pg' | 'mssql' | 'mysql';
+    MSSQL_HOST?: string;
+    MSSQL_PORT?: number;
+    MSSQL_DATABASE?: string;
+    MSSQL_USER?: string;
+    MSSQL_PASSWORD?: string;
+    MSSQL_ENCRYPT?: boolean;
+    MSSQL_TRUST_SERVER_CERT?: boolean;
+    MYSQL_HOST?: string;
+    MYSQL_PORT?: number;
+    MYSQL_DATABASE?: string;
+    MYSQL_USER?: string;
+    MYSQL_PASSWORD?: string;
+    MYSQL_SSL?: boolean;
+    MYSQL_SSL_REJECT_UNAUTHORIZED?: boolean;
+  };
 }
 
 // Full structural shape of the forms surface seedDatabase needs — the essentials above plus the
-// connector/dashboard/report/terminology/settings surfaces only the opt-in full demo seed touches.
+// dashboard/report/terminology/settings surfaces only the opt-in full demo seed touches.
 // AppContext satisfies this at the call sites.
 export interface FormSeedTarget extends EssentialSeedTarget {
-  // Host connector store + config, threaded from AppContext, so the seed can create a
-  // default target-warehouse connector. Structural subset — AppContext satisfies it.
-  connectors: Pick<ConnectorStore, 'list' | 'create'>;
   // Dashboards store, threaded the same way so the seed can insert the vetted sample dashboard
   // through the store (bypassing the authoring gate). AppContext.dashboards satisfies this.
   dashboards: { store: Pick<DashboardStore, 'get' | 'create' | 'update'> };
@@ -102,25 +125,7 @@ export interface FormSeedTarget extends EssentialSeedTarget {
     loaders: { resource(json: unknown): Promise<{ conceptsLoaded: number }> };
   };
   appSettings: Pick<AppSettingStore, 'get' | 'set'>;
-  cfg: {
-    TARGET_DATABASE_URL?: string;
-    SECRETS_ENCRYPTION_KEY?: string;
-    TARGET_STORE_ADAPTER?: 'pg' | 'mssql' | 'mysql';
-    MSSQL_HOST?: string;
-    MSSQL_PORT?: number;
-    MSSQL_DATABASE?: string;
-    MSSQL_USER?: string;
-    MSSQL_PASSWORD?: string;
-    MSSQL_ENCRYPT?: boolean;
-    MSSQL_TRUST_SERVER_CERT?: boolean;
-    MYSQL_HOST?: string;
-    MYSQL_PORT?: number;
-    MYSQL_DATABASE?: string;
-    MYSQL_USER?: string;
-    MYSQL_PASSWORD?: string;
-    MYSQL_SSL?: boolean;
-    MYSQL_SSL_REJECT_UNAUTHORIZED?: boolean;
-  };
+  // `cfg` (warehouse URL/adapter/credentials) is inherited from EssentialSeedTarget.
 }
 
 // Create (deduped by name) + publish the given forms. Dedup by name, not id: forms.create()
@@ -193,17 +198,23 @@ async function seedDefaultWorkflowsFor(app: EssentialSeedTarget, orderFormId: st
 }
 
 // The ALWAYS-seeded minimum, independent of SEED_ON_START: the Users-page form, the Lab order
-// form, and the unified ingestion workflow (+ its reactive companion) bound to it. These
-// are NOT optional demo data — the Users page can't render without a published 'users'-targeted
-// form, and the ingest workflow's form branch can't validate without the "Lab order" form — so a fresh install
-// with SEED_ON_START=false must still get them. Deliberately mirrors the unconditional
+// form, the unified ingestion workflow (+ its reactive companion) bound to it, and the default
+// target-warehouse connector. These are NOT optional demo data — the Users page can't render
+// without a published 'users'-targeted form, the ingest workflow's form branch can't validate
+// without the "Lab order" form, and the Query page can't run without a connector — so a fresh
+// install with SEED_ON_START=false must still get them. Deliberately mirrors the unconditional
 // `roles.seedSystemRoles()` boot-time seed (see createAppContext): idempotent (forms deduped by
-// name, workflows by id), so it's safe to run on every boot and re-run alongside the full seed.
-export async function seedEssentials(app: EssentialSeedTarget): Promise<{ formsSeeded: number; workflowsSeeded: number }> {
+// name, workflows by id, connector by name), so it's safe to run on every boot and re-run
+// alongside the full seed.
+export async function seedEssentials(app: EssentialSeedTarget): Promise<{ formsSeeded: number; workflowsSeeded: number; connectorsSeeded: number }> {
   const essentialForms = sampleForms.filter((f) => ESSENTIAL_FORM_NAMES.has(f.name));
   const { seeded: formsSeeded, orderFormId } = await upsertPublishedForms(app, essentialForms);
   const workflowsSeeded = await seedDefaultWorkflowsFor(app, orderFormId);
-  return { formsSeeded, workflowsSeeded };
+  // Default target-warehouse connector — an essential (like the workflows) so a SEED_ON_START=false
+  // install still has a connector to query against. Idempotent by name and self-guarded (skips when
+  // TARGET_DATABASE_URL / SECRETS_ENCRYPTION_KEY are unset), so it's safe on every boot.
+  const connectorsSeeded = await seedDefaultConnector(app);
+  return { formsSeeded, workflowsSeeded, connectorsSeeded };
 }
 
 // Idempotent sample-data seed shared by the `openldr db seed` CLI and the server's
@@ -385,7 +396,7 @@ async function seedBundledTerminology(app: FormSeedTarget): Promise<SeedResult['
 // warehouse. Idempotent by name. Skips gracefully (with a clear log) when the secrets key is
 // unset — connectors.create() would otherwise throw, and `db seed` must still succeed. Returns
 // the number of connectors created (0 or 1).
-export async function seedDefaultConnector(app: FormSeedTarget): Promise<number> {
+export async function seedDefaultConnector(app: Pick<EssentialSeedTarget, 'connectors' | 'cfg'>): Promise<number> {
   if (!app.cfg.SECRETS_ENCRYPTION_KEY) {
     console.log('[seed] SECRETS_ENCRYPTION_KEY unset — skipping default connector');
     return 0;
