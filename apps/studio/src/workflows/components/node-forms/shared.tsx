@@ -90,6 +90,7 @@ export function Select({
   children,
   className,
   disabled,
+  'aria-label': ariaLabel,
 }: SelectHTMLAttributes<HTMLSelectElement>) {
   const opts = collectOptions(children);
   const placeholderOpt = opts.find((o) => o.value === '');
@@ -103,7 +104,7 @@ export function Select({
       onValueChange={(v) => onChange?.({ target: { value: v } } as never)}
       disabled={disabled}
     >
-      <SelectTrigger className={cn('mt-1.5 w-full', className)}>
+      <SelectTrigger aria-label={ariaLabel ?? placeholder} className={cn('mt-1.5 w-full', className)}>
         <SelectValue placeholder={placeholder} />
       </SelectTrigger>
       <SelectContent>

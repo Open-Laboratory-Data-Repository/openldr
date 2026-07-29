@@ -122,6 +122,7 @@ export function CategoryPicker({ value, onChange, categories, onCategoriesChange
                   ) : (
                     <button
                       type="button"
+                      aria-label={`Select category ${cat.label}`}
                       className="flex min-w-0 flex-1 text-left text-sm"
                       onClick={() => handleSelect(cat.id)}
                     >

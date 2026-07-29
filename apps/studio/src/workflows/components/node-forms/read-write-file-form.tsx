@@ -43,6 +43,7 @@ export function ReadWriteFileForm({ node, update }: NodeFormProps) {
               <input
                 type="checkbox"
                 id="rwf-as-text"
+                aria-label="Read as text"
                 checked={!!(config.asText as boolean)}
                 onChange={(e) => patchConfig({ asText: e.target.checked })}
                 className="h-4 w-4 rounded border-border accent-violet-500"

@@ -128,7 +128,7 @@ function ElementBox({ el, rect, zoom, selected, showHandles, editing, onPointerD
           onChange={(e) => onEditChange(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Escape') { e.preventDefault(); onEditEnd(); } }}
           onBlur={onEditEnd}
-          className="absolute inset-0 resize-none overflow-hidden border-0 bg-transparent p-0 leading-tight outline-none"
+          className="absolute inset-0 resize-none overflow-hidden border-0 bg-transparent p-0 leading-tight outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
           style={textStyle(el, zoom)} />
       ) : (
         <ElementContent el={el} zoom={zoom} />

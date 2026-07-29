@@ -35,7 +35,7 @@ export function Combobox({
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
-        <div className="p-2"><Input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder={searchPlaceholder} /></div>
+        <div className="p-2"><Input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder={searchPlaceholder} aria-label={searchPlaceholder} /></div>
         <div className="max-h-64 overflow-y-auto p-1">
           {filtered.length === 0 ? (
             <div className="px-2 py-3 text-center text-sm text-muted-foreground">{searchPlaceholder}…</div>

@@ -258,8 +258,15 @@ export function FormBuilderPage(): JSX.Element {
           }
         />
 
+        {/* Announce form lifecycle changes (draft → published/archived) and transient errors to
+            assistive tech. The status region is visually hidden because the state is already shown
+            as a colored dot in the header; the live region gives non-visual users the same update. */}
+        <p role="status" aria-live="polite" className="sr-only">
+          {status ? `Form status: ${status}` : ''}
+        </p>
+
         {error ? (
-          <div className="m-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+          <div role="alert" className="m-3 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
             {error}
           </div>
         ) : null}

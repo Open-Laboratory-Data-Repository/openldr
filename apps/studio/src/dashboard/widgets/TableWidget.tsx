@@ -7,7 +7,15 @@ export function TableWidget({ result }: { result: ReportResult }) {
       <Table>
         <TableHeader><TableRow>{columns.map((c) => <TableHead key={c.key}>{c.label}</TableHead>)}</TableRow></TableHeader>
         <TableBody>
-          {rows.map((r, i) => <TableRow key={i}>{columns.map((c) => <TableCell key={c.key}>{String(r[c.key] ?? '')}</TableCell>)}</TableRow>)}
+          {rows.length === 0 ? (
+            <TableRow>
+              <TableCell colSpan={Math.max(columns.length, 1)} className="py-8 text-center text-sm text-muted-foreground">
+                No data to display.
+              </TableCell>
+            </TableRow>
+          ) : (
+            rows.map((r, i) => <TableRow key={i}>{columns.map((c) => <TableCell key={c.key}>{String(r[c.key] ?? '')}</TableCell>)}</TableRow>)
+          )}
         </TableBody>
       </Table>
     </div>

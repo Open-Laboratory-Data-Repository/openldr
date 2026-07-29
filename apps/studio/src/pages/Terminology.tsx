@@ -452,13 +452,14 @@ export function Terminology(): JSX.Element {
   return (
     <AppShell title="Terminology" fullBleed>
       <div className="ui-scope flex h-full flex-col">
-        <input ref={fileInputRef} data-testid="valueset-import-input" type="file" accept=".json,.json.gz,.gz" className="hidden" onChange={(e) => void handleVsImportFile(e)} />
+        <input ref={fileInputRef} data-testid="valueset-import-input" type="file" accept=".json,.json.gz,.gz" className="hidden" aria-label="Import value set file" onChange={(e) => void handleVsImportFile(e)} />
         <input
           ref={termImportFileRef}
           data-testid="term-import-input"
           type="file"
           accept=".csv,.txt,.tsv,.rrf,.jsonl,.ndjson,.json"
           className="hidden"
+          aria-label="Import terminology file"
           onChange={(e) => void handleTermImportFile(e)}
         />
         {loadError && (
@@ -835,13 +836,13 @@ export function Terminology(): JSX.Element {
                   <div className="flex flex-1 flex-col overflow-hidden">
                     <div className="flex items-center gap-2 border-b border-border px-3 py-2">
                       <Select value={vsSystem} onValueChange={setVsSystem}>
-                        <SelectTrigger className="h-8 w-56 text-sm"><SelectValue /></SelectTrigger>
+                        <SelectTrigger className="h-8 w-56 text-sm" aria-label="Filter by code system"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="__all__">All systems</SelectItem>
                           {vsSystemOptions.map((u) => <SelectItem key={u} value={u}><span className="font-mono text-xs">{systemLabel(u)}</span></SelectItem>)}
                         </SelectContent>
                       </Select>
-                      <Input value={vsSearch} onChange={(e) => setVsSearch(e.target.value)} placeholder="Search value sets..." className="h-8 max-w-md text-sm" />
+                      <Input value={vsSearch} onChange={(e) => setVsSearch(e.target.value)} placeholder="Search value sets..." className="h-8 max-w-md text-sm" aria-label="Search value sets" />
                     </div>
                     <div className="flex-1 overflow-auto">
                       <Table>

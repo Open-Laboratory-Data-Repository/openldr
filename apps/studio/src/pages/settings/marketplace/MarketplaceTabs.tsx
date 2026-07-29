@@ -49,9 +49,9 @@ function FilterBar({ filter, setFilter, typeFilter, setTypeFilter, right }: {
   const { t } = useTranslation();
   return (
     <div className="mb-3 flex items-center gap-2">
-      <Input className="max-w-xs" placeholder={t('settings.marketplace.searchPlaceholder')} value={filter} onChange={(e) => setFilter(e.target.value)} />
+      <Input className="max-w-xs" placeholder={t('settings.marketplace.searchPlaceholder')} value={filter} onChange={(e) => setFilter(e.target.value)} aria-label={t('settings.marketplace.searchPlaceholder')} />
       <Select value={typeFilter} onValueChange={setTypeFilter}>
-        <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
+        <SelectTrigger className="w-36" aria-label={t('settings.marketplace.filterByType', { defaultValue: 'Filter by type' })}><SelectValue /></SelectTrigger>
         <SelectContent>
           <SelectItem value="all">{t('settings.marketplace.allTypes')}</SelectItem>
           <SelectItem value="plugin">Plugin</SelectItem>

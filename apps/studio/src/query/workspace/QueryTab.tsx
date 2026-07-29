@@ -64,8 +64,9 @@ export function QueryTab({ tab }: { tab: QueryTabModel }): JSX.Element {
         <TooltipProvider delayDuration={150}>
           <div className="flex items-center gap-2 px-3 py-2">
             <StatusIcon status={status} message={statusMessage} />
+            <span className="sr-only" role="status" aria-live="polite">{statusMessage}</span>
             <Select value={tab.connectorId ?? ''} onValueChange={(v) => patchQuery(tab.id, { connectorId: v, dirty: true })}>
-              <SelectTrigger className="h-8 w-56 text-xs"><SelectValue placeholder="Select a connector…" /></SelectTrigger>
+              <SelectTrigger aria-label={t('query.connector', { defaultValue: 'Connector' })} className="h-8 w-56 text-xs"><SelectValue placeholder="Select a connector…" /></SelectTrigger>
               <SelectContent>
                 {connectors.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
               </SelectContent>

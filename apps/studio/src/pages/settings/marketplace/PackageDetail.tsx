@@ -180,7 +180,7 @@ export function PackageDetail({ entry, onBack, onInstall, onToggleEnabled, onRol
                 <div className="flex justify-between gap-2"><dt className="text-muted-foreground">{t('settings.marketplace.publisher')}</dt><dd className="text-right text-foreground/90">{publisher?.name || '—'}</dd></div>
                 <div className="flex items-center justify-between gap-2"><dt className="text-muted-foreground">{t('settings.marketplace.version')}</dt><dd className="text-right text-foreground/90">{entry.versions && entry.versions.length > 1 ? (
                   <Select value={selectedRef} onValueChange={setSelectedRef}>
-                    <SelectTrigger data-testid="version-select" className="h-7 w-28 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectTrigger data-testid="version-select" className="h-7 w-28 text-xs" aria-label={t('settings.marketplace.version')}><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {entry.versions.map((v) => <SelectItem key={v.ref} value={v.ref}>{v.version}</SelectItem>)}
                     </SelectContent>

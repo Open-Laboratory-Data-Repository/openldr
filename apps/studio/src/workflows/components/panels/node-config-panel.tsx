@@ -90,6 +90,7 @@ export function NodeConfigPanel() {
           type="button"
           className="flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
           onClick={() => setConfigNode(null)}
+          aria-label="Close"
           title="Close"
         >
           <X className="h-4 w-4" />

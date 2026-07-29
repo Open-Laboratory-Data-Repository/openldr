@@ -48,10 +48,12 @@ export function DataTableToolbar<T>({
     <div className="flex flex-wrap items-center gap-2">
       {onSearchChange && (
         <Input
+          type="search"
           value={searchValue ?? ""}
           onChange={(e) => onSearchChange(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter") onSearchEnter?.(); }}
           placeholder={searchPlaceholder}
+          aria-label={searchPlaceholder ?? t("common.search", { defaultValue: "Search" })}
           className="h-8 w-60 text-xs"
         />
       )}

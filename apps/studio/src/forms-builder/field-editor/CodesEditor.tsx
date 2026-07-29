@@ -74,7 +74,7 @@ export function CodesEditor({ field, onUpdate }: CodesEditorProps): JSX.Element 
                 variant="ghost"
                 size="icon"
                 aria-label="Remove code"
-                className="h-5 w-5 shrink-0 text-muted-foreground hover:text-destructive"
+                className="h-6 w-6 shrink-0 text-muted-foreground hover:text-destructive"
                 onClick={() => removeCode(i)}
               >
                 ×

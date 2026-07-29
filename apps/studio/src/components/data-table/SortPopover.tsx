@@ -115,7 +115,7 @@ export function SortPopover<T>({ columns, sorts, onApply }: SortPopoverProps<T>)
         <div className="border-t border-border px-3 py-2 flex items-center gap-2">
           {available.length > 0 ? (
             <Select value="" onValueChange={(v) => addSort(v)}>
-              <SelectTrigger className="h-7 flex-1 text-xs">
+              <SelectTrigger aria-label={t("table.addSort")} className="h-7 flex-1 text-xs">
                 <div className="flex items-center gap-1 text-muted-foreground">
                   <Plus className="h-3 w-3" /> {t("table.addSort")}
                 </div>

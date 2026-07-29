@@ -72,6 +72,7 @@ export function SwitchForm({ node, update }: NodeFormProps) {
             </div>
             <button
               type="button"
+              aria-label="Remove rule"
               onClick={() => removeRule(i)}
               className="mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-rose-500/10 hover:text-rose-400"
             >

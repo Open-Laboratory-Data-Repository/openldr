@@ -89,6 +89,8 @@ export function Users() {
     { id: 'createdAt', labelKey: 'users.created', accessor: (u) => <span className="text-xs text-muted-foreground">{formatDate(u.createdAt)}</span>, type: 'text', defaultVisible: false, sortable: true, filterable: false, headClassName: 'w-40' },
     { id: '__actions', labelKey: 'common.actions', accessor: (u) => {
         const isSelf = !!me && me.id === u.id;
+        // The actions wrapper stops the ⋯ trigger click from bubbling to the row's click-to-edit
+        // handler. It is an event-propagation guard, not an interactive control, so it has no role.
         return (
           <div className="flex items-center justify-end" onClick={(e) => e.stopPropagation()}>
             <DropdownMenu>

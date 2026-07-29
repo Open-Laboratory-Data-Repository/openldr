@@ -106,6 +106,7 @@ export function RunHistoryDrawer({ open, workflowId, onClose }: Props) {
             size="icon"
             onClick={refresh}
             disabled={loading || detailLoading}
+            aria-label="Refresh"
             title="Refresh"
             className="absolute right-11 top-2.5 h-7 w-7 text-muted-foreground hover:text-foreground"
           >
