@@ -145,3 +145,48 @@ describe('lintFormSchema', () => {
     expect(lintFormSchema(form)).toEqual([]);
   });
 });
+
+describe('reference source lint', () => {
+  const base = {
+    id: 'form-1', name: 'F', versionLabel: null, fhirVersion: 'R4' as const,
+    fhirResourceType: null, fhirProfileUrl: null, facilityId: null,
+    targetPages: [], sections: [], version: 1, active: true,
+    status: 'draft' as const, createdAt: '2026-07-31T00:00:00Z', updatedAt: '2026-07-31T00:00:00Z',
+  };
+  const refField = (over: Record<string, unknown>) => ({
+    id: 'r', fhirPath: null, displayLabel: 'R', description: null,
+    fieldType: 'reference' as const, required: false, enabled: true, order: 0,
+    cardinality: { min: 0, max: '1' }, ...over,
+  });
+
+  it('errors when a reference field declares no source', () => {
+    const issues = lintFormSchema({ ...base, fields: [refField({})] } as never);
+    expect(issues).toContainEqual(expect.objectContaining({
+      severity: 'error', code: 'reference-missing-source', fieldId: 'r',
+    }));
+  });
+
+  it('accepts a reference field with a referenceTarget', () => {
+    const issues = lintFormSchema({ ...base, fields: [refField({ referenceTarget: 'Patient' })] } as never);
+    expect(issues.filter((i) => i.code === 'reference-missing-source')).toEqual([]);
+  });
+
+  it('warns when both valueSetUrl and referenceTarget are set', () => {
+    const issues = lintFormSchema({
+      ...base, fields: [refField({ valueSetUrl: 'http://x/vs', referenceTarget: 'Patient' })],
+    } as never);
+    expect(issues).toContainEqual(expect.objectContaining({
+      severity: 'warning', code: 'reference-ambiguous-source', fieldId: 'r',
+    }));
+  });
+
+  it('warns rather than errors for a sourceless facility field', () => {
+    const issues = lintFormSchema({
+      ...base, fields: [refField({ fieldType: 'facility' })],
+    } as never);
+    expect(issues).toContainEqual(expect.objectContaining({
+      severity: 'warning', code: 'reference-missing-source', fieldId: 'r',
+    }));
+    expect(issues.filter((i) => i.severity === 'error')).toEqual([]);
+  });
+});

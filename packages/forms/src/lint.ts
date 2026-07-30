@@ -1,5 +1,6 @@
 import type { FormSchema } from './schema/form-schema';
 import { validateTemplateTargets } from './page-targets';
+import { isReferenceFieldType, resolveReferenceSource } from './reference-source';
 
 export type FormLintSeverity = 'error' | 'warning';
 
@@ -10,7 +11,9 @@ export interface FormLintIssue {
     | 'choice-missing-options'
     | 'visibility-missing-field'
     | 'dangling-group-id'
-    | 'target-contract-violation';
+    | 'target-contract-violation'
+    | 'reference-missing-source'
+    | 'reference-ambiguous-source';
   message: string;
   fieldId?: string;
   sectionId?: string;
@@ -49,6 +52,28 @@ export function lintFormSchema(form: FormSchema): FormLintIssue[] {
           severity: 'error',
           code: 'choice-missing-options',
           message: `Field "${field.id}" is a ${field.fieldType} but has neither valueSetOptions nor valueSetUrl`,
+          fieldId: field.id,
+        });
+      }
+    }
+
+    // reference-family source declaration. `reference` is an error (it has no usable
+    // fallback); facility/organism/antibiogram warn, because they degrade to a text
+    // input rather than becoming unusable.
+    if (isReferenceFieldType(field.fieldType)) {
+      const resolved = resolveReferenceSource(field);
+      if (!resolved.ok) {
+        issues.push({
+          severity: field.fieldType === 'reference' ? 'error' : 'warning',
+          code: 'reference-missing-source',
+          message: `Field "${field.id}" is a ${field.fieldType} but declares neither valueSetUrl nor referenceTarget`,
+          fieldId: field.id,
+        });
+      } else if (field.valueSetUrl && field.referenceTarget) {
+        issues.push({
+          severity: 'warning',
+          code: 'reference-ambiguous-source',
+          message: `Field "${field.id}" sets both valueSetUrl and referenceTarget; valueSetUrl wins`,
           fieldId: field.id,
         });
       }
