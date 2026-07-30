@@ -9,7 +9,7 @@
     "build": "tsup",
     "build:check": "tsup && node dist/index.js --help",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "vitest run --testTimeout 30000 --hookTimeout 30000",
     "lint": "echo \"no lint\""
   },
   "dependencies": {

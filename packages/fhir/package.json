@@ -6,7 +6,7 @@
   "exports": { ".": "./src/index.ts" },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "vitest run --testTimeout 30000 --hookTimeout 30000",
     "lint": "echo \"no lint\""
   },
   "dependencies": { "zod": "^3.24.1" },

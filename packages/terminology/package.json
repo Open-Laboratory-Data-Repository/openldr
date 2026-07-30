@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "exports": { ".": "./src/index.ts" },
-  "scripts": { "typecheck": "tsc --noEmit", "test": "vitest run", "lint": "echo \"no lint\"" },
+  "scripts": { "typecheck": "tsc --noEmit", "test": "vitest run --testTimeout 30000 --hookTimeout 30000", "lint": "echo \"no lint\"" },
   "dependencies": {
     "@openldr/core": "workspace:*",
     "@openldr/db": "workspace:*",

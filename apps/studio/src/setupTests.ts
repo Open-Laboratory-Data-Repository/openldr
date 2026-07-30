@@ -1,6 +1,14 @@
 import '@/i18n';
 import '@testing-library/jest-dom/vitest';
 
+import { configure } from '@testing-library/react';
+
+// Testing Library's own async timeout (waitFor / findBy*) defaults to 1000ms and is INDEPENDENT
+// of vitest's testTimeout. The full turbo gate runs ~10 packages at once on 12 cores, and a
+// starved render could exceed 1s, so queries failed with "Unable to find role=..." — a message
+// that reads like a missing element and is really just contention. The same specs pass alone.
+configure({ asyncUtilTimeout: 15000 });
+
 // jsdom's Blob lacks .text()/.arrayBuffer(); export tests read blob contents
 // and the PDF viewer decodes the blob via .arrayBuffer().
 if (typeof Blob !== 'undefined' && typeof Blob.prototype.text !== 'function') {

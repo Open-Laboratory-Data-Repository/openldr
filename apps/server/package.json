@@ -12,7 +12,7 @@
     "dev": "node --watch dev.mjs",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "test": "vitest run --testTimeout 30000 --hookTimeout 30000",
     "lint": "eslint ."
   },
   "dependencies": {
