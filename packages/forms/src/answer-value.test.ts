@@ -225,4 +225,12 @@ describe('fromAnswer', () => {
   it('returns a bare reference when no display is present, so legacy answers still round-trip', () => {
     expect(fromAnswer({ valueReference: { reference: 'Patient/123' } })).toBe('Patient/123');
   });
+
+  // Documents a known precondition rather than an aspiration: `system` is how fromAnswer
+  // tells a coded reference answer from a select answer, so a system-bearing select answer
+  // from an externally-authored QR hydrates as an object. See from-response.ts.
+  it('decodes a system-bearing coding as an object even if it came from a select', () => {
+    expect(fromAnswer({ valueCoding: { system: 'http://hl7.org/fhir/administrative-gender', code: 'female' } }))
+      .toEqual({ system: 'http://hl7.org/fhir/administrative-gender', code: 'female', display: null });
+  });
 });
