@@ -24,7 +24,7 @@ On the seeded Lab order form (`packages/forms/src/samples/forms.ts`), `patient` 
 
 **Terminology.** `GET /api/terminology/systems/:systemId/terms?q=` backs the existing `TermPicker` (`apps/studio/src/terminology/TermPicker.tsx`), which debounces at 200ms and emits `{ system, code, display }`. `GET /api/terminology/ValueSet/$expand` exists but takes only `count`/`offset` — no text filter, so it cannot back a type-ahead as-is. `GET /api/terminology/ValueSet/$validate-code` exists.
 
-**Column policy.** `columnPolicy: ColumnPolicyStore` is on `AppContext` (`packages/bootstrap/src/index.ts`) with an in-memory cache, so Settings→Data Exposure is reachable from a route.
+**Canonical store.** `FhirStore.exists(resourceType, id)` (`packages/db/src/fhir-store.ts`) is a cheap existence check against the latest version — the primitive the entity validation in §5 needs.
 
 **Browser boundary.** Studio imports forms helpers from `@openldr/forms/pure` (`packages/forms/src/pure.ts`), which re-exports only Node-free modules. Anything the picker needs must be added there.
 
@@ -53,28 +53,36 @@ type ReferenceSourceResult =
   | { ok: false; reason: 'no-source' | 'unknown-target' | 'ambiguous' }
 ```
 
-`resolveReferenceSource(field, registries)` resolves against two registries rather than inferring from string shape:
+Resolution happens in two stages, because **declaring** a source and that source **existing** are different questions with different homes.
+
+`resolveReferenceSource(field)` is pure, synchronous, browser-safe, and classifies what the field *declares*:
 
 | Field state | Result |
 |---|---|
 | `valueSetUrl` set | `{ kind: 'coding', mode: 'valueset', url }` |
-| `referenceTarget` resolves as a coding system | `{ kind: 'coding', mode: 'codesystem', system }` |
-| `referenceTarget` names a registered entity | `{ kind: 'entity', target }` |
-| both `valueSetUrl` and a resolvable `referenceTarget` | `valueSetUrl` wins; lint warns `ambiguous` |
-| neither resolves | `{ ok: false }` |
+| `referenceTarget` is a URL or a `cs-url-*` system id | `{ kind: 'coding', mode: 'codesystem', system }` |
+| `referenceTarget` is any other non-empty string | `{ kind: 'entity', target }` |
+| both `valueSetUrl` and `referenceTarget` set | `valueSetUrl` wins; lint warns `ambiguous` |
+| neither set | `{ ok: false, reason: 'no-source' }` |
 
 A coding system identifier may be a system id (`cs-url-LOINC`) or a canonical URL (`http://loinc.org`) — `searchTerms` already resolves both, and `referenceTarget` follows that convention. **No new schema property is added.**
 
-The entity registry is a plain list of target names (`['Patient']` in v1). Both registries live server-side and are authoritative there.
+The **server** then checks existence at search time: the coding system must be installed, or the entity target registered. A declared-but-absent source is a 400 at search, not a lint error.
 
-**The client does not resolve source kind.** It renders a picker and reacts to the `kind` the server returns in the response envelope. Its only local decision is the fallback in §6 — whether a field declares *any* source (`valueSetUrl` or `referenceTarget` present) — which needs no registry. This keeps the terminology-system list, which changes as systems are installed, out of the browser entirely.
+This split matters. Lint runs in the browser and has no registry, and a form that binds to a terminology system an operator has not installed yet should still be publishable — it simply cannot search until the system is loaded. Making that a publish-blocking error would couple form authoring to terminology install order.
+
+The entity registry is a plain list of target names (`['Patient']` in v1), server-side and authoritative there, as is the coding-system list (`admin.codingSystems.list()`).
+
+The client calls `resolveReferenceSource` only for the §6 fallback decision — does this field declare a source at all — and otherwise renders whatever `kind` the server returns. The terminology-system list, which changes as systems are installed, never reaches the browser.
 
 ### 2. Lint
 
 `packages/forms/src/lint.ts` gains:
 
-- **error** — a `reference` field whose source does not resolve. This is what stops a form reaching capture in the state Lab order is in today, and it gates publish (publish is already blocked on lint errors).
-- **warning** — `ambiguous` (both `valueSetUrl` and a resolvable `referenceTarget`).
+- **error** — a `reference` field that declares no source at all (`no-source`). It gates publish, since publish is already blocked on lint errors. It does *not* check that the declared source exists — see §1.
+
+Note what this does **not** catch: Lab order's `tests` field declares `referenceTarget: 'ActivityDefinition'`, which classifies as an entity target. It is a *declared* source, so lint passes; it is an *unregistered* one, so search returns 400. Lint cannot tell the difference without a registry. Fixing that field is the sample correction below, not a lint rule.
+- **warning** — `ambiguous` (both `valueSetUrl` and `referenceTarget` set).
 - **warning** — a `facility`/`organism`/`antibiogram` field with no resolvable source, noting it falls back to free text.
 
 The seeded Lab order sample is corrected as part of this work: `tests` gains a resolvable source and `cardinality.max` changes from `'1'` to `'*'` (a lab order carries several tests). `patient` keeps `referenceTarget: 'Patient'`, which resolves against the entity registry unchanged.
@@ -103,8 +111,9 @@ Response envelope, kind-tagged:
 
 - filters `active = true AND replaced_by_id IS NULL`, so duplicates retired by the `mergePatients` cascade (`packages/bootstrap/src/patient-merge.ts`) cannot be selected;
 - matches with `lower(col) LIKE lower(?)` via Kysely's `sql` template, which holds across Postgres, MySQL and MSSQL (`ilike` is Postgres-only);
-- passes searched and returned columns through `columnPolicy` — a column marked hidden is neither searched nor included in `secondary`;
-- builds `display` from `surname firstname` and `secondary` from the surviving subset of `date_of_birth · sex · national_id`.
+- searches a fixed, purpose-chosen column set and builds `display` from `surname firstname`, `secondary` from `date_of_birth · sex`. `national_id` is **searchable but never rendered**, so a national ID is not disclosed to someone who did not already know it.
+
+**The resolver deliberately does not consult `columnPolicy`.** That policy governs what the analytics query builder may expose, and its `patients` entry denies `id, patient_guid, surname, firstname, national_id, phone, email, date_of_birth, replaced_by_id` (`packages/dashboards/src/models/registry.ts`) — every column this resolver needs. Routing the picker through it would return zero results on a default install. Hiding patient names is correct for ad-hoc analytics and wrong for a clerk looking up the patient they are ordering tests for. The controls that do apply here are field-scoping (a caller can only search patients when a published form declares a patient-bound field) and the `forms.view` capability on the route.
 
 Search reads the projection; integrity is checked against canonical at validation time (§5). A patient missing from a lagging projection is a UX annoyance, not a correctness failure.
 
@@ -181,7 +190,7 @@ In `FormRuntime`, the stub branch is replaced: `reference` routes to `ReferenceP
 ## Testing
 
 - **`resolveReferenceSource`** — table-driven over field permutations: valueSetUrl only, referenceTarget as system id, as canonical URL, as entity, both set, neither set, unknown target.
-- **Patient resolver** — Postgres plus one other engine, to hold the portability line. Covers: match on each searched column, case-insensitivity, exclusion of `active = false` and `replaced_by_id IS NOT NULL`, limit cap, and hidden-column suppression via `columnPolicy`.
+- **Patient resolver** — Postgres plus one other engine, to hold the portability line. Covers: match on each searched column, case-insensitivity, exclusion of `active = false` and `replaced_by_id IS NOT NULL`, limit cap, and that `national_id` matches a search but never appears in a rendered row.
 - **`toAnswer`/`fromAnswer`** — round-trip for both answer kinds and the legacy bare string; an explicit assertion that `select`/`multiselect` output is unchanged.
 - **`validateAnswers`** — shape check only: bare string and malformed object in a reference field rejected; existing cases unchanged.
 - **`validateReferences`** — valid coding, coding outside the ValueSet, valid entity, non-existent entity, terminology unreachable.
