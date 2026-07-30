@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { format, isAfter, isBefore, startOfDay } from 'date-fns';
-import { Calendar } from './calendar';
+import { Calendar, CALENDAR_START_MONTH, CALENDAR_END_MONTH } from './calendar';
 import { Popover, PopoverContent, PopoverTrigger } from './popover';
 import { Button } from './button';
 import { cn } from '@/lib/cn';
@@ -40,10 +40,18 @@ export function DatePicker({ value, onChange, minDate, maxDate, placeholder = 'P
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-auto p-0" align="start">
+        {/* Month + YEAR dropdowns, same rationale as DateRangePicker: every DatePicker in the app
+            is a data filter (table filters, dashboard filters, widget parameters), so it has to
+            reach historical data. With prev/next arrows alone that is one click per month.
+            `minDate`/`maxDate` narrow the dropdown when the caller has constrained the field. */}
         <Calendar
           mode="single"
           selected={dateValue}
           onSelect={handleDateSelect}
+          captionLayout="dropdown"
+          startMonth={minDate ?? CALENDAR_START_MONTH}
+          endMonth={maxDate ?? CALENDAR_END_MONTH}
+          defaultMonth={dateValue ?? undefined}
           disabled={(date) => {
             if (maxDate && isAfter(startOfDay(date), startOfDay(maxDate))) return true;
             if (minDate && isBefore(startOfDay(date), startOfDay(minDate))) return true;

@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { format } from 'date-fns';
 import type { DateRange } from 'react-day-picker';
-import { Calendar } from './calendar';
+import { Calendar, CALENDAR_START_MONTH, CALENDAR_END_MONTH } from './calendar';
 import { Popover, PopoverContent, PopoverTrigger } from './popover';
 import { Button } from './button';
 import { cn } from '@/lib/cn';
@@ -11,10 +11,9 @@ export interface DateRangePreset {
   range: { from: string; to: string };
 }
 
-// Selectable span for the year dropdown. Wide enough for real laboratory archives (a national
-// repository holds a decade or more of history) without making the dropdown unusable.
-const START_MONTH = new Date(2000, 0, 1);
-const END_MONTH = new Date(new Date().getFullYear() + 1, 11, 31);
+// Shared with DatePicker so the two surfaces can never drift apart — see calendar.tsx.
+const START_MONTH = CALENDAR_START_MONTH;
+const END_MONTH = CALENDAR_END_MONTH;
 
 /** Presets every date-range surface should offer. `All time` is the important one: with only
  *  relative windows, historical data (the common case for lab archives) is unreachable without
