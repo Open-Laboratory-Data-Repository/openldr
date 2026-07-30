@@ -987,27 +987,31 @@ export interface TermInput { code: string; display: string; status: TermStatus; 
 export interface TermMapping { id: string; fromSystem: string; fromCode: string; toSystem: string; toCode: string; toDisplay: string | null; mapType: MapType; relationship: string | null; owner: string | null; isActive: boolean }
 export interface TermMappingInput { fromSystem: string; fromCode: string; toSystem: string; toCode: string; toDisplay: string | null; mapType: MapType; relationship?: string | null; owner?: string | null; isActive: boolean }
 
+// `systemId` is a SINGLE path segment and may be either a coding-system id (`cs-url-LOINC`) or a
+// canonical system URL (`http://loinc.org`) — the server resolves both. It MUST be percent-encoded:
+// an unencoded URL injects extra `/` and the request can never match `/systems/:id/terms`, which is
+// why binding a form field to LOINC 404'd with "search terms failed: Not Found".
 export const searchTerms = (systemId: string, p: { q?: string; status?: string; limit?: number; offset?: number }) => {
   const qs = new URLSearchParams();
   if (p.q) qs.set('q', p.q);
   if (p.status) qs.set('status', p.status);
   qs.set('limit', String(p.limit ?? 50));
   qs.set('offset', String(p.offset ?? 0));
-  return authFetch(`/api/terminology/systems/${systemId}/terms?${qs}`).then((r) => okJson<{ rows: Term[]; total: number }>(r, 'search terms'));
+  return authFetch(`/api/terminology/systems/${encodeURIComponent(systemId)}/terms?${qs}`).then((r) => okJson<{ rows: Term[]; total: number }>(r, 'search terms'));
 };
-export const createTerm = (systemId: string, i: TermInput) => authFetch(`/api/terminology/systems/${systemId}/terms`, jbody(i, 'POST')).then((r) => okJson<Term>(r, 'create term'));
-export const updateTerm = (systemId: string, code: string, i: TermInput) => authFetch(`/api/terminology/systems/${systemId}/terms/${encodeURIComponent(code)}`, jbody(i, 'PUT')).then((r) => okJson<Term>(r, 'update term'));
+export const createTerm = (systemId: string, i: TermInput) => authFetch(`/api/terminology/systems/${encodeURIComponent(systemId)}/terms`, jbody(i, 'POST')).then((r) => okJson<Term>(r, 'create term'));
+export const updateTerm = (systemId: string, code: string, i: TermInput) => authFetch(`/api/terminology/systems/${encodeURIComponent(systemId)}/terms/${encodeURIComponent(code)}`, jbody(i, 'PUT')).then((r) => okJson<Term>(r, 'update term'));
 export async function deleteTerm(systemId: string, code: string): Promise<void> {
-  const r = await authFetch(`/api/terminology/systems/${systemId}/terms/${encodeURIComponent(code)}`, { method: 'DELETE' });
+  const r = await authFetch(`/api/terminology/systems/${encodeURIComponent(systemId)}/terms/${encodeURIComponent(code)}`, { method: 'DELETE' });
   if (!r.ok && r.status !== 204) throw new Error(`delete term failed: ${r.status}`);
 }
 export const importTerms = (systemId: string, source: string | Blob) => {
   const init = source instanceof Blob
     ? { method: 'POST', headers: { 'content-type': 'application/octet-stream' }, body: source }
     : jbody({ text: source }, 'POST');
-  return authFetch(`/api/terminology/systems/${systemId}/terms/import`, init).then((r) => okJson<{ imported: number }>(r, 'import terms'));
+  return authFetch(`/api/terminology/systems/${encodeURIComponent(systemId)}/terms/import`, init).then((r) => okJson<{ imported: number }>(r, 'import terms'));
 };
-export const termsTemplateUrl = (systemId: string) => `/api/terminology/systems/${systemId}/terms/template.csv`;
+export const termsTemplateUrl = (systemId: string) => `/api/terminology/systems/${encodeURIComponent(systemId)}/terms/template.csv`;
 
 export const listTermMappings = (system: string, code: string) =>
   authFetch(`/api/terminology/terms/${encodeURIComponent(system)}/${encodeURIComponent(code)}/mappings`).then((r) => okJson<{ outgoing: TermMapping[]; reverse: TermMapping[] }>(r, 'list mappings'));

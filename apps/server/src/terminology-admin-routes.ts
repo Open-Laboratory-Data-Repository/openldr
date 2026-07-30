@@ -125,8 +125,13 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
     replacedBy: z.string().nullish(), metadata: z.record(z.unknown()).nullish(),
   });
 
+  // Accept EITHER the coding-system id (`cs-url-LOINC`) or its canonical url (`http://loinc.org`).
+  // Callers legitimately hold one or the other: the Terminology page lists systems by id, while a
+  // form field's Codes binding is authored as the canonical FHIR system URL. Matching only on `id`
+  // meant the form-field term picker always 404'd, so a coded field could never be bound to an
+  // imported code system — the one place terminology and forms are supposed to meet.
   async function systemInfo(id: string): Promise<{ url: string; systemCode: string }> {
-    const sys = (await admin.codingSystems.list()).find((s) => s.id === id);
+    const sys = (await admin.codingSystems.list()).find((s) => s.id === id || s.url === id);
     if (!sys || !sys.url) {
       throw Object.assign(new Error(`coding system has no url: ${id}`), { name: 'TerminologyAdminError', kind: 'not-found' as const });
     }
