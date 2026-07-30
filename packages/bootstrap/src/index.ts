@@ -182,6 +182,26 @@ function designDefaults(design: ReportDesign): Record<string, unknown> {
   return out;
 }
 
+/**
+ * Statically-declared columns of the design's table bound to `queryId`.
+ *
+ * The SQL runners derive a result's column list from the FIRST ROW
+ * (`rows[0] ? Object.keys(rows[0]) : []`), so a query that legitimately matches nothing reports
+ * ZERO columns. Downstream that is indistinguishable from "this report has no columns": the DHIS2
+ * mapping screen's Org-unit/Period pickers come up empty and no mapping can be authored against
+ * the report — including `AMR Resistance by Facility`, whose whole purpose is the DHIS2 aggregate
+ * push. A design already declares its bound columns, so an empty result can borrow that shape.
+ */
+export function designBoundColumns(design: ReportDesign, queryId: string): { key: string; label: string }[] {
+  for (const page of design.pages ?? []) {
+    for (const el of page.elements ?? []) {
+      const e = el as { kind?: string; dataSource?: { queryId?: string }; boundColumns?: { key: string; label: string }[] };
+      if (e.kind === 'table' && e.dataSource?.queryId === queryId && e.boundColumns?.length) return e.boundColumns;
+    }
+  }
+  return [];
+}
+
 function createDataDrivenReporting(deps: ReportingDataDrivenDeps) {
   const valuesOf = (rawParams: unknown) => (rawParams ?? {}) as Record<string, unknown>;
 
@@ -191,8 +211,11 @@ function createDataDrivenReporting(deps: ReportingDataDrivenDeps) {
     if (!design) throw new ReportNotFoundError(def.designId);
     const values = { ...designDefaults(design), ...valuesOf(rawParams) };
     const { columns, rows } = await deps.runStoredQuery(def.primaryQueryId, values);
+    // An empty result set carries no column metadata (see `designBoundColumns`), so fall back to
+    // the design's declared shape rather than reporting a report with no columns at all.
+    const effective = columns.length > 0 ? columns : designBoundColumns(design, def.primaryQueryId);
     const chart = (def.chart ?? { type: 'stat', value: String(rows.length), label: 'rows' }) as ReportResult['chart'];
-    const cols = columns.map((c) => ({ key: c.key, label: c.label, kind: 'string' as const }));
+    const cols = effective.map((c) => ({ key: c.key, label: c.label, kind: 'string' as const }));
     return { columns: cols, rows, chart, meta: { generatedAt: new Date().toISOString(), rowCount: rows.length } };
   }
 
