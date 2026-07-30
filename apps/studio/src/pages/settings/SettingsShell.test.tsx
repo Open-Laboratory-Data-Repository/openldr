@@ -110,4 +110,20 @@ describe('SettingsShell', () => {
     renderAppLikeSettingsTree('/settings');
     expect(screen.getByText('home')).toBeInTheDocument();
   });
+
+  // REGRESSION: the shell's content wrapper used `overflow-y-auto`, but every settings page
+  // already owns its own scroll region. The two nested scrollers could be scrolled independently,
+  // so the outer one pushed a page's first controls out of view — Distributed sync appeared to
+  // start at "Site ID", with Enable sync / Direction / Central URL seemingly missing, making it
+  // look impossible to point a lab at central.
+  it('does not create a second scroll container around the settings outlet', () => {
+    hasCapability.mockReturnValue(true);
+    const { container } = renderAppLikeSettingsTree('/settings');
+    const scrollers = container.querySelectorAll('.overflow-y-auto');
+    for (const el of scrollers) {
+      // the outlet wrapper is the direct parent of the routed page; it must not scroll
+      expect(el.getAttribute('data-testid')).not.toBe('settings-outlet');
+    }
+    expect(container.querySelector('[data-testid="settings-outlet"]')?.className).toMatch(/overflow-hidden/);
+  });
 });

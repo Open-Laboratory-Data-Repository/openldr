@@ -72,7 +72,13 @@ export function SettingsShell() {
             ))}
           </nav>
         </aside>
-        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+        {/* `overflow-hidden`, NOT `overflow-y-auto`. Every settings page owns its own scroll
+            region (General/NotificationPreferences/Connectors/DataExposure scroll their body,
+            Sites its table, DistributedSync its tab panel). A scroller here as well made two
+            nested ones: the outer could be scrolled independently of the inner, pushing a page's
+            first controls out of view — Distributed sync then looked like it started at "Site ID"
+            with the Enable/Direction/Central URL fields missing entirely. */}
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden" data-testid="settings-outlet">
           <Outlet />
         </div>
       </div>
