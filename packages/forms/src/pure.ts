@@ -10,3 +10,4 @@ export * from './lint';
 export * from './diff';
 export * from './page-targets';
 export * from './validate-answers';
+export * from './reference-source';
