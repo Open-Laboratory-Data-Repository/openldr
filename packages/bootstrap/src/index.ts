@@ -79,6 +79,27 @@ import { buildOntologyDistribution, canonicalSystemUrl, createOperations, import
 import { createTerminologyIngestWorker } from './terminology-ingest-worker';
 import { createRunIngest } from './terminology-ingest-shared';
 
+
+/** Params used ONLY to probe a report for its column list (see `reporting.columns` below).
+ *  Deliberately wide so a required date-range parameter is always satisfied — the rows the probe
+ *  returns are thrown away, so the range never influences anything a user sees or saves. Both the
+ *  `from`/`to` and `dateFrom`/`dateTo` spellings are supplied because report definitions use
+ *  either. */
+export const COLUMN_PROBE_PARAMS = {
+  from: '1900-01-01', to: '2999-12-31',
+  dateFrom: '1900-01-01', dateTo: '2999-12-31',
+} as const;
+
+/** Discover a report's column list by executing it and discarding the rows. Extracted so the
+ *  "probe with real params, never `{}`" contract is testable — see column-probe.test.ts. */
+export async function discoverReportColumns(
+  run: (id: string, params: Record<string, unknown>) => Promise<unknown>,
+  id: string,
+): Promise<unknown> {
+  const r = await run(id, { ...COLUMN_PROBE_PARAMS });
+  return (r as { columns: unknown }).columns;
+}
+
 export class ReportNotFoundError extends Error {
   constructor(public readonly id: string) {
     super(`unknown report: ${id}`);
@@ -473,7 +494,8 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     renderReportDesignPdf,
   });
 
-  const reporting: ReportingApi = {
+
+const reporting: ReportingApi = {
     // Catalog-only, synchronous by design (see the 2026-07-05 phase4 spec's "Sync `list()`
     // untouched" note — report-scheduler.ts/plugin-broker.ts/CLI `report list` are its only
     // consumers). Now that the catalog is empty, this always returns []; those consumers already
@@ -1195,7 +1217,13 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     schedules: createPluginScheduleApi(pluginData),
     reporting: {
       list: () => reporting.listAll(),
-      columns: (id) => reporting.run(id, {}).then((r) => (r as { columns: unknown }).columns),
+      // Column discovery EXECUTES the report purely to read back its column list — the rows are
+      // discarded. Probing with `{}` therefore threw `required parameter: from` for every report
+      // that declares a required parameter, which is all eight built-ins: the DHIS2 mapping
+      // screen's "Org-unit column" / "Period column" pickers came up empty ("No matches") and no
+      // mapping could be authored against a built-in report at all. Probe with a permissive window
+      // instead; these values only ever shape the discarded result set, never the saved mapping.
+      columns: (id) => discoverReportColumns((rid, p) => reporting.run(rid, p), id),
       run: (id, params) => reporting.run(id, params),
       eventSources: () => reporting.eventSources(),
     },
