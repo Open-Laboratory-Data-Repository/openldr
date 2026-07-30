@@ -33,14 +33,14 @@ export interface WorkflowTriggerRunner {
   reconcile(eventing: EventingPort): Promise<void>;
   setIngestWorkflowIds(ids: string[]): void;
   setEventWorkflowIds(ids: string[]): void;
-  runAndRecord(workflowId: string, source: TriggerSource, input: unknown, files?: Record<string, BinaryRef>): Promise<{ runId: string; correlationId: string | null } | null>;
+  runAndRecord(workflowId: string, source: TriggerSource, input: unknown, files?: Record<string, BinaryRef>): Promise<{ runId: string; correlationId: string | null; status: WorkflowRun['status']; error: string | null } | null>;
 }
 
 export function createWorkflowTriggerRunner(deps: RunnerDeps): WorkflowTriggerRunner {
   let ingestIds = new Set<string>();
   let eventIds = new Set<string>();
 
-  async function runAndRecord(workflowId: string, source: TriggerSource, input: unknown, files?: Record<string, BinaryRef>): Promise<{ runId: string; correlationId: string | null } | null> {
+  async function runAndRecord(workflowId: string, source: TriggerSource, input: unknown, files?: Record<string, BinaryRef>): Promise<{ runId: string; correlationId: string | null; status: WorkflowRun['status']; error: string | null } | null> {
     const wf = await deps.store.get(workflowId);
     if (!wf || !wf.enabled) return null;
     const def = WorkflowDefinitionSchema.parse(wf.definition);
@@ -77,7 +77,10 @@ export function createWorkflowTriggerRunner(deps: RunnerDeps): WorkflowTriggerRu
       correlationId,
     };
     await deps.runs.record(run);
-    return { runId: run.id, correlationId };
+    // Surface the outcome, not just the id: the webhook route must be able to tell a failed
+    // run from a successful one. Returning only {runId} is why POST /hooks/* answered
+    // 200 {ok:true} on a run that stored nothing — silent data loss for the sender.
+    return { runId: run.id, correlationId, status: run.status, error };
   }
 
   /**

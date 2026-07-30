@@ -75,7 +75,13 @@ function fakeWorkflowExtras() {
     runner: {
       setIngestWorkflowIds: (ids: string[]) => { ingestIds = ids; },
       setEventWorkflowIds: (ids: string[]) => { eventIds = ids; },
-      runAndRecord: async (workflowId: string, source: string, input: unknown, files?: unknown) => { runAndRecordCalls.push({ workflowId, source, input, files }); },
+      // Returns a realistic outcome: the hook route now reports the RUN's result (a failed run
+      // answers 500, an absent/disabled workflow 409), so a double that returned undefined would
+      // make every webhook test look like "workflow not enabled".
+      runAndRecord: async (workflowId: string, source: string, input: unknown, files?: unknown) => {
+        runAndRecordCalls.push({ workflowId, source, input, files });
+        return { runId: `run-${runAndRecordCalls.length}`, correlationId: null, status: 'completed' as const, error: null };
+      },
       registerRunner: async () => {},
       reconcile: async () => {},
     },
@@ -370,6 +376,43 @@ describe('workflow routes', () => {
     expect(res.statusCode).toBe(404);
   });
 
+  // REGRESSION: the hook used to answer 200 {ok:true} for EVERY authenticated request, including
+  // runs that failed and stored nothing, and requests to a disabled workflow. A sender (the CDR
+  // toolchain) therefore counted labs as "posted" while the warehouse stayed empty — silent data
+  // loss. The status must reflect the RUN, not merely that the request was accepted.
+  it('POST /api/workflows/hooks/:path reports a FAILED run as 500, not 200', async () => {
+    const app = Fastify();
+    const ctx = fakeCtx();
+    ctx.workflows.runner.runAndRecord = async () => ({
+      runId: 'run-x', correlationId: null, status: 'failed' as const, error: 'Switch rule "fhir" failed',
+    });
+    ctx.workflows.webhooks.register('hello', { workflowId: 'wf-hook', secret: 's3cret' });
+    registerWorkflowRoutes(app, ctx);
+
+    const res = await app.inject({
+      method: 'POST', url: '/api/workflows/hooks/hello',
+      headers: { 'x-webhook-token': 's3cret' }, payload: { name: 'a' },
+    });
+    expect(res.statusCode).toBe(500);
+    expect(res.json()).toMatchObject({ ok: false, runId: 'run-x', status: 'failed', error: 'Switch rule "fhir" failed' });
+  });
+
+  it('POST /api/workflows/hooks/:path reports a disabled/absent workflow as 409, not 200', async () => {
+    const app = Fastify();
+    const ctx = fakeCtx();
+    // runAndRecord returns null when the workflow is missing or disabled: nothing ran.
+    ctx.workflows.runner.runAndRecord = async () => null;
+    ctx.workflows.webhooks.register('hello', { workflowId: 'wf-hook', secret: 's3cret' });
+    registerWorkflowRoutes(app, ctx);
+
+    const res = await app.inject({
+      method: 'POST', url: '/api/workflows/hooks/hello',
+      headers: { 'x-webhook-token': 's3cret' }, payload: { name: 'a' },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({ ok: false });
+  });
+
   it('POST /api/workflows/hooks/:path enforces the secret (401 wrong token, 200 + run on correct)', async () => {
     const app = Fastify();
     const ctx = fakeCtx();
@@ -388,7 +431,7 @@ describe('workflow routes', () => {
       headers: { 'x-webhook-token': 's3cret' }, payload: { name: 'a' },
     });
     expect(ok.statusCode).toBe(200);
-    expect(ok.json()).toEqual({ ok: true, runId: null, correlationId: null });
+    expect(ok.json()).toEqual({ ok: true, runId: 'run-1', correlationId: null });
     expect(ctx.__extras.runAndRecordCalls.length).toBe(1);
     expect(ctx.__extras.runAndRecordCalls[0].workflowId).toBe('wf-hook');
     expect(ctx.__extras.runAndRecordCalls[0].source).toBe('webhook');

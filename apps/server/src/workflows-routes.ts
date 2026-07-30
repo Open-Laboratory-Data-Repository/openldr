@@ -428,7 +428,19 @@ export function registerWorkflowRoutes(
       method: req.method, body: webhookBody,
       headers: stripAuthHeaders(req.headers as Record<string, unknown>), query: req.query,
     }, files);
-    return { ok: true, runId: outcome?.runId ?? null, correlationId: outcome?.correlationId ?? null };
+    // Report the RUN's outcome, not merely that we accepted the request. Answering
+    // 200 {ok:true} regardless meant a sender (e.g. the CDR toolchain) counted a lab as
+    // "posted" while the run had failed and stored nothing — silent data loss.
+    if (!outcome) {
+      // runAndRecord returns null when the workflow is missing or disabled: nothing ran.
+      reply.code(409);
+      return { ok: false, error: 'workflow is not enabled; nothing was processed' };
+    }
+    if (outcome.status !== 'completed') {
+      reply.code(500);
+      return { ok: false, runId: outcome.runId, correlationId: outcome.correlationId, status: outcome.status, error: outcome.error };
+    }
+    return { ok: true, runId: outcome.runId, correlationId: outcome.correlationId };
   });
 }
 
