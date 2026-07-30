@@ -194,7 +194,9 @@ operator starting from a clean slate. (Fresh install only; a re-run keeps the ex
 
 OpenLDR CE stores operational data in an internal **PostgreSQL** database (always) and writes
 flattened analytics/reporting data to a separate **external/target** database. The external
-database may be **PostgreSQL** (default) or **self-hosted Microsoft SQL Server**.
+database may be **PostgreSQL** (default), **self-hosted Microsoft SQL Server**, or **self-hosted
+MySQL / MariaDB** — see the support matrices below. Only self-hosted engines are supported; no
+cloud/hosted database, for the data-sovereignty reasons set out below.
 
 ### Microsoft SQL Server support matrix
 
