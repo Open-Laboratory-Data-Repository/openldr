@@ -11,6 +11,29 @@ export interface DateRangePreset {
   range: { from: string; to: string };
 }
 
+// Selectable span for the year dropdown. Wide enough for real laboratory archives (a national
+// repository holds a decade or more of history) without making the dropdown unusable.
+const START_MONTH = new Date(2000, 0, 1);
+const END_MONTH = new Date(new Date().getFullYear() + 1, 11, 31);
+
+/** Presets every date-range surface should offer. `All time` is the important one: with only
+ *  relative windows, historical data (the common case for lab archives) is unreachable without
+ *  hand-picking a start year. */
+export function defaultDateRangePresets(): DateRangePreset[] {
+  const iso = (d: Date) => format(d, 'yyyy-MM-dd');
+  const today = new Date();
+  const daysAgo = (n: number) => new Date(today.getFullYear(), today.getMonth(), today.getDate() - n);
+  const y = today.getFullYear();
+  return [
+    { label: 'Last 7 days', range: { from: iso(daysAgo(7)), to: iso(today) } },
+    { label: 'Last 30 days', range: { from: iso(daysAgo(30)), to: iso(today) } },
+    { label: 'Last 12 months', range: { from: iso(new Date(y - 1, today.getMonth(), today.getDate())), to: iso(today) } },
+    { label: 'This year', range: { from: `${y}-01-01`, to: iso(today) } },
+    { label: 'Last year', range: { from: `${y - 1}-01-01`, to: `${y - 1}-12-31` } },
+    { label: 'All time', range: { from: iso(START_MONTH), to: iso(END_MONTH) } },
+  ];
+}
+
 interface DateRangePickerProps {
   value: { from: string; to: string } | null;
   onChange: (value: { from: string; to: string } | null) => void;
@@ -69,7 +92,21 @@ export function DateRangePicker({ value, onChange, placeholder = 'Pick a date ra
               ))}
             </div>
           )}
-          <Calendar mode="range" selected={dateRange} onSelect={handleSelect} numberOfMonths={2} />
+          {/* `captionLayout="dropdown"` + an explicit startMonth/endMonth give month AND YEAR
+              dropdowns. Without them react-day-picker shows only prev/next month arrows, so
+              reaching a historical month costs one click per month — laboratory archives are
+              routinely years old (the DISA corpus here is 2013-2016, i.e. ~150 clicks), which made
+              every date-range-parameterised report effectively unrunnable. */}
+          <Calendar
+            mode="range"
+            selected={dateRange}
+            onSelect={handleSelect}
+            numberOfMonths={2}
+            captionLayout="dropdown"
+            startMonth={START_MONTH}
+            endMonth={END_MONTH}
+            defaultMonth={dateRange?.from ?? undefined}
+          />
         </div>
         <div className="flex items-center justify-between gap-2 border-t border-border px-3 py-2">
           <Button variant="ghost" size="sm" onClick={handleClear} className="text-xs text-muted-foreground">

@@ -3,7 +3,7 @@ import type { ReportSummary, ReportParamMeta } from '../api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { DateRangePicker } from '@/components/ui/date-range-picker';
+import { DateRangePicker, defaultDateRangePresets } from '@/components/ui/date-range-picker';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface Props {
@@ -37,6 +37,10 @@ export function ReportParametersBar({ report, params, options, onChange, onRun, 
           value={value}
           onChange={(v) => set({ from: v?.from, to: v?.to })}
           placeholder={p.label}
+          // Reports are the surface where this matters most: the date range is usually REQUIRED
+          // (Run stays disabled until it is set) and lab data is typically historical, so without
+          // presets the only way in is clicking the month arrow once per month.
+          presets={defaultDateRangePresets()}
         />
       );
     }
