@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import type { FormField } from './schema/form-schema'
 import { toAnswer, fromAnswer } from './answer-value'
 import { makeField } from './__fixtures__/forms'
 
@@ -166,3 +167,62 @@ describe('round-trips', () => {
     expect(rt(field, 'Patient/123')).toBe('Patient/123')
   })
 })
+
+const field = (over: Partial<FormField>): FormField => ({
+  id: 'f', fhirPath: null, displayLabel: 'F', description: null,
+  fieldType: 'reference', required: false, enabled: true, order: 0,
+  cardinality: { min: 0, max: '1' }, ...over,
+});
+
+describe('toAnswer — reference answers', () => {
+  it('serializes a coding answer with its system and display', () => {
+    expect(toAnswer(field({}), { system: 'http://loinc.org', code: '718-7', display: 'Hemoglobin' }))
+      .toEqual({ valueCoding: { system: 'http://loinc.org', code: '718-7', display: 'Hemoglobin' } });
+  });
+
+  it('omits display when null', () => {
+    expect(toAnswer(field({}), { system: 'http://loinc.org', code: '718-7', display: null }))
+      .toEqual({ valueCoding: { system: 'http://loinc.org', code: '718-7' } });
+  });
+
+  it('serializes an entity answer with its display', () => {
+    expect(toAnswer(field({}), { reference: 'Patient/p1', display: 'Doe Jane' }))
+      .toEqual({ valueReference: { reference: 'Patient/p1', display: 'Doe Jane' } });
+  });
+
+  it('keeps the legacy bare-string mapping for reference and facility', () => {
+    expect(toAnswer(field({}), 'Patient/p1')).toEqual({ valueReference: { reference: 'Patient/p1' } });
+    expect(toAnswer(field({ fieldType: 'facility' }), 'Organization/o1'))
+      .toEqual({ valueReference: { reference: 'Organization/o1' } });
+  });
+
+  it('keeps the legacy bare-string mapping for organism and antibiogram', () => {
+    expect(toAnswer(field({ fieldType: 'organism' }), 'E. coli')).toEqual({ valueString: 'E. coli' });
+    expect(toAnswer(field({ fieldType: 'antibiogram' }), 'AMP-R')).toEqual({ valueString: 'AMP-R' });
+  });
+
+  it('leaves select and multiselect untouched', () => {
+    expect(toAnswer(field({ fieldType: 'select' }), 'routine')).toEqual({ valueCoding: { code: 'routine' } });
+    expect(toAnswer(field({ fieldType: 'multiselect' }), 'a')).toEqual({ valueCoding: { code: 'a' } });
+  });
+});
+
+describe('fromAnswer', () => {
+  it('reconstructs a coding answer when a system is present', () => {
+    expect(fromAnswer({ valueCoding: { system: 'http://loinc.org', code: '718-7', display: 'Hb' } }))
+      .toEqual({ system: 'http://loinc.org', code: '718-7', display: 'Hb' });
+  });
+
+  it('returns a bare code when no system is present, so select still round-trips', () => {
+    expect(fromAnswer({ valueCoding: { code: 'routine' } })).toBe('routine');
+  });
+
+  it('reconstructs an entity answer when a display is present', () => {
+    expect(fromAnswer({ valueReference: { reference: 'Patient/p1', display: 'Doe Jane' } }))
+      .toEqual({ reference: 'Patient/p1', display: 'Doe Jane' });
+  });
+
+  it('returns a bare reference when no display is present, so legacy answers still round-trip', () => {
+    expect(fromAnswer({ valueReference: { reference: 'Patient/123' } })).toBe('Patient/123');
+  });
+});
