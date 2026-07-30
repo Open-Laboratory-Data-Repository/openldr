@@ -154,7 +154,9 @@ describe('settings sync enrollment routes', () => {
     expect((body.clientSecret as string).length).toBeGreaterThan(0);
     expect(body.siteId).toBe('lab-a');
     expect(body.centralUrl).toBe('https://central.example');
-    expect(body.oidcIssuer).toBe('https://kc.example/realms/openldr');
+    // Rehosted onto the operator-supplied centralUrl — the address the SITE can reach. Echoing
+    // central's own OIDC_ISSUER_URL (kc.example) is what made sync fail with `fetch failed`.
+    expect(body.oidcIssuer).toBe('https://central.example/realms/openldr');
     // Sync S5 key exchange: enroll hands back the site's private signing key + central's public key.
     expect(typeof body.signingPrivateKey).toBe('string');
     expect((body.signingPrivateKey as string).length).toBeGreaterThan(0);

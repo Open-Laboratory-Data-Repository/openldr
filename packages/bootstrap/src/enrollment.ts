@@ -38,6 +38,31 @@ export class InvalidSiteIdError extends Error {
   }
 }
 
+/**
+ * The realm issuer as reached from the ENROLLING SITE, not from central itself.
+ *
+ * `OIDC_ISSUER_URL` is central's own public address (derived from its `SERVER_NAME`), so a central
+ * installed as `127.0.0.1` used to hand every new site
+ * `https://127.0.0.1:8443/auth/realms/openldr`. That is correct from a browser and wrong from
+ * inside the lab's api container, where `127.0.0.1` is the container itself — sync then died on
+ * the token fetch with a bare `fetch failed`, which reads like a credential problem and isn't.
+ *
+ * `centralUrl` is the address the operator states the site will use to reach central, so it is by
+ * definition reachable from there. Keep central's realm PATH (it encodes the realm name and any
+ * base path) and swap in that origin. Falls back to the configured issuer if either URL is
+ * unparseable — never throw here, enrolment is otherwise complete by this point.
+ */
+export function issuerForSite(configuredIssuer: string, centralUrl: string): string {
+  try {
+    const issuer = new URL(configuredIssuer);
+    const target = new URL(centralUrl);
+    if (issuer.origin === target.origin) return configuredIssuer;
+    return new URL(issuer.pathname + issuer.search, target.origin).toString().replace(/\/$/, '');
+  } catch {
+    return configuredIssuer;
+  }
+}
+
 /** enrollSite requires an explicit central public base URL — there is no config key to derive it. */
 export class MissingCentralUrlError extends Error {
   constructor() {
@@ -159,7 +184,8 @@ export async function enrollSite(
     clientSecret,
     siteId,
     centralUrl,
-    oidcIssuer: ctx.cfg.OIDC_ISSUER_URL,
+    // NOT ctx.cfg.OIDC_ISSUER_URL verbatim — that is central's own address. See issuerForSite.
+    oidcIssuer: issuerForSite(ctx.cfg.OIDC_ISSUER_URL, centralUrl),
     signingPrivateKey,
     centralPublicKey,
   };

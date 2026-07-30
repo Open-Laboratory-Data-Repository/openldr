@@ -83,12 +83,15 @@ describe('enrollment orchestrator', () => {
     expect(clients.getClientSecret).toHaveBeenCalledWith('uuid-new');
 
     // Result echoes secret + centralUrl + oidcIssuer (+ S5 key-exchange material).
+    // The issuer is rehosted onto `centralUrl` — the address the SITE will use — not echoed from
+    // central's own OIDC_ISSUER_URL. This assertion previously expected `ISSUER` verbatim, which is
+    // precisely the value a lab container cannot reach (see enrollment-issuer.test.ts).
     expect(res).toMatchObject({
       clientId: 'sync-lab-a',
       clientSecret: 'secret-created',
       siteId: 'lab-a',
       centralUrl: 'https://central',
-      oidcIssuer: ISSUER,
+      oidcIssuer: 'https://central/realms/openldr',
     });
     expect(res.signingPrivateKey).toMatch(/^[0-9a-f]+$/);
     expect(res.centralPublicKey).toMatch(/^[0-9a-f]+$/);
