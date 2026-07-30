@@ -146,7 +146,14 @@ export function createDhis2Orchestration(deps: Dhis2OrchestrationDeps): Dhis2Orc
 
       const am = mapping as AggregateMapping;
       const src = dispatchReportSource(am.source);
-      const { rows } = await deps.reporting.run(src.reportId, src.params);
+      // The push period IS the reporting window — exactly as the tracker branch above already
+      // does via `periodRange`. The aggregate branch used to pass only the mapping's stored
+      // params, which are empty (the mapping form has no parameters UI), so every report that
+      // declares a required date range — all eight built-ins — failed the push with
+      // "required parameter: from". The mapping's own params still win, so an explicit
+      // override remains possible.
+      const { from, to } = periodRange(period);
+      const { rows } = await deps.reporting.run(src.reportId, { from, to, dateFrom: from, dateTo: to, ...src.params });
       try {
         const out = await target.pushAggregate({ rows, mapping: am, orgUnitMap, period, dryRun });
         const build: BuildOutput = { payload: out.payload as { dataValues: DataValue[] }, skipped: out.skipped };

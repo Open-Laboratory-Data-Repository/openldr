@@ -75,7 +75,10 @@ describe('createDhis2Orchestration', () => {
     const { deps: d, target } = deps();
     const orch = createDhis2Orchestration(d as any);
     const out = await orch.push({ connectorId: 'c1', mapping: aggMapping, orgUnitMap: { f1: 'OU1' }, period: '2026', dryRun: false });
-    expect(d.reporting.run).toHaveBeenCalledWith('amr-resistance', { region: 'north' });
+    // The report window comes from the push period (see dhis2-aggregate-period.test.ts); the
+    // mapping's own params ride along on top. This used to assert `{ region: 'north' }` alone,
+    // which is exactly the shape that made every date-parameterised report fail the push.
+    expect(d.reporting.run).toHaveBeenCalledWith('amr-resistance', expect.objectContaining({ region: 'north', from: '2026-01-01', to: '2026-12-31' }));
     expect(target.pushAggregate).toHaveBeenCalledWith(expect.objectContaining({ orgUnitMap: { f1: 'OU1' }, period: '2026', dryRun: false }));
     expect(out).toMatchObject({ kind: 'aggregate', dryRun: false, build: { payload: { dataValues: [{ dataElement: 'de1', value: 1 }] }, skipped: [] } });
   });
