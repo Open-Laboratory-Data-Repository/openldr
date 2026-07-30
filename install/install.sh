@@ -219,7 +219,15 @@ fi
 
 # 2. Scaffold
 echo "→ Scaffolding $DIR"
-mkdir -p "$DIR/config/nginx/certs" "$DIR/config/keycloak"
+mkdir -p "$DIR/config/nginx/certs" "$DIR/config/nginx/certs/central" "$DIR/config/keycloak"
+
+# Placeholder for a CENTRAL's certificate, so a lab can trust one without hand-editing compose.
+# It must EXIST before `docker compose up`: Docker bind-mounting a missing file silently creates a
+# DIRECTORY at that path, and the api then fails to start. Empty is fine and honest — it means
+# "no extra CAs trusted yet"; Node accepts an empty NODE_EXTRA_CA_CERTS file (verified on the
+# api image's node v22). To trust a central, overwrite this file with its certificate and restart
+# the api — no .env or compose edit needed.
+[ -f "$DIR/config/nginx/certs/central/fullchain.pem" ] || : > "$DIR/config/nginx/certs/central/fullchain.pem"
 fetch() { curl -fsSL "$REPO_RAW/$1" -o "$2" || err "failed to download $1"; }
 fetch "deploy/install/docker-compose.yml" "$DIR/docker-compose.yml"
 fetch "infra/keycloak/openldr-realm.json" "$DIR/config/keycloak/openldr-realm.json"
@@ -359,6 +367,7 @@ KEYCLOAK_ADMIN_CLIENT_ID=openldr-admin
 KEYCLOAK_ADMIN_CLIENT_SECRET=$KC_ADMIN_SECRET
 INITIAL_LAB_ADMIN_PASSWORD=$LABADMIN_PW
 TLS_CERT_PATH=/etc/openldr/tls-cert.pem
+NODE_EXTRA_CA_CERTS=/etc/ssl/central-ca.pem
 SECRETS_ENCRYPTION_KEY=$SECRETS_KEY
 MIGRATE_ON_START=true
 SEED_ON_START=$SEED_ON_START_VAL
@@ -373,7 +382,11 @@ fi
 if [ ! -f "$DIR/config/nginx/certs/fullchain.pem" ]; then
   CERT_DIR="$DIR/config/nginx/certs"
   SUBJ="/CN=$HOST"
-  SAN="subjectAltName=DNS:$HOST,DNS:localhost,IP:127.0.0.1"
+  # `host.docker.internal` is how a CONTAINER on this host reaches this stack — which is exactly
+  # how an enrolled lab's api container talks to a central. Without it in the SAN list, lab->central
+  # sync failed TLS hostname validation and surfaced as a bare `fetch failed`, indistinguishable
+  # from "central is down". Harmless on a stack that never becomes a central.
+  SAN="subjectAltName=DNS:$HOST,DNS:localhost,DNS:host.docker.internal,IP:127.0.0.1"
   if command -v openssl >/dev/null 2>&1; then
     openssl req -x509 -newkey rsa:2048 -nodes -days 825 \
       -keyout "$CERT_DIR/privkey.pem" -out "$CERT_DIR/fullchain.pem" \

@@ -203,7 +203,17 @@ if (-not $envExists) {
 
 # 2. Scaffold
 Write-Host "-> Scaffolding $Dir"
-New-Item -ItemType Directory -Force -Path "$Dir/config/nginx/certs","$Dir/config/keycloak" | Out-Null
+New-Item -ItemType Directory -Force -Path "$Dir/config/nginx/certs","$Dir/config/nginx/certs/central","$Dir/config/keycloak" | Out-Null
+
+# Placeholder for a CENTRAL's certificate, so a lab can trust one without hand-editing compose.
+# It must EXIST before `docker compose up`: Docker bind-mounting a missing file silently creates a
+# DIRECTORY at that path, and the api then fails to start. Empty is fine and honest — it means
+# "no extra CAs trusted yet"; Node accepts an empty NODE_EXTRA_CA_CERTS file (verified on the api
+# image's node v22). To trust a central, overwrite this file with its certificate and restart the
+# api — no .env or compose edit needed. NEVER use New-Item -Force on it: that truncates a cert an
+# operator has already installed.
+$centralCa = "$Dir/config/nginx/certs/central/fullchain.pem"
+if (-not (Test-Path $centralCa)) { New-Item -ItemType File -Path $centralCa | Out-Null }
 function Fetch($rel, $out) { Invoke-WebRequest -UseBasicParsing "$RepoRaw/$rel" -OutFile $out }
 Fetch "deploy/install/docker-compose.yml" "$Dir/docker-compose.yml"
 Fetch "infra/keycloak/openldr-realm.json" "$Dir/config/keycloak/openldr-realm.json"
@@ -357,6 +367,7 @@ KEYCLOAK_ADMIN_CLIENT_ID=openldr-admin
 KEYCLOAK_ADMIN_CLIENT_SECRET=$kcAdminSecret
 INITIAL_LAB_ADMIN_PASSWORD=$labAdminPw
 TLS_CERT_PATH=/etc/openldr/tls-cert.pem
+NODE_EXTRA_CA_CERTS=/etc/ssl/central-ca.pem
 SECRETS_ENCRYPTION_KEY=$secretsKey
 MIGRATE_ON_START=true
 SEED_ON_START=$seedOnStart
@@ -383,7 +394,11 @@ if (-not (Test-Path $cert)) {
   # decide success from whether both cert files actually appear.
   $certDirAbs = (Resolve-Path -LiteralPath $certDir).Path
   $subj = "/CN=$ServerName"
-  $san  = "subjectAltName=DNS:$ServerName,DNS:localhost,IP:127.0.0.1"
+  # `host.docker.internal` is how a CONTAINER on this host reaches this stack — which is exactly
+  # how an enrolled lab's api container talks to a central. Without it in the SAN list, lab->central
+  # sync failed TLS hostname validation and surfaced as a bare `fetch failed`, indistinguishable
+  # from "central is down". Harmless on a stack that never becomes a central.
+  $san  = "subjectAltName=DNS:$ServerName,DNS:localhost,DNS:host.docker.internal,IP:127.0.0.1"
   $prevEAP = $ErrorActionPreference
   $ErrorActionPreference = "Continue"
   try {

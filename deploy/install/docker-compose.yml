@@ -8,6 +8,12 @@ services:
     expose: ["3000"]
     volumes:
       - ./config/nginx/certs/fullchain.pem:/etc/openldr/tls-cert.pem:ro
+      # A CENTRAL's certificate, trusted via NODE_EXTRA_CA_CERTS so an enrolled lab can reach it
+      # over self-signed TLS. The installer always creates this file (empty by default = trust
+      # nothing extra); to enrol against a central, overwrite it with that central's certificate
+      # and restart the api. The file MUST exist — Docker turns a missing bind-mount source into a
+      # directory and the api then fails to start.
+      - ./config/nginx/certs/central/fullchain.pem:/etc/ssl/central-ca.pem:ro
     depends_on:
       postgres: { condition: service_healthy }
       minio: { condition: service_started }
