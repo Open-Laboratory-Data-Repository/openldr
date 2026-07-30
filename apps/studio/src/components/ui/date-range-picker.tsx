@@ -4,6 +4,7 @@ import type { DateRange } from 'react-day-picker';
 import { Calendar, CALENDAR_START_MONTH, CALENDAR_END_MONTH } from './calendar';
 import { Popover, PopoverContent, PopoverTrigger } from './popover';
 import { Button } from './button';
+import { useIsNarrowViewport } from '@/lib/viewport';
 import { cn } from '@/lib/cn';
 
 export interface DateRangePreset {
@@ -44,6 +45,9 @@ interface DateRangePickerProps {
 
 export function DateRangePicker({ value, onChange, placeholder = 'Pick a date range', disabled, className, presets }: DateRangePickerProps) {
   const [open, setOpen] = React.useState(false);
+  // 639 = one below Tailwind's `sm` (640), so the prop flips on exactly the same boundary as the
+  // `sm:` classes in the popover below.
+  const compact = useIsNarrowViewport(639);
   const dateRange: DateRange | undefined =
     value?.from || value?.to ? { from: value.from ? new Date(value.from) : undefined, to: value.to ? new Date(value.to) : undefined } : undefined;
 
@@ -72,15 +76,19 @@ export function DateRangePicker({ value, onChange, placeholder = 'Pick a date ra
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-auto p-0" align="start">
-        <div className="flex">
+        {/* Phone layout: the preset rail and the second month together are far wider than a phone
+            screen, and `max-w` alone just clips them. Stack instead — presets become a horizontally
+            scrollable strip above a SINGLE month (see `numberOfMonths` below) — and restore the
+            side-by-side rail from `sm` up. */}
+        <div className="flex flex-col sm:flex-row">
           {presets && presets.length > 0 && (
-            <div className="flex flex-col gap-1 border-r border-border p-2">
+            <div className="flex shrink-0 flex-row gap-1 overflow-x-auto border-b border-border p-2 sm:flex-col sm:overflow-x-visible sm:border-b-0 sm:border-r">
               {presets.map((p) => (
                 <Button
                   key={p.label}
                   variant="ghost"
                   size="sm"
-                  className="justify-start text-xs font-normal"
+                  className="shrink-0 justify-start whitespace-nowrap text-xs font-normal"
                   onClick={() => {
                     onChange(p.range);
                     setOpen(false);
@@ -100,7 +108,9 @@ export function DateRangePicker({ value, onChange, placeholder = 'Pick a date ra
             mode="range"
             selected={dateRange}
             onSelect={handleSelect}
-            numberOfMonths={2}
+            // Two months need ~570px; a phone has ~360. This is a prop, not a class, so it cannot
+            // be handled by a Tailwind breakpoint — hence the reactive media query.
+            numberOfMonths={compact ? 1 : 2}
             captionLayout="dropdown"
             startMonth={START_MONTH}
             endMonth={END_MONTH}
