@@ -1,5 +1,6 @@
 import type { FormSchema } from './schema/form-schema';
 import type { AnswerState } from './answer-value';
+import { isCodingAnswer, isEntityAnswer, isReferenceFieldType } from './reference-source';
 
 export interface AnswerError {
   fieldId: string;
@@ -36,7 +37,15 @@ export function validateAnswers(model: FormSchema, answers: AnswerState): Answer
       continue;
     }
 
-    if (f.fieldType === 'select' || f.fieldType === 'multiselect') {
+    if (isReferenceFieldType(f.fieldType)) {
+      const values = Array.isArray(value) ? value : [value];
+      for (const v of values) {
+        if (!isCodingAnswer(v) && !isEntityAnswer(v)) {
+          push('must be selected from the list');
+          break;
+        }
+      }
+    } else if (f.fieldType === 'select' || f.fieldType === 'multiselect') {
       const options = f.valueSetOptions ?? [];
       if (!f.allowCustomValue && options.length > 0) {
         const values = Array.isArray(value) ? value : [value];

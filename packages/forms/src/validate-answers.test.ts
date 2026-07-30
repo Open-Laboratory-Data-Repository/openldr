@@ -53,3 +53,45 @@ describe('validateAnswers', () => {
     expect(validateAnswers(model([disabled, group]), {})).toEqual([]);
   });
 });
+
+describe('reference shape validation', () => {
+  const model = (over: Record<string, unknown> = {}) => ({
+    id: 'm', name: 'M', versionLabel: null, fhirVersion: 'R4',
+    fhirResourceType: null, fhirProfileUrl: null, facilityId: null,
+    targetPages: [], sections: [], version: 1, active: true, status: 'draft',
+    createdAt: '2026-07-31T00:00:00Z', updatedAt: '2026-07-31T00:00:00Z',
+    fields: [{
+      id: 'p', fhirPath: null, displayLabel: 'Patient', description: null,
+      fieldType: 'reference', required: false, enabled: true, order: 0,
+      cardinality: { min: 0, max: '1' }, referenceTarget: 'Patient', ...over,
+    }],
+  }) as never;
+
+  it('rejects a bare string in a reference field', () => {
+    expect(validateAnswers(model(), { p: 'asdf' })).toEqual([
+      { fieldId: 'p', label: 'Patient', reason: 'must be selected from the list' },
+    ]);
+  });
+
+  it('rejects an object missing both code and reference', () => {
+    expect(validateAnswers(model(), { p: { display: 'Doe Jane' } })).toEqual([
+      { fieldId: 'p', label: 'Patient', reason: 'must be selected from the list' },
+    ]);
+  });
+
+  it('accepts a resolved entity answer', () => {
+    expect(validateAnswers(model(), { p: { reference: 'Patient/p1', display: 'Doe Jane' } })).toEqual([]);
+  });
+
+  it('accepts a resolved coding answer', () => {
+    expect(validateAnswers(model(), { p: { system: 'http://loinc.org', code: '718-7', display: 'Hb' } })).toEqual([]);
+  });
+
+  it('checks every element of a multi-valued reference field', () => {
+    expect(validateAnswers(model({ repeatable: true, cardinality: { min: 0, max: '*' } }), {
+      p: [{ reference: 'Patient/p1', display: null }, 'asdf'],
+    })).toEqual([
+      { fieldId: 'p', label: 'Patient', reason: 'must be selected from the list' },
+    ]);
+  });
+});
