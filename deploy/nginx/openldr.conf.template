@@ -17,6 +17,17 @@ server {
     ssl_certificate_key /etc/nginx/certs/privkey.pem;
     ssl_protocols TLSv1.2 TLSv1.3;
 
+    # Emit RELATIVE Location headers on internal redirects (e.g. `= /studio` below).
+    # With nginx's default `absolute_redirect on`, a relative `return 301 /studio/` is
+    # rewritten to an absolute URL built from $server_name and the port nginx itself
+    # listens on (443) — NOT the port the gateway is published on. On an install using
+    # `--https-port 8443`, `GET https://host:8443/studio` therefore answered
+    # `Location: https://host/studio/`, silently sending the user to a DIFFERENT ORIGIN
+    # (with two instances on one host, the other instance — whose Keycloak then rejected
+    # the sign-in). A relative Location is resolved by the client against the current
+    # origin, so the port is preserved with no templating of the published port.
+    absolute_redirect off;
+
     # Re-resolve upstream container IPs at runtime via Docker's embedded DNS. Without this,
     # nginx resolves `app`/`landing`/`keycloak` ONCE at startup, so recreating a backing
     # container on redeploy (its IP changes) leaves nginx proxying a dead IP → 502 until an
