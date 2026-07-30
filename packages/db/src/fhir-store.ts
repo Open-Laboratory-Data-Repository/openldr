@@ -139,15 +139,21 @@ function contentHash(serialized: string): string {
 }
 
 export function createFhirStore(db: Kysely<InternalSchema>): FhirStore {
-  // site_id is process-stable; resolve once and memoize. undefined = not yet resolved.
+  // site_id is enrollment-stable ONCE SET, so memoize it — but only when it resolves to a
+  // real value. Memoizing `null` was a silent data-loss bug: a lab that ingested before an
+  // operator filled in Settings -> Distributed sync cached "no site" for the life of the
+  // process, so every change_log row was written with site_id = NULL. The sync worker then
+  // skipped each one ("missing site_id on safe record") *and advanced the push cursor past
+  // it*, permanently un-syncing that data while the UI showed "Pending push: 0". Re-reading
+  // while unset costs one indexed lookup per write and stops as soon as a site is configured.
   let siteId: string | null | undefined;
   async function resolveSiteId(): Promise<string | null> {
-    if (siteId !== undefined) return siteId;
+    if (siteId != null) return siteId;
     const row = await db.selectFrom('app_settings').select('value').where('key', '=', 'sync.site_id').executeTakeFirst();
-    // site_id is enrollment-stable; resolved once per store instance. A value configured after
-    // process boot won't take effect until restart. `||` so an empty app_settings value falls through.
-    siteId = row?.value || process.env.OPENLDR_SITE_ID || null;
-    return siteId;
+    // `||` so an empty app_settings value falls through to the env var.
+    const resolved = row?.value || process.env.OPENLDR_SITE_ID || null;
+    if (resolved) siteId = resolved; // only a real value is sticky
+    return resolved;
   }
 
   async function nextVersion(trx: Kysely<InternalSchema>, resourceType: string, id: string): Promise<number> {

@@ -278,7 +278,9 @@ describe('createSyncPushRunner', () => {
     const result = await createSyncPushRunner(deps).runCycle();
     expect(pushes).toHaveLength(1);
     expect(pushes[0].records.map((r) => r.id)).toEqual(['p2']); // p1 skipped, not a bodiless upsert
-    expect(logger.warns.some((w) => (w as { id?: string }).id === 'p1')).toBe(true);
+    // ERROR, not warn: the cursor advances past a skipped record, so the skip is PERMANENT —
+    // that record never reaches central. It must not be filed at the same level as routine noise.
+    expect(logger.errors.some((w) => (w as { id?: string }).id === 'p1')).toBe(true);
     expect(advancedTo).toBe(2); // cursor still advances past the skipped record (quarantine)
     expect(result.outcome).toBe('progressed');
     expect(result.applied).toBe(1);
@@ -314,7 +316,8 @@ describe('createSyncPushRunner', () => {
     expect(result.outcome).toBe('progressed');
     expect(result.applied).toBe(0);
     expect(pushed).toBe(false); // nothing pushed — every record was a defensive skip
-    expect(logger.warns).toHaveLength(2); // one for null site_id, one for missing meta
+    // ERROR-level: both rows are permanently skipped (the frontier advances past them below).
+    expect(logger.errors).toHaveLength(2); // one for null site_id, one for missing meta
     expect(advancedTo).toBe(2); // frontier still advances so the bad rows are not re-scanned forever
   });
 

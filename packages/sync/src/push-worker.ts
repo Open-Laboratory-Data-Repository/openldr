@@ -33,10 +33,17 @@ export interface SyncPushRunner {
 
 // Map each SAFE change row to a wire `SyncRecord`, resolving version/siteId from the batched change_log
 // meta read and the upsert body from `fetchContent`. Every defensive guard SKIPS the offending record
-// (excludes it from the batch) with a warn rather than emitting a corrupt one: a bodiless upsert, a
+// (excludes it from the batch) rather than emitting a corrupt one: a bodiless upsert, a
 // missing site_id (central always cross-site-rejects), or missing meta (a corrupting version:0) would
 // all be silently mishandled downstream. These cases should not occur for fhir-store-stamped rows, so a
 // skip-with-signal is a defensive backstop, not an expected path.
+//
+// ⚠ A SKIP IS PERMANENT. The cursor advances over the whole window (plan.newCursor), so a skipped
+// record is never revisited — the data simply never reaches central. That is deliberate: holding the
+// cursor on one unpushable row would wedge the entire stream. But it means these are logged at ERROR,
+// not warn: each line is one record that will never sync. This was not hypothetical — memoizing a null
+// site_id (see fhir-store.ts resolveSiteId) made 5,148 records skip in a single run while the UI
+// reported "Pending push: 0".
 async function buildRecords(
   safeRows: ChangeRow[],
   metaBySeq: Map<number, { version: number; siteId: string }>,
@@ -47,13 +54,13 @@ async function buildRecords(
     const md = metaBySeq.get(r.seq);
     if (!md) {
       // M2: safe seq absent from the meta read — building with version:0 would corrupt idempotency.
-      deps.logger.warn({ resourceType: r.resource_type, id: r.resource_id, seq: r.seq }, 'sync push: no change_log meta for safe seq; skipping record');
+      deps.logger.error({ resourceType: r.resource_type, id: r.resource_id, seq: r.seq }, 'sync push: no change_log meta for safe seq; record PERMANENTLY skipped (cursor advances past it)');
       continue;
     }
     const { version, siteId } = md;
     if (!siteId) {
       // M1: null/empty origin site_id → central always cross-site-rejects. Skip with signal.
-      deps.logger.warn({ resourceType: r.resource_type, id: r.resource_id, version, seq: r.seq }, 'sync push: missing site_id on safe record; skipping record');
+      deps.logger.error({ resourceType: r.resource_type, id: r.resource_id, version, seq: r.seq }, 'sync push: missing site_id on safe record; record PERMANENTLY skipped (cursor advances past it) - is sync.site_id configured?');
       continue;
     }
     const op: 'upsert' | 'delete' = r.op === 'delete' ? 'delete' : 'upsert';
@@ -61,7 +68,7 @@ async function buildRecords(
       const resource = await deps.fetchContent(r.resource_type, r.resource_id, version);
       if (!resource) {
         // I1: never emit a bodiless upsert — central's applyRemote requires a body. Skip with signal.
-        deps.logger.warn({ resourceType: r.resource_type, id: r.resource_id, version, seq: r.seq }, 'sync push: upsert content missing for safe record; skipping record');
+        deps.logger.error({ resourceType: r.resource_type, id: r.resource_id, version, seq: r.seq }, 'sync push: upsert content missing for safe record; record PERMANENTLY skipped (cursor advances past it)');
         continue;
       }
       records.push({ resourceType: r.resource_type, id: r.resource_id, version, op, siteId, seq: r.seq, resource });
