@@ -30,7 +30,7 @@ import { registerNotificationRoutes } from './notification-routes';
 import { registerPluginUiRoutes } from './plugin-ui-routes';
 import { registerQueryRoutes } from './query-routes';
 import { registerSyncRoutes } from './sync-routes';
-import { createConnectorStore, createCustomQueryStore } from '@openldr/db';
+import { createConnectorStore, createCustomQueryStore, referenceCapture } from '@openldr/db';
 import { registerAuth } from './auth-plugin';
 import { readAppVersion } from './version';
 
@@ -148,7 +148,9 @@ export async function buildApp(ctx: AppContext) {
   registerRolesRoutes(app, ctx);
   registerFormsRoutes(app, ctx);
   registerReportDesignRoutes(app, ctx, {
-    customQueries: createCustomQueryStore(ctx.internalDb),
+    // referenceCapture: an operator-authored query on CENTRAL is reference config that must
+    // reach labs alongside the report that points at it (reports.primary_query_id).
+    customQueries: createCustomQueryStore(ctx.internalDb, referenceCapture),
     runConnectorSql: (input) => {
       const run = ctx.workflows.services.runConnectorSql;
       if (!run) throw new Error('connector SQL runner unavailable');
@@ -162,7 +164,9 @@ export async function buildApp(ctx: AppContext) {
   registerConnectorsRoutes(app, ctx, { connectors: createConnectorStore(ctx.internalDb) });
   registerWorkflowRoutes(app, ctx, { connectors: createConnectorStore(ctx.internalDb) });
   registerQueryRoutes(app, ctx, {
-    customQueries: createCustomQueryStore(ctx.internalDb),
+    // referenceCapture: an operator-authored query on CENTRAL is reference config that must
+    // reach labs alongside the report that points at it (reports.primary_query_id).
+    customQueries: createCustomQueryStore(ctx.internalDb, referenceCapture),
     connectors: {
       list: () => ctx.connectors.list(),
       get: (id) => ctx.connectors.get(id),
