@@ -59,8 +59,11 @@ function fakeApp(cfg: FormSeedTarget['cfg'] = {}) {
     },
     forms: {
       list: async () => forms as never,
-      create: async (f: { name: string; status?: string }) => {
-        const created = { id: `form-${forms.length}`, name: f.name, status: f.status ?? 'draft' };
+      // Honour an explicit id exactly like the real store (FormInput.id): seeded forms use a
+      // DETERMINISTIC id so central's and a lab's copies converge instead of duplicating over sync.
+      // A fake that ignored it would keep passing while the real behaviour changed underneath.
+      create: async (f: { id?: string; name: string; status?: string }) => {
+        const created = { id: f.id ?? `form-${forms.length}`, name: f.name, status: f.status ?? 'draft' };
         forms.push(created);
         return created as never;
       },
@@ -128,8 +131,9 @@ function fakeApp(cfg: FormSeedTarget['cfg'] = {}) {
 const fakeDb = { persist: vi.fn(async (r: { id: string }) => ({ flattened: JSON.stringify(r) })) } as unknown as DbContext;
 
 describe('seedDatabase — default workflows', () => {
-  // The seeded sample-forms include "Lab order" at index 3 → the fake assigns it id 'form-3'.
-  const ORDER_FORM_ID = 'form-3';
+  // Seeded forms now carry a deterministic id derived from the sample's stable schema id
+  // ('sample-order' → 'form-sample-order'), so central and every lab agree on it.
+  const ORDER_FORM_ID = 'form-sample-order';
 
   it('seeds the Ingest + reactive default workflows', async () => {
     const { app, workflows } = fakeApp();

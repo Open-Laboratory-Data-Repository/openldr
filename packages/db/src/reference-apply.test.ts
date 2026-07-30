@@ -202,4 +202,66 @@ describe('applyReferenceChange', () => {
     await expect(apply({ entityType: 'report', entityId: 'r1', op: 'upsert' })).rejects.toThrow(/requires body/);
     await db.destroy();
   });
+
+  // ── report dependencies (report_designs / custom_queries) ────────────────────────────────────
+  // A report definition is inert without these: reports.design_id -> report_designs and
+  // reports.primary_query_id -> custom_queries. Before they joined the reference-sync set, central
+  // published 8 reports and a lab received 8 `reports` rows with 0 designs and 0 queries, so its
+  // Reports page read "No reports yet".
+
+  it('upserts a report_design stamped managed_origin=central', async () => {
+    const db = await makeMigratedDb();
+    const apply = createReferenceApplier(db);
+    const body = { name: 'Quarterly', paper: 'A4', orientation: 'landscape', pages: [{ n: 1 }], parameters: [], margins: { top: 10 } };
+    expect(await apply({ entityType: 'report_design', entityId: 'rd1', op: 'upsert', body })).toBe('applied');
+    const row: any = await db.selectFrom('report_designs').selectAll().where('id', '=', 'rd1').executeTakeFirst();
+    expect(row?.managed_origin).toBe('central');
+    expect(row?.name).toBe('Quarterly');
+    expect(row?.orientation).toBe('landscape');
+    await db.destroy();
+  });
+
+  it('report_design delete removes a central row but NOT a lab-local one', async () => {
+    const db = await makeMigratedDb();
+    const apply = createReferenceApplier(db);
+    await db.insertInto('report_designs' as never).values({ id: 'local', name: 'Mine', pages: '[]', parameters: '[]' } as never).execute();
+    await apply({ entityType: 'report_design', entityId: 'rd1', op: 'upsert', body: { name: 'C', pages: [], parameters: [] } });
+    await apply({ entityType: 'report_design', entityId: 'rd1', op: 'delete' });
+    await apply({ entityType: 'report_design', entityId: 'local', op: 'delete' });
+    expect(await db.selectFrom('report_designs').selectAll().where('id', '=', 'rd1').executeTakeFirst()).toBeUndefined();
+    // The lab-authored row survives — managed_origin IS NULL guards it.
+    expect(await db.selectFrom('report_designs').selectAll().where('id', '=', 'local').executeTakeFirst()).toBeDefined();
+    await db.destroy();
+  });
+
+  // THE subtle one: connectors hold encrypted credentials and never sync, so central's connector id
+  // does not exist on a lab. The applier must repoint the query at the lab's OWN default warehouse
+  // connector, or the synced query references a non-existent connector and cannot run.
+  it('custom_query is repointed at the LAB default warehouse connector', async () => {
+    const db = await makeMigratedDb();
+    const apply = createReferenceApplier(db);
+    await db.insertInto('connectors' as never)
+      .values({ id: 'lab-conn-1', name: 'Target Warehouse (Postgres)', kind: 'host', config_encrypted: 'x', enabled: true } as never)
+      .execute();
+    const body = { name: 'q-test-volume', connectorId: 'CENTRALS-OWN-CONNECTOR-ID', sql: 'select 1', params: [] };
+    expect(await apply({ entityType: 'custom_query', entityId: 'cq1', op: 'upsert', body })).toBe('applied');
+    const row: any = await db.selectFrom('custom_queries').selectAll().where('id', '=', 'cq1').executeTakeFirst();
+    expect(row?.connector_id).toBe('lab-conn-1');
+    expect(row?.connector_id).not.toBe('CENTRALS-OWN-CONNECTOR-ID');
+    expect(row?.managed_origin).toBe('central');
+    expect(row?.sql).toBe('select 1');
+    await db.destroy();
+  });
+
+  // Fail-open: the row must still land so the report definition is complete and an operator can
+  // repoint it by hand; it simply cannot run until a connector exists.
+  it('custom_query keeps central id when the lab has no default connector', async () => {
+    const db = await makeMigratedDb();
+    const apply = createReferenceApplier(db);
+    const body = { name: 'q', connectorId: 'central-conn', sql: 'select 1', params: [] };
+    expect(await apply({ entityType: 'custom_query', entityId: 'cq2', op: 'upsert', body })).toBe('applied');
+    const row: any = await db.selectFrom('custom_queries').selectAll().where('id', '=', 'cq2').executeTakeFirst();
+    expect(row?.connector_id).toBe('central-conn');
+    await db.destroy();
+  });
 });

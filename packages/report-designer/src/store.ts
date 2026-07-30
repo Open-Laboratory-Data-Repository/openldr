@@ -1,5 +1,6 @@
 import type { Kysely } from 'kysely';
-import type { InternalSchema } from '@openldr/db';
+import { canonicalHash } from '@openldr/core';
+import type { InternalSchema, ReferenceCapture } from '@openldr/db';
 import { type ReportDesign, ReportDesignSchema } from './schema';
 
 function toRow(d: ReportDesign) {
@@ -37,7 +38,20 @@ export interface ReportDesignStore {
   remove(id: string): Promise<void>;
 }
 
-export function createReportDesignStore(db: Kysely<InternalSchema>): ReportDesignStore {
+// Hash over the sync-relevant fields (NOT id / timestamps) so the reference-change content hash is
+// stable against jsonb key reordering (canonicalHash sorts keys) and matches what a lab consumes.
+function hashOf(d: ReportDesign): string {
+  return canonicalHash({
+    name: d.name, paper: d.paper, orientation: d.orientation,
+    pages: d.pages, parameters: d.parameters, margins: d.margins,
+  });
+}
+
+/** `capture` makes designs part of the central→lab reference-sync set. A report definition points at
+ *  a design (`reports.design_id`); syncing the definition without the design left labs with 8
+ *  published reports they could not render. Mirrors createReportStore's capture contract exactly:
+ *  same transaction as the write, hash the PERSISTED row (never the input). */
+export function createReportDesignStore(db: Kysely<InternalSchema>, capture?: ReferenceCapture): ReportDesignStore {
   const t = () => db.selectFrom('report_designs');
   const store: ReportDesignStore = {
     async list() {
@@ -49,22 +63,37 @@ export function createReportDesignStore(db: Kysely<InternalSchema>): ReportDesig
       return r ? fromRow(r as Record<string, unknown>) : undefined;
     },
     async create(d) {
-      // Idempotent insert: mirrors the report-template store — a duplicate id no-ops instead of
-      // raising a PK violation, and the existing row is returned.
-      const inserted = await db
-        .insertInto('report_designs')
-        .values(toRow(d) as never)
-        .onConflict((oc) => oc.column('id').doNothing())
-        .returningAll()
-        .executeTakeFirst();
-      if (inserted) return fromRow(inserted as Record<string, unknown>);
-      return (await store.get(d.id))!;
+      return db.transaction().execute(async (trx) => {
+        // Idempotent insert: mirrors the report-template store — a duplicate id no-ops instead of
+        // raising a PK violation, and the existing row is returned.
+        const inserted = await trx
+          .insertInto('report_designs')
+          .values(toRow(d) as never)
+          .onConflict((oc) => oc.column('id').doNothing())
+          .returningAll()
+          .executeTakeFirst();
+        // On a losing ON CONFLICT DO NOTHING the EXISTING row wins, so hash what actually persists.
+        const persisted = inserted
+          ? fromRow(inserted as Record<string, unknown>)
+          : fromRow((await trx.selectFrom('report_designs').selectAll().where('id', '=', d.id).executeTakeFirst()) as Record<string, unknown>);
+        if (capture) await capture.record(trx, 'report_design', d.id, 'upsert', hashOf(persisted));
+        return persisted;
+      });
     },
     async update(id, d) {
-      await db.updateTable('report_designs').set({ ...toRow({ ...d, id }) } as never).where('id', '=', id).execute();
-      return (await store.get(id))!;
+      return db.transaction().execute(async (trx) => {
+        await trx.updateTable('report_designs').set({ ...toRow({ ...d, id }) } as never).where('id', '=', id).execute();
+        const persisted = fromRow((await trx.selectFrom('report_designs').selectAll().where('id', '=', id).executeTakeFirst()) as Record<string, unknown>);
+        if (capture) await capture.record(trx, 'report_design', id, 'upsert', hashOf(persisted));
+        return persisted;
+      });
     },
-    async remove(id) { await db.deleteFrom('report_designs').where('id', '=', id).execute(); },
+    async remove(id) {
+      await db.transaction().execute(async (trx) => {
+        await trx.deleteFrom('report_designs').where('id', '=', id).execute();
+        if (capture) await capture.record(trx, 'report_design', id, 'delete', null);
+      });
+    },
   };
   return store;
 }

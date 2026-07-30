@@ -63,6 +63,13 @@ export interface PublishInput {
 }
 
 export interface FormInput {
+  /** Explicit id. Omit for operator-authored forms (a random `form-<uuid>` is minted).
+   *  SEEDED forms MUST set it to a deterministic value: two instances that each seed
+   *  their own copy of "Lab order" would otherwise mint different ids, and distributed
+   *  sync (which pushes central-owned forms down to every lab) then delivers central's
+   *  copy as an ADDITIONAL form instead of matching the lab's — the Forms page ends up
+   *  showing "Lab order" and "Users" twice, and deleting the copy just re-pulls it. */
+  id?: string;
   name: string;
   versionLabel?: string | null;
   fhirResourceType?: string | null;
@@ -245,7 +252,7 @@ export function createFormStore(db: Kysely<InternalSchema>, capture?: ReferenceC
   }
 
   async function create(input: FormInput): Promise<FormDefinition> {
-    const id = `form-${randomUUID()}`;
+    const id = input.id ?? `form-${randomUUID()}`;
     const status = input.status ?? 'draft';
     const values = {
       id,

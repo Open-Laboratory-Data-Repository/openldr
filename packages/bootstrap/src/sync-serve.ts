@@ -156,6 +156,29 @@ async function fetchReferenceBody(
       return (await ctx.dashboards.store.get(id)) ?? null;
     case 'report':
       return (await ctx.reportDefs.get(id)) ?? null;
+    // A report's two dependencies. Both serve their store RECORD shape, matching what
+    // reference-apply's reportDesignRow / customQueryRowLocal consume.
+    case 'report_design':
+      return (await ctx.reportDesigns.get(id)) ?? null;
+    case 'custom_query': {
+      // Read the raw row (custom_queries is not on AppContext) and serve the camelCase store shape
+      // the applier's customQueryRowLocal consumes. `connector_id` is served as-is but the applier
+      // deliberately repoints it at the LAB's own default warehouse connector — connectors hold
+      // encrypted credentials and never sync.
+      const r = await ctx.internalDb
+        .selectFrom('custom_queries')
+        .select(['id', 'name', 'connector_id', 'sql', 'params'])
+        .where('id', '=', id)
+        .executeTakeFirst();
+      if (!r) return null;
+      return {
+        id: r.id,
+        name: r.name,
+        connectorId: r.connector_id,
+        sql: r.sql,
+        params: (typeof r.params === 'string' ? JSON.parse(r.params) : r.params) ?? [],
+      };
+    }
     case 'form': {
       const row = (await ctx.internalDb
         .selectFrom('form_definitions')

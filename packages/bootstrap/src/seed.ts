@@ -5,7 +5,7 @@ import { seedDefaultDashboard, type DashboardStore } from '@openldr/dashboards';
 import { seedReportDesigns, removeRetiredDemoDesigns, type ReportDesignStore } from '@openldr/report-designer';
 import { seedDataDrivenReports, DEFAULT_REPORT_CATEGORIES, type SeedDataDrivenReportsResult } from '@openldr/reporting';
 import type { ConnectorStore, TerminologyAdminStore, AppSettingStore, ReportStore } from '@openldr/db';
-import { BUNDLED_TERMINOLOGY, readBundledTerminology, createCustomQueryStore } from '@openldr/db';
+import { BUNDLED_TERMINOLOGY, readBundledTerminology, createCustomQueryStore, referenceCapture } from '@openldr/db';
 import { FEATURE_FLAGS } from '@openldr/config';
 import type { DbContext } from './db-context';
 import { REPORT_CATEGORIES_SETTING_KEY } from './report-categories';
@@ -128,12 +128,17 @@ export interface FormSeedTarget extends EssentialSeedTarget {
   // `cfg` (warehouse URL/adapter/credentials) is inherited from EssentialSeedTarget.
 }
 
-// Create (deduped by name) + publish the given forms. Dedup by name, not id: forms.create()
-// always generates a fresh `form-<uuid>` id and ignores the sample's id, so id-based dedup would
-// re-create the samples every run. Publishing is what makes a form drive its target pages (the
-// Users page needs a published 'users' form); idempotent — only drafts get published, never
-// re-snapshotted. Returns the count created and the seeded "Lab order" form's id (for the
-// workflow bind), or null if that form wasn't in `forms`.
+// Create (deduped by name) + publish the given forms. Publishing is what makes a form drive its
+// target pages (the Users page needs a published 'users' form); idempotent — only drafts get
+// published, never re-snapshotted. Returns the count created and the seeded "Lab order" form's id
+// (for the workflow bind), or null if that form wasn't in `forms`.
+//
+// ⚠ Seeded forms are created with a DETERMINISTIC id derived from the sample's stable schema id
+// (`sample-users` -> `form-sample-users`), NOT a random `form-<uuid>`. Distributed sync pushes
+// central-owned forms down to every lab, so when central and a lab each seed their own copy of
+// "Lab order", random ids make central's copy arrive as an ADDITIONAL form rather than matching
+// the lab's — the Forms page then lists "Lab order" and "Users" twice, and deleting the duplicate
+// only makes the next pull re-create it. A shared id makes the two converge.
 async function upsertPublishedForms(
   app: EssentialSeedTarget,
   forms: (typeof sampleForms)[number][],
@@ -152,6 +157,8 @@ async function upsertPublishedForms(
       status = existing.status;
     } else {
       const created = await app.forms.create({
+        // Deterministic + shared across instances (see the note above).
+        id: `form-${form.id}`,
         name: form.name,
         versionLabel: form.versionLabel,
         fhirResourceType: form.fhirResourceType,
@@ -297,7 +304,10 @@ export async function seedDatabase(db: DbContext, app: FormSeedTarget): Promise<
   let dataDrivenReportsSeeded: SeedDataDrivenReportsResult = { queriesSeeded: 0, queriesUpdated: 0, designsSeeded: 0, reportDefsSeeded: 0 };
   try {
     dataDrivenReportsSeeded = await seedDataDrivenReports({
-      customQueries: createCustomQueryStore(db.internalDb),
+      // referenceCapture: the seeded queries are central-owned reference config and must enter
+      // reference_change_log, otherwise the reports that point at them sync down to labs without
+      // their data source and cannot render.
+      customQueries: createCustomQueryStore(db.internalDb, referenceCapture),
       designs: app.reportDesigns,
       reportDefs: app.reportDefs,
       connectors: app.connectors,

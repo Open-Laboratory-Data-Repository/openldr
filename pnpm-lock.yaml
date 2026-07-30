@@ -1098,6 +1098,9 @@ importers:
 
   packages/report-designer:
     dependencies:
+      '@openldr/core':
+        specifier: workspace:*
+        version: link:../core
       '@openldr/db':
         specifier: workspace:*
         version: link:../db

@@ -100,6 +100,67 @@ function dashboardRow(id: string, body: unknown) {
 }
 
 // Mirrors packages/db/src/report-store.ts toRow.
+interface ReportDesignBody {
+  name: string;
+  paper?: string;
+  orientation?: string;
+  pages?: unknown[];
+  parameters?: unknown[];
+  margins?: unknown | null;
+}
+function reportDesignRow(id: string, body: unknown) {
+  const d = body as ReportDesignBody;
+  return {
+    id,
+    name: d.name,
+    paper: d.paper ?? 'A4',
+    orientation: d.orientation ?? 'portrait',
+    pages: JSON.stringify(d.pages ?? []),
+    parameters: JSON.stringify(d.parameters ?? []),
+    margins: d.margins == null ? null : JSON.stringify(d.margins),
+    updated_at: sql`now()`,
+    managed_origin: MANAGED,
+  };
+}
+
+interface CustomQueryBody {
+  name: string;
+  connectorId: string;
+  sql: string;
+  params?: unknown[];
+}
+/**
+ * A synced query's `connector_id` is deliberately NOT central's value.
+ *
+ * Connectors carry encrypted credentials and are pointedly excluded from reference sync, so
+ * central's connector id does not exist on a lab. But `custom_queries.connector_id` is NOT NULL,
+ * and WHICH local database a query runs against is a lab-local concern anyway. The applier
+ * therefore rewrites it to the lab's own default target-warehouse connector, resolved by the
+ * well-known name shared by both sides' seeds. If the lab has no such connector we keep central's
+ * id verbatim: the row still lands (so the report definition is complete and the operator can
+ * repoint it), it just cannot run until a connector exists.
+ */
+const DEFAULT_CONNECTOR_NAME = 'Target Warehouse (Postgres)';
+async function customQueryRowLocal(db: Kysely<InternalSchema>, id: string, body: unknown) {
+  const q = body as CustomQueryBody;
+  const local = await (db as unknown as Kysely<Record<string, never>>)
+    .selectFrom('connectors' as never)
+    .select('id' as never)
+    .where('name' as never, '=', DEFAULT_CONNECTOR_NAME as never)
+    .executeTakeFirst()
+    .catch(() => undefined);
+  const connectorId = (local as { id?: string } | undefined)?.id ?? q.connectorId;
+  return {
+    id,
+    name: q.name,
+    connector_id: connectorId,
+    sql: q.sql,
+    params: JSON.stringify(q.params ?? []),
+    updated_at: sql`now()`,
+    managed_origin: MANAGED,
+  };
+}
+
 function reportRow(id: string, body: unknown) {
   const r = body as ReportBody;
   return {
@@ -190,6 +251,8 @@ function termMappingRow(id: string, body: unknown) {
 type ManagedTable =
   | 'dashboards'
   | 'reports'
+  | 'report_designs'
+  | 'custom_queries'
   | 'form_definitions'
   | 'publishers'
   | 'coding_systems'
@@ -252,6 +315,17 @@ export function createReferenceApplier(db: Kysely<InternalSchema>) {
         return upsertOrDelete(db, 'dashboards', rec.entityId, rec.op, rec.body, dashboardRow);
       case 'report':
         return upsertOrDelete(db, 'reports', rec.entityId, rec.op, rec.body, reportRow);
+      case 'report_design':
+        return upsertOrDelete(db, 'report_designs', rec.entityId, rec.op, rec.body, reportDesignRow);
+      case 'custom_query': {
+        // Row builder is async (it resolves the LOCAL connector), so pre-build then reuse the
+        // shared helper via a closure that ignores its args.
+        if (rec.op === 'delete') {
+          return upsertOrDelete(db, 'custom_queries', rec.entityId, rec.op, rec.body, () => ({}));
+        }
+        const row = await customQueryRowLocal(db, rec.entityId, rec.body);
+        return upsertOrDelete(db, 'custom_queries', rec.entityId, rec.op, rec.body, () => row);
+      }
       case 'form':
         return upsertOrDelete(db, 'form_definitions', rec.entityId, rec.op, rec.body, formRow);
       case 'publisher':

@@ -34,6 +34,10 @@ export interface PullRecord {
     | 'form'
     | 'dashboard'
     | 'report'
+    // reports.design_id / reports.primary_query_id targets — a report definition cannot render
+    // without them, so they travel with it (see ReferenceEntityType in @openldr/db).
+    | 'report_design'
+    | 'custom_query'
     | 'setting'
     | 'publisher'
     | 'coding_system'

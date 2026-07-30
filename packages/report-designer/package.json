@@ -12,6 +12,7 @@
     "lint": "echo \"no lint\""
   },
   "dependencies": {
+    "@openldr/core": "workspace:*",
     "@openldr/db": "workspace:*",
     "kysely": "^0.28.17",
     "pdfkit": "^0.15.0",

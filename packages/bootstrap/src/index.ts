@@ -450,7 +450,9 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
   // (via `dataDrivenReporting`, below) can reference them. `reportRenderDeps.runConnectorSql` reads
   // `workflowServices` lazily at call time (it is declared further down this function) — mirrors
   // the same lazy-read pattern in apps/server/app.ts.
-  const reportDesignStore = createReportDesignStore(internal.db);
+  // referenceCapture: designs are part of the central→lab reference-sync set (a report definition
+  // points at one via reports.design_id), so authoring one on central must land a change-log row.
+  const reportDesignStore = createReportDesignStore(internal.db, referenceCapture);
   const reportDefStore = createReportStore(internal.db, referenceCapture);
   const syncSites = createSyncSiteStore(internal.db);
   const reportRenderDeps: RunStoredQueryDeps = {
