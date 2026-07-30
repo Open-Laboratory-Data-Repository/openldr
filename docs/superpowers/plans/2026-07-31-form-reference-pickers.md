@@ -395,9 +395,13 @@ describe('fromAnswer', () => {
     expect(fromAnswer({ valueCoding: { code: 'routine' } })).toBe('routine');
   });
 
-  it('reconstructs an entity answer', () => {
+  it('reconstructs an entity answer when a display is present', () => {
     expect(fromAnswer({ valueReference: { reference: 'Patient/p1', display: 'Doe Jane' } }))
       .toEqual({ reference: 'Patient/p1', display: 'Doe Jane' });
+  });
+
+  it('returns a bare reference when no display is present, so legacy answers still round-trip', () => {
+    expect(fromAnswer({ valueReference: { reference: 'Patient/123' } })).toBe('Patient/123');
   });
 });
 ```
@@ -480,7 +484,12 @@ export function fromAnswer(answer: QuestionnaireResponseItemAnswer): unknown {
       : answer.valueCoding.code ?? ''
   }
   if (answer.valueReference !== undefined) {
-    return { reference: answer.valueReference.reference ?? '', display: answer.valueReference.display ?? null }
+    // Display is the discriminator here, mirroring the system check above: a legacy bare
+    // reference has none and must keep decoding to a string, or the existing round-trip
+    // test at answer-value.test.ts:166 breaks.
+    return answer.valueReference.display
+      ? { reference: answer.valueReference.reference ?? '', display: answer.valueReference.display }
+      : answer.valueReference.reference ?? ''
   }
   if (answer.valueString !== undefined) return answer.valueString
   return undefined
@@ -492,7 +501,9 @@ Keep the existing `import type { FormField } ...` and `import type { Questionnai
 - [ ] **Step 4: Run the package's full suite**
 
 Run: `pnpm --filter @openldr/forms exec vitest run`
-Expected: PASS. `round-trip.test.ts` and `to-questionnaire.test.ts` exercise `fromAnswer` for references — if either fails, the legacy bare-string path regressed; fix that rather than editing the assertions.
+Expected: PASS with **no existing assertion edited**.
+
+`answer-value.test.ts` already contains two legacy reference tests — `encodes reference as valueReference` (line ~71) and `reference: round-trips as reference string` (line ~166). Both must keep passing untouched: the first exercises `toAnswer`'s bare-string path, the second the display-absent decode rule. If either fails, the legacy path regressed — fix the implementation, do not edit the assertion. `round-trip.test.ts` and `to-questionnaire.test.ts` also exercise `fromAnswer`.
 
 - [ ] **Step 5: Commit**
 
