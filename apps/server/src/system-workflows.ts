@@ -35,8 +35,18 @@ function findNode(def: { nodes?: unknown[] }, templateId: string): Record<string
  *    token. Reset restores structure, never credentials.
  *  - the form-validate node's `formId`, so a site that re-pointed it keeps its binding.
  *
- * `secretPreserved: false` means the stored graph had no secret to carry over and the
- * rebuilt one carries the freshly generated default — callers must surface that.
+ * `secretPreserved` has ONE precise meaning: **no external sender's webhook token
+ * changed as a result of this reset.** Concretely:
+ *
+ *   - the restored graph has NO webhook node   → true  (there is no token; nothing could change)
+ *   - an existing `secretRef` was carried over → true  (the same token stays in force)
+ *   - a webhook node exists but nothing was carried over (the stored graph was gutted or its
+ *     secret was plaintext/absent) → false (a NEWLY minted token is now in force, and every
+ *     existing sender's token is dead until the operator redistributes it)
+ *
+ * Only the third case is operator-actionable, which is why the route surfaces and audits it.
+ * The no-webhook case is `true` on purpose, not by accident: `wf-sample-reactive` is fired by
+ * an `event-trigger` and has no token at all, so resetting it cannot break a sender.
  */
 export function rebuildSystemWorkflow(existing: { id: string; definition: { nodes?: unknown[] } }): {
   workflow: any;
@@ -55,7 +65,12 @@ export function rebuildSystemWorkflow(existing: { id: string; definition: { node
 
   const workflow = JSON.parse(JSON.stringify(fresh));
   const newTrigger = findNode(workflow.definition, 'webhook-trigger');
-  if (newTrigger && oldSecretRef) newTrigger.data.secret = { secretRef: oldSecretRef };
+  const carriedOver = Boolean(newTrigger && oldSecretRef);
+  if (carriedOver) newTrigger!.data.secret = { secretRef: oldSecretRef };
 
-  return { workflow, secretPreserved: Boolean(oldSecretRef) || !newTrigger };
+  // Spelled out rather than folded into one boolean expression: the two `true` branches
+  // mean different things (no token exists vs. the same token survived) and only the
+  // remaining case — a webhook whose token was just replaced — is a change to report.
+  const secretPreserved = !newTrigger || carriedOver;
+  return { workflow, secretPreserved };
 }
