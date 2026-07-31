@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/spinner';
+import { TablePagination } from '@/components/ui/table-pagination';
 import { SettingsHeader } from './SettingsHeader';
 import { fetchSites, enrollSite, rotateSite, revokeSite, downloadCentralCertificate, type SyncSiteRow, type EnrollResult } from '@/api';
 
@@ -33,6 +34,8 @@ export function Sites() {
   const [rows, setRows] = useState<SyncSiteRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [errored, setErrored] = useState(false);
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(25);
   const [enrollOpen, setEnrollOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [siteId, setSiteId] = useState('');
@@ -109,6 +112,8 @@ export function Sites() {
     catch { toast.error(t('sites.certDownloadFailed')); }
   }, [t]);
 
+  const pageRows = rows.slice(page * pageSize, page * pageSize + pageSize);
+
   return (
     <>
       <div className="flex min-h-0 flex-1 flex-col">
@@ -128,8 +133,12 @@ export function Sites() {
           }
         />
 
-        <div className="flex flex-1 flex-col overflow-auto">
-          <Table>
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          {/* The table renders ONLY when populated. Its six header cells have an intrinsic width
+              of ~396px, so keeping the header around for an empty list forces the region to
+              scroll sideways on any phone narrower than that — for a table with no data in it. */}
+          {!loading && !errored && rows.length > 0 && (
+          <Table wrapperClassName="min-h-0 flex-1">
             <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow>
                 <TableHead>{t('sites.siteId')}</TableHead>
@@ -140,9 +149,8 @@ export function Sites() {
                 <TableHead className="w-16" />
               </TableRow>
             </TableHeader>
-            {!loading && !errored && rows.length > 0 && (
             <TableBody className="[&_tr:last-child]:border-b">
-                {rows.map((s) => (
+                {pageRows.map((s) => (
                   <TableRow key={s.siteId}>
                     <TableCell className="font-medium">{s.siteId}</TableCell>
                     <TableCell>{s.name || <span className="text-muted-foreground">-</span>}</TableCell>
@@ -175,8 +183,8 @@ export function Sites() {
                   </TableRow>
                 ))}
             </TableBody>
-            )}
           </Table>
+          )}
           {loading && <LoadingState className="flex-1" label={t('sites.loading')} />}
           {!loading && errored && <div className="flex flex-1 items-center justify-center px-6 text-center text-sm text-muted-foreground">{t('sites.errorState')}</div>}
           {!loading && !errored && rows.length === 0 && (
@@ -188,6 +196,15 @@ export function Sites() {
             />
           )}
         </div>
+
+        <TablePagination
+          page={page}
+          pageSize={pageSize}
+          total={rows.length}
+          onPageChange={setPage}
+          onPageSizeChange={(n) => { setPageSize(n); setPage(0); }}
+          leftSlot={<span className="text-muted-foreground">{t('sites.count', { count: rows.length })}</span>}
+        />
       </div>
 
       {/* Enroll dialog */}

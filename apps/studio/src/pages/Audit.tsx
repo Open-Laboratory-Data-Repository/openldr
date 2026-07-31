@@ -364,8 +364,8 @@ export function Audit() {
           <button type="submit" className="hidden" aria-hidden="true">Apply</button>
         </form>
 
-        <div className="flex flex-1 flex-col overflow-auto">
-          <Table className="[&_td]:whitespace-nowrap [&_th]:whitespace-nowrap">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <Table wrapperClassName={events.length > 0 ? 'min-h-0 flex-1' : undefined} className="[&_td]:whitespace-nowrap [&_th]:whitespace-nowrap">
             <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow>
                 <TableHead className="w-48 text-xs uppercase">Timestamp</TableHead>

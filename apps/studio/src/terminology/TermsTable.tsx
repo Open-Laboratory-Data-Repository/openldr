@@ -240,8 +240,8 @@ export function TermsTable({
       )}
 
       {/* Table */}
-      <div className="flex-1 overflow-auto">
-        <Table>
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <Table wrapperClassName="min-h-0 flex-1">
           <TableHeader className="sticky top-0 z-10 bg-background">
             <TableRow>
               <TableHead className="w-32 text-xs uppercase tracking-wide">Code</TableHead>

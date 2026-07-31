@@ -15,8 +15,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Bleed } from '@/components/ui/bleed';
 import { EmptyState } from '@/components/ui/empty-state';
+import { TablePagination } from '@/components/ui/table-pagination';
 import { SettingsHeader } from './SettingsHeader';
 import {
   listConnectors, listSinkPlugins, createConnector, updateConnector, deleteConnector, testConnector,
@@ -143,6 +143,8 @@ export function Connectors() {
   const [testResult, setTestResult] = useState<Record<string, string>>({});
   const [testing, setTesting] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(25);
 
   const load = useCallback(async () => {
     try {
@@ -259,6 +261,8 @@ export function Connectors() {
     ? true
     : busy || !draft.name || (draft.category === 'plugin' ? !draft.pluginId : !draft.type);
 
+  const pageRows = rows.slice(page * pageSize, page * pageSize + pageSize);
+
   return (
     <div className="flex min-h-0 flex-1 flex-col" data-testid="connectors-page">
       <SettingsHeader
@@ -279,17 +283,9 @@ export function Connectors() {
         }
       />
 
-      {rows.length === 0 ? (
-        <EmptyState
-          icon={<Plug className="h-6 w-6" />}
-          title={t('settings.connectors.emptyTitle')}
-          action={<Button onClick={openCreate}>{t('settings.connectors.add')}</Button>}
-        />
-      ) : (
-        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
-        <Bleed>
-        <Table>
-          <TableHeader>
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <Table wrapperClassName={pageRows.length > 0 ? 'min-h-0 flex-1' : undefined}>
+          <TableHeader className="sticky top-0 z-10 bg-background">
             <TableRow>
               <TableHead>{t('settings.connectors.colName')}</TableHead>
               <TableHead>{t('settings.connectors.colType')}</TableHead>
@@ -298,8 +294,9 @@ export function Connectors() {
               <TableHead className="text-right">{t('settings.connectors.colActions')}</TableHead>
             </TableRow>
           </TableHeader>
-          <TableBody>
-            {rows.map((c) => (
+          {pageRows.length > 0 && (
+          <TableBody className="[&_tr:last-child]:border-b">
+            {pageRows.map((c) => (
               <TableRow key={c.id} data-testid={`connector-row-${c.id}`}>
                 <TableCell className="font-medium">{c.name}</TableCell>
                 <TableCell className="text-muted-foreground">{c.type ?? c.pluginId}</TableCell>
@@ -345,10 +342,25 @@ export function Connectors() {
               </TableRow>
             ))}
           </TableBody>
+          )}
         </Table>
-        </Bleed>
-        </div>
-      )}
+        {rows.length === 0 && (
+          <EmptyState
+            icon={<Plug className="h-6 w-6" />}
+            title={t('settings.connectors.emptyTitle')}
+            action={<Button onClick={openCreate}>{t('settings.connectors.add')}</Button>}
+          />
+        )}
+      </div>
+
+      <TablePagination
+        page={page}
+        pageSize={pageSize}
+        total={rows.length}
+        onPageChange={setPage}
+        onPageSizeChange={(n) => { setPageSize(n); setPage(0); }}
+        leftSlot={<span className="text-muted-foreground">{t('settings.connectors.count', { count: rows.length })}</span>}
+      />
 
       <Sheet open={draft !== null} onOpenChange={(o) => { if (!o) setDraft(null); }}>
         <SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-2xl">

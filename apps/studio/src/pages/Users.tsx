@@ -181,8 +181,10 @@ export function Users() {
           {toast ? <div className={toast.kind === 'ok' ? 'rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-700' : 'rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive'}>{toast.text}</div> : null}
         </div>
 
-        <div className="flex flex-1 flex-col overflow-auto">
-          <Table>
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          {/* Fill only when rows exist: the loading/empty siblings below are themselves `flex-1`,
+              so an always-filling wrapper would split the pane 50/50 with them. */}
+          <Table wrapperClassName={view.rows.length > 0 ? 'min-h-0 flex-1' : undefined}>
             <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow>{table.visibleColumns.map((c) => <TableHead key={c.id} className={c.headClassName}>{c.id === '__actions' ? '' : t(c.labelKey)}</TableHead>)}</TableRow>
             </TableHeader>

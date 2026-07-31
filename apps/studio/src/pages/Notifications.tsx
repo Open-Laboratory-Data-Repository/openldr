@@ -223,8 +223,8 @@ export function Notifications() {
           <ActiveFilterChips columns={columns} filters={table.filters} onChange={table.setFilters} />
         </div>
 
-        <div className="flex flex-1 flex-col overflow-auto">
-          <Table>
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <Table wrapperClassName={rows.length > 0 ? 'min-h-0 flex-1' : undefined}>
             <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow>
                 {table.visibleColumns.map((c) => (

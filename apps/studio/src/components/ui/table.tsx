@@ -1,9 +1,17 @@
 import * as React from 'react';
 import { cn } from '@/lib/cn';
 
-export const Table = React.forwardRef<HTMLTableElement, React.HTMLAttributes<HTMLTableElement>>(
-  ({ className, ...props }, ref) => (
-    <div className="relative w-full overflow-auto">
+/**
+ * `wrapperClassName` styles the scroll wrapper, not the <table>. Pass `min-h-0 flex-1` when the
+ * table sits in a flex column and its region should fill down to a pinned footer — without it the
+ * wrapper is content-height, so a short list leaves bare background below the last row.
+ */
+export const Table = React.forwardRef<
+  HTMLTableElement,
+  React.HTMLAttributes<HTMLTableElement> & { wrapperClassName?: string }
+>(
+  ({ className, wrapperClassName, ...props }, ref) => (
+    <div className={cn('relative w-full overflow-auto', wrapperClassName)}>
       <table ref={ref} className={cn('w-full caption-bottom border-collapse text-sm', className)} {...props} />
     </div>
   ),
