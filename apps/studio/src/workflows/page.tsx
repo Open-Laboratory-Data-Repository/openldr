@@ -21,7 +21,10 @@ export function Workflows() {
   const { save, execute, fireTrigger, saving, executing, lastExecution } = useWorkflowApi();
   const [historyOpen, setHistoryOpen] = useState(false);
   const [datasetsOpen, setDatasetsOpen] = useState(false);
-  const [isProtected, setIsProtected] = useState(false);
+  // Fail-safe default: until we actually know whether this workflow is
+  // protected, treat it as protected so an in-flight fetch can never let an
+  // unconfirmed save through (see the effect below for the id-transition case).
+  const [isProtected, setIsProtected] = useState(true);
   const [pendingProtectedSave, setPendingProtectedSave] = useState(false);
 
   const { id } = useParams();
@@ -38,6 +41,10 @@ export function Workflows() {
 
   useEffect(() => {
     if (!id || id === 'new') { clear(); setIsProtected(false); return; }
+    // The store's workflowId can outlive this component (see the comment above),
+    // so a fresh mount or an id switch must not inherit a stale "not protected"
+    // state from a previous workflow. Re-arm the fail-safe before fetching.
+    setIsProtected(true);
     let active = true;
     void fetchWorkflow(id)
       .then((w) => {

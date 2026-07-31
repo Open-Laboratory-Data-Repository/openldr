@@ -13,6 +13,7 @@ vi.mock('@/api', async (orig) => {
   const actual = await orig<typeof import('@/api')>();
   return { ...actual, fetchWorkflows: vi.fn(), createWorkflow: vi.fn(), deleteWorkflow: vi.fn(), resetWorkflow: vi.fn() };
 });
+import { toast } from 'sonner';
 import * as api from '@/api';
 import { WorkflowList } from './WorkflowList';
 
@@ -88,5 +89,40 @@ describe('WorkflowList', () => {
     await openMenuItem(/actions for mine/i, 'delete-wf-mine');
     expect(screen.getByTestId('delete-wf-mine')).toBeInTheDocument();
     expect(screen.queryByTestId('reset-wf-mine')).not.toBeInTheDocument();
+  });
+
+  // The reset toast is the only signal an operator gets that a webhook secret rotated —
+  // silently swallowing it (or making it look identical to the no-rotation case) would leave
+  // external senders quietly broken. See the "Never swallow this" comment in WorkflowList.
+  it('warns that senders need the new token when reset rotates the webhook secret', async () => {
+    (api.fetchWorkflows as any).mockResolvedValue([
+      { id: 'wf-ingest', name: 'Ingest', enabled: true, protected: true } as never,
+    ]);
+    (api.resetWorkflow as any).mockResolvedValue({ ok: true, secretPreserved: false });
+    render(<MemoryRouter><WorkflowList /></MemoryRouter>);
+    await screen.findByTestId('open-wf-ingest');
+
+    fireEvent.click(await openMenuItem(/actions for ingest/i, 'reset-wf-ingest'));
+
+    await waitFor(() => expect(api.resetWorkflow).toHaveBeenCalledWith('wf-ingest'));
+    await waitFor(() => expect(toast.warning).toHaveBeenCalledWith(
+      'Ingest restored, but a NEW webhook secret was generated — existing senders must be given the new token.',
+    ));
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  it('does not warn when reset preserves the existing webhook secret', async () => {
+    (api.fetchWorkflows as any).mockResolvedValue([
+      { id: 'wf-ingest', name: 'Ingest', enabled: true, protected: true } as never,
+    ]);
+    (api.resetWorkflow as any).mockResolvedValue({ ok: true, secretPreserved: true });
+    render(<MemoryRouter><WorkflowList /></MemoryRouter>);
+    await screen.findByTestId('open-wf-ingest');
+
+    fireEvent.click(await openMenuItem(/actions for ingest/i, 'reset-wf-ingest'));
+
+    await waitFor(() => expect(api.resetWorkflow).toHaveBeenCalledWith('wf-ingest'));
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Ingest restored to its default.'));
+    expect(toast.warning).not.toHaveBeenCalled();
   });
 });
