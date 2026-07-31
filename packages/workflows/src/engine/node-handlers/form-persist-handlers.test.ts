@@ -104,3 +104,64 @@ describe('persistStoreHandler', () => {
     ).rejects.toThrow(/persistStore service not injected/);
   });
 });
+
+describe('persist-store provenance override', () => {
+  const node = { id: 'p1', type: 'action', data: { config: { source: 'webhook-ingest' } } };
+
+  it('prefers a run-input provenance source over node config', async () => {
+    const calls: { source?: string }[] = [];
+    const persistStore = vi.fn(async (i: { source?: string }) => {
+      calls.push(i);
+      return { items: [], meta: {} };
+    });
+    const ctx = createContext(
+      undefined,
+      () => {},
+      [],
+      undefined,
+      { persistStore } as unknown as WorkflowServices,
+    );
+    ctx.input = { method: 'POST', body: {}, __provenance: { sourceSystem: 'form-capture' } };
+
+    await persistStoreHandler(node as never, ctx, []);
+    expect(calls[0]!.source).toBe('form-capture');
+  });
+
+  it('falls back to node config when no override is present', async () => {
+    const calls: { source?: string }[] = [];
+    const persistStore = vi.fn(async (i: { source?: string }) => {
+      calls.push(i);
+      return { items: [], meta: {} };
+    });
+    const ctx = createContext(
+      undefined,
+      () => {},
+      [],
+      undefined,
+      { persistStore } as unknown as WorkflowServices,
+    );
+    ctx.input = { method: 'POST', body: {} };
+
+    await persistStoreHandler(node as never, ctx, []);
+    expect(calls[0]!.source).toBe('webhook-ingest');
+  });
+
+  it('ignores an override nested in a webhook body', async () => {
+    const calls: { source?: string }[] = [];
+    const persistStore = vi.fn(async (i: { source?: string }) => {
+      calls.push(i);
+      return { items: [], meta: {} };
+    });
+    const ctx = createContext(
+      undefined,
+      () => {},
+      [],
+      undefined,
+      { persistStore } as unknown as WorkflowServices,
+    );
+    ctx.input = { method: 'POST', body: { __provenance: { sourceSystem: 'form-capture' } } };
+
+    await persistStoreHandler(node as never, ctx, []);
+    expect(calls[0]!.source).toBe('webhook-ingest');
+  });
+});
