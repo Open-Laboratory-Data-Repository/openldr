@@ -1050,4 +1050,66 @@ describe('workflow routes', () => {
     expect(res.statusCode).toBe(409);
     expect(res.json().error).toContain('cannot be deleted');
   });
+
+  it('DELETE /api/workflows/:id refuses wf-ingest with form capture/ingest dependency message', async () => {
+    const app = Fastify();
+    const ctx = fakeCtx();
+    app.addHook('onRequest', async (req) => {
+      req.user = { id: 'a', username: 'a', displayName: null, roles: ['lab_admin'], capabilities: ['workflows.edit'] } as never;
+    });
+    registerWorkflowRoutes(app, ctx as never);
+
+    const res = await app.inject({ method: 'DELETE', url: '/api/workflows/wf-ingest' });
+    expect(res.statusCode).toBe(409);
+    const error = res.json().error;
+    expect(error).toContain('cannot be deleted');
+    expect(error).toContain('Form capture and automated ingest both run through it');
+  });
+
+  it('DELETE /api/workflows/:id refuses wf-sample-reactive without form capture/ingest dependency message', async () => {
+    const app = Fastify();
+    const ctx = fakeCtx();
+    app.addHook('onRequest', async (req) => {
+      req.user = { id: 'a', username: 'a', displayName: null, roles: ['lab_admin'], capabilities: ['workflows.edit'] } as never;
+    });
+    registerWorkflowRoutes(app, ctx as never);
+
+    const res = await app.inject({ method: 'DELETE', url: '/api/workflows/wf-sample-reactive' });
+    expect(res.statusCode).toBe(409);
+    const error = res.json().error;
+    expect(error).toContain('cannot be deleted');
+    expect(error).not.toContain('Form capture and automated ingest');
+  });
+
+  it('GET /api/workflows/:id returns protected=true for a seeded workflow', async () => {
+    const app = Fastify();
+    const ctx = fakeCtx();
+    app.addHook('onRequest', async (req) => {
+      req.user = { id: 'a', username: 'a', displayName: null, roles: ['lab_admin'], capabilities: ['workflows.view'] } as never;
+    });
+    registerWorkflowRoutes(app, ctx as never);
+
+    // Seed a protected workflow into the store
+    await ctx.workflows.store.create({ id: 'wf-ingest', name: 'Ingest', description: null, definition: { nodes: [], edges: [] }, enabled: true, createdBy: null });
+
+    const res = await app.inject({ method: 'GET', url: '/api/workflows/wf-ingest' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().protected).toBe(true);
+  });
+
+  it('GET /api/workflows/:id returns protected=false for a non-seeded workflow', async () => {
+    const app = Fastify();
+    const ctx = fakeCtx();
+    app.addHook('onRequest', async (req) => {
+      req.user = { id: 'a', username: 'a', displayName: null, roles: ['lab_admin'], capabilities: ['workflows.view'] } as never;
+    });
+    registerWorkflowRoutes(app, ctx as never);
+
+    // Create a non-protected custom workflow
+    await ctx.workflows.store.create({ id: 'wf-custom', name: 'Custom', description: null, definition: { nodes: [], edges: [] }, enabled: true, createdBy: null });
+
+    const res = await app.inject({ method: 'GET', url: '/api/workflows/wf-custom' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().protected).toBe(false);
+  });
 });

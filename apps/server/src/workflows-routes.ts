@@ -225,9 +225,11 @@ export function registerWorkflowRoutes(
     const { id } = req.params as { id: string };
     if (isProtectedWorkflowId(id)) {
       reply.code(409);
-      return {
-        error: `'${id}' is a system workflow and cannot be deleted. Form capture and automated ingest both run through it. Use reset to restore it to its default.`,
-      };
+      const baseMsg = `'${id}' is a system workflow and cannot be deleted. Use reset to restore it to its default.`;
+      const msgWithCapture = id === 'wf-ingest'
+        ? `${baseMsg} Form capture and automated ingest both run through it.`
+        : baseMsg;
+      return { error: msgWithCapture };
     }
     const before = await ctx.workflows.store.get(id);
     await ctx.workflows.store.remove(id);
