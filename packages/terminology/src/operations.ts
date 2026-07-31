@@ -7,7 +7,7 @@ import type { MapElement } from '@openldr/db';
 export interface LookupResult { found: boolean; system: string; code: string; display: string | null; properties: Record<string, unknown> | null }
 export interface ValidateResult { result: boolean; message: string }
 export interface TranslateResult { result: boolean; matches: MapElement[] }
-export interface ExpandOptions { count?: number; offset?: number }
+export interface ExpandOptions { count?: number; offset?: number; filter?: string }
 
 export class TerminologyError extends Error {
   constructor(message: string, public readonly kind: 'not-found' | 'invalid') { super(message); this.name = 'TerminologyError'; }
@@ -55,10 +55,23 @@ export function createOperations(source: ConceptSource): Operations {
   async function expand(url: string, opts: ExpandOptions): Promise<ValueSet> {
     const vs = await loadValueSet(url);
     const { codes, total } = await expandCompose((vs.compose ?? { include: [] }) as VsCompose, makeDeps(source), { seedUrls: [url] });
+    // FHIR $expand `filter`: a case-insensitive substring over code and display. Applied
+    // before paging so `total` reflects the filtered set, which is what a type-ahead needs.
+    const needle = opts.filter?.trim().toLowerCase();
+    const matched = needle
+      ? codes.filter((c) => c.code.toLowerCase().includes(needle) || (c.display ?? '').toLowerCase().includes(needle))
+      : codes;
     const count = opts.count ?? 100;
     const offset = opts.offset ?? 0;
-    const page = codes.slice(offset, offset + count);
-    return { ...vs, expansion: { total, offset, contains: page.map((c) => ({ system: c.system, code: c.code, display: c.display ?? undefined })) } };
+    const page = matched.slice(offset, offset + count);
+    return {
+      ...vs,
+      expansion: {
+        total: needle ? matched.length : total,
+        offset,
+        contains: page.map((c) => ({ system: c.system, code: c.code, display: c.display ?? undefined })),
+      },
+    };
   }
 
   return {

@@ -108,3 +108,33 @@ describe('translate', () => {
     expect(r.matches).toEqual([]);
   });
 });
+
+describe('expand filter', () => {
+  const panel: ConceptRecord[] = [
+    { system: 'http://loinc.org', code: '718-7',  display: 'Hemoglobin', status: 'ACTIVE', properties: null },
+    { system: 'http://loinc.org', code: '2345-7', display: 'Glucose',    status: 'ACTIVE', properties: null },
+  ];
+  const vsResource = {
+    resourceType: 'ValueSet', url: 'http://x/vs',
+    compose: { include: [{ system: 'http://loinc.org' }] },
+  };
+  const ops = createOperations(memSource(panel, { 'http://x/vs': vsResource }));
+
+  it('matches on display, case-insensitively', async () => {
+    const vs = await ops.expand('http://x/vs', { filter: 'hemo' });
+    expect(vs.expansion?.contains?.map((c) => c.display)).toEqual(['Hemoglobin']);
+  });
+
+  it('matches on code', async () => {
+    const vs = await ops.expand('http://x/vs', { filter: '2345-7' });
+    expect(vs.expansion?.contains?.map((c) => c.code)).toEqual(['2345-7']);
+  });
+
+  it('reports the filtered total, not the unfiltered one', async () => {
+    expect((await ops.expand('http://x/vs', { filter: 'hemo' })).expansion?.total).toBe(1);
+  });
+
+  it('returns everything when no filter is given', async () => {
+    expect((await ops.expand('http://x/vs', {})).expansion?.contains).toHaveLength(2);
+  });
+});
