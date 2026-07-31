@@ -384,19 +384,26 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
       return { ok: false, error: "capture pipeline unavailable: the 'wf-ingest' workflow is missing or disabled" };
     }
     if (outcome.status !== 'completed') {
-      // A failed run does NOT mean nothing was stored. `persist-1` runs before `log-1`, and the
-      // run is recorded after the engine returns, so a failure in the Log node, in the
-      // `data.persisted` publish, or in the run-store insert lands here with the resources
+      // A failed run does NOT mean nothing was stored. `persist-1` runs before `log-1`, so a
+      // failure in the Log node or in the `data.persisted` publish lands here with the resources
       // already written. Telling the clerk only "failed" makes them resubmit — and
       // `unwrapBundle` assigns a fresh randomUUID() per entry on every submission, so the retry
       // writes a SECOND ServiceRequest and QuestionnaireResponse for the same clinical event.
       // The run's own metadata already knows; say what actually landed.
+      //
+      // NOT covered here: a run-store insert failure. `deps.runs.record(run)` throws INSIDE
+      // runAndRecord, before it builds and returns the outcome object, so `runAndRecord` itself
+      // throws, this route has no try/catch around that call, and the request falls through to
+      // the generic error handler — a plain 500 with the raw error, no clerk-facing advice.
       const persisted = persistedCount(outcome.nodeMeta);
-      // The clerk-facing sentence. Only the "already stored" case carries advice; the other is
-      // the plain truth, and a retry there is safe.
+      // The clerk-facing sentence. The "already stored" case has real evidence and tells the
+      // clerk not to resubmit. The zero case is absence of evidence, not evidence of absence —
+      // persist-1 may never have been reached, may have been renamed/removed from the graph, or
+      // may have persisted moments after this metadata was captured — so it must not assert the
+      // retry is safe. It tells the clerk to check the run instead.
       const message = persisted > 0
         ? `${persisted} resource(s) were stored before this submission failed. Do NOT resubmit — resubmitting would create a duplicate record. Quote run ${outcome.runId} when reporting this.`
-        : 'Nothing was stored. The submission can safely be retried.';
+        : `No stored records were reported for this run. Check run ${outcome.runId} before resubmitting.`;
       // redact, never verbatim: a Persist Store or DB-node failure can carry a connection
       // string, and `redact` masks DSN userinfo, `password=` and Authorization tokens.
       const detail = redact(outcome.error ?? '');

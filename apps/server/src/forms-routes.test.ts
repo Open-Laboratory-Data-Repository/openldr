@@ -983,7 +983,9 @@ describe('forms routes', () => {
     expect(res.json().error).toContain('log node blew up');
   });
 
-  it('says a retry is safe when the failed run stored nothing', async () => {
+  // Zero persisted is absence of evidence, not evidence of absence: the message must NOT assert
+  // the retry is safe, only that nothing was reported and the run should be checked first.
+  it('gives absence-of-evidence guidance, not a safety claim, when the failed run reports no persisted records', async () => {
     const ctx = fakeCtx();
     (ctx as any).workflows = {
       runner: {
@@ -1002,8 +1004,9 @@ describe('forms routes', () => {
     });
 
     expect(res.statusCode).toBe(500);
-    expect(res.json()).toMatchObject({ ok: false, persisted: 0 });
-    expect(res.json().message).toMatch(/safely be retried/i);
+    expect(res.json()).toMatchObject({ ok: false, persisted: 0, runId: 'run-none' });
+    expect(res.json().message).toBe('No stored records were reported for this run. Check run run-none before resubmitting.');
+    expect(res.json().message).not.toMatch(/safely be retried|safe to retry/i);
   });
 
   // The graph is operator-editable: the Persist Store node can be renamed or removed. "We cannot
