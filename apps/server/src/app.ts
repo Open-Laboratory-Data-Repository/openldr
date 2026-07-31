@@ -18,6 +18,7 @@ import { registerAuditRoutes } from './audit-routes';
 import { registerUsersRoutes } from './users-routes';
 import { registerRolesRoutes } from './roles-routes';
 import { registerFormsRoutes } from './forms-routes';
+import { registerReferenceSearchRoutes } from './reference-search-routes';
 import { registerReportDesignRoutes } from './report-designs-routes';
 import { registerReportDefRoutes } from './report-defs-routes';
 import { registerReportCategoryRoutes } from './report-categories-routes';
@@ -30,7 +31,7 @@ import { registerNotificationRoutes } from './notification-routes';
 import { registerPluginUiRoutes } from './plugin-ui-routes';
 import { registerQueryRoutes } from './query-routes';
 import { registerSyncRoutes } from './sync-routes';
-import { createConnectorStore, createCustomQueryStore, referenceCapture } from '@openldr/db';
+import { createConnectorStore, createCustomQueryStore, createPatientResolver, referenceCapture } from '@openldr/db';
 import { registerAuth } from './auth-plugin';
 import { readAppVersion } from './version';
 
@@ -147,6 +148,9 @@ export async function buildApp(ctx: AppContext) {
   registerUsersRoutes(app, ctx);
   registerRolesRoutes(app, ctx);
   registerFormsRoutes(app, ctx);
+  registerReferenceSearchRoutes(app, ctx, {
+    Patient: createPatientResolver(ctx.store.db as never, ctx.targetEngine),
+  });
   registerReportDesignRoutes(app, ctx, {
     // referenceCapture: an operator-authored query on CENTRAL is reference config that must
     // reach labs alongside the report that points at it (reports.primary_query_id).
