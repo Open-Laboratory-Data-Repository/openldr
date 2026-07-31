@@ -149,4 +149,127 @@ describe('RoleStore', () => {
     expect(rolesAfter.map((r) => r.slug)).toEqual(['lab_technician']);
     await db.destroy();
   });
+
+  // ── Capability reconciliation ────────────────────────────────────────────────────────────
+  // Simulate an EXISTING install: role rows created by an earlier version's seed, from a catalog
+  // that did not yet contain some key. This is the shape of the live field defect.
+  async function seedStaleAdmin(db: any, missing: string[]): Promise<void> {
+    const { CAPABILITY_KEYS } = await import('@openldr/rbac');
+    await db.insertInto('roles')
+      .values({ id: 'r-admin', slug: 'lab_admin', name: 'Administrator', description: null, is_system: true })
+      .execute();
+    for (const capability of CAPABILITY_KEYS.filter((c: string) => !missing.includes(c))) {
+      await db.insertInto('role_capabilities').values({ role_id: 'r-admin', capability }).execute();
+    }
+  }
+
+  // THE test for the live field defect: an install created from the 641ca678 image froze lab_admin
+  // without data_exposure.manage, and nothing could ever add it. Next boot must repair it.
+  it('repairs lab_admin when a capability was added to the catalog after the role existed', async () => {
+    const db = await makeMigratedDb();
+    const store = createRoleStore(db);
+    await seedStaleAdmin(db, ['data_exposure.manage']);
+
+    const result = await store.seedSystemRoles();
+
+    const admin = (await store.getBySlug('lab_admin'))!;
+    expect(admin.capabilities).toContain('data_exposure.manage');
+    expect(result.granted).toContainEqual({ slug: 'lab_admin', roleId: 'r-admin', capability: 'data_exposure.manage' });
+    await db.destroy();
+  });
+
+  // lab_admin is LOCKED — update() throws for it, so an absence can never be a deliberate revoke.
+  // It is therefore reconciled unconditionally, even though the ledger has seen the key.
+  it('reconciles lab_admin even when the key is already in the ledger', async () => {
+    const db = await makeMigratedDb();
+    const store = createRoleStore(db);
+    await seedStaleAdmin(db, ['data_exposure.manage']);
+    const before = await db.selectFrom('capability_introductions').select('capability')
+      .where('capability', '=', 'data_exposure.manage').executeTakeFirst();
+    expect(before).toBeDefined(); // migration 067 seeded it
+
+    await store.seedSystemRoles();
+
+    expect((await store.getBySlug('lab_admin'))!.capabilities).toContain('data_exposure.manage');
+    await db.destroy();
+  });
+
+  // The unlocked presets CAN be diverged. A key the ledger has seen has had its one free grant,
+  // so an absence is an operator decision and must survive every restart.
+  it('does NOT re-grant an unlocked preset capability the ledger has already seen', async () => {
+    const db = await makeMigratedDb();
+    const store = createRoleStore(db);
+    await store.seedSystemRoles();
+    const tech = (await store.getBySlug('lab_technician'))!;
+    await store.update(tech.id, { capabilities: ['forms.view'] }); // operator revokes forms.submit
+
+    await store.seedSystemRoles();
+    await store.seedSystemRoles(); // and again — a revoke must not decay over restarts
+
+    expect((await store.getBySlug('lab_technician'))!.capabilities).toEqual(['forms.view']);
+    await db.destroy();
+  });
+
+  // A brand-new key has never existed, so no operator can have revoked it: grant it once.
+  it('grants an unlocked preset a capability the ledger has never seen', async () => {
+    const db = await makeMigratedDb();
+    const store = createRoleStore(db);
+    await store.seedSystemRoles();
+    const tech = (await store.getBySlug('lab_technician'))!;
+    await store.update(tech.id, { capabilities: ['forms.view'] });
+    // Simulate "forms.submit is brand new in this version" by forgetting it from the ledger.
+    await db.deleteFrom('capability_introductions').where('capability', '=', 'forms.submit').execute();
+
+    const result = await store.seedSystemRoles();
+
+    expect((await store.getBySlug('lab_technician'))!.capabilities).toContain('forms.submit');
+    expect(result.granted.some((g) => g.slug === 'lab_technician' && g.capability === 'forms.submit')).toBe(true);
+    await db.destroy();
+  });
+
+  // ⚠ THE TRAP. A failed ledger read must mean "reconciliation disabled", NEVER "empty ledger":
+  // an empty set makes every preset capability look brand-new and re-grants the lot, silently
+  // undoing every revoke on the install — strictly worse than the bug this fixes.
+  it('grants NOTHING to unlocked presets when the ledger is unreadable', async () => {
+    const db = await makeMigratedDb();
+    const store = createRoleStore(db);
+    await store.seedSystemRoles();
+    const tech = (await store.getBySlug('lab_technician'))!;
+    await store.update(tech.id, { capabilities: ['forms.view'] });
+    await db.schema.dropTable('capability_introductions').execute(); // ledger read now throws
+
+    await store.seedSystemRoles();
+
+    expect((await store.getBySlug('lab_technician'))!.capabilities).toEqual(['forms.view']);
+    await db.destroy();
+  });
+
+  // The locked role's rule never consults the ledger, so it still self-heals in that state.
+  it('still reconciles lab_admin when the ledger is unreadable', async () => {
+    const db = await makeMigratedDb();
+    const store = createRoleStore(db);
+    await seedStaleAdmin(db, ['data_exposure.manage']);
+    await db.schema.dropTable('capability_introductions').execute();
+
+    await store.seedSystemRoles();
+
+    expect((await store.getBySlug('lab_admin'))!.capabilities).toContain('data_exposure.manage');
+    await db.destroy();
+  });
+
+  it('reports created roles on a fresh install and grants nothing on the second run', async () => {
+    const db = await makeMigratedDb();
+    const store = createRoleStore(db);
+
+    const first = await store.seedSystemRoles();
+    const second = await store.seedSystemRoles();
+
+    expect(first.created.sort()).toEqual(
+      ['data_analyst', 'lab_admin', 'lab_manager', 'lab_technician', 'system_auditor'].sort(),
+    );
+    expect(first.granted).toEqual([]);
+    expect(second.created).toEqual([]);
+    expect(second.granted).toEqual([]);
+    await db.destroy();
+  });
 });
