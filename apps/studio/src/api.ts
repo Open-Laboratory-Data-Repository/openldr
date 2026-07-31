@@ -1358,6 +1358,7 @@ export interface Workflow {
   createdBy: string | null;
   createdAt?: string;
   updatedAt?: string;
+  protected?: boolean;
 }
 
 /**
@@ -1446,6 +1447,16 @@ export async function updateWorkflow(id: string, body: Omit<Workflow, 'createdAt
 export async function deleteWorkflow(id: string): Promise<void> {
   const res = await authFetch(`/api/workflows/${encodeURIComponent(id)}`, { method: 'DELETE' });
   if (!res.ok) throw new Error(`delete workflow failed: ${res.status}`);
+}
+
+/** Restore a seeded system workflow to its default definition. The webhook secret is preserved
+ *  server-side whenever there is one to keep — whether it was stored as a `{ secretRef }` or, on
+ *  an unsealed graph, as plaintext. `secretPreserved: false` means the stored graph held no
+ *  webhook secret at all, so a placeholder was minted; it CANNOT be handed out (workflow secrets
+ *  are write-only, SEC-06), so the operator must set a new one on the trigger and distribute that. */
+export async function resetWorkflow(id: string): Promise<{ ok: true; secretPreserved: boolean }> {
+  return authFetch(`/api/workflows/${encodeURIComponent(id)}/reset`, jbody({}, 'POST'))
+    .then((r) => okJson<{ ok: true; secretPreserved: boolean }>(r, 'reset workflow'));
 }
 
 /**

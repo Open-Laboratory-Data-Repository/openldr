@@ -1019,4 +1019,292 @@ describe('workflow routes', () => {
     expect((await secretRows(db, 'wf-secret')).length).toBe(0);
     await db.destroy();
   });
+
+  it('marks seeded workflows as protected in the list response', async () => {
+    const app = Fastify();
+    const ctx = fakeCtx();
+    (ctx as any).workflows.store.list = async () => ([
+      { id: 'wf-ingest', name: 'Ingest', definition: { nodes: [], edges: [] } },
+      { id: 'wf-mine', name: 'Mine', definition: { nodes: [], edges: [] } },
+    ]);
+    app.addHook('onRequest', async (req) => {
+      req.user = { id: 'a', username: 'a', displayName: null, roles: ['lab_admin'], capabilities: ['workflows.view'] } as never;
+    });
+    registerWorkflowRoutes(app, ctx as never);
+
+    const res = await app.inject({ method: 'GET', url: '/api/workflows' });
+    const byId = Object.fromEntries(res.json().map((w: any) => [w.id, w.protected]));
+    expect(byId['wf-ingest']).toBe(true);
+    expect(byId['wf-mine']).toBe(false);
+  });
+
+  it('refuses to delete a protected system workflow', async () => {
+    const app = Fastify();
+    const ctx = fakeCtx();
+    app.addHook('onRequest', async (req) => {
+      req.user = { id: 'a', username: 'a', displayName: null, roles: ['lab_admin'], capabilities: ['workflows.edit'] } as never;
+    });
+    registerWorkflowRoutes(app, ctx as never);
+
+    const res = await app.inject({ method: 'DELETE', url: '/api/workflows/wf-ingest' });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toContain('cannot be deleted');
+  });
+
+  it('DELETE /api/workflows/:id refuses wf-ingest with form capture/ingest dependency message', async () => {
+    const app = Fastify();
+    const ctx = fakeCtx();
+    app.addHook('onRequest', async (req) => {
+      req.user = { id: 'a', username: 'a', displayName: null, roles: ['lab_admin'], capabilities: ['workflows.edit'] } as never;
+    });
+    registerWorkflowRoutes(app, ctx as never);
+
+    const res = await app.inject({ method: 'DELETE', url: '/api/workflows/wf-ingest' });
+    expect(res.statusCode).toBe(409);
+    const error = res.json().error;
+    expect(error).toContain('cannot be deleted');
+    expect(error).toContain('Form capture and automated ingest both run through it');
+  });
+
+  it('DELETE /api/workflows/:id refuses wf-sample-reactive without form capture/ingest dependency message', async () => {
+    const app = Fastify();
+    const ctx = fakeCtx();
+    app.addHook('onRequest', async (req) => {
+      req.user = { id: 'a', username: 'a', displayName: null, roles: ['lab_admin'], capabilities: ['workflows.edit'] } as never;
+    });
+    registerWorkflowRoutes(app, ctx as never);
+
+    const res = await app.inject({ method: 'DELETE', url: '/api/workflows/wf-sample-reactive' });
+    expect(res.statusCode).toBe(409);
+    const error = res.json().error;
+    expect(error).toContain('cannot be deleted');
+    expect(error).not.toContain('Form capture and automated ingest');
+  });
+
+  it('GET /api/workflows/:id returns protected=true for a seeded workflow', async () => {
+    const app = Fastify();
+    const ctx = fakeCtx();
+    app.addHook('onRequest', async (req) => {
+      req.user = { id: 'a', username: 'a', displayName: null, roles: ['lab_admin'], capabilities: ['workflows.view'] } as never;
+    });
+    registerWorkflowRoutes(app, ctx as never);
+
+    // Seed a protected workflow into the store
+    await ctx.workflows.store.create({ id: 'wf-ingest', name: 'Ingest', description: null, definition: { nodes: [], edges: [] }, enabled: true, createdBy: null });
+
+    const res = await app.inject({ method: 'GET', url: '/api/workflows/wf-ingest' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().protected).toBe(true);
+  });
+
+  it('GET /api/workflows/:id returns protected=false for a non-seeded workflow', async () => {
+    const app = Fastify();
+    const ctx = fakeCtx();
+    app.addHook('onRequest', async (req) => {
+      req.user = { id: 'a', username: 'a', displayName: null, roles: ['lab_admin'], capabilities: ['workflows.view'] } as never;
+    });
+    registerWorkflowRoutes(app, ctx as never);
+
+    // Create a non-protected custom workflow
+    await ctx.workflows.store.create({ id: 'wf-custom', name: 'Custom', description: null, definition: { nodes: [], edges: [] }, enabled: true, createdBy: null });
+
+    const res = await app.inject({ method: 'GET', url: '/api/workflows/wf-custom' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().protected).toBe(false);
+  });
+
+  it('reset preserves the webhook secret so existing tokens keep working', async () => {
+    const app = Fastify();
+    const ctx = fakeCtx();
+    let saved: any;
+    (ctx as any).workflows.store.get = async () => ({
+      id: 'wf-ingest', name: 'mangled',
+      definition: { nodes: [{ id: 't', type: 'webhook', data: { templateId: 'webhook-trigger', secret: { secretRef: 'wsec_ORIGINAL' } } }], edges: [] },
+    });
+    (ctx as any).workflows.store.update = async (_id: string, wf: any) => { saved = wf; return wf; };
+    app.addHook('onRequest', async (req) => {
+      req.user = { id: 'a', username: 'a', displayName: null, roles: ['lab_admin'], capabilities: ['workflows.edit'] } as never;
+    });
+    registerWorkflowRoutes(app, ctx as never);
+
+    const res = await app.inject({ method: 'POST', url: '/api/workflows/wf-ingest/reset' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ ok: true, secretPreserved: true });
+    const trigger = saved.definition.nodes.find((n: any) => n.data?.templateId === 'webhook-trigger');
+    expect(trigger.data.secret.secretRef).toBe('wsec_ORIGINAL');
+  });
+
+  it('refuses to reset a workflow that is not a system workflow', async () => {
+    const app = Fastify();
+    const ctx = fakeCtx();
+    app.addHook('onRequest', async (req) => {
+      req.user = { id: 'a', username: 'a', displayName: null, roles: ['lab_admin'], capabilities: ['workflows.edit'] } as never;
+    });
+    registerWorkflowRoutes(app, ctx as never);
+
+    const res = await app.inject({ method: 'POST', url: '/api/workflows/wf-custom/reset' });
+    expect(res.statusCode).toBe(400);
+  });
+});
+
+describe('workflow reset — SEC-06 sealing (no plaintext secret persisted or audited)', () => {
+  // The seed mints its webhook secret with randomUUID(), so a raw UUID anywhere in the
+  // persisted definition or the audit payload IS the leak this guards against.
+  const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+
+  function resetApp(ctx: any) {
+    const app = Fastify();
+    app.addHook('onRequest', async (req) => {
+      req.user = { id: 'a', username: 'a', displayName: null, roles: ['lab_admin'], capabilities: ['workflows.edit'] } as never;
+    });
+    registerWorkflowRoutes(app, ctx as never);
+    return app;
+  }
+
+  it('seals the freshly minted webhook secret when there is NOTHING to carry over', async () => {
+    const ctx = fakeCtx();
+    let saved: any;
+    // A gutted graph — precisely the recovery case reset exists for. rebuildSystemWorkflow
+    // finds no secretRef to carry over, so the rebuilt graph holds the seed's PLAINTEXT
+    // randomUUID() secret. Before the fix that string went straight into the DB + audit log.
+    (ctx as any).workflows.store.get = async () => ({ id: 'wf-ingest', name: 'gutted', definition: { nodes: [], edges: [] } });
+    (ctx as any).workflows.store.update = async (_id: string, wf: any) => { saved = wf; return wf; };
+    const app = resetApp(ctx);
+
+    const res = await app.inject({ method: 'POST', url: '/api/workflows/wf-ingest/reset' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ ok: true, secretPreserved: false });
+
+    // The webhook node's secret is an opaque ref, not a plain string.
+    const trigger = saved.definition.nodes.find((n: any) => n.data?.templateId === 'webhook-trigger');
+    expect(typeof trigger.data.secret).toBe('object');
+    expect(typeof trigger.data.secret.secretRef).toBe('string');
+    expect(trigger.data.secret.secretRef).toMatch(/^wsec_/);
+
+    // Nothing UUID-shaped survives into the persisted definition...
+    expect(JSON.stringify(saved)).not.toMatch(UUID_RE);
+    // ...nor into the audit payload (`after`, and the whole event for good measure).
+    const evt = ctx.__auditEvents.find((e: any) => e.action === 'workflow.reset');
+    expect(evt).toBeTruthy();
+    expect(JSON.stringify(evt)).not.toMatch(UUID_RE);
+    expect(evt.metadata).toEqual({ secretPreserved: false });
+
+    // The plaintext really did land in the secret STORE (sealed), not nowhere.
+    const stored = Array.from(ctx.__secretStore.rows.values()).map((r: any) => r.value);
+    expect(stored.some((v: string) => UUID_RE.test(v))).toBe(true);
+  });
+
+  // An UNSEALED graph (seeded before SEC-06, imported, or written by a path that skipped
+  // extractWorkflowSecrets) holds the token as plaintext. That string IS the live token, so the
+  // reset must carry the VALUE over and let the seal turn it into a ref — minting a fresh UUID
+  // here would kill every sender in exchange for a token nobody can ever read back.
+  it('carries a PLAINTEXT stored webhook secret through the reset, sealed', async () => {
+    const ctx = fakeCtx();
+    let saved: any;
+    (ctx as any).workflows.store.get = async () => ({
+      id: 'wf-ingest', name: 'unsealed',
+      definition: { nodes: [{ id: 't', type: 'webhook', data: { templateId: 'webhook-trigger', secret: 'live-plaintext-token' } }], edges: [] },
+    });
+    (ctx as any).workflows.store.update = async (_id: string, wf: any) => { saved = wf; return wf; };
+    const app = resetApp(ctx);
+
+    const res = await app.inject({ method: 'POST', url: '/api/workflows/wf-ingest/reset' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ ok: true, secretPreserved: true });
+
+    // Persisted as a ref, never as cleartext...
+    const trigger = saved.definition.nodes.find((n: any) => n.data?.templateId === 'webhook-trigger');
+    expect(trigger.data.secret.secretRef).toMatch(/^wsec_/);
+    expect(JSON.stringify(saved)).not.toContain('live-plaintext-token');
+    // ...and the token behind that ref is the SAME one senders already hold.
+    const stored = ctx.__secretStore.rows.get(trigger.data.secret.secretRef);
+    expect(stored.value).toBe('live-plaintext-token');
+  });
+
+  // The persisted half of this scenario is covered above ('carries a PLAINTEXT stored webhook
+  // secret through the reset, sealed'); the audit event is a SEPARATE write path
+  // (recordAuditEvent does no masking of its own) and previously carried the plaintext token
+  // verbatim in `before` — a live credential, since reset now CARRIES it over instead of
+  // invalidating it, readable by anyone holding audit.view (including system_auditor).
+  it('masks a plaintext webhook secret out of the reset audit event before-image', async () => {
+    const ctx = fakeCtx();
+    (ctx as any).workflows.store.get = async () => ({
+      id: 'wf-ingest', name: 'unsealed',
+      definition: { nodes: [{ id: 't', type: 'webhook', data: { templateId: 'webhook-trigger', secret: 'live-plaintext-token' } }], edges: [] },
+    });
+    (ctx as any).workflows.store.update = async (_id: string, wf: any) => wf;
+    const app = resetApp(ctx);
+
+    const res = await app.inject({ method: 'POST', url: '/api/workflows/wf-ingest/reset' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ ok: true, secretPreserved: true });
+
+    const evt = ctx.__auditEvents.find((e: any) => e.action === 'workflow.reset');
+    expect(evt).toBeTruthy();
+    expect(JSON.stringify(evt.before)).not.toContain('live-plaintext-token');
+    expect(JSON.stringify(evt)).not.toContain('live-plaintext-token');
+  });
+
+  it('GCs secret rows orphaned by the restored graph (deleteExcept runs)', async () => {
+    const ctx = fakeCtx();
+    // Two rows exist for wf-ingest: the webhook token (carried over) and one belonging to an
+    // HTTP node that the mangled graph had but the seeded default does not.
+    ctx.__secretStore.rows.set('wsec_KEEP', { workflowId: 'wf-ingest', value: 'live-token' });
+    ctx.__secretStore.rows.set('wsec_ORPHAN', { workflowId: 'wf-ingest', value: '{"authorization":"Bearer x"}' });
+    (ctx as any).workflows.store.get = async () => ({
+      id: 'wf-ingest', name: 'mangled',
+      definition: {
+        nodes: [
+          { id: 't', type: 'webhook', data: { templateId: 'webhook-trigger', secret: { secretRef: 'wsec_KEEP' } } },
+          { id: 'h', type: 'action', data: { templateId: 'http', config: { headers: { secretRef: 'wsec_ORPHAN' } } } },
+        ],
+        edges: [],
+      },
+    });
+    (ctx as any).workflows.store.update = async (_id: string, wf: any) => wf;
+    const app = resetApp(ctx);
+
+    const res = await app.inject({ method: 'POST', url: '/api/workflows/wf-ingest/reset' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ secretPreserved: true });
+    expect(ctx.__secretStore.rows.has('wsec_KEEP')).toBe(true);
+    expect(ctx.__secretStore.rows.has('wsec_ORPHAN')).toBe(false);
+  });
+
+  it('reports secretPreserved=true for wf-sample-reactive (no webhook token exists)', async () => {
+    const ctx = fakeCtx();
+    (ctx as any).workflows.store.get = async () => ({ id: 'wf-sample-reactive', name: 'mangled', definition: { nodes: [], edges: [] } });
+    (ctx as any).workflows.store.update = async (_id: string, wf: any) => wf;
+    const app = resetApp(ctx);
+
+    const res = await app.inject({ method: 'POST', url: '/api/workflows/wf-sample-reactive/reset' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ ok: true, secretPreserved: true });
+    const evt = ctx.__auditEvents.find((e: any) => e.action === 'workflow.reset');
+    expect(evt.metadata).toEqual({ secretPreserved: true });
+  });
+
+  it('maps the fail-closed ConfigError to 503 and persists nothing', async () => {
+    const ctx = fakeCtx();
+    ctx.cfg.SECRETS_ENCRYPTION_KEY = undefined; // sealing the fresh secret must fail closed
+    let updateCalls = 0;
+    (ctx as any).workflows.store.get = async () => ({ id: 'wf-ingest', name: 'gutted', definition: { nodes: [], edges: [] } });
+    (ctx as any).workflows.store.update = async (_id: string, wf: any) => { updateCalls++; return wf; };
+    const app = resetApp(ctx);
+
+    const res = await app.inject({ method: 'POST', url: '/api/workflows/wf-ingest/reset' });
+    expect(res.statusCode).toBe(503);
+    expect(res.json().error).toContain('SECRETS_ENCRYPTION_KEY');
+    expect(updateCalls).toBe(0);
+    expect(ctx.__auditEvents.some((e: any) => e.action === 'workflow.reset')).toBe(false);
+  });
+
+  it('keeps the 400 / 404 guards ahead of the sealing path', async () => {
+    const ctx = fakeCtx();
+    const app = resetApp(ctx);
+    // not a system workflow → 400 (checked before any store read)
+    expect((await app.inject({ method: 'POST', url: '/api/workflows/wf-custom/reset' })).statusCode).toBe(400);
+    // system workflow that is not stored → 404
+    expect((await app.inject({ method: 'POST', url: '/api/workflows/wf-ingest/reset' })).statusCode).toBe(404);
+  });
 });

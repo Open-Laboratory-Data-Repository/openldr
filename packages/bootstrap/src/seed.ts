@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { sampleForms, type FormStore } from '@openldr/forms';
-import { buildDefaultWorkflows, type WorkflowStore } from '@openldr/workflows';
+import { buildDefaultWorkflows, type Workflow, type WorkflowStore } from '@openldr/workflows';
 import { seedDefaultDashboard, type DashboardStore } from '@openldr/dashboards';
 import { seedReportDesigns, removeRetiredDemoDesigns, type ReportDesignStore } from '@openldr/report-designer';
 import { seedDataDrivenReports, DEFAULT_REPORT_CATEGORIES, type SeedDataDrivenReportsResult } from '@openldr/reporting';
@@ -71,7 +71,9 @@ const MYSQL_CONNECTOR_NAME = 'Target Warehouse (MySQL/MariaDB)';
 // dependency. AppContext satisfies it.
 export interface EssentialSeedTarget {
   forms: Pick<FormStore, 'list' | 'create' | 'setStatus'>;
-  workflows: { store: Pick<WorkflowStore, 'list' | 'create'> };
+  // 'update' is needed for one narrowly-scoped upgrade repair: re-enabling a disabled
+  // `wf-ingest` row on an existing install (see `enableIngestWorkflow`).
+  workflows: { store: Pick<WorkflowStore, 'list' | 'create' | 'update'> };
   // Host connector store, threaded from AppContext so the seed can create the default
   // target-warehouse connector — an essential (like the workflows) so a fresh install can query
   // out of the box, not just when SEED_ON_START seeds the full demo set. AppContext satisfies it.
@@ -201,7 +203,38 @@ async function seedDefaultWorkflowsFor(app: EssentialSeedTarget, orderFormId: st
       seeded += 1;
     }
   }
+  await enableIngestWorkflow(app, existingWorkflows);
   return seeded;
+}
+
+/** The id of the workflow hand capture submits through. */
+const INGEST_WORKFLOW_ID = 'wf-ingest';
+
+/**
+ * Re-enable an EXISTING, disabled `wf-ingest`.
+ *
+ * `buildDefaultWorkflows` now ships it `enabled: true`, but seeding is create-if-absent by id, so
+ * that default reaches FRESH installs only. Every deployment that already had the row keeps
+ * whatever enabled state it has — and `wf-ingest` used to ship DISABLED, so an upgraded install
+ * would 409 ("capture pipeline unavailable") on the first hand-captured submission: the feature
+ * this release delivers would be dead on arrival exactly where there is existing data to protect.
+ *
+ * Deliberately a TARGETED update of the `enabled` flag on the stored row, not a re-seed: the
+ * operator's node graph, name, description and webhook secret are carried through untouched. A
+ * broken graph is repaired by the explicit reset action, never silently by a boot-time seed.
+ *
+ * Only `wf-ingest` is touched. `wf-sample-reactive` is a demo with nothing depending on it, so an
+ * operator who disabled it made a choice worth respecting.
+ */
+async function enableIngestWorkflow(app: EssentialSeedTarget, existing: Workflow[]): Promise<boolean> {
+  const stored = existing.find((w) => w.id === INGEST_WORKFLOW_ID);
+  if (!stored || stored.enabled) return false;
+  await app.workflows.store.update(INGEST_WORKFLOW_ID, { ...stored, enabled: true });
+  console.warn(
+    `[seed] '${INGEST_WORKFLOW_ID}' was disabled and has been enabled — form capture submits through it. ` +
+    'Its webhook stays closed to anyone without the per-install X-Webhook-Token secret.',
+  );
+  return true;
 }
 
 // The ALWAYS-seeded minimum, independent of SEED_ON_START: the Users-page form, the Lab order

@@ -25,7 +25,8 @@ const RAW: Omit<CapabilityMeta, never>[] = [
   { key: 'reports.export', group: 'reports', label: 'Export reports', description: 'Download report output (PDF/data).' },
   { key: 'reports.edit_templates', group: 'reports', label: 'Edit report templates', description: 'Create and edit report definitions, categories, and designs.' },
   // Forms
-  { key: 'forms.view', group: 'forms', label: 'Use forms', description: 'Open and submit forms (data entry).' },
+  { key: 'forms.view', group: 'forms', label: 'Use forms', description: 'Open forms and read their definitions.' },
+  { key: 'forms.submit', group: 'forms', label: 'Submit forms', description: 'Capture data by hand: submitting a form WRITES clinical records to the FHIR store and the read model.' },
   { key: 'forms.edit', group: 'forms', label: 'Edit forms', description: 'Create and modify form definitions; export form bundles.' },
   { key: 'forms.publish', group: 'forms', label: 'Publish forms', description: 'Publish new form versions.' },
   // Workflows

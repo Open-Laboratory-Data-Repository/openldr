@@ -19,8 +19,11 @@ so you control the exact shape (a form submission, a vendor payload, or a FHIR B
 normalise inside the workflow).
 
 A fresh install ships **one** ingestion webhook workflow, **Ingest** (`wf-ingest`), that routes
-by the **shape** of the posted body. **It's disabled by default** — it exposes a live HTTP
-endpoint, so you opt in by enabling it and copying its per-install secret:
+by the **shape** of the posted body. **A fresh install ships it enabled** — hand capture on the
+**Forms** page submits through it, so it is install-critical rather than optional. (On an
+**upgraded** install it may have been left disabled by an earlier version; see *Upgrading an
+existing install?* below.) Its HTTP endpoint is still closed to anyone without the per-install
+secret:
 
 | Workflow | Webhook path | Expects | Behavior |
 |---|---|---|---|
@@ -29,8 +32,8 @@ endpoint, so you opt in by enabling it and copying its per-install secret:
 To use it:
 
 1. In the app, open **Workflows** and open **Ingest**.
-2. On its **Webhook** trigger, **enable** the workflow and **copy the secret**. The trigger has a
-   fixed URL path (`ingest`) and a per-install secret generated at seed time.
+2. On its **Webhook** trigger, **copy the secret**. The trigger has a fixed URL path (`ingest`)
+   and a per-install secret generated at seed time.
 3. Send the payload from your external system:
 
 ```bash
@@ -48,10 +51,20 @@ rejected with `401`; an unknown path returns `404`.
 You can also build your own webhook workflow (**Webhook → transform/validate → Persist / Store**)
 for any other payload shape — **Ingest** just covers the common cases out of the box.
 
-> **Upgrading an existing install?** Only fresh installs get the unified `wf-ingest` wiring. On a
-> deployment that already had the old workflows, the old `wf-ingest-form` / `wf-ingest-raw`
-> remain (disabled) and can be deleted manually, and the pre-existing reactive companion keeps
-> listening on the old event source.
+> **Upgrading an existing install?** Workflows are seeded by id and never overwritten, so an
+> upgrade keeps the `wf-ingest` row you already have — including your edits to its graph.
+>
+> - **Enabled state.** Earlier versions shipped `wf-ingest` **disabled**. Because hand capture now
+>   submits through it, a disabled `wf-ingest` would make every form submission fail with
+>   *"capture pipeline unavailable"*. The server therefore **enables it for you on startup** if it
+>   finds it disabled — a one-flag change that leaves your node graph, name and webhook secret
+>   untouched. Nothing else about the workflow is re-seeded. If you genuinely want it off, you
+>   must also stop using hand capture, since the two cannot be separated.
+> - **Your edits.** A customised `wf-ingest` graph is never overwritten by an upgrade. If you need
+>   the shipped graph back, use **Reset to default** on the workflow's ⋯ menu.
+> - **Retired workflows.** On a deployment that predates the unified wiring, the old
+>   `wf-ingest-form` / `wf-ingest-raw` remain (disabled) and can be deleted manually, and the
+>   pre-existing reactive companion keeps listening on the old event source.
 
 ### Post pre-built FHIR (the CDR toolchain)
 
@@ -71,7 +84,7 @@ it. The pipeline is **Webhook → Switch → Unwrap FHIR Bundle → Persist / St
   projection routes each by `resourceType` (`Observation` → `lab_results`, `ServiceRequest` →
   `lab_requests`, `QuestionnaireResponse` → `questionnaire_responses`, …).
 
-To point the CDR toolchain at a deployment, enable **Ingest**, copy its secret, and set:
+To point the CDR toolchain at a deployment, copy the **Ingest** webhook secret and set:
 
 ```bash
 OPENLDR_CE_URL=https://your-host        # base URL of the CE deployment

@@ -13,7 +13,7 @@ import { TablePagination } from '@/components/ui/table-pagination';
 import { StripedEmpty } from '@/components/ui/striped-empty';
 import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/spinner';
-import { fetchWorkflows, createWorkflow, deleteWorkflow, type Workflow } from '@/api';
+import { fetchWorkflows, createWorkflow, deleteWorkflow, resetWorkflow, type Workflow } from '@/api';
 
 function newWorkflowId(): string {
   return `wf_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -44,6 +44,10 @@ export function WorkflowList() {
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(25);
   const [pendingDelete, setPendingDelete] = useState<Workflow | null>(null);
+  // Reset is the MORE destructive of the two — Delete is refused outright for these workflows,
+  // while reset discards the operator's entire customised graph, garbage-collects the secret rows
+  // the old graph referenced, and can rotate the webhook token. It gets the same confirmation.
+  const [pendingReset, setPendingReset] = useState<Workflow | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -111,6 +115,24 @@ export function WorkflowList() {
     try { await deleteWorkflow(w.id); await load(); }
     catch (e) { toast.error(`Delete failed: ${e instanceof Error ? e.message : String(e)}`); }
   }, [pendingDelete, load]);
+
+  const onReset = useCallback(async () => {
+    if (!pendingReset) return;
+    const w = pendingReset; setPendingReset(null);
+    try {
+      const r = await resetWorkflow(w.id);
+      if (r.secretPreserved) toast.success(`${w.name} restored to its default.`);
+      // Never swallow this: every external sender's token has just stopped working. The advice
+      // has to be something the product can actually do — workflow secrets are write-only
+      // (SEC-06: no reveal endpoint exists), so the placeholder token minted here can never be
+      // read back and "give senders the new token" was impossible advice. Setting a fresh secret
+      // on the trigger is the only route to a token the operator holds.
+      else toast.warning(`${w.name} restored, but its webhook had no secret to keep. Open it, set a new secret on the Ingest webhook trigger, and give that to your senders.`);
+      await load();
+    } catch (e) {
+      toast.error(`Reset failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }, [pendingReset, load]);
 
   return (
     <AppShell title="Workflows" fullBleed>
@@ -187,7 +209,15 @@ export function WorkflowList() {
                           <DropdownMenuItem onClick={() => navigate(`/workflows/${w.id}`)}>Open</DropdownMenuItem>
                           <DropdownMenuItem data-testid={`duplicate-${w.id}`} onClick={() => { void onDuplicate(w); }}>Duplicate</DropdownMenuItem>
                           <DropdownMenuItem data-testid={`export-${w.id}`} onClick={() => exportWorkflow(w)}>Export</DropdownMenuItem>
-                          <DropdownMenuItem data-testid={`delete-${w.id}`} onClick={() => setPendingDelete(w)}>Delete</DropdownMenuItem>
+                          {w.protected ? (
+                            <DropdownMenuItem data-testid={`reset-${w.id}`} onClick={() => setPendingReset(w)}>
+                              Reset to default
+                            </DropdownMenuItem>
+                          ) : (
+                            <DropdownMenuItem data-testid={`delete-${w.id}`} onClick={() => setPendingDelete(w)}>
+                              Delete
+                            </DropdownMenuItem>
+                          )}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>
@@ -226,6 +256,16 @@ export function WorkflowList() {
           confirmLabel="Delete"
           destructive
           onConfirm={() => { void onDelete(); }}
+        />
+
+        <ConfirmDialog
+          open={pendingReset !== null}
+          onOpenChange={(o) => { if (!o) setPendingReset(null); }}
+          title={`Reset ${pendingReset?.name ?? ''} to its default?`}
+          description="Any changes you have made to this workflow will be discarded and the shipped design restored. This cannot be undone."
+          confirmLabel="Reset"
+          destructive
+          onConfirm={() => { void onReset(); }}
         />
       </div>
     </AppShell>

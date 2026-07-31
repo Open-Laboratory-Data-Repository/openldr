@@ -3,7 +3,8 @@ import type { FastifyInstance } from 'fastify';
 import AdmZip from 'adm-zip';
 import type { AppContext } from '@openldr/bootstrap';
 import { redact } from '@openldr/core';
-import { toQuestionnaire, toQuestionnaireResponse, validateAnswers, validateReferences } from '@openldr/forms';
+import type { ExtractionContext, FormSchema } from '@openldr/forms';
+import { extractorsForForm, isEntityAnswer, toQuestionnaire, toQuestionnaireResponse, toTransactionBundle, validateAnswers, validateReferences } from '@openldr/forms';
 import { z } from 'zod';
 import { recordAudit } from './audit-helper';
 import { requireCapability } from './rbac';
@@ -34,6 +35,49 @@ const responseInput = z.object({
   answers: z.record(z.unknown()),
 });
 
+/** The Corlix fhir-path a capture form binds its patient/subject field to. */
+const SUBJECT_FHIR_PATH = 'ServiceRequest.subject';
+
+/**
+ * Build the ExtractionContext the extractors need but a QuestionnaireResponse can't carry.
+ *
+ * ServiceRequestExtractor reads the subject ONLY from this context — it never looks at the
+ * response's `ServiceRequest.subject`-bound answer. Passing `{}` (as this route first did) meant
+ * every hand-captured order was extracted with `subject: { display: 'Unknown subject' }` and no
+ * `authoredOn`, so `lab_requests.patient_id` projected NULL for capture while every CDR-ingested
+ * order carried a real patient. The extractor is shared with the ingest path and the CLI, so the
+ * lookup lives here rather than widening it.
+ */
+function extractionContextFor(schema: FormSchema, answers: Record<string, unknown>, authored: string): ExtractionContext {
+  const context: ExtractionContext = { authored };
+  const subjectField = schema.fields.find((field) => field.fhirPath === SUBJECT_FHIR_PATH);
+  const answer = subjectField ? answers[subjectField.id] : undefined;
+  // No such field, unanswered, or a non-entity answer (e.g. free text): leave subject undefined
+  // so the extractor's own 'Unknown subject' fallback applies rather than emitting a broken ref.
+  if (isEntityAnswer(answer)) {
+    context.subject = { reference: answer.reference, ...(answer.display ? { display: answer.display } : {}) };
+  }
+  return context;
+}
+
+/** Id of the seeded ingest graph's Persist Store node — the one that reports what it wrote. */
+const PERSIST_NODE_ID = 'persist-1';
+
+/**
+ * How many resources this run actually stored, per the Persist Store node's own metadata.
+ *
+ * Read defensively: the graph is operator-editable, so the node may be renamed, removed, or never
+ * reached. Every one of those means "we cannot prove anything was stored", which must read as 0 —
+ * the conservative answer, since the advice keyed off this number is whether a clerk may safely
+ * resubmit. This runs on the ALREADY-FAILING path, so it must not add a failure of its own.
+ */
+function persistedCount(nodeMeta: Record<string, unknown> | undefined): number {
+  const meta = nodeMeta?.[PERSIST_NODE_ID];
+  if (typeof meta !== 'object' || meta === null) return 0;
+  const n = (meta as { persisted?: unknown }).persisted;
+  return typeof n === 'number' && Number.isFinite(n) && n > 0 ? n : 0;
+}
+
 // These routes were previously UNGATED (no requireRole at all — any authenticated user could hit
 // them). Task 8 adds capability gates per the mapping table: read/fill routes require forms.view
 // (held by every system-role preset, including lab_technician — so no preset loses access);
@@ -43,7 +87,16 @@ const responseInput = z.object({
 // even though a plain draft<->archived toggle is arguably a lesser action. This avoids a custom
 // role holding forms.edit-without-forms.publish being able to publish via this side door; no
 // system-role preset is harmed since every preset that holds forms.edit also holds forms.publish.
+//
+// SUBMIT (forms.submit) is separate from VIEW on purpose. POST /:id/responses was a read-only
+// echo when the gates above were written — it validated, built a QuestionnaireResponse and
+// returned it, storing nothing — so gating it on forms.view cost nothing. It now runs the
+// submission through the ingest pipeline and WRITES clinical records to fhir_resources and the
+// flat read model, and forms.view is held by every preset including system_auditor
+// ("Read-only oversight plus the audit log") and data_analyst. Data entry therefore gets its
+// own capability; every other forms route keeps the gate it had.
 const VIEW = { preHandler: requireCapability('forms.view') };
+const SUBMIT = { preHandler: requireCapability('forms.submit') };
 const EDIT = { preHandler: requireCapability('forms.edit') };
 const PUBLISH = { preHandler: requireCapability('forms.publish') };
 
@@ -250,7 +303,7 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
     return reply.send(buf);
   });
 
-  app.post('/api/forms/:id/responses', VIEW, async (req, reply) => {
+  app.post('/api/forms/:id/responses', SUBMIT, async (req, reply) => {
     const p = responseInput.safeParse(req.body);
     if (!p.success) {
       reply.code(400);
@@ -282,14 +335,104 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
       return { error: 'invalid answers', errors: referenceErrors };
     }
 
-    try {
-      const response = toQuestionnaireResponse(f.schema, p.data.answers as never);
-      await recordAudit(ctx, req, { action: 'form.response.submit', entityType: 'form', entityId: f.id, before: null, after: response, metadata: { formId: f.id } });
-      reply.code(201);
-      return response;
-    } catch (e) {
-      reply.code(500);
-      return { error: redact(e instanceof Error ? e.message : String(e)) };
+    // Manual capture goes through the SAME pipeline as automated ingest, down the FHIR
+    // branch: the form branch is hardcoded to one formId and cannot serve multiple
+    // capture forms. toTransactionBundle puts the QuestionnaireResponse at entry[0], so
+    // the verbatim record of what was typed is persisted alongside what was derived.
+    const actor = req.user?.username ?? 'unknown';
+    const submittedAt = new Date().toISOString();
+    const response = toQuestionnaireResponse(f.schema, p.data.answers as never) as unknown as Record<string, unknown>;
+    response.author = { display: actor };
+
+    const questionnaire = toQuestionnaire(f.schema);
+    const extractionContext = extractionContextFor(f.schema, p.data.answers, submittedAt);
+    const resources = extractorsForForm(f.schema as never)
+      .flatMap((ex) => ex.extract(response as never, questionnaire as never, extractionContext));
+    if (resources.length === 0) {
+      // A form that produces nothing is a form-configuration bug, so 400 is correct — but the
+      // operator has to be able to read a diagnosis out of it. The commonest cause by far is a
+      // form bound to a resource type no extractor covers: only Observation (fields flagged
+      // observationExtract with a code) and ServiceRequest (the requisition domain) extract
+      // today, so the seeded Patient- and Location-bound capture forms land here. Naming the
+      // resource type says which extractor is missing instead of posing a riddle.
+      const boundType = f.schema.fhirResourceType ?? f.fhirResourceType;
+      reply.code(400);
+      return {
+        error: boundType
+          ? boundType === 'Observation'
+            ? `form produced no resources: no field on the form is flagged for Observation extraction. ` +
+              'Flag at least one field with observationExtract: true and a LOINC code so ObservationExtractor can produce resources.'
+            : `form produced no resources: no extractor exists for fhirResourceType '${boundType}'. ` +
+              'Only Observation (fields flagged observationExtract with a code) and ServiceRequest ' +
+              'are extractable; bind the form to one of those or flag its fields for Observation extraction.'
+          : 'form produced no resources: the form declares no fhirResourceType and no field is flagged ' +
+            'observationExtract with a code, so no extractor applies.',
+        errors: [],
+      };
     }
+
+    const bundle = toTransactionBundle(response as never, resources);
+    const outcome = await ctx.workflows.runner.runAndRecord(
+      'wf-ingest',
+      'form',
+      { method: 'POST', body: bundle, headers: {}, query: {}, __provenance: { sourceSystem: 'form-capture' } },
+    );
+
+    if (!outcome) {
+      // runAndRecord returns null when the workflow is missing or disabled: nothing ran.
+      reply.code(409);
+      return { ok: false, error: "capture pipeline unavailable: the 'wf-ingest' workflow is missing or disabled" };
+    }
+    if (outcome.status !== 'completed') {
+      // A failed run does NOT mean nothing was stored. `persist-1` runs before `log-1`, so a
+      // failure in the Log node or in the `data.persisted` publish lands here with the resources
+      // already written. Telling the clerk only "failed" makes them resubmit — and
+      // `unwrapBundle` assigns a fresh randomUUID() per entry on every submission, so the retry
+      // writes a SECOND ServiceRequest and QuestionnaireResponse for the same clinical event.
+      // The run's own metadata already knows; say what actually landed.
+      //
+      // NOT covered here: a run-store insert failure. `deps.runs.record(run)` throws INSIDE
+      // runAndRecord, before it builds and returns the outcome object, so `runAndRecord` itself
+      // throws, this route has no try/catch around that call, and the request falls through to
+      // the generic error handler — a plain 500 with the raw error, no clerk-facing advice.
+      const persisted = persistedCount(outcome.nodeMeta);
+      // The clerk-facing sentence. The "already stored" case has real evidence and tells the
+      // clerk not to resubmit. The zero case is absence of evidence, not evidence of absence —
+      // persist-1 may never have been reached, may have been renamed/removed from the graph, or
+      // may have persisted moments after this metadata was captured — so it must not assert the
+      // retry is safe. It tells the clerk to check the run instead.
+      const message = persisted > 0
+        ? `${persisted} resource(s) were stored before this submission failed. Do NOT resubmit — resubmitting would create a duplicate record. Quote run ${outcome.runId} when reporting this.`
+        : `No stored records were reported for this run. Check run ${outcome.runId} before resubmitting.`;
+      // redact, never verbatim: a Persist Store or DB-node failure can carry a connection
+      // string, and `redact` masks DSN userinfo, `password=` and Authorization tokens.
+      const detail = redact(outcome.error ?? '');
+      reply.code(500);
+      return {
+        ok: false,
+        runId: outcome.runId,
+        correlationId: outcome.correlationId,
+        status: outcome.status,
+        persisted,
+        message,
+        // `message` LEADS `error`, deliberately. The studio's shared error handler surfaces
+        // `body.error` (see errorDetail in apps/studio/src/api.ts) and never reads `message`, so
+        // a clerk-facing sentence that lived only in `message` would never reach the clerk. The
+        // technical detail still follows, for the operator reading the response or the log.
+        error: detail ? `${message} (${detail})` : message,
+      };
+    }
+
+    await recordAudit(ctx, req, {
+      action: 'form.response.submit', entityType: 'form', entityId: f.id,
+      before: null, after: response, metadata: { formId: f.id, runId: outcome.runId },
+    });
+    reply.code(201);
+    return {
+      ok: true,
+      runId: outcome.runId,
+      correlationId: outcome.correlationId,
+      resourceTypes: resources.map((r) => (r as { resourceType: string }).resourceType),
+    };
   });
 }

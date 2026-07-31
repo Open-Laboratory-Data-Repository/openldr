@@ -6,9 +6,16 @@ describe('capability catalog', () => {
     expect(CAPABILITY_KEYS).toContain('data_exposure.manage');
   });
 
-  it('exposes 37 unique capability keys', () => {
-    expect(CAPABILITY_KEYS.length).toBe(37);
-    expect(new Set(CAPABILITY_KEYS).size).toBe(37);
+  // 37 -> 38: forms.submit was split out of forms.view when form submission stopped being a
+  // read-only echo and started writing clinical records.
+  it('exposes 38 unique capability keys', () => {
+    expect(CAPABILITY_KEYS.length).toBe(38);
+    expect(new Set(CAPABILITY_KEYS).size).toBe(38);
+  });
+
+  it('separates submitting a form from viewing one', () => {
+    expect(CAPABILITY_KEYS).toContain('forms.submit');
+    expect(CAPABILITY_KEYS).toContain('forms.view');
   });
 
   it('every capability belongs to a declared group', () => {

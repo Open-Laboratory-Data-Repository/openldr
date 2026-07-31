@@ -28,19 +28,36 @@ const SCHEDULE_DUE = 'workflow.schedule.due';
 const INGEST_DONE = 'ingest.batch.done';
 const DATA_PERSISTED = 'data.persisted';
 
+/**
+ * What a run reports back to its caller.
+ *
+ * `nodeMeta` is each node's structured result metadata, keyed by node id — the same values the
+ * run record stores, lifted out of `result.results` so a caller does not have to re-read the run.
+ * A caller that must tell a HUMAN what happened needs it: a run can persist and THEN fail (the
+ * Persist Store node succeeds, a later node throws), and "failed" on its own would send a clerk
+ * off to re-enter clinical data that is already stored.
+ */
+export interface RunOutcome {
+  runId: string;
+  correlationId: string | null;
+  status: WorkflowRun['status'];
+  error: string | null;
+  nodeMeta: Record<string, unknown>;
+}
+
 export interface WorkflowTriggerRunner {
   registerRunner(eventing: EventingPort): Promise<void>;
   reconcile(eventing: EventingPort): Promise<void>;
   setIngestWorkflowIds(ids: string[]): void;
   setEventWorkflowIds(ids: string[]): void;
-  runAndRecord(workflowId: string, source: TriggerSource, input: unknown, files?: Record<string, BinaryRef>): Promise<{ runId: string; correlationId: string | null; status: WorkflowRun['status']; error: string | null } | null>;
+  runAndRecord(workflowId: string, source: TriggerSource, input: unknown, files?: Record<string, BinaryRef>): Promise<RunOutcome | null>;
 }
 
 export function createWorkflowTriggerRunner(deps: RunnerDeps): WorkflowTriggerRunner {
   let ingestIds = new Set<string>();
   let eventIds = new Set<string>();
 
-  async function runAndRecord(workflowId: string, source: TriggerSource, input: unknown, files?: Record<string, BinaryRef>): Promise<{ runId: string; correlationId: string | null; status: WorkflowRun['status']; error: string | null } | null> {
+  async function runAndRecord(workflowId: string, source: TriggerSource, input: unknown, files?: Record<string, BinaryRef>): Promise<RunOutcome | null> {
     const wf = await deps.store.get(workflowId);
     if (!wf || !wf.enabled) return null;
     const def = WorkflowDefinitionSchema.parse(wf.definition);
@@ -80,7 +97,15 @@ export function createWorkflowTriggerRunner(deps: RunnerDeps): WorkflowTriggerRu
     // Surface the outcome, not just the id: the webhook route must be able to tell a failed
     // run from a successful one. Returning only {runId} is why POST /hooks/* answered
     // 200 {ok:true} on a run that stored nothing — silent data loss for the sender.
-    return { runId: run.id, correlationId, status: run.status, error };
+    //
+    // nodeMeta rides along for the mirror-image case: a run that DID store and then failed
+    // downstream. Without it the caller can only say "failed", and a clerk told that a
+    // submission failed resubmits — writing a second copy of the same clinical event.
+    const nodeMeta: Record<string, unknown> = {};
+    for (const r of result.results) {
+      if (r.meta !== undefined) nodeMeta[r.nodeId] = r.meta;
+    }
+    return { runId: run.id, correlationId, status: run.status, error, nodeMeta };
   }
 
   /**

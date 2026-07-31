@@ -302,3 +302,63 @@ describe('event trigger (data.persisted)', () => {
     expect(recorded.length).toBe(1);
   });
 });
+
+// A run can persist and THEN fail: the Persist Store node succeeds, a later node throws. The
+// caller must be able to tell that apart from "nothing happened" — a clerk told only "failed"
+// resubmits, and the ingest path mints fresh resource ids per submission, so the retry writes a
+// duplicate clinical record. Each node's `meta` is already computed; runAndRecord now returns it.
+describe('runAndRecord — nodeMeta', () => {
+  function metaRunner(recorded: unknown[]) {
+    return createWorkflowTriggerRunner({
+      store: {
+        get: async () => wfWith(
+          [
+            { id: 't', type: 'trigger', data: {} },
+            { id: 'p', type: 'action', data: { action: 'persist-store', config: { source: 's' } } },
+            // Fails for certain: form-validate throws when its service is not injected, and only
+            // persistStore is. Stands in for the real post-persist failures (Log node, the
+            // data.persisted publish, the run-store insert).
+            { id: 'boom', type: 'action', data: { action: 'form-validate', config: { formId: 'f1' } } },
+          ],
+          [{ id: 'e0', source: 't', target: 'p' }, { id: 'e1', source: 'p', target: 'boom' }],
+        ),
+      } as never,
+      runs: { record: async (r: unknown) => { recorded.push(r); } } as never,
+      schedules: { get: async () => null, list: async () => [], setNextDue: async () => {} } as never,
+      webhooks: { resolve: () => undefined } as never,
+      runWorkflow,
+      logger: { error: () => {}, warn: () => {} },
+      codeLimits: { enabled: true, timeoutMs: 1000, memoryMb: 16 },
+      services: {
+        persistStore: async ({ items }: { items: unknown[] }) => ({
+          items,
+          meta: { persisted: items.length, flattened: { written: items.length, skipped: 0, degraded: 0 }, resourceTypes: ['Observation'] },
+        }),
+      } as never,
+    });
+  }
+
+  it('surfaces the persist node meta on a run that stored and then failed', async () => {
+    const recorded: unknown[] = [];
+    const outcome = await metaRunner(recorded).runAndRecord('w1', 'form', { body: [{ resourceType: 'Observation' }] });
+
+    expect(outcome).not.toBeNull();
+    expect(outcome!.status).toBe('failed');
+    expect((outcome!.nodeMeta.p as { persisted: number }).persisted).toBe(1);
+  });
+
+  it('returns an empty nodeMeta when no node reported any', async () => {
+    const recorded: unknown[] = [];
+    const runner = createWorkflowTriggerRunner({
+      store: { get: async () => wfWith([{ id: 't', type: 'trigger', data: {} }]) } as never,
+      runs: { record: async (r: unknown) => { recorded.push(r); } } as never,
+      schedules: { get: async () => null, list: async () => [], setNextDue: async () => {} } as never,
+      webhooks: { resolve: () => undefined } as never,
+      runWorkflow,
+      logger: { error: () => {}, warn: () => {} },
+    });
+
+    const outcome = await runner.runAndRecord('w1', 'form', {});
+    expect(outcome!.nodeMeta).toEqual({});
+  });
+});

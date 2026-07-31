@@ -14,8 +14,11 @@ describe('buildDefaultWorkflows', () => {
     expect(reactive.id).toBe('wf-sample-reactive');
   });
 
-  it('ships the ingest webhook disabled and the reactive enabled', () => {
-    expect(ingest.enabled).toBe(false);
+  // wf-ingest used to ship disabled (operator opt-in for the live HTTP endpoint). Form capture
+  // — POST /api/forms/:id/responses — now runs through this workflow, so shipping it disabled
+  // would 409 every clinical submission on a fresh install. It is install-critical now.
+  it('ships both the ingest and the reactive workflow enabled', () => {
+    expect(ingest.enabled).toBe(true);
     expect(reactive.enabled).toBe(true);
   });
 

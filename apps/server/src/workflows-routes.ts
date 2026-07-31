@@ -8,6 +8,7 @@ import { toCsv } from '@openldr/reporting';
 import { recordAudit } from './audit-helper';
 import { requireCapability } from './rbac';
 import { resolveNodeOptions, resolveNodeDetail } from './workflows-node-options';
+import { isProtectedWorkflowId, rebuildSystemWorkflow } from './system-workflows';
 
 /** Sync a workflow's trigger nodes into the derived registries (webhooks + schedules). */
 async function syncWorkflowTriggers(ctx: AppContext, workflow: { id: string; definition: unknown }): Promise<void> {
@@ -171,7 +172,11 @@ export function registerWorkflowRoutes(
   // role as writes; the LIST response is additionally redacted (defense in depth).
   app.get('/api/workflows', VIEW, async () => {
     const all = await ctx.workflows.store.list();
-    return all.map((w) => ({ ...w, definition: redactWorkflowSecrets(w.definition) }));
+    return all.map((w) => ({
+      ...w,
+      definition: redactWorkflowSecrets(w.definition),
+      protected: isProtectedWorkflowId(w.id),
+    }));
   });
 
   app.get('/api/workflows/:id', VIEW, async (req, reply) => {
@@ -179,7 +184,7 @@ export function registerWorkflowRoutes(
     const w = await ctx.workflows.store.get(id);
     if (!w) { reply.code(404); return { error: `unknown workflow: ${id}` }; }
     // Detail stays FULL — manager-gated and the builder needs real values to edit.
-    return w;
+    return { ...w, protected: isProtectedWorkflowId(w.id) };
   });
 
   app.post('/api/workflows', EDIT, async (req, reply) => {
@@ -216,8 +221,16 @@ export function registerWorkflowRoutes(
     } catch (err) { return mapError(err, reply); }
   });
 
-  app.delete('/api/workflows/:id', EDIT, async (req) => {
+  app.delete('/api/workflows/:id', EDIT, async (req, reply) => {
     const { id } = req.params as { id: string };
+    if (isProtectedWorkflowId(id)) {
+      reply.code(409);
+      const baseMsg = `'${id}' is a system workflow and cannot be deleted. Use reset to restore it to its default.`;
+      const msgWithCapture = id === 'wf-ingest'
+        ? `${baseMsg} Form capture and automated ingest both run through it.`
+        : baseMsg;
+      return { error: msgWithCapture };
+    }
     const before = await ctx.workflows.store.get(id);
     await ctx.workflows.store.remove(id);
     // SEC-06: cascade-delete this workflow's sealed secrets.
@@ -231,6 +244,58 @@ export function registerWorkflowRoutes(
       await recordAudit(ctx, req, { action: 'workflow.delete', entityType: 'workflow', entityId: id, before, after: null });
     }
     return { ok: true };
+  });
+
+  // Restore a system workflow to its seeded default graph. Carries over the webhook
+  // node's stored `secretRef` (never regenerates it — see rebuildSystemWorkflow) and the
+  // form-validate node's `formId`, so a reset cannot silently break external producers'
+  // tokens or a site's re-pointed form binding.
+  app.post('/api/workflows/:id/reset', EDIT, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    if (!isProtectedWorkflowId(id)) {
+      reply.code(400);
+      return { error: `'${id}' is not a system workflow; there is no default to reset to` };
+    }
+    const before = await ctx.workflows.store.get(id);
+    if (!before) { reply.code(404); return { error: 'workflow not found' }; }
+
+    try {
+      const { workflow, secretPreserved } = rebuildSystemWorkflow(before as never);
+      // SEC-06: reset is a WRITE PATH and must seal like create/update. rebuildSystemWorkflow
+      // only carries over an existing `{ secretRef }`; when there was none (the gutted/mangled
+      // graph reset exists to repair) the rebuilt graph holds the seed's freshly minted
+      // PLAINTEXT webhook secret. Persisting/auditing that would put a live credential in
+      // cleartext into workflows.definition, into audit_events, and into the unredacted
+      // GET /api/workflows/:id detail response. Seal first, persist refs only — and the seal
+      // also GCs (deleteExcept) any secret rows the mangled graph left behind whose nodes are
+      // not in the restored default.
+      const definition = (await extractWorkflowSecrets(ctx, id, workflow.definition)) as typeof workflow.definition;
+      const updated = await ctx.workflows.store.update(id, { ...workflow, definition });
+      // Re-sync the in-memory webhook/schedule registries, same as create/update — otherwise
+      // a reset that fixes a mangled path in storage would leave the RUNNING server still
+      // routing on the stale (mangled) path until some other save happened.
+      await syncWorkflowTriggers(ctx, updated);
+      ctx.workflows.runner.setIngestWorkflowIds(await listIngestWorkflowIds(ctx));
+      ctx.workflows.runner.setEventWorkflowIds(await listEventWorkflowIds(ctx));
+      void ctx.workflows.listeners.reconcile().catch((err) => ctx.logger.warn({ err }, 'listener reconcile failed'));
+      // The `before` image can hold a LIVE plaintext secret: a graph seeded before SEC-06,
+      // imported, or otherwise saved by a path that skipped extractWorkflowSecrets keeps its
+      // webhook token as plaintext, and reset now CARRIES that value over (rather than minting a
+      // fresh one), so the token stays in force after this audit row is written. `recordAudit`
+      // does no masking of its own, and system_auditor ("Read-only oversight plus the audit log")
+      // holds audit.view — so an unmasked `before` would put a working credential in front of a
+      // role that is documented as read-only. Mask it through the SAME secret-field locator the
+      // LIST route uses, rather than hand-rolling a second walk that could drift from it.
+      // `updated` (the after image) needs no such treatment: it is built from a definition that
+      // already went through extractWorkflowSecrets before being persisted, so it only ever holds
+      // refs.
+      await recordAudit(ctx, req, {
+        action: 'workflow.reset', entityType: 'workflow', entityId: id,
+        before: { ...before, definition: redactWorkflowSecrets(before.definition) },
+        after: updated, metadata: { secretPreserved },
+      });
+      return { ok: true, secretPreserved };
+    } catch (err) { return mapError(err, reply); }
   });
 
   // SSE execution. POST so the client can pass an optional trigger `input` body.
