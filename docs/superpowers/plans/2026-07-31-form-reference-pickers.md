@@ -1035,7 +1035,9 @@ export function createPatientResolver(db: Kysely<ExternalSchema>, _engine: Engin
     async search(q, limit, offset) {
       const needle = `%${q.trim().toLowerCase()}%`;
 
-      // lower(col) LIKE lower(?) holds on Postgres, MySQL and MSSQL alike; `ilike` does not.
+      // lower(col) LIKE lower(?) holds on Postgres, MySQL and MSSQL alike. The Postgres-only
+      // case-insensitive operator does not — and Step 5's guard test forbids its name
+      // appearing anywhere in this file, comments included.
       const base = db
         .selectFrom('patients')
         .where('active', '=', true)
