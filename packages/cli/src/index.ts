@@ -19,7 +19,7 @@ import { runTerminologyImport, runTerminologyLookup, runTerminologyValidate, run
 import { runMarketVerify, runMarketInstall, runMarketList, runMarketRollback, runMarketEnable, runMarketDisable, runMarketRemove } from './market';
 import { runArtifactKeygen, runArtifactNew, runArtifactBuild, runArtifactPack, runArtifactSign, runArtifactTest, runArtifactPublish } from './artifact';
 import { runSettingsFlagsList, runSettingsFlagsSet, runSettingsDanger, runSettingsSyncShow, runSettingsSyncSet, runSettingsNumbersList, runSettingsNumbersSet, runSettingsValidationShow, runSettingsValidationSet } from './settings';
-import { runRolesList, runRolesShow, runRolesCreate, runRolesEdit, runRolesDelete, runRolesGrant, runRolesRevoke, runUserAssignRole, runUserUnassignRole } from './roles';
+import { runRolesList, runRolesShow, runRolesCreate, runRolesEdit, runRolesDelete, runRolesGrant, runRolesRevoke, runRolesDoctor, runUserAssignRole, runUserUnassignRole } from './roles';
 import { runDataExposureList, runDataExposureHide, runDataExposureShow } from './data-exposure';
 import { runSyncStatus, runSyncNow, runSyncEnroll, runSyncList, runSyncRotate, runSyncRevoke, runSyncAmend, runSyncMergePatient, runSyncExport, runSyncImport, runSyncQuarantineList, runSyncQuarantineRetry, runSyncDivergenceList, runSyncDivergenceShow, runSyncDivergenceClear } from './sync';
 import { runErrorsList } from './errors';
@@ -205,6 +205,10 @@ rolesCmd.command('grant <slug> <capability>').description('Add one capability to
 rolesCmd.command('revoke <slug> <capability>').description('Remove one capability from a role').option('--json', 'emit JSON', false)
   .action(async (slug: string, capability: string, opts: { json: boolean }) => {
     try { process.exitCode = await runRolesRevoke(slug, capability, opts); } catch (err) { process.stderr.write(`roles revoke failed: ${redactError(err)}\n`); process.exitCode = 1; }
+  });
+rolesCmd.command('doctor').description('Report preset-capability drift and orphaned capability keys').option('--json', 'emit JSON', false)
+  .action(async (opts: { json: boolean }) => {
+    try { process.exitCode = await runRolesDoctor(opts); } catch (err) { process.stderr.write(`roles doctor failed: ${redactError(err)}\n`); process.exitCode = 1; }
   });
 
 const dataExposure = program.command('data-exposure').description('Column exposure policy for dashboards/queries/reports (a running server picks up CLI changes after its next in-app policy save or restart)');

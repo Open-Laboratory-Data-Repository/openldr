@@ -1,7 +1,7 @@
 import { createAppContext, recordAuditEvent } from '@openldr/bootstrap';
 import { loadConfig } from '@openldr/config';
 import { CAPABILITY_KEYS } from '@openldr/rbac';
-import type { RoleRecord } from '@openldr/db';
+import type { RoleRecord, CapabilityDiagnosis } from '@openldr/db';
 import { cliActor } from './cli-actor';
 
 interface JsonOpt {
@@ -230,6 +230,49 @@ export async function runUserAssignRole(subject: string, slug: string, opts: Jso
     });
     emit(opts.json, { ok: true, subject, slug }, `assigned ${slug} to ${subject}`);
     return 0;
+  } finally {
+    await ctx.close();
+  }
+}
+
+/** Format a capability diagnosis and decide the exit code. Pure, so the classification and exit
+ *  policy are testable without a live AppContext.
+ *
+ *  Exit 1 for `pending` (a real backfill gap the next boot will close) and for `orphaned` (a key
+ *  retired from the catalog leaving rows behind) — both are states an operator should act on.
+ *  Exit 0 for `revoked`: that is a deliberate decision, not a defect. */
+export function summarizeDiagnosis(d: CapabilityDiagnosis): { lines: string[]; exitCode: number } {
+  const lines: string[] = [];
+  let problems = d.orphaned.length > 0;
+
+  for (const r of d.roles) {
+    if (!r.present) {
+      lines.push(`${r.slug}\tMISSING (role row absent — the next boot will create it)`);
+      problems = true;
+      continue;
+    }
+    const bits = [`ok=${r.ok.length}`];
+    if (r.revoked.length) bits.push(`revoked=[${r.revoked.join(', ')}]`);
+    if (r.pending.length) {
+      bits.push(`pending=[${r.pending.join(', ')}]`);
+      problems = true;
+    }
+    lines.push(`${r.slug}\t${bits.join('\t')}`);
+  }
+
+  for (const o of d.orphaned) lines.push(`${o.slug}\torphaned=${o.capability}`);
+  if (!problems) lines.push('no capability drift requiring action');
+
+  return { lines, exitCode: problems ? 1 : 0 };
+}
+
+export async function runRolesDoctor(opts: JsonOpt): Promise<number> {
+  const ctx = await createAppContext(loadConfig());
+  try {
+    const diagnosis = await ctx.roles.diagnoseCapabilities();
+    const { lines, exitCode } = summarizeDiagnosis(diagnosis);
+    emit(opts.json, diagnosis, lines.join('\n'));
+    return exitCode;
   } finally {
     await ctx.close();
   }
