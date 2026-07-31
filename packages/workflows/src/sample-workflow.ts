@@ -32,8 +32,11 @@ import type { Workflow } from './types';
 // surface). Pure builder: the form id and the webhook secret are injected by the seed
 // (packages/bootstrap/src/seed.ts) at seed time so no secret is committed.
 //
-// Seeding is create-if-absent by id (see seedDefaultWorkflowsFor), so this default applies to
-// FRESH installs only — an existing install keeps whatever enabled state it already has.
+// Seeding is create-if-absent by id (see seedDefaultWorkflowsFor), so this `enabled: true` default
+// only ever applies to a FRESH install. An EXISTING install that already has the row — and, since
+// wf-ingest used to ship disabled, most likely has it disabled — is repaired separately by
+// `enableIngestWorkflow` in seed.ts, which flips just the `enabled` flag and leaves the operator's
+// stored graph alone. `wf-sample-reactive` is NOT repaired that way: nothing depends on it.
 
 /** Ingest webhook path. The CDR toolchain sets OPENLDR_CE_HOOK_PATH=ingest to target it. */
 const INGEST_WEBHOOK_PATH = 'ingest';

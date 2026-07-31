@@ -6,7 +6,10 @@ import type { DbContext } from './db-context';
 // In-memory fakes so we exercise the real seedDatabase logic without a database.
 function fakeApp(cfg: FormSeedTarget['cfg'] = {}) {
   const forms: { id: string; name: string; status: string }[] = [];
-  const workflows: { id: string; name: string; definition?: unknown }[] = [];
+  // `enabled` is modelled because the seed now REPAIRS it: an existing but disabled `wf-ingest`
+  // is re-enabled on boot (form capture submits through it). A fake that dropped the flag would
+  // keep passing while that behaviour broke.
+  const workflows: { id: string; name: string; definition?: unknown; enabled?: boolean }[] = [];
   const connectors: { id: string; name: string; type: string | null; config: Record<string, string> }[] = [];
   const dashboards: Record<string, unknown>[] = [];
   // Terminology stores modelled just enough to exercise real idempotency: value sets deduped by
@@ -76,9 +79,16 @@ function fakeApp(cfg: FormSeedTarget['cfg'] = {}) {
     workflows: {
       store: {
         list: async () => workflows as never,
-        create: async (w: { id: string; name: string; definition?: unknown }) => {
-          workflows.push({ id: w.id, name: w.name, definition: w.definition });
+        create: async (w: { id: string; name: string; definition?: unknown; enabled?: boolean }) => {
+          workflows.push({ id: w.id, name: w.name, definition: w.definition, enabled: w.enabled });
           return w as never;
+        },
+        // Whole-row replace, exactly like the real store (`update(id, w)` takes a full Workflow).
+        update: async (id: string, w: { name: string; definition?: unknown; enabled?: boolean }) => {
+          const idx = workflows.findIndex((x) => x.id === id);
+          const next = { id, name: w.name, definition: w.definition, enabled: w.enabled };
+          if (idx >= 0) workflows[idx] = next; else workflows.push(next);
+          return next as never;
         },
       },
     },
@@ -157,6 +167,74 @@ describe('seedDatabase — default workflows', () => {
     const res2 = await seedDatabase(fakeDb, app);
     expect(res2.workflowsSeeded).toBe(0);
     expect(workflows).toHaveLength(2);
+  });
+
+  it('ships wf-ingest enabled on a fresh install', async () => {
+    const { app, workflows } = fakeApp();
+    await seedDatabase(fakeDb, app);
+    expect(workflows.find((w) => w.id === 'wf-ingest')?.enabled).toBe(true);
+  });
+});
+
+// Seeding is create-if-absent by id, so an install that already has the `wf-ingest` row keeps
+// whatever enabled state it has — and earlier versions shipped it DISABLED. Hand capture submits
+// through this workflow, so a disabled row means every form submission 409s on an upgrade.
+describe('seedEssentials — repairing a disabled wf-ingest on an upgrade', () => {
+  /** An existing install: the row is present, disabled, with a graph the operator has edited. */
+  function existingDisabledIngest(): { id: string; name: string; definition: unknown; enabled: boolean } {
+    return {
+      id: 'wf-ingest',
+      name: 'Ingest (renamed by the operator)',
+      definition: { nodes: [{ id: 'operator-node', type: 'action', position: { x: 0, y: 0 }, data: { label: 'Mine' } }], edges: [] },
+      enabled: false,
+    };
+  }
+
+  it('enables an existing disabled wf-ingest', async () => {
+    const { app, workflows } = fakeApp();
+    workflows.push(existingDisabledIngest());
+
+    const res = await seedEssentials(app);
+
+    // Nothing was CREATED for wf-ingest — the row already existed; only wf-sample-reactive is new.
+    expect(res.workflowsSeeded).toBe(1);
+    expect(workflows.find((w) => w.id === 'wf-ingest')?.enabled).toBe(true);
+  });
+
+  it('does NOT overwrite the operator\'s customised graph while enabling it', async () => {
+    const { app, workflows } = fakeApp();
+    workflows.push(existingDisabledIngest());
+
+    await seedEssentials(app);
+
+    const ingest = workflows.find((w) => w.id === 'wf-ingest')!;
+    const def = ingest.definition as { nodes: { id: string }[] };
+    expect(def.nodes.map((n) => n.id)).toEqual(['operator-node']);
+    expect(ingest.name).toBe('Ingest (renamed by the operator)');
+  });
+
+  it('leaves an already-enabled wf-ingest untouched', async () => {
+    const { app, workflows } = fakeApp();
+    const updates: string[] = [];
+    workflows.push({ ...existingDisabledIngest(), enabled: true });
+    const realUpdate = app.workflows.store.update;
+    app.workflows.store.update = (async (id: string, w: never) => { updates.push(id); return realUpdate(id, w); }) as never;
+
+    await seedEssentials(app);
+
+    expect(updates).toEqual([]);
+    expect(workflows.find((w) => w.id === 'wf-ingest')?.enabled).toBe(true);
+  });
+
+  // wf-sample-reactive is a demo with nothing depending on it, so disabling it is a choice the
+  // operator is entitled to keep.
+  it('does not re-enable a disabled wf-sample-reactive', async () => {
+    const { app, workflows } = fakeApp();
+    workflows.push({ id: 'wf-sample-reactive', name: 'On Ingest Persisted → Log', definition: { nodes: [], edges: [] }, enabled: false });
+
+    await seedEssentials(app);
+
+    expect(workflows.find((w) => w.id === 'wf-sample-reactive')?.enabled).toBe(false);
   });
 });
 
