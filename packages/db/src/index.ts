@@ -55,3 +55,4 @@ export * from './projection';
 export * from './terminology-ingest-job-store';
 export { createRoleStore } from './role-store';
 export type { RoleStore, RoleRecord, CreateRoleInput, UpdateRoleInput } from './role-store';
+export * from './reference-search';
