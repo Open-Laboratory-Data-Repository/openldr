@@ -1019,4 +1019,35 @@ describe('workflow routes', () => {
     expect((await secretRows(db, 'wf-secret')).length).toBe(0);
     await db.destroy();
   });
+
+  it('marks seeded workflows as protected in the list response', async () => {
+    const app = Fastify();
+    const ctx = fakeCtx();
+    (ctx as any).workflows.store.list = async () => ([
+      { id: 'wf-ingest', name: 'Ingest', definition: { nodes: [], edges: [] } },
+      { id: 'wf-mine', name: 'Mine', definition: { nodes: [], edges: [] } },
+    ]);
+    app.addHook('onRequest', async (req) => {
+      req.user = { id: 'a', username: 'a', displayName: null, roles: ['lab_admin'], capabilities: ['workflows.view'] } as never;
+    });
+    registerWorkflowRoutes(app, ctx as never);
+
+    const res = await app.inject({ method: 'GET', url: '/api/workflows' });
+    const byId = Object.fromEntries(res.json().map((w: any) => [w.id, w.protected]));
+    expect(byId['wf-ingest']).toBe(true);
+    expect(byId['wf-mine']).toBe(false);
+  });
+
+  it('refuses to delete a protected system workflow', async () => {
+    const app = Fastify();
+    const ctx = fakeCtx();
+    app.addHook('onRequest', async (req) => {
+      req.user = { id: 'a', username: 'a', displayName: null, roles: ['lab_admin'], capabilities: ['workflows.edit'] } as never;
+    });
+    registerWorkflowRoutes(app, ctx as never);
+
+    const res = await app.inject({ method: 'DELETE', url: '/api/workflows/wf-ingest' });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toContain('cannot be deleted');
+  });
 });

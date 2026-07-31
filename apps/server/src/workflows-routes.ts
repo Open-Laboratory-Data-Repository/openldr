@@ -8,6 +8,7 @@ import { toCsv } from '@openldr/reporting';
 import { recordAudit } from './audit-helper';
 import { requireCapability } from './rbac';
 import { resolveNodeOptions, resolveNodeDetail } from './workflows-node-options';
+import { isProtectedWorkflowId } from './system-workflows';
 
 /** Sync a workflow's trigger nodes into the derived registries (webhooks + schedules). */
 async function syncWorkflowTriggers(ctx: AppContext, workflow: { id: string; definition: unknown }): Promise<void> {
@@ -171,7 +172,11 @@ export function registerWorkflowRoutes(
   // role as writes; the LIST response is additionally redacted (defense in depth).
   app.get('/api/workflows', VIEW, async () => {
     const all = await ctx.workflows.store.list();
-    return all.map((w) => ({ ...w, definition: redactWorkflowSecrets(w.definition) }));
+    return all.map((w) => ({
+      ...w,
+      definition: redactWorkflowSecrets(w.definition),
+      protected: isProtectedWorkflowId(w.id),
+    }));
   });
 
   app.get('/api/workflows/:id', VIEW, async (req, reply) => {
@@ -179,7 +184,7 @@ export function registerWorkflowRoutes(
     const w = await ctx.workflows.store.get(id);
     if (!w) { reply.code(404); return { error: `unknown workflow: ${id}` }; }
     // Detail stays FULL — manager-gated and the builder needs real values to edit.
-    return w;
+    return { ...w, protected: isProtectedWorkflowId(w.id) };
   });
 
   app.post('/api/workflows', EDIT, async (req, reply) => {
@@ -216,8 +221,14 @@ export function registerWorkflowRoutes(
     } catch (err) { return mapError(err, reply); }
   });
 
-  app.delete('/api/workflows/:id', EDIT, async (req) => {
+  app.delete('/api/workflows/:id', EDIT, async (req, reply) => {
     const { id } = req.params as { id: string };
+    if (isProtectedWorkflowId(id)) {
+      reply.code(409);
+      return {
+        error: `'${id}' is a system workflow and cannot be deleted. Form capture and automated ingest both run through it. Use reset to restore it to its default.`,
+      };
+    }
     const before = await ctx.workflows.store.get(id);
     await ctx.workflows.store.remove(id);
     // SEC-06: cascade-delete this workflow's sealed secrets.
