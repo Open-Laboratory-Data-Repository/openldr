@@ -67,6 +67,13 @@ function openActionsMenu() {
   if (!document.querySelector('[role="menu"]')) fireEvent.keyDown(trigger, { key: 'Enter' });
 }
 
+// Parameters (and therefore Run) live in a sheet opened from the ⋯ menu, so the report body
+// starts near the top of the viewport on a phone rather than below an always-on parameter bar.
+async function openParameters() {
+  openActionsMenu();
+  fireEvent.click(await screen.findByText(/^(parameters|paramètres|parâmetros)$/i));
+}
+
 beforeEach(() => {
   localStorage.clear();
   fetchReportsMock.mockClear();
@@ -85,7 +92,8 @@ describe('Reports page', () => {
   it('lists reports; selecting + running shows the document tab', async () => {
     render(<MemoryRouter><Reports /></MemoryRouter>);
     fireEvent.click(await screen.findByText('AMR Resistance Rate'));
-    fireEvent.click(await screen.findByRole('button', { name: /run|exécuter|executar/i }));
+    await openParameters();
+    fireEvent.click(await screen.findByRole('button', { name: /^(run|exécuter|executar)$/i }));
     await waitFor(() => expect(screen.getByText('pdf-viewer')).toBeInTheDocument());
   });
 
@@ -93,7 +101,8 @@ describe('Reports page', () => {
     const api = await import('../api');
     render(<MemoryRouter><Reports /></MemoryRouter>);
     fireEvent.click(await screen.findByText('AMR Resistance Rate'));
-    fireEvent.click(await screen.findByRole('button', { name: /run|exécuter|executar/i }));
+    await openParameters();
+    fireEvent.click(await screen.findByRole('button', { name: /^(run|exécuter|executar)$/i }));
     await waitFor(() => expect(api.logReportRun).toHaveBeenCalledWith(
       'amr-resistance',
       expect.objectContaining({ format: 'preview' }),

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
-import { Library, MoreHorizontal, ChevronRight, Plus } from 'lucide-react';
+import { Library, MoreHorizontal, ChevronRight, Plus, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { cn } from '../lib/cn';
 import { toast } from 'sonner';
 import { AppShell } from '../shell/AppShell';
 import {
@@ -113,6 +114,7 @@ export function Terminology(): JSX.Element {
   const [loading, setLoading] = useState(true);
 
   // ── navigation ──────────────────────────────────────────────────────────────
+  const [railCollapsed, setRailCollapsed] = useState(false);
   const [selectedPublisherId, setSelectedPublisherId] = useState('');
   const [selectedSystemId, setSelectedSystemId] = useState('');
   const [paneTab, setPaneTab] = useState<'systems' | 'valuesets'>('systems');
@@ -470,14 +472,31 @@ export function Terminology(): JSX.Element {
 
         <div className="flex flex-1 overflow-hidden">
           {/* ── Publisher rail ──────────────────────────────────────────── */}
-          <div className="flex w-40 shrink-0 flex-col border-r border-border sm:w-52 md:w-60">
+          {/* The rail is a fixed-width column beside the main pane at every breakpoint, so on a
+              phone it eats most of the width. Collapsing it hands that space back. */}
+          <div
+            className={cn(
+              'flex shrink-0 flex-col border-r border-border',
+              railCollapsed ? 'w-9' : 'w-40 sm:w-52 md:w-60',
+            )}
+          >
             {/* Rail header */}
-            <div className="flex h-9 items-center border-b border-border px-3 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-              Publishers
+            <div className="flex h-9 items-center gap-1 border-b border-border pl-3 pr-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              {!railCollapsed && <span className="min-w-0 flex-1 truncate">Publishers</span>}
+              <Button
+                variant="ghost"
+                size="icon"
+                className={cn('h-7 w-7 shrink-0', railCollapsed && '-ml-2')}
+                onClick={() => setRailCollapsed((v) => !v)}
+                aria-label={railCollapsed ? 'Show publishers' : 'Hide publishers'}
+                title={railCollapsed ? 'Show publishers' : 'Hide publishers'}
+              >
+                {railCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+              </Button>
             </div>
 
             {/* Publisher list */}
-            <div className="flex-1 overflow-auto">
+            <div className={cn('flex-1 overflow-auto', railCollapsed && 'hidden')}>
               {loading ? (
                 <LoadingState label="Loading…" className="min-h-40" />
               ) : sections.length === 0 ? (
@@ -698,8 +717,10 @@ export function Terminology(): JSX.Element {
                 {/* Code-systems table */}
                 {activeSection.systems.length > 0 && !selectedSystemId && (!bothKinds || paneTab === 'systems') && (
                   <div className="flex flex-1 flex-col overflow-hidden">
-                    <div className="flex-1 overflow-auto">
-                      <Table>
+                    {/* The wrapper must fill, and this parent must be a FLEX column for that to
+                        mean anything — as a plain block it left the table content-height. */}
+                    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                      <Table wrapperClassName="min-h-0 flex-1">
                         <TableHeader className="sticky top-0 z-10 bg-background">
                           <TableRow>
                             <TableHead className="text-xs uppercase tracking-wide">
@@ -844,8 +865,10 @@ export function Terminology(): JSX.Element {
                       </Select>
                       <Input value={vsSearch} onChange={(e) => setVsSearch(e.target.value)} placeholder="Search value sets..." className="h-8 max-w-md text-sm" aria-label="Search value sets" />
                     </div>
-                    <div className="flex-1 overflow-auto">
-                      <Table>
+                    {/* The wrapper must fill, and this parent must be a FLEX column for that to
+                        mean anything — as a plain block it left the table content-height. */}
+                    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                      <Table wrapperClassName="min-h-0 flex-1">
                         <TableHeader className="sticky top-0 z-10 bg-background">
                           <TableRow>
                             <TableHead className="text-xs uppercase tracking-wide">Title</TableHead>

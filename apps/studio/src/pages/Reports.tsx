@@ -17,6 +17,7 @@ import { ReportHistoryDrawer } from '../reports/ReportHistoryDrawer';
 import { ReportSchedulesDrawer } from '../reports/ReportSchedulesDrawer';
 import { useAuth } from '@/auth/AuthProvider';
 import { ReportParametersBar } from '../reports/ReportParametersBar';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { ReportSummaryStrip } from '../reports/ReportSummaryStrip';
 import { ReportActionsMenu } from '../reports/ReportActionsMenu';
 import { ReportDocumentTab } from '../reports/ReportDocumentTab';
@@ -54,6 +55,7 @@ export function Reports() {
   const [running, setRunning] = useState(false);
   const [ranAt, setRanAt] = useState('');
   const [activeTab, setActiveTab] = useState<Tab>('document');
+  const [paramsOpen, setParamsOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
 
   const selected = reports.find((r) => r.id === selectedId) ?? null;
@@ -181,6 +183,7 @@ export function Reports() {
                   <TruncatedText text={selected.description} className="text-xs text-muted-foreground" />
                 </div>
                 <ReportActionsMenu
+                  onOpenParameters={() => setParamsOpen(true)}
                   onOpenHistory={() => setHistoryOpen(true)}
                   onOpenSchedules={() => setSchedulesOpen(true)}
                   canManageSchedules={canManageSchedules}
@@ -193,15 +196,27 @@ export function Reports() {
                 />
               </div>
 
-              <ReportParametersBar
-                report={selected}
-                params={params}
-                options={options}
-                onChange={setParams}
-                onRun={handleRun}
-                running={running}
-                canRun={canRun}
-              />
+              {/* Parameters live in a sheet off the ⋯ menu rather than an always-on bar: on a
+                  phone that bar pushed the report itself most of a screen down. */}
+              <Sheet open={paramsOpen} onOpenChange={setParamsOpen}>
+                <SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-md">
+                  <SheetHeader className="border-b border-border px-6 py-4">
+                    <SheetTitle>{t('reports.parameters')}</SheetTitle>
+                    <SheetDescription>{selected.name}</SheetDescription>
+                  </SheetHeader>
+                  <div className="min-h-0 flex-1 overflow-y-auto">
+                    <ReportParametersBar
+                      report={selected}
+                      params={params}
+                      options={options}
+                      onChange={setParams}
+                      onRun={() => { setParamsOpen(false); void handleRun(); }}
+                      running={running}
+                      canRun={canRun}
+                    />
+                  </div>
+                </SheetContent>
+              </Sheet>
 
               <ReportSummaryStrip metrics={metrics} />
 

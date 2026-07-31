@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
-import { RefreshCw } from 'lucide-react';
+import { MoreHorizontal, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -88,8 +89,12 @@ function ActivitySheet({ row, onOpenChange }: { row: SyncActivityRow | null; onO
   );
 }
 
+type SyncTab = 'settings' | 'activity';
+
 export function DistributedSync() {
   const { t } = useTranslation();
+  // Controlled so the ⋯ menu on the tab row can scope its items to the active tab.
+  const [tab, setTab] = useState<SyncTab>('settings');
   const [sync, setSync] = useState<SyncConfigView | null>(null);
   // Write-only secret field: blank ⇒ leave the stored secret unchanged (omit from the PUT payload).
   const [secretInput, setSecretInput] = useState('');
@@ -207,11 +212,39 @@ export function DistributedSync() {
       ) : error ? (
         <div className="flex flex-1 items-center justify-center px-6 text-center text-sm text-destructive">{error}</div>
       ) : sync ? (
-        <Tabs defaultValue="settings" className="flex min-h-0 flex-1 flex-col">
-          <TabsList className="mt-4 px-4">
-            <TabsTrigger value="settings">{t('settings.sync.tabs.settings')}</TabsTrigger>
-            <TabsTrigger value="activity">{t('settings.sync.tabs.activity')}</TabsTrigger>
-          </TabsList>
+        <Tabs value={tab} onValueChange={(v) => setTab(v as SyncTab)} className="flex min-h-0 flex-1 flex-col">
+          {/* The rule lives on this ROW, not on TabsList, so it runs edge-to-edge beneath both
+              the tabs and the ⋯ menu (TabsList's own `border-b` would stop at the last tab).
+              The ⋯ holds every action on the page, and its items switch with the active tab. */}
+          <div className="mt-4 flex items-center justify-between gap-2 border-b border-border px-4">
+            <TabsList className="border-b-0">
+              <TabsTrigger value="settings">{t('settings.sync.tabs.settings')}</TabsTrigger>
+              <TabsTrigger value="activity">{t('settings.sync.tabs.activity')}</TabsTrigger>
+            </TabsList>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" aria-label={t('common.actions')}>
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {tab === 'settings' ? (
+                  <DropdownMenuItem disabled={syncSaving} onClick={() => void saveSync()}>
+                    {t('settings.general.sync.save')}
+                  </DropdownMenuItem>
+                ) : (
+                  <>
+                    <DropdownMenuItem disabled={syncNowBusy} onClick={() => void doSyncNow()}>
+                      {t('settings.general.sync.syncNow')}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => void refreshStatus()}>
+                      {t('settings.sync.refresh')}
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
 
           {/* ── Settings tab: the sync config form ───────────────────────────── */}
           <TabsContent value="settings" className="min-h-0 overflow-y-auto p-4">
@@ -227,10 +260,10 @@ export function DistributedSync() {
                   aria-label={t('settings.general.sync.enabled.label')}
                 />
               </div>
-              <div className="flex items-center justify-between gap-4">
+              <div className="flex flex-col gap-1.5 md:flex-row md:items-center md:justify-between md:gap-4">
                 <div className="text-sm font-medium">{t('settings.general.sync.mode.label')}</div>
                 <Select value={sync.mode} onValueChange={(v) => setSync({ ...sync, mode: v as SyncMode })}>
-                  <SelectTrigger className="w-96 shrink-0" aria-label={t('settings.general.sync.mode.label')}>
+                  <SelectTrigger className="w-full md:w-96 md:shrink-0" aria-label={t('settings.general.sync.mode.label')}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -240,40 +273,40 @@ export function DistributedSync() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="flex items-center justify-between gap-4">
+              <div className="flex flex-col gap-1.5 md:flex-row md:items-center md:justify-between md:gap-4">
                 <div className="text-sm font-medium">{t('settings.general.sync.centralUrl.label')}</div>
                 <Input
-                  className="w-96 shrink-0"
+                  className="w-full md:w-96 md:shrink-0"
                   value={sync.centralUrl}
                   placeholder="https://central.example.org"
                   onChange={(e) => setSync({ ...sync, centralUrl: e.target.value })}
                   aria-label={t('settings.general.sync.centralUrl.label')}
                 />
               </div>
-              <div className="flex items-center justify-between gap-4">
+              <div className="flex flex-col gap-1.5 md:flex-row md:items-center md:justify-between md:gap-4">
                 <div className="text-sm font-medium">{t('settings.general.sync.siteId.label')}</div>
                 <Input
-                  className="w-96 shrink-0"
+                  className="w-full md:w-96 md:shrink-0"
                   value={sync.siteId}
                   placeholder="lab-site-01"
                   onChange={(e) => setSync({ ...sync, siteId: e.target.value })}
                   aria-label={t('settings.general.sync.siteId.label')}
                 />
               </div>
-              <div className="flex items-center justify-between gap-4">
+              <div className="flex flex-col gap-1.5 md:flex-row md:items-center md:justify-between md:gap-4">
                 <div className="text-sm font-medium">{t('settings.general.sync.oidcIssuer.label')}</div>
                 <Input
-                  className="w-96 shrink-0"
+                  className="w-full md:w-96 md:shrink-0"
                   value={sync.oidcIssuer}
                   placeholder="https://central.example.org/auth/realms/openldr"
                   onChange={(e) => setSync({ ...sync, oidcIssuer: e.target.value })}
                   aria-label={t('settings.general.sync.oidcIssuer.label')}
                 />
               </div>
-              <div className="flex items-center justify-between gap-4">
+              <div className="flex flex-col gap-1.5 md:flex-row md:items-center md:justify-between md:gap-4">
                 <div className="text-sm font-medium">{t('settings.general.sync.clientId.label')}</div>
                 <Input
-                  className="w-96 shrink-0"
+                  className="w-full md:w-96 md:shrink-0"
                   value={sync.clientId}
                   placeholder="sync-lab-site-01"
                   onChange={(e) => setSync({ ...sync, clientId: e.target.value })}
@@ -281,11 +314,11 @@ export function DistributedSync() {
                   autoComplete="off"
                 />
               </div>
-              <div className="flex items-center justify-between gap-4">
+              <div className="flex flex-col gap-1.5 md:flex-row md:items-center md:justify-between md:gap-4">
                 <div className="text-sm font-medium">{t('settings.general.sync.clientSecret.label')}</div>
                 <Input
                   type="password"
-                  className="w-96 shrink-0"
+                  className="w-full md:w-96 md:shrink-0"
                   value={secretInput}
                   placeholder={sync.clientSecretSet ? t('settings.general.sync.clientSecretSet') : ''}
                   onChange={(e) => setSecretInput(e.target.value)}
@@ -293,27 +326,26 @@ export function DistributedSync() {
                   autoComplete="new-password"
                 />
               </div>
-              <div className="flex items-center justify-between gap-4">
+              <div className="flex flex-col gap-1.5 md:flex-row md:items-center md:justify-between md:gap-4">
                 <div className="text-sm font-medium">{t('settings.general.sync.intervalMinutes.label')}</div>
                 <Input
                   type="number"
                   min={1}
-                  className="w-96 shrink-0"
+                  className="w-full md:w-96 md:shrink-0"
                   value={sync.intervalMinutes}
                   onChange={(e) => setSync({ ...sync, intervalMinutes: Number(e.target.value) })}
                   aria-label={t('settings.general.sync.intervalMinutes.label')}
                 />
               </div>
-              <div className="flex justify-end">
-                <Button onClick={() => void saveSync()} disabled={syncSaving}>
-                  {t('settings.general.sync.save')}
-                </Button>
-              </div>
             </div>
           </TabsContent>
 
           {/* ── Activity tab: live status + the recent-activity table ────────── */}
-          <TabsContent value="activity" className="flex min-h-0 flex-col">
+          {/* `data-[state=inactive]:hidden` is required, not decorative: Radix hides an inactive
+              panel with the `hidden` attribute, but preflight enforces that via a zero-specificity
+              `:where()` rule, so the `flex` class below out-ranks it. Without this the inactive
+              panel stays laid out and steals ~385px from the Settings form above. */}
+          <TabsContent value="activity" className="flex min-h-0 flex-col data-[state=inactive]:hidden">
             {/* Compact status strip — keeps the vertical budget for the activity table below. */}
             <div className="flex flex-wrap items-center gap-x-5 gap-y-1 border-b border-border px-4 py-2 text-xs">
               <span><span className="text-muted-foreground">{t('settings.general.sync.mode.push')}:</span> <span className="font-mono">{directionLine(syncStatus?.push ?? null)}</span></span>
@@ -343,30 +375,18 @@ export function DistributedSync() {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder={t('settings.sync.searchPlaceholder')}
-                className="h-8 max-w-xs text-xs"
+                className="h-8 min-w-0 max-w-xs text-xs"
                 aria-label={t('settings.sync.searchPlaceholder')}
               />
               <div className="flex-1" />
-              <span className="text-xs text-muted-foreground">{t('settings.sync.newestFirst')}</span>
-              <span className="h-4 w-px bg-border" aria-hidden="true" />
-              <Button variant="secondary" size="sm" className="h-8" onClick={() => void doSyncNow()} disabled={syncNowBusy}>
-                {t('settings.general.sync.syncNow')}
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-muted-foreground"
-                onClick={() => void refreshStatus()}
-                aria-label={t('settings.sync.refresh')}
-                title={t('settings.sync.refresh')}
-              >
-                <RefreshCw className="h-4 w-4" />
-              </Button>
+              {/* Sync now / Refresh moved to the tab row's ⋯ menu. `min-w-0` above lets the
+                  search field shrink so this label keeps to one line on a phone. */}
+              <span className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">{t('settings.sync.newestFirst')}</span>
             </div>
 
             {/* Recent activity table */}
-            <div className="flex min-h-0 flex-1 flex-col overflow-auto">
-              <Table>
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+              <Table wrapperClassName={pageRows.length > 0 ? 'min-h-0 flex-1' : undefined}>
                 <TableHeader className="sticky top-0 z-10 bg-background">
                   <TableRow>
                     <TableHead className="w-24 text-xs uppercase">{t('settings.sync.cols.direction')}</TableHead>

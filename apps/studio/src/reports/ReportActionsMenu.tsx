@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { MoreHorizontal, Pencil, EyeOff, Trash2 } from 'lucide-react';
+import { MoreHorizontal, Pencil, EyeOff, Trash2, SlidersHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
@@ -9,6 +9,9 @@ import {
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 
 interface Props {
+  /** Opens the parameters sheet. Parameters live here rather than in a always-on bar so the
+   *  report itself starts near the top of the viewport on a phone. */
+  onOpenParameters?: () => void;
   onOpenHistory?: () => void;
   onOpenSchedules?: () => void;
   canManageSchedules?: boolean;
@@ -26,7 +29,7 @@ interface Props {
 
 /** SP-3b: Run History (SP-2) and Schedules (manager-only) are live. Unpublish/Delete apply to source==='design' reports. */
 export function ReportActionsMenu({
-  onOpenHistory, onOpenSchedules, canManageSchedules, designId, reportId, source, canManage, onUnpublish, onDelete,
+  onOpenParameters, onOpenHistory, onOpenSchedules, canManageSchedules, designId, reportId, source, canManage, onUnpublish, onDelete,
 }: Props) {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -41,6 +44,14 @@ export function ReportActionsMenu({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-44">
+        {onOpenParameters && (
+          <>
+            <DropdownMenuItem onSelect={() => onOpenParameters()}>
+              <SlidersHorizontal className="mr-2 h-4 w-4" /> {t('reports.parameters')}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+          </>
+        )}
         <DropdownMenuItem onSelect={() => onOpenHistory?.()}>
           {t('reports.runHistory')}
         </DropdownMenuItem>
