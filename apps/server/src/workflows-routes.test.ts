@@ -1112,4 +1112,37 @@ describe('workflow routes', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json().protected).toBe(false);
   });
+
+  it('reset preserves the webhook secret so existing tokens keep working', async () => {
+    const app = Fastify();
+    const ctx = fakeCtx();
+    let saved: any;
+    (ctx as any).workflows.store.get = async () => ({
+      id: 'wf-ingest', name: 'mangled',
+      definition: { nodes: [{ id: 't', type: 'webhook', data: { templateId: 'webhook-trigger', secret: { secretRef: 'wsec_ORIGINAL' } } }], edges: [] },
+    });
+    (ctx as any).workflows.store.update = async (_id: string, wf: any) => { saved = wf; return wf; };
+    app.addHook('onRequest', async (req) => {
+      req.user = { id: 'a', username: 'a', displayName: null, roles: ['lab_admin'], capabilities: ['workflows.edit'] } as never;
+    });
+    registerWorkflowRoutes(app, ctx as never);
+
+    const res = await app.inject({ method: 'POST', url: '/api/workflows/wf-ingest/reset' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ ok: true, secretPreserved: true });
+    const trigger = saved.definition.nodes.find((n: any) => n.data?.templateId === 'webhook-trigger');
+    expect(trigger.data.secret.secretRef).toBe('wsec_ORIGINAL');
+  });
+
+  it('refuses to reset a workflow that is not a system workflow', async () => {
+    const app = Fastify();
+    const ctx = fakeCtx();
+    app.addHook('onRequest', async (req) => {
+      req.user = { id: 'a', username: 'a', displayName: null, roles: ['lab_admin'], capabilities: ['workflows.edit'] } as never;
+    });
+    registerWorkflowRoutes(app, ctx as never);
+
+    const res = await app.inject({ method: 'POST', url: '/api/workflows/wf-custom/reset' });
+    expect(res.statusCode).toBe(400);
+  });
 });

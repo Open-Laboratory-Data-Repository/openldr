@@ -8,7 +8,7 @@ import { toCsv } from '@openldr/reporting';
 import { recordAudit } from './audit-helper';
 import { requireCapability } from './rbac';
 import { resolveNodeOptions, resolveNodeDetail } from './workflows-node-options';
-import { isProtectedWorkflowId } from './system-workflows';
+import { isProtectedWorkflowId, rebuildSystemWorkflow } from './system-workflows';
 
 /** Sync a workflow's trigger nodes into the derived registries (webhooks + schedules). */
 async function syncWorkflowTriggers(ctx: AppContext, workflow: { id: string; definition: unknown }): Promise<void> {
@@ -244,6 +244,35 @@ export function registerWorkflowRoutes(
       await recordAudit(ctx, req, { action: 'workflow.delete', entityType: 'workflow', entityId: id, before, after: null });
     }
     return { ok: true };
+  });
+
+  // Restore a system workflow to its seeded default graph. Carries over the webhook
+  // node's stored `secretRef` (never regenerates it — see rebuildSystemWorkflow) and the
+  // form-validate node's `formId`, so a reset cannot silently break external producers'
+  // tokens or a site's re-pointed form binding.
+  app.post('/api/workflows/:id/reset', EDIT, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    if (!isProtectedWorkflowId(id)) {
+      reply.code(400);
+      return { error: `'${id}' is not a system workflow; there is no default to reset to` };
+    }
+    const before = await ctx.workflows.store.get(id);
+    if (!before) { reply.code(404); return { error: 'workflow not found' }; }
+
+    const { workflow, secretPreserved } = rebuildSystemWorkflow(before as never);
+    await ctx.workflows.store.update(id, workflow);
+    // Re-sync the in-memory webhook/schedule registries, same as create/update — otherwise
+    // a reset that fixes a mangled path in storage would leave the RUNNING server still
+    // routing on the stale (mangled) path until some other save happened.
+    await syncWorkflowTriggers(ctx, workflow);
+    ctx.workflows.runner.setIngestWorkflowIds(await listIngestWorkflowIds(ctx));
+    ctx.workflows.runner.setEventWorkflowIds(await listEventWorkflowIds(ctx));
+    void ctx.workflows.listeners.reconcile().catch((err) => ctx.logger.warn({ err }, 'listener reconcile failed'));
+    await recordAudit(ctx, req, {
+      action: 'workflow.reset', entityType: 'workflow', entityId: id,
+      before, after: workflow, metadata: { secretPreserved },
+    });
+    return { ok: true, secretPreserved };
   });
 
   // SSE execution. POST so the client can pass an optional trigger `input` body.
