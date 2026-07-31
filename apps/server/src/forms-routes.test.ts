@@ -33,12 +33,19 @@ type AuditInput = Parameters<AppContext['audit']['record']>[0];
 
 const NOW = '2026-01-01T00:00:00.000Z';
 
+// Bound to ServiceRequest (→ the 'requisition' domain → ServiceRequestExtractor) so its
+// /responses submissions clear the route's "produced no resources" guard. It previously carried
+// `observationExtract: true` with an invented LOINC code 'patient-id', which modelled a patient
+// identifier as an Observation — clinically wrong, and it pinned that wrong modelling as this
+// route's expected output. Its `patientId` is plain text (no ServiceRequest.subject binding), so
+// this fixture is also the case that proves the route falls back to the extractor's
+// 'Unknown subject' rather than fabricating a Reference.
 const sampleSchema = {
   id: 'specimen-intake',
   name: 'Specimen intake',
   versionLabel: null,
   fhirVersion: null,
-  fhirResourceType: null,
+  fhirResourceType: 'ServiceRequest',
   fhirProfileUrl: null,
   facilityId: null,
   fields: [
@@ -53,12 +60,6 @@ const sampleSchema = {
       order: 0,
       cardinality: { min: 1, max: '1' },
       section: 'main',
-      // Task S2-T2: extractorsForForm/ObservationExtractor only emits a resource for a field
-      // flagged observationExtract with a code — otherwise the submit route's "form produced
-      // no resources" guard rejects the submission before it ever reaches the ingest workflow.
-      // Flagged here so this fixture's /responses submissions are accepted.
-      observationExtract: true,
-      code: [{ system: 'http://loinc.org', code: 'patient-id', display: 'Patient ID' }],
     },
   ],
   sections: [{ id: 'main', label: 'Main', order: 0 }],
@@ -433,7 +434,7 @@ describe('forms routes', () => {
     // returning the bare QuestionnaireResponse — the response body is the run outcome.
     const response = await app.inject({ method: 'POST', url: `/api/forms/${id}/responses`, payload: { answers: { patientId: 'P-100' } } });
     expect(response.statusCode).toBe(201);
-    expect(response.json()).toMatchObject({ ok: true, runId: 'run-default', resourceTypes: ['Observation'] });
+    expect(response.json()).toMatchObject({ ok: true, runId: 'run-default', resourceTypes: ['ServiceRequest'] });
 
     // A required field that is absent must be rejected. This previously returned 201 —
     // the assertion encoded the bug that reference pickers exist to fix.
@@ -864,6 +865,30 @@ describe('forms routes', () => {
     expect(serviceRequest.subject.display).toBe('Doe Jane');
     expect(serviceRequest.authoredOn).toEqual(expect.any(String));
     expect(serviceRequest.authoredOn.length).toBeGreaterThan(0);
+  });
+
+  // The other half of Fix 1: a form with no ServiceRequest.subject binding (or an unanswered /
+  // non-entity one) must leave ctx.subject undefined so ServiceRequestExtractor's own fallback
+  // applies — the route must not fabricate a Reference out of a free-text answer.
+  it('falls back to the extractor default when no field is bound to ServiceRequest.subject', async () => {
+    const ctx = fakeCtx();
+    const runs: any[] = [];
+    (ctx as any).workflows = {
+      runner: { runAndRecord: async (_w: string, _s: string, input: any) => { runs.push(input); return { runId: 'r', correlationId: null, status: 'completed', error: null }; } },
+    };
+    const app = authedApp(ctx);
+    const created = await app.inject({ method: 'POST', url: '/api/forms', payload: { name: 'Specimen intake', schema: sampleSchema, targetPages: ['forms'] } });
+    const formId = created.json().id as string;
+
+    const res = await app.inject({ method: 'POST', url: `/api/forms/${formId}/responses`, payload: { answers: { patientId: 'P-100' } } });
+
+    expect(res.statusCode).toBe(201);
+    const serviceRequest = runs[0].body.entry
+      .map((e: any) => e.resource)
+      .find((r: any) => r.resourceType === 'ServiceRequest');
+    expect(serviceRequest.subject).toEqual({ display: 'Unknown subject' });
+    // authoredOn is still stamped — it comes from the submission time, not the subject binding.
+    expect(serviceRequest.authoredOn).toEqual(expect.any(String));
   });
 
   it('records the submitting user as the QuestionnaireResponse author', async () => {
