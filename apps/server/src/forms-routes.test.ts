@@ -108,18 +108,25 @@ const codingSchema = {
 
 // A minimal schema with one required reference field, used to exercise the submit-time
 // reference-validation path (Task 9) independently of sampleSchema's plain text field.
+//
+// It is bound to ServiceRequest (→ the 'requisition' domain → ServiceRequestExtractor), which is
+// the shape a realistic capture form actually takes: a patient picker bound to
+// ServiceRequest.subject. It previously carried `observationExtract: true` plus an invented
+// LOINC code 'lab-order-patient' purely to satisfy the route's "produced no resources" guard —
+// that modelled a patient identifier as an Observation, which is clinically wrong and pinned
+// that wrong modelling as expected output.
 const referenceSchema = {
   id: 'lab-order',
   name: 'Lab order',
   versionLabel: null,
   fhirVersion: null,
-  fhirResourceType: null,
+  fhirResourceType: 'ServiceRequest',
   fhirProfileUrl: null,
   facilityId: null,
   fields: [
     {
       id: 'patient',
-      fhirPath: null,
+      fhirPath: 'ServiceRequest.subject',
       displayLabel: 'Patient',
       description: null,
       fieldType: 'reference' as const,
@@ -129,14 +136,6 @@ const referenceSchema = {
       cardinality: { min: 1, max: '1' },
       section: 'main',
       referenceTarget: 'Patient',
-      // Task S2-T2: extractorsForForm/ObservationExtractor only emits a resource for a field
-      // flagged observationExtract with a code — otherwise the submit route's "form produced
-      // no resources" guard rejects the submission before it ever reaches the ingest workflow.
-      // Flagged here so this fixture's /responses submissions are accepted (the extracted
-      // Observation carries no value since ObservationExtractor doesn't map valueReference,
-      // but its presence is enough to satisfy the guard).
-      observationExtract: true,
-      code: [{ system: 'http://loinc.org', code: 'lab-order-patient', display: 'Patient' }],
     },
   ],
   sections: [{ id: 'main', label: 'Main', order: 0 }],
@@ -794,6 +793,38 @@ describe('forms routes', () => {
     expect(runs[0]!.input.body.entry[0].resource.resourceType).toBe('QuestionnaireResponse');
     // Provenance override is top-level, not inside body.
     expect(runs[0]!.input.__provenance.sourceSystem).toBe('form-capture');
+  });
+
+  // Fix 1: ServiceRequestExtractor takes the subject ONLY from the ExtractionContext, so the
+  // route must resolve it from the ServiceRequest.subject-bound field. With the `{}` context this
+  // route shipped with, every hand-captured order extracted as `subject: { display: 'Unknown
+  // subject' }` with no authoredOn — projecting lab_requests.patient_id NULL for capture while
+  // every CDR-ingested order carried a real patient id.
+  it('carries the subject-bound answer onto the derived ServiceRequest', async () => {
+    const ctx = fakeCtx();
+    const runs: any[] = [];
+    (ctx as any).workflows = {
+      runner: { runAndRecord: async (_w: string, _s: string, input: any) => { runs.push(input); return { runId: 'r', correlationId: null, status: 'completed', error: null }; } },
+    };
+    const app = authedApp(ctx);
+    const created = await app.inject({ method: 'POST', url: '/api/forms', payload: { name: 'Order', schema: referenceSchema, targetPages: ['forms'] } });
+    const formId = created.json().id as string;
+
+    const res = await app.inject({
+      method: 'POST', url: `/api/forms/${formId}/responses`,
+      payload: { answers: { patient: { reference: 'Patient/p1', display: 'Doe Jane' } } },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(res.json().resourceTypes).toEqual(['ServiceRequest']);
+    const serviceRequest = runs[0].body.entry
+      .map((e: any) => e.resource)
+      .find((r: any) => r.resourceType === 'ServiceRequest');
+    expect(serviceRequest).toBeDefined();
+    expect(serviceRequest.subject.reference).toBe('Patient/p1');
+    expect(serviceRequest.subject.display).toBe('Doe Jane');
+    expect(serviceRequest.authoredOn).toEqual(expect.any(String));
+    expect(serviceRequest.authoredOn.length).toBeGreaterThan(0);
   });
 
   it('records the submitting user as the QuestionnaireResponse author', async () => {

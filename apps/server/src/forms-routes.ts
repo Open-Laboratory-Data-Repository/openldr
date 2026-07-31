@@ -3,7 +3,8 @@ import type { FastifyInstance } from 'fastify';
 import AdmZip from 'adm-zip';
 import type { AppContext } from '@openldr/bootstrap';
 import { redact } from '@openldr/core';
-import { extractorsForForm, toQuestionnaire, toQuestionnaireResponse, toTransactionBundle, validateAnswers, validateReferences } from '@openldr/forms';
+import type { ExtractionContext, FormSchema } from '@openldr/forms';
+import { extractorsForForm, isEntityAnswer, toQuestionnaire, toQuestionnaireResponse, toTransactionBundle, validateAnswers, validateReferences } from '@openldr/forms';
 import { z } from 'zod';
 import { recordAudit } from './audit-helper';
 import { requireCapability } from './rbac';
@@ -33,6 +34,31 @@ const publishInput = z.object({
 const responseInput = z.object({
   answers: z.record(z.unknown()),
 });
+
+/** The Corlix fhir-path a capture form binds its patient/subject field to. */
+const SUBJECT_FHIR_PATH = 'ServiceRequest.subject';
+
+/**
+ * Build the ExtractionContext the extractors need but a QuestionnaireResponse can't carry.
+ *
+ * ServiceRequestExtractor reads the subject ONLY from this context — it never looks at the
+ * response's `ServiceRequest.subject`-bound answer. Passing `{}` (as this route first did) meant
+ * every hand-captured order was extracted with `subject: { display: 'Unknown subject' }` and no
+ * `authoredOn`, so `lab_requests.patient_id` projected NULL for capture while every CDR-ingested
+ * order carried a real patient. The extractor is shared with the ingest path and the CLI, so the
+ * lookup lives here rather than widening it.
+ */
+function extractionContextFor(schema: FormSchema, answers: Record<string, unknown>, authored: string): ExtractionContext {
+  const context: ExtractionContext = { authored };
+  const subjectField = schema.fields.find((field) => field.fhirPath === SUBJECT_FHIR_PATH);
+  const answer = subjectField ? answers[subjectField.id] : undefined;
+  // No such field, unanswered, or a non-entity answer (e.g. free text): leave subject undefined
+  // so the extractor's own 'Unknown subject' fallback applies rather than emitting a broken ref.
+  if (isEntityAnswer(answer)) {
+    context.subject = { reference: answer.reference, ...(answer.display ? { display: answer.display } : {}) };
+  }
+  return context;
+}
 
 // These routes were previously UNGATED (no requireRole at all — any authenticated user could hit
 // them). Task 8 adds capability gates per the mapping table: read/fill routes require forms.view
@@ -287,11 +313,14 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
     // capture forms. toTransactionBundle puts the QuestionnaireResponse at entry[0], so
     // the verbatim record of what was typed is persisted alongside what was derived.
     const actor = req.user?.username ?? 'unknown';
+    const submittedAt = new Date().toISOString();
     const response = toQuestionnaireResponse(f.schema, p.data.answers as never) as unknown as Record<string, unknown>;
     response.author = { display: actor };
 
+    const questionnaire = toQuestionnaire(f.schema);
+    const extractionContext = extractionContextFor(f.schema, p.data.answers, submittedAt);
     const resources = extractorsForForm(f.schema as never)
-      .flatMap((ex) => ex.extract(response as never, toQuestionnaire(f.schema) as never, {}));
+      .flatMap((ex) => ex.extract(response as never, questionnaire as never, extractionContext));
     if (resources.length === 0) {
       reply.code(400);
       return { error: 'form produced no resources', errors: [] };
