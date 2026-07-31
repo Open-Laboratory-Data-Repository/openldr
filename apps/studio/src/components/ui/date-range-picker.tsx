@@ -77,12 +77,19 @@ export function DateRangePicker({ value, onChange, placeholder = 'Pick a date ra
       </PopoverTrigger>
       <PopoverContent className="w-auto p-0" align="start">
         {/* Phone layout: the preset rail and the second month together are far wider than a phone
-            screen, and `max-w` alone just clips them. Stack instead — presets become a horizontally
-            scrollable strip above a SINGLE month (see `numberOfMonths` below) — and restore the
-            side-by-side rail from `sm` up. */}
+            screen, and `max-w` alone just clips them. Stack instead — presets sit above a SINGLE
+            month (see `numberOfMonths` below) — and restore the side-by-side rail from `sm` up.
+
+            The presets WRAP rather than scroll horizontally. They used to be an `overflow-x-auto`
+            strip, which is unreachable whenever this picker is opened inside a modal dialog or
+            sheet: PopoverContent renders through a Portal, so the calendar mounts at body level —
+            outside the dialog's subtree — and the dialog's scroll lock (react-remove-scroll)
+            permits scrolling only INSIDE that subtree. The strip therefore refused to scroll and
+            the presets past the right edge could not be reached at all. Wrapping needs no
+            scrolling, so it holds regardless of what the picker is nested in. */}
         <div className="flex flex-col sm:flex-row">
           {presets && presets.length > 0 && (
-            <div className="flex shrink-0 flex-row gap-1 overflow-x-auto border-b border-border p-2 sm:flex-col sm:overflow-x-visible sm:border-b-0 sm:border-r">
+            <div className="flex shrink-0 flex-row flex-wrap gap-1 border-b border-border p-2 sm:flex-col sm:flex-nowrap sm:border-b-0 sm:border-r">
               {presets.map((p) => (
                 <Button
                   key={p.label}

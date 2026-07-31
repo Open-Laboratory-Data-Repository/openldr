@@ -122,14 +122,19 @@ describe('DateRangePicker on a phone', () => {
     expect(monthCount()).toBe(2);
   });
 
-  it('stacks the preset rail above the calendar and lets it scroll sideways', () => {
+  it('stacks the preset rail above the calendar and wraps it rather than scrolling sideways', () => {
     stubViewport(true);
     openCalendar();
     const rail = screen.getByRole('button', { name: 'All time' }).parentElement!;
-    // Column from `sm` up, row (scrollable) below it — the rail is 6 presets wide otherwise.
+    // Column from `sm` up, wrapping row below it — the rail is 6 presets wide otherwise.
     expect(rail.className).toMatch(/flex-row/);
     expect(rail.className).toMatch(/sm:flex-col/);
-    expect(rail.className).toMatch(/overflow-x-auto/);
+    expect(rail.className).toMatch(/flex-wrap/);
+    // NOT a horizontal scroll strip. PopoverContent renders through a Portal, so when this picker
+    // is opened inside a modal dialog/sheet the calendar mounts outside that dialog's subtree and
+    // react-remove-scroll blocks scrolling within it — presets past the right edge became
+    // completely unreachable. Wrapping needs no scroll, so it survives any nesting.
+    expect(rail.className).not.toMatch(/overflow-x-auto/);
   });
 });
 
