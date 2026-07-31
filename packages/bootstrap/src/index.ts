@@ -10,7 +10,7 @@ import { toS3BucketConfig } from './s3-config';
 import type { Config } from '@openldr/config';
 import { createLogger, HealthRegistry, open, seal, parseSecretKey, redact, type Logger } from '@openldr/core';
 import { createInternalDb, createFhirStore, createRelationalWriter, persistResources, createTerminologyStore, createTerminologyAdminStore, createOntologyStore, createReportRunStore, createReportScheduleStore, createMarketplaceInstallStore, createRegistryStore, createAppSettingsStore, deriveSystemCode, resolveSeedPublisherId, createProjectionRunner, fetchSafeChangeRows, readCursor as readChangeCursor, advanceCursor as advanceChangeCursor, createReferenceApplier, referenceCapture, markTerminologyChanged, createRoleStore, type TerminologyAdminStore, type OntologyStore, type FhirStore, type ReportRunStore, type ReportScheduleStore, type AppSettingStore, type RoleStore } from '@openldr/db';
-import type { ExternalSchema, InternalSchema, Provenance, SyncActivityStore } from '@openldr/db';
+import type { ExternalSchema, InternalSchema, Provenance, SyncActivityStore, TargetEngine } from '@openldr/db';
 import type { AuthPort, BlobStoragePort, EventingPort, TargetStorePort } from '@openldr/ports';
 import { createAuditStore, safeRecord, type AuditStore } from '@openldr/audit';
 import { createUserStore, type UserStore, createUserProfileStore, type UserProfileStore } from '@openldr/users';
@@ -317,6 +317,10 @@ export interface AppContext {
   blob: BlobStoragePort;
   eventing: EventingPort;
   store: TargetStorePort;
+  /** Which relational engine `store` talks to (postgres/mssql/mysql). Threaded through from
+   *  `selectTargetStore(cfg)` rather than assumed, so callers that need to dispatch on engine
+   *  (e.g. the reference-search entity resolvers) never silently default to postgres. */
+  targetEngine: TargetEngine;
   internalDb: Kysely<InternalSchema>;
   fhirStore: FhirStore;
   audit: AuditStore;
@@ -1305,6 +1309,7 @@ const reporting: ReportingApi = {
     blob,
     eventing,
     store,
+    targetEngine: engine,
     internalDb: internal.db,
     fhirStore: termFhirStore,
     audit,

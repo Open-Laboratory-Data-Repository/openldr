@@ -96,6 +96,11 @@ export function UserDialog({ open, onOpenChange, user, onSaved }: UserDialogProp
 
   // Form schema state
   const [schema, setSchema] = useState<FormSchema | null>(null);
+  // The form-definition id (the id passed to getForm() below, NOT schema.id — that's the schema
+  // slug and would 404 against the reference-search route). Needed so FormRuntime's reference
+  // pickers can search via the forms.view-gated /api/forms/:id/fields/:fieldId/reference-search
+  // route instead of rendering permanently inert (see formDefinitionId below).
+  const [formDefId, setFormDefId] = useState<string | null>(null);
   const [schemaLoading, setSchemaLoading] = useState(false);
   const [noForm, setNoForm] = useState(false);
 
@@ -132,6 +137,7 @@ export function UserDialog({ open, onOpenChange, user, onSaved }: UserDialogProp
     setError(null);
     setSaving(false);
     setSchema(null);
+    setFormDefId(null);
     setNoForm(false);
     setSavedIdentity(null);
 
@@ -151,6 +157,10 @@ export function UserDialog({ open, onOpenChange, user, onSaved }: UserDialogProp
         }
         const loaded = parsed.data as FormSchema;
         setSchema(loaded);
+        // def.id is the same form-definition id passed to getForm() above — the id the
+        // reference-search route expects. schema.id (loaded.id) is the schema's own slug and
+        // would 404 if used here.
+        setFormDefId(def.id);
         // Seed answers from the user being edited (if any)
         if (user && loaded) setInitialAnswers(seedAnswers(loaded, user));
         else setInitialAnswers({});
@@ -397,6 +407,7 @@ export function UserDialog({ open, onOpenChange, user, onSaved }: UserDialogProp
             <FormRuntime
               key={`${schema.id}-${user?.id ?? 'new'}`}
               schema={schema}
+              formDefinitionId={formDefId ?? undefined}
               initialAnswers={initialAnswers}
               onSubmit={handleSubmit}
               // The visible Save affordance is the ⋯ menu in the toolbar row above, not a form

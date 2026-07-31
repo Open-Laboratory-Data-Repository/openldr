@@ -1,4 +1,11 @@
-import { visibleFieldIds as libVisibleFieldIds } from '@openldr/forms/pure';
+import {
+  isCodingAnswer,
+  isEntityAnswer,
+  isMultiValued,
+  isReferenceFieldType,
+  resolveReferenceSource,
+  visibleFieldIds as libVisibleFieldIds,
+} from '@openldr/forms/pure';
 import type { FormField, FormSchema, RuntimeAnswers } from './types';
 
 // ── Visibility ────────────────────────────────────────────────────────────────
@@ -31,6 +38,17 @@ export function validate(schema: FormSchema, answers: RuntimeAnswers): Record<st
     if (field.required && values.length === 0) {
       errors[field.id] = `field ${field.id} is required`;
       continue;
+    }
+
+    // A reference answer must be an object the picker produced — but only where a picker was
+    // actually rendered. FormRuntime falls back to a text input for a reference-family field
+    // that declares no source, so demanding an object there pointed the user at a list that
+    // does not exist. Gate on the same condition FormRuntime uses to choose the control.
+    if (isReferenceFieldType(field.fieldType) && resolveReferenceSource(field).ok && values.length > 0) {
+      if (values.some((v) => !isCodingAnswer(v) && !isEntityAnswer(v))) {
+        errors[field.id] = 'select a value from the list';
+        continue;
+      }
     }
 
     // Numeric constraints (number fieldType)
@@ -83,7 +101,9 @@ export function cleanAnswers(schema: FormSchema, answers: RuntimeAnswers): Runti
     const raw = answers[field.id];
     const values = (raw === undefined ? [] : Array.isArray(raw) ? raw : [raw]).filter((v) => !isEmpty(v));
     if (values.length === 0) continue;
-    out[field.id] = (field.repeatable || field.fieldType === 'multiselect') ? values : values[0];
+    // Same predicate as the picker and the serializer. Collapsing a multi-valued field to
+    // values[0] here silently dropped every test after the first on a Lab order.
+    out[field.id] = isMultiValued(field) ? values : values[0];
   }
 
   return out;

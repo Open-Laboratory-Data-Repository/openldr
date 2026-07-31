@@ -65,10 +65,99 @@ const sampleSchema = {
   updatedAt: NOW,
 } satisfies FormInput['schema'];
 
-function fakeCtx(): AppContext & { audits: AuditInput[] } {
+// A minimal schema with one coding-bound field (ValueSet), used to exercise the
+// `validateCode` dependency closure independently of the entity/`exists` path above.
+const codingSchema = {
+  id: 'organism-report',
+  name: 'Organism report',
+  versionLabel: null,
+  fhirVersion: null,
+  fhirResourceType: null,
+  fhirProfileUrl: null,
+  facilityId: null,
+  fields: [
+    {
+      id: 'organism',
+      fhirPath: null,
+      displayLabel: 'Organism',
+      description: null,
+      fieldType: 'organism' as const,
+      required: true,
+      enabled: true,
+      order: 0,
+      cardinality: { min: 1, max: '1' },
+      section: 'main',
+      valueSetUrl: 'http://example.org/fhir/ValueSet/organisms',
+    },
+  ],
+  sections: [{ id: 'main', label: 'Main', order: 0 }],
+  targetPages: [],
+  languages: ['en'],
+  version: 1,
+  active: true,
+  status: 'draft' as const,
+  createdAt: NOW,
+  updatedAt: NOW,
+} satisfies FormInput['schema'];
+
+// A minimal schema with one required reference field, used to exercise the submit-time
+// reference-validation path (Task 9) independently of sampleSchema's plain text field.
+const referenceSchema = {
+  id: 'lab-order',
+  name: 'Lab order',
+  versionLabel: null,
+  fhirVersion: null,
+  fhirResourceType: null,
+  fhirProfileUrl: null,
+  facilityId: null,
+  fields: [
+    {
+      id: 'patient',
+      fhirPath: null,
+      displayLabel: 'Patient',
+      description: null,
+      fieldType: 'reference' as const,
+      required: true,
+      enabled: true,
+      order: 0,
+      cardinality: { min: 1, max: '1' },
+      section: 'main',
+      referenceTarget: 'Patient',
+    },
+  ],
+  sections: [{ id: 'main', label: 'Main', order: 0 }],
+  targetPages: [],
+  languages: ['en'],
+  version: 1,
+  active: true,
+  status: 'draft' as const,
+  createdAt: NOW,
+  updatedAt: NOW,
+} satisfies FormInput['schema'];
+
+// Task 9: fakeCtx() previously provided no fhirStore/terminology stubs because nothing
+// needed them — the second validator wired into POST /responses (`validateReferences`)
+// was never actually exercised. These record what they were called with (not merely
+// that they were called) so a test can prove argument order, catching e.g. a swapped
+// `exists(resourceType, id)` call site that no type checker would flag (both params
+// are `string`).
+interface FakeFhirStoreCall { resourceType: string; id: string }
+interface FakeValidateCodeCall { valueSetUrl?: string; system?: string; code: string }
+
+function fakeCtx(): AppContext & {
+  audits: AuditInput[];
+  fhirStoreCalls: FakeFhirStoreCall[];
+  fhirStoreExists: { value: boolean };
+  validateCodeCalls: FakeValidateCodeCall[];
+  validateCodeResult: { value: { result: boolean; message: string } };
+} {
   const forms: FormDefinition[] = [];
   const versions = new Map<string, FormVersion[]>();
   const audits: AuditInput[] = [];
+  const fhirStoreCalls: FakeFhirStoreCall[] = [];
+  const fhirStoreExists = { value: true };
+  const validateCodeCalls: FakeValidateCodeCall[] = [];
+  const validateCodeResult = { value: { result: true, message: '' } };
   let seq = 0;
   const now = '2026-01-01T00:00:00.000Z';
 
@@ -219,8 +308,32 @@ function fakeCtx(): AppContext & { audits: AuditInput[] } {
       count: async () => 0,
       get: async () => undefined,
     },
+    fhirStore: {
+      exists: async (resourceType: string, id: string) => {
+        fhirStoreCalls.push({ resourceType, id });
+        return fhirStoreExists.value;
+      },
+    },
+    terminology: {
+      ops: {
+        validateCode: async (input: FakeValidateCodeCall) => {
+          validateCodeCalls.push(input);
+          return validateCodeResult.value;
+        },
+      },
+    },
     audits,
-  } as unknown as AppContext & { audits: AuditInput[] };
+    fhirStoreCalls,
+    fhirStoreExists,
+    validateCodeCalls,
+    validateCodeResult,
+  } as unknown as AppContext & {
+    audits: AuditInput[];
+    fhirStoreCalls: FakeFhirStoreCall[];
+    fhirStoreExists: { value: boolean };
+    validateCodeCalls: FakeValidateCodeCall[];
+    validateCodeResult: { value: { result: boolean; message: string } };
+  };
 }
 
 describe('forms routes', () => {
@@ -259,9 +372,107 @@ describe('forms routes', () => {
     expect(response.statusCode).toBe(201);
     expect(response.json()).toMatchObject({ resourceType: 'QuestionnaireResponse', status: 'completed' });
 
+    // A required field that is absent must be rejected. This previously returned 201 —
+    // the assertion encoded the bug that reference pickers exist to fix.
     const emptyResponse = await app.inject({ method: 'POST', url: `/api/forms/${id}/responses`, payload: { answers: {} } });
-    expect(emptyResponse.statusCode).toBe(201);
-    expect(emptyResponse.json()).toMatchObject({ resourceType: 'QuestionnaireResponse', status: 'completed' });
+    expect(emptyResponse.statusCode).toBe(400);
+    expect(emptyResponse.json().errors).toContainEqual(
+      expect.objectContaining({ fieldId: 'patientId', reason: 'required' }),
+    );
+  });
+
+  it('rejects an unresolved reference answer', async () => {
+    const app = authedApp(fakeCtx());
+    const created = await app.inject({
+      method: 'POST', url: '/api/forms',
+      payload: { name: 'Order', schema: referenceSchema, targetPages: ['forms'] },
+    });
+    const formId = created.json().id as string;
+
+    const res = await app.inject({
+      method: 'POST', url: `/api/forms/${formId}/responses`, payload: { answers: { patient: 'asdf' } },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().errors).toContainEqual(
+      expect.objectContaining({ fieldId: 'patient', reason: 'must be selected from the list' }),
+    );
+  });
+
+  // Task 9 gap: the test above submits a bare string, which `validateAnswers` (the FIRST
+  // validator) rejects before `validateReferences` — and its injected `exists`/`validateCode`
+  // closures — are ever reached. These three tests submit a well-formed reference/coding
+  // answer so the route's second validator, and its dependency wiring, actually run.
+
+  it('rejects a well-formed entity reference answer when the target does not exist', async () => {
+    const ctx = fakeCtx();
+    ctx.fhirStoreExists.value = false;
+    const app = authedApp(ctx);
+    const created = await app.inject({
+      method: 'POST', url: '/api/forms',
+      payload: { name: 'Order', schema: referenceSchema, targetPages: ['forms'] },
+    });
+    const formId = created.json().id as string;
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/forms/${formId}/responses`,
+      payload: { answers: { patient: { reference: 'Patient/ghost', display: null } } },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().errors).toContainEqual(
+      expect.objectContaining({ fieldId: 'patient', reason: 'Patient/ghost does not exist' }),
+    );
+  });
+
+  it('calls ctx.fhirStore.exists with (resourceType, id) in that order — not swapped', async () => {
+    const ctx = fakeCtx();
+    ctx.fhirStoreExists.value = true;
+    const app = authedApp(ctx);
+    const created = await app.inject({
+      method: 'POST', url: '/api/forms',
+      payload: { name: 'Order', schema: referenceSchema, targetPages: ['forms'] },
+    });
+    const formId = created.json().id as string;
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/forms/${formId}/responses`,
+      payload: { answers: { patient: { reference: 'Patient/p1', display: 'Doe Jane' } } },
+    });
+    expect(res.statusCode).toBe(201);
+    // Exact, not "was called": the wiring at the route's call site reads
+    // `exists: (resourceType, id) => ctx.fhirStore.exists(resourceType, id)`. If those two
+    // arguments were ever swapped to `ctx.fhirStore.exists(id, resourceType)`, this fake's
+    // `exists(resourceType, id)` would receive 'p1' as its first (resourceType) parameter
+    // and 'Patient' as its second (id) parameter, and the recorded call would come out as
+    // `{ resourceType: 'p1', id: 'Patient' }` — failing this exact match. Both parameters
+    // are plain `string`, so only a behavioral assertion like this one (not the type
+    // checker) can catch that swap.
+    expect(ctx.fhirStoreCalls).toEqual([{ resourceType: 'Patient', id: 'p1' }]);
+  });
+
+  it('validates a coding-bound answer through the injected validateCode dependency', async () => {
+    const ctx = fakeCtx();
+    ctx.validateCodeResult.value = { result: false, message: 'not a recognized organism code' };
+    const app = authedApp(ctx);
+    const created = await app.inject({
+      method: 'POST', url: '/api/forms',
+      payload: { name: 'Organism report', schema: codingSchema, targetPages: ['forms'] },
+    });
+    const formId = created.json().id as string;
+
+    const res = await app.inject({
+      method: 'POST',
+      url: `/api/forms/${formId}/responses`,
+      payload: { answers: { organism: { system: 'http://example.org/fhir/CodeSystem/organisms', code: 'ECOLI', display: null } } },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().errors).toContainEqual(
+      expect.objectContaining({ fieldId: 'organism', reason: 'not a recognized organism code' }),
+    );
+    expect(ctx.validateCodeCalls).toEqual([
+      { valueSetUrl: 'http://example.org/fhir/ValueSet/organisms', code: 'ECOLI', system: 'http://example.org/fhir/CodeSystem/organisms' },
+    ]);
   });
 
   it('publishes, duplicates, and returns form versions', async () => {

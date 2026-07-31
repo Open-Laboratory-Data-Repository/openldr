@@ -139,7 +139,16 @@ Multi-valued fields hold an array. `CodingAnswer` is already the shape `TermPick
 
 The last row matters: `organism` and `antibiogram` currently fall through to `valueString`, and they get no resolver in v1, so they keep producing bare strings. Routing them into the reference family wholesale would have silently changed their serialization for fields this work does not otherwise touch.
 
-`fromAnswer` reconstructs the object forms, returning `{ system, code, display }` for `valueCoding` and `{ reference, display }` for `valueReference`. Because `fromAnswer` is shared with `select`, it must keep returning a bare code string when `valueCoding` carries no `system` — that is the discriminator between a select answer and a coding-kind reference answer.
+`fromAnswer` reconstructs the object forms, and in both cases the *added* field is the discriminator:
+
+| Decoded from | Rule |
+|---|---|
+| `valueCoding` with `system` | `{ system, code, display }` |
+| `valueCoding` without `system` | bare code string — how `select` answers decode |
+| `valueReference` with `display` | `{ reference, display }` |
+| `valueReference` without `display` | bare reference string — how legacy answers decode |
+
+The two rules are deliberately symmetric. An earlier draft decoded `valueReference` to an object unconditionally, which broke the existing round-trip assertion at `answer-value.test.ts:166` (`rt(field, 'Patient/123')` → `'Patient/123'`). The edge case this leaves — a resolved entity whose display is genuinely null decoding as a string — is acceptable because the picker always sets a display from `surname firstname`.
 
 Retaining the legacy bare-string case means existing stored responses still decode.
 

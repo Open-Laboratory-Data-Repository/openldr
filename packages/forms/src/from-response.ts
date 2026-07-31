@@ -51,6 +51,13 @@ function collect(items: QuestionnaireResponseItem[], info: Map<string, ItemInfo>
  * Hydrate an AnswerState from a QuestionnaireResponse, using its Questionnaire to
  * recover structure (repeatable → array, repeating group → array of instances,
  * section → flat). Inverse of `toQuestionnaireResponse`. Pure.
+ *
+ * **Precondition:** Answers for `select` and `multiselect` fields are expected to
+ * carry no `system` on their `valueCoding`. The presence of a `system` is the
+ * discriminator `fromAnswer` uses to distinguish a coded reference answer (with system)
+ * from a select answer (without system). A FHIR-conformant QuestionnaireResponse from
+ * an external source that sets a system on a select answer will hydrate that value as
+ * an object `{ system, code, display }` rather than a bare code string.
  */
 export function fromQuestionnaireResponse(response: QuestionnaireResponse, questionnaire: Questionnaire): AnswerState {
   const answers: AnswerState = {}

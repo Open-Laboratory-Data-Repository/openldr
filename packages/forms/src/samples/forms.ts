@@ -312,9 +312,13 @@ const orderForm: FormSchema = {
       required: true,
       enabled: true,
       order: 1,
-      cardinality: { min: 0, max: '1' },
+      // A lab order carries several tests. LOINC is the orderable vocabulary; a site with a
+      // curated panel list can point this field at a ValueSet instead, which wins over
+      // referenceTarget.
+      cardinality: { min: 1, max: '*' },
+      referenceMultiple: true,
       section: 'order',
-      referenceTarget: 'ActivityDefinition',
+      referenceTarget: 'http://loinc.org',
       placeholder: 'Search tests…',
     },
     {
@@ -414,7 +418,14 @@ const orderForm: FormSchema = {
       order: 8,
       cardinality: { min: 0, max: '1' },
       section: 'specimen',
-      referenceTarget: 'SpecimenDefinition',
+      // SNOMED CT is the standard vocabulary for specimen type, and it is the canonical url
+      // this repo already uses for SNOMED (terminology-ingest-shared). The previous value,
+      // 'SpecimenDefinition', classified as an ENTITY target with no registered resolver, so
+      // every query on the flagship sample returned a raw "no resolver registered" error row.
+      // No specimen ValueSet is seeded here; a site with a curated list can point this field
+      // at one via valueSetUrl, which wins over referenceTarget.
+      referenceTarget: 'http://snomed.info/sct',
+      placeholder: 'Search specimen types…',
     },
   ],
 }

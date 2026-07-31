@@ -404,6 +404,7 @@ export function ctxWith(status: 'up' | 'down'): AppContext {
     blob: {} as never,
     eventing: {} as never,
     store: {} as never,
+    targetEngine: 'postgres',
     health,
     reporting: {} as never,
     reportRuns: {} as never,

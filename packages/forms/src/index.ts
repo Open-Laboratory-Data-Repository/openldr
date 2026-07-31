@@ -22,3 +22,5 @@ export * from './normalize';
 export * from './samples/forms';
 export * from './store';
 export * from './validate-answers';
+export * from './reference-source';
+export * from './validate-references';

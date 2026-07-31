@@ -1,6 +1,7 @@
 import type { FormField, FormSchema } from './schema/form-schema'
 import type { QuestionnaireResponse, QuestionnaireResponseItem, QuestionnaireResponseItemAnswer } from 'fhir/r4'
 import { toAnswer, type AnswerState } from './answer-value'
+import { isMultiValued } from './reference-source'
 
 /** Coerce a stored value into instance-array form (mirrors renderer formRepeat.asInstances). */
 function asInstances(raw: unknown): unknown[] {
@@ -18,7 +19,9 @@ const nonNull = (a: QuestionnaireResponseItemAnswer | null): a is QuestionnaireR
 
 /** QR items for one scalar/repeatable field, given its value source (form values or a group instance). */
 function scalarItems(field: FormField, source: Record<string, unknown>): QuestionnaireResponseItem[] {
-  if (field.repeatable || field.fieldType === 'multiselect') {
+  // isMultiValued, not a local predicate: a field the picker treats as multi-valued must take
+  // the array branch here too, or toAnswer receives the array itself and String()s it.
+  if (isMultiValued(field)) {
     const answer = asInstances(source[field.id]).map((v) => toAnswer(field, v)).filter(nonNull)
     return answer.length ? [{ linkId: field.id, answer }] : []
   }

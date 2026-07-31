@@ -10,8 +10,10 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { isMultiValued, resolveReferenceSource } from '@openldr/forms/pure';
 import type { FormField, FormSchema, FormSection, RuntimeAnswers } from './types';
 import { cleanAnswers, fieldLabel, groupChildren, validate, visibleIds } from './runtime';
+import { ReferencePicker, type ReferenceValue } from './ReferencePicker';
 
 // ── Public component ──────────────────────────────────────────────────────────
 
@@ -23,6 +25,8 @@ export function FormRuntime({
   initialAnswers,
   fieldWarnings,
   formId,
+  formDefinitionId,
+  preview,
 }: {
   schema: FormSchema;
   submitLabel?: string;
@@ -31,7 +35,15 @@ export function FormRuntime({
   initialAnswers?: RuntimeAnswers;
   /** @deprecated No longer used to render markers in preview; kept for API compatibility. */
   fieldWarnings?: Record<string, 'error' | 'warning'>;
+  /**
+   * DOM id set on the rendered `<form>` element, so a ⋯ menu item outside the form can call
+   * `requestSubmit()` on it. This is NOT a form-definition id — see `formDefinitionId`.
+   */
   formId?: string;
+  /** Id of the stored form definition, used to scope reference searches to this form's fields. */
+  formDefinitionId?: string;
+  /** Builder live preview: reference fields search the unsaved schema via the preview endpoint. */
+  preview?: boolean;
 }): JSX.Element {
   const [answers, setAnswers] = useState<RuntimeAnswers>(initialAnswers ?? {});
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -122,6 +134,8 @@ export function FormRuntime({
         error={errors[field.id]}
         onChange={setField}
         errors={errors}
+        formDefinitionId={formDefinitionId}
+        preview={preview}
       />
     ));
   }
@@ -185,6 +199,8 @@ function FieldRow({
   error,
   onChange,
   errors,
+  formDefinitionId,
+  preview,
 }: {
   field: FormField;
   schema: FormSchema;
@@ -193,6 +209,8 @@ function FieldRow({
   error?: string;
   onChange: (fieldId: string, value: unknown) => void;
   errors: Record<string, string>;
+  formDefinitionId?: string;
+  preview?: boolean;
 }) {
   const label = fieldLabel(field);
 
@@ -211,6 +229,8 @@ function FieldRow({
             error={errors[child.id]}
             onChange={onChange}
             errors={errors}
+            formDefinitionId={formDefinitionId}
+            preview={preview}
           />
         ))}
       </fieldset>
@@ -249,7 +269,13 @@ function FieldRow({
         ) : null}
       </Label>
       <div>
-        <FieldControl field={field} value={answers[field.id]} onChange={(v) => onChange(field.id, v)} />
+        <FieldControl
+          field={field}
+          value={answers[field.id]}
+          onChange={(v) => onChange(field.id, v)}
+          formDefinitionId={formDefinitionId}
+          preview={preview}
+        />
         {error ? <p className="mt-1 text-xs text-destructive" role="alert">{error}</p> : null}
       </div>
     </div>
@@ -262,10 +288,14 @@ function FieldControl({
   field,
   value,
   onChange,
+  formDefinitionId,
+  preview,
 }: {
   field: FormField;
   value: unknown;
   onChange: (value: unknown) => void;
+  formDefinitionId?: string;
+  preview?: boolean;
 }) {
   const label = fieldLabel(field);
 
@@ -376,35 +406,68 @@ function FieldControl({
         />
       );
 
-    // Stub types — render a basic text Input with placeholder
+    // reference always uses the picker. facility/organism/antibiogram use it only when the
+    // field actually declares a source; otherwise they keep the historical text input.
     case 'reference':
     case 'facility':
     case 'organism':
-    case 'antibiogram':
+    case 'antibiogram': {
+      const resolved = resolveReferenceSource(field);
+      if (field.fieldType === 'reference' || resolved.ok) {
+        const multiple = isMultiValued(field);
+        return (
+          <ReferencePicker
+            field={field}
+            formDefinitionId={formDefinitionId}
+            preview={preview}
+            multiple={multiple}
+            value={(value ?? null) as ReferenceValue | ReferenceValue[] | null}
+            onChange={(v) => onChange(v)}
+          />
+        );
+      }
       return (
-        <Input
-          id={field.id}
-          type="text"
-          value={value != null ? String(value) : ''}
+        <TextFallback
+          field={field}
+          value={value}
+          onChange={onChange}
+          label={label}
           placeholder={field.placeholder ?? `Search ${field.fieldType}...`}
-          onChange={(e) => onChange(e.target.value || undefined)}
-          aria-label={label}
-          required={field.required}
         />
       );
+    }
 
     // text, phone, email, address, identifier — all plain text inputs
     default:
-      return (
-        <Input
-          id={field.id}
-          type={field.fieldType === 'email' ? 'email' : field.fieldType === 'phone' ? 'tel' : 'text'}
-          value={value != null ? String(value) : ''}
-          placeholder={field.placeholder}
-          onChange={(e) => onChange(e.target.value || undefined)}
-          aria-label={label}
-          required={field.required}
-        />
-      );
+      return <TextFallback field={field} value={value} onChange={onChange} label={label} />;
   }
+}
+
+// ── Text fallback (shared by the default text-like types and the un-sourced reference stubs) ──
+
+function TextFallback({
+  field,
+  value,
+  onChange,
+  label,
+  placeholder,
+}: {
+  field: FormField;
+  value: unknown;
+  onChange: (value: unknown) => void;
+  label: string;
+  /** Overrides `field.placeholder` — used by the reference-family fallback's "Search ..." hint. */
+  placeholder?: string;
+}): JSX.Element {
+  return (
+    <Input
+      id={field.id}
+      type={field.fieldType === 'email' ? 'email' : field.fieldType === 'phone' ? 'tel' : 'text'}
+      value={value != null ? String(value) : ''}
+      placeholder={placeholder ?? field.placeholder}
+      onChange={(e) => onChange(e.target.value || undefined)}
+      aria-label={label}
+      required={field.required}
+    />
+  );
 }

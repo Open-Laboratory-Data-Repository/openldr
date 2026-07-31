@@ -108,3 +108,80 @@ describe('translate', () => {
     expect(r.matches).toEqual([]);
   });
 });
+
+describe('expand filter', () => {
+  const panel: ConceptRecord[] = [
+    { system: 'http://loinc.org', code: '718-7',  display: 'Hemoglobin', status: 'ACTIVE', properties: null },
+    { system: 'http://loinc.org', code: '2345-7', display: 'Glucose',    status: 'ACTIVE', properties: null },
+  ];
+  const vsResource = {
+    resourceType: 'ValueSet', url: 'http://x/vs',
+    compose: { include: [{ system: 'http://loinc.org' }] },
+  };
+  const ops = createOperations(memSource(panel, { 'http://x/vs': vsResource }));
+
+  it('matches on display, case-insensitively', async () => {
+    const vs = await ops.expand('http://x/vs', { filter: 'hemo' });
+    expect(vs.expansion?.contains?.map((c) => c.display)).toEqual(['Hemoglobin']);
+  });
+
+  it('matches on code', async () => {
+    const vs = await ops.expand('http://x/vs', { filter: '2345-7' });
+    expect(vs.expansion?.contains?.map((c) => c.code)).toEqual(['2345-7']);
+  });
+
+  it('reports the filtered total, not the unfiltered one', async () => {
+    expect((await ops.expand('http://x/vs', { filter: 'hemo' })).expansion?.total).toBe(1);
+  });
+
+  it('returns everything when no filter is given', async () => {
+    expect((await ops.expand('http://x/vs', {})).expansion?.contains).toHaveLength(2);
+  });
+
+  it('applies the filter before paginating, not after', async () => {
+    // Large fixture: 5 concepts arranged so a match sits outside the unfiltered
+    // first page but inside the filtered first page.
+    // Unfiltered order: [Apricot, Blueberry, Carrot, Bluefish, Date]
+    // Filter 'blue': [Blueberry, Bluefish]
+    // If filter-then-paginate (correct): paginate [Blueberry, Bluefish] with count=2 → [Blueberry, Bluefish]
+    // If paginate-then-filter (wrong): paginate [Apricot, Blueberry] with count=2, then filter → [Blueberry] only (1 match, not 2)
+    const pagingTestConcepts: ConceptRecord[] = [
+      { system: 'http://test.org', code: 'C001', display: 'Apricot',      status: 'ACTIVE', properties: null },
+      { system: 'http://test.org', code: 'C002', display: 'Blueberry',    status: 'ACTIVE', properties: null },
+      { system: 'http://test.org', code: 'C003', display: 'Carrot',       status: 'ACTIVE', properties: null },
+      { system: 'http://test.org', code: 'C004', display: 'Bluefish',     status: 'ACTIVE', properties: null },
+      { system: 'http://test.org', code: 'C005', display: 'Date',         status: 'ACTIVE', properties: null },
+    ];
+    const pagingTestVs = {
+      resourceType: 'ValueSet', url: 'http://test.org/paging-vs',
+      compose: { include: [{ system: 'http://test.org' }] },
+    };
+    const pagingOps = createOperations(memSource(pagingTestConcepts, { 'http://test.org/paging-vs': pagingTestVs }));
+
+    const vs = await pagingOps.expand('http://test.org/paging-vs', { filter: 'blue', count: 2, offset: 0 });
+    // With correct ordering (filter-then-paginate), we get both matches: C002, C004
+    expect(vs.expansion?.contains?.map((c) => c.code)).toEqual(['C002', 'C004']);
+    // If paginating first, we'd paginate to [C001, C002], then filter to [C002], returning only 1 code
+  });
+
+  it('reports filtered total distinct from page count when filter is small', async () => {
+    // Separate fixture to verify that total reflects the filtered set, not the page
+    const pagingTestConcepts: ConceptRecord[] = [
+      { system: 'http://test.org', code: 'C001', display: 'Apricot',      status: 'ACTIVE', properties: null },
+      { system: 'http://test.org', code: 'C002', display: 'Blueberry',    status: 'ACTIVE', properties: null },
+      { system: 'http://test.org', code: 'C003', display: 'Carrot',       status: 'ACTIVE', properties: null },
+      { system: 'http://test.org', code: 'C004', display: 'Bluefish',     status: 'ACTIVE', properties: null },
+      { system: 'http://test.org', code: 'C005', display: 'Date',         status: 'ACTIVE', properties: null },
+    ];
+    const pagingTestVs = {
+      resourceType: 'ValueSet', url: 'http://test.org/paging-vs2',
+      compose: { include: [{ system: 'http://test.org' }] },
+    };
+    const pagingOps = createOperations(memSource(pagingTestConcepts, { 'http://test.org/paging-vs2': pagingTestVs }));
+
+    const vs = await pagingOps.expand('http://test.org/paging-vs2', { filter: 'blue', count: 1, offset: 0 });
+    // total should be 2 (the number of matches: C002 and C004), but contains should have only 1 (the page)
+    expect(vs.expansion?.total).toBe(2);
+    expect(vs.expansion?.contains).toHaveLength(1);
+  });
+});

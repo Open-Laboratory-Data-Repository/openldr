@@ -2,6 +2,7 @@ import type { FormField, FormSchema, FormSection, VisibilityRule } from './schem
 import type { Coding, Extension, Questionnaire, QuestionnaireItem } from 'fhir/r4'
 import { fieldTypeNeedsHint, nativeItemType, toQStatus } from './scalar-types'
 import { toEnableWhen } from './visibility'
+import { isMultiValued } from './reference-source'
 import { hasKeys, translationElement } from './translations'
 import {
   EXT_CORLIX_BINDING_STRENGTH,
@@ -122,7 +123,9 @@ function buildItem(field: FormField, childrenByGroup: Map<string, FormField[]>):
     type: isChoice && field.allowCustomValue ? 'open-choice' : nativeItemType(field.fieldType),
   }
   if (field.required) item.required = true
-  if (field.repeatable || field.fieldType === 'multiselect') item.repeats = true
+  // Same predicate as the response serializer and the runtime picker: `repeats` must be true
+  // for every field that can hold more than one answer, cardinality included.
+  if (isMultiValued(field)) item.repeats = true
   if (field.code?.length) {
     item.code = field.code.map((c) => ({ system: c.system, code: c.code, ...(c.display ? { display: c.display } : {}) }))
   }
