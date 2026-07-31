@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { sampleForms } from './forms';
 import { FormSchema } from '../schema/form-schema';
 import { toQuestionnaire } from '../to-questionnaire';
+import { resolveReferenceSource } from '../reference-source';
 
 describe('sample forms', () => {
   it('parse against the schema and export to Questionnaire', () => {
@@ -38,5 +39,25 @@ describe('sample forms', () => {
   it('users form has no roles field — role assignment is a dedicated control outside the template', () => {
     const users = sampleForms.find((f) => f.id === 'sample-users');
     expect(users?.fields.some((x) => x.apiProperty === 'roles')).toBe(false);
+  });
+});
+
+describe('Lab order reference fields', () => {
+  const labOrder = sampleForms.find((f) => f.name === 'Lab order')!;
+  const field = (id: string) => labOrder.fields.find((f) => f.id === id)!;
+
+  it('binds patient to the Patient entity', () => {
+    expect(resolveReferenceSource(field('patient')))
+      .toEqual({ ok: true, source: { kind: 'entity', target: 'Patient' } });
+  });
+
+  it('binds tests to a coding system rather than an unregistered entity', () => {
+    const r = resolveReferenceSource(field('tests'));
+    expect(r.ok).toBe(true);
+    expect(r.ok && r.source.kind).toBe('coding');
+  });
+
+  it('allows more than one test per order', () => {
+    expect(field('tests').cardinality.max).not.toBe('1');
   });
 });

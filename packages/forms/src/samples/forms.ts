@@ -312,9 +312,13 @@ const orderForm: FormSchema = {
       required: true,
       enabled: true,
       order: 1,
-      cardinality: { min: 0, max: '1' },
+      // A lab order carries several tests. LOINC is the orderable vocabulary; a site with a
+      // curated panel list can point this field at a ValueSet instead, which wins over
+      // referenceTarget.
+      cardinality: { min: 1, max: '*' },
+      referenceMultiple: true,
       section: 'order',
-      referenceTarget: 'ActivityDefinition',
+      referenceTarget: 'http://loinc.org',
       placeholder: 'Search tests…',
     },
     {
