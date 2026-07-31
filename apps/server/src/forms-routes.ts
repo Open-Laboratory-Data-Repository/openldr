@@ -340,7 +340,9 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
     }
     if (outcome.status !== 'completed') {
       reply.code(500);
-      return { ok: false, runId: outcome.runId, correlationId: outcome.correlationId, status: outcome.status, error: outcome.error };
+      // redact, never verbatim: a Persist Store or DB-node failure can carry a connection
+      // string, and `redact` masks DSN userinfo, `password=` and Authorization tokens.
+      return { ok: false, runId: outcome.runId, correlationId: outcome.correlationId, status: outcome.status, error: redact(outcome.error ?? '') };
     }
 
     await recordAudit(ctx, req, {

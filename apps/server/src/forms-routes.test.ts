@@ -879,4 +879,35 @@ describe('forms routes', () => {
     expect(res.statusCode).toBe(500);
     expect(res.json()).toMatchObject({ ok: false, runId: 'run-2' });
   });
+
+  // Fix 3: the run error reaches the client, and a Persist Store / DB-node failure can carry a
+  // connection string. The code this route replaced ran errors through `redact()`; returning
+  // `outcome.error` verbatim was a real regression.
+  it('redacts credentials out of a failed run error', async () => {
+    const ctx = fakeCtx();
+    (ctx as any).workflows = {
+      runner: {
+        runAndRecord: async () => ({
+          runId: 'run-3',
+          correlationId: null,
+          status: 'failed',
+          error: 'connect ECONNREFUSED postgres://openldr:sup3rs3cret@db:5432/openldr (password=sup3rs3cret)',
+        }),
+      },
+    };
+    const app = authedApp(ctx);
+    const created = await app.inject({ method: 'POST', url: '/api/forms', payload: { name: 'O', schema: referenceSchema, targetPages: ['forms'] } });
+    const formId = created.json().id as string;
+
+    const res = await app.inject({
+      method: 'POST', url: `/api/forms/${formId}/responses`,
+      payload: { answers: { patient: { reference: 'Patient/p1', display: 'Doe Jane' } } },
+    });
+
+    expect(res.statusCode).toBe(500);
+    expect(res.json().error).not.toContain('sup3rs3cret');
+    expect(res.json().error).toContain('***');
+    // Still diagnosable: only the credentials are masked, not the whole message.
+    expect(res.json().error).toContain('ECONNREFUSED');
+  });
 });
