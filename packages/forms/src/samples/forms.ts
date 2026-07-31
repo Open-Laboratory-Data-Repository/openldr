@@ -418,7 +418,14 @@ const orderForm: FormSchema = {
       order: 8,
       cardinality: { min: 0, max: '1' },
       section: 'specimen',
-      referenceTarget: 'SpecimenDefinition',
+      // SNOMED CT is the standard vocabulary for specimen type, and it is the canonical url
+      // this repo already uses for SNOMED (terminology-ingest-shared). The previous value,
+      // 'SpecimenDefinition', classified as an ENTITY target with no registered resolver, so
+      // every query on the flagship sample returned a raw "no resolver registered" error row.
+      // No specimen ValueSet is seeded here; a site with a curated list can point this field
+      // at one via valueSetUrl, which wins over referenceTarget.
+      referenceTarget: 'http://snomed.info/sct',
+      placeholder: 'Search specimen types…',
     },
   ],
 }

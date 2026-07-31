@@ -57,6 +57,11 @@ describe('Lab order reference fields', () => {
     expect(r.ok && r.source.kind).toBe('coding');
   });
 
+  it('binds specimen type to a coding system rather than an unregistered entity', () => {
+    const r = resolveReferenceSource(field('fld-ord-specimen-type'));
+    expect(r).toEqual({ ok: true, source: { kind: 'coding', mode: 'codesystem', system: 'http://snomed.info/sct' } });
+  });
+
   it('allows more than one test per order', () => {
     expect(field('tests').cardinality.max).not.toBe('1');
   });
