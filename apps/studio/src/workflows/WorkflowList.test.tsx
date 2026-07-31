@@ -8,10 +8,10 @@ vi.mock('react-router-dom', async (orig) => {
   return { ...actual, useNavigate: () => navigateMock };
 });
 vi.mock('@/auth/AuthProvider', () => ({ useAuth: () => ({ user: { id: 'me', username: 'admin', roles: ['lab_admin'] }, hasCapability: () => true }) }));
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() }, Toaster: () => null }));
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() }, Toaster: () => null }));
 vi.mock('@/api', async (orig) => {
   const actual = await orig<typeof import('@/api')>();
-  return { ...actual, fetchWorkflows: vi.fn(), createWorkflow: vi.fn(), deleteWorkflow: vi.fn() };
+  return { ...actual, fetchWorkflows: vi.fn(), createWorkflow: vi.fn(), deleteWorkflow: vi.fn(), resetWorkflow: vi.fn() };
 });
 import * as api from '@/api';
 import { WorkflowList } from './WorkflowList';
