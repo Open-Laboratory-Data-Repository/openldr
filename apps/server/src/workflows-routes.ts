@@ -259,20 +259,31 @@ export function registerWorkflowRoutes(
     const before = await ctx.workflows.store.get(id);
     if (!before) { reply.code(404); return { error: 'workflow not found' }; }
 
-    const { workflow, secretPreserved } = rebuildSystemWorkflow(before as never);
-    await ctx.workflows.store.update(id, workflow);
-    // Re-sync the in-memory webhook/schedule registries, same as create/update — otherwise
-    // a reset that fixes a mangled path in storage would leave the RUNNING server still
-    // routing on the stale (mangled) path until some other save happened.
-    await syncWorkflowTriggers(ctx, workflow);
-    ctx.workflows.runner.setIngestWorkflowIds(await listIngestWorkflowIds(ctx));
-    ctx.workflows.runner.setEventWorkflowIds(await listEventWorkflowIds(ctx));
-    void ctx.workflows.listeners.reconcile().catch((err) => ctx.logger.warn({ err }, 'listener reconcile failed'));
-    await recordAudit(ctx, req, {
-      action: 'workflow.reset', entityType: 'workflow', entityId: id,
-      before, after: workflow, metadata: { secretPreserved },
-    });
-    return { ok: true, secretPreserved };
+    try {
+      const { workflow, secretPreserved } = rebuildSystemWorkflow(before as never);
+      // SEC-06: reset is a WRITE PATH and must seal like create/update. rebuildSystemWorkflow
+      // only carries over an existing `{ secretRef }`; when there was none (the gutted/mangled
+      // graph reset exists to repair) the rebuilt graph holds the seed's freshly minted
+      // PLAINTEXT webhook secret. Persisting/auditing that would put a live credential in
+      // cleartext into workflows.definition, into audit_events, and into the unredacted
+      // GET /api/workflows/:id detail response. Seal first, persist refs only — and the seal
+      // also GCs (deleteExcept) any secret rows the mangled graph left behind whose nodes are
+      // not in the restored default.
+      const definition = (await extractWorkflowSecrets(ctx, id, workflow.definition)) as typeof workflow.definition;
+      const updated = await ctx.workflows.store.update(id, { ...workflow, definition });
+      // Re-sync the in-memory webhook/schedule registries, same as create/update — otherwise
+      // a reset that fixes a mangled path in storage would leave the RUNNING server still
+      // routing on the stale (mangled) path until some other save happened.
+      await syncWorkflowTriggers(ctx, updated);
+      ctx.workflows.runner.setIngestWorkflowIds(await listIngestWorkflowIds(ctx));
+      ctx.workflows.runner.setEventWorkflowIds(await listEventWorkflowIds(ctx));
+      void ctx.workflows.listeners.reconcile().catch((err) => ctx.logger.warn({ err }, 'listener reconcile failed'));
+      await recordAudit(ctx, req, {
+        action: 'workflow.reset', entityType: 'workflow', entityId: id,
+        before, after: updated, metadata: { secretPreserved },
+      });
+      return { ok: true, secretPreserved };
+    } catch (err) { return mapError(err, reply); }
   });
 
   // SSE execution. POST so the client can pass an optional trigger `input` body.
