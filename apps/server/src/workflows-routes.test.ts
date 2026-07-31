@@ -1221,6 +1221,30 @@ describe('workflow reset — SEC-06 sealing (no plaintext secret persisted or au
     expect(stored.value).toBe('live-plaintext-token');
   });
 
+  // The persisted half of this scenario is covered above ('carries a PLAINTEXT stored webhook
+  // secret through the reset, sealed'); the audit event is a SEPARATE write path
+  // (recordAuditEvent does no masking of its own) and previously carried the plaintext token
+  // verbatim in `before` — a live credential, since reset now CARRIES it over instead of
+  // invalidating it, readable by anyone holding audit.view (including system_auditor).
+  it('masks a plaintext webhook secret out of the reset audit event before-image', async () => {
+    const ctx = fakeCtx();
+    (ctx as any).workflows.store.get = async () => ({
+      id: 'wf-ingest', name: 'unsealed',
+      definition: { nodes: [{ id: 't', type: 'webhook', data: { templateId: 'webhook-trigger', secret: 'live-plaintext-token' } }], edges: [] },
+    });
+    (ctx as any).workflows.store.update = async (_id: string, wf: any) => wf;
+    const app = resetApp(ctx);
+
+    const res = await app.inject({ method: 'POST', url: '/api/workflows/wf-ingest/reset' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ ok: true, secretPreserved: true });
+
+    const evt = ctx.__auditEvents.find((e: any) => e.action === 'workflow.reset');
+    expect(evt).toBeTruthy();
+    expect(JSON.stringify(evt.before)).not.toContain('live-plaintext-token');
+    expect(JSON.stringify(evt)).not.toContain('live-plaintext-token');
+  });
+
   it('GCs secret rows orphaned by the restored graph (deleteExcept runs)', async () => {
     const ctx = fakeCtx();
     // Two rows exist for wf-ingest: the webhook token (carried over) and one belonging to an

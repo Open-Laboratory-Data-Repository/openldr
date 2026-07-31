@@ -278,9 +278,21 @@ export function registerWorkflowRoutes(
       ctx.workflows.runner.setIngestWorkflowIds(await listIngestWorkflowIds(ctx));
       ctx.workflows.runner.setEventWorkflowIds(await listEventWorkflowIds(ctx));
       void ctx.workflows.listeners.reconcile().catch((err) => ctx.logger.warn({ err }, 'listener reconcile failed'));
+      // The `before` image can hold a LIVE plaintext secret: a graph seeded before SEC-06,
+      // imported, or otherwise saved by a path that skipped extractWorkflowSecrets keeps its
+      // webhook token as plaintext, and reset now CARRIES that value over (rather than minting a
+      // fresh one), so the token stays in force after this audit row is written. `recordAudit`
+      // does no masking of its own, and system_auditor ("Read-only oversight plus the audit log")
+      // holds audit.view — so an unmasked `before` would put a working credential in front of a
+      // role that is documented as read-only. Mask it through the SAME secret-field locator the
+      // LIST route uses, rather than hand-rolling a second walk that could drift from it.
+      // `updated` (the after image) needs no such treatment: it is built from a definition that
+      // already went through extractWorkflowSecrets before being persisted, so it only ever holds
+      // refs.
       await recordAudit(ctx, req, {
         action: 'workflow.reset', entityType: 'workflow', entityId: id,
-        before, after: updated, metadata: { secretPreserved },
+        before: { ...before, definition: redactWorkflowSecrets(before.definition) },
+        after: updated, metadata: { secretPreserved },
       });
       return { ok: true, secretPreserved };
     } catch (err) { return mapError(err, reply); }
