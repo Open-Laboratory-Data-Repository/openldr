@@ -133,7 +133,7 @@ export const rxnormAdapter: OntologyAdapter = {
       let batch: ConceptRecord[] = [];
       for (const [rxcui, concept] of concepts) {
         if (!concept.tty) continue; // semantic-TTY drug concepts only
-        batch.push({ system: url, code: rxcui, display: concept.display, status: 'active', properties: { tty: concept.tty } });
+        batch.push({ system: url, code: rxcui, display: concept.display, status: 'ACTIVE', properties: { tty: concept.tty } });
         if (batch.length >= 1000) {
           await conceptSink(batch);
           batch = [];

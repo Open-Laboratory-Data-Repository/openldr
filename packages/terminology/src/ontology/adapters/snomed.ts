@@ -66,7 +66,7 @@ export const snomedAdapter: OntologyAdapter = {
       const url = canonicalSystemUrl('snomed')!;
       let batch: ConceptRecord[] = [];
       for (const [code, fsn] of names) {
-        batch.push({ system: url, code, display: fsn, status: 'active', properties: { semanticTag: parseSemanticTag(fsn), fsn } });
+        batch.push({ system: url, code, display: fsn, status: 'ACTIVE', properties: { semanticTag: parseSemanticTag(fsn), fsn } });
         if (batch.length >= 1000) {
           await conceptSink(batch);
           batch = [];

@@ -47,7 +47,10 @@ describe('snomedAdapter', () => {
     const concepts: any[] = [];
     await snomedAdapter.buildIndex(distribution, collected.writer, () => {}, async (rows) => { concepts.push(...rows); });
     const blood = concepts.find((c) => c.code === '119297000');
-    expect(blood).toMatchObject({ system: canonicalSystemUrl('snomed'), display: 'Blood specimen (specimen)', status: 'active' });
+    // Uppercase: status is compared case-sensitively downstream (valueset expansion gates on
+    // `status = 'ACTIVE'`), and every other concept source writes uppercase. This adapter
+    // emitting lowercase made all SNOMED concepts invisible to activeOnly expansion.
+    expect(blood).toMatchObject({ system: canonicalSystemUrl('snomed'), display: 'Blood specimen (specimen)', status: 'ACTIVE' });
     expect(blood.properties).toMatchObject({ semanticTag: 'specimen', fsn: 'Blood specimen (specimen)' });
     // every active FSN'd concept is emitted (fuller than the tree node set)
     expect(concepts.length).toBeGreaterThanOrEqual(collected.nodes.length);
