@@ -97,4 +97,70 @@ describe('ReferencePicker', () => {
     await user.type(screen.getByRole('combobox'), 'doe');
     expect(await screen.findByText(/boom/i)).toBeInTheDocument();
   });
+
+  it('ignores a stale response that resolves after a newer one', async () => {
+    const staleResult = {
+      kind: 'entity' as const,
+      rows: [{ reference: 'Patient/stale', display: 'Stale Match', secondary: null }],
+      total: 1,
+    };
+    const freshResult = {
+      kind: 'entity' as const,
+      rows: [{ reference: 'Patient/fresh', display: 'Fresh Match', secondary: null }],
+      total: 1,
+    };
+    // First call (broader query) resolves slowly; second call (narrower query) resolves quickly.
+    // Without the generation guard, the slow-but-first promise settles LAST and its
+    // setRows(...) call clobbers the fresh rows already on screen -- so a naive
+    // `waitFor(() => expect(screen.getByText('Fresh Match')).toBeInTheDocument())`
+    // would pass right up until the stale promise resolves and then silently regress.
+    // Asserting the stale text is absent *after* that slow promise has settled is what
+    // actually falsifies the no-guard behavior.
+    let resolveStale!: (v: typeof staleResult) => void;
+    const stalePromise = new Promise<typeof staleResult>((resolve) => { resolveStale = resolve; });
+    vi.mocked(referenceSearch)
+      .mockImplementationOnce(() => stalePromise)
+      .mockImplementationOnce(() => Promise.resolve(freshResult));
+
+    const user = userEvent.setup();
+    render(<ReferencePicker field={field} formId="f1" multiple={false} value={null} onChange={() => {}} />);
+
+    const combobox = screen.getByRole('combobox');
+    await user.type(combobox, 'do');
+    await waitFor(() => expect(referenceSearch).toHaveBeenCalledTimes(1));
+
+    await user.clear(combobox);
+    await user.type(combobox, 'doe');
+    await waitFor(() => expect(referenceSearch).toHaveBeenCalledTimes(2));
+
+    // The fresh (second) response wins because it resolved first.
+    await waitFor(() => expect(screen.getByText('Fresh Match')).toBeInTheDocument());
+
+    // Now let the slow, stale (first) response settle. If the component lacks a
+    // generation guard, this resolves and overwrites the rows with the stale result.
+    resolveStale(staleResult);
+    await waitFor(() => expect(referenceSearch).toHaveBeenCalledTimes(2));
+    // Flush microtasks so the (would-be) stale setRows has a chance to apply.
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(screen.getByText('Fresh Match')).toBeInTheDocument();
+    expect(screen.queryByText('Stale Match')).not.toBeInTheDocument();
+  });
+
+  it('sets aria-activedescendant to the keyboard-active option id', async () => {
+    vi.mocked(referenceSearch).mockResolvedValue(entityResult);
+    const user = userEvent.setup();
+    render(<ReferencePicker field={field} formId="f1" multiple={false} value={null} onChange={() => {}} />);
+
+    const combobox = screen.getByRole('combobox');
+    await user.type(combobox, 'doe');
+    const option = await screen.findByText('Doe Jane');
+
+    expect(combobox).not.toHaveAttribute('aria-activedescendant');
+
+    await user.keyboard('{ArrowDown}');
+    const optionEl = option.closest('[role="option"]') as HTMLElement;
+    expect(optionEl).toHaveAttribute('id');
+    expect(combobox).toHaveAttribute('aria-activedescendant', optionEl.id);
+  });
 });

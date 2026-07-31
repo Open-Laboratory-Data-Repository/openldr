@@ -43,24 +43,28 @@ export function ReferencePicker({ field, formId, multiple, value, onChange }: {
   const [active, setActive] = useState(-1);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
   const containerRef = useRef<HTMLDivElement>(null);
+  const requestIdRef = useRef(0);
 
   const selected: ReferenceValue[] = value == null ? [] : Array.isArray(value) ? value : [value];
 
   const search = useCallback(async (q: string) => {
     const trimmed = q.trim();
     if (trimmed.length < 2) { setRows([]); setError(null); return; }
+    const requestId = ++requestIdRef.current;
     setBusy(true); setError(null);
     try {
       const res = formId
         ? await referenceSearch(formId, field.id, { q: trimmed })
         : await referenceSearchPreview(field, { q: trimmed });
+      if (requestIdRef.current !== requestId) return;
       setRows(toRows(res));
       setActive(-1);
     } catch (e) {
+      if (requestIdRef.current !== requestId) return;
       setError(e instanceof Error ? e.message : String(e));
       setRows([]);
     } finally {
-      setBusy(false);
+      if (requestIdRef.current === requestId) setBusy(false);
     }
   }, [field, formId]);
 
@@ -131,6 +135,7 @@ export function ReferencePicker({ field, formId, multiple, value, onChange }: {
           role="combobox"
           aria-expanded={open}
           aria-controls={`${field.id}-reference-listbox`}
+          aria-activedescendant={active >= 0 && rows[active] ? `${field.id}-reference-option-${active}` : undefined}
           id={field.id}
           value={query}
           onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
@@ -160,6 +165,7 @@ export function ReferencePicker({ field, formId, multiple, value, onChange }: {
           {!error && rows.map((r, i) => (
             <button
               key={r.key}
+              id={`${field.id}-reference-option-${i}`}
               type="button"
               role="option"
               aria-selected={i === active}
