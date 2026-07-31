@@ -75,7 +75,9 @@ The route keeps its existing 400 behaviour for invalid answers. Persistence is a
 
 The Persist Store node stamps `source` from static node config (`webhook-ingest`). Manual capture must be distinguishable from LIMS/CDR data and must record who typed it.
 
-The route passes a provenance override through the run input: `sourceSystem: 'form-capture'` plus the submitting user as actor. The Persist Store node prefers a source supplied on the run input and falls back to its configured `data.config.source` when absent, so the webhook path is unchanged and no seeded graph needs editing.
+The route passes a provenance override through the run input: `sourceSystem: 'form-capture'`. The Persist Store node prefers a source supplied on the run input and falls back to its configured `data.config.source` when absent, so the webhook path is unchanged and no seeded graph needs editing.
+
+**The submitting user is recorded on `QuestionnaireResponse.author`, not on provenance.** `Provenance` carries only `sourceSystem`, `pluginId`, `pluginVersion` and `batchId`; adding an actor there would mean a migration touching `fhir.fhir_resources` and every flat table. `QuestionnaireResponse.author` is FHIR's own field for "who filled this in", the QR is already being persisted as the record of what was typed, and the route additionally records the real request actor on its audit event. That covers traceability with no schema change.
 
 **Mechanism.** The override travels on the run input alongside the envelope rather than in the node graph, because the graph is operator-editable and provenance must not be. Concretely: the runner's input carries a reserved key the Persist Store handler reads before falling back to node config. The handler must ignore an override arriving from a *webhook* payload — otherwise an external caller could forge `source: 'form-capture'` and disguise machine data as hand-entered. Only an in-process invocation may set it.
 
