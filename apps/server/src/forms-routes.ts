@@ -69,7 +69,16 @@ function extractionContextFor(schema: FormSchema, answers: Record<string, unknow
 // even though a plain draft<->archived toggle is arguably a lesser action. This avoids a custom
 // role holding forms.edit-without-forms.publish being able to publish via this side door; no
 // system-role preset is harmed since every preset that holds forms.edit also holds forms.publish.
+//
+// SUBMIT (forms.submit) is separate from VIEW on purpose. POST /:id/responses was a read-only
+// echo when the gates above were written — it validated, built a QuestionnaireResponse and
+// returned it, storing nothing — so gating it on forms.view cost nothing. It now runs the
+// submission through the ingest pipeline and WRITES clinical records to fhir_resources and the
+// flat read model, and forms.view is held by every preset including system_auditor
+// ("Read-only oversight plus the audit log") and data_analyst. Data entry therefore gets its
+// own capability; every other forms route keeps the gate it had.
 const VIEW = { preHandler: requireCapability('forms.view') };
+const SUBMIT = { preHandler: requireCapability('forms.submit') };
 const EDIT = { preHandler: requireCapability('forms.edit') };
 const PUBLISH = { preHandler: requireCapability('forms.publish') };
 
@@ -276,7 +285,7 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
     return reply.send(buf);
   });
 
-  app.post('/api/forms/:id/responses', VIEW, async (req, reply) => {
+  app.post('/api/forms/:id/responses', SUBMIT, async (req, reply) => {
     const p = responseInput.safeParse(req.body);
     if (!p.success) {
       reply.code(400);

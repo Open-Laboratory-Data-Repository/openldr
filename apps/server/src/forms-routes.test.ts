@@ -6,7 +6,11 @@ import type { FormDefinition, FormInput, FormVersion, FormVersionSummary } from 
 import { registerFormsRoutes } from './forms-routes';
 import './auth-plugin';
 
-const ALL_FORMS_CAPS = ['forms.view', 'forms.edit', 'forms.publish'];
+// forms.submit joined this list when POST /:id/responses stopped being a read-only echo and
+// started writing clinical records (see the SUBMIT gate in forms-routes.ts). These helpers exist
+// to give pre-existing BEHAVIOURAL tests every forms capability; the RBAC coverage for the split
+// itself is the dedicated 'capability gates' cases below.
+const ALL_FORMS_CAPS = ['forms.view', 'forms.submit', 'forms.edit', 'forms.publish'];
 
 function appWithForms(ctx: Record<string, unknown>, roles: string[] = ['lab_admin'], capabilities: string[] = ALL_FORMS_CAPS) {
   const app = Fastify();
@@ -1056,5 +1060,57 @@ describe('forms routes', () => {
     expect(res.json().error).toContain('***');
     // Still diagnosable: only the credentials are masked, not the whole message.
     expect(res.json().error).toContain('ECONNREFUSED');
+  });
+
+  // Submission is gated on forms.submit, NOT forms.view. forms.view is held by every system-role
+  // preset — including system_auditor, described as "Read-only oversight plus the audit log" —
+  // and this route now writes clinical records to fhir_resources and the flat read model.
+  describe('forms.submit capability gate', () => {
+    async function seedFormWith(ctx: AppContext): Promise<string> {
+      const created = await authedApp(ctx).inject({
+        method: 'POST', url: '/api/forms',
+        payload: { name: 'Order', schema: referenceSchema, targetPages: ['forms'] },
+      });
+      return created.json().id as string;
+    }
+
+    it('refuses a submission from a role holding forms.view but not forms.submit', async () => {
+      const ctx = fakeCtx();
+      const runs: unknown[] = [];
+      (ctx as any).workflows = { runner: { runAndRecord: async (...args: unknown[]) => { runs.push(args); return { runId: 'r', correlationId: null, status: 'completed', error: null }; } } };
+      const formId = await seedFormWith(ctx);
+
+      const res = await authedApp(ctx, ['forms.view']).inject({
+        method: 'POST', url: `/api/forms/${formId}/responses`,
+        payload: { answers: { patient: { reference: 'Patient/p1', display: 'Doe Jane' } } },
+      });
+
+      expect(res.statusCode).toBe(403);
+      // Nothing reached the pipeline: the guard runs before any extraction or persistence.
+      expect(runs).toEqual([]);
+    });
+
+    it('accepts a submission from a role holding forms.submit', async () => {
+      const ctx = fakeCtx();
+      const runs: unknown[] = [];
+      (ctx as any).workflows = { runner: { runAndRecord: async (...args: unknown[]) => { runs.push(args); return { runId: 'run-sub', correlationId: null, status: 'completed', error: null }; } } };
+      const formId = await seedFormWith(ctx);
+
+      const res = await authedApp(ctx, ['forms.view', 'forms.submit']).inject({
+        method: 'POST', url: `/api/forms/${formId}/responses`,
+        payload: { answers: { patient: { reference: 'Patient/p1', display: 'Doe Jane' } } },
+      });
+
+      expect(res.statusCode).toBe(201);
+      expect(res.json()).toMatchObject({ ok: true, runId: 'run-sub' });
+      expect(runs).toHaveLength(1);
+    });
+
+    it('still lets a forms.view-only role read the form it may not submit', async () => {
+      const ctx = fakeCtx();
+      const formId = await seedFormWith(ctx);
+      const res = await authedApp(ctx, ['forms.view']).inject({ method: 'GET', url: `/api/forms/${formId}` });
+      expect(res.statusCode).toBe(200);
+    });
   });
 });
