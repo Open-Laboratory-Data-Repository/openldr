@@ -3,7 +3,7 @@ import type { Workflow } from './types';
 // The seeded default workflows for a fresh install: ONE unified ingestion workflow that
 // routes by the SHAPE of the posted payload, plus one reactive demo.
 //
-//   Ingest (wf-ingest, DISABLED):
+//   Ingest (wf-ingest, ENABLED):
 //     Webhook (POST /api/workflows/hooks/ingest, X-Webhook-Token)
 //       → Switch  rule "fhir": body is a FHIR transaction Bundle OR a bare resource array
 //           ├─ handle "fhir" → Unwrap FHIR Bundle (sourcePath 'body'; entry[].resource →
@@ -20,10 +20,20 @@ import type { Workflow } from './types';
 //   Reactive (wf-sample-reactive, ENABLED):
 //     Event Trigger (data.persisted, source: webhook-ingest) → Log
 //
-// The ingest webhook ships DISABLED because it exposes a live HTTP endpoint — the operator
-// opts in (enable + copy the per-install secret). The reactive one ships ENABLED (no external
+// wf-ingest ships ENABLED. It used to ship disabled, on the reasoning that it exposes a live
+// HTTP endpoint the operator should opt into — defensible while the workflow served only that
+// inbound webhook. It no longer does: POST /api/forms/:id/responses runs hand-captured clinical
+// data through this same workflow, so a fresh install that shipped it disabled would 409 every
+// form submission. It is now install-critical infrastructure, not an optional demo.
+//
+// Enabling it does NOT make the endpoint open: the webhook still requires the per-install
+// X-Webhook-Token secret, which is generated at seed time and never leaves the install, so an
+// unauthenticated caller gets nothing. The reactive workflow also ships ENABLED (no external
 // surface). Pure builder: the form id and the webhook secret are injected by the seed
 // (packages/bootstrap/src/seed.ts) at seed time so no secret is committed.
+//
+// Seeding is create-if-absent by id (see seedDefaultWorkflowsFor), so this default applies to
+// FRESH installs only — an existing install keeps whatever enabled state it already has.
 
 /** Ingest webhook path. The CDR toolchain sets OPENLDR_CE_HOOK_PATH=ingest to target it. */
 const INGEST_WEBHOOK_PATH = 'ingest';
@@ -49,9 +59,9 @@ export function buildDefaultWorkflows({ orderFormId, webhookSecret }: DefaultWor
       'Switch routes by payload shape: a FHIR transaction Bundle (or bare resource array) is ' +
       'unwrapped into one item per resource, while form ANSWERS are validated against the ' +
       '"Lab order" form → both persist to the FHIR store (the projection routes each resource ' +
-      'by type) → emit data.persisted. Disabled by default: enable it and copy the webhook ' +
-      'secret to accept requests.',
-    enabled: false,
+      'by type) → emit data.persisted. Enabled by default — form capture submits through it; ' +
+      'copy the webhook secret to let external senders post to it too.',
+    enabled: true,
     createdBy: null,
     definition: {
       nodes: [

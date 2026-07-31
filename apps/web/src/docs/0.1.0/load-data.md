@@ -19,8 +19,9 @@ so you control the exact shape (a form submission, a vendor payload, or a FHIR B
 normalise inside the workflow).
 
 A fresh install ships **one** ingestion webhook workflow, **Ingest** (`wf-ingest`), that routes
-by the **shape** of the posted body. **It's disabled by default** — it exposes a live HTTP
-endpoint, so you opt in by enabling it and copying its per-install secret:
+by the **shape** of the posted body. **It's enabled by default** — hand capture on the **Forms**
+page submits through it, so it is install-critical rather than optional. Its HTTP endpoint is
+still closed to anyone without the per-install secret:
 
 | Workflow | Webhook path | Expects | Behavior |
 |---|---|---|---|
@@ -29,8 +30,8 @@ endpoint, so you opt in by enabling it and copying its per-install secret:
 To use it:
 
 1. In the app, open **Workflows** and open **Ingest**.
-2. On its **Webhook** trigger, **enable** the workflow and **copy the secret**. The trigger has a
-   fixed URL path (`ingest`) and a per-install secret generated at seed time.
+2. On its **Webhook** trigger, **copy the secret**. The trigger has a fixed URL path (`ingest`)
+   and a per-install secret generated at seed time.
 3. Send the payload from your external system:
 
 ```bash
@@ -71,7 +72,7 @@ it. The pipeline is **Webhook → Switch → Unwrap FHIR Bundle → Persist / St
   projection routes each by `resourceType` (`Observation` → `lab_results`, `ServiceRequest` →
   `lab_requests`, `QuestionnaireResponse` → `questionnaire_responses`, …).
 
-To point the CDR toolchain at a deployment, enable **Ingest**, copy its secret, and set:
+To point the CDR toolchain at a deployment, copy the **Ingest** webhook secret and set:
 
 ```bash
 OPENLDR_CE_URL=https://your-host        # base URL of the CE deployment
