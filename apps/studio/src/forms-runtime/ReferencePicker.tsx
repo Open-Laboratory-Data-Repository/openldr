@@ -27,10 +27,22 @@ const labelOf = (v: ReferenceValue): string =>
 const keyOf = (v: ReferenceValue): string =>
   'reference' in v ? v.reference : `${v.system}|${v.code}`;
 
-export function ReferencePicker({ field, formId, multiple, value, onChange }: {
+export function ReferencePicker({ field, formDefinitionId, preview = false, multiple, value, onChange }: {
   field: FormField;
-  /** Omitted in the builder preview, which searches an unsaved field instead. */
-  formId?: string;
+  /**
+   * Id of the STORED form definition this field belongs to — the `:formId` path segment of
+   * `/api/forms/:formId/fields/:fieldId/reference-search`. Deliberately NOT the DOM id that
+   * `FormRuntime`'s `formId` prop sets on the `<form>` element; conflating the two made every
+   * capture-page search request a 404.
+   */
+  formDefinitionId?: string;
+  /**
+   * Builder live preview only: search an UNSAVED field descriptor through the
+   * `forms.edit`-gated preview endpoint. Opt-in on purpose — it must never be reached as a
+   * fallback for a forgotten `formDefinitionId`, because that endpoint can search sources no
+   * stored form declares.
+   */
+  preview?: boolean;
   multiple: boolean;
   value: ReferenceValue | ReferenceValue[] | null;
   onChange: (v: ReferenceValue | ReferenceValue[] | null) => void;
@@ -47,15 +59,21 @@ export function ReferencePicker({ field, formId, multiple, value, onChange }: {
 
   const selected: ReferenceValue[] = value == null ? [] : Array.isArray(value) ? value : [value];
 
+  // Neither a stored form to scope the search to nor an explicit preview opt-in: there is no
+  // endpoint this picker may legitimately call, so it degrades to a read-only state instead of
+  // reaching for the privileged preview route.
+  const unavailable = !preview && !formDefinitionId;
+
   const search = useCallback(async (q: string) => {
+    if (unavailable) return;
     const trimmed = q.trim();
     if (trimmed.length < 2) { setRows([]); setError(null); return; }
     const requestId = ++requestIdRef.current;
     setBusy(true); setError(null);
     try {
-      const res = formId
-        ? await referenceSearch(formId, field.id, { q: trimmed })
-        : await referenceSearchPreview(field, { q: trimmed });
+      const res = preview
+        ? await referenceSearchPreview(field, { q: trimmed })
+        : await referenceSearch(formDefinitionId!, field.id, { q: trimmed });
       if (requestIdRef.current !== requestId) return;
       setRows(toRows(res));
       setActive(-1);
@@ -66,7 +84,7 @@ export function ReferencePicker({ field, formId, multiple, value, onChange }: {
     } finally {
       if (requestIdRef.current === requestId) setBusy(false);
     }
-  }, [field, formId]);
+  }, [field, formDefinitionId, preview, unavailable]);
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -104,6 +122,25 @@ export function ReferencePicker({ field, formId, multiple, value, onChange }: {
   };
 
   const showSingleSelected = !multiple && selected.length > 0;
+
+  if (unavailable) {
+    return (
+      <div>
+        <Input
+          id={field.id}
+          disabled
+          readOnly
+          value={selected.map((v) => labelOf(v)).join(', ')}
+          placeholder="Reference search unavailable"
+          aria-label={field.displayLabel}
+          className="h-9 text-sm"
+        />
+        <p className="mt-1 text-xs text-muted-foreground">
+          This field is not attached to a saved form, so its values cannot be looked up here.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div ref={containerRef} className="relative">

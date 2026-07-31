@@ -7,7 +7,7 @@ vi.mock('@/api', () => ({
   referenceSearch: vi.fn(),
   referenceSearchPreview: vi.fn(),
 }));
-import { referenceSearch } from '@/api';
+import { referenceSearch, referenceSearchPreview } from '@/api';
 
 const field = { id: 'patient', displayLabel: 'Patient', fieldType: 'reference', referenceTarget: 'Patient' } as never;
 const entityResult = {
@@ -16,13 +16,48 @@ const entityResult = {
   total: 1,
 };
 
-beforeEach(() => { vi.mocked(referenceSearch).mockReset(); });
+beforeEach(() => {
+  vi.mocked(referenceSearch).mockReset();
+  vi.mocked(referenceSearchPreview).mockReset();
+});
+
+describe('ReferencePicker — endpoint selection', () => {
+  it('searches the stored form when given a form definition id', async () => {
+    vi.mocked(referenceSearch).mockResolvedValue(entityResult);
+    const user = userEvent.setup();
+    render(<ReferencePicker field={field} formDefinitionId="form-7" multiple={false} value={null} onChange={() => {}} />);
+
+    await user.type(screen.getByRole('combobox'), 'doe');
+    await waitFor(() => expect(referenceSearch).toHaveBeenCalledWith('form-7', 'patient', { q: 'doe' }));
+    expect(referenceSearchPreview).not.toHaveBeenCalled();
+  });
+
+  it('uses the preview endpoint only when preview is explicitly set', async () => {
+    vi.mocked(referenceSearchPreview).mockResolvedValue(entityResult);
+    const user = userEvent.setup();
+    render(<ReferencePicker field={field} preview multiple={false} value={null} onChange={() => {}} />);
+
+    await user.type(screen.getByRole('combobox'), 'doe');
+    await waitFor(() => expect(referenceSearchPreview).toHaveBeenCalledTimes(1));
+    expect(referenceSearch).not.toHaveBeenCalled();
+  });
+
+  it('renders an unavailable state — never the privileged preview endpoint — when given neither', () => {
+    render(<ReferencePicker field={field} multiple={false} value={null} onChange={() => {}} />);
+
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+    expect(screen.getByText(/not attached to a saved form/i)).toBeInTheDocument();
+    expect(screen.getByLabelText('Patient')).toBeDisabled();
+    expect(referenceSearchPreview).not.toHaveBeenCalled();
+    expect(referenceSearch).not.toHaveBeenCalled();
+  });
+});
 
 describe('ReferencePicker', () => {
   it('searches after the debounce and renders display plus secondary', async () => {
     vi.mocked(referenceSearch).mockResolvedValue(entityResult);
     const user = userEvent.setup();
-    render(<ReferencePicker field={field} formId="f1" multiple={false} value={null} onChange={() => {}} />);
+    render(<ReferencePicker field={field} formDefinitionId="f1" multiple={false} value={null} onChange={() => {}} />);
 
     await user.type(screen.getByRole('combobox'), 'doe');
     await waitFor(() => expect(screen.getByText('Doe Jane')).toBeInTheDocument());
@@ -32,7 +67,7 @@ describe('ReferencePicker', () => {
   it('coalesces keystrokes into a single request', async () => {
     vi.mocked(referenceSearch).mockResolvedValue(entityResult);
     const user = userEvent.setup();
-    render(<ReferencePicker field={field} formId="f1" multiple={false} value={null} onChange={() => {}} />);
+    render(<ReferencePicker field={field} formDefinitionId="f1" multiple={false} value={null} onChange={() => {}} />);
 
     await user.type(screen.getByRole('combobox'), 'doe');
     await waitFor(() => expect(referenceSearch).toHaveBeenCalledTimes(1));
@@ -42,7 +77,7 @@ describe('ReferencePicker', () => {
     vi.mocked(referenceSearch).mockResolvedValue(entityResult);
     const onChange = vi.fn();
     const user = userEvent.setup();
-    render(<ReferencePicker field={field} formId="f1" multiple={false} value={null} onChange={onChange} />);
+    render(<ReferencePicker field={field} formDefinitionId="f1" multiple={false} value={null} onChange={onChange} />);
 
     await user.type(screen.getByRole('combobox'), 'doe');
     await user.click(await screen.findByText('Doe Jane'));
@@ -53,7 +88,7 @@ describe('ReferencePicker', () => {
     vi.mocked(referenceSearch).mockResolvedValue(entityResult);
     const onChange = vi.fn();
     const user = userEvent.setup();
-    render(<ReferencePicker field={field} formId="f1" multiple={false} value={null} onChange={onChange} />);
+    render(<ReferencePicker field={field} formDefinitionId="f1" multiple={false} value={null} onChange={onChange} />);
 
     await user.type(screen.getByRole('combobox'), 'doe');
     await screen.findByText('Doe Jane');
@@ -65,7 +100,7 @@ describe('ReferencePicker', () => {
     const onChange = vi.fn();
     const user = userEvent.setup();
     render(
-      <ReferencePicker field={field} formId="f1" multiple={false}
+      <ReferencePicker field={field} formDefinitionId="f1" multiple={false}
         value={{ reference: 'Patient/p1', display: 'Doe Jane' }} onChange={onChange} />,
     );
     await user.click(screen.getByRole('button', { name: /clear/i }));
@@ -74,7 +109,7 @@ describe('ReferencePicker', () => {
 
   it('renders one chip per value when multiple', () => {
     render(
-      <ReferencePicker field={field} formId="f1" multiple
+      <ReferencePicker field={field} formDefinitionId="f1" multiple
         value={[{ reference: 'Patient/p1', display: 'Doe Jane' }, { reference: 'Patient/p2', display: 'Doe John' }]}
         onChange={() => {}} />,
     );
@@ -85,7 +120,7 @@ describe('ReferencePicker', () => {
   it('shows an empty state when nothing matches', async () => {
     vi.mocked(referenceSearch).mockResolvedValue({ kind: 'entity', rows: [], total: 0 });
     const user = userEvent.setup();
-    render(<ReferencePicker field={field} formId="f1" multiple={false} value={null} onChange={() => {}} />);
+    render(<ReferencePicker field={field} formDefinitionId="f1" multiple={false} value={null} onChange={() => {}} />);
     await user.type(screen.getByRole('combobox'), 'zzz');
     expect(await screen.findByText(/no matches/i)).toBeInTheDocument();
   });
@@ -93,7 +128,7 @@ describe('ReferencePicker', () => {
   it('shows an error row when the search fails', async () => {
     vi.mocked(referenceSearch).mockRejectedValue(new Error('boom'));
     const user = userEvent.setup();
-    render(<ReferencePicker field={field} formId="f1" multiple={false} value={null} onChange={() => {}} />);
+    render(<ReferencePicker field={field} formDefinitionId="f1" multiple={false} value={null} onChange={() => {}} />);
     await user.type(screen.getByRole('combobox'), 'doe');
     expect(await screen.findByText(/boom/i)).toBeInTheDocument();
   });
@@ -123,7 +158,7 @@ describe('ReferencePicker', () => {
       .mockImplementationOnce(() => Promise.resolve(freshResult));
 
     const user = userEvent.setup();
-    render(<ReferencePicker field={field} formId="f1" multiple={false} value={null} onChange={() => {}} />);
+    render(<ReferencePicker field={field} formDefinitionId="f1" multiple={false} value={null} onChange={() => {}} />);
 
     const combobox = screen.getByRole('combobox');
     await user.type(combobox, 'do');
@@ -150,7 +185,7 @@ describe('ReferencePicker', () => {
   it('sets aria-activedescendant to the keyboard-active option id', async () => {
     vi.mocked(referenceSearch).mockResolvedValue(entityResult);
     const user = userEvent.setup();
-    render(<ReferencePicker field={field} formId="f1" multiple={false} value={null} onChange={() => {}} />);
+    render(<ReferencePicker field={field} formDefinitionId="f1" multiple={false} value={null} onChange={() => {}} />);
 
     const combobox = screen.getByRole('combobox');
     await user.type(combobox, 'doe');

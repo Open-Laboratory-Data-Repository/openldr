@@ -25,6 +25,8 @@ export function FormRuntime({
   initialAnswers,
   fieldWarnings,
   formId,
+  formDefinitionId,
+  preview,
 }: {
   schema: FormSchema;
   submitLabel?: string;
@@ -33,7 +35,15 @@ export function FormRuntime({
   initialAnswers?: RuntimeAnswers;
   /** @deprecated No longer used to render markers in preview; kept for API compatibility. */
   fieldWarnings?: Record<string, 'error' | 'warning'>;
+  /**
+   * DOM id set on the rendered `<form>` element, so a ⋯ menu item outside the form can call
+   * `requestSubmit()` on it. This is NOT a form-definition id — see `formDefinitionId`.
+   */
   formId?: string;
+  /** Id of the stored form definition, used to scope reference searches to this form's fields. */
+  formDefinitionId?: string;
+  /** Builder live preview: reference fields search the unsaved schema via the preview endpoint. */
+  preview?: boolean;
 }): JSX.Element {
   const [answers, setAnswers] = useState<RuntimeAnswers>(initialAnswers ?? {});
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -124,7 +134,8 @@ export function FormRuntime({
         error={errors[field.id]}
         onChange={setField}
         errors={errors}
-        formId={formId}
+        formDefinitionId={formDefinitionId}
+        preview={preview}
       />
     ));
   }
@@ -188,7 +199,8 @@ function FieldRow({
   error,
   onChange,
   errors,
-  formId,
+  formDefinitionId,
+  preview,
 }: {
   field: FormField;
   schema: FormSchema;
@@ -197,7 +209,8 @@ function FieldRow({
   error?: string;
   onChange: (fieldId: string, value: unknown) => void;
   errors: Record<string, string>;
-  formId?: string;
+  formDefinitionId?: string;
+  preview?: boolean;
 }) {
   const label = fieldLabel(field);
 
@@ -216,7 +229,8 @@ function FieldRow({
             error={errors[child.id]}
             onChange={onChange}
             errors={errors}
-            formId={formId}
+            formDefinitionId={formDefinitionId}
+            preview={preview}
           />
         ))}
       </fieldset>
@@ -255,7 +269,13 @@ function FieldRow({
         ) : null}
       </Label>
       <div>
-        <FieldControl field={field} value={answers[field.id]} onChange={(v) => onChange(field.id, v)} formId={formId} />
+        <FieldControl
+          field={field}
+          value={answers[field.id]}
+          onChange={(v) => onChange(field.id, v)}
+          formDefinitionId={formDefinitionId}
+          preview={preview}
+        />
         {error ? <p className="mt-1 text-xs text-destructive" role="alert">{error}</p> : null}
       </div>
     </div>
@@ -268,12 +288,14 @@ function FieldControl({
   field,
   value,
   onChange,
-  formId,
+  formDefinitionId,
+  preview,
 }: {
   field: FormField;
   value: unknown;
   onChange: (value: unknown) => void;
-  formId?: string;
+  formDefinitionId?: string;
+  preview?: boolean;
 }) {
   const label = fieldLabel(field);
 
@@ -398,7 +420,8 @@ function FieldControl({
         return (
           <ReferencePicker
             field={field}
-            formId={formId}
+            formDefinitionId={formDefinitionId}
+            preview={preview}
             multiple={multiple}
             value={(value ?? null) as ReferenceValue | ReferenceValue[] | null}
             onChange={(v) => onChange(v)}

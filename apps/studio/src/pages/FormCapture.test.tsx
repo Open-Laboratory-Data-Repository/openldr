@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { FormCapture } from './FormCapture';
 import * as api from '../api';
@@ -75,6 +76,42 @@ const form: api.FormDefinition = {
 
 // Same form, but published — submission is only enabled for published forms.
 const publishedForm: api.FormDefinition = { ...form, status: 'published' };
+
+// A published form carrying a reference field, used to pin which id the picker searches with.
+const referenceForm: api.FormDefinition = {
+  ...publishedForm,
+  schema: {
+    id: 'specimen-intake',
+    name: 'Specimen intake',
+    versionLabel: null,
+    fhirVersion: null,
+    fhirResourceType: 'Questionnaire',
+    fhirProfileUrl: null,
+    facilityId: null,
+    sections: [],
+    targetPages: ['forms'],
+    languages: ['en'],
+    version: 1,
+    active: true,
+    status: 'published',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    fields: [
+      {
+        id: 'subject',
+        fhirPath: null,
+        displayLabel: 'Subject',
+        description: null,
+        fieldType: 'reference',
+        required: false,
+        enabled: true,
+        order: 1,
+        cardinality: { min: 0, max: '1' },
+        referenceTarget: 'Patient',
+      },
+    ],
+  },
+};
 
 /**
  * Open the ⋯ "Form actions" DropdownMenu and click a menu item by text.
@@ -178,5 +215,25 @@ describe('FormCapture page', () => {
       ),
     );
     expect(await screen.findByText('Response captured.')).toBeInTheDocument();
+  });
+
+  // Regression: `formId` is the DOM id of the <form> element ("form-capture"). Threading it into
+  // the reference picker made every search request GET /api/forms/form-capture/... and 404 — so a
+  // required reference field could never be satisfied. The search must use the ROUTE form id.
+  it('searches references with the route form id, not the DOM form id', async () => {
+    vi.spyOn(api, 'getForm').mockResolvedValue(referenceForm);
+    const search = vi.spyOn(api, 'referenceSearch').mockResolvedValue({ kind: 'entity', rows: [], total: 0 });
+    const user = userEvent.setup();
+
+    render(
+      <MemoryRouter initialEntries={['/forms/form-1']}>
+        <Routes><Route path="/forms/:id" element={<FormCapture />} /></Routes>
+      </MemoryRouter>,
+    );
+
+    await screen.findByText('Specimen intake');
+    await user.type(screen.getByRole('combobox'), 'doe');
+
+    await waitFor(() => expect(search).toHaveBeenCalledWith('form-1', 'subject', { q: 'doe' }));
   });
 });

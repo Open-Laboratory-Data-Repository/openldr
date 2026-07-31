@@ -113,7 +113,10 @@ export function FormCapture() {
           {schema ? (
             <FormRuntime
               schema={schema}
+              // Two distinct ids: `formId` is the DOM id the ⋯ menu's requestSubmit() targets,
+              // `formDefinitionId` is the stored form the reference-search route is scoped to.
               formId="form-capture"
+              formDefinitionId={id}
               footer={null}
               onSubmit={handleSubmit}
             />

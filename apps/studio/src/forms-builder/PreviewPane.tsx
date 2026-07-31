@@ -40,6 +40,9 @@ export function PreviewPane({ schema }: { schema: FormSchema }) {
         <FormRuntime
           key={remountKey}
           schema={schema}
+          // The builder previews an UNSAVED schema, so reference fields must search the field
+          // descriptor through the forms.edit-gated preview endpoint rather than a stored form.
+          preview
           footer={null}
           onSubmit={() => {}}
           initialAnswers={answers}
