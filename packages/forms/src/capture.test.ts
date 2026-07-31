@@ -3,6 +3,9 @@ import { toQuestionnaire } from './to-questionnaire'
 import { toQuestionnaireResponse } from './response'
 import { fromQuestionnaireResponse } from './from-response'
 import { makeField, makeSchema } from './__fixtures__/forms'
+import { sampleForms } from './samples/forms'
+
+const orderForm = sampleForms.find((f) => f.id === 'sample-order')!
 
 describe('toQuestionnaireResponse — shape', () => {
   it('is a completed QuestionnaireResponse with linkId-keyed answer items', () => {
@@ -68,5 +71,23 @@ describe('capture round-trip — fromQuestionnaireResponse(toQuestionnaireRespon
       fields: [makeField({ id: 'name', displayLabel: 'Name', fieldType: 'text', order: 0, section: 's1' })],
     })
     expect(roundTrip(model, { name: 'Jane' })).toEqual({ name: 'Jane' })
+  })
+
+  // Regression over the REAL seeded sample, not a fixture. `tests` sets referenceMultiple and
+  // cardinality.max '*' but not `repeatable`, which is exactly the combination the old
+  // `repeatable || multiselect` predicate missed: the array reached toAnswer whole and became
+  // valueReference: { reference: "[object Object],[object Object]" } inside a 201 response.
+  it('round-trips several coding answers on the Lab order tests field', () => {
+    const codingA = { system: 'http://loinc.org', code: '718-7', display: 'Hemoglobin' }
+    const codingB = { system: 'http://loinc.org', code: '789-8', display: 'Erythrocytes' }
+
+    const qr = toQuestionnaireResponse(orderForm, { tests: [codingA, codingB] })
+    const answers = qr.item?.flatMap((i) => i.item ?? [i]).find((i) => i.linkId === 'tests')?.answer ?? []
+    expect(answers).toEqual([
+      { valueCoding: { system: 'http://loinc.org', code: '718-7', display: 'Hemoglobin' } },
+      { valueCoding: { system: 'http://loinc.org', code: '789-8', display: 'Erythrocytes' } },
+    ])
+
+    expect(fromQuestionnaireResponse(qr, toQuestionnaire(orderForm))).toEqual({ tests: [codingA, codingB] })
   })
 })

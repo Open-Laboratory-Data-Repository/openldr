@@ -10,7 +10,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { resolveReferenceSource } from '@openldr/forms/pure';
+import { isMultiValued, resolveReferenceSource } from '@openldr/forms/pure';
 import type { FormField, FormSchema, FormSection, RuntimeAnswers } from './types';
 import { cleanAnswers, fieldLabel, groupChildren, validate, visibleIds } from './runtime';
 import { ReferencePicker, type ReferenceValue } from './ReferencePicker';
@@ -414,9 +414,7 @@ function FieldControl({
     case 'antibiogram': {
       const resolved = resolveReferenceSource(field);
       if (field.fieldType === 'reference' || resolved.ok) {
-        const multiple = field.referenceMultiple === true
-          || field.repeatable === true
-          || (field.cardinality?.max !== undefined && field.cardinality.max !== '1');
+        const multiple = isMultiValued(field);
         return (
           <ReferencePicker
             field={field}

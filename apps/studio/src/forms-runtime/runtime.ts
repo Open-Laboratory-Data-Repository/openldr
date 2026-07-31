@@ -1,4 +1,4 @@
-import { isCodingAnswer, isEntityAnswer, isReferenceFieldType, visibleFieldIds as libVisibleFieldIds } from '@openldr/forms/pure';
+import { isCodingAnswer, isEntityAnswer, isMultiValued, isReferenceFieldType, visibleFieldIds as libVisibleFieldIds } from '@openldr/forms/pure';
 import type { FormField, FormSchema, RuntimeAnswers } from './types';
 
 // ── Visibility ────────────────────────────────────────────────────────────────
@@ -92,7 +92,9 @@ export function cleanAnswers(schema: FormSchema, answers: RuntimeAnswers): Runti
     const raw = answers[field.id];
     const values = (raw === undefined ? [] : Array.isArray(raw) ? raw : [raw]).filter((v) => !isEmpty(v));
     if (values.length === 0) continue;
-    out[field.id] = (field.repeatable || field.fieldType === 'multiselect') ? values : values[0];
+    // Same predicate as the picker and the serializer. Collapsing a multi-valued field to
+    // values[0] here silently dropped every test after the first on a Lab order.
+    out[field.id] = isMultiValued(field) ? values : values[0];
   }
 
   return out;
