@@ -332,9 +332,12 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
       reply.code(400);
       return {
         error: boundType
-          ? `form produced no resources: no extractor exists for fhirResourceType '${boundType}'. ` +
-            'Only Observation (fields flagged observationExtract with a code) and ServiceRequest ' +
-            'are extractable; bind the form to one of those or flag its fields for Observation extraction.'
+          ? boundType === 'Observation'
+            ? `form produced no resources: no field on the form is flagged for Observation extraction. ` +
+              'Flag at least one field with observationExtract: true and a LOINC code so ObservationExtractor can produce resources.'
+            : `form produced no resources: no extractor exists for fhirResourceType '${boundType}'. ` +
+              'Only Observation (fields flagged observationExtract with a code) and ServiceRequest ' +
+              'are extractable; bind the form to one of those or flag its fields for Observation extraction.'
           : 'form produced no resources: the form declares no fhirResourceType and no field is flagged ' +
             'observationExtract with a code, so no extractor applies.',
         errors: [],

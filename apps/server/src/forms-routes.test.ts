@@ -967,6 +967,66 @@ describe('forms routes', () => {
     expect(runs).toEqual([]);
   });
 
+  it('tells an Observation-bound form to flag a field, not that the extractor is missing', async () => {
+    const ctx = fakeCtx();
+    const runs: unknown[] = [];
+    (ctx as any).workflows = { runner: { runAndRecord: async (...args: unknown[]) => { runs.push(args); return { runId: 'r', correlationId: null, status: 'completed', error: null }; } } };
+    const app = authedApp(ctx);
+
+    // Observation-bound schema with no fields flagged for extraction
+    const observationBoundSchema = {
+      id: 'vital-signs',
+      name: 'Vital signs',
+      versionLabel: null,
+      fhirVersion: null,
+      fhirResourceType: 'Observation',
+      fhirProfileUrl: null,
+      facilityId: null,
+      fields: [
+        {
+          id: 'temperature',
+          fhirPath: null,
+          displayLabel: 'Temperature',
+          description: null,
+          fieldType: 'text' as const,
+          required: true,
+          enabled: true,
+          order: 0,
+          cardinality: { min: 1, max: '1' },
+          section: 'main',
+          // Note: observationExtract is NOT set, so this field will not be extracted
+        },
+      ],
+      sections: [{ id: 'main', label: 'Main', order: 0 }],
+      targetPages: [],
+      languages: ['en'],
+      version: 1,
+      active: true,
+      status: 'draft' as const,
+      createdAt: NOW,
+      updatedAt: NOW,
+    } satisfies FormInput['schema'];
+
+    const created = await app.inject({
+      method: 'POST', url: '/api/forms',
+      payload: { name: 'Vital signs', fhirResourceType: 'Observation', schema: observationBoundSchema, targetPages: ['forms'] },
+    });
+    const formId = created.json().id as string;
+
+    const res = await app.inject({
+      method: 'POST', url: `/api/forms/${formId}/responses`,
+      payload: { answers: { temperature: '37.5' } },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toContain('Observation');
+    expect(res.json().error).toContain('flagged for Observation extraction');
+    // Should NOT claim the extractor is missing
+    expect(res.json().error).not.toMatch(/no extractor/i);
+    // Nothing was submitted to the pipeline.
+    expect(runs).toEqual([]);
+  });
+
   // Fix 3: the run error reaches the client, and a Persist Store / DB-node failure can carry a
   // connection string. The code this route replaced ran errors through `redact()`; returning
   // `outcome.error` verbatim was a real regression.
