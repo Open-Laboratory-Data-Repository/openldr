@@ -413,18 +413,31 @@ const orderForm: FormSchema = {
       displayLabel: 'Specimen Type',
       description: null,
       fieldType: 'reference',
-      required: false,
+      required: true,
       enabled: true,
       order: 8,
-      cardinality: { min: 0, max: '1' },
+      cardinality: { min: 1, max: '1' },
       section: 'specimen',
-      // SNOMED CT is the standard vocabulary for specimen type, and it is the canonical url
-      // this repo already uses for SNOMED (terminology-ingest-shared). The previous value,
-      // 'SpecimenDefinition', classified as an ENTITY target with no registered resolver, so
-      // every query on the flagship sample returned a raw "no resolver registered" error row.
-      // No specimen ValueSet is seeded here; a site with a curated list can point this field
-      // at one via valueSetUrl, which wins over referenceTarget.
-      referenceTarget: 'http://snomed.info/sct',
+      // Bound to the SEEDED ValueSet, NOT to the whole SNOMED CodeSystem.
+      //
+      // This previously targeted `http://snomed.info/sct`, which was broken two ways. SNOMED is
+      // not shipped — it needs an affiliate licence — so on a normal install the picker searched
+      // an empty vocabulary and answered "No matches" for every term. And on an install that HAD
+      // imported SNOMED, searching the whole CodeSystem ranked by code across 532k concepts, so
+      // "serum" returned "BOVI-SERA ANTISERUM (product)" and friends while "Serum specimen"
+      // never surfaced. Loading the vocabulary alone did not fix it; the binding was the defect.
+      //
+      // `urn:openldr:valueset:specimen-type` is seeded by migration 014, so it exists and is
+      // populated on EVERY install — which is what makes `required: true` above safe. Required
+      // against an empty vocabulary would make the whole form unsubmittable.
+      //
+      // ⚠ That seed carries only four LOCAL codes (Blood, Urine, CSF, Sputum) — no serum or
+      // plasma — so the default HIV viral-load test ("…in Serum or Plasma") cannot yet be given
+      // its true specimen out of the box. A site that imports SNOMED should repoint this
+      // ValueSet at the specimen hierarchy (`properties.semanticTag = 'specimen'`, ~2k concepts);
+      // that needs no change to this form. `valueSetUrl` wins over `referenceTarget`, and the
+      // form linter warns when both are set, so `referenceTarget` is deliberately absent.
+      valueSetUrl: 'urn:openldr:valueset:specimen-type',
       placeholder: 'Search specimen types…',
     },
   ],

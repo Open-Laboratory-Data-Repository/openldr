@@ -57,9 +57,29 @@ describe('Lab order reference fields', () => {
     expect(r.ok && r.source.kind).toBe('coding');
   });
 
-  it('binds specimen type to a coding system rather than an unregistered entity', () => {
+  // Binds to the SEEDED ValueSet, not to the whole SNOMED CodeSystem.
+  //
+  // Targeting `http://snomed.info/sct` was broken two ways on a fresh install. SNOMED is not
+  // shipped (it needs an affiliate licence), so the picker searched an empty vocabulary and
+  // returned "No matches" for every term. And where SNOMED HAD been imported, searching the
+  // whole CodeSystem ranked by code across 532k concepts, so "serum" surfaced
+  // "BOVI-SERA ANTISERUM (product)" while "Serum specimen" never appeared.
+  //
+  // `urn:openldr:valueset:specimen-type` is seeded by migration 014, so it is present and
+  // populated on EVERY install — which is what makes `required` below safe. A site that
+  // imports SNOMED can repoint that ValueSet at the specimen hierarchy without touching this form.
+  it('binds specimen type to the seeded specimen ValueSet', () => {
     const r = resolveReferenceSource(field('fld-ord-specimen-type'));
-    expect(r).toEqual({ ok: true, source: { kind: 'coding', mode: 'codesystem', system: 'http://snomed.info/sct' } });
+    expect(r).toEqual({ ok: true, source: { kind: 'coding', mode: 'valueset', url: 'urn:openldr:valueset:specimen-type' } });
+  });
+
+  // A lab order without a specimen type is not actionable in the lab. Only safe because the
+  // binding above resolves against a seeded ValueSet — required against an empty vocabulary
+  // would make the form unsubmittable.
+  it('requires a specimen type', () => {
+    const f = field('fld-ord-specimen-type');
+    expect(f.required).toBe(true);
+    expect(f.cardinality.min).toBe(1);
   });
 
   it('allows more than one test per order', () => {
