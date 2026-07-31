@@ -4,7 +4,7 @@ import { createAppSettingsStore, createReportStore, createRoleStore, referenceCa
 import { createDashboardStore, createColumnPolicyStore, joinableTablesForClient } from '@openldr/dashboards';
 import { createFormStore } from '@openldr/forms';
 import type { Config } from '@openldr/config';
-import { createAppContext, type AppContext } from './index';
+import { createAppContext, capabilityBackfillEvents, type AppContext } from './index';
 import { truncateTables } from './danger';
 
 const cfg: Config = Object.freeze({
@@ -253,5 +253,33 @@ describe('dangerFactoryReset role reseed (admin-lockout fix)', () => {
     const admin = list.find((r) => r.slug === 'lab_admin')!;
     expect(admin.isSystem).toBe(true);
     expect(admin.locked).toBe(true);
+  });
+});
+
+describe('boot-time capability reconciliation audit', () => {
+  // Reconciliation grants a privilege without anyone asking for it. That is exactly what an audit
+  // log is for — otherwise the Data Exposure pane simply appears one day with no explanation.
+  it('groups granted capabilities into one event per role', async () => {
+    const granted = [
+      { slug: 'lab_admin', roleId: 'r-admin', capability: 'data_exposure.manage' },
+      { slug: 'lab_admin', roleId: 'r-admin', capability: 'audit.view' },
+      { slug: 'lab_technician', roleId: 'r-tech', capability: 'forms.submit' },
+    ];
+
+    const events = capabilityBackfillEvents(granted);
+
+    expect(events).toHaveLength(2);
+    expect(events[0]).toEqual({
+      action: 'role.capability.backfill',
+      entityType: 'role',
+      entityId: 'r-admin',
+      metadata: { slug: 'lab_admin', capabilities: ['data_exposure.manage', 'audit.view'] },
+    });
+    expect(events[1].entityId).toBe('r-tech');
+  });
+
+  // An ordinary restart changes nothing; it must not write an event, or the signal is worthless.
+  it('emits no events when nothing was granted', () => {
+    expect(capabilityBackfillEvents([])).toEqual([]);
   });
 });
