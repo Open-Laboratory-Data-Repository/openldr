@@ -65,6 +65,41 @@ const sampleSchema = {
   updatedAt: NOW,
 } satisfies FormInput['schema'];
 
+// A minimal schema with one required reference field, used to exercise the submit-time
+// reference-validation path (Task 9) independently of sampleSchema's plain text field.
+const referenceSchema = {
+  id: 'lab-order',
+  name: 'Lab order',
+  versionLabel: null,
+  fhirVersion: null,
+  fhirResourceType: null,
+  fhirProfileUrl: null,
+  facilityId: null,
+  fields: [
+    {
+      id: 'patient',
+      fhirPath: null,
+      displayLabel: 'Patient',
+      description: null,
+      fieldType: 'reference' as const,
+      required: true,
+      enabled: true,
+      order: 0,
+      cardinality: { min: 1, max: '1' },
+      section: 'main',
+      referenceTarget: 'Patient',
+    },
+  ],
+  sections: [{ id: 'main', label: 'Main', order: 0 }],
+  targetPages: [],
+  languages: ['en'],
+  version: 1,
+  active: true,
+  status: 'draft' as const,
+  createdAt: NOW,
+  updatedAt: NOW,
+} satisfies FormInput['schema'];
+
 function fakeCtx(): AppContext & { audits: AuditInput[] } {
   const forms: FormDefinition[] = [];
   const versions = new Map<string, FormVersion[]>();
@@ -259,9 +294,30 @@ describe('forms routes', () => {
     expect(response.statusCode).toBe(201);
     expect(response.json()).toMatchObject({ resourceType: 'QuestionnaireResponse', status: 'completed' });
 
+    // A required field that is absent must be rejected. This previously returned 201 —
+    // the assertion encoded the bug that reference pickers exist to fix.
     const emptyResponse = await app.inject({ method: 'POST', url: `/api/forms/${id}/responses`, payload: { answers: {} } });
-    expect(emptyResponse.statusCode).toBe(201);
-    expect(emptyResponse.json()).toMatchObject({ resourceType: 'QuestionnaireResponse', status: 'completed' });
+    expect(emptyResponse.statusCode).toBe(400);
+    expect(emptyResponse.json().errors).toContainEqual(
+      expect.objectContaining({ fieldId: 'patientId', reason: 'required' }),
+    );
+  });
+
+  it('rejects an unresolved reference answer', async () => {
+    const app = authedApp(fakeCtx());
+    const created = await app.inject({
+      method: 'POST', url: '/api/forms',
+      payload: { name: 'Order', schema: referenceSchema, targetPages: ['forms'] },
+    });
+    const formId = created.json().id as string;
+
+    const res = await app.inject({
+      method: 'POST', url: `/api/forms/${formId}/responses`, payload: { answers: { patient: 'asdf' } },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().errors).toContainEqual(
+      expect.objectContaining({ fieldId: 'patient', reason: 'must be selected from the list' }),
+    );
   });
 
   it('publishes, duplicates, and returns form versions', async () => {

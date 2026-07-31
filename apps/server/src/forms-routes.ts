@@ -3,7 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import AdmZip from 'adm-zip';
 import type { AppContext } from '@openldr/bootstrap';
 import { redact } from '@openldr/core';
-import { toQuestionnaire, toQuestionnaireResponse } from '@openldr/forms';
+import { toQuestionnaire, toQuestionnaireResponse, validateAnswers, validateReferences } from '@openldr/forms';
 import { z } from 'zod';
 import { recordAudit } from './audit-helper';
 import { requireCapability } from './rbac';
@@ -260,6 +260,25 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
       reply.code(404);
       return { error: 'not found' };
     }
+
+    // Validation runs here and nowhere else on this path: `validateAnswers` is pure and
+    // catches shape/required/options; `validateReferences` does the I/O-bound existence
+    // checks. Before this, the route validated nothing at all.
+    const shapeErrors = validateAnswers(f.schema as never, p.data.answers as never);
+    if (shapeErrors.length > 0) {
+      reply.code(400);
+      return { error: 'invalid answers', errors: shapeErrors };
+    }
+
+    const referenceErrors = await validateReferences(f.schema as never, p.data.answers as never, {
+      validateCode: (input) => ctx.terminology.ops.validateCode(input),
+      exists: (resourceType, id) => ctx.fhirStore.exists(resourceType, id),
+    });
+    if (referenceErrors.length > 0) {
+      reply.code(400);
+      return { error: 'invalid answers', errors: referenceErrors };
+    }
+
     try {
       const response = toQuestionnaireResponse(f.schema, p.data.answers as never);
       await recordAudit(ctx, req, { action: 'form.response.submit', entityType: 'form', entityId: f.id, before: null, after: response, metadata: { formId: f.id } });
