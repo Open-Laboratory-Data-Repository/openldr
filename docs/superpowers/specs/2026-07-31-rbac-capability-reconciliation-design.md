@@ -1,7 +1,7 @@
 # RBAC capability reconciliation — design
 
 **Date:** 2026-07-31
-**Status:** Agreed, not implemented
+**Status:** Implemented on `fix/rbac-capability-reconciliation` (plan: `docs/superpowers/plans/2026-07-31-rbac-capability-reconciliation.md`)
 **Scope:** Repair installs whose `lab_admin` role is missing `data_exposure.manage`, and remove the class of defect where a capability added to the catalog never reaches an existing install.
 
 ## Why
