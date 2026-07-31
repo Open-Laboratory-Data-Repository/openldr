@@ -281,4 +281,87 @@ describe('RoleStore', () => {
     expect(second.granted).toEqual([]);
     await db.destroy();
   });
+
+  it('diagnoses a stale lab_admin as pending, not revoked', async () => {
+    const db = await makeMigratedDb();
+    const store = createRoleStore(db);
+    await seedStaleAdmin(db, ['data_exposure.manage']);
+
+    const d = await store.diagnoseCapabilities();
+
+    const admin = d.roles.find((r) => r.slug === 'lab_admin')!;
+    expect(admin.present).toBe(true);
+    expect(admin.pending).toContain('data_exposure.manage');
+    expect(admin.revoked).not.toContain('data_exposure.manage');
+    await db.destroy();
+  });
+
+  // An operator revoke on an UNLOCKED preset is a decision, not a defect — it must not be
+  // reported as something the next boot will undo.
+  it('classifies an operator revoke on an unlocked preset as revoked', async () => {
+    const db = await makeMigratedDb();
+    const store = createRoleStore(db);
+    await store.seedSystemRoles();
+    const tech = (await store.getBySlug('lab_technician'))!;
+    await store.update(tech.id, { capabilities: ['forms.view'] });
+
+    const d = await store.diagnoseCapabilities();
+
+    const row = d.roles.find((r) => r.slug === 'lab_technician')!;
+    expect(row.revoked).toContain('forms.submit');
+    expect(row.pending).toEqual([]);
+    expect(row.ok).toContain('forms.view');
+    await db.destroy();
+  });
+
+  it('classifies a never-introduced capability on an unlocked preset as pending', async () => {
+    const db = await makeMigratedDb();
+    const store = createRoleStore(db);
+    await store.seedSystemRoles();
+    const tech = (await store.getBySlug('lab_technician'))!;
+    await store.update(tech.id, { capabilities: ['forms.view'] });
+    await db.deleteFrom('capability_introductions').where('capability', '=', 'forms.submit').execute();
+
+    const d = await store.diagnoseCapabilities();
+
+    expect(d.roles.find((r) => r.slug === 'lab_technician')!.pending).toContain('forms.submit');
+    await db.destroy();
+  });
+
+  // The mirror-image drift: a key retired from the catalog leaves orphan rows behind.
+  it('reports capability rows whose key no longer exists in the catalog', async () => {
+    const db = await makeMigratedDb();
+    const store = createRoleStore(db);
+    await store.seedSystemRoles();
+    const tech = (await store.getBySlug('lab_technician'))!;
+    await db.insertInto('role_capabilities').values({ role_id: tech.id, capability: 'retired.key' }).execute();
+
+    const d = await store.diagnoseCapabilities();
+
+    expect(d.orphaned).toContainEqual({ slug: 'lab_technician', capability: 'retired.key' });
+    await db.destroy();
+  });
+
+  it('reports a preset role whose row is absent entirely', async () => {
+    const db = await makeMigratedDb();
+    const store = createRoleStore(db);
+
+    const d = await store.diagnoseCapabilities();
+
+    expect(d.roles.every((r) => r.present === false)).toBe(true);
+    expect(d.roles).toHaveLength(5);
+    await db.destroy();
+  });
+
+  it('reports a fully seeded install as clean', async () => {
+    const db = await makeMigratedDb();
+    const store = createRoleStore(db);
+    await store.seedSystemRoles();
+
+    const d = await store.diagnoseCapabilities();
+
+    expect(d.roles.every((r) => r.present && r.pending.length === 0 && r.revoked.length === 0)).toBe(true);
+    expect(d.orphaned).toEqual([]);
+    await db.destroy();
+  });
 });

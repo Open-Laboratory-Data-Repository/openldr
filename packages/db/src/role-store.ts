@@ -34,6 +34,21 @@ export interface CapabilityReconciliation {
   granted: Array<{ slug: string; roleId: string; capability: string }>;
 }
 
+/** Preset-vs-actual capability drift, for `openldr roles doctor` and any future UI.
+ *  `revoked` (missing, key already introduced) is a deliberate operator decision;
+ *  `pending` (missing, key never introduced — or any absence on the unconditionally
+ *  reconciled locked role) is a real gap the next boot will close. */
+export interface CapabilityDiagnosis {
+  roles: Array<{
+    slug: string;
+    present: boolean;
+    ok: string[];
+    revoked: string[];
+    pending: string[];
+  }>;
+  orphaned: Array<{ slug: string; capability: string }>;
+}
+
 export interface RoleStore {
   list(): Promise<RoleRecord[]>;
   get(id: string): Promise<RoleRecord | null>;
@@ -47,6 +62,7 @@ export interface RoleStore {
   unassignRole(subject: string, roleId: string): Promise<void>;
   setUserRoles(subject: string, roleIds: string[]): Promise<void>;
   seedSystemRoles(): Promise<CapabilityReconciliation>;
+  diagnoseCapabilities(): Promise<CapabilityDiagnosis>;
   backfillUserFromRoleNames(subject: string, roleNames: string[]): Promise<void>;
 }
 
@@ -351,6 +367,45 @@ export function createRoleStore(db: Kysely<InternalSchema>): RoleStore {
       // new capability's one free grant and permanently withhold it from the unlocked presets.
       if (ledger !== null) await recordLedger();
       return { created, granted };
+    },
+    async diagnoseCapabilities() {
+      const ledger = await readLedger();
+      const known = new Set(CAPABILITY_KEYS);
+      const roles: CapabilityDiagnosis['roles'] = [];
+
+      for (const def of SYSTEM_ROLES) {
+        const existing = await store.getBySlug(def.slug);
+        if (!existing) {
+          roles.push({ slug: def.slug, present: false, ok: [], revoked: [], pending: [] });
+          continue;
+        }
+        const have = new Set(existing.capabilities);
+        const ok: string[] = [];
+        const revoked: string[] = [];
+        const pending: string[] = [];
+        for (const c of def.capabilities) {
+          if (have.has(c)) ok.push(c);
+          // The locked role is reconciled UNCONDITIONALLY, so anything missing from it will be
+          // granted on the next boot no matter what the ledger says. Reporting it as `revoked`
+          // would be wrong twice over: nothing can revoke from lab_admin, and it is not durable.
+          else if (def.slug === LOCKED_SLUG) pending.push(c);
+          // Ledger unreadable → cannot prove a key is new, so report the conservative class.
+          else if (ledger === null || ledger.has(c)) revoked.push(c);
+          else pending.push(c);
+        }
+        roles.push({ slug: def.slug, present: true, ok, revoked, pending });
+      }
+
+      const rows = await db
+        .selectFrom('role_capabilities')
+        .innerJoin('roles', 'roles.id', 'role_capabilities.role_id')
+        .select(['roles.slug as slug', 'role_capabilities.capability as capability'])
+        .execute();
+      const orphaned = rows
+        .filter((r) => !known.has(r.capability))
+        .map((r) => ({ slug: r.slug, capability: r.capability }));
+
+      return { roles, orphaned };
     },
     async backfillUserFromRoleNames(subject, roleNames) {
       for (const name of roleNames) {
