@@ -364,4 +364,29 @@ describe('RoleStore', () => {
     expect(d.orphaned).toEqual([]);
     await db.destroy();
   });
+
+  // The signal `roles doctor` needs to tell "operator revoked this" from "we cannot tell":
+  // a dropped ledger table must not silently masquerade as a healthy, all-revoked report.
+  it('reports ledgerAvailable: true on a healthy install', async () => {
+    const db = await makeMigratedDb();
+    const store = createRoleStore(db);
+    await store.seedSystemRoles();
+
+    const d = await store.diagnoseCapabilities();
+
+    expect(d.ledgerAvailable).toBe(true);
+    await db.destroy();
+  });
+
+  it('reports ledgerAvailable: false after the capability ledger becomes unreadable', async () => {
+    const db = await makeMigratedDb();
+    const store = createRoleStore(db);
+    await store.seedSystemRoles();
+    await db.schema.dropTable('capability_introductions').execute();
+
+    const d = await store.diagnoseCapabilities();
+
+    expect(d.ledgerAvailable).toBe(false);
+    await db.destroy();
+  });
 });

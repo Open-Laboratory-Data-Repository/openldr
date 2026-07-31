@@ -1,7 +1,7 @@
-import { createAppContext, recordAuditEvent } from '@openldr/bootstrap';
+import { createAppContext, createDbContext, recordAuditEvent } from '@openldr/bootstrap';
 import { loadConfig } from '@openldr/config';
 import { CAPABILITY_KEYS } from '@openldr/rbac';
-import type { RoleRecord, CapabilityDiagnosis } from '@openldr/db';
+import { createRoleStore, type RoleRecord, type CapabilityDiagnosis } from '@openldr/db';
 import { cliActor } from './cli-actor';
 
 interface JsonOpt {
@@ -208,42 +208,21 @@ export async function runRolesRevoke(slug: string, capability: string, opts: Jso
   return grantOrRevoke(slug, capability, opts, (caps) => caps.filter((c) => c !== capability));
 }
 
-export async function runUserAssignRole(subject: string, slug: string, opts: JsonOpt): Promise<number> {
-  const ctx = await createAppContext(loadConfig());
-  try {
-    const role = await ctx.roles.getBySlug(slug);
-    if (!role) {
-      emit(opts.json, { error: 'role not found' }, `role ${slug} not found`);
-      return 1;
-    }
-    try {
-      await ctx.roles.assignRole(subject, role.id);
-    } catch (e) {
-      process.stderr.write(`${e instanceof Error ? e.message : String(e)}\n`);
-      return 1;
-    }
-    await recordAuditEvent(ctx, cliActor(), {
-      action: 'user.role.assign',
-      entityType: 'user',
-      entityId: subject,
-      metadata: { roleId: role.id, slug: role.slug },
-    });
-    emit(opts.json, { ok: true, subject, slug }, `assigned ${slug} to ${subject}`);
-    return 0;
-  } finally {
-    await ctx.close();
-  }
-}
-
 /** Format a capability diagnosis and decide the exit code. Pure, so the classification and exit
  *  policy are testable without a live AppContext.
  *
- *  Exit 1 for `pending` (a real backfill gap the next boot will close) and for `orphaned` (a key
- *  retired from the catalog leaving rows behind) — both are states an operator should act on.
- *  Exit 0 for `revoked`: that is a deliberate decision, not a defect. */
+ *  Exit 1 for `pending` (a real backfill gap the next boot will close), for `orphaned` (a key
+ *  retired from the catalog leaving rows behind), and for an unavailable ledger (reconciliation
+ *  is silently disabled and `revoked` vs `pending` can no longer be told apart) — all three are
+ *  states an operator should act on. Exit 0 for `revoked`: that is a deliberate decision, not a
+ *  defect. */
 export function summarizeDiagnosis(d: CapabilityDiagnosis): { lines: string[]; exitCode: number } {
   const lines: string[] = [];
-  let problems = d.orphaned.length > 0;
+  let problems = d.orphaned.length > 0 || !d.ledgerAvailable;
+
+  if (!d.ledgerAvailable) {
+    lines.push('ledger unavailable — capability reconciliation is DISABLED; revoked/pending cannot be distinguished');
+  }
 
   for (const r of d.roles) {
     if (!r.present) {
@@ -266,13 +245,45 @@ export function summarizeDiagnosis(d: CapabilityDiagnosis): { lines: string[]; e
   return { lines, exitCode: problems ? 1 : 0 };
 }
 
+/** Read-only: goes through `createDbContext`, never `createAppContext`. `createAppContext` calls
+ *  `roles.seedSystemRoles()` on construction, which RECONCILES drift — by the time a diagnosis
+ *  built on it ran, the install would already have been repaired, making `pending`/`present:false`
+ *  unreachable through this command. A diagnostic that silently fixes what it was asked to report
+ *  on destroys the evidence it exists to surface. */
 export async function runRolesDoctor(opts: JsonOpt): Promise<number> {
+  const ctx = await createDbContext(loadConfig());
+  try {
+    const diagnosis = await createRoleStore(ctx.internalDb).diagnoseCapabilities();
+    const { lines, exitCode } = summarizeDiagnosis(diagnosis);
+    emit(opts.json, { ...diagnosis, exitCode }, lines.join('\n'));
+    return exitCode;
+  } finally {
+    await ctx.close();
+  }
+}
+
+export async function runUserAssignRole(subject: string, slug: string, opts: JsonOpt): Promise<number> {
   const ctx = await createAppContext(loadConfig());
   try {
-    const diagnosis = await ctx.roles.diagnoseCapabilities();
-    const { lines, exitCode } = summarizeDiagnosis(diagnosis);
-    emit(opts.json, diagnosis, lines.join('\n'));
-    return exitCode;
+    const role = await ctx.roles.getBySlug(slug);
+    if (!role) {
+      emit(opts.json, { error: 'role not found' }, `role ${slug} not found`);
+      return 1;
+    }
+    try {
+      await ctx.roles.assignRole(subject, role.id);
+    } catch (e) {
+      process.stderr.write(`${e instanceof Error ? e.message : String(e)}\n`);
+      return 1;
+    }
+    await recordAuditEvent(ctx, cliActor(), {
+      action: 'user.role.assign',
+      entityType: 'user',
+      entityId: subject,
+      metadata: { roleId: role.id, slug: role.slug },
+    });
+    emit(opts.json, { ok: true, subject, slug }, `assigned ${slug} to ${subject}`);
+    return 0;
   } finally {
     await ctx.close();
   }

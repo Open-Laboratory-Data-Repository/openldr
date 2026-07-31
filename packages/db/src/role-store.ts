@@ -47,6 +47,10 @@ export interface CapabilityDiagnosis {
     pending: string[];
   }>;
   orphaned: Array<{ slug: string; capability: string }>;
+  /** False when the capability ledger could not be read. In that state reconciliation is
+   *  DISABLED for unlocked presets and `revoked` vs `pending` cannot be distinguished, so
+   *  every missing capability is reported under the conservative `revoked` class. */
+  ledgerAvailable: boolean;
 }
 
 export interface RoleStore {
@@ -405,7 +409,7 @@ export function createRoleStore(db: Kysely<InternalSchema>): RoleStore {
         .filter((r) => !known.has(r.capability))
         .map((r) => ({ slug: r.slug, capability: r.capability }));
 
-      return { roles, orphaned };
+      return { roles, orphaned, ledgerAvailable: ledger !== null };
     },
     async backfillUserFromRoleNames(subject, roleNames) {
       for (const name of roleNames) {
