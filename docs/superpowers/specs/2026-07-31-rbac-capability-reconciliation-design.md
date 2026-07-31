@@ -84,10 +84,10 @@ for each def in SYSTEM_ROLES:
              : ledger === null ? []                          // reconciliation disabled
              : def.capabilities.filter(c => !ledger.has(c))  // ledger-gated
     grant each of `want` not already held; collect for audit
-record every CAPABILITY_KEYS entry into the ledger, on conflict do nothing
+if ledger !== null: record every CAPABILITY_KEYS entry into the ledger, on conflict do nothing
 ```
 
-**Trap, built in deliberately:** a failed ledger read must mean *"reconciliation disabled"*, never *"empty ledger"*. An empty set makes every preset capability look brand-new and re-grants the lot, silently undoing every revoke on the install — strictly worse than the bug being fixed. A pre-migration DB or a transient connection blip is exactly when this fires, so it is not hypothetical. `lab_admin` still reconciles in that case, since its rule never consults the ledger.
+**Trap, built in deliberately:** a failed ledger read must mean *"reconciliation disabled"*, never *"empty ledger"*. An empty set makes every preset capability look brand-new and re-grants the lot, silently undoing every revoke on the install — strictly worse than the bug being fixed. A pre-migration DB or a transient connection blip is exactly when this fires, so it is not hypothetical. `lab_admin` still reconciles in that case, since its rule never consults the ledger. The same applies to the write: recording keys after a failed read would mark a brand-new capability as introduced without ever granting it, permanently burning its one free grant — so the ledger is recorded only when it was readable.
 
 Both writes use `on conflict do nothing`, which also makes concurrent replica boots harmless: two boots may both grant, but the `(role_id, capability)` primary key absorbs the duplicate and the ledger insert absorbs the other. This mirrors the race-free `on conflict` column-policy seed already in `bootstrap` (`3ff2d0a5`).
 
