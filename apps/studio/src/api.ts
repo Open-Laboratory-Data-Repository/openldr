@@ -772,6 +772,29 @@ export async function exportFormBundle(id: string): Promise<void> {
 export const submitFormResponse = (id: string, answers: unknown): Promise<unknown> =>
   authFetch(`/api/forms/${id}/responses`, jbody({ answers }, 'POST')).then((r) => okJson<unknown>(r, 'submit form response'));
 
+// ── Reference search (form reference pickers) ────────────────────────────────────
+export interface CodingRow { system: string; code: string; display: string | null }
+export interface EntityRow { reference: string; display: string; secondary: string | null }
+export type ReferenceSearchResponse =
+  | { kind: 'coding'; rows: CodingRow[]; total: number }
+  | { kind: 'entity'; rows: EntityRow[]; total: number };
+
+export const referenceSearch = (
+  formId: string, fieldId: string, p: { q: string; limit?: number; offset?: number },
+): Promise<ReferenceSearchResponse> => {
+  const qs = new URLSearchParams({ q: p.q, limit: String(p.limit ?? 20), offset: String(p.offset ?? 0) });
+  return authFetch(
+    `/api/forms/${encodeURIComponent(formId)}/fields/${encodeURIComponent(fieldId)}/reference-search?${qs}`,
+  ).then((r) => okJson<ReferenceSearchResponse>(r, 'reference search'));
+};
+
+/** Builder-only: search against an unsaved field. Requires forms.edit. */
+export const referenceSearchPreview = (
+  field: unknown, p: { q: string; limit?: number },
+): Promise<ReferenceSearchResponse> =>
+  authFetch('/api/forms/reference-search/preview', jbody({ field, q: p.q, limit: p.limit ?? 20 }, 'POST'))
+    .then((r) => okJson<ReferenceSearchResponse>(r, 'reference search preview'));
+
 // ── Report designs (Report Designer) ─────────────────────────────────────────
 export const listReportDesigns = (): Promise<ReportDesign[]> =>
   authFetch('/api/report-designs').then((r) => okJson<ReportDesign[]>(r, 'list report designs'));
