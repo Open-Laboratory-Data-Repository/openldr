@@ -162,9 +162,12 @@ export function ReferencePicker({ field, formDefinitionId, preview = false, mult
           {selected.map((v) => (
             <span
               key={keyOf(v)}
+              // Single mode: the span is the flex row, not the wrapper — the wrapper holds
+              // exactly one child, so justify-between on it does nothing and the block-level
+              // TruncatedText pushes the clear button onto its own line.
               className={multiple
                 ? 'inline-flex items-center gap-1 rounded-md border border-input px-2 py-0.5 text-xs'
-                : 'text-sm'}
+                : 'flex w-full items-center justify-between gap-2 text-sm'}
             >
               <TruncatedText text={labelOf(v)} className="min-w-0" />
               <Button
