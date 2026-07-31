@@ -58,4 +58,64 @@ describe('validateReferences', () => {
   it('ignores empty and non-reference fields', async () => {
     expect(await validateReferences(model(), {}, deps())).toEqual([]);
   });
+
+  it('rejects a coding whose system does not match the field-bound codesystem, without calling validateCode', async () => {
+    let called = false;
+    const errors = await validateReferences(
+      model({ referenceTarget: 'http://loinc.org' }),
+      { p: { system: 'http://snomed.info/sct', code: '718-7', display: null } },
+      deps({ validateCode: async () => { called = true; return { result: true, message: 'ok' }; } }),
+    );
+    expect(errors).toEqual([{
+      fieldId: 'p', label: 'Patient',
+      reason: "'http://snomed.info/sct' is not the system this field accepts (http://loinc.org)",
+    }]);
+    expect(called).toBe(false);
+  });
+
+  it('validates a codesystem-bound coding against the FIELD system, not the answer system', async () => {
+    const received: Array<{ valueSetUrl?: string; code: string; system?: string }> = [];
+    const errors = await validateReferences(
+      model({ referenceTarget: 'http://loinc.org' }),
+      { p: { system: 'http://loinc.org', code: '718-7', display: null } },
+      deps({
+        validateCode: async (input) => { received.push(input); return { result: true, message: 'ok' }; },
+      }),
+    );
+    expect(errors).toEqual([]);
+    expect(received).toEqual([{ system: 'http://loinc.org', code: '718-7' }]);
+  });
+
+  it('rejects a coding-shaped answer on an entity-sourced field', async () => {
+    const errors = await validateReferences(
+      model({ referenceTarget: 'Patient' }),
+      { p: { system: 'http://loinc.org', code: '718-7', display: null } },
+      deps(),
+    );
+    expect(errors).toEqual([{
+      fieldId: 'p', label: 'Patient',
+      reason: "'718-7' is a coded value but this field expects a reference",
+    }]);
+  });
+
+  it('rejects an entity-shaped answer on a coding-sourced field', async () => {
+    const errors = await validateReferences(
+      model({ referenceTarget: 'http://loinc.org' }),
+      { p: { reference: 'Patient/p1', display: null } },
+      deps(),
+    );
+    expect(errors).toEqual([{
+      fieldId: 'p', label: 'Patient',
+      reason: "'Patient/p1' is a reference but this field expects a coded value",
+    }]);
+  });
+
+  it('rejects a coding-shaped answer on a field that declares no reference source', async () => {
+    const errors = await validateReferences(
+      model({ referenceTarget: undefined }),
+      { p: { system: 'http://loinc.org', code: '718-7', display: null } },
+      deps(),
+    );
+    expect(errors).toEqual([{ fieldId: 'p', label: 'Patient', reason: 'field declares no reference source' }]);
+  });
 });

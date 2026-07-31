@@ -37,6 +37,11 @@ export async function validateReferences(
 
     for (const v of values) {
       if (isEntityAnswer(v)) {
+        if (!resolved.ok) { push('field declares no reference source'); continue; }
+        if (resolved.source.kind !== 'entity') {
+          push(`'${v.reference}' is a reference but this field expects a coded value`);
+          continue;
+        }
         const m = REFERENCE_RE.exec(v.reference);
         if (!m) { push(`'${v.reference}' is not a valid reference`); continue; }
         try {
@@ -48,16 +53,25 @@ export async function validateReferences(
       }
 
       if (isCodingAnswer(v)) {
-        if (!resolved.ok || resolved.source.kind !== 'coding') continue;
+        if (!resolved.ok) { push('field declares no reference source'); continue; }
+        if (resolved.source.kind !== 'coding') {
+          push(`'${v.code}' is a coded value but this field expects a reference`);
+          continue;
+        }
+        if (resolved.source.mode === 'codesystem' && v.system !== resolved.source.system) {
+          push(`'${v.system}' is not the system this field accepts (${resolved.source.system})`);
+          continue;
+        }
         const input = resolved.source.mode === 'valueset'
           ? { valueSetUrl: resolved.source.url, code: v.code, system: v.system }
-          : { system: v.system, code: v.code };
+          : { system: resolved.source.system, code: v.code };
         try {
           const r = await deps.validateCode(input);
           if (!r.result) push(r.message);
         } catch (e) {
           push(`could not be checked: ${e instanceof Error ? e.message : String(e)}`);
         }
+        continue;
       }
       // Non-object values are `validateAnswers`' job (Task 4), not this one.
     }
