@@ -27,6 +27,32 @@ export interface UpdateRoleInput {
   capabilities?: string[];
 }
 
+/** What a `seedSystemRoles()` pass actually changed. Returned so the caller can audit it —
+ *  the store itself does no auditing (that lives in @openldr/bootstrap). */
+export interface CapabilityReconciliation {
+  created: string[];
+  granted: Array<{ slug: string; roleId: string; capability: string }>;
+}
+
+/** Preset-vs-actual capability drift, for `openldr roles doctor` and any future UI.
+ *  `revoked` (missing, key already introduced) is a deliberate operator decision;
+ *  `pending` (missing, key never introduced — or any absence on the unconditionally
+ *  reconciled locked role) is a real gap the next boot will close. */
+export interface CapabilityDiagnosis {
+  roles: Array<{
+    slug: string;
+    present: boolean;
+    ok: string[];
+    revoked: string[];
+    pending: string[];
+  }>;
+  orphaned: Array<{ slug: string; capability: string }>;
+  /** False when the capability ledger could not be read. In that state reconciliation is
+   *  DISABLED for unlocked presets and `revoked` vs `pending` cannot be distinguished, so
+   *  every missing capability is reported under the conservative `revoked` class. */
+  ledgerAvailable: boolean;
+}
+
 export interface RoleStore {
   list(): Promise<RoleRecord[]>;
   get(id: string): Promise<RoleRecord | null>;
@@ -39,7 +65,8 @@ export interface RoleStore {
   assignRole(subject: string, roleId: string): Promise<void>;
   unassignRole(subject: string, roleId: string): Promise<void>;
   setUserRoles(subject: string, roleIds: string[]): Promise<void>;
-  seedSystemRoles(): Promise<void>;
+  seedSystemRoles(): Promise<CapabilityReconciliation>;
+  diagnoseCapabilities(): Promise<CapabilityDiagnosis>;
   backfillUserFromRoleNames(subject: string, roleNames: string[]): Promise<void>;
 }
 
@@ -128,6 +155,35 @@ export function createRoleStore(db: Kysely<InternalSchema>): RoleStore {
     await db.deleteFrom('role_capabilities').where('role_id', '=', roleId).execute();
     if (caps.length) {
       await db.insertInto('role_capabilities').values(caps.map((c) => ({ role_id: roleId, capability: c }))).execute();
+    }
+  }
+
+  // The ledger of capability keys that have ever existed (migration 067).
+  //
+  // ⚠ Returns null — NOT an empty Set — when the table cannot be read (a pre-migration DB, a
+  // transient failure). Null means "reconciliation disabled". An empty Set would mean "no key has
+  // ever existed", which makes every preset capability look brand-new and re-grants the lot,
+  // silently undoing every revoke on the install. Callers MUST branch on null explicitly.
+  async function readLedger(): Promise<Set<string> | null> {
+    try {
+      const rows = await db.selectFrom('capability_introductions').select('capability').execute();
+      return new Set(rows.map((r) => r.capability));
+    } catch {
+      return null;
+    }
+  }
+
+  // Record every catalog key as introduced. Best-effort: on a pre-migration DB the table does not
+  // exist yet, and role CREATION must still succeed exactly as it did before this feature.
+  async function recordLedger(): Promise<void> {
+    try {
+      await db
+        .insertInto('capability_introductions')
+        .values(CAPABILITY_KEYS.map((capability) => ({ capability })))
+        .onConflict((oc) => oc.column('capability').doNothing())
+        .execute();
+    } catch {
+      /* ledger unavailable — reconciliation is already disabled in that state */
     }
   }
 
@@ -264,13 +320,96 @@ export function createRoleStore(db: Kysely<InternalSchema>): RoleStore {
       });
     },
     async seedSystemRoles() {
+      const ledger = await readLedger();
+      const created: string[] = [];
+      const granted: CapabilityReconciliation['granted'] = [];
+
       for (const def of SYSTEM_ROLES) {
         const existing = await store.getBySlug(def.slug);
-        if (existing) continue;
-        const id = randomUUID();
-        await db.insertInto('roles').values({ id, slug: def.slug, name: def.name, description: def.description, is_system: true }).execute();
-        await writeCaps(id, def.capabilities);
+        if (!existing) {
+          const id = randomUUID();
+          await db.insertInto('roles').values({ id, slug: def.slug, name: def.name, description: def.description, is_system: true }).execute();
+          await writeCaps(id, def.capabilities);
+          created.push(def.slug);
+          continue;
+        }
+
+        // Reconcile an EXISTING role. Adding a capability to the catalog used to reach fresh
+        // installs only; this is what makes it reach upgraded ones.
+        //
+        // lab_admin: UNCONDITIONAL. Its preset is [...CAPABILITY_KEYS] and it is the locked role —
+        // update() throws for it, create() cannot collide with its slug, remove() refuses system
+        // roles. No operator-facing path can revoke from it, so no operator intent exists to
+        // protect and reconciling it every boot cannot destroy information. This is what repairs
+        // data_exposure.manage in the field.
+        //
+        // Unlocked presets: LEDGER-GATED. They genuinely can be diverged, so only ever grant a key
+        // the ledger has never seen — a key that has never existed cannot have been revoked.
+        //
+        // ⚠ ledger === null means "disabled", NOT "empty". See readLedger().
+        const want =
+          def.slug === LOCKED_SLUG
+            ? def.capabilities
+            : ledger === null
+              ? []
+              : def.capabilities.filter((c) => !ledger.has(c));
+
+        const have = new Set(existing.capabilities);
+        for (const capability of want) {
+          if (have.has(capability)) continue;
+          await db
+            .insertInto('role_capabilities')
+            .values({ role_id: existing.id, capability })
+            .onConflict((oc) => oc.columns(['role_id', 'capability']).doNothing())
+            .execute();
+          granted.push({ slug: def.slug, roleId: existing.id, capability });
+        }
       }
+
+      // Only record when the ledger was actually readable. A null ledger means reconciliation
+      // was DISABLED for this pass — recording keys we deliberately did not grant would burn a
+      // new capability's one free grant and permanently withhold it from the unlocked presets.
+      if (ledger !== null) await recordLedger();
+      return { created, granted };
+    },
+    async diagnoseCapabilities() {
+      const ledger = await readLedger();
+      const known = new Set(CAPABILITY_KEYS);
+      const roles: CapabilityDiagnosis['roles'] = [];
+
+      for (const def of SYSTEM_ROLES) {
+        const existing = await store.getBySlug(def.slug);
+        if (!existing) {
+          roles.push({ slug: def.slug, present: false, ok: [], revoked: [], pending: [] });
+          continue;
+        }
+        const have = new Set(existing.capabilities);
+        const ok: string[] = [];
+        const revoked: string[] = [];
+        const pending: string[] = [];
+        for (const c of def.capabilities) {
+          if (have.has(c)) ok.push(c);
+          // The locked role is reconciled UNCONDITIONALLY, so anything missing from it will be
+          // granted on the next boot no matter what the ledger says. Reporting it as `revoked`
+          // would be wrong twice over: nothing can revoke from lab_admin, and it is not durable.
+          else if (def.slug === LOCKED_SLUG) pending.push(c);
+          // Ledger unreadable → cannot prove a key is new, so report the conservative class.
+          else if (ledger === null || ledger.has(c)) revoked.push(c);
+          else pending.push(c);
+        }
+        roles.push({ slug: def.slug, present: true, ok, revoked, pending });
+      }
+
+      const rows = await db
+        .selectFrom('role_capabilities')
+        .innerJoin('roles', 'roles.id', 'role_capabilities.role_id')
+        .select(['roles.slug as slug', 'role_capabilities.capability as capability'])
+        .execute();
+      const orphaned = rows
+        .filter((r) => !known.has(r.capability))
+        .map((r) => ({ slug: r.slug, capability: r.capability }));
+
+      return { roles, orphaned, ledgerAvailable: ledger !== null };
     },
     async backfillUserFromRoleNames(subject, roleNames) {
       for (const name of roleNames) {

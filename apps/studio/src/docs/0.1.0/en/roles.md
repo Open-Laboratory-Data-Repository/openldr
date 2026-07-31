@@ -66,6 +66,28 @@ The Roles list shows each role's name, description, and member count. A user's v
 
 Prefer several narrow custom roles over one broad role reused everywhere — it keeps the audit trail (`role.create`, `role.update`, `role.delete`, `user.assign_role`) meaningful and makes it obvious what a future capability change actually affects. The `openldr roles` CLI commands mirror everything in this page for scripted or headless administration.
 
+## How capabilities reach an existing install
+
+New OpenLDR versions add capabilities. Roles live in the database, so a role created by an earlier
+version does not automatically know about a capability introduced later. OpenLDR reconciles this on
+every start:
+
+- **Administrator** is always brought up to the full capability list. The role is locked and is
+  defined as "every capability", so there is no customisation to preserve — if a release adds a
+  capability, the Administrator role has it after the next restart.
+- **The other built-in roles** receive a capability **only the first time that capability exists**.
+  After that, OpenLDR never re-grants it. If you remove a capability from Lab Manager, it stays
+  removed across restarts and upgrades.
+- **Custom roles you create are never modified.** If a new capability is relevant to one of your own
+  roles, grant it yourself in Settings → Roles.
+
+A capability granted this way is recorded in the audit log as `role.capability.backfill`, so an
+upgrade that widens a role leaves a trace.
+
+To see how your install compares with the built-in definitions, run `openldr roles doctor`. It
+reports, per built-in role, which capabilities are held, which you have deliberately removed, and
+which are still pending — plus any capability keys left behind by a retired feature.
+
 ## Related guides
 
 - [Users and Roles](/docs/users)

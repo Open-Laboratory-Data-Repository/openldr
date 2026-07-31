@@ -10,7 +10,7 @@ import { toS3BucketConfig } from './s3-config';
 import type { Config } from '@openldr/config';
 import { createLogger, HealthRegistry, open, seal, parseSecretKey, redact, type Logger } from '@openldr/core';
 import { createInternalDb, createFhirStore, createRelationalWriter, persistResources, createTerminologyStore, createTerminologyAdminStore, createOntologyStore, createReportRunStore, createReportScheduleStore, createMarketplaceInstallStore, createRegistryStore, createAppSettingsStore, deriveSystemCode, resolveSeedPublisherId, createProjectionRunner, fetchSafeChangeRows, readCursor as readChangeCursor, advanceCursor as advanceChangeCursor, createReferenceApplier, referenceCapture, markTerminologyChanged, createRoleStore, type TerminologyAdminStore, type OntologyStore, type FhirStore, type ReportRunStore, type ReportScheduleStore, type AppSettingStore, type RoleStore } from '@openldr/db';
-import type { ExternalSchema, InternalSchema, Provenance, SyncActivityStore, TargetEngine } from '@openldr/db';
+import type { ExternalSchema, InternalSchema, Provenance, SyncActivityStore, TargetEngine, CapabilityReconciliation } from '@openldr/db';
 import type { AuthPort, BlobStoragePort, EventingPort, TargetStorePort } from '@openldr/ports';
 import { createAuditStore, safeRecord, type AuditStore } from '@openldr/audit';
 import { createUserStore, type UserStore, createUserProfileStore, type UserProfileStore } from '@openldr/users';
@@ -78,6 +78,7 @@ import { createProjectionWorker } from './projection-worker';
 import { buildOntologyDistribution, canonicalSystemUrl, createOperations, importTerminologyResource, loadLoinc, loadWhonetAmr, stalenessReason, type LoaderStore, type LoadResult, type OntologyBuildProgress, type OntologyManifest, type OntologyType, type Operations } from '@openldr/terminology';
 import { createTerminologyIngestWorker } from './terminology-ingest-worker';
 import { createRunIngest } from './terminology-ingest-shared';
+import { recordAuditEvent, type AuditDetails } from './record-audit';
 
 
 /** Params used ONLY to probe a report for its column list (see `reporting.columns` below).
@@ -407,6 +408,26 @@ export interface AppContext {
   close(): Promise<void>;
 }
 
+/** Group a reconciliation's grants into one audit event per role. Pure, so the grouping is
+ *  testable without a live context. Empty in → empty out: a boot that changed nothing writes
+ *  no events, which is what keeps the signal meaningful across ordinary restarts. */
+export function capabilityBackfillEvents(
+  granted: CapabilityReconciliation['granted'],
+): AuditDetails[] {
+  const byRole = new Map<string, { slug: string; capabilities: string[] }>();
+  for (const g of granted) {
+    const entry = byRole.get(g.roleId) ?? { slug: g.slug, capabilities: [] };
+    entry.capabilities.push(g.capability);
+    byRole.set(g.roleId, entry);
+  }
+  return [...byRole].map(([roleId, { slug, capabilities }]) => ({
+    action: 'role.capability.backfill',
+    entityType: 'role',
+    entityId: roleId,
+    metadata: { slug, capabilities },
+  }));
+}
+
 export async function createAppContext(cfg: Config): Promise<AppContext> {
   const logger = createLogger({ level: cfg.LOG_LEVEL });
 
@@ -437,9 +458,17 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
   // covers a fresh install AND an existing-DB upgrade to this feature identically. Mirrors the
   // migrateWorkflowSecrets/migrateLegacySyncConfig best-effort shims further below: wrapped so a
   // pre-migration DB or a transient connection failure logs a warning and never aborts boot.
-  await roles.seedSystemRoles().catch((err) => {
+  const reconciliation = await roles.seedSystemRoles().catch((err) => {
     logger.warn({ err }, 'system-role seed failed');
+    return { created: [], granted: [] } as CapabilityReconciliation;
   });
+  // Reconciliation can GRANT a capability without an operator asking — the mechanism that repairs
+  // a capability added to the catalog after this install's roles were created. Record it, so the
+  // change is traceable rather than appearing as if by magic after an upgrade. recordAuditEvent is
+  // already best-effort (safeRecord logs and never throws), so no extra guard is needed.
+  for (const details of capabilityBackfillEvents(reconciliation.granted)) {
+    await recordAuditEvent({ audit, logger }, { actorType: 'system', actorId: null, actorName: 'boot' }, details);
+  }
   // Data Exposure Task 5: seed column_exposure_policy from HARDCODED_DENY_UNION on every boot —
   // UNCONDITIONAL and best-effort, mirroring the role seed immediately above (NOT routed through
   // seedEssentials()/seedDatabase(), which take a forms/workflows surface with no db handle and are

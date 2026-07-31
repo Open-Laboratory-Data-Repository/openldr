@@ -627,6 +627,14 @@ export interface AppSettingsTable {
   updated_by: string | null;
 }
 
+/** Ledger of capability keys that have ever existed in the catalog (migration 067).
+ *  Read by RoleStore.seedSystemRoles() to decide whether a preset capability is brand-new
+ *  (safe to grant once) or has already had its one free grant (a later absence is a revoke). */
+export interface CapabilityIntroductionsTable {
+  capability: string;
+  introduced_at: Generated<Date>;
+}
+
 export interface ReportDesignsTable {
   id: string;
   name: string;
@@ -766,5 +774,6 @@ export interface InternalSchema {
   terminology_ingest_jobs: TerminologyIngestJobsTable;
   roles: RolesTable;
   role_capabilities: RoleCapabilitiesTable;
+  capability_introductions: CapabilityIntroductionsTable;
   user_roles: UserRolesTable;
 }

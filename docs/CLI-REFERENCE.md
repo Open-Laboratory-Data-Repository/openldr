@@ -33,6 +33,7 @@ Most commands return `0` on success and `1` on validation/runtime failure. Comma
 | `openldr report-design list/delete` | Manage Report Designer page designs. |
 | `openldr audit list` | Query append-only audit events. |
 | `openldr users list` / `openldr user ...` | Manage local users and roles. |
+| `openldr roles ...` | Manage capability roles. `roles doctor` reports capability drift against the built-in role definitions. |
 | `openldr settings flags/numbers/sync/danger ...` | Read/write feature flags, numeric limits, sync config, and danger-zone actions. |
 | `openldr sync ...` | Distributed (lab⇄central) sync status/control, enrollment, amendment, divergence, and offline bundle export/import. |
 | `openldr export` | Export the complete dataset: canonical FHIR (NDJSON + Bundle) + flat-table CSV + manifest. |
