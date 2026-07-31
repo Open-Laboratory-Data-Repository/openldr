@@ -123,7 +123,12 @@ export function AppShell({
 
   return (
     <TooltipProvider delayDuration={300}>
-    <div className="ui-scope flex h-screen overflow-hidden">
+    {/* `h-dvh`, not `h-screen`: `100vh` on mobile browsers is the LARGE viewport (URL bar
+        retracted), so while the bar is showing the real visible area is shorter. Combined with
+        `overflow-hidden` that puts anything pinned to the bottom — pagination footers, save
+        bars — under the browser chrome with no way to scroll to it. `100dvh` tracks the
+        actually-visible height. */}
+    <div className="ui-scope flex h-dvh overflow-hidden">
       <NotificationToaster />
       {/* Scrim behind the mobile drawer; tapping it closes the menu. Desktop never shows it. */}
       {mobileOpen && (
