@@ -1,4 +1,4 @@
-import { visibleFieldIds as libVisibleFieldIds } from '@openldr/forms/pure';
+import { isCodingAnswer, isEntityAnswer, isReferenceFieldType, visibleFieldIds as libVisibleFieldIds } from '@openldr/forms/pure';
 import type { FormField, FormSchema, RuntimeAnswers } from './types';
 
 // ── Visibility ────────────────────────────────────────────────────────────────
@@ -31,6 +31,15 @@ export function validate(schema: FormSchema, answers: RuntimeAnswers): Record<st
     if (field.required && values.length === 0) {
       errors[field.id] = `field ${field.id} is required`;
       continue;
+    }
+
+    // A reference answer must be an object the picker produced. A bare string means the
+    // user typed into a stub input, which is exactly what this feature removes.
+    if (isReferenceFieldType(field.fieldType) && values.length > 0) {
+      if (values.some((v) => !isCodingAnswer(v) && !isEntityAnswer(v))) {
+        errors[field.id] = 'select a value from the list';
+        continue;
+      }
     }
 
     // Numeric constraints (number fieldType)

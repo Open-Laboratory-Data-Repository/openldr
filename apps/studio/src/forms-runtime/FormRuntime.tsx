@@ -10,8 +10,10 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { resolveReferenceSource } from '@openldr/forms/pure';
 import type { FormField, FormSchema, FormSection, RuntimeAnswers } from './types';
 import { cleanAnswers, fieldLabel, groupChildren, validate, visibleIds } from './runtime';
+import { ReferencePicker, type ReferenceValue } from './ReferencePicker';
 
 // ── Public component ──────────────────────────────────────────────────────────
 
@@ -122,6 +124,7 @@ export function FormRuntime({
         error={errors[field.id]}
         onChange={setField}
         errors={errors}
+        formId={formId}
       />
     ));
   }
@@ -185,6 +188,7 @@ function FieldRow({
   error,
   onChange,
   errors,
+  formId,
 }: {
   field: FormField;
   schema: FormSchema;
@@ -193,6 +197,7 @@ function FieldRow({
   error?: string;
   onChange: (fieldId: string, value: unknown) => void;
   errors: Record<string, string>;
+  formId?: string;
 }) {
   const label = fieldLabel(field);
 
@@ -211,6 +216,7 @@ function FieldRow({
             error={errors[child.id]}
             onChange={onChange}
             errors={errors}
+            formId={formId}
           />
         ))}
       </fieldset>
@@ -249,7 +255,7 @@ function FieldRow({
         ) : null}
       </Label>
       <div>
-        <FieldControl field={field} value={answers[field.id]} onChange={(v) => onChange(field.id, v)} />
+        <FieldControl field={field} value={answers[field.id]} onChange={(v) => onChange(field.id, v)} formId={formId} />
         {error ? <p className="mt-1 text-xs text-destructive" role="alert">{error}</p> : null}
       </div>
     </div>
@@ -262,10 +268,12 @@ function FieldControl({
   field,
   value,
   onChange,
+  formId,
 }: {
   field: FormField;
   value: unknown;
   onChange: (value: unknown) => void;
+  formId?: string;
 }) {
   const label = fieldLabel(field);
 
@@ -376,35 +384,69 @@ function FieldControl({
         />
       );
 
-    // Stub types — render a basic text Input with placeholder
+    // reference always uses the picker. facility/organism/antibiogram use it only when the
+    // field actually declares a source; otherwise they keep the historical text input.
     case 'reference':
     case 'facility':
     case 'organism':
-    case 'antibiogram':
+    case 'antibiogram': {
+      const resolved = resolveReferenceSource(field);
+      if (field.fieldType === 'reference' || resolved.ok) {
+        const multiple = field.referenceMultiple === true
+          || field.repeatable === true
+          || (field.cardinality?.max !== undefined && field.cardinality.max !== '1');
+        return (
+          <ReferencePicker
+            field={field}
+            formId={formId}
+            multiple={multiple}
+            value={(value ?? null) as ReferenceValue | ReferenceValue[] | null}
+            onChange={(v) => onChange(v)}
+          />
+        );
+      }
       return (
-        <Input
-          id={field.id}
-          type="text"
-          value={value != null ? String(value) : ''}
+        <TextFallback
+          field={field}
+          value={value}
+          onChange={onChange}
+          label={label}
           placeholder={field.placeholder ?? `Search ${field.fieldType}...`}
-          onChange={(e) => onChange(e.target.value || undefined)}
-          aria-label={label}
-          required={field.required}
         />
       );
+    }
 
     // text, phone, email, address, identifier — all plain text inputs
     default:
-      return (
-        <Input
-          id={field.id}
-          type={field.fieldType === 'email' ? 'email' : field.fieldType === 'phone' ? 'tel' : 'text'}
-          value={value != null ? String(value) : ''}
-          placeholder={field.placeholder}
-          onChange={(e) => onChange(e.target.value || undefined)}
-          aria-label={label}
-          required={field.required}
-        />
-      );
+      return <TextFallback field={field} value={value} onChange={onChange} label={label} />;
   }
+}
+
+// ── Text fallback (shared by the default text-like types and the un-sourced reference stubs) ──
+
+function TextFallback({
+  field,
+  value,
+  onChange,
+  label,
+  placeholder,
+}: {
+  field: FormField;
+  value: unknown;
+  onChange: (value: unknown) => void;
+  label: string;
+  /** Overrides `field.placeholder` — used by the reference-family fallback's "Search ..." hint. */
+  placeholder?: string;
+}): JSX.Element {
+  return (
+    <Input
+      id={field.id}
+      type={field.fieldType === 'email' ? 'email' : field.fieldType === 'phone' ? 'tel' : 'text'}
+      value={value != null ? String(value) : ''}
+      placeholder={placeholder ?? field.placeholder}
+      onChange={(e) => onChange(e.target.value || undefined)}
+      aria-label={label}
+      required={field.required}
+    />
+  );
 }
