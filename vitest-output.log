@@ -1,0 +1,337 @@
+﻿
+ RUN  v2.1.8 D:/Projects/Repositories/openldr_ce/packages/db
+
+ ✓ src/fhir-store-merge.test.ts (8 tests) 6083ms
+   ✓ FhirStore.mergePatients > marks the duplicate replaced, re-points referencing resources, writes a merge Provenance + outbox rows 2403ms
+   ✓ FhirStore.mergePatients > rejects a cross-site merge (patients owned by different sites) 697ms
+   ✓ FhirStore.mergePatients > rejects merging a patient into itself 443ms
+   ✓ FhirStore.mergePatients > rejects when a patient does not exist 310ms
+   ✓ FhirStore.mergePatients > skips a stale referencing ref that no longer exists (does not fail the merge) 466ms
+   ✓ FhirStore.mergePatients > skips a ref of a non-mergeable type (never grafts a spurious subject) 668ms
+   ✓ FhirStore.mergePatients > skips a cross-site referencing ref (never re-stamps a resource owned by another site) 481ms
+   ✓ FhirStore.mergePatients > is idempotent on re-run: a second identical merge writes nothing 613ms
+ ✓ src/terminology-ingest-job-store.test.ts (10 tests) 6304ms
+   ✓ terminology ingest job store > enqueues a queued job and reads it back 2189ms
+   ✓ terminology ingest job store > rejects a second active job for the same system 491ms
+   ✓ terminology ingest job store > claimNext moves the oldest queued job to running exactly once 418ms
+   ✓ terminology ingest job store > updateProgress + finish transition status 484ms
+   ✓ terminology ingest job store > latestReadyForSystem returns the newest ready job, not a later running job 359ms
+   ✓ terminology ingest job store > insertRunning creates a running, active job the queued-only claimer will not pick up 494ms
+   ✓ terminology ingest job store > insertRunning rejects a second active job for the same system 493ms
+   ✓ terminology ingest job store > failStaleRunning fails only running jobs, clears active_key, and returns the count 449ms
+   ✓ terminology ingest job store > failStaleRunning leaves queued jobs untouched and returns 0 446ms
+   ✓ terminology ingest job store > listForCodingSystem returns all jobs for a coding system, newest first 478ms
+ ✓ src/fhir-store-amend.test.ts (8 tests) 6263ms
+   ✓ FhirStore.amend > amends a lab-owned resource: bumps version, preserves site_id, writes Provenance + 2 outbox rows 2613ms
+   ✓ FhirStore.amend > ignores a patch that tries to override resourceType/id (envelope stays intact) 682ms
+   ✓ FhirStore.amend > rejects amending a resource that does not exist 456ms
+   ✓ FhirStore.amend > rejects amending a resource with no owning site (central-owned / unsynced) 618ms
+   ✓ FhirStore.amend > amends a ServiceRequest with activity=update: Provenance activity is UPDATE, version bumped, site preserved 485ms
+   ✓ FhirStore.amend > defaults activity to AMEND when omitted (S6a regression guard) 650ms
+   ✓ FhirStore.amend > treats an empty-string activity as the AMEND default (falsy coalescing) 410ms
+   ✓ FhirStore.amend > rejects a non-allowlisted resource type with UnsupportedResourceTypeError (before any write) 318ms
+ ✓ src/fhir-store-apply.test.ts (8 tests) 6433ms
+   ✓ fhir-store applyRemote > fresh upsert → applied; canonical row, history row, and origin-stamped change_log 2785ms
+   ✓ fhir-store applyRemote > re-apply same (type,id,version) → skipped; no duplicate history or change_log rows 501ms
+   ✓ fhir-store applyRemote > op:delete → tombstone in history, canonical row gone, change_log op=delete with null hash 548ms
+   ✓ fhir-store applyRemote > out-of-order: v3 then v2 → v2 applied (history) but canonical row stays at v3 898ms
+   ✓ fhir-store applyRemote > out-of-order: newer upsert (v5) then older delete (v3) → canonical row survives at v5 525ms
+   ✓ fhir-store applyRemote > out-of-order: newer delete (v5) then older upsert (v3) → resource stays deleted (no resurrection) 413ms
+   ✓ fhir-store applyRemote > op:upsert with no resource → rejects (and writes nothing) 374ms
+   ✓ fhir-store applyRemote > a newer version DOES advance the canonical row (upsert path) 387ms
+ ✓ src/fhir-store-versioning.test.ts (8 tests) 7618ms
+   ✓ fhir-store versioning > assigns monotonic version and mirrors meta.versionId 2807ms
+   ✓ fhir-store versioning > appends a history row per save and stores the resource 505ms
+   ✓ fhir-store versioning > emits one change_log row per save with hash and increasing seq 537ms
+   ✓ fhir-store versioning > resolves site_id from app_settings, then env, then null 1563ms
+   ✓ fhir-store versioning > keeps version monotonic across delete then recreate (no PK collision) 361ms
+   ✓ fhir-store versioning > content_hash is stable for identical content across saves 878ms
+   ✓ fhir-store delete (tombstone) > tombstones an existing resource: history + change_log delete rows, get() null, version bumped 459ms
+   ✓ fhir-store delete (tombstone) > is a no-op for a missing resource 505ms
+ ✓ src/fhir-store-divergence.test.ts (11 tests) 7766ms
+   ✓ fhir-store applyRemote — same-version divergence > same version + DIFFERENT content → diverged + exactly one row holding the dropped body 2707ms
+   ✓ fhir-store applyRemote — same-version divergence > does NOT overwrite the canonical row on divergence (the local copy is kept) 480ms
+   ✓ fhir-store applyRemote — same-version divergence > same version + IDENTICAL content → skipped, NO row (idempotent re-drain unchanged) 466ms
+   ✓ fhir-store applyRemote — same-version divergence > content differing ONLY in volatile meta → skipped, NO row (the false-positive guard) 793ms
+   ✓ fhir-store applyRemote — same-version divergence > a body that omits id does NOT falsely diverge from the id-normalized stored copy 692ms
+   ✓ fhir-store applyRemote — same-version divergence > tombstone vs tombstone → skipped, NO row (two deletes agree) 435ms
+   ✓ fhir-store applyRemote — same-version divergence > local tombstone vs incoming body → diverged (delete-vs-edit) 470ms
+   ✓ fhir-store applyRemote — same-version divergence > local body vs incoming tombstone → diverged, NULL incoming hash/body persisted 412ms
+   ✓ fhir-store applyRemote — same-version divergence > re-delivery of a diverged record → still diverged, no duplicate, no detected_at churn 348ms
+   ✓ fhir-store applyRemote — same-version divergence > divergences at v2 and v5 on one resource are independent rows 580ms
+   ✓ fhir-store applyRemote — same-version divergence > a normal first apply at a new version still returns applied and records nothing 380ms
+ ✓ src/terminology-sync-instrumentation.test.ts (7 tests) 8145ms
+   ✓ terminology change instrumentation (Sync S3 / B2) > terms.importRows spanning >1 internal batch emits exactly ONE terminology_system signal 4345ms
+   ✓ terminology change instrumentation (Sync S3 / B2) > terms.importRows marks each DISTINCT system once (not one signal for two systems) 1180ms
+   ✓ terminology change instrumentation (Sync S3 / B2) > terms.update of one concept adds one MORE terminology_system signal for its system 570ms
+   ✓ terminology change instrumentation (Sync S3 / B2) > terms.create and terms.delete each emit one terminology_system signal 662ms
+   ✓ terminology change instrumentation (Sync S3 / B2) > upsertMapElements on a non-LOCAL map_url emits ONE concept_map signal 624ms
+   ✓ terminology change instrumentation (Sync S3 / B2) > upsertMapElements on LOCAL_MAP_URL emits NO concept_map signal 409ms
+   ✓ terminology change instrumentation (Sync S3 / B2) > a curated termMappings.create (writes LOCAL_MAP_URL) emits NO concept_map signal 352ms
+ ✓ src/relational/relational.test.ts (8 tests) 17ms
+ ✓ src/reference-apply.test.ts (19 tests) 9490ms
+   ✓ applyReferenceChange > upserts a dashboard stamped managed_origin=central 2283ms
+   ✓ applyReferenceChange > upsert updates an existing central-managed dashboard 533ms
+   ✓ applyReferenceChange > delete removes a central-managed row but NOT a lab-local one 419ms
+   ✓ applyReferenceChange > applies a report (upsert stamped central + delete guarded) 607ms
+   ✓ applyReferenceChange > report delete does NOT remove a lab-local row 410ms
+   ✓ applyReferenceChange > applies a form (upsert stamped central + delete guarded) 656ms
+   ✓ applyReferenceChange > form delete does NOT remove a lab-local row 536ms
+   ✓ applyReferenceChange > applies a setting (upsert + delete) 308ms
+   ✓ applyReferenceChange > applies a publisher (upsert stamped central, match_prefixes jsonb round-trips) 378ms
+   ✓ applyReferenceChange > publisher delete removes a central-managed row but NOT a lab-local one 458ms
+   ✓ applyReferenceChange > applies a coding_system (upsert stamped central + delete guarded) 371ms
+   ✓ applyReferenceChange > coding_system delete removes a central-managed row but NOT a lab-local one 325ms
+   ✓ applyReferenceChange > applies a term_mapping (upsert stamped central, owner preserved + delete guarded) 383ms
+   ✓ applyReferenceChange > term_mapping delete removes a central-managed row but NOT a lab-local one 330ms
+   ✓ applyReferenceChange > rejects an upsert with no body 382ms
+   ✓ applyReferenceChange > upserts a report_design stamped managed_origin=central 344ms
+ ✓ src/role-store.test.ts (12 tests) 9488ms
+   ✓ RoleStore > seedSystemRoles is idempotent and creates 5 roles with preset caps 2918ms
+   ✓ RoleStore > resolveCapabilities returns the union across assigned roles 610ms
+   ✓ RoleStore > create rejects unknown capability 469ms
+   ✓ RoleStore > cannot edit or delete the locked administrator role 849ms
+   ✓ RoleStore > cannot unassign the last roles.manage holder 721ms
+   ✓ RoleStore > backfillUserFromRoleNames maps token role names to system roles once 1551ms
+   ✓ RoleStore > remove rejects a non-locked system role 474ms
+   ✓ RoleStore > setUserRoles rejects (without mutating) a write that would leave zero roles.manage holders 438ms
+   ✓ RoleStore > remove rejects deleting a custom role that is the only actual roles.manage holder, even if lab_admin also grants it but has no members 414ms
+   ✓ RoleStore > remove succeeds deleting a roles.manage-granting custom role when another user still holds roles.manage 382ms
+   ✓ RoleStore > setUserRoles succeeds when roles.manage is still held by someone else 365ms
+ ✓ src/batch-upsert.test.ts (7 tests) 60ms
+ ✓ src/persist.test.ts (7 tests) 28ms
+ ✓ src/projection/cycle.test.ts (10 tests) 9171ms
+   ✓ runProjectionCycle > projects safe rows to the external store and advances the cursor 3762ms
+   ✓ runProjectionCycle > deletes the relational row when the canonical resource is gone (tombstone) 1087ms
+   ✓ runProjectionCycle > carries provenance from the canonical row into the projected row 1410ms
+   ✓ createProjectionRunner (stateful gaps across cycles) > carries pendingGaps across runCycle() calls: a fresh gap blocks, then confirms once the boundary advances 487ms
+   ✓ getWithProvenance > returns the resource alongside its stored provenance 434ms
+   ✓ getWithProvenance > returns an empty provenance (not undefined) when the columns are NULL 335ms
+   ✓ getWithProvenance > returns null for a missing resource 338ms
+   ✓ getWithProvenance > leaves get() unchanged — terminology-store.ts:161 depends on the bare resource 331ms
+   ✓ reprojectAll > rebuilds the read-model from canonical and sets the cursor to max seq 627ms
+   ✓ reprojectAll > carries provenance from the canonical rows into the rebuilt rows 358ms
+ ↓ src/migrations/external/reset-roundtrip-live.test.ts (1 test | 1 skipped)
+ ✓ src/terminology-admin-store.test.ts (31 tests) 14186ms
+   ✓ terminology admin store > lists the seeded publishers ordered by sort_order 2563ms
+   ✓ terminology admin store > creates, updates, and deletes a custom publisher 651ms
+   ✓ terminology admin store > refuses to delete a seeded publisher 486ms
+   ✓ terminology admin store > rejects a duplicate code-system url with a conflict 531ms
+   ✓ terminology admin store > updates a code system but keeps system_code immutable, and 404s on missing 632ms
+   ✓ terminology admin store > creates a code system and reports deletion impact 467ms
+   ✓ terminology admin store > upserts a coding system by url (idempotent, updates name) 716ms
+   ✓ terminology admin store > delete(id,{cascade}) removes an upload-created system + its concepts; protects a true seed 432ms
+   ✓ terminology admin store > codingSystems.getByUrl > returns the coding system for a known url, null when absent 473ms
+   ✓ terminology admin store > terms > creates a term with structured properties and reads them back 572ms
+   ✓ terminology admin store > terms > updates and deletes a term 309ms
+   ✓ terminology admin store > terms > throws not-found on update/delete of a missing term 335ms
+   ✓ terminology admin store > terms > importRows upserts (re-import updates) 376ms
+   ✓ terminology admin store > terms > search filters by text and status 332ms
+   ✓ terminology admin store > termMappings > creates a mapping, projects into concept_map_elements, and auto-creates a DRAFT target concept 303ms
+   ✓ terminology admin store > termMappings > does not create a draft when the target concept already exists 324ms
+   ✓ terminology admin store > termMappings > delete removes the mapping and its projection 363ms
+   ✓ terminology admin store > termMappings > update repoints the projection 476ms
+   ✓ terminology admin store > valueSets namespace > saves (insert), expands enumerated concepts, and lists with codeCount 319ms
+   ✓ terminology admin store > valueSets namespace > updates by url (no duplicate row) and rejects immutable edits 315ms
+   ✓ terminology admin store > reference-change capture > captures publisher create (upsert), update (upsert), and delete 324ms
+   ✓ terminology admin store > reference-change capture > captures term-mapping create/update (upsert) and delete 319ms
+   ✓ terminology admin store > reference-change capture > no-capture path: a store built without a capture writes NO reference_change_log rows 345ms
+ ✓ src/terminology-sync.test.ts (4 tests) 3796ms
+   ✓ markTerminologyChanged > creates a registry row (generation 1) + one signal for a brand-new system url 2469ms
+   ✓ markTerminologyChanged > a second bump advances generation to 2 and appends a distinct signal (no dedup) 425ms
+   ✓ markTerminologyChanged > bumps an existing system without disturbing its version/kind/resource_id 451ms
+   ✓ markConceptMapChanged > creates a concept_map_state row (generation 1) + one signal, then advances on a second bump 448ms
+ ✓ src/migrations/internal/012_terminology_admin.test.ts (7 tests) 3347ms
+   ✓ 012_terminology_admin > creates publishers and coding_systems 2154ms
+   ✓ 012_terminology_admin > enforces FK: publisher_id references publishers 498ms
+   ✓ 012_terminology_admin > rejects a coding_system with an unknown publisher_id 370ms
+   ✓ 012_terminology_admin > enforces unique url via index 318ms
+ ✓ src/reference-search.test.ts (7 tests) 1694ms
+   ✓ createPatientResolver > matches on surname, case-insensitively 1072ms
+ ✓ src/migrations/internal/066_forms_submit_capability.test.ts (6 tests) 4574ms
+   ✓ 066_forms_submit_capability > backfills forms.submit onto the data-entry presets 2390ms
+   ✓ 066_forms_submit_capability > does NOT grant it to the read-only presets 653ms
+   ✓ 066_forms_submit_capability > leaves custom operator-defined roles alone 436ms
+   ✓ 066_forms_submit_capability > skips a data-entry preset that no longer holds forms.view 404ms
+   ✓ 066_forms_submit_capability > is idempotent (the primary key is not violated on a re-run) 404ms
+ ✓ src/sync-divergence-store.test.ts (8 tests) 6012ms
+   ✓ sync-divergence-store > records a divergence and reads it back with the body 3110ms
+   ✓ sync-divergence-store > re-recording the same key is a no-op and does not churn detected_at 672ms
+   ✓ sync-divergence-store > records a tombstone side as NULL hash and body 359ms
+   ✓ sync-divergence-store > treats each version as an independent row 367ms
+   ✓ sync-divergence-store > clear removes only the targeted row 519ms
+   ✓ sync-divergence-store > list is newest-first 317ms
+   ✓ sync-divergence-store > get returns undefined for an unknown key 327ms
+   ✓ sync-divergence-store > list does NOT include incomingBody (PHI-free by construction) 339ms
+ ✓ src/connector-store.test.ts (10 tests) 6203ms
+   ✓ connector store > creates, lists (masking secrets), and getDecryptedConfig round-trips 2822ms
+   ✓ connector store > update replaces the sealed config + toggles enabled 653ms
+   ✓ connector store > fails closed when the encryption key is unset on create 354ms
+   ✓ connector store > getDecryptedConfig throws on a wrong key 362ms
+   ✓ connector store > update without a config patch does not require the key 388ms
+   ✓ connector store > removes a connector 323ms
+   ✓ connector store — host connectors > creates and round-trips a host (typed, plugin-less) connector 301ms
+   ✓ connector store — host connectors > keeps type null for a plugin connector 360ms
+   ✓ connector store — host connectors > rejects create with neither, or both, of pluginId and type 347ms
+ ✓ src/migrations/internal/056_sync_divergences.test.ts (4 tests) 4029ms
+   ✓ 056_sync_divergences > rejects a duplicate (resource_type, resource_id, version) — re-delivery cannot inflate the table 2539ms
+   ✓ 056_sync_divergences > records the same resource diverging at two versions as two independent rows 483ms
+   ✓ 056_sync_divergences > allows a NULL local_hash (local tombstone vs incoming edit at the same version) 493ms
+   ✓ 056_sync_divergences > allows a NULL incoming hash and body (incoming tombstone vs local edit) 512ms
+ ✓ src/report-store.test.ts (5 tests) 5291ms
+   ✓ createReportStore > creates and reads a record with JSON round-tripped 2731ms
+   ✓ createReportStore > create is idempotent on duplicate id 544ms
+   ✓ createReportStore > lists, updates and removes 506ms
+   ✓ createReportStore > without capture: no reference_change_log rows are written 755ms
+   ✓ createReportStore > with capture: create → upsert, update → upsert, remove → delete 751ms
+ ✓ src/projection/plan.test.ts (7 tests) 12ms
+ ✓ src/migrations/036_dhis2_to_plugin_data.test.ts (4 tests) 4627ms
+   ✓ 036_dhis2_to_plugin_data migration > copies host DHIS2 tables into plugin_data 2995ms
+   ✓ 036_dhis2_to_plugin_data migration > is idempotent 904ms
+   ✓ 036_dhis2_to_plugin_data migration > no-ops when source tables are empty 724ms
+ ↓ src/relational/questionnaire-response.roundtrip.test.ts (1 test | 1 skipped)
+ ✓ src/migrations/internal/015_ontology.test.ts (1 test) 3924ms
+   ✓ 015_ontology > creates ontology index tables 3916ms
+ ✓ src/migrations/migrations.test.ts (2 tests) 12ms
+ ✓ src/sync-site-cursor-store.test.ts (5 tests) 6192ms
+   ✓ sync-site-cursor-store > reports and reads back a position 4718ms
+   ✓ sync-site-cursor-store > returns 0 for an unknown site — 0 means "full snapshot", undefined would mean "nothing" 368ms
+   ✓ sync-site-cursor-store > NEVER clamps: a LOWER reported seq overwrites — a lab restored from backup needs those records again 398ms
+   ✓ sync-site-cursor-store > re-report TOUCHES the row: seq changes and reported_at is refreshed 400ms
+   ✓ sync-site-cursor-store > keeps the two streams independent for one site 305ms
+ ✓ src/workflow-secret-store.test.ts (8 tests) 7695ms
+   ✓ workflow secret store > put → resolve round-trips the plaintext 4620ms
+   ✓ workflow secret store > resolve throws for an unknown id 806ms
+   ✓ workflow secret store > resolve throws on a wrong key 457ms
+   ✓ workflow secret store > put fails closed when the encryption key is unset 482ms
+   ✓ workflow secret store > resolve fails closed when the encryption key is unset 348ms
+   ✓ workflow secret store > deleteExcept keeps the listed ids and drops the rest (orphan GC) 344ms
+   ✓ workflow secret store > deleteExcept with no keepIds removes all of the workflow secrets 343ms
+ ✓ src/sync-site-store.test.ts (6 tests) 5747ms
+   ✓ createSyncSiteStore > inserts then round-trips via get + list (camel<->snake, defaults, ISO timestamp) 3768ms
+   ✓ createSyncSiteStore > accepts null name / enrolledBy 364ms
+   ✓ createSyncSiteStore > setStatus revokes a site 549ms
+   ✓ createSyncSiteStore > setSigningPublicKey round-trips (null until set) 386ms
+   ✓ createSyncSiteStore > get returns undefined for an unknown site 375ms
+   ✓ createSyncSiteStore > list orders by enrolled_at desc (newest first) 303ms
+ ✓ src/divergence-hash.test.ts (8 tests) 15ms
+ ✓ src/migrations/external/007_drop_thin_rename_v2.test.ts (3 tests) 1484ms
+   ✓ 007 drop thin + rename v2->canonical > renames all 6 v2_ tables to canonical (which exist + accept rows) 1021ms
+ ✓ src/ontology-store.test.ts (2 tests) 3321ms
+   ✓ ontology-store > bulk-inserts nodes/edges and walks roots to children to node 2783ms
+   ✓ ontology-store > round-trips panel/answer/specimen rows and unlink clears everything 534ms
+ ✓ src/sync-activity-store.test.ts (3 tests) 3844ms
+   ✓ createSyncActivityStore > records a row and reads it back with parsed fields 2930ms
+   ✓ createSyncActivityStore > trims to N most-recent rows PER DIRECTION on write 526ms
+   ✓ createSyncActivityStore > lists newest-first and filters by direction 386ms
+ ✓ src/sync-quarantine-store.test.ts (4 tests) 4060ms
+   ✓ createSyncQuarantineStore > increments attempts and flips holding→quarantined at the threshold 2928ms
+   ✓ createSyncQuarantineStore > persists the record body so a retry can replay central's real descriptor 457ms
+   ✓ createSyncQuarantineStore > a failure with no body stores lastBody null 322ms
+   ✓ createSyncQuarantineStore > clear() removes the row; list() returns rows 351ms
+ ✓ src/reference-change-log.test.ts (5 tests) 4216ms
+   ✓ recordReferenceChange > appends an upsert row with the content hash 2574ms
+   ✓ recordReferenceChange > is a no-op when the latest row for the entity has the same content hash 505ms
+   ✓ recordReferenceChange > appends a new row when the content hash changes 345ms
+   ✓ recordReferenceChange > appends a delete tombstone unless the latest row is already a delete 493ms
+ ✓ src/plugin-data-store.test.ts (7 tests) 5088ms
+   ✓ plugin-data store > put/get round-trips a doc, scoped by plugin id 2917ms
+   ✓ plugin-data store > put upserts (second write to same key replaces) 588ms
+   ✓ plugin-data store > list returns a collection, with optional equality filter + limit 369ms
+   ✓ plugin-data store > delete removes one key; purge removes a whole namespace 360ms
+   ✓ plugin-data store > rejects an invalid filter field name 326ms
+ ✓ src/report-schedule-store.test.ts (1 test) 2310ms
+   ✓ report schedule store > CRUD + next-due/markRun + runs 2308ms
+ ✓ src/bundled-terminology.test.ts (3 tests) 323ms
+ ✓ src/migrations/internal/067_capability_introductions.test.ts (3 tests) 3116ms
+   ✓ 067_capability_introductions > seeds every capability key that exists as of 2026-07-31 2227ms
+   ✓ 067_capability_introductions > re-seeding an existing key is a no-op (the ON CONFLICT guard holds) 407ms
+   ✓ 067_capability_introductions > records data_exposure.manage even though no role may hold it 479ms
+ ✓ src/relational-writer.test.ts (2 tests) 1086ms
+   ✓ relational-writer > writes/upserts a resource into its table and deletes by id 941ms
+ ✓ src/app-settings-store.test.ts (4 tests) 3337ms
+   ✓ createAppSettingsStore > sets and reads a value (upsert on repeat) 2255ms
+   ✓ createAppSettingsStore > without capture: no reference_change_log rows 419ms
+   ✓ createAppSettingsStore > with capture: allowlisted key → upsert capture 348ms
+   ✓ createAppSettingsStore > with capture: non-allowlisted (sync.*) key → NO capture 311ms
+ ✓ src/relational/questionnaire-response.test.ts (3 tests) 8ms
+ ✓ src/migrations/internal/014_value_sets.test.ts (2 tests) 2810ms
+   ✓ 014_value_sets > creates value_sets and valueset_expansions tables 2375ms
+   ✓ 014_value_sets seeds > seeds the local code system, concepts, and six value sets with expansions 433ms
+ ✓ src/migrations/internal/017_reference_terminology_seeds.test.ts (1 test) 2322ms
+   ✓ 017_reference_terminology_seeds > seeds UCUM and ICD-10 code systems with Corlix starter terms 2319ms
+ ✓ src/terminology-store.test.ts (3 tests) 3053ms
+   ✓ searchConcepts > filters by text on code or display (case-insensitive) 2337ms
+   ✓ searchConcepts > filters by status and counts 393ms
+   ✓ searchConcepts > pages results ordered by code 321ms
+ ✓ src/registry-store.test.ts (2 tests) 2819ms
+   ✓ createRegistryStore > creates/lists/gets/updates/removes 2439ms
+   ✓ createRegistryStore > update patches only specified fields 377ms
+ ✓ src/migrations/internal/062_rbac.test.ts (2 tests) 2840ms
+   ✓ 062_rbac > creates rbac tables and the users.rbac_initialized column 2492ms
+   ✓ 062_rbac > slug is unique 346ms
+ ✓ src/migrations/internal/048_managed_origin.test.ts (1 test) 2269ms
+   ✓ 048_managed_origin > adds a nullable managed_origin column to the three config tables 2267ms
+ ✓ src/migrations/internal/057_sync_site_cursors.test.ts (3 tests) 3176ms
+   ✓ 057_sync_site_cursors > stores one row per (site_id, consumer) 2267ms
+   ✓ 057_sync_site_cursors > rejects a duplicate (site_id, consumer) — one row per stream, not an append log 374ms
+   ✓ 057_sync_site_cursors > defaults reported_at 533ms
+ ✓ src/migrations/internal/049_terminology_managed_origin.test.ts (1 test) 2269ms
+   ✓ 049_terminology_managed_origin > adds a nullable managed_origin column to the three terminology metadata tables 2267ms
+ ✓ src/seed-publishers.test.ts (2 tests) 6ms
+ ✓ src/migrations/internal/018_snomed_code_system.test.ts (1 test) 1914ms
+   ✓ 018_snomed_code_system > repairs legacy seeded SNOMED rows so RF2 imports use the SNOMED parser 1911ms
+ ✓ src/report-run-store.test.ts (1 test) 2320ms
+   ✓ report run store > records runs and lists them newest-first with paging + total 2318ms
+ ✓ src/fhir-store.test.ts (2 tests) 3092ms
+   ✓ fhir-store listByType > returns only resources of the requested type 2594ms
+   ✓ fhir-store exists > is true for a saved resource and false for a missing one 496ms
+ ✓ src/marketplace-install-store.test.ts (1 test) 2238ms
+   ✓ MarketplaceInstallStore > upserts, gets, lists and removes 2236ms
+ ✓ src/migrations/internal/046_fhir_versioning.test.ts (1 test) 2778ms
+   ✓ 046 fhir versioning schema > adds version column (backfilled) and creates history + change_log + change_cursors 2776ms
+ ✓ src/migrations/internal/020_form_fhir_metadata.test.ts (1 test) 2786ms
+   ✓ 020_form_fhir_metadata migration > adds fhir_version, fhir_profile_url, and facility_id to form_definitions 2783ms
+ ✓ src/migrations/internal/045_fhir_schema.test.ts (1 test) 2433ms
+   ✓ 045 fhir schema move > relocates fhir_resources into the fhir schema, preserves existing rows, and FhirStore round-trips 2430ms
+ ✓ src/migrations/internal/026_report_schedules.test.ts (2 tests) 2460ms
+   ✓ 026_report_schedules migration > creates writable report_schedules + report_schedule_runs tables 2455ms
+ ✓ src/migrations/external/dialect.test.ts (4 tests) 16ms
+ ✓ src/resolve-publisher.test.ts (3 tests) 10ms
+ ✓ src/migrations/internal/019_form_versions.test.ts (1 test) 2471ms
+   ✓ 019_form_versions migration > creates immutable published form snapshot storage 2467ms
+ ✓ src/custom-query-store.test.ts (1 test) 2385ms
+   ✓ CustomQueryStore > creates, gets, lists, updates and removes 2382ms
+ ✓ src/relational/patient.test.ts (2 tests) 7ms
+ ✓ src/migrations/external/003_v2_core.test.ts (1 test) 1032ms
+   ✓ 003 v2 core tables > creates the v2_ core tables (FHIR-id keyed, provenance cols) 1030ms
+ ✓ src/export-data.test.ts (2 tests) 11ms
+ ✓ src/persist-changelog.test.ts (1 test) 2542ms
+   ✓ persist path emits change_log per resource > one change_log row per resource in a batch, versions correct 2540ms
+ ✓ src/migrations/internal/054_sync_amendments.test.ts (1 test) 2350ms
+   ✓ 054_sync_amendments > creates the sync_amendments outbox with a bigserial seq and site-scoped columns 2348ms
+ ✓ src/migrations/internal/016_form_definitions.test.ts (1 test) 2168ms
+   ✓ 016_form_definitions > creates form_definitions for persisted form schemas 2165ms
+ ✓ src/migrations/internal/025_report_runs.test.ts (2 tests) 2112ms
+   ✓ 025_report_runs migration > creates a writable report_runs table 2107ms
+ ✓ src/migrations/external/005_v2_specimen_diagreport.test.ts (1 test) 883ms
+   ✓ 005 v2 specimen + diagnostic_report > creates specimens and diagnostic_reports 881ms
+ ✓ src/migrations/internal/042_report_designs.test.ts (1 test) 2138ms
+   ✓ 042_report_designs > creates report_designs and round-trips a row 2136ms
+ ✓ src/migrations/internal/053_workflow_secrets.test.ts (1 test) 2193ms
+   ✓ 053_workflow_secrets > creates the workflow_secrets table with the expected columns 2191ms
+ ✓ src/migrations/internal/043_reports.test.ts (1 test) 4ms
+ ✓ src/migrations/external/004_v2_patients_facility.test.ts (1 test) 775ms
+   ✓ 004 v2_patients.managing_organization > adds the managing_organization column 773ms
+ ✓ src/migrations/internal/024_plugin_registry.test.ts (1 test) 1906ms
+   ✓ 024_plugin_registry > adds enabled/active/approved_by/granted_at to plugins 1905ms
+ ✓ src/migrations/internal/013_term_mappings.test.ts (1 test) 1856ms
+   ✓ 013_term_mappings > creates term_mappings with from/to rows 1854ms
+ ✓ src/migrations/internal/023_marketplace_publishers.test.ts (1 test) 1824ms
+   ✓ 023_marketplace_publishers > creates the marketplace_publishers table 1822ms
+
+ Test Files  78 passed | 2 skipped (80)
+      Tests  340 passed | 2 skipped (342)
+   Start at  15:56:06
+   Duration  49.24s (transform 11.72s, setup 0ms, collect 156.68s, tests 254.68s, environment 37ms, prepare 44.16s)
+

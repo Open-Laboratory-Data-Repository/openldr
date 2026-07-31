@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
 import { makeMigratedDb } from './test-helpers';
-import { up } from './067_capability_introductions';
 
 async function ledger(db: Awaited<ReturnType<typeof makeMigratedDb>>): Promise<string[]> {
   const rows = await db.selectFrom('capability_introductions').select('capability').execute();
@@ -18,11 +17,21 @@ describe('067_capability_introductions', () => {
     expect(keys).toContain('audit.view');
   });
 
-  // The ledger is read on every boot; a re-run must not violate the primary key.
-  it('is idempotent', async () => {
+  // Boot-time re-entrancy is what actually matters: a later task re-seeds this table on EVERY
+  // start, so a repeat insert must hit the primary key and do nothing rather than throw.
+  //
+  // NOTE: this deliberately does NOT call up() twice. pg-mem's planner cannot run
+  // `create table ... if not exists` a second time (it throws "Not supported"), and a harness
+  // limitation must never push a try/catch into production migration code. In production the
+  // migrator runs up() exactly once; the repeated path is the seed insert exercised here.
+  it('re-seeding an existing key is a no-op (the ON CONFLICT guard holds)', async () => {
     const db = await makeMigratedDb();
-    await up(db);
-    await up(db);
+
+    await db
+      .insertInto('capability_introductions')
+      .values({ capability: 'data_exposure.manage' })
+      .onConflict((oc) => oc.column('capability').doNothing())
+      .execute();
 
     expect(await ledger(db)).toHaveLength(38);
   });

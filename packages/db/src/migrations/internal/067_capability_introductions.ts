@@ -41,21 +41,12 @@ const FROZEN_CAPABILITY_KEYS = [
 ] as const;
 
 export async function up(db: Kysely<any>): Promise<void> {
-  try {
-    await db.schema
-      .createTable('capability_introductions')
-      .ifNotExists()
-      .addColumn('capability', 'text', (c) => c.primaryKey())
-      .addColumn('introduced_at', 'timestamptz', (c) => c.notNull().defaultTo(sql`now()`))
-      .execute();
-  } catch (e) {
-    // pg-mem doesn't fully support this constraint pattern on subsequent runs.
-    // The table already exists, which is fine. In production (real PostgreSQL), this would not error.
-    const isExpectedError = e instanceof Error && (e.message.includes('Not supported') || e.message.includes('already exists'));
-    if (!isExpectedError) {
-      throw e;
-    }
-  }
+  await db.schema
+    .createTable('capability_introductions')
+    .ifNotExists()
+    .addColumn('capability', 'text', (c) => c.primaryKey())
+    .addColumn('introduced_at', 'timestamptz', (c) => c.notNull().defaultTo(sql`now()`))
+    .execute();
 
   await db
     .insertInto('capability_introductions')
