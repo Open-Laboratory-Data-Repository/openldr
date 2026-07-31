@@ -224,6 +224,15 @@ describe('RoleStore', () => {
 
     expect((await store.getBySlug('lab_technician'))!.capabilities).toContain('forms.submit');
     expect(result.granted.some((g) => g.slug === 'lab_technician' && g.capability === 'forms.submit')).toBe(true);
+
+    // The write half of the ledger contract: the first pass must RECORD forms.submit, so this
+    // second pass sees it as already-introduced and lets the operator's revoke stand. If
+    // recordLedger() were a no-op, the key would look brand-new again and be re-granted here.
+    const after = (await store.getBySlug('lab_technician'))!;
+    await store.update(after.id, { capabilities: ['forms.view'] });
+    await store.seedSystemRoles();
+
+    expect((await store.getBySlug('lab_technician'))!.capabilities).toEqual(['forms.view']);
     await db.destroy();
   });
 

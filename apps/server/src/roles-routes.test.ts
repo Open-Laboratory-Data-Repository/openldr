@@ -119,7 +119,7 @@ function buildFakeRoleStore() {
       }
       userRoles.set(subject, new Set(roleIds));
     },
-    async seedSystemRoles() { /* unused in these tests */ },
+    async seedSystemRoles() { return { created: [], granted: [] }; },
     async backfillUserFromRoleNames() { /* unused in these tests */ },
   };
 

@@ -346,7 +346,10 @@ export function createRoleStore(db: Kysely<InternalSchema>): RoleStore {
         }
       }
 
-      await recordLedger();
+      // Only record when the ledger was actually readable. A null ledger means reconciliation
+      // was DISABLED for this pass — recording keys we deliberately did not grant would burn a
+      // new capability's one free grant and permanently withhold it from the unlocked presets.
+      if (ledger !== null) await recordLedger();
       return { created, granted };
     },
     async backfillUserFromRoleNames(subject, roleNames) {
