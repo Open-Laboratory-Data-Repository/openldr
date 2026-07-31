@@ -7,6 +7,7 @@ import { toQuestionnaire, toQuestionnaireResponse, validateAnswers, validateRefe
 import { z } from 'zod';
 import { recordAudit } from './audit-helper';
 import { requireCapability } from './rbac';
+import { makeCodingSystemResolver } from './coding-system-url';
 
 function slug(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'form';
@@ -273,6 +274,8 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
     const referenceErrors = await validateReferences(f.schema as never, p.data.answers as never, {
       validateCode: (input) => ctx.terminology.ops.validateCode(input),
       exists: (resourceType, id) => ctx.fhirStore.exists(resourceType, id),
+      // A field bound to `cs-url-LOINC` must accept an answer carrying `http://loinc.org`.
+      resolveSystem: makeCodingSystemResolver(ctx),
     });
     if (referenceErrors.length > 0) {
       reply.code(400);

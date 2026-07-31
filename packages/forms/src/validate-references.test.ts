@@ -127,4 +127,46 @@ describe('validateReferences', () => {
     );
     expect(errors).toEqual([{ fieldId: 'p', label: 'Patient', reason: 'field declares no reference source' }]);
   });
+
+  // resolveReferenceSource classifies `cs-url-*` as a codesystem source, but every resolved
+  // answer carries the canonical url. Raw equality therefore rejected a correct answer.
+  describe('cs-url-* system identifiers', () => {
+    const resolveSystem = async (s: string): Promise<string> =>
+      (s === 'cs-url-LOINC' ? 'http://loinc.org' : s);
+
+    it('accepts a canonical-url answer against a cs-url-* bound field', async () => {
+      const received: Array<{ valueSetUrl?: string; code: string; system?: string }> = [];
+      const errors = await validateReferences(
+        model({ referenceTarget: 'cs-url-LOINC' }),
+        { p: { system: 'http://loinc.org', code: '718-7', display: null } },
+        deps({
+          resolveSystem,
+          validateCode: async (input) => { received.push(input); return { result: true, message: 'ok' }; },
+        }),
+      );
+      expect(errors).toEqual([]);
+      // validateCode is handed the canonical url, which is what the terminology store keys on.
+      expect(received).toEqual([{ system: 'http://loinc.org', code: '718-7' }]);
+    });
+
+    it('still rejects a genuinely different system once both sides are normalised', async () => {
+      const errors = await validateReferences(
+        model({ referenceTarget: 'cs-url-LOINC' }),
+        { p: { system: 'http://snomed.info/sct', code: '718-7', display: null } },
+        deps({ resolveSystem }),
+      );
+      expect(errors).toEqual([{
+        fieldId: 'p', label: 'Patient',
+        reason: "'http://snomed.info/sct' is not the system this field accepts (cs-url-LOINC)",
+      }]);
+    });
+
+    it('falls back to raw comparison when no resolver is injected', async () => {
+      expect(await validateReferences(
+        model({ referenceTarget: 'cs-url-LOINC' }),
+        { p: { system: 'cs-url-LOINC', code: '718-7', display: null } },
+        deps(),
+      )).toEqual([]);
+    });
+  });
 });

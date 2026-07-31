@@ -13,6 +13,7 @@ const FORM = {
       { id: 'patient',    fieldType: 'reference', displayLabel: 'Patient', referenceTarget: 'Patient' },
       { id: 'tests',      fieldType: 'reference', displayLabel: 'Tests',   referenceTarget: 'ActivityDefinition' },
       { id: 'loinc',      fieldType: 'reference', displayLabel: 'LOINC',   referenceTarget: 'http://loinc.org' },
+      { id: 'loincById',  fieldType: 'reference', displayLabel: 'LOINC',   referenceTarget: 'cs-url-LOINC' },
       { id: 'sourceless', fieldType: 'reference', displayLabel: 'None' },
       { id: 'vaccine',    fieldType: 'reference', displayLabel: 'Vaccine', valueSetUrl: 'http://hl7.org/fhir/ValueSet/vaccine-code' },
     ],
@@ -37,21 +38,30 @@ const calls: { limit: number }[] = [];
 const offsets: number[] = [];
 /** Reassigned per `makeApp()` call so tests can assert on the instance for that app. */
 let opsExpand = vi.fn();
+/** Systems `terms.search` was actually called with, so the cs-url-* resolution can be asserted. */
+const searchedSystems: string[] = [];
 
 function makeApp(capabilities = ['forms.view', 'forms.edit']) {
   calls.length = 0;
   offsets.length = 0;
+  searchedSystems.length = 0;
   opsExpand = vi.fn();
   const ctx = {
     forms: { get: async (id: string) => (id === FORM.id ? FORM : id === DRAFT_FORM.id ? DRAFT_FORM : null) },
     terminology: {
       ops: { expand: opsExpand },
       admin: {
+        codingSystems: {
+          list: async () => [{ id: 'cs-url-LOINC', url: 'http://loinc.org', systemCode: 'LOINC' }],
+        },
         terms: {
-          search: async () => ({
-            rows: [{ system: 'http://loinc.org', code: '718-7', display: 'Hemoglobin' }],
-            total: 1,
-          }),
+          search: async (systemUrl: string) => {
+            searchedSystems.push(systemUrl);
+            return {
+              rows: [{ system: 'http://loinc.org', code: '718-7', display: 'Hemoglobin' }],
+              total: 1,
+            };
+          },
         },
       },
     },
@@ -164,5 +174,21 @@ describe('reference search', () => {
     const res = await makeApp().inject({ method: 'GET', url: url('vaccine', 'q=d') });
     expect(res.json()).toEqual({ kind: 'coding', rows: [], total: 0 });
     expect(opsExpand).not.toHaveBeenCalled();
+  });
+
+  // `terminology_concepts.system` holds the canonical URL, so a field bound by coding-system id
+  // — the convention resolveReferenceSource classifies and the spec documents — used to return
+  // zero rows forever, silently.
+  it('resolves a cs-url-* system id to its canonical url before searching terms', async () => {
+    const res = await makeApp().inject({ method: 'GET', url: url('loincById', 'q=hemo') });
+    expect(res.statusCode).toBe(200);
+    expect(searchedSystems).toEqual(['http://loinc.org']);
+    expect(res.json().rows).toHaveLength(1);
+  });
+
+  it('passes an already-canonical system url through unchanged', async () => {
+    const res = await makeApp().inject({ method: 'GET', url: url('loinc', 'q=hemo') });
+    expect(res.statusCode).toBe(200);
+    expect(searchedSystems).toEqual(['http://loinc.org']);
   });
 });

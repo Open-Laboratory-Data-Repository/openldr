@@ -4,6 +4,7 @@ import { resolveReferenceSource, type FormField, type ReferenceSource } from '@o
 import { ENTITY_TARGETS, type EntityRow, type EntitySearchResolver } from '@openldr/db';
 import { z } from 'zod';
 import { requireCapability } from './rbac';
+import { makeCodingSystemResolver } from './coding-system-url';
 
 const VIEW = { preHandler: requireCapability('forms.view') };
 const MANAGE = { preHandler: requireCapability('forms.edit') };
@@ -29,6 +30,8 @@ export function registerReferenceSearchRoutes(
   ctx: AppContext,
   entityResolvers: Record<string, EntitySearchResolver>,
 ): void {
+  const resolveSystem = makeCodingSystemResolver(ctx);
+
   async function run(
     source: ReferenceSource, q: string, limit: number, offset: number, reply: FastifyReply,
   ): Promise<ReferenceSearchResponse | { error: string }> {
@@ -54,7 +57,11 @@ export function registerReferenceSearchRoutes(
       };
     }
 
-    const found = await ctx.terminology.admin.terms.search(source.system, { query: q, limit, offset });
+    // `terms.search` filters on terminology_concepts.system, which holds the CANONICAL URL.
+    // A field authored per the documented `cs-url-*` convention would otherwise match nothing,
+    // silently and forever.
+    const system = await resolveSystem(source.system);
+    const found = await ctx.terminology.admin.terms.search(system, { query: q, limit, offset });
     return {
       kind: 'coding',
       rows: found.rows.map((r) => ({ system: r.system, code: r.code, display: r.display })),
