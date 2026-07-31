@@ -66,6 +66,7 @@ import * as m064 from './064_column_exposure_policy_hidden';
 import * as m065 from './065_report_deps_managed_origin';
 import * as m066 from './066_forms_submit_capability';
 import * as m067 from './067_capability_introductions';
+import * as m068 from './068_normalize_concept_status';
 
 export const internalMigrations: Record<string, Migration> = {
   '001_fhir_resources': { up: m001.up, down: m001.down },
@@ -135,4 +136,5 @@ export const internalMigrations: Record<string, Migration> = {
   '065_report_deps_managed_origin': { up: m065.up, down: m065.down },
   '066_forms_submit_capability': { up: m066.up, down: m066.down },
   '067_capability_introductions': { up: m067.up, down: m067.down },
+  '068_normalize_concept_status': { up: m068.up, down: m068.down },
 };

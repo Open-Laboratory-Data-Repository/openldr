@@ -98,7 +98,12 @@ export function createTerminologyStore(db: Kysely<InternalSchema>, fhirStore: Fh
         system: r.system,
         code: r.code,
         display: r.display,
-        status: r.status,
+        // Status is compared case-SENSITIVELY downstream (valueset expansion's filterConcepts
+        // gates on `status = 'ACTIVE'`), so normalise at this single choke point every loader and
+        // ontology adapter writes through. The SNOMED and RxNorm adapters hardcoded lowercase
+        // 'active' while every other source wrote uppercase, which made all SNOMED concepts
+        // invisible to activeOnly expansion — silently, as an empty result rather than an error.
+        status: r.status?.toUpperCase() ?? null,
         properties: r.properties === null ? null : JSON.stringify(r.properties),
       }));
       await db

@@ -72,7 +72,8 @@ describe('rxnormAdapter two-layer', () => {
     expect(concepts.length).toBeGreaterThan(0);
     for (const c of concepts) {
       expect(c.system).toBe(canonicalSystemUrl('rxnorm'));
-      expect(c.status).toBe('active');
+      // Uppercase, matching every other concept source — see the note in snomed.test.ts.
+      expect(c.status).toBe('ACTIVE');
       expect(c.properties.tty).toBeTruthy(); // only semantic TTYs
       expect(typeof c.display).toBe('string');
     }
