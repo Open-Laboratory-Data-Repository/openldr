@@ -157,6 +157,45 @@ const referenceSchema = {
 interface FakeFhirStoreCall { resourceType: string; id: string }
 interface FakeValidateCodeCall { valueSetUrl?: string; system?: string; code: string }
 
+// Fix 4: the two seeded entity capture forms (form-sample-patient → Patient, form-sample-facility
+// → Location) are published to the Forms page but have no extractor — there is no
+// PatientExtractor/LocationExtractor in packages/forms/src/extract, and writing one is deferred
+// S5 work. `extractorsForForm` gives them only ObservationExtractor and they carry no
+// observationExtract field, so they yield zero resources. The 400 is CORRECT behaviour (a form
+// that produces nothing is a form-configuration bug); this fixture pins that the message names
+// the resource type so an operator reads a diagnosis rather than a riddle.
+const patientBoundSchema = {
+  id: 'patient-intake',
+  name: 'Patient intake',
+  versionLabel: null,
+  fhirVersion: null,
+  fhirResourceType: 'Patient',
+  fhirProfileUrl: null,
+  facilityId: null,
+  fields: [
+    {
+      id: 'familyName',
+      fhirPath: 'Patient.name.family',
+      displayLabel: 'Family name',
+      description: null,
+      fieldType: 'text' as const,
+      required: true,
+      enabled: true,
+      order: 0,
+      cardinality: { min: 1, max: '1' },
+      section: 'main',
+    },
+  ],
+  sections: [{ id: 'main', label: 'Main', order: 0 }],
+  targetPages: [],
+  languages: ['en'],
+  version: 1,
+  active: true,
+  status: 'draft' as const,
+  createdAt: NOW,
+  updatedAt: NOW,
+} satisfies FormInput['schema'];
+
 function fakeCtx(): AppContext & {
   audits: AuditInput[];
   fhirStoreCalls: FakeFhirStoreCall[];
@@ -878,6 +917,29 @@ describe('forms routes', () => {
 
     expect(res.statusCode).toBe(500);
     expect(res.json()).toMatchObject({ ok: false, runId: 'run-2' });
+  });
+
+  it('rejects a form whose resource type has no extractor, naming the resource type', async () => {
+    const ctx = fakeCtx();
+    const runs: unknown[] = [];
+    (ctx as any).workflows = { runner: { runAndRecord: async (...args: unknown[]) => { runs.push(args); return { runId: 'r', correlationId: null, status: 'completed', error: null }; } } };
+    const app = authedApp(ctx);
+    const created = await app.inject({
+      method: 'POST', url: '/api/forms',
+      payload: { name: 'Patient intake', fhirResourceType: 'Patient', schema: patientBoundSchema, targetPages: ['forms'] },
+    });
+    const formId = created.json().id as string;
+
+    const res = await app.inject({
+      method: 'POST', url: `/api/forms/${formId}/responses`,
+      payload: { answers: { familyName: 'Doe' } },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toContain('Patient');
+    expect(res.json().error).toMatch(/no extractor/i);
+    // Nothing was submitted to the pipeline.
+    expect(runs).toEqual([]);
   });
 
   // Fix 3: the run error reaches the client, and a Persist Store / DB-node failure can carry a

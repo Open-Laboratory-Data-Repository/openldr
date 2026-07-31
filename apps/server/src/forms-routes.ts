@@ -322,8 +322,23 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
     const resources = extractorsForForm(f.schema as never)
       .flatMap((ex) => ex.extract(response as never, questionnaire as never, extractionContext));
     if (resources.length === 0) {
+      // A form that produces nothing is a form-configuration bug, so 400 is correct — but the
+      // operator has to be able to read a diagnosis out of it. The commonest cause by far is a
+      // form bound to a resource type no extractor covers: only Observation (fields flagged
+      // observationExtract with a code) and ServiceRequest (the requisition domain) extract
+      // today, so the seeded Patient- and Location-bound capture forms land here. Naming the
+      // resource type says which extractor is missing instead of posing a riddle.
+      const boundType = f.schema.fhirResourceType ?? f.fhirResourceType;
       reply.code(400);
-      return { error: 'form produced no resources', errors: [] };
+      return {
+        error: boundType
+          ? `form produced no resources: no extractor exists for fhirResourceType '${boundType}'. ` +
+            'Only Observation (fields flagged observationExtract with a code) and ServiceRequest ' +
+            'are extractable; bind the form to one of those or flag its fields for Observation extraction.'
+          : 'form produced no resources: the form declares no fhirResourceType and no field is flagged ' +
+            'observationExtract with a code, so no extractor applies.',
+        errors: [],
+      };
     }
 
     const bundle = toTransactionBundle(response as never, resources);
