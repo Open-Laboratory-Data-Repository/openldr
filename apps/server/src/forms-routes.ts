@@ -3,7 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import AdmZip from 'adm-zip';
 import type { AppContext } from '@openldr/bootstrap';
 import { redact } from '@openldr/core';
-import { toQuestionnaire, toQuestionnaireResponse, validateAnswers, validateReferences } from '@openldr/forms';
+import { extractorsForForm, toQuestionnaire, toQuestionnaireResponse, toTransactionBundle, validateAnswers, validateReferences } from '@openldr/forms';
 import { z } from 'zod';
 import { recordAudit } from './audit-helper';
 import { requireCapability } from './rbac';
@@ -282,14 +282,48 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
       return { error: 'invalid answers', errors: referenceErrors };
     }
 
-    try {
-      const response = toQuestionnaireResponse(f.schema, p.data.answers as never);
-      await recordAudit(ctx, req, { action: 'form.response.submit', entityType: 'form', entityId: f.id, before: null, after: response, metadata: { formId: f.id } });
-      reply.code(201);
-      return response;
-    } catch (e) {
-      reply.code(500);
-      return { error: redact(e instanceof Error ? e.message : String(e)) };
+    // Manual capture goes through the SAME pipeline as automated ingest, down the FHIR
+    // branch: the form branch is hardcoded to one formId and cannot serve multiple
+    // capture forms. toTransactionBundle puts the QuestionnaireResponse at entry[0], so
+    // the verbatim record of what was typed is persisted alongside what was derived.
+    const actor = req.user?.username ?? 'unknown';
+    const response = toQuestionnaireResponse(f.schema, p.data.answers as never) as unknown as Record<string, unknown>;
+    response.author = { display: actor };
+
+    const resources = extractorsForForm(f.schema as never)
+      .flatMap((ex) => ex.extract(response as never, toQuestionnaire(f.schema) as never, {}));
+    if (resources.length === 0) {
+      reply.code(400);
+      return { error: 'form produced no resources', errors: [] };
     }
+
+    const bundle = toTransactionBundle(response as never, resources);
+    const outcome = await ctx.workflows.runner.runAndRecord(
+      'wf-ingest',
+      'form',
+      { method: 'POST', body: bundle, headers: {}, query: {}, __provenance: { sourceSystem: 'form-capture' } },
+    );
+
+    if (!outcome) {
+      // runAndRecord returns null when the workflow is missing or disabled: nothing ran.
+      reply.code(409);
+      return { ok: false, error: "capture pipeline unavailable: the 'wf-ingest' workflow is missing or disabled" };
+    }
+    if (outcome.status !== 'completed') {
+      reply.code(500);
+      return { ok: false, runId: outcome.runId, correlationId: outcome.correlationId, status: outcome.status, error: outcome.error };
+    }
+
+    await recordAudit(ctx, req, {
+      action: 'form.response.submit', entityType: 'form', entityId: f.id,
+      before: null, after: response, metadata: { formId: f.id, runId: outcome.runId },
+    });
+    reply.code(201);
+    return {
+      ok: true,
+      runId: outcome.runId,
+      correlationId: outcome.correlationId,
+      resourceTypes: resources.map((r) => (r as { resourceType: string }).resourceType),
+    };
   });
 }

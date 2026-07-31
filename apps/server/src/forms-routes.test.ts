@@ -53,6 +53,12 @@ const sampleSchema = {
       order: 0,
       cardinality: { min: 1, max: '1' },
       section: 'main',
+      // Task S2-T2: extractorsForForm/ObservationExtractor only emits a resource for a field
+      // flagged observationExtract with a code — otherwise the submit route's "form produced
+      // no resources" guard rejects the submission before it ever reaches the ingest workflow.
+      // Flagged here so this fixture's /responses submissions are accepted.
+      observationExtract: true,
+      code: [{ system: 'http://loinc.org', code: 'patient-id', display: 'Patient ID' }],
     },
   ],
   sections: [{ id: 'main', label: 'Main', order: 0 }],
@@ -123,6 +129,14 @@ const referenceSchema = {
       cardinality: { min: 1, max: '1' },
       section: 'main',
       referenceTarget: 'Patient',
+      // Task S2-T2: extractorsForForm/ObservationExtractor only emits a resource for a field
+      // flagged observationExtract with a code — otherwise the submit route's "form produced
+      // no resources" guard rejects the submission before it ever reaches the ingest workflow.
+      // Flagged here so this fixture's /responses submissions are accepted (the extracted
+      // Observation carries no value since ObservationExtractor doesn't map valueReference,
+      // but its presence is enough to satisfy the guard).
+      observationExtract: true,
+      code: [{ system: 'http://loinc.org', code: 'lab-order-patient', display: 'Patient' }],
     },
   ],
   sections: [{ id: 'main', label: 'Main', order: 0 }],
@@ -322,6 +336,15 @@ function fakeCtx(): AppContext & {
         },
       },
     },
+    // Task S2-T2: POST /:id/responses now routes accepted submissions through
+    // ctx.workflows.runner.runAndRecord. Every pre-existing test in this file that posts a
+    // valid submission needs a stub here or it crashes on `ctx.workflows` being undefined;
+    // tests that care about the outcome override `(ctx as any).workflows` themselves.
+    workflows: {
+      runner: {
+        runAndRecord: async () => ({ runId: 'run-default', correlationId: null, status: 'completed', error: null }),
+      },
+    },
     audits,
     fhirStoreCalls,
     fhirStoreExists,
@@ -368,9 +391,11 @@ describe('forms routes', () => {
     expect(questionnaire.statusCode).toBe(200);
     expect(questionnaire.json()).toMatchObject({ resourceType: 'Questionnaire', title: 'Specimen intake', item: [{ linkId: 'main' }] });
 
+    // Task S2-T2: POST /responses now persists through the ingest workflow instead of
+    // returning the bare QuestionnaireResponse — the response body is the run outcome.
     const response = await app.inject({ method: 'POST', url: `/api/forms/${id}/responses`, payload: { answers: { patientId: 'P-100' } } });
     expect(response.statusCode).toBe(201);
-    expect(response.json()).toMatchObject({ resourceType: 'QuestionnaireResponse', status: 'completed' });
+    expect(response.json()).toMatchObject({ ok: true, runId: 'run-default', resourceTypes: ['Observation'] });
 
     // A required field that is absent must be rejected. This previously returned 201 —
     // the assertion encoded the bug that reference pickers exist to fix.
@@ -732,5 +757,95 @@ describe('forms routes', () => {
     expect(snapshot.statusCode).toBe(404);
     expect(snapshot.json()).toMatchObject({ error: 'not found' });
     expect(ctx.audits).toHaveLength(auditCount);
+  });
+
+  it('persists a submission through the ingest workflow', async () => {
+    const ctx = fakeCtx();
+    const runs: { workflowId: string; source: string; input: any }[] = [];
+    (ctx as any).workflows = {
+      runner: {
+        runAndRecord: async (workflowId: string, source: string, input: any) => {
+          runs.push({ workflowId, source, input });
+          return { runId: 'run-1', correlationId: null, status: 'completed', error: null };
+        },
+      },
+    };
+    const app = authedApp(ctx);
+    const created = await app.inject({
+      method: 'POST', url: '/api/forms',
+      payload: { name: 'Order', schema: referenceSchema, targetPages: ['forms'] },
+    });
+    const formId = created.json().id as string;
+
+    const res = await app.inject({
+      method: 'POST', url: `/api/forms/${formId}/responses`,
+      payload: { answers: { patient: { reference: 'Patient/p1', display: 'Doe Jane' } } },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(res.json()).toMatchObject({ ok: true, runId: 'run-1' });
+    expect(runs).toHaveLength(1);
+    expect(runs[0]!.workflowId).toBe('wf-ingest');
+    expect(runs[0]!.source).toBe('form');
+    // Routed down the FHIR branch: the body is a transaction Bundle.
+    expect(runs[0]!.input.body.resourceType).toBe('Bundle');
+    expect(runs[0]!.input.body.type).toBe('transaction');
+    // The QuestionnaireResponse rides along as entry[0].
+    expect(runs[0]!.input.body.entry[0].resource.resourceType).toBe('QuestionnaireResponse');
+    // Provenance override is top-level, not inside body.
+    expect(runs[0]!.input.__provenance.sourceSystem).toBe('form-capture');
+  });
+
+  it('records the submitting user as the QuestionnaireResponse author', async () => {
+    const ctx = fakeCtx();
+    const runs: any[] = [];
+    (ctx as any).workflows = {
+      runner: { runAndRecord: async (_w: string, _s: string, input: any) => { runs.push(input); return { runId: 'r', correlationId: null, status: 'completed', error: null }; } },
+    };
+    const app = authedApp(ctx);
+    const created = await app.inject({ method: 'POST', url: '/api/forms', payload: { name: 'O', schema: referenceSchema, targetPages: ['forms'] } });
+    const formId = created.json().id as string;
+
+    await app.inject({
+      method: 'POST', url: `/api/forms/${formId}/responses`,
+      payload: { answers: { patient: { reference: 'Patient/p1', display: 'Doe Jane' } } },
+    });
+
+    expect(runs[0].body.entry[0].resource.author).toMatchObject({ display: 'admin' });
+  });
+
+  it('reports a specific error when the ingest workflow is disabled', async () => {
+    const ctx = fakeCtx();
+    (ctx as any).workflows = { runner: { runAndRecord: async () => null } };
+    const app = authedApp(ctx);
+    const created = await app.inject({ method: 'POST', url: '/api/forms', payload: { name: 'O', schema: referenceSchema, targetPages: ['forms'] } });
+    const formId = created.json().id as string;
+
+    const res = await app.inject({
+      method: 'POST', url: `/api/forms/${formId}/responses`,
+      payload: { answers: { patient: { reference: 'Patient/p1', display: 'Doe Jane' } } },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toContain('wf-ingest');
+    expect(res.json().error).toMatch(/disabled|not enabled|unavailable/i);
+  });
+
+  it('reports a failed run rather than success', async () => {
+    const ctx = fakeCtx();
+    (ctx as any).workflows = {
+      runner: { runAndRecord: async () => ({ runId: 'run-2', correlationId: null, status: 'failed', error: 'persist blew up' }) },
+    };
+    const app = authedApp(ctx);
+    const created = await app.inject({ method: 'POST', url: '/api/forms', payload: { name: 'O', schema: referenceSchema, targetPages: ['forms'] } });
+    const formId = created.json().id as string;
+
+    const res = await app.inject({
+      method: 'POST', url: `/api/forms/${formId}/responses`,
+      payload: { answers: { patient: { reference: 'Patient/p1', display: 'Doe Jane' } } },
+    });
+
+    expect(res.statusCode).toBe(500);
+    expect(res.json()).toMatchObject({ ok: false, runId: 'run-2' });
   });
 });
