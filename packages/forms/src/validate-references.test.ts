@@ -118,4 +118,13 @@ describe('validateReferences', () => {
     );
     expect(errors).toEqual([{ fieldId: 'p', label: 'Patient', reason: 'field declares no reference source' }]);
   });
+
+  it('rejects an entity-shaped answer on a field that declares no reference source', async () => {
+    const errors = await validateReferences(
+      model({ referenceTarget: undefined }),
+      { p: { reference: 'Patient/p1', display: null } },
+      deps(),
+    );
+    expect(errors).toEqual([{ fieldId: 'p', label: 'Patient', reason: 'field declares no reference source' }]);
+  });
 });

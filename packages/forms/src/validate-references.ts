@@ -62,6 +62,9 @@ export async function validateReferences(
           push(`'${v.system}' is not the system this field accepts (${resolved.source.system})`);
           continue;
         }
+        // The mismatch guard above ensures the systems are equal; use the field's system
+        // here so that the code stays correct if that guard is ever relaxed.
+        // Do not "simplify" this to v.system.
         const input = resolved.source.mode === 'valueset'
           ? { valueSetUrl: resolved.source.url, code: v.code, system: v.system }
           : { system: resolved.source.system, code: v.code };
