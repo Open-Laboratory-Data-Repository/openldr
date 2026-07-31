@@ -13,7 +13,7 @@ import { TablePagination } from '@/components/ui/table-pagination';
 import { StripedEmpty } from '@/components/ui/striped-empty';
 import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/spinner';
-import { fetchWorkflows, createWorkflow, deleteWorkflow, type Workflow } from '@/api';
+import { fetchWorkflows, createWorkflow, deleteWorkflow, resetWorkflow, type Workflow } from '@/api';
 
 function newWorkflowId(): string {
   return `wf_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -112,6 +112,18 @@ export function WorkflowList() {
     catch (e) { toast.error(`Delete failed: ${e instanceof Error ? e.message : String(e)}`); }
   }, [pendingDelete, load]);
 
+  const onReset = useCallback(async (w: Workflow) => {
+    try {
+      const r = await resetWorkflow(w.id);
+      if (r.secretPreserved) toast.success(`${w.name} restored to its default.`);
+      // Never swallow this: every external sender's token has just stopped working.
+      else toast.warning(`${w.name} restored, but a NEW webhook secret was generated — existing senders must be given the new token.`);
+      await load();
+    } catch (e) {
+      toast.error(`Reset failed: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }, [load]);
+
   return (
     <AppShell title="Workflows" fullBleed>
       <div className="flex min-h-0 flex-1 flex-col" data-testid="workflow-list">
@@ -187,7 +199,15 @@ export function WorkflowList() {
                           <DropdownMenuItem onClick={() => navigate(`/workflows/${w.id}`)}>Open</DropdownMenuItem>
                           <DropdownMenuItem data-testid={`duplicate-${w.id}`} onClick={() => { void onDuplicate(w); }}>Duplicate</DropdownMenuItem>
                           <DropdownMenuItem data-testid={`export-${w.id}`} onClick={() => exportWorkflow(w)}>Export</DropdownMenuItem>
-                          <DropdownMenuItem data-testid={`delete-${w.id}`} onClick={() => setPendingDelete(w)}>Delete</DropdownMenuItem>
+                          {w.protected ? (
+                            <DropdownMenuItem data-testid={`reset-${w.id}`} onClick={() => { void onReset(w); }}>
+                              Reset to default
+                            </DropdownMenuItem>
+                          ) : (
+                            <DropdownMenuItem data-testid={`delete-${w.id}`} onClick={() => setPendingDelete(w)}>
+                              Delete
+                            </DropdownMenuItem>
+                          )}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>

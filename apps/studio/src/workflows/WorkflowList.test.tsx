@@ -66,4 +66,27 @@ describe('WorkflowList', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
     await waitFor(() => expect(api.deleteWorkflow).toHaveBeenCalledWith('wf_1'));
   });
+  it('offers reset instead of delete for a protected workflow', async () => {
+    (api.fetchWorkflows as any).mockResolvedValue([
+      { id: 'wf-ingest', name: 'Ingest', enabled: true, protected: true } as never,
+      { id: 'wf-mine', name: 'Mine', enabled: true, protected: false } as never,
+    ]);
+    render(<MemoryRouter><WorkflowList /></MemoryRouter>);
+    await screen.findByTestId('open-wf-ingest');
+
+    await openMenuItem(/actions for ingest/i, 'reset-wf-ingest');
+    expect(screen.queryByTestId('delete-wf-ingest')).not.toBeInTheDocument();
+    expect(screen.getByTestId('reset-wf-ingest')).toBeInTheDocument();
+  });
+  it('still offers delete for a user workflow', async () => {
+    (api.fetchWorkflows as any).mockResolvedValue([
+      { id: 'wf-mine', name: 'Mine', enabled: true, protected: false } as never,
+    ]);
+    render(<MemoryRouter><WorkflowList /></MemoryRouter>);
+    await screen.findByTestId('open-wf-mine');
+
+    await openMenuItem(/actions for mine/i, 'delete-wf-mine');
+    expect(screen.getByTestId('delete-wf-mine')).toBeInTheDocument();
+    expect(screen.queryByTestId('reset-wf-mine')).not.toBeInTheDocument();
+  });
 });
