@@ -60,6 +60,24 @@ function extractionContextFor(schema: FormSchema, answers: Record<string, unknow
   return context;
 }
 
+/** Id of the seeded ingest graph's Persist Store node — the one that reports what it wrote. */
+const PERSIST_NODE_ID = 'persist-1';
+
+/**
+ * How many resources this run actually stored, per the Persist Store node's own metadata.
+ *
+ * Read defensively: the graph is operator-editable, so the node may be renamed, removed, or never
+ * reached. Every one of those means "we cannot prove anything was stored", which must read as 0 —
+ * the conservative answer, since the advice keyed off this number is whether a clerk may safely
+ * resubmit. This runs on the ALREADY-FAILING path, so it must not add a failure of its own.
+ */
+function persistedCount(nodeMeta: Record<string, unknown> | undefined): number {
+  const meta = nodeMeta?.[PERSIST_NODE_ID];
+  if (typeof meta !== 'object' || meta === null) return 0;
+  const n = (meta as { persisted?: unknown }).persisted;
+  return typeof n === 'number' && Number.isFinite(n) && n > 0 ? n : 0;
+}
+
 // These routes were previously UNGATED (no requireRole at all — any authenticated user could hit
 // them). Task 8 adds capability gates per the mapping table: read/fill routes require forms.view
 // (held by every system-role preset, including lab_technician — so no preset loses access);
@@ -366,10 +384,36 @@ export function registerFormsRoutes(app: FastifyInstance<any, any, any, any>, ct
       return { ok: false, error: "capture pipeline unavailable: the 'wf-ingest' workflow is missing or disabled" };
     }
     if (outcome.status !== 'completed') {
-      reply.code(500);
+      // A failed run does NOT mean nothing was stored. `persist-1` runs before `log-1`, and the
+      // run is recorded after the engine returns, so a failure in the Log node, in the
+      // `data.persisted` publish, or in the run-store insert lands here with the resources
+      // already written. Telling the clerk only "failed" makes them resubmit — and
+      // `unwrapBundle` assigns a fresh randomUUID() per entry on every submission, so the retry
+      // writes a SECOND ServiceRequest and QuestionnaireResponse for the same clinical event.
+      // The run's own metadata already knows; say what actually landed.
+      const persisted = persistedCount(outcome.nodeMeta);
+      // The clerk-facing sentence. Only the "already stored" case carries advice; the other is
+      // the plain truth, and a retry there is safe.
+      const message = persisted > 0
+        ? `${persisted} resource(s) were stored before this submission failed. Do NOT resubmit — resubmitting would create a duplicate record. Quote run ${outcome.runId} when reporting this.`
+        : 'Nothing was stored. The submission can safely be retried.';
       // redact, never verbatim: a Persist Store or DB-node failure can carry a connection
       // string, and `redact` masks DSN userinfo, `password=` and Authorization tokens.
-      return { ok: false, runId: outcome.runId, correlationId: outcome.correlationId, status: outcome.status, error: redact(outcome.error ?? '') };
+      const detail = redact(outcome.error ?? '');
+      reply.code(500);
+      return {
+        ok: false,
+        runId: outcome.runId,
+        correlationId: outcome.correlationId,
+        status: outcome.status,
+        persisted,
+        message,
+        // `message` LEADS `error`, deliberately. The studio's shared error handler surfaces
+        // `body.error` (see errorDetail in apps/studio/src/api.ts) and never reads `message`, so
+        // a clerk-facing sentence that lived only in `message` would never reach the clerk. The
+        // technical detail still follows, for the operator reading the response or the log.
+        error: detail ? `${message} (${detail})` : message,
+      };
     }
 
     await recordAudit(ctx, req, {

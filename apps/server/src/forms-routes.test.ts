@@ -948,6 +948,86 @@ describe('forms routes', () => {
     expect(res.json()).toMatchObject({ ok: false, runId: 'run-2' });
   });
 
+  // `persist-1` runs before `log-1`, and runAndRecord records the run AFTER the engine returns,
+  // so a failure in the Log node, in the data.persisted publish, or in the run-store insert
+  // arrives here with the resources ALREADY written. `unwrapBundle` mints a fresh randomUUID()
+  // per entry on every submission, so a clerk who resubmits creates a second ServiceRequest and
+  // QuestionnaireResponse for the same clinical event.
+  it('tells the clerk NOT to resubmit when a run persisted and then failed', async () => {
+    const ctx = fakeCtx();
+    (ctx as any).workflows = {
+      runner: {
+        runAndRecord: async () => ({
+          runId: 'run-partial', correlationId: null, status: 'failed', error: 'log node blew up',
+          nodeMeta: { 'persist-1': { persisted: 2, flattened: { written: 2, skipped: 0, degraded: 0 }, resourceTypes: ['QuestionnaireResponse', 'ServiceRequest'] } },
+        }),
+      },
+    };
+    const app = authedApp(ctx);
+    const created = await app.inject({ method: 'POST', url: '/api/forms', payload: { name: 'O', schema: referenceSchema, targetPages: ['forms'] } });
+    const formId = created.json().id as string;
+
+    const res = await app.inject({
+      method: 'POST', url: `/api/forms/${formId}/responses`,
+      payload: { answers: { patient: { reference: 'Patient/p1', display: 'Doe Jane' } } },
+    });
+
+    // Still a failure — the run did not complete and the status must not be softened.
+    expect(res.statusCode).toBe(500);
+    expect(res.json()).toMatchObject({ ok: false, runId: 'run-partial', persisted: 2 });
+    expect(res.json().message).toMatch(/do not resubmit/i);
+    expect(res.json().message).toContain('run-partial');
+    // The studio's shared error handler reads `error`, not `message` — the warning has to be
+    // there or the clerk never sees it.
+    expect(res.json().error).toMatch(/do not resubmit/i);
+    expect(res.json().error).toContain('log node blew up');
+  });
+
+  it('says a retry is safe when the failed run stored nothing', async () => {
+    const ctx = fakeCtx();
+    (ctx as any).workflows = {
+      runner: {
+        runAndRecord: async () => ({
+          runId: 'run-none', correlationId: null, status: 'failed', error: 'persist blew up', nodeMeta: {},
+        }),
+      },
+    };
+    const app = authedApp(ctx);
+    const created = await app.inject({ method: 'POST', url: '/api/forms', payload: { name: 'O', schema: referenceSchema, targetPages: ['forms'] } });
+    const formId = created.json().id as string;
+
+    const res = await app.inject({
+      method: 'POST', url: `/api/forms/${formId}/responses`,
+      payload: { answers: { patient: { reference: 'Patient/p1', display: 'Doe Jane' } } },
+    });
+
+    expect(res.statusCode).toBe(500);
+    expect(res.json()).toMatchObject({ ok: false, persisted: 0 });
+    expect(res.json().message).toMatch(/safely be retried/i);
+  });
+
+  // The graph is operator-editable: the Persist Store node can be renamed or removed. "We cannot
+  // prove anything was stored" must read as 0 — the answer that does not invite a duplicate.
+  it('reports 0 persisted when the run carries no persist metadata at all', async () => {
+    const ctx = fakeCtx();
+    (ctx as any).workflows = {
+      runner: {
+        runAndRecord: async () => ({ runId: 'run-x', correlationId: null, status: 'failed', error: 'boom' }),
+      },
+    };
+    const app = authedApp(ctx);
+    const created = await app.inject({ method: 'POST', url: '/api/forms', payload: { name: 'O', schema: referenceSchema, targetPages: ['forms'] } });
+    const formId = created.json().id as string;
+
+    const res = await app.inject({
+      method: 'POST', url: `/api/forms/${formId}/responses`,
+      payload: { answers: { patient: { reference: 'Patient/p1', display: 'Doe Jane' } } },
+    });
+
+    expect(res.statusCode).toBe(500);
+    expect(res.json().persisted).toBe(0);
+  });
+
   it('rejects a form whose resource type has no extractor, naming the resource type', async () => {
     const ctx = fakeCtx();
     const runs: unknown[] = [];
