@@ -1,5 +1,5 @@
 /// <reference types="vitest" />
-import { defineConfig, type Plugin } from 'vite';
+import { defineConfig, loadEnv, type Plugin } from 'vite';
 import { fileURLToPath, URL } from 'node:url';
 import { createRequire } from 'node:module';
 import react from '@vitejs/plugin-react';
@@ -29,17 +29,29 @@ function redirectStudioBase(): Plugin {
   };
 }
 
-export default defineConfig(({ mode }) => ({
-  base: '/studio/',
-  plugins: [react(), tailwindcss(), redirectStudioBase()],
-  resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
-  // react-grid-layout / react-draggable / react-resizable reference `process.env.NODE_ENV`
-  // at runtime; without this define, `process` is undefined in the dev browser and the
-  // drag/resize start handlers throw `process is not defined`, silently disabling them.
-  define: {
-    'process.env.NODE_ENV': JSON.stringify(mode),
-    __APP_VERSION__: JSON.stringify(pkgVersion),
-  },
-  server: { proxy: { '/api': 'http://localhost:3000' } },
-  test: { environment: 'jsdom', globals: true, setupFiles: ['./src/setupTests.ts'] },
-}));
+export default defineConfig(({ mode }) => {
+  // Dev-only: Vite binds to localhost, so the dev server is unreachable from another device
+  // (e.g. a phone on the same tailnet). DEV_HOST overrides the bind address. It's read from the
+  // repo-root .env — which is gitignored — so no machine-specific address lands in this tracked
+  // file, and the `DEV_` prefix keeps the rest of that file (secrets) out of this config.
+  // Unset => Vite's localhost-only default, which is what CI and everyone else keeps getting.
+  const rootEnv = loadEnv(mode, fileURLToPath(new URL('../../', import.meta.url)), 'DEV_');
+
+  return {
+    base: '/studio/',
+    plugins: [react(), tailwindcss(), redirectStudioBase()],
+    resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
+    // react-grid-layout / react-draggable / react-resizable reference `process.env.NODE_ENV`
+    // at runtime; without this define, `process` is undefined in the dev browser and the
+    // drag/resize start handlers throw `process is not defined`, silently disabling them.
+    define: {
+      'process.env.NODE_ENV': JSON.stringify(mode),
+      __APP_VERSION__: JSON.stringify(pkgVersion),
+    },
+    server: {
+      host: rootEnv.DEV_HOST || undefined,
+      proxy: { '/api': 'http://localhost:3000' },
+    },
+    test: { environment: 'jsdom', globals: true, setupFiles: ['./src/setupTests.ts'] },
+  };
+});
