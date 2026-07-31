@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { validateAnswers } from './validate-answers';
+import { resolveReferenceSource } from './reference-source';
+import { toAnswer } from './answer-value';
+import { sampleForms } from './samples/forms';
 import type { FormSchema, FormField } from './schema/form-schema';
 
 const field = (over: Partial<FormField>): FormField => ({
@@ -93,5 +96,38 @@ describe('reference shape validation', () => {
     })).toEqual([
       { fieldId: 'p', label: 'Patient', reason: 'must be selected from the list' },
     ]);
+  });
+
+  // A facility/organism/antibiogram field with no source renders a TEXT INPUT (FormRuntime),
+  // lint only warns about it, and toAnswer preserves its string. Rejecting a bare string here
+  // made the seeded Lab order form unsubmittable and made the ingest Form Validate node drop
+  // an external producer's organism names into meta.invalid.
+  it('accepts a bare string in a sourceless facility field', () => {
+    const sourceless = model({ id: 'fac', displayLabel: 'Facility', fieldType: 'facility', referenceTarget: undefined });
+    expect(validateAnswers(sourceless, { fac: 'Kanyama Clinic' })).toEqual([]);
+  });
+
+  it('accepts a bare string in a sourceless organism field', () => {
+    const sourceless = model({ id: 'org', displayLabel: 'Organism', fieldType: 'organism', referenceTarget: undefined });
+    expect(validateAnswers(sourceless, { org: 'E. coli' })).toEqual([]);
+  });
+
+  it('still rejects a bare string once the same facility field declares a source', () => {
+    const sourced = model({ id: 'fac', displayLabel: 'Facility', fieldType: 'facility', referenceTarget: 'Location' });
+    expect(validateAnswers(sourced, { fac: 'Kanyama Clinic' })).toEqual([
+      { fieldId: 'fac', label: 'Facility', reason: 'must be selected from the list' },
+    ]);
+  });
+
+  it('accepts the seeded Lab order sourceless facility field end to end', () => {
+    const labOrder = sampleForms.find((f) => f.id === 'sample-order')!;
+    const facility = labOrder.fields.find((f) => f.id === 'fld-ord-ref-facility')!;
+    expect(resolveReferenceSource(facility).ok).toBe(false);
+
+    // Validates (the form's other required fields are irrelevant here), then serializes to the
+    // same valueReference toAnswer already produced for a bare-string facility.
+    const errs = validateAnswers(labOrder, { 'fld-ord-ref-facility': 'Kanyama Clinic' });
+    expect(errs.filter((e) => e.fieldId === 'fld-ord-ref-facility')).toEqual([]);
+    expect(toAnswer(facility, 'Kanyama Clinic')).toEqual({ valueReference: { reference: 'Kanyama Clinic' } });
   });
 });

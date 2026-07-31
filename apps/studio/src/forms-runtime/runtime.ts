@@ -1,4 +1,11 @@
-import { isCodingAnswer, isEntityAnswer, isMultiValued, isReferenceFieldType, visibleFieldIds as libVisibleFieldIds } from '@openldr/forms/pure';
+import {
+  isCodingAnswer,
+  isEntityAnswer,
+  isMultiValued,
+  isReferenceFieldType,
+  resolveReferenceSource,
+  visibleFieldIds as libVisibleFieldIds,
+} from '@openldr/forms/pure';
 import type { FormField, FormSchema, RuntimeAnswers } from './types';
 
 // ── Visibility ────────────────────────────────────────────────────────────────
@@ -33,9 +40,11 @@ export function validate(schema: FormSchema, answers: RuntimeAnswers): Record<st
       continue;
     }
 
-    // A reference answer must be an object the picker produced. A bare string means the
-    // user typed into a stub input, which is exactly what this feature removes.
-    if (isReferenceFieldType(field.fieldType) && values.length > 0) {
+    // A reference answer must be an object the picker produced — but only where a picker was
+    // actually rendered. FormRuntime falls back to a text input for a reference-family field
+    // that declares no source, so demanding an object there pointed the user at a list that
+    // does not exist. Gate on the same condition FormRuntime uses to choose the control.
+    if (isReferenceFieldType(field.fieldType) && resolveReferenceSource(field).ok && values.length > 0) {
       if (values.some((v) => !isCodingAnswer(v) && !isEntityAnswer(v))) {
         errors[field.id] = 'select a value from the list';
         continue;
