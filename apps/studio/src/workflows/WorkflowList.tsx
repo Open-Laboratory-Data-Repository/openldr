@@ -44,6 +44,10 @@ export function WorkflowList() {
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(25);
   const [pendingDelete, setPendingDelete] = useState<Workflow | null>(null);
+  // Reset is the MORE destructive of the two — Delete is refused outright for these workflows,
+  // while reset discards the operator's entire customised graph, garbage-collects the secret rows
+  // the old graph referenced, and can rotate the webhook token. It gets the same confirmation.
+  const [pendingReset, setPendingReset] = useState<Workflow | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -112,7 +116,9 @@ export function WorkflowList() {
     catch (e) { toast.error(`Delete failed: ${e instanceof Error ? e.message : String(e)}`); }
   }, [pendingDelete, load]);
 
-  const onReset = useCallback(async (w: Workflow) => {
+  const onReset = useCallback(async () => {
+    if (!pendingReset) return;
+    const w = pendingReset; setPendingReset(null);
     try {
       const r = await resetWorkflow(w.id);
       if (r.secretPreserved) toast.success(`${w.name} restored to its default.`);
@@ -126,7 +132,7 @@ export function WorkflowList() {
     } catch (e) {
       toast.error(`Reset failed: ${e instanceof Error ? e.message : String(e)}`);
     }
-  }, [load]);
+  }, [pendingReset, load]);
 
   return (
     <AppShell title="Workflows" fullBleed>
@@ -204,7 +210,7 @@ export function WorkflowList() {
                           <DropdownMenuItem data-testid={`duplicate-${w.id}`} onClick={() => { void onDuplicate(w); }}>Duplicate</DropdownMenuItem>
                           <DropdownMenuItem data-testid={`export-${w.id}`} onClick={() => exportWorkflow(w)}>Export</DropdownMenuItem>
                           {w.protected ? (
-                            <DropdownMenuItem data-testid={`reset-${w.id}`} onClick={() => { void onReset(w); }}>
+                            <DropdownMenuItem data-testid={`reset-${w.id}`} onClick={() => setPendingReset(w)}>
                               Reset to default
                             </DropdownMenuItem>
                           ) : (
@@ -250,6 +256,16 @@ export function WorkflowList() {
           confirmLabel="Delete"
           destructive
           onConfirm={() => { void onDelete(); }}
+        />
+
+        <ConfirmDialog
+          open={pendingReset !== null}
+          onOpenChange={(o) => { if (!o) setPendingReset(null); }}
+          title={`Reset ${pendingReset?.name ?? ''} to its default?`}
+          description="Any changes you have made to this workflow will be discarded and the shipped design restored. This cannot be undone."
+          confirmLabel="Reset"
+          destructive
+          onConfirm={() => { void onReset(); }}
         />
       </div>
     </AppShell>

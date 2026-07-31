@@ -107,6 +107,7 @@ describe('WorkflowList', () => {
     await screen.findByTestId('open-wf-ingest');
 
     fireEvent.click(await openMenuItem(/actions for ingest/i, 'reset-wf-ingest'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Reset' }));
 
     await waitFor(() => expect(api.resetWorkflow).toHaveBeenCalledWith('wf-ingest'));
     await waitFor(() => expect(toast.warning).toHaveBeenCalledWith(
@@ -124,9 +125,46 @@ describe('WorkflowList', () => {
     await screen.findByTestId('open-wf-ingest');
 
     fireEvent.click(await openMenuItem(/actions for ingest/i, 'reset-wf-ingest'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Reset' }));
 
     await waitFor(() => expect(api.resetWorkflow).toHaveBeenCalledWith('wf-ingest'));
     await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Ingest restored to its default.'));
     expect(toast.warning).not.toHaveBeenCalled();
+  });
+
+  // Reset discards the operator's entire customised graph, GCs the secret rows the old graph
+  // referenced, and can rotate the webhook token. Delete — which the route REFUSES for these
+  // workflows — already had a confirmation, so the destructive action had less friction than the
+  // refused one.
+  it('does not reset until the confirmation is accepted', async () => {
+    (api.fetchWorkflows as any).mockResolvedValue([
+      { id: 'wf-ingest', name: 'Ingest', enabled: true, protected: true } as never,
+    ]);
+    (api.resetWorkflow as any).mockResolvedValue({ ok: true, secretPreserved: true });
+    render(<MemoryRouter><WorkflowList /></MemoryRouter>);
+    await screen.findByTestId('open-wf-ingest');
+
+    fireEvent.click(await openMenuItem(/actions for ingest/i, 'reset-wf-ingest'));
+
+    // The dialog is up and nothing has been sent.
+    expect(await screen.findByText(/changes you have made to this workflow will be discarded/i)).toBeTruthy();
+    expect(api.resetWorkflow).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reset' }));
+    await waitFor(() => expect(api.resetWorkflow).toHaveBeenCalledWith('wf-ingest'));
+  });
+
+  it('does not reset when the confirmation is cancelled', async () => {
+    (api.fetchWorkflows as any).mockResolvedValue([
+      { id: 'wf-ingest', name: 'Ingest', enabled: true, protected: true } as never,
+    ]);
+    render(<MemoryRouter><WorkflowList /></MemoryRouter>);
+    await screen.findByTestId('open-wf-ingest');
+
+    fireEvent.click(await openMenuItem(/actions for ingest/i, 'reset-wf-ingest'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }));
+
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Reset' })).toBeNull());
+    expect(api.resetWorkflow).not.toHaveBeenCalled();
   });
 });
