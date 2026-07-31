@@ -116,8 +116,12 @@ export function WorkflowList() {
     try {
       const r = await resetWorkflow(w.id);
       if (r.secretPreserved) toast.success(`${w.name} restored to its default.`);
-      // Never swallow this: every external sender's token has just stopped working.
-      else toast.warning(`${w.name} restored, but a NEW webhook secret was generated — existing senders must be given the new token.`);
+      // Never swallow this: every external sender's token has just stopped working. The advice
+      // has to be something the product can actually do — workflow secrets are write-only
+      // (SEC-06: no reveal endpoint exists), so the placeholder token minted here can never be
+      // read back and "give senders the new token" was impossible advice. Setting a fresh secret
+      // on the trigger is the only route to a token the operator holds.
+      else toast.warning(`${w.name} restored, but its webhook had no secret to keep. Open it, set a new secret on the Ingest webhook trigger, and give that to your senders.`);
       await load();
     } catch (e) {
       toast.error(`Reset failed: ${e instanceof Error ? e.message : String(e)}`);

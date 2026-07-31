@@ -94,7 +94,11 @@ describe('WorkflowList', () => {
   // The reset toast is the only signal an operator gets that a webhook secret rotated —
   // silently swallowing it (or making it look identical to the no-rotation case) would leave
   // external senders quietly broken. See the "Never swallow this" comment in WorkflowList.
-  it('warns that senders need the new token when reset rotates the webhook secret', async () => {
+  //
+  // The wording changed: it used to say "existing senders must be given the new token", which the
+  // product cannot support — workflow secrets are write-only (SEC-06) and there is no reveal
+  // endpoint, so the minted token can never be read back. It now names the action that works.
+  it('tells the operator to set a new secret when reset had none to keep', async () => {
     (api.fetchWorkflows as any).mockResolvedValue([
       { id: 'wf-ingest', name: 'Ingest', enabled: true, protected: true } as never,
     ]);
@@ -106,7 +110,7 @@ describe('WorkflowList', () => {
 
     await waitFor(() => expect(api.resetWorkflow).toHaveBeenCalledWith('wf-ingest'));
     await waitFor(() => expect(toast.warning).toHaveBeenCalledWith(
-      'Ingest restored, but a NEW webhook secret was generated — existing senders must be given the new token.',
+      'Ingest restored, but its webhook had no secret to keep. Open it, set a new secret on the Ingest webhook trigger, and give that to your senders.',
     ));
     expect(toast.success).not.toHaveBeenCalled();
   });

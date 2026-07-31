@@ -55,7 +55,8 @@ describe('rebuildSystemWorkflow', () => {
   });
 
   // secretPreserved means exactly one thing: NO external sender's webhook token changed.
-  // The three branches below are the complete case split.
+  // The cases below are the complete split: a carried-over ref, a carried-over plaintext value,
+  // no webhook node at all, and the one genuinely lossy case (a webhook with no stored secret).
   describe('secretPreserved', () => {
     it('is true when an existing secretRef was carried over (same token stays in force)', () => {
       expect(rebuildSystemWorkflow(existing as never).secretPreserved).toBe(true);
@@ -70,12 +71,26 @@ describe('rebuildSystemWorkflow', () => {
       expect(secretPreserved).toBe(false);
     });
 
-    it('is false when the old webhook secret was PLAINTEXT (no ref to carry over)', () => {
+    // Was `false`: a plaintext secret produced a freshly minted UUID, and the operator was told
+    // to redistribute a token that is write-only and can never be read back. The plaintext value
+    // IS the token, so it is carried through and sealed by the route — the token really survives.
+    it('is true when the old webhook secret was PLAINTEXT — the value itself is carried over', () => {
       const plaintext = {
         id: 'wf-ingest', name: 'x',
         definition: { nodes: [{ id: 't', type: 'webhook', data: { templateId: 'webhook-trigger', secret: 'raw-token' } }], edges: [] },
       };
-      expect(rebuildSystemWorkflow(plaintext as never).secretPreserved).toBe(false);
+      const { workflow, secretPreserved } = rebuildSystemWorkflow(plaintext as never);
+      const trigger = workflow.definition.nodes.find((n: any) => n.data?.templateId === 'webhook-trigger');
+      expect(trigger.data.secret).toBe('raw-token');
+      expect(secretPreserved).toBe(true);
+    });
+
+    it('is false when the stored webhook secret is blank (nothing to carry over)', () => {
+      const blank = {
+        id: 'wf-ingest', name: 'x',
+        definition: { nodes: [{ id: 't', type: 'webhook', data: { templateId: 'webhook-trigger', secret: '   ' } }], edges: [] },
+      };
+      expect(rebuildSystemWorkflow(blank as never).secretPreserved).toBe(false);
     });
 
     it('is true for wf-sample-reactive, whose restored graph has no webhook node at all', () => {

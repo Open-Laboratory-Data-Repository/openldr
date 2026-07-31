@@ -1194,6 +1194,33 @@ describe('workflow reset — SEC-06 sealing (no plaintext secret persisted or au
     expect(stored.some((v: string) => UUID_RE.test(v))).toBe(true);
   });
 
+  // An UNSEALED graph (seeded before SEC-06, imported, or written by a path that skipped
+  // extractWorkflowSecrets) holds the token as plaintext. That string IS the live token, so the
+  // reset must carry the VALUE over and let the seal turn it into a ref — minting a fresh UUID
+  // here would kill every sender in exchange for a token nobody can ever read back.
+  it('carries a PLAINTEXT stored webhook secret through the reset, sealed', async () => {
+    const ctx = fakeCtx();
+    let saved: any;
+    (ctx as any).workflows.store.get = async () => ({
+      id: 'wf-ingest', name: 'unsealed',
+      definition: { nodes: [{ id: 't', type: 'webhook', data: { templateId: 'webhook-trigger', secret: 'live-plaintext-token' } }], edges: [] },
+    });
+    (ctx as any).workflows.store.update = async (_id: string, wf: any) => { saved = wf; return wf; };
+    const app = resetApp(ctx);
+
+    const res = await app.inject({ method: 'POST', url: '/api/workflows/wf-ingest/reset' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ ok: true, secretPreserved: true });
+
+    // Persisted as a ref, never as cleartext...
+    const trigger = saved.definition.nodes.find((n: any) => n.data?.templateId === 'webhook-trigger');
+    expect(trigger.data.secret.secretRef).toMatch(/^wsec_/);
+    expect(JSON.stringify(saved)).not.toContain('live-plaintext-token');
+    // ...and the token behind that ref is the SAME one senders already hold.
+    const stored = ctx.__secretStore.rows.get(trigger.data.secret.secretRef);
+    expect(stored.value).toBe('live-plaintext-token');
+  });
+
   it('GCs secret rows orphaned by the restored graph (deleteExcept runs)', async () => {
     const ctx = fakeCtx();
     // Two rows exist for wf-ingest: the webhook token (carried over) and one belonging to an
