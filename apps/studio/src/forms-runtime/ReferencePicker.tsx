@@ -22,10 +22,23 @@ function toRows(res: ReferenceSearchResponse): Row[] {
       }));
 }
 
-const labelOf = (v: ReferenceValue): string =>
-  v.display ?? ('reference' in v ? v.reference : v.code);
-const keyOf = (v: ReferenceValue): string =>
-  'reference' in v ? v.reference : `${v.system}|${v.code}`;
+/**
+ * A value here is not guaranteed to be an object: `fromAnswer` decodes a display-less
+ * valueReference back to a bare reference string, so legacy stored answers arrive as
+ * primitives. `'x' in v` THROWS a TypeError on a primitive, and keyOf runs inside key={...}
+ * during render — which unmounted the React tree instead of degrading. Both helpers now
+ * fall back to the value's string form.
+ */
+const isRefObject = (v: unknown): v is ReferenceValue => typeof v === 'object' && v !== null;
+
+const labelOf = (v: ReferenceValue): string => {
+  if (!isRefObject(v)) return String(v);
+  return v.display ?? ('reference' in v ? v.reference : v.code);
+};
+const keyOf = (v: ReferenceValue): string => {
+  if (!isRefObject(v)) return String(v);
+  return 'reference' in v ? v.reference : `${v.system}|${v.code}`;
+};
 
 export function ReferencePicker({ field, formDefinitionId, preview = false, multiple, value, onChange }: {
   field: FormField;

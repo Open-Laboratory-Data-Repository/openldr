@@ -107,6 +107,17 @@ describe('ReferencePicker', () => {
     expect(onChange).toHaveBeenCalledWith(null);
   });
 
+  // A display-less valueReference decodes back to a bare string by design, and the builder's
+  // "Fill example" used to inject one too. `'reference' in v` throws on a primitive, and keyOf
+  // runs inside key={...} during render — so this used to unmount the tree, not degrade.
+  it('renders a bare-string value instead of throwing', () => {
+    render(
+      <ReferencePicker field={field} formDefinitionId="f1" multiple={false}
+        value={'Patient/legacy' as never} onChange={() => {}} />,
+    );
+    expect(screen.getByText('Patient/legacy')).toBeInTheDocument();
+  });
+
   it('renders one chip per value when multiple', () => {
     render(
       <ReferencePicker field={field} formDefinitionId="f1" multiple
