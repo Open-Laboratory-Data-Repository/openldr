@@ -20,8 +20,8 @@ You can browse the report library by category, select a report, fill in filters 
 1. Open **Reports** from the main navigation.
 2. Browse the library, grouped by **Category**. Use the search box to filter by name, or star a report to pin it to the top.
 3. Select a report. Reports built from a template carry a **Template** badge.
-4. Set the filters shown above the result — these are generated automatically from the parameters defined on the report's template (for example Date range or Facility). Leave optional filters blank when you want the broadest result.
-5. Select **Run**.
+4. Open the report's **⋯** menu and choose **Parameters**. The filters are generated automatically from the parameters defined on the report's template (for example Date range or Facility). Leave optional filters blank when you want the broadest result.
+5. Select **Run** in the Parameters panel. The panel closes and the report runs.
 6. Read the **Document** tab for the formatted, printable PDF.
 7. Switch to **Spreadsheet** to inspect, sort, filter, and export rows as CSV or XLSX.
 8. Review the summary strip above the result, if the report defines one, for at-a-glance totals.
@@ -37,8 +37,10 @@ The report run completes, the result appears in both the Document and Spreadshee
 
 ## Troubleshooting
 
-- **Run is disabled:** a required filter is missing.
+- **Run is disabled:** a required filter is missing. Open **⋯ → Parameters** and fill in every filter marked required — most reports require a date range.
+- **"date range not selected", or a message naming a parameter:** the report ran without a value it needs. Open **⋯ → Parameters**, set it, and run again. The message names the parameter at fault.
 - **The result is empty:** widen the date range, remove optional filters, or confirm that the relevant data has been ingested.
+- **An antibiogram shows an `(unmapped)` column:** those are susceptibility results the report could not attribute to a specific antibiotic — commonly a panel-level summary row, a single result reporting two drugs, or a microscopy finding recorded as S/I/R. They are shown rather than dropped so the count is visible; treat a large number as a data-quality signal worth raising with whoever configures the analyser.
 - **Permission denied:** your account can view reports but may not have permission to manage schedules, edit templates, or unpublish/delete.
 - **A previous run failed:** open **Run History**, inspect the error, adjust filters, and run again.
 - **A report you expect isn't in the library:** it may have been unpublished, or it hasn't been created yet — see [Report Designer](/docs/report-designer) to publish it.

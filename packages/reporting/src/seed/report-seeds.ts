@@ -856,14 +856,28 @@ order by coalesce(f.performer, p.managing_organization)`,
     //    isolate's OWN date (or '1970-01-01' if dateless) via Postgres `age()`, which performs the
     //    same calendar year/month/day-borrow subtraction as the JS algorithm (same technique already
     //    used/validated by q-patient-demographics's age banding).
-    //  - country/year: the catalog defaults `country` to `'XXX'` and `year` to `0` when unset (zod
-    //    `.default(...)`). Both `{{param.country}}`/`{{param.year}}` tokens are ALWAYS bound
+    //  - country/year: both `{{param.country}}`/`{{param.year}}` tokens are ALWAYS bound
     //    (substituteParams throws on any unbound token) — same '' = "use default" guard as
     //    q-patient-demographics's `asOf`: `coalesce(nullif({{param.X}}, ''), '<default>')`. The
     //    seeded design defaults both params' `value` to `''` so an untouched filter still resolves.
-    //  - final grouping: specimenType x pathogen x antibiotic x gender x ageBand x origin, matching
-    //    `toGlassRis`'s grouping key `[specimenType, pathogenCode, antibiotic, gender, ageBand,
-    //    origin]`.
+    //  - ⛔ YEAR IS DERIVED, not defaulted to 0. The catalog's `year: 0` fallback shipped a literal
+    //    zero into every row of a GLASS submission file — a value that is not a year and that no
+    //    recipient can interpret. The isolate's own date is right there and is populated on 47 of
+    //    47 measured isolates, so the year comes from it: `substr(iso_date, 1, 4)` (`substring` on
+    //    T-SQL, which has no `substr`). Read off the TEXT column deliberately — casting to a
+    //    timestamp would throw on the partial-precision FHIR dates this warehouse legitimately
+    //    stores (see q-turnaround-time's precision guard). `{{param.year}}` still wins when the
+    //    operator sets it, and a dateless isolate still falls back to '0' rather than a NULL row.
+    //    `iso_year` therefore joins the GROUP BY: GLASS RIS is reported per year, so two years of
+    //    the same pathogen/antibiotic must NOT be summed into one row — which is exactly what the
+    //    constant 0 did.
+    //  - ⚠ `Iso3Country` stays operator-supplied with an 'XXX' placeholder: CE holds no country
+    //    setting to derive it from, and inventing one would be worse than a visibly unset value.
+    //  - ⚠ `AgeGroup`/`Origin` reading 'unknown' is SOURCE DATA, not a defect here: measured,
+    //    date_of_birth is present on 201 of 589 patients and `specimens.origin` is null on 588 of
+    //    588. Do not "fix" those in SQL — there is nothing to read.
+    //  - final grouping: specimenType x pathogen x antibiotic x gender x ageBand x origin x year,
+    //    matching `toGlassRis`'s grouping key plus the derived year described above.
     //  - row order: Specimen, PathogenCode, AntibioticCode, Gender, AgeGroup, Origin all ASC —
     //    matches `toGlassRis`'s explicit chained `.localeCompare` sort.
     //  - R3d cutover: reads lab_results/specimens/patients; bare-id joins
@@ -937,13 +951,14 @@ ast_obs as (
     and o.specimen_id is not null and o.specimen_id <> ''
 ),
 results as (
-  select fi.*, a.antibiotic, a.ris
+  select fi.*, a.antibiotic, a.ris,
+    coalesce(nullif({{param.year}}, ''), substr(fi.iso_date, 1, 4), '0') as iso_year
   from first_isolates fi
   join ast_obs a on a.specimen_id = fi.specimen_id
 )
 select
   coalesce(nullif({{param.country}}, ''), 'XXX') as "Iso3Country",
-  coalesce(nullif({{param.year}}, ''), '0')::int as "Year",
+  iso_year::int as "Year",
   specimen_type as "Specimen",
   pathogen_code as "PathogenCode",
   antibiotic as "AntibioticCode",
@@ -955,7 +970,7 @@ select
   sum(case when ris = 'S' then 1 else 0 end)::int as "Susceptible",
   count(*)::int as "Total"
 from results
-group by specimen_type, pathogen_code, antibiotic, gender, age_band, origin
+group by specimen_type, pathogen_code, pathogen_name, antibiotic, gender, age_band, origin, iso_year
 order by "Specimen", "PathogenCode", "AntibioticCode", "Gender", "AgeGroup", "Origin"`,
       // Task 2 port — FLAGGED for extra parity-harness attention (the most structurally complex
       // query in the seed set):
@@ -1047,13 +1062,14 @@ ast_obs as (
     and o.specimen_id is not null and o.specimen_id <> ''
 ),
 results as (
-  select fi.*, a.antibiotic, a.ris
+  select fi.*, a.antibiotic, a.ris,
+    coalesce(nullif({{param.year}}, ''), substring(fi.iso_date, 1, 4), '0') as iso_year
   from first_isolates fi
   join ast_obs a on a.specimen_id = fi.specimen_id
 )
 select
   coalesce(nullif({{param.country}}, ''), 'XXX') as "Iso3Country",
-  cast(coalesce(nullif({{param.year}}, ''), '0') as int) as "Year",
+  cast(iso_year as int) as "Year",
   specimen_type as "Specimen",
   pathogen_code as "PathogenCode",
   antibiotic as "AntibioticCode",
@@ -1065,7 +1081,7 @@ select
   cast(sum(case when ris = 'S' then 1 else 0 end) as int) as "Susceptible",
   cast(count(*) as int) as "Total"
 from results
-group by specimen_type, pathogen_code, antibiotic, gender, age_band, origin
+group by specimen_type, pathogen_code, pathogen_name, antibiotic, gender, age_band, origin, iso_year
 order by "Specimen", "PathogenCode", "AntibioticCode", "Gender", "AgeGroup", "Origin"`,
       // Task 5 mysql port — same CTE-chain shape as the mssql variant (distinct on ->
       // row_number()/rn=1 dedup) but with MySQL's simpler calendar-exact age:
@@ -1144,13 +1160,14 @@ ast_obs as (
     and o.specimen_id is not null and o.specimen_id <> ''
 ),
 results as (
-  select fi.*, a.antibiotic, a.ris
+  select fi.*, a.antibiotic, a.ris,
+    coalesce(nullif({{param.year}}, ''), substr(fi.iso_date, 1, 4), '0') as iso_year
   from first_isolates fi
   join ast_obs a on a.specimen_id = fi.specimen_id
 )
 select
   coalesce(nullif({{param.country}}, ''), 'XXX') as \`Iso3Country\`,
-  cast(coalesce(nullif({{param.year}}, ''), '0') as signed) as \`Year\`,
+  cast(iso_year as signed) as \`Year\`,
   specimen_type as \`Specimen\`,
   pathogen_code as \`PathogenCode\`,
   antibiotic as \`AntibioticCode\`,
@@ -1162,7 +1179,7 @@ select
   cast(sum(case when ris = 'S' then 1 else 0 end) as signed) as \`Susceptible\`,
   cast(count(*) as signed) as \`Total\`
 from results
-group by specimen_type, pathogen_code, antibiotic, gender, age_band, origin
+group by specimen_type, pathogen_code, pathogen_name, antibiotic, gender, age_band, origin, iso_year
 order by \`Specimen\`, \`PathogenCode\`, \`AntibioticCode\`, \`Gender\`, \`AgeGroup\`, \`Origin\``,
     },
   },
@@ -1253,7 +1270,7 @@ results as (
 )
 select
   specimen_type as "specimenType",
-  pathogen_code as "pathogen",
+  pathogen_name as "pathogen",
   antibiotic,
   count(*)::int as tested,
   sum(case when ris = 'R' then 1 else 0 end)::int as r,
@@ -1261,8 +1278,8 @@ select
   sum(case when ris = 'S' then 1 else 0 end)::int as s,
   round(100.0 * sum(case when ris = 'R' then 1 else 0 end) / nullif(count(*), 0), 1)::float8 as "percentR"
 from results
-group by specimen_type, pathogen_code, antibiotic
-order by specimen_type, pathogen_code, antibiotic`,
+group by specimen_type, pathogen_code, pathogen_name, antibiotic
+order by specimen_type, pathogen_name, antibiotic`,
       // Task 2 port: identical CTE chain/rationale as q-amr-glass-ris's mssql variant (distinct
       // on -> row_number()/rn=1, age() -> datediff(year,...) borrow-day formula, ::int ->
       // cast(...as int), string || -> +) — see its comment for the full explanation. Flagged for
@@ -1346,7 +1363,7 @@ results as (
 )
 select
   specimen_type as "specimenType",
-  pathogen_code as "pathogen",
+  pathogen_name as "pathogen",
   antibiotic,
   cast(count(*) as int) as tested,
   cast(sum(case when ris = 'R' then 1 else 0 end) as int) as r,
@@ -1354,8 +1371,8 @@ select
   cast(sum(case when ris = 'S' then 1 else 0 end) as int) as s,
   cast(round(100.0 * sum(case when ris = 'R' then 1 else 0 end) / nullif(count(*), 0), 1) as float) as "percentR"
 from results
-group by specimen_type, pathogen_code, antibiotic
-order by specimen_type, pathogen_code, antibiotic`,
+group by specimen_type, pathogen_code, pathogen_name, antibiotic
+order by specimen_type, pathogen_name, antibiotic`,
       // Task 5 mysql port: same CTE-chain port as q-amr-glass-ris's mysql variant (row_number
       // dedup + timestampdiff calendar-exact age + concat + substr date-strip) — see its comment.
       // Final grouping is specimenType x pathogen x antibiotic only. Backtick the quoted result
@@ -1434,7 +1451,7 @@ results as (
 )
 select
   specimen_type as \`specimenType\`,
-  pathogen_code as \`pathogen\`,
+  pathogen_name as \`pathogen\`,
   antibiotic,
   cast(count(*) as signed) as tested,
   cast(sum(case when ris = 'R' then 1 else 0 end) as signed) as r,
@@ -1442,8 +1459,8 @@ select
   cast(sum(case when ris = 'S' then 1 else 0 end) as signed) as s,
   cast(round(100.0 * sum(case when ris = 'R' then 1 else 0 end) / nullif(count(*), 0), 1) as double) as \`percentR\`
 from results
-group by specimen_type, pathogen_code, antibiotic
-order by specimen_type, pathogen_code, antibiotic`,
+group by specimen_type, pathogen_code, pathogen_name, antibiotic
+order by specimen_type, pathogen_name, antibiotic`,
     },
   },
   {
@@ -1474,8 +1491,16 @@ order by specimen_type, pathogen_code, antibiotic`,
     //  - cell format: see antibiogramCellSql's comment — one CASE column per ANTIBIOGRAM_PANEL
     //    antibiotic, `${percentR}% (${tested})` or `''`, byte-identical to the catalog's cells for
     //    every antibiotic the panel and the catalog's dynamic union both contain.
-    //  - row order: pathogen_code ASC — matches antibiogram()'s explicit
-    //    `.sort(([a],[b]) => a.localeCompare(b))`.
+    //  - ⛔ ROWS ARE LABELLED BY NAME, DEDUPED BY CODE. The matrix used to print the raw source
+    //    code (`VIBCO`, `SHIFL`, `ACIBA`) as the pathogen, which is unreadable to the person the
+    //    report is for. The display name is already in the warehouse — `lab_results.text_value`
+    //    carries "Vibrio cholera 01 Ogawa" etc. beside the code — so it is used for the label while
+    //    the FIRST-ISOLATE DEDUP KEY AND GROUPING STAY ON `pathogen_code`. That split matters: the
+    //    code is the stable identity, and grouping by a free-text name would merge two codes that
+    //    happen to share a description. `pathogen_name` rides in the GROUP BY only because it is
+    //    functionally dependent on the code (verified 1:1 on real data); if a source ever breaks
+    //    that, the group splits — visibly — rather than silently collapsing distinct organisms.
+    //  - row order: pathogen NAME ASC (was code) — the label the reader actually sees.
     //  - R3d cutover: reads lab_results/specimens; bare-id join (oo.specimen_id = s.id);
     //    org uses observation_code/coded_value/result_timestamp, ast uses observation_desc/
     //    abnormal_flag; ref columns renamed specimen_ref->specimen_id, subject_ref->patient_id.
@@ -1499,6 +1524,7 @@ isolate_meta as (
     oo.patient_id,
     coalesce(s.type_code, '(unknown)') as specimen_type,
     coalesce(oo.coded_value, '(unknown)') as pathogen_code,
+    coalesce(oo.text_value, oo.coded_value, '(unknown)') as pathogen_name,
     coalesce(oo.result_timestamp, s.received_time) as iso_date
   from org_obs oo
   left join specimens s on oo.specimen_id = s.id
@@ -1508,7 +1534,7 @@ isolate_meta as (
 ),
 first_isolates as (
   select distinct on (patient_id, pathogen_code, specimen_type)
-    obs_id, specimen_id, pathogen_code
+    obs_id, specimen_id, pathogen_code, pathogen_name
   from isolate_meta
   order by patient_id, pathogen_code, specimen_type, (iso_date is null), iso_date asc, obs_id asc
 ),
@@ -1520,16 +1546,16 @@ ast_obs as (
     and o.specimen_id is not null and o.specimen_id <> ''
 ),
 results as (
-  select fi.pathogen_code, a.antibiotic, a.ris
+  select fi.pathogen_code, fi.pathogen_name, a.antibiotic, a.ris
   from first_isolates fi
   join ast_obs a on a.specimen_id = fi.specimen_id
 )
 select
-  pathogen_code as pathogen,
+  pathogen_name as pathogen,
   ${ANTIBIOGRAM_PANEL.map((a) => antibiogramCellSql(a, 'postgres')).join(',\n  ')}
 from results
-group by pathogen_code
-order by pathogen_code`,
+group by pathogen_code, pathogen_name
+order by pathogen_name`,
       // Task 2 port: distinct on -> row_number()/rn=1 (no age/gender columns needed here, so
       // the CTE chain is simpler than glass-ris/first-isolate-summary — same dedup rationale,
       // see q-amr-glass-ris's comment); string || -> +; antibiogramCellSql('mssql') ports each
@@ -1548,6 +1574,7 @@ isolate_meta as (
     oo.patient_id,
     coalesce(s.type_code, '(unknown)') as specimen_type,
     coalesce(oo.coded_value, '(unknown)') as pathogen_code,
+    coalesce(oo.text_value, oo.coded_value, '(unknown)') as pathogen_name,
     coalesce(oo.result_timestamp, s.received_time) as iso_date
   from org_obs oo
   left join specimens s on oo.specimen_id = s.id
@@ -1564,7 +1591,7 @@ ranked as (
   from isolate_meta im
 ),
 first_isolates as (
-  select obs_id, specimen_id, pathogen_code
+  select obs_id, specimen_id, pathogen_code, pathogen_name
   from ranked
   where rn = 1
 ),
@@ -1576,16 +1603,16 @@ ast_obs as (
     and o.specimen_id is not null and o.specimen_id <> ''
 ),
 results as (
-  select fi.pathogen_code, a.antibiotic, a.ris
+  select fi.pathogen_code, fi.pathogen_name, a.antibiotic, a.ris
   from first_isolates fi
   join ast_obs a on a.specimen_id = fi.specimen_id
 )
 select
-  pathogen_code as pathogen,
+  pathogen_name as pathogen,
   ${ANTIBIOGRAM_PANEL.map((a) => antibiogramCellSql(a, 'mssql')).join(',\n  ')}
 from results
-group by pathogen_code
-order by pathogen_code`,
+group by pathogen_code, pathogen_name
+order by pathogen_name`,
       // Task 5 mysql port: simpler CTE chain (no age/gender) — distinct on -> row_number()/rn=1;
       // end-of-day || -> concat(); the SELECT emits one backtick-aliased CASE
       // column per panel antibiotic via antibiogramCellSql(a, 'mysql'). pathogen_code as pathogen
@@ -1604,6 +1631,7 @@ isolate_meta as (
     oo.patient_id,
     coalesce(s.type_code, '(unknown)') as specimen_type,
     coalesce(oo.coded_value, '(unknown)') as pathogen_code,
+    coalesce(oo.text_value, oo.coded_value, '(unknown)') as pathogen_name,
     coalesce(oo.result_timestamp, s.received_time) as iso_date
   from org_obs oo
   left join specimens s on oo.specimen_id = s.id
@@ -1620,7 +1648,7 @@ ranked as (
   from isolate_meta im
 ),
 first_isolates as (
-  select obs_id, specimen_id, pathogen_code
+  select obs_id, specimen_id, pathogen_code, pathogen_name
   from ranked
   where rn = 1
 ),
@@ -1632,16 +1660,16 @@ ast_obs as (
     and o.specimen_id is not null and o.specimen_id <> ''
 ),
 results as (
-  select fi.pathogen_code, a.antibiotic, a.ris
+  select fi.pathogen_code, fi.pathogen_name, a.antibiotic, a.ris
   from first_isolates fi
   join ast_obs a on a.specimen_id = fi.specimen_id
 )
 select
-  pathogen_code as pathogen,
+  pathogen_name as pathogen,
   ${ANTIBIOGRAM_PANEL.map((a) => antibiogramCellSql(a, 'mysql')).join(',\n  ')}
 from results
-group by pathogen_code
-order by pathogen_code`,
+group by pathogen_code, pathogen_name
+order by pathogen_name`,
     },
   },
 ];

@@ -373,6 +373,66 @@ describe('SEED_QUERIES — q-amr-facility-summary takes its facility from the re
   });
 });
 
+// The human-facing AMR reports printed raw source codes (VIBCO, SHIFL, ACIBA) as the pathogen.
+// The display name sits beside the code in `lab_results.text_value` ("Vibrio cholera 01 Ogawa").
+describe('SEED_QUERIES — pathogens are labelled by name but grouped by code', () => {
+  for (const id of ['q-amr-antibiogram', 'q-amr-first-isolate-summary'] as const) {
+    it(`${id} labels rows with the name in every dialect`, () => {
+      const q = SEED_QUERIES.find((x) => x.id === id)!;
+      for (const [dialect, sql] of Object.entries(q.sql)) {
+        expect(sql, `${id}/${dialect} still labels rows with the raw code`)
+          .not.toMatch(/pathogen_code as ["`]?pathogen["`]?,/);
+        expect(sql, `${id}/${dialect} does not label rows with the name`)
+          .toMatch(/pathogen_name as ["`\\]*pathogen["`\\]*,/);
+        // The code remains the identity: dedup and grouping must not move to the free-text name,
+        // or two codes sharing a description would silently merge into one organism.
+        expect(sql, `${id}/${dialect} lost the code from the grouping`).toMatch(/group by[^\n]*pathogen_code/);
+      }
+    });
+  }
+
+  it('q-amr-glass-ris keeps a CODE in its PathogenCode column', () => {
+    // GLASS RIS is a submission shape, not a reading surface — a column named PathogenCode must
+    // carry a code even though the neighbouring reports now show names.
+    const q = SEED_QUERIES.find((x) => x.id === 'q-amr-glass-ris')!;
+    for (const [dialect, sql] of Object.entries(q.sql)) {
+      expect(sql, `glass/${dialect}`).toMatch(/pathogen_code as ["`\\]*PathogenCode["`\\]*,/);
+    }
+  });
+});
+
+// `Year: 0` was shipped into every row of a GLASS submission file. The isolate's own date is
+// populated on 47 of 47 measured isolates, so the year is derived from it instead.
+describe('SEED_QUERIES — q-amr-glass-ris derives the reporting year', () => {
+  const q = () => SEED_QUERIES.find((x) => x.id === 'q-amr-glass-ris')!;
+
+  it('reads the year off the isolate date, with the operator parameter still winning', () => {
+    for (const [dialect, sql] of Object.entries(q().sql)) {
+      expect(sql, `${dialect} still hardcodes year 0`).not.toContain(`coalesce(nullif({{param.year}}, ''), '0')`);
+      expect(sql, `${dialect} does not derive the year`).toMatch(/coalesce\(nullif\(\{\{param\.year\}\}, ''\), subs\w+\(fi\.iso_date, 1, 4\), '0'\) as iso_year/);
+    }
+  });
+
+  it('uses substring() on T-SQL, which has no substr()', () => {
+    expect(q().sql.mssql).toContain('substring(fi.iso_date, 1, 4)');
+    expect(q().sql.postgres).toContain('substr(fi.iso_date, 1, 4)');
+    expect(q().sql.mysql).toContain('substr(fi.iso_date, 1, 4)');
+  });
+
+  it('reads the year off the TEXT column — never a timestamp cast', () => {
+    // Casting would throw on the partial-precision FHIR dates the warehouse legitimately stores.
+    for (const [dialect, sql] of Object.entries(q().sql)) {
+      expect(sql, `${dialect} casts iso_date to a timestamp`).not.toMatch(/iso_date\s*(::|as\s+)timestamp/i);
+    }
+  });
+
+  it('groups by the year so two years are never summed into one row', () => {
+    for (const [dialect, sql] of Object.entries(q().sql)) {
+      expect(sql, `${dialect} omits iso_year from the grouping`).toMatch(/group by[^\n]*iso_year/);
+    }
+  });
+});
+
 describe('SEED_QUERIES — q-amr-antibiogram', () => {
   it('declares from/to as required plain params and generates one CASE column per panel antibiotic', () => {
     const q = SEED_QUERIES.find((x) => x.id === 'q-amr-antibiogram');
