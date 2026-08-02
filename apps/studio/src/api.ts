@@ -72,8 +72,11 @@ export async function fetchReports(): Promise<ReportSummary[]> {
 export async function fetchReport(id: string, params: Record<string, string> = {}): Promise<ReportResult> {
   const qs = new URLSearchParams(params).toString();
   const res = await authFetch(`/api/reports/${id}${qs ? `?${qs}` : ''}`);
-  if (!res.ok) throw new Error(`report ${id} failed: ${res.status}`);
-  return res.json() as Promise<ReportResult>;
+  // Surface the server's own reason (+ code + correlationId) rather than the bare status. Running a
+  // report is the one call an operator makes constantly and the one most likely to fail on THEIR
+  // input (an unpicked date range); "report r-amr-antibiogram failed: 500" told them nothing and
+  // made a plain client mistake indistinguishable from an outage.
+  return okJson<ReportResult>(res, `report ${id}`);
 }
 
 export async function fetchReportOptions(id: string): Promise<Record<string, string[]>> {

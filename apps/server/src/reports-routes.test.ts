@@ -92,6 +92,50 @@ describe('report routes', () => {
     expect(res.json().error).toContain('from');
   });
 
+  // `substituteParams` (packages/dashboards/src/custom-query-run.ts) throws plain Errors for the
+  // three ways a caller can supply bad run values. They are CLIENT mistakes, but they used to fall
+  // through to the SY0500 catch-all, so Studio could only ever say "failed: 500" — no indication
+  // that a date range was simply not picked.
+  it('400 + RP0001 when a required date bound is missing', async () => {
+    const app = appWith({ list: vi.fn(), run: vi.fn(async () => { throw new Error('required parameter: from'); }) });
+    const res = await app.inject({ method: 'GET', url: '/api/reports/amr-antibiogram' });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('RP0001');
+    expect(res.json().error).toContain('from');
+  });
+
+  it('400 + RP0004 when a required non-date parameter is missing', async () => {
+    const app = appWith({ list: vi.fn(), run: vi.fn(async () => { throw new Error('required parameter: facility'); }) });
+    const res = await app.inject({ method: 'GET', url: '/api/reports/amr-resistance' });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('RP0004');
+    expect(res.json().error).toContain('facility');
+  });
+
+  it('400 + RP0004 on an unbound parameter token', async () => {
+    const app = appWith({ list: vi.fn(), run: vi.fn(async () => { throw new Error('unbound parameter: region'); }) });
+    const res = await app.inject({ method: 'GET', url: '/api/reports/amr-resistance' });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('RP0004');
+    expect(res.json().error).toContain('region');
+  });
+
+  it('400 + RP0004 on a malformed date value', async () => {
+    const app = appWith({ list: vi.fn(), run: vi.fn(async () => { throw new Error('invalid date: 08/02/2026'); }) });
+    const res = await app.inject({ method: 'GET', url: '/api/reports/amr-resistance?from=08/02/2026' });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('RP0004');
+    expect(res.json().error).toContain('08/02/2026');
+  });
+
+  // Guard against over-matching: a genuine server fault whose message merely mentions a parameter
+  // must stay a 500, not get downgraded to a client error.
+  it('does not downgrade an unrelated failure that mentions parameters', async () => {
+    const app = appWith({ list: vi.fn(), run: vi.fn(async () => { throw new Error('relation "parameters" does not exist'); }) });
+    const res = await app.inject({ method: 'GET', url: '/api/reports/amr-resistance' });
+    expect(res.statusCode).toBe(500);
+  });
+
   it('503 on connection failure', async () => {
     const app = appWith({ list: vi.fn(), run: vi.fn(async () => { throw new Error('connect ECONNREFUSED'); }) });
     const res = await app.inject({ method: 'GET', url: '/api/reports/amr-resistance' });
