@@ -165,6 +165,24 @@ order by 1`,
     //    reason. Confirmed live in the Task 4.2 parity check.
     //  - R3d cutover: reads lab_results (observation_desc/abnormal_flag/result_timestamp);
     //    facility subquery via bare patient_id against patients. No specimen, no gender.
+    //  - ⛔ ISOLATE ANCHOR — `abnormal_flag in ('S','I','R')` ALONE IS NOT "an antibiotic
+    //    susceptibility result". S/I/R is just a coded interpretation, and real DISA data puts it on
+    //    far more than antibiotics. Measured on the TDS site (2026-08-02), that bare filter selects
+    //    18,732 rows of which only ~118 are bacterial AST:
+    //      · 16,288 (87%) EQA proficiency panels (EQSS1-6, "A-1".."A-6") — 100% R by design, because
+    //        they are quality-control specimens, not patients. Unfiltered they alone would report a
+    //        ~99% resistance rate.
+    //      · ~2,150 HIV ANTIRETROVIRAL resistance results (Atazanavir, Lopinavir, Tenofovir,
+    //        Efavirenz, …) — real S/I/R, but ARVs are not antibacterials and must never appear in an
+    //        antibiogram.
+    //      · plus Epithelial cells, Pus cells, Comments and OD values that happen to be coded S/I/R.
+    //    So require the AST's specimen to have ALSO produced an organism (LOINC 634-6). A
+    //    susceptibility test exists BECAUSE a culture grew something; EQA panels and ARV panels have
+    //    no isolate, so the structure of the data excludes them without hardcoding an antibiotic or
+    //    organism list (which would be per-country and immediately stale — see the CE convention
+    //    against inlining clinical vocabularies).
+    //    q-amr-antibiogram / q-amr-first-isolate-summary / q-amr-glass-ris already anchored this way;
+    //    these two were the 2-of-5 an earlier pass missed. Proven a no-op on culture+AST data.
     sql: {
       postgres: `select
   coalesce(o.observation_desc, '(unknown)') as antibiotic,
@@ -176,6 +194,8 @@ order by 1`,
 from lab_results o
 left join specimens s on o.specimen_id = s.id
 where o.abnormal_flag in ('S', 'I', 'R')
+  and o.specimen_id is not null and o.specimen_id <> ''
+  and exists (select 1 from lab_results g where g.observation_code = '634-6' and g.specimen_id = o.specimen_id)
   and (coalesce(o.result_timestamp, s.received_time) is null
        or (coalesce(o.result_timestamp, s.received_time) >= {{param.from}}
            and coalesce(o.result_timestamp, s.received_time) <= ({{param.to}} || 'T23:59:59.999Z')))
@@ -198,6 +218,8 @@ order by "percentR" desc`,
 from lab_results o
 left join specimens s on o.specimen_id = s.id
 where o.abnormal_flag in ('S', 'I', 'R')
+  and o.specimen_id is not null and o.specimen_id <> ''
+  and exists (select 1 from lab_results g where g.observation_code = '634-6' and g.specimen_id = o.specimen_id)
   and (coalesce(o.result_timestamp, s.received_time) is null
        or (coalesce(o.result_timestamp, s.received_time) >= {{param.from}}
            and coalesce(o.result_timestamp, s.received_time) <= ({{param.to}} + 'T23:59:59.999Z')))
@@ -219,6 +241,8 @@ order by "percentR" desc`,
 from lab_results o
 left join specimens s on o.specimen_id = s.id
 where o.abnormal_flag in ('S', 'I', 'R')
+  and o.specimen_id is not null and o.specimen_id <> ''
+  and exists (select 1 from lab_results g where g.observation_code = '634-6' and g.specimen_id = o.specimen_id)
   and (coalesce(o.result_timestamp, s.received_time) is null
        or (coalesce(o.result_timestamp, s.received_time) >= {{param.from}}
            and coalesce(o.result_timestamp, s.received_time) <= concat({{param.to}}, 'T23:59:59.999Z')))
@@ -612,6 +636,10 @@ order by case band when '0-4' then 1 when '5-14' then 2 when '15-24' then 3 when
     //    a.facility.localeCompare(b.facility))`.
     //  - R3d cutover: reads lab_results join patients on bare o.patient_id = p.id
     //    (abnormal_flag/result_timestamp). No specimen, no gender.
+    //  - ⛔ ISOLATE ANCHOR: same requirement, same reason as q-amr-resistance — the AST's specimen
+    //    must also carry an organism (LOINC 634-6), or EQA proficiency panels (100% R) and HIV
+    //    antiretroviral resistance results are counted as facility antibacterial resistance. These
+    //    two queries were the 2-of-5 that an earlier pass left unanchored.
     params: [
       { id: 'from', label: 'From', type: 'text', required: true },
       { id: 'to', label: 'To', type: 'text', required: true },
@@ -626,6 +654,8 @@ join patients p on o.patient_id = p.id
 left join specimens s on o.specimen_id = s.id
 where o.abnormal_flag in ('S', 'I', 'R')
   and o.patient_id is not null and o.patient_id <> ''
+  and o.specimen_id is not null and o.specimen_id <> ''
+  and exists (select 1 from lab_results g where g.observation_code = '634-6' and g.specimen_id = o.specimen_id)
   and p.managing_organization is not null
   and (coalesce(o.result_timestamp, s.received_time) is null
        or (coalesce(o.result_timestamp, s.received_time) >= {{param.from}}
@@ -643,6 +673,8 @@ join patients p on o.patient_id = p.id
 left join specimens s on o.specimen_id = s.id
 where o.abnormal_flag in ('S', 'I', 'R')
   and o.patient_id is not null and o.patient_id <> ''
+  and o.specimen_id is not null and o.specimen_id <> ''
+  and exists (select 1 from lab_results g where g.observation_code = '634-6' and g.specimen_id = o.specimen_id)
   and p.managing_organization is not null
   and (coalesce(o.result_timestamp, s.received_time) is null
        or (coalesce(o.result_timestamp, s.received_time) >= {{param.from}}
@@ -660,6 +692,8 @@ join patients p on o.patient_id = p.id
 left join specimens s on o.specimen_id = s.id
 where o.abnormal_flag in ('S', 'I', 'R')
   and o.patient_id is not null and o.patient_id <> ''
+  and o.specimen_id is not null and o.specimen_id <> ''
+  and exists (select 1 from lab_results g where g.observation_code = '634-6' and g.specimen_id = o.specimen_id)
   and p.managing_organization is not null
   and (coalesce(o.result_timestamp, s.received_time) is null
        or (coalesce(o.result_timestamp, s.received_time) >= {{param.from}}

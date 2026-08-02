@@ -184,6 +184,51 @@ describe('SEED_QUERIES — q-amr-resistance', () => {
   });
 });
 
+// `abnormal_flag in ('S','I','R')` alone does NOT mean "an antibiotic susceptibility result".
+// Measured on real DISA data (TDS, 2026-08-02) that filter selects 18,732 rows of which only ~118
+// are bacterial AST — 87% are EQA proficiency panels (100% R by design) and ~2,150 are HIV
+// antiretroviral resistance. Every AMR query must therefore anchor the AST to a specimen that also
+// produced an organism (LOINC 634-6). Three of the five already did; q-amr-resistance and
+// q-amr-facility-summary did not, and this pins all five so the gap cannot reopen.
+describe('SEED_QUERIES — every AMR query anchors S/I/R to an isolate', () => {
+  const AMR_QUERY_IDS = [
+    'q-amr-resistance',
+    'q-amr-facility-summary',
+    'q-amr-antibiogram',
+    'q-amr-first-isolate-summary',
+    'q-amr-glass-ris',
+  ] as const;
+
+  for (const id of AMR_QUERY_IDS) {
+    it(`${id} requires an organism observation in every dialect`, () => {
+      const q = SEED_QUERIES.find((x) => x.id === id);
+      expect(q, `${id} missing from SEED_QUERIES`).toBeTruthy();
+      for (const [dialect, sql] of Object.entries(q!.sql)) {
+        // Vacuity guard: the assertion below is only meaningful for a query that actually
+        // filters on S/I/R. If that filter ever moves, fail loudly rather than pass silently.
+        expect(sql, `${id}/${dialect} no longer filters on S/I/R`).toMatch(/abnormal_flag in \('S', ?'I', ?'R'\)/);
+        expect(sql, `${id}/${dialect} does not anchor to an isolate`).toContain('634-6');
+      }
+    });
+  }
+
+  // The two that had to be repaired — assert the specific predicate, not just the literal, so a
+  // stray '634-6' in a comment or an unrelated clause cannot satisfy the check above.
+  for (const id of ['q-amr-resistance', 'q-amr-facility-summary'] as const) {
+    it(`${id} correlates the isolate to the AST's own specimen in every dialect`, () => {
+      const q = SEED_QUERIES.find((x) => x.id === id)!;
+      for (const [dialect, sql] of Object.entries(q.sql)) {
+        expect(sql, `${id}/${dialect} lost the correlated exists(...)`).toContain(
+          "exists (select 1 from lab_results g where g.observation_code = '634-6' and g.specimen_id = o.specimen_id)",
+        );
+        // An AST with no specimen can never be tied to an isolate; excluding it keeps the
+        // exists(...) from being satisfied by a NULL-to-NULL comparison quirk on any engine.
+        expect(sql, `${id}/${dialect} does not require a specimen`).toContain("o.specimen_id is not null and o.specimen_id <> ''");
+      }
+    });
+  }
+});
+
 describe('SEED_REPORT_DEFS — r-amr-resistance', () => {
   it('links rt-amr-resistance + q-amr-resistance with the catalog report’s metrics/chart/options', () => {
     const def = SEED_REPORT_DEFS.find((r) => r.id === 'r-amr-resistance');
