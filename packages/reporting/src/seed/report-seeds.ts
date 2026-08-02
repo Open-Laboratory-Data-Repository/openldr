@@ -321,6 +321,23 @@ order by 1, 2`,
     //    `patient_id`, and the facility subquery compares the bare `dr.patient_id` against bare
     //    `patients.id` (no `'Patient/' ||` prefix needed). `managing_organization` itself is
     //    unchanged.
+    //  - PRECISION GUARD (both sides): `specimens.received_time` and `diagnostic_reports.issued`
+    //    are TEXT columns holding whatever FHIR supplied, verbatim. `Specimen.receivedTime` is a
+    //    FHIR `dateTime`, and CE's DATETIME_RE (packages/fhir/src/datatypes/primitives.ts) accepts
+    //    year ('2026') and year-month ('2026-07') precision — both of which are valid FHIR and
+    //    both of which make `::timestamptz` throw ("invalid input syntax"), failing the WHOLE
+    //    report with a 500 rather than skipping the row. A month-precision receipt also cannot
+    //    yield an hours-level turnaround, so these rows are EXCLUDED, not coerced to midnight —
+    //    coercing would silently invent up to a month of turnaround. The guard sits INSIDE the
+    //    `received` CTE, before `min()`, because `min()` here is a lexical TEXT min: a single
+    //    '2026-07' row would otherwise win over that patient's real full-precision receipts
+    //    (shorter prefix sorts first) and poison every report paired to that patient.
+    //    `issued` is typed FHIR `instant` (INSTANT_RE, always full precision) so it should never
+    //    be partial — it is guarded symmetrically as defence in depth, since the cast is equally
+    //    fatal there and nothing in the SQL layer re-checks what a writer put in the column.
+    //    Ported per engine: postgres `~`, mysql `regexp`, mssql `like` with [0-9] ranges (T-SQL
+    //    has no regex; the LIKE pins the full YYYY-MM-DDThh:mm:ss prefix, which is exactly the
+    //    partial-precision exclusion the regex performs).
     //  - date range: from/to REQUIRED (see q-test-volume's note on why); endOfDay applied to `to`.
     //  - row order: avgHours DESCENDING, matching `rows.sort((a,b) => b.avgHours - a.avgHours)`.
     //    The catalog has no secondary tiebreaker (nondeterministic tie order there); `test asc` is
@@ -343,7 +360,8 @@ order by 1, 2`,
       postgres: `with received as (
   select patient_id, min(received_time) as received_time
   from specimens
-  where patient_id is not null and received_time is not null
+  where patient_id is not null
+    and received_time ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}([.][0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$'
   group by patient_id
 ),
 paired as (
@@ -352,7 +370,7 @@ paired as (
     round(extract(epoch from (dr.issued::timestamptz - r.received_time::timestamptz)) / 3600.0)::int as hours
   from diagnostic_reports dr
   join received r on r.patient_id = dr.patient_id
-  where dr.issued is not null
+  where dr.issued ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}([.][0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$'
     and dr.issued >= r.received_time
     and dr.issued >= {{param.from}}
     and dr.issued <= ({{param.to}} || 'T23:59:59.999Z')
@@ -381,7 +399,8 @@ order by "avgHours" desc, test asc`,
       mssql: `with received as (
   select patient_id, min(received_time) as received_time
   from specimens
-  where patient_id is not null and received_time is not null
+  where patient_id is not null
+    and received_time like '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]%'
   group by patient_id
 ),
 paired as (
@@ -390,7 +409,7 @@ paired as (
     cast(round(datediff(second, cast(r.received_time as datetime2), cast(dr.issued as datetime2)) / 3600.0, 0) as int) as hours
   from diagnostic_reports dr
   join received r on r.patient_id = dr.patient_id
-  where dr.issued is not null
+  where dr.issued like '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]%'
     and dr.issued >= r.received_time
     and dr.issued >= {{param.from}}
     and dr.issued <= ({{param.to}} + 'T23:59:59.999Z')
@@ -418,7 +437,8 @@ order by "avgHours" desc, test asc`,
       mysql: `with received as (
   select patient_id, min(received_time) as received_time
   from specimens
-  where patient_id is not null and received_time is not null
+  where patient_id is not null
+    and received_time regexp '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}([.][0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$'
   group by patient_id
 ),
 paired as (
@@ -427,7 +447,7 @@ paired as (
     cast(round(timestampdiff(second, str_to_date(substr(r.received_time, 1, 19), '%Y-%m-%dT%H:%i:%s'), str_to_date(substr(dr.issued, 1, 19), '%Y-%m-%dT%H:%i:%s')) / 3600.0, 0) as signed) as hours
   from diagnostic_reports dr
   join received r on r.patient_id = dr.patient_id
-  where dr.issued is not null
+  where dr.issued regexp '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}([.][0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$'
     and dr.issued >= r.received_time
     and dr.issued >= {{param.from}}
     and dr.issued <= concat({{param.to}}, 'T23:59:59.999Z')

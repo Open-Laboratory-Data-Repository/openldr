@@ -3,7 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { z, ZodError } from 'zod';
 import { ReportNotFoundError, type AppContext } from '@openldr/bootstrap';
 import { toCsv, nextRunAt, type ScheduleFrequency } from '@openldr/reporting';
-import { appError } from '@openldr/core';
+import { appError, type AppError } from '@openldr/core';
 import { requireCapability } from './rbac';
 
 const runBeaconBody = z.object({
@@ -212,5 +212,34 @@ function rethrowAsAppError(err: unknown): never {
     const fields = err.issues.map((i) => i.path.join('.') || '(root)').join(', ');
     throw appError('RP0004', { message: `invalid report parameters: ${fields}`, details: err.flatten(), cause: err });
   }
-  throw err;
+  throw asParamError(err) ?? err;
+}
+
+// `substituteParams` (packages/dashboards/src/custom-query-run.ts) reports every bad run value as a
+// plain Error, so all three landed in the SY0500 catch-all — a 500 that blamed the server for what
+// is always a CLIENT mistake, and gave Studio nothing to show but "failed: 500". The commonest case
+// by far is simply running a report before picking its (required) date range.
+//
+// Matched with ANCHORED patterns against the exact strings that function throws. A loose substring
+// test would silently downgrade real server faults that happen to mention a parameter — e.g. a
+// Postgres `relation "parameters" does not exist` — from 500 to 400, hiding an outage as bad input.
+const PARAM_ERRORS = [
+  { re: /^required parameter: (.+)$/, code: 'RP0004' as const },
+  { re: /^unbound parameter: (.+)$/, code: 'RP0004' as const },
+  { re: /^invalid date: (.+)$/, code: 'RP0004' as const },
+];
+// The query declares its date bounds as two separate params (`from`/`to`), so a missing one arrives
+// as `required parameter: from`. That is the catalog's RP0001 ("date range not selected") — a more
+// actionable thing to put in front of an operator than the generic invalid-parameters code.
+const DATE_BOUND_IDS = new Set(['from', 'to', 'dateRange', 'dateFrom', 'dateTo']);
+
+function asParamError(err: unknown): AppError | null {
+  if (!(err instanceof Error)) return null;
+  for (const { re, code } of PARAM_ERRORS) {
+    const m = re.exec(err.message);
+    if (!m) continue;
+    const isMissingDateBound = code === 'RP0004' && re.source.startsWith('^required') && DATE_BOUND_IDS.has(m[1]);
+    return appError(isMissingDateBound ? 'RP0001' : code, { message: err.message, cause: err });
+  }
+  return null;
 }

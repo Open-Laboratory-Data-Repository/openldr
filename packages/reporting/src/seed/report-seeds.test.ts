@@ -342,3 +342,62 @@ describe('SEED_QUERIES — AMR date filtering is NULL-safe in every dialect', ()
     }
   });
 });
+
+describe('SEED_QUERIES — q-turnaround-time excludes partial-precision timestamps', () => {
+  // Regression: `Specimen.receivedTime` is a FHIR `dateTime`, and CE's DATETIME_RE accepts
+  // year ('2026') and year-month ('2026-07') precision. Those land verbatim in the TEXT
+  // column `specimens.received_time`, and `'2026-07'::timestamptz` throws in Postgres —
+  // failing the ENTIRE report with a 500 rather than skipping the offending row. Real data
+  // from the CDR/DISA bridge hit exactly this.
+  const q = () => SEED_QUERIES.find((x) => x.id === 'q-turnaround-time')!;
+
+  it('guards received_time before it is ever cast, in all three dialects', () => {
+    // The mutation this kills: reverting any dialect to a bare
+    // `received_time is not null`, which lets a partial value reach the cast.
+    expect(q().sql.postgres).toMatch(
+      /received_time\s+~\s+'\^\[0-9\]\{4\}-\[0-9\]\{2\}-\[0-9\]\{2\}T/,
+    );
+    expect(q().sql.mysql).toMatch(
+      /received_time\s+regexp\s+'\^\[0-9\]\{4\}-\[0-9\]\{2\}-\[0-9\]\{2\}T/,
+    );
+    // T-SQL has no regex; the LIKE pins the same full YYYY-MM-DDThh:mm:ss prefix.
+    expect(q().sql.mssql).toMatch(
+      /received_time\s+like\s+'(\[0-9\]){4}-(\[0-9\]){2}-(\[0-9\]){2}T/,
+    );
+    for (const [dialect, sql] of Object.entries(q().sql)) {
+      expect(
+        /received_time\s+is\s+not\s+null/.test(sql),
+        `${dialect} still relies on a bare received_time null-check`,
+      ).toBe(false);
+    }
+  });
+
+  it('guards issued symmetrically, in all three dialects', () => {
+    // `issued` is typed FHIR `instant` so it should always be full precision, but the
+    // cast is equally fatal and nothing in the SQL layer re-checks the column.
+    expect(q().sql.postgres).toMatch(/dr\.issued\s+~\s+'\^\[0-9\]\{4\}/);
+    expect(q().sql.mysql).toMatch(/dr\.issued\s+regexp\s+'\^\[0-9\]\{4\}/);
+    expect(q().sql.mssql).toMatch(/dr\.issued\s+like\s+'(\[0-9\]){4}/);
+    for (const [dialect, sql] of Object.entries(q().sql)) {
+      expect(
+        /dr\.issued\s+is\s+not\s+null/.test(sql),
+        `${dialect} still relies on a bare issued null-check`,
+      ).toBe(false);
+    }
+  });
+
+  it('keeps the guard INSIDE the received CTE, before min()', () => {
+    // min() here is a LEXICAL text min, so '2026-07' sorts BEFORE that patient's real
+    // full-precision receipts (shorter prefix wins) and would poison every report paired
+    // to that patient. Filtering after the CTE would not prevent that.
+    // The mutation this kills: hoisting the guard out into the `paired` WHERE clause.
+    for (const [dialect, sql] of Object.entries(q().sql)) {
+      const cte = sql.slice(sql.indexOf('received as ('), sql.indexOf('paired as ('));
+      expect(/received_time/.test(cte), `${dialect} CTE lost received_time`).toBe(true);
+      expect(
+        /(~|regexp|like)/.test(cte),
+        `${dialect} moved the precision guard out of the received CTE`,
+      ).toBe(true);
+    }
+  });
+});

@@ -64,6 +64,17 @@ describe('error catalog', () => {
     expect(codeForUnknown(new Error('boom'))).toBe('SY0500');
   });
 
+  it('codeForUnknown treats a peer-dropped connection as an unavailable backend', () => {
+    // Regression: the driver raises the bare token "read ECONNRESET", and the older
+    // `\bconnect(ion)?\b` alternative does not match inside it — so a warehouse that had gone
+    // away was reported as SY0500 "unexpected server error" (an application bug) instead of
+    // SY0503, losing the retryable flag. This is the ordinary signature of a stopped Postgres
+    // behind a Docker/WSL port-forward, which resets rather than refuses.
+    expect(codeForUnknown(new Error('read ECONNRESET'))).toBe('SY0503');
+    expect(codeForUnknown(new Error('write EPIPE'))).toBe('SY0503');
+    expect(codeForUnknown(new Error('socket hang up ECONNABORTED'))).toBe('SY0503');
+  });
+
   it('codeForUnknown does not false-positive on connect-substring words', () => {
     expect(codeForUnknown(new Error('reconnect attempt failed'))).toBe('SY0500');
     expect(codeForUnknown(new Error('connection refused'))).toBe('SY0503');
