@@ -45,16 +45,108 @@ export const DEFAULT_CONNECTOR_NAME = 'Target Warehouse (Postgres)';
  *  dropped from the matrix) until this constant is edited — the catalog would have grown a column
  *  automatically. Accepted per the plan (Task 6.1) as the "fixed panel" trade-off; SQL cannot
  *  express a data-dependent column list. */
-export const ANTIBIOGRAM_PANEL: string[] = [
-  'Ampicillin',
-  'Amoxicillin/Clavulanate',
-  'Cefotaxime',
-  'Ceftriaxone',
-  'Ciprofloxacin',
-  'Gentamicin',
-  'Meropenem',
-  'Trimethoprim/Sulfamethoxazole',
-];
+/** Canonical antibiotic -> the source codes that mean it, keyed on `lab_results.observation_code`
+ *  (system `urn:openldr:default_abx`).
+ *
+ *  ⛔ MATCH ON THE CODE, NOT THE DESCRIPTION. The panel used to compare against
+ *  `observation_desc`, which is prose written by whoever configured the analyser, so real results
+ *  missed their own column. Measured across all 22 v1 sites (2026-08-02, restricted to S/I/R
+ *  results on requests that also carry an organism):
+ *    · `COTRI` "Cotrimoxazole" (200 uses) never matched the panel's
+ *      "Trimethoprim/Sulfamethoxazole" column — THE SAME DRUG, spelled the other way. 200 results
+ *      silently dropped; the 3 that landed came from `SXT`, which happens to spell it the panel's way.
+ *    · "Amoxicillin/Clavulanate" is written three ways in the data — `AMC` "AMOXYLIN/CLAVULANIC
+ *      ACID" (50), `AUG` "Co-amoxiclav" (17), `AUGUM` "Augumentin" (8) — and matched none of them.
+ *    · `AMPIC` "Ampicillin*" (30) missed on a trailing asterisk; `GENT`/`GENTA` differ by a letter.
+ *  A code is stable; a description is not. Codes also collapse these variants without a
+ *  string-similarity guess.
+ *
+ *  Entries are the measured corpus, so the panel now covers what labs actually test rather than a
+ *  guessed subset. `Meropenem` is retained with no observed code: it is a standard WHONET
+ *  reserve-carbapenem column worth showing as empty-until-tested. */
+export const ANTIBIOTIC_CODES: Record<string, readonly string[]> = {
+  'Amikacin': ['AMIK'],
+  'Amoxicillin/Clavulanate': ['AMC', 'AUG', 'AUGUM'],
+  'Ampicillin': ['AMP', 'AMPIC'],
+  'Azithromycin': ['AZYT'],
+  'Cefazolin': ['CEFAZ'],
+  'Cefotaxime': ['CTX'],
+  'Cefoxitin': ['CEFOX'],
+  'Ceftazidime': ['CEFTA'],
+  'Ceftriaxone': ['CEF'],
+  'Cephradine': ['CEPHR'],
+  'Chloramphenicol': ['CHLOR'],
+  'Ciprofloxacin': ['CIPRO'],
+  'Clindamycin': ['CLIND'],
+  'Erythromycin': ['ERYTH'],
+  'Gentamicin': ['GENTA', 'GENT'],
+  'Imipenem': ['IMIP'],
+  'Meropenem': ['MERO'],
+  'Nalidixic Acid': ['NALID'],
+  'Nitrofurantoin': ['NITRO'],
+  'Norfloxacin': ['NORF'],
+  'Oxacillin': ['OXACI'],
+  'Penicillin G': ['PENG'],
+  'Piperacillin': ['PIPER'],
+  'Rifampicin': ['RIF'],
+  'Tetracycline': ['TETRA'],
+  'Tobramycin': ['TOBRA'],
+  'Trimethoprim/Sulfamethoxazole': ['COTRI', 'SXT'],
+  'Vancomycin': ['VANCO'],
+};
+
+/** Catch-all column for any S/I/R result the panel does not recognise.
+ *
+ *  The old panel dropped such rows SILENTLY, which is the failure mode the AMR work keeps hitting:
+ *  a report that under-counts looks exactly like a report with less data. Surfacing them is the
+ *  agreed rule — loud and slightly wrong beats quiet and wrong.
+ *
+ *  It is a REVIEW BUCKET, not a drug, and it is expected to be non-empty: measured on real data it
+ *  collects `AST` "Antimicrobial Sensitivity Test" (97 uses — a panel-level summary row, not an
+ *  agent), microscopy findings that are coded S/I/R on culture specimens (`EPI`/`WEPI` epithelial
+ *  cells, `PSHY` pseudohyphae, `YEAST`), and `CEFOT` "Cefotaxime/Ceftriazone" — one result
+ *  reporting TWO drugs, deliberately left unmapped rather than silently attributed to either. A
+ *  number here means "these results exist and this report cannot place them", which is a
+ *  data-quality signal worth acting on. */
+export const UNMAPPED_ANTIBIOTIC = '(unmapped)';
+
+/** The antibiogram's columns: every canonical antibiotic, then the review bucket last. */
+export const ANTIBIOGRAM_PANEL: string[] = [...Object.keys(ANTIBIOTIC_CODES), UNMAPPED_ANTIBIOTIC];
+
+/** SQL `case` mapping a row to its canonical antibiotic. Dialect-independent — plain `in (...)`
+ *  over string literals, identical on postgres/mssql/mysql.
+ *
+ *  Ordering is load-bearing: code first (authoritative), then an exact-description fallback so a
+ *  warehouse fed by a non-DISA source that already writes canonical names still lands in the right
+ *  column, then the unmapped case. There is deliberately NO fuzzy match — a wrong column is worse
+ *  than an honestly unmapped one.
+ *
+ *  `unmapped` differs by report SHAPE, and the difference is deliberate:
+ *   - `'bucket'` (the antibiogram): a matrix needs a CLOSED column set, so anything unrecognised
+ *     collapses into the single `UNMAPPED_ANTIBIOTIC` column. Without this the row would have
+ *     nowhere to go and would vanish — the exact silent drop being fixed.
+ *   - `'passthrough'` (the long-format reports): one row per antibiotic, so the column set is not
+ *     constrained. Keep the raw description — collapsing every unknown into one `(unmapped)` row
+ *     there would MERGE distinct findings and lose which one it was, i.e. it would destroy
+ *     information the old behaviour preserved. Synonyms still normalise; only the unknowns pass
+ *     through. */
+export function antibioticNormalizeSql(unmapped: 'bucket' | 'passthrough'): string {
+  const lit = (s: string) => `'${s.replace(/'/g, "''")}'`;
+  const arms = Object.entries(ANTIBIOTIC_CODES).map(
+    ([display, codes]) => `      when o.observation_code in (${codes.map(lit).join(', ')}) then ${lit(display)}`,
+  );
+  // Passthrough coalesces to the CODE so an unmapped row can never surface as a NULL antibiotic
+  // (possible now that matching is code-first: a coded row is reportable with no description).
+  const fallback = unmapped === 'bucket'
+    ? lit(UNMAPPED_ANTIBIOTIC)
+    : `coalesce(o.observation_desc, o.observation_code, ${lit(UNMAPPED_ANTIBIOTIC)})`;
+  const names = Object.keys(ANTIBIOTIC_CODES).map(lit).join(', ');
+  return `case
+${arms.join('\n')}
+      when o.observation_desc in (${names}) then o.observation_desc
+      else ${fallback}
+    end`;
+}
 
 /** Builds one CASE-column SQL fragment for `antibiotic`, matching `amr-antibiogram.ts`'s cell
  *  format EXACTLY: `${cell.percentR}% (${cell.tested})` when the pathogen was tested against this
@@ -804,10 +896,10 @@ first_isolates as (
   order by patient_id, pathogen_code, specimen_type, (iso_date is null), iso_date asc, obs_id asc
 ),
 ast_obs as (
-  select o.specimen_id, o.observation_desc as antibiotic, o.abnormal_flag as ris
+  select o.specimen_id, ${antibioticNormalizeSql('passthrough')} as antibiotic, o.abnormal_flag as ris
   from lab_results o
   where o.abnormal_flag in ('S', 'I', 'R')
-    and o.observation_desc is not null
+    and (o.observation_code is not null or o.observation_desc is not null)
     and o.specimen_id is not null and o.specimen_id <> ''
 ),
 results as (
@@ -914,10 +1006,10 @@ first_isolates as (
   where rn = 1
 ),
 ast_obs as (
-  select o.specimen_id, o.observation_desc as antibiotic, o.abnormal_flag as ris
+  select o.specimen_id, ${antibioticNormalizeSql('passthrough')} as antibiotic, o.abnormal_flag as ris
   from lab_results o
   where o.abnormal_flag in ('S', 'I', 'R')
-    and o.observation_desc is not null
+    and (o.observation_code is not null or o.observation_desc is not null)
     and o.specimen_id is not null and o.specimen_id <> ''
 ),
 results as (
@@ -1011,10 +1103,10 @@ first_isolates as (
   where rn = 1
 ),
 ast_obs as (
-  select o.specimen_id, o.observation_desc as antibiotic, o.abnormal_flag as ris
+  select o.specimen_id, ${antibioticNormalizeSql('passthrough')} as antibiotic, o.abnormal_flag as ris
   from lab_results o
   where o.abnormal_flag in ('S', 'I', 'R')
-    and o.observation_desc is not null
+    and (o.observation_code is not null or o.observation_desc is not null)
     and o.specimen_id is not null and o.specimen_id <> ''
 ),
 results as (
@@ -1114,10 +1206,10 @@ first_isolates as (
   order by patient_id, pathogen_code, specimen_type, (iso_date is null), iso_date asc, obs_id asc
 ),
 ast_obs as (
-  select o.specimen_id, o.observation_desc as antibiotic, o.abnormal_flag as ris
+  select o.specimen_id, ${antibioticNormalizeSql('passthrough')} as antibiotic, o.abnormal_flag as ris
   from lab_results o
   where o.abnormal_flag in ('S', 'I', 'R')
-    and o.observation_desc is not null
+    and (o.observation_code is not null or o.observation_desc is not null)
     and o.specimen_id is not null and o.specimen_id <> ''
 ),
 results as (
@@ -1207,10 +1299,10 @@ first_isolates as (
   where rn = 1
 ),
 ast_obs as (
-  select o.specimen_id, o.observation_desc as antibiotic, o.abnormal_flag as ris
+  select o.specimen_id, ${antibioticNormalizeSql('passthrough')} as antibiotic, o.abnormal_flag as ris
   from lab_results o
   where o.abnormal_flag in ('S', 'I', 'R')
-    and o.observation_desc is not null
+    and (o.observation_code is not null or o.observation_desc is not null)
     and o.specimen_id is not null and o.specimen_id <> ''
 ),
 results as (
@@ -1295,10 +1387,10 @@ first_isolates as (
   where rn = 1
 ),
 ast_obs as (
-  select o.specimen_id, o.observation_desc as antibiotic, o.abnormal_flag as ris
+  select o.specimen_id, ${antibioticNormalizeSql('passthrough')} as antibiotic, o.abnormal_flag as ris
   from lab_results o
   where o.abnormal_flag in ('S', 'I', 'R')
-    and o.observation_desc is not null
+    and (o.observation_code is not null or o.observation_desc is not null)
     and o.specimen_id is not null and o.specimen_id <> ''
 ),
 results as (
@@ -1387,10 +1479,10 @@ first_isolates as (
   order by patient_id, pathogen_code, specimen_type, (iso_date is null), iso_date asc, obs_id asc
 ),
 ast_obs as (
-  select o.specimen_id, o.observation_desc as antibiotic, o.abnormal_flag as ris
+  select o.specimen_id, ${antibioticNormalizeSql('bucket')} as antibiotic, o.abnormal_flag as ris
   from lab_results o
   where o.abnormal_flag in ('S', 'I', 'R')
-    and o.observation_desc is not null
+    and (o.observation_code is not null or o.observation_desc is not null)
     and o.specimen_id is not null and o.specimen_id <> ''
 ),
 results as (
@@ -1443,10 +1535,10 @@ first_isolates as (
   where rn = 1
 ),
 ast_obs as (
-  select o.specimen_id, o.observation_desc as antibiotic, o.abnormal_flag as ris
+  select o.specimen_id, ${antibioticNormalizeSql('bucket')} as antibiotic, o.abnormal_flag as ris
   from lab_results o
   where o.abnormal_flag in ('S', 'I', 'R')
-    and o.observation_desc is not null
+    and (o.observation_code is not null or o.observation_desc is not null)
     and o.specimen_id is not null and o.specimen_id <> ''
 ),
 results as (
@@ -1499,10 +1591,10 @@ first_isolates as (
   where rn = 1
 ),
 ast_obs as (
-  select o.specimen_id, o.observation_desc as antibiotic, o.abnormal_flag as ris
+  select o.specimen_id, ${antibioticNormalizeSql('bucket')} as antibiotic, o.abnormal_flag as ris
   from lab_results o
   where o.abnormal_flag in ('S', 'I', 'R')
-    and o.observation_desc is not null
+    and (o.observation_code is not null or o.observation_desc is not null)
     and o.specimen_id is not null and o.specimen_id <> ''
 ),
 results as (

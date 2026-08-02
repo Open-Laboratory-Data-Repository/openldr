@@ -6,6 +6,9 @@ import {
   SEED_REPORT_DEFS,
   DEFAULT_CONNECTOR_NAME,
   ANTIBIOGRAM_PANEL,
+  ANTIBIOTIC_CODES,
+  UNMAPPED_ANTIBIOTIC,
+  antibioticNormalizeSql,
   type SeedDataDrivenReportsDeps,
 } from './report-seeds';
 
@@ -248,6 +251,85 @@ describe('ANTIBIOGRAM_PANEL', () => {
     // order by 1 -- confirmed live against the dev DB (docker compose postgres, openldr_target).
     for (const a of ['Ampicillin', 'Ceftriaxone', 'Ciprofloxacin', 'Gentamicin']) {
       expect(ANTIBIOGRAM_PANEL).toContain(a);
+    }
+  });
+});
+
+// Regression: the panel used to compare against `observation_desc` (prose), so real results missed
+// their own column. Measured across all 22 v1 sites on 2026-08-02.
+describe('antibiotic normalisation', () => {
+  const canonicalFor = (code: string) =>
+    Object.entries(ANTIBIOTIC_CODES).find(([, codes]) => codes.includes(code))?.[0];
+
+  it('collapses the synonym groups that silently dropped results', () => {
+    // 200 "Cotrimoxazole" results never reached the "Trimethoprim/Sulfamethoxazole" column —
+    // the same drug spelled the other way. Only the 3 SXT ones landed.
+    expect(canonicalFor('COTRI')).toBe('Trimethoprim/Sulfamethoxazole');
+    expect(canonicalFor('SXT')).toBe('Trimethoprim/Sulfamethoxazole');
+    // Written three ways in the data, matching none of them.
+    for (const c of ['AMC', 'AUG', 'AUGUM']) expect(canonicalFor(c)).toBe('Amoxicillin/Clavulanate');
+    // Missed on a trailing asterisk / a single letter.
+    for (const c of ['AMP', 'AMPIC']) expect(canonicalFor(c)).toBe('Ampicillin');
+    for (const c of ['GENTA', 'GENT']) expect(canonicalFor(c)).toBe('Gentamicin');
+  });
+
+  it('covers every antibiotic measured on real culture requests', () => {
+    // Codes carrying S/I/R on requests that also had an organism, all sites. If a deployment adds
+    // one, it lands in the review bucket rather than vanishing — but these are already known.
+    const measured = ['CIPRO', 'COTRI', 'GENTA', 'AMIK', 'AMP', 'CEFTA', 'CEF', 'CLIND', 'CHLOR',
+      'NITRO', 'ERYTH', 'VANCO', 'NORF', 'TETRA', 'AMC', 'PIPER', 'AMPIC', 'AZYT', 'CTX', 'CEFAZ',
+      'AUG', 'OXACI', 'PENG', 'CEFOX', 'IMIP', 'AUGUM', 'RIF', 'CEPHR', 'SXT', 'NALID', 'TOBRA', 'GENT'];
+    for (const code of measured) expect(canonicalFor(code), `${code} is unmapped`).toBeTruthy();
+  });
+
+  it('never maps one code to two different antibiotics', () => {
+    const seen = new Map<string, string>();
+    for (const [display, codes] of Object.entries(ANTIBIOTIC_CODES)) {
+      for (const code of codes) {
+        expect(seen.has(code), `${code} mapped to both ${seen.get(code)} and ${display}`).toBe(false);
+        seen.set(code, display);
+      }
+    }
+  });
+
+  it('deliberately leaves non-drugs and ambiguous combined results unmapped', () => {
+    // These carry S/I/R on culture specimens but are not a single agent. Surfacing them in the
+    // review bucket is the point — attributing them to a drug column would be worse.
+    for (const code of ['AST', 'CEFOT', 'EPI', 'WEPI', 'PSHY', 'YEAST']) {
+      expect(canonicalFor(code), `${code} should not be mapped to a drug`).toBeUndefined();
+    }
+  });
+
+  it('puts the review bucket last so the matrix always has somewhere to put an unknown', () => {
+    expect(ANTIBIOGRAM_PANEL[ANTIBIOGRAM_PANEL.length - 1]).toBe(UNMAPPED_ANTIBIOTIC);
+    expect(ANTIBIOGRAM_PANEL.filter((a) => a === UNMAPPED_ANTIBIOTIC)).toHaveLength(1);
+  });
+
+  it('buckets unknowns only in the matrix, and preserves them in the long-format reports', () => {
+    // A matrix needs a closed column set; a long-format report does not, and collapsing every
+    // unknown into one row there would merge distinct findings.
+    expect(antibioticNormalizeSql('bucket')).toContain(`else '${UNMAPPED_ANTIBIOTIC}'`);
+    expect(antibioticNormalizeSql('passthrough')).toContain('coalesce(o.observation_desc, o.observation_code');
+
+    const antibiogram = SEED_QUERIES.find((x) => x.id === 'q-amr-antibiogram')!;
+    for (const [dialect, sql] of Object.entries(antibiogram.sql)) {
+      expect(sql, `antibiogram/${dialect}`).toContain(`else '${UNMAPPED_ANTIBIOTIC}'`);
+    }
+    for (const id of ['q-amr-glass-ris', 'q-amr-first-isolate-summary'] as const) {
+      const q = SEED_QUERIES.find((x) => x.id === id)!;
+      for (const [dialect, sql] of Object.entries(q.sql)) {
+        expect(sql, `${id}/${dialect} must not bucket unknowns`).toContain('coalesce(o.observation_desc, o.observation_code');
+      }
+    }
+  });
+
+  it('normalises by code in every AMR query that reports an antibiotic, in every dialect', () => {
+    for (const id of ['q-amr-antibiogram', 'q-amr-glass-ris', 'q-amr-first-isolate-summary'] as const) {
+      const q = SEED_QUERIES.find((x) => x.id === id)!;
+      for (const [dialect, sql] of Object.entries(q.sql)) {
+        expect(sql, `${id}/${dialect} still matches on prose`).not.toContain('o.observation_desc as antibiotic');
+        expect(sql, `${id}/${dialect} lost the COTRI synonym`).toContain("'COTRI', 'SXT'");
+      }
     }
   });
 });
