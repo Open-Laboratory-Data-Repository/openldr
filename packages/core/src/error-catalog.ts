@@ -133,6 +133,15 @@ export function codeForUnknown(err: unknown): 'SY0400' | 'SY0500' | 'SY0503' {
     return 'SY0400';
   }
   const msg = err instanceof Error ? err.message : String(err);
+  // ECONNRESET/ECONNABORTED/EPIPE are peer-dropped-us failures, not our-bug failures, so they
+  // belong with the other unreachable-backend codes. They need naming EXPLICITLY: the message a
+  // driver raises is "read ECONNRESET", and `\bconnect(ion)?\b` does NOT match inside the token
+  // ECONNRESET (no word boundary around a bare "conn"), so these previously fell through to
+  // SY0500 "unexpected server error" — reporting a dead warehouse as an application bug, with
+  // none of SY0503's retryable flag. A stopped Postgres behind a Docker/WSL port-forward resets
+  // rather than refuses (the proxy still holds the port), which makes ECONNRESET the NORMAL
+  // signature of "the database is down" on a Windows dev host, not an exotic one.
+  if (/ECONNRESET|ECONNABORTED|EPIPE/i.test(msg)) return 'SY0503';
   if (/ECONNREFUSED|ETIMEDOUT|ENOTFOUND|\bconnect(ion)?\b/i.test(msg)) return 'SY0503';
   return 'SY0500';
 }
