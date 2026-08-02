@@ -80,6 +80,12 @@ export interface DiagnosticReportsTable extends ProvenanceColumns {
   issued: string | null;
   effective: string | null;
   conclusion: string | null;
+  /** Facility, from `DiagnosticReport.performer[0]` — the only facility dimension the CDR/DISA
+   *  source actually supplies (`patients.managing_organization` is never set by it). */
+  performer: string | null;
+  /** `DiagnosticReport.specimen[0]` — the key that ties a report to the AST results on the same
+   *  specimen, without the patient-level fan-out. */
+  specimen_id: string | null;
 }
 
 export interface QuestionnaireResponsesTable extends ProvenanceColumns {
@@ -115,6 +121,6 @@ export const EXTERNAL_TABLE_COLUMNS: Record<keyof ExternalSchema, string[]> = {
   lab_results: ['id', 'request_id', 'observation_code', 'observation_system', 'observation_desc', 'result_type', 'numeric_value', 'numeric_units', 'coded_value', 'text_value', 'abnormal_flag', 'result_timestamp', 'patient_id', 'specimen_id', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at'],
   facilities: ['id', 'facility_code', 'facility_name', 'facility_type', 'source_resource', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at'],
   specimens: ['id', 'patient_id', 'received_time', 'accession', 'status', 'type_code', 'type_text', 'origin', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at'],
-  diagnostic_reports: ['id', 'patient_id', 'status', 'code_code', 'code_text', 'issued', 'effective', 'conclusion', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at'],
+  diagnostic_reports: ['id', 'patient_id', 'status', 'code_code', 'code_text', 'issued', 'effective', 'conclusion', 'performer', 'specimen_id', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at'],
   questionnaire_responses: ['id', 'questionnaire', 'form_code', 'subject_id', 'authored', 'based_on_id', 'items', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at'],
 };

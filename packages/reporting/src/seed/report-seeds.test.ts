@@ -334,6 +334,45 @@ describe('antibiotic normalisation', () => {
   });
 });
 
+// Regression: this report grouped by `patients.managing_organization`, which the CDR/DISA source
+// never sets (1 of 589 patients measured, and that one is the seed), so it returned ZERO rows on
+// real data while the other four AMR reports worked.
+describe('SEED_QUERIES — q-amr-facility-summary takes its facility from the report', () => {
+  const q = () => SEED_QUERIES.find((x) => x.id === 'q-amr-facility-summary')!;
+
+  it('groups by the report performer, falling back to the patient organization', () => {
+    for (const [dialect, sql] of Object.entries(q().sql)) {
+      expect(sql, `${dialect} does not read the report performer`)
+        .toContain('coalesce(f.performer, p.managing_organization)');
+      expect(sql, `${dialect} still groups by the patient organization alone`)
+        .not.toMatch(/group by p\.managing_organization/);
+    }
+  });
+
+  it('collapses reports to one row per specimen before joining — the fan-out guard', () => {
+    // Reports are per-ORDER, not per-specimen: 521 specimens carry 2 and some carry up to 14, so a
+    // direct join to diagnostic_reports would multiply every AST count by the report count.
+    for (const [dialect, sql] of Object.entries(q().sql)) {
+      expect(sql, `${dialect} lost the facility_of CTE`).toContain('facility_of as (');
+      expect(sql, `${dialect} does not deduplicate reports per specimen`)
+        .toMatch(/select specimen_id, min\(performer\) as performer[\s\S]*group by specimen_id/);
+      expect(sql, `${dialect} must join the collapsed CTE, not the raw table`)
+        .toContain('left join facility_of f on f.specimen_id = o.specimen_id');
+      expect(sql, `${dialect} joins diagnostic_reports directly and will fan out`)
+        .not.toMatch(/join diagnostic_reports [a-z]+ on/);
+    }
+  });
+
+  it('joins patients LEFT so a missing patient does not drop a facility total', () => {
+    // The facility no longer comes from the patient, so an inner join would silently discard
+    // results whose patient row is absent.
+    for (const [dialect, sql] of Object.entries(q().sql)) {
+      expect(sql, `${dialect} still inner-joins patients`).not.toMatch(/\njoin patients p on/);
+      expect(sql, `${dialect}`).toContain('left join patients p on o.patient_id = p.id');
+    }
+  });
+});
+
 describe('SEED_QUERIES — q-amr-antibiogram', () => {
   it('declares from/to as required plain params and generates one CASE column per panel antibiotic', () => {
     const q = SEED_QUERIES.find((x) => x.id === 'q-amr-antibiogram');

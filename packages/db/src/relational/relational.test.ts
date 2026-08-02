@@ -53,6 +53,32 @@ describe('relational projectResource', () => {
     expect(out?.row).toMatchObject({ id: 'dr1', patient_id: 'p1', status: 'final', code_code: 'CBC', code_text: 'Complete Blood Count', issued: '2026-01-02T00:00:00Z', conclusion: 'ok' });
   });
 
+  // The facility dimension for AMR reporting. `patients.managing_organization` is never set by the
+  // CDR/DISA source (1 of 589 measured), but `DiagnosticReport.performer[0].display` is populated on
+  // every ingested report — so this is where "resistance by facility" actually gets its facility.
+  it('maps DiagnosticReport performer + specimen to the facility columns', () => {
+    const out = projectResource({
+      resourceType: 'DiagnosticReport', id: 'dr2', subject: { reference: 'Patient/p1' },
+      performer: [{ display: 'Mnazi Mmoja' }],
+      specimen: [{ reference: 'Specimen/sp-1' }],
+    });
+    expect(out?.row).toMatchObject({ performer: 'Mnazi Mmoja', specimen_id: 'sp-1' });
+  });
+
+  it('falls back to the performer reference id when a sender contributes Organizations', () => {
+    // DISA supplies a bare display and no Organization resource; a richer sender may do the
+    // opposite. Neither should land a null facility.
+    const out = projectResource({
+      resourceType: 'DiagnosticReport', id: 'dr3', performer: [{ reference: 'Organization/org-9' }],
+    });
+    expect(out?.row).toMatchObject({ performer: 'org-9' });
+  });
+
+  it('leaves the facility columns null when the report carries neither', () => {
+    const out = projectResource({ resourceType: 'DiagnosticReport', id: 'dr4' });
+    expect(out?.row).toMatchObject({ performer: null, specimen_id: null });
+  });
+
   it('returns null for non-projected types', () => {
     expect(projectResource({ resourceType: 'Bundle' })).toBeNull();
     expect(tableForResourceType('Bundle')).toBeNull();

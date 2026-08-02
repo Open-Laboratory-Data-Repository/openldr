@@ -732,66 +732,100 @@ order by case band when '0-4' then 1 when '5-14' then 2 when '15-24' then 3 when
     //    must also carry an organism (LOINC 634-6), or EQA proficiency panels (100% R) and HIV
     //    antiretroviral resistance results are counted as facility antibacterial resistance. These
     //    two queries were the 2-of-5 that an earlier pass left unanchored.
+    //  - ⛔ FACILITY SOURCE: this report returned ZERO rows on real data because it grouped by
+    //    `patients.managing_organization`, which the CDR/DISA source NEVER sets — measured 1 of 589
+    //    patients, and that one is the seed. The facility does exist, on the report:
+    //    `DiagnosticReport.performer[0].display`, populated on 1303 of 1303 ingested reports with
+    //    15+ real facilities (Dodoma, Mwananyamala, Mnazi Mmoja, Muhimbili, Aga Khan, ...).
+    //    `coalesce(f.performer, p.managing_organization)` prefers the report's own facility and
+    //    still honours `managing_organization` for a sender that does populate it (the seed does).
+    //  - ⛔ THE `facility_of` CTE IS NOT COSMETIC — it prevents a fan-out that would inflate every
+    //    count. Reports are per-ORDER, not per-specimen: measured, 521 specimens carry 2 reports and
+    //    some carry up to 14, so joining `diagnostic_reports` directly would multiply a specimen's
+    //    AST rows by its report count. Collapsing to one row per specimen first makes the join
+    //    1:1. `min(performer)` is safe AND lossless here because every specimen's reports agree on
+    //    the facility (`count(distinct performer) = 1` for all 585 specimens); if a future sender
+    //    ever disagrees, `min` still picks deterministically and still cannot fan out.
+    //  - the patient join is LEFT, not inner: the facility no longer comes from the patient, so a
+    //    result whose patient row is missing must not be dropped from its facility's totals.
     params: [
       { id: 'from', label: 'From', type: 'text', required: true },
       { id: 'to', label: 'To', type: 'text', required: true },
     ],
     sql: {
-      postgres: `select
-  p.managing_organization as facility,
+      postgres: `with facility_of as (
+  select specimen_id, min(performer) as performer
+  from diagnostic_reports
+  where specimen_id is not null and specimen_id <> '' and performer is not null
+  group by specimen_id
+)
+select
+  coalesce(f.performer, p.managing_organization) as facility,
   count(*)::int as tested,
   sum(case when o.abnormal_flag = 'R' then 1 else 0 end)::int as resistant
 from lab_results o
-join patients p on o.patient_id = p.id
+left join patients p on o.patient_id = p.id
 left join specimens s on o.specimen_id = s.id
+left join facility_of f on f.specimen_id = o.specimen_id
 where o.abnormal_flag in ('S', 'I', 'R')
-  and o.patient_id is not null and o.patient_id <> ''
   and o.specimen_id is not null and o.specimen_id <> ''
   and exists (select 1 from lab_results g where g.observation_code = '634-6' and g.specimen_id = o.specimen_id)
-  and p.managing_organization is not null
+  and coalesce(f.performer, p.managing_organization) is not null
   and (coalesce(o.result_timestamp, s.received_time) is null
        or (coalesce(o.result_timestamp, s.received_time) >= {{param.from}}
            and coalesce(o.result_timestamp, s.received_time) <= ({{param.to}} || 'T23:59:59.999Z')))
-group by p.managing_organization
-order by p.managing_organization`,
+group by coalesce(f.performer, p.managing_organization)
+order by coalesce(f.performer, p.managing_organization)`,
       // Task 2 port: ::int -> cast(...as int); end-of-day string || -> + (the `{{param.to}}`
       // concat).
-      mssql: `select
-  p.managing_organization as facility,
+      mssql: `with facility_of as (
+  select specimen_id, min(performer) as performer
+  from diagnostic_reports
+  where specimen_id is not null and specimen_id <> '' and performer is not null
+  group by specimen_id
+)
+select
+  coalesce(f.performer, p.managing_organization) as facility,
   cast(count(*) as int) as tested,
   cast(sum(case when o.abnormal_flag = 'R' then 1 else 0 end) as int) as resistant
 from lab_results o
-join patients p on o.patient_id = p.id
+left join patients p on o.patient_id = p.id
 left join specimens s on o.specimen_id = s.id
+left join facility_of f on f.specimen_id = o.specimen_id
 where o.abnormal_flag in ('S', 'I', 'R')
-  and o.patient_id is not null and o.patient_id <> ''
   and o.specimen_id is not null and o.specimen_id <> ''
   and exists (select 1 from lab_results g where g.observation_code = '634-6' and g.specimen_id = o.specimen_id)
-  and p.managing_organization is not null
+  and coalesce(f.performer, p.managing_organization) is not null
   and (coalesce(o.result_timestamp, s.received_time) is null
        or (coalesce(o.result_timestamp, s.received_time) >= {{param.from}}
            and coalesce(o.result_timestamp, s.received_time) <= ({{param.to}} + 'T23:59:59.999Z')))
-group by p.managing_organization
-order by p.managing_organization`,
+group by coalesce(f.performer, p.managing_organization)
+order by coalesce(f.performer, p.managing_organization)`,
       // Task 5 mysql port: ::int -> cast(...as signed); end-of-day string || -> concat().
       // Otherwise identical structure.
-      mysql: `select
-  p.managing_organization as facility,
+      mysql: `with facility_of as (
+  select specimen_id, min(performer) as performer
+  from diagnostic_reports
+  where specimen_id is not null and specimen_id <> '' and performer is not null
+  group by specimen_id
+)
+select
+  coalesce(f.performer, p.managing_organization) as facility,
   cast(count(*) as signed) as tested,
   cast(sum(case when o.abnormal_flag = 'R' then 1 else 0 end) as signed) as resistant
 from lab_results o
-join patients p on o.patient_id = p.id
+left join patients p on o.patient_id = p.id
 left join specimens s on o.specimen_id = s.id
+left join facility_of f on f.specimen_id = o.specimen_id
 where o.abnormal_flag in ('S', 'I', 'R')
-  and o.patient_id is not null and o.patient_id <> ''
   and o.specimen_id is not null and o.specimen_id <> ''
   and exists (select 1 from lab_results g where g.observation_code = '634-6' and g.specimen_id = o.specimen_id)
-  and p.managing_organization is not null
+  and coalesce(f.performer, p.managing_organization) is not null
   and (coalesce(o.result_timestamp, s.received_time) is null
        or (coalesce(o.result_timestamp, s.received_time) >= {{param.from}}
            and coalesce(o.result_timestamp, s.received_time) <= concat({{param.to}}, 'T23:59:59.999Z')))
-group by p.managing_organization
-order by p.managing_organization`,
+group by coalesce(f.performer, p.managing_organization)
+order by coalesce(f.performer, p.managing_organization)`,
     },
   },
   {
