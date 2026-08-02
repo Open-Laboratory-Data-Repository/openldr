@@ -564,7 +564,14 @@ const DRIFT_REDACTED = new Set(['password']);
  * repointed the warehouse in Studio, and clobbering that from the environment would be worse than
  * the drift). This reports the disagreement and leaves the decision where it belongs.
  */
-async function warnIfDefaultConnectorDrifted(app: EssentialSeedTarget, connectorId: string, url: URL): Promise<void> {
+async function warnIfDefaultConnectorDrifted(
+  // Narrowed to what this actually reads, matching `seedDefaultConnector`'s own parameter — it
+  // only ever holds a `Pick<…, 'connectors' | 'cfg'>`, so demanding the full target here made the
+  // sole call site a type error.
+  app: Pick<EssentialSeedTarget, 'connectors' | 'cfg'>,
+  connectorId: string,
+  url: URL,
+): Promise<void> {
   let stored: Record<string, string>;
   try {
     stored = await app.connectors.getDecryptedConfig(connectorId, app.cfg.SECRETS_ENCRYPTION_KEY);
