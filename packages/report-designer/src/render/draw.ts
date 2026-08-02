@@ -12,6 +12,39 @@ export const ROW_H = 16; // pt
 /** Body rows that fit in a box of height `hPt` (pt), reserving one row for the header. */
 const maxRowsFor = (hPt: number): number => Math.floor((hPt - ROW_H) / ROW_H);
 
+/** Vertical padding above the text inside a row; also the space left below it. */
+const CELL_PAD = 4;
+/** Space a cell's text may occupy: from its baseline offset to the bottom of its own row. */
+export const CELL_TEXT_H = ROW_H - CELL_PAD; // 12pt — one 8pt line (9.25pt), never two (18.5pt)
+
+/**
+ * Text options for one table cell — SINGLE LINE, truncated with an ellipsis.
+ *
+ * ⛔ `height` is the load-bearing option. Cells passed `width` + `ellipsis: true` but NO `height`,
+ * and pdfkit only ellipsizes text it has constrained VERTICALLY — so `ellipsis` was inert and a
+ * long value simply WRAPPED. Every row is drawn at a fixed `y = r.y + ROW_H + ri * ROW_H`, so the
+ * wrapped second line landed on top of the next row: "Chloramphenicol" and
+ * "Trimethoprim/Sulfamethoxazole" overprinted the rows beneath them in AMR GLASS RIS.
+ *
+ * ⚠ `lineBreak: false` does NOT fix this and was measured doing nothing (pdfkit 0.15.2). It only
+ * suppresses the DEFAULT width assignment in `_initOptions`; once an explicit `width` is passed the
+ * LineWrapper still wraps to it. Measured y-advance at width 56pt, 8pt Helvetica:
+ * "Trimethoprim/Sulfamethoxazole" → 27.74pt (3 lines) both with and without `lineBreak: false`,
+ * and 9.25pt (1 line) once `height` is supplied. Do not "simplify" this back to `lineBreak`.
+ *
+ * Single-line is right for THIS element model rather than growing the row: a design's table has an
+ * author-fixed box, and `maxRowsFor`/`tableChunkCount` derive pagination from a constant `ROW_H`,
+ * so variable row heights would make the row count unknowable before layout. The untruncated value
+ * stays available in the Spreadsheet tab and the CSV export, and an ellipsis is strictly better
+ * than text printed over other text.
+ *
+ * The sibling calls in this file (`drawText`, `drawErrorPlaceholder`) always passed `height` — the
+ * table cells were the only ones that did not, which is exactly why only tables overlapped.
+ */
+export function cellTextOptions(width: number): { width: number; height: number; ellipsis: true } {
+  return { width, height: CELL_TEXT_H, ellipsis: true };
+}
+
 export function paramMap(design: ReportDesign, now: Date): Map<string, string> {
   const m = new Map<string, string>();
   for (const p of design.parameters) {
@@ -143,12 +176,12 @@ function drawGrid(doc: Doc, r: Box, headers: string[], allRows: string[][], chun
   doc.save().rect(r.x, r.y, r.w, r.h).clip();
   doc.rect(r.x, r.y, r.w, ROW_H).fill('#f5f5f5');
   doc.font('Helvetica-Bold').fontSize(8).fillColor('#262626');
-  headers.forEach((h, i) => doc.text(h, r.x + i * colW + 3, r.y + 4, { width: colW - 6, ellipsis: true }));
+  headers.forEach((h, i) => doc.text(h, r.x + i * colW + 3, r.y + 4, cellTextOptions(colW - 6)));
   doc.font('Helvetica').fontSize(8).fillColor('#404040');
   rows.forEach((row, ri) => {
     const y = r.y + ROW_H + ri * ROW_H;
     if (ri % 2 === 1) doc.rect(r.x, y, r.w, ROW_H).fill('#fafafa').fillColor('#404040');
-    row.forEach((cell, ci) => doc.text(cell, r.x + ci * colW + 3, y + 4, { width: colW - 6, ellipsis: true }));
+    row.forEach((cell, ci) => doc.text(cell, r.x + ci * colW + 3, y + 4, cellTextOptions(colW - 6)));
   });
   doc.restore();
 }

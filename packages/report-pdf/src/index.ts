@@ -9,6 +9,25 @@ export interface PdfInput {
   rows: Record<string, unknown>[];
 }
 
+const ROW_H = 16;              // pt, one table row
+const ROW_PAD = 4;             // pt, gap above the text inside the row
+const ROW_TEXT_H = ROW_H - ROW_PAD; // 12pt — one 9pt line fits, two never do
+
+/**
+ * Text options for one table cell — SINGLE LINE, truncated with an ellipsis.
+ *
+ * ⛔ `height` is the load-bearing option. Cells passed `width` + `ellipsis: true` but no `height`,
+ * and pdfkit only ellipsizes text it has constrained VERTICALLY, so `ellipsis` was inert and long
+ * values WRAPPED. Rows advance by a fixed `rowH`, so the second line was drawn over the next row.
+ *
+ * ⚠ `lineBreak: false` does NOT prevent this (measured, pdfkit 0.15.2) — it only suppresses the
+ * default width assignment, and an explicit `width` still wraps. Same defect, same fix, as
+ * `report-designer`'s grid renderer; see its `cellTextOptions` for the measurements.
+ */
+function cellTextOptions(width: number): { width: number; height: number; ellipsis: true } {
+  return { width, height: ROW_TEXT_H, ellipsis: true };
+}
+
 export function renderReportPdf(input: PdfInput): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: 'A4', margin: 40, layout: 'landscape', bufferPages: true });
@@ -28,12 +47,12 @@ export function renderReportPdf(input: PdfInput): Promise<Buffer> {
 
     const cols = input.columns;
     const colW = usable / Math.max(cols.length, 1);
-    const rowH = 16;
+    const rowH = ROW_H;
 
     const drawHeader = (): void => {
       doc.font('Helvetica-Bold').fontSize(9);
       const y = doc.y;
-      cols.forEach((c, i) => doc.text(c.label, left + i * colW + 2, y + 4, { width: colW - 4, ellipsis: true }));
+      cols.forEach((c, i) => doc.text(c.label, left + i * colW + 2, y + 4, cellTextOptions(colW - 4)));
       doc.moveTo(left, y + rowH).lineTo(right, y + rowH).strokeColor('#999').stroke();
       doc.y = y + rowH + 2;
     };
@@ -44,7 +63,7 @@ export function renderReportPdf(input: PdfInput): Promise<Buffer> {
       if (doc.y + rowH > doc.page.height - doc.page.margins.bottom) { doc.addPage(); drawHeader(); doc.font('Helvetica').fontSize(9); }
       const y = doc.y;
       if (idx % 2 === 1) doc.rect(left, y, usable, rowH).fillColor('#f3f3f3').fill().fillColor('#000');
-      cols.forEach((c, i) => doc.text(String(row[c.key] ?? ''), left + i * colW + 2, y + 4, { width: colW - 4, ellipsis: true }));
+      cols.forEach((c, i) => doc.text(String(row[c.key] ?? ''), left + i * colW + 2, y + 4, cellTextOptions(colW - 4)));
       doc.y = y + rowH;
     });
     if (input.rows.length === 0) doc.fillColor('#777').text('(no rows)', left, doc.y + 4).fillColor('#000');

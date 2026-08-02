@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { interpolate, paramMap, tableChunkCount, pageChunkCount, rowsFor, totalPhysicalPages, pageFooterLabel } from './draw';
+import { interpolate, paramMap, tableChunkCount, pageChunkCount, rowsFor, totalPhysicalPages, pageFooterLabel, cellTextOptions, CELL_TEXT_H, ROW_H } from './draw';
 import type { ReportDesign, DesignElement, DesignPage } from '../schema';
 import type { ResolvedTable } from './index';
 
@@ -95,6 +95,58 @@ describe('pageChunkCount', () => {
   it('is 1 for a page with no tables', () => {
     const page: DesignPage = { id: 'p', elements: [{ id: 'x', kind: 'text', name: 'T', rect: { x: 0, y: 0, w: 10, h: 10 }, text: 'hi' } as DesignElement] };
     expect(pageChunkCount(page, new Map())).toBe(1);
+  });
+});
+
+describe('cellTextOptions', () => {
+  // Regression: cells passed `width` + `ellipsis: true` but no `height`. pdfkit only ellipsizes
+  // text it has constrained VERTICALLY, so `ellipsis` was inert and long values wrapped — drawn on
+  // top of the next row, because rows sit at fixed ROW_H offsets. Seen live in AMR GLASS RIS on
+  // "Chloramphenicol" and "Trimethoprim/Sulfamethoxazole".
+  //
+  // ⚠ Measured with the real y-ADVANCE of doc.text, not doc.heightOfString: heightOfString ignores
+  // both `height` and `lineBreak` and reports the wrapped height either way, so it cannot tell a
+  // fixed cell from a broken one. Using it here would produce a test that passes on the bug.
+  const advanceOf = async (text: string, width: number, opts: Record<string, unknown>): Promise<number> => {
+    const { default: PDFDocument } = await import('pdfkit');
+    const doc = new PDFDocument({ size: 'A4' });
+    doc.font('Helvetica').fontSize(8); // the table body font used by drawGrid
+    doc.text(text, 0, 100, { width, ...opts });
+    return doc.y - 100;
+  };
+
+  // A GLASS RIS cell is ~56pt: 10 columns across the design's table box.
+  const CELL_W = 56;
+  const LINE = 9.25; // one 8pt Helvetica line, to 2dp
+
+  it('draws a long antibiotic name on ONE line where it used to take three', async () => {
+    const value = 'Trimethoprim/Sulfamethoxazole';
+    expect(await advanceOf(value, CELL_W, {})).toBeGreaterThan(2 * LINE);          // the bug
+    expect(await advanceOf(value, CELL_W, cellTextOptions(CELL_W))).toBeCloseTo(LINE, 1); // fixed
+  });
+
+  it('draws Chloramphenicol on ONE line where it used to take two', async () => {
+    expect(await advanceOf('Chloramphenicol', CELL_W, {})).toBeGreaterThan(1.5 * LINE);
+    expect(await advanceOf('Chloramphenicol', CELL_W, cellTextOptions(CELL_W))).toBeCloseTo(LINE, 1);
+  });
+
+  it('leaves a value that already fits untouched', async () => {
+    expect(await advanceOf('Ceftriaxone', CELL_W, cellTextOptions(CELL_W))).toBeCloseTo(LINE, 1);
+  });
+
+  it('constrains height, and keeps ellipsis so the truncation is visible', () => {
+    const o = cellTextOptions(80);
+    expect(o.width).toBe(80);
+    expect(o.height).toBe(CELL_TEXT_H);
+    expect(o.ellipsis).toBe(true);
+  });
+
+  it('allows exactly one line in a row — never two', () => {
+    // The invariant the fix rests on. If ROW_H or the font ever changes such that two lines fit,
+    // the overlap silently returns; this fails first.
+    expect(CELL_TEXT_H).toBeGreaterThanOrEqual(LINE);
+    expect(CELL_TEXT_H).toBeLessThan(2 * LINE);
+    expect(ROW_H).toBe(16);
   });
 });
 
