@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { FEATURE_FLAGS } from '@openldr/config';
 import { seedDatabase, seedDefaultConnector, seedEssentials, type FormSeedTarget } from './seed';
 import type { DbContext } from './db-context';
@@ -97,6 +97,7 @@ function fakeApp(cfg: FormSeedTarget['cfg'] = {}) {
       create: async (input: { id: string; name: string; type?: string | null; config: Record<string, string> }) => {
         connectors.push({ id: input.id, name: input.name, type: input.type ?? null, config: input.config });
       },
+      getDecryptedConfig: async (id: string) => connectors.find((c) => c.id === id)?.config ?? {},
     },
     dashboards: {
       store: {
@@ -288,6 +289,59 @@ describe('seedEssentials — always-seeded minimum (SEED_ON_START off)', () => {
     const res2 = await seedEssentials(app);
     expect(res2.connectorsSeeded).toBe(0);
     expect(connectors).toHaveLength(1);
+  });
+
+  describe('drift warning against TARGET_DATABASE_URL', () => {
+    // The connector is written once and never re-synced, so a TARGET_DATABASE_URL that moves
+    // afterwards leaves reports pointing at the OLD server — failing at connection time, far from
+    // the config that caused it. These pin that the disagreement is announced at boot.
+    const warned = () => (console.warn as unknown as { mock: { calls: unknown[][] } }).mock.calls.map((c) => c.join(' ')).join('\n');
+
+    beforeEach(() => {
+      vi.spyOn(console, 'warn').mockImplementation(() => {});
+    });
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('says nothing when the stored connector still matches the environment', async () => {
+      const { app } = fakeApp({ SECRETS_ENCRYPTION_KEY: 'k', TARGET_DATABASE_URL: 'postgres://u:p@h:5433/d' });
+      await seedEssentials(app);
+      await seedEssentials(app);
+      expect(warned()).not.toMatch(/no longer matches TARGET_DATABASE_URL/);
+    });
+
+    it('names each diverging field, with both values, when the URL has moved', async () => {
+      // The exact shape of this failure: seeded against one port, environment later points at another.
+      const { app } = fakeApp({ SECRETS_ENCRYPTION_KEY: 'k', TARGET_DATABASE_URL: 'postgres://u:p@h:5432/d' });
+      await seedEssentials(app);
+      app.cfg.TARGET_DATABASE_URL = 'postgres://u:p@h:5433/openldr_target';
+      await seedEssentials(app);
+      const out = warned();
+      expect(out).toMatch(/no longer matches TARGET_DATABASE_URL/);
+      expect(out).toMatch(/port: connector has "5432", TARGET_DATABASE_URL says "5433"/);
+      expect(out).toMatch(/database: connector has "d", TARGET_DATABASE_URL says "openldr_target"/);
+    });
+
+    it('reports a password change WITHOUT printing either password', async () => {
+      const { app } = fakeApp({ SECRETS_ENCRYPTION_KEY: 'k', TARGET_DATABASE_URL: 'postgres://u:oldpw@h:5433/d' });
+      await seedEssentials(app);
+      app.cfg.TARGET_DATABASE_URL = 'postgres://u:newpw@h:5433/d';
+      await seedEssentials(app);
+      const out = warned();
+      expect(out).toMatch(/password: differs \(value withheld\)/);
+      expect(out).not.toMatch(/oldpw|newpw/);
+    });
+
+    it('warns but does not throw when the config cannot be decrypted', async () => {
+      const { app } = fakeApp({ SECRETS_ENCRYPTION_KEY: 'k', TARGET_DATABASE_URL: 'postgres://u:p@h:5433/d' });
+      await seedEssentials(app);
+      app.connectors.getDecryptedConfig = async () => {
+        throw new Error('SECRETS_ENCRYPTION_KEY is required');
+      };
+      await expect(seedEssentials(app)).resolves.toBeTruthy();
+      expect(warned()).toMatch(/could not read .* to compare it against TARGET_DATABASE_URL/);
+    });
   });
 });
 

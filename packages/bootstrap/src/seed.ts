@@ -77,7 +77,9 @@ export interface EssentialSeedTarget {
   // Host connector store, threaded from AppContext so the seed can create the default
   // target-warehouse connector — an essential (like the workflows) so a fresh install can query
   // out of the box, not just when SEED_ON_START seeds the full demo set. AppContext satisfies it.
-  connectors: Pick<ConnectorStore, 'list' | 'create'>;
+  // `getDecryptedConfig` is read-only here: it backs the boot-time drift warning that compares an
+  // already-seeded default connector against TARGET_DATABASE_URL (`warnIfDefaultConnectorDrifted`).
+  connectors: Pick<ConnectorStore, 'list' | 'create' | 'getDecryptedConfig'>;
   // Config the default-connector seed reads (which warehouse URL/adapter/credentials to parse).
   // Lives here because the connector is now an essential; AppContext satisfies it.
   cfg: {
@@ -512,26 +514,83 @@ export async function seedDefaultConnector(app: Pick<EssentialSeedTarget, 'conne
     return 0;
   }
   const existing = await app.connectors.list();
-  if (existing.some((c) => c.name === DEFAULT_CONNECTOR_NAME)) return 0; // idempotent by name
-
   const url = new URL(app.cfg.TARGET_DATABASE_URL);
+  const already = existing.find((c) => c.name === DEFAULT_CONNECTOR_NAME);
+  if (already) {
+    // Idempotent by name — but say so out loud when the row no longer describes the same server
+    // the environment points at (see `warnIfDefaultConnectorDrifted`).
+    await warnIfDefaultConnectorDrifted(app, already.id, url);
+    return 0;
+  }
+
   await app.connectors.create(
     {
       id: randomUUID(),
       name: DEFAULT_CONNECTOR_NAME,
       type: 'postgres',
       kind: 'database',
-      config: {
-        host: url.hostname,
-        port: url.port || '5432',
-        user: decodeURIComponent(url.username),
-        password: decodeURIComponent(url.password),
-        database: url.pathname.replace(/^\//, ''),
-        ssl: url.searchParams.get('sslmode') === 'require' ? 'true' : 'false',
-      },
+      config: pgConnectorConfigFromUrl(url),
     },
     app.cfg.SECRETS_ENCRYPTION_KEY,
   );
   console.log(`[seed] created default connector "${DEFAULT_CONNECTOR_NAME}"`);
   return 1;
+}
+
+/** The connector config `TARGET_DATABASE_URL` describes. Shared by the create path and the drift
+ *  check below so the two can never disagree about what the environment is asking for. */
+export function pgConnectorConfigFromUrl(url: URL): Record<string, string> {
+  return {
+    host: url.hostname,
+    port: url.port || '5432',
+    user: decodeURIComponent(url.username),
+    password: decodeURIComponent(url.password),
+    database: url.pathname.replace(/^\//, ''),
+    ssl: url.searchParams.get('sslmode') === 'require' ? 'true' : 'false',
+  };
+}
+
+/** Never printed, only compared — a drift warning must not leak the warehouse password to stdout. */
+const DRIFT_REDACTED = new Set(['password']);
+
+/**
+ * The default warehouse connector is written ONCE, on first boot, and is idempotent by name
+ * thereafter — so editing `TARGET_DATABASE_URL` later changes nothing, and neither does a restart
+ * or a re-seed. Every data-driven report runs against the STORED values, which means a connector
+ * left pointing at a host/port that no longer answers fails each run at connection time, far from
+ * the config that caused it. Diverging silently is what makes that hard to find, so say it at boot.
+ *
+ * Warn only: the stored row is authoritative on purpose (an operator may have deliberately
+ * repointed the warehouse in Studio, and clobbering that from the environment would be worse than
+ * the drift). This reports the disagreement and leaves the decision where it belongs.
+ */
+async function warnIfDefaultConnectorDrifted(app: EssentialSeedTarget, connectorId: string, url: URL): Promise<void> {
+  let stored: Record<string, string>;
+  try {
+    stored = await app.connectors.getDecryptedConfig(connectorId, app.cfg.SECRETS_ENCRYPTION_KEY);
+  } catch (e) {
+    // No key, or a row this key cannot open. Not fatal to boot — the connector still works for
+    // anything holding the right key, and failing the seed over a diagnostic would be worse.
+    console.warn(
+      `[seed] could not read "${DEFAULT_CONNECTOR_NAME}" to compare it against TARGET_DATABASE_URL:`,
+      e instanceof Error ? e.message : String(e),
+    );
+    return;
+  }
+  const expected = pgConnectorConfigFromUrl(url);
+  const drifted = Object.keys(expected).filter((k) => (stored[k] ?? '') !== expected[k]);
+  if (drifted.length === 0) return;
+
+  const detail = drifted
+    .map((k) =>
+      DRIFT_REDACTED.has(k)
+        ? `${k}: differs (value withheld)`
+        : `${k}: connector has ${JSON.stringify(stored[k] ?? null)}, TARGET_DATABASE_URL says ${JSON.stringify(expected[k])}`,
+    )
+    .join('; ');
+  console.warn(
+    `[seed] connector "${DEFAULT_CONNECTOR_NAME}" no longer matches TARGET_DATABASE_URL — ${detail}. ` +
+      'It was stored on first boot and is never updated from the environment; data-driven reports use the STORED values. ' +
+      'If the environment is the one that is right, fix the connector under Connectors in Studio and use Test to confirm it.',
+  );
 }
