@@ -7,7 +7,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
 import { AlignLeft, AlignCenter, AlignRight, X } from 'lucide-react';
 import { cn } from '@/lib/cn';
-import type { Margins, Orientation, Paper, Rect, ReportTemplate, TextAlign } from './types';
+import type { DesignElement, Margins, Orientation, Paper, Rect, ReportTemplate, TextAlign } from './types';
+import { encodeCode128, encodeQr, maxCode128Chars, minWidthPxFor, moduleWidthMm, MIN_MODULE_MM, QR_QUIET_ZONE } from './types';
 import { findElement, paperSize } from './model';
 import { clampRectToPage } from './geometry';
 import { ColorField } from './ColorField';
@@ -41,6 +42,68 @@ function NumberField({ label, value, onChange, min, placeholder }: { label: stri
         }}
         className="h-8 text-xs" />
     </div>
+  );
+}
+
+interface ScanReport {
+  /** Modules across the symbol's width, for the value we can see from here. */
+  modules: number;
+  moduleMm: number;
+  tooSmall: boolean;
+  minWidthPx: number;
+}
+
+/**
+ * Whether this symbol is drawn large enough to scan, for the value the DESIGNER can see.
+ *
+ * `null` for a bound symbol: the real value is whatever the query returns at run time, so there is
+ * no honest pass/fail to give — those get the character-budget line instead (see `ScanHint`).
+ */
+function scanReport(el: DesignElement): ScanReport | null {
+  if (el.dataSource) return null;
+  const value = el.text ?? '';
+  const modules = el.kind === 'qrcode'
+    ? (encodeQr(value)?.length ?? 0) + QR_QUIET_ZONE * 2
+    : (encodeCode128(value)?.length ?? 0);
+  if (!modules) return null;
+  // A QR is square: its module pitch is set by the SHORTER side, so measuring width alone would
+  // call a 200x20 box comfortable when it is unreadable.
+  const across = el.kind === 'qrcode' ? Math.min(el.rect.w, el.rect.h) : el.rect.w;
+  const moduleMm = moduleWidthMm(across, modules);
+  return { modules, moduleMm, tooSmall: moduleMm < MIN_MODULE_MM, minWidthPx: minWidthPxFor(modules) };
+}
+
+/**
+ * The authoring-time warning for a symbol too small to scan.
+ *
+ * This exists because the failure is otherwise INVISIBLE until someone is at a bench with a
+ * specimen: a barcode drawn at half the minimum module width still has all its bars, still prints,
+ * still passes every test we have, and simply does not read. The designer is the last moment anyone
+ * can act on it.
+ *
+ * It warns and never blocks: `MIN_MODULE_MM` is a practical floor carried from GS1's GS1-128
+ * figure, not a conformance rule binding plain Code 128 — and an operator printing to a known
+ * high-resolution label printer may legitimately know better than we do.
+ */
+function ScanHint({ el }: { el: DesignElement }): JSX.Element | null {
+  const { t } = useTranslation();
+  if (el.dataSource) {
+    // Bound: the sample says nothing about the values this will actually carry, so give the budget
+    // instead of a pass/fail. No budget line for a bound QR — a QR's capacity is a step function of
+    // its version, not a width the author can read a character count off, and a wrong number here
+    // would be worse than none.
+    if (el.kind === 'qrcode') return null;
+    return <p className="text-xs text-muted-foreground">{t('reportDesigner.scanBudget', { count: maxCode128Chars(el.rect.w) })}</p>;
+  }
+  const report = scanReport(el);
+  if (!report) return null;
+  if (!report.tooSmall) {
+    return <p className="text-xs text-muted-foreground">{t('reportDesigner.scanOk', { mm: report.moduleMm.toFixed(2) })}</p>;
+  }
+  return (
+    <p className="text-xs text-destructive">
+      {t('reportDesigner.scanTooSmall', { mm: report.moduleMm.toFixed(2), min: MIN_MODULE_MM, width: report.minWidthPx })}
+    </p>
   );
 }
 
@@ -131,6 +194,19 @@ function KindControls({ el, onPatch }: {
               onCheckedChange={(v) => onPatch({ caption: v === true }, { discrete: true })} />
             {t('reportDesigner.barcodeCaption')}
           </label>
+        )}
+        <ScanHint el={el} />
+        {el.kind === 'barcode' && (
+          <Button type="button" variant="outline" size="sm" className="justify-start text-xs"
+            onClick={() => {
+              // Widen in place, keeping the left edge — the author put the element where they want
+              // it, so growing rightward is the least surprising fix.
+              const need = scanReport(el)?.minWidthPx;
+              if (need) onPatch({ rect: { ...el.rect, w: need } }, { discrete: true });
+            }}
+            disabled={!scanReport(el)?.tooSmall}>
+            {t('reportDesigner.scanFixWidth')}
+          </Button>
         )}
       </div>
     );
