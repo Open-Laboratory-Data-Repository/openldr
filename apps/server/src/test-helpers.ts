@@ -350,6 +350,12 @@ function buildFakeLoaders(): FakeLoaders {
         byType: { bacteria: 1, none: 1 }, skipped: 0,
       };
     },
+    async parameters() {
+      return {
+        system: 'urn:openldr:default_result', conceptsLoaded: 2, resourceUrl: 'urn:openldr:default_result',
+        byRole: { result: 1, metadata: 1 }, skipped: 0,
+      };
+    },
     async amr() {
       return [];
     },

@@ -20,6 +20,8 @@ const mocks = vi.hoisted(() => ({
       loinc: vi.fn(),
       amr: vi.fn(),
       resource: vi.fn(),
+      organisms: vi.fn(),
+      parameters: vi.fn(),
     },
     audit: {},
     logger: {},
@@ -135,6 +137,36 @@ describe('terminology CLI audit', () => {
         metadata: { source: 'amr', result },
       }),
     );
+  });
+
+  it('terminology import parameters audits coding_system.import (entityId "parameters"), matching the organisms branch', async () => {
+    const result = { system: 'urn:openldr:default_result', conceptsLoaded: 2, resourceUrl: 'urn:openldr:default_result', byRole: { result: 1, metadata: 1 }, skipped: 0 };
+    mocks.termCtx.loaders.parameters.mockResolvedValue(result);
+    // readFileSync(path) is invoked inside runTerminologyImport to build the parameters JSON argument
+    // before loaders.parameters (mocked above) is called.
+    mocks.readFileSync.mockReturnValue('[]');
+
+    const code = await runTerminologyImport('parameters', '/some/file.json', { json: true });
+
+    expect(code).toBe(0);
+    expect(mocks.termCtx.loaders.parameters).toHaveBeenCalledTimes(1);
+    expect(mocks.recordAuditEvent).toHaveBeenCalledWith(
+      mocks.termCtx,
+      expect.objectContaining({ actorType: 'cli' }),
+      expect.objectContaining({
+        action: 'coding_system.import',
+        entityType: 'coding_system',
+        entityId: 'parameters',
+        metadata: { source: 'parameters', result },
+      }),
+    );
+  });
+
+  it('still rejects an unknown import kind', async () => {
+    const code = await runTerminologyImport('nonsense', '/some/file.json', { json: false });
+
+    expect(code).toBe(1);
+    expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
   });
 
   it('does not audit a failed import', async () => {

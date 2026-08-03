@@ -2,7 +2,7 @@ import { Kysely } from 'kysely';
 import type { Config } from '@openldr/config';
 import { redact, createLogger, type Logger } from '@openldr/core';
 import { createInternalDb, createFhirStore, createTerminologyStore, createTerminologyAdminStore, createOntologyStore, referenceCapture, markTerminologyChanged, createTerminologyIngestJobStore, type TerminologyAdminStore, type InternalSchema, type OntologyStore, type TerminologyIngestJobStore, resolveSeedPublisherId, deriveSystemCode } from '@openldr/db';
-import { buildOntologyDistribution, canonicalSystemUrl, createOperations, type Operations, type LoaderStore, loadLoinc, loadWhonetAmr, importTerminologyResource, importOrganismDictionary, stalenessReason, type LoadResult, type OrganismImportResult, type OntologyBuildProgress, type OntologyManifest, type OntologyType } from '@openldr/terminology';
+import { buildOntologyDistribution, canonicalSystemUrl, createOperations, type Operations, type LoaderStore, loadLoinc, loadWhonetAmr, importTerminologyResource, importOrganismDictionary, importResultParameters, stalenessReason, type LoadResult, type OrganismImportResult, type ResultParamImportResult, type OntologyBuildProgress, type OntologyManifest, type OntologyType } from '@openldr/terminology';
 import { createAuditStore, type AuditStore } from '@openldr/audit';
 import type { BlobStoragePort } from '@openldr/ports';
 import { createBlobFromConfig } from './s3-config';
@@ -41,6 +41,7 @@ export interface TerminologyContext {
     loinc(dir: string, acceptLicense: boolean): Promise<LoadResult>;
     amr(sqlitePath: string): Promise<LoadResult[]>;
     organisms(json: unknown): Promise<OrganismImportResult>;
+    parameters(json: unknown): Promise<ResultParamImportResult>;
     resource(json: unknown): Promise<LoadResult>;
   };
   ingestOntologyWithConcepts(systemType: string, systemId: string, dir: string, onProgress: (p: { phase: string; processed: number; total: number | null }) => void): Promise<{ conceptsLoaded: number }>;
@@ -131,6 +132,7 @@ export async function createTerminologyContext(cfg: Config): Promise<Terminology
       amr: (p) => loadWhonetAmr(p, loaderStore),
       resource: (json) => importTerminologyResource(json, loaderStore),
       organisms: (json) => importOrganismDictionary(json, loaderStore),
+      parameters: (json) => importResultParameters(json, loaderStore),
     },
     async ingestOntologyWithConcepts(systemType, systemId, dir, onProgress) {
       const url = canonicalSystemUrl(systemType);
