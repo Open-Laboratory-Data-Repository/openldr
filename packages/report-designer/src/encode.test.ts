@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { encodeCode128, encodeQr, QR_QUIET_ZONE } from './encode';
+import { encodeCode128, encodeQr, QR_QUIET_ZONE, MIN_MODULE_MM, moduleWidthMm, maxCode128Chars, minWidthPxFor } from './encode';
 
 const bits = (bars: boolean[] | null): string => (bars ?? []).map((b) => (b ? '1' : '0')).join('');
 
@@ -81,5 +81,38 @@ describe('encodeQr', () => {
     const m = encodeQr('TZ00123/26')!;
     expect(m[0][0]).toBe(true); // a finder corner sits at 0,0 — no padding ahead of it
     expect(QR_QUIET_ZONE).toBe(4);
+  });
+});
+
+describe('scannability helpers', () => {
+  it('measures the module width of the shipped clinical-report barcode above the floor', () => {
+    // rt-clinical-micro's barcode box is 184px and a 10-char alphanumeric lab number is 145
+    // modules. Pinned because it is the ONE place the built-in's scannability is asserted at all.
+    const mm = moduleWidthMm(184, 145);
+    expect(mm).toBeCloseTo(0.336, 3);
+    expect(mm).toBeGreaterThan(MIN_MODULE_MM);
+  });
+
+  it('reports the character budget for a box, conservatively', () => {
+    // 184px = 48.7mm; at 0.25mm that is 194 modules => floor((194-35)/11) = 14 characters.
+    expect(maxCode128Chars(184)).toBe(14);
+    // Under-promises for digits: AUTO packs 2 per symbol, so 20 digits actually fit in 14 slots.
+    expect(encodeCode128('1'.repeat(20))!.length).toBeLessThanOrEqual(Math.floor((184 * 25.4 / 96) / MIN_MODULE_MM));
+  });
+
+  it('never returns a negative budget for a box too small to hold even the fixed patterns', () => {
+    expect(maxCode128Chars(1)).toBe(0);
+    expect(maxCode128Chars(0)).toBe(0);
+  });
+
+  it('round-trips: the minimum width it recommends actually clears the floor', () => {
+    for (const modules of [90, 145, 200, 313]) {
+      expect(moduleWidthMm(minWidthPxFor(modules), modules)).toBeGreaterThanOrEqual(MIN_MODULE_MM);
+    }
+  });
+
+  it('returns 0 rather than Infinity or NaN for a degenerate box', () => {
+    expect(moduleWidthMm(0, 145)).toBe(0);
+    expect(moduleWidthMm(184, 0)).toBe(0);
   });
 });

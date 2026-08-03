@@ -73,3 +73,61 @@ export function encodeQr(value: string): boolean[][] | null {
  *  below it, and the omission is invisible on a white page — which is exactly why it is a constant
  *  with a test rather than a number inlined in the drawer. */
 export const QR_QUIET_ZONE = 4;
+
+// ---------------------------------------------------------------------------------------------
+// Scannability
+//
+// A symbol drawn too small still LOOKS correct — the bars are there, the caption reads, the PDF
+// prints. It simply does not scan, and nobody finds out until someone is standing at a bench with a
+// specimen. These helpers exist so the designer can say so at authoring time, which is the only
+// moment anyone can act on it.
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * Minimum module width ("X-dimension") in millimetres.
+ *
+ * 0.250mm is the GS1 General Specifications minimum X-dimension for GS1-128 in general distribution
+ * (their stated maximum is 1.016mm), and smaller is sanctioned only where the item is physically too
+ * small to carry a full-size symbol.
+ *
+ * ⚠ Two honest caveats. We emit plain Code 128, not GS1-128, and ISO/IEC 15417 fixes no absolute
+ * X-dimension — so this is a well-founded PRACTICAL floor, not a conformance requirement we are
+ * bound by. And it is applied to QR modules too, where ISO/IEC 18004 likewise sets no absolute
+ * minimum; carrying the 1D figure across is a judgement call, deliberately on the cautious side.
+ * The designer therefore WARNS and never blocks or silently resizes.
+ */
+export const MIN_MODULE_MM = 0.25;
+
+/** Element rects are CSS px at 96dpi (see `PAPER_PX`), so one px is 25.4/96 mm. */
+const MM_PER_PX = 25.4 / 96;
+
+/** Millimetres one module occupies when `moduleCount` modules are stretched across `widthPx`. */
+export function moduleWidthMm(widthPx: number, moduleCount: number): number {
+  if (moduleCount <= 0 || widthPx <= 0) return 0;
+  return (widthPx * MM_PER_PX) / moduleCount;
+}
+
+/**
+ * How many Code 128 characters still scan in a box `widthPx` wide, at `MIN_MODULE_MM`.
+ *
+ * The character budget, rather than a pass/fail on today's value, is what a BOUND symbol needs: the
+ * design is authored against one sample lab number and then runs against every lab number the site
+ * will ever issue. "Values up to 14 characters stay scannable" is actionable; "this particular
+ * sample fits" is not.
+ *
+ * Width of a Code 128 symbol = 11 modules per symbol character (start, each data character, and the
+ * check character) + 13 for the stop pattern ⇒ `11 × (n + 2) + 13` for n data characters.
+ *
+ * ⚠ CONSERVATIVE for digits: AUTO mode packs two digits into one Code C symbol character, so an
+ * all-numeric value fits about twice this. Under-promising is the right way to be wrong here.
+ */
+export function maxCode128Chars(widthPx: number): number {
+  const maxModules = Math.floor((widthPx * MM_PER_PX) / MIN_MODULE_MM);
+  return Math.max(0, Math.floor((maxModules - 35) / 11));
+}
+
+/** Narrowest box (px) that keeps `moduleCount` modules at or above `MIN_MODULE_MM`. Rounded up, so
+ *  the returned width always satisfies the floor rather than landing a rounding error below it. */
+export function minWidthPxFor(moduleCount: number): number {
+  return Math.ceil((moduleCount * MIN_MODULE_MM) / MM_PER_PX);
+}

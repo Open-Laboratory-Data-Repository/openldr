@@ -186,3 +186,45 @@ describe('PropertiesTab barcode and QR controls', () => {
     expect(screen.queryByLabelText('Show value under the bars')).not.toBeInTheDocument();
   });
 });
+
+describe('PropertiesTab scannability hint', () => {
+  const bc = (over: Partial<DesignElement> = {}): DesignElement =>
+    ({ id: 'sym', kind: 'barcode', name: 'B', rect: { x: 0, y: 0, w: 220, h: 56 }, text: '1234567890', ...over }) as DesignElement;
+
+  it('warns when the box is too narrow to scan, naming the measurement and the fix', () => {
+    // 40px for a 90-module symbol is ~0.12mm per module — half the floor.
+    setup({ template: tplWithEl(bc({ rect: { x: 0, y: 0, w: 40, h: 56 } })), selectedIds: ['sym'] });
+    expect(screen.getByText(/too small to scan reliably/i)).toBeInTheDocument();
+    expect(screen.getByText(/0\.12 mm per module/i)).toBeInTheDocument();
+    expect(screen.getByText(/at least 86 px/i)).toBeInTheDocument();
+  });
+
+  it('confirms, rather than nags, when the symbol is comfortably above the floor', () => {
+    setup({ template: tplWithEl(bc()), selectedIds: ['sym'] });
+    expect(screen.queryByText(/too small to scan/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/mm per module/i)).toBeInTheDocument();
+  });
+
+  it('resizes to the minimum scannable width, keeping the left edge and the height', () => {
+    const el = bc({ rect: { x: 30, y: 10, w: 40, h: 56 } });
+    const props = setup({ template: tplWithEl(el), selectedIds: ['sym'] });
+    fireEvent.click(screen.getByRole('button', { name: /resize to the scanning minimum/i }));
+    expect(props.onPatchElement).toHaveBeenCalledWith('sym',
+      { rect: { x: 30, y: 10, w: 86, h: 56 } }, { discrete: true });
+  });
+
+  it('gives a BOUND barcode a character budget instead of a false pass/fail', () => {
+    // The design is authored against one sample and then runs against every lab number the site
+    // ever issues, so "this sample fits" would be a claim we cannot make.
+    setup({ template: tplWithEl(bc({ dataSource: { kind: 'custom-query', queryId: 'q' }, text: '' })), selectedIds: ['sym'] });
+    expect(screen.getByText(/up to 17 characters/i)).toBeInTheDocument();
+    expect(screen.queryByText(/too small to scan/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /resize to the scanning minimum/i })).toBeDisabled();
+  });
+
+  it('measures a QR against its SHORTER side, since the module pitch follows it', () => {
+    // 200 wide but 20 tall: measuring width alone would call this comfortable.
+    setup({ template: tplWithEl(bc({ kind: 'qrcode', rect: { x: 0, y: 0, w: 200, h: 20 } })), selectedIds: ['sym'] });
+    expect(screen.getByText(/too small to scan reliably/i)).toBeInTheDocument();
+  });
+});
