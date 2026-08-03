@@ -30,7 +30,7 @@ export function createRelationalWriter(db: Kysely<ExternalSchema>, engine: Targe
     async write(resource, provenance) {
       const p = projectResource(resource, provenance);
       if (!p) return 'skipped';
-      await upsert(p.table, [p.row]);
+      await upsert(p.table, p.rows);
       return 'written';
     },
     async writeMany(items) {
@@ -41,7 +41,7 @@ export function createRelationalWriter(db: Kysely<ExternalSchema>, engine: Targe
         if (!p) return;
         results[idx] = 'written';
         const list = byTable.get(p.table) ?? [];
-        list.push(p.row);
+        list.push(...p.rows);
         byTable.set(p.table, list);
       });
       for (const [table, rows] of byTable) await upsert(table, rows);
