@@ -224,3 +224,38 @@ describe('PageCanvas style rendering', () => {
     expect(screen.queryByTestId('margin-guide')).toBeNull();
   });
 });
+
+describe('PageCanvas keyvalue panel', () => {
+  const kvTemplate = (el: Partial<import('./types').DesignElement>): ReportTemplate => ({
+    id: 't', name: 't', paper: 'A4', orientation: 'portrait', parameters: [],
+    pages: [{ id: 'p1', elements: [{
+      id: 'kv', kind: 'keyvalue', name: 'Panel', rect: { x: 10, y: 10, w: 300, h: 80 }, ...el,
+    } as import('./types').DesignElement] }],
+  });
+
+  it('shows the static sample pairs of an unbound panel', () => {
+    render(<PageCanvas template={kvTemplate({ rows: [['Surname', 'MWASEKAGA']] })} zoom={1}
+      selectedIds={[]} onSelect={vi.fn()} onCommitRects={vi.fn()} />);
+    expect(screen.getByText('Surname')).toBeInTheDocument();
+    expect(screen.getByText('MWASEKAGA')).toBeInTheDocument();
+  });
+
+  it('shows a BOUND panel as its labels with placeholder values — the canvas never runs the query', () => {
+    render(<PageCanvas template={kvTemplate({
+      dataSource: { kind: 'custom-query', queryId: 'q' },
+      boundColumns: [{ key: 'sn', label: 'Surname' }, { key: 'sex', label: 'Sex' }],
+    })} zoom={1} selectedIds={[]} onSelect={vi.fn()} onCommitRects={vi.fn()} />);
+    expect(screen.getByText('Surname')).toBeInTheDocument();
+    expect(screen.getByText('Sex')).toBeInTheDocument();
+    expect(screen.getAllByText('—')).toHaveLength(2);
+  });
+
+  it('draws the title bar only when the panel carries title text', () => {
+    const { rerender } = render(<PageCanvas template={kvTemplate({ rows: [['A', 'B']] })} zoom={1}
+      selectedIds={[]} onSelect={vi.fn()} onCommitRects={vi.fn()} />);
+    expect(screen.queryByText('PATIENT')).not.toBeInTheDocument();
+    rerender(<PageCanvas template={kvTemplate({ rows: [['A', 'B']], text: 'PATIENT' })} zoom={1}
+      selectedIds={[]} onSelect={vi.fn()} onCommitRects={vi.fn()} />);
+    expect(screen.getByText('PATIENT')).toBeInTheDocument();
+  });
+});

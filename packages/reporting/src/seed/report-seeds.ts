@@ -1967,25 +1967,35 @@ export const SEED_DESIGNS: ReportDesign[] = [
     pages: [{ id: 'p1', elements: [
       { id: 'lab', kind: 'text', name: 'lab', rect: { x: 40, y: 34, w: 460, h: 16 }, text: 'LABORATORY REPORT', style: { fontSize: 15, bold: true, color: '#0f172a' } },
       { id: 'title', kind: 'text', name: 'title', rect: { x: 40, y: 56, w: 400, h: 16 }, text: 'MICROBIOLOGY — CULTURE & SENSITIVITY', style: { fontSize: 10, bold: true, color: '#334155' } },
-      { id: 'hdr', kind: 'table', name: 'Patient & specimen', rect: { x: 40, y: 84, w: 700, h: 46 },
+      // Band 2 of the reference: a label→value metadata strip, NOT a one-row table. It was a table
+      // with a header row until S4 gave the vocabulary a `keyvalue` panel; the column labels sat
+      // above the values in a tinted band, which reads as a spreadsheet fragment rather than a
+      // patient header. Two pair columns, so the eight facts fill four lines instead of eight.
+      { id: 'hdr', kind: 'keyvalue', name: 'Patient & specimen', rect: { x: 40, y: 84, w: 700, h: 84 },
+        layout: 'inline', panelColumns: 2,
         dataSource: { kind: 'custom-query', queryId: 'q-clinical-micro-header' },
         boundColumns: [
           { key: 'patient_surname', label: 'Surname', kind: 'label' },
-          { key: 'patient_firstname', label: 'First name', kind: 'label' },
-          { key: 'sex', label: 'Sex', kind: 'label' },
-          { key: 'dob', label: 'DOB', kind: 'label' },
           { key: 'specimen', label: 'Specimen', kind: 'label' },
+          { key: 'patient_firstname', label: 'First name', kind: 'label' },
           { key: 'received', label: 'Received', kind: 'label' },
+          { key: 'sex', label: 'Sex', kind: 'label' },
           { key: 'lab_number', label: 'Lab number', kind: 'label' },
+          { key: 'dob', label: 'DOB', kind: 'label' },
+          { key: 'panel', label: 'Panel', kind: 'label' },
         ] },
-      { id: 'org', kind: 'table', name: 'Organism', rect: { x: 40, y: 140, w: 700, h: 46 },
+      // Band 4: a titled panel. Stacked, because an organism name ("Klebsiella pneumoniae") is
+      // longer than the 40% an inline label would leave it, and it is the one fact on this page a
+      // clinician looks for first.
+      { id: 'org', kind: 'keyvalue', name: 'Organism', rect: { x: 40, y: 176, w: 700, h: 58 },
+        layout: 'stacked', text: 'ORGANISM ISOLATED', style: { fill: '#334155', strokeColor: '#cbd5e1' },
         dataSource: { kind: 'custom-query', queryId: 'q-clinical-micro-header' },
-        boundColumns: [{ key: 'organism', label: 'Organism isolated', kind: 'label' }] },
-      { id: 'band', kind: 'rect', name: 'band', rect: { x: 40, y: 198, w: 700, h: 20 }, style: { fill: '#334155', strokeColor: '#334155' } },
-      { id: 'bandt', kind: 'text', name: 'bandt', rect: { x: 40, y: 203, w: 420, h: 16 }, text: '   ANTIMICROBIAL SUSCEPTIBILITY', style: { fontSize: 8, bold: true, color: '#ffffff' } },
+        boundColumns: [{ key: 'organism', label: 'Isolate', kind: 'label' }] },
+      { id: 'band', kind: 'rect', name: 'band', rect: { x: 40, y: 246, w: 700, h: 20 }, style: { fill: '#334155', strokeColor: '#334155' } },
+      { id: 'bandt', kind: 'text', name: 'bandt', rect: { x: 40, y: 251, w: 420, h: 16 }, text: '   ANTIMICROBIAL SUSCEPTIBILITY', style: { fontSize: 8, bold: true, color: '#ffffff' } },
       // Two columns, not three: the interpretation IS the result for a susceptibility test, and
       // carrying the same fact in two renderings is what let them visibly disagree.
-      { id: 'tbl', kind: 'table', name: 'Susceptibility', rect: { x: 40, y: 224, w: 700, h: 300 },
+      { id: 'tbl', kind: 'table', name: 'Susceptibility', rect: { x: 40, y: 272, w: 700, h: 300 },
         dataSource: { kind: 'custom-query', queryId: 'q-clinical-micro-ast' },
         boundColumns: [
           { key: 'test', label: 'Antimicrobial', kind: 'label' },

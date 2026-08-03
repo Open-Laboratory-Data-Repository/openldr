@@ -146,6 +146,49 @@ function textStyle(el: DesignElement, zoom: number): CSSProperties {
   return { fontSize: (s.fontSize ?? 11) * zoom, fontWeight: s.bold ? 600 : 400, textAlign: s.align ?? 'left', color: s.color ?? '#262626' };
 }
 
+/**
+ * A keyvalue panel as the AUTHOR sees it while editing: its title bar and its pair grid, in the
+ * chosen layout.
+ *
+ * ⚠ Like every other element here, this NEVER resolves the bound query — the canvas has no query
+ * runner and adding one would run a query on every drag. A BOUND panel therefore shows each bound
+ * column's LABEL with a muted em-dash where its value will be, so the panel's shape is visible while
+ * placing it; live values are Preview's job. That is deliberately more than a bound `table` shows
+ * here (nothing at all, which reads as a broken binding) and it is the S4 answer to that gap.
+ */
+function KeyValuePreview({ el, zoom }: { el: DesignElement; zoom: number }): JSX.Element {
+  const s = el.style ?? {};
+  const title = (el.text ?? '').trim();
+  const pairs = el.dataSource
+    ? (el.boundColumns ?? []).map((c) => ({ label: c.label, value: '—' }))
+    : (el.rows ?? []).map((r) => ({ label: r[0] ?? '', value: r[1] ?? '' }));
+  const stacked = el.layout === 'stacked';
+  const cols = Math.max(1, Math.min(4, el.panelColumns ?? 1));
+  return (
+    <div className="flex h-full w-full flex-col overflow-hidden"
+      style={s.strokeColor ? { border: `${(s.strokeWidth ?? 0.5) * zoom}px solid ${s.strokeColor}` } : undefined}>
+      {title && (
+        <div className="shrink-0 truncate font-semibold"
+          style={{ background: s.fill && s.fill !== 'none' ? s.fill : '#334155', color: s.color ?? '#ffffff',
+            fontSize: 8 * zoom, padding: `${3 * zoom}px ${6 * zoom}px` }}>
+          {title}
+        </div>
+      )}
+      <div className="grid min-h-0 flex-1 content-start"
+        style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`, columnGap: 12 * zoom, padding: `${4 * zoom}px ${6 * zoom}px` }}>
+        {pairs.map((p, i) => (
+          <div key={i} className={cn('min-w-0', stacked ? 'flex flex-col' : 'flex items-baseline gap-2')}
+            style={{ fontSize: 8 * zoom }}>
+            <span className={cn('truncate font-semibold text-neutral-500', stacked ? 'uppercase' : 'shrink-0 basis-[40%]')}
+              style={stacked ? { fontSize: 6.5 * zoom } : undefined}>{p.label}</span>
+            <span className="truncate text-neutral-700">{p.value}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function ElementContent({ el, zoom }: { el: DesignElement; zoom: number }): JSX.Element {
   const s = el.style ?? {};
   switch (el.kind) {
@@ -168,6 +211,8 @@ function ElementContent({ el, zoom }: { el: DesignElement; zoom: number }): JSX.
             <ImageIcon className="h-4 w-4" />
           </div>
         );
+    case 'keyvalue':
+      return <KeyValuePreview el={el} zoom={zoom} />;
     case 'table':
       return (
         <table className="h-full w-full border-collapse text-[8px] text-neutral-700">

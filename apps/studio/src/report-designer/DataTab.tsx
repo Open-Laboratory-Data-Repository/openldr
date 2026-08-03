@@ -165,7 +165,9 @@ export function DataTab({ element, parameters, onPatchElement, onPatchParameters
     setLoading(false); // a new element always starts idle, even if the old one had a run in flight
   }, [element?.id]);
 
-  if (!element || element.kind !== 'table') {
+  // `keyvalue` binds through exactly the same fields as a table — each bound column is one
+  // label→value pair — so the whole editor below serves both kinds unchanged.
+  if (!element || (element.kind !== 'table' && element.kind !== 'keyvalue')) {
     return (
       <div className="flex flex-col gap-3 p-3">
         <p className="text-xs text-muted-foreground">{t('reportDesigner.selectTableToBind')}</p>
@@ -276,7 +278,9 @@ export function DataTab({ element, parameters, onPatchElement, onPatchParameters
       {loadError && <p className="text-xs text-destructive">{loadError}</p>}
 
       <div>
-        <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">{t('reportDesigner.columns')}</div>
+        <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+          {t(el.kind === 'keyvalue' ? 'reportDesigner.fields' : 'reportDesigner.columns')}
+        </div>
         {rows.length === 0 ? (
           <p className="text-xs text-muted-foreground">{t('reportDesigner.noColumnsLoaded')}</p>
         ) : (

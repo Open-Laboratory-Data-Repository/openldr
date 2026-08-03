@@ -256,3 +256,30 @@ describe('DataTab design parameters', () => {
     }
   });
 });
+
+describe('DataTab keyvalue binding', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  const kvEl = (over: Partial<DesignElement> = {}): DesignElement => ({
+    id: 'kv', kind: 'keyvalue', name: 'Panel', rect: { x: 0, y: 0, w: 200, h: 100 }, ...over,
+  });
+
+  it('binds a keyvalue panel through the same editor as a table, labelled Fields', async () => {
+    const onPatchElement = vi.fn();
+    render(<DataTab element={kvEl({ dataSource: { kind: 'custom-query', queryId: 'cq_1' } })}
+      parameters={[]} onPatchElement={onPatchElement} onPatchParameters={vi.fn()} />);
+    expect(screen.queryByText(/select a table/i)).not.toBeInTheDocument();
+    expect(screen.getByText('Fields')).toBeInTheDocument();
+    await loadColumns();
+    fireEvent.click(await screen.findByLabelText('org'));
+    // One bound column === one label→value pair.
+    expect(onPatchElement).toHaveBeenCalledWith('kv',
+      { boundColumns: [{ key: 'org', label: 'Organism' }] }, { discrete: true });
+  });
+
+  it('still refuses to bind a kind that has no binding, e.g. a rect', () => {
+    render(<DataTab element={{ id: 'r', kind: 'rect', name: 'R', rect: { x: 0, y: 0, w: 1, h: 1 } }}
+      parameters={[]} onPatchElement={vi.fn()} onPatchParameters={vi.fn()} />);
+    expect(screen.getByText(/select a table/i)).toBeInTheDocument();
+  });
+});

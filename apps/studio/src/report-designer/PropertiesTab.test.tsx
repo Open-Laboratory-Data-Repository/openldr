@@ -138,3 +138,28 @@ describe('PropertiesTab editing', () => {
     expect(size).toHaveAttribute('placeholder', 'Mixed');
   });
 });
+
+describe('PropertiesTab keyvalue controls', () => {
+  const kv = (over: Partial<DesignElement> = {}): DesignElement =>
+    ({ id: 'kv', kind: 'keyvalue', name: 'Panel', rect: { x: 0, y: 0, w: 200, h: 80 }, ...over }) as DesignElement;
+
+  it('edits the panel title, layout and pairs-per-line', () => {
+    const el = kv();
+    const props = setup({ template: tplWithEl(el), selectedIds: ['kv'] });
+    fireEvent.change(screen.getByLabelText('Panel title'), { target: { value: 'PATIENT' } });
+    expect(props.onPatchElement).toHaveBeenCalledWith('kv', { text: 'PATIENT' }, undefined);
+    fireEvent.change(screen.getByLabelText('Pairs per line'), { target: { value: '2' } });
+    expect(props.onPatchElement).toHaveBeenCalledWith('kv', { panelColumns: 2 }, undefined);
+  });
+
+  it('clamps pairs-per-line into 1..4 rather than passing a nonsense divisor to the renderer', () => {
+    const props = setup({ template: tplWithEl(kv()), selectedIds: ['kv'] });
+    fireEvent.change(screen.getByLabelText('Pairs per line'), { target: { value: '9' } });
+    expect(props.onPatchElement).toHaveBeenCalledWith('kv', { panelColumns: 4 }, undefined);
+  });
+
+  it('shows no static-pair editor — an unbound panel is made real by binding a query', () => {
+    setup({ template: tplWithEl(kv({ rows: [['A', 'B']] })), selectedIds: ['kv'] });
+    expect(screen.queryByText('Add column')).not.toBeInTheDocument();
+  });
+});

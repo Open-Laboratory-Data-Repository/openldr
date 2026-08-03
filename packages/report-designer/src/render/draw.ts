@@ -1,4 +1,4 @@
-import type { CellEmphasis, CellStatus, ColumnKind, DesignElement, DesignPage, ReportDesign } from '../schema';
+import type { BoundColumn, CellEmphasis, CellStatus, ColumnKind, DesignElement, DesignPage, ReportDesign } from '../schema';
 import { CELL_STATUSES } from '../schema';
 import { toPt, PX_TO_PT } from './units';
 import type { ResolvedTable } from './index';
@@ -214,6 +214,179 @@ export function cellStatusesFor(
   return resolved.rows.map((row) => cols.map((c) => (c.statusKey ? asCellStatus(row[c.statusKey]) : undefined)));
 }
 
+// ---------------------------------------------------------------------------------------------
+// keyvalue panel
+// ---------------------------------------------------------------------------------------------
+
+/** Panel title band height. Deliberately `ROW_H`, so a keyvalue panel's header aligns with a table's
+ *  header when the two are placed side by side. */
+const KV_TITLE_H = ROW_H;
+const KV_TITLE_FILL = '#334155';
+const KV_TITLE_TEXT = '#ffffff';
+/** Pair label. Muted against the value on purpose: in a metadata block the reader scans VALUES and
+ *  uses the labels only to locate one, so equal weight would make the block harder to read, not easier. */
+const KV_LABEL_COLOR = '#64748b';
+const KV_PAD_X = 6;
+const KV_PAD_Y = 4;
+/** Horizontal space between adjacent pair columns. */
+const KV_GUTTER = 12;
+const KV_INLINE_H = 14;
+const KV_STACKED_H = 22;
+/** An inline label's share of its pair's width, and the floor below which the share is not taken.
+ *  40% keeps "First name" from wrapping while leaving the value the larger half. */
+const KV_LABEL_FRAC = 0.4;
+const KV_LABEL_MIN_W = 40;
+const KV_LABEL_SIZE = 8;
+const KV_VALUE_SIZE = 8;
+const KV_STACKED_LABEL_SIZE = 6.5;
+const KV_STACKED_VALUE_SIZE = 8.5;
+
+export type KeyValuePair = { label: string; value: string; status?: CellStatus; emphasis: CellEmphasis };
+
+/**
+ * The pairs a keyvalue element renders.
+ *
+ * Bound: ONE PAIR PER `boundColumn`, valued from **row 0** — a metadata panel describes a single
+ * subject (this patient, this specimen), so a second row has nothing to attach to. Unbound: the
+ * element's `rows` as `[label, value]`, mirroring how an unbound table draws its sample rows.
+ *
+ * A query error yields `[]`; the caller draws the same red placeholder a bound table does. Zero rows
+ * yields the labels with EMPTY values rather than nothing at all — the panel's shape is part of the
+ * report, and a blank Surname line is information where a vanished panel is an invisible defect.
+ */
+export function keyValuePairs(el: DesignElement, resolved: ResolvedTable | undefined): KeyValuePair[] {
+  if (el.kind !== 'keyvalue') return [];
+  if (el.dataSource) {
+    if (!resolved || 'error' in resolved) return [];
+    const cols = el.boundColumns && el.boundColumns.length ? el.boundColumns : resolved.columns;
+    const row = resolved.rows[0];
+    return cols.map((c) => {
+      const bc = c as BoundColumn;
+      return {
+        label: bc.label,
+        value: row ? String(row[bc.key] ?? '') : '',
+        status: row && bc.statusKey ? asCellStatus(row[bc.statusKey]) : undefined,
+        emphasis: bc.emphasis ?? 'text',
+      };
+    });
+  }
+  return (el.rows ?? []).map((r) => ({ label: r[0] ?? '', value: r[1] ?? '', emphasis: 'text' as CellEmphasis }));
+}
+
+export interface PairBox {
+  /** Pair cell box, inside the panel padding and below any title. */
+  x: number; y: number; w: number; h: number;
+  /** Label and value TEXT boxes — the `y` each is passed straight to `doc.text`, so the vertical
+   *  centring lives here rather than in the drawer (which is what keeps an inline label and its
+   *  value on ONE baseline; they were 3pt apart while the offset was applied to only one of them). */
+  label: Box; value: Box;
+}
+
+/** pdfkit line height ≈ 1.15 × font size for Helvetica. Used only to centre text in a pair row; the
+ *  drawer asks the document for the real value when it needs to size a chip. */
+const lineH = (fontSize: number): number => fontSize * 1.15;
+
+/**
+ * Geometry for `n` pairs inside panel box `r`, flowing ACROSS then down.
+ *
+ * Extracted from the drawer and pure so pitch, flow order and the title offset are testable without
+ * a PDF document — the same seam `columnWidths` uses. Pairs beyond the box's height are still
+ * returned: clipping is the drawer's job (`doc.clip()`), and truncating here would make the helper
+ * disagree with what the reader sees at the boundary.
+ */
+export function pairRects(
+  r: Box, n: number, layout: 'inline' | 'stacked', panelColumns: number, hasTitle: boolean,
+): PairBox[] {
+  const cols = Math.max(1, Math.min(4, Math.floor(panelColumns) || 1));
+  const pitch = layout === 'stacked' ? KV_STACKED_H : KV_INLINE_H;
+  const x0 = r.x + KV_PAD_X;
+  const y0 = r.y + (hasTitle ? KV_TITLE_H : 0) + KV_PAD_Y;
+  const innerW = Math.max(0, r.w - KV_PAD_X * 2);
+  const cellW = (innerW - KV_GUTTER * (cols - 1)) / cols;
+  return Array.from({ length: Math.max(0, n) }, (_, i) => {
+    const x = x0 + (i % cols) * (cellW + KV_GUTTER);
+    const y = y0 + Math.floor(i / cols) * pitch;
+    const cell = { x, y, w: cellW, h: pitch };
+    if (layout === 'stacked') {
+      const lh = lineH(KV_STACKED_LABEL_SIZE);
+      return {
+        ...cell,
+        label: { x, y: y + 1, w: cellW, h: lh },
+        value: { x, y: y + 1 + lh + 1, w: cellW, h: lineH(KV_STACKED_VALUE_SIZE) },
+      };
+    }
+    // Both boxes share one `y`, centred in the pair row — an inline label and its value are read as
+    // a single line and any offset between them shows.
+    const labelW = Math.min(Math.max(KV_LABEL_MIN_W, cellW * KV_LABEL_FRAC), cellW);
+    const lh = lineH(KV_VALUE_SIZE);
+    const ty = y + (pitch - lh) / 2;
+    return {
+      ...cell,
+      label: { x, y: ty, w: labelW, h: lh },
+      value: { x: x + labelW, y: ty, w: Math.max(0, cellW - labelW), h: lh },
+    };
+  });
+}
+
+function drawKeyValue(doc: Doc, el: DesignElement, r: Box, resolved: ResolvedTable | undefined): void {
+  if (el.dataSource && resolved && 'error' in resolved) { drawErrorPlaceholder(doc, r, resolved.error); return; }
+  const s = el.style ?? {};
+  const title = (el.text ?? '').trim();
+  const pairs = keyValuePairs(el, resolved);
+  const layout = el.layout ?? 'inline';
+
+  doc.save().rect(r.x, r.y, r.w, r.h).clip();
+
+  if (title) {
+    doc.rect(r.x, r.y, r.w, KV_TITLE_H).fill(s.fill && s.fill !== 'none' ? s.fill : KV_TITLE_FILL);
+    doc.font('Helvetica-Bold').fontSize(8).fillColor(s.color ?? KV_TITLE_TEXT)
+      .text(title, r.x + KV_PAD_X, r.y + CELL_PAD, { width: r.w - KV_PAD_X * 2, height: CELL_TEXT_H, ellipsis: true });
+  }
+
+  // An outline is opt-in (`style.strokeColor`), because band 2 of the reference is a bare metadata
+  // strip that a box would only clutter. A TITLED panel usually wants one: without it the dark title
+  // bar floats above its own content and reads as an unrelated section band.
+  if (s.strokeColor) {
+    doc.save().lineWidth(s.strokeWidth ?? 0.5).strokeColor(s.strokeColor)
+      .rect(r.x, r.y, r.w, r.h).stroke().restore();
+  }
+
+  const boxes = pairRects(r, pairs.length, layout, el.panelColumns ?? 1, !!title);
+  pairs.forEach((p, i) => {
+    const b = boxes[i];
+    const labelSize = layout === 'stacked' ? KV_STACKED_LABEL_SIZE : KV_LABEL_SIZE;
+    const valueSize = layout === 'stacked' ? KV_STACKED_VALUE_SIZE : KV_VALUE_SIZE;
+    // The label is BOLD and the value regular — the opposite of a table, on purpose. A table's
+    // column header is read once and its rows many times; a metadata panel is scanned by hunting
+    // for a label, so the label is the entry point and needs the weight. Colour alone was not
+    // enough to separate the two at 8pt.
+    doc.font('Helvetica-Bold').fontSize(labelSize).fillColor(KV_LABEL_COLOR)
+      .text(layout === 'stacked' ? p.label.toUpperCase() : p.label, b.label.x, b.label.y,
+        { width: b.label.w, height: b.label.h, ellipsis: true });
+
+    // A `fill` chip is sized to the VALUE TEXT, not to the pair's width: a metadata panel's value
+    // column is as wide as the widest value in it, so a full-width chip would paint a bar across
+    // empty space instead of the pill the reference shows. The chip is grown from the text box
+    // rather than the pair row so it hugs the value in BOTH layouts (a stacked pair's row also
+    // contains its label, which a chip must not cover).
+    doc.font('Helvetica').fontSize(valueSize);
+    const chip = p.status && p.emphasis === 'fill';
+    const pad = chip ? CELL_PAD : 0;
+    let valueColor = BODY_TEXT;
+    if (chip) {
+      const w = Math.min(doc.widthOfString(p.value) + pad * 2, b.value.w);
+      doc.rect(b.value.x, b.value.y - CHIP_INSET_Y, w, b.value.h + CHIP_INSET_Y * 2).fill(STATUS_CHIP_FILL[p.status!]);
+      valueColor = STATUS_CHIP_TEXT[p.status!];
+    } else if (p.status) {
+      valueColor = STATUS_TEXT_COLOR[p.status];
+    }
+    doc.fillColor(valueColor).text(p.value, b.value.x + pad, b.value.y,
+      { width: Math.max(0, b.value.w - pad), height: b.value.h, ellipsis: true });
+  });
+
+  doc.restore();
+}
+
 /** How many physical pages this one table needs (repeat-page model). 1 for non-tables/errors/degenerate boxes. */
 export function tableChunkCount(el: DesignElement, resolved: ResolvedTable | undefined): number {
   if (el.kind !== 'table') return 1;
@@ -280,6 +453,10 @@ export function drawElement(
     }
     case 'table': {
       drawTable(doc, el, r, resolved, chunk);
+      return;
+    }
+    case 'keyvalue': {
+      drawKeyValue(doc, el, r, resolved);
       return;
     }
   }

@@ -12,13 +12,14 @@ export function paperSize(paper: Paper, orientation: Orientation): { w: number; 
 }
 
 /** Insertable element kinds, in menu order. */
-export const ELEMENT_KINDS: ElementKind[] = ['text', 'table', 'image', 'line', 'rect', 'datetime'];
+export const ELEMENT_KINDS: ElementKind[] = ['text', 'table', 'keyvalue', 'image', 'line', 'rect', 'datetime'];
 
 let seq = 0;
 export function newElementId(): string { seq += 1; return `el-${Date.now()}-${seq}`; }
 
 const DEFAULT_NAME: Record<ElementKind, string> = {
   text: 'Text', table: 'Table', image: 'Image', line: 'Line', rect: 'Rectangle', datetime: 'Date/time',
+  keyvalue: 'Key/value panel',
 };
 
 export function newElement(kind: ElementKind): DesignElement {
@@ -30,6 +31,12 @@ export function newElement(kind: ElementKind): DesignElement {
   if (kind === 'table') return {
     id, kind, name, rect: { x: 48, y: 48, w: 480, h: 160 },
     columns: ['Column A', 'Column B'], rows: [['—', '—'], ['—', '—']],
+  };
+  // Sample PAIRS, matching how a new table gets sample rows: a freshly dropped panel has to show
+  // its own shape before it is bound to anything.
+  if (kind === 'keyvalue') return {
+    id, kind, name, rect: { x: 48, y: 48, w: 320, h: 72 }, layout: 'inline', panelColumns: 1,
+    rows: [['Label', '—'], ['Label', '—']],
   };
   return { id, kind, name, rect: { x: 48, y: 48, w: 200, h: 80 } };
 }
