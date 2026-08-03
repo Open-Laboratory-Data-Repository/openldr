@@ -1,6 +1,16 @@
 import PDFDocument from 'pdfkit';
 
-export interface PdfColumn { key: string; label: string }
+export interface PdfColumn {
+  key: string;
+  label: string;
+  /** Name of ANOTHER column in the same row carrying a status token (see `CELL_STATUSES` below). */
+  statusKey?: string;
+  /** How a recognised status paints: `'fill'` = saturated chip with knocked-out text, `'text'`
+   *  (default) = just tint the value. `'text'` is the default because it survives a mono printer. */
+  emphasis?: 'fill' | 'text';
+  /** Overrides numeric-column detection for alignment only — see `isRightAligned` below. */
+  kind?: 'value' | 'range' | 'units' | 'flag' | 'label';
+}
 export interface PdfInput {
   title: string;
   generatedAt: string;
@@ -31,7 +41,7 @@ const WIDTH_SAMPLE_ROWS = 400;
  *  invert the direction; adding a workspace dependency for two pure functions, right before the
  *  report-template work that will restructure both renderers, buys less than it costs. Consolidate
  *  the pair into one module when that work lands — and keep them in step until then. */
-function columnWidths(headers: string[], rows: string[][], totalW: number, measure: (t: string, bold: boolean) => number): number[] {
+export function columnWidths(headers: string[], rows: string[][], totalW: number, measure: (t: string, bold: boolean) => number): number[] {
   const n = Math.max(headers.length, 1);
   const sample = rows.slice(0, WIDTH_SAMPLE_ROWS);
   const natural = Array.from({ length: n }, (_, i) => {
@@ -50,7 +60,7 @@ function columnWidths(headers: string[], rows: string[][], totalW: number, measu
   return out;
 }
 
-function isNumericColumn(rows: string[][], ci: number): boolean {
+export function isNumericColumn(rows: string[][], ci: number): boolean {
   let seen = 0;
   for (const row of rows) {
     const v = (row[ci] ?? '').trim();
@@ -59,6 +69,54 @@ function isNumericColumn(rows: string[][], ci: number): boolean {
     seen += 1;
   }
   return seen > 0;
+}
+
+/** Whether column `ci` is right-aligned.
+ *
+ *  ⚠ DUPLICATED from `@openldr/report-designer`'s `render/draw.ts`'s `isRightAligned`, deliberately
+ *  — same reason as `columnWidths` above. A `units` or `range` column is text that merely LOOKS
+ *  numeric ("3.5" as a unit, a lone bound of a range) and ranging it right would align it against
+ *  the values it qualifies; `kind` overrides the numeric test, only ever toward the left. A column
+ *  with no `kind` behaves exactly as `isNumericColumn` alone always has. */
+export function isRightAligned(rows: string[][], ci: number, kind: PdfColumn['kind']): boolean {
+  if (kind === 'units' || kind === 'range') return false;
+  return isNumericColumn(rows, ci);
+}
+
+/** Status vocabulary and palette.
+ *
+ * ⚠ DUPLICATED from `@openldr/report-designer`'s `render/draw.ts`, deliberately — same reason as
+ * `columnWidths` above (this package is the dependency leaf; report-designer sits above it, so
+ * importing across would invert the dependency direction). Keep the two in step.
+ *
+ * `STATUS_CHIP_TEXT` is per-status, not one white constant: `none`'s fill (`#e2e8f0`) is near-white,
+ * so white-on-it is ~1.15:1 contrast — effectively invisible — and gets the same dark slate the
+ * plain body text uses instead. */
+const CELL_STATUSES = ['normal', 'abnormal', 'critical', 'indeterminate', 'none'] as const;
+export type CellStatus = (typeof CELL_STATUSES)[number];
+const STATUS_CHIP_FILL: Record<CellStatus, string> = {
+  normal: '#16a34a', abnormal: '#e11d48', critical: '#9f1239', indeterminate: '#94a3b8', none: '#e2e8f0',
+};
+const STATUS_CHIP_TEXT: Record<CellStatus, string> = {
+  normal: '#ffffff', abnormal: '#ffffff', critical: '#ffffff', indeterminate: '#ffffff', none: BODY_TEXT,
+};
+const STATUS_TEXT_COLOR: Record<CellStatus, string> = {
+  normal: '#166534', abnormal: '#b91c1c', critical: '#9f1239', indeterminate: '#475569', none: BODY_TEXT,
+};
+
+/** Parse a status token from a query cell. Unrecognised values become `undefined` — this renderer
+ *  never COMPUTES a status, it only paints one it is given. */
+export function asCellStatus(v: unknown): CellStatus | undefined {
+  if (typeof v !== 'string') return undefined;
+  const s = v.trim().toLowerCase();
+  return (CELL_STATUSES as readonly string[]).includes(s) ? (s as CellStatus) : undefined;
+}
+
+/** Per-cell statuses aligned to `cells`'s grid (one entry per row × column). `undefined` wherever a
+ *  column has no `statusKey`, or the row's value under it isn't a recognised token — both render
+ *  exactly as they did before this feature existed (see `asCellStatus`). */
+export function cellStatusesFor(columns: PdfColumn[], rows: Record<string, unknown>[]): (CellStatus | undefined)[][] {
+  return rows.map((row) => columns.map((c) => (c.statusKey ? asCellStatus(row[c.statusKey]) : undefined)));
 }
 
 /**
@@ -96,12 +154,13 @@ export function renderReportPdf(input: PdfInput): Promise<Buffer> {
     const cols = input.columns;
     const rowH = ROW_H;
     const cells = input.rows.map((row) => cols.map((c) => String(row[c.key] ?? '')));
+    const statuses = cellStatusesFor(cols, input.rows);
     const widths = columnWidths(cols.map((c) => c.label), cells, usable, (text, bold) => {
       doc.font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(9);
       return doc.widthOfString(text);
     });
     const xOf = (ci: number): number => left + widths.slice(0, ci).reduce((a, b) => a + b, 0);
-    const numeric = cols.map((_, ci) => isNumericColumn(cells, ci));
+    const numeric = cols.map((c, ci) => isRightAligned(cells, ci, c.kind));
     const opts = (ci: number) => ({ ...cellTextOptions(widths[ci] - ROW_PAD * 2), align: numeric[ci] ? ('right' as const) : ('left' as const) });
 
     const drawHeader = (): void => {
@@ -116,11 +175,24 @@ export function renderReportPdf(input: PdfInput): Promise<Buffer> {
     drawHeader();
 
     doc.font('Helvetica').fontSize(9).fillColor(BODY_TEXT);
+    // ⚠ Neither branch below re-asserts `fillColor(BODY_TEXT)` after a fill — the per-cell branch in
+    // the row loop owns the fill colour for every cell it draws, so doing that here would overwrite
+    // every status colour it set on the row that follows.
     cells.forEach((row, idx) => {
-      if (doc.y + rowH > doc.page.height - doc.page.margins.bottom) { doc.addPage(); drawHeader(); doc.font('Helvetica').fontSize(9).fillColor(BODY_TEXT); }
+      if (doc.y + rowH > doc.page.height - doc.page.margins.bottom) { doc.addPage(); drawHeader(); doc.font('Helvetica').fontSize(9); }
       const y = doc.y;
-      if (idx % 2 === 1) doc.rect(left, y, usable, rowH).fill(ZEBRA_FILL).fillColor(BODY_TEXT);
-      row.forEach((cell, ci) => doc.text(cell, xOf(ci) + ROW_PAD, y + ROW_PAD, opts(ci)));
+      if (idx % 2 === 1) doc.rect(left, y, usable, rowH).fill(ZEBRA_FILL);
+      row.forEach((cell, ci) => {
+        const st = statuses[idx]?.[ci];
+        // A chip is exactly one row tall and one column wide, so it can never affect the y-advance.
+        if (st && (cols[ci].emphasis ?? 'text') === 'fill') {
+          doc.rect(xOf(ci), y, widths[ci], rowH).fill(STATUS_CHIP_FILL[st]);
+          doc.fillColor(STATUS_CHIP_TEXT[st]);
+        } else {
+          doc.fillColor(st ? STATUS_TEXT_COLOR[st] : BODY_TEXT);
+        }
+        doc.text(cell, xOf(ci) + ROW_PAD, y + ROW_PAD, opts(ci));
+      });
       doc.y = y + rowH;
     });
     if (cells.length > 0) {
