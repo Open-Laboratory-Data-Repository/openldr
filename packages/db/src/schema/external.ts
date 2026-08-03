@@ -99,6 +99,15 @@ export interface QuestionnaireResponsesTable extends ProvenanceColumns {
   items: string | null;
 }
 
+export interface TerminologyCodesTable extends ProvenanceColumns {
+  id: string;
+  value_set_id: string | null;
+  value_set_url: string | null;
+  system: string | null;
+  code: string | null;
+  display: string | null;
+}
+
 export interface ExternalSchema {
   patients: PatientsTable;
   lab_requests: LabRequestsTable;
@@ -107,6 +116,7 @@ export interface ExternalSchema {
   specimens: SpecimensTable;
   diagnostic_reports: DiagnosticReportsTable;
   questionnaire_responses: QuestionnaireResponsesTable;
+  terminology_codes: TerminologyCodesTable;
 }
 
 /**
@@ -123,4 +133,5 @@ export const EXTERNAL_TABLE_COLUMNS: Record<keyof ExternalSchema, string[]> = {
   specimens: ['id', 'patient_id', 'received_time', 'accession', 'status', 'type_code', 'type_text', 'origin', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at'],
   diagnostic_reports: ['id', 'patient_id', 'status', 'code_code', 'code_text', 'issued', 'effective', 'conclusion', 'performer', 'specimen_id', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at'],
   questionnaire_responses: ['id', 'questionnaire', 'form_code', 'subject_id', 'authored', 'based_on_id', 'items', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at'],
+  terminology_codes: ['id', 'value_set_id', 'value_set_url', 'system', 'code', 'display', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at'],
 };
