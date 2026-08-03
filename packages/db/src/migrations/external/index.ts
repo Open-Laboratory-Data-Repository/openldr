@@ -10,6 +10,7 @@ import * as m007 from './007_drop_thin_rename_v2';
 import * as m008 from './008_patients_merge';
 import * as m009 from './009_questionnaire_responses';
 import * as m010 from './010_diagnostic_report_facility';
+import * as m011 from './011_terminology_codes';
 
 export function externalMigrations(engine: TargetEngine): Record<string, Migration> {
   return {
@@ -23,5 +24,6 @@ export function externalMigrations(engine: TargetEngine): Record<string, Migrati
     '008_patients_merge': { up: (db) => m008.up(db, engine), down: m008.down },
     '009_questionnaire_responses': { up: (db) => m009.up(db, engine), down: m009.down },
     '010_diagnostic_report_facility': { up: (db) => m010.up(db, engine), down: m010.down },
+    '011_terminology_codes': { up: (db) => m011.up(db, engine), down: m011.down },
   };
 }

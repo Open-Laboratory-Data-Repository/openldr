@@ -1,7 +1,8 @@
 import { readFileSync, createReadStream } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { loadConfig } from '@openldr/config';
-import { createTerminologyContext, resolveCodingSystemId, createRunIngest, runIngestJob, recordAuditEvent } from '@openldr/bootstrap';
+import { createTerminologyContext, createDbContext, resolveCodingSystemId, createRunIngest, runIngestJob, recordAuditEvent } from '@openldr/bootstrap';
+import { reprojectAll } from '@openldr/db';
 import { cliActor } from './cli-actor';
 import { redactError } from './redact-error';
 import { validateDistributionImportArgs, isActiveJobConflict } from './distribution-args';
@@ -136,6 +137,31 @@ export async function runValueSetList(opts: { publisher?: string; json?: boolean
     return 0;
   } catch (err) { process.stderr.write(`terminology valueset list failed: ${redactError(err)}\n`); return 1; }
   finally { await ctx.close(); }
+}
+
+// Backfill/recovery for terminology_codes (the warehouse dimension projected from a ValueSet's
+// expansion.contains[]). Nothing in production populates it on its own today (seed migrations write
+// straight into fhir.fhir_resources with no change_log row, importFhirCatalog never projects, and an
+// upgrade's pre-existing change_log rows sit below the projection cursor) — so this rebuilds the read
+// model from the canonical fhir.fhir_resources rows and re-arms the cursor at the current max seq.
+// Uses createDbContext (not createTerminologyContext): reprojectAll needs both internalDb AND
+// relationalWriter (the external/warehouse writer), and TerminologyContext exposes neither.
+export async function runTerminologyReproject(opts: { json: boolean }): Promise<number> {
+  const ctx = await createDbContext(loadConfig());
+  try {
+    const projected = await reprojectAll({ internalDb: ctx.internalDb, relationalWriter: ctx.relationalWriter });
+    // ⚠ `projected` counts EVERY canonical resource rebuilt, not terminology rows — reprojectAll
+    // rebuilds the whole read model (patients, lab_results, … as well as terminology_codes). Saying
+    // "into the terminology_codes read model" read as "8692 terminology rows" on the first live run,
+    // when the dimension actually held 2025. Name what the number is.
+    out(opts.json, { projected }, `rebuilt the read model from ${projected} canonical resource${projected === 1 ? '' : 's'} (includes the terminology_codes dimension)`);
+    return 0;
+  } catch (err) {
+    process.stderr.write(`terminology reproject failed: ${redactError(err)}\n`);
+    return 1;
+  } finally {
+    await ctx.close();
+  }
 }
 
 export async function runOntologyBuild(systemId: string, dir: string, opts: { json?: boolean }): Promise<number> {

@@ -25,7 +25,14 @@ const mocks = vi.hoisted(() => ({
     logger: {},
     close: vi.fn(),
   },
+  dbCtx: {
+    internalDb: { marker: 'internalDb' },
+    relationalWriter: { marker: 'relationalWriter' },
+    close: vi.fn(),
+  },
   createTerminologyContext: vi.fn(),
+  createDbContext: vi.fn(),
+  reprojectAll: vi.fn(),
   recordAuditEvent: vi.fn(),
   readFileSync: vi.fn(),
 }));
@@ -36,7 +43,12 @@ vi.mock('@openldr/config', () => ({
 
 vi.mock('@openldr/bootstrap', () => ({
   createTerminologyContext: mocks.createTerminologyContext,
+  createDbContext: mocks.createDbContext,
   recordAuditEvent: mocks.recordAuditEvent,
+}));
+
+vi.mock('@openldr/db', () => ({
+  reprojectAll: mocks.reprojectAll,
 }));
 
 vi.mock('node:fs', () => ({
@@ -49,6 +61,7 @@ import {
   runSystemCreate,
   runOntologyUnlink,
   runOntologyBuild,
+  runTerminologyReproject,
 } from './terminology';
 
 describe('terminology CLI audit', () => {
@@ -197,5 +210,62 @@ describe('terminology CLI audit', () => {
 
     expect(code).toBe(0);
     expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
+  });
+});
+
+describe('terminology reproject', () => {
+  let out: string;
+  let err: string;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    out = '';
+    err = '';
+    vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+      out += String(chunk);
+      return true;
+    });
+    vi.spyOn(process.stderr, 'write').mockImplementation((chunk) => {
+      err += String(chunk);
+      return true;
+    });
+    mocks.createDbContext.mockResolvedValue(mocks.dbCtx);
+    mocks.dbCtx.close.mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('invokes reprojectAll with the db context internals and reports the count', async () => {
+    mocks.reprojectAll.mockResolvedValue(42);
+
+    const code = await runTerminologyReproject({ json: false });
+
+    expect(code).toBe(0);
+    expect(mocks.reprojectAll).toHaveBeenCalledWith({
+      internalDb: mocks.dbCtx.internalDb,
+      relationalWriter: mocks.dbCtx.relationalWriter,
+    });
+    expect(out).toContain('42');
+    expect(mocks.dbCtx.close).toHaveBeenCalled();
+  });
+
+  it('emits JSON with the projected count when --json is passed', async () => {
+    mocks.reprojectAll.mockResolvedValue(7);
+
+    await runTerminologyReproject({ json: true });
+
+    expect(JSON.parse(out)).toEqual({ projected: 7 });
+  });
+
+  it('returns a non-zero exit code and closes the context when reprojectAll rejects', async () => {
+    mocks.reprojectAll.mockRejectedValue(new Error('connection refused'));
+
+    const code = await runTerminologyReproject({ json: false });
+
+    expect(code).toBe(1);
+    expect(err).toContain('connection refused');
+    expect(mocks.dbCtx.close).toHaveBeenCalled();
   });
 });

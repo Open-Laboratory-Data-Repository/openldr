@@ -7,6 +7,7 @@ import { projectFacility } from './facility';
 import { projectSpecimen } from './specimen';
 import { projectDiagnosticReport } from './diagnostic-report';
 import { projectQuestionnaireResponse } from './questionnaire-response';
+import { projectValueSet } from './value-set';
 
 export * from './patient';
 export * from './service-request';
@@ -15,24 +16,38 @@ export * from './facility';
 export * from './specimen';
 export * from './diagnostic-report';
 export * from './questionnaire-response';
+export * from './value-set';
 
 export interface RelationalResult {
   table: keyof ExternalSchema;
-  row: Record<string, unknown>;
+  /** One row for a fact resource; many for a resource that fans out to a dimension. */
+  rows: Record<string, unknown>[];
+  /** Present only for fan-out resources. Names the column identifying every row this resource
+   *  owns, so the writer can REPLACE that set — deleting rows the resource no longer produces.
+   *  Without it a shrinking ValueSet would silently leave its removed codes behind. */
+  scope?: { column: string; value: unknown };
 }
 
 export function projectResource(resource: unknown, prov: Provenance = {}): RelationalResult | null {
   if (typeof resource !== 'object' || resource === null) return null;
   const r = resource as Record<string, unknown>;
   switch (r['resourceType']) {
-    case 'Patient': return { table: 'patients', row: projectPatient(r, prov) };
-    case 'ServiceRequest': return { table: 'lab_requests', row: projectServiceRequest(r, prov) };
-    case 'Observation': return { table: 'lab_results', row: projectObservation(r, prov) };
+    case 'Patient': return { table: 'patients', rows: [projectPatient(r, prov)] };
+    case 'ServiceRequest': return { table: 'lab_requests', rows: [projectServiceRequest(r, prov)] };
+    case 'Observation': return { table: 'lab_results', rows: [projectObservation(r, prov)] };
     case 'Organization':
-    case 'Location': return { table: 'facilities', row: projectFacility(r, prov) };
-    case 'Specimen': return { table: 'specimens', row: projectSpecimen(r, prov) };
-    case 'DiagnosticReport': return { table: 'diagnostic_reports', row: projectDiagnosticReport(r, prov) };
-    case 'QuestionnaireResponse': return { table: 'questionnaire_responses', row: projectQuestionnaireResponse(r, prov) };
+    case 'Location': return { table: 'facilities', rows: [projectFacility(r, prov)] };
+    case 'Specimen': return { table: 'specimens', rows: [projectSpecimen(r, prov)] };
+    case 'DiagnosticReport': return { table: 'diagnostic_reports', rows: [projectDiagnosticReport(r, prov)] };
+    case 'QuestionnaireResponse': return { table: 'questionnaire_responses', rows: [projectQuestionnaireResponse(r, prov)] };
+    case 'ValueSet':
+      return {
+        table: 'terminology_codes',
+        rows: projectValueSet(r, prov),
+        // Fan-out resource: this ValueSet owns every terminology_codes row carrying its id, so a
+        // rewrite must REPLACE that set, not merely upsert into it (see relational-writer.ts).
+        scope: { column: 'value_set_id', value: String(r['id']) },
+      };
     default: return null;
   }
 }
@@ -47,6 +62,16 @@ export function tableForResourceType(resourceType: string): keyof ExternalSchema
     case 'Specimen': return 'specimens';
     case 'DiagnosticReport': return 'diagnostic_reports';
     case 'QuestionnaireResponse': return 'questionnaire_responses';
+    case 'ValueSet': return 'terminology_codes';
+    default: return null;
+  }
+}
+
+/** Names the column identifying every row a fan-out resource owns, for `deleteById` to clear the
+ *  whole scope instead of a single `id` row. `null` for fact resources (delete-by-`id` applies). */
+export function scopeColumnFor(resourceType: string): string | null {
+  switch (resourceType) {
+    case 'ValueSet': return 'value_set_id';
     default: return null;
   }
 }
