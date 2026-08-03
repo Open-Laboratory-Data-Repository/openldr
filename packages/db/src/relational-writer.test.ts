@@ -103,4 +103,50 @@ describe('scoped projection', () => {
     expect(rows.map((r) => r.id)).toEqual(['p1', 'p2']); // no scope ⇒ no deletion of p1
     await db.destroy();
   });
+
+  // A ValueSet arriving with no `expansion` still carries a scope, and that scope must DELETE
+  // every row it previously owned — "no expansion" means "this value set now contributes nothing",
+  // not "leave the old rows alone". Unpinned before this test: adding
+  // `if (p.rows.length === 0) return;` to relational-writer.ts's replaceScope (an "optimization"
+  // that skips the delete-then-insert transaction when there's nothing to insert) left all other
+  // tests in this suite green while silently reverting this semantic.
+  it('clears prior rows when the same value set id is re-written with no expansion', async () => {
+    const db = await makeMigratedExternalDb();
+    const w = createRelationalWriter(db as any);
+    await w.write(vs('vs1', ['A', 'B']), {});
+    expect(await codes(db)).toEqual(['A', 'B']);
+    await w.write({ resourceType: 'ValueSet', id: 'vs1', url: 'urn:test:vs1' }, {}); // no expansion
+    expect(await codes(db)).toEqual([]);
+    await db.destroy();
+  });
+
+  // Every other test here reads back only `code`, so a regression that dropped `display` or nulled
+  // `value_set_url` — or even scrambled `id` — would be invisible: `replaceScope` deletes the scope
+  // before inserting, so even a non-deterministic id would keep prior tests green (nothing stale
+  // survives to collide with). This test reads the FULL row the writer actually persisted.
+  it('projects the full row mapping into the database — id, value_set_id, value_set_url, system, code, display', async () => {
+    const db = await makeMigratedExternalDb();
+    const w = createRelationalWriter(db as any);
+    await w.write(
+      {
+        resourceType: 'ValueSet', id: 'vs-full', url: 'urn:test:vs-full',
+        expansion: { contains: [{ system: 'urn:openldr:cs:local', code: 'M', display: 'Male' }] },
+      },
+      {},
+    );
+    const rows = (
+      await sql<{
+        id: string; value_set_id: string; value_set_url: string; system: string; code: string; display: string;
+      }>`select id, value_set_id, value_set_url, system, code, display from terminology_codes`.execute(db)
+    ).rows;
+    expect(rows).toEqual([{
+      id: 'vs-full|urn:openldr:cs:local|M',
+      value_set_id: 'vs-full',
+      value_set_url: 'urn:test:vs-full',
+      system: 'urn:openldr:cs:local',
+      code: 'M',
+      display: 'Male',
+    }]);
+    await db.destroy();
+  });
 });
