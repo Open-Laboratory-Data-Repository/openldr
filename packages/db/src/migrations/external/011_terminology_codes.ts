@@ -18,9 +18,15 @@ import { textType, keyType, timestampType, nowExpr } from './dialect';
 export async function up(db: Kysely<unknown>, engine: TargetEngine): Promise<void> {
   const text = sql.raw(textType(engine));
   const key = sql.raw(keyType(engine));
-  await db.schema.createTable('terminology_codes')
+  let built = db.schema.createTable('terminology_codes')
     .addColumn('id', key, (c) => c.primaryKey())
-    .addColumn('value_set_id', text)
+    // `keyType`, not `textType`: this column is indexed below. MSSQL refuses LOB types
+    // (nvarchar(max)) as an index key column outright, and MySQL requires an explicit prefix
+    // length to index a TEXT/BLOB-family column — a bare CREATE INDEX on `longtext` throws
+    // error 1170. `system` and `code` stay `textType` below: they aren't indexed by this
+    // migration, and bounding them preemptively belongs with the migration that actually adds
+    // the (system, code) join index, once its real length/uniqueness needs are known.
+    .addColumn('value_set_id', key)
     .addColumn('value_set_url', text)
     .addColumn('system', text)
     .addColumn('code', text)
@@ -29,8 +35,13 @@ export async function up(db: Kysely<unknown>, engine: TargetEngine): Promise<voi
     .addColumn('plugin_id', text)
     .addColumn('plugin_version', text)
     .addColumn('batch_id', text)
-    .addColumn('created_at', sql.raw(timestampType(engine)), (c) => c.notNull().defaultTo(nowExpr(engine)))
-    .execute();
+    .addColumn('created_at', sql.raw(timestampType(engine)), (c) => c.notNull().defaultTo(nowExpr(engine)));
+  // Pin the table storage charset to utf8mb4 explicitly, mirroring 001_flat_tables' withCommon.
+  // `display` holds SNOMED/LOINC display strings and French/Portuguese diacritics; without this,
+  // Unicode integrity depends entirely on the server's default charset, which a self-hosted
+  // MySQL/MariaDB install may set to latin1/utf8mb3.
+  if (engine === 'mysql') built = built.modifyEnd(sql`character set utf8mb4`);
+  await built.execute();
   // The projection replaces a whole value set at once, so every write and every delete filters on
   // value_set_id. Without this index that is a full scan of the dimension on each terminology edit.
   await db.schema.createIndex('terminology_codes_value_set_id_idx')
