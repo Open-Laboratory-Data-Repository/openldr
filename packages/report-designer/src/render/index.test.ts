@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
+import zlib from 'node:zlib';
 import { renderReportDesignPdf, type ResolvedTable } from './index';
-import type { ReportDesign } from '../schema';
+import type { ReportDesign, BoundColumn } from '../schema';
 
 const NOW = new Date('2026-07-08T00:00:00Z');
 
@@ -93,5 +94,68 @@ describe('renderReportDesignPdf', () => {
     ] }] });
     const buf = await renderReportDesignPdf(design, new Map([['t1', { error: 'boom' }]]), { now: NOW });
     expect(buf.toString('latin1')).toMatch(/\/Count 1/);
+  });
+});
+
+/** Text baselines, in PDF user space, parsed out of the (deflated) content streams.
+ *  pdfkit emits `1 0 0 1 <x> <y> Tm` before each run — verified against pdfkit 0.15.2. */
+function textYs(pdf: Buffer): number[] {
+  const ys: number[] = [];
+  const raw = pdf.toString('latin1');
+  const streams = /stream\r?\n([\s\S]*?)\r?\nendstream/g;
+  let m: RegExpExecArray | null;
+  while ((m = streams.exec(raw))) {
+    let body: string;
+    try { body = zlib.inflateSync(Buffer.from(m[1], 'latin1')).toString('latin1'); } catch { continue; }
+    const tm = /1 0 0 1 (-?[\d.]+) (-?[\d.]+) Tm/g;
+    let t: RegExpExecArray | null;
+    while ((t = tm.exec(body))) ys.push(parseFloat(t[2]));
+  }
+  return ys;
+}
+
+const statusDesign = (boundColumns: BoundColumn[]): ReportDesign => ({
+  id: 'd', name: 'N', paper: 'A4', orientation: 'portrait', parameters: [],
+  pages: [{ id: 'p', elements: [{
+    id: 't', kind: 'table', name: 'T', rect: { x: 0, y: 0, w: 400, h: 200 },
+    dataSource: { kind: 'custom-query', queryId: 'q' }, boundColumns,
+  }] }],
+} as ReportDesign);
+
+const statusRows = (): Map<string, ResolvedTable> => new Map([['t', {
+  columns: [{ key: 'name', label: 'Test' }, { key: 'res', label: 'Result' }],
+  rows: [
+    { name: 'HIV 1/2 Ab', res: 'Negative', s: 'normal' },
+    { name: 'HBsAg', res: 'Positive', s: 'abnormal' },
+    { name: 'Treponema pallidum antibody screen', res: 'Indeterminate', s: 'indeterminate' },
+  ],
+}]]);
+
+describe('cell status rendering', () => {
+  it('does not move a single text baseline when a filled status column is added', async () => {
+    const plain = await renderReportDesignPdf(
+      statusDesign([{ key: 'name', label: 'Test' }, { key: 'res', label: 'Result' }]), statusRows());
+    const filled = await renderReportDesignPdf(
+      statusDesign([{ key: 'name', label: 'Test' },
+                    { key: 'res', label: 'Result', statusKey: 's', emphasis: 'fill' }]), statusRows());
+    expect(textYs(filled)).toEqual(textYs(plain));
+  });
+
+  it('keeps every body row exactly ROW_H apart with a long value in a filled cell', async () => {
+    const pdf = await renderReportDesignPdf(
+      statusDesign([{ key: 'name', label: 'Test' },
+                    { key: 'res', label: 'Result', statusKey: 's', emphasis: 'fill' }]), statusRows());
+    const rowYs = [...new Set(textYs(pdf))].sort((a, b) => b - a);
+    const gaps = rowYs.slice(1).map((y, i) => Number((rowYs[i] - y).toFixed(3)));
+    expect(gaps).toEqual([16, 16, 16]);
+  });
+
+  it('emits no status fill when the design declares no statusKey', async () => {
+    const plain = await renderReportDesignPdf(
+      statusDesign([{ key: 'name', label: 'Test' }, { key: 'res', label: 'Result' }]), statusRows());
+    const filled = await renderReportDesignPdf(
+      statusDesign([{ key: 'name', label: 'Test' },
+                    { key: 'res', label: 'Result', statusKey: 's', emphasis: 'fill' }]), statusRows());
+    expect(filled.length).toBeGreaterThan(plain.length);
   });
 });

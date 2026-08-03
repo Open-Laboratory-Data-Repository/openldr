@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { interpolate, paramMap, tableChunkCount, pageChunkCount, rowsFor, totalPhysicalPages, pageFooterLabel, cellTextOptions, columnWidths, isNumericColumn, CELL_TEXT_H, ROW_H, asCellStatus, cellStatusesFor } from './draw';
+import { interpolate, paramMap, tableChunkCount, pageChunkCount, rowsFor, totalPhysicalPages, pageFooterLabel, cellTextOptions, columnWidths, isNumericColumn, CELL_TEXT_H, ROW_H, asCellStatus, cellStatusesFor, isRightAligned } from './draw';
 import type { ReportDesign, DesignElement, DesignPage } from '../schema';
 import type { ResolvedTable } from './index';
 
@@ -282,5 +282,23 @@ describe('cellStatusesFor', () => {
   it('returns [] for a static table and for an error-resolved bound table', () => {
     expect(cellStatusesFor(tbl({ columns: ['A'], rows: [['1']] }), undefined)).toEqual([]);
     expect(cellStatusesFor(tbl({ dataSource: ds, boundColumns: [{ key: 'a', label: 'A', statusKey: 's' }] }), { error: 'x' })).toEqual([]);
+  });
+});
+
+describe('isRightAligned', () => {
+  const numericRows = [['5.0'], ['6.2'], ['7.1']];
+
+  it('right-aligns a numeric column with no kind, exactly as before this feature', () => {
+    expect(isRightAligned(numericRows, 0, undefined)).toBe(true);
+    expect(isRightAligned(numericRows, 0, 'value')).toBe(true);
+  });
+
+  it('never right-aligns a units or range column, even when every value parses as a number', () => {
+    expect(isRightAligned(numericRows, 0, 'units')).toBe(false);
+    expect(isRightAligned(numericRows, 0, 'range')).toBe(false);
+  });
+
+  it('leaves a non-numeric column left-aligned regardless of kind', () => {
+    expect(isRightAligned([['abc']], 0, 'value')).toBe(false);
   });
 });

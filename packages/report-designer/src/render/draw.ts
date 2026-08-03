@@ -1,4 +1,4 @@
-import type { CellStatus, DesignElement, DesignPage, ReportDesign } from '../schema';
+import type { CellEmphasis, CellStatus, ColumnKind, DesignElement, DesignPage, ReportDesign } from '../schema';
 import { CELL_STATUSES } from '../schema';
 import { toPt, PX_TO_PT } from './units';
 import type { ResolvedTable } from './index';
@@ -18,6 +18,15 @@ const HEAD_RULE = '#94a3b8';
 const GRID_RULE = '#cbd5e1';
 const ZEBRA_FILL = '#f8fafc';
 const BODY_TEXT = '#334155';
+// Status palette. `fill` chips are saturated with knocked-out white text (the reference's language);
+// `text` emphasis just tints the value and is the default, because it survives a mono office printer.
+const STATUS_CHIP_FILL: Record<CellStatus, string> = {
+  normal: '#16a34a', abnormal: '#e11d48', critical: '#9f1239', indeterminate: '#94a3b8', none: '#e2e8f0',
+};
+const STATUS_CHIP_TEXT = '#ffffff';
+const STATUS_TEXT_COLOR: Record<CellStatus, string> = {
+  normal: '#166534', abnormal: '#b91c1c', critical: '#9f1239', indeterminate: '#475569', none: BODY_TEXT,
+};
 export const ROW_H = 16; // pt
 /** Body rows that fit in a box of height `hPt` (pt), reserving one row for the header. */
 const maxRowsFor = (hPt: number): number => Math.floor((hPt - ROW_H) / ROW_H);
@@ -116,6 +125,17 @@ export function isNumericColumn(rows: string[][], ci: number): boolean {
     seen += 1;
   }
   return seen > 0;
+}
+
+/** Whether column `ci` is right-aligned.
+ *
+ *  Numbers belong on the right, but a `units` or `range` column is text that merely looks numeric
+ *  — "3.5" as a unit, or a range column holding a lone bound — and ranging it right would align it
+ *  against the values it qualifies. `kind` therefore overrides the numeric test, and only ever
+ *  toward the left; a column with no `kind` behaves exactly as it did before this feature. */
+export function isRightAligned(rows: string[][], ci: number, kind: ColumnKind | undefined): boolean {
+  if (kind === 'units' || kind === 'range') return false;
+  return isNumericColumn(rows, ci);
 }
 
 export function paramMap(design: ReportDesign, now: Date): Map<string, string> {
@@ -257,7 +277,11 @@ function drawTable(doc: Doc, el: DesignElement, r: Box, resolved: ResolvedTable 
   if (el.dataSource && resolved && 'error' in resolved) { drawErrorPlaceholder(doc, r, resolved.error); return; }
   const headers = tableHeaders(el, resolved);
   const allRows = rowsFor(el, resolved);
-  drawGrid(doc, r, headers, allRows, chunk);
+  const statuses = cellStatusesFor(el, resolved);
+  const cols = el.boundColumns ?? [];
+  const emphasis = cols.map((c) => c.emphasis ?? 'text');
+  const kinds = cols.map((c) => c.kind);
+  drawGrid(doc, r, headers, allRows, chunk, statuses, emphasis, kinds);
 }
 
 function tableHeaders(el: DesignElement, resolved: ResolvedTable | undefined): string[] {
@@ -268,10 +292,16 @@ function tableHeaders(el: DesignElement, resolved: ResolvedTable | undefined): s
   return cols.map((c) => c.label);
 }
 
-function drawGrid(doc: Doc, r: Box, headers: string[], allRows: string[][], chunk: number): void {
+function drawGrid(
+  doc: Doc, r: Box, headers: string[], allRows: string[][], chunk: number,
+  allStatuses: (CellStatus | undefined)[][] = [], emphasis: CellEmphasis[] = [],
+  kinds: (ColumnKind | undefined)[] = [],
+): void {
   const n = Math.max(headers.length, 1);
   const maxRows = maxRowsFor(r.h);
-  const rows = maxRows >= 1 ? allRows.slice(chunk * maxRows, chunk * maxRows + maxRows) : [];
+  const lo = chunk * maxRows;
+  const rows = maxRows >= 1 ? allRows.slice(lo, lo + maxRows) : [];
+  const statuses = maxRows >= 1 ? allStatuses.slice(lo, lo + maxRows) : [];
 
   // Widths come from ALL rows, not just this chunk, so a column keeps the same width on every page.
   const widths = columnWidths(headers, allRows, r.w, (text, bold) => {
@@ -279,7 +309,7 @@ function drawGrid(doc: Doc, r: Box, headers: string[], allRows: string[][], chun
     return doc.widthOfString(text);
   });
   const xOf = (ci: number): number => r.x + widths.slice(0, ci).reduce((a, b) => a + b, 0);
-  const numeric = headers.map((_, ci) => isNumericColumn(allRows, ci));
+  const numeric = headers.map((_, ci) => isRightAligned(allRows, ci, kinds[ci]));
 
   doc.save().rect(r.x, r.y, r.w, r.h).clip();
 
@@ -293,13 +323,23 @@ function drawGrid(doc: Doc, r: Box, headers: string[], allRows: string[][], chun
   doc.save().lineWidth(0.75).strokeColor(HEAD_RULE)
     .moveTo(r.x, r.y + ROW_H).lineTo(r.x + r.w, r.y + ROW_H).stroke().restore();
 
-  doc.font('Helvetica').fontSize(8).fillColor(BODY_TEXT);
+  doc.font('Helvetica').fontSize(8);
   rows.forEach((row, ri) => {
     const y = r.y + ROW_H + ri * ROW_H;
-    if (ri % 2 === 1) doc.rect(r.x, y, r.w, ROW_H).fill(ZEBRA_FILL).fillColor(BODY_TEXT);
-    row.forEach((cell, ci) => doc.text(cell, xOf(ci) + CELL_PAD, y + CELL_PAD, {
-      ...cellTextOptions(widths[ci] - CELL_PAD * 2), align: numeric[ci] ? 'right' : 'left',
-    }));
+    if (ri % 2 === 1) doc.rect(r.x, y, r.w, ROW_H).fill(ZEBRA_FILL);
+    row.forEach((cell, ci) => {
+      const st = statuses[ri]?.[ci];
+      // A chip is exactly one row tall and one column wide, so it can never affect the y-advance.
+      if (st && (emphasis[ci] ?? 'text') === 'fill') {
+        doc.rect(xOf(ci), y, widths[ci], ROW_H).fill(STATUS_CHIP_FILL[st]);
+        doc.fillColor(STATUS_CHIP_TEXT);
+      } else {
+        doc.fillColor(st ? STATUS_TEXT_COLOR[st] : BODY_TEXT);
+      }
+      doc.text(cell, xOf(ci) + CELL_PAD, y + CELL_PAD, {
+        ...cellTextOptions(widths[ci] - CELL_PAD * 2), align: numeric[ci] ? 'right' : 'left',
+      });
+    });
   });
 
   // Close the body with the same rule weight as the header, so the block reads as one object
