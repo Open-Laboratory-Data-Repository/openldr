@@ -317,7 +317,7 @@ targetStore
   });
 
 const term = program.command('terminology').description('Terminology service (CodeSystem/ValueSet/ConceptMap)');
-term.command('import <kind> <path>').description('import loinc|amr|organisms|resource').option('--accept-license', 'accept the LOINC license', false).option('--json', 'emit JSON', false)
+term.command('import <kind> <path>').description('import loinc|amr|organisms|parameters|resource').option('--accept-license', 'accept the LOINC license', false).option('--json', 'emit JSON', false)
   .action(async (kind: string, path: string, opts: { acceptLicense: boolean; json: boolean }) => { process.exitCode = await runTerminologyImport(kind, path, opts); });
 term.command('lookup <system> <code>').option('--json', 'emit JSON', false)
   .action(async (system: string, code: string, opts: { json: boolean }) => { process.exitCode = await runTerminologyLookup(system, code, opts); });

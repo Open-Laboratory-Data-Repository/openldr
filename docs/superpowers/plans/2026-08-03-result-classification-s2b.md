@@ -464,9 +464,23 @@ intensional sets must be **re-expanded**, or they stay empty, project nothing to
 `terminology_codes`, and the whole slice looks configured while doing nothing.
 
 The machinery exists: `terminology-admin-store` exposes `valueSets.save/expand/importFhir`,
-`filterConcepts`, and `resolveValueSetCompose`. ⚠ `applyConceptFilter` compiles to
-`where(sql\`properties->>${name}\`, '=', value)`, and `filterConcepts` honours **only `filters[0]`
-and op `'='`** — which the Task 3 compose shapes are built for.
+`filterConcepts`, and `resolveValueSetCompose`. `applyConceptFilter` compiles to
+`where(sql\`properties->>${name}\`, '=', value)`.
+
+⚠ **CORRECTION (verified against current code during Task 3's review).** An earlier draft of this
+plan said `filterConcepts` "honours only `filters[0]`". **That is FALSE.**
+`terminology-admin-store.ts:238-241` loops `for (const f of filters) qb = qb.where(...)` — every
+filter is applied, and they **AND** together. The two-clause design in Task 3 is still correct, but
+for this reason rather than the one originally given: one clause carrying both filters would ask for
+`result_role='metadata' AND result_role='admin'`, which is the empty set.
+
+⛔ **`valueSets.save()` — NOT `valueSets.expand()`.** This is the single way to get this task wrong.
+Both exist on the store. `expand(id)` writes `valueset_expansions` and **does not project at all** —
+no `fhirStore.save`, no `change_log` row — so `terminology_codes` would stay empty forever and the
+slice would reproduce the exact migration-014 defect the previous slice had to add a `reproject` CLI
+to work around. `save()` routes through `refreshCacheAndProject` → `projection.saveValueSetResource`
+→ `fhirStore.save()` (`bootstrap/terminology-context.ts:64`), which writes the change_log row.
+**Verify which one you called before claiming this task works.**
 
 ⚠ **Read `packages/db/src/terminology-admin-store.ts` before writing anything here**, and find how
 `refreshCacheAndProject` (or its equivalent) turns a saved ValueSet into a projected FHIR resource.

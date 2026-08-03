@@ -38,7 +38,17 @@ export async function runTerminologyImport(kind: string, path: string, opts: { a
         Object.entries(r.byType).map(([t, n]) => `  ${t}: ${n}`).join('\n') +
         (r.skipped ? `\n  skipped (no code): ${r.skipped}` : ''));
       await recordAuditEvent(ctx, cliActor(), { action: 'coding_system.import', entityType: 'coding_system', entityId: 'organisms', metadata: { source: 'organisms', result: r } });
-    } else { process.stderr.write(`unknown import kind '${kind}' (loinc|amr|organisms|resource)\n`); return 1; }
+    } else if (kind === 'parameters') {
+      // A site's result-parameter dictionary (DISA PARMDICT) as a CodeSystem carrying
+      // properties.result_role. Deliberately an IMPORT and not a seed: the dictionary is
+      // site-specific, so shipping one deployment's codes as a product default would make every
+      // other deployment silently wrong. See importResultParameters's comment.
+      const r = await ctx.loaders.parameters(JSON.parse(readFileSync(path, 'utf8')));
+      out(opts.json, r, `loaded ${r.conceptsLoaded} result parameter concepts into ${r.system}\n` +
+        Object.entries(r.byRole).map(([t, n]) => `  ${t}: ${n}`).join('\n') +
+        (r.skipped ? `\n  skipped (no code): ${r.skipped}` : ''));
+      await recordAuditEvent(ctx, cliActor(), { action: 'coding_system.import', entityType: 'coding_system', entityId: 'parameters', metadata: { source: 'parameters', result: r } });
+    } else { process.stderr.write(`unknown import kind '${kind}' (loinc|amr|organisms|parameters|resource)\n`); return 1; }
     return 0;
   } catch (err) { process.stderr.write(`terminology import failed: ${redactError(err)}\n`); return 1; }
   finally { await ctx.close(); }

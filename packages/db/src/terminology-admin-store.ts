@@ -228,13 +228,21 @@ export function createTerminologyAdminStore(db: Kysely<InternalSchema>, projecti
   const vsDeps: ExpandDeps = {
     async listSystemConcepts(systemUrl, activeOnly) {
       let qb = db.selectFrom('terminology_concepts').select(['system', 'code', 'display']).where('system', '=', systemUrl);
-      if (activeOnly) qb = qb.where('status', '=', 'ACTIVE');
+      // NULL status counts as active. termRow (above) already treats `status: null` as
+      // `'ACTIVE'` for display purposes — every loader in @openldr/terminology (result-parameters,
+      // organisms, whonet, the generic loader) deliberately writes `status: null` on import,
+      // never an explicit 'ACTIVE'. Excluding NULL here would silently zero out any intensional
+      // ValueSet expanded over a loader-fed system. Real non-active statuses (DEPRECATED,
+      // DISABLED, DRAFT, DISCOURAGED, TRIAL) are unaffected — migration 068 upper-cases them so
+      // they never collide with NULL or 'ACTIVE'.
+      if (activeOnly) qb = qb.where((eb) => eb.or([eb('status', '=', 'ACTIVE'), eb('status', 'is', null)]));
       const rows = await qb.orderBy('code').limit(10_000).execute();
       return rows.map((r) => ({ system: r.system, code: r.code, display: r.display }));
     },
     async filterConcepts(systemUrl, filters, activeOnly) {
       let qb = db.selectFrom('terminology_concepts').select(['system', 'code', 'display']).where('system', '=', systemUrl);
-      if (activeOnly) qb = qb.where('status', '=', 'ACTIVE');
+      // See listSystemConcepts above: NULL status counts as active for the same reason.
+      if (activeOnly) qb = qb.where((eb) => eb.or([eb('status', '=', 'ACTIVE'), eb('status', 'is', null)]));
       for (const f of filters) {
         if (f.property === 'status') qb = qb.where('status', '=', f.value);
         else qb = qb.where(sql`properties->>${f.property}`, '=', f.value);

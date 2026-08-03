@@ -49,6 +49,7 @@ import { createSyncActivityTracker } from './sync-activity-tracker';
 import { migrateLegacySyncConfig } from './sync-settings-migrate';
 import { encodePushBody, advertisesGzip } from './sync-gzip';
 import { migrateWorkflowSecrets } from './workflow-secret-migrate';
+import { createResultParametersLoader } from './reexpand-value-sets';
 
 import { createActivityService, type ActivityService } from './activity-service';
 import { createFeatureFlags, type FeatureFlags } from './feature-flags';
@@ -75,7 +76,7 @@ import { createDhis2Orchestration } from './dhis2-orchestration';
 import { selectTargetStore } from './target-store';
 import { createPluginRegistry } from './plugin-registry';
 import { createProjectionWorker } from './projection-worker';
-import { buildOntologyDistribution, canonicalSystemUrl, createOperations, importOrganismDictionary, importTerminologyResource, loadLoinc, loadWhonetAmr, stalenessReason, type LoaderStore, type LoadResult, type OrganismImportResult, type OntologyBuildProgress, type OntologyManifest, type OntologyType, type Operations } from '@openldr/terminology';
+import { buildOntologyDistribution, canonicalSystemUrl, createOperations, importOrganismDictionary, importTerminologyResource, loadLoinc, loadWhonetAmr, stalenessReason, type LoaderStore, type LoadResult, type OrganismImportResult, type ResultParamImportResult, type OntologyBuildProgress, type OntologyManifest, type OntologyType, type Operations } from '@openldr/terminology';
 import { createTerminologyIngestWorker } from './terminology-ingest-worker';
 import { createRunIngest } from './terminology-ingest-shared';
 import { recordAuditEvent, type AuditDetails } from './record-audit';
@@ -347,6 +348,7 @@ export interface AppContext {
       loinc(dir: string, acceptLicense: boolean): Promise<LoadResult>;
       amr(sqlitePath: string): Promise<LoadResult[]>;
       organisms(json: unknown): Promise<OrganismImportResult>;
+      parameters(json: unknown): Promise<ResultParamImportResult>;
       resource(json: unknown): Promise<LoadResult>;
     };
     ingestOntologyWithConcepts(systemType: string, systemId: string, dir: string, onProgress: (p: { phase: string; processed: number; total: number | null }) => void): Promise<{ conceptsLoaded: number }>;
@@ -756,6 +758,11 @@ const reporting: ReportingApi = {
       amr: (p) => loadWhonetAmr(p, loaderStore),
       resource: (json) => importTerminologyResource(json, loaderStore),
       organisms: (json) => importOrganismDictionary(json, loaderStore),
+      // Task 4 (S2b): the intensional result-role ValueSets (Task 3's migration 069) are seeded with
+      // no expansion — their concepts arrive here, not at migration time. Re-expand + reproject them
+      // (via valueSets.save(), not expand() — see reexpand-value-sets.ts) every time this import runs,
+      // or they stay empty forever and nothing reaches terminology_codes.
+      parameters: createResultParametersLoader(termAdmin, loaderStore),
     },
     async ingestOntologyWithConcepts(systemType, systemId, dir, onProgress) {
       const url = canonicalSystemUrl(systemType);
