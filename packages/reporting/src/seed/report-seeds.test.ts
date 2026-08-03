@@ -38,17 +38,28 @@ function fakeDeps(connectorList: { id: string; name: string; type?: string | nul
       },
     },
     designs: {
+      // Stores the WHOLE design, not just its id: the seeder now compares stored content against
+      // the shipped definition, so a stub fake would report drift on every run and make the
+      // idempotence test vacuous.
       get: async (id) => designs.get(id) as never,
       create: async (d) => {
-        designs.set(d.id, { id: d.id });
+        designs.set(d.id, { ...d } as never);
         return d;
+      },
+      update: async (id, d) => {
+        designs.set(id, { ...d, id } as never);
+        return { ...d, id } as never;
       },
     },
     reportDefs: {
       get: async (id) => reportDefs.get(id) as never,
       create: async (r) => {
-        reportDefs.set(r.id, { id: r.id });
+        reportDefs.set(r.id, { ...r } as never);
         return r;
+      },
+      update: async (id, r) => {
+        reportDefs.set(id, { ...r, id } as never);
+        return { ...r, id } as never;
       },
     },
     connectors: { list: async () => connectorList as never },
@@ -60,7 +71,7 @@ describe('seedDataDrivenReports', () => {
   it('skips entirely (all zero) when the default connector has not been seeded', async () => {
     const { deps, queries, designs, reportDefs } = fakeDeps([]);
     const res = await seedDataDrivenReports(deps);
-    expect(res).toEqual({ queriesSeeded: 0, queriesUpdated: 0, designsSeeded: 0, reportDefsSeeded: 0 });
+    expect(res).toEqual({ queriesSeeded: 0, queriesUpdated: 0, designsSeeded: 0, designsUpdated: 0, reportDefsSeeded: 0, reportDefsUpdated: 0 });
     expect(queries.size).toBe(0);
     expect(designs.size).toBe(0);
     expect(reportDefs.size).toBe(0);
@@ -69,7 +80,7 @@ describe('seedDataDrivenReports', () => {
   it('only matches the connector by exact name — a differently-named connector is not enough', async () => {
     const { deps } = fakeDeps([{ id: 'c-other', name: 'Some Other Connector' }]);
     const res = await seedDataDrivenReports(deps);
-    expect(res).toEqual({ queriesSeeded: 0, queriesUpdated: 0, designsSeeded: 0, reportDefsSeeded: 0 });
+    expect(res).toEqual({ queriesSeeded: 0, queriesUpdated: 0, designsSeeded: 0, designsUpdated: 0, reportDefsSeeded: 0, reportDefsUpdated: 0 });
   });
 
   it('resolves the default connector by name and stamps its id onto every seed query', async () => {
@@ -79,7 +90,9 @@ describe('seedDataDrivenReports', () => {
       queriesSeeded: SEED_QUERIES.length,
       queriesUpdated: 0,
       designsSeeded: SEED_DESIGNS.length,
+      designsUpdated: 0,
       reportDefsSeeded: SEED_REPORT_DEFS.length,
+      reportDefsUpdated: 0,
     });
     expect(queries.size).toBe(SEED_QUERIES.length);
     for (const q of queries.values()) expect(q.connectorId).toBe('conn-123');
@@ -91,7 +104,46 @@ describe('seedDataDrivenReports', () => {
     const { deps } = fakeDeps([{ id: 'conn-123', name: DEFAULT_CONNECTOR_NAME }]);
     await seedDataDrivenReports(deps);
     const second = await seedDataDrivenReports(deps);
-    expect(second).toEqual({ queriesSeeded: 0, queriesUpdated: 0, designsSeeded: 0, reportDefsSeeded: 0 });
+    expect(second).toEqual({ queriesSeeded: 0, queriesUpdated: 0, designsSeeded: 0, designsUpdated: 0, reportDefsSeeded: 0, reportDefsUpdated: 0 });
+  });
+
+  it('refreshes a built-in DESIGN whose stored content drifted from the shipped definition', async () => {
+    const { deps, designs } = fakeDeps([{ id: 'conn-123', name: DEFAULT_CONNECTOR_NAME }]);
+    await seedDataDrivenReports(deps);
+    const target = SEED_DESIGNS[0];
+    // Simulate an install carrying an older shipped version of a built-in.
+    designs.set(target.id, { ...(designs.get(target.id) as object), name: 'Stale name from an older release' } as never);
+
+    const second = await seedDataDrivenReports(deps);
+    expect(second.designsUpdated).toBe(1);
+    expect(second.designsSeeded).toBe(0);
+    expect((designs.get(target.id) as unknown as { name: string }).name).toBe(target.name);
+
+    // And it settles: a third run finds no drift.
+    expect((await seedDataDrivenReports(deps)).designsUpdated).toBe(0);
+  });
+
+  it('refreshes a built-in REPORT DEF whose stored content drifted', async () => {
+    const { deps, reportDefs } = fakeDeps([{ id: 'conn-123', name: DEFAULT_CONNECTOR_NAME }]);
+    await seedDataDrivenReports(deps);
+    const target = SEED_REPORT_DEFS[0];
+    reportDefs.set(target.id, { ...(reportDefs.get(target.id) as object), description: 'stale' } as never);
+
+    const second = await seedDataDrivenReports(deps);
+    expect(second.reportDefsUpdated).toBe(1);
+    expect((reportDefs.get(target.id) as unknown as { description: string }).description).toBe(target.description);
+  });
+
+  it('never touches a user-authored design — only built-in ids are iterated', async () => {
+    const { deps, designs } = fakeDeps([{ id: 'conn-123', name: DEFAULT_CONNECTOR_NAME }]);
+    const mine = { id: 'rd-mine', name: 'My own report', pages: [], parameters: [] };
+    designs.set('rd-mine', mine as never);
+
+    await seedDataDrivenReports(deps);
+    await seedDataDrivenReports(deps);
+
+    // Byte-identical after two seed passes: the loop iterates SEED_DESIGNS ids, and this is not one.
+    expect(designs.get('rd-mine')).toEqual(mine);
   });
 
   it('refreshes a built-in query whose stored SQL is stale (managed-overwrite), preserving connectorId', async () => {

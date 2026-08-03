@@ -24,6 +24,11 @@ function fakeApp(cfg: FormSeedTarget['cfg'] = {}) {
       valueSets: {
         list: async (publisherId?: string) =>
           valueSets.filter((v) => !publisherId || v.publisherId === publisherId) as never,
+        getByUrl: async (url: string) => (valueSets.find((v) => v.url === url) ?? null) as never,
+        save: async (input: { url: string; publisherId?: string | null }) => {
+          valueSets.push({ url: input.url, publisherId: input.publisherId ?? null } as never);
+          return {} as never;
+        },
         importFhirCatalog: async (resource: unknown) => {
           const cat = resource as { valueSets?: { url: string }[] };
           let imported = 0;
@@ -124,9 +129,11 @@ function fakeApp(cfg: FormSeedTarget['cfg'] = {}) {
         const idx = reportDesigns.findIndex((x) => x.id === id);
         if (idx !== -1) reportDesigns.splice(idx, 1);
       },
+      update: async (id: string, d: { id: string }) => ({ ...d, id }) as never,
     },
     reportDefs: {
       get: async (id: string) => reportDefs.find((r) => r.id === id) as never,
+      update: async (id: string, r: { id: string }) => ({ ...r, id }) as never,
       create: async (r: { id: string; designId?: string }) => {
         if (!reportDefs.some((x) => x.id === r.id)) reportDefs.push({ id: r.id, designId: r.designId });
         return r as never;
@@ -515,7 +522,10 @@ describe('seedDatabase — bundled terminology', () => {
     // Hundreds of FHIR R4 value sets + hundreds of UCUM concepts from the real bundled fixtures.
     expect(res.terminology.valueSetsImported).toBeGreaterThan(100);
     expect(res.terminology.ucumConceptsImported).toBeGreaterThan(100);
-    expect(valueSets.length).toBe(res.terminology.valueSetsImported);
+    // +1: the AST interpretation set is CE's OWN semantics, seeded alongside the bundled catalog
+    // rather than counted by `valueSetsImported` (which reports catalog imports only).
+    expect(valueSets.length).toBe(res.terminology.valueSetsImported + 1);
+    expect(valueSets.some((v) => v.url === 'urn:openldr:valueset:ast-interpretation')).toBe(true);
     // meter is our UCUM presence marker — must be imported.
     expect(concepts.has('http://unitsofmeasure.org\tm')).toBe(true);
   });
@@ -596,7 +606,7 @@ describe('seedDatabase — data-driven reports (S4)', () => {
     // even though SEED_QUERIES/SEED_DESIGNS/SEED_REPORT_DEFS are populated as of Task 4.2.
     const { app, reportDefs } = fakeApp();
     const res = await seedDatabase(fakeDb, app);
-    expect(res.dataDrivenReportsSeeded).toEqual({ queriesSeeded: 0, queriesUpdated: 0, designsSeeded: 0, reportDefsSeeded: 0 });
+    expect(res.dataDrivenReportsSeeded).toEqual({ queriesSeeded: 0, queriesUpdated: 0, designsSeeded: 0, designsUpdated: 0, reportDefsSeeded: 0, reportDefsUpdated: 0 });
     expect(reportDefs).toHaveLength(0);
   });
 
@@ -610,7 +620,7 @@ describe('seedDatabase — data-driven reports (S4)', () => {
     const { app } = fakeApp(cfg);
     const res = await seedDatabase(fakeDb, app);
     expect(res.connectorsSeeded).toBe(1);
-    expect(res.dataDrivenReportsSeeded).toEqual({ queriesSeeded: 0, queriesUpdated: 0, designsSeeded: 0, reportDefsSeeded: 0 });
+    expect(res.dataDrivenReportsSeeded).toEqual({ queriesSeeded: 0, queriesUpdated: 0, designsSeeded: 0, designsUpdated: 0, reportDefsSeeded: 0, reportDefsUpdated: 0 });
     expect(res.formsSeeded).toBeGreaterThan(0);
   });
 });

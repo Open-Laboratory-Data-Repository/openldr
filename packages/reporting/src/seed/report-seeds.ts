@@ -1947,8 +1947,8 @@ const WAREHOUSE_NAMES = ['Target Warehouse (Postgres)', 'Target Warehouse (SQL S
 
 export interface SeedDataDrivenReportsDeps {
   customQueries: Pick<CustomQueryStore, 'get' | 'create' | 'update'>;
-  designs: Pick<ReportDesignStore, 'get' | 'create'>;
-  reportDefs: Pick<ReportStore, 'get' | 'create'>;
+  designs: Pick<ReportDesignStore, 'get' | 'create' | 'update'>;
+  reportDefs: Pick<ReportStore, 'get' | 'create' | 'update'>;
   /** Used to resolve the default warehouse connector (by `WAREHOUSE_NAMES`) → its server-generated
    *  id (stamped onto every `SEED_QUERIES` entry before insert) and its `type` (used to pick the
    *  matching `sql.postgres`/`sql.mssql` variant). If no such connector exists yet (e.g.
@@ -1962,10 +1962,13 @@ export interface SeedDataDrivenReportsResult {
   queriesSeeded: number;
   queriesUpdated: number;
   designsSeeded: number;
+  /** Built-in designs refreshed because the shipped definition drifted from the stored one. */
+  designsUpdated: number;
   reportDefsSeeded: number;
+  reportDefsUpdated: number;
 }
 
-const EMPTY_RESULT: SeedDataDrivenReportsResult = { queriesSeeded: 0, queriesUpdated: 0, designsSeeded: 0, reportDefsSeeded: 0 };
+const EMPTY_RESULT: SeedDataDrivenReportsResult = { queriesSeeded: 0, queriesUpdated: 0, designsSeeded: 0, designsUpdated: 0, reportDefsSeeded: 0, reportDefsUpdated: 0 };
 
 // Canonical JSON: recursively sorts object keys so equality is insensitive to key order. Needed
 // because `params` is a jsonb column — Postgres normalizes (re-sorts) jsonb keys on read, so a
@@ -1980,6 +1983,28 @@ function canonicalJson(v: unknown): string {
 // Structural, key-order-insensitive equality for seed-query params vs. stored params.
 function paramsEqual(a: unknown, b: unknown): boolean {
   return canonicalJson(a ?? []) === canonicalJson(b ?? []);
+}
+
+/** The parts of a seeded design the product owns. Deliberately EXCLUDES `createdAt`/`updatedAt`,
+ *  which the store stamps — comparing them would report drift on every boot and rewrite the row
+ *  forever. */
+function designContent(d: ReportDesign): string {
+  return canonicalJson({
+    name: d.name, paper: d.paper, orientation: d.orientation,
+    margins: d.margins ?? null, pageNumbers: d.pageNumbers ?? false,
+    parameters: d.parameters ?? [], pages: d.pages ?? [],
+  });
+}
+
+/** Same idea for a report record. `status` is included: a built-in that ships `published` should be
+ *  restored to published if a previous version shipped it as a draft. */
+function reportContent(r: ReportRecord): string {
+  return canonicalJson({
+    name: r.name, description: r.description ?? null, category: r.category ?? null,
+    designId: r.designId ?? null, primaryQueryId: r.primaryQueryId ?? null,
+    summaryMetrics: r.summaryMetrics ?? [], chart: r.chart ?? null,
+    paramOptions: r.paramOptions ?? null, status: r.status ?? null,
+  });
 }
 
 /** Idempotently inserts `SEED_DESIGNS` and `SEED_REPORT_DEFS` (skipping any id already present),
@@ -2030,20 +2055,36 @@ export async function seedDataDrivenReports(deps: SeedDataDrivenReportsDeps): Pr
   }
 
   let designsSeeded = 0;
+  let designsUpdated = 0;
   for (const d of SEED_DESIGNS) {
-    if (!(await deps.designs.get(d.id))) {
+    const existing = await deps.designs.get(d.id);
+    if (!existing) {
       await deps.designs.create(d);
       designsSeeded += 1;
+    } else if (designContent(existing) !== designContent(d)) {
+      // Managed-overwrite, same contract as SEED_QUERIES above: built-in ids are PRODUCT-OWNED, so
+      // a shipped fix reaches an existing install instead of only fresh ones. Before this, these
+      // were create-if-absent, which meant a corrected built-in design could never reach anybody
+      // who already had the old one.
+      // ⚠ An operator who edits a built-in IN PLACE loses those edits here. That is the accepted
+      // trade: customise via Duplicate (⋯ menu), which mints a new id this loop never iterates.
+      await deps.designs.update(d.id, d);
+      designsUpdated += 1;
     }
   }
 
   let reportDefsSeeded = 0;
+  let reportDefsUpdated = 0;
   for (const r of SEED_REPORT_DEFS) {
-    if (!(await deps.reportDefs.get(r.id))) {
+    const existing = await deps.reportDefs.get(r.id);
+    if (!existing) {
       await deps.reportDefs.create(r);
       reportDefsSeeded += 1;
+    } else if (reportContent(existing) !== reportContent(r)) {
+      await deps.reportDefs.update(r.id, r);
+      reportDefsUpdated += 1;
     }
   }
 
-  return { queriesSeeded, queriesUpdated, designsSeeded, reportDefsSeeded };
+  return { queriesSeeded, queriesUpdated, designsSeeded, designsUpdated, reportDefsSeeded, reportDefsUpdated };
 }

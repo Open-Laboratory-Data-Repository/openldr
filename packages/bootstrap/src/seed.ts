@@ -114,18 +114,18 @@ export interface FormSeedTarget extends EssentialSeedTarget {
   // MOCK_TEMPLATES). Structural subset — AppContext.reportDesigns satisfies it.
   // 'remove' is also needed so the Slice S5 one-shot cleanup can drop retired demo designs on an
   // existing pre-cutover install — see `removeRetiredDemoDesigns`.
-  reportDesigns: Pick<ReportDesignStore, 'get' | 'create' | 'remove'>;
+  reportDesigns: Pick<ReportDesignStore, 'get' | 'create' | 'remove' | 'update'>;
   // Report-def store, threaded so the seed can insert the S4 data-driven report records
   // (query+design triples that replace the hardcoded catalog). Structural subset —
   // AppContext.reportDefs satisfies it. Skipped (no-op) until the default warehouse connector
   // (`connectors`, below) exists — see `seedDataDrivenReports`. 'list' is also needed so the
   // Slice S5 demo-design cleanup can guard against deleting a design a report still references.
-  reportDefs: Pick<ReportStore, 'get' | 'create' | 'list'>;
+  reportDefs: Pick<ReportStore, 'get' | 'create' | 'list' | 'update'>;
   // Terminology surface, threaded so the seed can auto-import the bundled license-safe sets
   // (FHIR R4 catalog + full UCUM) on first boot. Structural subset — AppContext satisfies it.
   terminology: {
     ops: { lookup(system: string, code: string): Promise<{ found: boolean; display?: string | null }> };
-    admin: { valueSets: Pick<TerminologyAdminStore['valueSets'], 'list' | 'importFhirCatalog'> };
+    admin: { valueSets: Pick<TerminologyAdminStore['valueSets'], 'list' | 'importFhirCatalog' | 'save' | 'getByUrl'> };
     loaders: { resource(json: unknown): Promise<{ conceptsLoaded: number }> };
   };
   appSettings: Pick<AppSettingStore, 'get' | 'set'>;
@@ -336,7 +336,7 @@ export async function seedDatabase(db: DbContext, app: FormSeedTarget): Promise<
   // otherwise part of AppContext's public surface. Must run AFTER `seedDefaultConnector` above —
   // `seedDataDrivenReports` resolves each seed query's connector by the same `DEFAULT_CONNECTOR_NAME`
   // and skips entirely (no-op) if that connector doesn't exist yet.
-  let dataDrivenReportsSeeded: SeedDataDrivenReportsResult = { queriesSeeded: 0, queriesUpdated: 0, designsSeeded: 0, reportDefsSeeded: 0 };
+  let dataDrivenReportsSeeded: SeedDataDrivenReportsResult = { queriesSeeded: 0, queriesUpdated: 0, designsSeeded: 0, designsUpdated: 0, reportDefsSeeded: 0, reportDefsUpdated: 0 };
   try {
     dataDrivenReportsSeeded = await seedDataDrivenReports({
       // referenceCapture: the seeded queries are central-owned reference config and must enter
@@ -434,8 +434,47 @@ async function seedBundledTerminology(app: FormSeedTarget): Promise<SeedResult['
     console.warn('[seed] UCUM import skipped:', e instanceof Error ? e.message : String(e));
   }
 
+  // (c) AST interpretation displays — CE's OWN semantics, so unlike a site dictionary this IS seeded.
+  //
+  // ⚠ Why this exists at all: DISA's COMMDICT describes susceptibility code `I` as "Invalid", an
+  // upstream Tanzania typo for "Intermediate" (CONTEXT=79). CE stores what the lab published,
+  // verbatim; the clinical report renders the TERMINOLOGY display for the same code instead. Without
+  // this set the report's `coalesce(tc.display, ...)` falls through to the raw text and prints the
+  // wrong word on a clinical document.
+  //
+  // ⚠ Seeded via `valueSets.save()`, NOT via a migration and NOT via `importFhirCatalog`. Both of
+  // those write the row without a `fhir.change_log` entry, so the projection never sees it and the
+  // set never reaches `terminology_codes` — the exact defect that forced an `openldr terminology
+  // reproject` backfill for migration 014's seeds. `save()` routes through refreshCacheAndProject →
+  // fhirStore.save(), which writes change_log and projects.
+  //
+  // Extensional with inline displays on purpose: `collectClause` uses `c.display` directly when the
+  // clause carries a concept list, so this expands without needing rows in `terminology_concepts`.
+  try {
+    if (!(await app.terminology.admin.valueSets.getByUrl(AST_INTERPRETATION_URL))) {
+      await app.terminology.admin.valueSets.save({
+        url: AST_INTERPRETATION_URL, status: 'active', name: 'ast-interpretation',
+        title: 'AST Interpretation',
+        description: 'Display terms for antimicrobial susceptibility codes, so a report never renders a mangled source description.',
+        publisherId: 'pub-system',
+        compose: { include: [{ system: AST_INTERPRETATION_SYSTEM, concept: AST_INTERPRETATION_CONCEPTS }] },
+      });
+      console.log('[seed] seeded the AST interpretation value set');
+    }
+  } catch (e) {
+    console.warn('[seed] AST interpretation value set skipped:', e instanceof Error ? e.message : String(e));
+  }
+
   return { valueSetsImported, ucumConceptsImported };
 }
+
+const AST_INTERPRETATION_SYSTEM = 'urn:openldr:cs:ast-interpretation';
+const AST_INTERPRETATION_URL = 'urn:openldr:valueset:ast-interpretation';
+const AST_INTERPRETATION_CONCEPTS = [
+  { code: 'S', display: 'Susceptible' },
+  { code: 'I', display: 'Intermediate' },
+  { code: 'R', display: 'Resistant' },
+];
 
 // Seed one default host connector of type 'postgres', kind 'database' pointing at the target
 // warehouse. Idempotent by name. Skips gracefully (with a clear log) when the secrets key is
