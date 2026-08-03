@@ -20,10 +20,19 @@ const ZEBRA_FILL = '#f8fafc';
 const BODY_TEXT = '#334155';
 // Status palette. `fill` chips are saturated with knocked-out white text (the reference's language);
 // `text` emphasis just tints the value and is the default, because it survives a mono office printer.
+// ⚠ `indeterminate` (`#94a3b8`) happens to equal `HEAD_RULE` above, and `STATUS_TEXT_COLOR.critical`
+// below happens to equal `critical` here. Both are coincidence, not a shared constant waiting to be
+// factored out — the status palette and the table chrome are chosen independently and are free to
+// diverge. Do not "de-duplicate" them.
 const STATUS_CHIP_FILL: Record<CellStatus, string> = {
   normal: '#16a34a', abnormal: '#e11d48', critical: '#9f1239', indeterminate: '#94a3b8', none: '#e2e8f0',
 };
-const STATUS_CHIP_TEXT = '#ffffff';
+// Chip text is knocked-out white on every saturated fill EXCEPT `none`, whose fill (`#e2e8f0`) is
+// near-white — white-on-white would be ~1.15:1 contrast, effectively invisible. `none` gets the
+// same dark slate the plain body text uses instead.
+const STATUS_CHIP_TEXT: Record<CellStatus, string> = {
+  normal: '#ffffff', abnormal: '#ffffff', critical: '#ffffff', indeterminate: '#ffffff', none: BODY_TEXT,
+};
 const STATUS_TEXT_COLOR: Record<CellStatus, string> = {
   normal: '#166534', abnormal: '#b91c1c', critical: '#9f1239', indeterminate: '#475569', none: BODY_TEXT,
 };
@@ -324,17 +333,30 @@ function drawGrid(
     .moveTo(r.x, r.y + ROW_H).lineTo(r.x + r.w, r.y + ROW_H).stroke().restore();
 
   doc.font('Helvetica').fontSize(8);
+  // pdfkit emits `fillColor` unconditionally — it does not cache the current colour — so calling it
+  // once per cell instead of once per row cost every wide table ~40 bytes/cell of repeated colour
+  // operators for a colour that, most of the time, had not actually changed. `lastFill` tracks what
+  // colour is ACTUALLY in effect on the doc right now, so `setFill` can skip the call when nothing
+  // would change. ⚠ `rect(...).fill(color)` also changes the doc's current fill colour as a side
+  // effect (that is how it paints) — every call site that uses it, not just `setFill`, must update
+  // `lastFill` too, or the next `setFill` compares against a stale value and skips a call it needed,
+  // leaving text painted in the rect's colour instead of its own.
+  let lastFill: string | undefined;
+  const setFill = (color: string): void => {
+    if (color !== lastFill) { doc.fillColor(color); lastFill = color; }
+  };
   rows.forEach((row, ri) => {
     const y = r.y + ROW_H + ri * ROW_H;
-    if (ri % 2 === 1) doc.rect(r.x, y, r.w, ROW_H).fill(ZEBRA_FILL);
+    if (ri % 2 === 1) { doc.rect(r.x, y, r.w, ROW_H).fill(ZEBRA_FILL); lastFill = ZEBRA_FILL; }
     row.forEach((cell, ci) => {
       const st = statuses[ri]?.[ci];
       // A chip is exactly one row tall and one column wide, so it can never affect the y-advance.
       if (st && (emphasis[ci] ?? 'text') === 'fill') {
         doc.rect(xOf(ci), y, widths[ci], ROW_H).fill(STATUS_CHIP_FILL[st]);
-        doc.fillColor(STATUS_CHIP_TEXT);
+        lastFill = STATUS_CHIP_FILL[st];
+        setFill(STATUS_CHIP_TEXT[st]);
       } else {
-        doc.fillColor(st ? STATUS_TEXT_COLOR[st] : BODY_TEXT);
+        setFill(st ? STATUS_TEXT_COLOR[st] : BODY_TEXT);
       }
       doc.text(cell, xOf(ci) + CELL_PAD, y + CELL_PAD, {
         ...cellTextOptions(widths[ci] - CELL_PAD * 2), align: numeric[ci] ? 'right' : 'left',

@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import zlib from 'node:zlib';
+import PDFDocument from 'pdfkit';
 import { renderReportDesignPdf, type ResolvedTable } from './index';
+import { columnWidths } from './draw';
 import type { ReportDesign, BoundColumn } from '../schema';
 
 const NOW = new Date('2026-07-08T00:00:00Z');
@@ -114,10 +116,59 @@ function textYs(pdf: Buffer): number[] {
   return ys;
 }
 
-const statusDesign = (boundColumns: BoundColumn[]): ReportDesign => ({
+/** All content-stream bytes, decompressed and concatenated in stream order — for substring
+ *  assertions on the raw PDF drawing operators (colours, rects) that `textYs` doesn't expose. */
+function decodedContent(pdf: Buffer): string {
+  const raw = pdf.toString('latin1');
+  const streams = /stream\r?\n([\s\S]*?)\r?\nendstream/g;
+  let m: RegExpExecArray | null;
+  let out = '';
+  while ((m = streams.exec(raw))) {
+    try { out += zlib.inflateSync(Buffer.from(m[1], 'latin1')).toString('latin1'); } catch { /* not a flate stream (e.g. a font) */ }
+  }
+  return out;
+}
+
+/** Each physical page's own decoded content stream, in page order — found via `/Kids` rather than
+ *  assumed from byte order, so a page-2-shows-page-1's-content bug can't hide behind a coincidence
+ *  of object emission order. */
+function pageContents(pdf: Buffer): string[] {
+  const raw = pdf.toString('latin1');
+  const kids = raw.match(/\/Type\s*\/Pages[\s\S]*?\/Kids\s*\[([^\]]*)\]/);
+  if (!kids) throw new Error('no /Kids found in PDF');
+  const kidIds = [...kids[1].matchAll(/(\d+) 0 R/g)].map((m) => m[1]);
+  const objBody = (id: string): string => {
+    const m = raw.match(new RegExp(`(?:^|[^0-9])${id} 0 obj([\\s\\S]*?)endobj`));
+    if (!m) throw new Error(`obj ${id} not found`);
+    return m[1];
+  };
+  return kidIds.map((id) => {
+    const contentsId = objBody(id).match(/\/Contents (\d+) 0 R/)?.[1];
+    if (!contentsId) throw new Error(`page ${id} has no /Contents`);
+    const stream = objBody(contentsId).match(/stream\r?\n([\s\S]*?)\r?\nendstream/);
+    if (!stream) throw new Error(`contents ${contentsId} has no stream`);
+    return zlib.inflateSync(Buffer.from(stream[1], 'latin1')).toString('latin1');
+  });
+}
+
+/** The `/DeviceRGB cs\n<r> <g> <b> scn` operator pdfkit emits for a `fillColor(hex)` call —
+ *  computed from the hex, not copied from a captured sample, so the assertion documents its own
+ *  derivation instead of pinning a magic string. */
+function fillOp(hex: string): string {
+  const r = parseInt(hex.slice(1, 3), 16) / 255;
+  const g = parseInt(hex.slice(3, 5), 16) / 255;
+  const b = parseInt(hex.slice(5, 7), 16) / 255;
+  return `${r} ${g} ${b} scn`;
+}
+
+/** pdfkit rounds every content-stream coordinate to 6 decimal places (`PDFObject.number`,
+ *  `Math.round(n * 1e6) / 1e6`, pdfkit 0.15.2) before printing it into a `re`/`m`/`l` operator. */
+function pdfNum(n: number): number { return Math.round(n * 1e6) / 1e6; }
+
+const statusDesign = (boundColumns: BoundColumn[], rect: { x: number; y: number; w: number; h: number } = { x: 0, y: 0, w: 400, h: 200 }): ReportDesign => ({
   id: 'd', name: 'N', paper: 'A4', orientation: 'portrait', parameters: [],
   pages: [{ id: 'p', elements: [{
-    id: 't', kind: 'table', name: 'T', rect: { x: 0, y: 0, w: 400, h: 200 },
+    id: 't', kind: 'table', name: 'T', rect,
     dataSource: { kind: 'custom-query', queryId: 'q' }, boundColumns,
   }] }],
 } as ReportDesign);
@@ -142,20 +193,132 @@ describe('cell status rendering', () => {
   });
 
   it('keeps every body row exactly ROW_H apart with a long value in a filled cell', async () => {
+    // The long value lives in `res` — the FILLED column — not `name`, so this actually exercises
+    // the wrap-vs-ellipsis regression `cellTextOptions`'s docblock warns about: dropping `height`
+    // from that function wraps this value onto a second line inside its fixed-height row, which
+    // pushes every following row's baseline off the 16pt grid. A long `name` value alone cannot
+    // catch that, because `name` carries no status/emphasis and was never the code path in question.
+    const longVal = 'Methicillin-resistant Staphylococcus aureus screen POSITIVE result';
+    const rows = new Map<string, ResolvedTable>([['t', {
+      columns: [{ key: 'name', label: 'Test' }, { key: 'res', label: 'Result' }],
+      rows: [
+        { name: 'HIV 1/2 Ab', res: 'Negative', s: 'normal' },
+        { name: 'HBsAg', res: longVal, s: 'abnormal' },
+        { name: 'Treponema pallidum antibody screen', res: 'Indeterminate', s: 'indeterminate' },
+      ],
+    }]]);
     const pdf = await renderReportDesignPdf(
       statusDesign([{ key: 'name', label: 'Test' },
-                    { key: 'res', label: 'Result', statusKey: 's', emphasis: 'fill' }]), statusRows());
+                    { key: 'res', label: 'Result', statusKey: 's', emphasis: 'fill' }]), rows);
     const rowYs = [...new Set(textYs(pdf))].sort((a, b) => b - a);
     const gaps = rowYs.slice(1).map((y, i) => Number((rowYs[i] - y).toFixed(3)));
     expect(gaps).toEqual([16, 16, 16]);
   });
 
-  it('emits no status fill when the design declares no statusKey', async () => {
+  it('emits no status fill colour anywhere when the design declares no statusKey', async () => {
     const plain = await renderReportDesignPdf(
       statusDesign([{ key: 'name', label: 'Test' }, { key: 'res', label: 'Result' }]), statusRows());
-    const filled = await renderReportDesignPdf(
+    const content = decodedContent(plain);
+    // None of the five status chip colours may appear when no column carries a statusKey — a
+    // byte-length comparison against a "filled" render (the prior version of this test) passes on
+    // any extra byte at all, including the wrong colour, the wrong column, or a chip on every cell.
+    for (const hex of ['#16a34a', '#e11d48', '#9f1239', '#94a3b8', '#e2e8f0']) {
+      expect(content).not.toContain(fillOp(hex));
+    }
+  });
+
+  it('paints the fill chip exactly on the status column band, ROW_H tall, in the status colour', async () => {
+    const headers = ['Test', 'Result'];
+    const rows = [['HBsAg', 'Positive']];
+    const rectWPt = 300 * 0.75; // rect.w is authored in px (matches statusDesign's convention)
+    const measureDoc = new PDFDocument({ autoFirstPage: false });
+    const widths = columnWidths(headers, rows, rectWPt, (text, bold) => {
+      measureDoc.font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(8);
+      return measureDoc.widthOfString(text);
+    });
+    const expectedX = widths[0]; // res is column index 1; rect.x is 0
+    const expectedW = widths[1];
+    const expectedY = 16; // r.y(0) + ROW_H(16) + row 0 * ROW_H
+
+    const resolved = new Map<string, ResolvedTable>([['t', {
+      columns: [{ key: 'name', label: 'Test' }, { key: 'res', label: 'Result' }],
+      rows: [{ name: 'HBsAg', res: 'Positive', s: 'critical' }],
+    }]]);
+    const pdf = await renderReportDesignPdf(
       statusDesign([{ key: 'name', label: 'Test' },
-                    { key: 'res', label: 'Result', statusKey: 's', emphasis: 'fill' }]), statusRows());
-    expect(filled.length).toBeGreaterThan(plain.length);
+                    { key: 'res', label: 'Result', statusKey: 's', emphasis: 'fill' }],
+                   { x: 0, y: 0, w: 300, h: 100 }),
+      resolved);
+    const content = decodedContent(pdf);
+
+    const expectedRect = `${pdfNum(expectedX)} ${pdfNum(expectedY)} ${pdfNum(expectedW)} 16 re`;
+    const expectedFill = fillOp('#9f1239'); // STATUS_CHIP_FILL.critical
+    // The rect, its fill colour, and the paint op must appear back-to-back — not just present
+    // somewhere in the stream — so a wrong colour, wrong size, or wrong column all fail this.
+    expect(content).toContain(`${expectedRect}\n/DeviceRGB cs\n${expectedFill}\nf`);
+  });
+
+  it('gives a `none` status a dark chip text colour, not the white used by every other status', async () => {
+    // STATUS_CHIP_FILL.none (#e2e8f0) is near-white; white-on-white text (~1.15:1 contrast) is
+    // effectively invisible. `none` must render with the same dark slate body text uses.
+    const resolved = new Map<string, ResolvedTable>([['t', {
+      columns: [{ key: 'name', label: 'Test' }, { key: 'res', label: 'Result' }],
+      rows: [{ name: 'CBC', res: 'Pending', s: 'none' }],
+    }]]);
+    const pdf = await renderReportDesignPdf(
+      statusDesign([{ key: 'name', label: 'Test' },
+                    { key: 'res', label: 'Result', statusKey: 's', emphasis: 'fill' }],
+                   { x: 0, y: 0, w: 300, h: 100 }),
+      resolved);
+    const content = decodedContent(pdf);
+    const chipFill = fillOp('#e2e8f0'); // STATUS_CHIP_FILL.none
+    expect(content).toContain(`${chipFill}\nf\n/DeviceRGB cs\n${fillOp('#334155')}`); // dark slate (BODY_TEXT)
+    expect(content).not.toContain(`${chipFill}\nf\n/DeviceRGB cs\n${fillOp('#ffffff')}`); // never white here
+  });
+
+  it('tints the value with STATUS_TEXT_COLOR under the default (omitted) emphasis, not a fill chip', async () => {
+    // No test previously rendered a bound column with `emphasis` omitted (the documented default is
+    // `'text'`), so STATUS_TEXT_COLOR was provably dead to the suite.
+    const resolved = new Map<string, ResolvedTable>([['t', {
+      columns: [{ key: 'name', label: 'Test' }, { key: 'res', label: 'Result' }],
+      rows: [{ name: 'HBsAg', res: 'Positive', s: 'abnormal' }],
+    }]]);
+    const pdf = await renderReportDesignPdf(
+      statusDesign([{ key: 'name', label: 'Test' }, { key: 'res', label: 'Result', statusKey: 's' }]),
+      resolved);
+    const content = decodedContent(pdf);
+    expect(content).toContain(fillOp('#b91c1c')); // STATUS_TEXT_COLOR.abnormal
+    expect(content).not.toContain(fillOp('#e11d48')); // STATUS_CHIP_FILL.abnormal — no chip was drawn
+  });
+
+  it('shows page 2 its own statuses, not page 1s, after the table paginates', async () => {
+    // A 4-row table in a box tall enough for exactly 2 body rows per page (`maxRows = 2`) needs 2
+    // physical pages. `drawGrid` must slice `allStatuses` by the SAME [lo, lo+maxRows) window as
+    // `allRows` — slicing statuses from the start of the array every time (a page-2-repeats-page-1's-
+    // colours bug) would leave every one of the other 53 tests green.
+    const resolved = new Map<string, ResolvedTable>([['t', {
+      columns: [{ key: 'name', label: 'Test' }, { key: 'res', label: 'Result' }],
+      rows: [
+        { name: 'r0', res: 'v0', s: 'normal' },
+        { name: 'r1', res: 'v1', s: 'abnormal' },
+        { name: 'r2', res: 'v2', s: 'critical' },
+        { name: 'r3', res: 'v3', s: 'indeterminate' },
+      ],
+    }]]);
+    const pdf = await renderReportDesignPdf(
+      statusDesign([{ key: 'name', label: 'Test' },
+                    { key: 'res', label: 'Result', statusKey: 's', emphasis: 'fill' }],
+                   { x: 0, y: 0, w: 300, h: 64 }), // 64px -> 48pt -> maxRows = floor((48-16)/16) = 2
+      resolved);
+    const pages = pageContents(pdf);
+    expect(pages.length).toBe(2);
+    const normal = fillOp('#16a34a');
+    const abnormal = fillOp('#e11d48');
+    const critical = fillOp('#9f1239');
+    const indeterminate = fillOp('#94a3b8');
+    expect(pages[1]).toContain(critical);
+    expect(pages[1]).toContain(indeterminate);
+    expect(pages[1]).not.toContain(normal);
+    expect(pages[1]).not.toContain(abnormal);
   });
 });
