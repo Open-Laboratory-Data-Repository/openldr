@@ -266,8 +266,13 @@ git commit -m "feat(report-designer): derive a per-cell status grid from a bound
 - Test: `packages/report-designer/src/render/index.test.ts`
 
 **Interfaces:**
-- Consumes: `cellStatusesFor` from Task 2.
-- Produces: no new exported names; `drawGrid` gains a `statuses` parameter (module-private).
+- Consumes: `cellStatusesFor` from Task 2, `ColumnKind` from Task 1.
+- Produces: `isRightAligned(rows: string[][], ci: number, kind: ColumnKind | undefined): boolean`. `drawGrid` gains `statuses`, `emphasis` and `kinds` parameters (module-private).
+
+**Alignment rule (user decision, pre-flight):** `kind` is **consumed in S1**, not inert. A `range` or
+`units` column is **never** right-aligned even when every value in it parses as a number — `"3.5"` in
+a units column and a lone-value range column are text, not quantities. Every other column keeps
+today's `isNumericColumn` behaviour exactly.
 
 **Why the test is a PDF-geometry test:** a test asserting "a fill was emitted" would stay green through the exact regression it names — a chip that pushes text onto the next row. The assertion below compares **text baselines with and without status** for equality, which only passes if the y-advance is untouched. Verified against pdfkit 0.15.2: content streams are deflated and text is positioned with `1 0 0 1 <x> <y> Tm`; consecutive body rows differ by exactly `ROW_H`.
 
@@ -344,10 +349,34 @@ describe('cell status rendering', () => {
 });
 ```
 
+Also append to `packages/report-designer/src/render/draw.test.ts` — this is a **pure-function** test and belongs beside the other `draw` unit tests, not in the geometry file:
+
+```ts
+import { isRightAligned } from './draw';
+
+describe('isRightAligned', () => {
+  const numericRows = [['5.0'], ['6.2'], ['7.1']];
+
+  it('right-aligns a numeric column with no kind, exactly as before this feature', () => {
+    expect(isRightAligned(numericRows, 0, undefined)).toBe(true);
+    expect(isRightAligned(numericRows, 0, 'value')).toBe(true);
+  });
+
+  it('never right-aligns a units or range column, even when every value parses as a number', () => {
+    expect(isRightAligned(numericRows, 0, 'units')).toBe(false);
+    expect(isRightAligned(numericRows, 0, 'range')).toBe(false);
+  });
+
+  it('leaves a non-numeric column left-aligned regardless of kind', () => {
+    expect(isRightAligned([['abc']], 0, 'value')).toBe(false);
+  });
+});
+```
+
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd packages/report-designer && npx vitest run src/render/index.test.ts`
-Expected: FAIL — the third case fails (`filled.length` equals `plain.length`, because `statusKey` is not painted yet). The first two pass trivially, which is expected and correct: they are regression guards, not feature proofs.
+Run: `cd packages/report-designer && npx vitest run src/render/`
+Expected: FAIL twice — `isRightAligned` is not exported from `./draw`, and in `index.test.ts` the "emits no status fill" case fails because `filled.length` equals `plain.length` (`statusKey` is not painted yet). The two geometry cases pass trivially at this point; that is expected and correct — they are regression guards, and Step 5's mutation check is what proves they have teeth.
 
 - [ ] **Step 3: Write minimal implementation**
 
@@ -365,6 +394,21 @@ const STATUS_TEXT_COLOR: Record<CellStatus, string> = {
 };
 ```
 
+Add the alignment rule beside `isNumericColumn` (after line 118):
+
+```ts
+/** Whether column `ci` is right-aligned.
+ *
+ *  Numbers belong on the right, but a `units` or `range` column is text that merely looks numeric
+ *  — "3.5" as a unit, or a range column holding a lone bound — and ranging it right would align it
+ *  against the values it qualifies. `kind` therefore overrides the numeric test, and only ever
+ *  toward the left; a column with no `kind` behaves exactly as it did before this feature. */
+export function isRightAligned(rows: string[][], ci: number, kind: ColumnKind | undefined): boolean {
+  if (kind === 'units' || kind === 'range') return false;
+  return isNumericColumn(rows, ci);
+}
+```
+
 Replace `drawTable` (line 228) with:
 
 ```ts
@@ -373,8 +417,10 @@ function drawTable(doc: Doc, el: DesignElement, r: Box, resolved: ResolvedTable 
   const headers = tableHeaders(el, resolved);
   const allRows = rowsFor(el, resolved);
   const statuses = cellStatusesFor(el, resolved);
-  const emphasis = (el.boundColumns ?? []).map((c) => c.emphasis ?? 'text');
-  drawGrid(doc, r, headers, allRows, chunk, statuses, emphasis);
+  const cols = el.boundColumns ?? [];
+  const emphasis = cols.map((c) => c.emphasis ?? 'text');
+  const kinds = cols.map((c) => c.kind);
+  drawGrid(doc, r, headers, allRows, chunk, statuses, emphasis, kinds);
 }
 ```
 
@@ -384,6 +430,7 @@ Replace `drawGrid` (line 243) with — note the statuses are sliced by the **sam
 function drawGrid(
   doc: Doc, r: Box, headers: string[], allRows: string[][], chunk: number,
   allStatuses: (CellStatus | undefined)[][] = [], emphasis: CellEmphasis[] = [],
+  kinds: (ColumnKind | undefined)[] = [],
 ): void {
   const n = Math.max(headers.length, 1);
   const maxRows = maxRowsFor(r.h);
@@ -396,7 +443,7 @@ function drawGrid(
     return doc.widthOfString(text);
   });
   const xOf = (ci: number): number => r.x + widths.slice(0, ci).reduce((a, b) => a + b, 0);
-  const numeric = headers.map((_, ci) => isNumericColumn(allRows, ci));
+  const numeric = headers.map((_, ci) => isRightAligned(allRows, ci, kinds[ci]));
 
   doc.save().rect(r.x, r.y, r.w, r.h).clip();
 
@@ -586,7 +633,12 @@ Expected: FAIL — `statusKey` is not in `PdfColumn`, so this is a TypeScript er
 Widen `PdfColumn` (line 3) and add, beside the duplicated helpers:
 
 ```ts
-export interface PdfColumn { key: string; label: string; statusKey?: string; emphasis?: 'fill' | 'text' }
+export interface PdfColumn {
+  key: string; label: string;
+  statusKey?: string;
+  emphasis?: 'fill' | 'text';
+  kind?: 'value' | 'range' | 'units' | 'flag' | 'label';
+}
 
 /** ⚠ DUPLICATED from `@openldr/report-designer`'s `render/draw.ts`, deliberately — same reason as
  *  `columnWidths` above (this package is the dependency leaf). Keep the two in step. */
@@ -610,6 +662,13 @@ Build a status grid beside `cells` (line 98) and paint it in the row loop (line 
 
 ```ts
 const statuses = input.rows.map((row) => cols.map((c) => (c.statusKey ? asCellStatus(row[c.statusKey]) : undefined)));
+```
+
+Apply the same alignment override as Task 3 — replace the `numeric` line (line 104):
+
+```ts
+const numeric = cols.map((c, ci) =>
+  (c.kind === 'units' || c.kind === 'range') ? false : isNumericColumn(cells, ci));
 ```
 
 ```ts
@@ -673,7 +732,7 @@ Render any of the 8 built-in reports from the Reports page before and after this
 
 ## Self-Review
 
-**Spec coverage.** §1.1 status entry point → Task 2 (with the documented correction). §1.2 five-token vocabulary → Task 1. §1.3 two emphases → Tasks 1, 3, 5. §1.4 column `kind` → Task 1 defines it; **no task consumes it**, because alignment currently derives from `isNumericColumn` and changing that is a separate behaviour change. Flagged deliberately: `kind` ships as authored-but-inert metadata in S1 and is consumed in S2 when `range`/`units` columns actually exist. §1.5 no-regression → Task 3 Steps 1/5 and Task 6. §1.6 surfaces → Tasks 1-5, minus `PageCanvas.tsx` per the correction above.
+**Spec coverage.** §1.1 status entry point → Task 2 (with the documented correction). §1.2 five-token vocabulary → Task 1. §1.3 two emphases → Tasks 1, 3, 5. §1.4 column `kind` → Task 1 defines it and **Tasks 3 and 5 consume it** (user decision, pre-flight): `units` and `range` columns are never right-aligned, overriding `isNumericColumn`. A column with no `kind` keeps today's behaviour exactly, so this is additive rather than a regression surface. Pinned by the `isRightAligned` unit tests in Task 3. §1.5 no-regression → Task 3 Steps 1/5 and Task 6. §1.6 surfaces → Tasks 1-5, minus `PageCanvas.tsx` per the correction above.
 
 **Placeholder scan.** Task 4 Step 3 is the weakest step: it specifies the state-update function exactly but describes the JSX rather than showing it, because `DataTab.tsx`'s markup idiom was not read in full while planning. It is marked with a ⚠ read-first instruction rather than a fabricated component. Task 5 Step 3 shows the two edited blocks but not the whole file.
 
