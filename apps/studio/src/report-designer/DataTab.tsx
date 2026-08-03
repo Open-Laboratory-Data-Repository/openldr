@@ -239,6 +239,14 @@ export function DataTab({ element, parameters, onPatchElement, onPatchParameters
       const { statusKey: _drop, ...rest } = c;
       return statusKey ? { ...rest, statusKey } : rest;
     }), { discrete: true });
+  // Same idiom as setStatusKey: 'text' is the default emphasis, so picking it deletes the property
+  // rather than persisting the redundant value. Also a discrete undo step (one-shot Select choice).
+  const setEmphasis = (idx: number, emphasis: 'fill' | 'text') =>
+    setBound(bound.map((c, i) => {
+      if (i !== idx) return c;
+      const { emphasis: _drop, ...rest } = c;
+      return emphasis === 'fill' ? { ...rest, emphasis } : rest;
+    }), { discrete: true });
 
   // Included columns first (in bound order), then the remaining result columns.
   const rows: { col: ResultColumn; included: boolean }[] = [
@@ -289,6 +297,18 @@ export function DataTab({ element, parameters, onPatchElement, onPatchParameters
                       <SelectContent>
                         <SelectItem value={NONE_STATUS}>{t('reportDesigner.none')}</SelectItem>
                         {statusOptions.map((c) => <SelectItem key={c.key} value={c.key}>{c.label || c.key}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  )}
+                  {included && boundCol && (
+                    <Select value={boundCol.emphasis ?? 'text'} disabled={!boundCol.statusKey}
+                      onValueChange={(v) => setEmphasis(bound.indexOf(boundCol), v as 'fill' | 'text')}>
+                      <SelectTrigger aria-label={`${t('reportDesigner.emphasisFor')} ${boundCol.label}`} className="h-7 w-28 shrink-0 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="text">{t('reportDesigner.emphasisText')}</SelectItem>
+                        <SelectItem value="fill">{t('reportDesigner.emphasisFill')}</SelectItem>
                       </SelectContent>
                     </Select>
                   )}

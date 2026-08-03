@@ -112,6 +112,50 @@ describe('DataTab table binding', () => {
     expect(onPatchElement.mock.calls.at(-1)?.[1].boundColumns[0]).not.toHaveProperty('statusKey');
   });
 
+  it('disables the emphasis control for a column with no statusKey', async () => {
+    setup({
+      dataSource: { kind: 'custom-query', queryId: 'cq_1' },
+      boundColumns: [{ key: 'org', label: 'Organism' }],
+    });
+    await loadColumns();
+    expect(await screen.findByLabelText('Emphasis for Organism')).toBeDisabled();
+  });
+
+  it('sets emphasis to fill on a status-bound column (discrete)', async () => {
+    const { onPatchElement } = setup({
+      dataSource: { kind: 'custom-query', queryId: 'cq_1' },
+      boundColumns: [{ key: 'org', label: 'Organism', statusKey: 'pct' }],
+    });
+    await loadColumns();
+    const emphasisSelect = await screen.findByLabelText('Emphasis for Organism');
+    expect(emphasisSelect).not.toBeDisabled();
+    fireEvent.click(emphasisSelect);
+    fireEvent.click(await screen.findByText('Filled chip'));
+    expect(onPatchElement).toHaveBeenLastCalledWith(
+      't',
+      { boundColumns: [{ key: 'org', label: 'Organism', statusKey: 'pct', emphasis: 'fill' }] },
+      { discrete: true },
+    );
+  });
+
+  it('clears emphasis when set back to the default tinted-text option (discrete)', async () => {
+    const { onPatchElement } = setup({
+      dataSource: { kind: 'custom-query', queryId: 'cq_1' },
+      boundColumns: [{ key: 'org', label: 'Organism', statusKey: 'pct', emphasis: 'fill' }],
+    });
+    await loadColumns();
+    fireEvent.click(await screen.findByLabelText('Emphasis for Organism'));
+    fireEvent.click(await screen.findByText('Tinted text'));
+    expect(onPatchElement).toHaveBeenLastCalledWith(
+      't',
+      { boundColumns: [{ key: 'org', label: 'Organism', statusKey: 'pct' }] },
+      { discrete: true },
+    );
+    // Regression guard: toEqual would treat a missing key and an explicit `emphasis: undefined` as
+    // equal, masking a bug where the property is set to undefined instead of deleted.
+    expect(onPatchElement.mock.calls.at(-1)?.[1].boundColumns[0]).not.toHaveProperty('emphasis');
+  });
+
   it('renders the error line when the query run rejects', async () => {
     (queryApi.run as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('boom'));
     setup({ dataSource: { kind: 'custom-query', queryId: 'cq_1' } });
