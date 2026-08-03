@@ -2,9 +2,13 @@ import { describe, it, expect, vi } from 'vitest';
 import { importOrganismDictionary, SITE_ORGANISM_SYSTEM, ORGANISM_TYPES } from './organisms';
 import type { LoaderStore } from './generic';
 
+type Concept = { code: string; display: string | null; properties: unknown };
+
 function fakeStore() {
-  const upsertConcepts = vi.fn(async () => {});
-  const markSystemChanged = vi.fn(async () => {});
+  // Params are declared so `mock.calls[0][0]` is typed — an untyped `vi.fn(async () => {})` gives
+  // an empty tuple and passes vitest while failing tsc (the package's test script does not typecheck).
+  const upsertConcepts = vi.fn(async (_rows: Concept[]) => {});
+  const markSystemChanged = vi.fn(async (_system: string) => {});
   const store = {
     upsertConcepts, markSystemChanged,
     upsertMapElements: vi.fn(async () => {}),
@@ -27,7 +31,7 @@ describe('importOrganismDictionary', () => {
     expect(r.conceptsLoaded).toBe(3);
     expect(r.byType).toEqual({ bacteria: 1, fungus: 1, none: 1 });
 
-    const rows = upsertConcepts.mock.calls[0][0] as { code: string; display: string | null; properties: unknown }[];
+    const rows = upsertConcepts.mock.calls[0][0];
     expect(rows.find((c) => c.code === 'ACIBA')).toMatchObject({
       display: 'Acinetobacter baumanii', properties: { organism_type: 'bacteria' },
     });
@@ -64,7 +68,7 @@ describe('importOrganismDictionary', () => {
     const r = await importOrganismDictionary([{ code: '', description: 'Microbiology Organisms', category: 'bacteria' }, ROW('ACIBA', 'bacteria')], store);
     expect(r.skipped).toBe(1);
     expect(r.conceptsLoaded).toBe(1);
-    expect((upsertConcepts.mock.calls[0][0] as { code: string }[]).map((c) => c.code)).toEqual(['ACIBA']);
+    expect(upsertConcepts.mock.calls[0][0].map((c) => c.code)).toEqual(['ACIBA']);
   });
 
   it('signals the system ONCE, after the concepts land', async () => {
