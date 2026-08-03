@@ -1,4 +1,5 @@
-import type { DesignElement, DesignPage, ReportDesign } from '../schema';
+import type { CellStatus, DesignElement, DesignPage, ReportDesign } from '../schema';
+import { CELL_STATUSES } from '../schema';
 import { toPt, PX_TO_PT } from './units';
 import type { ResolvedTable } from './index';
 
@@ -142,6 +143,33 @@ export function rowsFor(el: DesignElement, resolved: ResolvedTable | undefined):
     return resolved.rows.map((row) => cols.map((c) => String(row[c.key] ?? '')));
   }
   return el.rows ?? [];
+}
+
+/** Parse a status token from a query cell. Unrecognised values become `undefined` — a report must
+ *  never colour a cell on a token it does not understand. */
+export function asCellStatus(v: unknown): CellStatus | undefined {
+  if (typeof v !== 'string') return undefined;
+  const s = v.trim().toLowerCase();
+  return (CELL_STATUSES as readonly string[]).includes(s) ? (s as CellStatus) : undefined;
+}
+
+/**
+ * Per-cell statuses aligned to `rowsFor`'s grid, or `[]` when this table has none.
+ *
+ * Returning `[]` on the no-statusKey path is the compatibility contract: `drawGrid` then takes
+ * exactly the code path it took before this feature existed.
+ *
+ * ⚠ Only `el.boundColumns` is consulted. `resolved.columns` is `{key,label}` and carries no
+ * `statusKey`, and binding columns explicitly is the only way to author one anyway.
+ */
+export function cellStatusesFor(
+  el: DesignElement, resolved: ResolvedTable | undefined,
+): (CellStatus | undefined)[][] {
+  if (el.kind !== 'table' || !el.dataSource) return [];
+  if (!resolved || 'error' in resolved) return [];
+  const cols = el.boundColumns ?? [];
+  if (!cols.some((c) => c.statusKey)) return [];
+  return resolved.rows.map((row) => cols.map((c) => (c.statusKey ? asCellStatus(row[c.statusKey]) : undefined)));
 }
 
 /** How many physical pages this one table needs (repeat-page model). 1 for non-tables/errors/degenerate boxes. */
