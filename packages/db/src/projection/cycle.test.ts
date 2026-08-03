@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { sql } from 'kysely';
 import { makeMigratedDb } from '../migrations/internal/test-helpers';
 import { makeMigratedExternalDb } from '../test-helpers-external';
 import { createFhirStore } from '../fhir-store';
@@ -213,6 +214,54 @@ describe('reprojectAll', () => {
     const [row] = await externalDb.selectFrom('patients').selectAll().execute();
     expect(row.source_system).toBe('cdr');
     expect(row.batch_id).toBe('batch-1');
+    await internalDb.destroy();
+    await externalDb.destroy();
+  });
+
+  // reprojectAll pages fhir_resources (1,000 at a time) straight into writeMany, unlike the
+  // deferred cycle which projects one resource per apply. If that paged batch ever let a scoped
+  // resource's delete-then-insert be skipped or merged with a sibling's, one value set's rebuild
+  // would erase the other's rows. writeMany already applies scoped resources individually
+  // (relational-writer.test.ts: "writeMany still replaces ... a scoped resource batched with a
+  // sibling"), so this pins that the same guarantee survives reprojectAll's own batching.
+  it('rebuilds two value sets in one batch without either erasing the other', async () => {
+    const internalDb = await makeMigratedDb();
+    const externalDb = await makeMigratedExternalDb();
+    const relationalWriter = createRelationalWriter(externalDb as never, 'postgres');
+
+    const mk = (id: string, code: string) => ({
+      resourceType: 'ValueSet', id, url: `urn:test:${id}`,
+      expansion: { contains: [{ system: 'sys', code, display: code }] },
+    });
+    for (const r of [mk('vs1', 'A'), mk('vs2', 'B')]) {
+      await internalDb.insertInto('fhir.fhir_resources')
+        .values({ resource_type: 'ValueSet', id: r.id, version: 1, version_id: '1', resource: JSON.stringify(r) } as never)
+        .execute();
+    }
+
+    // Pre-seed a STALE row under vs1's scope in the external warehouse that the canonical fhir_resources
+    // row above no longer contains. A correct rebuild's delete-then-insert must remove it; only asserting
+    // that 'A' and 'B' are present (without this) would pass even if the rebuild degenerated into a plain
+    // upsert that never prunes stale rows — see Step 4's mutation check.
+    await relationalWriter.write(mk('vs1', 'STALE'), {});
+
+    await reprojectAll({ internalDb: internalDb as never, relationalWriter });
+
+    // internalDb's migrations seed several builtin ValueSets (specimen type, result flags, etc.)
+    // directly into fhir.fhir_resources, and reprojectAll rebuilds ALL of them — so scope the read
+    // to our two test value sets rather than asserting on the whole terminology_codes table.
+    const ourCodes = async () =>
+      (await sql<{ code: string }>`select code from terminology_codes where value_set_id in ('vs1', 'vs2') order by code`.execute(externalDb)).rows.map((r) => r.code);
+    expect(await ourCodes()).toEqual(['A', 'B']);
+
+    // Determinism guard: the composite id is deterministic, so a second rebuild must UPDATE the
+    // dimension in place rather than duplicate it.
+    const totalBefore = (await sql`select count(*) as n from terminology_codes`.execute(externalDb)).rows[0] as { n: number | string };
+    await reprojectAll({ internalDb: internalDb as never, relationalWriter });
+    expect(await ourCodes()).toEqual(['A', 'B']);
+    const totalAfter = (await sql`select count(*) as n from terminology_codes`.execute(externalDb)).rows[0] as { n: number | string };
+    expect(Number(totalAfter.n)).toBe(Number(totalBefore.n));
+
     await internalDb.destroy();
     await externalDb.destroy();
   });
