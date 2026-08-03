@@ -7,6 +7,7 @@ import { projectFacility } from './facility';
 import { projectSpecimen } from './specimen';
 import { projectDiagnosticReport } from './diagnostic-report';
 import { projectQuestionnaireResponse } from './questionnaire-response';
+import { projectValueSet } from './value-set';
 
 export * from './patient';
 export * from './service-request';
@@ -15,6 +16,7 @@ export * from './facility';
 export * from './specimen';
 export * from './diagnostic-report';
 export * from './questionnaire-response';
+export * from './value-set';
 
 export interface RelationalResult {
   table: keyof ExternalSchema;
@@ -38,6 +40,14 @@ export function projectResource(resource: unknown, prov: Provenance = {}): Relat
     case 'Specimen': return { table: 'specimens', rows: [projectSpecimen(r, prov)] };
     case 'DiagnosticReport': return { table: 'diagnostic_reports', rows: [projectDiagnosticReport(r, prov)] };
     case 'QuestionnaireResponse': return { table: 'questionnaire_responses', rows: [projectQuestionnaireResponse(r, prov)] };
+    case 'ValueSet':
+      return {
+        table: 'terminology_codes',
+        rows: projectValueSet(r, prov),
+        // Fan-out resource: this ValueSet owns every terminology_codes row carrying its id, so a
+        // rewrite must REPLACE that set, not merely upsert into it (see relational-writer.ts).
+        scope: { column: 'value_set_id', value: String(r['id']) },
+      };
     default: return null;
   }
 }
@@ -52,6 +62,16 @@ export function tableForResourceType(resourceType: string): keyof ExternalSchema
     case 'Specimen': return 'specimens';
     case 'DiagnosticReport': return 'diagnostic_reports';
     case 'QuestionnaireResponse': return 'questionnaire_responses';
+    case 'ValueSet': return 'terminology_codes';
+    default: return null;
+  }
+}
+
+/** Names the column identifying every row a fan-out resource owns, for `deleteById` to clear the
+ *  whole scope instead of a single `id` row. `null` for fact resources (delete-by-`id` applies). */
+export function scopeColumnFor(resourceType: string): string | null {
+  switch (resourceType) {
+    case 'ValueSet': return 'value_set_id';
     default: return null;
   }
 }
