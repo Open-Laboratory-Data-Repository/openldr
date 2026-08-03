@@ -22,6 +22,11 @@ interface Props {
 type ResultColumn = { key: string; label: string };
 type ParamType = NonNullable<TemplateParam['type']>;
 
+// Radix Select renders `<SelectItem value="">` as an error, so "no status column" is modeled with
+// this sentinel and translated back to an absent `statusKey` before it reaches boundColumns (see
+// BuilderForm's identical NONE convention).
+const NONE_STATUS = '__none__';
+
 const emptyValue = (type: ParamType): TemplateParam['value'] => (type === 'daterange' ? { from: '', to: '' } : '');
 
 /** One editable design-parameter row. Text inputs commit on blur (local state while typing). */
@@ -224,12 +229,26 @@ export function DataTab({ element, parameters, onPatchElement, onPatchParameters
     [next[i], next[j]] = [next[j], next[i]];
     setBound(next, { discrete: true });
   };
+  // Picking a status column is a discrete undo step, like toggle/move/pickQuery above — it's a
+  // one-shot Select choice, not continuous typing (which is what coalescing is for).
+  const setStatusKey = (idx: number, statusKey: string | undefined) =>
+    setBound(bound.map((c, i) => {
+      if (i !== idx) return c;
+      // Delete rather than assign undefined: `statusKey: undefined` would round-trip through
+      // zod/JSON as an absent key anyway, but an explicit delete keeps the persisted design clean.
+      const { statusKey: _drop, ...rest } = c;
+      return statusKey ? { ...rest, statusKey } : rest;
+    }), { discrete: true });
 
   // Included columns first (in bound order), then the remaining result columns.
   const rows: { col: ResultColumn; included: boolean }[] = [
     ...bound.map((b) => ({ col: resultColumns.find((r) => r.key === b.key) ?? { key: b.key, label: b.label }, included: true })),
     ...resultColumns.filter((r) => !includedKeys.has(r.key)).map((r) => ({ col: r, included: false })),
   ];
+  // Status-source choices for every included column: any loaded result column not already shown as
+  // its own visible column (a column can't be its own status flag, and every included row's own key
+  // is itself among includedKeys, so it's naturally excluded too). Same list for every row.
+  const statusOptions = resultColumns.filter((r) => !includedKeys.has(r.key));
 
   return (
     <div className="flex flex-col gap-3 p-3">
@@ -261,6 +280,18 @@ export function DataTab({ element, parameters, onPatchElement, onPatchParameters
                   <Checkbox aria-label={col.key} checked={included} onCheckedChange={(v) => toggle(col, v === true)} />
                   <Input aria-label={`${t('reportDesigner.columnLabel')} ${col.key}`} value={boundCol ? boundCol.label : col.label}
                     disabled={!included} onChange={(e) => relabel(col.key, e.target.value)} className="h-7 flex-1 text-xs" />
+                  {included && boundCol && (
+                    <Select value={boundCol.statusKey ?? NONE_STATUS}
+                      onValueChange={(v) => setStatusKey(bound.indexOf(boundCol), v === NONE_STATUS ? undefined : v)}>
+                      <SelectTrigger aria-label={`${t('reportDesigner.statusColumnFor')} ${boundCol.label}`} className="h-7 w-28 shrink-0 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={NONE_STATUS}>{t('reportDesigner.none')}</SelectItem>
+                        {statusOptions.map((c) => <SelectItem key={c.key} value={c.key}>{c.label || c.key}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  )}
                   <Button type="button" variant="ghost" size="icon" className="h-7 w-7 shrink-0"
                     aria-label={`${t('reportDesigner.moveUp')} ${col.label}`} disabled={!included || i === 0}
                     onClick={() => move(col.key, -1)}><ArrowUp className="h-3.5 w-3.5" /></Button>

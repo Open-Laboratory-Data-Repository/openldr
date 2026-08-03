@@ -806,6 +806,7 @@ export const pt: EnShape = {
     noColumnsLoaded: 'Nenhuma coluna carregada. Escolha uma consulta e selecione Carregar colunas.',
     loadColumnsError: 'Não foi possível carregar as colunas. Verifique a consulta e os seus parâmetros.',
     columnLabel: 'Rótulo da coluna',
+    statusColumnFor: 'Coluna de estado para',
     moveUp: 'Mover para cima',
     moveDown: 'Mover para baixo',
     parameters: 'Parâmetros',

@@ -810,6 +810,7 @@ export const en = {
     noColumnsLoaded: 'No columns loaded. Pick a query and choose Load columns.',
     loadColumnsError: 'Could not load columns. Check the query and its parameters.',
     columnLabel: 'Label for column',
+    statusColumnFor: 'Status column for',
     moveUp: 'Move up',
     moveDown: 'Move down',
     parameters: 'Parameters',

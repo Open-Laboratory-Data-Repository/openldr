@@ -78,6 +78,40 @@ describe('DataTab table binding', () => {
     );
   });
 
+  it('binds a status column to an included column (discrete)', async () => {
+    const { onPatchElement } = setup({
+      dataSource: { kind: 'custom-query', queryId: 'cq_1' },
+      boundColumns: [{ key: 'org', label: 'Organism' }],
+    });
+    await loadColumns();
+    // 'pct' is the only result column not already shown as a visible bound column, so it's the
+    // sole status-source choice besides None.
+    fireEvent.click(screen.getByLabelText('Status column for Organism'));
+    fireEvent.click(await screen.findByText('%R'));
+    expect(onPatchElement).toHaveBeenLastCalledWith(
+      't',
+      { boundColumns: [{ key: 'org', label: 'Organism', statusKey: 'pct' }] },
+      { discrete: true },
+    );
+  });
+
+  it('clears statusKey when the status column is set back to none (discrete)', async () => {
+    const { onPatchElement } = setup({
+      dataSource: { kind: 'custom-query', queryId: 'cq_1' },
+      boundColumns: [{ key: 'org', label: 'Organism', statusKey: 'pct' }],
+    });
+    await loadColumns();
+    fireEvent.click(screen.getByLabelText('Status column for Organism'));
+    fireEvent.click(await screen.findByText('None'));
+    expect(onPatchElement).toHaveBeenLastCalledWith(
+      't',
+      { boundColumns: [{ key: 'org', label: 'Organism' }] },
+      { discrete: true },
+    );
+    // A column with no statusKey behaves exactly as before this slice: no stray property left behind.
+    expect(onPatchElement.mock.calls.at(-1)?.[1].boundColumns[0]).not.toHaveProperty('statusKey');
+  });
+
   it('renders the error line when the query run rejects', async () => {
     (queryApi.run as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('boom'));
     setup({ dataSource: { kind: 'custom-query', queryId: 'cq_1' } });
