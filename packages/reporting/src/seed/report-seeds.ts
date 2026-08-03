@@ -1672,6 +1672,146 @@ group by pathogen_code, pathogen_name
 order by pathogen_name`,
     },
   },
+
+  // ── Clinical microbiology report ────────────────────────────────────────────────────────────
+  // The one built-in aimed at a CLINICIAN rather than a programme analyst: a single request's
+  // culture & sensitivity result, for handing to the requesting ward.
+  //
+  // ⚠ Two terminology joins do real work here, and neither hardcodes a vocabulary:
+  //   1. `vs-non-reportable` EXCLUDES collection metadata. Without it the report prints the
+  //      courier's phone number ("Collect By Contact Number") as a lab result — measured, 425 rows.
+  //   2. `vs-ast-interpretation` supplies the DISPLAY for S/I/R. DISA's dictionary describes code
+  //      `I` as "Invalid" (an upstream Tanzania typo for "Intermediate"); CE stores what the lab
+  //      published, verbatim, and renders the terminology display instead. `coalesce` keeps it
+  //      FAIL-OPEN: a code with no terminology entry still prints its raw text.
+  // The status token (`normal`/`abnormal`/`indeterminate`) stays in SQL deliberately — mapping a
+  // clinical value to a presentational one is CE's choice, and the PDF renderer must never learn
+  // what an antibiotic is.
+  {
+    id: 'q-clinical-micro-ast',
+    name: 'Clinical — antimicrobial susceptibility for a request',
+    connectorId: '',
+    params: [{ id: 'request', label: 'Request ID', type: 'text', required: true }],
+    sql: {
+      postgres: `select
+  r.observation_desc as test,
+  coalesce(tc.display, r.text_value, r.coded_value) as result,
+  case coalesce(r.coded_value, r.abnormal_flag)
+    when 'S' then 'normal'
+    when 'R' then 'abnormal'
+    when 'I' then 'indeterminate'
+    else '' end as status
+from lab_results r
+left join terminology_codes tc
+  on tc.value_set_id = 'vs-ast-interpretation'
+ and tc.code = coalesce(r.coded_value, r.abnormal_flag)
+where r.request_id = {{param.request}}
+  and r.observation_code not in (select code from terminology_codes where value_set_id = 'vs-non-reportable')
+  and coalesce(r.coded_value, r.abnormal_flag) is not null
+  and r.observation_code not in ('634-6', 'ORGS')
+group by 1, 2, 3
+order by 1`,
+      // ⚠ MSSQL has no ordinal GROUP BY — the select expressions are repeated in full.
+      mssql: `select
+  r.observation_desc as test,
+  coalesce(tc.display, r.text_value, r.coded_value) as result,
+  case coalesce(r.coded_value, r.abnormal_flag)
+    when 'S' then 'normal'
+    when 'R' then 'abnormal'
+    when 'I' then 'indeterminate'
+    else '' end as status
+from lab_results r
+left join terminology_codes tc
+  on tc.value_set_id = 'vs-ast-interpretation'
+ and tc.code = coalesce(r.coded_value, r.abnormal_flag)
+where r.request_id = {{param.request}}
+  and r.observation_code not in (select code from terminology_codes where value_set_id = 'vs-non-reportable')
+  and coalesce(r.coded_value, r.abnormal_flag) is not null
+  and r.observation_code not in ('634-6', 'ORGS')
+group by
+  r.observation_desc,
+  coalesce(tc.display, r.text_value, r.coded_value),
+  case coalesce(r.coded_value, r.abnormal_flag)
+    when 'S' then 'normal'
+    when 'R' then 'abnormal'
+    when 'I' then 'indeterminate'
+    else '' end
+order by 1`,
+      mysql: `select
+  r.observation_desc as test,
+  coalesce(tc.display, r.text_value, r.coded_value) as result,
+  case coalesce(r.coded_value, r.abnormal_flag)
+    when 'S' then 'normal'
+    when 'R' then 'abnormal'
+    when 'I' then 'indeterminate'
+    else '' end as status
+from lab_results r
+left join terminology_codes tc
+  on tc.value_set_id = 'vs-ast-interpretation'
+ and tc.code = coalesce(r.coded_value, r.abnormal_flag)
+where r.request_id = {{param.request}}
+  and r.observation_code not in (select code from terminology_codes where value_set_id = 'vs-non-reportable')
+  and coalesce(r.coded_value, r.abnormal_flag) is not null
+  and r.observation_code not in ('634-6', 'ORGS')
+group by 1, 2, 3
+order by 1`,
+    },
+  },
+  // Patient/specimen header for the same request. Returns ONE row; the design binds it twice with
+  // different column projections (the panel strip, and the isolate on its own).
+  // ⚠ `lab_results.request_id` references the ServiceRequest **id**, so `lab_requests` joins on
+  // `id` — NOT on its own `request_id` column, which is the site's lab number. Getting that
+  // backwards returns an empty header and looks exactly like a binding failure.
+  // `max(...)` rather than `limit 1`/`top 1`: portable across all three dialects unchanged.
+  {
+    id: 'q-clinical-micro-header',
+    name: 'Clinical — patient & specimen header',
+    connectorId: '',
+    params: [{ id: 'request', label: 'Request ID', type: 'text', required: true }],
+    sql: { postgres: `select
+  p.surname as patient_surname,
+  p.firstname as patient_firstname,
+  p.sex as sex,
+  p.date_of_birth as dob,
+  s.type_text as specimen,
+  left(s.received_time, 10) as received,
+  q.request_id as lab_number,
+  q.panel_desc as panel,
+  (select max(coalesce(o.text_value, o.coded_value)) from lab_results o
+     where o.request_id = q.id and o.observation_code in ('634-6', 'ORGS')) as organism
+from lab_requests q
+left join patients p on p.id = q.patient_id
+left join specimens s on s.id = (select max(l.specimen_id) from lab_results l where l.request_id = q.id)
+where q.id = {{param.request}}`, mssql: `select
+  p.surname as patient_surname,
+  p.firstname as patient_firstname,
+  p.sex as sex,
+  p.date_of_birth as dob,
+  s.type_text as specimen,
+  left(s.received_time, 10) as received,
+  q.request_id as lab_number,
+  q.panel_desc as panel,
+  (select max(coalesce(o.text_value, o.coded_value)) from lab_results o
+     where o.request_id = q.id and o.observation_code in ('634-6', 'ORGS')) as organism
+from lab_requests q
+left join patients p on p.id = q.patient_id
+left join specimens s on s.id = (select max(l.specimen_id) from lab_results l where l.request_id = q.id)
+where q.id = {{param.request}}`, mysql: `select
+  p.surname as patient_surname,
+  p.firstname as patient_firstname,
+  p.sex as sex,
+  p.date_of_birth as dob,
+  s.type_text as specimen,
+  left(s.received_time, 10) as received,
+  q.request_id as lab_number,
+  q.panel_desc as panel,
+  (select max(coalesce(o.text_value, o.coded_value)) from lab_results o
+     where o.request_id = q.id and o.observation_code in ('634-6', 'ORGS')) as organism
+from lab_requests q
+left join patients p on p.id = q.patient_id
+left join specimens s on s.id = (select max(l.specimen_id) from lab_results l where l.request_id = q.id)
+where q.id = {{param.request}}` },
+  },
 ];
 
 /** Report-designer page designs, one table bound to a `SEED_QUERIES` entry (via `simpleTableDesign`). */
@@ -1807,6 +1947,55 @@ export const SEED_DESIGNS: ReportDesign[] = [
     ],
     parameters: [{ key: 'dateRange', label: 'Date range', type: 'daterange', required: true }],
   }),
+
+  // The clinical microbiology report. Authored as a literal rather than via `simpleTableDesign`
+  // because it is not one table on a page: it is an identity header, a bound patient/specimen
+  // panel, the isolate, a section band, and the susceptibility table.
+  //
+  // ⚠ Coordinates are px @96 (the renderer multiplies by 0.75 to reach pt) — the same units the
+  // Report Designer canvas edits in.
+  // ⚠ The two header tables bind the SAME query with different `boundColumns`. That is how the
+  // reference mockup's information-panel strip is expressed with today's element kinds; a purpose
+  // built key/value panel would drop the header row and set values under labels.
+  {
+    id: 'rt-clinical-micro',
+    name: 'Clinical Microbiology Report',
+    paper: 'A4',
+    orientation: 'portrait',
+    margins: { top: 32, right: 32, bottom: 32, left: 32 },
+    parameters: [{ key: 'request', label: 'Request ID', type: 'text', required: true, value: '' }],
+    pages: [{ id: 'p1', elements: [
+      { id: 'lab', kind: 'text', name: 'lab', rect: { x: 40, y: 34, w: 460, h: 16 }, text: 'LABORATORY REPORT', style: { fontSize: 15, bold: true, color: '#0f172a' } },
+      { id: 'title', kind: 'text', name: 'title', rect: { x: 40, y: 56, w: 400, h: 16 }, text: 'MICROBIOLOGY — CULTURE & SENSITIVITY', style: { fontSize: 10, bold: true, color: '#334155' } },
+      { id: 'hdr', kind: 'table', name: 'Patient & specimen', rect: { x: 40, y: 84, w: 700, h: 46 },
+        dataSource: { kind: 'custom-query', queryId: 'q-clinical-micro-header' },
+        boundColumns: [
+          { key: 'patient_surname', label: 'Surname', kind: 'label' },
+          { key: 'patient_firstname', label: 'First name', kind: 'label' },
+          { key: 'sex', label: 'Sex', kind: 'label' },
+          { key: 'dob', label: 'DOB', kind: 'label' },
+          { key: 'specimen', label: 'Specimen', kind: 'label' },
+          { key: 'received', label: 'Received', kind: 'label' },
+          { key: 'lab_number', label: 'Lab number', kind: 'label' },
+        ] },
+      { id: 'org', kind: 'table', name: 'Organism', rect: { x: 40, y: 140, w: 700, h: 46 },
+        dataSource: { kind: 'custom-query', queryId: 'q-clinical-micro-header' },
+        boundColumns: [{ key: 'organism', label: 'Organism isolated', kind: 'label' }] },
+      { id: 'band', kind: 'rect', name: 'band', rect: { x: 40, y: 198, w: 700, h: 20 }, style: { fill: '#334155', strokeColor: '#334155' } },
+      { id: 'bandt', kind: 'text', name: 'bandt', rect: { x: 40, y: 203, w: 420, h: 16 }, text: '   ANTIMICROBIAL SUSCEPTIBILITY', style: { fontSize: 8, bold: true, color: '#ffffff' } },
+      // Two columns, not three: the interpretation IS the result for a susceptibility test, and
+      // carrying the same fact in two renderings is what let them visibly disagree.
+      { id: 'tbl', kind: 'table', name: 'Susceptibility', rect: { x: 40, y: 224, w: 700, h: 300 },
+        dataSource: { kind: 'custom-query', queryId: 'q-clinical-micro-ast' },
+        boundColumns: [
+          { key: 'test', label: 'Antimicrobial', kind: 'label' },
+          { key: 'result', label: 'Result', statusKey: 'status', emphasis: 'fill', kind: 'flag' },
+        ] },
+      { id: 'rule2', kind: 'line', name: 'rule2', rect: { x: 40, y: 700, w: 700, h: 0 }, style: { strokeColor: '#cbd5e1', strokeWidth: 0.75 } },
+      { id: 'ft', kind: 'text', name: 'ft', rect: { x: 40, y: 712, w: 430, h: 16 }, text: 'Interpretations reflect the laboratory’s reading at time of testing.', style: { fontSize: 7, color: '#94a3b8' } },
+      { id: 'sig', kind: 'text', name: 'sig', rect: { x: 500, y: 712, w: 240, h: 16 }, text: 'Authorised by ______________________', style: { fontSize: 8, color: '#475569' } },
+    ] }],
+  },
 ];
 
 /** `reports` records linking a `SEED_DESIGNS` design to its `SEED_QUERIES` primary query. */
@@ -1925,6 +2114,21 @@ export const SEED_REPORT_DEFS: ReportRecord[] = [
     // and is what the Reports page actually renders — this field is currently inert).
     chart: { type: 'stat', value: '0', label: 'pathogens' },
     // No facility filter — the catalog declares only `dateRange` (see amr-antibiogram.ts).
+    paramOptions: null,
+    status: 'published',
+  },
+
+  {
+    id: 'r-clinical-micro',
+    name: 'Clinical Microbiology Report',
+    description: 'Culture & sensitivity result for a single request, for the requesting clinician. Collection metadata is excluded by terminology, not by a hardcoded code list.',
+    category: 'operational',
+    designId: 'rt-clinical-micro',
+    primaryQueryId: 'q-clinical-micro-ast',
+    summaryMetrics: [{ id: 'agents', label: 'Agents tested', type: 'count' }],
+    // No chart: a per-patient clinical result is not a series, and no param options: `request` is
+    // typed by the clinician, not picked from a lookup query.
+    chart: null,
     paramOptions: null,
     status: 'published',
   },
