@@ -27,12 +27,13 @@ describe('014_value_sets seeds', () => {
     const urls = sets.map((s) => s.url);
     expect(urls).toContain('urn:openldr:valueset:yes-no');
     expect(urls).toContain('urn:openldr:valueset:hiv-result');
-    // Scoped to 014's own six seed slugs, not the whole table: migration 069 seeds three more
-    // urn:openldr:valueset:* rows of its own, so an unscoped table-length assertion would break
-    // every time a later migration seeds another value set.
-    const seededByThisMigration = ['yes-no', 'biological-sex', 'result-interpretation', 'specimen-type', 'malaria-species', 'hiv-result']
-      .map((slug) => `urn:openldr:valueset:${slug}`);
-    expect(urls.filter((u) => seededByThisMigration.includes(u))).toHaveLength(6);
+    // Scope by 014's own `vs-seed-` id prefix rather than by the whole table: 069 seeds three more
+    // `urn:openldr:valueset:*` rows (ids `vs-<slug>`), so an unscoped length assertion would break
+    // every time a later migration seeds another set. The prefix keeps BOTH halves of
+    // the original assertion — all six are present, AND 014 seeds nothing extra — which a slug
+    // filter alone would lose (a seventh seed added inside 014 would slip through it).
+    const ids = (await db.selectFrom('value_sets').select('id').execute()).map((r) => r.id);
+    expect(ids.filter((i) => i.startsWith('vs-seed-'))).toHaveLength(6);
 
     const yn = await db.selectFrom('value_sets').select('id').where('url', '=', 'urn:openldr:valueset:yes-no').executeTakeFirstOrThrow();
     const exp = await db.selectFrom('valueset_expansions').select(['code']).where('value_set_id', '=', yn.id).orderBy('code').execute();

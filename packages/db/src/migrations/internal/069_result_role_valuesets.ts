@@ -79,10 +79,19 @@ export async function up(db: Kysely<unknown>): Promise<void> {
     });
     // ⚠ `fhir_resources` was relocated to the `fhir` schema by migration 045 (the FHIR storage
     // CQRS pivot) — it must be addressed as `fhir.fhir_resources` here, not the bare (now
-    // nonexistent) `public.fhir_resources` that 014 (written pre-045) still targets. We write only
-    // the canonical row, not `fhir.resource_history`/`fhir.change_log` — this mirrors 045's own
-    // migration-time fallback, which copied only `fhir_resources` rows across the schema move
-    // without backfilling history/change-log. `version`/`version_id` are left to their defaults.
+    // nonexistent) `public.fhir_resources` that 014 (written pre-045) still targets.
+    //
+    // We write ONLY the canonical row — no `fhir.resource_history`, no `fhir.change_log`.
+    // ⚠ That is normally a defect: a canonical row with no change_log entry is invisible to the
+    // incremental projection (it reads `where seq > cursor`), which is exactly why migration 014's
+    // seeded ValueSets never reached the warehouse and needed an `openldr terminology reproject`
+    // backfill. It is safe HERE for one specific reason: these three sets are seeded with NO
+    // expansion, so `projectValueSet` emits zero rows — there is no content to lose. The moment
+    // concepts exist, the re-expansion goes through `valueSets.save()` → `refreshCacheAndProject`
+    // → `fhirStore.save()`, which DOES write a change_log row and projects normally.
+    // ⇒ If you ever seed a set here WITH an expansion, this comment stops applying.
+    // `version`/`version_id` are left to their defaults; because no history row is written,
+    // `save()`'s `max(version)+1` yields 1, matching the seeded default — no version skew.
     await seedDb.insertInto('fhir.fhir_resources').values({
       id, resource_type: 'ValueSet', resource: JSON.stringify(resource),
     } as never).onConflict((oc) => oc.columns(['resource_type', 'id']).doNothing()).execute();
