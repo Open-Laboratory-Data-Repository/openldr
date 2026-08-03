@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { interpolate, paramMap, tableChunkCount, pageChunkCount, rowsFor, totalPhysicalPages, pageFooterLabel, cellTextOptions, columnWidths, isNumericColumn, CELL_TEXT_H, ROW_H } from './draw';
+import { interpolate, paramMap, tableChunkCount, pageChunkCount, rowsFor, totalPhysicalPages, pageFooterLabel, cellTextOptions, columnWidths, isNumericColumn, CELL_TEXT_H, ROW_H, asCellStatus, cellStatusesFor, isRightAligned } from './draw';
 import type { ReportDesign, DesignElement, DesignPage } from '../schema';
 import type { ResolvedTable } from './index';
 
@@ -229,5 +229,76 @@ describe('totalPhysicalPages', () => {
       { id: 'p2', elements: [{ id: 'x', kind: 'text', name: 'T', rect: { x: 0, y: 0, w: 10, h: 10 }, text: 'hi' } as DesignElement] }, // 1
     ];
     expect(totalPhysicalPages(pages, new Map())).toBe(4);
+  });
+});
+
+describe('asCellStatus', () => {
+  it('accepts the five tokens case-insensitively and trims', () => {
+    expect(asCellStatus('normal')).toBe('normal');
+    expect(asCellStatus('  ABNORMAL ')).toBe('abnormal');
+    expect(asCellStatus('Indeterminate')).toBe('indeterminate');
+  });
+  it('rejects anything else, including clinical tokens and non-strings', () => {
+    expect(asCellStatus('R')).toBeUndefined();
+    expect(asCellStatus('high')).toBeUndefined();
+    expect(asCellStatus(1)).toBeUndefined();
+    expect(asCellStatus(null)).toBeUndefined();
+  });
+});
+
+describe('cellStatusesFor', () => {
+  const ds = { kind: 'custom-query', queryId: 'q' } as const;
+
+  it('returns [] when no bound column declares a statusKey (the identical-output contract)', () => {
+    const el = tbl({ dataSource: ds, boundColumns: [{ key: 'a', label: 'A' }] });
+    const resolved = { columns: [{ key: 'a', label: 'A' }], rows: [{ a: 1 }, { a: 2 }] };
+    expect(cellStatusesFor(el, resolved)).toEqual([]);
+  });
+
+  it('reads the status column and aligns it to the bound column position', () => {
+    const el = tbl({ dataSource: ds, boundColumns: [
+      { key: 'name', label: 'Test' },
+      { key: 'res', label: 'Result', statusKey: 'res_status' },
+    ] });
+    const resolved = {
+      columns: [{ key: 'name', label: 'Test' }, { key: 'res', label: 'Result' }],
+      rows: [
+        { name: 'HIV', res: 'Negative', res_status: 'normal' },
+        { name: 'HBsAg', res: 'Positive', res_status: 'abnormal' },
+      ],
+    };
+    expect(cellStatusesFor(el, resolved)).toEqual([
+      [undefined, 'normal'],
+      [undefined, 'abnormal'],
+    ]);
+  });
+
+  it('drops an unrecognised status rather than passing it through', () => {
+    const el = tbl({ dataSource: ds, boundColumns: [{ key: 'res', label: 'R', statusKey: 's' }] });
+    const resolved = { columns: [{ key: 'res', label: 'R' }], rows: [{ res: 'x', s: 'RESISTANT' }] };
+    expect(cellStatusesFor(el, resolved)).toEqual([[undefined]]);
+  });
+
+  it('returns [] for a static table and for an error-resolved bound table', () => {
+    expect(cellStatusesFor(tbl({ columns: ['A'], rows: [['1']] }), undefined)).toEqual([]);
+    expect(cellStatusesFor(tbl({ dataSource: ds, boundColumns: [{ key: 'a', label: 'A', statusKey: 's' }] }), { error: 'x' })).toEqual([]);
+  });
+});
+
+describe('isRightAligned', () => {
+  const numericRows = [['5.0'], ['6.2'], ['7.1']];
+
+  it('right-aligns a numeric column with no kind, exactly as before this feature', () => {
+    expect(isRightAligned(numericRows, 0, undefined)).toBe(true);
+    expect(isRightAligned(numericRows, 0, 'value')).toBe(true);
+  });
+
+  it('never right-aligns a units or range column, even when every value parses as a number', () => {
+    expect(isRightAligned(numericRows, 0, 'units')).toBe(false);
+    expect(isRightAligned(numericRows, 0, 'range')).toBe(false);
+  });
+
+  it('leaves a non-numeric column left-aligned regardless of kind', () => {
+    expect(isRightAligned([['abc']], 0, 'value')).toBe(false);
   });
 });
