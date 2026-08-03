@@ -150,7 +150,11 @@ export async function runTerminologyReproject(opts: { json: boolean }): Promise<
   const ctx = await createDbContext(loadConfig());
   try {
     const projected = await reprojectAll({ internalDb: ctx.internalDb, relationalWriter: ctx.relationalWriter });
-    out(opts.json, { projected }, `reprojected ${projected} resource${projected === 1 ? '' : 's'} into the terminology_codes read model`);
+    // ⚠ `projected` counts EVERY canonical resource rebuilt, not terminology rows — reprojectAll
+    // rebuilds the whole read model (patients, lab_results, … as well as terminology_codes). Saying
+    // "into the terminology_codes read model" read as "8692 terminology rows" on the first live run,
+    // when the dimension actually held 2025. Name what the number is.
+    out(opts.json, { projected }, `rebuilt the read model from ${projected} canonical resource${projected === 1 ? '' : 's'} (includes the terminology_codes dimension)`);
     return 0;
   } catch (err) {
     process.stderr.write(`terminology reproject failed: ${redactError(err)}\n`);
