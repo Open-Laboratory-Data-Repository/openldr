@@ -679,3 +679,53 @@ describe('SEED_QUERIES — q-turnaround-time excludes partial-precision timestam
     }
   });
 });
+
+describe('SEED_DESIGNS — rt-clinical-micro uses real keyvalue panels', () => {
+  const design = () => SEED_DESIGNS.find((d) => d.id === 'rt-clinical-micro')!;
+  const el = (id: string) => design().pages[0].elements.find((e) => e.id === id)!;
+
+  it('renders the patient/specimen band as a keyvalue panel, not a one-row table', () => {
+    // Until S4 this was a `table` bound to the header query, so its column LABELS printed as a
+    // header band above a single row of values — a spreadsheet fragment where the reference shows
+    // a metadata block. A regression back to `kind: 'table'` here is invisible in a diff of ids.
+    expect(el('hdr').kind).toBe('keyvalue');
+    expect(el('org').kind).toBe('keyvalue');
+    expect(design().pages[0].elements.filter((e) => e.kind === 'table').map((e) => e.id)).toEqual(['tbl']);
+  });
+
+  it('keeps both panels bound to the SAME header query, one row serving both', () => {
+    for (const id of ['hdr', 'org']) {
+      expect(el(id).dataSource).toEqual({ kind: 'custom-query', queryId: 'q-clinical-micro-header' });
+      expect(el(id).boundColumns?.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('projects only keys the header query actually selects', () => {
+    const sql = SEED_QUERIES.find((q) => q.id === 'q-clinical-micro-header')!.sql.postgres;
+    for (const id of ['hdr', 'org']) {
+      for (const c of el(id).boundColumns ?? []) {
+        // ⚠ `\\b` — inside a TEMPLATE LITERAL a lone `\b` is the backspace character, not a regex
+        // word boundary, so the pattern becomes `as panel\x08` and never matches anything.
+        expect(new RegExp(`as ${c.key}\\b`).test(sql), `${id}.${c.key} is not selected by the header query`).toBe(true);
+      }
+    }
+  });
+
+  it('lays the header out in two pair columns and the isolate stacked', () => {
+    expect(el('hdr').layout).toBe('inline');
+    expect(el('hdr').panelColumns).toBe(2);
+    expect(el('org').layout).toBe('stacked');
+    expect(el('org').text).toBe('ORGANISM ISOLATED');
+  });
+
+  it('leaves no element overlapping another vertically', () => {
+    // The panels are taller than the tables they replaced; a stale `y` silently overprints.
+    const els = [...design().pages[0].elements].sort((a, b) => a.rect.y - b.rect.y);
+    for (let i = 1; i < els.length; i += 1) {
+      const prev = els[i - 1];
+      const overlaps = els[i].rect.y < prev.rect.y + prev.rect.h;
+      // `band`/`bandt` are a deliberate pair (text sits inside its own band), as are rule/footer rows.
+      if (overlaps) expect(['bandt', 'ft', 'sig'], `${els[i].id} overlaps ${prev.id}`).toContain(els[i].id);
+    }
+  });
+});

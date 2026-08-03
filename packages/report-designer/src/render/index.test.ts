@@ -154,6 +154,21 @@ function pageContents(pdf: Buffer): string[] {
 /** The `/DeviceRGB cs\n<r> <g> <b> scn` operator pdfkit emits for a `fillColor(hex)` call —
  *  computed from the hex, not copied from a captured sample, so the assertion documents its own
  *  derivation instead of pinning a magic string. */
+/**
+ * Every text run drawn in the PDF, decoded.
+ *
+ * ⚠ A plain string NEVER appears in a content stream, and neither does its hex — pdfkit splits a run
+ * at every kerning pair, so "Surname" is emitted as `[<537572> -25 <6e616d65> 0] TJ` ("Sur", kern,
+ * "name"). Assertions must therefore rejoin the `<...>` chunks WITHIN one `TJ` array before
+ * comparing; hex-encoding the whole expected string and searching for it silently fails on any word
+ * that happens to contain a kerning pair.
+ */
+function pdfTexts(pdf: Buffer): string[] {
+  return [...decodedContent(pdf).matchAll(/\[(.*?)\]\s*TJ/g)].map((m) =>
+    [...m[1].matchAll(/<([0-9a-fA-F]*)>/g)]
+      .map((h) => Buffer.from(h[1], 'hex').toString('latin1')).join(''));
+}
+
 function fillOp(hex: string): string {
   const r = parseInt(hex.slice(1, 3), 16) / 255;
   const g = parseInt(hex.slice(3, 5), 16) / 255;
@@ -419,5 +434,86 @@ describe('zebra-stripe fill tracking', () => {
     const zebraFill = fillOp('#f8fafc'); // ZEBRA_FILL
     const bodyFill = fillOp('#334155'); // BODY_TEXT
     expect(content).toContain(`${zebraRect}\n/DeviceRGB cs\n${zebraFill}\nf\n/DeviceRGB cs\n${bodyFill}\n`);
+  });
+});
+
+describe('keyvalue panel rendering', () => {
+  const kvDesign = (over: Partial<import('../schema').DesignElement> = {}): ReportDesign => ({
+    id: 'd', name: 'N', paper: 'A4', orientation: 'portrait', parameters: [],
+    pages: [{ id: 'p', elements: [{
+      id: 'k', kind: 'keyvalue', name: 'K', rect: { x: 0, y: 0, w: 400, h: 200 },
+      dataSource: { kind: 'custom-query', queryId: 'q' },
+      boundColumns: [{ key: 'sn', label: 'Surname' }, { key: 'sex', label: 'Sex' }],
+      ...over,
+    }] }],
+  } as ReportDesign);
+  const kvRows = (): Map<string, ResolvedTable> => new Map([['k', {
+    columns: [], rows: [{ sn: 'MWASEKAGA', sex: 'M', st: 'abnormal' }],
+  }]]);
+
+  it('draws every label and its row-0 value, and no header band', async () => {
+    const pdf = await renderReportDesignPdf(kvDesign(), kvRows(), { now: NOW });
+    const texts = pdfTexts(pdf);
+    for (const s of ['Surname', 'MWASEKAGA', 'Sex']) expect(texts).toContain(s);
+    // A table would paint its header band; a keyvalue panel has no header row at all.
+    expect(decodedContent(pdf)).not.toContain(fillOp('#eef2f6'));
+  });
+
+  it('puts an inline label and its value on ONE baseline, and a stacked value below its label', async () => {
+    const inline = textYs(await renderReportDesignPdf(kvDesign({ layout: 'inline' }), kvRows(), { now: NOW }));
+    const stacked = textYs(await renderReportDesignPdf(kvDesign({ layout: 'stacked' }), kvRows(), { now: NOW }));
+    // inline: label and value share a y, so 2 pairs → 2 distinct ys. stacked: 4.
+    expect(new Set(inline).size).toBe(2);
+    expect(new Set(stacked).size).toBe(4);
+  });
+
+  it('draws the title band only when the element carries title text', async () => {
+    const withoutTitle = await renderReportDesignPdf(kvDesign(), kvRows(), { now: NOW });
+    const withTitle = await renderReportDesignPdf(kvDesign({ text: 'PATIENT' }), kvRows(), { now: NOW });
+    // ⚠ Assert on the BAND RECT, not on `fillOp('#334155')`: the title fill happens to be the same
+    // colour as `BODY_TEXT`, so the colour operator is present either way and a colour-only
+    // assertion passes on a panel that draws no band at all. The panel is 400px wide → 300pt, and
+    // the band is ROW_H tall.
+    const band = '0 0 300 16 re';
+    expect(decodedContent(withoutTitle)).not.toContain(band);
+    expect(decodedContent(withTitle)).toContain(band);
+    expect(pdfTexts(withTitle)).toContain('PATIENT');
+  });
+
+  it('paints a chip only for fill emphasis on a recognised token, sized to the value not the pair', async () => {
+    const plain = decodedContent(await renderReportDesignPdf(
+      kvDesign({ boundColumns: [{ key: 'sn', label: 'Surname' }] }), kvRows(), { now: NOW }));
+    const chipped = decodedContent(await renderReportDesignPdf(
+      kvDesign({ boundColumns: [{ key: 'sn', label: 'Surname', statusKey: 'st', emphasis: 'fill' }] }), kvRows(), { now: NOW }));
+    expect(plain).not.toContain(fillOp('#e11d48'));
+    expect(chipped).toContain(fillOp('#e11d48'));
+    // The chip must be narrower than the value box (300pt panel, 1 column, ~180pt of value area) —
+    // a full-width bar is the defect this sizing exists to avoid.
+    // ⚠ The element also emits a CLIP rect spanning the whole panel, which would otherwise be the
+    // widest match every time. A clip is `re` followed by `W n`; a fill is `re` followed by the
+    // colour operators and then `f`, so the negative lookahead — not an `f` match — is what
+    // separates them.
+    const filled = /(-?[\d.]+) (-?[\d.]+) (-?[\d.]+) (-?[\d.]+) re\n(?!W n)/g;
+    const widths = [...chipped.matchAll(filled)].map((m) => parseFloat(m[3]));
+    expect(widths.length).toBeGreaterThan(0);
+    expect(Math.max(...widths)).toBeLessThan(120);
+  });
+
+  it('draws the error placeholder for a failed query, as a bound table does', async () => {
+    const content = decodedContent(await renderReportDesignPdf(
+      kvDesign(), new Map([['k', { error: 'boom' }]]), { now: NOW }));
+    expect(content).toContain(fillOp('#fef2f2'));
+  });
+
+  it('keeps the labels visible when the query returns no rows', async () => {
+    const pdf = await renderReportDesignPdf(kvDesign(), new Map([['k', { columns: [], rows: [] }]]), { now: NOW });
+    expect(pdfTexts(pdf)).toContain('Surname');
+  });
+
+  it('never paginates: a panel with more pairs than fit stays on one page', async () => {
+    const many = Array.from({ length: 40 }, (_, i) => ({ key: `k${i}`, label: `L${i}` }));
+    const rows = new Map<string, ResolvedTable>([['k', { columns: [], rows: [Object.fromEntries(many.map((c) => [c.key, 'v']))] }]]);
+    const pdf = await renderReportDesignPdf(kvDesign({ boundColumns: many, rect: { x: 0, y: 0, w: 400, h: 60 } }), rows, { now: NOW });
+    expect(pdf.toString('latin1')).toMatch(/\/Count 1/);
   });
 });

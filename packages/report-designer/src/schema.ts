@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export type ElementKind = 'text' | 'table' | 'image' | 'line' | 'rect' | 'datetime';
+export type ElementKind = 'text' | 'table' | 'image' | 'line' | 'rect' | 'datetime' | 'keyvalue';
 export type Paper = 'A4' | 'Letter';
 export type Orientation = 'portrait' | 'landscape';
 export type TextAlign = 'left' | 'center' | 'right';
@@ -44,21 +44,31 @@ export const BoundColumnSchema = z.object({
 });
 export type BoundColumn = z.infer<typeof BoundColumnSchema>;
 
+/** How a `keyvalue` pair arranges its label against its value. `inline` puts them side by side;
+ *  `stacked` puts a small uppercase label above the value, for values too long to share a line. */
+export type KeyValueLayout = 'inline' | 'stacked';
+
 export const DesignElementSchema = z.object({
   id: z.string(),
-  kind: z.enum(['text', 'table', 'image', 'line', 'rect', 'datetime']),
+  kind: z.enum(['text', 'table', 'image', 'line', 'rect', 'datetime', 'keyvalue']),
   name: z.string(),
   rect: RectSchema,
-  /** text/datetime content */
+  /** text/datetime content; also the OPTIONAL title of a `keyvalue` panel (no title when empty) */
   text: z.string().optional(),
   /** table column headers */
   columns: z.array(z.string()).optional(),
-  /** table sample rows (looks-only) */
+  /** table sample rows (looks-only); for an unbound `keyvalue`, `[label, value]` sample pairs */
   rows: z.array(z.array(z.string())).optional(),
-  /** real table binding (configured in the Data tab) */
+  /** real table/keyvalue binding (configured in the Data tab) */
   dataSource: DataSourceSchema.optional(),
-  /** picked/reordered/relabeled projection of the query's result columns */
+  /** picked/reordered/relabeled projection of the query's result columns.
+   *  On a `keyvalue` element each entry is ONE label→value pair, valued from row 0. */
   boundColumns: z.array(BoundColumnSchema).optional(),
+  /** `keyvalue` pair arrangement (default `inline`) */
+  layout: z.enum(['inline', 'stacked']).optional(),
+  /** `keyvalue` pairs side by side per line (default 1). Capped at 4 — beyond that a pair's share of
+   *  an A4 width is narrower than its own label. */
+  panelColumns: z.number().int().min(1).max(4).optional(),
   /** presentational style (text/line/rect) */
   style: ElementStyleSchema.optional(),
   /** image source (URL or data: URI) */

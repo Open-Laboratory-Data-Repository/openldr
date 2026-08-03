@@ -113,6 +113,42 @@ function KindControls({ el, onPatch }: {
     );
   }
 
+  if (el.kind === 'keyvalue') {
+    // No static-pair editor: an unbound panel shows its sample pairs and is made real by binding a
+    // query in the Data tab — the same contract a table's sample `rows` already have here.
+    return (
+      <div className="flex flex-col gap-3">
+        <div>
+          <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">{t('reportDesigner.panelTitle')}</div>
+          <Input aria-label={t('reportDesigner.panelTitle')} value={el.text ?? ''} placeholder="—"
+            onChange={(e) => onPatch({ text: e.target.value })} className="h-8 text-xs" />
+        </div>
+        <div>
+          <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">{t('reportDesigner.panelTitleFill')}</div>
+          <ColorField value={s.fill ?? '#334155'} onChange={(c, opts) => style({ fill: c }, !!opts?.discrete)} aria-label={t('reportDesigner.panelTitleFill')} />
+        </div>
+        <div>
+          <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">{t('reportDesigner.layout')}</div>
+          <Select value={el.layout ?? 'inline'} onValueChange={(v) => onPatch({ layout: v as 'inline' | 'stacked' }, { discrete: true })}>
+            <SelectTrigger aria-label={t('reportDesigner.layout')} className="h-8 w-full text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="inline">{t('reportDesigner.layoutInline')}</SelectItem>
+              <SelectItem value="stacked">{t('reportDesigner.layoutStacked')}</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <NumberField label={t('reportDesigner.panelColumns')} value={el.panelColumns ?? 1}
+          onChange={(n) => onPatch({ panelColumns: Math.max(1, Math.min(4, Math.round(n))) })} min={1} />
+        <div>
+          <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">{t('reportDesigner.strokeColor')}</div>
+          <ColorField value={s.strokeColor ?? 'none'} allowNone
+            onChange={(c, opts) => style({ strokeColor: c === 'none' ? undefined : c }, !!opts?.discrete)}
+            aria-label={t('reportDesigner.strokeColor')} />
+        </div>
+      </div>
+    );
+  }
+
   if (el.kind === 'table') {
     // Bound tables get their columns from the Data tab's boundColumns — no PropertiesTab columns editor.
     if (el.dataSource) return null;

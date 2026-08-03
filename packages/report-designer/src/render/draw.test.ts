@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { interpolate, paramMap, tableChunkCount, pageChunkCount, rowsFor, totalPhysicalPages, pageFooterLabel, cellTextOptions, columnWidths, isNumericColumn, CELL_TEXT_H, ROW_H, asCellStatus, cellStatusesFor, isRightAligned } from './draw';
+import { interpolate, paramMap, tableChunkCount, pageChunkCount, rowsFor, totalPhysicalPages, pageFooterLabel, cellTextOptions, columnWidths, isNumericColumn, CELL_TEXT_H, ROW_H, asCellStatus, cellStatusesFor, isRightAligned, keyValuePairs, pairRects } from './draw';
 import type { ReportDesign, DesignElement, DesignPage } from '../schema';
 import type { ResolvedTable } from './index';
 
@@ -300,5 +300,94 @@ describe('isRightAligned', () => {
 
   it('leaves a non-numeric column left-aligned regardless of kind', () => {
     expect(isRightAligned([['abc']], 0, 'value')).toBe(false);
+  });
+});
+
+describe('keyValuePairs', () => {
+  const kv = (over: Partial<DesignElement>): DesignElement =>
+    ({ id: 'k', kind: 'keyvalue', name: 'K', rect: { x: 0, y: 0, w: 200, h: 80 }, ...over }) as DesignElement;
+  const ds = { kind: 'custom-query' as const, queryId: 'q' };
+
+  it('makes ONE pair per bound column, valued from row 0 only', () => {
+    const resolved: ResolvedTable = {
+      columns: [{ key: 'a', label: 'A' }],
+      rows: [{ a: 'first', b: 'B1' }, { a: 'second', b: 'B2' }],
+    };
+    const el = kv({ dataSource: ds, boundColumns: [{ key: 'a', label: 'Surname' }, { key: 'b', label: 'Sex' }] });
+    expect(keyValuePairs(el, resolved)).toEqual([
+      { label: 'Surname', value: 'first', status: undefined, emphasis: 'text' },
+      { label: 'Sex', value: 'B1', status: undefined, emphasis: 'text' },
+    ]);
+  });
+
+  it('carries S1 status and emphasis through from the bound column', () => {
+    const resolved: ResolvedTable = { columns: [], rows: [{ r: 'Positive', s: 'abnormal' }] };
+    const el = kv({ dataSource: ds, boundColumns: [{ key: 'r', label: 'Result', statusKey: 's', emphasis: 'fill' }] });
+    expect(keyValuePairs(el, resolved)).toEqual([{ label: 'Result', value: 'Positive', status: 'abnormal', emphasis: 'fill' }]);
+  });
+
+  it('keeps the labels with EMPTY values when the query returns no rows', () => {
+    const el = kv({ dataSource: ds, boundColumns: [{ key: 'a', label: 'Surname' }] });
+    expect(keyValuePairs(el, { columns: [], rows: [] })).toEqual([
+      { label: 'Surname', value: '', status: undefined, emphasis: 'text' },
+    ]);
+  });
+
+  it('yields [] for an errored query, so the caller draws the error placeholder instead', () => {
+    const el = kv({ dataSource: ds, boundColumns: [{ key: 'a', label: 'A' }] });
+    expect(keyValuePairs(el, { error: 'boom' })).toEqual([]);
+  });
+
+  it('reads static [label, value] rows when unbound', () => {
+    expect(keyValuePairs(kv({ rows: [['Label', 'Value'], ['Solo']] }), undefined)).toEqual([
+      { label: 'Label', value: 'Value', emphasis: 'text' },
+      { label: 'Solo', value: '', emphasis: 'text' },
+    ]);
+  });
+
+  it('is empty for any other element kind', () => {
+    expect(keyValuePairs({ id: 't', kind: 'table', name: 'T', rect: { x: 0, y: 0, w: 1, h: 1 } }, undefined)).toEqual([]);
+  });
+});
+
+describe('pairRects', () => {
+  const box = { x: 100, y: 200, w: 400, h: 200 };
+
+  it('puts an inline label and its value on ONE baseline', () => {
+    const [p] = pairRects(box, 1, 'inline', 1, false);
+    expect(p.label.y).toBe(p.value.y);
+    expect(p.value.x).toBeGreaterThan(p.label.x);
+  });
+
+  it('puts a stacked value BELOW its label, in the same column', () => {
+    const [p] = pairRects(box, 1, 'stacked', 1, false);
+    expect(p.value.y).toBeGreaterThan(p.label.y);
+    expect(p.value.x).toBe(p.label.x);
+  });
+
+  it('flows pairs across then down, and stacked pitch exceeds inline pitch', () => {
+    const inline = pairRects(box, 4, 'inline', 2, false);
+    expect(inline[1].y).toBe(inline[0].y);          // same line, next column
+    expect(inline[1].x).toBeGreaterThan(inline[0].x);
+    expect(inline[2].x).toBe(inline[0].x);          // wrapped back to column 0
+    expect(inline[2].y).toBeGreaterThan(inline[0].y);
+    const stacked = pairRects(box, 3, 'stacked', 1, false);
+    expect(stacked[1].y - stacked[0].y).toBeGreaterThan(inline[2].y - inline[0].y);
+  });
+
+  it('offsets every pair by the title band when the panel has a title', () => {
+    const without = pairRects(box, 1, 'inline', 1, false)[0];
+    const withTitle = pairRects(box, 1, 'inline', 1, true)[0];
+    expect(withTitle.y - without.y).toBe(ROW_H);
+  });
+
+  it('clamps panelColumns into 1..4 rather than dividing by a nonsense value', () => {
+    expect(pairRects(box, 2, 'inline', 0, false)[1].y).toBeGreaterThan(pairRects(box, 2, 'inline', 0, false)[0].y);
+    const wide = pairRects(box, 5, 'inline', 9, false);
+    expect(wide[4].x).toBe(wide[0].x); // wrapped after 4 columns, not 9
+  });
+
+  it('returns every pair even when they overflow the box, leaving clipping to the drawer', () => {
+    expect(pairRects({ ...box, h: 20 }, 6, 'inline', 1, false)).toHaveLength(6);
   });
 });
