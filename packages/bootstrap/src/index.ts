@@ -699,7 +699,17 @@ const reporting: ReportingApi = {
     async registerSystem(url: string, version: string | null, kind: string, resourceId: string): Promise<void> {
       await termStore.saveSystem(url, version, kind, resourceId);
     },
-    async deleteValueSetResource(url: string): Promise<void> {
+    async deleteValueSetResource(url: string, id: string): Promise<void> {
+      // Delete the canonical FHIR resource FIRST: fhirStore.delete() writes an op:'delete'
+      // change_log row, which is what makes the projection cycle actually clear this value
+      // set's terminology_codes rows (applyProjection -> relationalWriter.deleteById on a
+      // getWithProvenance miss). Deleting only terminology_systems (as this used to) left the
+      // canonical fhir.fhir_resources row — and therefore the projected codes — orphaned
+      // forever, and a later reprojectAll would resurrect them.
+      // NOTE: keep this in lockstep with the twin implementation in
+      // packages/bootstrap/src/terminology-context.ts — a previous slice in this repo was
+      // bitten by exactly these two drifting apart.
+      await termFhirStore.delete('ValueSet', id);
       await termDb.deleteFrom('terminology_systems').where('url', '=', url).execute();
     },
   };

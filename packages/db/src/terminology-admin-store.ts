@@ -81,7 +81,15 @@ export interface ValueSetInput {
 export interface ValueSetProjection {
   saveValueSetResource(resource: Record<string, unknown>): Promise<string>;
   registerSystem(url: string, version: string | null, kind: string, resourceId: string): Promise<void>;
-  deleteValueSetResource(url: string): Promise<void>;
+  // `id` is the FHIR ValueSet resource id (== value_sets.id — valueSetToFhirResource builds the
+  // resource with `id: vs.id`, so the two always match). The implementation MUST delete the
+  // canonical `fhir.fhir_resources` row for ('ValueSet', id), not just the terminology_systems
+  // registration by url: only a real fhirStore.delete() writes an op:'delete' change_log row, which
+  // is what makes the projection cycle's applyProjection() call relationalWriter.deleteById and
+  // actually clear the value set's terminology_codes rows. Deleting only by url leaves the
+  // canonical row (and therefore the projected codes) behind forever, and a later reprojectAll
+  // would resurrect them.
+  deleteValueSetResource(url: string, id: string): Promise<void>;
 }
 
 export class TerminologyAdminError extends Error {
@@ -654,7 +662,7 @@ export function createTerminologyAdminStore(db: Kysely<InternalSchema>, projecti
         if (!r) throw new TerminologyAdminError(`value set not found: ${id}`, 'not-found');
         await db.deleteFrom('valueset_expansions').where('value_set_id', '=', id).execute();
         await db.deleteFrom('value_sets').where('id', '=', id).execute();
-        if (projection) await projection.deleteValueSetResource(r.url);
+        if (projection) await projection.deleteValueSetResource(r.url, id);
       },
       async expand(id, activeOnly = true) {
         const vs = await getValueSet(id);
