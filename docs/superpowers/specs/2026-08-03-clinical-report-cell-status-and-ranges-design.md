@@ -1,7 +1,8 @@
 # Clinical report — cell status model (S1) + reference ranges & units (S2)
 
 **Date:** 2026-08-03
-**Status:** Design agreed. Supersedes §2 slices S1/S2 of
+**Status:** **S1 IMPLEMENTED** and merged to local `main` (`39d7fe90`). S2 not started.
+Supersedes §2 slices S1/S2 of
 `2026-08-03-clinical-report-template-design.md` (which scoped them before the data was measured).
 **Reference:** `D:\Downloads\Lab-Report-Formats.svg`
 
@@ -43,6 +44,23 @@ courier's phone number as a lab result**. Filtering is a requirement, not a refi
 ---
 
 ## 1. S1 — cell status model
+
+> ⚠ **Two claims below were falsified during planning and did NOT ship as written.** The
+> implementation is authoritative; §1.1 and §1.6 are kept for the reasoning, not the conclusion.
+>
+> 1. **§1.1 — `rowsFor` does NOT return `Cell[][]`.** It keeps its `string[][]` shape. Changing it
+>    would have dragged `tableChunkCount`, `columnWidths` and `isNumericColumn` into scope. A
+>    parallel `cellStatusesFor()` ships instead — more surgical, and it makes the
+>    "no `statusKey` ⇒ unchanged output" contract trivially provable.
+> 2. **§1.6 — `PageCanvas.tsx` was NOT a surface.** It renders only static sample rows and never
+>    resolves a bound query, so it cannot preview bound-column status. `DataTab.tsx` is the studio
+>    surface that changed. A third `boundColumns` consumer the spec missed, `exportExcel.ts`, was
+>    verified to need no change (it projects `boundColumns` only, so a status column cannot leak
+>    into the spreadsheet).
+>
+> Also: **§1.4's `kind` is consumed, not inert** — `units`/`range` columns never right-align.
+> And the "byte-identical" wording in §1.5 is too strong: a no-`statusKey` design differs by a
+> redundant colour-operator pair in a chunk with zero body rows. **Visually** identical.
 
 **Principle: the renderer colours from a status token it is *given*. It never computes one.**
 All clinical judgement lives in SQL/terminology. This is what makes the ~100-format catalogue in
