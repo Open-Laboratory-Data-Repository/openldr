@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ReportDesignSchema } from './schema';
+import { ReportDesignSchema, BoundColumnSchema, CELL_STATUSES } from './schema';
 
 describe('ReportDesignSchema', () => {
   it('round-trips a full design and strips unknown keys', () => {
@@ -71,5 +71,28 @@ describe('ReportDesignSchema — data binding', () => {
       pages: [],
     });
     expect(parsed.parameters[0].required).toBe(true);
+  });
+});
+
+describe('BoundColumnSchema', () => {
+  it('accepts a bare key/label pair (the shape every existing design uses)', () => {
+    expect(BoundColumnSchema.parse({ key: 'a', label: 'A' }))
+      .toEqual({ key: 'a', label: 'A' });
+  });
+
+  it('accepts statusKey, emphasis and kind', () => {
+    expect(BoundColumnSchema.parse({
+      key: 'result', label: 'Result', statusKey: 'result_status', emphasis: 'fill', kind: 'value',
+    })).toEqual({
+      key: 'result', label: 'Result', statusKey: 'result_status', emphasis: 'fill', kind: 'value',
+    });
+  });
+
+  it('rejects an emphasis outside fill|text', () => {
+    expect(() => BoundColumnSchema.parse({ key: 'a', label: 'A', emphasis: 'glow' })).toThrow();
+  });
+
+  it('exposes exactly the five presentational statuses', () => {
+    expect(CELL_STATUSES).toEqual(['normal', 'abnormal', 'critical', 'indeterminate', 'none']);
   });
 });

@@ -25,7 +25,23 @@ export type Margins = z.infer<typeof MarginsSchema>;
 export const DataSourceSchema = z.object({ kind: z.literal('custom-query'), queryId: z.string() });
 export type DataSource = z.infer<typeof DataSourceSchema>;
 
-export const BoundColumnSchema = z.object({ key: z.string(), label: z.string() });
+/** Presentational cell states. Deliberately NOT clinical: the mapping from `R`/`UNDET`/`IND` to one
+ *  of these belongs in the query, which is what lets one renderer serve AST, serology and chemistry. */
+export const CELL_STATUSES = ['normal', 'abnormal', 'critical', 'indeterminate', 'none'] as const;
+export type CellStatus = (typeof CELL_STATUSES)[number];
+export type CellEmphasis = 'fill' | 'text';
+export type ColumnKind = 'value' | 'range' | 'units' | 'flag' | 'label';
+
+export const BoundColumnSchema = z.object({
+  key: z.string(),
+  label: z.string(),
+  /** Name of ANOTHER column in the same query result carrying a CellStatus token. */
+  statusKey: z.string().optional(),
+  /** How status is shown: a filled chip, or just coloured text. Defaults to 'text'. */
+  emphasis: z.enum(['fill', 'text']).optional(),
+  /** Drives alignment/width policy only. `range` and `units` never right-align. */
+  kind: z.enum(['value', 'range', 'units', 'flag', 'label']).optional(),
+});
 export type BoundColumn = z.infer<typeof BoundColumnSchema>;
 
 export const DesignElementSchema = z.object({
