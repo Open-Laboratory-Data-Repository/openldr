@@ -816,7 +816,7 @@ export const pt: EnShape = {
     symbolBound: 'Vinculado a uma consulta — edite o campo no separador Dados.',
     symbolStaticHint: 'Texto estático. Aceita {{param.x}} e {{date}}.',
     barcodeCaption: 'Mostrar o valor sob as barras',
-    scanOk: '{{mm}} mm por módulo — acima do mínimo de leitura de {{- min}} mm.',
+    scanOk: '{{mm}} mm por módulo — acima do mínimo de leitura de {{min}} mm.',
     scanTooSmall: 'Demasiado pequeno para leitura fiável: {{mm}} mm por módulo, abaixo do mínimo de {{min}} mm. Alargue para pelo menos {{width}} px.',
     scanBudget: 'Nesta largura, valores até {{count}} caracteres continuam legíveis (mais, no caso de dígitos).',
     scanFixWidth: 'Redimensionar para o mínimo de leitura',

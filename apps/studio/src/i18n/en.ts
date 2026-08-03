@@ -820,7 +820,7 @@ export const en = {
     symbolBound: 'Bound to a query — edit the field in the Data tab.',
     symbolStaticHint: 'Static text. Supports {{param.x}} and {{date}}.',
     barcodeCaption: 'Show value under the bars',
-    scanOk: '{{mm}} mm per module — above the {{- min}} mm scanning minimum.',
+    scanOk: '{{mm}} mm per module — above the {{min}} mm scanning minimum.',
     scanTooSmall: 'Too small to scan reliably: {{mm}} mm per module, below the {{min}} mm minimum. Widen to at least {{width}} px.',
     scanBudget: 'At this width, values up to {{count}} characters stay scannable (more for digits).',
     scanFixWidth: 'Resize to the scanning minimum',

@@ -816,7 +816,7 @@ export const fr: EnShape = {
     symbolBound: 'Liée à une requête — modifiez le champ dans l’onglet Données.',
     symbolStaticHint: 'Texte statique. Accepte {{param.x}} et {{date}}.',
     barcodeCaption: 'Afficher la valeur sous les barres',
-    scanOk: '{{mm}} mm par module — au-dessus du minimum de lecture de {{- min}} mm.',
+    scanOk: '{{mm}} mm par module — au-dessus du minimum de lecture de {{min}} mm.',
     scanTooSmall: 'Trop petit pour être lu de façon fiable : {{mm}} mm par module, en dessous du minimum de {{min}} mm. Élargissez à au moins {{width}} px.',
     scanBudget: 'À cette largeur, les valeurs jusqu’à {{count}} caractères restent lisibles (davantage pour les chiffres).',
     scanFixWidth: 'Redimensionner au minimum de lecture',

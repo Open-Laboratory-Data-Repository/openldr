@@ -98,7 +98,14 @@ function ScanHint({ el }: { el: DesignElement }): JSX.Element | null {
   const report = scanReport(el);
   if (!report) return null;
   if (!report.tooSmall) {
-    return <p className="text-xs text-muted-foreground">{t('reportDesigner.scanOk', { mm: report.moduleMm.toFixed(2) })}</p>;
+    // ⚠ `min` must be passed even though it is a constant: i18next renders an interpolation token
+    // LITERALLY when its value is undefined, so a missing argument ships "{{min}}" to the user
+    // rather than failing anywhere a type checker or a test would see it.
+    return (
+      <p className="text-xs text-muted-foreground">
+        {t('reportDesigner.scanOk', { mm: report.moduleMm.toFixed(2), min: MIN_MODULE_MM })}
+      </p>
+    );
   }
   return (
     <p className="text-xs text-destructive">
@@ -181,8 +188,12 @@ function KindControls({ el, onPatch }: {
       <div className="flex flex-col gap-3">
         <div>
           <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">{t('reportDesigner.symbolValue')}</div>
-          <Input aria-label={t('reportDesigner.symbolValue')} value={el.text ?? ''} disabled={!!el.dataSource}
-            placeholder={el.dataSource ? t('reportDesigner.symbolBound') : '{{param.request}}'}
+          {/* When bound, the disabled input shows WHICH field is encoded rather than repeating the
+              helper line verbatim underneath it — the author already knows it is bound (the input
+              is disabled and the line says so); what they cannot see otherwise is the field. */}
+          <Input aria-label={t('reportDesigner.symbolValue')} disabled={!!el.dataSource}
+            value={el.dataSource ? (el.boundColumns?.[0]?.label ?? el.boundColumns?.[0]?.key ?? '') : (el.text ?? '')}
+            placeholder={el.dataSource ? '—' : '{{param.request}}'}
             onChange={(e) => onPatch({ text: e.target.value })} className="h-8 text-xs" />
           <p className="mt-1 text-xs text-muted-foreground">
             {el.dataSource ? t('reportDesigner.symbolBound') : t('reportDesigner.symbolStaticHint')}

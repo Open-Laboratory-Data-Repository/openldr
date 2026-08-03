@@ -202,7 +202,31 @@ describe('PropertiesTab scannability hint', () => {
   it('confirms, rather than nags, when the symbol is comfortably above the floor', () => {
     setup({ template: tplWithEl(bc()), selectedIds: ['sym'] });
     expect(screen.queryByText(/too small to scan/i)).not.toBeInTheDocument();
-    expect(screen.getByText(/mm per module/i)).toBeInTheDocument();
+    // ⚠ Assert the FLOOR renders, not just the leading value. It shipped as `{{- min}}` (i18next's
+    // unescaped-interpolation prefix) and printed the token LITERALLY in the running app — invisible
+    // here because every assertion matched only the `{{mm}}` value at the start of the sentence.
+    // An interpolation nothing asserts is one that can silently render as braces.
+    expect(screen.getByText(/above the 0\.25 mm scanning minimum/i)).toBeInTheDocument();
+  });
+
+  it('leaves no un-interpolated token in any scannability line', () => {
+    // One case per branch: warning, confirmation, budget.
+    // ⚠ Scoped to the scannability paragraphs, NOT the whole panel: `symbolStaticHint` legitimately
+    // contains `{{param.x}}` as literal example syntax, so a blanket body scan fails on correct copy.
+    for (const el of [
+      bc({ rect: { x: 0, y: 0, w: 40, h: 56 } }),
+      bc(),
+      bc({ dataSource: { kind: 'custom-query', queryId: 'q' }, text: '' }),
+    ]) {
+      const { unmount } = render(<PropertiesTab template={tplWithEl(el)} selectedIds={['sym']}
+        onPatchElement={vi.fn()} onPatchPage={vi.fn()} onPatchElements={vi.fn()} />);
+      const lines = [...document.querySelectorAll('p')]
+        .map((p) => p.textContent ?? '')
+        .filter((s) => /scannable|mm per module|too small/i.test(s));
+      expect(lines.length).toBeGreaterThan(0);
+      for (const line of lines) expect(line).not.toMatch(/\{\{|\}\}/);
+      unmount();
+    }
   });
 
   it('resizes to the minimum scannable width, keeping the left edge and the height', () => {
