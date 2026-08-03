@@ -27,7 +27,17 @@ export async function runTerminologyImport(kind: string, path: string, opts: { a
       const r = await ctx.loaders.resource(JSON.parse(readFileSync(path, 'utf8')));
       out(opts.json, r, `imported ${r.resourceUrl} (${r.conceptsLoaded} concepts)`);
       await recordAuditEvent(ctx, cliActor(), { action: 'term.import', entityType: 'term', entityId: r.resourceUrl, metadata: { result: r } });
-    } else { process.stderr.write(`unknown import kind '${kind}' (loinc|amr|resource)\n`); return 1; }
+    } else if (kind === 'organisms') {
+      // A site's organism dictionary (DISA COMMDICT CONTEXT=50) as a CodeSystem carrying
+      // properties.organism_type. Deliberately an IMPORT and not a seed: the dictionary is
+      // site-specific, so shipping one deployment's codes as a product default would make every
+      // other deployment silently wrong. See importOrganismDictionary's comment.
+      const r = await ctx.loaders.organisms(JSON.parse(readFileSync(path, 'utf8')));
+      out(opts.json, r, `loaded ${r.conceptsLoaded} organism concepts into ${r.system}\n` +
+        Object.entries(r.byType).map(([t, n]) => `  ${t}: ${n}`).join('\n') +
+        (r.skipped ? `\n  skipped (no code): ${r.skipped}` : ''));
+      await recordAuditEvent(ctx, cliActor(), { action: 'coding_system.import', entityType: 'coding_system', entityId: 'organisms', metadata: { source: 'organisms', result: r } });
+    } else { process.stderr.write(`unknown import kind '${kind}' (loinc|amr|organisms|resource)\n`); return 1; }
     return 0;
   } catch (err) { process.stderr.write(`terminology import failed: ${redactError(err)}\n`); return 1; }
   finally { await ctx.close(); }

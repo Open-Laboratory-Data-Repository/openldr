@@ -75,7 +75,7 @@ import { createDhis2Orchestration } from './dhis2-orchestration';
 import { selectTargetStore } from './target-store';
 import { createPluginRegistry } from './plugin-registry';
 import { createProjectionWorker } from './projection-worker';
-import { buildOntologyDistribution, canonicalSystemUrl, createOperations, importTerminologyResource, loadLoinc, loadWhonetAmr, stalenessReason, type LoaderStore, type LoadResult, type OntologyBuildProgress, type OntologyManifest, type OntologyType, type Operations } from '@openldr/terminology';
+import { buildOntologyDistribution, canonicalSystemUrl, createOperations, importOrganismDictionary, importTerminologyResource, loadLoinc, loadWhonetAmr, stalenessReason, type LoaderStore, type LoadResult, type OrganismImportResult, type OntologyBuildProgress, type OntologyManifest, type OntologyType, type Operations } from '@openldr/terminology';
 import { createTerminologyIngestWorker } from './terminology-ingest-worker';
 import { createRunIngest } from './terminology-ingest-shared';
 import { recordAuditEvent, type AuditDetails } from './record-audit';
@@ -346,6 +346,7 @@ export interface AppContext {
     loaders: {
       loinc(dir: string, acceptLicense: boolean): Promise<LoadResult>;
       amr(sqlitePath: string): Promise<LoadResult[]>;
+      organisms(json: unknown): Promise<OrganismImportResult>;
       resource(json: unknown): Promise<LoadResult>;
     };
     ingestOntologyWithConcepts(systemType: string, systemId: string, dir: string, onProgress: (p: { phase: string; processed: number; total: number | null }) => void): Promise<{ conceptsLoaded: number }>;
@@ -744,6 +745,7 @@ const reporting: ReportingApi = {
       loinc: (dir, acceptLicense) => loadLoinc(dir, { acceptLicense }, loaderStore),
       amr: (p) => loadWhonetAmr(p, loaderStore),
       resource: (json) => importTerminologyResource(json, loaderStore),
+      organisms: (json) => importOrganismDictionary(json, loaderStore),
     },
     async ingestOntologyWithConcepts(systemType, systemId, dir, onProgress) {
       const url = canonicalSystemUrl(systemType);
