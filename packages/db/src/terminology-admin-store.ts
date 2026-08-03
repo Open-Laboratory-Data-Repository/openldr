@@ -163,7 +163,10 @@ export interface TerminologyAdminStore {
     list(publisherId?: string): Promise<ValueSetSummary[]>;
     get(id: string): Promise<ValueSet>;
     getByUrl(url: string): Promise<ValueSetSummary | null>;
-    save(input: ValueSetInput): Promise<ValueSet>;
+    // opts.activeOnly defaults true; pass false to include concepts with no recorded status (e.g.
+    // freshly loader-imported concepts, which never carry an explicit 'ACTIVE' — see
+    // refreshCacheAndProject's comment).
+    save(input: ValueSetInput, opts?: { activeOnly?: boolean }): Promise<ValueSet>;
     duplicate(id: string): Promise<ValueSet>;
     delete(id: string): Promise<void>;
     expand(id: string, activeOnly?: boolean): Promise<{ codes: ExpandedConcept[]; total: number }>;
@@ -295,8 +298,18 @@ export function createTerminologyAdminStore(db: Kysely<InternalSchema>, projecti
     }
   }
 
-  async function refreshCacheAndProject(vs: ValueSet): Promise<void> {
-    const { codes } = await expandCompose(vs.compose, vsDeps, { seedUrls: [vs.url] });
+  // `activeOnly` defaults true (unchanged historical behaviour for every admin-UI save). Task 4
+  // (S2b, result-classification) needs `false`: every loader in @openldr/terminology
+  // (result-parameters, organisms, whonet, the generic loader) deliberately writes
+  // `status: null` for imported concepts — see migration 068's comment ("NULL stays NULL — WHONET
+  // writes it deliberately") — and `filterConcepts`/`listSystemConcepts` gate `activeOnly` on
+  // `status = 'ACTIVE'` exactly, so a null-status concept never satisfies it. Re-expanding a
+  // loader-fed ValueSet with the default `activeOnly: true` would silently produce ZERO codes on
+  // every real install — the concepts are there, but none of them are ever provably "ACTIVE" to
+  // this filter. `null` is "no opinion recorded", not "inactive"; treating it as excluded here
+  // would reproduce the exact silent-empty-expansion failure mode migration 068 fixed for casing.
+  async function refreshCacheAndProject(vs: ValueSet, activeOnly = true): Promise<void> {
+    const { codes } = await expandCompose(vs.compose, vsDeps, { seedUrls: [vs.url], activeOnly });
     await writeExpansionCache(vs.id, codes);
     if (projection) {
       const resource = valueSetToFhirResource(
@@ -308,7 +321,7 @@ export function createTerminologyAdminStore(db: Kysely<InternalSchema>, projecti
     }
   }
 
-  async function saveValueSet(input: ValueSetInput): Promise<ValueSet> {
+  async function saveValueSet(input: ValueSetInput, opts?: { activeOnly?: boolean }): Promise<ValueSet> {
     const url = input.url.trim();
     if (!url) throw new TerminologyAdminError('value set url required', 'conflict');
     const existing = await db.selectFrom('value_sets').select(['id', 'immutable']).where('url', '=', url).executeTakeFirst();
@@ -330,7 +343,7 @@ export function createTerminologyAdminStore(db: Kysely<InternalSchema>, projecti
       } as never).execute();
     }
     const vs = await getValueSet(id);
-    await refreshCacheAndProject(vs);
+    await refreshCacheAndProject(vs, opts?.activeOnly ?? true);
     return vs;
   }
 

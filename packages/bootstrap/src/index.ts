@@ -49,6 +49,7 @@ import { createSyncActivityTracker } from './sync-activity-tracker';
 import { migrateLegacySyncConfig } from './sync-settings-migrate';
 import { encodePushBody, advertisesGzip } from './sync-gzip';
 import { migrateWorkflowSecrets } from './workflow-secret-migrate';
+import { reexpandValueSetsForSystem } from './reexpand-value-sets';
 
 import { createActivityService, type ActivityService } from './activity-service';
 import { createFeatureFlags, type FeatureFlags } from './feature-flags';
@@ -757,7 +758,15 @@ const reporting: ReportingApi = {
       amr: (p) => loadWhonetAmr(p, loaderStore),
       resource: (json) => importTerminologyResource(json, loaderStore),
       organisms: (json) => importOrganismDictionary(json, loaderStore),
-      parameters: (json) => importResultParameters(json, loaderStore),
+      // Task 4 (S2b): the intensional result-role ValueSets (Task 3's migration 069) are seeded with
+      // no expansion — their concepts arrive here, not at migration time. Re-expand + reproject them
+      // (via valueSets.save(), not expand() — see reexpand-value-sets.ts) every time this import runs,
+      // or they stay empty forever and nothing reaches terminology_codes.
+      parameters: async (json) => {
+        const result = await importResultParameters(json, loaderStore);
+        await reexpandValueSetsForSystem(termAdmin, result.system);
+        return result;
+      },
     },
     async ingestOntologyWithConcepts(systemType, systemId, dir, onProgress) {
       const url = canonicalSystemUrl(systemType);

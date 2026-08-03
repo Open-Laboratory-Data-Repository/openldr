@@ -6,6 +6,7 @@ import { buildOntologyDistribution, canonicalSystemUrl, createOperations, type O
 import { createAuditStore, type AuditStore } from '@openldr/audit';
 import type { BlobStoragePort } from '@openldr/ports';
 import { createBlobFromConfig } from './s3-config';
+import { reexpandValueSetsForSystem } from './reexpand-value-sets';
 
 function createOntologyApi(ontologyStore: OntologyStore) {
   return {
@@ -132,7 +133,15 @@ export async function createTerminologyContext(cfg: Config): Promise<Terminology
       amr: (p) => loadWhonetAmr(p, loaderStore),
       resource: (json) => importTerminologyResource(json, loaderStore),
       organisms: (json) => importOrganismDictionary(json, loaderStore),
-      parameters: (json) => importResultParameters(json, loaderStore),
+      // Task 4 (S2b): the intensional result-role ValueSets (Task 3's migration 069) are seeded with
+      // no expansion — their concepts arrive here, not at migration time. Re-expand + reproject them
+      // (via valueSets.save(), not expand() — see reexpand-value-sets.ts) every time this import runs,
+      // or they stay empty forever and nothing reaches terminology_codes.
+      parameters: async (json) => {
+        const result = await importResultParameters(json, loaderStore);
+        await reexpandValueSetsForSystem(admin, result.system);
+        return result;
+      },
     },
     async ingestOntologyWithConcepts(systemType, systemId, dir, onProgress) {
       const url = canonicalSystemUrl(systemType);
