@@ -103,6 +103,12 @@ const STATUS_CHIP_TEXT: Record<CellStatus, string> = {
 const STATUS_TEXT_COLOR: Record<CellStatus, string> = {
   normal: '#166534', abnormal: '#b91c1c', critical: '#9f1239', indeterminate: '#475569', none: BODY_TEXT,
 };
+/** ⚠ DUPLICATED from `@openldr/report-designer`'s `render/draw.ts` — same reason as the helpers
+ *  above (this package is the dependency leaf). Keep the two in step.
+ *  A chip is inset inside its cell so two adjacent rows sharing a status do not paint touching
+ *  rectangles and read as one merged slab. Must stay strictly inside `ROW_H` — row pitch is fixed. */
+const CHIP_INSET_X = 1;
+const CHIP_INSET_Y = 1.5;
 
 /** Parse a status token from a query cell. Unrecognised values become `undefined` — this renderer
  *  never COMPUTES a status, it only paints one it is given. */
@@ -191,7 +197,7 @@ export function renderReportPdf(input: PdfInput): Promise<Buffer> {
         const st = statuses[idx]?.[ci];
         // A chip is exactly one row tall and one column wide, so it can never affect the y-advance.
         if (st && (cols[ci].emphasis ?? 'text') === 'fill') {
-          doc.rect(xOf(ci), y, widths[ci], rowH).fill(STATUS_CHIP_FILL[st]);
+          doc.rect(xOf(ci) + CHIP_INSET_X, y + CHIP_INSET_Y, widths[ci] - CHIP_INSET_X * 2, rowH - CHIP_INSET_Y * 2).fill(STATUS_CHIP_FILL[st]);
           doc.fillColor(STATUS_CHIP_TEXT[st]);
         } else {
           doc.fillColor(st ? STATUS_TEXT_COLOR[st] : BODY_TEXT);

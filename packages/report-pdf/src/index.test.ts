@@ -202,10 +202,12 @@ describe('cell status rendering', () => {
       measureDoc.font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(9);
       return measureDoc.widthOfString(text);
     });
-    const chipX = pdfNum(headerX + widths[0]);
-    const chipW = pdfNum(widths[1]);
+    // Chip is inset 1pt horizontally / 1.5pt vertically inside its cell, so adjacent same-status
+    // rows do not merge into one slab.
+    const chipX = pdfNum(headerX + widths[0] + 1);
+    const chipW = pdfNum(widths[1] - 2);
 
-    const expectedRect = `${chipX} ${bodyY} ${chipW} 16 re`;
+    const expectedRect = `${chipX} ${pdfNum(bodyY + 1.5)} ${chipW} 13 re`;  // ROW_H(16) less the 1.5pt inset top+bottom
     const expectedFill = fillOp('#9f1239'); // STATUS_CHIP_FILL.critical
     // The rect, its fill colour, and the paint op must appear back-to-back — not just present
     // somewhere in the stream — so a wrong colour, wrong size, or wrong column all fail this.

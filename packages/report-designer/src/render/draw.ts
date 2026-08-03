@@ -36,6 +36,19 @@ const STATUS_CHIP_TEXT: Record<CellStatus, string> = {
 const STATUS_TEXT_COLOR: Record<CellStatus, string> = {
   normal: '#166534', abnormal: '#b91c1c', critical: '#9f1239', indeterminate: '#475569', none: BODY_TEXT,
 };
+/**
+ * A chip is inset inside its cell rather than filling it edge to edge.
+ *
+ * Without this, two vertically adjacent rows sharing a status paint touching rectangles and read as
+ * ONE merged slab — on a real AST panel, "Cefotaxime / Ceftazidime" both Intermediate became a
+ * single grey block, and two Resistant rows a single red one, so the reader loses the row boundary
+ * and the count. The horizontal inset does the same job between a chip and its neighbouring column.
+ *
+ * ⚠ The inset must stay strictly inside `ROW_H`: pagination (`maxRowsFor`, `tableChunkCount`) and
+ * the fixed `y = r.y + ROW_H + ri * ROW_H` advance all assume a chip can never affect row pitch.
+ */
+const CHIP_INSET_X = 1;
+const CHIP_INSET_Y = 1.5;
 export const ROW_H = 16; // pt
 /** Body rows that fit in a box of height `hPt` (pt), reserving one row for the header. */
 const maxRowsFor = (hPt: number): number => Math.floor((hPt - ROW_H) / ROW_H);
@@ -352,7 +365,8 @@ function drawGrid(
       const st = statuses[ri]?.[ci];
       // A chip is exactly one row tall and one column wide, so it can never affect the y-advance.
       if (st && (emphasis[ci] ?? 'text') === 'fill') {
-        doc.rect(xOf(ci), y, widths[ci], ROW_H).fill(STATUS_CHIP_FILL[st]);
+        doc.rect(xOf(ci) + CHIP_INSET_X, y + CHIP_INSET_Y, widths[ci] - CHIP_INSET_X * 2, ROW_H - CHIP_INSET_Y * 2)
+          .fill(STATUS_CHIP_FILL[st]);
         lastFill = STATUS_CHIP_FILL[st];
         setFill(STATUS_CHIP_TEXT[st]);
       } else {

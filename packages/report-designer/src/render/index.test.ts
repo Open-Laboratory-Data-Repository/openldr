@@ -236,9 +236,12 @@ describe('cell status rendering', () => {
       measureDoc.font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(8);
       return measureDoc.widthOfString(text);
     });
-    const expectedX = widths[0]; // res is column index 1; rect.x is 0
-    const expectedW = widths[1];
-    const expectedY = 16; // r.y(0) + ROW_H(16) + row 0 * ROW_H
+    // The chip is INSET inside its cell (CHIP_INSET_X 1, CHIP_INSET_Y 1.5) so two adjacent rows
+    // sharing a status do not paint touching rectangles and merge into one slab.
+    const expectedX = widths[0] + 1; // res is column index 1; rect.x is 0; + inset
+    const expectedW = widths[1] - 2;
+    const expectedY = 16 + 1.5; // r.y(0) + ROW_H(16) + row 0 * ROW_H, + inset
+    const expectedH = 16 - 3;   // ROW_H less the inset top and bottom — still strictly inside a row
 
     const resolved = new Map<string, ResolvedTable>([['t', {
       columns: [{ key: 'name', label: 'Test' }, { key: 'res', label: 'Result' }],
@@ -251,7 +254,7 @@ describe('cell status rendering', () => {
       resolved);
     const content = decodedContent(pdf);
 
-    const expectedRect = `${pdfNum(expectedX)} ${pdfNum(expectedY)} ${pdfNum(expectedW)} 16 re`;
+    const expectedRect = `${pdfNum(expectedX)} ${pdfNum(expectedY)} ${pdfNum(expectedW)} ${pdfNum(expectedH)} re`;
     const expectedFill = fillOp('#9f1239'); // STATUS_CHIP_FILL.critical
     // The rect, its fill colour, and the paint op must appear back-to-back — not just present
     // somewhere in the stream — so a wrong colour, wrong size, or wrong column all fail this.
