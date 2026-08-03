@@ -27,6 +27,9 @@ type ParamType = NonNullable<TemplateParam['type']>;
 // BuilderForm's identical NONE convention).
 const NONE_STATUS = '__none__';
 
+/** Kinds the Data tab can bind. `barcode`/`qrcode` use `boundColumns[0]` only (see `isSymbol`). */
+const BINDABLE_KINDS = new Set<DesignElement['kind']>(['table', 'keyvalue', 'barcode', 'qrcode']);
+
 const emptyValue = (type: ParamType): TemplateParam['value'] => (type === 'daterange' ? { from: '', to: '' } : '');
 
 /** One editable design-parameter row. Text inputs commit on blur (local state while typing). */
@@ -165,9 +168,10 @@ export function DataTab({ element, parameters, onPatchElement, onPatchParameters
     setLoading(false); // a new element always starts idle, even if the old one had a run in flight
   }, [element?.id]);
 
-  // `keyvalue` binds through exactly the same fields as a table — each bound column is one
-  // label→value pair — so the whole editor below serves both kinds unchanged.
-  if (!element || (element.kind !== 'table' && element.kind !== 'keyvalue')) {
+  // `keyvalue` binds through exactly the same fields as a table (each bound column is one
+  // label→value pair), and a `barcode`/`qrcode` through the FIRST bound column only — so the whole
+  // editor below serves every bindable kind unchanged.
+  if (!element || !BINDABLE_KINDS.has(element.kind)) {
     return (
       <div className="flex flex-col gap-3 p-3">
         <p className="text-xs text-muted-foreground">{t('reportDesigner.selectTableToBind')}</p>
@@ -177,6 +181,9 @@ export function DataTab({ element, parameters, onPatchElement, onPatchParameters
   }
 
   const el = element;
+  // One symbol carries ONE value, so only the first bound column is encoded — said out loud rather
+  // than silently dropping the rest.
+  const isSymbol = el.kind === 'barcode' || el.kind === 'qrcode';
   const queryId = el.dataSource?.queryId ?? '';
   const bound: BoundColumn[] = el.boundColumns ?? [];
   // Structural changes are discrete undo steps; continuous label typing is coalesced (see relabel).
@@ -281,6 +288,7 @@ export function DataTab({ element, parameters, onPatchElement, onPatchParameters
         <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
           {t(el.kind === 'keyvalue' ? 'reportDesigner.fields' : 'reportDesigner.columns')}
         </div>
+        {isSymbol && <p className="mb-1 text-xs text-muted-foreground">{t('reportDesigner.firstFieldEncoded')}</p>}
         {rows.length === 0 ? (
           <p className="text-xs text-muted-foreground">{t('reportDesigner.noColumnsLoaded')}</p>
         ) : (

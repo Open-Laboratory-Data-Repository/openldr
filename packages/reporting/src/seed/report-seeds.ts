@@ -1967,6 +1967,13 @@ export const SEED_DESIGNS: ReportDesign[] = [
     pages: [{ id: 'p1', elements: [
       { id: 'lab', kind: 'text', name: 'lab', rect: { x: 40, y: 34, w: 460, h: 16 }, text: 'LABORATORY REPORT', style: { fontSize: 15, bold: true, color: '#0f172a' } },
       { id: 'title', kind: 'text', name: 'title', rect: { x: 40, y: 56, w: 400, h: 16 }, text: 'MICROBIOLOGY — CULTURE & SENSITIVITY', style: { fontSize: 10, bold: true, color: '#334155' } },
+      // The accession barcode a technologist scans. BOUND, not `{{param.request}}`: the design's
+      // parameter is the ServiceRequest UUID, so a barcode of it would scan cleanly to the wrong
+      // identifier. `lab_number` is the site's own lab number, which is what the specimen carries.
+      { id: 'bc', kind: 'barcode', name: 'Lab number barcode', rect: { x: 556, y: 28, w: 184, h: 46 },
+        caption: true,
+        dataSource: { kind: 'custom-query', queryId: 'q-clinical-micro-header' },
+        boundColumns: [{ key: 'lab_number', label: 'Lab number' }] },
       // Band 2 of the reference: a label→value metadata strip, NOT a one-row table. It was a table
       // with a header row until S4 gave the vocabulary a `keyvalue` panel; the column labels sat
       // above the values in a tinted band, which reads as a spreadsheet fragment rather than a
@@ -2001,9 +2008,20 @@ export const SEED_DESIGNS: ReportDesign[] = [
           { key: 'test', label: 'Antimicrobial', kind: 'label' },
           { key: 'result', label: 'Result', statusKey: 'status', emphasis: 'fill', kind: 'flag' },
         ] },
-      { id: 'rule2', kind: 'line', name: 'rule2', rect: { x: 40, y: 700, w: 700, h: 0 }, style: { strokeColor: '#cbd5e1', strokeWidth: 0.75 } },
-      { id: 'ft', kind: 'text', name: 'ft', rect: { x: 40, y: 712, w: 430, h: 16 }, text: 'Interpretations reflect the laboratory’s reading at time of testing.', style: { fontSize: 7, color: '#94a3b8' } },
-      { id: 'sig', kind: 'text', name: 'sig', rect: { x: 500, y: 712, w: 240, h: 16 }, text: 'Authorised by ______________________', style: { fontSize: 8, color: '#475569' } },
+      // ⚠ The footer sits at the BOTTOM of the page: A4 portrait is 1123px tall at 96dpi and the
+      // bottom margin is 32, so the last usable row is ~1091. These elements were authored at
+      // y=700 — 62% down — which left the signature line floating mid-page under a table that
+      // ends at 572. A signature block that is not at the foot of the page reads as an
+      // unfinished document, and on a short result list the empty half below it reads as
+      // "something failed to print".
+      { id: 'rule2', kind: 'line', name: 'rule2', rect: { x: 40, y: 1000, w: 700, h: 0 }, style: { strokeColor: '#cbd5e1', strokeWidth: 0.75 } },
+      // Same payload as the barcode, deliberately: a URL would need a deployment base URL this
+      // design cannot know, and inventing one ships a QR that resolves nowhere.
+      { id: 'qr', kind: 'qrcode', name: 'Lab number QR', rect: { x: 40, y: 1012, w: 62, h: 62 },
+        dataSource: { kind: 'custom-query', queryId: 'q-clinical-micro-header' },
+        boundColumns: [{ key: 'lab_number', label: 'Lab number' }] },
+      { id: 'ft', kind: 'text', name: 'ft', rect: { x: 112, y: 1030, w: 380, h: 16 }, text: 'Interpretations reflect the laboratory’s reading at time of testing.', style: { fontSize: 7, color: '#94a3b8' } },
+      { id: 'sig', kind: 'text', name: 'sig', rect: { x: 500, y: 1030, w: 240, h: 16 }, text: 'Authorised by ______________________', style: { fontSize: 8, color: '#475569' } },
     ] }],
   },
 ];

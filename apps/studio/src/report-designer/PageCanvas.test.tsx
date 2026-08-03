@@ -259,3 +259,55 @@ describe('PageCanvas keyvalue panel', () => {
     expect(screen.getByText('PATIENT')).toBeInTheDocument();
   });
 });
+
+describe('PageCanvas barcode and QR', () => {
+  const symTemplate = (el: Partial<import('./types').DesignElement>): ReportTemplate => ({
+    id: 't', name: 't', paper: 'A4', orientation: 'portrait', parameters: [],
+    pages: [{ id: 'p1', elements: [{
+      id: 'sym', kind: 'barcode', name: 'Symbol', rect: { x: 10, y: 10, w: 200, h: 60 }, ...el,
+    } as import('./types').DesignElement] }],
+  });
+  const render_ = (el: Partial<import('./types').DesignElement>) =>
+    render(<PageCanvas template={symTemplate(el)} zoom={1} selectedIds={[]} onSelect={vi.fn()} onCommitRects={vi.fn()} />);
+
+  it('draws real bars from the shared encoder, one rect per module', () => {
+    const { container } = render_({ text: '1234567890' });
+    // 90 modules for a 10-digit value (Code C); 45 of them are bars.
+    const rects = container.querySelectorAll('svg rect');
+    expect(rects.length).toBeGreaterThan(20);
+    expect(container.querySelector('svg')?.getAttribute('viewBox')).toBe('0 0 90 10');
+  });
+
+  it('reserves the QR quiet zone in the preview too, so on-canvas size matches the print', () => {
+    const { container } = render_({ kind: 'qrcode', text: 'TZ00123/26', rect: { x: 0, y: 0, w: 80, h: 80 } });
+    // 21 modules + 4 quiet on each side = 29.
+    expect(container.querySelector('svg')?.getAttribute('viewBox')).toBe('0 0 29 29');
+  });
+
+  it('shows a BOUND symbol muted, encoding the field label as a stand-in', () => {
+    const { container } = render_({
+      dataSource: { kind: 'custom-query', queryId: 'q' },
+      boundColumns: [{ key: 'lab_number', label: 'Lab number' }],
+    });
+    // Muted says "this is the shape, not the code" — a full-strength fake would be a scannable
+    // wrong value sitting on the design surface.
+    expect(container.querySelector('[style*="opacity"]')).toBeTruthy();
+    expect(container.querySelector('svg')).toBeTruthy();
+  });
+
+  it('shows the caption only when enabled', () => {
+    // ⚠ Scope each assertion to its own `container`: two `render()` calls in one test mount into
+    // the SAME document, so a global `queryByText` still finds the first render's caption and the
+    // negative assertion fails for a reason that has nothing to do with the component.
+    const on = render_({ text: '1234567890' }).container;
+    expect(within(on).getByText('1234567890')).toBeInTheDocument();
+    const off = render_({ text: '1234567890', caption: false }).container;
+    expect(within(off).queryByText('1234567890')).not.toBeInTheDocument();
+  });
+
+  it('falls back to a dashed placeholder for a value that cannot encode', () => {
+    const { container } = render_({ text: '' });
+    expect(container.querySelector('svg')).toBeNull();
+    expect(container.querySelector('.border-dashed')).toBeTruthy();
+  });
+});

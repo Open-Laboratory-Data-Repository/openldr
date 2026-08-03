@@ -811,6 +811,11 @@ export const fr: EnShape = {
     emphasisText: 'Texte teinté',
     emphasisFill: 'Puce remplie',
     fields: 'Champs',
+    firstFieldEncoded: 'Seul le premier champ est encodé — un symbole porte une seule valeur.',
+    symbolValue: 'Valeur',
+    symbolBound: 'Liée à une requête — modifiez le champ dans l’onglet Données.',
+    symbolStaticHint: 'Texte statique. Accepte {{param.x}} et {{date}}.',
+    barcodeCaption: 'Afficher la valeur sous les barres',
     panelTitle: 'Titre du panneau',
     panelTitleFill: 'Fond du bandeau de titre',
     panelColumns: 'Paires par ligne',
@@ -854,7 +859,7 @@ export const fr: EnShape = {
     saveFailed: 'Échec de l’enregistrement',
     element: {
       text: 'Texte', table: 'Tableau', image: 'Image', line: 'Ligne', rect: 'Rectangle', datetime: 'Date/heure',
-      keyvalue: 'Panneau clé/valeur',
+      keyvalue: 'Panneau clé/valeur', barcode: 'Code-barres', qrcode: 'Code QR',
     },
   },
   a11y: {

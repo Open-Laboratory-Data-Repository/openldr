@@ -815,6 +815,11 @@ export const en = {
     emphasisText: 'Tinted text',
     emphasisFill: 'Filled chip',
     fields: 'Fields',
+    firstFieldEncoded: 'Only the first field is encoded — one symbol carries one value.',
+    symbolValue: 'Value',
+    symbolBound: 'Bound to a query — edit the field in the Data tab.',
+    symbolStaticHint: 'Static text. Supports {{param.x}} and {{date}}.',
+    barcodeCaption: 'Show value under the bars',
     panelTitle: 'Panel title',
     panelTitleFill: 'Title bar fill',
     panelColumns: 'Pairs per line',
@@ -858,7 +863,7 @@ export const en = {
     saveFailed: 'Save failed',
     element: {
       text: 'Text', table: 'Table', image: 'Image', line: 'Line', rect: 'Rectangle', datetime: 'Date/time',
-      keyvalue: 'Key/value panel',
+      keyvalue: 'Key/value panel', barcode: 'Barcode', qrcode: 'QR code',
     },
   },
   a11y: {

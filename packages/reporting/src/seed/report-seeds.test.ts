@@ -718,14 +718,55 @@ describe('SEED_DESIGNS — rt-clinical-micro uses real keyvalue panels', () => {
     expect(el('org').text).toBe('ORGANISM ISOLATED');
   });
 
-  it('leaves no element overlapping another vertically', () => {
+  it('leaves no element overprinting another', () => {
     // The panels are taller than the tables they replaced; a stale `y` silently overprints.
-    const els = [...design().pages[0].elements].sort((a, b) => a.rect.y - b.rect.y);
-    for (let i = 1; i < els.length; i += 1) {
-      const prev = els[i - 1];
-      const overlaps = els[i].rect.y < prev.rect.y + prev.rect.h;
-      // `band`/`bandt` are a deliberate pair (text sits inside its own band), as are rule/footer rows.
-      if (overlaps) expect(['bandt', 'ft', 'sig'], `${els[i].id} overlaps ${prev.id}`).toContain(els[i].id);
+    // ⚠ Must be a 2D intersection. A vertical-band-only check calls every side-by-side pair an
+    // overlap — the header barcode shares rows with the report title and is 56px to its right —
+    // so it would have to whitelist real elements and would then miss a genuine collision
+    // between them.
+    const els = design().pages[0].elements;
+    // `bandt` sits INSIDE `band` by design (a label on its own section bar).
+    const allowed = new Set(['band|bandt']);
+    for (let i = 0; i < els.length; i += 1) {
+      for (let j = i + 1; j < els.length; j += 1) {
+        const a = els[i].rect; const b = els[j].rect;
+        const hit = a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+        if (hit && !allowed.has(`${els[i].id}|${els[j].id}`) && !allowed.has(`${els[j].id}|${els[i].id}`)) {
+          expect.fail(`${els[i].id} overprints ${els[j].id}`);
+        }
+      }
+    }
+  });
+});
+
+describe('SEED_DESIGNS — rt-clinical-micro carries the scannable identifiers', () => {
+  const design = () => SEED_DESIGNS.find((d) => d.id === 'rt-clinical-micro')!;
+  const el = (id: string) => design().pages[0].elements.find((e) => e.id === id)!;
+
+  it('binds both symbols to lab_number, NOT to the request parameter', () => {
+    // The design's `request` param is the ServiceRequest UUID. A barcode of it would scan
+    // perfectly — to an identifier no one on the bench can act on. `lab_number` is what the
+    // specimen tube actually carries.
+    for (const id of ['bc', 'qr']) {
+      expect(el(id).dataSource?.queryId).toBe('q-clinical-micro-header');
+      expect(el(id).boundColumns?.[0].key).toBe('lab_number');
+      expect(el(id).text ?? '').toBe('');
+    }
+    expect(el('bc').kind).toBe('barcode');
+    expect(el('qr').kind).toBe('qrcode');
+  });
+
+  it('keeps the footer block at the FOOT of the page', () => {
+    // Authored at y=700 on an 1123px A4 page (62% down), leaving the signature line floating
+    // mid-page under a table ending at 572. Pinned as a fraction, not a literal, so the intent
+    // survives a re-layout.
+    const pageH = 1123;
+    for (const id of ['rule2', 'ft', 'sig', 'qr']) {
+      expect(el(id).rect.y / pageH, `${id} drifted off the page foot`).toBeGreaterThan(0.85);
+    }
+    // ...and still inside the bottom margin (32).
+    for (const id of ['rule2', 'ft', 'sig', 'qr']) {
+      expect(el(id).rect.y + el(id).rect.h).toBeLessThanOrEqual(pageH - 32);
     }
   });
 });

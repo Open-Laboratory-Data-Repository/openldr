@@ -163,3 +163,26 @@ describe('PropertiesTab keyvalue controls', () => {
     expect(screen.queryByText('Add column')).not.toBeInTheDocument();
   });
 });
+
+describe('PropertiesTab barcode and QR controls', () => {
+  const sym = (over: Partial<DesignElement> = {}): DesignElement =>
+    ({ id: 'sym', kind: 'barcode', name: 'B', rect: { x: 0, y: 0, w: 200, h: 60 }, ...over }) as DesignElement;
+
+  it('edits the static value and toggles the caption', () => {
+    const props = setup({ template: tplWithEl(sym({ text: '123' })), selectedIds: ['sym'] });
+    fireEvent.change(screen.getByLabelText('Value'), { target: { value: '456' } });
+    expect(props.onPatchElement).toHaveBeenCalledWith('sym', { text: '456' }, undefined);
+    fireEvent.click(screen.getByLabelText('Show value under the bars'));
+    expect(props.onPatchElement).toHaveBeenCalledWith('sym', { caption: false }, { discrete: true });
+  });
+
+  it('disables the static value when the symbol is bound, so the two cannot disagree', () => {
+    setup({ template: tplWithEl(sym({ dataSource: { kind: 'custom-query', queryId: 'q' } })), selectedIds: ['sym'] });
+    expect(screen.getByLabelText('Value')).toBeDisabled();
+  });
+
+  it('offers no caption toggle for a QR — it has no human-readable line', () => {
+    setup({ template: tplWithEl(sym({ kind: 'qrcode' })), selectedIds: ['sym'] });
+    expect(screen.queryByLabelText('Show value under the bars')).not.toBeInTheDocument();
+  });
+});

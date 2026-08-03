@@ -3,6 +3,7 @@ import zlib from 'node:zlib';
 import PDFDocument from 'pdfkit';
 import { renderReportDesignPdf, type ResolvedTable } from './index';
 import { columnWidths } from './draw';
+import { encodeCode128, encodeQr, QR_QUIET_ZONE } from '../encode';
 import type { ReportDesign, BoundColumn } from '../schema';
 
 const NOW = new Date('2026-07-08T00:00:00Z');
@@ -515,5 +516,98 @@ describe('keyvalue panel rendering', () => {
     const rows = new Map<string, ResolvedTable>([['k', { columns: [], rows: [Object.fromEntries(many.map((c) => [c.key, 'v']))] }]]);
     const pdf = await renderReportDesignPdf(kvDesign({ boundColumns: many, rect: { x: 0, y: 0, w: 400, h: 60 } }), rows, { now: NOW });
     expect(pdf.toString('latin1')).toMatch(/\/Count 1/);
+  });
+});
+
+describe('barcode and qrcode rendering', () => {
+  const VALUE = 'TZ00123/26';
+  const symDesign = (el: Partial<import('../schema').DesignElement>): ReportDesign => ({
+    id: 'd', name: 'N', paper: 'A4', orientation: 'portrait', parameters: [],
+    pages: [{ id: 'p', elements: [{
+      id: 's', kind: 'barcode', name: 'S', rect: { x: 0, y: 0, w: 400, h: 60 }, ...el,
+    } as import('../schema').DesignElement] }],
+  } as ReportDesign);
+  // FILLED rects only. Three different things emit `re` here and the test means exactly one of
+  // them: a fill (`re` then the colour operators then `f`), the element's own full-box CLIP
+  // (`re` + `W n`), and the unencodable placeholder's dashed OUTLINE (`re` + `S`). Counting the
+  // last two as bars is how "drew nothing" and "drew a box" both look like "drew one bar".
+  const fillRects = (pdf: Buffer) =>
+    [...decodedContent(pdf).matchAll(/(-?[\d.]+) (-?[\d.]+) (-?[\d.]+) (-?[\d.]+) re\n(?!W n|S\n)/g)]
+      .map((m) => ({ x: +m[1], y: +m[2], w: +m[3], h: +m[4] }));
+
+  it('draws one rect per RUN of bars, not one per module', async () => {
+    const bars = encodeCode128(VALUE)!;
+    let runs = 0;
+    for (let i = 0; i < bars.length; i += 1) if (bars[i] && !bars[i - 1]) runs += 1;
+    const rects = fillRects(await renderReportDesignPdf(symDesign({ text: VALUE }), new Map(), { now: NOW }));
+    // Merging matters twice over: 145 modules would otherwise cost 145 operators, and adjacent
+    // fractional-width rects can leave hairline seams a scanner reads as extra bars.
+    expect(rects).toHaveLength(runs);
+    expect(runs).toBeLessThan(bars.length);
+  });
+
+  it('scales the bars to fill the box width exactly', async () => {
+    const bars = encodeCode128(VALUE)!;
+    const rects = fillRects(await renderReportDesignPdf(symDesign({ text: VALUE }), new Map(), { now: NOW }));
+    const mw = 300 / bars.length; // 400px box → 300pt
+    expect(rects[0].x).toBeCloseTo(0, 4);
+    const last = rects[rects.length - 1];
+    expect(last.x + last.w).toBeCloseTo(300, 3);
+    expect(rects[0].w / mw).toBeCloseTo(Math.round(rects[0].w / mw), 4); // a whole number of modules
+  });
+
+  it('reserves the caption strip only when the caption is on', async () => {
+    const withCap = fillRects(await renderReportDesignPdf(symDesign({ text: VALUE }), new Map(), { now: NOW }));
+    const noCap = fillRects(await renderReportDesignPdf(symDesign({ text: VALUE, caption: false }), new Map(), { now: NOW }));
+    expect(noCap[0].h).toBeGreaterThan(withCap[0].h);
+    expect(noCap[0].h).toBeCloseTo(45, 4); // 60px box → 45pt, bars take all of it
+    expect(pdfTexts(await renderReportDesignPdf(symDesign({ text: VALUE }), new Map(), { now: NOW }))).toContain(VALUE);
+    expect(pdfTexts(await renderReportDesignPdf(symDesign({ text: VALUE, caption: false }), new Map(), { now: NOW }))).not.toContain(VALUE);
+  });
+
+  it('interpolates {{param.x}} into the encoded value, as a text element would', async () => {
+    const design = symDesign({ text: '{{param.lab}}' });
+    design.parameters = [{ key: 'lab', label: 'Lab', type: 'text', value: VALUE }];
+    // Encoding the LITERAL "{{param.lab}}" would still produce a valid-looking barcode — which is
+    // exactly the failure this pins: it would scan, to the wrong thing.
+    expect(pdfTexts(await renderReportDesignPdf(design, new Map(), { now: NOW }))).toContain(VALUE);
+  });
+
+  it('reserves a 4-module quiet zone on every side of a QR', async () => {
+    const pdf = await renderReportDesignPdf(
+      symDesign({ kind: 'qrcode', text: VALUE, rect: { x: 0, y: 0, w: 100, h: 100 } }), new Map(), { now: NOW });
+    const rects = fillRects(pdf);
+    const n = encodeQr(VALUE)!.length;
+    const pitch = 75 / (n + QR_QUIET_ZONE * 2); // 100px → 75pt
+    expect(rects.every((r) => Math.abs(r.h - pitch) < 1e-6)).toBe(true);
+    // The top-left finder is dark at module 0,0, so the first dark pixel sits exactly the quiet
+    // zone in. A regression that drops the margin still LOOKS right on a white page.
+    expect(Math.min(...rects.map((r) => r.x)) / pitch).toBeCloseTo(QR_QUIET_ZONE, 4);
+    expect(Math.min(...rects.map((r) => r.y)) / pitch).toBeCloseTo(QR_QUIET_ZONE, 4);
+  });
+
+  it('draws the dashed placeholder instead of throwing when a value cannot encode', async () => {
+    for (const el of [{ text: '' }, { text: 'aemol/læ' }, { kind: 'qrcode' as const, text: '' }]) {
+      const pdf = await renderReportDesignPdf(symDesign(el), new Map(), { now: NOW });
+      // `[3 2] 0 d` is pdfkit's dash operator — the same placeholder an `image` with no usable
+      // source draws, so "nothing to show" looks identical wherever it happens.
+      expect(decodedContent(pdf)).toContain('[3 2] 0 d');
+      // ...and nothing was FILLED: a half-drawn symbol would scan as a wrong value.
+      expect(fillRects(pdf)).toHaveLength(0);
+    }
+  });
+
+  it('encodes boundColumns[0] of row 0 for a bound symbol', async () => {
+    const design = symDesign({
+      dataSource: { kind: 'custom-query', queryId: 'q' },
+      boundColumns: [{ key: 'lab', label: 'Lab number' }, { key: 'ignored', label: 'Other' }],
+    });
+    const resolved = new Map<string, ResolvedTable>([['s', {
+      columns: [], rows: [{ lab: VALUE, ignored: 'NOT-THIS' }, { lab: 'SECOND-ROW' }],
+    }]]);
+    const texts = pdfTexts(await renderReportDesignPdf(design, resolved, { now: NOW }));
+    expect(texts).toContain(VALUE);
+    expect(texts).not.toContain('NOT-THIS');
+    expect(texts).not.toContain('SECOND-ROW');
   });
 });

@@ -811,6 +811,11 @@ export const pt: EnShape = {
     emphasisText: 'Texto colorido',
     emphasisFill: 'Chip preenchido',
     fields: 'Campos',
+    firstFieldEncoded: 'Apenas o primeiro campo é codificado — um símbolo carrega um valor.',
+    symbolValue: 'Valor',
+    symbolBound: 'Vinculado a uma consulta — edite o campo no separador Dados.',
+    symbolStaticHint: 'Texto estático. Aceita {{param.x}} e {{date}}.',
+    barcodeCaption: 'Mostrar o valor sob as barras',
     panelTitle: 'Título do painel',
     panelTitleFill: 'Fundo da barra de título',
     panelColumns: 'Pares por linha',
@@ -854,7 +859,7 @@ export const pt: EnShape = {
     saveFailed: 'Falha ao salvar',
     element: {
       text: 'Texto', table: 'Tabela', image: 'Imagem', line: 'Linha', rect: 'Retângulo', datetime: 'Data/hora',
-      keyvalue: 'Painel chave/valor',
+      keyvalue: 'Painel chave/valor', barcode: 'Código de barras', qrcode: 'Código QR',
     },
   },
   a11y: {
