@@ -267,6 +267,66 @@ describe('cell status rendering', () => {
   });
 });
 
+describe('renderReportPdf wires column.kind into alignment', () => {
+  // `columnWidths` depends only on headers/rows, never `kind`, so both renders below get IDENTICAL
+  // column geometry — any difference in a text run's x-position is attributable purely to the
+  // alignment `isRightAligned` chose, which proves the renderer actually forwards `column.kind`
+  // into it (rather than, say, calling `isRightAligned(cells, ci, undefined)` or falling back to
+  // the old `isNumericColumn(cells, ci)` — both of those mutations leave every OTHER test green).
+  it('renders an all-numeric column right-aligned by default, and left-aligned when kind is "units"', async () => {
+    const rows = [{ v: '100' }, { v: '5' }];
+    const base = { title: 'T', generatedAt: 'now', params: {}, rows };
+    const rightAligned = await renderReportPdf({ ...base, columns: [{ key: 'v', label: 'V' }] });
+    const leftAligned = await renderReportPdf({ ...base, columns: [{ key: 'v', label: 'V', kind: 'units' as const }] });
+
+    // Locate the "100" data cell's own text run (hex `313030` = the ASCII codes for "1","0","0")
+    // in each decompressed content stream and read back its `Tm` x-coordinate.
+    const cellRunX = (pdf: Buffer): string => {
+      const content = decodedContent(pdf);
+      const m = content.match(/1 0 0 1 (-?[\d.]+) (-?[\d.]+) Tm\n\/F\d \d+ Tf\n\[<313030>[^\]]*\] TJ/);
+      expect(m).not.toBeNull();
+      return (m as RegExpMatchArray)[1];
+    };
+    expect(cellRunX(leftAligned)).not.toBe(cellRunX(rightAligned));
+  });
+});
+
+describe('status palette pinning', () => {
+  // Only STATUS_TEXT_COLOR.abnormal is asserted anywhere else in this file. Because this palette is
+  // a SANCTIONED duplicate of `@openldr/report-designer`'s `render/draw.ts` copy (see the docblock
+  // above `CELL_STATUSES` in `../src/index.ts`), tests are the only thing keeping the two in step —
+  // pin every entry here so a drift in any one of the 15 hex values fails loudly. Values verified
+  // against `packages/report-designer/src/render/draw.ts` (not copied from this package's own
+  // source, which would just pin the duplicate to itself).
+  const CHIP_FILL: Record<string, string> = {
+    normal: '#16a34a', abnormal: '#e11d48', critical: '#9f1239', indeterminate: '#94a3b8', none: '#e2e8f0',
+  };
+  const CHIP_TEXT: Record<string, string> = {
+    normal: '#ffffff', abnormal: '#ffffff', critical: '#ffffff', indeterminate: '#ffffff', none: '#334155', // BODY_TEXT
+  };
+  const TEXT_COLOR: Record<string, string> = {
+    normal: '#166534', abnormal: '#b91c1c', critical: '#9f1239', indeterminate: '#475569', none: '#334155', // BODY_TEXT
+  };
+  const STATUSES = Object.keys(CHIP_FILL);
+
+  it.each(STATUSES)('paints the "%s" fill chip and its chip-text colour', async (status) => {
+    const columns = [{ key: 'res', label: 'Result', statusKey: 's', emphasis: 'fill' as const }];
+    const rows = [{ res: 'v', s: status }];
+    const pdf = await renderReportPdf({ title: 'T', generatedAt: 'now', params: {}, columns, rows });
+    const content = decodedContent(pdf);
+    expect(content).toContain(fillOp(CHIP_FILL[status]));
+    expect(content).toContain(fillOp(CHIP_TEXT[status]));
+  });
+
+  it.each(STATUSES)('tints the "%s" value with STATUS_TEXT_COLOR under the default (text) emphasis', async (status) => {
+    const columns = [{ key: 'res', label: 'Result', statusKey: 's' }];
+    const rows = [{ res: 'v', s: status }];
+    const pdf = await renderReportPdf({ title: 'T', generatedAt: 'now', params: {}, columns, rows });
+    const content = decodedContent(pdf);
+    expect(content).toContain(fillOp(TEXT_COLOR[status]));
+  });
+});
+
 describe('cellStatusesFor', () => {
   it('is a grid of undefined when no column declares a statusKey', () => {
     const grid = cellStatusesFor(

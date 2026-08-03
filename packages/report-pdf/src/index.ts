@@ -114,7 +114,12 @@ export function asCellStatus(v: unknown): CellStatus | undefined {
 
 /** Per-cell statuses aligned to `cells`'s grid (one entry per row × column). `undefined` wherever a
  *  column has no `statusKey`, or the row's value under it isn't a recognised token — both render
- *  exactly as they did before this feature existed (see `asCellStatus`). */
+ *  exactly as they did before this feature existed (see `asCellStatus`).
+ *
+ *  ⚠ Same name, different empty-case contract than `report-designer`'s `cellStatusesFor`: that one
+ *  returns `[]` (its documented "compatibility contract") when no column declares a `statusKey`;
+ *  this one always returns a full grid of `undefined`. Render output is identical either way, but
+ *  keep this in mind if the two ever get consolidated. */
 export function cellStatusesFor(columns: PdfColumn[], rows: Record<string, unknown>[]): (CellStatus | undefined)[][] {
   return rows.map((row) => columns.map((c) => (c.statusKey ? asCellStatus(row[c.statusKey]) : undefined)));
 }
