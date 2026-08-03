@@ -322,3 +322,30 @@ describe('cell status rendering', () => {
     expect(pages[1]).not.toContain(abnormal);
   });
 });
+
+describe('zebra-stripe fill tracking', () => {
+  it('repaints BODY_TEXT before a zebra-striped row\'s text, not the leftover zebra colour (plain table, no statusKey)', async () => {
+    // pdfkit's `rect(...).fill(color)` changes the doc's ACTUAL fill colour as a side effect (that
+    // is how it paints), so `drawGrid`'s `lastFill` cache must be updated at the zebra-band call
+    // site too — not just inside `setFill` — or the next `setFill(BODY_TEXT)` for that row's text
+    // compares against a stale cached value, wrongly concludes nothing changed, and skips the colour
+    // op. The text is then painted in whatever colour is still actually active on the doc (the
+    // zebra fill), on top of a band of that same colour: invisible text on every other row of every
+    // table. This is a plain, unbound table with no `statusKey` — the bug affects ALL tables, not
+    // just ones using cell status.
+    const design = baseDesign({ pages: [{ id: 'p1', elements: [
+      { id: 't1', kind: 'table', name: 'T', rect: { x: 0, y: 0, w: 300, h: 200 },
+        columns: ['A', 'B'],
+        rows: [['r0a', 'r0b'], ['r1a', 'r1b'], ['r2a', 'r2b'], ['r3a', 'r3b']] },
+    ] }] });
+    const pdf = await renderReportDesignPdf(design, new Map(), { now: NOW });
+    const content = decodedContent(pdf);
+
+    // Row index 1 is the first zebra-striped row: y = r.y(0) + ROW_H(16) + 1 * ROW_H(16) = 32.
+    // r.w is the full table width (300px -> 225pt), since the zebra band spans the whole row.
+    const zebraRect = `${pdfNum(0)} ${pdfNum(32)} ${pdfNum(225)} 16 re`;
+    const zebraFill = fillOp('#f8fafc'); // ZEBRA_FILL
+    const bodyFill = fillOp('#334155'); // BODY_TEXT
+    expect(content).toContain(`${zebraRect}\n/DeviceRGB cs\n${zebraFill}\nf\n/DeviceRGB cs\n${bodyFill}\n`);
+  });
+});
