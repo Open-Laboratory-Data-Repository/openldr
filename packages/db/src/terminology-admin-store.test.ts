@@ -241,6 +241,42 @@ describe('terminology admin store', () => {
         .rejects.toMatchObject({ kind: 'conflict' });
     });
 
+    // Task 4 (S2b) review fix: every @openldr/terminology loader (result-parameters, organisms,
+    // whonet, the generic loader) writes `status: null` on imported concepts by design. `termRow`
+    // already treats NULL as 'ACTIVE' for display (see the comment there); `vsDeps.listSystemConcepts`
+    // and `vsDeps.filterConcepts` used to be the outliers, gating `activeOnly` on `status = 'ACTIVE'`
+    // exactly, which silently excluded every loader-fed concept. They now accept NULL too, but a real
+    // non-active status (DEPRECATED here) must still be excluded — otherwise there would be no way to
+    // retire a concept out of an intensional ValueSet by status.
+    it('activeOnly expansion includes NULL-status concepts but still excludes DEPRECATED ones', async () => {
+      const { s: admin, db } = await store();
+      await db.insertInto('terminology_concepts').values([
+        { system: 's1', code: 'A', display: 'Alpha', status: null, properties: JSON.stringify({ result_role: 'result' }) },
+        { system: 's1', code: 'B', display: 'Beta', status: 'DEPRECATED', properties: JSON.stringify({ result_role: 'result' }) },
+      ] as never).execute();
+
+      // listSystemConcepts path: whole-system include, no concept/filter (mirrors migration 069's
+      // 'result-observation' set).
+      const wholeSystem = await admin.valueSets.save({
+        url: 'urn:test:vs-whole', version: null, name: null, title: 'whole', status: 'active',
+        experimental: false, description: null,
+        compose: { include: [{ system: 's1' }] },
+      });
+      const wholeCodes = (await db.selectFrom('valueset_expansions').select('code')
+        .where('value_set_id', '=', wholeSystem.id).orderBy('code').execute()).map((c) => c.code);
+      expect(wholeCodes).toEqual(['A']);
+
+      // filterConcepts path: property filter (mirrors migration 069's 'reportable-result' set).
+      const filtered = await admin.valueSets.save({
+        url: 'urn:test:vs-filtered', version: null, name: null, title: 'filtered', status: 'active',
+        experimental: false, description: null,
+        compose: { include: [{ system: 's1', filter: [{ property: 'result_role', op: '=', value: 'result' }] }] },
+      });
+      const filteredCodes = (await db.selectFrom('valueset_expansions').select('code')
+        .where('value_set_id', '=', filtered.id).orderBy('code').execute()).map((c) => c.code);
+      expect(filteredCodes).toEqual(['A']);
+    });
+
     it('duplicates into an editable copy', async () => {
       const { s: admin } = await store();
       const a = await admin.valueSets.save({ url: 'urn:test:vs', version: null, name: null, title: 'orig', status: 'active', experimental: false, description: null, compose: { include: [] } });

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { makeMigratedDb } from '@openldr/db/testing';
 import { createFhirStore, createTerminologyStore, createTerminologyAdminStore, type ValueSetProjection } from '@openldr/db';
 import { importResultParameters, type LoaderStore } from '@openldr/terminology';
-import { reexpandValueSetsForSystem } from './reexpand-value-sets';
+import { reexpandValueSetsForSystem, createResultParametersLoader } from './reexpand-value-sets';
 
 // Mirrors bootstrap's exact terminology-context.ts construction (createTerminologyContext can't run
 // against pg-mem itself — see index.test.ts's reference-capture describe block for why): a real
@@ -92,5 +92,28 @@ describe('reexpandValueSetsForSystem (Task 4, S2b)', () => {
 
     expect(await codesIn('urn:openldr:valueset:non-reportable')).toEqual([]);
     expect(await codesIn('urn:openldr:valueset:reportable-result')).toEqual([]);
+  });
+});
+
+describe('createResultParametersLoader (F3: the actual boot wiring, not the helper directly)', () => {
+  // The three cases above call `reexpandValueSetsForSystem` directly, which proves the helper
+  // itself works — but not that either boot path (`terminology-context.ts`'s
+  // `createTerminologyContext` or `index.ts`'s `createAppContext`) actually calls it. Both files now
+  // build their `loaders.parameters` closure from this same factory (see reexpand-value-sets.ts), so
+  // driving `loaders.parameters(...)` here — the real seam this task owns — exercises the exact code
+  // both boot paths run, not a hand-rolled equivalent.
+  it('drives loaders.parameters(...) end to end and leaves the result-role sets expanded', async () => {
+    const { admin, loaderStore, codesIn } = await buildContext();
+    const loaders = { parameters: createResultParametersLoader(admin, loaderStore) };
+
+    const result = await loaders.parameters([
+      { code: 'CD4', description: 'CD4 Count', result_role: 'result' },
+      { code: 'COLBY', description: 'Collected By', result_role: 'metadata' },
+    ]);
+
+    expect(result.system).toBe('urn:openldr:default_result');
+    expect(await codesIn('urn:openldr:valueset:non-reportable')).toEqual(['COLBY']);
+    expect(await codesIn('urn:openldr:valueset:reportable-result')).toEqual(['CD4']);
+    expect(await codesIn('urn:openldr:valueset:result-observation')).toEqual(['CD4', 'COLBY']);
   });
 });

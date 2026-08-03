@@ -1,4 +1,5 @@
 import type { TerminologyAdminStore } from '@openldr/db';
+import { importResultParameters, type LoaderStore, type ResultParamImportResult } from '@openldr/terminology';
 
 /**
  * Task 4 (S2b, result-classification): re-expands and reprojects every ValueSet whose compose
@@ -26,32 +27,51 @@ import type { TerminologyAdminStore } from '@openldr/db';
  * workaround. `save()` is fed back the ValueSet's OWN unchanged fields (fetched via `valueSets.get`)
  * purely to trigger that recompute-and-project path — this is not an edit.
  *
- * `{ activeOnly: false }`: every @openldr/terminology loader (result-parameters included) writes
- * `status: null` for imported concepts by design — see `terminology-admin-store.ts`'s
- * `refreshCacheAndProject` comment. The default `activeOnly: true` gates on `status = 'ACTIVE'`
- * exactly, which a null-status concept never satisfies, so re-expanding with the default would
- * silently yield zero codes on every real install — the exact failure this task exists to prevent,
- * just moved one layer down.
+ * Plain `save(input)` — no `activeOnly` override. Every @openldr/terminology loader
+ * (result-parameters included) writes `status: null` for imported concepts by design, but
+ * `terminology-admin-store.ts`'s `vsDeps.listSystemConcepts`/`filterConcepts` now treat NULL status
+ * as active (same convention `termRow` already applies for display), so the store's default
+ * `activeOnly: true` expansion picks up loader-fed concepts without an opt-in override. A concept an
+ * admin later marks non-active (DEPRECATED/DISABLED/DRAFT/DISCOURAGED/TRIAL) is still excluded.
  */
 export async function reexpandValueSetsForSystem(admin: TerminologyAdminStore, system: string): Promise<void> {
   const summaries = await admin.valueSets.list();
   const targets = summaries.filter((vs) => vs.primarySystem === system);
   for (const t of targets) {
     const vs = await admin.valueSets.get(t.id);
-    await admin.valueSets.save(
-      {
-        url: vs.url,
-        version: vs.version,
-        name: vs.name,
-        title: vs.title,
-        status: vs.status,
-        experimental: vs.experimental,
-        description: vs.description,
-        compose: vs.compose,
-        publisherId: vs.publisherId,
-        category: vs.category,
-      },
-      { activeOnly: false },
-    );
+    await admin.valueSets.save({
+      url: vs.url,
+      version: vs.version,
+      name: vs.name,
+      title: vs.title,
+      status: vs.status,
+      experimental: vs.experimental,
+      description: vs.description,
+      compose: vs.compose,
+      publisherId: vs.publisherId,
+      category: vs.category,
+    });
   }
+}
+
+/**
+ * The actual `loaders.parameters` wiring, shared by `terminology-context.ts` (lab/single-tenant
+ * boot) and `index.ts` (`createAppContext`'s `terminology.loaders`) so there is exactly one place
+ * that pairs `importResultParameters` with the `reexpandValueSetsForSystem` call above — previously
+ * each file duplicated this closure inline (with only the `admin` binding differing), which let the
+ * two copies silently drift and left the re-expansion call itself untested: a unit test that invokes
+ * `reexpandValueSetsForSystem` directly (see `reexpand-value-sets.test.ts`'s first three cases)
+ * proves the helper works, but not that either boot path actually calls it. A test that builds this
+ * factory the same way production does and calls the resulting `loaders.parameters` closure exercises
+ * the real seam.
+ */
+export function createResultParametersLoader(
+  admin: TerminologyAdminStore,
+  loaderStore: LoaderStore,
+): (json: unknown) => Promise<ResultParamImportResult> {
+  return async (json) => {
+    const result = await importResultParameters(json, loaderStore);
+    await reexpandValueSetsForSystem(admin, result.system);
+    return result;
+  };
 }

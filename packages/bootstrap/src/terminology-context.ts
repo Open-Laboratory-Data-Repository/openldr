@@ -2,11 +2,11 @@ import { Kysely } from 'kysely';
 import type { Config } from '@openldr/config';
 import { redact, createLogger, type Logger } from '@openldr/core';
 import { createInternalDb, createFhirStore, createTerminologyStore, createTerminologyAdminStore, createOntologyStore, referenceCapture, markTerminologyChanged, createTerminologyIngestJobStore, type TerminologyAdminStore, type InternalSchema, type OntologyStore, type TerminologyIngestJobStore, resolveSeedPublisherId, deriveSystemCode } from '@openldr/db';
-import { buildOntologyDistribution, canonicalSystemUrl, createOperations, type Operations, type LoaderStore, loadLoinc, loadWhonetAmr, importTerminologyResource, importOrganismDictionary, importResultParameters, stalenessReason, type LoadResult, type OrganismImportResult, type ResultParamImportResult, type OntologyBuildProgress, type OntologyManifest, type OntologyType } from '@openldr/terminology';
+import { buildOntologyDistribution, canonicalSystemUrl, createOperations, type Operations, type LoaderStore, loadLoinc, loadWhonetAmr, importTerminologyResource, importOrganismDictionary, stalenessReason, type LoadResult, type OrganismImportResult, type ResultParamImportResult, type OntologyBuildProgress, type OntologyManifest, type OntologyType } from '@openldr/terminology';
 import { createAuditStore, type AuditStore } from '@openldr/audit';
 import type { BlobStoragePort } from '@openldr/ports';
 import { createBlobFromConfig } from './s3-config';
-import { reexpandValueSetsForSystem } from './reexpand-value-sets';
+import { createResultParametersLoader } from './reexpand-value-sets';
 
 function createOntologyApi(ontologyStore: OntologyStore) {
   return {
@@ -137,11 +137,7 @@ export async function createTerminologyContext(cfg: Config): Promise<Terminology
       // no expansion — their concepts arrive here, not at migration time. Re-expand + reproject them
       // (via valueSets.save(), not expand() — see reexpand-value-sets.ts) every time this import runs,
       // or they stay empty forever and nothing reaches terminology_codes.
-      parameters: async (json) => {
-        const result = await importResultParameters(json, loaderStore);
-        await reexpandValueSetsForSystem(admin, result.system);
-        return result;
-      },
+      parameters: createResultParametersLoader(admin, loaderStore),
     },
     async ingestOntologyWithConcepts(systemType, systemId, dir, onProgress) {
       const url = canonicalSystemUrl(systemType);

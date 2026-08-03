@@ -49,7 +49,7 @@ import { createSyncActivityTracker } from './sync-activity-tracker';
 import { migrateLegacySyncConfig } from './sync-settings-migrate';
 import { encodePushBody, advertisesGzip } from './sync-gzip';
 import { migrateWorkflowSecrets } from './workflow-secret-migrate';
-import { reexpandValueSetsForSystem } from './reexpand-value-sets';
+import { createResultParametersLoader } from './reexpand-value-sets';
 
 import { createActivityService, type ActivityService } from './activity-service';
 import { createFeatureFlags, type FeatureFlags } from './feature-flags';
@@ -76,7 +76,7 @@ import { createDhis2Orchestration } from './dhis2-orchestration';
 import { selectTargetStore } from './target-store';
 import { createPluginRegistry } from './plugin-registry';
 import { createProjectionWorker } from './projection-worker';
-import { buildOntologyDistribution, canonicalSystemUrl, createOperations, importOrganismDictionary, importResultParameters, importTerminologyResource, loadLoinc, loadWhonetAmr, stalenessReason, type LoaderStore, type LoadResult, type OrganismImportResult, type ResultParamImportResult, type OntologyBuildProgress, type OntologyManifest, type OntologyType, type Operations } from '@openldr/terminology';
+import { buildOntologyDistribution, canonicalSystemUrl, createOperations, importOrganismDictionary, importTerminologyResource, loadLoinc, loadWhonetAmr, stalenessReason, type LoaderStore, type LoadResult, type OrganismImportResult, type ResultParamImportResult, type OntologyBuildProgress, type OntologyManifest, type OntologyType, type Operations } from '@openldr/terminology';
 import { createTerminologyIngestWorker } from './terminology-ingest-worker';
 import { createRunIngest } from './terminology-ingest-shared';
 import { recordAuditEvent, type AuditDetails } from './record-audit';
@@ -762,11 +762,7 @@ const reporting: ReportingApi = {
       // no expansion — their concepts arrive here, not at migration time. Re-expand + reproject them
       // (via valueSets.save(), not expand() — see reexpand-value-sets.ts) every time this import runs,
       // or they stay empty forever and nothing reaches terminology_codes.
-      parameters: async (json) => {
-        const result = await importResultParameters(json, loaderStore);
-        await reexpandValueSetsForSystem(termAdmin, result.system);
-        return result;
-      },
+      parameters: createResultParametersLoader(termAdmin, loaderStore),
     },
     async ingestOntologyWithConcepts(systemType, systemId, dir, onProgress) {
       const url = canonicalSystemUrl(systemType);
