@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { interpolate, paramMap, tableChunkCount, pageChunkCount, rowsFor, totalPhysicalPages, pageFooterLabel, cellTextOptions, CELL_TEXT_H, ROW_H } from './draw';
+import { interpolate, paramMap, tableChunkCount, pageChunkCount, rowsFor, totalPhysicalPages, pageFooterLabel, cellTextOptions, columnWidths, isNumericColumn, CELL_TEXT_H, ROW_H } from './draw';
 import type { ReportDesign, DesignElement, DesignPage } from '../schema';
 import type { ResolvedTable } from './index';
 
@@ -147,6 +147,71 @@ describe('cellTextOptions', () => {
     expect(CELL_TEXT_H).toBeGreaterThanOrEqual(LINE);
     expect(CELL_TEXT_H).toBeLessThan(2 * LINE);
     expect(ROW_H).toBe(16);
+  });
+});
+
+describe('columnWidths', () => {
+  // Stand-in for pdfkit metrics: bold is a touch wider, which is enough to exercise the header
+  // contribution without pulling a PDF document into a unit test.
+  const measure = (t: string, bold: boolean) => t.length * (bold ? 5.2 : 4.6);
+  const sum = (a: number[]) => a.reduce((x, y) => x + y, 0);
+
+  it('gives a long text column more room than a single-character count column', () => {
+    // The real shape of AMR GLASS RIS, which is what motivated this.
+    const headers = ['Antibiotic', 'R', 'I', 'S'];
+    const rows = [['Trimethoprim/Sulfamethoxazole', '0', '0', '2'], ['Ceftriaxone', '1', '0', '3']];
+    const w = columnWidths(headers, rows, 400, measure);
+    expect(w[0]).toBeGreaterThan(w[1] * 2); // the old uniform split made these equal
+    expect(sum(w)).toBeCloseTo(400, 5);     // and the row still fills its box exactly
+  });
+
+  it('always fills exactly the width it is given', () => {
+    for (const total of [120, 400, 900]) {
+      const w = columnWidths(['a', 'bb', 'ccc'], [['1', '22', '333']], total, measure);
+      expect(sum(w)).toBeCloseTo(total, 5);
+    }
+  });
+
+  it('keeps a narrow column legible instead of collapsing it to nothing', () => {
+    // One enormous column beside several tiny ones: the tiny ones must not vanish.
+    const headers = ['id', 'note', 'n'];
+    const rows = [['1', 'x'.repeat(300), '2']];
+    const w = columnWidths(headers, rows, 400, measure);
+    for (const width of w) expect(width).toBeGreaterThanOrEqual(20);
+    expect(sum(w)).toBeCloseTo(400, 5);
+  });
+
+  it('caps one runaway column so it cannot starve the rest', () => {
+    const wide = columnWidths(['a', 'b'], [['x'.repeat(500), 'y']], 400, measure);
+    const narrow = columnWidths(['a', 'b'], [['x'.repeat(40), 'y']], 400, measure);
+    // Past the cap, growing the content further must not keep taking width from column b.
+    expect(wide[0]).toBeCloseTo(narrow[0], 5);
+  });
+
+  it('survives a degenerate table without dividing by zero', () => {
+    expect(sum(columnWidths([], [], 300, measure))).toBeCloseTo(300, 5);
+    expect(sum(columnWidths(['a'], [], 300, measure))).toBeCloseTo(300, 5);
+  });
+});
+
+describe('isNumericColumn', () => {
+  const rows = [
+    ['VIBCO', '18', '0% (13)', '5-14', ''],
+    ['SHIFL', '3', '100% (1)', '1-4', ''],
+  ];
+  it('detects a column of plain numbers', () => {
+    expect(isNumericColumn(rows, 1)).toBe(true);
+  });
+  it('leaves formatted and mixed values ranged left', () => {
+    expect(isNumericColumn(rows, 0)).toBe(false); // text
+    expect(isNumericColumn(rows, 2)).toBe(false); // "0% (13)" is not a number
+    expect(isNumericColumn(rows, 3)).toBe(false); // "5-14" is an age band, not a negative number
+  });
+  it('is false for an all-empty column rather than vacuously true', () => {
+    expect(isNumericColumn(rows, 4)).toBe(false);
+  });
+  it('ignores blanks among numbers, and accepts negatives and decimals', () => {
+    expect(isNumericColumn([['1'], [''], ['-2.5']], 0)).toBe(true);
   });
 });
 
