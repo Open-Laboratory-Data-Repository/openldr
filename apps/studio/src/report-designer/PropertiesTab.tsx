@@ -113,6 +113,29 @@ function KindControls({ el, onPatch }: {
     );
   }
 
+  if (el.kind === 'barcode' || el.kind === 'qrcode') {
+    return (
+      <div className="flex flex-col gap-3">
+        <div>
+          <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">{t('reportDesigner.symbolValue')}</div>
+          <Input aria-label={t('reportDesigner.symbolValue')} value={el.text ?? ''} disabled={!!el.dataSource}
+            placeholder={el.dataSource ? t('reportDesigner.symbolBound') : '{{param.request}}'}
+            onChange={(e) => onPatch({ text: e.target.value })} className="h-8 text-xs" />
+          <p className="mt-1 text-xs text-muted-foreground">
+            {el.dataSource ? t('reportDesigner.symbolBound') : t('reportDesigner.symbolStaticHint')}
+          </p>
+        </div>
+        {el.kind === 'barcode' && (
+          <label className="flex items-center gap-2 text-xs text-foreground">
+            <Checkbox aria-label={t('reportDesigner.barcodeCaption')} checked={el.caption ?? true}
+              onCheckedChange={(v) => onPatch({ caption: v === true }, { discrete: true })} />
+            {t('reportDesigner.barcodeCaption')}
+          </label>
+        )}
+      </div>
+    );
+  }
+
   if (el.kind === 'keyvalue') {
     // No static-pair editor: an unbound panel shows its sample pairs and is made real by binding a
     // query in the Data tab — the same contract a table's sample `rows` already have here.

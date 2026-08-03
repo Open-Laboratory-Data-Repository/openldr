@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export type ElementKind = 'text' | 'table' | 'image' | 'line' | 'rect' | 'datetime' | 'keyvalue';
+export type ElementKind = 'text' | 'table' | 'image' | 'line' | 'rect' | 'datetime' | 'keyvalue' | 'barcode' | 'qrcode';
 export type Paper = 'A4' | 'Letter';
 export type Orientation = 'portrait' | 'landscape';
 export type TextAlign = 'left' | 'center' | 'right';
@@ -50,10 +50,11 @@ export type KeyValueLayout = 'inline' | 'stacked';
 
 export const DesignElementSchema = z.object({
   id: z.string(),
-  kind: z.enum(['text', 'table', 'image', 'line', 'rect', 'datetime', 'keyvalue']),
+  kind: z.enum(['text', 'table', 'image', 'line', 'rect', 'datetime', 'keyvalue', 'barcode', 'qrcode']),
   name: z.string(),
   rect: RectSchema,
-  /** text/datetime content; also the OPTIONAL title of a `keyvalue` panel (no title when empty) */
+  /** text/datetime content; the OPTIONAL title of a `keyvalue` panel (no title when empty); and the
+   *  static value of an UNBOUND `barcode`/`qrcode` (interpolated, so `{{param.x}}` works) */
   text: z.string().optional(),
   /** table column headers */
   columns: z.array(z.string()).optional(),
@@ -69,6 +70,9 @@ export const DesignElementSchema = z.object({
   /** `keyvalue` pairs side by side per line (default 1). Capped at 4 — beyond that a pair's share of
    *  an A4 width is narrower than its own label. */
   panelColumns: z.number().int().min(1).max(4).optional(),
+  /** `barcode` human-readable text under the bars (default TRUE — standard on specimen labels, and
+   *  what lets a human read the accession when a scanner is unavailable). */
+  caption: z.boolean().optional(),
   /** presentational style (text/line/rect) */
   style: ElementStyleSchema.optional(),
   /** image source (URL or data: URI) */

@@ -14,8 +14,10 @@
   "dependencies": {
     "@openldr/core": "workspace:*",
     "@openldr/db": "workspace:*",
+    "jsbarcode": "3.12.3",
     "kysely": "^0.28.17",
     "pdfkit": "^0.15.0",
+    "qrcode-generator": "^2.0.4",
     "zod": "3.24.0"
   },
   "devDependencies": {

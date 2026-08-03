@@ -12,14 +12,14 @@ export function paperSize(paper: Paper, orientation: Orientation): { w: number; 
 }
 
 /** Insertable element kinds, in menu order. */
-export const ELEMENT_KINDS: ElementKind[] = ['text', 'table', 'keyvalue', 'image', 'line', 'rect', 'datetime'];
+export const ELEMENT_KINDS: ElementKind[] = ['text', 'table', 'keyvalue', 'image', 'barcode', 'qrcode', 'line', 'rect', 'datetime'];
 
 let seq = 0;
 export function newElementId(): string { seq += 1; return `el-${Date.now()}-${seq}`; }
 
 const DEFAULT_NAME: Record<ElementKind, string> = {
   text: 'Text', table: 'Table', image: 'Image', line: 'Line', rect: 'Rectangle', datetime: 'Date/time',
-  keyvalue: 'Key/value panel',
+  keyvalue: 'Key/value panel', barcode: 'Barcode', qrcode: 'QR code',
 };
 
 export function newElement(kind: ElementKind): DesignElement {
@@ -38,6 +38,10 @@ export function newElement(kind: ElementKind): DesignElement {
     id, kind, name, rect: { x: 48, y: 48, w: 320, h: 72 }, layout: 'inline', panelColumns: 1,
     rows: [['Label', '—'], ['Label', '—']],
   };
+  // A barcode is WIDE and short, a QR is SQUARE — dropping either at the generic 200x80 gives a
+  // squashed symbol the author has to fix before it can even be read.
+  if (kind === 'barcode') return { id, kind, name, rect: { x: 48, y: 48, w: 220, h: 56 }, text: '123456789', caption: true };
+  if (kind === 'qrcode') return { id, kind, name, rect: { x: 48, y: 48, w: 80, h: 80 }, text: '123456789' };
   return { id, kind, name, rect: { x: 48, y: 48, w: 200, h: 80 } };
 }
 

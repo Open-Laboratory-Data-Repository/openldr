@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Image as ImageIcon } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import type { DesignElement, DesignPage, Margins, Rect, ReportTemplate } from './types';
+import { encodeCode128, encodeQr, QR_QUIET_ZONE } from './types';
 import { paperSize } from './model';
 import { HANDLES, boundingBox, type Handle } from './geometry';
 import { useCanvasInteraction } from './useCanvasInteraction';
@@ -189,6 +190,56 @@ function KeyValuePreview({ el, zoom }: { el: DesignElement; zoom: number }): JSX
   );
 }
 
+/**
+ * A barcode or QR drawn REAL, as SVG, from the same encoder the PDF renderer uses
+ * (`@openldr/report-designer/pure`) — so what the author places is the geometry that will print,
+ * not an icon standing in for it. Width and module density are exactly what placement decisions
+ * depend on, and they change with the value's length.
+ *
+ * ⚠ A BOUND symbol has no value here (the canvas never runs queries), so it encodes the bound
+ * column's LABEL as a stand-in and draws it MUTED. Encoding a plausible-looking fake at full
+ * strength would put a scannable-but-wrong code on the design surface; muted says "this is the
+ * shape, not the code".
+ */
+function SymbolPreview({ el }: { el: DesignElement }): JSX.Element {
+  const bound = !!el.dataSource;
+  const value = bound ? (el.boundColumns?.[0]?.label ?? '') : (el.text ?? '');
+  const opacity = bound ? 0.35 : 1;
+
+  if (el.kind === 'qrcode') {
+    const modules = encodeQr(value);
+    if (!modules) return <UnencodablePreview />;
+    const n = modules.length;
+    const span = n + QR_QUIET_ZONE * 2;
+    return (
+      <svg viewBox={`0 0 ${span} ${span}`} className="h-full w-full" preserveAspectRatio="xMidYMid meet" opacity={opacity}>
+        {modules.flatMap((row, r) => row.map((dark, c) => (dark
+          ? <rect key={`${r}-${c}`} x={c + QR_QUIET_ZONE} y={r + QR_QUIET_ZONE} width={1} height={1} fill="#262626" />
+          : null)))}
+      </svg>
+    );
+  }
+
+  const bars = encodeCode128(value);
+  if (!bars) return <UnencodablePreview />;
+  const caption = el.caption ?? true;
+  return (
+    <div className="flex h-full w-full flex-col" style={{ opacity }}>
+      <svg viewBox={`0 0 ${bars.length} 10`} className="min-h-0 w-full flex-1" preserveAspectRatio="none">
+        {bars.map((bar, i) => (bar ? <rect key={i} x={i} y={0} width={1} height={10} fill="#262626" /> : null))}
+      </svg>
+      {caption && value && (
+        <div className="shrink-0 truncate text-center text-[7px] leading-tight text-neutral-800">{value}</div>
+      )}
+    </div>
+  );
+}
+
+/** Matches the renderer's dashed placeholder for a value that cannot encode. */
+function UnencodablePreview(): JSX.Element {
+  return <div className="h-full w-full border border-dashed border-neutral-300" />;
+}
+
 function ElementContent({ el, zoom }: { el: DesignElement; zoom: number }): JSX.Element {
   const s = el.style ?? {};
   switch (el.kind) {
@@ -213,6 +264,9 @@ function ElementContent({ el, zoom }: { el: DesignElement; zoom: number }): JSX.
         );
     case 'keyvalue':
       return <KeyValuePreview el={el} zoom={zoom} />;
+    case 'barcode':
+    case 'qrcode':
+      return <SymbolPreview el={el} />;
     case 'table':
       return (
         <table className="h-full w-full border-collapse text-[8px] text-neutral-700">

@@ -1,5 +1,6 @@
 import type { BoundColumn, CellEmphasis, CellStatus, ColumnKind, DesignElement, DesignPage, ReportDesign } from '../schema';
 import { CELL_STATUSES } from '../schema';
+import { encodeCode128, encodeQr, QR_QUIET_ZONE } from '../encode';
 import { toPt, PX_TO_PT } from './units';
 import type { ResolvedTable } from './index';
 
@@ -387,6 +388,115 @@ function drawKeyValue(doc: Doc, el: DesignElement, r: Box, resolved: ResolvedTab
   doc.restore();
 }
 
+// ---------------------------------------------------------------------------------------------
+// barcode / qrcode
+// ---------------------------------------------------------------------------------------------
+
+/** Caption strip height under a barcode, and its font size. */
+const BARCODE_CAPTION_H = 9;
+const BARCODE_CAPTION_SIZE = 7;
+/** Gap between the bars and the caption, so descenders never touch the bars. */
+const BARCODE_CAPTION_GAP = 1;
+
+/**
+ * The single value a `barcode`/`qrcode` element encodes.
+ *
+ * Bound: **`boundColumns[0]` of row 0**. One symbol carries one value, so the first bound column is
+ * the value and any others are ignored — the Data tab says so rather than silently dropping them.
+ * Unbound: the element's `text`, interpolated, so `{{param.x}}` reaches a symbol exactly as it
+ * reaches a text element.
+ *
+ * Returns `''` (never throws) when the query failed or returned nothing; the caller draws a
+ * placeholder, because a report whose barcode could not resolve still owes the reader its results.
+ */
+export function elementValue(
+  el: DesignElement, resolved: ResolvedTable | undefined, tokens: Map<string, string>,
+): string {
+  if (el.dataSource) {
+    if (!resolved || 'error' in resolved) return '';
+    const col = el.boundColumns?.[0];
+    const row = resolved.rows[0];
+    if (!col || !row) return '';
+    return String(row[col.key] ?? '');
+  }
+  return interpolate(el.text ?? '', tokens);
+}
+
+/**
+ * Bars scaled to fill the box width.
+ *
+ * ⚠ Consecutive same-value modules are merged into ONE rect rather than emitted per module. A
+ * 145-module symbol otherwise costs 145 rect operators, most of them adjacent and identical; worse,
+ * adjacent rects drawn at fractional module widths can leave hairline seams where the rasteriser
+ * rounds each edge independently, which a scanner reads as extra bars.
+ */
+function drawBarcode(doc: Doc, el: DesignElement, r: Box, value: string): void {
+  const bars = encodeCode128(value);
+  if (!bars || !bars.length) { drawUnencodable(doc, r); return; }
+  const caption = (el.caption ?? true) && value !== '';
+  const barsH = Math.max(1, r.h - (caption ? BARCODE_CAPTION_H + BARCODE_CAPTION_GAP : 0));
+  const mw = r.w / bars.length;
+
+  doc.save().rect(r.x, r.y, r.w, r.h).clip();
+  doc.fillColor(TEXT_COLOR);
+  let i = 0;
+  while (i < bars.length) {
+    if (!bars[i]) { i += 1; continue; }
+    let run = 1;
+    while (i + run < bars.length && bars[i + run]) run += 1;
+    doc.rect(r.x + i * mw, r.y, run * mw, barsH).fill(TEXT_COLOR);
+    i += run;
+  }
+  if (caption) {
+    doc.font('Helvetica').fontSize(BARCODE_CAPTION_SIZE).fillColor(TEXT_COLOR)
+      .text(value, r.x, r.y + barsH + BARCODE_CAPTION_GAP,
+        { width: r.w, height: BARCODE_CAPTION_H, align: 'center', ellipsis: true });
+  }
+  doc.restore();
+}
+
+/**
+ * A square QR centred in the box, including its mandatory quiet zone.
+ *
+ * The module pitch divides by `size + QR_QUIET_ZONE * 2`, so the 4-module margin the QR spec
+ * requires is reserved from the SAME budget as the modules — the code shrinks to make room for it
+ * instead of the margin being trimmed away. Scanners fail without that margin, and on a white page
+ * its absence is invisible, so this is geometry a test pins rather than something eyeballed.
+ */
+function drawQrCode(doc: Doc, r: Box, value: string): void {
+  const modules = encodeQr(value);
+  if (!modules) { drawUnencodable(doc, r); return; }
+  const n = modules.length;
+  const pitch = Math.min(r.w, r.h) / (n + QR_QUIET_ZONE * 2);
+  const side = pitch * (n + QR_QUIET_ZONE * 2);
+  // Centre the whole symbol (quiet zone included) in the author's box.
+  const x0 = r.x + (r.w - side) / 2 + pitch * QR_QUIET_ZONE;
+  const y0 = r.y + (r.h - side) / 2 + pitch * QR_QUIET_ZONE;
+
+  doc.save();
+  doc.fillColor(TEXT_COLOR);
+  // Merge horizontal runs, for the same reason as the barcode: fewer operators, and no hairline
+  // seams between adjacent modules for a scanner to misread.
+  for (let row = 0; row < n; row += 1) {
+    let c = 0;
+    while (c < n) {
+      if (!modules[row][c]) { c += 1; continue; }
+      let run = 1;
+      while (c + run < n && modules[row][c + run]) run += 1;
+      doc.rect(x0 + c * pitch, y0 + row * pitch, run * pitch, pitch).fill(TEXT_COLOR);
+      c += run;
+    }
+  }
+  doc.restore();
+}
+
+/** The dashed box an `image` with no usable source already draws. Reused deliberately: "this
+ *  element has nothing to show" should look the same wherever it happens. */
+function drawUnencodable(doc: Doc, r: Box): void {
+  doc.save().lineWidth(1).strokeColor(RECT_BORDER).dash(3, { space: 2 })
+    .rect(r.x, r.y, r.w, r.h).stroke().undash().restore();
+}
+
 /** How many physical pages this one table needs (repeat-page model). 1 for non-tables/errors/degenerate boxes. */
 export function tableChunkCount(el: DesignElement, resolved: ResolvedTable | undefined): number {
   if (el.kind !== 'table') return 1;
@@ -457,6 +567,14 @@ export function drawElement(
     }
     case 'keyvalue': {
       drawKeyValue(doc, el, r, resolved);
+      return;
+    }
+    case 'barcode': {
+      drawBarcode(doc, el, r, elementValue(el, resolved, tokens));
+      return;
+    }
+    case 'qrcode': {
+      drawQrCode(doc, r, elementValue(el, resolved, tokens));
       return;
     }
   }
