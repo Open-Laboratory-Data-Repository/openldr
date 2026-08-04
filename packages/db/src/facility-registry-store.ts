@@ -2,6 +2,17 @@ import { type Kysely, sql } from 'kysely';
 import { canonicalHash } from '@openldr/core';
 import type { InternalSchema } from './schema/internal';
 import type { ReferenceCapture } from './reference-capture';
+import { FACILITY_ADMIN_LEVELS, type FacilityAdminLevel } from './facility-answers';
+
+// `FacilityAdminLevel`/`FACILITY_ADMIN_LEVELS` live in `./facility-answers` (the browser-safe
+// subpath) rather than here — that is the one dependency-free seam `apps/studio` already imports
+// through (`@openldr/db/facility-answers`, see FacilityDialog.tsx), so the studio UI can import the
+// exact same whitelist the server validates against instead of hand-duplicating it. Re-exported
+// below (and from this package's root `index.ts`) so every existing server-side caller of
+// `FacilityAdminLevel`/`FACILITY_ADMIN_LEVELS` from `@openldr/db`/`./facility-registry-store`
+// keeps working unchanged.
+export { FACILITY_ADMIN_LEVELS };
+export type { FacilityAdminLevel };
 
 /** A curated facility. camelCase; the store translates to/from the snake_case row. */
 export interface FacilityRecord {
@@ -49,20 +60,6 @@ export interface FacilityListOptions {
    *  never what a caller wants. Pass an explicit value (including a large one) to override. */
   limit?: number;
 }
-
-/**
- * The four per-country administrative-area columns on `facility_registry`. Deliberately a closed
- * union, NOT `string` — `country` is a column too but is excluded on purpose (Task 4 binds it to
- * a ValueSet instead of deriving it from observed data). This type IS the whitelist:
- * `distinctAdminValues` below can only ever be called with one of these four literal column
- * names, so a caller cannot smuggle an arbitrary column (`password`, `id`, ...) into the query
- * even by mistake — the check does not depend on a route remembering to validate first.
- */
-export type FacilityAdminLevel = 'zone' | 'region' | 'district' | 'council';
-
-/** Single source of truth for the whitelist, so a caller can validate a request param against the
- *  exact same list the type enforces, rather than re-typing the four names elsewhere. */
-export const FACILITY_ADMIN_LEVELS: readonly FacilityAdminLevel[] = ['zone', 'region', 'district', 'council'];
 
 export interface FacilityAdminValueCount {
   /** The observed value, verbatim (never normalised/cased). */
@@ -188,6 +185,63 @@ function hashOf(rec: FacilityRecord): string {
   return canonicalHash(rec);
 }
 
+/**
+ * Builds — but does not execute — the query behind `distinctAdminValues`. Factored out of the
+ * store method purely so the test suite can assert on the compiled SQL (`.compile().sql`, which
+ * Kysely exposes on any query builder without running it) rather than on pg-mem's row OUTPUT.
+ *
+ * That distinction matters here specifically: pg-mem (the in-memory Postgres this store's tests
+ * run against) is not a trustworthy oracle for this query. It measurably mis-evaluates an
+ * `IS NOT NULL` predicate chained with another `.where()` depending on which one comes first — and
+ * this is NOT a `GROUP BY`-specific interaction (an earlier version of this comment claimed that;
+ * it reproduces in a bare, ungrouped `SELECT ... WHERE` too). Re-verified directly against THIS
+ * query (which does carry the `GROUP BY` below): chaining `col IS NOT NULL` before a second
+ * `.where()` on the same grouped column returns an EMPTY result set for every row, not merely the
+ * NULL ones — confirmed with both Kysely's typed `is not` operator and an equivalent raw `sql`
+ * fragment, so it is not an artifact of one particular operator spelling. A row-output test built
+ * on top of that ordering only proves pg-mem did something on that run, not that Postgres would.
+ *
+ * That's why the NULL/blank guarantee below is a single NULL-safe expression —
+ * `coalesce(col, '') != ''` — instead of the two separately-chained `col IS NOT NULL` /
+ * `col != ''` predicates this file used to carry. `coalesce(col, '') != ''` is logically identical
+ * to `col IS NOT NULL AND col != ''` under standard three-valued logic — a NULL row coalesces to
+ * `''` and is excluded, a blank row IS `''` and is excluded, anything else compares unequal and
+ * survives — but expressed as ONE predicate it never lands two chained clauses in the vulnerable
+ * order in the first place. There is no ordering left to get wrong, and none to accidentally
+ * reintroduce by refactoring this back into two `.where()` calls. Under real Postgres this was
+ * always true regardless of clause order (`AND` is commutative under 3VL, so `IS NOT NULL` was
+ * always logically redundant there) — the whole ordering concern, past and present, is a pg-mem
+ * workaround with no live meaning in production; do not read its removal as if some Postgres
+ * constraint had lapsed.
+ */
+export function buildDistinctAdminValuesQuery(
+  db: Kysely<InternalSchema>,
+  level: FacilityAdminLevel,
+  scope: Partial<Record<FacilityAdminLevel, string>> = {},
+) {
+  // `level` is typed `FacilityAdminLevel`, a 4-member literal union — Kysely resolves it to a
+  // real, quoted column reference, exactly as it does for every other typed `.where()`/
+  // `.select()` call in this file. There is no string concatenation or raw-SQL interpolation
+  // of `level` anywhere below; the type system is what makes an arbitrary column name
+  // unrepresentable here, not a runtime check.
+  let q = db.selectFrom('facility_registry').select([level, sql<number>`count(*)`.as('count')]);
+
+  for (const col of FACILITY_ADMIN_LEVELS) {
+    if (col === level) continue; // scoping a column by itself is meaningless
+    const v = scope[col];
+    if (v) q = q.where(col, '=', v);
+  }
+
+  return q
+    .where(sql<boolean>`coalesce(${sql.ref(level)}, '') != ''`)
+    .groupBy(level)
+    .orderBy(sql`count(*)`, 'desc')
+    // Tiebreaker only — keeps the result order deterministic when two values share a count,
+    // it is not itself the ranking the brief asks for.
+    .orderBy(level, 'asc')
+    .limit(MAX_ADMIN_VALUES);
+}
+
 export function createFacilityRegistryStore(
   db: Kysely<InternalSchema>,
   capture?: ReferenceCapture,
@@ -210,40 +264,7 @@ export function createFacilityRegistryStore(
     },
 
     async distinctAdminValues(level, scope = {}) {
-      // `level` is typed `FacilityAdminLevel`, a 4-member literal union — Kysely resolves it to a
-      // real, quoted column reference, exactly as it does for every other typed `.where()`/
-      // `.select()` call in this file. There is no string concatenation or raw-SQL interpolation
-      // of `level` anywhere below; the type system is what makes an arbitrary column name
-      // unrepresentable here, not a runtime check.
-      let q = db
-        .selectFrom('facility_registry')
-        .select([level, sql<number>`count(*)`.as('count')]);
-
-      for (const col of FACILITY_ADMIN_LEVELS) {
-        if (col === level) continue; // scoping a column by itself is meaningless
-        const v = scope[col];
-        if (v) q = q.where(col, '=', v);
-      }
-
-      // ⚠ Order matters here — NOT for correctness in real Postgres (three-valued logic already
-      // makes `col != ''` false/unknown for a NULL row, so `IS NOT NULL` is logically redundant
-      // there), but pg-mem (the in-memory Postgres this store's tests run against) measurably
-      // mis-evaluates an `IS NOT NULL` predicate combined with a GROUP BY unless it is the LAST
-      // `.where()` applied — added any earlier, it silently drops every row instead of filtering
-      // correctly. Proven by direct experiment against pg-mem (scope filters, or none, before it;
-      // `IS NOT NULL` always last). Keeping `!= ''` too because pg-mem, unlike real Postgres,
-      // does NOT treat `NULL != ''` as excluding the row on its own.
-      q = q
-        .where(level, '!=', '')
-        .where(level, 'is not', null)
-        .groupBy(level)
-        .orderBy(sql`count(*)`, 'desc')
-        // Tiebreaker only — keeps the result order deterministic when two values share a count,
-        // it is not itself the ranking the brief asks for.
-        .orderBy(level, 'asc')
-        .limit(MAX_ADMIN_VALUES);
-
-      const rows = await q.execute();
+      const rows = await buildDistinctAdminValuesQuery(db, level, scope).execute();
       return rows.map((r) => ({ value: (r as Record<string, unknown>)[level] as string, count: Number(r.count) }));
     },
 

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { makeMigratedDb } from './migrations/internal/test-helpers';
-import { createFacilityRegistryStore } from './facility-registry-store';
+import { createFacilityRegistryStore, buildDistinctAdminValuesQuery } from './facility-registry-store';
 
 async function store() {
   const db = await makeMigratedDb();
@@ -191,13 +191,44 @@ describe('createFacilityRegistryStore', () => {
 
     it('caps the number of distinct values returned', async () => {
       const { db, s } = await store();
+      // 1005 rows, each with its OWN distinct zone value — 1005 distinct values on offer, strictly
+      // more than MAX_ADMIN_VALUES (1000), so the cap is the only thing that can be limiting the
+      // result. `toBe(1000)`, not a `<=`/`>` range: a range passes for any cap from 1 through 1000,
+      // including an accidentally-much-smaller one (e.g. a stray off-by-a-lot slicing bug) — it
+      // does not actually pin the documented cap.
       const rows = Array.from({ length: 1005 }, (_, i) => ({
         id: `f${i}`, local_code: `LAB${i}`, name: `Facility ${i}`, source: 'manual', zone: `Zone ${i}`,
       }));
       await db.insertInto('facility_registry' as never).values(rows as never).execute();
       const result = await s.distinctAdminValues('zone');
-      expect(result.length).toBeLessThanOrEqual(1000);
-      expect(result.length).toBeGreaterThan(0);
+      expect(result.length).toBe(1000);
+    });
+  });
+
+  // --- Task 3 code review remediation: distinctAdminValues' NULL/blank exclusion guarantee -------
+  //
+  // The behavioural test above ("excludes NULL and blank values") executes the real query against
+  // pg-mem, the in-memory Postgres this suite runs on — and pg-mem is NOT a trustworthy oracle for
+  // this particular predicate (see the long comment on `buildDistinctAdminValuesQuery` in
+  // facility-registry-store.ts for the measured details: it mis-evaluates an `IS NOT NULL`
+  // predicate chained with another `.where()` depending on which one comes first, independent of
+  // `GROUP BY`). A row-output test alone proves pg-mem did something on that run, not that the
+  // SQL sent to a real Postgres is actually NULL/blank-safe. This block pins the guarantee a second,
+  // independent way — on the COMPILED SQL text, which `buildDistinctAdminValuesQuery` exposes
+  // without executing anything — so the guarantee does not rest on pg-mem's row output alone.
+  describe('distinctAdminValues — compiled-SQL guarantee (not just pg-mem row output)', () => {
+    it('compiles a single NULL-safe predicate that excludes both NULL and blank for the requested column', async () => {
+      const { db } = await store();
+      const { sql } = buildDistinctAdminValuesQuery(db, 'district').compile();
+      // Both guarantees present in ONE predicate, not two separately-ordered `.where()` clauses —
+      // there is nothing left to reorder, so this assertion does not care about clause order.
+      expect(sql).toContain(`coalesce("district", '') != ''`);
+    });
+
+    it('compiles the same NULL-safe predicate for every admin level, scoped or not', async () => {
+      const { db } = await store();
+      const { sql } = buildDistinctAdminValuesQuery(db, 'zone', { region: 'Dodoma Region' }).compile();
+      expect(sql).toContain(`coalesce("zone", '') != ''`);
     });
   });
 });

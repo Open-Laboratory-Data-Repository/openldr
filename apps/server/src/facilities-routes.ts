@@ -97,6 +97,20 @@ function firstString(v: unknown): string | undefined {
   return typeof v === 'string' ? v : undefined;
 }
 
+/**
+ * `firstString(q[key])` alone reads an INHERITED property too — `q` is a plain object cast from
+ * `req.query`, so a `key` that was never actually present as the query string's own property still
+ * resolves via the prototype chain (`Object.prototype.toString`, or anything a polluted
+ * `Object.prototype` carries) exactly as if the client had sent it. There is no live vector for
+ * that today (measured) — nothing upstream of this handler writes to `Object.prototype` — but
+ * reading query params should not depend on that staying true forever. `Object.hasOwn` restricts
+ * the lookup to the query string's own keys, the same guarantee `Object.hasOwn(answers, field.id)`
+ * already relies on elsewhere in this file (`clearedCoreKeys`, `splitFacilityAnswers`).
+ */
+function ownFirstString(q: Record<string, unknown>, key: string): string | undefined {
+  return Object.hasOwn(q, key) ? firstString(q[key]) : undefined;
+}
+
 /** Whether a sanitised (already-array-stripped) string is one of the four admin-area columns.
  *  This closed whitelist — not a free string — IS the column-injection guard: `level` selects a
  *  raw column name inside `ctx.facilityRegistry.distinctAdminValues`'s query, and this is the one
@@ -191,11 +205,12 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     return ctx.facilityRegistry.list({
       // A repeated query param (`?region=A&region=B`) arrives as an array; only a plain string is a
       // valid filter value, so anything else is treated as "not specified" rather than reaching
-      // Kysely as `where(col, '=', [...])`.
-      region: firstString(q.region),
-      district: firstString(q.district),
-      council: firstString(q.council),
-      status: firstString(q.status),
+      // Kysely as `where(col, '=', [...])`. `ownFirstString` (not `firstString(q.region)` directly)
+      // additionally keeps this reading only `q`'s OWN properties — see its doc comment.
+      region: ownFirstString(q, 'region'),
+      district: ownFirstString(q, 'district'),
+      council: ownFirstString(q, 'council'),
+      status: ownFirstString(q, 'status'),
       limit: parseLimit(q.limit),
     });
   });
@@ -228,7 +243,11 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     const scope: Partial<Record<FacilityAdminLevel, string>> = {};
     for (const col of FACILITY_ADMIN_LEVELS) {
       if (col === level) continue; // scoping a column by itself is meaningless
-      const v = firstString(q[col]);
+      // `ownFirstString`, not `firstString(q[col])` directly — see that helper's doc comment: a
+      // polluted `Object.prototype.region` (say) would otherwise be read here as if the client had
+      // actually sent `?region=...`, with no live vector for that today but no reason to depend on
+      // it staying that way.
+      const v = ownFirstString(q, col);
       if (v) scope[col] = v;
       // An absent, non-string (repeated-param array), or blank value is left OUT of `scope`
       // entirely — the store treats a missing key as "unfiltered for that level", never as

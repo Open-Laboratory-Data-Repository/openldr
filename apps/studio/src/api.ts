@@ -1,6 +1,10 @@
 import { getAccessToken, notifyUnauthorized } from './auth/token';
 import type { PluginBrokerOp, PluginRpcResult } from '@openldr/plugin-ui-sdk';
 import type { ReportDesign } from '@openldr/report-designer/pure';
+// Browser-safe subpath — no kysely/pg. Same seam FacilityDialog.tsx already imports
+// CORE_FACILITY_KEYS through; see the re-export comment further down for why the level list
+// itself now comes from here too instead of being hand-duplicated.
+import type { FacilityAdminLevel } from '@openldr/db/facility-answers';
 
 /** fetch wrapper that attaches the bearer token when one is present. */
 export async function authFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
@@ -744,13 +748,12 @@ export async function deleteFacility(id: string): Promise<void> {
   throw new Error(formatApiError('delete facility', await errorDetail(res)));
 }
 
-// Mirrors FacilityAdminLevel/FACILITY_ADMIN_LEVELS in packages/db/src/facility-registry-store.ts
-// by VALUE, not by import: that module pulls in Kysely/pg, and apps/studio only ever imports the
-// browser-safe `@openldr/db/facility-answers` subpath (see FacilityRecord's mirrored-not-imported
-// `Facility` interface above, and CORE_FACILITY_KEYS's dedicated subpath) to keep those bytes out
-// of the web bundle. A 4-literal union is a small enough surface that duplicating it here is safer
-// than widening the package's exported surface just for a type.
-export type FacilityAdminLevel = 'zone' | 'region' | 'district' | 'council';
+// `FacilityAdminLevel` is IMPORTED (above, from `@openldr/db/facility-answers`), not
+// hand-duplicated — that subpath is dependency-free (no Kysely/pg; see the comment at the top of
+// facility-answers.ts), so importing the type doesn't pull the server DB engine into the web
+// bundle the way importing `@openldr/db`'s root would. Re-exported here so this module stays the
+// one place the rest of the studio app imports facility API types from.
+export type { FacilityAdminLevel };
 
 export interface FacilityAdminValueCount {
   /** The observed value, verbatim (never normalised/cased). */
