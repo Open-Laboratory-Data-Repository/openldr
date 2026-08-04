@@ -106,6 +106,15 @@ function firstString(v: unknown): string | undefined {
  * reading query params should not depend on that staying true forever. `Object.hasOwn` restricts
  * the lookup to the query string's own keys, the same guarantee `Object.hasOwn(answers, field.id)`
  * already relies on elsewhere in this file (`clearedCoreKeys`, `splitFacilityAnswers`).
+ *
+ * ⛔ A regression test for this CANNOT be written with `app.inject()`. Measured: `fast-querystring`
+ * returns a null-prototype object, so pollution is structurally unreachable whenever a query string
+ * is present, and the only exposed case is a request with NO query string at all — where this
+ * function correctly rejects the inherited read. `light-my-request` (what `inject` uses) copies
+ * prototype properties into the query object as OWN keys, so under `inject` the fixed and unfixed
+ * code produce identical output and the test proves nothing. Two such tests were written and
+ * discarded for exactly that reason. Use a real socket (`app.listen` + `fetch`) or don't bother.
+ * The culprit is the test harness, NOT Fastify's request pipeline — do not go looking in Fastify.
  */
 function ownFirstString(q: Record<string, unknown>, key: string): string | undefined {
   return Object.hasOwn(q, key) ? firstString(q[key]) : undefined;
