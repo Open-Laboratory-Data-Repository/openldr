@@ -3,6 +3,7 @@ import { sampleForms } from './forms';
 import { FormSchema } from '../schema/form-schema';
 import { toQuestionnaire } from '../to-questionnaire';
 import { resolveReferenceSource } from '../reference-source';
+import { PAGE_TARGETS } from '../page-targets';
 
 describe('sample forms', () => {
   it('parse against the schema and export to Questionnaire', () => {
@@ -20,9 +21,9 @@ describe('sample forms', () => {
     expect(ids).toContain('sample-patient');
     expect(ids).toContain('sample-order');
   });
-  it('includes a Facility (Location) form, targeting the generic forms page for now', () => {
+  it('includes a Facility (Location) form, targeting the facilities page', () => {
     const facility = sampleForms.find((f) => f.fhirResourceType === 'Location');
-    expect(facility?.targetPages).toEqual(['forms']);
+    expect(facility?.targetPages).toEqual(['facilities']);
     expect(facility?.fields.some((x) => x.apiProperty === 'name')).toBe(true);
   });
   it('patient form targets the forms page and has a firstName apiProperty field', () => {
@@ -84,5 +85,38 @@ describe('Lab order reference fields', () => {
 
   it('allows more than one test per order', () => {
     expect(field('tests').cardinality.max).not.toBe('1');
+  });
+});
+
+const facility = () => sampleForms.find((f) => f.name === 'Facility')!;
+
+describe('the seeded Facility form', () => {
+  it('targets the facilities page', () => {
+    expect(facility().targetPages).toEqual(['facilities']);
+  });
+
+  it('⛔ gives EVERY field an apiProperty', () => {
+    // Under the Users pattern a field with no apiProperty falls into `extras`. Several fields
+    // shipped without one, which would have put region/district/status/level in a jsonb bag —
+    // unindexed and unjoinable, defeating the reason they are columns.
+    const missing = facility().fields.filter((f) => !f.apiProperty).map((f) => f.id);
+    expect(missing, `fields with no apiProperty: ${missing.join(', ')}`).toEqual([]);
+  });
+
+  it('carries exactly the agreed required set', () => {
+    expect(facility().fields.map((f) => f.apiProperty).sort()).toEqual(
+      ['country', 'district', 'level', 'localCode', 'name', 'region', 'status', 'zone'].sort(),
+    );
+  });
+
+  it('marks the required fields required', () => {
+    const required = facility().fields.filter((f) => f.required).map((f) => f.apiProperty).sort();
+    expect(required).toEqual(['country', 'district', 'level', 'localCode', 'name', 'region', 'status', 'zone'].sort());
+  });
+
+  it('offers facilities as a page target, requiring the DB-required pair', () => {
+    const t = PAGE_TARGETS.find((p) => p.id === 'facilities')!;
+    expect(t.available).toBe(true);
+    expect(t.requiredKeys.sort()).toEqual(['localCode', 'name']);
   });
 });

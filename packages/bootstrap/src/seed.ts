@@ -49,9 +49,12 @@ const DEFAULT_CONNECTOR_NAME = 'Target Warehouse (Postgres)';
 const ORDER_FORM_NAME = 'Lab order';
 /** Name of the seeded form that drives the Users management page. */
 const USERS_FORM_NAME = 'Users';
+/** Name of the seeded form that drives the Facilities management page. */
+const FACILITY_FORM_NAME = 'Facility';
 /** The forms that MUST exist on every install regardless of SEED_ON_START (see `seedEssentials`):
- *  the Users-page form and the Lab order form the ingestion workflow binds to. */
-const ESSENTIAL_FORM_NAMES = new Set<string>([USERS_FORM_NAME, ORDER_FORM_NAME]);
+ *  the Users-page form, the Facilities-page form, and the Lab order form the ingestion workflow
+ *  binds to. */
+const ESSENTIAL_FORM_NAMES = new Set<string>([USERS_FORM_NAME, ORDER_FORM_NAME, FACILITY_FORM_NAME]);
 
 /** Name for the MSSQL target-warehouse connector — distinct from DEFAULT_CONNECTOR_NAME so the
  *  two warehouse connectors are identifiable by name. `seedDataDrivenReports` resolves EITHER name
