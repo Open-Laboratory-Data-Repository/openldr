@@ -15,6 +15,7 @@ const MANAGER = [
   'workflows.view', 'workflows.edit', 'workflows.run', 'workflows.manage_secrets',
   'query.run',
   'terminology.view', 'terminology.manage',
+  'facilities.view', 'facilities.manage',
   'activity.view', 'notifications.view',
 ];
 
@@ -29,6 +30,7 @@ const ANALYST = [
   'forms.view',
   'query.run',
   'terminology.view',
+  'facilities.view',
   'activity.view', 'notifications.view',
 ];
 
@@ -37,6 +39,7 @@ const AUDITOR = [
   'reports.view',
   'forms.view',
   'terminology.view',
+  'facilities.view',
   'activity.view', 'notifications.view',
   'audit.view',
 ];

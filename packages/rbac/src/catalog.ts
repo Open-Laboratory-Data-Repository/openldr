@@ -41,6 +41,9 @@ const RAW: Omit<CapabilityMeta, never>[] = [
   { key: 'users.manage', group: 'users', label: 'Manage users', description: 'Create, edit, enable, and disable user accounts.' },
   { key: 'users.reset_password', group: 'users', label: 'Reset passwords', description: "Reset a user's password or send a reset email." },
   { key: 'users.force_logout', group: 'users', label: 'Force logout', description: 'End all of a user’s active sessions.' },
+  // Facilities
+  { key: 'facilities.view', group: 'facilities', label: 'View facilities', description: 'Open the Facilities workspace and see the facility register.' },
+  { key: 'facilities.manage', group: 'facilities', label: 'Manage facilities', description: 'Create, edit and remove facility records.' },
   // Roles
   { key: 'roles.view', group: 'roles', label: 'View roles', description: 'Open the Roles workspace and see roles and their capabilities.' },
   { key: 'roles.manage', group: 'roles', label: 'Manage roles', description: 'Create, edit, delete roles and assign them to users.' },
@@ -76,6 +79,7 @@ const GROUP_LABELS: Record<string, string> = {
   workflows: 'Workflows',
   query: 'Query',
   users: 'Users',
+  facilities: 'Facilities',
   roles: 'Roles',
   terminology: 'Terminology',
   marketplace: 'Marketplace',
