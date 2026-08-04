@@ -126,6 +126,21 @@ describe('the seeded Facility form', () => {
     expect(required).toEqual(['country', 'district', 'level', 'localCode', 'name', 'region', 'status', 'zone'].sort());
   });
 
+  it('binds status and level to their ValueSets as searchable reference fields, not free text', () => {
+    const status = facility().fields.find((f) => f.id === 'fld-fac-status')!;
+    const level = facility().fields.find((f) => f.id === 'fld-fac-level')!;
+
+    expect(status.fieldType).toBe('reference');
+    expect(status.valueSetUrl).toBe('urn:openldr:valueset:location-status');
+    expect(status.required).toBe(true);
+    expect(status.apiProperty).toBe('status');
+
+    expect(level.fieldType).toBe('reference');
+    expect(level.valueSetUrl).toBe('urn:openldr:valueset:facility-type');
+    expect(level.required).toBe(true);
+    expect(level.apiProperty).toBe('level');
+  });
+
   it('offers facilities as a page target, requiring name plus the only code a template can supply', () => {
     const t = PAGE_TARGETS.find((p) => p.id === 'facilities')!;
     expect(t.available).toBe(true);
