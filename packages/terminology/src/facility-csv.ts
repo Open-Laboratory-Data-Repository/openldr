@@ -55,9 +55,23 @@ const num = (v: string | undefined): number | null => {
  * does the opposite — its docblock promises "extra columns go to properties" while the code keeps
  * exactly three and silently discards the rest — so an import reports success having lost half the
  * data. That is the worst available outcome, and this parser deliberately does not repeat it.
+ *
+ * Imported records carry NO `managedOrigin` stamp (it comes back `undefined`, stored as NULL).
+ * Migration 048's convention reserves `managed_origin = 'central'` for rows the sync APPLIER writes
+ * on arrival from central — it is what makes the down-sync delete guard
+ * (`WHERE managed_origin = 'central'`) safe to run unattended. A lab importing a national CSV here
+ * is an AUTHORING path, not a receiving one: if this parser stamped 'central' itself, a future
+ * central down-sync would be free to delete a lab's own freshly-imported rows. The stamp belongs to
+ * whichever code path actually receives a sync payload, not to this one.
  */
 export function parseFacilityCsv(csv: string, opts: FacilityCsvOptions): FacilityCsvResult {
-  const rows = parseCsvSync(csv, { columns: true, skip_empty_lines: true, trim: true }) as Record<string, string>[];
+  const rows = parseCsvSync(csv, {
+    columns: (header: string[]) => header.map((h) => h.trim().toLowerCase()),
+    skip_empty_lines: true,
+    trim: true,
+    bom: true,
+    relax_column_count: true,
+  }) as Record<string, string>[];
   const headers = rows.length > 0 ? Object.keys(rows[0]) : csvHeader(csv);
   const unknownColumns = headers.filter((h) => h !== '' && !KNOWN.has(h));
 
@@ -98,16 +112,17 @@ export function parseFacilityCsv(csv: string, opts: FacilityCsvOptions): Facilit
       latitude: num(r.latitude),
       longitude: num(r.longitude),
       extras: Object.keys(extras).length > 0 ? extras : undefined,
-      // Imported rows are central-managed and replaceable by down-sync; lab-local rows are not.
-      managedOrigin: 'central',
+      // No managedOrigin stamp — see the docblock above. The sync applier stamps 'central' on arrival.
       source: 'import',
     });
   }
   return { records, unknownColumns, skipped };
 }
 
-/** Header of a file with no data rows — `csv-parse` yields nothing to read keys from. */
+/** Header of a file with no data rows — `csv-parse` yields nothing to read keys from. Normalised
+ *  identically to the `columns` callback above: BOM stripped, lowercased, trimmed. */
 function csvHeader(csv: string): string[] {
-  const first = csv.split(/\r?\n/, 1)[0] ?? '';
-  return first.split(',').map((h) => h.trim());
+  let first = csv.split(/\r?\n/, 1)[0] ?? '';
+  if (first.charCodeAt(0) === 0xfeff) first = first.slice(1);
+  return first.split(',').map((h) => h.trim().toLowerCase());
 }

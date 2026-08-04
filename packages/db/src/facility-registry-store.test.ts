@@ -62,7 +62,7 @@ describe('createFacilityRegistryStore', () => {
     expect(await s.listAliases('f1')).toHaveLength(1);
   });
 
-  it('captures a reference change for central-managed writes', async () => {
+  it('captures a reference change on registry writes — unconditionally, not filtered by managedOrigin', async () => {
     const { db } = await store();
     const seen: { entityType: string; entityId: string; op: string }[] = [];
     const s = createFacilityRegistryStore(db as never, {
@@ -103,5 +103,15 @@ describe('createFacilityRegistryStore', () => {
     await s.upsert({ id: 'f2', localCode: 'LAB02', name: 'Closed One', source: 'manual', region: 'Dodoma Region', status: 'Closed' });
     expect(await s.list({ region: 'Dodoma Region' })).toHaveLength(2);
     expect(await s.list({ region: 'Dodoma Region', status: 'Operating' })).toHaveLength(1);
+  });
+
+  it('caps list() at a default of 200 rows when no limit is given — a national register runs 10-15k', async () => {
+    const { db, s } = await store();
+    const rows = Array.from({ length: 205 }, (_, i) => ({
+      id: `f${i}`, local_code: `LAB${i}`, name: `Facility ${i}`, source: 'manual',
+    }));
+    await db.insertInto('facility_registry' as never).values(rows as never).execute();
+    expect(await s.list()).toHaveLength(200);
+    expect(await s.list({ limit: 5 })).toHaveLength(5);
   });
 });

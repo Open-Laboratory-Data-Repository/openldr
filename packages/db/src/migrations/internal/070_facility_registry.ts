@@ -28,8 +28,11 @@ export async function up(db: Kysely<any>): Promise<void> {
     .addColumn('village', 'text')
     .addColumn('address_text', 'text')
     .addColumn('phone', 'text')
-    .addColumn('latitude', 'numeric')
-    .addColumn('longitude', 'numeric')
+    // double precision, not numeric: node-postgres returns `numeric` as a STRING (no type parser is
+    // configured in this repo), which would make FacilityRecord.latitude/longitude a type lie in
+    // production even though pg-mem returns real numbers in tests. Coordinates need no exact decimal.
+    .addColumn('latitude', 'double precision')
+    .addColumn('longitude', 'double precision')
     // Fields a form added beyond the core, so an admin can extend without a migration (Users pattern).
     .addColumn('extras', 'jsonb', (c) => c.notNull().defaultTo(sql`'{}'::jsonb`))
     // NULL = lab-local, 'central' = central-managed and replaceable by down-sync. Matches the

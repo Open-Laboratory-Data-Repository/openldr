@@ -69,4 +69,45 @@ describe('parseFacilityCsv', () => {
     const r = parseFacilityCsv(FACILITY_CSV_TEMPLATE, { nationalSystem: HFR });
     expect(r.unknownColumns).toEqual([]);
   });
+
+  it('stamps NO managedOrigin on an imported record — that is the sync applier\'s job, not the parser\'s', () => {
+    // Migration 048's convention: managed_origin = 'central' is written by whoever RECEIVES a sync
+    // payload, so the down-sync delete guard (`WHERE managed_origin = 'central'`) never touches a
+    // lab's own authored rows. A CSV import is authoring, not receiving — stamping it here would let
+    // central delete a lab's freshly-imported facilities.
+    const r = csv('national_code,name\n122023-5,BAHEBE\n');
+    expect(r.records[0].managedOrigin).toBeUndefined();
+  });
+
+  it('parses a UTF-8 BOM-prefixed file — the default export from Excel and most government tools', () => {
+    const r = csv('﻿national_code,name\n122023-5,BAHEBE\n');
+    expect(r.unknownColumns).toEqual([]);
+    expect(r.records).toHaveLength(1);
+    expect(r.records[0]).toMatchObject({ nationalCode: '122023-5', name: 'BAHEBE' });
+  });
+
+  it('accepts uppercase/mixed-case headers', () => {
+    const r = csv('NATIONAL_CODE,NAME\n122023-5,BAHEBE\n');
+    expect(r.unknownColumns).toEqual([]);
+    expect(r.records).toHaveLength(1);
+    expect(r.records[0]).toMatchObject({ nationalCode: '122023-5', name: 'BAHEBE' });
+  });
+
+  it('BOM detection on a header-only file (no data rows) matches the same-file-with-data path', () => {
+    const r = csv('﻿national_code,name\n');
+    expect(r.unknownColumns).toEqual([]);
+  });
+
+  it('counts a ragged row as skipped instead of throwing, and still imports the good rows', () => {
+    // csv-parse throws "Invalid Record Length" on a row whose field count differs from the header
+    // unless relax_column_count is set. A single malformed line must not reject the whole file.
+    const r = csv(
+      'national_code,name,level\n' +
+      '122023-5,BAHEBE,Level IA2\n' +
+      'TOOFEW\n' +
+      '999-9,GOOD ROW,Level IB\n',
+    );
+    expect(r.records.map((rec) => rec.nationalCode)).toEqual(['122023-5', '999-9']);
+    expect(r.skipped).toBe(1);
+  });
 });

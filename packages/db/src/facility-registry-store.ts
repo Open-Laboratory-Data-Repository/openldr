@@ -1,4 +1,4 @@
-import type { Kysely } from 'kysely';
+import { type Kysely, sql } from 'kysely';
 import { canonicalHash } from '@openldr/core';
 import type { InternalSchema } from './schema/internal';
 import type { ReferenceCapture } from './reference-capture';
@@ -45,12 +45,25 @@ export interface FacilityListOptions {
   district?: string;
   council?: string;
   status?: string;
+  /** Defaults to 200 when omitted — a national register runs 10-15k rows and an unbounded scan is
+   *  never what a caller wants. Pass an explicit value (including a large one) to override. */
   limit?: number;
 }
 
 export interface FacilityRegistryStore {
   get(id: string): Promise<FacilityRecord | undefined>;
+  /** Capped at 200 rows by default — see `FacilityListOptions.limit`. */
   list(opts?: FacilityListOptions): Promise<FacilityRecord[]>;
+  /**
+   * Conflicts on `id` ONLY. The spec keys re-import on `(national_system, national_code)`, and the
+   * CSV parser satisfies that by deriving `id` deterministically from those two fields — but a
+   * hand-entered facility that later gains a national code was NOT created that way, so upserting it
+   * by national identity collides with the partial unique index
+   * (`facility_registry_national_unique`) as a raw constraint violation, not a clean update.
+   * A caller importing by national identity must resolve `(national_system, national_code) → id`
+   * itself first (e.g. via a lookup method) before calling `upsert`. Widening the conflict target
+   * here is deliberately deferred to a dedicated method alongside the CLI that needs it.
+   */
   upsert(rec: FacilityRecord): Promise<FacilityRecord>;
   remove(id: string): Promise<void>;
   /** Attach an observed feed code to a facility. Idempotent; re-points if already attached elsewhere. */
@@ -60,6 +73,9 @@ export interface FacilityRegistryStore {
   resolve(sourceSystem: string, sourceCode: string): Promise<FacilityRecord | undefined>;
   listAliases(registryId: string): Promise<FacilityAlias[]>;
 }
+
+/** A national register runs 10-15k rows; `list()` with no options must not return all of them. */
+const DEFAULT_LIST_LIMIT = 200;
 
 type Row = InternalSchema['facility_registry'];
 
@@ -145,7 +161,7 @@ export function createFacilityRegistryStore(
       if (opts.council) q = q.where('council', '=', opts.council);
       if (opts.status) q = q.where('status', '=', opts.status);
       q = q.orderBy('name', 'asc');
-      if (opts.limit) q = q.limit(opts.limit);
+      q = q.limit(opts.limit ?? DEFAULT_LIST_LIMIT);
       return (await q.execute()).map((r) => toRecord(r as Row));
     },
 
@@ -155,7 +171,7 @@ export function createFacilityRegistryStore(
         await trx
           .insertInto('facility_registry')
           .values(row as never)
-          .onConflict((oc) => oc.column('id').doUpdateSet({ ...row, updated_at: new Date().toISOString() } as never))
+          .onConflict((oc) => oc.column('id').doUpdateSet({ ...row, updated_at: sql`now()` } as never))
           .execute();
         const stored = toRecord(
           (await trx.selectFrom('facility_registry').selectAll().where('id', '=', rec.id).executeTakeFirstOrThrow()) as Row,
