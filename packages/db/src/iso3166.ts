@@ -15,6 +15,12 @@
  * ("Tanzania, United Republic of"). That is deliberate — they are the authoritative name
  * for the code. Do not tidy them to friendlier CLDR forms; CLDR disagrees with ISO and
  * aliases withdrawn codes to modern names, which is why it was rejected as a source.
+ *
+ * ⚠ `Object.freeze` here is SHALLOW: the outer array cannot be pushed to or reassigned, but
+ * the inner pairs are not frozen — `ISO3166_COUNTRIES[0][1] = 'x'` succeeds at runtime. The
+ * pairs are protected by the `readonly` TYPE, which is compile-time only, so a cast or a
+ * plain-JS consumer can still mutate one. Deep-freezing 249 tuples was judged not worth the
+ * cost for a module nothing mutates; if that changes, freeze each pair too.
  */
 export const ISO3166_COUNTRIES: readonly (readonly [alpha3: string, name: string])[] = Object.freeze([
   ["AFG", "Afghanistan"],
