@@ -2,6 +2,7 @@ export * from './source';
 export * from './operations';
 export * from './loaders/index';
 export * from './terms-csv';
+export * from './facility-csv';
 export * from './expander';
 export * from './fhirValueSet';
 export * from './ontology/index';

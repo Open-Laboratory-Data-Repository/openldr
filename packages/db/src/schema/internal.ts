@@ -235,6 +235,47 @@ export interface ColumnExposurePolicyTable {
   updated_by: string | null;
 }
 
+/** Curated facility record — what we KNOW. Distinct from the analytics `facilities` table, which is
+ *  the uncurated projection of ingested Organization/Location resources. */
+export interface FacilityRegistryTable {
+  id: string;
+  /** OURS. Required at data entry, absent on a nationally-imported row. */
+  local_code: string | null;
+  national_system: string | null;
+  /** THEIRS. The only code an imported row carries. */
+  national_code: string | null;
+  name: string;
+  level: string | null;
+  ownership: string | null;
+  status: string | null;
+  country: string | null;
+  zone: string | null;
+  region: string | null;
+  district: string | null;
+  council: string | null;
+  ward: string | null;
+  village: string | null;
+  address_text: string | null;
+  phone: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  extras: unknown;
+  /** NULL = lab-local, 'central' = central-managed (migration 048 convention). */
+  managed_origin: string | null;
+  source: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/** What an incoming FEED called a facility. Many per facility; the PK makes one alias mean one. */
+export interface FacilityAliasesTable {
+  source_system: string;
+  source_code: string;
+  registry_id: string;
+  created_at: string;
+  created_by: string | null;
+}
+
 export interface TerminologyConceptsTable {
   system: string;
   code: string;
@@ -750,6 +791,8 @@ export interface InternalSchema {
   dhis2_metadata_cache: Dhis2MetadataCacheTable;
   dashboards: DashboardsTable;
   column_exposure_policy: ColumnExposurePolicyTable;
+  facility_registry: FacilityRegistryTable;
+  facility_aliases: FacilityAliasesTable;
   form_definitions: FormDefinitionsTable;
   form_versions: FormVersionsTable;
   user_profiles: UserProfilesTable;
