@@ -70,3 +70,4 @@ export { NEW_FIELDS_SNAPSHOT as FACILITY_FORM_MIGRATION_NEW_FIELDS } from './mig
 // snapshot of the level/status-bound Facility fields it writes into already-migrated installs, and
 // packages/forms/src/samples/forms.test.ts pins the CURRENT sample against it from the forms side.
 export { BOUND_FIELDS_SNAPSHOT as FACILITY_FORM_MIGRATION_BOUND_FIELDS } from './migrations/internal/072_facility_level_status_valuesets';
+export { ISO3166_COUNTRIES } from './iso3166';
