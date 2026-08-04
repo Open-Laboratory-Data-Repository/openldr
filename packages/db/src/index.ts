@@ -58,3 +58,5 @@ export type { RoleStore, RoleRecord, CreateRoleInput, UpdateRoleInput, Capabilit
 export * from './reference-search';
 export { createFacilityRegistryStore } from './facility-registry-store';
 export type { FacilityRecord, FacilityAlias, FacilityListOptions, FacilityRegistryStore } from './facility-registry-store';
+export { splitFacilityAnswers, CORE_FACILITY_KEYS } from './facility-answers';
+export type { AnswerField, FacilityAnswerSplit } from './facility-answers';
