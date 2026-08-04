@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import type { AppContext } from '@openldr/bootstrap';
-import { splitFacilityAnswers } from '@openldr/db';
+import { splitFacilityAnswers, CORE_FACILITY_KEYS } from '@openldr/db';
 import { requireCapability } from './rbac';
 import { recordAudit } from './audit-helper';
 
@@ -18,20 +18,100 @@ const SubmitSchema = z.object({
   formVersion: z.number().nullish(),
 });
 
-/** Resolve the submitted form's field list so `apiProperty` can be read per answer. */
-async function fieldsOf(ctx: AppContext, formSchemaId: string | null | undefined): Promise<{ id: string; apiProperty?: string | null }[]> {
+type FieldRef = { id: string; apiProperty?: string | null };
+
+/** Resolve the submitted form's field list so `apiProperty` can be read per answer. Returns `[]`
+ *  both when no form id was submitted AND when the id does not resolve — callers MUST treat an
+ *  empty list as "the form could not be resolved" and refuse to write, never as "no core fields,
+ *  everything is extras" (see the empty-field-list guards in POST/PUT below). */
+async function fieldsOf(ctx: AppContext, formSchemaId: string | null | undefined): Promise<FieldRef[]> {
   if (!formSchemaId) return [];
   const def = await ctx.forms.get(formSchemaId);
-  const schema = def?.schema as { fields?: { id: string; apiProperty?: string | null }[] } | undefined;
+  const schema = def?.schema as { fields?: FieldRef[] } | undefined;
   return schema?.fields ?? [];
+}
+
+/**
+ * Core columns the submitted answers explicitly BLANKED.
+ *
+ * `splitFacilityAnswers` OMITS a blanked core answer from `record` rather than nulling it — correct
+ * for its own contract (see facility-answers.ts), but it means `{ ...before, ...record }` lets a
+ * stale value survive untouched, and there would be no way for an operator to ever clear a field.
+ *
+ * A key counts as "cleared" when: a submitted field maps to that core column, the operator's
+ * submission included an answer for that field's id (so this is a deliberate blank, not a field the
+ * form never asked about), and the key did not survive into `record`. `latitude`/`longitude` never
+ * appear here — `splitFacilityAnswers` already assigns them `null` explicitly, so they are always
+ * present `in record` and this function correctly leaves them alone.
+ */
+function clearedCoreKeys(
+  fields: FieldRef[],
+  answers: Record<string, unknown>,
+  record: Record<string, unknown>,
+): Set<string> {
+  const cleared = new Set<string>();
+  for (const field of fields) {
+    const key = field.apiProperty ?? '';
+    if (!CORE_FACILITY_KEYS.has(key)) continue;
+    if (!Object.hasOwn(answers, field.id)) continue;
+    if (key in record) continue;
+    cleared.add(key);
+  }
+  return cleared;
+}
+
+/**
+ * Map a Postgres constraint violation an ordinary operator input can trigger onto a 4xx with an
+ * operator-legible message, instead of letting a raw SQL message reach the generic 500 handler.
+ * `local_code` is UNIQUE (23505 → 409, a conflict); `facility_registry_has_a_code` is a CHECK
+ * requiring at least one of local/national code (23514 → 400, invalid input). Both are ALSO guarded
+ * before the write in the route handlers below — this is the belt-and-suspenders fallback for
+ * whatever gap the pre-write guard doesn't cover (e.g. a concurrent write). Anything else is
+ * rethrown so the app's central error handler classifies it as usual.
+ */
+function mapFacilityDbError(err: unknown, reply: FastifyReply): { error: string } {
+  const code = typeof err === 'object' && err !== null ? (err as { code?: unknown }).code : undefined;
+  if (code === '23505') {
+    reply.code(409);
+    return { error: 'a facility with that local code (or national code) already exists' };
+  }
+  if (code === '23514') {
+    reply.code(400);
+    return { error: 'a facility must have a local code or a national code' };
+  }
+  throw err;
+}
+
+function firstString(v: unknown): string | undefined {
+  return typeof v === 'string' ? v : undefined;
+}
+
+// The national register runs 10-15k rows; an unbounded `limit` lets one request scan far past that
+// for no operator benefit. Comfortably above the whole register, well below "accidentally OOM".
+const MAX_LIST_LIMIT = 20000;
+
+/** A `NaN`, non-positive, or repeated (array-valued, from `?limit=1&limit=2`) limit must never
+ *  reach the store's `?? DEFAULT` — that only rescues a genuinely absent value, not a bad one — so
+ *  anything that isn't a plain positive finite number is treated as "not specified" here. */
+function parseLimit(raw: unknown): number | undefined {
+  if (typeof raw !== 'string') return undefined;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return undefined;
+  return Math.min(Math.floor(n), MAX_LIST_LIMIT);
 }
 
 export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext): void {
   app.get('/api/facilities', VIEW, async (req) => {
-    const q = req.query as { region?: string; district?: string; council?: string; status?: string; limit?: string };
+    const q = req.query as Record<string, unknown>;
     return ctx.facilityRegistry.list({
-      region: q.region, district: q.district, council: q.council, status: q.status,
-      limit: q.limit ? Number(q.limit) : undefined,
+      // A repeated query param (`?region=A&region=B`) arrives as an array; only a plain string is a
+      // valid filter value, so anything else is treated as "not specified" rather than reaching
+      // Kysely as `where(col, '=', [...])`.
+      region: firstString(q.region),
+      district: firstString(q.district),
+      council: firstString(q.council),
+      status: firstString(q.status),
+      limit: parseLimit(q.limit),
     });
   });
 
@@ -47,23 +127,39 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     if (!p.success) { reply.code(400); return { error: p.error.message }; }
 
     const fields = await fieldsOf(ctx, p.data.formSchemaId);
+    // An empty field list means the submitted form could not be resolved — NOT "every field is
+    // extras". Refuse the write rather than silently persisting nothing but a bare id.
+    if (fields.length === 0) { reply.code(400); return { error: 'the submitted form could not be resolved' }; }
+
     const { record, extras } = splitFacilityAnswers(fields, p.data.answers);
 
-    // ⛔ The id is ALWAYS generated here. The CSV importer derives ids deterministically from
-    // sha256(nationalSystem|nationalCode), so a client-chosen id could collide with an imported
-    // row and silently overwrite it.
-    const created = await ctx.facilityRegistry.upsert({
-      ...record,
-      id: randomUUID(),
-      name: String(record.name ?? ''),
-      extras,
-      // Lab-authored: managedOrigin stays NULL. Only the sync applier stamps 'central'.
-      source: 'manual',
-    } as never);
+    const name = typeof record.name === 'string' ? record.name : '';
+    if (!name) { reply.code(400); return { error: 'name is required' }; }
 
-    await recordAudit(ctx, req, { action: 'facility.create', entityType: 'facility', entityId: created.id, before: null, after: created });
-    reply.code(201);
-    return created;
+    if (record.localCode == null && record.nationalCode == null) {
+      reply.code(400);
+      return { error: 'a facility must have a local code or a national code' };
+    }
+
+    try {
+      // ⛔ The id is ALWAYS generated here. The CSV importer derives ids deterministically from
+      // sha256(nationalSystem|nationalCode), so a client-chosen id could collide with an imported
+      // row and silently overwrite it.
+      const created = await ctx.facilityRegistry.upsert({
+        ...record,
+        id: randomUUID(),
+        name,
+        extras,
+        // Lab-authored: managedOrigin stays NULL. Only the sync applier stamps 'central'.
+        source: 'manual',
+      } as never);
+
+      await recordAudit(ctx, req, { action: 'facility.create', entityType: 'facility', entityId: created.id, before: null, after: created });
+      reply.code(201);
+      return created;
+    } catch (err) {
+      return mapFacilityDbError(err, reply);
+    }
   });
 
   app.put('/api/facilities/:id', MANAGE, async (req, reply) => {
@@ -75,16 +171,37 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     if (!before) { reply.code(404); return { error: 'not found' }; }
 
     const fields = await fieldsOf(ctx, p.data.formSchemaId);
+    if (fields.length === 0) { reply.code(400); return { error: 'the submitted form could not be resolved' }; }
+
     const { record, extras } = splitFacilityAnswers(fields, p.data.answers);
+    const cleared = clearedCoreKeys(fields, p.data.answers, record as Record<string, unknown>);
 
-    const after = await ctx.facilityRegistry.upsert({
-      ...before, ...record, id, name: String(record.name ?? before.name), extras,
-      // An edit never changes who manages the row.
-      managedOrigin: before.managedOrigin, source: before.source,
-    } as never);
+    // `name` is NOT NULL — a blanked name can never become a null write, only a 400.
+    if (cleared.has('name')) { reply.code(400); return { error: 'name is required' }; }
 
-    await recordAudit(ctx, req, { action: 'facility.update', entityType: 'facility', entityId: id, before, after });
-    return after;
+    const nulls: Record<string, null> = {};
+    for (const key of cleared) nulls[key] = null;
+
+    // `facility_registry_has_a_code`: at least one of local/national code must survive the clear.
+    const effectiveLocalCode = cleared.has('localCode') ? null : (record.localCode ?? before.localCode);
+    const effectiveNationalCode = cleared.has('nationalCode') ? null : (record.nationalCode ?? before.nationalCode);
+    if (effectiveLocalCode == null && effectiveNationalCode == null) {
+      reply.code(400);
+      return { error: 'a facility must have a local code or a national code' };
+    }
+
+    try {
+      const after = await ctx.facilityRegistry.upsert({
+        ...before, ...record, ...nulls, id, name: record.name ?? before.name, extras,
+        // An edit never changes who manages the row.
+        managedOrigin: before.managedOrigin, source: before.source,
+      } as never);
+
+      await recordAudit(ctx, req, { action: 'facility.update', entityType: 'facility', entityId: id, before, after });
+      return after;
+    } catch (err) {
+      return mapFacilityDbError(err, reply);
+    }
   });
 
   app.delete('/api/facilities/:id', MANAGE, async (req, reply) => {
