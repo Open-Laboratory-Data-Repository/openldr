@@ -11,6 +11,15 @@ const PUSH_DATE = new Date('2026-07-14T08:30:00.000Z');
 // wire an `activity` tracker get this all-null shape spread onto their expected cursor fields.
 const NO_LIVENESS = { lastAttemptAt: null, lastSuccessAt: null, lastErrorAt: null, lastError: null };
 
+// migration 072 (facility level/status ValueSets) deliberately writes a fhir.change_log row for
+// each of the two ValueSets it seeds, so the projection worker populates terminology_codes without
+// a manual `openldr terminology reproject` backfill (see that migration's seedHistoryAndChangeLog()
+// comment). That means EVERY freshly migrated database — including a bare makeMigratedDb() with no
+// test-authored seed() — starts with this many change_log rows already present. If a future
+// migration seeds another resource the same way, bump this number and it flows into the
+// pendingPush arithmetic below.
+const MIGRATION_SEEDED_CHANGE_LOG_ROWS = 2;
+
 async function seed(db: Db) {
   // Separate inserts: pg-mem rejects a multi-row insert that mixes an explicit value with a
   // column default (sync-pull's updated_at defaults to now()).
@@ -83,7 +92,9 @@ describe('createSyncHandle.status', () => {
     expect(s.pull?.running).toBe(true);
     expect(s.pull?.lastSeq).toBe(88);
     expect(typeof s.pull?.lastSyncedAt).toBe('string'); // updated_at defaults to now() on insert
-    expect(s.pendingPush).toBe(8); // 150 - 142
+    // 150 rows from seed() + MIGRATION_SEEDED_CHANGE_LOG_ROWS from migration 072, minus the 142
+    // already-pushed cursor.
+    expect(s.pendingPush).toBe(150 + MIGRATION_SEEDED_CHANGE_LOG_ROWS - 142);
   });
 
   it('reports disabled state with null directions and no head query', async () => {
@@ -112,7 +123,9 @@ describe('createSyncHandle.status', () => {
     const s = await handle.status();
     expect(s.pull).toBeNull();
     expect(s.push).toEqual({ running: true, lastSeq: 142, lastSyncedAt: PUSH_DATE.toISOString(), ...NO_LIVENESS });
-    expect(s.pendingPush).toBe(8);
+    // 150 rows from seed() + MIGRATION_SEEDED_CHANGE_LOG_ROWS from migration 072, minus the 142
+    // already-pushed cursor.
+    expect(s.pendingPush).toBe(150 + MIGRATION_SEEDED_CHANGE_LOG_ROWS - 142);
   });
 
   it('a stopped worker reports running:false', async () => {
@@ -128,7 +141,11 @@ describe('createSyncHandle.status', () => {
   });
 
   it('lastSyncedAt is null when the direction has no cursor row', async () => {
-    const db = await makeMigratedDb(); // no seed → empty cursors + empty change_log
+    const db = await makeMigratedDb(); // no seed → empty cursors, but NOT an empty change_log:
+    // migration 072 always leaves MIGRATION_SEEDED_CHANGE_LOG_ROWS rows behind (see that constant's
+    // comment). This test's intent is genuinely the empty-change_log path, so delete those rows
+    // rather than reinterpreting "empty" to mean "only the migration-seeded baseline".
+    await db.deleteFrom('fhir.change_log').execute();
     const handle = createSyncHandle({
       db,
       runtime: fakeRuntime({ mode: 'push', centralUrl: 'https://c', siteId: 's', pushWorker: runningWorker() }),
@@ -136,7 +153,7 @@ describe('createSyncHandle.status', () => {
 
     const s = await handle.status();
     expect(s.push).toEqual({ running: true, lastSeq: 0, lastSyncedAt: null, ...NO_LIVENESS });
-    expect(s.pendingPush).toBe(0); // empty change_log
+    expect(s.pendingPush).toBe(0); // empty change_log (seeded rows explicitly deleted above)
   });
 
   it('status() reflects the runtime LIVE (enabled flips without rebuilding the handle)', async () => {
