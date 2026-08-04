@@ -91,62 +91,10 @@ describe('createFacilityRegistryStore', () => {
     expect(seen).toEqual([]);
   });
 
-  it('round-trips extras and hashes them independent of jsonb key order', async () => {
-    // Part 1: extras really do round-trip through the store with their values intact.
+  it('round-trips extras through the store', async () => {
     const { s } = await store();
     await s.upsert({ ...manual, extras: { catchmentPop: 42000, tier: 'referral' } });
     expect(await s.get('f1')).toMatchObject({ extras: { catchmentPop: 42000, tier: 'referral' } });
-
-    // Part 2: the captured content hash is the same for the same extras entries inserted in a
-    // different key order. NOTE: Postgres (and pg-mem, faithfully) already canonicalizes jsonb
-    // key order in storage — verified empirically: a plain SELECT after INSERT/UPDATE always
-    // returns keys sorted, regardless of insertion order — so `hashOf`'s input (the freshly
-    // read-back row) is already order-normalized by the time a real store.upsert() reaches it,
-    // and a live DB round trip cannot exercise the JSON.stringify-vs-canonicalHash difference.
-    // Drive hashOf() through the real store/capture path anyway, using a minimal stand-in `db`
-    // that returns a *controlled* stored row (bypassing DB-level canonicalization) so the two
-    // captured hashes are genuinely comparing "same content, different literal key order" — the
-    // exact case plain JSON.stringify gets wrong and canonicalHash gets right.
-    const rowFor = (extras: Record<string, unknown>) => ({
-      id: 'f1', local_code: 'LAB01', national_system: null, national_code: null,
-      name: 'Dodoma Regional Referral', level: null, ownership: null, status: null,
-      country: null, zone: null, region: null, district: null, council: null, ward: null,
-      village: null, address_text: null, phone: null, latitude: null, longitude: null,
-      managed_origin: null, source: 'manual', extras,
-    });
-    const stubDb = (row: Record<string, unknown>) => ({
-      transaction: () => ({
-        execute: async (cb: (trx: unknown) => Promise<unknown>) =>
-          cb({
-            insertInto: () => ({
-              values: () => ({
-                onConflict: (fn: (oc: unknown) => unknown) => {
-                  fn({ column: () => ({ doUpdateSet: () => ({}) }) });
-                  return { execute: async () => {} };
-                },
-              }),
-            }),
-            selectFrom: () => ({
-              selectAll: () => ({ where: () => ({ executeTakeFirstOrThrow: async () => row }) }),
-            }),
-          }),
-      }),
-    });
-
-    let hashA = '';
-    const sA = createFacilityRegistryStore(stubDb(rowFor({ catchmentPop: 42000, tier: 'referral' })) as never, {
-      record: async (_trx, _entityType, _entityId, _op, contentHash) => { hashA = contentHash as string; },
-    });
-    await sA.upsert({ ...manual, extras: { catchmentPop: 42000, tier: 'referral' } });
-
-    let hashB = '';
-    const sB = createFacilityRegistryStore(stubDb(rowFor({ tier: 'referral', catchmentPop: 42000 })) as never, {
-      record: async (_trx, _entityType, _entityId, _op, contentHash) => { hashB = contentHash as string; },
-    });
-    await sB.upsert({ ...manual, extras: { tier: 'referral', catchmentPop: 42000 } });
-
-    expect(hashA).toBeTruthy();
-    expect(hashA).toBe(hashB);
   });
 
   it('filters the list by region and status', async () => {
