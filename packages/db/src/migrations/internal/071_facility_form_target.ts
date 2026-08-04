@@ -6,7 +6,7 @@ import type { Kysely } from 'kysely';
 // Seeded forms are create-if-absent, deduped by NAME (`upsertPublishedForms` in
 // packages/bootstrap/src/seed.ts) and their `schema` is NEVER re-snapshotted once created —
 // editing the sample in packages/forms/src/samples/forms.ts reaches fresh installs only. An
-// install that already carries the OLD Facility form needs BOTH `target_pages` repointed AND the
+// install that already carries an OLD Facility form needs BOTH `target_pages` repointed AND the
 // `schema` rewritten:
 //
 // ⛔ Repointing `target_pages` alone (the first cut of this migration) delivered a form that could
@@ -16,6 +16,32 @@ import type { Kysely } from 'kysely';
 // repointed page 400'd ("a facility must have a local code or a national code") forever. Rewriting
 // `schema.fields` to the NEW eight fields (all carrying an `apiProperty` that IS a core key) is what
 // makes the page usable, not just visible.
+//
+// ⛔⛔ REVIEW ROUND 2: matching against a SINGLE `OLD_FIELDS` snapshot (the second cut) silently
+// no-op'd on essentially every real install. THREE distinct eras of the seeded Facility form have
+// shipped — each verified with `git show <sha>:packages/forms/src/samples/forms.ts`, not assumed:
+//
+//   Era 1  efde1594..0ef91c21~1  (2026-06-19 -> 06-21)          target_pages ['facilities'], PRE_DISCRIMINATOR_FIELDS
+//   Era 2  0ef91c21..7b4d4d58~1  (2026-06-21 -> 08-04 09:17)    target_pages ['forms'],       PRE_DISCRIMINATOR_FIELDS
+//   Era 3  7b4d4d58..4b7b181f~1  (2026-08-04 09:17 -> today)    target_pages ['forms'],       OLD_FIELDS
+//
+// Era 2 — six weeks — is essentially every real install. `OLD_FIELDS` (added by 7b4d4d58, "stop
+// Local ID and MFL ID colliding on one fhirPath") only existed for a few hours before 4b7b181f moved
+// the sample again, so matching ONLY Era 3's shape skipped Era 1 and Era 2 rows entirely: the
+// Facilities page would show "no published facilities form" forever, silently, on every install that
+// wasn't seeded in that few-hour window.
+//
+// Era 1 additionally already carries `target_pages: ['facilities']` — a guard that only accepted
+// `target_pages === ['forms']` skipped it outright even though its FIELDS still need rewriting: the
+// page now exists and renders the OLD fields, `hasCoreField` passes (its `fld-fac-name` carries
+// `apiProperty: 'name'`), and every submission still reaches the code check and 400s ("a facility
+// must have a local code or a national code"). So the guard must accept target_pages of EITHER
+// `['forms']` (Eras 2/3: needs target_pages AND fields rewritten) OR `['facilities']` (Era 1: needs
+// only fields rewritten, target_pages is already right) — see KNOWN_HISTORICAL_SHAPES below, which
+// pairs each era's target_pages with ITS field shape rather than checking either independently. A
+// FRESH install (post 4b7b181f) also has target_pages `['facilities']`, but its fields are
+// NEW_FIELDS, not PRE_DISCRIMINATOR_FIELDS or OLD_FIELDS — so it never matches any of the three
+// known combinations below and is correctly left alone.
 //
 // ⚠ `schema.targetPages` must be written to match the `target_pages` column, not just the column
 // alone. `FormBuilderPage.tsx` loads `schema` and, on save, writes `targetPages: schema.targetPages`
@@ -32,15 +58,80 @@ import type { Kysely } from 'kysely';
 // DB constraint), the match is ambiguous and nothing is touched — no guessing which one is "the"
 // seeded form.
 //
-// It only touches a row that still looks EXACTLY like the OLD shipped seed: `target_pages` is
-// still `['forms']` AND `schema.fields` deep-equals `OLD_FIELDS` below, property for property —
-// not merely "every field id starts with fld-fac-". A relabelled field, a bound `valueSetUrl`, a
-// flipped `required`, a disabled field, or the fields deleted down to `[]` all fail that equality,
-// which is deliberate: any of those means an operator has already put their own work into this
-// form, and silently overwriting it (or silently republishing an unfinished draft — `[]` least of
-// all counts as "untouched") would be worse than the page's "no published facilities form" empty
-// state. `fields.length > 0` is checked explicitly first so an emptied `fields: []` — vacuously
-// "every field matches" under a naive `.every()` — is never mistaken for untouched.
+// A row only ever matches when its (target_pages, schema.fields) PAIR deep-equals — property for
+// property, not merely "every field id starts with fld-fac-" — one of the three known historical
+// combinations in KNOWN_HISTORICAL_SHAPES below. Anything else (a relabelled field, a bound
+// `valueSetUrl`, a flipped `required`, a disabled field, the fields deleted down to `[]`, or simply a
+// shape from an era this migration doesn't know about) fails every comparison, which is deliberate:
+// any of those means an operator has already put their own work into this form (or it's some
+// future/unknown shape), and silently overwriting it (or silently republishing an unfinished draft —
+// `[]` least of all counts as "untouched") would be worse than the page's "no published facilities
+// form" empty state. `fields.length > 0` is checked explicitly first so an emptied `fields: []` —
+// vacuously "every field matches" under a naive `.every()` — is never mistaken for untouched.
+const PRE_DISCRIMINATOR_FIELDS: readonly unknown[] = [
+  {
+    id: 'fld-fac-name', fhirPath: 'name', displayLabel: 'Name', description: null,
+    fieldType: 'text', required: true, enabled: true, order: 0,
+    cardinality: { min: 0, max: '1' }, apiProperty: 'name',
+  },
+  {
+    // Era 1/2: no `fhirDiscriminator` yet (added by 7b4d4d58 — see OLD_FIELDS below) — Local ID and
+    // MFL ID both wrote/read `identifier.value` with nothing to tell them apart.
+    id: 'fld-fac-local-id', fhirPath: 'identifier.value', displayLabel: 'Local ID', description: null,
+    fieldType: 'identifier', required: false, enabled: true, order: 1,
+    cardinality: { min: 0, max: '1' }, apiProperty: 'localId',
+  },
+  {
+    // Era 1/2: no `fhirDiscriminator` AND no `apiProperty` at all — this field didn't write
+    // anywhere a facility record could read it back from.
+    id: 'fld-fac-mfl-id', fhirPath: 'identifier.value', displayLabel: 'MFL ID', description: null,
+    fieldType: 'identifier', required: false, enabled: true, order: 2,
+    cardinality: { min: 0, max: '1' },
+  },
+  {
+    id: 'fld-fac-level', fhirPath: 'physicalType', displayLabel: 'Level', description: null,
+    fieldType: 'select', required: false, enabled: true, order: 3,
+    cardinality: { min: 0, max: '1' },
+    // Inert historical snapshot of what this field's option list looked like at the time, needed
+    // ONLY for the equality check above and for down()'s exact restore — NOT new hardcoded clinical
+    // vocabulary. The repo's "never hardcode a vocabulary" rule is about what CE writes going
+    // forward (see NEW_FIELDS's 'level' field, which is free text); this is a frozen transcription
+    // of what already shipped, same as the rest of this array.
+    valueSetOptions: [
+      { code: 'national', display: 'National' },
+      { code: 'regional', display: 'Regional' },
+      { code: 'district', display: 'District' },
+      { code: 'facility', display: 'Facility' },
+    ],
+  },
+  {
+    id: 'fld-fac-country', fhirPath: 'address.country', displayLabel: 'Country', description: null,
+    fieldType: 'text', required: false, enabled: true, order: 4,
+    cardinality: { min: 0, max: '1' },
+  },
+  {
+    id: 'fld-fac-district', fhirPath: 'address.district', displayLabel: 'District', description: null,
+    fieldType: 'text', required: false, enabled: true, order: 5,
+    cardinality: { min: 0, max: '1' },
+  },
+  {
+    id: 'fld-fac-region', fhirPath: 'address.state', displayLabel: 'Region', description: null,
+    fieldType: 'text', required: false, enabled: true, order: 6,
+    cardinality: { min: 0, max: '1' },
+  },
+  {
+    id: 'fld-fac-phone', fhirPath: 'telecom.value', displayLabel: 'Phone', description: null,
+    fieldType: 'phone', required: false, enabled: true, order: 7,
+    cardinality: { min: 0, max: '1' },
+  },
+];
+
+// Era 3 shape: identical to PRE_DISCRIMINATOR_FIELDS except Local ID and MFL ID each carry a
+// `fhirDiscriminator` (and MFL ID now carries an `apiProperty`), added by 7b4d4d58 ("stop Local ID
+// and MFL ID colliding on one fhirPath"). Only ever co-occurred with `target_pages: ['forms']` — the
+// target_pages flip to `['facilities']` and the move to NEW_FIELDS happened together in 4b7b181f, so
+// (['facilities'], OLD_FIELDS) is not a combination that has ever existed on a real install and is
+// deliberately absent from KNOWN_HISTORICAL_SHAPES below.
 const OLD_FIELDS: readonly unknown[] = [
   {
     id: 'fld-fac-name', fhirPath: 'name', displayLabel: 'Name', description: null,
@@ -68,6 +159,8 @@ const OLD_FIELDS: readonly unknown[] = [
     id: 'fld-fac-level', fhirPath: 'physicalType', displayLabel: 'Level', description: null,
     fieldType: 'select', required: false, enabled: true, order: 3,
     cardinality: { min: 0, max: '1' },
+    // Inert historical snapshot (same option list as PRE_DISCRIMINATOR_FIELDS above) needed ONLY
+    // for the equality check and down()'s exact restore — NOT new hardcoded clinical vocabulary.
     valueSetOptions: [
       { code: 'national', display: 'National' },
       { code: 'regional', display: 'Regional' },
@@ -101,7 +194,11 @@ const OLD_FIELDS: readonly unknown[] = [
 // as of this release). Copied, not imported — packages/db must not depend on @openldr/forms (forms
 // already depends on db; importing back would invert that), and importing the CURRENT sample would
 // silently change this migration's meaning every time the sample is later edited. A migration is a
-// frozen snapshot of one release, not a live mirror.
+// frozen snapshot of one release, not a live mirror. Pinned against the live sample from the OTHER
+// side instead: NEW_FIELDS_SNAPSHOT is re-exported from packages/db/src/index.ts and
+// packages/forms/src/samples/forms.test.ts asserts it still matches sampleForms' Facility fields, so
+// a future sample edit that isn't also reflected here fails that test rather than silently
+// desynchronising fresh-install forms from what this migration thinks "new" looks like.
 const NEW_FIELDS: readonly unknown[] = [
   {
     id: 'fld-fac-local-code', fhirPath: 'identifier.value',
@@ -151,9 +248,28 @@ const NEW_FIELDS: readonly unknown[] = [
 
 const NEW_TARGET_PAGES: readonly string[] = ['facilities'];
 
+interface HistoricalShape {
+  readonly targetPages: readonly string[];
+  readonly fields: readonly unknown[];
+}
+
+// The three (target_pages, schema.fields) combinations a real, un-edited install can carry — see
+// the era table in the file-level comment above. Checked as PAIRS, not independently: Era 1's
+// target_pages (['facilities']) also happens to be what a FRESH post-4b7b181f install has, and Era
+// 3's fields (OLD_FIELDS) never co-occurred with target_pages ['facilities'] on any real install —
+// pairing them is what keeps a fresh install (['facilities'] + NEW_FIELDS) from ever matching.
+const KNOWN_HISTORICAL_SHAPES: readonly HistoricalShape[] = [
+  { targetPages: ['facilities'], fields: PRE_DISCRIMINATOR_FIELDS }, // Era 1: efde1594..0ef91c21~1
+  { targetPages: ['forms'], fields: PRE_DISCRIMINATOR_FIELDS },      // Era 2: 0ef91c21..7b4d4d58~1
+  { targetPages: ['forms'], fields: OLD_FIELDS },                    // Era 3: 7b4d4d58..4b7b181f~1
+];
+
 /** Exported for the test file so it can build fixtures without duplicating (and risking drift
- *  from) the frozen literals above. */
+ *  from) the frozen literals above. New tests added for review round 2 deliberately do NOT use
+ *  these — they hand-transcribe from git history directly, which is the only thing that can catch
+ *  one of these constants itself being wrong. */
 export const OLD_FIELDS_SNAPSHOT = OLD_FIELDS;
+export const PRE_DISCRIMINATOR_FIELDS_SNAPSHOT = PRE_DISCRIMINATOR_FIELDS;
 export const NEW_FIELDS_SNAPSHOT = NEW_FIELDS;
 
 /**
@@ -167,12 +283,22 @@ export const NEW_FIELDS_SNAPSHOT = NEW_FIELDS;
  * loaded and saved through the builder, the marker silently disappears — which is exactly the
  * right behaviour: from that point on the row carries an operator's own save, not just this
  * migration's rewrite, and down() must leave it alone.
+ *
+ * Carries the FULL prior (target_pages, fields, status) rather than just status, because up() can
+ * now rewrite rows from any of THREE different prior shapes (see KNOWN_HISTORICAL_SHAPES) — down()
+ * restoring unconditionally to Era 3's OLD_FIELDS/['forms'] would be wrong for an Era 1 or Era 2
+ * row. Storing exactly what up() saw makes down() a precise per-row inverse regardless of which
+ * era the row came from.
  */
 const MARKER_KEY = '__migration071';
 
 interface Migration071Marker {
   /** The row's `status` immediately before up() rewrote it, so down() restores it exactly. */
   prevStatus: string;
+  /** The row's `target_pages` immediately before up() rewrote it. */
+  prevTargetPages: readonly string[];
+  /** The row's `schema.fields` immediately before up() rewrote it. */
+  prevFields: readonly unknown[];
 }
 
 export async function up(db: Kysely<any>): Promise<void> {
@@ -185,14 +311,18 @@ export async function up(db: Kysely<any>): Promise<void> {
   const row = rows[0]!;
 
   const targets = typeof row.target_pages === 'string' ? JSON.parse(row.target_pages) : row.target_pages;
-  if (!Array.isArray(targets) || targets.length !== 1 || targets[0] !== 'forms') return; // already moved or customised
-
   const schema = (typeof row.schema === 'string' ? JSON.parse(row.schema) : row.schema) as Record<string, unknown> | null;
   const fields = schema?.fields;
-  const untouched = Array.isArray(fields) && fields.length > 0 && stableStringify(fields) === stableStringify(OLD_FIELDS);
-  if (!untouched) return;
+  if (!Array.isArray(targets) || !Array.isArray(fields) || fields.length === 0) return;
 
-  const marker: Migration071Marker = { prevStatus: row.status };
+  const match = KNOWN_HISTORICAL_SHAPES.find(
+    (shape) =>
+      stableStringify(targets) === stableStringify(shape.targetPages) &&
+      stableStringify(fields) === stableStringify(shape.fields),
+  );
+  if (!match) return; // already moved, already new, or an operator's own edit — never guess
+
+  const marker: Migration071Marker = { prevStatus: row.status, prevTargetPages: targets, prevFields: fields };
   const nextSchema = {
     ...(schema ?? {}),
     fields: NEW_FIELDS,
@@ -212,6 +342,13 @@ export async function up(db: Kysely<any>): Promise<void> {
 }
 
 export async function down(db: Kysely<any>): Promise<void> {
+  // Unlike up(), this does NOT gate on `rows.length !== 1` — that guard exists in up() purely so it
+  // never has to guess which of several same-named rows is "the" seeded one before writing to one.
+  // down() has nothing to guess: it only ever acts on a row carrying MARKER_KEY, and up() stamps
+  // that marker onto exactly the one row it rewrote (only reachable when rows.length===1 held at
+  // that time) — an ambiguous multi-row state can never have gotten a marker stamped onto it in the
+  // first place, so iterating every 'Facility' row here and filtering on the marker is equivalent to
+  // up()'s guard, not looser than it.
   const rows = await db
     .selectFrom('form_definitions')
     .select(['id', 'schema'])
@@ -229,11 +366,11 @@ export async function down(db: Kysely<any>): Promise<void> {
     if (!marker) continue;
 
     const { [MARKER_KEY]: _drop, ...rest } = schema as Record<string, unknown>;
-    const prevSchema = { ...rest, fields: OLD_FIELDS, targetPages: ['forms'] };
+    const prevSchema = { ...rest, fields: marker.prevFields, targetPages: marker.prevTargetPages };
     await db
       .updateTable('form_definitions')
       .set({
-        target_pages: JSON.stringify(['forms']),
+        target_pages: JSON.stringify(marker.prevTargetPages),
         status: marker.prevStatus,
         schema: JSON.stringify(prevSchema),
       } as never)

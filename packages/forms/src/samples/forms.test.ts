@@ -4,7 +4,7 @@ import { FormSchema } from '../schema/form-schema';
 import { toQuestionnaire } from '../to-questionnaire';
 import { resolveReferenceSource } from '../reference-source';
 import { PAGE_TARGETS } from '../page-targets';
-import { CORE_FACILITY_KEYS } from '@openldr/db';
+import { CORE_FACILITY_KEYS, FACILITY_FORM_MIGRATION_NEW_FIELDS } from '@openldr/db';
 
 describe('sample forms', () => {
   it('parse against the schema and export to Questionnaire', () => {
@@ -130,5 +130,16 @@ describe('the seeded Facility form', () => {
     const t = PAGE_TARGETS.find((p) => p.id === 'facilities')!;
     expect(t.available).toBe(true);
     expect(t.requiredKeys.sort()).toEqual(['localCode', 'name']);
+  });
+
+  // Migration 071_facility_form_target rewrites an existing install's persisted Facility form to a
+  // frozen NEW_FIELDS snapshot copied (not imported) from this sample, because a migration must not
+  // live-track a file that keeps changing. That snapshot is a duplicate by construction, so nothing
+  // stops the two silently drifting apart: edit a field here without also updating the migration and
+  // BOTH suites stay green — the migration's own test only ever compares the migration's output to
+  // the migration's own constant. Pinning FROM THIS SIDE against the db-exported snapshot is what
+  // actually catches that drift.
+  it('⛔ matches migration 071\'s frozen NEW_FIELDS snapshot exactly, so a future edit here cannot silently desynchronise a fresh install from what the migration thinks "new" looks like', () => {
+    expect(facility().fields).toEqual(FACILITY_FORM_MIGRATION_NEW_FIELDS);
   });
 });

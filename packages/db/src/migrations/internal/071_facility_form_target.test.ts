@@ -247,3 +247,171 @@ describe('071_facility_form_target down()', () => {
     await db.destroy();
   });
 });
+
+// Review round 2 (Finding 1 + Finding 3): the fixtures below are HAND-TRANSCRIBED from git history,
+// NOT built from OLD_FIELDS_SNAPSHOT / PRE_DISCRIMINATOR_FIELDS_SNAPSHOT (the migration's own
+// constants, as `seeded()` above does). That is the whole point — a fixture derived from the same
+// constant the migration compares against can never catch that constant itself being wrong, which is
+// exactly how round 1 shipped a migration that silently no-op'd on the six-week window of installs
+// that constitutes essentially every real deployment. Provenance for each shape is the literal
+// `git show` command used to pull it, so it is auditable independent of this file.
+describe('071_facility_form_target — literal historical fixtures (not derived from the migration)', () => {
+  // git show efde1594:packages/forms/src/samples/forms.ts
+  // Era 1: 2026-06-19 -> 2026-06-21 (efde1594..0ef91c21~1). Shipped with target_pages ['facilities']
+  // already — the facility form pointed at a page that didn't exist yet.
+  const ERA1_FIELDS = [
+    { id: 'fld-fac-name', fhirPath: 'name', displayLabel: 'Name', description: null, fieldType: 'text', required: true, enabled: true, order: 0, cardinality: { min: 0, max: '1' }, apiProperty: 'name' },
+    { id: 'fld-fac-local-id', fhirPath: 'identifier.value', displayLabel: 'Local ID', description: null, fieldType: 'identifier', required: false, enabled: true, order: 1, cardinality: { min: 0, max: '1' }, apiProperty: 'localId' },
+    { id: 'fld-fac-mfl-id', fhirPath: 'identifier.value', displayLabel: 'MFL ID', description: null, fieldType: 'identifier', required: false, enabled: true, order: 2, cardinality: { min: 0, max: '1' } },
+    {
+      id: 'fld-fac-level', fhirPath: 'physicalType', displayLabel: 'Level', description: null, fieldType: 'select', required: false, enabled: true, order: 3, cardinality: { min: 0, max: '1' },
+      valueSetOptions: [
+        { code: 'national', display: 'National' }, { code: 'regional', display: 'Regional' },
+        { code: 'district', display: 'District' }, { code: 'facility', display: 'Facility' },
+      ],
+    },
+    { id: 'fld-fac-country', fhirPath: 'address.country', displayLabel: 'Country', description: null, fieldType: 'text', required: false, enabled: true, order: 4, cardinality: { min: 0, max: '1' } },
+    { id: 'fld-fac-district', fhirPath: 'address.district', displayLabel: 'District', description: null, fieldType: 'text', required: false, enabled: true, order: 5, cardinality: { min: 0, max: '1' } },
+    { id: 'fld-fac-region', fhirPath: 'address.state', displayLabel: 'Region', description: null, fieldType: 'text', required: false, enabled: true, order: 6, cardinality: { min: 0, max: '1' } },
+    { id: 'fld-fac-phone', fhirPath: 'telecom.value', displayLabel: 'Phone', description: null, fieldType: 'phone', required: false, enabled: true, order: 7, cardinality: { min: 0, max: '1' } },
+  ];
+
+  // git show 0ef91c21:packages/forms/src/samples/forms.ts
+  // Era 2: 2026-06-21 -> 2026-08-04 09:17 (0ef91c21..7b4d4d58~1) — the six-week window that is
+  // essentially every real install. Fields are byte-for-byte identical to ERA1_FIELDS; only
+  // target_pages changed (['forms'] here, retargeted off the LIS-only pages).
+  const ERA2_FIELDS = ERA1_FIELDS;
+
+  // git show 7b4d4d58:packages/forms/src/samples/forms.ts
+  // Era 3: 2026-08-04 09:17 -> today (7b4d4d58..4b7b181f~1) — adds fhirDiscriminator to Local ID and
+  // MFL ID (and an apiProperty to MFL ID), fixing the fhirPath collision. `git diff 7b4d4d58
+  // 4b7b181f~1 -- packages/forms/src/samples/forms.ts` is empty, confirming this is the exact shape
+  // right up until 4b7b181f moved the sample again.
+  const ERA3_FIELDS = [
+    { id: 'fld-fac-name', fhirPath: 'name', displayLabel: 'Name', description: null, fieldType: 'text', required: true, enabled: true, order: 0, cardinality: { min: 0, max: '1' }, apiProperty: 'name' },
+    {
+      id: 'fld-fac-local-id', fhirPath: 'identifier.value', fhirDiscriminator: { system: 'urn:openldr:facility:local' },
+      displayLabel: 'Local ID', description: null, fieldType: 'identifier', required: false, enabled: true, order: 1,
+      cardinality: { min: 0, max: '1' }, apiProperty: 'localId',
+    },
+    {
+      id: 'fld-fac-mfl-id', fhirPath: 'identifier.value', fhirDiscriminator: { system: 'urn:openldr:facility:national' },
+      displayLabel: 'MFL ID', description: null, fieldType: 'identifier', required: false, enabled: true, order: 2,
+      cardinality: { min: 0, max: '1' }, apiProperty: 'mflId',
+    },
+    {
+      id: 'fld-fac-level', fhirPath: 'physicalType', displayLabel: 'Level', description: null, fieldType: 'select', required: false, enabled: true, order: 3, cardinality: { min: 0, max: '1' },
+      valueSetOptions: [
+        { code: 'national', display: 'National' }, { code: 'regional', display: 'Regional' },
+        { code: 'district', display: 'District' }, { code: 'facility', display: 'Facility' },
+      ],
+    },
+    { id: 'fld-fac-country', fhirPath: 'address.country', displayLabel: 'Country', description: null, fieldType: 'text', required: false, enabled: true, order: 4, cardinality: { min: 0, max: '1' } },
+    { id: 'fld-fac-district', fhirPath: 'address.district', displayLabel: 'District', description: null, fieldType: 'text', required: false, enabled: true, order: 5, cardinality: { min: 0, max: '1' } },
+    { id: 'fld-fac-region', fhirPath: 'address.state', displayLabel: 'Region', description: null, fieldType: 'text', required: false, enabled: true, order: 6, cardinality: { min: 0, max: '1' } },
+    { id: 'fld-fac-phone', fhirPath: 'telecom.value', displayLabel: 'Phone', description: null, fieldType: 'phone', required: false, enabled: true, order: 7, cardinality: { min: 0, max: '1' } },
+  ];
+
+  it('Era 1: repoints an install that already targets facilities under the pre-discriminator fields (Finding 1 + 2)', async () => {
+    const db = await makeMigratedDb();
+    await db.insertInto('form_definitions' as never).values(
+      seeded({
+        target_pages: JSON.stringify(['facilities']),
+        schema: JSON.stringify({ id: 'sample-facility', fields: ERA1_FIELDS }),
+      }) as never,
+    ).execute();
+    await up(db);
+    const row: any = await getRow(db, 'form-sample-facility');
+    expect(parseJson(row.target_pages)).toEqual(['facilities']);
+    expect(row.status).toBe('published');
+    expect((parseJson(row.schema) as any).fields).toEqual(NEW_FIELDS_SNAPSHOT);
+    await db.destroy();
+  });
+
+  it('Era 2: repoints an install targeting forms under the pre-discriminator fields (Finding 1 — the six-week window)', async () => {
+    const db = await makeMigratedDb();
+    await db.insertInto('form_definitions' as never).values(
+      seeded({
+        target_pages: JSON.stringify(['forms']),
+        schema: JSON.stringify({ id: 'sample-facility', fields: ERA2_FIELDS }),
+      }) as never,
+    ).execute();
+    await up(db);
+    const row: any = await getRow(db, 'form-sample-facility');
+    expect(parseJson(row.target_pages)).toEqual(['facilities']);
+    expect(row.status).toBe('published');
+    expect((parseJson(row.schema) as any).fields).toEqual(NEW_FIELDS_SNAPSHOT);
+    await db.destroy();
+  });
+
+  it('Era 3: repoints an install targeting forms under the discriminator fields, verified against a literal independent of OLD_FIELDS_SNAPSHOT', async () => {
+    const db = await makeMigratedDb();
+    await db.insertInto('form_definitions' as never).values(
+      seeded({
+        target_pages: JSON.stringify(['forms']),
+        schema: JSON.stringify({ id: 'sample-facility', fields: ERA3_FIELDS }),
+      }) as never,
+    ).execute();
+    await up(db);
+    const row: any = await getRow(db, 'form-sample-facility');
+    expect(parseJson(row.target_pages)).toEqual(['facilities']);
+    expect(row.status).toBe('published');
+    expect((parseJson(row.schema) as any).fields).toEqual(NEW_FIELDS_SNAPSHOT);
+    await db.destroy();
+  });
+
+  it("down() round-trips an Era 1 row back to target_pages ['facilities'] with the PRE-discriminator fields, not Era 3's OLD_FIELDS", async () => {
+    const db = await makeMigratedDb();
+    await db.insertInto('form_definitions' as never).values(
+      seeded({
+        status: 'draft',
+        target_pages: JSON.stringify(['facilities']),
+        schema: JSON.stringify({ id: 'sample-facility', fields: ERA1_FIELDS }),
+      }) as never,
+    ).execute();
+    await up(db);
+    await down(db);
+    const row: any = await getRow(db, 'form-sample-facility');
+    expect(parseJson(row.target_pages)).toEqual(['facilities']);
+    expect(row.status).toBe('draft');
+    expect((parseJson(row.schema) as any).fields).toEqual(ERA1_FIELDS);
+    await db.destroy();
+  });
+
+  it("down() round-trips an Era 2 row back to target_pages ['forms'] with the PRE-discriminator fields", async () => {
+    const db = await makeMigratedDb();
+    await db.insertInto('form_definitions' as never).values(
+      seeded({
+        status: 'draft',
+        target_pages: JSON.stringify(['forms']),
+        schema: JSON.stringify({ id: 'sample-facility', fields: ERA2_FIELDS }),
+      }) as never,
+    ).execute();
+    await up(db);
+    await down(db);
+    const row: any = await getRow(db, 'form-sample-facility');
+    expect(parseJson(row.target_pages)).toEqual(['forms']);
+    expect(row.status).toBe('draft');
+    expect((parseJson(row.schema) as any).fields).toEqual(ERA2_FIELDS);
+    await db.destroy();
+  });
+
+  it('⛔ an Era 1 install with an operator-edited field is never clobbered even though target_pages already matches', async () => {
+    // Same shape as Era 1 except one field is relabelled — proves the widened ['facilities'] guard
+    // did not become a loose match: it still requires exact field equality, just against a second
+    // accepted shape.
+    const db = await makeMigratedDb();
+    const editedFields = ERA1_FIELDS.map((f, i) => (i === 0 ? { ...f, displayLabel: 'Facility name (custom)' } : f));
+    await db.insertInto('form_definitions' as never).values(
+      seeded({
+        target_pages: JSON.stringify(['facilities']),
+        schema: JSON.stringify({ id: 'sample-facility', fields: editedFields }),
+      }) as never,
+    ).execute();
+    await up(db);
+    const row: any = await getRow(db, 'form-sample-facility');
+    expect((parseJson(row.schema) as any).fields).toEqual(editedFields); // untouched
+    expect(row.status).toBe('draft'); // seeded() default — never republished
+    await db.destroy();
+  });
+});

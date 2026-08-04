@@ -60,3 +60,9 @@ export { createFacilityRegistryStore } from './facility-registry-store';
 export type { FacilityRecord, FacilityAlias, FacilityListOptions, FacilityRegistryStore } from './facility-registry-store';
 export { splitFacilityAnswers, CORE_FACILITY_KEYS } from './facility-answers';
 export type { AnswerField, FacilityAnswerSplit } from './facility-answers';
+// Re-exported (not reachable via `export * from './migrations/internal/index'` above — that module
+// only exports the aggregated `internalMigrations` map, not individual migrations' constants) so
+// @openldr/forms can pin migration 071's frozen NEW_FIELDS snapshot against the CURRENT shipped
+// sample. packages/db must not depend on @openldr/forms (forms already depends on db), so the
+// comparison has to run from the forms side — see packages/forms/src/samples/forms.test.ts.
+export { NEW_FIELDS_SNAPSHOT as FACILITY_FORM_MIGRATION_NEW_FIELDS } from './migrations/internal/071_facility_form_target';
