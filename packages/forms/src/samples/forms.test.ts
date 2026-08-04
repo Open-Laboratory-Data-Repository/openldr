@@ -4,6 +4,7 @@ import { FormSchema } from '../schema/form-schema';
 import { toQuestionnaire } from '../to-questionnaire';
 import { resolveReferenceSource } from '../reference-source';
 import { PAGE_TARGETS } from '../page-targets';
+import { CORE_FACILITY_KEYS } from '@openldr/db';
 
 describe('sample forms', () => {
   it('parse against the schema and export to Questionnaire', () => {
@@ -109,12 +110,23 @@ describe('the seeded Facility form', () => {
     );
   });
 
+  it('⛔ every apiProperty is a REAL facility_registry column, not just a string that happens to match', () => {
+    // packages/db/src/facility-answers.ts's CORE_FACILITY_KEYS is what actually routes an answer
+    // to an indexed column vs the `extras` jsonb bag. This file used to hand-duplicate the eight
+    // names as a plain array — renaming a key in facility-answers.ts would silently start routing
+    // answers into extras with BOTH suites green, since neither one cross-checked the other.
+    // Importing the real set closes that gap.
+    for (const field of facility().fields) {
+      expect(CORE_FACILITY_KEYS.has(field.apiProperty!), `"${field.apiProperty}" is not in CORE_FACILITY_KEYS`).toBe(true);
+    }
+  });
+
   it('marks the required fields required', () => {
     const required = facility().fields.filter((f) => f.required).map((f) => f.apiProperty).sort();
     expect(required).toEqual(['country', 'district', 'level', 'localCode', 'name', 'region', 'status', 'zone'].sort());
   });
 
-  it('offers facilities as a page target, requiring the DB-required pair', () => {
+  it('offers facilities as a page target, requiring name plus the only code a template can supply', () => {
     const t = PAGE_TARGETS.find((p) => p.id === 'facilities')!;
     expect(t.available).toBe(true);
     expect(t.requiredKeys.sort()).toEqual(['localCode', 'name']);

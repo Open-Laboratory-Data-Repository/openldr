@@ -242,12 +242,13 @@ async function enableIngestWorkflow(app: EssentialSeedTarget, existing: Workflow
   return true;
 }
 
-// The ALWAYS-seeded minimum, independent of SEED_ON_START: the Users-page form, the Lab order
-// form, the unified ingestion workflow (+ its reactive companion) bound to it, and the default
-// target-warehouse connector. These are NOT optional demo data — the Users page can't render
-// without a published 'users'-targeted form, the ingest workflow's form branch can't validate
-// without the "Lab order" form, and the Query page can't run without a connector — so a fresh
-// install with SEED_ON_START=false must still get them. Deliberately mirrors the unconditional
+// The ALWAYS-seeded minimum, independent of SEED_ON_START: the Users-page form, the Facilities-page
+// form, the Lab order form, the unified ingestion workflow (+ its reactive companion) bound to it,
+// and the default target-warehouse connector. These are NOT optional demo data — the Users page
+// can't render without a published 'users'-targeted form, the Facilities page likewise needs a
+// published 'facilities'-targeted form, the ingest workflow's form branch can't validate without
+// the "Lab order" form, and the Query page can't run without a connector — so a fresh install with
+// SEED_ON_START=false must still get them. Deliberately mirrors the unconditional
 // `roles.seedSystemRoles()` boot-time seed (see createAppContext): idempotent (forms deduped by
 // name, workflows by id, connector by name), so it's safe to run on every boot and re-run
 // alongside the full seed.
