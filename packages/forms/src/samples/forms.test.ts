@@ -4,7 +4,7 @@ import { FormSchema } from '../schema/form-schema';
 import { toQuestionnaire } from '../to-questionnaire';
 import { resolveReferenceSource } from '../reference-source';
 import { PAGE_TARGETS } from '../page-targets';
-import { CORE_FACILITY_KEYS, FACILITY_FORM_MIGRATION_NEW_FIELDS } from '@openldr/db';
+import { CORE_FACILITY_KEYS, FACILITY_FORM_MIGRATION_BOUND_FIELDS } from '@openldr/db';
 
 describe('sample forms', () => {
   it('parse against the schema and export to Questionnaire', () => {
@@ -147,14 +147,17 @@ describe('the seeded Facility form', () => {
     expect(t.requiredKeys.sort()).toEqual(['localCode', 'name']);
   });
 
-  // Migration 071_facility_form_target rewrites an existing install's persisted Facility form to a
-  // frozen NEW_FIELDS snapshot copied (not imported) from this sample, because a migration must not
-  // live-track a file that keeps changing. That snapshot is a duplicate by construction, so nothing
-  // stops the two silently drifting apart: edit a field here without also updating the migration and
-  // BOTH suites stay green — the migration's own test only ever compares the migration's output to
-  // the migration's own constant. Pinning FROM THIS SIDE against the db-exported snapshot is what
-  // actually catches that drift.
-  it('⛔ matches migration 071\'s frozen NEW_FIELDS snapshot exactly, so a future edit here cannot silently desynchronise a fresh install from what the migration thinks "new" looks like', () => {
-    expect(facility().fields).toEqual(FACILITY_FORM_MIGRATION_NEW_FIELDS);
+  // Migration 072_facility_level_status_valuesets rewrites an already-migrated install's persisted
+  // Facility form to a frozen BOUND_FIELDS snapshot copied (not imported) from this sample, because
+  // a migration must not live-track a file that keeps changing. (Migration 071 pinned this same way
+  // against its own NEW_FIELDS snapshot before the level/status fields were bound to ValueSets; 072
+  // is now the frozen snapshot that reflects the CURRENT sample, since it is 072 — not 071 — that
+  // ships the bound shape to already-migrated installs.) That snapshot is a duplicate by
+  // construction, so nothing stops the two silently drifting apart: edit a field here without also
+  // updating the migration and BOTH suites stay green — the migration's own test only ever compares
+  // the migration's output to the migration's own constant. Pinning FROM THIS SIDE against the
+  // db-exported snapshot is what actually catches that drift.
+  it('⛔ matches migration 072\'s frozen BOUND_FIELDS snapshot exactly, so a future edit here cannot silently desynchronise an already-migrated install from what the migration thinks "bound" looks like', () => {
+    expect(facility().fields).toEqual(FACILITY_FORM_MIGRATION_BOUND_FIELDS);
   });
 });
