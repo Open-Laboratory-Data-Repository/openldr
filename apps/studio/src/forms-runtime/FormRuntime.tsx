@@ -4,6 +4,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SuggestCombobox } from '@/components/ui/suggest-combobox';
 import {
   Tooltip,
   TooltipContent,
@@ -11,7 +12,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { isMultiValued, resolveReferenceSource } from '@openldr/forms/pure';
-import type { FormField, FormSchema, FormSection, RuntimeAnswers } from './types';
+import type { FieldSuggestions, FormField, FormSchema, FormSection, RuntimeAnswers } from './types';
 import { cleanAnswers, fieldLabel, groupChildren, validate, visibleIds } from './runtime';
 import { ReferencePicker, type ReferenceValue } from './ReferencePicker';
 
@@ -27,6 +28,7 @@ export function FormRuntime({
   formId,
   formDefinitionId,
   preview,
+  fieldSuggestions,
 }: {
   schema: FormSchema;
   submitLabel?: string;
@@ -44,6 +46,14 @@ export function FormRuntime({
   formDefinitionId?: string;
   /** Builder live preview: reference fields search the unsaved schema via the preview endpoint. */
   preview?: boolean;
+  /**
+   * Suggestion state for `suggest` fields, keyed by field id. FormRuntime never fetches these
+   * itself — a caller (Task 3/5: a hook backed by the facility-registry distinct-values
+   * endpoint) owns the fetch and passes the resulting `{ status, options, error }` down here.
+   * Omitting an entry — or the whole prop — degrades to "ready with no suggestions" rather than
+   * an infinite loading spinner, so the field stays usable before that wiring exists.
+   */
+  fieldSuggestions?: FieldSuggestions;
 }): JSX.Element {
   const [answers, setAnswers] = useState<RuntimeAnswers>(initialAnswers ?? {});
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -136,6 +146,7 @@ export function FormRuntime({
         errors={errors}
         formDefinitionId={formDefinitionId}
         preview={preview}
+        fieldSuggestions={fieldSuggestions}
       />
     ));
   }
@@ -201,6 +212,7 @@ function FieldRow({
   errors,
   formDefinitionId,
   preview,
+  fieldSuggestions,
 }: {
   field: FormField;
   schema: FormSchema;
@@ -211,6 +223,7 @@ function FieldRow({
   errors: Record<string, string>;
   formDefinitionId?: string;
   preview?: boolean;
+  fieldSuggestions?: FieldSuggestions;
 }) {
   const label = fieldLabel(field);
 
@@ -231,6 +244,7 @@ function FieldRow({
             errors={errors}
             formDefinitionId={formDefinitionId}
             preview={preview}
+            fieldSuggestions={fieldSuggestions}
           />
         ))}
       </fieldset>
@@ -275,6 +289,7 @@ function FieldRow({
           onChange={(v) => onChange(field.id, v)}
           formDefinitionId={formDefinitionId}
           preview={preview}
+          fieldSuggestions={fieldSuggestions}
         />
         {error ? <p className="mt-1 text-xs text-destructive" role="alert">{error}</p> : null}
       </div>
@@ -290,12 +305,14 @@ function FieldControl({
   onChange,
   formDefinitionId,
   preview,
+  fieldSuggestions,
 }: {
   field: FormField;
   value: unknown;
   onChange: (value: unknown) => void;
   formDefinitionId?: string;
   preview?: boolean;
+  fieldSuggestions?: FieldSuggestions;
 }) {
   const label = fieldLabel(field);
 
@@ -346,6 +363,25 @@ function FieldControl({
             );
           })}
         </div>
+      );
+    }
+
+    // Proposes but does not constrain: the answer is always the raw typed string, whether or
+    // not it matches a suggestion, so it lands directly in a text column with no flattening.
+    case 'suggest': {
+      const suggestion = fieldSuggestions?.[field.id];
+      return (
+        <SuggestCombobox
+          id={field.id}
+          value={value != null ? String(value) : ''}
+          onChange={(v) => onChange(v || undefined)}
+          options={suggestion?.options ?? []}
+          status={suggestion?.status ?? 'ready'}
+          error={suggestion?.error}
+          placeholder={field.placeholder}
+          label={label}
+          required={field.required}
+        />
       );
     }
 

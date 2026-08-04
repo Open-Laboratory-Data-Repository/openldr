@@ -457,4 +457,125 @@ describe('FormRuntime', () => {
     // The select trigger should be present (aria-label matches field label)
     expect(screen.getByRole('combobox', { name: 'Color' })).toBeInTheDocument();
   });
+
+  // ── suggest field type ───────────────────────────────────────────────────────
+
+  function suggestSchema(): FormSchema {
+    return {
+      ...previewSchema,
+      id: 'sug1',
+      fields: [
+        {
+          id: 'district',
+          fhirPath: null,
+          displayLabel: 'District',
+          description: null,
+          fieldType: 'suggest',
+          required: false,
+          enabled: true,
+          order: 1,
+          cardinality: { min: 0, max: '1' },
+        },
+      ],
+    };
+  }
+
+  it('renders a suggest field as a combobox', () => {
+    render(<FormRuntime schema={suggestSchema()} submitLabel="" footer={null} onSubmit={() => {}} />);
+    expect(screen.getByRole('combobox', { name: 'District' })).toBeInTheDocument();
+  });
+
+  it('suggest field: typing filters the suggestion list', () => {
+    render(
+      <FormRuntime
+        schema={suggestSchema()}
+        submitLabel=""
+        footer={null}
+        onSubmit={() => {}}
+        initialAnswers={{ district: 'ki' }}
+        fieldSuggestions={{ district: { status: 'ready', options: ['Kampala', 'Kigali', 'Kisumu'] } }}
+      />,
+    );
+    const input = screen.getByRole('combobox', { name: 'District' });
+    fireEvent.focus(input);
+    expect(screen.getByText('Kigali')).toBeInTheDocument();
+    expect(screen.getByText('Kisumu')).toBeInTheDocument();
+    expect(screen.queryByText('Kampala')).not.toBeInTheDocument();
+  });
+
+  it('suggest field: picking a suggestion sets the answer to that plain string and submits it', async () => {
+    const onSubmit = vi.fn();
+    render(
+      <FormRuntime
+        schema={suggestSchema()}
+        submitLabel="Submit"
+        onSubmit={onSubmit}
+        fieldSuggestions={{ district: { status: 'ready', options: ['Kampala', 'Kigali'] } }}
+      />,
+    );
+    fireEvent.focus(screen.getByRole('combobox', { name: 'District' }));
+    fireEvent.click(screen.getByText('Kigali'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Submit' }));
+    await vi.waitFor(() => expect(onSubmit).toHaveBeenCalled());
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ district: 'Kigali' }));
+  });
+
+  it('suggest field: typing a value not in the list is accepted and submitted verbatim', async () => {
+    const onSubmit = vi.fn();
+    render(
+      <FormRuntime
+        schema={suggestSchema()}
+        submitLabel="Submit"
+        onSubmit={onSubmit}
+        fieldSuggestions={{ district: { status: 'ready', options: ['Kampala', 'Kigali'] } }}
+      />,
+    );
+    fireEvent.change(screen.getByRole('combobox', { name: 'District' }), { target: { value: 'A Brand New Ward' } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Submit' }));
+    await vi.waitFor(() => expect(onSubmit).toHaveBeenCalled());
+    expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ district: 'A Brand New Ward' }));
+  });
+
+  it('suggest field: an empty suggestion list still allows free typing and shows "no suggestions", distinct from loading', () => {
+    const onSubmit = vi.fn();
+    render(
+      <FormRuntime
+        schema={suggestSchema()}
+        submitLabel="Submit"
+        onSubmit={onSubmit}
+        fieldSuggestions={{ district: { status: 'ready', options: [] } }}
+      />,
+    );
+    const input = screen.getByRole('combobox', { name: 'District' });
+    fireEvent.focus(input);
+    expect(screen.getByText(/no suggestions/i)).toBeInTheDocument();
+    expect(screen.queryByText(/loading/i)).not.toBeInTheDocument();
+
+    fireEvent.change(input, { target: { value: 'Freehand Value' } });
+    expect((input as HTMLInputElement).value).toBe('Freehand Value');
+  });
+
+  it('suggest field: a loading state is shown distinctly from "no suggestions"', () => {
+    render(
+      <FormRuntime
+        schema={suggestSchema()}
+        submitLabel=""
+        footer={null}
+        onSubmit={() => {}}
+        fieldSuggestions={{ district: { status: 'loading', options: [] } }}
+      />,
+    );
+    fireEvent.focus(screen.getByRole('combobox', { name: 'District' }));
+    expect(screen.getByText(/loading/i)).toBeInTheDocument();
+    expect(screen.queryByText(/no suggestions/i)).not.toBeInTheDocument();
+  });
+
+  it('suggest field: no fieldSuggestions prop at all still renders and allows free typing', () => {
+    render(<FormRuntime schema={suggestSchema()} submitLabel="" footer={null} onSubmit={() => {}} />);
+    const input = screen.getByRole('combobox', { name: 'District' });
+    fireEvent.change(input, { target: { value: 'Typed freely' } });
+    expect((input as HTMLInputElement).value).toBe('Typed freely');
+  });
 });
