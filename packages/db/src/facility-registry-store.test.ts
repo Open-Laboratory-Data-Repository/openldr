@@ -114,4 +114,90 @@ describe('createFacilityRegistryStore', () => {
     expect(await s.list()).toHaveLength(200);
     expect(await s.list({ limit: 5 })).toHaveLength(5);
   });
+
+  // --- Task 3: distinctAdminValues ------------------------------------------------------------
+
+  describe('distinctAdminValues', () => {
+    it('ranks distinct values by frequency (commonest first), with counts', async () => {
+      const { db, s } = await store();
+      // Dodoma x3, Kongwa x1, Chamwino x2 — the ranking must be Dodoma(3), Chamwino(2), Kongwa(1),
+      // NOT insertion order and NOT alphabetical.
+      const rows = [
+        { id: 'f1', local_code: 'LAB1', name: 'A', source: 'manual', district: 'Dodoma' },
+        { id: 'f2', local_code: 'LAB2', name: 'B', source: 'manual', district: 'Dodoma' },
+        { id: 'f3', local_code: 'LAB3', name: 'C', source: 'manual', district: 'Dodoma' },
+        { id: 'f4', local_code: 'LAB4', name: 'D', source: 'manual', district: 'Kongwa' },
+        { id: 'f5', local_code: 'LAB5', name: 'E', source: 'manual', district: 'Chamwino' },
+        { id: 'f6', local_code: 'LAB6', name: 'F', source: 'manual', district: 'Chamwino' },
+      ];
+      await db.insertInto('facility_registry' as never).values(rows as never).execute();
+      expect(await s.distinctAdminValues('district')).toEqual([
+        { value: 'Dodoma', count: 3 },
+        { value: 'Chamwino', count: 2 },
+        { value: 'Kongwa', count: 1 },
+      ]);
+    });
+
+    it('scopes by the parent level already chosen (e.g. districts filtered by region)', async () => {
+      const { db, s } = await store();
+      const rows = [
+        { id: 'f1', local_code: 'LAB1', name: 'A', source: 'manual', region: 'Dodoma Region', district: 'Dodoma' },
+        { id: 'f2', local_code: 'LAB2', name: 'B', source: 'manual', region: 'Dodoma Region', district: 'Kongwa' },
+        // Same district NAME, different region — must NOT bleed into the Dodoma-region result.
+        { id: 'f3', local_code: 'LAB3', name: 'C', source: 'manual', region: 'Mbeya Region', district: 'Dodoma' },
+      ];
+      await db.insertInto('facility_registry' as never).values(rows as never).execute();
+      const result = await s.distinctAdminValues('district', { region: 'Dodoma Region' });
+      expect(result.map((r) => r.value).sort()).toEqual(['Dodoma', 'Kongwa']);
+      expect(result.find((r) => r.value === 'Dodoma')?.count).toBe(1);
+    });
+
+    it('an absent or blank scope value means unfiltered for that level, not "match empty string"', async () => {
+      const { db, s } = await store();
+      const rows = [
+        { id: 'f1', local_code: 'LAB1', name: 'A', source: 'manual', region: 'Dodoma Region', district: 'Dodoma' },
+        { id: 'f2', local_code: 'LAB2', name: 'B', source: 'manual', region: 'Mbeya Region', district: 'Mbeya' },
+      ];
+      await db.insertInto('facility_registry' as never).values(rows as never).execute();
+      // No scope at all.
+      expect((await s.distinctAdminValues('district')).map((r) => r.value).sort()).toEqual(['Dodoma', 'Mbeya']);
+      // Explicit but blank scope value — must behave the same as omitting it, never match `region = ''`.
+      expect((await s.distinctAdminValues('district', { region: '' })).map((r) => r.value).sort()).toEqual(['Dodoma', 'Mbeya']);
+    });
+
+    it('excludes NULL and blank values — they are not suggestions', async () => {
+      const { db, s } = await store();
+      const rows = [
+        { id: 'f1', local_code: 'LAB1', name: 'A', source: 'manual', district: 'Dodoma' },
+        { id: 'f2', local_code: 'LAB2', name: 'B', source: 'manual', district: null },
+        { id: 'f3', local_code: 'LAB3', name: 'C', source: 'manual', district: '' },
+      ];
+      await db.insertInto('facility_registry' as never).values(rows as never).execute();
+      expect(await s.distinctAdminValues('district')).toEqual([{ value: 'Dodoma', count: 1 }]);
+    });
+
+    it('never treats a scope entry for the requested level itself as a filter', async () => {
+      const { db, s } = await store();
+      const rows = [
+        { id: 'f1', local_code: 'LAB1', name: 'A', source: 'manual', district: 'Dodoma' },
+        { id: 'f2', local_code: 'LAB2', name: 'B', source: 'manual', district: 'Kongwa' },
+      ];
+      await db.insertInto('facility_registry' as never).values(rows as never).execute();
+      // scope.district is nonsensical when level === 'district'; it must be ignored, not applied
+      // as `WHERE district = 'Dodoma'` (which would silently collapse the result to one row).
+      const result = await s.distinctAdminValues('district', { district: 'Dodoma' } as never);
+      expect(result.map((r) => r.value).sort()).toEqual(['Dodoma', 'Kongwa']);
+    });
+
+    it('caps the number of distinct values returned', async () => {
+      const { db, s } = await store();
+      const rows = Array.from({ length: 1005 }, (_, i) => ({
+        id: `f${i}`, local_code: `LAB${i}`, name: `Facility ${i}`, source: 'manual', zone: `Zone ${i}`,
+      }));
+      await db.insertInto('facility_registry' as never).values(rows as never).execute();
+      const result = await s.distinctAdminValues('zone');
+      expect(result.length).toBeLessThanOrEqual(1000);
+      expect(result.length).toBeGreaterThan(0);
+    });
+  });
 });

@@ -744,6 +744,40 @@ export async function deleteFacility(id: string): Promise<void> {
   throw new Error(formatApiError('delete facility', await errorDetail(res)));
 }
 
+// Mirrors FacilityAdminLevel/FACILITY_ADMIN_LEVELS in packages/db/src/facility-registry-store.ts
+// by VALUE, not by import: that module pulls in Kysely/pg, and apps/studio only ever imports the
+// browser-safe `@openldr/db/facility-answers` subpath (see FacilityRecord's mirrored-not-imported
+// `Facility` interface above, and CORE_FACILITY_KEYS's dedicated subpath) to keep those bytes out
+// of the web bundle. A 4-literal union is a small enough surface that duplicating it here is safer
+// than widening the package's exported surface just for a type.
+export type FacilityAdminLevel = 'zone' | 'region' | 'district' | 'council';
+
+export interface FacilityAdminValueCount {
+  /** The observed value, verbatim (never normalised/cased). */
+  value: string;
+  /** How many facility_registry rows carry this value for the requested level. */
+  count: number;
+}
+
+/**
+ * Distinct, already-seen values for one admin-area column, ranked by frequency with counts —
+ * backs the `suggest` field type's suggestions (Task 1/5). `scope` filters by the OTHER admin
+ * columns already chosen on the form (e.g. district suggestions scoped by the region already
+ * picked); omit a key (or pass a blank value) for "unfiltered at that level". The server is the
+ * actual authority on which `level` values are legal (a closed 4-column whitelist — see
+ * facilities-routes.ts) — this function does no validation of its own, it only builds the request.
+ */
+export const listFacilityAdminValues = (
+  level: FacilityAdminLevel,
+  scope: Partial<Record<FacilityAdminLevel, string>> = {},
+): Promise<FacilityAdminValueCount[]> => {
+  const params = new URLSearchParams({ level });
+  for (const [key, value] of Object.entries(scope)) {
+    if (value) params.set(key, value);
+  }
+  return apiGet(`/api/facilities/admin-values?${params.toString()}`, 'list facility admin values');
+};
+
 // Roles / capabilities (capability-based RBAC)
 export interface RoleRecord {
   id: string;

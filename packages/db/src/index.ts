@@ -56,8 +56,15 @@ export * from './terminology-ingest-job-store';
 export { createRoleStore } from './role-store';
 export type { RoleStore, RoleRecord, CreateRoleInput, UpdateRoleInput, CapabilityReconciliation, CapabilityDiagnosis } from './role-store';
 export * from './reference-search';
-export { createFacilityRegistryStore } from './facility-registry-store';
-export type { FacilityRecord, FacilityAlias, FacilityListOptions, FacilityRegistryStore } from './facility-registry-store';
+export { createFacilityRegistryStore, FACILITY_ADMIN_LEVELS } from './facility-registry-store';
+export type {
+  FacilityRecord,
+  FacilityAlias,
+  FacilityListOptions,
+  FacilityRegistryStore,
+  FacilityAdminLevel,
+  FacilityAdminValueCount,
+} from './facility-registry-store';
 export { splitFacilityAnswers, CORE_FACILITY_KEYS } from './facility-answers';
 export type { AnswerField, FacilityAnswerSplit } from './facility-answers';
 // Re-exported (not reachable via `export * from './migrations/internal/index'` above — that module

@@ -2,7 +2,8 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import type { AppContext } from '@openldr/bootstrap';
-import { splitFacilityAnswers, CORE_FACILITY_KEYS } from '@openldr/db';
+import { splitFacilityAnswers, CORE_FACILITY_KEYS, FACILITY_ADMIN_LEVELS } from '@openldr/db';
+import type { FacilityAdminLevel } from '@openldr/db';
 import { requireCapability } from './rbac';
 import { recordAudit } from './audit-helper';
 
@@ -96,6 +97,16 @@ function firstString(v: unknown): string | undefined {
   return typeof v === 'string' ? v : undefined;
 }
 
+/** Whether a sanitised (already-array-stripped) string is one of the four admin-area columns.
+ *  This closed whitelist — not a free string — IS the column-injection guard: `level` selects a
+ *  raw column name inside `ctx.facilityRegistry.distinctAdminValues`'s query, and this is the one
+ *  and only place a request value is allowed to become that column name. Anything not in
+ *  FACILITY_ADMIN_LEVELS (imported from `@openldr/db`, the store's own whitelist — not re-typed
+ *  here, so the two cannot drift) is rejected with 400 before any query runs. */
+function isFacilityAdminLevel(v: string | undefined): v is FacilityAdminLevel {
+  return v !== undefined && (FACILITY_ADMIN_LEVELS as readonly string[]).includes(v);
+}
+
 /** Whether the submitted form's field list maps ANY field onto a facility column. On its own this
  *  is only a PROXY for "this is the facilities form" — a form that happens to declare a generic
  *  core key such as `name` (e.g. Users' first/last name fields do not collide, but nothing stops a
@@ -187,6 +198,43 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       status: firstString(q.status),
       limit: parseLimit(q.limit),
     });
+  });
+
+  // Distinct, already-seen values for one of the four admin-area columns (zone/region/district/
+  // council), ranked by frequency with counts — backs the `suggest` field type (Task 1) so a form
+  // proposes real values (`Dodoma (142)`) instead of an unbounded free-text box or a hardcoded
+  // vocabulary that doesn't exist for a country's admin geography.
+  //
+  // ⚠ Naming collision, deliberately not renamed to match the URL the brief specifies: the
+  // `?level=` query param here means "which ADMIN COLUMN" (zone/region/district/council). It is
+  // unrelated to `facility_registry.level`, the FACILITY level/type column (Hospital/Dispensary/
+  // Clinic) used elsewhere in this file and in `list()`.
+  //
+  // ⛔ SECURITY: `level` ultimately selects a raw column name inside the store's query. It is
+  // validated against FACILITY_ADMIN_LEVELS — a closed whitelist — and rejected with 400 BEFORE
+  // any query runs; a value like `password` or `id` never reaches `distinctAdminValues`. The
+  // store's own method signature is additionally typed to the same four-member union (see
+  // facility-registry-store.ts), so even a future caller that skipped this check could not pass
+  // an arbitrary string through — this is defense in depth, not the only guard.
+  app.get('/api/facilities/admin-values', VIEW, async (req, reply) => {
+    const q = req.query as Record<string, unknown>;
+    // `firstString` matters here exactly as it does in list() below: `?level=a&level=b` arrives
+    // as an array, and an array must never reach the whitelist check as if it were a scalar.
+    const level = firstString(q.level);
+    if (!isFacilityAdminLevel(level)) {
+      reply.code(400);
+      return { error: `level must be one of ${FACILITY_ADMIN_LEVELS.join(', ')}` };
+    }
+    const scope: Partial<Record<FacilityAdminLevel, string>> = {};
+    for (const col of FACILITY_ADMIN_LEVELS) {
+      if (col === level) continue; // scoping a column by itself is meaningless
+      const v = firstString(q[col]);
+      if (v) scope[col] = v;
+      // An absent, non-string (repeated-param array), or blank value is left OUT of `scope`
+      // entirely — the store treats a missing key as "unfiltered for that level", never as
+      // "match the empty string".
+    }
+    return ctx.facilityRegistry.distinctAdminValues(level, scope);
   });
 
   app.get('/api/facilities/:id', VIEW, async (req, reply) => {
