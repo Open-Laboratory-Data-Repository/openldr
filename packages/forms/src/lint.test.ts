@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { lintFormSchema } from './lint';
+import { sampleForms } from './samples/forms';
 import { makeField, makeSchema } from './__fixtures__/forms';
 
 describe('lintFormSchema', () => {
@@ -188,5 +189,66 @@ describe('reference source lint', () => {
       severity: 'warning', code: 'reference-missing-source', fieldId: 'r',
     }));
     expect(issues.filter((i) => i.severity === 'error')).toEqual([]);
+  });
+});
+
+describe('ambiguous-fhir-path', () => {
+  const field = (over: Record<string, unknown>) => ({
+    id: 'f', fhirPath: 'identifier.value', displayLabel: 'F', description: null,
+    fieldType: 'identifier', required: false, enabled: true, order: 0,
+    cardinality: { min: 0, max: '1' }, ...over,
+  }) as never;
+  const form = (fields: unknown[]) => ({
+    id: 'x', name: 'X', versionLabel: 'v1', fhirVersion: 'R4', fhirResourceType: 'Location',
+    fhirProfileUrl: null, facilityId: null, targetPages: ['forms'], sections: [], version: 1,
+    active: true, status: 'draft', createdAt: '', updatedAt: '', fields,
+  }) as never;
+
+  it('flags two enabled fields on one fhirPath with no discriminator', () => {
+    // The shipped Facility form's defect: Local ID and MFL ID both bound identifier.value, so the
+    // form carrying the local↔national PAIR could not tell the two codes apart.
+    const issues = lintFormSchema(form([field({ id: 'local' }), field({ id: 'mfl' })]));
+    expect(issues.filter((i) => i.code === 'ambiguous-fhir-path').map((i) => i.fieldId).sort())
+      .toEqual(['local', 'mfl']);
+    expect(issues.find((i) => i.code === 'ambiguous-fhir-path')?.severity).toBe('error');
+  });
+
+  it('accepts them once each declares a DISTINCT discriminator', () => {
+    const issues = lintFormSchema(form([
+      field({ id: 'local', fhirDiscriminator: { system: 'urn:openldr:facility:local' } }),
+      field({ id: 'mfl', fhirDiscriminator: { system: 'urn:openldr:facility:national' } }),
+    ]));
+    expect(issues.filter((i) => i.code === 'ambiguous-fhir-path')).toEqual([]);
+  });
+
+  it('still flags them when the discriminators are IDENTICAL', () => {
+    // Same {system} on both is exactly as ambiguous as none — a discriminator only disambiguates
+    // when it differs.
+    const same = { system: 'urn:openldr:facility:local' };
+    const issues = lintFormSchema(form([
+      field({ id: 'local', fhirDiscriminator: same }),
+      field({ id: 'mfl', fhirDiscriminator: { ...same } }),
+    ]));
+    expect(issues.filter((i) => i.code === 'ambiguous-fhir-path')).toHaveLength(2);
+  });
+
+  it('ignores DISABLED fields — they bind nothing', () => {
+    const issues = lintFormSchema(form([field({ id: 'local' }), field({ id: 'mfl', enabled: false })]));
+    expect(issues.filter((i) => i.code === 'ambiguous-fhir-path')).toEqual([]);
+  });
+
+  it('ignores fields with no fhirPath at all', () => {
+    const issues = lintFormSchema(form([field({ id: 'a', fhirPath: undefined }), field({ id: 'b', fhirPath: undefined })]));
+    expect(issues.filter((i) => i.code === 'ambiguous-fhir-path')).toEqual([]);
+  });
+});
+
+describe('the shipped sample forms', () => {
+  it('⛔ lint clean — the Facility form regression guard', () => {
+    // This is what would have caught the Local ID / MFL ID collision before it shipped.
+    for (const f of sampleForms) {
+      const errors = lintFormSchema(f).filter((i) => i.severity === 'error');
+      expect(errors, `${f.name} has lint errors: ${JSON.stringify(errors)}`).toEqual([]);
+    }
   });
 });

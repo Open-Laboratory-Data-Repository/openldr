@@ -2,6 +2,13 @@ import type { FormSchema } from '../schema/form-schema'
 
 const NOW = '2026-01-01T00:00:00.000Z'
 
+/** The site's OWN facility numbering — whatever the local LIS calls a facility. Always CE-local. */
+export const LOCAL_FACILITY_SYSTEM = 'urn:openldr:facility:local'
+/** The national facility register a local code maps TO. A PLACEHOLDER: every country has its own
+ *  (Tanzania HFR, Kenya MFL, …), so the real value belongs in configuration, never in a shipped
+ *  sample. See docs/superpowers/specs/2026-08-04-facility-registry-design.md. */
+export const NATIONAL_FACILITY_SYSTEM = 'urn:openldr:facility:national'
+
 /** Facility / Location form — drives the facilities management page. */
 const facilityForm: FormSchema = {
   id: 'sample-facility',
@@ -31,9 +38,19 @@ const facilityForm: FormSchema = {
       cardinality: { min: 0, max: '1' },
       apiProperty: 'name',
     },
+    // ⛔ These two share `fhirPath: 'identifier.value'` — a FHIR resource holds MANY identifiers and
+    // the path alone cannot say which one. Without a discriminator they collide on write and are
+    // indistinguishable on read, which would break the one thing this form exists for: carrying the
+    // LOCAL code and the NATIONAL code as a mappable pair. `fhirDiscriminator` pins each to its own
+    // `identifier.system`.
+    //
+    // ⚠ The national system is a PLACEHOLDER here because it is country-specific — Tanzania's HFR,
+    // Kenya's MFL and so on are different code systems. A shipped sample must not hardcode one
+    // country's registry as if it were universal; the facility-registry design makes it configurable.
     {
       id: 'fld-fac-local-id',
       fhirPath: 'identifier.value',
+      fhirDiscriminator: { system: LOCAL_FACILITY_SYSTEM },
       displayLabel: 'Local ID',
       description: null,
       fieldType: 'identifier',
@@ -46,6 +63,7 @@ const facilityForm: FormSchema = {
     {
       id: 'fld-fac-mfl-id',
       fhirPath: 'identifier.value',
+      fhirDiscriminator: { system: NATIONAL_FACILITY_SYSTEM },
       displayLabel: 'MFL ID',
       description: null,
       fieldType: 'identifier',
@@ -53,6 +71,7 @@ const facilityForm: FormSchema = {
       enabled: true,
       order: 2,
       cardinality: { min: 0, max: '1' },
+      apiProperty: 'mflId',
     },
     {
       id: 'fld-fac-level',

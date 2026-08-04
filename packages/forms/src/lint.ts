@@ -13,7 +13,8 @@ export interface FormLintIssue {
     | 'dangling-group-id'
     | 'target-contract-violation'
     | 'reference-missing-source'
-    | 'reference-ambiguous-source';
+    | 'reference-ambiguous-source'
+    | 'ambiguous-fhir-path';
   message: string;
   fieldId?: string;
   sectionId?: string;
@@ -27,6 +28,42 @@ export function lintFormSchema(form: FormSchema): FormLintIssue[] {
   // Build the set of all field ids and group-type field ids
   for (const field of form.fields) {
     if (field.fieldType === 'group') groupFieldIds.add(field.id);
+  }
+
+  /**
+   * Two ENABLED fields bound to the same `fhirPath` with nothing to tell them apart.
+   *
+   * A FHIR resource holds many `identifier`s, many `telecom`s, many `address`es — the path alone
+   * does not identify WHICH one, so two fields sharing it collide on write and are
+   * indistinguishable on read. `fhirDiscriminator` (e.g. `{ system: … }`) is what separates them.
+   *
+   * ⛔ This shipped in the seeded Facility form: `Local ID` and `MFL ID` both bound
+   * `identifier.value`, so the one form whose entire purpose is carrying the local↔national code
+   * PAIR could not distinguish the two codes. It went unnoticed because nothing extracts by
+   * `fhirPath` yet — the defect was latent, waiting for the extractor. Hence a lint rule rather
+   * than a one-off fix.
+   */
+  const byPath = new Map<string, typeof form.fields>();
+  for (const field of form.fields) {
+    if (!field.enabled || !field.fhirPath) continue;
+    const list = byPath.get(field.fhirPath) ?? [];
+    list.push(field);
+    byPath.set(field.fhirPath, list);
+  }
+  for (const [path, fields] of byPath) {
+    if (fields.length < 2) continue;
+    // A discriminator only disambiguates if the fields' discriminators actually DIFFER; two fields
+    // carrying the same `{system: X}` are just as ambiguous as two carrying none.
+    const keys = fields.map((f) => JSON.stringify(f.fhirDiscriminator ?? null));
+    if (new Set(keys).size === fields.length) continue;
+    for (const field of fields) {
+      issues.push({
+        severity: 'error',
+        code: 'ambiguous-fhir-path',
+        message: `Field "${field.id}" shares fhirPath "${path}" with ${fields.length - 1} other field(s) and no distinct fhirDiscriminator`,
+        fieldId: field.id,
+      });
+    }
   }
 
   // Check fields
