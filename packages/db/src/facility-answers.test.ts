@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, it, expect } from 'vitest';
 import { splitFacilityAnswers, CORE_FACILITY_KEYS } from './facility-answers';
 
@@ -65,6 +67,27 @@ describe('splitFacilityAnswers', () => {
     // `id`, `extras`, `managedOrigin` and `source` are set by the ROUTE, never by an answer.
     for (const k of ['id', 'extras', 'managedOrigin', 'source']) {
       expect(CORE_FACILITY_KEYS.has(k), `${k} must NOT be settable from a form answer`).toBe(false);
+    }
+  });
+});
+
+describe('facility-answers.ts stays browser-safe (Minor 5)', () => {
+  // This module is published as its own subpath (@openldr/db/facility-answers, see package.json)
+  // specifically so apps/studio can import CORE_FACILITY_KEYS without pulling in `pg`/kysely and the
+  // rest of the server DB engine. A runtime (non type-only) import added here later — even an
+  // innocuous-looking one — would silently break the studio Vite bundle rather than fail loudly, so
+  // this asserts the invariant directly against the source text rather than trusting a comment.
+  it('has no runtime (non type-only) imports', () => {
+    const path = fileURLToPath(new URL('./facility-answers.ts', import.meta.url));
+    const source = readFileSync(path, 'utf8');
+    const importLines = source
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.startsWith('import '));
+
+    expect(importLines.length, 'expected at least the known `import type` line').toBeGreaterThan(0);
+    for (const line of importLines) {
+      expect(line.startsWith('import type '), `runtime import found: ${line}`).toBe(true);
     }
   });
 });

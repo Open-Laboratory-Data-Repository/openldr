@@ -1,3 +1,11 @@
+// Browser-safe subpath (@openldr/db/facility-answers) of the db package. This module must stay
+// free of Node.js (node:crypto), database, or server dependencies — apps/studio imports
+// CORE_FACILITY_KEYS directly from here (not from `@openldr/db`'s root, which pulls in `pg`/kysely
+// and the rest of the server DB engine) so seeding a facility-edit form doesn't drag that into the
+// web bundle. The only reference to `FacilityRecord` below is `import type`, which TypeScript
+// erases entirely at compile time — any future edit that turns it (or adds any other import) into
+// a runtime import will silently break the studio Vite bundle. Mirrors the same invariant on
+// packages/forms/src/pure.ts.
 import type { FacilityRecord } from './facility-registry-store';
 
 /**

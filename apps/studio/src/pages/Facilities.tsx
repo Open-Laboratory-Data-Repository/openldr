@@ -42,6 +42,11 @@ export function Facilities() {
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+      // Rows already on screen (if any) are left as-is — they're from the last successful load, not
+      // this failed one — but the truncated flag describes a specific fetched row count, and this
+      // fetch produced none. Leaving a stale `true` here would keep claiming "showing the first N"
+      // for data this attempt never actually saw, outliving the row set it was measured against.
+      setTruncated(false);
     } finally {
       setLoading(false);
     }
@@ -89,11 +94,11 @@ export function Facilities() {
     );
   }
 
-  // Whether the operator can actually open the edit form and save it. Editing is offered from a
-  // row even when there is no published form (see the I5 comment below) — FacilityDialog itself
-  // shows a "no form" message and blocks saving in that case — but there is no point sending a
-  // view-only user into that dialog at all when they hold no facilities.manage, so both gates
-  // apply together for the click affordance.
+  // Whether the operator can actually open the edit form and save it: requires facilities.manage
+  // AND a published form to target. The per-row Edit menu item is `disabled={!hasForm}` and the
+  // row's own click-to-edit handler is gated on this same `canEdit`, so a lab with no published
+  // Facility form still sees its registry (I5, below) but cannot open the edit dialog from it — the
+  // banner further down names that cause instead of leaving Add/Edit silently greyed out.
   const canEdit = canManage && hasForm;
 
   return (
@@ -126,6 +131,18 @@ export function Facilities() {
         {truncated && (
           <div className="mx-4 mt-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700">
             {t('facilities.truncated', { limit: FACILITIES_LIST_LIMIT })}
+          </div>
+        )}
+
+        {/* Minor 4: a lab with rows already imported but no published form sees Add/Edit greyed
+            out with no explanation anywhere else on the page — this names the cause and links to
+            the fix. Reuses noFormHelp/openForms (not the `noForm` title) so this stays distinct
+            from the dedicated no-form EMPTY state below: I5 depends on that title never appearing
+            when rows are present. */}
+        {!hasForm && rows.length > 0 && (
+          <div className="mx-4 mt-2 flex flex-wrap items-center justify-between gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700">
+            <span>{t('facilities.noFormHelp')}</span>
+            <Link to="/forms" className="shrink-0 underline underline-offset-2">{t('facilities.openForms')}</Link>
           </div>
         )}
 

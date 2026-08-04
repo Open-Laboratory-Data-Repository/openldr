@@ -144,4 +144,47 @@ describe('FacilityDialog', () => {
     // (which requires Object.hasOwn(answers, field.id)) would never see the clear at all.
     expect(body.answers).toHaveProperty('f-phone', '');
   });
+
+  it('does NOT submit an empty value for a seeded field that is currently HIDDEN by a visibility rule (Important 1)', async () => {
+    // cleanAnswers (forms-runtime/runtime.ts) drops a field for being hidden, not only for being
+    // blanked. Restoring '' for every seeded field regardless of visibility turned an operator never
+    // touching a hidden field into an explicit clear on the very first Save — nulling district here,
+    // or 400ing if the hidden field were name/localCode/nationalCode instead.
+    const schemaWithHiddenField = {
+      ...facilitySchema,
+      fields: [
+        ...facilitySchema.fields,
+        {
+          id: 'f-district', displayLabel: 'District', description: null, fieldType: 'text',
+          apiProperty: 'district', fhirPath: null, required: false, enabled: true, order: 4,
+          cardinality: { min: 0, max: '1' },
+          // Never satisfied: f-name can never equal this sentinel, so f-district stays hidden
+          // throughout the test regardless of what the operator does to other fields.
+          visibility: { combinator: 'all', conditions: [{ fieldId: 'f-name', operator: 'equals', value: '__never__' }] },
+        },
+      ],
+    };
+    (api.getForm as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: FORM_DEFINITION_ID, name: 'Facility', versionLabel: null, fhirResourceType: null, status: 'published', active: true,
+      schema: schemaWithHiddenField, targetPages: ['facilities'], createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z',
+    });
+    const facilityWithDistrict: Facility = { ...editFacility, district: 'Kinondoni' };
+    (api.updateFacility as ReturnType<typeof vi.fn>).mockResolvedValue(facilityWithDistrict);
+    render(<FacilityDialog open facility={facilityWithDistrict} onOpenChange={vi.fn()} onSaved={vi.fn()} />);
+
+    // Confirm the field really is hidden (not merely absent from the schema) before saving.
+    await waitFor(() => expect(screen.getByLabelText('Name')).toHaveValue('Dodoma RRH'));
+    expect(screen.queryByLabelText('District')).not.toBeInTheDocument();
+
+    clickMenuItem(/^save$/i);
+
+    await waitFor(() => expect(api.updateFacility).toHaveBeenCalled());
+    const body = (api.updateFacility as ReturnType<typeof vi.fn>).mock.calls[0][1];
+    expect(body.answers).not.toHaveProperty('f-district');
+
+    // A VISIBLE, untouched field is unaffected by this — FormRuntime's own cleanAnswers already
+    // carries its real value through, confirming the fix narrows the restore loop's blank-'' path
+    // rather than disabling field submission generally.
+    expect(body.answers).toHaveProperty('f-phone', '+255700000000');
+  });
 });

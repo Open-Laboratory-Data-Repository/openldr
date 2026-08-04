@@ -715,11 +715,17 @@ export interface FacilitySubmit {
 
 // Client-requested cap for GET /api/facilities. The store's own default (200 rows — see
 // DEFAULT_LIST_LIMIT in packages/db/src/facility-registry-store.ts) is far below what a
-// CSV-imported national register can hold (10-15k rows, per Slice 1). Requesting the server's own
-// MAX_LIST_LIMIT (facilities-routes.ts) explicitly turns a silent 200-row cut into a visible one —
-// Facilities.tsx compares the returned row count against this same constant and tells the operator
-// when the list was capped, instead of presenting 200 rows as the whole registry.
-export const FACILITIES_LIST_LIMIT = 20000;
+// CSV-imported national register can hold (10-15k rows, per Slice 1), and a silent 200-row cut is
+// its own defect (see Facilities.tsx's `truncated` banner, which compares the returned row count
+// against this same constant). But this page renders every row into the DOM — one `TableRow` with
+// its own Radix `DropdownMenu` trigger each — with no pagination or virtualization (both explicitly
+// out of scope for this slice); requesting the server's own MAX_LIST_LIMIT (20000,
+// facilities-routes.ts) would turn a 10-15k-row register into a ~100k-node synchronous render, i.e.
+// a page that's honest about being capped but too sluggish to use. 2000 is the deliberate middle
+// ground: comfortably above the row count of most labs (so the truncation banner stays rare in
+// practice), while keeping the render small enough to stay responsive without either of those
+// bigger features.
+export const FACILITIES_LIST_LIMIT = 2000;
 export const listFacilities = (): Promise<Facility[]> =>
   apiGet(`/api/facilities?limit=${FACILITIES_LIST_LIMIT}`, 'list facilities');
 export const createFacility = (body: FacilitySubmit): Promise<Facility> =>

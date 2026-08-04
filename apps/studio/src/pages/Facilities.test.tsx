@@ -1,3 +1,4 @@
+import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
@@ -158,6 +159,10 @@ describe('Facilities page', () => {
     // A silent cap is the defect (see I1) — hitting FACILITIES_LIST_LIMIT must say so plainly,
     // not just render exactly as many rows as fit and leave the operator to guess.
     expect(screen.getByText(/showing the first/i)).toBeInTheDocument();
+    // Minor 6: the loose /showing the first/i match above would still pass if `{{limit}}` rendered
+    // literally instead of interpolating — assert on the actual number so a broken interpolation
+    // fails this test.
+    expect(screen.getByText(new RegExp(`showing the first ${FACILITIES_LIST_LIMIT} facilities`, 'i'))).toBeInTheDocument();
   });
 
   it('I1: does not warn when the list is comfortably under the cap', async () => {
@@ -203,5 +208,51 @@ describe('Facilities page', () => {
       fireEvent.click(cell.closest('tr')!);
       expect(screen.queryByText(/edit facility/i)).not.toBeInTheDocument();
     });
+  });
+
+  it('Minor 4: names the cause inline when rows exist but no facility form is published', async () => {
+    // Distinct from I5 (which only pins that the TABLE keeps rendering): a lab in this exact state
+    // sees Add and the row Edit item both greyed out with nothing else on the page explaining why —
+    // this banner is that explanation.
+    (listPublishedForms as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (listFacilities as ReturnType<typeof vi.fn>).mockResolvedValue([sampleFacility]);
+    show();
+    await waitFor(() => expect(screen.getByText('Dodoma Regional Referral')).toBeInTheDocument());
+    // Reuses the noFormHelp body text, NOT the noForm title — the title ("No facility form is
+    // published.") is reserved for the dedicated empty state and must stay absent here, exactly
+    // what the existing I5 assertion above already locks in.
+    expect(screen.getByText(/entered through a published form targeting the Facilities page/i)).toBeInTheDocument();
+    expect(screen.queryByText(/no facility form/i)).not.toBeInTheDocument();
+  });
+
+  it('Minor 4: does not show the banner once a form is published, even with rows present', async () => {
+    (listPublishedForms as ReturnType<typeof vi.fn>).mockResolvedValue([publishedFacilityForm]);
+    (listFacilities as ReturnType<typeof vi.fn>).mockResolvedValue([sampleFacility]);
+    show();
+    await waitFor(() => expect(screen.getByText('Dodoma Regional Referral')).toBeInTheDocument());
+    expect(screen.queryByText(/entered through a published form targeting the Facilities page/i)).not.toBeInTheDocument();
+  });
+
+  it('Minor 7: does not let the truncation banner outlive a later failed reload', async () => {
+    (listPublishedForms as ReturnType<typeof vi.fn>).mockResolvedValue([publishedFacilityForm]);
+    const capped: Facility[] = Array.from({ length: FACILITIES_LIST_LIMIT }, (_, i) => ({
+      ...sampleFacility, id: `f${i}`, localCode: `LAB0${i}`, name: `Facility ${i}`,
+    }));
+    // React 18 StrictMode double-invokes mount effects (no cleanup is returned from the reload
+    // effect, so nothing undoes the first call — it just fires twice against the same mounted
+    // state). That's the realistic way a SECOND reload lands on this page without adding a retry
+    // affordance that's out of scope for this round: the first of the two calls succeeds and hits
+    // the cap, the second fails.
+    (listFacilities as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(capped)
+      .mockRejectedValueOnce(new Error('network blip'));
+
+    render(<React.StrictMode><MemoryRouter><Facilities /></MemoryRouter></React.StrictMode>);
+
+    await waitFor(() => expect(screen.getByText(/network blip/i)).toBeInTheDocument());
+    // The failed reload never got to re-measure the row count it's claiming — a stale `true` left
+    // over from the earlier successful call would keep the banner up describing data this attempt
+    // never saw.
+    expect(screen.queryByText(/showing the first/i)).not.toBeInTheDocument();
   });
 });

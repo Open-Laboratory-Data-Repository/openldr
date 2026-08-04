@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { createFacility, updateFacility, listPublishedForms, getForm, type Facility } from '@/api';
 import { FormRuntime } from '@/forms-runtime/FormRuntime';
+import { visibleIds } from '@/forms-runtime/runtime';
 import type { FormSchema, RuntimeAnswers } from '@/forms-runtime/types';
 import { FormSchema as FormSchemaZ } from '@openldr/forms/pure';
 // A dedicated subpath (NOT the package root, which pulls in `pg`/kysely and the rest of the
@@ -34,13 +35,17 @@ interface FacilityDialogProps {
  *   - apiProperty set but NOT core       → extras[apiProperty].
  *   - no apiProperty at all              → extras[field.id].
  *
- * The last case matters as much as the first two: a field with no apiProperty (the Facility form
- * shipped several) is never a record column, so skipping it here — as an earlier version of this
- * function did — means Edit-then-Save-without-touching submits no answer for that field at all,
- * and PUT replaces `extras` wholesale, silently deleting it. Using CORE_FACILITY_KEYS (rather than
- * `Object.hasOwn(asRecord, ap)`) also keeps this in lockstep with the server's own key set — the
- * facility object's own `id`/`extras`/`managedOrigin`/`source` fields are NOT core columns a form
- * can target, but `Object.hasOwn` on the object would have matched them anyway.
+ * The last case matters as much as the first two: a field with no apiProperty is never a record
+ * column, so skipping it here — as an earlier version of this function did — means
+ * Edit-then-Save-without-touching submits no answer for that field at all, and PUT replaces
+ * `extras` wholesale, silently deleting it. The 8-field Facility form seeded by migration 071 gives
+ * every field a core apiProperty, so this path is inert on it today; it matters for an
+ * operator-authored field added later in the builder that maps to no core column (the historical
+ * pre-071 seed shipped several such fields, which is where this guard was first proven necessary).
+ * Using CORE_FACILITY_KEYS (rather than `Object.hasOwn(asRecord, ap)`) also keeps this in lockstep
+ * with the server's own key set — the facility object's own `id`/`extras`/`managedOrigin`/`source`
+ * fields are NOT core columns a form can target, but `Object.hasOwn` on the object would have
+ * matched them anyway.
  */
 function seedAnswers(schema: FormSchema, facility: Facility): RuntimeAnswers {
   const answers: RuntimeAnswers = {};
@@ -125,10 +130,22 @@ export function FacilityDialog({ open, onOpenChange, facility, onSaved }: Facili
       // one the form never asked about, and the route's whole clear path is unreachable from here:
       // Save silently keeps the stale value. Restore an explicit '' for every field this dialog
       // seeded a value for (initialAnswers) that has no value in the cleaned submission.
+      //
+      // BUT cleanAnswers also drops a field for being HIDDEN (a visibility rule), not only for being
+      // blanked — and a seeded field can be hidden on load without the operator ever touching it (an
+      // operator-customised form with a visibility rule, or a section rule; the shipped 8-field
+      // Facility form has none, so this never fires there). Restoring '' unconditionally for every
+      // seeded field turned a merely-hidden field into an explicit clear on the very first Save,
+      // which the route then nulls, 400s on (a hidden `name` or the local/national code CHECK), or
+      // both. Intersect with the CURRENTLY visible fields — computed off this same cleaned `answers`,
+      // the same values FormRuntime itself just used to decide what's visible — so only a field the
+      // operator could actually see and blank is treated as cleared; a hidden field's stored value is
+      // left alone, same as before the I2 fix.
       const submitAnswers: Record<string, unknown> = { ...answers };
       if (isEdit) {
+        const visible = visibleIds(schema, answers);
         for (const fieldId of Object.keys(initialAnswers)) {
-          if (!Object.hasOwn(submitAnswers, fieldId)) submitAnswers[fieldId] = '';
+          if (visible.has(fieldId) && !Object.hasOwn(submitAnswers, fieldId)) submitAnswers[fieldId] = '';
         }
       }
       const body = { answers: submitAnswers, formSchemaId: formDefId, formVersion: schema.version };
