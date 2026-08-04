@@ -33,12 +33,24 @@ Consequences today: `q-amr-facility-summary` and the `q-facilities` filter are e
 ## 2. Decisions taken (user)
 
 1. **Organization is the facility.** One `Organization` per institution, carrying the local code as
-   an identifier and the address. `Location`, if used at all, is a bench/room *inside* it. Chosen
-   because the data arrives as an institution, not a room, and because only Organization can
-   plausibly carry an address.
-2. **CE-only, keyed on what we actually have.** No national facility list is available, so the
-   registry reconciles against the observed display names. The national code is an **optional**
-   field that stays empty until such a list exists.
+   an identifier and the address. `Location`, if used at all, is a bench/room *inside* it.
+   ⚠ **REVISIT — one of the two reasons given for this was FALSE.** "Only Organization can
+   plausibly carry an address" is wrong: `Location.address` exists in CE's own FHIR schema
+   (`packages/fhir` Location, `address: Address.optional()`), and the shipped Facility form already
+   maps `address.country` / `address.district` / `address.state` onto a **Location**. The surviving
+   reason (the data arrives as an institution, not a room) is real but weaker, and **every existing
+   consumer anchors on Location** — the Facility form (§2a), the DHIS2 Org Units tab
+   (`listByType('Location')`), and `bootstrap/index.ts:1323`. Choosing Organization means migrating
+   all of them; see §4 trap 4. Settle this before slice 1.
+2. **CE-only, keyed on what we actually have.**
+   ⚠ **CORRECTION — a national list DOES exist.** Tanzania's HFR publishes **14,209 facilities**
+   with exactly the fields this registry wants: facility code (`122023-5`), name, type
+   (`Level IA2 (Dispensary Laboratory)`), region, council, ownership, operating status, address
+   (Zone–Region–District–Council–Ward–Village) and phone. **What is missing is a BULK EXPORT** —
+   records are viewable and printable one at a time, not downloadable as a set. So the national code
+   is not unavailable, it is *unbatchable*: it has to be attached per facility, by hand or by a
+   per-record fetch. That makes the reconciliation screen (§3) more important, not less — it becomes
+   the place an operator pastes an MFL code the first time a facility is seen.
 3. **The registry IS a set of FHIR `Organization` resources**, edited in Studio, versioned through
    `change_log` and projected to `facilities` — reusing existing machinery and syncing for free.
 4. **The upstream toolchain is out of scope**; its requirement is documented here (§6).
@@ -46,6 +58,36 @@ Consequences today: `q-amr-facility-summary` and the `q-facilities` filter are e
 Explicitly **not** a goal: DHIS2 org-unit alignment. DHIS2 is not a core CE feature, and
 facility-level AMR is not identifiable from this source. Closing BUG 11 would be a *consequence* of
 a coded facility arriving upstream, not a driver of this work.
+
+## 2a. ⚠ A Facility form ALREADY EXISTS — and it has a defect
+
+`packages/forms/src/samples/forms.ts` seeds a published **Facility** form
+(`id: 'sample-facility'`, "drives the facilities management page") with exactly the shape this spec
+was about to design:
+
+| Field | fhirPath |
+|---|---|
+| Name (required) | `name` |
+| **Local ID** | `identifier.value` |
+| **MFL ID** | `identifier.value` |
+| Level | `physicalType` |
+| Country / District / Region | `address.country` / `address.district` / `address.state` |
+| Phone | `telecom.value` |
+
+Two things follow.
+
+1. **`fhirResourceType: 'Location'`** — the existing model already chose Location, contradicting §2
+   decision 1.
+2. **⛔ `Local ID` and `MFL ID` write to the SAME `fhirPath`** (`identifier.value`) with **no
+   `identifier.system` to tell them apart.** The one form meant to carry the local↔national code
+   pair therefore cannot distinguish them: on write they collide, and on read there is no way to
+   know which identifier is which. This is the single most load-bearing defect for the whole
+   registry — the local→national mapping is *exactly* these two values — and it must be fixed
+   before the form is used to capture anything real.
+
+So the registry is further along than §1 suggests: the capture surface exists. What is missing is a
+distinguishable identifier system, a resolver so the form's facilities can be *referenced* from a
+lab order (§4a), and reconciliation for the legacy strings.
 
 ## 3. Shape
 

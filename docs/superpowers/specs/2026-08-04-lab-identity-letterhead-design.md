@@ -160,6 +160,31 @@ top-right. A rule closes the header (spec band 3, currently missing).
 - Settings route + CLI round-trip; i18n parity.
 - Seed: `rt-clinical-micro` band 1 references the identity tokens and nothing overprints.
 
+## 7a. ⚠ KNOWN GAP — this assumes one install = one lab
+
+Shipped, and correct for a **lab node**. It is wrong in two situations, both of which exist:
+
+1. **A central node is not a laboratory.** It aggregates enrolled sites and may sit in a data
+   centre owned by nobody clinical. `Settings ▸ Laboratory` invites an operator to give it a name
+   and address it does not have — and a report rendered *on* the central about lab X's data would
+   carry the central's letterhead, which is **actively misleading**: it attributes the result to
+   the wrong institution. `sync_sites` already holds each enrolled lab's `name`, so the data to do
+   better exists.
+2. **One install can serve several LIS feeds / several labs.** Even off a central, a single CE can
+   ingest from more than one laboratory, and a fixed install-level identity cannot say which one
+   issued a given report.
+
+**The shape of the fix (not designed, not built):** identity becomes *resolved per report run*
+rather than fixed per install — something like `report parameter → the data's own site/facility →
+install default`. That folds into the facility registry: once facilities are records with a name and
+address, "the issuing lab" is a reference into that registry rather than a fourth copy of the same
+four fields. It also reopens the "designate one registry entry as this lab" option, which was
+declined for the single-lab case and is the natural answer for the multi-lab one.
+
+Until then the install-level identity is the default and only source, and **an operator running a
+central should leave it blank** — the tokens resolve to empty and the letterhead simply does not
+print, which is the honest outcome.
+
 ## 8. Out of scope
 
 Multi-site identity (one identity per install; a central node does not learn its labs' letterheads
