@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { type Kysely, sql } from 'kysely';
 import { valueSetToFhirResource } from '../../fhir-value-set';
 import { NEW_FIELDS_SNAPSHOT } from './071_facility_form_target';
@@ -130,6 +131,76 @@ const LEVEL_CONCEPTS: [string, string][] = [
   ['gym', 'Gym'],
 ];
 
+// Marker stamped into a NEWLY-inserted concept's `properties` so down() can tell "up() inserted this
+// row" apart from "this (system, code) pair already existed under a system we don't own outright"
+// (STATUS_SYSTEM is FHIR's own `location-status` — a site could plausibly have imported the FHIR core
+// CodeSystem bundle separately, landing a same-code, same-display row before this migration ever ran).
+// `terminology_concepts` inserts go through `onConflict().doNothing()`, so a pre-existing pair is
+// silently skipped, not overwritten — its `properties` (marker included) is whatever it already was.
+// Stored as the STRING "true" (not a JSON boolean) so `properties->>'...'` — Postgres's own textual
+// jsonb-scalar-extraction operator, already used this way in terminology-admin-store.ts's
+// `filterConcepts` — always compares against a plain string, regardless of pg vs pg-mem edge cases in
+// converting a JSON boolean to text.
+const CONCEPT_OWNER_KEY = '__migration072Owned';
+
+// One SELECT to snapshot which of `concepts`' (system, code) pairs already exist, then ONE batched
+// INSERT for the whole list — never a per-row loop (see the batching note on the insert below). Only
+// codes NOT already present get the ownership marker; a pre-existing row's insert values are moot
+// anyway since onConflict().doNothing() discards them.
+async function insertOwnedConcepts(seedDb: Kysely<any>, system: string, concepts: [string, string][]): Promise<void> {
+  const codes = concepts.map(([code]) => code);
+  const existing = await seedDb
+    .selectFrom('terminology_concepts')
+    .select('code')
+    .where('system', '=', system)
+    .where('code', 'in', codes)
+    .execute();
+  const preexisting = new Set(existing.map((r: { code: string }) => r.code));
+
+  // Batched as ONE multi-row insert rather than looping an awaited insert per concept — 63+3
+  // sequential round trips across every table in this migration was measurably slow enough to tip
+  // otherwise-unrelated tests over their 5s timeout when running the whole migrations directory
+  // (every test in it calls makeMigratedDb(), which runs every migration including this one). Each
+  // row is independently unique, so ON CONFLICT DO NOTHING over the whole statement behaves
+  // identically to the per-row loop.
+  await seedDb.insertInto('terminology_concepts').values(
+    concepts.map(([code, display]) => ({
+      system,
+      code,
+      display,
+      status: 'ACTIVE',
+      properties: preexisting.has(code) ? null : (JSON.stringify({ [CONCEPT_OWNER_KEY]: 'true' }) as never),
+    })) as never,
+  ).onConflict((oc) => oc.columns(['system', 'code']).doNothing()).execute();
+}
+
+// Unlike 069_result_role_valuesets.ts's seeds — which carry NO expansion, so a missing
+// `fhir.change_log` row is harmless (see that file's comment) — these two ValueSets DO carry an
+// expansion (`valueSetToFhirResource` is passed the concept list below), so a canonical
+// `fhir.fhir_resources` row with no accompanying `change_log` entry would be invisible to the
+// incremental projection (`fetchSafeChangeRows` only ever reads `where seq > cursor` on change_log).
+// That is precisely the defect that forced an `openldr terminology reproject` backfill for migration
+// 014's seeds (see packages/bootstrap/src/seed.ts's AST-interpretation comment) — so, unlike 069,
+// up() writes the row itself here, mirroring the shape fhir-store.ts's writeVersion()/save() write
+// (resource_type, resource_id, version, op, content_hash, site_id). `change_log.seq` is a bare
+// bigserial with no natural unique constraint for `onConflict` to key off, so this is guarded by an
+// explicit existence check instead — a re-run of up() must not append a duplicate entry.
+async function seedChangeLogRow(seedDb: Kysely<any>, id: string, resource: unknown): Promise<void> {
+  const already = await seedDb
+    .selectFrom('fhir.change_log')
+    .select('seq')
+    .where('resource_type', '=', 'ValueSet')
+    .where('resource_id', '=', id)
+    .executeTakeFirst();
+  if (already) return;
+
+  const serialized = JSON.stringify(resource);
+  const contentHashHex = createHash('sha256').update(serialized).digest('hex');
+  await seedDb.insertInto('fhir.change_log').values({
+    resource_type: 'ValueSet', resource_id: id, version: 1, op: 'upsert', content_hash: contentHashHex, site_id: null,
+  } as never).execute();
+}
+
 async function seedStatusValueSet(seedDb: Kysely<any>): Promise<void> {
   const existing = await seedDb
     .selectFrom('coding_systems')
@@ -150,15 +221,7 @@ async function seedStatusValueSet(seedDb: Kysely<any>): Promise<void> {
     } as never).onConflict((oc) => oc.column('url').doNothing()).execute();
   }
 
-  // Batched as ONE multi-row insert rather than looping an awaited insert per concept — 63+3
-  // sequential round trips across every table in this migration was measurably slow enough to tip
-  // otherwise-unrelated tests over their 5s timeout when running the whole migrations directory
-  // (every test in it calls makeMigratedDb(), which runs every migration including this one). Each
-  // row is independently unique, so ON CONFLICT DO NOTHING over the whole statement behaves
-  // identically to the per-row loop.
-  await seedDb.insertInto('terminology_concepts').values(
-    STATUS_CONCEPTS.map(([code, display]) => ({ system: STATUS_SYSTEM, code, display, status: 'ACTIVE', properties: null })) as never,
-  ).onConflict((oc) => oc.columns(['system', 'code']).doNothing()).execute();
+  await insertOwnedConcepts(seedDb, STATUS_SYSTEM, STATUS_CONCEPTS);
 
   const compose = { include: [{ system: STATUS_SYSTEM, concept: STATUS_CONCEPTS.map(([code, display]) => ({ code, display })) }] };
   await seedDb.insertInto('value_sets').values({
@@ -181,6 +244,7 @@ async function seedStatusValueSet(seedDb: Kysely<any>): Promise<void> {
   await seedDb.insertInto('fhir.fhir_resources').values({
     id: STATUS_VS_ID, resource_type: 'ValueSet', resource: JSON.stringify(resource),
   } as never).onConflict((oc) => oc.columns(['resource_type', 'id']).doNothing()).execute();
+  await seedChangeLogRow(seedDb, STATUS_VS_ID, resource);
 
   await seedDb.insertInto('terminology_systems').values({
     url: STATUS_VS_URL, version: null, kind: 'ValueSet', resource_id: STATUS_VS_ID,
@@ -193,14 +257,11 @@ async function seedLevelValueSet(seedDb: Kysely<any>): Promise<void> {
   // landed there, any collision with a future local-system code would be silently dropped.
   await seedDb.insertInto('coding_systems').values({
     id: LEVEL_CS_ID, system_code: 'FACILITY-TYPE', system_name: 'OpenLDR Facility Type Codes',
-    url: LEVEL_SYSTEM, system_version: null, description: 'HFR facility-type codes for the Facility form’s Level field.',
+    url: LEVEL_SYSTEM, system_version: null, description: "HFR facility-type codes for the Facility form's Level field.",
     active: true, publisher_id: LEVEL_PUBLISHER, seeded: true,
   } as never).onConflict((oc) => oc.column('url').doNothing()).execute();
 
-  // Batched for the same reason as seedStatusValueSet's concepts above.
-  await seedDb.insertInto('terminology_concepts').values(
-    LEVEL_CONCEPTS.map(([code, display]) => ({ system: LEVEL_SYSTEM, code, display, status: 'ACTIVE', properties: null })) as never,
-  ).onConflict((oc) => oc.columns(['system', 'code']).doNothing()).execute();
+  await insertOwnedConcepts(seedDb, LEVEL_SYSTEM, LEVEL_CONCEPTS);
 
   const compose = { include: [{ system: LEVEL_SYSTEM, concept: LEVEL_CONCEPTS.map(([code, display]) => ({ code, display })) }] };
   await seedDb.insertInto('value_sets').values({
@@ -220,6 +281,7 @@ async function seedLevelValueSet(seedDb: Kysely<any>): Promise<void> {
   await seedDb.insertInto('fhir.fhir_resources').values({
     id: LEVEL_VS_ID, resource_type: 'ValueSet', resource: JSON.stringify(resource),
   } as never).onConflict((oc) => oc.columns(['resource_type', 'id']).doNothing()).execute();
+  await seedChangeLogRow(seedDb, LEVEL_VS_ID, resource);
 
   await seedDb.insertInto('terminology_systems').values({
     url: LEVEL_VS_URL, version: null, kind: 'ValueSet', resource_id: LEVEL_VS_ID,
@@ -315,7 +377,17 @@ export async function down(db: Kysely<unknown>): Promise<void> {
   await seedDb.deleteFrom('fhir.fhir_resources').where('resource_type', '=', 'ValueSet').where('id', 'in', [STATUS_VS_ID, LEVEL_VS_ID]).execute();
   await seedDb.deleteFrom('valueset_expansions').where('value_set_id', 'in', [STATUS_VS_ID, LEVEL_VS_ID]).execute();
   await seedDb.deleteFrom('value_sets').where('url', 'in', [STATUS_VS_URL, LEVEL_VS_URL]).execute();
-  await seedDb.deleteFrom('terminology_concepts').where('system', 'in', [STATUS_SYSTEM, LEVEL_SYSTEM]).execute();
+
+  // NOT a bare `system in (...)` delete: up() inserts concepts with `onConflict().doNothing()`, so a
+  // concept that already existed under STATUS_SYSTEM (FHIR's own `location-status` — plausibly
+  // populated by a separate FHIR-core-catalog import before this migration ever ran) is skipped by
+  // up(), not inserted by it. Deleting by system alone would still remove that pre-existing row, and
+  // any OTHER unrelated code an operator later added under either system. Scope to exactly the rows
+  // up() itself inserted, via the ownership marker `insertOwnedConcepts` stamps on them.
+  await seedDb.deleteFrom('terminology_concepts')
+    .where('system', 'in', [STATUS_SYSTEM, LEVEL_SYSTEM])
+    .where(sql`properties->>${CONCEPT_OWNER_KEY}`, '=', 'true')
+    .execute();
 
   // LEVEL_CS_ID is always OUR row (urn:openldr:cs:facility-type never existed before this
   // migration) — unambiguous to delete outright.

@@ -48,9 +48,24 @@ describe('admin.valueSets.delete reaches the projection (F3)', () => {
       compose: { include: [{ system: 'urn:sys', concept: [{ code: 'A', display: 'Alpha' }] }] },
     });
 
-    // Project the save (upsert) so terminology_codes actually holds rows to delete.
+    // Project the save (upsert) so terminology_codes actually holds rows to delete. Feed the fake
+    // fetch EVERY change_log row that exists so far (all with a safe xid), not just a single
+    // hardcoded `seq: 1` row for our own resource — migration 072 now seeds two of its own
+    // fhir.change_log rows ahead of this test (both its ValueSets carry an expansion, so they must
+    // be reachable by the projection; see that migration's `seedChangeLogRow`), so a freshly migrated
+    // pg-mem db no longer starts change_log empty. planProjection treats any seq in (cursor, maxSeq]
+    // that is NOT present in the returned rows as an unconfirmed gap and refuses to advance the
+    // cursor past it — a fetch that silently omitted those two real, already-committed rows would
+    // manufacture a phantom gap and starve this cycle of any task.
+    const allRows = await internalDb
+      .selectFrom('fhir.change_log')
+      .select(['seq', 'resource_type', 'resource_id', 'op'])
+      .orderBy('seq')
+      .execute();
     const upsertFetch: FetchSafeRows = async () => ({
-      rows: [{ seq: 1, xid: 1, resource_type: 'ValueSet', resource_id: vs.id, op: 'upsert' }],
+      rows: allRows.map((r: { seq: number; resource_type: string; resource_id: string; op: string }) => ({
+        seq: Number(r.seq), xid: 1, resource_type: r.resource_type, resource_id: r.resource_id, op: r.op,
+      })),
       boundary: 100,
       xmax: 200,
     });

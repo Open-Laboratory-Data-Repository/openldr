@@ -137,6 +137,36 @@ describe('072_facility_level_status_valuesets — idempotency', () => {
   });
 });
 
+describe('072_facility_level_status_valuesets — change_log projection reachability', () => {
+  it('writes a fhir.change_log row for each seeded ValueSet (both carry an expansion, unlike 069)', async () => {
+    const db = await makeMigratedDb();
+    const rows = await db.selectFrom('fhir.change_log').select(['resource_type', 'resource_id', 'version', 'op', 'content_hash', 'site_id'])
+      .where('resource_type', '=', 'ValueSet')
+      .where('resource_id', 'in', ['vs-location-status', 'vs-facility-type'])
+      .execute();
+    expect(rows).toHaveLength(2);
+    for (const r of rows) {
+      expect(r.op).toBe('upsert');
+      expect(r.version).toBe(1);
+      expect(typeof r.content_hash).toBe('string');
+      expect((r.content_hash as string).length).toBe(64); // sha256 hex, matches fhir-store.ts's contentHash()
+    }
+    await db.destroy();
+  });
+
+  it('running up() twice does not duplicate the change_log rows', async () => {
+    const db = await makeMigratedDb(); // 072 already ran once via makeMigratedDb()
+    await up(db);
+
+    const rows = await db.selectFrom('fhir.change_log').select(['seq'])
+      .where('resource_type', '=', 'ValueSet')
+      .where('resource_id', 'in', ['vs-location-status', 'vs-facility-type'])
+      .execute();
+    expect(rows).toHaveLength(2);
+    await db.destroy();
+  });
+});
+
 const seededForm = (over: Record<string, unknown> = {}) => ({
   id: 'form-sample-facility', name: 'Facility', version_label: 'v1',
   fhir_resource_type: 'Location', fhir_version: 'R4', status: 'published', active: true,
@@ -256,6 +286,39 @@ describe('072_facility_level_status_valuesets — form repoint down()', () => {
   it('is a no-op when no seeded form exists', async () => {
     const db = await makeMigratedDb();
     await expect(down(db)).resolves.not.toThrow();
+    await db.destroy();
+  });
+});
+
+describe('072_facility_level_status_valuesets — down() concept ownership', () => {
+  it('does NOT delete a PRE-EXISTING concept sharing a seeded (system, code) pair', async () => {
+    const db = await makeMigratedDb(); // 072 already ran once via makeMigratedDb()
+
+    // Simulate: 'active' under STATUS_SYSTEM existed BEFORE up() ever ran (e.g. imported separately
+    // from the FHIR core CodeSystem bundle) — swap out the row up() inserted for one that predates it.
+    await db.deleteFrom('terminology_concepts')
+      .where('system', '=', 'http://hl7.org/fhir/location-status').where('code', '=', 'active').execute();
+    await db.insertInto('terminology_concepts' as never).values({
+      system: 'http://hl7.org/fhir/location-status', code: 'active', display: 'Active (pre-existing)',
+      status: 'ACTIVE', properties: null,
+    } as never).execute();
+
+    await up(db); // re-run: onConflict().doNothing() skips 'active' (already exists) — up() does not own it
+    await down(db);
+
+    const preExisting = await db.selectFrom('terminology_concepts').select(['display'])
+      .where('system', '=', 'http://hl7.org/fhir/location-status').where('code', '=', 'active').executeTakeFirst();
+    expect(preExisting?.display).toBe('Active (pre-existing)'); // survived down()
+
+    // The genuinely up()-owned siblings ARE removed.
+    const remaining = await db.selectFrom('terminology_concepts').select(['code'])
+      .where('system', '=', 'http://hl7.org/fhir/location-status').execute();
+    expect(remaining.map((r: any) => r.code).sort()).toEqual(['active']);
+
+    // LEVEL_SYSTEM is a brand-new space with no pre-existing rows — down() removes everything up() owns.
+    const levelRemaining = await db.selectFrom('terminology_concepts').select(['code'])
+      .where('system', '=', 'urn:openldr:cs:facility-type').execute();
+    expect(levelRemaining).toHaveLength(0);
     await db.destroy();
   });
 });
