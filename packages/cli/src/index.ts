@@ -18,7 +18,7 @@ import { runTargetStoreTest } from './target-store';
 import { runTerminologyImport, runTerminologyLookup, runTerminologyValidate, runTerminologyExpand, runTerminologyTranslate, runPublisherList, runPublisherCreate, runSystemList, runSystemCreate, runTermList, runValueSetList, runTerminologyReproject, runOntologyBuild, runOntologyRebuild, runOntologyList, runOntologyUnlink, runDistributionImport, runDistributionPurge } from './terminology';
 import { runMarketVerify, runMarketInstall, runMarketList, runMarketRollback, runMarketEnable, runMarketDisable, runMarketRemove } from './market';
 import { runArtifactKeygen, runArtifactNew, runArtifactBuild, runArtifactPack, runArtifactSign, runArtifactTest, runArtifactPublish } from './artifact';
-import { runSettingsFlagsList, runSettingsFlagsSet, runSettingsDanger, runSettingsSyncShow, runSettingsSyncSet, runSettingsNumbersList, runSettingsNumbersSet, runSettingsValidationShow, runSettingsValidationSet } from './settings';
+import { runSettingsFlagsList, runSettingsFlagsSet, runSettingsDanger, runSettingsSyncShow, runSettingsSyncSet, runSettingsNumbersList, runSettingsNumbersSet, runSettingsValidationShow, runSettingsValidationSet, runSettingsLabShow, runSettingsLabSet } from './settings';
 import { runRolesList, runRolesShow, runRolesCreate, runRolesEdit, runRolesDelete, runRolesGrant, runRolesRevoke, runRolesDoctor, runUserAssignRole, runUserUnassignRole } from './roles';
 import { runDataExposureList, runDataExposureHide, runDataExposureShow } from './data-exposure';
 import { runSyncStatus, runSyncNow, runSyncEnroll, runSyncList, runSyncRotate, runSyncRevoke, runSyncAmend, runSyncMergePatient, runSyncExport, runSyncImport, runSyncQuarantineList, runSyncQuarantineRetry, runSyncDivergenceList, runSyncDivergenceShow, runSyncDivergenceClear } from './sync';
@@ -143,6 +143,17 @@ numbers.command('set <key> <value>').description('Set a number setting (clamped 
   .action(async (key: string, value: string, opts: { json: boolean }) => {
     try { process.exitCode = await runSettingsNumbersSet(key, value, opts); } catch (err) { process.stderr.write(`settings numbers set failed: ${redactError(err)}\n`); process.exitCode = 1; }
   });
+const lab = settings.command('lab').description("The issuing laboratory's identity — the report letterhead");
+lab.command('show').description('Show the configured lab identity').option('--json', 'emit JSON', false)
+  .action(async (o) => { process.exitCode = await runSettingsLabShow(o); });
+lab.command('set').description('Set one or more lab identity fields')
+  .option('--name <name>', 'laboratory name')
+  .option('--address <address>', 'postal address (use \n for line breaks)')
+  .option('--contact <contact>', 'phone / email / accreditation line')
+  .option('--logo-file <path>', 'PNG, JPEG or WebP file to store as the logo (empty string clears)')
+  .option('--json', 'emit JSON', false)
+  .action(async (o) => { process.exitCode = await runSettingsLabSet(o); });
+
 const sync = settings.command('sync').description('Lab⇄central sync config (writes the discrete sync.* keys the workers read)');
 sync.command('show').description('Show the current sync configuration').option('--json', 'emit JSON', false)
   .action(async (opts: { json: boolean }) => {

@@ -311,3 +311,44 @@ describe('PageCanvas barcode and QR', () => {
     expect(container.querySelector('.border-dashed')).toBeTruthy();
   });
 });
+
+describe('PageCanvas letterhead tokens', () => {
+  const tpl = (el: Partial<import('./types').DesignElement>): ReportTemplate => ({
+    id: 't', name: 't', paper: 'A4', orientation: 'portrait', parameters: [],
+    pages: [{ id: 'p1', elements: [{
+      id: 'e', kind: 'text', name: 'El', rect: { x: 0, y: 0, w: 300, h: 20 }, ...el,
+    } as import('./types').DesignElement] }],
+  });
+  const show = (el: Partial<import('./types').DesignElement>, identity?: Record<string, string>) =>
+    render(<PageCanvas template={tpl(el)} zoom={1} selectedIds={[]} onSelect={vi.fn()}
+      onCommitRects={vi.fn()} identity={identity} />);
+
+  it('resolves {{lab.*}} so the letterhead is visible while it is positioned', () => {
+    const { container } = show({ text: '{{lab.name}}' }, { name: 'Muhimbili' });
+    expect(within(container).getByText('Muhimbili')).toBeInTheDocument();
+  });
+
+  it('renders an unset identity as blank, not as the literal token', () => {
+    const { container } = show({ text: '{{lab.name}}' });
+    expect(container.textContent).not.toContain('{{');
+  });
+
+  it('leaves {{param.x}} and {{date}} LITERAL — the canvas cannot know a run-time choice', () => {
+    // Deliberate asymmetry: identity is static install-level data the canvas can know; a
+    // parameter's value is chosen when the report is run.
+    const { container } = show({ text: '{{param.site}} {{date}}' }, { name: 'Muhimbili' });
+    expect(container.textContent).toContain('{{param.site}}');
+    expect(container.textContent).toContain('{{date}}');
+  });
+
+  it('resolves a token image src, so the logo previews rather than showing a broken image', () => {
+    const png = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+    const { container } = show({ kind: 'image', src: '{{lab.logo}}' }, { logo: png });
+    expect(container.querySelector('img')?.getAttribute('src')).toBe(png);
+  });
+
+  it('falls back to the image placeholder when the logo is unset', () => {
+    const { container } = show({ kind: 'image', src: '{{lab.logo}}' });
+    expect(container.querySelector('img')).toBeNull();
+  });
+});

@@ -1,7 +1,9 @@
 import type { FastifyInstance } from 'fastify';
+import { z } from 'zod';
 import { readFile } from 'node:fs/promises';
 import type { AppContext } from '@openldr/bootstrap';
 import { dangerResetDashboards, dangerFactoryReset, dangerClearAudit, getSyncConfig, setSyncConfig, enrollSite, listSites, rotateSite, revokeSite, mergePatients } from '@openldr/bootstrap';
+import { LAB_IDENTITY_FIELDS, LAB_LOGO_MAX_BYTES, LAB_LOGO_MIME } from '@openldr/config';
 import { requireCapability } from './rbac';
 import { recordAudit } from './audit-helper';
 
@@ -9,6 +11,15 @@ import { recordAudit } from './audit-helper';
 // everything else — including the bare sync-config GET/PUT, divergence list/detail (detail
 // carries PHI), the site list, and the central-certificate download — stays on sync.manage. These
 // were previously uniformly lab_admin-only, so this is at most equally strict, never looser.
+// Only declared identity keys are accepted; the service validates each VALUE (length, data-URI
+// shape, image type). `.strict()` so a typo'd key is a 400 rather than a silently ignored write.
+const LabIdentityPatchSchema = z.object({
+  'lab.name': z.string().optional(),
+  'lab.address': z.string().optional(),
+  'lab.contact': z.string().optional(),
+  'lab.logo': z.string().optional(),
+}).strict();
+
 const FEATURE_FLAGS = { preHandler: requireCapability('settings.feature_flags') };
 const EDIT_GENERAL = { preHandler: requireCapability('settings.edit_general') };
 const DANGER_ZONE = { preHandler: requireCapability('settings.danger_zone') };
@@ -36,8 +47,48 @@ const defaultDeps: DangerDeps = {
   clearAudit: dangerClearAudit,
 };
 
+/** Which keys differ between two identity snapshots — audited instead of the values, so a
+ *  256KB logo data URI never lands in an audit row. */
+function changedKeys(a: Record<string, string>, b: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const k of new Set([...Object.keys(a), ...Object.keys(b)])) {
+    if (a[k] !== b[k]) out[k] = k === 'lab.logo' ? `<${(a[k] ?? '').length} chars>` : (a[k] ?? '');
+  }
+  return out;
+}
+
 export function registerSettingsRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext, deps: DangerDeps = defaultDeps): void {
   app.get('/api/settings/flags', FEATURE_FLAGS, async () => ctx.featureFlags.all());
+
+  // The issuing laboratory's letterhead identity. NOT secrets, so unlike the `sync.*` keys these
+  // are returned in full — the logo data URI included, because the designer canvas renders it.
+  // Read is gated on `reports.view` rather than `settings.edit_general`: every report author needs
+  // the letterhead to preview a design, and it is printed on documents that leave the building.
+  // Returns the field DEFINITIONS alongside the values, exactly as the feature-flag route does:
+  // `@openldr/config` re-exports an env loader that reads process.env, so it is not browser-safe
+  // and studio must not import the registry directly. The logo limits ride along for the same
+  // reason — the client validates the upload before sending, from ONE source of truth.
+  app.get('/api/settings/lab', { preHandler: requireCapability('reports.view') }, async () => ({
+    fields: LAB_IDENTITY_FIELDS.map((f) => ({ id: f.id, labelKey: f.labelKey, multiline: f.multiline ?? false })),
+    values: await ctx.labIdentity.all(),
+    logo: { maxBytes: LAB_LOGO_MAX_BYTES, mimeTypes: LAB_LOGO_MIME },
+  }));
+
+  app.put('/api/settings/lab', EDIT_GENERAL, async (req, reply) => {
+    const p = LabIdentityPatchSchema.safeParse(req.body);
+    if (!p.success) { reply.code(400); return { error: p.error.message }; }
+    const before = await ctx.labIdentity.all();
+    const errors = await ctx.labIdentity.set(p.data, req.user?.id ?? null);
+    if (errors.length) { reply.code(400); return { error: 'invalid lab identity', details: errors }; }
+    const after = await ctx.labIdentity.all();
+    // The logo is a multi-hundred-KB data URI; auditing the VALUE would bloat every audit row and
+    // tell a reader nothing. Record which keys changed instead.
+    await recordAudit(ctx, req, {
+      action: 'settings.lab.update', entityType: 'settings', entityId: 'lab',
+      before: changedKeys(before, after), after: changedKeys(after, before),
+    });
+    return after;
+  });
 
   // Lab⇄central sync config — writes the discrete `sync.*` app_settings keys the sync workers read
   // (client secret encrypted + write-only). Admin-only + audited, mirrored by `openldr settings sync …`.

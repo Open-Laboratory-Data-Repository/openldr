@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { interpolate, paramMap, tableChunkCount, pageChunkCount, rowsFor, totalPhysicalPages, pageFooterLabel, cellTextOptions, columnWidths, isNumericColumn, CELL_TEXT_H, ROW_H, asCellStatus, cellStatusesFor, isRightAligned, keyValuePairs, pairRects } from './draw';
+import { interpolate, paramMap, tableChunkCount, pageChunkCount, rowsFor, totalPhysicalPages, pageFooterLabel, cellTextOptions, columnWidths, isNumericColumn, CELL_TEXT_H, ROW_H, asCellStatus, cellStatusesFor, isRightAligned, keyValuePairs, pairRects, elementValue } from './draw';
 import type { ReportDesign, DesignElement, DesignPage } from '../schema';
 import type { ResolvedTable } from './index';
 
@@ -389,5 +389,49 @@ describe('pairRects', () => {
 
   it('returns every pair even when they overflow the box, leaving clipping to the drawer', () => {
     expect(pairRects({ ...box, h: 20 }, 6, 'inline', 1, false)).toHaveLength(6);
+  });
+});
+
+describe('lab identity tokens', () => {
+  const tokens = (identity?: Record<string, string>) =>
+    paramMap(design({ parameters: [{ key: 'site', label: 'Site', type: 'text', value: 'Ndola' }] }), NOW, identity);
+
+  it('resolves each {{lab.*}} token', () => {
+    const t = tokens({ name: 'Muhimbili', address: 'PO Box 65000\nDar es Salaam', contact: '+255 22' });
+    expect(interpolate('{{lab.name}}', t)).toBe('Muhimbili');
+    expect(interpolate('{{lab.address}}', t)).toBe('PO Box 65000\nDar es Salaam');
+    expect(interpolate('{{lab.contact}}', t)).toBe('+255 22');
+  });
+
+  it('resolves an UNSET identity key to empty, not to the literal token', () => {
+    // A design referencing identity must stay valid on an install that never configured it.
+    // Leaving "{{lab.name}}" on the page would print braces onto a clinical report.
+    expect(interpolate('{{lab.name}}', tokens())).toBe('');
+    expect(interpolate('{{lab.name}}', tokens({ contact: 'x' }))).toBe('');
+  });
+
+  it('leaves param and date behaviour exactly as before', () => {
+    const t = tokens({ name: 'Muhimbili' });
+    expect(interpolate('{{param.site}}', t)).toBe('Ndola');
+    expect(interpolate('{{date}}', t)).toBe(NOW.toLocaleDateString());
+  });
+
+  it('⛔ a design PARAMETER cannot shadow the lab identity', () => {
+    // Identity is namespaced and written last. A report whose letterhead could be overwritten by a
+    // parameter value is a forgery risk, not a convenience — so a param called `name` must not
+    // reach {{lab.name}}, and must still reach {{param.name}}.
+    const d = design({ parameters: [{ key: 'name', label: 'Name', type: 'text', value: 'ATTACKER LAB' }] });
+    const t = paramMap(d, NOW, { name: 'Muhimbili' });
+    expect(interpolate('{{lab.name}}', t)).toBe('Muhimbili');
+    expect(interpolate('{{param.name}}', t)).toBe('ATTACKER LAB');
+  });
+
+  it('tolerates whitespace inside the braces, like the existing tokens', () => {
+    expect(interpolate('{{ lab.name }}', tokens({ name: 'M' }))).toBe('M');
+  });
+
+  it('leaves an unknown lab sub-key alone rather than emitting a stray empty string mid-sentence', () => {
+    // `{{lab.motto}}` is not a declared field; it resolves empty like any other unset key.
+    expect(interpolate('A{{lab.motto}}B', tokens({ name: 'M' }))).toBe('AB');
   });
 });

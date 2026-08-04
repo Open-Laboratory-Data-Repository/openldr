@@ -67,7 +67,9 @@ export function registerReportDesignRoutes(
     // (all store access lives inside runStoredQuery, inside resolveDesignTables' per-table catch).
     const resolved = await resolveDesignTables(design, values, (qid, v) => runStoredQuery(deps, qid, v));
 
-    const pdf = await renderReportDesignPdf(design, resolved);
+    // Resolved fresh per preview so a Settings ▸ Laboratory edit shows up on the next render
+    // without a restart — the same contract the other app-settings-backed services have.
+    const pdf = await renderReportDesignPdf(design, resolved, { identity: await ctx.labIdentity.tokens() });
     reply.header('content-type', 'application/pdf');
     reply.header('content-disposition', 'inline; filename="report-design.pdf"');
     return reply.send(pdf);

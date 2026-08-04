@@ -15,6 +15,9 @@ function fakeCtx() {
       remove: async (id: string) => { const i = data.findIndex((x) => x.id === id); if (i >= 0) data.splice(i, 1); },
     },
     audit: { record: async (e: any) => { auditEvents.push(e); return e; } },
+    // The preview route resolves the letterhead per render; an empty identity is the
+    // never-configured install, which is what these table-focused tests mean to exercise.
+    labIdentity: { all: async () => ({}), tokens: async () => ({}), set: async () => [] },
     logger: { error() {}, warn() {}, info() {} },
     __auditEvents: auditEvents,
   } as any;

@@ -16,7 +16,7 @@ import { PageCanvas } from './PageCanvas';
 import { InspectorTabs } from './InspectorTabs';
 import { PreviewReportDesignDialog } from './PreviewReportDesignDialog';
 import { NewReportSheet } from '../reports/NewReportSheet';
-import { createReportDesign, deleteReportDesign, downloadReportDesignPdf, getReportDesign, listReportDesigns, updateReportDesign } from '../api';
+import { createReportDesign, deleteReportDesign, downloadReportDesignPdf, fetchLabIdentity, getReportDesign, listReportDesigns, updateReportDesign } from '../api';
 import { addElement, allElements, newElement, paperSize, removeElements, updateElement, updateElementRects, updateElements } from './model';
 import { clampRectToPage } from './geometry';
 import { exportDesignToExcel } from './exportExcel';
@@ -47,6 +47,22 @@ function stableJson(d: ReportDesign): string {
 
 export function ReportDesignerPage(): JSX.Element {
   const { t } = useTranslation();
+  // Lab identity for `{{lab.*}}` on the canvas — fetched once so the letterhead is VISIBLE while
+  // it is being positioned. Best-effort: a failure just leaves the tokens resolving to empty, which
+  // is the same as an install that has not configured an identity.
+  const [labIdentity, setLabIdentity] = useState<Record<string, string>>({});
+  useEffect(() => {
+    let cancelled = false;
+    void fetchLabIdentity()
+      .then((r) => {
+        if (cancelled) return;
+        const bare: Record<string, string> = {};
+        for (const [k, v] of Object.entries(r.values)) if (v) bare[k.replace(/^lab\./, '')] = v;
+        setLabIdentity(bare);
+      })
+      .catch(() => { /* letterhead simply stays blank on the canvas */ });
+    return () => { cancelled = true; };
+  }, []);
   const { id: routeId } = useParams();
   const navigate = useNavigate();
   const [templates, setTemplates] = useState<ReportDesign[]>([]);
@@ -416,7 +432,8 @@ export function ReportDesignerPage(): JSX.Element {
                 onToggleInspector={() => setInspectorOpen((o) => !o)}
                 onCheck={noop} onDuplicate={noop} onDelete={() => setConfirmDeleteOpen(true)} />
               <PageCanvas template={template} zoom={zoom} selectedIds={selectedIds} onSelect={setSelectedIds} onCommitRects={commitRects}
-                editingId={editingId} onEditStart={startEdit} onEditChange={editChange} onEditEnd={endEdit} />
+                editingId={editingId} onEditStart={startEdit} onEditChange={editChange} onEditEnd={endEdit}
+                identity={labIdentity} />
             </div>
             {/* The inspector is a right-side overlay drawer below lg (toggled from the header and
                 auto-opened on selection) and a static column at lg+ where there's room for all three

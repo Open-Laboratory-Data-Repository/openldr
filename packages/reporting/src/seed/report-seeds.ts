@@ -1965,8 +1965,17 @@ export const SEED_DESIGNS: ReportDesign[] = [
     margins: { top: 32, right: 32, bottom: 32, left: 32 },
     parameters: [{ key: 'request', label: 'Request ID', type: 'text', required: true, value: '' }],
     pages: [{ id: 'p1', elements: [
-      { id: 'lab', kind: 'text', name: 'lab', rect: { x: 40, y: 34, w: 460, h: 16 }, text: 'LABORATORY REPORT', style: { fontSize: 15, bold: true, color: '#0f172a' } },
-      { id: 'title', kind: 'text', name: 'title', rect: { x: 40, y: 56, w: 400, h: 16 }, text: 'MICROBIOLOGY — CULTURE & SENSITIVITY', style: { fontSize: 10, bold: true, color: '#334155' } },
+      // Band 1 — the letterhead. Every value comes from Settings ▸ Laboratory via `{{lab.*}}`;
+      // an install that has not configured its identity renders these BLANK rather than printing
+      // the token, so the design stays valid out of the box.
+      { id: 'logo', kind: 'image', name: 'Lab logo', rect: { x: 40, y: 28, w: 54, h: 54 }, src: '{{lab.logo}}' },
+      { id: 'labname', kind: 'text', name: 'Lab name', rect: { x: 104, y: 30, w: 430, h: 18 }, text: '{{lab.name}}', style: { fontSize: 13, bold: true, color: '#0f172a' } },
+      { id: 'labaddr', kind: 'text', name: 'Lab address', rect: { x: 104, y: 48, w: 430, h: 22 }, text: '{{lab.address}}', style: { fontSize: 7.5, color: '#64748b' } },
+      { id: 'labcontact', kind: 'text', name: 'Lab contact', rect: { x: 104, y: 71, w: 430, h: 13 }, text: '{{lab.contact}}', style: { fontSize: 7.5, color: '#64748b' } },
+      // Band 3 of the reference: a rule closing the identity header. Was missing entirely.
+      { id: 'rule1', kind: 'line', name: 'rule1', rect: { x: 40, y: 92, w: 700, h: 0 }, style: { strokeColor: '#cbd5e1', strokeWidth: 0.75 } },
+      { id: 'lab', kind: 'text', name: 'lab', rect: { x: 40, y: 102, w: 460, h: 16 }, text: 'LABORATORY REPORT', style: { fontSize: 15, bold: true, color: '#0f172a' } },
+      { id: 'title', kind: 'text', name: 'title', rect: { x: 40, y: 124, w: 400, h: 16 }, text: 'MICROBIOLOGY — CULTURE & SENSITIVITY', style: { fontSize: 10, bold: true, color: '#334155' } },
       // The accession barcode a technologist scans. BOUND, not `{{param.request}}`: the design's
       // parameter is the ServiceRequest UUID, so a barcode of it would scan cleanly to the wrong
       // identifier. `lab_number` is the site's own lab number, which is what the specimen carries.
@@ -1978,7 +1987,7 @@ export const SEED_DESIGNS: ReportDesign[] = [
       // with a header row until S4 gave the vocabulary a `keyvalue` panel; the column labels sat
       // above the values in a tinted band, which reads as a spreadsheet fragment rather than a
       // patient header. Two pair columns, so the eight facts fill four lines instead of eight.
-      { id: 'hdr', kind: 'keyvalue', name: 'Patient & specimen', rect: { x: 40, y: 84, w: 700, h: 84 },
+      { id: 'hdr', kind: 'keyvalue', name: 'Patient & specimen', rect: { x: 40, y: 152, w: 700, h: 84 },
         layout: 'inline', panelColumns: 2,
         dataSource: { kind: 'custom-query', queryId: 'q-clinical-micro-header' },
         boundColumns: [
@@ -1994,15 +2003,15 @@ export const SEED_DESIGNS: ReportDesign[] = [
       // Band 4: a titled panel. Stacked, because an organism name ("Klebsiella pneumoniae") is
       // longer than the 40% an inline label would leave it, and it is the one fact on this page a
       // clinician looks for first.
-      { id: 'org', kind: 'keyvalue', name: 'Organism', rect: { x: 40, y: 176, w: 700, h: 58 },
+      { id: 'org', kind: 'keyvalue', name: 'Organism', rect: { x: 40, y: 244, w: 700, h: 58 },
         layout: 'stacked', text: 'ORGANISM ISOLATED', style: { fill: '#334155', strokeColor: '#cbd5e1' },
         dataSource: { kind: 'custom-query', queryId: 'q-clinical-micro-header' },
         boundColumns: [{ key: 'organism', label: 'Isolate', kind: 'label' }] },
-      { id: 'band', kind: 'rect', name: 'band', rect: { x: 40, y: 246, w: 700, h: 20 }, style: { fill: '#334155', strokeColor: '#334155' } },
-      { id: 'bandt', kind: 'text', name: 'bandt', rect: { x: 40, y: 251, w: 420, h: 16 }, text: '   ANTIMICROBIAL SUSCEPTIBILITY', style: { fontSize: 8, bold: true, color: '#ffffff' } },
+      { id: 'band', kind: 'rect', name: 'band', rect: { x: 40, y: 314, w: 700, h: 20 }, style: { fill: '#334155', strokeColor: '#334155' } },
+      { id: 'bandt', kind: 'text', name: 'bandt', rect: { x: 40, y: 319, w: 420, h: 16 }, text: '   ANTIMICROBIAL SUSCEPTIBILITY', style: { fontSize: 8, bold: true, color: '#ffffff' } },
       // Two columns, not three: the interpretation IS the result for a susceptibility test, and
       // carrying the same fact in two renderings is what let them visibly disagree.
-      { id: 'tbl', kind: 'table', name: 'Susceptibility', rect: { x: 40, y: 272, w: 700, h: 300 },
+      { id: 'tbl', kind: 'table', name: 'Susceptibility', rect: { x: 40, y: 340, w: 700, h: 300 },
         dataSource: { kind: 'custom-query', queryId: 'q-clinical-micro-ast' },
         boundColumns: [
           { key: 'test', label: 'Antimicrobial', kind: 'label' },

@@ -371,6 +371,24 @@ export const setFeatureFlag = (key: string, value: boolean): Promise<{ key: stri
   authFetch(`/api/settings/flags/${encodeURIComponent(key)}`, jbody({ value }, 'PUT'))
     .then((r) => okJson<{ key: string; value: boolean }>(r, 'set feature flag'));
 
+/** The issuing lab's letterhead identity, keyed by its `lab.*` app_settings keys. */
+export type LabIdentity = Record<string, string>;
+
+export interface LabIdentityField { id: string; labelKey: string; multiline: boolean }
+/** Field definitions come FROM the server: `@openldr/config` re-exports an env loader that reads
+ *  process.env, so studio cannot import the registry (same reason feature flags work this way). */
+export interface LabIdentityResponse {
+  fields: LabIdentityField[];
+  values: LabIdentity;
+  logo: { maxBytes: number; mimeTypes: string[] };
+}
+
+export const fetchLabIdentity = (): Promise<LabIdentityResponse> =>
+  authFetch('/api/settings/lab').then((r) => okJson<LabIdentityResponse>(r, 'load lab identity'));
+
+export const saveLabIdentity = (patch: LabIdentity): Promise<{ values: LabIdentity }> =>
+  authFetch('/api/settings/lab', jbody(patch, 'PUT')).then((r) => okJson<{ values: LabIdentity }>(r, 'save lab identity'));
+
 export interface NumberSetting {
   id: string;
   labelKey: string;
