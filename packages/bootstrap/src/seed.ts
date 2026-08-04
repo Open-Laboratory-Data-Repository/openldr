@@ -49,9 +49,12 @@ const DEFAULT_CONNECTOR_NAME = 'Target Warehouse (Postgres)';
 const ORDER_FORM_NAME = 'Lab order';
 /** Name of the seeded form that drives the Users management page. */
 const USERS_FORM_NAME = 'Users';
+/** Name of the seeded form that drives the Facilities management page. */
+const FACILITY_FORM_NAME = 'Facility';
 /** The forms that MUST exist on every install regardless of SEED_ON_START (see `seedEssentials`):
- *  the Users-page form and the Lab order form the ingestion workflow binds to. */
-const ESSENTIAL_FORM_NAMES = new Set<string>([USERS_FORM_NAME, ORDER_FORM_NAME]);
+ *  the Users-page form, the Facilities-page form, and the Lab order form the ingestion workflow
+ *  binds to. */
+const ESSENTIAL_FORM_NAMES = new Set<string>([USERS_FORM_NAME, ORDER_FORM_NAME, FACILITY_FORM_NAME]);
 
 /** Name for the MSSQL target-warehouse connector — distinct from DEFAULT_CONNECTOR_NAME so the
  *  two warehouse connectors are identifiable by name. `seedDataDrivenReports` resolves EITHER name
@@ -239,12 +242,13 @@ async function enableIngestWorkflow(app: EssentialSeedTarget, existing: Workflow
   return true;
 }
 
-// The ALWAYS-seeded minimum, independent of SEED_ON_START: the Users-page form, the Lab order
-// form, the unified ingestion workflow (+ its reactive companion) bound to it, and the default
-// target-warehouse connector. These are NOT optional demo data — the Users page can't render
-// without a published 'users'-targeted form, the ingest workflow's form branch can't validate
-// without the "Lab order" form, and the Query page can't run without a connector — so a fresh
-// install with SEED_ON_START=false must still get them. Deliberately mirrors the unconditional
+// The ALWAYS-seeded minimum, independent of SEED_ON_START: the Users-page form, the Facilities-page
+// form, the Lab order form, the unified ingestion workflow (+ its reactive companion) bound to it,
+// and the default target-warehouse connector. These are NOT optional demo data — the Users page
+// can't render without a published 'users'-targeted form, the Facilities page likewise needs a
+// published 'facilities'-targeted form, the ingest workflow's form branch can't validate without
+// the "Lab order" form, and the Query page can't run without a connector — so a fresh install with
+// SEED_ON_START=false must still get them. Deliberately mirrors the unconditional
 // `roles.seedSystemRoles()` boot-time seed (see createAppContext): idempotent (forms deduped by
 // name, workflows by id, connector by name), so it's safe to run on every boot and re-run
 // alongside the full seed.

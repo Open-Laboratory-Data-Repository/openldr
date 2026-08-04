@@ -23,6 +23,7 @@
     "@dnd-kit/utilities": "^3.2.2",
     "@glideapps/glide-data-grid": "^6.0.3",
     "@openldr/dashboards": "workspace:*",
+    "@openldr/db": "workspace:*",
     "@openldr/forms": "workspace:*",
     "@openldr/plugin-ui-sdk": "workspace:*",
     "@openldr/rbac": "workspace:*",

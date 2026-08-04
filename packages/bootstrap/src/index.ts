@@ -9,7 +9,7 @@ import { createS3Bucket } from '@openldr/adapter-s3-bucket';
 import { toS3BucketConfig } from './s3-config';
 import type { Config } from '@openldr/config';
 import { createLogger, HealthRegistry, open, seal, parseSecretKey, redact, type Logger } from '@openldr/core';
-import { createInternalDb, createFhirStore, createRelationalWriter, persistResources, createTerminologyStore, createTerminologyAdminStore, createOntologyStore, createReportRunStore, createReportScheduleStore, createMarketplaceInstallStore, createRegistryStore, createAppSettingsStore, deriveSystemCode, resolveSeedPublisherId, createProjectionRunner, fetchSafeChangeRows, readCursor as readChangeCursor, advanceCursor as advanceChangeCursor, createReferenceApplier, referenceCapture, markTerminologyChanged, createRoleStore, type TerminologyAdminStore, type OntologyStore, type FhirStore, type ReportRunStore, type ReportScheduleStore, type AppSettingStore, type RoleStore } from '@openldr/db';
+import { createInternalDb, createFhirStore, createRelationalWriter, persistResources, createTerminologyStore, createTerminologyAdminStore, createOntologyStore, createReportRunStore, createReportScheduleStore, createMarketplaceInstallStore, createRegistryStore, createAppSettingsStore, deriveSystemCode, resolveSeedPublisherId, createProjectionRunner, fetchSafeChangeRows, readCursor as readChangeCursor, advanceCursor as advanceChangeCursor, createReferenceApplier, referenceCapture, markTerminologyChanged, createRoleStore, createFacilityRegistryStore, type TerminologyAdminStore, type OntologyStore, type FhirStore, type ReportRunStore, type ReportScheduleStore, type AppSettingStore, type RoleStore, type FacilityRegistryStore } from '@openldr/db';
 import type { ExternalSchema, InternalSchema, Provenance, SyncActivityStore, TargetEngine, CapabilityReconciliation } from '@openldr/db';
 import type { AuthPort, BlobStoragePort, EventingPort, TargetStorePort } from '@openldr/ports';
 import { createAuditStore, safeRecord, type AuditStore } from '@openldr/audit';
@@ -391,6 +391,9 @@ export interface AppContext {
   numberSettings: NumberSettings;
   /** The issuing lab's letterhead identity (Settings ▸ Laboratory). Read per render. */
   labIdentity: LabIdentityService;
+  /** Curated facility records (slice 1's registry). Capture-aware: registry writes land in
+   *  reference_change_log ready for the eventual central→lab down-sync. */
+  facilityRegistry: FacilityRegistryStore;
   /** Gates persistResources() strictness for the webhook (Persist Store node) and ingest paths
    *  (Task 8). Reads the level fresh per persist call so runtime setting changes apply immediately. */
   validationStrictness: ValidationStrictness;
@@ -819,6 +822,7 @@ const reporting: ReportingApi = {
   const numberSettings = createNumberSettings(appSettings);
   const validationStrictness: ValidationStrictness = createValidationStrictness(appSettings);
   const labIdentity = createLabIdentity(appSettings);
+  const facilityRegistry = createFacilityRegistryStore(internal.db, referenceCapture);
   const reportCategories = createReportCategoriesService(appSettings);
   const connectorSqlRunner = createConnectorSqlRunner({ connectors: connectorStore, secretsKey: cfg.SECRETS_ENCRYPTION_KEY });
   const connectorMongoRunner = createConnectorMongoRunner({ connectors: connectorStore, secretsKey: cfg.SECRETS_ENCRYPTION_KEY });
@@ -1398,6 +1402,7 @@ const reporting: ReportingApi = {
     connectors: connectorStore,
     appSettings,
     labIdentity,
+    facilityRegistry,
     featureFlags,
     numberSettings,
     validationStrictness,

@@ -247,14 +247,14 @@ describe('seedEssentials — repairing a disabled wf-ingest on an upgrade', () =
 });
 
 describe('seedEssentials — always-seeded minimum (SEED_ON_START off)', () => {
-  it('seeds ONLY the Users + Lab order forms and the two default workflows', async () => {
+  it('seeds ONLY the Users + Lab order + Facility forms and the two default workflows', async () => {
     const { app, workflows } = fakeApp();
     const res = await seedEssentials(app);
-    // Two essential forms, both published; the two other sample forms (facility/patient) are NOT
-    // seeded here — those are demo-only and belong to the full SEED_ON_START seed.
-    expect(res.formsSeeded).toBe(2);
+    // Three essential forms, all published; the remaining sample form (patient) is NOT seeded
+    // here — that one is demo-only and belongs to the full SEED_ON_START seed.
+    expect(res.formsSeeded).toBe(3);
     const forms = await app.forms.list();
-    expect(forms.map((f) => f.name).sort()).toEqual(['Lab order', 'Users']);
+    expect(forms.map((f) => f.name).sort()).toEqual(['Facility', 'Lab order', 'Users']);
     expect(forms.every((f) => f.status === 'published')).toBe(true);
     // Both default workflows seeded; the Ingest workflow is bound to the seeded Lab order form's id.
     expect(res.workflowsSeeded).toBe(2);
@@ -274,7 +274,7 @@ describe('seedEssentials — always-seeded minimum (SEED_ON_START off)', () => {
     const res2 = await seedEssentials(app);
     expect(res2.formsSeeded).toBe(0);
     expect(res2.workflowsSeeded).toBe(0);
-    expect((await app.forms.list())).toHaveLength(2);
+    expect((await app.forms.list())).toHaveLength(3);
     expect(workflows).toHaveLength(2);
   });
 

@@ -11,15 +11,18 @@ describe('page targets', () => {
     expect(getPageTarget('patients')?.requiredKeys).toEqual(['firstName', 'lastName', 'dateOfBirth', 'sex']);
     expect(getPageTarget('orders')?.requiredKeys).toEqual(['patient', 'tests']);
   });
-  it('only forms and users are available for selection today', () => {
-    expect(AVAILABLE_PAGE_TARGETS.map((p) => p.id)).toEqual(['forms', 'users']);
-    expect(PAGE_TARGETS.filter((p) => !p.available).map((p) => p.id)).toEqual(['facilities', 'patients', 'orders']);
+  it('forms, users and facilities are available for selection today', () => {
+    expect(AVAILABLE_PAGE_TARGETS.map((p) => p.id)).toEqual(['forms', 'users', 'facilities']);
+    expect(PAGE_TARGETS.filter((p) => !p.available).map((p) => p.id)).toEqual(['patients', 'orders']);
   });
   it('reports missing required keys for a target page', () => {
     const violations = validateTemplateTargets(['facilities'], [field({ apiProperty: undefined })]);
-    expect(violations[0]).toMatchObject({ pageId: 'facilities', missing: ['name'] });
+    expect(violations[0]).toMatchObject({ pageId: 'facilities', missing: ['localCode', 'name'] });
   });
   it('passes when an enabled field supplies the key', () => {
-    expect(validateTemplateTargets(['facilities'], [field({ apiProperty: 'name' })])).toEqual([]);
+    expect(validateTemplateTargets(
+      ['facilities'],
+      [field({ apiProperty: 'localCode' }), field({ apiProperty: 'name' })],
+    )).toEqual([]);
   });
 });

@@ -3,6 +3,8 @@ import { sampleForms } from './forms';
 import { FormSchema } from '../schema/form-schema';
 import { toQuestionnaire } from '../to-questionnaire';
 import { resolveReferenceSource } from '../reference-source';
+import { PAGE_TARGETS } from '../page-targets';
+import { CORE_FACILITY_KEYS, FACILITY_FORM_MIGRATION_NEW_FIELDS } from '@openldr/db';
 
 describe('sample forms', () => {
   it('parse against the schema and export to Questionnaire', () => {
@@ -20,9 +22,9 @@ describe('sample forms', () => {
     expect(ids).toContain('sample-patient');
     expect(ids).toContain('sample-order');
   });
-  it('includes a Facility (Location) form, targeting the generic forms page for now', () => {
+  it('includes a Facility (Location) form, targeting the facilities page', () => {
     const facility = sampleForms.find((f) => f.fhirResourceType === 'Location');
-    expect(facility?.targetPages).toEqual(['forms']);
+    expect(facility?.targetPages).toEqual(['facilities']);
     expect(facility?.fields.some((x) => x.apiProperty === 'name')).toBe(true);
   });
   it('patient form targets the forms page and has a firstName apiProperty field', () => {
@@ -84,5 +86,60 @@ describe('Lab order reference fields', () => {
 
   it('allows more than one test per order', () => {
     expect(field('tests').cardinality.max).not.toBe('1');
+  });
+});
+
+const facility = () => sampleForms.find((f) => f.name === 'Facility')!;
+
+describe('the seeded Facility form', () => {
+  it('targets the facilities page', () => {
+    expect(facility().targetPages).toEqual(['facilities']);
+  });
+
+  it('⛔ gives EVERY field an apiProperty', () => {
+    // Under the Users pattern a field with no apiProperty falls into `extras`. Several fields
+    // shipped without one, which would have put region/district/status/level in a jsonb bag —
+    // unindexed and unjoinable, defeating the reason they are columns.
+    const missing = facility().fields.filter((f) => !f.apiProperty).map((f) => f.id);
+    expect(missing, `fields with no apiProperty: ${missing.join(', ')}`).toEqual([]);
+  });
+
+  it('carries exactly the agreed required set', () => {
+    expect(facility().fields.map((f) => f.apiProperty).sort()).toEqual(
+      ['country', 'district', 'level', 'localCode', 'name', 'region', 'status', 'zone'].sort(),
+    );
+  });
+
+  it('⛔ every apiProperty is a REAL facility_registry column, not just a string that happens to match', () => {
+    // packages/db/src/facility-answers.ts's CORE_FACILITY_KEYS is what actually routes an answer
+    // to an indexed column vs the `extras` jsonb bag. This file used to hand-duplicate the eight
+    // names as a plain array — renaming a key in facility-answers.ts would silently start routing
+    // answers into extras with BOTH suites green, since neither one cross-checked the other.
+    // Importing the real set closes that gap.
+    for (const field of facility().fields) {
+      expect(CORE_FACILITY_KEYS.has(field.apiProperty!), `"${field.apiProperty}" is not in CORE_FACILITY_KEYS`).toBe(true);
+    }
+  });
+
+  it('marks the required fields required', () => {
+    const required = facility().fields.filter((f) => f.required).map((f) => f.apiProperty).sort();
+    expect(required).toEqual(['country', 'district', 'level', 'localCode', 'name', 'region', 'status', 'zone'].sort());
+  });
+
+  it('offers facilities as a page target, requiring name plus the only code a template can supply', () => {
+    const t = PAGE_TARGETS.find((p) => p.id === 'facilities')!;
+    expect(t.available).toBe(true);
+    expect(t.requiredKeys.sort()).toEqual(['localCode', 'name']);
+  });
+
+  // Migration 071_facility_form_target rewrites an existing install's persisted Facility form to a
+  // frozen NEW_FIELDS snapshot copied (not imported) from this sample, because a migration must not
+  // live-track a file that keeps changing. That snapshot is a duplicate by construction, so nothing
+  // stops the two silently drifting apart: edit a field here without also updating the migration and
+  // BOTH suites stay green — the migration's own test only ever compares the migration's output to
+  // the migration's own constant. Pinning FROM THIS SIDE against the db-exported snapshot is what
+  // actually catches that drift.
+  it('⛔ matches migration 071\'s frozen NEW_FIELDS snapshot exactly, so a future edit here cannot silently desynchronise a fresh install from what the migration thinks "new" looks like', () => {
+    expect(facility().fields).toEqual(FACILITY_FORM_MIGRATION_NEW_FIELDS);
   });
 });

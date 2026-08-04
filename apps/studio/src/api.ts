@@ -673,6 +673,77 @@ export const sendUserResetEmail = (id: string): Promise<void> =>
 export const forceUserLogout = (id: string): Promise<void> =>
   authFetch(`/api/users/${id}/force-logout`, { method: 'POST' }).then((r) => { if (!r.ok) throw new Error(`force logout failed: ${r.status}`); });
 
+// ── Facility registry (hand entry via the Users pattern) ──────────────────────
+// Mirrors the server's FacilityRecord (packages/db/src/facility-registry-store.ts) as returned
+// verbatim by GET/POST/PUT /api/facilities.
+export interface Facility {
+  id: string;
+  /** OURS — required at data entry, absent on a nationally-imported row. */
+  localCode: string | null;
+  nationalSystem: string | null;
+  /** THEIRS — the only code an imported row carries. */
+  nationalCode: string | null;
+  name: string;
+  level: string | null;
+  ownership: string | null;
+  status: string | null;
+  country: string | null;
+  zone: string | null;
+  region: string | null;
+  district: string | null;
+  council: string | null;
+  ward: string | null;
+  village: string | null;
+  addressText: string | null;
+  phone: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  /** Fields the Facility form added beyond the core columns above. */
+  extras: Record<string, unknown>;
+  /** NULL = lab-local, 'central' = central-managed and replaceable by down-sync. */
+  managedOrigin: string | null;
+  source: 'manual' | 'import';
+}
+
+export interface FacilitySubmit {
+  answers: Record<string, unknown>;
+  /** The form-DEFINITION id (not the schema's own slug) — the server resolves this via
+   *  ctx.forms.get() to read the field list back out and decide which answers are core columns. */
+  formSchemaId: string | null;
+  formVersion: number | null;
+}
+
+// Client-requested cap for GET /api/facilities. The store's own default (200 rows — see
+// DEFAULT_LIST_LIMIT in packages/db/src/facility-registry-store.ts) is far below what a
+// CSV-imported national register can hold (10-15k rows, per Slice 1), and a silent 200-row cut is
+// its own defect (see Facilities.tsx's `truncated` banner, which compares the returned row count
+// against this same constant). But this page renders every row into the DOM — one `TableRow` with
+// its own Radix `DropdownMenu` trigger each — with no pagination or virtualization (both explicitly
+// out of scope for this slice); requesting the server's own MAX_LIST_LIMIT (20000,
+// facilities-routes.ts) would turn a 10-15k-row register into a ~100k-node synchronous render, i.e.
+// a page that's honest about being capped but too sluggish to use. 2000 is the deliberate middle
+// ground: comfortably above the row count of most labs (so the truncation banner stays rare in
+// practice), while keeping the render small enough to stay responsive without either of those
+// bigger features.
+export const FACILITIES_LIST_LIMIT = 2000;
+export const listFacilities = (): Promise<Facility[]> =>
+  apiGet(`/api/facilities?limit=${FACILITIES_LIST_LIMIT}`, 'list facilities');
+export const createFacility = (body: FacilitySubmit): Promise<Facility> =>
+  authFetch('/api/facilities', jbody(body, 'POST')).then((r) => okJson<Facility>(r, 'create facility'));
+export const updateFacility = (id: string, body: FacilitySubmit): Promise<Facility> =>
+  authFetch(`/api/facilities/${encodeURIComponent(id)}`, jbody(body, 'PUT')).then((r) => okJson<Facility>(r, 'update facility'));
+// Scoped fix (Minor 1): the shared `apiDelete` helper collapses every failure to a bare
+// "<what> failed: <status>", discarding the server's own JSON message. That helper is used by
+// many other pages' delete calls, which are left untouched — only this one call is rewired to
+// extract the response body (via the same errorDetail/formatApiError okJson already uses) so a
+// 403 ("insufficient capability") or 404 from facilities-routes.ts reaches the operator verbatim
+// instead of as "delete facility failed: 403".
+export async function deleteFacility(id: string): Promise<void> {
+  const res = await authFetch(`/api/facilities/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  if (res.ok || res.status === 204) return;
+  throw new Error(formatApiError('delete facility', await errorDetail(res)));
+}
+
 // Roles / capabilities (capability-based RBAC)
 export interface RoleRecord {
   id: string;

@@ -1,0 +1,79 @@
+// Browser-safe subpath (@openldr/db/facility-answers) of the db package. This module must stay
+// free of Node.js (node:crypto), database, or server dependencies — apps/studio imports
+// CORE_FACILITY_KEYS directly from here (not from `@openldr/db`'s root, which pulls in `pg`/kysely
+// and the rest of the server DB engine) so seeding a facility-edit form doesn't drag that into the
+// web bundle. The only reference to `FacilityRecord` below is `import type`, which TypeScript
+// erases entirely at compile time — any future edit that turns it (or adds any other import) into
+// a runtime import will silently break the studio Vite bundle. Mirrors the same invariant on
+// packages/forms/src/pure.ts.
+import type { FacilityRecord } from './facility-registry-store';
+
+/**
+ * Columns a form answer may write.
+ *
+ * ⚠ `id`, `extras`, `managedOrigin` and `source` are deliberately ABSENT: they are the route's to
+ * set. A form that could set `id` would let a client overwrite an imported row; one that could set
+ * `managedOrigin` would let a lab-authored facility masquerade as central-managed and be deleted by
+ * the next down-sync.
+ */
+export const CORE_FACILITY_KEYS: ReadonlySet<string> = new Set([
+  'localCode', 'nationalCode', 'nationalSystem', 'name', 'level', 'ownership', 'status',
+  'country', 'zone', 'region', 'district', 'council', 'ward', 'village',
+  'addressText', 'phone', 'latitude', 'longitude',
+]);
+
+const NUMERIC_KEYS: ReadonlySet<string> = new Set(['latitude', 'longitude']);
+
+/** The shape the caller passes — `schema.fields`, narrowed. Deliberately NOT `FormSchema`:
+ *  `@openldr/db` must not depend on `@openldr/forms`, which already depends on it. */
+export interface AnswerField {
+  id: string;
+  apiProperty?: string | null;
+}
+
+export interface FacilityAnswerSplit {
+  record: Partial<FacilityRecord>;
+  extras: Record<string, unknown>;
+}
+
+/**
+ * Split submitted form answers into registry columns and an `extras` bag.
+ *
+ * A field whose `apiProperty` names a column writes that column; EVERYTHING ELSE goes to `extras`,
+ * including a field with no `apiProperty` at all (keyed by its field id). Nothing is silently
+ * dropped — the seeded Facility form shipped several fields with no `apiProperty`, and losing an
+ * operator's typed answer with no error is the failure this guards.
+ *
+ * Runs SERVER-side: a client cannot be trusted to decide which answers become indexed columns.
+ */
+export function splitFacilityAnswers(
+  fields: AnswerField[],
+  answers: Record<string, unknown>,
+): FacilityAnswerSplit {
+  const record: Record<string, unknown> = {};
+  const extras: Record<string, unknown> = {};
+
+  for (const field of fields) {
+    if (!Object.hasOwn(answers, field.id)) continue;
+    const raw = answers[field.id];
+    const key = field.apiProperty ?? '';
+
+    if (CORE_FACILITY_KEYS.has(key)) {
+      if (NUMERIC_KEYS.has(key)) {
+        const n = Number(String(raw ?? '').trim());
+        record[key] = String(raw ?? '').trim() === '' ? null : (Number.isFinite(n) ? n : null);
+        continue;
+      }
+      const text = typeof raw === 'string' ? raw.trim() : raw;
+      if (text === '' || text === null || text === undefined) continue; // blank omitted, not stored as ''
+      record[key] = text;
+      continue;
+    }
+
+    const text = typeof raw === 'string' ? raw.trim() : raw;
+    if (text === '' || text === null || text === undefined) continue;
+    extras[key || field.id] = text;
+  }
+
+  return { record: record as Partial<FacilityRecord>, extras };
+}

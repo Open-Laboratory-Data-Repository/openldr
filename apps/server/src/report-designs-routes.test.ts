@@ -18,6 +18,7 @@ function fakeCtx() {
     // The preview route resolves the letterhead per render; an empty identity is the
     // never-configured install, which is what these table-focused tests mean to exercise.
     labIdentity: { all: async () => ({}), tokens: async () => ({}), set: async () => [] },
+    facilityRegistry: {} as never,
     logger: { error() {}, warn() {}, info() {} },
     __auditEvents: auditEvents,
   } as any;
