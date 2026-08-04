@@ -8,6 +8,7 @@ import { Audit } from './pages/Audit';
 import { Activity } from './pages/Activity';
 import { Notifications } from './pages/Notifications';
 import { Users } from './pages/Users';
+import { Facilities } from './pages/Facilities';
 import { Sites } from './pages/settings/Sites';
 import { SettingsShell, SettingsIndexRedirect } from '@/pages/settings/SettingsShell';
 import { General } from '@/pages/settings/General';
@@ -41,6 +42,7 @@ export function App() {
       <Route path="/query" element={<RequireCapability cap="query.run"><QueryPage /></RequireCapability>} />
       <Route path="/terminology" element={<Terminology />} />
       <Route path="/users" element={<RequireCapability cap="users.view"><Users /></RequireCapability>} />
+      <Route path="/facilities" element={<RequireCapability cap="facilities.view"><Facilities /></RequireCapability>} />
       {/* Sites moved under Settings (was top-level /sites) so it isn't confused with a future
           Facilities / master facility list. The old path redirects so existing links keep working. */}
       <Route path="/sites" element={<Navigate to="/settings/sites" replace />} />

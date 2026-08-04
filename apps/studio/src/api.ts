@@ -673,6 +673,54 @@ export const sendUserResetEmail = (id: string): Promise<void> =>
 export const forceUserLogout = (id: string): Promise<void> =>
   authFetch(`/api/users/${id}/force-logout`, { method: 'POST' }).then((r) => { if (!r.ok) throw new Error(`force logout failed: ${r.status}`); });
 
+// ── Facility registry (hand entry via the Users pattern) ──────────────────────
+// Mirrors the server's FacilityRecord (packages/db/src/facility-registry-store.ts) as returned
+// verbatim by GET/POST/PUT /api/facilities.
+export interface Facility {
+  id: string;
+  /** OURS — required at data entry, absent on a nationally-imported row. */
+  localCode: string | null;
+  nationalSystem: string | null;
+  /** THEIRS — the only code an imported row carries. */
+  nationalCode: string | null;
+  name: string;
+  level: string | null;
+  ownership: string | null;
+  status: string | null;
+  country: string | null;
+  zone: string | null;
+  region: string | null;
+  district: string | null;
+  council: string | null;
+  ward: string | null;
+  village: string | null;
+  addressText: string | null;
+  phone: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  /** Fields the Facility form added beyond the core columns above. */
+  extras: Record<string, unknown>;
+  /** NULL = lab-local, 'central' = central-managed and replaceable by down-sync. */
+  managedOrigin: string | null;
+  source: 'manual' | 'import';
+}
+
+export interface FacilitySubmit {
+  answers: Record<string, unknown>;
+  /** The form-DEFINITION id (not the schema's own slug) — the server resolves this via
+   *  ctx.forms.get() to read the field list back out and decide which answers are core columns. */
+  formSchemaId: string | null;
+  formVersion: number | null;
+}
+
+export const listFacilities = (): Promise<Facility[]> => apiGet('/api/facilities', 'list facilities');
+export const createFacility = (body: FacilitySubmit): Promise<Facility> =>
+  authFetch('/api/facilities', jbody(body, 'POST')).then((r) => okJson<Facility>(r, 'create facility'));
+export const updateFacility = (id: string, body: FacilitySubmit): Promise<Facility> =>
+  authFetch(`/api/facilities/${encodeURIComponent(id)}`, jbody(body, 'PUT')).then((r) => okJson<Facility>(r, 'update facility'));
+export const deleteFacility = (id: string): Promise<void> =>
+  apiDelete(`/api/facilities/${encodeURIComponent(id)}`, 'delete facility');
+
 // Roles / capabilities (capability-based RBAC)
 export interface RoleRecord {
   id: string;
