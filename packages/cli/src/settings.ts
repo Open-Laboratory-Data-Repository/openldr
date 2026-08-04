@@ -213,3 +213,73 @@ export async function runSettingsDanger(action: string, opts: JsonOpt & { force:
     await ctx.close();
   }
 }
+
+// ---------------------------------------------------------------------------------------------
+// Lab identity (Settings ▸ Laboratory) — the letterhead printed on every report.
+// Operator parity with the HTTP route, per the standing convention that new settings features
+// must also be reachable from `openldr`.
+// ---------------------------------------------------------------------------------------------
+
+export async function runSettingsLabShow(opts: JsonOpt): Promise<number> {
+  const ctx = await createAppContext(loadConfig());
+  try {
+    const all = await ctx.labIdentity.all();
+    // ⚠ The logo is a data URI of up to ~350k characters. Printing it would flood a terminal and
+    // makes `--json` output unusable in a pipeline, so summarise it; `--json` keeps the same shape.
+    const shown = { ...all, ...(all['lab.logo'] ? { 'lab.logo': `<data URI, ${all['lab.logo'].length} chars>` } : {}) };
+    emit(opts.json, shown, Object.entries(shown).map(([k, v]) => `${k} = ${v}`).join('\n') || '(no lab identity configured)');
+    return 0;
+  } finally {
+    await ctx.close();
+  }
+}
+
+export interface LabSetOpts extends JsonOpt {
+  name?: string;
+  address?: string;
+  contact?: string;
+  /** Path to a PNG/JPEG/WebP file; read and stored as a data URI. */
+  logoFile?: string;
+}
+
+export async function runSettingsLabSet(opts: LabSetOpts): Promise<number> {
+  const patch: Record<string, string> = {};
+  if (opts.name !== undefined) patch['lab.name'] = opts.name;
+  if (opts.address !== undefined) patch['lab.address'] = opts.address;
+  if (opts.contact !== undefined) patch['lab.contact'] = opts.contact;
+
+  if (opts.logoFile !== undefined) {
+    if (opts.logoFile === '') {
+      patch['lab.logo'] = ''; // explicit clear
+    } else {
+      const { readFile } = await import('node:fs/promises');
+      const { extname } = await import('node:path');
+      const mime = ({ '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp' } as Record<string, string>)[extname(opts.logoFile).toLowerCase()];
+      if (!mime) { process.stderr.write(`unsupported logo type "${extname(opts.logoFile)}" — use .png, .jpg or .webp\n`); return 1; }
+      let bytes: Buffer;
+      try { bytes = await readFile(opts.logoFile); }
+      catch { process.stderr.write(`cannot read ${opts.logoFile}\n`); return 1; }
+      patch['lab.logo'] = `data:${mime};base64,${bytes.toString('base64')}`;
+    }
+  }
+
+  if (Object.keys(patch).length === 0) {
+    process.stderr.write('nothing to set — pass at least one of --name, --address, --contact, --logo-file\n');
+    return 1;
+  }
+
+  const ctx = await createAppContext(loadConfig());
+  try {
+    const errors = await ctx.labIdentity.set(patch, 'cli');
+    if (errors.length) {
+      for (const e of errors) process.stderr.write(`${e.key}: ${e.reason}\n`);
+      return 1;
+    }
+    const after = await ctx.labIdentity.all();
+    const shown = { ...after, ...(after['lab.logo'] ? { 'lab.logo': `<data URI, ${after['lab.logo'].length} chars>` } : {}) };
+    emit(opts.json, shown, `updated ${Object.keys(patch).join(', ')}`);
+    return 0;
+  } finally {
+    await ctx.close();
+  }
+}

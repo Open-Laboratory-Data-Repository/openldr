@@ -443,6 +443,9 @@ export function ctxWith(status: 'up' | 'down'): AppContext {
     pluginBroker: {} as never,
     connectors: {} as never,
     appSettings: {} as never,
+    // Empty identity: every {{lab.*}} resolves to '' — the same as an install that never
+    // configured a letterhead, which is what most route tests should be exercising anyway.
+    labIdentity: { all: async () => ({}), tokens: async () => ({}), set: async () => [] },
     featureFlags: { get: async () => false } as never,
     numberSettings: { get: async () => 0, all: async () => [], set: async () => 0, invalidate: () => {} } as never,
     validationStrictness: { get: async () => 'high', set: async () => {} } as never,

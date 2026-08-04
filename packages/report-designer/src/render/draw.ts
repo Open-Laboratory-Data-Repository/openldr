@@ -161,19 +161,30 @@ export function isRightAligned(rows: string[][], ci: number, kind: ColumnKind | 
   return isNumericColumn(rows, ci);
 }
 
-export function paramMap(design: ReportDesign, now: Date): Map<string, string> {
+/** Prefix under which the issuing laboratory's identity is stashed in the token map, so `lab.name`
+ *  can never collide with a design parameter that happens to be called `name`. */
+const LAB_TOKEN_PREFIX = 'lab.';
+
+export function paramMap(design: ReportDesign, now: Date, identity?: Record<string, string>): Map<string, string> {
   const m = new Map<string, string>();
   for (const p of design.parameters) {
     if (typeof p.value === 'string') m.set(p.key, p.value);
     else if (p.value) { m.set('from', p.value.from); m.set('to', p.value.to); }
   }
   m.set('date', now.toLocaleDateString());
+  // Namespaced, and added LAST so a design parameter can never shadow the lab's own identity —
+  // a report whose letterhead could be overwritten by a parameter value is a forgery risk, not a
+  // convenience.
+  for (const [k, v] of Object.entries(identity ?? {})) m.set(LAB_TOKEN_PREFIX + k, v);
   return m;
 }
 
 export function interpolate(input: string, tokens: Map<string, string>): string {
   return input
     .replace(/\{\{\s*param\.([a-zA-Z0-9_]+)\s*\}\}/g, (_m, k: string) => tokens.get(k) ?? '')
+    // `{{lab.name}}` etc. An unset key resolves to '' exactly as an unknown param does, so a design
+    // referencing identity stays valid on an install that has not configured it.
+    .replace(/\{\{\s*lab\.([a-zA-Z0-9_]+)\s*\}\}/g, (_m, k: string) => tokens.get(LAB_TOKEN_PREFIX + k) ?? '')
     .replace(/\{\{\s*date\s*\}\}/g, tokens.get('date') ?? '');
 }
 
@@ -552,9 +563,17 @@ export function drawElement(
       return;
     }
     case 'image': {
-      if (el.src) {
+      // Interpolated like text, so `src: "{{lab.logo}}"` resolves to the configured logo.
+      //
+      // ⚠ MEASURED: pdfkit treats a URL src as a FILE PATH and throws ENOENT — only `data:` URIs
+      // (and real local paths) draw. An `https://` logo therefore renders fine on the studio canvas,
+      // where `<img>` is perfectly happy with it, and silently becomes the dashed placeholder below
+      // in the PDF. That is why `lab.logo` is validated as a data URI at WRITE time rather than
+      // here: by the time we are drawing, there is nobody left to tell.
+      const src = el.src ? interpolate(el.src, tokens) : '';
+      if (src) {
         doc.save();
-        try { doc.image(el.src, r.x, r.y, { fit: [r.w, r.h] }); doc.restore(); return; }
+        try { doc.image(src, r.x, r.y, { fit: [r.w, r.h] }); doc.restore(); return; }
         catch { doc.restore(); /* fall through to placeholder */ }
       }
       doc.save().lineWidth(1).strokeColor(RECT_BORDER).dash(3, { space: 2 })

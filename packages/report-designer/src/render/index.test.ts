@@ -611,3 +611,49 @@ describe('barcode and qrcode rendering', () => {
     expect(texts).not.toContain('SECOND-ROW');
   });
 });
+
+describe('letterhead identity rendering', () => {
+  const headerDesign = (): ReportDesign => ({
+    id: 'd', name: 'N', paper: 'A4', orientation: 'portrait', parameters: [],
+    pages: [{ id: 'p', elements: [
+      { id: 'logo', kind: 'image', name: 'Logo', rect: { x: 0, y: 0, w: 60, h: 60 }, src: '{{lab.logo}}' },
+      { id: 'nm', kind: 'text', name: 'Name', rect: { x: 70, y: 0, w: 400, h: 20 }, text: '{{lab.name}}' },
+      { id: 'ad', kind: 'text', name: 'Addr', rect: { x: 70, y: 22, w: 400, h: 30 }, text: '{{lab.address}}' },
+    ] }],
+  } as ReportDesign);
+  // 1x1 PNG — enough to prove the data URI reached pdfkit, which is all the renderer owes us.
+  const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+
+  it('renders the configured identity', async () => {
+    const texts = pdfTexts(await renderReportDesignPdf(headerDesign(), new Map(), {
+      now: NOW, identity: { name: 'Muhimbili National Referral Laboratory', address: 'PO Box 65000' },
+    }));
+    expect(texts).toContain('Muhimbili National Referral Laboratory');
+    expect(texts).toContain('PO Box 65000');
+  });
+
+  it('⛔ renders BLANK, never the literal token, on an unconfigured install', async () => {
+    // The failure this pins: a design shipped with {{lab.name}} printing braces onto a clinical
+    // report. Asserting "the line exists" would pass on exactly that bug — assert the ABSENCE of
+    // braces and the ABSENCE of the token text.
+    const texts = pdfTexts(await renderReportDesignPdf(headerDesign(), new Map(), { now: NOW }));
+    expect(texts.join('')).not.toContain('{{');
+    expect(texts.join('')).not.toContain('lab.name');
+  });
+
+  it('resolves a token image src to the configured logo, and placeholders when unset', async () => {
+    const withLogo = decodedContent(await renderReportDesignPdf(headerDesign(), new Map(), { now: NOW, identity: { logo: PNG } }));
+    const without = decodedContent(await renderReportDesignPdf(headerDesign(), new Map(), { now: NOW }));
+    // pdfkit emits an XObject Do for a drawn image; the dashed placeholder emits the dash operator.
+    expect(withLogo).toMatch(/\/I\d+ Do/);
+    expect(without).not.toMatch(/\/I\d+ Do/);
+    expect(without).toContain('[3 2] 0 d');
+  });
+
+  it('does not throw when the logo is a URL — it placeholders, which is why write-time validation exists', async () => {
+    const content = decodedContent(await renderReportDesignPdf(headerDesign(), new Map(), {
+      now: NOW, identity: { logo: 'https://example.org/logo.png' },
+    }));
+    expect(content).toContain('[3 2] 0 d');
+  });
+});

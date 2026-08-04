@@ -10,6 +10,20 @@ import { useCanvasInteraction } from './useCanvasInteraction';
 
 const GUIDE_COLOR = '#e0369a'; // distinct alignment-guide color, drawn over the white page
 
+/**
+ * Resolve `{{lab.*}}` against the install's identity.
+ *
+ * ⚠ Only `lab.*`. `{{param.x}}` and `{{date}}` stay LITERAL on the canvas, exactly as they are
+ * today. The line is deliberate: identity is static install-level data the canvas can simply know,
+ * whereas a parameter's value is a run-time choice the canvas has no business guessing. A
+ * letterhead you cannot see while positioning it defeats the point of placing it — and an
+ * `<img src="{{lab.logo}}">` would otherwise render as a broken-image icon.
+ */
+function resolveLab(input: string, identity: Record<string, string> | undefined): string {
+  if (!input.includes('{{')) return input;
+  return input.replace(/\{\{\s*lab\.([a-zA-Z0-9_]+)\s*\}\}/g, (_m, k: string) => identity?.[k] ?? '');
+}
+
 interface Props {
   template: ReportTemplate;
   zoom: number;
@@ -20,10 +34,12 @@ interface Props {
   onEditStart?(id: string): void;
   onEditChange?(id: string, text: string): void;
   onEditEnd?(): void;
+  /** Lab identity, keyed without the `lab.` prefix — resolves `{{lab.*}}` for the letterhead. */
+  identity?: Record<string, string>;
 }
 
 export function PageCanvas({ template, zoom, selectedIds, onSelect, onCommitRects,
-  editingId = null, onEditStart, onEditChange, onEditEnd }: Props): JSX.Element {
+  editingId = null, onEditStart, onEditChange, onEditEnd, identity }: Props): JSX.Element {
   const { t } = useTranslation();
   const size = paperSize(template.paper, template.orientation);
   return (
@@ -33,7 +49,8 @@ export function PageCanvas({ template, zoom, selectedIds, onSelect, onCommitRect
         <div key={page.id} className="flex flex-col items-center gap-1.5">
           <PageSurface page={page} zoom={zoom} pageSize={size} margins={template.margins}
             selectedIds={selectedIds} onSelect={onSelect} onCommitRects={onCommitRects}
-            editingId={editingId} onEditStart={onEditStart} onEditChange={onEditChange} onEditEnd={onEditEnd} />
+            editingId={editingId} onEditStart={onEditStart} onEditChange={onEditChange} onEditEnd={onEditEnd}
+            identity={identity} />
           <span className="text-[11px] text-neutral-600 dark:text-neutral-300">
             {t('reportDesigner.pageOf', { n: i + 1, total: template.pages.length })}
           </span>
@@ -44,13 +61,14 @@ export function PageCanvas({ template, zoom, selectedIds, onSelect, onCommitRect
 }
 
 function PageSurface({ page, zoom, pageSize, margins, selectedIds, onSelect, onCommitRects,
-  editingId = null, onEditStart, onEditChange, onEditEnd }: {
+  editingId = null, onEditStart, onEditChange, onEditEnd, identity }: {
   page: DesignPage; zoom: number; pageSize: { w: number; h: number }; margins?: Margins;
   selectedIds: string[]; onSelect(ids: string[]): void; onCommitRects(rects: Map<string, Rect>): void;
   editingId?: string | null;
   onEditStart?(id: string): void;
   onEditChange?(id: string, text: string): void;
   onEditEnd?(): void;
+  identity?: Record<string, string>;
 }): JSX.Element {
   const ref = useRef<HTMLDivElement>(null);
   const ix = useCanvasInteraction({ page, zoom, pageSize, selectedIds, originRef: ref, onSelect, onCommitRects });
@@ -72,7 +90,8 @@ function PageSurface({ page, zoom, pageSize, margins, selectedIds, onSelect, onC
             onHandlePointerDown={(e, h) => ix.onHandlePointerDown(e, el.id, h)}
             onDoubleClick={() => onEditStart?.(el.id)}
             onEditChange={(text) => onEditChange?.(el.id, text)}
-            onEditEnd={() => onEditEnd?.()} />
+            onEditEnd={() => onEditEnd?.()}
+            identity={identity} />
         );
       })}
       {groupBox && (
@@ -108,10 +127,11 @@ const HANDLE_CLASS: Record<Handle, string> = {
   sw: '-left-1 -bottom-1 cursor-nesw-resize', w: '-left-1 top-1/2 -translate-y-1/2 cursor-ew-resize',
 };
 
-function ElementBox({ el, rect, zoom, selected, showHandles, editing, onPointerDown, onHandlePointerDown, onDoubleClick, onEditChange, onEditEnd }: {
+function ElementBox({ el, rect, zoom, selected, showHandles, editing, onPointerDown, onHandlePointerDown, onDoubleClick, onEditChange, onEditEnd, identity }: {
   el: DesignElement; rect: Rect; zoom: number; selected: boolean; showHandles: boolean; editing: boolean;
   onPointerDown(e: ReactPointerEvent): void; onHandlePointerDown(e: ReactPointerEvent, h: Handle): void;
   onDoubleClick(): void; onEditChange(text: string): void; onEditEnd(): void;
+  identity?: Record<string, string>;
 }): JSX.Element {
   const editRef = useRef<HTMLTextAreaElement>(null);
   useEffect(() => { if (editing) { editRef.current?.focus(); editRef.current?.select(); } }, [editing]);
@@ -132,7 +152,7 @@ function ElementBox({ el, rect, zoom, selected, showHandles, editing, onPointerD
           className="absolute inset-0 resize-none overflow-hidden border-0 bg-transparent p-0 leading-tight outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
           style={textStyle(el, zoom)} />
       ) : (
-        <ElementContent el={el} zoom={zoom} />
+        <ElementContent el={el} zoom={zoom} identity={identity} />
       )}
       {showHandles && !editing && HANDLES.map((h) => (
         <span key={h} data-testid={`handle-${h}`} onPointerDown={(e) => onHandlePointerDown(e, h)}
@@ -157,9 +177,9 @@ function textStyle(el: DesignElement, zoom: number): CSSProperties {
  * placing it; live values are Preview's job. That is deliberately more than a bound `table` shows
  * here (nothing at all, which reads as a broken binding) and it is the S4 answer to that gap.
  */
-function KeyValuePreview({ el, zoom }: { el: DesignElement; zoom: number }): JSX.Element {
+function KeyValuePreview({ el, zoom, identity }: { el: DesignElement; zoom: number; identity?: Record<string, string> }): JSX.Element {
   const s = el.style ?? {};
-  const title = (el.text ?? '').trim();
+  const title = resolveLab(el.text ?? '', identity).trim();
   const pairs = el.dataSource
     ? (el.boundColumns ?? []).map((c) => ({ label: c.label, value: '—' }))
     : (el.rows ?? []).map((r) => ({ label: r[0] ?? '', value: r[1] ?? '' }));
@@ -201,9 +221,9 @@ function KeyValuePreview({ el, zoom }: { el: DesignElement; zoom: number }): JSX
  * strength would put a scannable-but-wrong code on the design surface; muted says "this is the
  * shape, not the code".
  */
-function SymbolPreview({ el }: { el: DesignElement }): JSX.Element {
+function SymbolPreview({ el, identity }: { el: DesignElement; identity?: Record<string, string> }): JSX.Element {
   const bound = !!el.dataSource;
-  const value = bound ? (el.boundColumns?.[0]?.label ?? '') : (el.text ?? '');
+  const value = bound ? (el.boundColumns?.[0]?.label ?? '') : resolveLab(el.text ?? '', identity);
   const opacity = bound ? 0.35 : 1;
 
   if (el.kind === 'qrcode') {
@@ -240,33 +260,35 @@ function UnencodablePreview(): JSX.Element {
   return <div className="h-full w-full border border-dashed border-neutral-300" />;
 }
 
-function ElementContent({ el, zoom }: { el: DesignElement; zoom: number }): JSX.Element {
+function ElementContent({ el, zoom, identity }: { el: DesignElement; zoom: number; identity?: Record<string, string> }): JSX.Element {
   const s = el.style ?? {};
   switch (el.kind) {
     case 'text':
     case 'datetime':
       return (
         <div className="h-full w-full overflow-hidden leading-tight" style={textStyle(el, zoom)}>
-          {el.text}
+          {resolveLab(el.text ?? '', identity)}
         </div>
       );
     case 'line':
       return <div className="w-full" style={{ height: (s.strokeWidth ?? 1) * zoom, background: s.strokeColor ?? '#a3a3a3' }} />;
     case 'rect':
       return <div className="h-full w-full" style={{ border: `${(s.strokeWidth ?? 1) * zoom}px solid ${s.strokeColor ?? '#d4d4d4'}`, background: s.fill && s.fill !== 'none' ? s.fill : 'transparent' }} />;
-    case 'image':
-      return el.src
-        ? <img src={el.src} alt={el.name} draggable={false} className="h-full w-full object-contain" />
+    case 'image': {
+      const src = resolveLab(el.src ?? '', identity);
+      return src
+        ? <img src={src} alt={el.name} draggable={false} className="h-full w-full object-contain" />
         : (
           <div className="flex h-full w-full items-center justify-center border border-dashed border-neutral-300 text-neutral-400">
             <ImageIcon className="h-4 w-4" />
           </div>
         );
+    }
     case 'keyvalue':
-      return <KeyValuePreview el={el} zoom={zoom} />;
+      return <KeyValuePreview el={el} zoom={zoom} identity={identity} />;
     case 'barcode':
     case 'qrcode':
-      return <SymbolPreview el={el} />;
+      return <SymbolPreview el={el} identity={identity} />;
     case 'table':
       return (
         <table className="h-full w-full border-collapse text-[8px] text-neutral-700">

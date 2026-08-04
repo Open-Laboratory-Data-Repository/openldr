@@ -77,6 +77,30 @@ point of the feature: 23 decisions, made once.
 5. **Reconciliation must be re-runnable.** New `performer` values appear with every ingest; the
    screen has to show what is newly unattached rather than assuming a one-time pass.
 
+## 4a. Manual capture — the registry's second, better data source
+
+Manual data entry is not merely another consumer. **A hand-entered order picks a facility from the
+registry and records a real `Organization/<id>` reference** — no truncation, no ambiguity, no
+alias-matching. It is the one path that produces clean facility data, which inverts part of §1: the
+registry is not only for reconciling 23 legacy strings, it is a **prerequisite for a manually
+captured order to carry a facility at all**.
+
+**The extension point already exists; the resolver does not.** A form field declares
+`referenceTarget` and the model is generic — `{ kind: 'entity'; target: string }`
+(`packages/forms/src/reference-source.ts:6`) — but the server registers exactly one entity
+resolver: `ENTITY_TARGETS = ['Patient']` (`packages/db/src/reference-search.ts:19`). Tests are not
+entities; they resolve through the *coding* path (ValueSet/CodeSystem).
+
+⚠ A form declaring `referenceTarget: 'Organization'` therefore **publishes successfully** — by
+design, so a form can bind to a not-yet-installed source — and fails only at search time with
+`no resolver registered for entity target 'Organization' (known: Patient)`. A facility picker that
+"looks wired but returns nothing" is the predictable first bug here.
+
+The work is the Patient pattern repeated: a `createOrganizationResolver` over the registry, plus one
+entry in `ENTITY_TARGETS`, plus the Lab-order form gaining a facility field. Note the Patient
+resolver's documented caveat applies equally — it deliberately does **not** consult `columnPolicy`,
+because that policy governs analytics exposure and would deny every column the picker needs.
+
 ## 5. Consumers to rewire (after the registry exists)
 
 - `q-facilities` (the report facility filter) — currently `select distinct managing_organization`,
@@ -100,7 +124,17 @@ only `testing_facility_code.display_name` into a display string.
 When that lands, the registry re-keys from alias-matching onto code-matching, and the aliases become
 a historical fallback for data ingested before the change.
 
-## 7. Out of scope
+## 7. Suggested slice order
+
+1. **Registry CRUD** — Organization resources editable in Studio, projected to `facilities`
+   (address column + projection change, §4 trap 1).
+2. **Facility picker for manual capture** (§4a) — `createOrganizationResolver` + `ENTITY_TARGETS`.
+   Independently useful the moment the registry has one row, and it is the path that produces
+   *clean* facility data.
+3. **Reconciliation screen** (§3) — attach the 23 observed strings to registry records via aliases.
+   Last, because it is the only part that depends on legacy ingested data.
+
+## 8. Out of scope
 
 DHIS2 org-unit mapping, a national facility list importer, facility hierarchies (district → region),
 and any change to `cdr-toolchain`.

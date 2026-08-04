@@ -55,6 +55,7 @@ import { createActivityService, type ActivityService } from './activity-service'
 import { createFeatureFlags, type FeatureFlags } from './feature-flags';
 import { createNumberSettings, type NumberSettings } from './number-settings';
 import { createValidationStrictness, type ValidationStrictness } from './validation-settings';
+import { createLabIdentity, type LabIdentityService } from './lab-identity';
 export { createValidationStrictness, VALIDATION_STRICTNESS_KEY, type ValidationStrictness } from './validation-settings';
 import { createReportCategoriesService, type ReportCategoriesService } from './report-categories';
 import { createPluginBroker, type PluginBroker } from './plugin-broker';
@@ -170,6 +171,9 @@ export interface ReportingDataDrivenDeps {
   runStoredQuery: (queryId: string, values: Record<string, unknown>) => Promise<{ columns: { key: string; label: string }[]; rows: Record<string, unknown>[] }>;
   resolveDesignTables: typeof resolveDesignTables;
   renderReportDesignPdf: typeof renderReportDesignPdf;
+  /** The issuing lab's letterhead identity, resolved fresh per render so a Settings edit applies
+   *  without a restart. Optional so `buildReportingForTest` need not stub it. */
+  labIdentity?: { tokens(): Promise<Record<string, string>> };
 }
 
 /** A data-driven report's `/reports` filter bar omits an optional select filter's key when the
@@ -227,7 +231,8 @@ function createDataDrivenReporting(deps: ReportingDataDrivenDeps) {
     if (!design) throw new ReportNotFoundError(def.designId);
     const values = { ...designDefaults(design), ...valuesOf(rawParams) };
     const resolved = await deps.resolveDesignTables(design, values, deps.runStoredQuery);
-    return deps.renderReportDesignPdf(design, resolved);
+    const identity = await deps.labIdentity?.tokens();
+    return deps.renderReportDesignPdf(design, resolved, { identity });
   }
 
   async function optionsDataDriven(id: string): Promise<Record<string, string[]>> {
@@ -384,6 +389,8 @@ export interface AppContext {
   appSettings: AppSettingStore;
   featureFlags: FeatureFlags;
   numberSettings: NumberSettings;
+  /** The issuing lab's letterhead identity (Settings ▸ Laboratory). Read per render. */
+  labIdentity: LabIdentityService;
   /** Gates persistResources() strictness for the webhook (Persist Store node) and ingest paths
    *  (Task 8). Reads the level fresh per persist call so runtime setting changes apply immediately. */
   validationStrictness: ValidationStrictness;
@@ -551,6 +558,10 @@ export async function createAppContext(cfg: Config): Promise<AppContext> {
     runStoredQuery: runReportQuery,
     resolveDesignTables,
     renderReportDesignPdf,
+    // ⚠ LAZY on purpose: `labIdentity` is constructed further down this same function (it needs
+    // `appSettings`), so naming it directly here is a temporal-dead-zone throw at boot. The arrow
+    // is only invoked during a render, long after createAppContext has returned.
+    labIdentity: { tokens: () => labIdentity.tokens() },
   });
 
 
@@ -807,6 +818,7 @@ const reporting: ReportingApi = {
   const featureFlags = createFeatureFlags(appSettings);
   const numberSettings = createNumberSettings(appSettings);
   const validationStrictness: ValidationStrictness = createValidationStrictness(appSettings);
+  const labIdentity = createLabIdentity(appSettings);
   const reportCategories = createReportCategoriesService(appSettings);
   const connectorSqlRunner = createConnectorSqlRunner({ connectors: connectorStore, secretsKey: cfg.SECRETS_ENCRYPTION_KEY });
   const connectorMongoRunner = createConnectorMongoRunner({ connectors: connectorStore, secretsKey: cfg.SECRETS_ENCRYPTION_KEY });
@@ -1385,6 +1397,7 @@ const reporting: ReportingApi = {
     pluginBroker,
     connectors: connectorStore,
     appSettings,
+    labIdentity,
     featureFlags,
     numberSettings,
     validationStrictness,
@@ -1410,6 +1423,7 @@ const reporting: ReportingApi = {
 
 export { createFeatureFlags } from './feature-flags';
 export type { FeatureFlags, ResolvedFlag } from './feature-flags';
+export { createLabIdentity, type LabIdentityService } from './lab-identity';
 export { createNumberSettings } from './number-settings';
 export type { NumberSettings, ResolvedNumberSetting } from './number-settings';
 export { createReportCategoriesService, REPORT_CATEGORIES_SETTING_KEY } from './report-categories';

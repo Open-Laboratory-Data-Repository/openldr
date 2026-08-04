@@ -26,6 +26,7 @@ import { PluginContainer } from './plugins/PluginContainer';
 import { RequireCapability } from './auth/RequireCapability';
 import { Roles } from './pages/Roles';
 import { DataExposure } from '@/pages/settings/DataExposure';
+import { Laboratory } from '@/pages/settings/Laboratory';
 import { CallbackPage } from './auth/CallbackPage';
 
 export function App() {
@@ -66,6 +67,7 @@ export function App() {
         <Route path="marketplace" element={<RequireCapability cap="marketplace.view"><Marketplace /></RequireCapability>} />
         <Route path="connectors" element={<RequireCapability cap="connectors.manage"><Connectors /></RequireCapability>} />
         <Route path="roles" element={<RequireCapability cap="roles.view"><Roles /></RequireCapability>} />
+        <Route path="laboratory" element={<RequireCapability cap="settings.view"><Laboratory /></RequireCapability>} />
         <Route path="data-exposure" element={<RequireCapability cap="data_exposure.manage"><DataExposure /></RequireCapability>} />
       </Route>
       <Route path="/audit" element={<Audit />} />

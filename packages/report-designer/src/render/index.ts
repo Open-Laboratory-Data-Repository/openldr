@@ -9,7 +9,18 @@ export type ResolvedTable =
 
 export { resolveDesignTables, type RunQuery } from './resolve';
 
-export interface RenderOptions { now?: Date }
+export interface RenderOptions {
+  now?: Date;
+  /**
+   * The issuing laboratory's identity, keyed WITHOUT the `lab.` prefix (`name`, `address`,
+   * `contact`, `logo`) — reachable from a design as `{{lab.name}}` and friends.
+   *
+   * Supplied by the CALLER because this package is pure and has no database reach: the server's
+   * preview route and bootstrap's export path each load it and pass it in. Omitted, every
+   * `{{lab.*}}` resolves to '' and a design referencing identity still renders.
+   */
+  identity?: Record<string, string>;
+}
 
 export function renderReportDesignPdf(
   design: ReportDesign,
@@ -17,7 +28,7 @@ export function renderReportDesignPdf(
   opts: RenderOptions = {},
 ): Promise<Buffer> {
   const now = opts.now ?? new Date();
-  const tokens = paramMap(design, now);
+  const tokens = paramMap(design, now, opts.identity);
   const pages = design.pages.length ? design.pages : [{ id: '_empty', elements: [] }];
   const [w, h] = paperSizePt(design.paper, design.orientation);
 
