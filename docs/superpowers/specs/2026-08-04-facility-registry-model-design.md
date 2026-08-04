@@ -27,16 +27,22 @@ Location-vs-Organization question — see §6.
 
 ```
 facility_registry                          -- what we KNOW (curated)
-  id              text  PK                 -- CE-generated, stable, never the national code
-  national_system text  NULL               -- which register the code belongs to (§4)
-  national_code   text  NULL               -- e.g. HFR '122023-5'
+  id              text  PK                 -- CE-generated, stable, machine-only; never typed
+  code            text  NOT NULL UNIQUE    -- OPERATOR-FACING code, assigned in OpenLDR (§2.1)
+  national_system text  NULL               -- which register national_code belongs to (§4)
+  national_code   text  NULL               -- e.g. HFR '122023-5'. OPTIONAL — see §2.1
   name            text  NOT NULL           -- canonical, UNTRUNCATED
   level           text  NULL               -- 'Level IA2 (Dispensary Laboratory)'
   ownership       text  NULL               -- 'Private, For Profit'
   status          text  NULL               -- 'Operating' | 'Closed' | …
+  -- Administrative chain, full, all real columns (§2.2)
+  country         text  NULL
+  zone            text  NULL
   region          text  NULL
+  district        text  NULL
   council         text  NULL
   ward            text  NULL
+  village         text  NULL
   address_text    text  NULL
   phone           text  NULL
   latitude        numeric NULL
@@ -63,6 +69,41 @@ an already-attached string is a no-op, not a duplicate.
 **`id` is CE-generated, never the national code.** A facility exists in the registry before anyone
 knows its MFL code (that is the normal case today), and national codes get reassigned. Keying on
 them would make an unidentified facility unrepresentable and a re-key a cascade.
+
+### 2.1 THREE identifiers, and why each exists
+
+⚠ Do not collapse these. They answer different questions and have different lifetimes.
+
+| Column / table | Who assigns it | Required | Question it answers |
+|---|---|---|---|
+| `facility_registry.id` | CE, generated | always | "which row" — machine-stable, never shown, never typed |
+| `facility_registry.code` | **the operator, in OpenLDR** | **yes** | "what do WE call it" — short, human-facing, on screens and in exports |
+| `facility_registry.national_code` | the national register | **no** | "what does the COUNTRY call it" — external metadata, may never be known |
+| `facility_aliases.local_code` | each LIS feed | n/a | "what did the incoming DATA call it" — many per facility |
+
+**`national_code` stays optional, and that is load-bearing.** All 23 facilities observed today have
+no national code. If it were required, no registry row could be created for them, and reconciliation
+— the one thing that must work before any national list arrives — would be blocked on a per-facility
+lookup against a portal with no bulk export.
+
+⛔ **`facility_registry.code` is NOT `facilities.facility_code`.** The latter is the *projection* of
+an ingested resource's first FHIR identifier (§6). They will look joinable and are not. Nor is it
+`facility_aliases.local_code`, which is per-feed and many-per-facility.
+
+⚠ **`code` is unique per INSTALL.** Two labs may each mint `LAB01` for different facilities; that is
+harmless while `origin='local'` rows never leave the lab (§8), but it is a collision the open
+"promote a local facility to central" question (§8.1) must resolve.
+
+### 2.2 The administrative chain is columns, not jsonb
+
+`country · zone · region · district · council · ward · village` are all real columns. Rationale
+(user): the data source supplies the whole chain, and anything a report might group by should be
+indexable — an `extras` key cannot be.
+
+⚠ The names are Tanzania-shaped. Another country's `council` may be a *municipality* or have no
+equivalent tier at all. They stay free text rather than FKs to an administrative-unit table, so a
+deployment maps its own vocabulary onto the nearest column and leaves the rest NULL. A real
+administrative-unit hierarchy is out of scope (§8).
 
 ## 3. Import contract
 
@@ -166,6 +207,27 @@ column later is a migration you choose, not one you are forced into.
 ⚠ One asymmetry to respect: a column can be indexed and joined; an `extras` key cannot. So the core
 set should cover anything reports filter or group by — `region`, `council`, `status`, `level` — and
 `extras` should hold the descriptive rest.
+
+### 7.1 Where "required" is enforced — three layers, on purpose
+
+One answer does not fit the three ways a facility gets created.
+
+| Layer | Required | Why |
+|---|---|---|
+| **DB** | `code`, `name` only | A reconciliation stub and a partially-known import row must both be STORABLE. NOT NULL on the rest would make them unrepresentable. |
+| **`PAGE_TARGETS.requiredKeys`** | `code`, `name` | The bare structural contract — what the page cannot function without. |
+| **The Facility FORM** (`required: true` per field) | `country`, `zone`, `region`, `district`, `status`, `level` | What a HUMAN must supply when creating a facility by hand. |
+| **Import** | `code`/`national_code` + `name`; **warns** on the rest | Rejecting 14,000 rows over a blank ward is worse than importing them and reporting the gaps. |
+
+**⭐ Putting the country-specific required set in the FORM is what makes this portable.** A form's
+`required` flags are per-field and **every install can edit them** — that is already true of the
+Users form. So the shipped Facility form requires `country/zone/region/district` (Tanzania's chain),
+and a deployment in a country with no zone tier simply un-requires that field. No fork, no config
+flag, no code change.
+
+⚠ This matters more than it looks: **`zone` is LESS universal than `council`.** Most countries have
+a region → district → local-government chain; a tier *above* region is rarer. Hardcoding a required
+`zone` anywhere but the form would make the second country a code change.
 
 ## 8. Sync: central owns it, labs receive it (decided)
 
