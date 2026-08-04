@@ -22,10 +22,10 @@ type FieldRef = { id: string; apiProperty?: string | null };
 
 /** Everything the POST/PUT guards need from the submitted `formSchemaId`: the field list (for
  *  `hasCoreField`/`splitFacilityAnswers`) and the form's `targetPages` (for `targetsFacilitiesPage`
- *  below). `targetPages` is typed `unknown` here — not `FormDefinition['targetPages']` — on
- *  purpose: it flows straight from whatever `ctx.forms.get()` handed back into a boundary function
- *  that normalizes it, so a differently-shaped store (a test double, or a future store revision)
- *  degrades to "not the facilities form" instead of a thrown TypeError. */
+ *  below). `targetPages` is typed `unknown` here — not `FormDefinition['targetPages']` — because
+ *  `targetsFacilitiesPage` is a boundary function that normalizes it (see that function's doc
+ *  comment for why: it accepts both the parsed array the real store returns and, defensively, a raw
+ *  JSON string), not because `ctx.forms` itself is loosely typed. */
 type ResolvedForm = { fields: FieldRef[]; targetPages: unknown };
 
 /** Resolve the submitted form so `apiProperty` and `targetPages` can be read. Returns
@@ -38,7 +38,7 @@ async function resolveForm(ctx: AppContext, formSchemaId: string | null | undefi
   const def = await ctx.forms.get(formSchemaId);
   if (!def) return { fields: [], targetPages: null };
   const schema = def.schema as { fields?: FieldRef[] } | undefined;
-  return { fields: schema?.fields ?? [], targetPages: (def as { targetPages?: unknown }).targetPages ?? null };
+  return { fields: schema?.fields ?? [], targetPages: def.targetPages ?? null };
 }
 
 /**
@@ -125,11 +125,11 @@ function hasCoreField(fields: FieldRef[]): boolean {
  * `ctx.forms.get()` (`packages/forms/src/store.ts`'s `toDefinition`) always hands back an
  * already-parsed array (or `null`) on the top-level `targetPages` property — never the raw JSON
  * string sitting in the `target_pages` column — so the real store never takes the string branch
- * below. The branch exists only because `AppContext['forms']` is a wide store type and this
- * function is handed whatever a caller's `ctx.forms.get()` returns at runtime, not a value this
- * module controls end to end; a test double or a future store revision that instead forwards the
- * raw column value degrades to a normal array check rather than crashing or silently accepting
- * a string that happens to contain the substring "facilities".
+ * below. The branch exists as defensive normalization at this boundary: `resolveForm` passes this
+ * function's `targetPages` parameter through as `unknown` (see `ResolvedForm`'s doc comment), so a
+ * test double or a future store revision that instead forwards the raw column value degrades to a
+ * normal array check rather than crashing or silently accepting a string that happens to contain
+ * the substring "facilities".
  */
 function targetsFacilitiesPage(targetPages: unknown): boolean {
   const arr = typeof targetPages === 'string' ? parseJsonArray(targetPages) : targetPages;

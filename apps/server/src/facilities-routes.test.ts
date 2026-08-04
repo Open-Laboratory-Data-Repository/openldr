@@ -23,6 +23,14 @@ const PATIENT_FORM_FIELDS = [
 // which is exactly the gap `targetsFacilitiesPage` closes — see facilities-routes.ts.
 const GENERIC_CORE_FIELD_FORM_FIELDS = [{ id: 'g1', apiProperty: 'name' }];
 
+// Fix 2 regression guard: a form that DOES target facilities (so `targetsFacilitiesPage` passes)
+// but maps NONE of its fields onto a CORE_FACILITY_KEYS column — `hasCoreField` must reject this
+// independently. Every other `targetPages: ['facilities']` fixture in this file (FORM_FIELDS,
+// and form-real-shape below) happens to ALSO carry a core field, so without this fixture and the
+// test built on it, stubbing `hasCoreField` to `() => true` would leave every test in this file
+// green — see hasCoreField's doc comment in facilities-routes.ts.
+const NO_CORE_FIELD_FORM_FIELDS = [{ id: 'n1', apiProperty: 'notes' }];
+
 function fakeCtx() {
   const rows: any[] = [];
   const audit: any[] = [];
@@ -41,6 +49,11 @@ function fakeCtx() {
       id: 'form-generic-core-field',
       schema: { fields: GENERIC_CORE_FIELD_FORM_FIELDS },
       targetPages: ['users'],
+    },
+    'form-no-core-field': {
+      id: 'form-no-core-field',
+      schema: { fields: NO_CORE_FIELD_FORM_FIELDS },
+      targetPages: ['facilities'],
     },
   };
   // Captures whatever options object actually reached `list()`, so tests can assert on what the
@@ -196,7 +209,7 @@ describe('facilities routes', () => {
     expect(res.json().error).toMatch(/form/i);
   });
 
-  it('C2: POST with no formSchemaId at all is a 400 (fieldsOf also resolves to [])', async () => {
+  it('C2: POST with no formSchemaId at all is a 400 (resolveForm also resolves to [])', async () => {
     const app = await appWith(fakeCtx());
     const res = await app.inject({
       method: 'POST', url: '/api/facilities',
@@ -321,6 +334,38 @@ describe('facilities routes', () => {
     });
     expect(res.statusCode).toBe(201);
     expect(res.json().localCode).toBe('LAB01');
+  });
+
+  // --- Fix 2: hasCoreField's own rejection must still be reachable, distinct from the
+  // targetsFacilitiesPage rejection above -----------------------------------------------------
+
+  it('Fix2: POST with a form that targets facilities but maps no field to a core key is a 400 for "no facility fields", not the target-page message', async () => {
+    const app = await appWith(fakeCtx());
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities',
+      payload: { answers: { n1: 'some note' }, formSchemaId: 'form-no-core-field', formVersion: 1 },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toMatch(/no facility fields/i);
+    // Distinguish this from targetsFacilitiesPage's rejection message — this form DOES target
+    // facilities, so the failure must be attributed to the field list, not the target page.
+    expect(res.json().error).not.toMatch(/target/i);
+  });
+
+  it('Fix2: PUT with a form that targets facilities but maps no field to a core key is a 400 for "no facility fields", not a write that replaces extras', async () => {
+    const ctx = fakeCtx();
+    const app = await appWith(ctx);
+    const id = (await app.inject({ method: 'POST', url: '/api/facilities', payload: body })).json().id;
+    expect(ctx.__rows[0].extras).toEqual({ catchmentPop: '42000' });
+
+    const res = await app.inject({
+      method: 'PUT', url: `/api/facilities/${id}`,
+      payload: { answers: { n1: 'some note' }, formSchemaId: 'form-no-core-field', formVersion: 1 },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toMatch(/no facility fields/i);
+    expect(ctx.__rows[0].extras).toEqual({ catchmentPop: '42000' });
+    expect(ctx.__audit.map((a: any) => a.action)).toEqual(['facility.create']); // no facility.update recorded
   });
 
   // --- I3: ordinary operator input must never produce a raw 500 ------------------------------

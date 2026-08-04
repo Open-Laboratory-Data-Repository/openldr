@@ -68,7 +68,7 @@ export function FacilityDialog({ open, onOpenChange, facility, onSaved }: Facili
   // own slug). The submit payload's formSchemaId below MUST be this id: the facilities route
   // resolves it via ctx.forms.get(formSchemaId) to read the field list back out, and a
   // schema-slug id simply will not resolve there (see apps/server/src/facilities-routes.ts's
-  // fieldsOf()), producing "the submitted form could not be resolved" on every save.
+  // resolveForm()), producing "the submitted form could not be resolved" on every save.
   const [formDefId, setFormDefId] = useState<string | null>(null);
   const [schemaLoading, setSchemaLoading] = useState(false);
   const [noForm, setNoForm] = useState(false);
