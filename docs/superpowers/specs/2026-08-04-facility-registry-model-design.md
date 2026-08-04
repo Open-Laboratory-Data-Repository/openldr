@@ -28,9 +28,9 @@ Location-vs-Organization question — see §6.
 ```
 facility_registry                          -- what we KNOW (curated)
   id              text  PK                 -- CE-generated, stable, machine-only; never typed
-  code            text  NOT NULL UNIQUE    -- OPERATOR-FACING code, assigned in OpenLDR (§2.1)
+  local_code      text  NULL UNIQUE       -- OURS. Required at DATA ENTRY, absent on imports (§2.1)
   national_system text  NULL               -- which register national_code belongs to (§4)
-  national_code   text  NULL               -- e.g. HFR '122023-5'. OPTIONAL — see §2.1
+  national_code   text  NULL               -- THEIRS, e.g. HFR '122023-5'. The ONLY code on imports
   name            text  NOT NULL           -- canonical, UNTRUNCATED
   level           text  NULL               -- 'Level IA2 (Dispensary Laboratory)'
   ownership       text  NULL               -- 'Private, For Profit'
@@ -52,16 +52,17 @@ facility_registry                          -- what we KNOW (curated)
   source          text  NOT NULL           -- 'import' | 'manual'
   created_at / updated_at
   UNIQUE (national_system, national_code) WHERE national_code IS NOT NULL
+  CHECK  (local_code IS NOT NULL OR national_code IS NOT NULL)   -- identifiable SOMEHOW (§2.1)
 
-facility_aliases                           -- what the DATA calls it (observed)
+facility_aliases                           -- what an incoming FEED calls it (observed)
   source_system   text  NOT NULL           -- per feed: 'urn:openldr:cdr:performer', 'lis-a', …
-  local_code      text  NOT NULL           -- the local code, or the observed display string
+  source_code     text  NOT NULL           -- the feed's code, or the observed display string
   registry_id     text  NOT NULL  FK → facility_registry.id
   created_at / created_by
-  PRIMARY KEY (source_system, local_code)
+  PRIMARY KEY (source_system, source_code)
 ```
 
-**The PK is the whole design.** `(source_system, local_code)` means *one alias resolves to exactly
+**The PK is the whole design.** `(source_system, source_code)` means *one alias resolves to exactly
 one facility*, while many aliases point at one registry row. That is the multi-LIS answer: a second
 LIS adds aliases, it never forks the registry. It also makes reconciliation idempotent — attaching
 an already-attached string is a no-op, not a duplicate.
@@ -74,25 +75,38 @@ them would make an unidentified facility unrepresentable and a re-key a cascade.
 
 ⚠ Do not collapse these. They answer different questions and have different lifetimes.
 
-| Column / table | Who assigns it | Required | Question it answers |
-|---|---|---|---|
-| `facility_registry.id` | CE, generated | always | "which row" — machine-stable, never shown, never typed |
-| `facility_registry.code` | **the operator, in OpenLDR** | **yes** | "what do WE call it" — short, human-facing, on screens and in exports |
-| `facility_registry.national_code` | the national register | **no** | "what does the COUNTRY call it" — external metadata, may never be known |
-| `facility_aliases.local_code` | each LIS feed | n/a | "what did the incoming DATA call it" — many per facility |
+| Column / table | Who assigns it | Question it answers |
+|---|---|---|
+| `facility_registry.id` | CE, generated | "which row" — machine-stable, never shown, never typed |
+| `facility_registry.local_code` | **the operator, at data entry** | "what do WE call it" |
+| `facility_registry.national_code` | the national register | "what does the COUNTRY call it" |
+| `facility_aliases.source_code` | each incoming feed | "what did the DATA call it" — many per facility |
 
-**`national_code` stays optional, and that is load-bearing.** All 23 facilities observed today have
-no national code. If it were required, no registry row could be created for them, and reconciliation
-— the one thing that must work before any national list arrives — would be blocked on a per-facility
-lookup against a portal with no bulk export.
+**Which code is required depends on how the row was created:**
 
-⛔ **`facility_registry.code` is NOT `facilities.facility_code`.** The latter is the *projection* of
-an ingested resource's first FHIR identifier (§6). They will look joinable and are not. Nor is it
-`facility_aliases.local_code`, which is per-feed and many-per-facility.
+| Row origin | `local_code` | `national_code` |
+|---|---|---|
+| Data entry at a lab | **required** | optional |
+| Imported / synced national registry | absent | **required** |
 
-⚠ **`code` is unique per INSTALL.** Two labs may each mint `LAB01` for different facilities; that is
-harmless while `origin='local'` rows never leave the lab (§8), but it is a collision the open
-"promote a local facility to central" question (§8.1) must resolve.
+⇒ `CHECK (local_code IS NOT NULL OR national_code IS NOT NULL)`. A facility must be identifiable
+*somehow*; neither code alone can be NOT NULL. **A nationally-imported row has no local code** — the
+national register has no concept of one — and a hand-entered facility may never acquire a national
+one. All 23 facilities observed today have no national code, so requiring it would block
+reconciliation on a per-facility lookup against a portal with no bulk export.
+
+⛔ **`facility_registry.local_code` (AUTHORED) is not `facility_aliases.source_code` (OBSERVED).**
+One is what this install decided to call the facility; the others are what arriving data happened to
+call it, many per facility. The alias column is deliberately NOT named `local_code` for exactly this
+reason.
+
+⛔ **Neither is `facilities.facility_code`**, the *projection* of an ingested resource's first FHIR
+identifier (§6). Three similarly-named columns, three different meanings; they will look joinable in
+a query and are not.
+
+⚠ **`local_code` is unique per INSTALL.** Two labs may each mint `LAB01` for different facilities —
+harmless while `origin='local'` rows never leave the lab (§8), but a collision the open "promote a
+local facility to central" question (§8.1) must resolve.
 
 ### 2.2 The administrative chain is columns, not jsonb
 
@@ -158,7 +172,7 @@ Measured today: the only facility signal is `diagnostic_reports.performer`, **13
 **23 distinct values**, **truncated to exactly 30 characters** (15 rows sit at the limit).
 
 - Each observed string becomes an alias with `source_system` naming the feed and `local_code` set to
-  **the string exactly as it arrived, truncation and all.** It is a match key, not a name.
+  **the string exactly as it arrived, truncation and all** (as `source_code`). It is a match key, not a name.
 - ⛔ **Never fuzzy-match or "un-truncate."** `International School of Tangan` must be attached by a
   human once, not guessed. `Dodoma` is a region name and `HYDOH`/`CDCIL`/`NHLQATC` are acronyms —
   precisely the cases where a similarity score is confidently wrong.
@@ -195,7 +209,7 @@ not exist yet, which is the only reason for `available: false` — flip it when 
 | | Users | Facilities |
 |---|---|---|
 | Form | `usersForm` | `facilityForm` (`sample-facility`, already seeded) |
-| Required contract | firstName, lastName, email | **name** (extend as agreed) |
+| Required contract | firstName, lastName, email | **local_code + name** |
 | Core columns | Keycloak identity | `facility_registry` columns (§2) |
 | Everything else | `user_profiles.extras` | `facility_registry.extras` |
 
@@ -214,10 +228,10 @@ One answer does not fit the three ways a facility gets created.
 
 | Layer | Required | Why |
 |---|---|---|
-| **DB** | `code`, `name` only | A reconciliation stub and a partially-known import row must both be STORABLE. NOT NULL on the rest would make them unrepresentable. |
-| **`PAGE_TARGETS.requiredKeys`** | `code`, `name` | The bare structural contract — what the page cannot function without. |
+| **DB** | `name`, plus at least one code | A reconciliation stub and a partially-known import row must both be STORABLE. NOT NULL on the rest would make them unrepresentable. |
+| **`PAGE_TARGETS.requiredKeys`** | `local_code`, `name` | The bare structural contract — what the page cannot function without. |
 | **The Facility FORM** (`required: true` per field) | `country`, `zone`, `region`, `district`, `status`, `level` | What a HUMAN must supply when creating a facility by hand. |
-| **Import** | `code`/`national_code` + `name`; **warns** on the rest | Rejecting 14,000 rows over a blank ward is worse than importing them and reporting the gaps. |
+| **Import** | `national_code` + `name`; **warns** on the rest | Rejecting 14,000 rows over a blank ward is worse than importing them and reporting the gaps. |
 
 **⭐ Putting the country-specific required set in the FORM is what makes this portable.** A form's
 `required` flags are per-field and **every install can edit them** — that is already true of the
