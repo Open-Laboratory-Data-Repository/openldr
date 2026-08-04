@@ -48,12 +48,19 @@ facility_registry                          -- what we KNOW (curated)
   latitude        numeric NULL
   longitude       numeric NULL
   extras          jsonb NOT NULL DEFAULT '{}'  -- form-added fields beyond the core (§7)
-  origin          text  NOT NULL           -- 'central' | 'local'  (§8 — decides overwrite)
+  managed_origin  text  NULL               -- NULL = lab-local | 'central' = central-managed (§8)
   source          text  NOT NULL           -- 'import' | 'manual'
   created_at / updated_at
   UNIQUE (national_system, national_code) WHERE national_code IS NOT NULL
   CHECK  (local_code IS NOT NULL OR national_code IS NOT NULL)   -- identifiable SOMEHOW (§2.1)
+```
 
+⚠ The column is `managed_origin`, not `origin`: migration 048 and `reference-apply.ts` already
+establish that name and semantics (NULL = lab-local, `'central'` = managed), and the applier's
+deletes are guarded by it. Reusing the convention means the sync task inherits that guard instead of
+reimplementing it.
+
+```
 facility_aliases                           -- what an incoming FEED calls it (observed)
   source_system   text  NOT NULL           -- per feed: 'urn:openldr:cdr:performer', 'lis-a', …
   source_code     text  NOT NULL           -- the feed's code, or the observed display string
