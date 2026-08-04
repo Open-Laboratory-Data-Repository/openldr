@@ -118,6 +118,31 @@ describe('splitFacilityAnswers — coding answers on core keys (ValueSet-bound l
     );
     expect(record).toEqual({});
   });
+
+  it('falls back to code when display is an empty string and code is real — display must not silently win', () => {
+    const { record } = splitFacilityAnswers(
+      [f('a', 'level')],
+      { a: { system: 'urn:openldr:cs:facility-type', code: 'level-ia2-dispensary-laboratory', display: '' } },
+    );
+    expect(record.level).toBe('level-ia2-dispensary-laboratory');
+  });
+
+  it('falls back to code when display is whitespace-only and code is real', () => {
+    const { record } = splitFacilityAnswers(
+      [f('a', 'status')],
+      { a: { system: 'urn:openldr:cs:facility-status', code: 'active', display: '   ' } },
+    );
+    expect(record.status).toBe('active');
+  });
+
+  it('omits from both record and extras when a core-key coding answer has display and code both blank', () => {
+    const { record, extras } = splitFacilityAnswers(
+      [f('a', 'level')],
+      { a: { system: 'urn:openldr:cs:facility-type', code: '', display: '' } },
+    );
+    expect(record).toEqual({});
+    expect(extras).toEqual({});
+  });
 });
 
 describe('facility-answers.ts stays browser-safe (Minor 5)', () => {

@@ -76,10 +76,15 @@ export function splitFacilityAnswers(
         continue;
       }
       // A ValueSet-bound `reference` field submits `{ system, code, display }`, not a string — flatten
-      // it to `display ?? code` so the column stays human-readable (existing reports group by the
-      // rendered level/status text) and hand-typed rows stay homogeneous with picked ones. Only on
-      // this core-column branch: `extras` is jsonb, where flattening would lose the code for nothing.
-      const flattened = isCodingLikeAnswer(raw) ? (raw.display ?? raw.code) : raw;
+      // it to `display`, falling back to `code` when `display` is missing, null, OR blank/whitespace-
+      // only (an empty display with a real code must not be dropped — `raw.display ?? raw.code` alone
+      // does not catch `''`, since nullish coalescing does not treat an empty string as nullish), so
+      // the column stays human-readable (existing reports group by the rendered level/status text)
+      // and hand-typed rows stay homogeneous with picked ones. Only on this core-column branch:
+      // `extras` is jsonb, where flattening would lose the code for nothing.
+      const flattened = isCodingLikeAnswer(raw)
+        ? (typeof raw.display === 'string' && raw.display.trim() !== '' ? raw.display : raw.code)
+        : raw;
       const text = typeof flattened === 'string' ? flattened.trim() : flattened;
       if (text === '' || text === null || text === undefined) continue; // blank omitted, not stored as ''
       record[key] = text;
