@@ -86,6 +86,33 @@ function firstString(v: unknown): string | undefined {
   return typeof v === 'string' ? v : undefined;
 }
 
+/** Whether the submitted form's field list maps ANY field onto a facility column — the guard
+ *  against a resolvable but UNRELATED form (a Patient form's `formSchemaId`, say) reaching the
+ *  write path. `fields.length > 0` alone is not enough: ANY resolvable form passes that check,
+ *  including one that has nothing to do with facilities. Without this, such a submission sails
+ *  through the empty-field-list guard, `splitFacilityAnswers` runs on fields none of which are
+ *  core columns, and the request proceeds to replace `extras` wholesale with that other form's
+ *  answers behind a legitimate-looking `facility.update`/`facility.create` audit entry — C2's
+ *  exact silent-data-loss failure mode, reached through a different input than "unresolvable". */
+function hasCoreField(fields: FieldRef[]): boolean {
+  return fields.some((f) => CORE_FACILITY_KEYS.has(f.apiProperty ?? ''));
+}
+
+/**
+ * `record.name` comes from arbitrary client JSON `answers`, so a field mapped onto `name` can
+ * carry a number, object, array, etc — not just a string. `undefined` ("no value was submitted for
+ * this field at all") is NOT a type error: POST treats that as "missing" and PUT keeps the
+ * existing name. Anything else non-string IS a type error distinct from "missing" — the operator
+ * DID supply something, so "name is required" would be misleading — and must be rejected here
+ * rather than reaching the `text NOT NULL` column un-coerced. POST and PUT both call this so they
+ * agree on the same input instead of drifting (POST used to report "required" for a
+ * submitted-but-wrong-type name; PUT used to silently coerce it straight into the DB).
+ */
+function nameTypeError(name: unknown): { error: string } | undefined {
+  if (name !== undefined && typeof name !== 'string') return { error: 'name must be text' };
+  return undefined;
+}
+
 // The national register runs 10-15k rows; an unbounded `limit` lets one request scan far past that
 // for no operator benefit. Comfortably above the whole register, well below "accidentally OOM".
 const MAX_LIST_LIMIT = 20000;
@@ -130,9 +157,15 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     // An empty field list means the submitted form could not be resolved — NOT "every field is
     // extras". Refuse the write rather than silently persisting nothing but a bare id.
     if (fields.length === 0) { reply.code(400); return { error: 'the submitted form could not be resolved' }; }
+    // A form that resolves but maps NONE of its fields onto a facility column is not a facility
+    // form (see hasCoreField's doc comment) — refuse it rather than building a "facility" out of
+    // some other form's answers.
+    if (!hasCoreField(fields)) { reply.code(400); return { error: 'the submitted form has no facility fields' }; }
 
     const { record, extras } = splitFacilityAnswers(fields, p.data.answers);
 
+    const nameErr = nameTypeError(record.name);
+    if (nameErr) { reply.code(400); return nameErr; }
     const name = typeof record.name === 'string' ? record.name : '';
     if (!name) { reply.code(400); return { error: 'name is required' }; }
 
@@ -141,11 +174,15 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       return { error: 'a facility must have a local code or a national code' };
     }
 
+    // Only the write itself is guarded — an error from `recordAudit` below must never be mapped
+    // as if it came from `upsert` (e.g. a 23505 from the audit table mis-reported to the client as
+    // "a facility with that local code already exists" after the facility row already committed).
+    let created;
     try {
       // ⛔ The id is ALWAYS generated here. The CSV importer derives ids deterministically from
       // sha256(nationalSystem|nationalCode), so a client-chosen id could collide with an imported
       // row and silently overwrite it.
-      const created = await ctx.facilityRegistry.upsert({
+      created = await ctx.facilityRegistry.upsert({
         ...record,
         id: randomUUID(),
         name,
@@ -153,13 +190,13 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
         // Lab-authored: managedOrigin stays NULL. Only the sync applier stamps 'central'.
         source: 'manual',
       } as never);
-
-      await recordAudit(ctx, req, { action: 'facility.create', entityType: 'facility', entityId: created.id, before: null, after: created });
-      reply.code(201);
-      return created;
     } catch (err) {
       return mapFacilityDbError(err, reply);
     }
+
+    await recordAudit(ctx, req, { action: 'facility.create', entityType: 'facility', entityId: created.id, before: null, after: created });
+    reply.code(201);
+    return created;
   });
 
   app.put('/api/facilities/:id', MANAGE, async (req, reply) => {
@@ -172,12 +209,18 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
 
     const fields = await fieldsOf(ctx, p.data.formSchemaId);
     if (fields.length === 0) { reply.code(400); return { error: 'the submitted form could not be resolved' }; }
+    // Same wrong-form guard as POST (see hasCoreField's doc comment) — without it a resolvable but
+    // unrelated form (a Patient form's formSchemaId, say) sails past the check above and silently
+    // replaces `extras` with that other form's answers behind a 200.
+    if (!hasCoreField(fields)) { reply.code(400); return { error: 'the submitted form has no facility fields' }; }
 
     const { record, extras } = splitFacilityAnswers(fields, p.data.answers);
     const cleared = clearedCoreKeys(fields, p.data.answers, record as Record<string, unknown>);
 
     // `name` is NOT NULL — a blanked name can never become a null write, only a 400.
     if (cleared.has('name')) { reply.code(400); return { error: 'name is required' }; }
+    const nameErr = nameTypeError(record.name);
+    if (nameErr) { reply.code(400); return nameErr; }
 
     const nulls: Record<string, null> = {};
     for (const key of cleared) nulls[key] = null;
@@ -190,18 +233,20 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       return { error: 'a facility must have a local code or a national code' };
     }
 
+    // Only the write itself is guarded — see the matching comment in POST.
+    let after;
     try {
-      const after = await ctx.facilityRegistry.upsert({
+      after = await ctx.facilityRegistry.upsert({
         ...before, ...record, ...nulls, id, name: record.name ?? before.name, extras,
         // An edit never changes who manages the row.
         managedOrigin: before.managedOrigin, source: before.source,
       } as never);
-
-      await recordAudit(ctx, req, { action: 'facility.update', entityType: 'facility', entityId: id, before, after });
-      return after;
     } catch (err) {
       return mapFacilityDbError(err, reply);
     }
+
+    await recordAudit(ctx, req, { action: 'facility.update', entityType: 'facility', entityId: id, before, after });
+    return after;
   });
 
   app.delete('/api/facilities/:id', MANAGE, async (req, reply) => {

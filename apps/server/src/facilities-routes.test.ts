@@ -9,6 +9,14 @@ const FORM_FIELDS = [
   { id: 'f4', apiProperty: 'catchmentPop' },
 ];
 
+// A resolvable form whose fields map onto NONE of CORE_FACILITY_KEYS — the "wrong form" case (Q2):
+// a Patient form's `formSchemaId`, submitted to the facilities endpoint by mistake or otherwise,
+// must not pass just because it resolves and its field list is non-empty.
+const PATIENT_FORM_FIELDS = [
+  { id: 'p1', apiProperty: 'patientName' },
+  { id: 'p2', apiProperty: 'dateOfBirth' },
+];
+
 function fakeCtx() {
   const rows: any[] = [];
   const audit: any[] = [];
@@ -16,13 +24,18 @@ function fakeCtx() {
   // `undefined`), distinct from the happy-path id used by every baseline test.
   const forms: Record<string, any> = {
     'form-sample-facility': { id: 'form-sample-facility', schema: { fields: FORM_FIELDS } },
+    'form-patient': { id: 'form-patient', schema: { fields: PATIENT_FORM_FIELDS } },
   };
+  // Captures whatever options object actually reached `list()`, so tests can assert on what the
+  // route computed rather than merely on the response's statusCode (a fake `list` that discards
+  // its argument makes query-param sanitisation tests tautological — see Q1).
+  let lastListOptions: any;
   return {
     audit: { record: async (e: any) => { audit.push(e); return e; } },
     logger: { error() {}, warn() {}, info() {} },
     forms: { get: async (formId: string) => forms[formId] },
     facilityRegistry: {
-      list: async () => rows,
+      list: async (opts?: any) => { lastListOptions = opts; return rows; },
       get: async (id: string) => rows.find((r) => r.id === id),
       upsert: async (rec: any) => {
         const i = rows.findIndex((r) => r.id === rec.id);
@@ -41,6 +54,7 @@ function fakeCtx() {
     },
     __rows: rows,
     __audit: audit,
+    get __lastListOptions() { return lastListOptions; },
   } as any;
 }
 
@@ -189,6 +203,39 @@ describe('facilities routes', () => {
     expect(ctx.__rows[0].extras).toEqual({ catchmentPop: '42000' });
   });
 
+  // --- Q2: a RESOLVABLE but UNRELATED form must never wipe extras with a silent 200 -----------
+  // (distinct from C2 above: `fields.length > 0` here, so the empty-field-list guard alone does
+  // NOT catch this — the guard checked the wrong invariant.)
+
+  it('Q2: PUT with a resolvable-but-unrelated form (a Patient form) is a 400, not a write that replaces extras', async () => {
+    const ctx = fakeCtx();
+    const app = await appWith(ctx);
+    const id = (await app.inject({ method: 'POST', url: '/api/facilities', payload: body })).json().id;
+    expect(ctx.__rows[0].extras).toEqual({ catchmentPop: '42000' });
+
+    const res = await app.inject({
+      method: 'PUT', url: `/api/facilities/${id}`,
+      payload: { answers: { p1: 'John Doe', p2: '2000-01-01' }, formSchemaId: 'form-patient', formVersion: 1 },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toMatch(/facility/i);
+    // C2's exact failure mode — silent data loss behind a 200 — reached through a form that
+    // resolves and has fields, unlike the C2 tests above.
+    expect(ctx.__rows[0].extras).toEqual({ catchmentPop: '42000' });
+    expect(ctx.__rows[0].localCode).toBe('LAB01');
+    expect(ctx.__audit.map((a: any) => a.action)).toEqual(['facility.create']); // no facility.update was recorded
+  });
+
+  it('Q2: POST with a resolvable-but-unrelated form is a 400, not a facility built from another form\'s answers', async () => {
+    const app = await appWith(fakeCtx());
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities',
+      payload: { answers: { p1: 'John Doe', p2: '2000-01-01' }, formSchemaId: 'form-patient', formVersion: 1 },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toMatch(/facility/i);
+  });
+
   // --- I3: ordinary operator input must never produce a raw 500 ------------------------------
 
   it('I3: a duplicate local code is a 409 with a human message, not a raw 500', async () => {
@@ -223,6 +270,35 @@ describe('facilities routes', () => {
       payload: { ...body, answers: { f1: 'LAB02', f3: 'Dodoma Region' } },
     });
     expect(res.statusCode).toBe(400);
+  });
+
+  // --- Q3: POST and PUT must agree on a non-string name, and neither may write one -----------
+
+  it('Q3: POST with a non-string name is a 400 "name must be text", not the misleading "required"', async () => {
+    const app = await appWith(fakeCtx());
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities',
+      payload: { ...body, answers: { ...body.answers, f2: 42 } },
+    });
+    expect(res.statusCode).toBe(400);
+    // A name WAS supplied — "required" would be a lie. Pin the actual (distinct) message so this
+    // test fails if the two error paths drift back apart.
+    expect(res.json().error).toBe('name must be text');
+  });
+
+  it('Q3: PUT with a non-string name is a 400 and never stores the raw JS value in the text column', async () => {
+    const ctx = fakeCtx();
+    const app = await appWith(ctx);
+    const id = (await app.inject({ method: 'POST', url: '/api/facilities', payload: body })).json().id;
+
+    const res = await app.inject({
+      method: 'PUT', url: `/api/facilities/${id}`,
+      payload: { ...body, answers: { ...body.answers, f2: 42 } },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toBe('name must be text');
+    // Not coerced into the DB as the number 42 — the original string survives.
+    expect(ctx.__rows[0].name).toBe('Dodoma Regional Referral');
   });
 
   // --- I5: capability gating must actually be exercised by the tests -------------------------
@@ -265,23 +341,36 @@ describe('facilities routes', () => {
     await app.inject({ method: 'POST', url: '/api/facilities', payload: body });
     const res = await app.inject({ method: 'GET', url: '/api/facilities?limit=abc' });
     expect(res.statusCode).toBe(200);
+    // Must reach the store as "not specified" (undefined) — never as `Number('abc')` === NaN,
+    // which `.limit(NaN)` is not the same thing as "no limit clause" for.
+    expect(ctx.__lastListOptions.limit).toBeUndefined();
   });
 
   it('ignores a non-positive limit', async () => {
-    const app = await appWith(fakeCtx());
+    const ctx = fakeCtx();
+    const app = await appWith(ctx);
     const res = await app.inject({ method: 'GET', url: '/api/facilities?limit=-5' });
     expect(res.statusCode).toBe(200);
+    expect(ctx.__lastListOptions.limit).toBeUndefined();
   });
 
   it('tolerates a repeated limit param (Fastify parses it as an array)', async () => {
-    const app = await appWith(fakeCtx());
+    const ctx = fakeCtx();
+    const app = await appWith(ctx);
     const res = await app.inject({ method: 'GET', url: '/api/facilities?limit=1&limit=2' });
     expect(res.statusCode).toBe(200);
+    // `Number(['1','2'])` is NaN — the sanitiser must reject the array outright, not stringify it
+    // and not let it through as an array either.
+    expect(ctx.__lastListOptions.limit).toBeUndefined();
   });
 
   it('tolerates a repeated filter param instead of passing an array to the store', async () => {
-    const app = await appWith(fakeCtx());
+    const ctx = fakeCtx();
+    const app = await appWith(ctx);
     const res = await app.inject({ method: 'GET', url: '/api/facilities?region=A&region=B' });
     expect(res.statusCode).toBe(200);
+    // Must reach the store as undefined ("not specified") — never as the raw ['A','B'] array,
+    // which Kysely's `.where('region', '=', [...])` does not mean "repeated param, take neither".
+    expect(ctx.__lastListOptions.region).toBeUndefined();
   });
 });
