@@ -1,5 +1,5 @@
-import { createHash } from 'node:crypto';
 import type { Kysely } from 'kysely';
+import { canonicalHash } from '@openldr/core';
 import type { InternalSchema } from './schema/internal';
 import type { ReferenceCapture } from './reference-capture';
 
@@ -117,9 +117,10 @@ function toRow(rec: FacilityRecord): Omit<Row, 'created_at' | 'updated_at'> {
   };
 }
 
-/** Hash the STORED record, not the input, so the captured hash reflects what is served. */
+// Hash the STORED record, not the input, so the captured hash reflects what is served — stable
+// against jsonb key reordering (canonicalHash sorts keys), matching report-store.ts's hashOf.
 function hashOf(rec: FacilityRecord): string {
-  return createHash('sha256').update(JSON.stringify(rec)).digest('hex');
+  return canonicalHash(rec);
 }
 
 export function createFacilityRegistryStore(
@@ -179,6 +180,9 @@ export function createFacilityRegistryStore(
           created_by: alias.createdBy ?? null,
         } as never)
         .onConflict((oc) =>
+          // Only registry_id moves on a re-point. created_by is deliberately left alone — it
+          // records who FIRST created this alias, not who re-pointed it most recently. Creation
+          // provenance is separate from the alias's current target.
           oc.columns(['source_system', 'source_code']).doUpdateSet({ registry_id: alias.registryId } as never),
         )
         .execute();
