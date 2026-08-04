@@ -112,7 +112,7 @@ identifier (§6). Three similarly-named columns, three different meanings; they 
 a query and are not.
 
 ⚠ **`local_code` is unique per INSTALL.** Two labs may each mint `LAB01` for different facilities —
-harmless while `origin='local'` rows never leave the lab (§8), but a collision the open "promote a
+harmless while lab-local rows never leave the lab (§8), but a collision the open "promote a
 local facility to central" question (§8.1) must resolve.
 
 ### 2.2 The administrative chain is columns, not jsonb
@@ -272,18 +272,22 @@ of §2's PK.
 
 A central-managed row that a lab edits gets clobbered on the next pull — the same trade already
 accepted for managed seed designs. But a lab legitimately needs to create facilities the national
-list does not have. Hence **`origin`**:
+list does not have. Hence **`managed_origin`**:
 
-- `origin='central'` — replaceable by down-sync. A lab's edits to these WILL be lost.
-- `origin='local'` — created at the lab; **down-sync must never touch these**, and they must survive
+- `managed_origin='central'` — replaceable by down-sync. A lab's edits to these WILL be lost.
+- `managed_origin` NULL (lab-local) — created at the lab; **down-sync must never touch these**, and they must survive
   a full registry replace.
 
-Without that column the first sync after a lab adds a facility silently deletes it, which is exactly
+Without that stamp the first sync after a lab adds a facility silently deletes it, which is exactly
 the class of failure that is invisible until someone goes looking for a facility that was there
 yesterday.
 
-**Open:** whether a lab may *promote* a local facility to central (submit it upward for inclusion),
-or whether that is an out-of-band request. Not designed.
+**Open:** whether a lab may *promote* a lab-local facility to central (submit it upward for
+inclusion), or whether that is an out-of-band request. Not designed.
+
+⚠ Naming: this spec originally said `origin`. The shipped column is **`managed_origin`**, matching
+migration 048 and `reference-apply.ts`, whose deletes are already guarded by that stamp — reusing
+the convention inherits the guard rather than reimplementing it.
 
 ## 9. Open questions for review
 
@@ -299,7 +303,7 @@ or whether that is an out-of-band request. Not designed.
 5. **What is the required set beyond `name`?** The page-target contract says `name` only. Candidates
    for *core columns* (indexable, joinable) are `region`, `council`, `status`, `level`; everything
    else could start in `extras`.
-6. **May a lab promote a `origin='local'` facility to central?** (§8.1)
+6. **May a lab promote a lab-local (`managed_origin` NULL) facility to central?** (§8.1)
 
 ## 8. Out of scope
 
