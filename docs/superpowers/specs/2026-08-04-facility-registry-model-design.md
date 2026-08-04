@@ -41,6 +41,8 @@ facility_registry                          -- what we KNOW (curated)
   phone           text  NULL
   latitude        numeric NULL
   longitude       numeric NULL
+  extras          jsonb NOT NULL DEFAULT '{}'  -- form-added fields beyond the core (§7)
+  origin          text  NOT NULL           -- 'central' | 'local'  (§8 — decides overwrite)
   source          text  NOT NULL           -- 'import' | 'manual'
   created_at / updated_at
   UNIQUE (national_system, national_code) WHERE national_code IS NOT NULL
@@ -134,20 +136,87 @@ Ingested resources keep projecting to `facilities` exactly as they do now, which
 and the alias table bridges observation to registry regardless. Whoever eventually fixes ingest or
 DHIS2 BUG 11 still has to pick an anchor for *those* paths — but it no longer blocks this work.
 
-## 7. Open questions for review
+## 7. The Facilities page = the Users pattern (decided)
 
-1. **Does the registry sync to central?** A dedicated table rides neither terminology sync nor the
-   FHIR `change_log`, so lab and central would maintain separate registries unless something is
-   built. Given a central aggregates many labs, it plausibly wants to *own* the registry and push it
-   down — which is the opposite direction from most sync here.
-2. **Does anything consume it yet?** `q-facilities` and `q-amr-facility-summary` currently read
+The Users page is already exactly this, and it is worth copying rather than reinventing:
+
+- `UserDialog.tsx` renders **`<FormRuntime>` driven by a `FormSchema`** — the page's fields come
+  from a *form*, not from hardcoded JSX.
+- `CORE_KEYS = {firstName, lastName, email}` are written to **real identity columns**.
+- **Every other `apiProperty` goes to `user_profiles.extras`**, a `jsonb NOT NULL DEFAULT '{}'`
+  (migration 021). So an admin can add a field to the form and it persists **with no migration**.
+- `PAGE_TARGETS` declares the contract: `users` requires `firstName`/`lastName`/`email`.
+
+Facilities gets the same shape, and **the contract is already declared**:
+`{ id: 'facilities', match: 'apiProperty', requiredKeys: ['name'], available: false }`. The page does
+not exist yet, which is the only reason for `available: false` — flip it when the page ships.
+
+| | Users | Facilities |
+|---|---|---|
+| Form | `usersForm` | `facilityForm` (`sample-facility`, already seeded) |
+| Required contract | firstName, lastName, email | **name** (extend as agreed) |
+| Core columns | Keycloak identity | `facility_registry` columns (§2) |
+| Everything else | `user_profiles.extras` | `facility_registry.extras` |
+
+That answers "required fields, but expandable later": the **required set is the page-target
+contract**, the **core columns are what the registry can query and join on**, and **anything the
+form adds beyond them lands in `extras` without a migration**. Promoting a popular extra to a real
+column later is a migration you choose, not one you are forced into.
+
+⚠ One asymmetry to respect: a column can be indexed and joined; an `extras` key cannot. So the core
+set should cover anything reports filter or group by — `region`, `council`, `status`, `level` — and
+`extras` should hold the descriptive rest.
+
+## 8. Sync: central owns it, labs receive it (decided)
+
+**Direction is central → lab**, which is the opposite of most sync here and is already the
+established pattern for reference data.
+
+**The bus exists and is generic.** `reference_change_log` (`packages/db/src/reference-change-log.ts`)
+carries a closed `ReferenceEntityType` union — `form`, `dashboard`, `report`, `report_design`,
+`custom_query`, `setting`, `publisher`, `coding_system`, `term_mapping`, `terminology_system`,
+`concept_map`. Config stores call `recordReferenceChange` **inside their own write transaction**, so
+capture is atomic with the write. `packages/sync/src/terminology-sync.ts` is explicitly the lab-side
+puller for *central-managed* systems. Adding `facility_registry` to that union is the mechanism —
+no new transport.
+
+⚠ **`facility_aliases` must NOT sync, in either direction.** An alias maps *one lab's* LIS codes to
+a registry entry; it is meaningless at central and actively wrong at another lab, whose identical
+local code may mean a different facility. Registry down, aliases local — the split falls straight out
+of §2's PK.
+
+### 8.1 ⛔ The overwrite trap
+
+A central-managed row that a lab edits gets clobbered on the next pull — the same trade already
+accepted for managed seed designs. But a lab legitimately needs to create facilities the national
+list does not have. Hence **`origin`**:
+
+- `origin='central'` — replaceable by down-sync. A lab's edits to these WILL be lost.
+- `origin='local'` — created at the lab; **down-sync must never touch these**, and they must survive
+  a full registry replace.
+
+Without that column the first sync after a lab adds a facility silently deletes it, which is exactly
+the class of failure that is invisible until someone goes looking for a facility that was there
+yesterday.
+
+**Open:** whether a lab may *promote* a local facility to central (submit it upward for inclusion),
+or whether that is an out-of-band request. Not designed.
+
+## 9. Open questions for review
+
+1. ~~Does the registry sync?~~ **ANSWERED — central → lab, over the existing
+   `reference_change_log` bus. See §8.**
+2. ~~Manual capture path?~~ **ANSWERED — the Users pattern: FormRuntime + core columns + `extras`.
+   See §7.**
+3. **Does anything consume it yet?** `q-facilities` and `q-amr-facility-summary` currently read
    `patients.managing_organization` (1/589). Rewiring them to the registry is a follow-on, and
    worth confirming it is wanted before the join is designed.
-3. **Manual capture path.** The Facility form (`sample-facility`) currently targets `forms`, and the
-   `facilities` page target is `available: false`. Does the form write to `facility_registry`, or
-   does the registry get its own admin page?
 4. **Does the lab order need a facility field at all**, or is facility derived from the ordering
    context? This decides whether the entity resolver (`ENTITY_TARGETS`) work is needed.
+5. **What is the required set beyond `name`?** The page-target contract says `name` only. Candidates
+   for *core columns* (indexable, joinable) are `region`, `council`, `status`, `level`; everything
+   else could start in `extras`.
+6. **May a lab promote a `origin='local'` facility to central?** (§8.1)
 
 ## 8. Out of scope
 
