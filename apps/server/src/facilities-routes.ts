@@ -20,15 +20,25 @@ const SubmitSchema = z.object({
 
 type FieldRef = { id: string; apiProperty?: string | null };
 
-/** Resolve the submitted form's field list so `apiProperty` can be read per answer. Returns `[]`
- *  both when no form id was submitted AND when the id does not resolve — callers MUST treat an
- *  empty list as "the form could not be resolved" and refuse to write, never as "no core fields,
- *  everything is extras" (see the empty-field-list guards in POST/PUT below). */
-async function fieldsOf(ctx: AppContext, formSchemaId: string | null | undefined): Promise<FieldRef[]> {
-  if (!formSchemaId) return [];
+/** Everything the POST/PUT guards need from the submitted `formSchemaId`: the field list (for
+ *  `hasCoreField`/`splitFacilityAnswers`) and the form's `targetPages` (for `targetsFacilitiesPage`
+ *  below). `targetPages` is typed `unknown` here — not `FormDefinition['targetPages']` — on
+ *  purpose: it flows straight from whatever `ctx.forms.get()` handed back into a boundary function
+ *  that normalizes it, so a differently-shaped store (a test double, or a future store revision)
+ *  degrades to "not the facilities form" instead of a thrown TypeError. */
+type ResolvedForm = { fields: FieldRef[]; targetPages: unknown };
+
+/** Resolve the submitted form so `apiProperty` and `targetPages` can be read. Returns
+ *  `{ fields: [], targetPages: null }` both when no form id was submitted AND when the id does not
+ *  resolve — callers MUST treat an empty field list as "the form could not be resolved" and refuse
+ *  to write, never as "no core fields, everything is extras" (see the empty-field-list guards in
+ *  POST/PUT below). */
+async function resolveForm(ctx: AppContext, formSchemaId: string | null | undefined): Promise<ResolvedForm> {
+  if (!formSchemaId) return { fields: [], targetPages: null };
   const def = await ctx.forms.get(formSchemaId);
-  const schema = def?.schema as { fields?: FieldRef[] } | undefined;
-  return schema?.fields ?? [];
+  if (!def) return { fields: [], targetPages: null };
+  const schema = def.schema as { fields?: FieldRef[] } | undefined;
+  return { fields: schema?.fields ?? [], targetPages: (def as { targetPages?: unknown }).targetPages ?? null };
 }
 
 /**
@@ -86,16 +96,53 @@ function firstString(v: unknown): string | undefined {
   return typeof v === 'string' ? v : undefined;
 }
 
-/** Whether the submitted form's field list maps ANY field onto a facility column — the guard
- *  against a resolvable but UNRELATED form (a Patient form's `formSchemaId`, say) reaching the
- *  write path. `fields.length > 0` alone is not enough: ANY resolvable form passes that check,
- *  including one that has nothing to do with facilities. Without this, such a submission sails
- *  through the empty-field-list guard, `splitFacilityAnswers` runs on fields none of which are
- *  core columns, and the request proceeds to replace `extras` wholesale with that other form's
- *  answers behind a legitimate-looking `facility.update`/`facility.create` audit entry — C2's
- *  exact silent-data-loss failure mode, reached through a different input than "unresolvable". */
+/** Whether the submitted form's field list maps ANY field onto a facility column. On its own this
+ *  is only a PROXY for "this is the facilities form" — a form that happens to declare a generic
+ *  core key such as `name` (e.g. Users' first/last name fields do not collide, but nothing stops a
+ *  future form from reusing `name`) would pass even though it has nothing to do with facilities.
+ *  Kept as a second, independent check alongside `targetsFacilitiesPage` below (not dropped): a
+ *  form can correctly declare `targetPages: ['facilities']` and still, through a builder bug or an
+ *  unfinished draft, carry fields with no `apiProperty` wired up at all — `targetsFacilitiesPage`
+ *  alone would let that through and hand `splitFacilityAnswers` a field list with nothing to
+ *  split, silently building a facility (POST) or wiping `extras` (PUT) out of a form that
+ *  currently persists nothing. Both checks must hold; see the doc comments at each call site for
+ *  which failure mode each one alone misses. */
 function hasCoreField(fields: FieldRef[]): boolean {
   return fields.some((f) => CORE_FACILITY_KEYS.has(f.apiProperty ?? ''));
+}
+
+/**
+ * Whether the resolved form actually TARGETS the `facilities` page (`packages/forms/src/page-
+ * targets.ts`'s `PAGE_TARGETS`), the strong signal Task 5 / migration 071 introduced: the seeded
+ * Facility form now carries `targetPages: ['facilities']` on both the `target_pages` column and
+ * the embedded `schema.targetPages` (kept in sync by `FormBuilderPage.tsx`'s save path — see
+ * 071's file-level comment), and the `facilities` PAGE_TARGET is `available: true`. This is the
+ * guard `hasCoreField` alone could not provide: `hasCoreField` only asks "does some field map onto
+ * a core column", which a Patient/Users form sharing a key like `name` can satisfy by accident;
+ * `targetPages` is a deliberate, page-scoped declaration an operator makes in the builder's target
+ * picker, not a coincidence of field naming.
+ *
+ * `ctx.forms.get()` (`packages/forms/src/store.ts`'s `toDefinition`) always hands back an
+ * already-parsed array (or `null`) on the top-level `targetPages` property — never the raw JSON
+ * string sitting in the `target_pages` column — so the real store never takes the string branch
+ * below. The branch exists only because `AppContext['forms']` is a wide store type and this
+ * function is handed whatever a caller's `ctx.forms.get()` returns at runtime, not a value this
+ * module controls end to end; a test double or a future store revision that instead forwards the
+ * raw column value degrades to a normal array check rather than crashing or silently accepting
+ * a string that happens to contain the substring "facilities".
+ */
+function targetsFacilitiesPage(targetPages: unknown): boolean {
+  const arr = typeof targetPages === 'string' ? parseJsonArray(targetPages) : targetPages;
+  return Array.isArray(arr) && arr.includes('facilities');
+}
+
+function parseJsonArray(raw: string): unknown[] | undefined {
+  try {
+    const v: unknown = JSON.parse(raw);
+    return Array.isArray(v) ? v : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /**
@@ -153,13 +200,20 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     const p = SubmitSchema.safeParse(req.body);
     if (!p.success) { reply.code(400); return { error: p.error.message }; }
 
-    const fields = await fieldsOf(ctx, p.data.formSchemaId);
+    const { fields, targetPages } = await resolveForm(ctx, p.data.formSchemaId);
     // An empty field list means the submitted form could not be resolved — NOT "every field is
     // extras". Refuse the write rather than silently persisting nothing but a bare id.
     if (fields.length === 0) { reply.code(400); return { error: 'the submitted form could not be resolved' }; }
-    // A form that resolves but maps NONE of its fields onto a facility column is not a facility
-    // form (see hasCoreField's doc comment) — refuse it rather than building a "facility" out of
-    // some other form's answers.
+    // The resolved form must actually declare itself the facilities form (see
+    // targetsFacilitiesPage's doc comment) — refuse a resolvable-but-unrelated form before it ever
+    // reaches splitFacilityAnswers.
+    if (!targetsFacilitiesPage(targetPages)) {
+      reply.code(400);
+      return { error: 'the submitted form does not target the facility registry (targetPages must include "facilities")' };
+    }
+    // A form that targets facilities but maps NONE of its fields onto a facility column is not
+    // usable either (see hasCoreField's doc comment) — refuse it rather than building a "facility"
+    // out of a field list with nothing wired to a core column.
     if (!hasCoreField(fields)) { reply.code(400); return { error: 'the submitted form has no facility fields' }; }
 
     const { record, extras } = splitFacilityAnswers(fields, p.data.answers);
@@ -207,11 +261,15 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     const before = await ctx.facilityRegistry.get(id);
     if (!before) { reply.code(404); return { error: 'not found' }; }
 
-    const fields = await fieldsOf(ctx, p.data.formSchemaId);
+    const { fields, targetPages } = await resolveForm(ctx, p.data.formSchemaId);
     if (fields.length === 0) { reply.code(400); return { error: 'the submitted form could not be resolved' }; }
-    // Same wrong-form guard as POST (see hasCoreField's doc comment) — without it a resolvable but
-    // unrelated form (a Patient form's formSchemaId, say) sails past the check above and silently
-    // replaces `extras` with that other form's answers behind a 200.
+    // Same wrong-form guard as POST (see targetsFacilitiesPage's doc comment) — without it a
+    // resolvable but unrelated form (a Patient form's formSchemaId, say) sails past the check
+    // above and silently replaces `extras` with that other form's answers behind a 200.
+    if (!targetsFacilitiesPage(targetPages)) {
+      reply.code(400);
+      return { error: 'the submitted form does not target the facility registry (targetPages must include "facilities")' };
+    }
     if (!hasCoreField(fields)) { reply.code(400); return { error: 'the submitted form has no facility fields' }; }
 
     const { record, extras } = splitFacilityAnswers(fields, p.data.answers);

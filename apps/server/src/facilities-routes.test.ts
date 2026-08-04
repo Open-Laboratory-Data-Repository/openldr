@@ -17,14 +17,31 @@ const PATIENT_FORM_FIELDS = [
   { id: 'p2', apiProperty: 'dateOfBirth' },
 ];
 
+// Task 5 follow-up: a form that maps a field onto a GENERIC core key (`name` — also used by the
+// Users page, say) but was never pointed at the facilities page in the builder's target picker.
+// `hasCoreField` alone would pass this (it only checks whether ANY field maps to a core column),
+// which is exactly the gap `targetsFacilitiesPage` closes — see facilities-routes.ts.
+const GENERIC_CORE_FIELD_FORM_FIELDS = [{ id: 'g1', apiProperty: 'name' }];
+
 function fakeCtx() {
   const rows: any[] = [];
   const audit: any[] = [];
   // Keyed by form id so a test can submit an id that does NOT resolve (`ctx.forms.get` returns
   // `undefined`), distinct from the happy-path id used by every baseline test.
+  //
+  // `targetPages` is set at the TOP level of each form object, matching the real
+  // `packages/forms/src/store.ts`'s `toDefinition` return shape (an already-parsed array on
+  // `FormDefinition.targetPages`, never a JSON string, never nested under `schema`) — the route's
+  // `resolveForm`/`targetsFacilitiesPage` read exactly that property. See the "Task 5" test below
+  // for a fixture built to look unmistakably like a real store row, not just this shorthand.
   const forms: Record<string, any> = {
-    'form-sample-facility': { id: 'form-sample-facility', schema: { fields: FORM_FIELDS } },
-    'form-patient': { id: 'form-patient', schema: { fields: PATIENT_FORM_FIELDS } },
+    'form-sample-facility': { id: 'form-sample-facility', schema: { fields: FORM_FIELDS }, targetPages: ['facilities'] },
+    'form-patient': { id: 'form-patient', schema: { fields: PATIENT_FORM_FIELDS }, targetPages: ['forms'] },
+    'form-generic-core-field': {
+      id: 'form-generic-core-field',
+      schema: { fields: GENERIC_CORE_FIELD_FORM_FIELDS },
+      targetPages: ['users'],
+    },
   };
   // Captures whatever options object actually reached `list()`, so tests can assert on what the
   // route computed rather than merely on the response's statusCode (a fake `list` that discards
@@ -236,6 +253,76 @@ describe('facilities routes', () => {
     expect(res.json().error).toMatch(/facility/i);
   });
 
+  // --- Task 5 follow-up: `hasCoreField` alone is only a PROXY for "this is the facilities form" —
+  // a form that maps a field onto a generic core key (`name`) but was never pointed at the
+  // facilities page in the builder must still be rejected. Without `targetsFacilitiesPage`,
+  // `hasCoreField` alone would pass GENERIC_CORE_FIELD_FORM_FIELDS (it maps `g1` -> `name`, a real
+  // CORE_FACILITY_KEYS entry) and let a holder of `facilities.manage` drive the split with an
+  // unrelated form's field list, replacing `extras` on PUT.
+
+  it('Task 5: PUT with a form that maps a generic core key but does not target facilities is a 400, not a write that replaces extras', async () => {
+    const ctx = fakeCtx();
+    const app = await appWith(ctx);
+    const id = (await app.inject({ method: 'POST', url: '/api/facilities', payload: body })).json().id;
+    expect(ctx.__rows[0].extras).toEqual({ catchmentPop: '42000' });
+
+    const res = await app.inject({
+      method: 'PUT', url: `/api/facilities/${id}`,
+      payload: { answers: { g1: 'Hijacked Name' }, formSchemaId: 'form-generic-core-field', formVersion: 1 },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toMatch(/facility/i);
+    expect(res.json().error).toMatch(/target/i);
+    // The split never ran — extras and the pre-existing name both survive untouched.
+    expect(ctx.__rows[0].extras).toEqual({ catchmentPop: '42000' });
+    expect(ctx.__rows[0].name).toBe('Dodoma Regional Referral');
+    expect(ctx.__audit.map((a: any) => a.action)).toEqual(['facility.create']); // no facility.update recorded
+  });
+
+  it('Task 5: POST with a form that maps a generic core key but does not target facilities is a 400', async () => {
+    const app = await appWith(fakeCtx());
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities',
+      payload: { answers: { g1: 'Hijacked Name' }, formSchemaId: 'form-generic-core-field', formVersion: 1 },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toMatch(/facility/i);
+    expect(res.json().error).toMatch(/target/i);
+  });
+
+  it('Task 5: the seeded facility form — carrying targetPages exactly as the real store returns it — is accepted', async () => {
+    // Deliberately hand-built to look like `packages/forms/src/store.ts`'s `toDefinition` output
+    // rather than reusing the `fakeCtx` shorthand: a top-level `targetPages` array (never a JSON
+    // string, never nested under `schema`), plus the other fields a real FormDefinition row
+    // carries, so this test would catch the route reading the wrong property name.
+    const ctx = fakeCtx();
+    (ctx.forms as any).get = async (formId: string) => {
+      if (formId !== 'form-real-shape') return undefined;
+      return {
+        id: 'form-real-shape',
+        name: 'Facility',
+        versionLabel: null,
+        fhirResourceType: 'Location',
+        fhirVersion: null,
+        fhirProfileUrl: null,
+        facilityId: null,
+        status: 'published',
+        active: true,
+        schema: { fields: FORM_FIELDS },
+        targetPages: ['facilities'],
+        createdAt: '2026-01-01T00:00:00Z',
+        updatedAt: '2026-01-01T00:00:00Z',
+      };
+    };
+    const app = await appWith(ctx);
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities',
+      payload: { ...body, formSchemaId: 'form-real-shape' },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(res.json().localCode).toBe('LAB01');
+  });
+
   // --- I3: ordinary operator input must never produce a raw 500 ------------------------------
 
   it('I3: a duplicate local code is a 409 with a human message, not a raw 500', async () => {
@@ -372,5 +459,30 @@ describe('facilities routes', () => {
     // Must reach the store as undefined ("not specified") — never as the raw ['A','B'] array,
     // which Kysely's `.where('region', '=', [...])` does not mean "repeated param, take neither".
     expect(ctx.__lastListOptions.region).toBeUndefined();
+  });
+
+  // --- Positive direction: a GOOD param must actually reach the store, not just a bad one being
+  // dropped. Every test above only proves parseLimit/firstString reject junk; none of them prove a
+  // valid value survives the trip — a `parseLimit`/`firstString` stubbed to `() => undefined` would
+  // leave the whole suite above green while the studio's `?limit=2000` (FACILITIES_LIST_LIMIT in
+  // apps/studio/src/api.ts) silently falls back to the store's own 200-row default and the
+  // truncation banner (which compares the returned row count against that same constant) never
+  // fires — the exact defect the banner exists to make visible. See the report for the deliberate
+  // stub experiment that proves these two tests actually catch that regression.
+
+  it('a valid ?limit reaches the store as the number, not a string', async () => {
+    const ctx = fakeCtx();
+    const app = await appWith(ctx);
+    const res = await app.inject({ method: 'GET', url: '/api/facilities?limit=50' });
+    expect(res.statusCode).toBe(200);
+    expect(ctx.__lastListOptions.limit).toBe(50);
+  });
+
+  it('a valid ?region reaches the store as the string', async () => {
+    const ctx = fakeCtx();
+    const app = await appWith(ctx);
+    const res = await app.inject({ method: 'GET', url: '/api/facilities?region=Dodoma' });
+    expect(res.statusCode).toBe(200);
+    expect(ctx.__lastListOptions.region).toBe('Dodoma');
   });
 });
