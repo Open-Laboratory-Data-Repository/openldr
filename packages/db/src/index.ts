@@ -66,3 +66,7 @@ export type { AnswerField, FacilityAnswerSplit } from './facility-answers';
 // sample. packages/db must not depend on @openldr/forms (forms already depends on db), so the
 // comparison has to run from the forms side — see packages/forms/src/samples/forms.test.ts.
 export { NEW_FIELDS_SNAPSHOT as FACILITY_FORM_MIGRATION_NEW_FIELDS } from './migrations/internal/071_facility_form_target';
+// Same reasoning as the 071 re-export above: migration 072's BOUND_FIELDS_SNAPSHOT is the frozen
+// snapshot of the level/status-bound Facility fields it writes into already-migrated installs, and
+// packages/forms/src/samples/forms.test.ts pins the CURRENT sample against it from the forms side.
+export { BOUND_FIELDS_SNAPSHOT as FACILITY_FORM_MIGRATION_BOUND_FIELDS } from './migrations/internal/072_facility_level_status_valuesets';

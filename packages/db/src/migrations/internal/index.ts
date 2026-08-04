@@ -70,6 +70,7 @@ import * as m068 from './068_normalize_concept_status';
 import * as m069 from './069_result_role_valuesets';
 import * as m070 from './070_facility_registry';
 import * as m071 from './071_facility_form_target';
+import * as m072 from './072_facility_level_status_valuesets';
 
 export const internalMigrations: Record<string, Migration> = {
   '001_fhir_resources': { up: m001.up, down: m001.down },
@@ -143,4 +144,5 @@ export const internalMigrations: Record<string, Migration> = {
   '069_result_role_valuesets': { up: m069.up, down: m069.down },
   '070_facility_registry': { up: m070.up, down: m070.down },
   '071_facility_form_target': { up: m071.up, down: m071.down },
+  '072_facility_level_status_valuesets': { up: m072.up, down: m072.down },
 };

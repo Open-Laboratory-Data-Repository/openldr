@@ -24,6 +24,17 @@ export const CORE_FACILITY_KEYS: ReadonlySet<string> = new Set([
 
 const NUMERIC_KEYS: ReadonlySet<string> = new Set(['latitude', 'longitude']);
 
+/**
+ * Narrow local guard for a picked coding answer — `{ system, code, display }` — WITHOUT importing
+ * `@openldr/forms`'s `CodingAnswer`: `@openldr/forms` already depends on `@openldr/db`, so importing
+ * back would invert the package graph. `display` is read separately below since it may be absent.
+ */
+function isCodingLikeAnswer(v: unknown): v is { system: string; code: string; display?: string | null } {
+  return typeof v === 'object' && v !== null && !Array.isArray(v)
+    && typeof (v as { system?: unknown }).system === 'string'
+    && typeof (v as { code?: unknown }).code === 'string';
+}
+
 /** The shape the caller passes — `schema.fields`, narrowed. Deliberately NOT `FormSchema`:
  *  `@openldr/db` must not depend on `@openldr/forms`, which already depends on it. */
 export interface AnswerField {
@@ -64,7 +75,17 @@ export function splitFacilityAnswers(
         record[key] = String(raw ?? '').trim() === '' ? null : (Number.isFinite(n) ? n : null);
         continue;
       }
-      const text = typeof raw === 'string' ? raw.trim() : raw;
+      // A ValueSet-bound `reference` field submits `{ system, code, display }`, not a string — flatten
+      // it to `display`, falling back to `code` when `display` is missing, null, OR blank/whitespace-
+      // only (an empty display with a real code must not be dropped — `raw.display ?? raw.code` alone
+      // does not catch `''`, since nullish coalescing does not treat an empty string as nullish), so
+      // the column stays human-readable (existing reports group by the rendered level/status text)
+      // and hand-typed rows stay homogeneous with picked ones. Only on this core-column branch:
+      // `extras` is jsonb, where flattening would lose the code for nothing.
+      const flattened = isCodingLikeAnswer(raw)
+        ? (typeof raw.display === 'string' && raw.display.trim() !== '' ? raw.display : raw.code)
+        : raw;
+      const text = typeof flattened === 'string' ? flattened.trim() : flattened;
       if (text === '' || text === null || text === undefined) continue; // blank omitted, not stored as ''
       record[key] = text;
       continue;

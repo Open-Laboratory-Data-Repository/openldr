@@ -71,6 +71,80 @@ describe('splitFacilityAnswers', () => {
   });
 });
 
+describe('splitFacilityAnswers — coding answers on core keys (ValueSet-bound level/status)', () => {
+  it('flattens a coding answer to its display on a core key', () => {
+    const { record } = splitFacilityAnswers(
+      [f('a', 'level')],
+      { a: { system: 'https://terminology.example/facility-level', code: 'IA2', display: 'Level IA2 (Dispensary Laboratory)' } },
+    );
+    expect(record.level).toBe('Level IA2 (Dispensary Laboratory)');
+  });
+
+  it('falls back to code when display is null', () => {
+    const { record } = splitFacilityAnswers(
+      [f('a', 'level')],
+      { a: { system: 'https://terminology.example/facility-level', code: 'IA2', display: null } },
+    );
+    expect(record.level).toBe('IA2');
+  });
+
+  it('falls back to code when display is absent entirely', () => {
+    const { record } = splitFacilityAnswers(
+      [f('a', 'status')],
+      { a: { system: 'https://terminology.example/facility-status', code: 'active' } },
+    );
+    expect(record.status).toBe('active');
+  });
+
+  it('still passes a bare string through unchanged on the same key — the pre-existing free-text path', () => {
+    const { record } = splitFacilityAnswers(
+      [f('a', 'level')],
+      { a: 'Level IA2 (Dispensary Laboratory)' },
+    );
+    expect(record.level).toBe('Level IA2 (Dispensary Laboratory)');
+  });
+
+  it('leaves a coding answer on a non-core key unflattened in extras (jsonb — flattening loses the code for no benefit)', () => {
+    const coding = { system: 'https://terminology.example/catchment', code: 'C1', display: 'Catchment One' };
+    const { record, extras } = splitFacilityAnswers([f('a', 'catchmentPop')], { a: coding });
+    expect(record).toEqual({});
+    expect(extras).toEqual({ catchmentPop: coding });
+  });
+
+  it('omits a coding answer whose flattened display is blank/whitespace-only, same as the string path', () => {
+    const { record } = splitFacilityAnswers(
+      [f('a', 'level')],
+      { a: { system: 'https://terminology.example/facility-level', code: '', display: '   ' } },
+    );
+    expect(record).toEqual({});
+  });
+
+  it('falls back to code when display is an empty string and code is real — display must not silently win', () => {
+    const { record } = splitFacilityAnswers(
+      [f('a', 'level')],
+      { a: { system: 'urn:openldr:cs:facility-type', code: 'level-ia2-dispensary-laboratory', display: '' } },
+    );
+    expect(record.level).toBe('level-ia2-dispensary-laboratory');
+  });
+
+  it('falls back to code when display is whitespace-only and code is real', () => {
+    const { record } = splitFacilityAnswers(
+      [f('a', 'status')],
+      { a: { system: 'urn:openldr:cs:facility-status', code: 'active', display: '   ' } },
+    );
+    expect(record.status).toBe('active');
+  });
+
+  it('omits from both record and extras when a core-key coding answer has display and code both blank', () => {
+    const { record, extras } = splitFacilityAnswers(
+      [f('a', 'level')],
+      { a: { system: 'urn:openldr:cs:facility-type', code: '', display: '' } },
+    );
+    expect(record).toEqual({});
+    expect(extras).toEqual({});
+  });
+});
+
 describe('facility-answers.ts stays browser-safe (Minor 5)', () => {
   // This module is published as its own subpath (@openldr/db/facility-answers, see package.json)
   // specifically so apps/studio can import CORE_FACILITY_KEYS without pulling in `pg`/kysely and the

@@ -58,18 +58,22 @@ const facilityForm: FormSchema = {
       fieldType: 'text', required: true, enabled: true, order: 5,
       cardinality: { min: 1, max: '1' }, apiProperty: 'district',
     },
-    // ⚠ status and level stay FREE TEXT. Baking in an "Operating/Closed" option list would inline a
-    // vocabulary into source; the field type supports `valueSetUrl`, so binding a ValueSet later is
-    // a form edit rather than a code change.
+    // Bound to seeded ValueSets rather than free text, same reasoning as the specimen-type field
+    // below: a picker over an enumerated vocabulary instead of hand-typed strings. `valueSetUrl`
+    // wins over `referenceTarget`, and the form linter warns when both are set, so `referenceTarget`
+    // is deliberately absent. Both ValueSets are seeded by migration 072, which also repoints any
+    // already-migrated install's Facility form (see migration 071) to these exact shapes.
     {
       id: 'fld-fac-status', fhirPath: 'status', displayLabel: 'Status', description: null,
-      fieldType: 'text', required: true, enabled: true, order: 6,
+      fieldType: 'reference', required: true, enabled: true, order: 6,
       cardinality: { min: 1, max: '1' }, apiProperty: 'status',
+      valueSetUrl: 'urn:openldr:valueset:location-status',
     },
     {
       id: 'fld-fac-level', fhirPath: 'physicalType', displayLabel: 'Level', description: null,
-      fieldType: 'text', required: true, enabled: true, order: 7,
+      fieldType: 'reference', required: true, enabled: true, order: 7,
       cardinality: { min: 1, max: '1' }, apiProperty: 'level',
+      valueSetUrl: 'urn:openldr:valueset:facility-type',
     },
   ],
 }
