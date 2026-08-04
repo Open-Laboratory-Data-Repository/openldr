@@ -20,7 +20,8 @@ export type ReferenceEntityType =
   | 'coding_system'
   | 'term_mapping'
   | 'terminology_system'
-  | 'concept_map';
+  | 'concept_map'
+  | 'facility_registry';
 // Order matters for a first-pull replay: a report's dependencies are listed BEFORE `report`, and
 // the seed writes queries -> designs -> report defs, so seq order already delivers deps first.
 // (No FK constraints exist between the three tables, so an out-of-order arrival cannot error —
@@ -28,6 +29,7 @@ export type ReferenceEntityType =
 export const ENTITY_TYPES: ReferenceEntityType[] = [
   'form', 'dashboard', 'custom_query', 'report_design', 'report', 'setting',
   'publisher', 'coding_system', 'term_mapping', 'terminology_system', 'concept_map',
+  'facility_registry',
 ];
 export type ReferenceOp = 'upsert' | 'delete';
 
