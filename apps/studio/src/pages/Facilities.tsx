@@ -146,7 +146,11 @@ export function Facilities() {
           </div>
         )}
 
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-4">
+        {/* No padding here: the striped EmptyState below fills this wrapper, and the repo
+            convention is that empty-state hatching and table borders bleed to the pane edges.
+            A `p-4` here insets the stripes by 16px on every side (and Users.tsx, the page this
+            mirrors, deliberately has none). */}
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
           {rows.length > 0 ? (
             <Table wrapperClassName="min-h-0 flex-1">
               <TableHeader className="sticky top-0 z-10 bg-background">
