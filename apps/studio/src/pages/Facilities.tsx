@@ -9,22 +9,36 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/spinner';
-import { listFacilities, deleteFacility, listPublishedForms, type Facility } from '@/api';
+import { useAuth } from '@/auth/AuthProvider';
+import { listFacilities, deleteFacility, listPublishedForms, FACILITIES_LIST_LIMIT, type Facility } from '@/api';
 import { FacilityDialog } from '@/facilities/FacilityDialog';
 
 export function Facilities() {
   const { t } = useTranslation();
+  const { hasCapability } = useAuth();
+  // The route/nav are gated on facilities.view alone, so every viewer with view access reaches
+  // this page — data_analyst and system_auditor hold facilities.view WITHOUT facilities.manage
+  // (see packages/rbac/src/presets.ts). Add/Edit/Delete must check this separately, or those
+  // roles get a full Add/Edit form experience that only 403s on the final Save.
+  const canManage = hasCapability('facilities.manage');
+
   const [rows, setRows] = useState<Facility[]>([]);
   const [loading, setLoading] = useState(true);
   const [hasForm, setHasForm] = useState<boolean | null>(null);
   const [editing, setEditing] = useState<Facility | null | undefined>(undefined); // undefined = closed
   const [confirming, setConfirming] = useState<Facility | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Whether the last list() hit the client-requested cap (FACILITIES_LIST_LIMIT) — a CSV-imported
+  // national register can run 10-15k rows, and presenting a capped page with no indication anything
+  // was cut is its own defect distinct from "no rows at all". See listFacilities in api.ts.
+  const [truncated, setTruncated] = useState(false);
 
   const reload = useCallback(async () => {
     setLoading(true);
     try {
-      setRows(await listFacilities());
+      const data = await listFacilities();
+      setRows(data);
+      setTruncated(data.length >= FACILITIES_LIST_LIMIT);
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -75,23 +89,32 @@ export function Facilities() {
     );
   }
 
+  // Whether the operator can actually open the edit form and save it. Editing is offered from a
+  // row even when there is no published form (see the I5 comment below) — FacilityDialog itself
+  // shows a "no form" message and blocks saving in that case — but there is no point sending a
+  // view-only user into that dialog at all when they hold no facilities.manage, so both gates
+  // apply together for the click affordance.
+  const canEdit = canManage && hasForm;
+
   return (
     <AppShell title={t('nav.facilities')} fullBleed>
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="flex items-center justify-between border-b border-border px-4 py-2">
           <span className="text-sm font-medium">{t('facilities.title')}</span>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8" aria-label={t('facilities.actions')}>
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem disabled={!hasForm} onSelect={() => setEditing(null)}>
-                {t('facilities.add')}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {canManage && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8" aria-label={t('facilities.actions')}>
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem disabled={!hasForm} onSelect={() => setEditing(null)}>
+                  {t('facilities.add')}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
 
         {error && (
@@ -100,22 +123,14 @@ export function Facilities() {
           </div>
         )}
 
+        {truncated && (
+          <div className="mx-4 mt-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700">
+            {t('facilities.truncated', { limit: FACILITIES_LIST_LIMIT })}
+          </div>
+        )}
+
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-4">
-          {!hasForm ? (
-            <EmptyState
-              icon={<Building2 className="h-6 w-6" />}
-              title={t('facilities.noForm')}
-              body={t('facilities.noFormHelp')}
-              action={<Link to="/forms" className="text-xs underline underline-offset-2">{t('facilities.openForms')}</Link>}
-            />
-          ) : rows.length === 0 ? (
-            <EmptyState
-              icon={<Building2 className="h-6 w-6" />}
-              title={t('facilities.empty')}
-              body={t('facilities.emptyHelp')}
-              action={<Button size="sm" onClick={() => setEditing(null)}>{t('facilities.add')}</Button>}
-            />
-          ) : (
+          {rows.length > 0 ? (
             <Table wrapperClassName="min-h-0 flex-1">
               <TableHeader className="sticky top-0 z-10 bg-background">
                 <TableRow>
@@ -131,8 +146,8 @@ export function Facilities() {
                 {rows.map((f) => (
                   <TableRow
                     key={f.id}
-                    className="cursor-pointer transition-colors hover:bg-[rgba(70,130,180,0.08)]"
-                    onClick={() => setEditing(f)}
+                    className={canEdit ? 'cursor-pointer transition-colors hover:bg-[rgba(70,130,180,0.08)]' : undefined}
+                    onClick={canEdit ? () => setEditing(f) : undefined}
                   >
                     <TableCell className="text-xs">{f.localCode ?? f.nationalCode ?? '—'}</TableCell>
                     <TableCell className="text-xs">{f.name}</TableCell>
@@ -140,24 +155,43 @@ export function Facilities() {
                     <TableCell className="text-xs">{f.district ?? '—'}</TableCell>
                     <TableCell className="text-xs">{f.status ?? '—'}</TableCell>
                     <TableCell onClick={(e) => e.stopPropagation()}>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" aria-label={`${t('facilities.actions')} ${f.name}`}>
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => setEditing(f)}>{t('common.edit')}</DropdownMenuItem>
-                          <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setConfirming(f)}>
-                            {t('common.delete')}
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                      {canManage ? (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" aria-label={`${t('facilities.actions')} ${f.name}`}>
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem disabled={!hasForm} onClick={() => setEditing(f)}>{t('common.edit')}</DropdownMenuItem>
+                            <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setConfirming(f)}>
+                              {t('common.delete')}
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      ) : null}
                     </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
+          ) : !hasForm ? (
+            // No rows AND no published form: the no-form state must name its own cause (see the
+            // ⛔ test) rather than fall into the same "no facilities yet" message a lab with a
+            // working form and an empty registry would see.
+            <EmptyState
+              icon={<Building2 className="h-6 w-6" />}
+              title={t('facilities.noForm')}
+              body={t('facilities.noFormHelp')}
+              action={<Link to="/forms" className="text-xs underline underline-offset-2">{t('facilities.openForms')}</Link>}
+            />
+          ) : (
+            <EmptyState
+              icon={<Building2 className="h-6 w-6" />}
+              title={t('facilities.empty')}
+              body={t('facilities.emptyHelp')}
+              action={canManage ? <Button size="sm" onClick={() => setEditing(null)}>{t('facilities.add')}</Button> : undefined}
+            />
           )}
         </div>
 

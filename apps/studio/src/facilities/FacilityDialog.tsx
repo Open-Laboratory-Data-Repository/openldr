@@ -13,6 +13,10 @@ import { createFacility, updateFacility, listPublishedForms, getForm, type Facil
 import { FormRuntime } from '@/forms-runtime/FormRuntime';
 import type { FormSchema, RuntimeAnswers } from '@/forms-runtime/types';
 import { FormSchema as FormSchemaZ } from '@openldr/forms/pure';
+// A dedicated subpath (NOT the package root, which pulls in `pg`/kysely and the rest of the
+// server DB engine) so this stays a zero-dependency browser-safe import — `facility-answers.ts`
+// only has an `import type` on `FacilityRecord`, which TypeScript erases entirely at compile time.
+import { CORE_FACILITY_KEYS } from '@openldr/db/facility-answers';
 
 interface FacilityDialogProps {
   open: boolean;
@@ -23,17 +27,28 @@ interface FacilityDialogProps {
 
 /**
  * Build initialAnswers from a Facility, keyed by fieldId, using the schema's apiProperty mapping.
- * Core registry columns (localCode, name, region, …) live on the facility itself; everything else
- * a form field can target was routed by the server into `extras` — see splitFacilityAnswers in
- * packages/db/src/facility-answers.ts, which is the server-side counterpart of this split.
+ *
+ * Mirrors splitFacilityAnswers' own key choice exactly (packages/db/src/facility-answers.ts, the
+ * server-side counterpart of this split) rather than re-deriving it:
+ *   - apiProperty in CORE_FACILITY_KEYS  → the value lives on the facility itself (record column).
+ *   - apiProperty set but NOT core       → extras[apiProperty].
+ *   - no apiProperty at all              → extras[field.id].
+ *
+ * The last case matters as much as the first two: a field with no apiProperty (the Facility form
+ * shipped several) is never a record column, so skipping it here — as an earlier version of this
+ * function did — means Edit-then-Save-without-touching submits no answer for that field at all,
+ * and PUT replaces `extras` wholesale, silently deleting it. Using CORE_FACILITY_KEYS (rather than
+ * `Object.hasOwn(asRecord, ap)`) also keeps this in lockstep with the server's own key set — the
+ * facility object's own `id`/`extras`/`managedOrigin`/`source` fields are NOT core columns a form
+ * can target, but `Object.hasOwn` on the object would have matched them anyway.
  */
 function seedAnswers(schema: FormSchema, facility: Facility): RuntimeAnswers {
   const answers: RuntimeAnswers = {};
   const asRecord = facility as unknown as Record<string, unknown>;
   for (const field of schema.fields) {
     const ap = field.apiProperty;
-    if (!ap) continue;
-    const value = Object.hasOwn(asRecord, ap) ? asRecord[ap] : facility.extras?.[ap];
+    const isCore = !!ap && CORE_FACILITY_KEYS.has(ap);
+    const value = isCore ? asRecord[ap as string] : facility.extras?.[ap || field.id];
     if (value !== undefined && value !== null && value !== '') answers[field.id] = value;
   }
   return answers;
@@ -102,7 +117,21 @@ export function FacilityDialog({ open, onOpenChange, facility, onSaved }: Facili
     setSaving(true);
     setError(null);
     try {
-      const body = { answers, formSchemaId: formDefId, formVersion: schema.version };
+      // FormRuntime deletes a field's key from its own answer state the instant its value becomes
+      // empty (see setField in FormRuntime.tsx), and cleanAnswers drops empties again on submit —
+      // so a field the operator just blanked never appears in `answers` at all. The route's clear
+      // detection (clearedCoreKeys in facilities-routes.ts) keys off Object.hasOwn(answers, field.id)
+      // — a submitted-but-blank answer — so without this, a cleared field is indistinguishable from
+      // one the form never asked about, and the route's whole clear path is unreachable from here:
+      // Save silently keeps the stale value. Restore an explicit '' for every field this dialog
+      // seeded a value for (initialAnswers) that has no value in the cleaned submission.
+      const submitAnswers: Record<string, unknown> = { ...answers };
+      if (isEdit) {
+        for (const fieldId of Object.keys(initialAnswers)) {
+          if (!Object.hasOwn(submitAnswers, fieldId)) submitAnswers[fieldId] = '';
+        }
+      }
+      const body = { answers: submitAnswers, formSchemaId: formDefId, formVersion: schema.version };
       const saved = isEdit ? await updateFacility(facility.id, body) : await createFacility(body);
       onSaved(saved);
       onOpenChange(false);

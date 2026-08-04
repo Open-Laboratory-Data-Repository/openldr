@@ -762,6 +762,7 @@ export const pt: EnShape = {
     newDesc: 'Inserir uma nova unidade no registo.',
     deleteTitle: 'Eliminar {{name}}?',
     deleteBody: 'Esta ação remove permanentemente {{name}} do registo de unidades. Esta ação não pode ser anulada.',
+    truncated: 'A mostrar as primeiras {{limit}} unidades. O registo pode conter mais unidades do que as apresentadas aqui.',
   },
   query: {
     explorer: 'Explorador', connectors: 'Conectores', datasets: 'Conjuntos de dados', customQueries: 'Consultas personalizadas',

@@ -713,13 +713,30 @@ export interface FacilitySubmit {
   formVersion: number | null;
 }
 
-export const listFacilities = (): Promise<Facility[]> => apiGet('/api/facilities', 'list facilities');
+// Client-requested cap for GET /api/facilities. The store's own default (200 rows — see
+// DEFAULT_LIST_LIMIT in packages/db/src/facility-registry-store.ts) is far below what a
+// CSV-imported national register can hold (10-15k rows, per Slice 1). Requesting the server's own
+// MAX_LIST_LIMIT (facilities-routes.ts) explicitly turns a silent 200-row cut into a visible one —
+// Facilities.tsx compares the returned row count against this same constant and tells the operator
+// when the list was capped, instead of presenting 200 rows as the whole registry.
+export const FACILITIES_LIST_LIMIT = 20000;
+export const listFacilities = (): Promise<Facility[]> =>
+  apiGet(`/api/facilities?limit=${FACILITIES_LIST_LIMIT}`, 'list facilities');
 export const createFacility = (body: FacilitySubmit): Promise<Facility> =>
   authFetch('/api/facilities', jbody(body, 'POST')).then((r) => okJson<Facility>(r, 'create facility'));
 export const updateFacility = (id: string, body: FacilitySubmit): Promise<Facility> =>
   authFetch(`/api/facilities/${encodeURIComponent(id)}`, jbody(body, 'PUT')).then((r) => okJson<Facility>(r, 'update facility'));
-export const deleteFacility = (id: string): Promise<void> =>
-  apiDelete(`/api/facilities/${encodeURIComponent(id)}`, 'delete facility');
+// Scoped fix (Minor 1): the shared `apiDelete` helper collapses every failure to a bare
+// "<what> failed: <status>", discarding the server's own JSON message. That helper is used by
+// many other pages' delete calls, which are left untouched — only this one call is rewired to
+// extract the response body (via the same errorDetail/formatApiError okJson already uses) so a
+// 403 ("insufficient capability") or 404 from facilities-routes.ts reaches the operator verbatim
+// instead of as "delete facility failed: 403".
+export async function deleteFacility(id: string): Promise<void> {
+  const res = await authFetch(`/api/facilities/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  if (res.ok || res.status === 204) return;
+  throw new Error(formatApiError('delete facility', await errorDetail(res)));
+}
 
 // Roles / capabilities (capability-based RBAC)
 export interface RoleRecord {

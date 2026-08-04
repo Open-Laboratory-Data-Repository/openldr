@@ -766,6 +766,7 @@ export const en = {
     newDesc: 'Enter a new facility into the registry.',
     deleteTitle: 'Delete {{name}}?',
     deleteBody: 'This permanently removes {{name}} from the facility registry. This cannot be undone.',
+    truncated: 'Showing the first {{limit}} facilities. The registry may hold more than what is listed here.',
   },
   query: {
     explorer: 'Explorer', connectors: 'Connectors', datasets: 'Datasets', customQueries: 'Custom Queries',

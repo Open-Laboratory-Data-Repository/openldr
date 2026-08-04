@@ -6,7 +6,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./schema/external": "./src/schema/external.ts",
-    "./testing": "./src/migrations/internal/test-helpers.ts"
+    "./testing": "./src/migrations/internal/test-helpers.ts",
+    "./facility-answers": "./src/facility-answers.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
