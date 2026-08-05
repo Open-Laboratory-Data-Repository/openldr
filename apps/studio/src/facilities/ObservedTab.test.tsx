@@ -103,6 +103,41 @@ describe('ObservedTab', () => {
     expect(within(rows[1]).getByText('via registry')).toBeInTheDocument();
   });
 
+  it('omits localCode from the detail line when it is byte-identical to the observed code already shown in column 1', async () => {
+    // Operator observation: on a single-feed install, facility_registry.local_code is either NULL
+    // or a verbatim repeat of the observed code (column 1) — showing it again in the detail line
+    // is pure noise. Here sourceCode === localCode === 'NHLQATC', the measured live-DB shape.
+    const sameCode = {
+      ...dodoma, sourceCode: 'NHLQATC', localCode: 'NHLQATC', level: 'Hospital',
+      district: 'Dodoma Urban', region: 'Dodoma',
+    };
+    (listObservedFacilities as ReturnType<typeof vi.fn>).mockResolvedValue([sameCode]);
+    show();
+    const rows = await screen.findAllByRole('row');
+    // The code must not repeat: no "NHLQATC · Hospital · ..." — just level/area/via.
+    expect(within(rows[1]).getByText('Hospital · Dodoma Urban, Dodoma · via registry')).toBeInTheDocument();
+    expect(within(rows[1]).queryByText(/NHLQATC ·/)).not.toBeInTheDocument();
+  });
+
+  it('shows localCode in the detail line when it differs from the observed code (a second feed sending a different code for the same facility)', async () => {
+    // dodoma's fixture: sourceCode 'Dodoma', localCode 'DOD-REF' — genuinely different strings,
+    // so localCode carries real information and must render.
+    show();
+    const rows = await screen.findAllByRole('row');
+    expect(within(rows[1]).getByText('DOD-REF · Hospital · Dodoma Urban, Dodoma · via registry')).toBeInTheDocument();
+  });
+
+  it('renders level and admin area with no leading or doubled separator when localCode is null (the real Dodoma row on this install today)', async () => {
+    // Measured live-DB shape: 3 of 4 facility_registry rows have local_code NULL (the CSV importer
+    // only writes national fields). This must not render a leading "· Hospital · ..." nor a
+    // doubled "· ·" where the omitted localCode would have been.
+    const noLocalCode = { ...dodoma, localCode: null };
+    (listObservedFacilities as ReturnType<typeof vi.fn>).mockResolvedValue([noLocalCode]);
+    show();
+    const rows = await screen.findAllByRole('row');
+    expect(within(rows[1]).getByText('Hospital · Dodoma Urban, Dodoma · via registry')).toBeInTheDocument();
+  });
+
   it('marks a mapping whose target was deleted', async () => {
     (listObservedFacilities as ReturnType<typeof vi.fn>).mockResolvedValue([oceanRoad]);
     show();

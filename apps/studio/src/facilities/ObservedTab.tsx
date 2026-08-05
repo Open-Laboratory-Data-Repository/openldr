@@ -23,17 +23,27 @@ import {
 import { TermMappingDialog } from '@/terminology/TermMappingDialog';
 
 /**
- * The operator-visible second line under a resolved facility's name: local code, level, and
- * admin area (district/region — whichever are populated), then the resolution route. Each part is
- * OMITTED (not rendered as an empty separator) when null — an operator disambiguating "Dodoma
- * Regional Referral" from "Dodoma Zonal Lab" needs `DOD-REF · Hospital · Dodoma Urban, Dodoma`,
- * not `· · Dodoma`.
+ * The operator-visible second line under a resolved facility's name: local code (only when it
+ * differs from the observed code already shown in column 1), level, and admin area
+ * (district/region — whichever are populated), then the resolution route. Each part is OMITTED
+ * (not rendered as an empty separator) when null — an operator disambiguating "Dodoma Regional
+ * Referral" from "Dodoma Zonal Lab" needs `Hospital · Dodoma Urban, Dodoma`, not `· · Dodoma`.
+ *
+ * `localCode` (`facility_registry.local_code`) is single-valued and UNIQUE — the one canonical
+ * short code for the facility. `row.sourceCode` (the observed string, column 1) is per-FEED: one
+ * facility can be observed under several codes from several feeds. They coincide today because
+ * this install only has one feed and the CSV importer never populates `local_code` at all — but
+ * they are not the same thing, and once a second feed sends a different code the two will diverge
+ * and BOTH are worth showing. The comparison is deliberately exact (`!==`, not case-insensitive or
+ * trimmed): the observed code is stored byte-for-byte on purpose, and a normalising comparison
+ * here would hide a genuine case-only difference between two codes.
  */
 function facilityDetailLine(row: ObservedFacility, viaLabel: string): string {
   const adminArea = row.district && row.region
     ? `${row.district}, ${row.region}`
-    : row.district ?? row.region ?? null;
-  return [row.localCode, row.level, adminArea, viaLabel].filter((part): part is string => !!part).join(' · ');
+    : (row.district || row.region || null);
+  const localCode = row.localCode && row.localCode !== row.sourceCode ? row.localCode : null;
+  return [localCode, row.level, adminArea, viaLabel].filter((part): part is string => !!part).join(' · ');
 }
 
 /**
