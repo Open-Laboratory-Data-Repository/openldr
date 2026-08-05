@@ -113,6 +113,7 @@ export interface FacilityMapTable {
   source_system: string;
   source_code: string;
   registry_id: string | null;
+  local_code: string | null;
   name: string | null;
   level: string | null;
   status: string | null;
@@ -152,5 +153,5 @@ export const EXTERNAL_TABLE_COLUMNS: Record<keyof ExternalSchema, string[]> = {
   diagnostic_reports: ['id', 'patient_id', 'status', 'code_code', 'code_text', 'issued', 'effective', 'conclusion', 'performer', 'specimen_id', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at'],
   questionnaire_responses: ['id', 'questionnaire', 'form_code', 'subject_id', 'authored', 'based_on_id', 'items', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at'],
   terminology_codes: ['id', 'value_set_id', 'value_set_url', 'system', 'code', 'display', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at'],
-  facility_map: ['id', 'source_system', 'source_code', 'registry_id', 'name', 'level', 'status', 'region', 'district', 'council', 'national_system', 'national_code', 'resolved_via', 'updated_at'],
+  facility_map: ['id', 'source_system', 'source_code', 'registry_id', 'local_code', 'name', 'level', 'status', 'region', 'district', 'council', 'national_system', 'national_code', 'resolved_via', 'updated_at'],
 };

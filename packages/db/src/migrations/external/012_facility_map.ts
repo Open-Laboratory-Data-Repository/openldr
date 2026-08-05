@@ -33,6 +33,10 @@ export async function up(db: Kysely<unknown>, engine: TargetEngine): Promise<voi
     // The resolved facility. NULL is a legitimate, meaningful state: the string was observed but is
     // not mapped, or its mapping's target no longer exists. A report falls back to the raw string.
     .addColumn('registry_id', text)
+    // `facility_registry.local_code` — carried through so a report/UI can disambiguate two
+    // similarly-named facilities (e.g. "Dodoma Regional Referral" vs "Dodoma Zonal Lab"). `textType`,
+    // not `keyType`: this is descriptive data copied from the registry, never a join predicate here.
+    .addColumn('local_code', text)
     .addColumn('name', text)
     .addColumn('level', text)
     .addColumn('status', text)

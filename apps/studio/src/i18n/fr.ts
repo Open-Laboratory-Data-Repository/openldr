@@ -809,6 +809,8 @@ export const fr: EnShape = {
       code: 'Code observé',
       reports: 'Rapports',
       resolvesTo: 'Résout vers',
+      count_one: '{{count}} établissement observé',
+      count_other: '{{count}} établissements observés',
       unmapped: 'Non associé',
       targetMissing: 'Cible manquante',
       viaRegistry: 'via le registre',

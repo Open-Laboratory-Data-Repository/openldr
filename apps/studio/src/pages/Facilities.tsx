@@ -99,20 +99,20 @@ export function Facilities() {
     }
   }, [confirming]);
 
-  if (loading || hasForm === null) {
-    return (
-      <AppShell title={t('nav.facilities')} fullBleed>
-        <LoadingState className="flex-1" label={t('common.loading')} />
-      </AppShell>
-    );
-  }
+  // Registry-only loading gate: `hasForm === null` means the listPublishedForms() effect hasn't
+  // settled yet. This used to gate the WHOLE page (return before Tabs even rendered), which meant a
+  // slow/failing Registry fetch (e.g. a large CSV import in flight) blocked the operator from even
+  // reaching the Observed tab's trigger — see the ⛔ review finding this replaced. The tab SHELL
+  // (Tabs/TabsList) now always renders below; only the Registry panel's own body swaps in
+  // LoadingState while this is true, so Observed stays reachable regardless.
+  const registryLoading = loading || hasForm === null;
 
   // Whether the operator can actually open the edit form and save it: requires facilities.manage
   // AND a published form to target. The per-row Edit menu item is `disabled={!hasForm}` and the
   // row's own click-to-edit handler is gated on this same `canEdit`, so a lab with no published
   // Facility form still sees its registry (I5, below) but cannot open the edit dialog from it — the
   // banner further down names that cause instead of leaving Add/Edit silently greyed out.
-  const canEdit = canManage && hasForm;
+  const canEdit = canManage && !!hasForm;
 
   return (
     <AppShell title={t('nav.facilities')} fullBleed>
@@ -125,14 +125,15 @@ export function Facilities() {
           <TabsTrigger value="observed">{t('facilities.tabs.observed')}</TabsTrigger>
         </TabsList>
 
-        {/* ⛔ TabsContent must NOT carry a `flex` (display:flex) utility of its own: the browser's
-            `[hidden]{display:none}` UA rule and Tailwind's `.flex{display:flex}` have EQUAL
-            selector specificity, and Tailwind's generated stylesheet loads AFTER the UA sheet, so
-            `.flex` wins the tie — the inactive panel (which Radix marks `hidden`) keeps its
-            layout box instead of collapsing, stacking visibly above the active one. `flex-1` and
-            `min-h-0` are safe (neither declares `display`); the flex LAYOUT itself lives on an
-            inner div (below) that never carries the `hidden` attribute. */}
+        {/* The `TabsContent` primitive (components/ui/tabs.tsx) now defends against the
+            flex-vs-[hidden] specificity trap (commit 5fc72756) itself via
+            `data-[state=inactive]:hidden`, so a `flex` utility here would no longer resurrect the
+            bug. `flex-1`/`min-h-0` are kept anyway — the flex LAYOUT itself lives on an inner div
+            (below) that never carries the `hidden` attribute. */}
         <TabsContent value="registry" className="min-h-0 flex-1">
+        {registryLoading ? (
+          <LoadingState className="flex-1" label={t('common.loading')} />
+        ) : (
         <div className="flex min-h-0 h-full flex-col">
         <div className="flex items-center justify-between border-b border-border px-4 py-2">
           <span className="text-sm font-medium">{t('facilities.title')}</span>
@@ -280,6 +281,7 @@ export function Facilities() {
           onConfirm={() => { void doDelete(); }}
         />
         </div>
+        )}
         </TabsContent>
 
         {/* ObservedTab supplies its own `flex min-h-0 flex-1 flex-col` root div — the same

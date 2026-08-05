@@ -218,6 +218,19 @@ describe('resolveObservedFacilities', () => {
     expect(row.resolvedVia).toBe('registry');
     expect(row.region).toBe('Dodoma');
     expect(row.targetMissing).toBe(false);
+    // Operator request: the local code disambiguates two similarly-named facilities (e.g. "Dodoma
+    // Regional Referral" vs "Dodoma Zonal Lab") — the name alone cannot.
+    expect(row.localCode).toBe('DOD');
+  });
+
+  it('reports localCode as null for an unmapped code (no registry row to read it from)', async () => {
+    const deps = await makeReconcileDeps();
+    await seedPerformers(deps, [['Kibondo', 148]]);
+    await scanObservedFacilities(deps, { now: '2026-08-05T00:00:00.000Z', apply: true });
+
+    const [row] = await resolveObservedFacilities(deps);
+
+    expect(row.localCode).toBeNull();
   });
 
   it('resolves a national-route mapping through (national_system, national_code)', async () => {
@@ -315,7 +328,9 @@ describe('publishFacilityMap', () => {
     const rows = await deps.externalDb.selectFrom('facility_map').selectAll().execute();
     expect(rows).toHaveLength(2);
     expect(rows.find((r) => r.source_code === 'Dodoma')!.name).toBe('Dodoma Regional Referral Hospital');
+    expect(rows.find((r) => r.source_code === 'Dodoma')!.local_code).toBe('DOD');
     expect(rows.find((r) => r.source_code === 'Kibondo')!.name).toBeNull();
+    expect(rows.find((r) => r.source_code === 'Kibondo')!.local_code).toBeNull();
   });
 });
 

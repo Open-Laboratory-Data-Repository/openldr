@@ -360,7 +360,7 @@ describe('Facilities page', () => {
       (listPublishedForms as ReturnType<typeof vi.fn>).mockResolvedValue([publishedFacilityForm]);
       (listFacilities as ReturnType<typeof vi.fn>).mockResolvedValue([sampleFacility]);
       (listObservedFacilities as ReturnType<typeof vi.fn>).mockResolvedValue([
-        { sourceSystem: 'webhook-ingest', sourceCode: 'Dodoma', reportCount: 247, registryId: null, name: null, level: null, status: null, region: null, district: null, council: null, nationalSystem: null, nationalCode: null, resolvedVia: null, targetMissing: false },
+        { sourceSystem: 'webhook-ingest', sourceCode: 'Dodoma', reportCount: 247, registryId: null, localCode: null, name: null, level: null, status: null, region: null, district: null, council: null, nationalSystem: null, nationalCode: null, resolvedVia: null, targetMissing: false },
       ]);
       show();
       await waitFor(() => expect(screen.getByText('Dodoma Regional Referral')).toBeInTheDocument());
@@ -376,6 +376,27 @@ describe('Facilities page', () => {
       // inactive TabsContent, via an async Presence transition — wait for it rather than
       // asserting synchronously).
       await waitFor(() => expect(screen.queryByText('Dodoma Regional Referral')).not.toBeInTheDocument());
+    });
+
+    it('review finding: the Observed tab trigger is reachable while the Registry fetch is still pending', async () => {
+      // A slow/failing Registry fetch (e.g. a large CSV import in flight) used to gate the WHOLE
+      // page behind a full-page LoadingState rendered BEFORE Tabs even mounted — the operator
+      // couldn't even see the Observed trigger, let alone click it. listFacilities() here never
+      // resolves, simulating that slow fetch; listPublishedForms() likewise never resolves, so
+      // `hasForm` also never settles. Only the Registry panel's own body should show a spinner.
+      (listFacilities as ReturnType<typeof vi.fn>).mockReturnValue(new Promise(() => {}));
+      (listPublishedForms as ReturnType<typeof vi.fn>).mockReturnValue(new Promise(() => {}));
+      (listObservedFacilities as ReturnType<typeof vi.fn>).mockResolvedValue([
+        { sourceSystem: 'webhook-ingest', sourceCode: 'Dodoma', reportCount: 247, registryId: null, localCode: null, name: null, level: null, status: null, region: null, district: null, council: null, nationalSystem: null, nationalCode: null, resolvedVia: null, targetMissing: false },
+      ]);
+      show();
+
+      // The tab trigger itself is reachable immediately — the old code never rendered Tabs at all
+      // while loading, so this `getByRole` would have thrown before this fix.
+      const observedTrigger = await screen.findByRole('tab', { name: 'Observed' });
+      fireEvent.mouseDown(observedTrigger, { button: 0, ctrlKey: false });
+      // Observed fetches independently and is not blocked by the still-pending Registry calls.
+      expect(await screen.findByText('Dodoma')).toBeInTheDocument();
     });
   });
 });

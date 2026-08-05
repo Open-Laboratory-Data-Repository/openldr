@@ -813,6 +813,8 @@ export const en = {
       code: 'Observed code',
       reports: 'Reports',
       resolvesTo: 'Resolves to',
+      count_one: '{{count}} observed facility',
+      count_other: '{{count}} observed facilities',
       unmapped: 'Not mapped',
       targetMissing: 'Target missing',
       viaRegistry: 'via registry',

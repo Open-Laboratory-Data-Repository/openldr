@@ -820,6 +820,10 @@ export interface ObservedFacility {
   sourceCode: string;
   reportCount: number;
   registryId: string | null;
+  /** `facility_registry.local_code` of the resolved row — OURS, distinct from `nationalCode`
+   *  (THEIRS). Disambiguates similarly-named facilities (e.g. "Dodoma Regional Referral" vs
+   *  "Dodoma Zonal Lab"). */
+  localCode: string | null;
   name: string | null;
   level: string | null;
   status: string | null;

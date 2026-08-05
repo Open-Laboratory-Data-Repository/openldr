@@ -174,6 +174,10 @@ export interface ResolvedFacility {
   sourceSystem: string;
   sourceCode: string;
   registryId: string | null;
+  /** `facility_registry.local_code` of the resolved row — OURS, distinct from `nationalCode`
+   *  (THEIRS). Lets an operator tell apart two similarly-named facilities (e.g. "Dodoma Regional
+   *  Referral" vs "Dodoma Zonal Lab") on the Observed tab. */
+  localCode: string | null;
   name: string | null;
   level: string | null;
   status: string | null;
@@ -259,6 +263,7 @@ export async function resolveObservedFacilities(
       sourceSystem,
       sourceCode: code,
       registryId: row?.id ?? null,
+      localCode: row?.local_code ?? null,
       name: row?.name ?? null,
       level: row?.level ?? null,
       status: row?.status ?? null,
@@ -310,6 +315,7 @@ export async function publishFacilityMap(
     source_system: r.sourceSystem,
     source_code: r.sourceCode,
     registry_id: r.registryId,
+    local_code: r.localCode,
     name: r.name,
     level: r.level,
     status: r.status,
@@ -323,8 +329,9 @@ export async function publishFacilityMap(
 
   await deps.externalDb.transaction().execute(async (trx) => {
     await trx.deleteFrom('facility_map').execute();
-    // Chunked: MSSQL's parameter budget is ~2000 and each row binds 13 values.
-    const chunk = 150;
+    // Chunked: MSSQL's parameter budget is ~2000 and each row binds 14 values (150 * 14 = 2100
+    // would exceed it, hence 140 not 150).
+    const chunk = 140;
     for (let i = 0; i < rows.length; i += chunk) {
       await trx.insertInto('facility_map').values(rows.slice(i, i + chunk) as never).execute();
     }

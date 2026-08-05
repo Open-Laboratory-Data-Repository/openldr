@@ -30,18 +30,22 @@ import { ObservedTab } from './ObservedTab';
 
 const dodoma: ObservedFacility = {
   sourceSystem: 'webhook-ingest', sourceCode: 'Dodoma', reportCount: 247,
-  registryId: 'f1', name: 'Dodoma Regional Referral Hospital', level: null, status: null,
-  region: null, district: null, council: null, nationalSystem: null, nationalCode: null,
+  registryId: 'f1', localCode: 'DOD-REF', name: 'Dodoma Regional Referral Hospital', level: 'Hospital', status: null,
+  region: 'Dodoma', district: 'Dodoma Urban', council: null, nationalSystem: null, nationalCode: null,
   resolvedVia: 'registry', targetMissing: false,
 };
-const kibondo: ObservedFacility = {
-  sourceSystem: 'webhook-ingest', sourceCode: 'Kibondo', reportCount: 148,
-  registryId: null, name: null, level: null, status: null, region: null, district: null,
+// Alphabetically "Arusha" sorts BEFORE "Dodoma", but carries fewer reports (148 < 247) — deliberately
+// the opposite of alphabetical order, so a sort-by-code mutation cannot pass the ordering test below
+// by accident (Minor finding: the old "Kibondo" fixture was alphabetical AND count-descending too,
+// so this fixture is deliberately renamed/reordered to break that coincidence).
+const arusha: ObservedFacility = {
+  sourceSystem: 'webhook-ingest', sourceCode: 'Arusha', reportCount: 148,
+  registryId: null, localCode: null, name: null, level: null, status: null, region: null, district: null,
   council: null, nationalSystem: null, nationalCode: null, resolvedVia: null, targetMissing: false,
 };
 const oceanRoad: ObservedFacility = {
   sourceSystem: 'webhook-ingest', sourceCode: 'Ocean Road Cancer Institute (O', reportCount: 6,
-  registryId: null, name: null, level: null, status: null, region: null, district: null,
+  registryId: null, localCode: null, name: null, level: null, status: null, region: null, district: null,
   council: null, nationalSystem: null, nationalCode: null, resolvedVia: null, targetMissing: true,
 };
 
@@ -68,13 +72,35 @@ describe('ObservedTab', () => {
   });
 
   it('orders observed facilities by report count and names the fallback', async () => {
-    (listObservedFacilities as ReturnType<typeof vi.fn>).mockResolvedValue([dodoma, kibondo]);
+    (listObservedFacilities as ReturnType<typeof vi.fn>).mockResolvedValue([dodoma, arusha]);
     show();
 
     const rows = await screen.findAllByRole('row');
     expect(within(rows[1]).getByText('Dodoma')).toBeInTheDocument();
     expect(within(rows[1]).getByText('Dodoma Regional Referral Hospital')).toBeInTheDocument();
-    expect(within(rows[2]).getByText(/Kibondo/)).toBeInTheDocument();
+    expect(within(rows[2]).getByText(/Arusha/)).toBeInTheDocument();
+  });
+
+  it('shows the local code, level and admin area under a resolved name, so two similarly-named facilities are distinguishable', async () => {
+    // Operator request: "I need to know is it Dodoma referral or Dodoma zonal lab" — the name alone
+    // cannot answer that; `dodoma`'s fixture carries localCode: 'DOD-REF', level: 'Hospital',
+    // district: 'Dodoma Urban', region: 'Dodoma'.
+    show();
+    const rows = await screen.findAllByRole('row');
+    expect(within(rows[1]).getByText('Dodoma Regional Referral Hospital')).toBeInTheDocument();
+    expect(within(rows[1]).getByText('DOD-REF · Hospital · Dodoma Urban, Dodoma · via registry')).toBeInTheDocument();
+  });
+
+  it('omits a null part of the detail line rather than rendering an empty separator', async () => {
+    // A registry-resolved row with NO localCode/level/district/region set (only region/district
+    // absent, say) must not render stray "· ·" from the omitted parts.
+    const sparse = {
+      ...dodoma, sourceCode: 'Sparse', localCode: null, level: null, region: null, district: null,
+    };
+    (listObservedFacilities as ReturnType<typeof vi.fn>).mockResolvedValue([sparse]);
+    show();
+    const rows = await screen.findAllByRole('row');
+    expect(within(rows[1]).getByText('via registry')).toBeInTheDocument();
   });
 
   it('marks a mapping whose target was deleted', async () => {
@@ -100,13 +126,13 @@ describe('ObservedTab', () => {
     // Guards against the resolves-to cell repeating the raw code substring — if it did, a regex
     // match on that substring (as the brief's own "marks a mapping..." style test uses) would hit
     // BOTH the code cell and the resolves-to cell and throw "multiple elements found".
-    (listObservedFacilities as ReturnType<typeof vi.fn>).mockResolvedValue([kibondo]);
+    (listObservedFacilities as ReturnType<typeof vi.fn>).mockResolvedValue([arusha]);
     show();
 
     const rows = await screen.findAllByRole('row');
     expect(within(rows[1]).getByText(/not mapped/i)).toBeInTheDocument();
     // Exactly one element in the row carries the raw code text (the observed-code cell).
-    expect(within(rows[1]).getAllByText('Kibondo')).toHaveLength(1);
+    expect(within(rows[1]).getAllByText('Arusha')).toHaveLength(1);
   });
 
   it('shows an empty state when there are no observed facilities', async () => {
@@ -115,10 +141,15 @@ describe('ObservedTab', () => {
     expect(await screen.findByText(/no observed facilities/i)).toBeInTheDocument();
   });
 
-  it('surfaces a load error', async () => {
+  it('surfaces a load error, and does not ALSO show the misleading "run a scan" empty state', async () => {
     (listObservedFacilities as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('network blip'));
     show();
     expect(await screen.findByText(/network blip/i)).toBeInTheDocument();
+    // A load failure leaves `rows` at `[]`, same as a genuinely empty result — but "run a scan to
+    // discover facility strings" actively misdirects an operator whose fetch failed for network
+    // reasons; there is nothing a scan fixes here. The two states must be mutually exclusive.
+    expect(screen.queryByText(/no observed facilities/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/run a scan/i)).not.toBeInTheDocument();
   });
 
   it('offers Scan and Publish in the header ⋯ menu for a manage-capable actor, and branches on the returned counters', async () => {
@@ -142,12 +173,62 @@ describe('ObservedTab', () => {
     await waitFor(() => expect(listObservedFacilities).toHaveBeenCalledTimes(2));
   });
 
-  it('opens the shipped TermMappingDialog to map an unmapped row, prefilling nothing (create mode)', async () => {
-    (listObservedFacilities as ReturnType<typeof vi.fn>).mockResolvedValue([kibondo]);
+  it('renders an all-zero scan result honestly rather than as a bare success', async () => {
+    // Minor finding: nothing previously pinned that a scan discovering NOTHING new still shows its
+    // real (zero) counters, rather than e.g. a generic "done" a caller might be tempted to
+    // special-case when every counter is 0.
+    (scanObservedFacilities as ReturnType<typeof vi.fn>).mockResolvedValue({ discovered: 0, created: 0, updated: 0, systemRegistered: true });
     show();
-    await screen.findByText('Kibondo');
+    await screen.findByText('Dodoma');
 
-    const trigger = screen.getByRole('button', { name: 'Observed facility actions Kibondo' });
+    const trigger = screen.getByRole('button', { name: 'Observed facility actions' });
+    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByRole('menuitem', { name: /scan for new facilities/i })) {
+      fireEvent.keyDown(trigger, { key: 'Enter' });
+    }
+    fireEvent.click(screen.getByRole('menuitem', { name: /scan for new facilities/i }));
+
+    await waitFor(() => expect(scanObservedFacilities).toHaveBeenCalledWith({ apply: true }));
+    expect(await screen.findByText(/0 discovered/i)).toBeInTheDocument();
+    expect(screen.getByText(/0 created/i)).toBeInTheDocument();
+    expect(screen.getByText(/0 updated/i)).toBeInTheDocument();
+  });
+
+  it('paginates client-side using the shared TablePagination, and resets to page 0 after a scan', async () => {
+    const many: ObservedFacility[] = Array.from({ length: 30 }, (_, i) => ({
+      ...arusha, sourceCode: `Facility ${String(i).padStart(2, '0')}`, reportCount: 100 - i,
+    }));
+    (listObservedFacilities as ReturnType<typeof vi.fn>).mockResolvedValue(many);
+    (scanObservedFacilities as ReturnType<typeof vi.fn>).mockResolvedValue({ discovered: 30, created: 0, updated: 30, systemRegistered: true });
+    show();
+
+    // Default page size is 25 — the first page shows Facility 00..24, not Facility 29.
+    await screen.findByText('Facility 00');
+    expect(screen.queryByText('Facility 29')).not.toBeInTheDocument();
+    expect(screen.getByText(/1–25 of 30/)).toBeInTheDocument(); // from the shared TablePagination
+
+    fireEvent.click(screen.getByRole('button', { name: /next page/i }));
+    expect(await screen.findByText('Facility 29')).toBeInTheDocument();
+    expect(screen.queryByText('Facility 00')).not.toBeInTheDocument();
+
+    // A scan changes the underlying row set — the operator must not be stranded on page 2.
+    const trigger = screen.getByRole('button', { name: 'Observed facility actions' });
+    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByRole('menuitem', { name: /scan for new facilities/i })) {
+      fireEvent.keyDown(trigger, { key: 'Enter' });
+    }
+    fireEvent.click(screen.getByRole('menuitem', { name: /scan for new facilities/i }));
+
+    await waitFor(() => expect(screen.getByText('Facility 00')).toBeInTheDocument());
+    expect(screen.queryByText('Facility 29')).not.toBeInTheDocument();
+  });
+
+  it('opens the shipped TermMappingDialog to map an unmapped row, prefilling nothing (create mode)', async () => {
+    (listObservedFacilities as ReturnType<typeof vi.fn>).mockResolvedValue([arusha]);
+    show();
+    await screen.findByText('Arusha');
+
+    const trigger = screen.getByRole('button', { name: 'Observed facility actions Arusha' });
     fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
     if (!screen.queryByRole('menuitem', { name: /^map$/i })) {
       fireEvent.keyDown(trigger, { key: 'Enter' });

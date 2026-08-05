@@ -5,6 +5,7 @@ import { DEFAULT_OBSERVED_FACILITY_SYSTEM } from '@openldr/db/facility-observed'
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { TablePagination } from '@/components/ui/table-pagination';
 import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/spinner';
 import { TruncatedText } from '@/components/ui/truncated-text';
@@ -20,6 +21,20 @@ import {
   type TermMapping,
 } from '@/api';
 import { TermMappingDialog } from '@/terminology/TermMappingDialog';
+
+/**
+ * The operator-visible second line under a resolved facility's name: local code, level, and
+ * admin area (district/region — whichever are populated), then the resolution route. Each part is
+ * OMITTED (not rendered as an empty separator) when null — an operator disambiguating "Dodoma
+ * Regional Referral" from "Dodoma Zonal Lab" needs `DOD-REF · Hospital · Dodoma Urban, Dodoma`,
+ * not `· · Dodoma`.
+ */
+function facilityDetailLine(row: ObservedFacility, viaLabel: string): string {
+  const adminArea = row.district && row.region
+    ? `${row.district}, ${row.region}`
+    : row.district ?? row.region ?? null;
+  return [row.localCode, row.level, adminArea, viaLabel].filter((part): part is string => !!part).join(' · ');
+}
 
 /**
  * The Observed tab (Facilities page). Impact-ordered view of facility strings observed in
@@ -42,6 +57,12 @@ export function ObservedTab(): JSX.Element {
   const [rows, setRows] = useState<ObservedFacility[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Client-side pagination: GET /api/facilities/observed returns the whole (already
+  // reportCount-ordered) array unpaginated, so paging happens here against the fetched rows.
+  // `TablePagination` is the shared primitive (components/ui/table-pagination.tsx); no bespoke
+  // pager here — see Sites.tsx for the same client-side slice pattern.
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(25);
 
   // F1's fix, reapplied here: a plain `reload()` flips `loading`, and the render below swaps in a
   // full-page `LoadingState` that unmounts everything else — including a just-opened mapping
@@ -78,6 +99,9 @@ export function ObservedTab(): JSX.Element {
       // Branch on the COUNTERS, never the HTTP status — a scan that discovers zero new codes is
       // still a 200, and the banner must say so honestly rather than a bare "done".
       setActionResult(t('facilities.observed.scanDone', { ...result }));
+      // The underlying row set just changed (new codes discovered) — an operator sitting on page 3
+      // must not be stranded past the new last page.
+      setPage(0);
       await reload({ background: true });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -92,6 +116,7 @@ export function ObservedTab(): JSX.Element {
     try {
       const result = await publishFacilities({ apply: true });
       setActionResult(t('facilities.observed.publishDone', { ...result }));
+      setPage(0);
       await reload({ background: true });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -135,6 +160,8 @@ export function ObservedTab(): JSX.Element {
   if (loading) {
     return <LoadingState className="flex-1" label={t('common.loading')} />;
   }
+
+  const pageRows = rows.slice(page * pageSize, page * pageSize + pageSize);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -183,7 +210,7 @@ export function ObservedTab(): JSX.Element {
               </TableRow>
             </TableHeader>
             <TableBody className="[&_tr:last-child]:border-b">
-              {rows.map((row) => (
+              {pageRows.map((row) => (
                 <TableRow key={`${row.sourceSystem}|${row.sourceCode}`}>
                   <TableCell className="max-w-[220px] text-xs">
                     <TruncatedText text={row.sourceCode} />
@@ -196,7 +223,10 @@ export function ObservedTab(): JSX.Element {
                       <div className="flex flex-col">
                         <span>{row.name}</span>
                         <span className="text-[11px] text-muted-foreground">
-                          {row.resolvedVia === 'registry' ? t('facilities.observed.viaRegistry') : t('facilities.observed.viaNational')}
+                          {facilityDetailLine(
+                            row,
+                            row.resolvedVia === 'registry' ? t('facilities.observed.viaRegistry') : t('facilities.observed.viaNational'),
+                          )}
                         </span>
                       </div>
                     ) : (
@@ -223,7 +253,10 @@ export function ObservedTab(): JSX.Element {
               ))}
             </TableBody>
           </Table>
-        ) : (
+        ) : error ? null : (
+          // Mutually exclusive with the error banner above: "run a scan to discover facilities"
+          // actively misdirects an operator whose load just failed for network reasons — there is
+          // nothing to scan into fixing that. See ObservedTab.test.tsx's "surfaces a load error".
           <EmptyState
             icon={<Building2 className="h-6 w-6" />}
             title={t('facilities.observed.empty')}
@@ -231,6 +264,15 @@ export function ObservedTab(): JSX.Element {
           />
         )}
       </div>
+
+      <TablePagination
+        page={page}
+        pageSize={pageSize}
+        total={rows.length}
+        onPageChange={setPage}
+        onPageSizeChange={(size) => { setPageSize(size); setPage(0); }}
+        leftSlot={<span className="text-muted-foreground">{t('facilities.observed.count', { count: rows.length })}</span>}
+      />
 
       {mappingRow && (
         <TermMappingDialog
