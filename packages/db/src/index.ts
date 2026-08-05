@@ -59,7 +59,6 @@ export * from './reference-search';
 export { createFacilityRegistryStore, FACILITY_ADMIN_LEVELS, toRow as facilityRecordToRow, toRecord as facilityRowToRecord } from './facility-registry-store';
 export type {
   FacilityRecord,
-  FacilityAlias,
   FacilityListOptions,
   FacilityRegistryStore,
   FacilityAdminLevel,

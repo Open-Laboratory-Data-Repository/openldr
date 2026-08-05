@@ -267,15 +267,6 @@ export interface FacilityRegistryTable {
   updated_at: string;
 }
 
-/** What an incoming FEED called a facility. Many per facility; the PK makes one alias mean one. */
-export interface FacilityAliasesTable {
-  source_system: string;
-  source_code: string;
-  registry_id: string;
-  created_at: string;
-  created_by: string | null;
-}
-
 export interface TerminologyConceptsTable {
   system: string;
   code: string;
@@ -792,7 +783,6 @@ export interface InternalSchema {
   dashboards: DashboardsTable;
   column_exposure_policy: ColumnExposurePolicyTable;
   facility_registry: FacilityRegistryTable;
-  facility_aliases: FacilityAliasesTable;
   form_definitions: FormDefinitionsTable;
   form_versions: FormVersionsTable;
   user_profiles: UserProfilesTable;

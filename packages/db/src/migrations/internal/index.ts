@@ -72,6 +72,7 @@ import * as m070 from './070_facility_registry';
 import * as m071 from './071_facility_form_target';
 import * as m072 from './072_facility_level_status_valuesets';
 import * as m073 from './073_facility_country_and_admin_fields';
+import * as m074 from './074_drop_facility_aliases';
 
 export const internalMigrations: Record<string, Migration> = {
   '001_fhir_resources': { up: m001.up, down: m001.down },
@@ -147,4 +148,5 @@ export const internalMigrations: Record<string, Migration> = {
   '071_facility_form_target': { up: m071.up, down: m071.down },
   '072_facility_level_status_valuesets': { up: m072.up, down: m072.down },
   '073_facility_country_and_admin_fields': { up: m073.up, down: m073.down },
+  '074_drop_facility_aliases': { up: m074.up, down: m074.down },
 };

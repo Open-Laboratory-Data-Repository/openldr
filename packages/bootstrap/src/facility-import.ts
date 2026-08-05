@@ -48,7 +48,7 @@ export interface FacilityImportResult {
   /** Rows written that did not previously exist. Always 0 on a dry run. */
   created: number;
   /** Rows written that already existed (same nationalSystem+nationalCode ⇒ same hashed id, so this
-   *  is an in-place update — the row's `id` and any attached `facility_aliases` are untouched).
+   *  is an in-place update — the row's `id` is untouched).
    *  Always 0 on a dry run. */
   updated: number;
   /** How many accepted rows shared a `national_code` (and therefore a generated `id`) with another
