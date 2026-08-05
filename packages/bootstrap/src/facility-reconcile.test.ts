@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { scanObservedFacilities } from './facility-reconcile';
-import { makeReconcileDeps, seedPerformers } from './test-support/facility-reconcile-fixture';
+import { scanObservedFacilities, resolveObservedFacilities, publishFacilityMap } from './facility-reconcile';
+import { makeReconcileDeps, seedPerformers, seedRegistry, seedMapping } from './test-support/facility-reconcile-fixture';
 
 describe('scanObservedFacilities', () => {
   it('discovers distinct performers and creates concepts', async () => {
@@ -198,5 +198,123 @@ describe('scanObservedFacilities', () => {
     const result = await scanObservedFacilities(deps, { now: '2026-08-05T00:00:00.000Z', apply: true });
 
     expect(result.discovered).toBe(1);
+  });
+});
+
+describe('resolveObservedFacilities', () => {
+  it('resolves a registry-route mapping to the canonical name', async () => {
+    const deps = await makeReconcileDeps();
+    await seedPerformers(deps, [['Dodoma', 247]]);
+    await scanObservedFacilities(deps, { now: '2026-08-05T00:00:00.000Z', apply: true });
+    await seedRegistry(deps, { id: 'fac-1', name: 'Dodoma Regional Referral Hospital', localCode: 'DOD', region: 'Dodoma' });
+    await seedMapping(deps, {
+      fromSystem: 'urn:openldr:default_fac', fromCode: 'Dodoma',
+      toSystem: 'urn:openldr:cs:facility-registry', toCode: 'fac-1',
+    });
+
+    const [row] = await resolveObservedFacilities(deps);
+
+    expect(row.name).toBe('Dodoma Regional Referral Hospital');
+    expect(row.resolvedVia).toBe('registry');
+    expect(row.region).toBe('Dodoma');
+    expect(row.targetMissing).toBe(false);
+  });
+
+  it('resolves a national-route mapping through (national_system, national_code)', async () => {
+    const deps = await makeReconcileDeps();
+    await seedPerformers(deps, [['Muhimbili', 82]]);
+    await scanObservedFacilities(deps, { now: '2026-08-05T00:00:00.000Z', apply: true });
+    await seedRegistry(deps, { id: 'fac-2', name: 'Muhimbili National Hospital', nationalSystem: 'urn:tz:hfr', nationalCode: 'TZ-001' });
+    await seedMapping(deps, {
+      fromSystem: 'urn:openldr:default_fac', fromCode: 'Muhimbili',
+      toSystem: 'urn:tz:hfr', toCode: 'TZ-001',
+    });
+
+    const [row] = await resolveObservedFacilities(deps);
+
+    expect(row.name).toBe('Muhimbili National Hospital');
+    expect(row.resolvedVia).toBe('national');
+  });
+
+  // ⛔ The operator chose "both targets allowed"; this pins the tiebreak so it can never be a coin flip.
+  it('prefers the registry route when both mappings exist', async () => {
+    const deps = await makeReconcileDeps();
+    await seedPerformers(deps, [['Mnazi Mmoja', 182]]);
+    await scanObservedFacilities(deps, { now: '2026-08-05T00:00:00.000Z', apply: true });
+    await seedRegistry(deps, { id: 'fac-3', name: 'Mnazi Mmoja Hospital', localCode: 'MMH' });
+    await seedRegistry(deps, { id: 'fac-4', name: 'Some Other Hospital', nationalSystem: 'urn:tz:hfr', nationalCode: 'TZ-999' });
+    await seedMapping(deps, { fromSystem: 'urn:openldr:default_fac', fromCode: 'Mnazi Mmoja', toSystem: 'urn:tz:hfr', toCode: 'TZ-999' });
+    await seedMapping(deps, { fromSystem: 'urn:openldr:default_fac', fromCode: 'Mnazi Mmoja', toSystem: 'urn:openldr:cs:facility-registry', toCode: 'fac-3' });
+
+    const [row] = await resolveObservedFacilities(deps);
+
+    expect(row.name).toBe('Mnazi Mmoja Hospital');
+    expect(row.resolvedVia).toBe('registry');
+  });
+
+  it('reports an unmapped code as null, not blank', async () => {
+    const deps = await makeReconcileDeps();
+    await seedPerformers(deps, [['Kibondo', 148]]);
+    await scanObservedFacilities(deps, { now: '2026-08-05T00:00:00.000Z', apply: true });
+
+    const [row] = await resolveObservedFacilities(deps);
+
+    expect(row.name).toBeNull();
+    expect(row.resolvedVia).toBeNull();
+    expect(row.targetMissing).toBe(false);
+    expect(row.sourceCode).toBe('Kibondo');
+  });
+
+  it('flags targetMissing when the mapped facility was deleted', async () => {
+    const deps = await makeReconcileDeps();
+    await seedPerformers(deps, [['Ocean Road Cancer Institute (O', 6]]);
+    await scanObservedFacilities(deps, { now: '2026-08-05T00:00:00.000Z', apply: true });
+    await seedMapping(deps, {
+      fromSystem: 'urn:openldr:default_fac', fromCode: 'Ocean Road Cancer Institute (O',
+      toSystem: 'urn:openldr:cs:facility-registry', toCode: 'fac-deleted',
+    });
+
+    const [row] = await resolveObservedFacilities(deps);
+
+    expect(row.targetMissing).toBe(true);
+    expect(row.name).toBeNull();
+  });
+
+  it('ignores an inactive mapping', async () => {
+    const deps = await makeReconcileDeps();
+    await seedPerformers(deps, [['Dodoma', 247]]);
+    await scanObservedFacilities(deps, { now: '2026-08-05T00:00:00.000Z', apply: true });
+    await seedRegistry(deps, { id: 'fac-1', name: 'Dodoma Regional Referral Hospital', localCode: 'DOD' });
+    await seedMapping(deps, {
+      fromSystem: 'urn:openldr:default_fac', fromCode: 'Dodoma',
+      toSystem: 'urn:openldr:cs:facility-registry', toCode: 'fac-1', isActive: false,
+    });
+
+    const [row] = await resolveObservedFacilities(deps);
+
+    expect(row.resolvedVia).toBeNull();
+  });
+});
+
+describe('publishFacilityMap', () => {
+  it('writes resolved rows to the warehouse and re-publishes without duplicating', async () => {
+    const deps = await makeReconcileDeps();
+    await seedPerformers(deps, [['Dodoma', 247], ['Kibondo', 148]]);
+    await scanObservedFacilities(deps, { now: '2026-08-05T00:00:00.000Z', apply: true });
+    await seedRegistry(deps, { id: 'fac-1', name: 'Dodoma Regional Referral Hospital', localCode: 'DOD' });
+    await seedMapping(deps, {
+      fromSystem: 'urn:openldr:default_fac', fromCode: 'Dodoma',
+      toSystem: 'urn:openldr:cs:facility-registry', toCode: 'fac-1',
+    });
+
+    const first = await publishFacilityMap(deps, { apply: true });
+    const second = await publishFacilityMap(deps, { apply: true });
+
+    expect(first).toMatchObject({ resolved: 1, unmapped: 1, written: 2 });
+    expect(second).toEqual(first);
+    const rows = await deps.externalDb.selectFrom('facility_map').selectAll().execute();
+    expect(rows).toHaveLength(2);
+    expect(rows.find((r) => r.source_code === 'Dodoma')!.name).toBe('Dodoma Regional Referral Hospital');
+    expect(rows.find((r) => r.source_code === 'Kibondo')!.name).toBeNull();
   });
 });

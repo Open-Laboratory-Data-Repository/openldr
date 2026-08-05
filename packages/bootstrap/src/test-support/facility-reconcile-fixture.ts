@@ -5,6 +5,7 @@ import {
   internalMigrations,
   externalMigrations,
   createTerminologyAdminStore,
+  createFacilityRegistryStore,
   type ExternalSchema,
   type InternalSchema,
   type TerminologyAdminStore,
@@ -68,4 +69,68 @@ export async function seedPerformers(deps: ReconcileDeps, pairs: [string | null,
   for (let i = 0; i < rows.length; i += batchSize) {
     await deps.externalDb.insertInto('diagnostic_reports').values(rows.slice(i, i + batchSize) as never).execute();
   }
+}
+
+export interface SeedRegistryInput {
+  id: string;
+  name: string;
+  localCode?: string | null;
+  nationalSystem?: string | null;
+  nationalCode?: string | null;
+  region?: string | null;
+  district?: string | null;
+  council?: string | null;
+  level?: string | null;
+  status?: string | null;
+}
+
+/**
+ * Seeds one `facility_registry` row through the real store (`createFacilityRegistryStore`), not a
+ * raw insert, so a seeded row honours the same `facility_registry_has_a_code` CHECK (local_code or
+ * national_code present) a hand-entered or imported row would.
+ */
+export async function seedRegistry(deps: ReconcileDeps, input: SeedRegistryInput): Promise<void> {
+  const store = createFacilityRegistryStore(deps.internalDb);
+  await store.upsert({
+    id: input.id,
+    name: input.name,
+    localCode: input.localCode ?? null,
+    nationalSystem: input.nationalSystem ?? null,
+    nationalCode: input.nationalCode ?? null,
+    region: input.region ?? null,
+    district: input.district ?? null,
+    council: input.council ?? null,
+    level: input.level ?? null,
+    status: input.status ?? null,
+    source: 'manual',
+  });
+}
+
+export interface SeedMappingInput {
+  fromSystem: string;
+  fromCode: string;
+  toSystem: string;
+  toCode: string;
+  /** Defaults to true. Task 4's "ignores an inactive mapping" test passes `false` here to pin the
+   *  `term_mappings.is_active` filter. */
+  isActive?: boolean;
+}
+
+/**
+ * Seeds one `term_mappings` row through `admin.termMappings.create` — the same path an operator's
+ * `TermMappingDialog` submit takes — rather than a raw insert. That includes its side effect of
+ * auto-creating a DRAFT `terminology_concepts` row for an unknown target (Task 4b's concern); Task
+ * 4's resolution reads `facility_registry` directly, not the concept, so that side effect is inert
+ * here but must not be bypassed by seeding differently than production does.
+ */
+export async function seedMapping(deps: ReconcileDeps, input: SeedMappingInput): Promise<void> {
+  await deps.admin.termMappings.create({
+    fromSystem: input.fromSystem,
+    fromCode: input.fromCode,
+    toSystem: input.toSystem,
+    toCode: input.toCode,
+    toDisplay: null,
+    mapType: 'SAME-AS',
+    isActive: input.isActive ?? true,
+  });
 }

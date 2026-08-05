@@ -1,6 +1,6 @@
 import type { Kysely } from 'kysely';
 import type { ExternalSchema, InternalSchema, TerminologyAdminStore } from '@openldr/db';
-import { DEFAULT_OBSERVED_FACILITY_SYSTEM, observedFacilityConceptRow } from '@openldr/db';
+import { DEFAULT_OBSERVED_FACILITY_SYSTEM, FACILITY_REGISTRY_SYSTEM, facilityMapId, observedFacilityConceptRow } from '@openldr/db';
 
 export interface ReconcileDeps {
   internalDb: Kysely<InternalSchema>;
@@ -164,6 +164,169 @@ export async function scanObservedFacilities(deps: ReconcileDeps, opts: ScanOpti
   result.systemRegistered = true;
 
   if (rows.length > 0) await deps.admin.terms.importRows(rows);
+
+  return result;
+}
+
+export type ResolvedVia = 'registry' | 'national';
+
+export interface ResolvedFacility {
+  sourceSystem: string;
+  sourceCode: string;
+  registryId: string | null;
+  name: string | null;
+  level: string | null;
+  status: string | null;
+  region: string | null;
+  district: string | null;
+  council: string | null;
+  nationalSystem: string | null;
+  nationalCode: string | null;
+  resolvedVia: ResolvedVia | null;
+  /** A mapping exists, but its target resolves to no live registry row. Surfaced on the Observed
+   *  tab; the report still falls back to the raw string. */
+  targetMissing: boolean;
+}
+
+/**
+ * Resolve every observed facility code through its mapping to a registry row.
+ *
+ * ⛔ Reads `term_mappings`, NOT `concept_map_elements`. `term_mappings` is the authoritative table
+ * (`terminology-admin-store.ts:567-633` reads it and writes the concept_map_elements mirror
+ * alongside), and only it carries `is_active` — an operator-deactivated mapping must not resolve.
+ *
+ * ⛔ Precedence is fixed and total: registry route, then national route, then unresolved. Never a
+ * silent pick between two candidates.
+ *
+ * `opts.system` is the CODING SYSTEM used to author mappings (`term_mappings.from_system`, default
+ * `DEFAULT_OBSERVED_FACILITY_SYSTEM`) — unrelated to `diagnostic_reports.source_system` (the
+ * ingestion feed, e.g. `webhook-ingest`), which flows straight through into `sourceSystem` below and
+ * is what `facility_map`/`facilityMapId` key on.
+ */
+export async function resolveObservedFacilities(
+  deps: ReconcileDeps,
+  opts: { system?: string } = {},
+): Promise<ResolvedFacility[]> {
+  const system = opts.system ?? DEFAULT_OBSERVED_FACILITY_SYSTEM;
+
+  const observed = await deps.externalDb
+    .selectFrom('diagnostic_reports')
+    .select(['performer', 'source_system'])
+    .where('performer', 'is not', null)
+    .groupBy(['performer', 'source_system'])
+    .execute();
+
+  const mappings = await deps.internalDb
+    .selectFrom('term_mappings')
+    .select(['from_code', 'to_system', 'to_code'])
+    .where('from_system', '=', system)
+    .where('is_active', '=', true)
+    .execute();
+
+  const registry = await deps.internalDb.selectFrom('facility_registry').selectAll().execute();
+  const byId = new Map(registry.map((r) => [r.id, r]));
+  const byNational = new Map(
+    registry
+      .filter((r) => r.national_system && r.national_code)
+      .map((r) => [`${r.national_system}|${r.national_code}`, r]),
+  );
+
+  const byCode = new Map<string, { toSystem: string; toCode: string }[]>();
+  for (const m of mappings) {
+    const list = byCode.get(m.from_code) ?? [];
+    list.push({ toSystem: m.to_system, toCode: m.to_code });
+    byCode.set(m.from_code, list);
+  }
+
+  return observed.map((o) => {
+    const code = o.performer as string;
+    const sourceSystem = o.source_system ?? '';
+    const candidates = byCode.get(code) ?? [];
+
+    // 1. Registry route wins — the registry is what holds a printable name.
+    const registryMapping = candidates.find((c) => c.toSystem === FACILITY_REGISTRY_SYSTEM);
+    const nationalMapping = candidates.find((c) => c.toSystem !== FACILITY_REGISTRY_SYSTEM);
+
+    const row = registryMapping
+      ? byId.get(registryMapping.toCode)
+      : nationalMapping
+        ? byNational.get(`${nationalMapping.toSystem}|${nationalMapping.toCode}`)
+        : undefined;
+
+    const resolvedVia: ResolvedVia | null = row ? (registryMapping ? 'registry' : 'national') : null;
+
+    return {
+      sourceSystem,
+      sourceCode: code,
+      registryId: row?.id ?? null,
+      name: row?.name ?? null,
+      level: row?.level ?? null,
+      status: row?.status ?? null,
+      region: row?.region ?? null,
+      district: row?.district ?? null,
+      council: row?.council ?? null,
+      nationalSystem: row?.national_system ?? null,
+      nationalCode: row?.national_code ?? null,
+      resolvedVia,
+      // A mapping was authored but points at nothing live — distinct from "never mapped".
+      targetMissing: candidates.length > 0 && !row,
+    };
+  });
+}
+
+export interface PublishResult {
+  resolved: number;
+  unmapped: number;
+  targetMissing: number;
+  written: number;
+}
+
+/**
+ * Rebuild `facility_map` from the current resolution.
+ *
+ * ⛔ DELETE-then-INSERT, never upsert-then-prune. All three dialect batch-upserts conflict on `id`
+ * and MSSQL caps at ~2000 bound parameters, so a `where id not in (...)` prune is unimplementable
+ * at register scale — the same constraint that made `terminology_codes` delete-then-insert. One
+ * transaction, so a concurrent reader never sees the dimension empty.
+ */
+export async function publishFacilityMap(
+  deps: ReconcileDeps,
+  opts: { system?: string; apply?: boolean } = {},
+): Promise<PublishResult> {
+  const resolved = await resolveObservedFacilities(deps, { system: opts.system });
+
+  const result: PublishResult = {
+    resolved: resolved.filter((r) => r.resolvedVia !== null).length,
+    unmapped: resolved.filter((r) => r.resolvedVia === null && !r.targetMissing).length,
+    targetMissing: resolved.filter((r) => r.targetMissing).length,
+    written: resolved.length,
+  };
+  if (!opts.apply) return result;
+
+  const rows = resolved.map((r) => ({
+    id: facilityMapId(r.sourceSystem, r.sourceCode),
+    source_system: r.sourceSystem,
+    source_code: r.sourceCode,
+    registry_id: r.registryId,
+    name: r.name,
+    level: r.level,
+    status: r.status,
+    region: r.region,
+    district: r.district,
+    council: r.council,
+    national_system: r.nationalSystem,
+    national_code: r.nationalCode,
+    resolved_via: r.resolvedVia,
+  }));
+
+  await deps.externalDb.transaction().execute(async (trx) => {
+    await trx.deleteFrom('facility_map').execute();
+    // Chunked: MSSQL's parameter budget is ~2000 and each row binds 13 values.
+    const chunk = 150;
+    for (let i = 0; i < rows.length; i += chunk) {
+      await trx.insertInto('facility_map').values(rows.slice(i, i + chunk) as never).execute();
+    }
+  });
 
   return result;
 }
