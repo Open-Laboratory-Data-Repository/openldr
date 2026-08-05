@@ -56,7 +56,7 @@ export * from './terminology-ingest-job-store';
 export { createRoleStore } from './role-store';
 export type { RoleStore, RoleRecord, CreateRoleInput, UpdateRoleInput, CapabilityReconciliation, CapabilityDiagnosis } from './role-store';
 export * from './reference-search';
-export { createFacilityRegistryStore, FACILITY_ADMIN_LEVELS } from './facility-registry-store';
+export { createFacilityRegistryStore, FACILITY_ADMIN_LEVELS, toRow as facilityRecordToRow, toRecord as facilityRowToRecord } from './facility-registry-store';
 export type {
   FacilityRecord,
   FacilityAlias,
