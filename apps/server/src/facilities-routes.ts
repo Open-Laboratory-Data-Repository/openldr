@@ -8,7 +8,7 @@ import {
 } from '@openldr/bootstrap';
 import {
   splitFacilityAnswers, CORE_FACILITY_KEYS, FACILITY_ADMIN_LEVELS, referenceCapture,
-  DEFAULT_OBSERVED_FACILITY_SYSTEM,
+  DEFAULT_OBSERVED_FACILITY_SYSTEM, FACILITY_REGISTRY_SYSTEM,
 } from '@openldr/db';
 import type { FacilityAdminLevel, ExternalSchema } from '@openldr/db';
 import { requireCapability } from './rbac';
@@ -519,6 +519,68 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     const rec = await ctx.facilityRegistry.get(id);
     if (!rec) { reply.code(404); return { error: 'not found' }; }
     return rec;
+  });
+
+  // Task 7: the delete guard's impact preview. A facility can be TARGETED by a mapping two ways —
+  // see `resolveObservedFacilities`'s fixed precedence (packages/bootstrap/src/facility-reconcile.ts):
+  // a registry-route mapping (`to_system = FACILITY_REGISTRY_SYSTEM AND to_code = <this id>`), or a
+  // national-route mapping (`to_system = <this facility's national_system> AND to_code = <its
+  // national_code>`). Both are counted here — deleting the facility does not retire either route, a
+  // mapping keeps resolving right up until the row disappears, and after that Task 4's
+  // `ResolvedFacility.targetMissing` is what surfaces the orphan.
+  //
+  // ⛔ A facility with no national code has no national-route mappings, by construction — the
+  // national-route query only runs when BOTH `nationalSystem` and `nationalCode` are present. It
+  // deliberately does NOT fall through to `.where('to_code', '=', facility.nationalCode)` with a null
+  // value: `to_code` is NOT NULL on `term_mappings`, so that comparison can never match a real row
+  // today, but a future caller "simplifying" this into `facility.nationalCode ?? ''` (or any other
+  // sentinel) would start matching a pathological empty-string mapping that belongs to nobody. Skip
+  // the query outright rather than leave that door open.
+  //
+  // `reportCount` sums the LIVE `diagnostic_reports` aggregate (same table/approach as
+  // `GET /api/facilities/observed` above) for the observed codes these mappings come from — NOT the
+  // scan's stored snapshot, for the same freshness reason documented on that route. Unlike that
+  // route's per-`(sourceSystem, sourceCode)` key, a `term_mappings` row carries no `source_system` of
+  // its own (`from_code` alone identifies the observed string), so counts here are summed across
+  // every source system reporting that code rather than kept split by feed.
+  app.get('/api/facilities/:id/impact', VIEW, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const facility = await ctx.facilityRegistry.get(id);
+    if (!facility) { reply.code(404); return { error: 'not found' }; }
+
+    const deps = reconcileDeps(ctx);
+
+    const registryMappings = await deps.internalDb
+      .selectFrom('term_mappings')
+      .select(['from_code'])
+      .where('to_system', '=', FACILITY_REGISTRY_SYSTEM)
+      .where('to_code', '=', id)
+      .execute();
+
+    const nationalMappings = (facility.nationalSystem != null && facility.nationalCode != null)
+      ? await deps.internalDb
+          .selectFrom('term_mappings')
+          .select(['from_code'])
+          .where('to_system', '=', facility.nationalSystem)
+          .where('to_code', '=', facility.nationalCode)
+          .execute()
+      : [];
+
+    const mappingCount = registryMappings.length + nationalMappings.length;
+
+    const observedCodes = [...new Set([...registryMappings, ...nationalMappings].map((m) => m.from_code))];
+    let reportCount = 0;
+    if (observedCodes.length > 0) {
+      const counts = await deps.externalDb
+        .selectFrom('diagnostic_reports')
+        .select(({ fn }) => ['performer', fn.countAll<number>().as('n')])
+        .where('performer', 'in', observedCodes)
+        .groupBy('performer')
+        .execute();
+      reportCount = counts.reduce((sum, c) => sum + Number(c.n), 0);
+    }
+
+    return { mappingCount, reportCount };
   });
 
   app.post('/api/facilities', MANAGE, async (req, reply) => {
