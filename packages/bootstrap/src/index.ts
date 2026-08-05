@@ -9,7 +9,7 @@ import { createS3Bucket } from '@openldr/adapter-s3-bucket';
 import { toS3BucketConfig } from './s3-config';
 import type { Config } from '@openldr/config';
 import { createLogger, HealthRegistry, open, seal, parseSecretKey, redact, type Logger } from '@openldr/core';
-import { createInternalDb, createFhirStore, createRelationalWriter, persistResources, createTerminologyStore, createTerminologyAdminStore, createOntologyStore, createReportRunStore, createReportScheduleStore, createMarketplaceInstallStore, createRegistryStore, createAppSettingsStore, deriveSystemCode, resolveSeedPublisherId, createProjectionRunner, fetchSafeChangeRows, readCursor as readChangeCursor, advanceCursor as advanceChangeCursor, createReferenceApplier, referenceCapture, markTerminologyChanged, createRoleStore, createFacilityRegistryStore, type TerminologyAdminStore, type OntologyStore, type FhirStore, type ReportRunStore, type ReportScheduleStore, type AppSettingStore, type RoleStore, type FacilityRegistryStore } from '@openldr/db';
+import { createInternalDb, createFhirStore, createRelationalWriter, persistResources, createTerminologyStore, createTerminologyAdminStore, createOntologyStore, createReportRunStore, createReportScheduleStore, createMarketplaceInstallStore, createRegistryStore, createAppSettingsStore, deriveSystemCode, resolveSeedPublisherId, createProjectionRunner, fetchSafeChangeRows, readCursor as readChangeCursor, advanceCursor as advanceChangeCursor, createReferenceApplier, referenceCapture, markTerminologyChanged, createRoleStore, createFacilityRegistryStore, projectDiagnosticReport, DEFAULT_OBSERVED_FACILITY_SYSTEM, type TerminologyAdminStore, type OntologyStore, type FhirStore, type ReportRunStore, type ReportScheduleStore, type AppSettingStore, type RoleStore, type FacilityRegistryStore } from '@openldr/db';
 import type { ExternalSchema, InternalSchema, Provenance, SyncActivityStore, TargetEngine, CapabilityReconciliation } from '@openldr/db';
 import type { AuthPort, BlobStoragePort, EventingPort, TargetStorePort } from '@openldr/ports';
 import { createAuditStore, safeRecord, type AuditStore } from '@openldr/audit';
@@ -58,6 +58,7 @@ import { createValidationStrictness, type ValidationStrictness } from './validat
 import { createLabIdentity, type LabIdentityService } from './lab-identity';
 export { createValidationStrictness, VALIDATION_STRICTNESS_KEY, type ValidationStrictness } from './validation-settings';
 import { createReportCategoriesService, type ReportCategoriesService } from './report-categories';
+import { captureObservedFacility } from './facility-reconcile';
 import { createPluginBroker, type PluginBroker } from './plugin-broker';
 import { policyFromConfig } from './policy';
 import { createPluginTarget } from './connector-target';
@@ -963,6 +964,19 @@ const reporting: ReportingApi = {
     relationalWriter: workflowRelationalWriter,
     logger,
     fetch: fetchSafeChangeRows,
+    // Facility-reconciliation: capture a DiagnosticReport's performer the moment it is projected,
+    // so a newly-seen facility string appears as a concept without waiting for the next
+    // `scanObservedFacilities` scan. `onProjected` itself already wraps this call and swallows any
+    // error (see `applyProjection` in `@openldr/db`'s cycle.ts) — never let a facility-capture
+    // failure be mistaken for a failed clinical projection.
+    onProjected: async (resourceType, resource) => {
+      if (resourceType !== 'DiagnosticReport') return;
+      // Reuse the same extraction the relational writer already applied to this resource, so the
+      // captured code cannot drift from the `diagnostic_reports.performer` value the scan reads.
+      const performer = projectDiagnosticReport(resource, {}).performer;
+      if (!performer) return;
+      await captureObservedFacility({ admin: termAdmin }, DEFAULT_OBSERVED_FACILITY_SYSTEM, performer, new Date().toISOString());
+    },
   });
   const projectionWorker = createProjectionWorker({
     runCycle: () => projectionRunner.runCycle(),

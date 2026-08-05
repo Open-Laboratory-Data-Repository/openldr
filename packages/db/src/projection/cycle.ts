@@ -18,6 +18,13 @@ export interface ProjectionDeps {
   logger: Logger;
   fetch: FetchSafeRows;
   batchSize?: number;
+  /** Optional per-resource side effect, fired after a successful `relationalWriter.write()` (never
+   *  on the tombstone/delete path). Callers hang ancillary capture off the projection loop this way —
+   *  e.g. facility-reconciliation's `captureObservedFacility` — without `applyProjection` or
+   *  `projectResource` knowing anything about what the hook does. A throwing hook is caught and
+   *  logged locally (see `applyProjection` below) so it can never abort a cycle or be mistaken for a
+   *  failed write: the clinical projection this task represents already landed by the time it runs. */
+  onProjected?: (resourceType: string, resource: Record<string, unknown>) => Promise<void>;
 }
 
 export interface ProjectionRunner {
@@ -31,6 +38,16 @@ async function applyProjection(task: ProjectionTask, deps: ProjectionDeps): Prom
   const found = await deps.fhirStore.getWithProvenance(task.resourceType, task.id);
   if (found) {
     await deps.relationalWriter.write(found.resource, found.provenance);
+    if (deps.onProjected) {
+      try {
+        await deps.onProjected(task.resourceType, found.resource as Record<string, unknown>);
+      } catch (err) {
+        // Deliberately a SEPARATE try/catch from the write above (and from the caller's own
+        // per-task catch): the clinical projection already succeeded, so this must never be
+        // reported or treated as an apply failure — only the ancillary hook failed.
+        deps.logger.error({ err, task }, 'onProjected hook failed; ignoring (clinical projection already applied)');
+      }
+    }
   } else {
     await deps.relationalWriter.deleteById(task.resourceType, task.id);
   }

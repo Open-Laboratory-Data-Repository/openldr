@@ -78,6 +78,89 @@ describe('runProjectionCycle', () => {
     await internalDb.destroy();
     await externalDb.destroy();
   });
+
+  it('calls onProjected with the resource after a successful write', async () => {
+    const internalDb = await makeMigratedDb();
+    const externalDb = await makeMigratedExternalDb();
+    const fhirStore = createFhirStore(internalDb as never);
+    const relationalWriter = createRelationalWriter(externalDb as never, 'postgres');
+    await fhirStore.save({ resourceType: 'Patient', id: 'p1', name: [{ family: 'A' }] } as never);
+
+    const fetch: FetchSafeRows = async () => ({
+      rows: [{ seq: 1, xid: 1, resource_type: 'Patient', resource_id: 'p1', op: 'upsert' }],
+      boundary: 100,
+      xmax: 200,
+    });
+    const seen: { resourceType: string; id: unknown }[] = [];
+    const runner = createProjectionRunner({
+      internalDb: internalDb as never, fhirStore, relationalWriter, logger, fetch, batchSize: 500,
+      onProjected: async (resourceType, resource) => { seen.push({ resourceType, id: resource.id }); },
+    });
+
+    await runner.runCycle();
+
+    expect(seen).toEqual([{ resourceType: 'Patient', id: 'p1' }]);
+    await internalDb.destroy();
+    await externalDb.destroy();
+  });
+
+  it('does not call onProjected on the tombstone (delete) path', async () => {
+    const internalDb = await makeMigratedDb();
+    const externalDb = await makeMigratedExternalDb();
+    const fhirStore = createFhirStore(internalDb as never);
+    const relationalWriter = createRelationalWriter(externalDb as never, 'postgres');
+    await fhirStore.save({ resourceType: 'Patient', id: 'p1' } as never);
+    await relationalWriter.write({ resourceType: 'Patient', id: 'p1' }, {});
+    await fhirStore.delete('Patient', 'p1');
+
+    const fetch: FetchSafeRows = async () => ({
+      rows: [{ seq: 1, xid: 1, resource_type: 'Patient', resource_id: 'p1', op: 'delete' }],
+      boundary: 100,
+      xmax: 200,
+    });
+    let calls = 0;
+    const runner = createProjectionRunner({
+      internalDb: internalDb as never, fhirStore, relationalWriter, logger, fetch, batchSize: 500,
+      onProjected: async () => { calls += 1; },
+    });
+
+    await runner.runCycle();
+
+    expect(calls).toBe(0);
+    await internalDb.destroy();
+    await externalDb.destroy();
+  });
+
+  // ⛔ THE trap this hook exists to avoid: a throwing side-effect must never look like a failed
+  // clinical apply. The write already landed — assert that directly, not just that runCycle resolved.
+  it('swallows an onProjected error without failing the cycle or the clinical write', async () => {
+    const internalDb = await makeMigratedDb();
+    const externalDb = await makeMigratedExternalDb();
+    const fhirStore = createFhirStore(internalDb as never);
+    const relationalWriter = createRelationalWriter(externalDb as never, 'postgres');
+    await fhirStore.save({ resourceType: 'Patient', id: 'p1', name: [{ family: 'A' }] } as never);
+
+    const fetch: FetchSafeRows = async () => ({
+      rows: [{ seq: 1, xid: 1, resource_type: 'Patient', resource_id: 'p1', op: 'upsert' }],
+      boundary: 100,
+      xmax: 200,
+    });
+    const errors: unknown[] = [];
+    const spyLogger = { info() {}, warn() {}, debug() {}, error: (o: unknown) => errors.push(o) } as never;
+    const runner = createProjectionRunner({
+      internalDb: internalDb as never, fhirStore, relationalWriter, logger: spyLogger, fetch, batchSize: 500,
+      onProjected: async () => { throw new Error('facility capture boom'); },
+    });
+
+    const n = await runner.runCycle();
+
+    expect(n).toBe(1);
+    expect(errors).toHaveLength(1);
+    expect(await externalDb.selectFrom('patients').selectAll().execute()).toHaveLength(1);
+    expect(await readCursor(internalDb as never, 'projection')).toBe(1);
+    await internalDb.destroy();
+    await externalDb.destroy();
+  });
 });
 
 describe('createProjectionRunner (stateful gaps across cycles)', () => {

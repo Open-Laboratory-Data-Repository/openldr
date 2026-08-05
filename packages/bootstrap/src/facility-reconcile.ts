@@ -386,3 +386,26 @@ export async function publishRegistryConcepts(
 
   return { concepts: registry.length, systemRegistered: true };
 }
+
+/**
+ * Capture ONE observed facility string, from the ingest path.
+ *
+ * Shares `observedFacilityConceptRow` with `scanObservedFacilities` so the two capture paths cannot
+ * drift on concept shape. It deliberately does NOT compute `reportCount` — that is an aggregate
+ * over the warehouse this path cannot see from a single resource; the scan owns it. A code first
+ * seen here carries `reportCount: 0` until the next scan corrects it.
+ */
+export async function captureObservedFacility(
+  deps: Pick<ReconcileDeps, 'admin'>,
+  system: string,
+  code: string,
+  now: string,
+): Promise<void> {
+  if (!code) return;
+  const { rows } = await deps.admin.terms.search(system, { query: code, limit: 1, offset: 0 });
+  const existing = rows.find((r) => r.code === code);
+  if (existing) return; // Already known; the scan advances lastSeen/reportCount.
+  await deps.admin.terms.importRows([
+    observedFacilityConceptRow({ system, code, seenAt: now, reportCount: 0 }),
+  ]);
+}

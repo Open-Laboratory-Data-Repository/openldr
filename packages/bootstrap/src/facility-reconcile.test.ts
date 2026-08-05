@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { scanObservedFacilities, resolveObservedFacilities, publishFacilityMap, publishRegistryConcepts } from './facility-reconcile';
+import { scanObservedFacilities, resolveObservedFacilities, publishFacilityMap, publishRegistryConcepts, captureObservedFacility } from './facility-reconcile';
 import { makeReconcileDeps, seedPerformers, seedRegistry, seedMapping } from './test-support/facility-reconcile-fixture';
 
 describe('scanObservedFacilities', () => {
@@ -400,5 +400,76 @@ describe('publishRegistryConcepts', () => {
     const { rows } = await deps.admin.terms.search('urn:openldr:cs:facility-registry', { limit: 10, offset: 0 });
     expect(rows).toHaveLength(0);
     expect(await deps.admin.codingSystems.getByUrl('urn:openldr:cs:facility-registry')).toBeNull();
+  });
+});
+
+describe('captureObservedFacility', () => {
+  it('creates a concept for a newly seen performer', async () => {
+    const deps = await makeReconcileDeps();
+
+    await captureObservedFacility(deps, 'urn:openldr:default_fac', 'Namansi', '2026-08-05T00:00:00.000Z');
+
+    const { rows } = await deps.admin.terms.search('urn:openldr:default_fac', { limit: 10, offset: 0 });
+    expect(rows.map((r) => r.code)).toEqual(['Namansi']);
+  });
+
+  it('is idempotent for a performer already captured', async () => {
+    const deps = await makeReconcileDeps();
+    await captureObservedFacility(deps, 'urn:openldr:default_fac', 'Namansi', '2026-08-05T00:00:00.000Z');
+
+    await captureObservedFacility(deps, 'urn:openldr:default_fac', 'Namansi', '2026-08-06T00:00:00.000Z');
+
+    const { total } = await deps.admin.terms.search('urn:openldr:default_fac', { limit: 10, offset: 0 });
+    expect(total).toBe(1);
+  });
+
+  it('keeps the string byte-for-byte', async () => {
+    const deps = await makeReconcileDeps();
+
+    await captureObservedFacility(deps, 'urn:openldr:default_fac', 'Aga Khan', '2026-08-05T00:00:00.000Z');
+
+    const { rows } = await deps.admin.terms.search('urn:openldr:default_fac', { limit: 10, offset: 0 });
+    expect(rows[0].code).toBe('Aga Khan');
+  });
+
+  // ⚠ `terms.search` with a `query` does a substring match — a performer whose code is a SUBSTRING
+  // of an already-captured one (or vice versa) must still create its own, distinct concept.
+  it('creates a distinct concept even when the code is a substring of an existing one', async () => {
+    const deps = await makeReconcileDeps();
+    await captureObservedFacility(deps, 'urn:openldr:default_fac', 'Aga Khan Hospital', '2026-08-05T00:00:00.000Z');
+
+    await captureObservedFacility(deps, 'urn:openldr:default_fac', 'Aga Khan', '2026-08-05T00:00:00.000Z');
+
+    const { rows } = await deps.admin.terms.search('urn:openldr:default_fac', { limit: 10, offset: 0 });
+    expect(rows.map((r) => r.code).sort()).toEqual(['Aga Khan', 'Aga Khan Hospital']);
+  });
+
+  it('does nothing for an empty code', async () => {
+    const deps = await makeReconcileDeps();
+
+    await captureObservedFacility(deps, 'urn:openldr:default_fac', '', '2026-08-05T00:00:00.000Z');
+
+    const { total } = await deps.admin.terms.search('urn:openldr:default_fac', { limit: 10, offset: 0 });
+    expect(total).toBe(0);
+  });
+
+  it('records reportCount 0 for a code first seen through this path', async () => {
+    const deps = await makeReconcileDeps();
+
+    await captureObservedFacility(deps, 'urn:openldr:default_fac', 'Namansi', '2026-08-05T00:00:00.000Z');
+
+    const raw = await deps.internalDb
+      .selectFrom('terminology_concepts')
+      .select(['properties'])
+      .where('system', '=', 'urn:openldr:default_fac')
+      .where('code', '=', 'Namansi')
+      .executeTakeFirstOrThrow();
+    const props = (typeof raw.properties === 'string' ? JSON.parse(raw.properties) : raw.properties) as {
+      firstSeen: string;
+      lastSeen: string;
+      reportCount: number;
+    };
+    expect(props.reportCount).toBe(0);
+    expect(props.firstSeen).toBe('2026-08-05T00:00:00.000Z');
   });
 });
