@@ -1319,6 +1319,44 @@ describe('Task 7: GET /api/facilities/:id/impact', () => {
     expect(res.json()).toEqual({ mappingCount: 2, reportCount: 150 });
   });
 
+  // A deactivated mapping still shows up as `targetMissing` on the observed list (Task 4's
+  // `resolveObservedFacilities` filters on `is_active = true` — see
+  // packages/bootstrap/src/facility-reconcile.ts:222-223) and a delete does not touch it either way,
+  // so it contributes NOTHING to the impact preview. Assert exact zeros, not merely "fewer than an
+  // active mapping would report" — a partial fix (e.g. filtering only one of the two queries, or a
+  // typo'd column) could still leave a nonzero count here.
+  it('ignores a deactivated mapping entirely: mappingCount and reportCount are both exactly 0', async () => {
+    const internalDb = await makeMigratedDb();
+    const externalDb = await makeMigratedExternalDb();
+    const ctx = impactCtx(internalDb, externalDb);
+    await ctx.facilityRegistry.upsert({ id: 'fac-1', name: 'Dodoma Regional Referral', localCode: 'LAB01', source: 'manual' });
+    await seedMapping(internalDb, { is_active: false });
+    await seedObservedReports(externalDb, [['Dodoma', 247]]);
+    const app = await appWith(ctx);
+
+    const res = await app.inject({ method: 'GET', url: '/api/facilities/fac-1/impact' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ mappingCount: 0, reportCount: 0 });
+  });
+
+  // Proves the filter is actually APPLIED (as opposed to, say, the whole query being broken and
+  // returning nothing regardless of `is_active`): one active + one inactive mapping for the same
+  // facility/observed-code pair must count exactly the active one.
+  it('counts only the active mapping when one active and one inactive mapping both target the facility', async () => {
+    const internalDb = await makeMigratedDb();
+    const externalDb = await makeMigratedExternalDb();
+    const ctx = impactCtx(internalDb, externalDb);
+    await ctx.facilityRegistry.upsert({ id: 'fac-1', name: 'Dodoma Regional Referral', localCode: 'LAB01', source: 'manual' });
+    await seedMapping(internalDb, { from_code: 'Dodoma', is_active: true });
+    await seedMapping(internalDb, { from_code: 'DDM-OLD', is_active: false });
+    await seedObservedReports(externalDb, [['Dodoma', 247], ['DDM-OLD', 999]]);
+    const app = await appWith(ctx);
+
+    const res = await app.inject({ method: 'GET', url: '/api/facilities/fac-1/impact' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ mappingCount: 1, reportCount: 247 });
+  });
+
   // A facility with no national code has NO national-route mappings, by construction — proven here
   // against the specific bug the brief calls out: a mapping row that happens to carry an
   // empty-string `to_system`/`to_code` (a plausible pathological row, since `to_code` is only

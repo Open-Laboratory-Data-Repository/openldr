@@ -555,6 +555,7 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       .select(['from_code'])
       .where('to_system', '=', FACILITY_REGISTRY_SYSTEM)
       .where('to_code', '=', id)
+      .where('is_active', '=', true)
       .execute();
 
     const nationalMappings = (facility.nationalSystem != null && facility.nationalCode != null)
@@ -563,6 +564,7 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
           .select(['from_code'])
           .where('to_system', '=', facility.nationalSystem)
           .where('to_code', '=', facility.nationalCode)
+          .where('is_active', '=', true)
           .execute()
       : [];
 
