@@ -293,6 +293,8 @@ export async function publishFacilityMap(
   deps: ReconcileDeps,
   opts: { system?: string; apply?: boolean } = {},
 ): Promise<PublishResult> {
+  if (opts.apply) await publishRegistryConcepts(deps, { apply: true });
+
   const resolved = await resolveObservedFacilities(deps, { system: opts.system });
 
   const result: PublishResult = {
@@ -329,4 +331,58 @@ export async function publishFacilityMap(
   });
 
   return result;
+}
+
+/**
+ * Project `facility_registry` into `FACILITY_REGISTRY_SYSTEM` so registry rows are pickable as
+ * mapping targets in `TermMappingDialog`'s search mode.
+ *
+ * ⛔ `display` TRACKS `facility_registry.name` — this concept is a projection, and the registry is
+ * the source of truth for a facility's name. That is the OPPOSITE of the observed-facility system,
+ * where a curated display is preserved because the operator owns it. Both rules are deliberate.
+ *
+ * ⚠ A deleted facility leaves its concept behind. `importRows` upserts and never prunes, and that is
+ * acceptable and deliberate here: the stale concept is what makes `targetMissing` (resolution) detectable
+ * at all, since resolution checks the live `facility_registry` row rather than the concept. Do NOT add
+ * a prune — it would silently erase the evidence the Observed tab exists to show.
+ */
+export async function publishRegistryConcepts(
+  deps: ReconcileDeps,
+  opts: { apply?: boolean } = {},
+): Promise<{ concepts: number; systemRegistered: boolean }> {
+  const registry = await deps.internalDb
+    .selectFrom('facility_registry')
+    .select(['id', 'name'])
+    .execute();
+
+  if (!opts.apply) return { concepts: registry.length, systemRegistered: false };
+
+  // ⛔ MUST leave the row ACTIVE: see `scanObservedFacilities` above for the same trap.
+  // `systemCode` must stay distinct from `DEFAULT_SYSTEM_CODE` ('DEFAULT_FAC') and any
+  // `systemCodeFor`-derived observed-facility code.
+  await deps.admin.codingSystems.upsertByUrl({
+    url: FACILITY_REGISTRY_SYSTEM,
+    systemCode: 'FACILITY-REGISTRY',
+    systemName: 'OpenLDR facility registry',
+    publisherId: SYSTEM_PUBLISHER_ID,
+  });
+  const cs = await deps.admin.codingSystems.getByUrl(FACILITY_REGISTRY_SYSTEM);
+  if (cs && !cs.active) {
+    await deps.internalDb.updateTable('coding_systems').set({ active: true })
+      .where('url', '=', FACILITY_REGISTRY_SYSTEM).execute();
+  }
+
+  if (registry.length > 0) {
+    await deps.admin.terms.importRows(
+      registry.map((r) => ({
+        system: FACILITY_REGISTRY_SYSTEM,
+        code: r.id,
+        display: r.name,
+        status: 'ACTIVE',
+        properties: null,
+      })),
+    );
+  }
+
+  return { concepts: registry.length, systemRegistered: true };
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { scanObservedFacilities, resolveObservedFacilities, publishFacilityMap } from './facility-reconcile';
+import { scanObservedFacilities, resolveObservedFacilities, publishFacilityMap, publishRegistryConcepts } from './facility-reconcile';
 import { makeReconcileDeps, seedPerformers, seedRegistry, seedMapping } from './test-support/facility-reconcile-fixture';
 
 describe('scanObservedFacilities', () => {
@@ -316,5 +316,60 @@ describe('publishFacilityMap', () => {
     expect(rows).toHaveLength(2);
     expect(rows.find((r) => r.source_code === 'Dodoma')!.name).toBe('Dodoma Regional Referral Hospital');
     expect(rows.find((r) => r.source_code === 'Kibondo')!.name).toBeNull();
+  });
+});
+
+describe('publishRegistryConcepts', () => {
+  // The assertion is the OPERATOR-VISIBLE outcome — what the picker will search — not that some
+  // internal function was called.
+  it('makes every registry row pickable as a mapping target', async () => {
+    const deps = await makeReconcileDeps();
+    await seedRegistry(deps, { id: 'fac-1', name: 'Dodoma Regional Referral Hospital', localCode: 'DOD' });
+    await seedRegistry(deps, { id: 'fac-2', name: 'Muhimbili National Hospital', nationalSystem: 'urn:tz:hfr', nationalCode: 'TZ-001' });
+
+    const result = await publishRegistryConcepts(deps, { apply: true });
+
+    expect(result).toMatchObject({ concepts: 2, systemRegistered: true });
+    const { rows } = await deps.admin.terms.search('urn:openldr:cs:facility-registry', { limit: 50, offset: 0 });
+    expect(rows.map((r) => ({ code: r.code, display: r.display })).sort((a, b) => a.code.localeCompare(b.code)))
+      .toEqual([
+        { code: 'fac-1', display: 'Dodoma Regional Referral Hospital' },
+        { code: 'fac-2', display: 'Muhimbili National Hospital' },
+      ]);
+  });
+
+  it('registers an ACTIVE coding_systems row', async () => {
+    const deps = await makeReconcileDeps();
+    await seedRegistry(deps, { id: 'fac-1', name: 'Dodoma Regional Referral Hospital', localCode: 'DOD' });
+
+    await publishRegistryConcepts(deps, { apply: true });
+
+    const cs = await deps.admin.codingSystems.getByUrl('urn:openldr:cs:facility-registry');
+    expect(cs).not.toBeNull();
+    expect(cs!.active).toBe(true);
+  });
+
+  it('tracks a renamed facility on re-publish', async () => {
+    const deps = await makeReconcileDeps();
+    await seedRegistry(deps, { id: 'fac-1', name: 'Dodoma Regional Hospital', localCode: 'DOD' });
+    await publishRegistryConcepts(deps, { apply: true });
+
+    await deps.internalDb.updateTable('facility_registry')
+      .set({ name: 'Dodoma Regional Referral Hospital' }).where('id', '=', 'fac-1').execute();
+    await publishRegistryConcepts(deps, { apply: true });
+
+    const { rows } = await deps.admin.terms.search('urn:openldr:cs:facility-registry', { limit: 10, offset: 0 });
+    expect(rows).toHaveLength(1);
+    expect(rows[0].display).toBe('Dodoma Regional Referral Hospital');
+  });
+
+  it('is called by publishFacilityMap', async () => {
+    const deps = await makeReconcileDeps();
+    await seedRegistry(deps, { id: 'fac-1', name: 'Dodoma Regional Referral Hospital', localCode: 'DOD' });
+
+    await publishFacilityMap(deps, { apply: true });
+
+    const { total } = await deps.admin.terms.search('urn:openldr:cs:facility-registry', { limit: 10, offset: 0 });
+    expect(total).toBe(1);
   });
 });
