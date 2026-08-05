@@ -1066,7 +1066,13 @@ describe('Task 6: GET /api/facilities/observed', () => {
   it('lists observed facilities ordered by report count desc, with reportCount on each row', async () => {
     const internalDb = await makeMigratedDb();
     const externalDb = await makeMigratedExternalDb();
-    await seedObservedReports(externalDb, [['Dodoma', 247], ['Kibondo', 99]]);
+    // Seeded LOWER-count-first (Kibondo, then Dodoma): pg-mem's unordered `group by` happens to
+    // come back in roughly insertion order, so seeding highest-count-first would let this test pass
+    // even with the route's `.sort()` deleted entirely (proven by a deliberate mutation experiment
+    // — see the task report). Seeding the smaller count first means an unsorted result would read
+    // ['Kibondo', 'Dodoma'] — the OPPOSITE of what's asserted below — so this only passes because
+    // the route actually sorts by reportCount desc.
+    await seedObservedReports(externalDb, [['Kibondo', 99], ['Dodoma', 247]]);
     const app = await appWith(fakeReconcileCtx(internalDb, externalDb));
 
     const res = await app.inject({ method: 'GET', url: '/api/facilities/observed' });
