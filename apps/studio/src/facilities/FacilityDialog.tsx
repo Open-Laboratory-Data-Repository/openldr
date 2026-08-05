@@ -18,6 +18,7 @@ import { FormSchema as FormSchemaZ } from '@openldr/forms/pure';
 // server DB engine) so this stays a zero-dependency browser-safe import — `facility-answers.ts`
 // only has an `import type` on `FacilityRecord`, which TypeScript erases entirely at compile time.
 import { CORE_FACILITY_KEYS } from '@openldr/db/facility-answers';
+import { useFacilityAdminSuggestions } from './useFacilityAdminSuggestions';
 
 interface FacilityDialogProps {
   open: boolean;
@@ -82,6 +83,18 @@ export function FacilityDialog({ open, onOpenChange, facility, onSaved }: Facili
   // under the SheetHeader, not a footer). Save proxies a click to this hidden submit button so the
   // click still goes through FormRuntime's own <form onSubmit> (and its field validation).
   const hiddenSubmitRef = useRef<HTMLButtonElement>(null);
+
+  // Also used as FormRuntime's own `key` below (forcing a fresh mount, and fresh internal
+  // `answers` state, on a schema/facility swap) — shared with useFacilityAdminSuggestions so the
+  // suggestion state resets in lockstep with the form it's feeding, rather than carrying one
+  // facility's admin-area suggestions into the next facility's dialog.
+  const remountKey = schema ? `${schema.id}-${facility?.id ?? 'new'}` : 'loading';
+  // Task 5: drives the zone/region/district/council `suggest` fields' options from the facility
+  // registry's own previously-seen values, cascading each level's fetch off the OTHERS the
+  // operator has already chosen. See the hook's own doc comment for the scoping/debounce/staleness
+  // design — FacilityDialog only owns wiring it to FormRuntime's `fieldSuggestions` prop and
+  // reading the live answers back out via `onAnswersChange` below.
+  const { suggestions: fieldSuggestions, reportAnswers } = useFacilityAdminSuggestions(schema, remountKey);
 
   // Load the published 'facilities' form schema whenever the dialog opens.
   useEffect(() => {
@@ -204,11 +217,19 @@ export function FacilityDialog({ open, onOpenChange, facility, onSaved }: Facili
 
           {formReady && schema ? (
             <FormRuntime
-              key={`${schema.id}-${facility?.id ?? 'new'}`}
+              key={remountKey}
               schema={schema}
               formDefinitionId={formDefId ?? undefined}
               initialAnswers={initialAnswers}
               onSubmit={handleSubmit}
+              fieldSuggestions={fieldSuggestions}
+              onAnswersChange={reportAnswers}
+              suggestCopy={{
+                placeholder: t('facilities.suggest.placeholder'),
+                loadingLabel: t('facilities.suggest.loading'),
+                noSuggestionsLabel: t('facilities.suggest.empty'),
+                errorFallback: t('facilities.suggest.error'),
+              }}
               footer={<button ref={hiddenSubmitRef} type="submit" className="hidden" aria-hidden="true" />}
             />
           ) : (

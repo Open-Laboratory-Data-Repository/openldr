@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { SuggestCombobox } from '@/components/ui/suggest-combobox';
 import {
   Tooltip,
   TooltipContent,
@@ -11,9 +12,22 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { isMultiValued, resolveReferenceSource } from '@openldr/forms/pure';
-import type { FormField, FormSchema, FormSection, RuntimeAnswers } from './types';
+import type { FieldSuggestions, FormField, FormSchema, FormSection, RuntimeAnswers } from './types';
 import { cleanAnswers, fieldLabel, groupChildren, validate, visibleIds } from './runtime';
 import { ReferencePicker, type ReferenceValue } from './ReferencePicker';
+
+/**
+ * Translated copy for `SuggestCombobox`'s listbox chrome — shared by `FormRuntime`, `FieldRow` and
+ * `FieldControl` below so the shape is declared exactly once instead of three times as the prop
+ * threads down through this file's component split. See `FormRuntime`'s own `suggestCopy` doc
+ * comment for why this is a plain optional prop rather than `useTranslation` called in this file.
+ */
+type SuggestCopy = {
+  placeholder?: string;
+  loadingLabel?: string;
+  noSuggestionsLabel?: string;
+  errorFallback?: string;
+};
 
 // ── Public component ──────────────────────────────────────────────────────────
 
@@ -27,6 +41,9 @@ export function FormRuntime({
   formId,
   formDefinitionId,
   preview,
+  fieldSuggestions,
+  onAnswersChange,
+  suggestCopy,
 }: {
   schema: FormSchema;
   submitLabel?: string;
@@ -44,10 +61,46 @@ export function FormRuntime({
   formDefinitionId?: string;
   /** Builder live preview: reference fields search the unsaved schema via the preview endpoint. */
   preview?: boolean;
+  /**
+   * Suggestion state for `suggest` fields, keyed by field id. FormRuntime never fetches these
+   * itself — a caller (Task 3/5: a hook backed by the facility-registry distinct-values
+   * endpoint) owns the fetch and passes the resulting `{ status, options, error }` down here.
+   * Omitting an entry — or the whole prop — degrades to "ready with no suggestions" rather than
+   * an infinite loading spinner, so the field stays usable before that wiring exists.
+   */
+  fieldSuggestions?: FieldSuggestions;
+  /**
+   * Read-only reporting hook: fires with the current `answers` on mount and after every change.
+   * `answers` is otherwise private state a caller has no way to observe — a cascading `suggest`
+   * field (Task 5: District scoped by the Region the operator just picked) needs its SIBLING
+   * fields' live values to build a fetch scope, not just its own. This does not make FormRuntime
+   * a fetcher itself: it only reports state a caller already owns the display of via
+   * `fieldSuggestions`, same division of responsibility as that prop's doc comment above.
+   */
+  onAnswersChange?: (answers: RuntimeAnswers) => void;
+  /**
+   * Translated copy for `suggest` fields' listbox chrome (loading / empty / error-fallback /
+   * placeholder). FormRuntime is schema-driven and has no `useTranslation` of its own — every
+   * other piece of on-screen copy it renders comes from the schema (`displayLabel`, `placeholder`,
+   * ValueSet `display` text, etc.), never a literal. These four strings are the one exception
+   * (`SuggestCombobox`'s own listbox chrome, not schema data), so the caller that DOES have an
+   * i18n context — FacilityDialog, today's only `suggest`-field consumer — supplies them here
+   * rather than FormRuntime importing `react-i18next` for a single field type. Omitting this prop
+   * (or any key in it) falls through to `SuggestCombobox`'s own English defaults.
+   */
+  suggestCopy?: SuggestCopy;
 }): JSX.Element {
   const [answers, setAnswers] = useState<RuntimeAnswers>(initialAnswers ?? {});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const visible = useMemo(() => visibleIds(schema, answers), [schema, answers]);
+
+  useEffect(() => {
+    onAnswersChange?.(answers);
+    // Deliberately keyed on `answers` alone: a parent's `onAnswersChange` is typically a fresh
+    // closure every render (e.g. FacilityDialog's hook-returned callback), and including it here
+    // would fire this on every parent re-render rather than only on an actual answer change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [answers]);
 
   const setField = (fieldId: string, value: unknown) => {
     setAnswers((prev) => {
@@ -136,6 +189,8 @@ export function FormRuntime({
         errors={errors}
         formDefinitionId={formDefinitionId}
         preview={preview}
+        fieldSuggestions={fieldSuggestions}
+        suggestCopy={suggestCopy}
       />
     ));
   }
@@ -201,6 +256,8 @@ function FieldRow({
   errors,
   formDefinitionId,
   preview,
+  fieldSuggestions,
+  suggestCopy,
 }: {
   field: FormField;
   schema: FormSchema;
@@ -211,6 +268,8 @@ function FieldRow({
   errors: Record<string, string>;
   formDefinitionId?: string;
   preview?: boolean;
+  fieldSuggestions?: FieldSuggestions;
+  suggestCopy?: SuggestCopy;
 }) {
   const label = fieldLabel(field);
 
@@ -231,6 +290,8 @@ function FieldRow({
             errors={errors}
             formDefinitionId={formDefinitionId}
             preview={preview}
+            fieldSuggestions={fieldSuggestions}
+            suggestCopy={suggestCopy}
           />
         ))}
       </fieldset>
@@ -275,6 +336,8 @@ function FieldRow({
           onChange={(v) => onChange(field.id, v)}
           formDefinitionId={formDefinitionId}
           preview={preview}
+          fieldSuggestions={fieldSuggestions}
+          suggestCopy={suggestCopy}
         />
         {error ? <p className="mt-1 text-xs text-destructive" role="alert">{error}</p> : null}
       </div>
@@ -290,12 +353,16 @@ function FieldControl({
   onChange,
   formDefinitionId,
   preview,
+  fieldSuggestions,
+  suggestCopy,
 }: {
   field: FormField;
   value: unknown;
   onChange: (value: unknown) => void;
   formDefinitionId?: string;
   preview?: boolean;
+  fieldSuggestions?: FieldSuggestions;
+  suggestCopy?: SuggestCopy;
 }) {
   const label = fieldLabel(field);
 
@@ -346,6 +413,28 @@ function FieldControl({
             );
           })}
         </div>
+      );
+    }
+
+    // Proposes but does not constrain: the answer is always the raw typed string, whether or
+    // not it matches a suggestion, so it lands directly in a text column with no flattening.
+    case 'suggest': {
+      const suggestion = fieldSuggestions?.[field.id];
+      return (
+        <SuggestCombobox
+          id={field.id}
+          value={value != null ? String(value) : ''}
+          onChange={(v) => onChange(v || undefined)}
+          options={suggestion?.options ?? []}
+          status={suggestion?.status ?? 'ready'}
+          error={suggestion?.error}
+          placeholder={field.placeholder ?? suggestCopy?.placeholder}
+          loadingLabel={suggestCopy?.loadingLabel}
+          noSuggestionsLabel={suggestCopy?.noSuggestionsLabel}
+          errorFallback={suggestCopy?.errorFallback}
+          label={label}
+          required={field.required}
+        />
       );
     }
 

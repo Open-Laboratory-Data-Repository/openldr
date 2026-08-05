@@ -36,4 +36,10 @@ describe('form-schema (corlix model)', () => {
   it('rejects an unknown field type', () => {
     expect(() => FormField.parse({ ...field, fieldType: 'bogus' })).toThrow();
   });
+
+  it('accepts the "suggest" field type', () => {
+    expect(FieldType.parse('suggest')).toBe('suggest');
+    const parsed = FormField.parse({ ...field, fieldType: 'suggest' });
+    expect(parsed.fieldType).toBe('suggest');
+  });
 });

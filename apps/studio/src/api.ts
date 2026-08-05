@@ -1,6 +1,10 @@
 import { getAccessToken, notifyUnauthorized } from './auth/token';
 import type { PluginBrokerOp, PluginRpcResult } from '@openldr/plugin-ui-sdk';
 import type { ReportDesign } from '@openldr/report-designer/pure';
+// Browser-safe subpath — no kysely/pg. Same seam FacilityDialog.tsx already imports
+// CORE_FACILITY_KEYS through; see the re-export comment further down for why the level list
+// itself now comes from here too instead of being hand-duplicated.
+import type { FacilityAdminLevel } from '@openldr/db/facility-answers';
 
 /** fetch wrapper that attaches the bearer token when one is present. */
 export async function authFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
@@ -743,6 +747,39 @@ export async function deleteFacility(id: string): Promise<void> {
   if (res.ok || res.status === 204) return;
   throw new Error(formatApiError('delete facility', await errorDetail(res)));
 }
+
+// `FacilityAdminLevel` is IMPORTED (above, from `@openldr/db/facility-answers`), not
+// hand-duplicated — that subpath is dependency-free (no Kysely/pg; see the comment at the top of
+// facility-answers.ts), so importing the type doesn't pull the server DB engine into the web
+// bundle the way importing `@openldr/db`'s root would. Re-exported here so this module stays the
+// one place the rest of the studio app imports facility API types from.
+export type { FacilityAdminLevel };
+
+export interface FacilityAdminValueCount {
+  /** The observed value, verbatim (never normalised/cased). */
+  value: string;
+  /** How many facility_registry rows carry this value for the requested level. */
+  count: number;
+}
+
+/**
+ * Distinct, already-seen values for one admin-area column, ranked by frequency with counts —
+ * backs the `suggest` field type's suggestions (Task 1/5). `scope` filters by the OTHER admin
+ * columns already chosen on the form (e.g. district suggestions scoped by the region already
+ * picked); omit a key (or pass a blank value) for "unfiltered at that level". The server is the
+ * actual authority on which `level` values are legal (a closed 4-column whitelist — see
+ * facilities-routes.ts) — this function does no validation of its own, it only builds the request.
+ */
+export const listFacilityAdminValues = (
+  level: FacilityAdminLevel,
+  scope: Partial<Record<FacilityAdminLevel, string>> = {},
+): Promise<FacilityAdminValueCount[]> => {
+  const params = new URLSearchParams({ level });
+  for (const [key, value] of Object.entries(scope)) {
+    if (value) params.set(key, value);
+  }
+  return apiGet(`/api/facilities/admin-values?${params.toString()}`, 'list facility admin values');
+};
 
 // Roles / capabilities (capability-based RBAC)
 export interface RoleRecord {

@@ -56,8 +56,15 @@ export * from './terminology-ingest-job-store';
 export { createRoleStore } from './role-store';
 export type { RoleStore, RoleRecord, CreateRoleInput, UpdateRoleInput, CapabilityReconciliation, CapabilityDiagnosis } from './role-store';
 export * from './reference-search';
-export { createFacilityRegistryStore } from './facility-registry-store';
-export type { FacilityRecord, FacilityAlias, FacilityListOptions, FacilityRegistryStore } from './facility-registry-store';
+export { createFacilityRegistryStore, FACILITY_ADMIN_LEVELS } from './facility-registry-store';
+export type {
+  FacilityRecord,
+  FacilityAlias,
+  FacilityListOptions,
+  FacilityRegistryStore,
+  FacilityAdminLevel,
+  FacilityAdminValueCount,
+} from './facility-registry-store';
 export { splitFacilityAnswers, CORE_FACILITY_KEYS } from './facility-answers';
 export type { AnswerField, FacilityAnswerSplit } from './facility-answers';
 // Re-exported (not reachable via `export * from './migrations/internal/index'` above — that module
@@ -66,7 +73,11 @@ export type { AnswerField, FacilityAnswerSplit } from './facility-answers';
 // sample. packages/db must not depend on @openldr/forms (forms already depends on db), so the
 // comparison has to run from the forms side — see packages/forms/src/samples/forms.test.ts.
 export { NEW_FIELDS_SNAPSHOT as FACILITY_FORM_MIGRATION_NEW_FIELDS } from './migrations/internal/071_facility_form_target';
-// Same reasoning as the 071 re-export above: migration 072's BOUND_FIELDS_SNAPSHOT is the frozen
-// snapshot of the level/status-bound Facility fields it writes into already-migrated installs, and
+// Same reasoning as the 071 re-export above. Repointed from 072 to 073: migration 073's
+// BOUND_FIELDS_SNAPSHOT is now the frozen snapshot of the country/admin-chain-bound Facility fields
+// it writes into already-migrated installs (072's own snapshot is still reachable directly from
+// './migrations/internal/072_facility_level_status_valuesets' — e.g. 073's own test file imports it
+// as PREV_BOUND_FIELDS_SNAPSHOT — this re-export just tracks whichever migration is CURRENT), and
 // packages/forms/src/samples/forms.test.ts pins the CURRENT sample against it from the forms side.
-export { BOUND_FIELDS_SNAPSHOT as FACILITY_FORM_MIGRATION_BOUND_FIELDS } from './migrations/internal/072_facility_level_status_valuesets';
+export { BOUND_FIELDS_SNAPSHOT as FACILITY_FORM_MIGRATION_BOUND_FIELDS } from './migrations/internal/073_facility_country_and_admin_fields';
+export { ISO3166_COUNTRIES } from './iso3166';

@@ -38,40 +38,70 @@ const facilityForm: FormSchema = {
       fieldType: 'text', required: true, enabled: true, order: 1,
       cardinality: { min: 1, max: '1' }, apiProperty: 'name',
     },
+    // Bound to the seeded ISO 3166 ValueSet rather than free text — same reasoning as status/level
+    // below: a picker over an enumerated vocabulary instead of hand-typed strings. `valueSetUrl`
+    // wins over `referenceTarget`, and the form linter warns when both are set, so `referenceTarget`
+    // is deliberately absent. Seeded by migration 073, which also repoints any already-migrated
+    // install's Facility form (see migrations 071/072) to this exact shape.
     {
       id: 'fld-fac-country', fhirPath: 'address.country', displayLabel: 'Country', description: null,
-      fieldType: 'text', required: true, enabled: true, order: 2,
+      fieldType: 'reference', required: true, enabled: true, order: 2,
       cardinality: { min: 1, max: '1' }, apiProperty: 'country',
+      valueSetUrl: 'urn:openldr:valueset:country',
     },
+    // zone/region/district/council are NOT ValueSets — see migration 073's file comment and
+    // docs/superpowers/specs/2026-08-05-facility-country-and-admin-hierarchy-design.md §2: they are
+    // per-country and unbounded (Tanzania alone has ~5 zones / 31 regions / ~184 districts), so
+    // authoring a vocabulary for each would be a vocabulary maintained forever, for values the
+    // facility register already contains. `fieldType: 'suggest'` proposes values derived from
+    // `facility_registry` itself (via /api/facilities/admin-values, cascading on the parent levels
+    // already chosen — apps/studio wires that fetch) but never blocks a value that isn't suggested
+    // yet, since a newly gazetted district must be enterable on day one.
     {
       id: 'fld-fac-zone', fhirPath: 'address.district', displayLabel: 'Zone', description: null,
-      fieldType: 'text', required: true, enabled: true, order: 3,
+      fieldType: 'suggest', required: true, enabled: true, order: 3,
       cardinality: { min: 1, max: '1' }, apiProperty: 'zone',
     },
     {
       id: 'fld-fac-region', fhirPath: 'address.state', displayLabel: 'Region', description: null,
-      fieldType: 'text', required: true, enabled: true, order: 4,
+      fieldType: 'suggest', required: true, enabled: true, order: 4,
       cardinality: { min: 1, max: '1' }, apiProperty: 'region',
     },
     {
       id: 'fld-fac-district', fhirPath: 'address.city', displayLabel: 'District', description: null,
-      fieldType: 'text', required: true, enabled: true, order: 5,
+      fieldType: 'suggest', required: true, enabled: true, order: 5,
       cardinality: { min: 1, max: '1' }, apiProperty: 'district',
+    },
+    {
+      // OPTIONAL — nobody may be blocked from saving a facility when council data is unknown.
+      // `fhirPath: null`, not `address.line`: no standard R4 Address element remains for a fourth
+      // admin tier once country/district/region/state are already bound to the four real Address
+      // elements above (`address.country`/`.district`/`.state`/`.city`), and `address.line` is the
+      // STREET-ADDRESS element — binding an administrative tier to it would corrupt any future
+      // Location export. `FormField.fhirPath` is `z.string().nullable()`, and the
+      // `ambiguous-fhir-path` lint rule skips falsy paths
+      // (`if (!field.enabled || !field.fhirPath) continue`), so `null` is valid and lint-clean.
+      // council is FACILITY_ADMIN_LEVELS' fourth column (packages/db/src/facility-answers.ts).
+      id: 'fld-fac-council', fhirPath: null, displayLabel: 'Council', description: null,
+      fieldType: 'suggest', required: false, enabled: true, order: 6,
+      cardinality: { min: 0, max: '1' }, apiProperty: 'council',
     },
     // Bound to seeded ValueSets rather than free text, same reasoning as the specimen-type field
     // below: a picker over an enumerated vocabulary instead of hand-typed strings. `valueSetUrl`
     // wins over `referenceTarget`, and the form linter warns when both are set, so `referenceTarget`
     // is deliberately absent. Both ValueSets are seeded by migration 072, which also repoints any
-    // already-migrated install's Facility form (see migration 071) to these exact shapes.
+    // already-migrated install's Facility form (see migration 071) to these exact shapes; migration
+    // 073 repoints the same form again afterwards, shifting status/level's `order` from 6/7 to 7/8
+    // to make room for the new council field, without touching either binding itself.
     {
       id: 'fld-fac-status', fhirPath: 'status', displayLabel: 'Status', description: null,
-      fieldType: 'reference', required: true, enabled: true, order: 6,
+      fieldType: 'reference', required: true, enabled: true, order: 7,
       cardinality: { min: 1, max: '1' }, apiProperty: 'status',
       valueSetUrl: 'urn:openldr:valueset:location-status',
     },
     {
       id: 'fld-fac-level', fhirPath: 'physicalType', displayLabel: 'Level', description: null,
-      fieldType: 'reference', required: true, enabled: true, order: 7,
+      fieldType: 'reference', required: true, enabled: true, order: 8,
       cardinality: { min: 1, max: '1' }, apiProperty: 'level',
       valueSetUrl: 'urn:openldr:valueset:facility-type',
     },

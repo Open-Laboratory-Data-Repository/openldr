@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 export const FieldType = z.enum([
   'text', 'number', 'date', 'datetime', 'boolean',
-  'select', 'multiselect', 'phone', 'email', 'address',
+  'select', 'multiselect', 'suggest', 'phone', 'email', 'address',
   'identifier', 'attachment', 'organism', 'antibiogram',
   'reference', 'facility', 'group',
 ]);

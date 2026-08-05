@@ -22,6 +22,62 @@ export const CORE_FACILITY_KEYS: ReadonlySet<string> = new Set([
   'addressText', 'phone', 'latitude', 'longitude',
 ]);
 
+/**
+ * The four per-country administrative-area columns on `facility_registry`. Deliberately a closed
+ * union, NOT `string` — `country` is a column too but is excluded on purpose (Task 4 binds it to
+ * a ValueSet instead of deriving it from observed data). This type IS the whitelist:
+ * `facility-registry-store.ts`'s `distinctAdminValues` can only ever be called with one of these
+ * four literal column names, so a caller cannot smuggle an arbitrary column (`password`, `id`,
+ * ...) into that query even by mistake — the check does not depend on a route remembering to
+ * validate first.
+ *
+ * Lives in THIS browser-safe module (not `facility-registry-store.ts`, which imports `kysely` as a
+ * runtime value) specifically so `apps/studio` can import it directly from
+ * `@openldr/db/facility-answers` — the same zero-dependency subpath it already imports
+ * `CORE_FACILITY_KEYS` through — instead of hand-duplicating the four literal names as its own
+ * `FacilityAdminLevel` (see `apps/studio/src/api.ts`). One list, two consumers.
+ */
+export type FacilityAdminLevel = 'zone' | 'region' | 'district' | 'council';
+
+/**
+ * Single source of truth for the whitelist, so a caller can validate a request param against the
+ * exact same list the type enforces, rather than re-typing the four names elsewhere.
+ *
+ * A plain `: readonly FacilityAdminLevel[]` annotation (what this used to be) only checks that
+ * every array ELEMENT is a valid level — it does nothing to stop an element being dropped, so
+ * deleting `'council'` from the array literal leaves `tsc` green while silently de-scoping it from
+ * both the route's `?level=` whitelist (`apps/server/src/facilities-routes.ts`) and the store's own
+ * scope loop (`distinctAdminValues`) — a legitimate `?level=council` request would 400, and
+ * `council` would stop being applied as a scope filter, with no error anywhere.
+ *
+ * `FACILITY_ADMIN_LEVEL_SET`'s `Record<FacilityAdminLevel, true>` annotation is what actually
+ * enforces completeness: a mapped type over a union requires EVERY member as a key and rejects any
+ * key that isn't one, in both directions — remove `council: true` below and `tsc` reports it
+ * missing; remove `'council'` from the `FacilityAdminLevel` union above and this object literal's
+ * (now-extra) `council: true` key fails to compile. `FACILITY_ADMIN_LEVELS` is derived FROM this
+ * object (not hand-typed alongside it) so there is exactly one place the four names are spelled.
+ */
+/**
+ * ⛔ KEY ORDER IS LOAD-BEARING — it is the parent→child admin hierarchy, not a style choice.
+ *
+ * `FACILITY_ADMIN_LEVELS` is `Object.keys` of this literal, and the studio's suggestion hook
+ * (`useFacilityAdminSuggestions`) scopes each level by the levels at a LOWER INDEX — Region is
+ * suggested within the chosen Zone, District within Zone+Region, and so on. Alphabetising these
+ * keys (`council, district, region, zone`) looks purely cosmetic and keeps `tsc` green, but it
+ * INVERTS the cascade: a child would constrain its parent, and editing a fully-populated facility
+ * would offer exactly one option per field — the value already in it. That was a real review
+ * finding. The hook's tests assert exact scopes and would catch it; do not rely on that alone.
+ */
+const FACILITY_ADMIN_LEVEL_SET: Record<FacilityAdminLevel, true> = {
+  zone: true,
+  region: true,
+  district: true,
+  council: true,
+};
+export const FACILITY_ADMIN_LEVELS: readonly FacilityAdminLevel[] = Object.keys(
+  FACILITY_ADMIN_LEVEL_SET,
+) as FacilityAdminLevel[];
+
 const NUMERIC_KEYS: ReadonlySet<string> = new Set(['latitude', 'longitude']);
 
 /**

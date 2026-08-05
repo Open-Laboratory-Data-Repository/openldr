@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, it, expect } from 'vitest';
-import { splitFacilityAnswers, CORE_FACILITY_KEYS } from './facility-answers';
+import { splitFacilityAnswers, CORE_FACILITY_KEYS, FACILITY_ADMIN_LEVELS } from './facility-answers';
 
 const f = (id: string, apiProperty?: string | null) => ({ id, apiProperty });
 
@@ -142,6 +142,16 @@ describe('splitFacilityAnswers — coding answers on core keys (ValueSet-bound l
     );
     expect(record).toEqual({});
     expect(extras).toEqual({});
+  });
+});
+
+describe('FACILITY_ADMIN_LEVELS', () => {
+  // Completeness (dropping a member) is caught at COMPILE time by the `Record<FacilityAdminLevel,
+  // true>` this constant is derived from (see facility-answers.ts) — this test is the runtime
+  // belt-and-suspenders check that the derived array actually matches, so a `tsc`-only guarantee
+  // doesn't quietly drift from what callers observe at runtime.
+  it('contains exactly the four admin-area columns, no more and no fewer', () => {
+    expect([...FACILITY_ADMIN_LEVELS].sort()).toEqual(['council', 'district', 'region', 'zone']);
   });
 });
 

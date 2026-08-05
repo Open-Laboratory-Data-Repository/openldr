@@ -767,6 +767,12 @@ export const en = {
     deleteTitle: 'Delete {{name}}?',
     deleteBody: 'This permanently removes {{name}} from the facility registry. This cannot be undone.',
     truncated: 'Showing the first {{limit}} facilities. The registry may hold more than what is listed here.',
+    suggest: {
+      placeholder: 'Type or pick a suggestion…',
+      loading: 'Loading suggestions…',
+      empty: 'No suggestions',
+      error: 'Could not load suggestions',
+    },
   },
   query: {
     explorer: 'Explorer', connectors: 'Connectors', datasets: 'Datasets', customQueries: 'Custom Queries',

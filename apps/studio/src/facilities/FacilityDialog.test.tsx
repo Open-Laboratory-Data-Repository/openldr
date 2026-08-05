@@ -10,6 +10,7 @@ vi.mock('@/api', async (orig) => {
     updateFacility: vi.fn(),
     listPublishedForms: vi.fn(),
     getForm: vi.fn(),
+    listFacilityAdminValues: vi.fn(),
   };
 });
 
@@ -79,6 +80,7 @@ beforeEach(() => {
     id: FORM_DEFINITION_ID, name: 'Facility', versionLabel: null, fhirResourceType: null, status: 'published', active: true,
     schema: facilitySchema, targetPages: ['facilities'], createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z',
   });
+  (api.listFacilityAdminValues as ReturnType<typeof vi.fn>).mockResolvedValue([]);
 });
 
 describe('FacilityDialog', () => {
@@ -186,5 +188,138 @@ describe('FacilityDialog', () => {
     // carries its real value through, confirming the fix narrows the restore loop's blank-'' path
     // rather than disabling field submission generally.
     expect(body.answers).toHaveProperty('f-phone', '+255700000000');
+  });
+
+  // ── Task 5: admin-area suggestions (zone/region/district/council) ───────────────────────────
+
+  const schemaWithAdminFields = {
+    ...facilitySchema,
+    fields: [
+      ...facilitySchema.fields,
+      { id: 'f-region', displayLabel: 'Region', description: null, fieldType: 'suggest', apiProperty: 'region', fhirPath: null, required: false, enabled: true, order: 4, cardinality: { min: 0, max: '1' } },
+      { id: 'f-district', displayLabel: 'District', description: null, fieldType: 'suggest', apiProperty: 'district', fhirPath: null, required: false, enabled: true, order: 5, cardinality: { min: 0, max: '1' } },
+    ],
+  };
+
+  function renderWithAdminFields(facilityArg: Facility | null = null) {
+    (api.getForm as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: FORM_DEFINITION_ID, name: 'Facility', versionLabel: null, fhirResourceType: null, status: 'published', active: true,
+      schema: schemaWithAdminFields, targetPages: ['facilities'], createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z',
+    });
+    return render(<FacilityDialog open facility={facilityArg} onOpenChange={vi.fn()} onSaved={vi.fn()} />);
+  }
+
+  it('a suggest field fetches its options scoped by the parent values currently chosen', async () => {
+    (api.listFacilityAdminValues as ReturnType<typeof vi.fn>).mockImplementation((level: string) =>
+      Promise.resolve(level === 'district' ? [{ value: 'Kinondoni', count: 3 }] : []),
+    );
+    renderWithAdminFields();
+
+    fireEvent.change(await screen.findByLabelText('Region'), { target: { value: 'Dar es Salaam' } });
+
+    await waitFor(() =>
+      expect(api.listFacilityAdminValues).toHaveBeenCalledWith('district', { region: 'Dar es Salaam' }),
+    );
+
+    fireEvent.focus(screen.getByLabelText('District'));
+    expect(await screen.findByText('Kinondoni')).toBeInTheDocument();
+  });
+
+  it('changing Region refetches District with the new scope', async () => {
+    const mock = api.listFacilityAdminValues as ReturnType<typeof vi.fn>;
+    mock.mockResolvedValue([]);
+    renderWithAdminFields();
+    const regionInput = await screen.findByLabelText('Region');
+
+    fireEvent.change(regionInput, { target: { value: 'Dar es Salaam' } });
+    await waitFor(() =>
+      expect(mock).toHaveBeenCalledWith('district', { region: 'Dar es Salaam' }),
+    );
+
+    mock.mockClear();
+    fireEvent.change(regionInput, { target: { value: 'Dodoma' } });
+    await waitFor(() =>
+      expect(mock).toHaveBeenCalledWith('district', { region: 'Dodoma' }),
+    );
+  });
+
+  it('a value typed but never suggested is still submitted verbatim', async () => {
+    (api.createFacility as ReturnType<typeof vi.fn>).mockResolvedValue({ ...editFacility, id: 'new-2' });
+    renderWithAdminFields();
+
+    fireEvent.change(await screen.findByLabelText('Name'), { target: { value: 'New Facility' } });
+    fireEvent.change(screen.getByLabelText('District'), { target: { value: 'A Brand New Ward' } });
+    clickMenuItem(/^create$/i);
+
+    await waitFor(() => expect(api.createFacility).toHaveBeenCalled());
+    const body = (api.createFacility as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(body.answers['f-district']).toBe('A Brand New Ward');
+  });
+
+  it('an edit-mode dialog with all four admin levels populated still offers alternatives for Region (Important 1)', async () => {
+    // Every admin level (Zone/Region/District/Council) has a value — the common case, since the
+    // shipped form marks Zone/Region/District required. Under the old symmetric scoping, Region's
+    // own fetch would have been scoped by District+Council too, collapsing its options down to
+    // essentially the one value already in the field.
+    const schemaAllFourLevels = {
+      ...facilitySchema,
+      fields: [
+        ...facilitySchema.fields,
+        { id: 'f-zone', displayLabel: 'Zone', description: null, fieldType: 'suggest', apiProperty: 'zone', fhirPath: null, required: false, enabled: true, order: 4, cardinality: { min: 0, max: '1' } },
+        { id: 'f-region', displayLabel: 'Region', description: null, fieldType: 'suggest', apiProperty: 'region', fhirPath: null, required: false, enabled: true, order: 5, cardinality: { min: 0, max: '1' } },
+        { id: 'f-district', displayLabel: 'District', description: null, fieldType: 'suggest', apiProperty: 'district', fhirPath: null, required: false, enabled: true, order: 6, cardinality: { min: 0, max: '1' } },
+        { id: 'f-council', displayLabel: 'Council', description: null, fieldType: 'suggest', apiProperty: 'council', fhirPath: null, required: false, enabled: true, order: 7, cardinality: { min: 0, max: '1' } },
+      ],
+    };
+    (api.getForm as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: FORM_DEFINITION_ID, name: 'Facility', versionLabel: null, fhirResourceType: null, status: 'published', active: true,
+      schema: schemaAllFourLevels, targetPages: ['facilities'], createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z',
+    });
+    (api.listFacilityAdminValues as ReturnType<typeof vi.fn>).mockImplementation((level: string) =>
+      Promise.resolve(level === 'region'
+        ? [{ value: 'Dodoma', count: 3 }, { value: 'Mwanza', count: 2 }, { value: 'Arusha', count: 1 }]
+        : []),
+    );
+    const fullyPopulatedFacility: Facility = {
+      ...editFacility, zone: 'North', region: 'Dodoma', district: 'Dodoma Urban', council: 'Dodoma City',
+    };
+    render(<FacilityDialog open facility={fullyPopulatedFacility} onOpenChange={vi.fn()} onSaved={vi.fn()} />);
+
+    await waitFor(() => expect(screen.getByLabelText('Region')).toHaveValue('Dodoma'));
+    // Proves the SCOPE itself: Region's fetch carries Zone alone, not District/Council too.
+    await waitFor(() =>
+      expect(api.listFacilityAdminValues).toHaveBeenCalledWith('region', { zone: 'North' }),
+    );
+
+    // SuggestCombobox's own listbox filters by the CURRENT typed value (see suggest-combobox.tsx),
+    // so with 'Dodoma' still sitting in the field, only 'Dodoma' itself would show — that filtering
+    // is unrelated to this hook's scoping bug and would mask it. Clear the field, the way an
+    // operator changing Region actually would, to see the full fetched list.
+    fireEvent.change(screen.getByLabelText('Region'), { target: { value: '' } });
+    fireEvent.focus(screen.getByLabelText('Region'));
+    // Alternatives besides the value that was already in the field are present — a symmetric-scope
+    // fetch (Region also scoped by District+Council, both already filled in) would have returned
+    // nothing useful beyond Dodoma itself.
+    expect(await screen.findByText('Mwanza')).toBeInTheDocument();
+    expect(screen.getByText('Arusha')).toBeInTheDocument();
+    expect(screen.getByText('Dodoma')).toBeInTheDocument();
+  });
+
+  it('a suggestions fetch failure degrades to free text rather than blocking the form', async () => {
+    (api.listFacilityAdminValues as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('registry unreachable'));
+    (api.createFacility as ReturnType<typeof vi.fn>).mockResolvedValue({ ...editFacility, id: 'new-3' });
+    renderWithAdminFields();
+
+    fireEvent.change(await screen.findByLabelText('Name'), { target: { value: 'New Facility' } });
+    // The operator can keep typing straight through the fetch failure — no disabled/blocked input.
+    fireEvent.change(screen.getByLabelText('District'), { target: { value: 'Free Typed District' } });
+
+    await waitFor(() => expect(api.listFacilityAdminValues).toHaveBeenCalled());
+    expect(screen.getByLabelText('District')).toHaveValue('Free Typed District');
+
+    clickMenuItem(/^create$/i);
+    await waitFor(() => expect(api.createFacility).toHaveBeenCalled());
+    const body = (api.createFacility as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(body.answers['f-district']).toBe('Free Typed District');
   });
 });

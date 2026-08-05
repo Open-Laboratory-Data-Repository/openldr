@@ -60,12 +60,24 @@ function fakeCtx() {
   // route computed rather than merely on the response's statusCode (a fake `list` that discards
   // its argument makes query-param sanitisation tests tautological — see Q1).
   let lastListOptions: any;
+  // Same reasoning as lastListOptions, for the Task 3 admin-values endpoint: captures the exact
+  // (level, scope) the route computed, so a test can assert the route forwarded a good value
+  // AND withheld a bad one, rather than merely reading the HTTP response.
+  let lastAdminValuesCall: any;
   return {
     audit: { record: async (e: any) => { audit.push(e); return e; } },
     logger: { error() {}, warn() {}, info() {} },
     forms: { get: async (formId: string) => forms[formId] },
     facilityRegistry: {
       list: async (opts?: any) => { lastListOptions = opts; return rows; },
+      distinctAdminValues: async (level: any, scope?: any) => {
+        lastAdminValuesCall = { level, scope };
+        // A small canned, already-ranked/counted response — the STORE's actual ranking/counting/
+        // scoping SQL is exercised for real in packages/db/src/facility-registry-store.test.ts;
+        // this fake only needs to prove the ROUTE forwards the right level/scope and returns
+        // whatever the store hands back.
+        return [{ value: 'Dodoma', count: 2 }, { value: 'Kongwa', count: 1 }];
+      },
       get: async (id: string) => rows.find((r) => r.id === id),
       upsert: async (rec: any) => {
         const i = rows.findIndex((r) => r.id === rec.id);
@@ -85,6 +97,7 @@ function fakeCtx() {
     __rows: rows,
     __audit: audit,
     get __lastListOptions() { return lastListOptions; },
+    get __lastAdminValuesCall() { return lastAdminValuesCall; },
   } as any;
 }
 
@@ -529,5 +542,134 @@ describe('facilities routes', () => {
     const res = await app.inject({ method: 'GET', url: '/api/facilities?region=Dodoma' });
     expect(res.statusCode).toBe(200);
     expect(ctx.__lastListOptions.region).toBe('Dodoma');
+  });
+
+  // --- Task 3: GET /api/facilities/admin-values -----------------------------------------------
+
+  describe('GET /api/facilities/admin-values', () => {
+    it('returns distinct values ranked by frequency, with counts, for a valid level scoped by a parent', async () => {
+      const ctx = fakeCtx();
+      const app = await appWith(ctx);
+      const res = await app.inject({ method: 'GET', url: '/api/facilities/admin-values?level=district&region=Dodoma' });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual([{ value: 'Dodoma', count: 2 }, { value: 'Kongwa', count: 1 }]);
+      // The route forwarded the requested level and the scope param to the store.
+      expect(ctx.__lastAdminValuesCall).toEqual({ level: 'district', scope: { region: 'Dodoma' } });
+    });
+
+    it('an absent parent scope reaches the store as an empty scope object, not a "" filter', async () => {
+      const ctx = fakeCtx();
+      const app = await appWith(ctx);
+      const res = await app.inject({ method: 'GET', url: '/api/facilities/admin-values?level=region' });
+      expect(res.statusCode).toBe(200);
+      expect(ctx.__lastAdminValuesCall).toEqual({ level: 'region', scope: {} });
+    });
+
+    it('a blank parent scope is dropped, not forwarded as region=""', async () => {
+      const ctx = fakeCtx();
+      const app = await appWith(ctx);
+      const res = await app.inject({ method: 'GET', url: '/api/facilities/admin-values?level=district&region=' });
+      expect(res.statusCode).toBe(200);
+      expect(ctx.__lastAdminValuesCall).toEqual({ level: 'district', scope: {} });
+    });
+
+    // --- The security requirement: level is a column-injection vector ------------------------
+
+    it('⛔ level=password is rejected with 400 before any query runs (column-injection guard)', async () => {
+      const ctx = fakeCtx();
+      const app = await appWith(ctx);
+      const res = await app.inject({ method: 'GET', url: '/api/facilities/admin-values?level=password' });
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error).toMatch(/level/i);
+      // The store was NEVER called — the arbitrary column name never reached a query.
+      expect(ctx.__lastAdminValuesCall).toBeUndefined();
+    });
+
+    it('⛔ level=id is rejected with 400 (another real column that must never be selectable)', async () => {
+      const ctx = fakeCtx();
+      const app = await appWith(ctx);
+      const res = await app.inject({ method: 'GET', url: '/api/facilities/admin-values?level=id' });
+      expect(res.statusCode).toBe(400);
+      expect(ctx.__lastAdminValuesCall).toBeUndefined();
+    });
+
+    it('⛔ a SQL-fragment level is rejected with 400, not passed through as a raw identifier', async () => {
+      const ctx = fakeCtx();
+      const app = await appWith(ctx);
+      const res = await app.inject({
+        method: 'GET',
+        url: `/api/facilities/admin-values?level=${encodeURIComponent('district; drop table facility_registry;--')}`,
+      });
+      expect(res.statusCode).toBe(400);
+      expect(ctx.__lastAdminValuesCall).toBeUndefined();
+    });
+
+    it('⛔ a missing level is a 400, not an unfiltered scan of every column', async () => {
+      const app = await appWith(fakeCtx());
+      const res = await app.inject({ method: 'GET', url: '/api/facilities/admin-values' });
+      expect(res.statusCode).toBe(400);
+    });
+
+    it('⛔ facility_registry.level (facility TYPE) is NOT one of the four admin columns', async () => {
+      // Guards against the naming collision: the query param `level` means "which admin column",
+      // and must not be confused with the pre-existing facility_registry.level (facility
+      // type/Hospital-Dispensary) column — that column is not in the whitelist either.
+      const ctx = fakeCtx();
+      const app = await appWith(ctx);
+      const res = await app.inject({ method: 'GET', url: '/api/facilities/admin-values?level=level' });
+      expect(res.statusCode).toBe(400);
+      expect(ctx.__lastAdminValuesCall).toBeUndefined();
+    });
+
+    it('⛔ country is not offered — Task 4 binds it to a ValueSet instead', async () => {
+      const ctx = fakeCtx();
+      const app = await appWith(ctx);
+      const res = await app.inject({ method: 'GET', url: '/api/facilities/admin-values?level=country' });
+      expect(res.statusCode).toBe(400);
+      expect(ctx.__lastAdminValuesCall).toBeUndefined();
+    });
+
+    // --- Repeated/array query params must never reach the store as arrays --------------------
+
+    it('a repeated ?level cannot reach the store as an array — rejected with 400', async () => {
+      const ctx = fakeCtx();
+      const app = await appWith(ctx);
+      const res = await app.inject({ method: 'GET', url: '/api/facilities/admin-values?level=district&level=region' });
+      expect(res.statusCode).toBe(400);
+      expect(ctx.__lastAdminValuesCall).toBeUndefined();
+    });
+
+    it('a repeated scope param cannot reach the store as an array', async () => {
+      const ctx = fakeCtx();
+      const app = await appWith(ctx);
+      const res = await app.inject({ method: 'GET', url: '/api/facilities/admin-values?level=district&region=A&region=B' });
+      expect(res.statusCode).toBe(200);
+      // Must reach the store as "not specified" (absent from scope) — never as ['A','B'].
+      expect(ctx.__lastAdminValuesCall).toEqual({ level: 'district', scope: {} });
+    });
+
+    // --- A scope entry for the requested level itself must never reach the store -------------
+
+    it('a scope query param matching the requested level is dropped, never forwarded as a self-filter', async () => {
+      const ctx = fakeCtx();
+      const app = await appWith(ctx);
+      const res = await app.inject({ method: 'GET', url: '/api/facilities/admin-values?level=district&district=Dodoma' });
+      expect(res.statusCode).toBe(200);
+      expect(ctx.__lastAdminValuesCall).toEqual({ level: 'district', scope: {} });
+    });
+
+    // --- Capability gating -----------------------------------------------------------------
+
+    it('is gated on facilities.view — a user without it gets 403', async () => {
+      const app = await appWith(fakeCtx(), []);
+      const res = await app.inject({ method: 'GET', url: '/api/facilities/admin-values?level=district' });
+      expect(res.statusCode).toBe(403);
+    });
+
+    it('a user with only facilities.view (no facilities.manage) CAN read admin-values', async () => {
+      const app = await appWith(fakeCtx(), ['facilities.view']);
+      const res = await app.inject({ method: 'GET', url: '/api/facilities/admin-values?level=district' });
+      expect(res.statusCode).toBe(200);
+    });
   });
 });
