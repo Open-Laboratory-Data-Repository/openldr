@@ -105,8 +105,17 @@ describe('the seeded Facility form', () => {
   });
 
   it('carries exactly the agreed required set', () => {
-    expect(facility().fields.map((f) => f.apiProperty).sort()).toEqual(
+    // council is deliberately NOT in this set — it is the one optional field in the admin chain
+    // (nobody may be blocked from saving a facility when council data is unknown). This is the
+    // original eight required apiProperties, unchanged by council's addition.
+    expect(facility().fields.filter((f) => f.required).map((f) => f.apiProperty).sort()).toEqual(
       ['country', 'district', 'level', 'localCode', 'name', 'region', 'status', 'zone'].sort(),
+    );
+  });
+
+  it('every field carries an apiProperty from the full set, including the optional council', () => {
+    expect(facility().fields.map((f) => f.apiProperty).sort()).toEqual(
+      ['council', 'country', 'district', 'level', 'localCode', 'name', 'region', 'status', 'zone'].sort(),
     );
   });
 
@@ -122,6 +131,7 @@ describe('the seeded Facility form', () => {
   });
 
   it('marks the required fields required', () => {
+    // council excluded — see 'carries exactly the agreed required set' above.
     const required = facility().fields.filter((f) => f.required).map((f) => f.apiProperty).sort();
     expect(required).toEqual(['country', 'district', 'level', 'localCode', 'name', 'region', 'status', 'zone'].sort());
   });
@@ -141,23 +151,53 @@ describe('the seeded Facility form', () => {
     expect(level.apiProperty).toBe('level');
   });
 
+  it('binds country to the seeded ISO 3166 ValueSet as a searchable reference field, not free text', () => {
+    const country = facility().fields.find((f) => f.id === 'fld-fac-country')!;
+    expect(country.fieldType).toBe('reference');
+    expect(country.valueSetUrl).toBe('urn:openldr:valueset:country');
+    expect(country.required).toBe(true);
+    expect(country.apiProperty).toBe('country');
+  });
+
+  it('binds the four admin-chain fields (zone/region/district/council) to `suggest`, not free text or a ValueSet', () => {
+    for (const id of ['fld-fac-zone', 'fld-fac-region', 'fld-fac-district']) {
+      const f = facility().fields.find((x) => x.id === id)!;
+      expect(f.fieldType, `${id}.fieldType`).toBe('suggest');
+      expect(f.valueSetUrl, `${id}.valueSetUrl`).toBeUndefined();
+      expect(f.required, `${id}.required`).toBe(true);
+    }
+  });
+
+  it('binds council to `suggest` too, but — unlike zone/region/district — it is OPTIONAL with no FHIR path', () => {
+    // Nobody may be blocked from saving a facility when council data is unknown. `fhirPath: null`
+    // because no standard R4 Address element remains for a fourth admin tier below the four already
+    // bound above (address.country/.district/.state/.city) — see forms.ts's comment on this field.
+    const council = facility().fields.find((x) => x.id === 'fld-fac-council')!;
+    expect(council.fieldType).toBe('suggest');
+    expect(council.valueSetUrl).toBeUndefined();
+    expect(council.required).toBe(false);
+    expect(council.fhirPath).toBeNull();
+    expect(council.cardinality).toEqual({ min: 0, max: '1' });
+  });
+
   it('offers facilities as a page target, requiring name plus the only code a template can supply', () => {
     const t = PAGE_TARGETS.find((p) => p.id === 'facilities')!;
     expect(t.available).toBe(true);
     expect(t.requiredKeys.sort()).toEqual(['localCode', 'name']);
   });
 
-  // Migration 072_facility_level_status_valuesets rewrites an already-migrated install's persisted
+  // Migration 073_facility_country_and_admin_fields rewrites an already-migrated install's persisted
   // Facility form to a frozen BOUND_FIELDS snapshot copied (not imported) from this sample, because
   // a migration must not live-track a file that keeps changing. (Migration 071 pinned this same way
-  // against its own NEW_FIELDS snapshot before the level/status fields were bound to ValueSets; 072
-  // is now the frozen snapshot that reflects the CURRENT sample, since it is 072 — not 071 — that
-  // ships the bound shape to already-migrated installs.) That snapshot is a duplicate by
-  // construction, so nothing stops the two silently drifting apart: edit a field here without also
-  // updating the migration and BOTH suites stay green — the migration's own test only ever compares
-  // the migration's output to the migration's own constant. Pinning FROM THIS SIDE against the
-  // db-exported snapshot is what actually catches that drift.
-  it('⛔ matches migration 072\'s frozen BOUND_FIELDS snapshot exactly, so a future edit here cannot silently desynchronise an already-migrated install from what the migration thinks "bound" looks like', () => {
+  // against its own NEW_FIELDS snapshot before level/status were bound to ValueSets; 072 then pinned
+  // against ITS OWN BOUND_FIELDS snapshot once level/status were bound; 073 is now the frozen
+  // snapshot that reflects the CURRENT sample, since it is 073 — not 072 — that ships country's
+  // ValueSet binding and the suggest-typed admin chain to already-migrated installs.) That snapshot
+  // is a duplicate by construction, so nothing stops the two silently drifting apart: edit a field
+  // here without also updating the migration and BOTH suites stay green — the migration's own test
+  // only ever compares the migration's output to the migration's own constant. Pinning FROM THIS SIDE
+  // against the db-exported snapshot is what actually catches that drift.
+  it('⛔ matches migration 073\'s frozen BOUND_FIELDS snapshot exactly, so a future edit here cannot silently desynchronise an already-migrated install from what the migration thinks "bound" looks like', () => {
     expect(facility().fields).toEqual(FACILITY_FORM_MIGRATION_BOUND_FIELDS);
   });
 });

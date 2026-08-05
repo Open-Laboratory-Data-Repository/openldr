@@ -14,11 +14,12 @@ const NO_LIVENESS = { lastAttemptAt: null, lastSuccessAt: null, lastErrorAt: nul
 // migration 072 (facility level/status ValueSets) deliberately writes a fhir.change_log row for
 // each of the two ValueSets it seeds, so the projection worker populates terminology_codes without
 // a manual `openldr terminology reproject` backfill (see that migration's seedHistoryAndChangeLog()
-// comment). That means EVERY freshly migrated database — including a bare makeMigratedDb() with no
-// test-authored seed() — starts with this many change_log rows already present. If a future
-// migration seeds another resource the same way, bump this number and it flows into the
-// pendingPush arithmetic below.
-const MIGRATION_SEEDED_CHANGE_LOG_ROWS = 2;
+// comment). migration 073 (facility country ValueSet) adds a THIRD such row the same way, for the
+// one ValueSet it seeds. That means EVERY freshly migrated database — including a bare
+// makeMigratedDb() with no test-authored seed() — starts with this many change_log rows already
+// present. If a future migration seeds another resource the same way, bump this number and it
+// flows into the pendingPush arithmetic below.
+const MIGRATION_SEEDED_CHANGE_LOG_ROWS = 3;
 
 async function seed(db: Db) {
   // Separate inserts: pg-mem rejects a multi-row insert that mixes an explicit value with a
