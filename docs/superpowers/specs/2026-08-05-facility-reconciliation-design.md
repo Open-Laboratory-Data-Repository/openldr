@@ -93,7 +93,7 @@ diagnostic_reports.performer      "Dodoma"        EXTERNAL warehouse. Verbatim. 
         │  captured as a concept — code IS the raw string
         ▼
 terminology_concepts              urn:openldr:default_fac | Dodoma          INTERNAL
-        │  concept_map_elements @ LOCAL_MAP_URL (already excluded from sync)
+        │  term_mappings (authoritative) + concept_map_elements @ LOCAL_MAP_URL (mirror)
         ▼
  ┌──────┴──────────────────────────────────┬──────────────────────────────────┐
  │ urn:openldr:cs:facility-registry         │ national system                  │
@@ -371,13 +371,52 @@ because it branched on HTTP status instead of the counters.
 
 ---
 
-## 11. Pre-existing oddities found while measuring — NOT this slice
+## 11. ⛔ CORRECTION (2026-08-05, during planning) — how mappings are actually stored and synced
 
-- **`term_mappings` is dead but still served.** 0 rows; the admin store's `termMappings.*` API writes
-  `concept_map_elements` at `LOCAL_MAP_URL`
-  (`packages/db/src/terminology-admin-store.ts:108-109`), yet `sync-serve.ts:238` still selects from
-  `term_mappings`. Worth its own look.
+An earlier draft of this spec claimed `term_mappings` was dead and that mappings live in
+`concept_map_elements` at `LOCAL_MAP_URL`, "already excluded from sync". **Reading the full
+implementation falsified both halves.**
+
+**`term_mappings` is the AUTHORITATIVE table.** `termMappings.listOutgoing` / `listReverse` read it
+(`packages/db/src/terminology-admin-store.ts:567-574`), and `create` / `update` / `delete` write it
+FIRST, then write `concept_map_elements` at `LOCAL_MAP_URL` as a **mirror** in the same transaction
+(`:575-633`). The mirror is the FHIR ConceptMap projection of the same fact.
+
+⇒ **The resolver reads `term_mappings`, not `concept_map_elements`.** Only `term_mappings` carries
+`is_active` (a deactivated mapping must not resolve) and `to_display`.
+
+**Sync, stated accurately:**
+
+- `concept_map_elements` @ `LOCAL_MAP_URL` is excluded from the terminology bulk pull
+  (`packages/db/src/terminology-store.ts:178-180`).
+- **`term_mappings` IS captured and served** — `capture.record(trx, 'term_mapping', …)` on every
+  write, `sync-serve.ts:236-255` serves it, `reference-apply.ts:233-249` applies it.
+- A down-sync **cannot destroy a lab-authored mapping**: the delete is guarded by
+  `where('managed_origin', '=', MANAGED)` (`reference-apply.ts:274-279`), and a lab-authored row has
+  `managed_origin = NULL`.
+
+⇒ Facility mappings authored on the national instance **propagate down to lab nodes**, and a lab's
+own mappings survive. Given the national-instance architecture, that is the desired behaviour — but
+it is a different mechanism from the one this spec originally described, and the reason it is safe
+is the `managed_origin` delete guard, not a `LOCAL_MAP_URL` exclusion.
+
+⚠ **Pre-existing defect noticed while reading, NOT this slice's to fix:** `termMappings.update`
+deletes the mirror row using `existing.from_system` / `existing.from_code` but re-inserts using
+`input.fromSystem` / `input.fromCode` (`:605-618`). If a caller ever changes the `from` side on
+update, the old mirror row leaks. No current caller does.
+
+⚠ **`termMappings.create` auto-creates a DRAFT concept for an unknown target** (`:590-594`,
+`draftCreated`). Convenient for national codes, but it means mapping into the registry coding system
+before the publish step has run creates a ghost DRAFT concept with no registry row behind it. The
+Observed tab's `target missing` state (§6) is what surfaces that.
+
+## 12. Pre-existing oddities found while measuring — NOT this slice
+
 - **`parseTermsCsv` silently drops columns** — already recorded, still unfixed.
+- **`codingSystems.upsertByUrl` never re-activates.** It inserts `active: true`, but its
+  `onConflict` update sets only name/version/publisher (`:470-478`). A system that already exists
+  with `active = false` stays invisible to the mapping UI. §3.3's assertion must therefore check the
+  flag, not merely the row's existence.
 
 Related: [[facility-registry-workstream]], [[clinical-report-template-workstream]],
 [[terminology-projection-fanout]], [[dont-hardcode-use-terminology]],
