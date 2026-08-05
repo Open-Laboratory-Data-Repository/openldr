@@ -1,14 +1,70 @@
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
-import type { AppContext } from '@openldr/bootstrap';
-import { splitFacilityAnswers, CORE_FACILITY_KEYS, FACILITY_ADMIN_LEVELS } from '@openldr/db';
+import { importFacilities, type AppContext, type FacilityImportResult } from '@openldr/bootstrap';
+import { splitFacilityAnswers, CORE_FACILITY_KEYS, FACILITY_ADMIN_LEVELS, referenceCapture } from '@openldr/db';
 import type { FacilityAdminLevel } from '@openldr/db';
 import { requireCapability } from './rbac';
 import { recordAudit } from './audit-helper';
 
 const VIEW = { preHandler: requireCapability('facilities.view') };
 const MANAGE = { preHandler: requireCapability('facilities.manage') };
+
+// ── Task 4: CSV import ──────────────────────────────────────────────────────────────────────────
+//
+// A JSON-encoded CSV body large enough to comfortably cover the stated workload (a 14 000-row
+// national register, see facility-import.ts's docblock) — 8MB is roughly 3x a generous
+// bytes/row estimate at that row count — while still catching a config mistake or a client that
+// ignores this cap outright before Node fully buffers it. The check runs at the JS level (not left
+// to Fastify's own bodyLimit) so an oversized upload gets the SAME uniform `{ error }` 400 shape as
+// every other validation failure in this file, rather than Fastify's own 413.
+const MAX_IMPORT_CSV_BYTES = 8 * 1024 * 1024;
+// Fastify's `bodyLimit` route option is a backstop ABOVE the CSV cap, not the primary guard: it
+// exists so a request that ignores MAX_IMPORT_CSV_BYTES entirely (or one inflated by JSON
+// escaping/other fields) is rejected before Node buffers the whole thing into memory. Deliberately
+// higher than MAX_IMPORT_CSV_BYTES so a csv field right at that limit still reaches the JS-level
+// check above and gets the clearer 400 — Fastify's own body-too-large error is a 413, which would
+// otherwise win the race and pre-empt the check below.
+const MAX_IMPORT_REQUEST_BYTES = MAX_IMPORT_CSV_BYTES + 2 * 1024 * 1024;
+// Same gate as MANAGE (facilities.manage) — importing is a write — with the higher bodyLimit layered on.
+const IMPORT = { ...MANAGE, bodyLimit: MAX_IMPORT_REQUEST_BYTES };
+
+// A real applied import runs as ONE atomic transaction, and for every row that already exists in
+// facility_registry it falls back to a per-row SELECT + conditional INSERT into
+// reference_change_log (facility-import.ts's docblock: `capture.record()` per updated row) —
+// holding row locks for however long that takes. At full national-register scale (14 000 rows,
+// worst case all updates on a re-import) that is measured in tens of seconds, which is not
+// something to run inside one HTTP request/response cycle: a client timeout or a proxy's own
+// request deadline would abort the connection while the transaction keeps running server-side.
+//
+// Decision: bound APPLY to a row-count cap and point the operator at the CLI
+// (`openldr facilities import --apply`, packages/cli/src/facilities.ts) above it — the CLI runs
+// the identical `importFacilities` call with no request deadline. 2000 is comfortably inside "a few
+// seconds" even in the worst-case all-updates path, while still covering a district- or
+// council-scoped partial register (the common incremental-update case) without ever touching the
+// CLI. This is NOT a background-job system — a request over the cap is simply refused, nothing is
+// queued. A dry run (no `apply`) is exempt: it never opens a transaction, so a 14 000-row register
+// can always be PREVIEWED inline regardless of this cap.
+const MAX_INLINE_APPLY_ROWS = 2000;
+
+const ImportSchema = z.object({
+  // ⚠ Minor fix: blank/whitespace-only content is refused here, not left to reach
+  // `parseFacilityCsv` and come back as an all-zero `{ parsed: 0, ... }` 200 — a UI that only
+  // checks `res.ok` would otherwise report success for an upload that changed nothing. A single
+  // `.refine` (rather than `.min(1)` alone) catches BOTH the empty string and a
+  // whitespace/newline-only body (routine when a client trims a template file down to just blank
+  // lines), since `''.trim()` and `'   \n  \n'.trim()` both collapse to length 0.
+  csv: z.string().refine((v) => v.trim().length > 0, { message: 'csv must not be empty' }),
+  // ⛔ Required, never defaulted — HFR/MFL/etc differ per country/deployment (see
+  // facility-import.ts's `FacilityImportOptions.nationalSystem` doc comment). A hardcoded fallback
+  // here would eventually mislabel an import as belonging to the wrong national register.
+  nationalSystem: z.string().min(1),
+  allowUnknownColumns: z.boolean().optional(),
+  // The caller opts IN to writing (mirrors the CLI's `--apply`). Omitted/false ⇒ dry run: parse
+  // and report, write NOTHING — the default, so a 14 000-row register can never be silently
+  // rewritten by a client that forgot to set this.
+  apply: z.boolean().optional(),
+});
 
 // The client submits ANSWERS, never a pre-split record: deciding which answers become indexed
 // columns is the server's call, and duplicating the core-key list client-side would let the two
@@ -72,6 +128,24 @@ function clearedCoreKeys(
 }
 
 /**
+ * `extras` keys the submitted form's field LIST claims ownership of — independent of whether this
+ * particular submission actually supplied a value for that field. Mirrors how `clearedCoreKeys`
+ * treats a core column: the FIELD determines ownership, the ANSWER only determines the value. A
+ * non-core field owns `apiProperty || field.id` in `extras` — exactly the key
+ * `splitFacilityAnswers` writes it under (see that function's `extras[key || field.id] = text`
+ * line) — so this set and that function agree on what "form-mapped" means without re-deriving it.
+ */
+function mappedExtrasKeys(fields: FieldRef[]): Set<string> {
+  const keys = new Set<string>();
+  for (const field of fields) {
+    const key = field.apiProperty ?? '';
+    if (CORE_FACILITY_KEYS.has(key)) continue;
+    keys.add(key || field.id);
+  }
+  return keys;
+}
+
+/**
  * Map a Postgres constraint violation an ordinary operator input can trigger onto a 4xx with an
  * operator-legible message, instead of letting a raw SQL message reach the generic 500 handler.
  * `local_code` is UNIQUE (23505 → 409, a conflict); `facility_registry_has_a_code` is a CHECK
@@ -91,6 +165,45 @@ function mapFacilityDbError(err: unknown, reply: FastifyReply): { error: string 
     return { error: 'a facility must have a local code or a national code' };
   }
   throw err;
+}
+
+// ⛔ Blocking fix: `parseFacilityCsv` (packages/terminology/src/facility-csv.ts, called inside
+// `@openldr/bootstrap`'s `importFacilities`) hands off to `csv-parse/sync`, which THROWS
+// synchronously on malformed input (an unterminated quote, a stray `"` inside a facility name, a
+// `.json` file uploaded by mistake) instead of returning a result — that throw was reaching the
+// central error handler unclassified and coming back as a bare 500 "Internal Server Error", with
+// the actually-useful csv-parse message (which includes the line/column) discarded before it ever
+// reached the operator. See `IMPORT`'s handler below for where this is used.
+//
+// A closed enumeration of `csv-parse@5.6.0`'s own error codes (copied from that package's
+// `CsvError.js`/`api/index.js`/`api/normalize_options.js` call sites), not a shape heuristic —
+// apps/server deliberately does NOT depend on `csv-parse` directly (it is
+// `@openldr/terminology`'s implementation detail, reached only indirectly through
+// `importFacilities`), so `instanceof CsvError` is not available here, and a bare `.code` string
+// alone is not a safe enough signal: a Postgres constraint violation (`mapFacilityDbError`'s
+// 23505/23514) ALSO carries a `.code` — always a 5-character SQLSTATE, never one of the
+// ALL_CAPS/underscore identifiers below, but "always distinct today" is exactly the kind of thing
+// worth pinning to an explicit list rather than a `.length` heuristic. Anything NOT in this set —
+// a future csv-parse version's new code, or an unrelated error that happens to carry a `.code` —
+// falls through unrecognised and is rethrown, reaching the central error handler as the 500 it
+// actually is. That is the deliberate boundary: only a recognised parse failure becomes a 400; a
+// DB failure (or anything else) must keep surfacing as a 500 / going through
+// `mapFacilityDbError`, never be silently reclassified.
+const CSV_PARSE_ERROR_CODES = new Set([
+  'CSV_IGNORE_LAST_DELIMITERS_REQUIRES_COLUMNS', 'CSV_INVALID_ARGUMENT', 'CSV_INVALID_CLOSING_QUOTE',
+  'CSV_INVALID_COLUMN_DEFINITION', 'CSV_INVALID_COLUMN_MAPPING', 'CSV_INVALID_OPTION_BOM',
+  'CSV_INVALID_OPTION_CAST', 'CSV_INVALID_OPTION_CAST_DATE', 'CSV_INVALID_OPTION_COLUMNS',
+  'CSV_INVALID_OPTION_COMMENT', 'CSV_INVALID_OPTION_DELIMITER', 'CSV_INVALID_OPTION_ENCODING',
+  'CSV_INVALID_OPTION_GROUP_COLUMNS_BY_NAME', 'CSV_INVALID_OPTION_IGNORE_LAST_DELIMITERS',
+  'CSV_INVALID_OPTION_ON_RECORD', 'CSV_INVALID_OPTION_RECORD_DELIMITER', 'CSV_MAX_RECORD_SIZE',
+  'CSV_NON_TRIMABLE_CHAR_AFTER_CLOSING_QUOTE', 'CSV_OPTION_COLUMNS_MISSING_NAME',
+  'CSV_QUOTE_NOT_CLOSED', 'CSV_RECORD_INCONSISTENT_COLUMNS', 'CSV_RECORD_INCONSISTENT_FIELDS_LENGTH',
+  'INVALID_BUFFER_STATE', 'INVALID_OPENING_QUOTE',
+]);
+
+function isCsvParseError(err: unknown): err is Error & { code: string } {
+  const code = err instanceof Error ? (err as { code?: unknown }).code : undefined;
+  return typeof code === 'string' && CSV_PARSE_ERROR_CODES.has(code);
 }
 
 function firstString(v: unknown): string | undefined {
@@ -351,6 +464,21 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     const { record, extras } = splitFacilityAnswers(fields, p.data.answers);
     const cleared = clearedCoreKeys(fields, p.data.answers, record as Record<string, unknown>);
 
+    // Preserve `extras` keys the submitted form's field list does NOT map (e.g. columns the CSV
+    // importer wrote under raw header names that no form field maps) — `extras` above is only
+    // authoritative for the keys the form DOES map (see mappedExtrasKeys' doc comment). Wholesale
+    // `{ ...before.extras, ...extras }` is deliberately NOT used: that would make it impossible for
+    // an operator to ever clear a form-mapped extra, since the stale `before` value would always
+    // survive a blank. Instead, form-mapped keys are dropped from `before.extras` unconditionally
+    // (including when this submission left the field unanswered, e.g. `answers: {}`) and replaced
+    // by whatever `extras` says — which correctly omits a key the operator just blanked.
+    const mappedExtras = mappedExtrasKeys(fields);
+    const mergedExtras: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(before.extras ?? {})) {
+      if (!mappedExtras.has(key)) mergedExtras[key] = value;
+    }
+    Object.assign(mergedExtras, extras);
+
     // `name` is NOT NULL — a blanked name can never become a null write, only a 400.
     if (cleared.has('name')) { reply.code(400); return { error: 'name is required' }; }
     const nameErr = nameTypeError(record.name);
@@ -371,7 +499,7 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     let after;
     try {
       after = await ctx.facilityRegistry.upsert({
-        ...before, ...record, ...nulls, id, name: record.name ?? before.name, extras,
+        ...before, ...record, ...nulls, id, name: record.name ?? before.name, extras: mergedExtras,
         // An edit never changes who manages the row.
         managedOrigin: before.managedOrigin, source: before.source,
       } as never);
@@ -390,5 +518,85 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     await ctx.facilityRegistry.remove(id);
     await recordAudit(ctx, req, { action: 'facility.delete', entityType: 'facility', entityId: id, before, after: null });
     return { ok: true };
+  });
+
+  // Task 4: CSV import — a thin HTTP wrapper over `@openldr/bootstrap`'s `importFacilities`, the
+  // SAME function `openldr facilities import` (packages/cli/src/facilities.ts) calls, per the
+  // repo's CLI-parity rule. See the MAX_IMPORT_CSV_BYTES / MAX_INLINE_APPLY_ROWS comments above for
+  // the size-cap and inline-vs-bounded-apply decisions.
+  app.post('/api/facilities/import', IMPORT, async (req, reply) => {
+    const p = ImportSchema.safeParse(req.body);
+    if (!p.success) { reply.code(400); return { error: p.error.message }; }
+
+    // Enforced here at the JS level, not left to Fastify's own (higher) bodyLimit — see
+    // MAX_IMPORT_CSV_BYTES's doc comment for why the ordering matters.
+    const csvBytes = Buffer.byteLength(p.data.csv, 'utf8');
+    if (csvBytes > MAX_IMPORT_CSV_BYTES) {
+      reply.code(400);
+      return {
+        error: `csv exceeds the ${Math.floor(MAX_IMPORT_CSV_BYTES / (1024 * 1024))}MB limit for this endpoint; `
+          + `use \`openldr facilities import\` (the CLI) for a larger register`,
+      };
+    }
+
+    const deps = { db: ctx.internalDb, capture: referenceCapture };
+    const importOpts = { nationalSystem: p.data.nationalSystem, allowUnknownColumns: p.data.allowUnknownColumns };
+
+    // Always preview first (parse-only — importFacilities never opens a transaction when
+    // `apply` is falsy, see its own early-return). This gives an AUTHORITATIVE `parsed` count —
+    // not a cheap line-count approximation — to check the inline-apply cap against, before ever
+    // considering the write transaction below. Unknown columns (parser-blocked, per
+    // facility-csv.ts) and an empty/all-skipped file both surface here as `parsed: 0` and are
+    // reported back verbatim rather than swallowed — never treated as "safe to write".
+    //
+    // ⛔ Wrapped: `parseFacilityCsv` (reached inside `importFacilities`, before any DB access on
+    // this preview path) throws on malformed CSV rather than returning a result — see
+    // `isCsvParseError`'s doc comment. Only a RECOGNISED parse failure becomes a 400; anything
+    // else is rethrown unchanged and reaches the central error handler as the 500 it is.
+    let preview: FacilityImportResult;
+    try {
+      preview = await importFacilities(deps, p.data.csv, { ...importOpts, apply: false });
+    } catch (err) {
+      if (!isCsvParseError(err)) throw err;
+      reply.code(400);
+      return { error: err.message };
+    }
+    if (!p.data.apply || preview.parsed === 0) return preview;
+
+    if (preview.parsed > MAX_INLINE_APPLY_ROWS) {
+      reply.code(400);
+      return {
+        error: `this register has ${preview.parsed} row(s), which exceeds the ${MAX_INLINE_APPLY_ROWS}-row inline apply `
+          + `limit; use \`openldr facilities import --apply\` (the CLI) instead — it is not bound by an HTTP request deadline`,
+      };
+    }
+
+    // ⛔ Wrapped for the same reason as the preview call above. In practice the preview call
+    // above already parsed this exact `p.data.csv` successfully (a malformed file would have been
+    // caught and returned as a 400 before this line is ever reached), so `parseFacilityCsv`
+    // itself will not throw a second time here — this guard exists so the apply path does not
+    // silently regress to a raw 500 if that assumption ever stops holding (e.g. a future change
+    // that lets the two calls see different input), not because it is expected to fire today. A
+    // non-parse error (a DB failure from the write transaction this call opens) is rethrown
+    // unchanged, exactly as before this fix — it must still surface as a 500, never a 400.
+    let result: FacilityImportResult;
+    try {
+      result = await importFacilities(deps, p.data.csv, { ...importOpts, apply: true });
+    } catch (err) {
+      if (!isCsvParseError(err)) throw err;
+      reply.code(400);
+      return { error: err.message };
+    }
+    // A dry run (handled above) writes nothing and must not audit. This point is only reached
+    // once a real write happened (preview.parsed > 0 and under the inline cap).
+    await recordAudit(ctx, req, {
+      action: 'facility.import',
+      entityType: 'facility',
+      entityId: p.data.nationalSystem,
+      before: null,
+      after: null,
+      metadata: { nationalSystem: p.data.nationalSystem, allowUnknownColumns: !!p.data.allowUnknownColumns, result },
+    });
+    return result;
   });
 }

@@ -7,9 +7,6 @@
 // execArgv, so spawned workers never enable them. See apps/server/dev.mjs for the same fix on the
 // server. Production uses the built `dist/index.js` (empty execArgv) and was never affected.
 import { register } from 'tsx/esm/api';
-import { fileURLToPath } from 'node:url';
 
 register();
-// Keep argv[1] pointing at the real entry so commander derives the same program name as before.
-process.argv[1] = fileURLToPath(new URL('./src/index.ts', import.meta.url));
 await import('./src/index.ts');

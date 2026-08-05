@@ -12,6 +12,7 @@ import { LoadingState } from '@/components/ui/spinner';
 import { useAuth } from '@/auth/AuthProvider';
 import { listFacilities, deleteFacility, listPublishedForms, FACILITIES_LIST_LIMIT, type Facility } from '@/api';
 import { FacilityDialog } from '@/facilities/FacilityDialog';
+import { ImportFacilitiesSheet } from '@/facilities/ImportFacilitiesSheet';
 
 export function Facilities() {
   const { t } = useTranslation();
@@ -27,14 +28,24 @@ export function Facilities() {
   const [hasForm, setHasForm] = useState<boolean | null>(null);
   const [editing, setEditing] = useState<Facility | null | undefined>(undefined); // undefined = closed
   const [confirming, setConfirming] = useState<Facility | null>(null);
+  const [importing, setImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Whether the last list() hit the client-requested cap (FACILITIES_LIST_LIMIT) — a CSV-imported
   // national register can run 10-15k rows, and presenting a capped page with no indication anything
   // was cut is its own defect distinct from "no rows at all". See listFacilities in api.ts.
   const [truncated, setTruncated] = useState(false);
 
-  const reload = useCallback(async () => {
-    setLoading(true);
+  // F1 fix: a plain `reload()` flips `loading` to true, which the render below turns into a
+  // full-page `LoadingState` that UNMOUNTS everything else on the page — including a currently-open
+  // ImportFacilitiesSheet. That's fine (desirable, even) for the very first load, but the sheet's
+  // own onImported callback also calls this after a successful Apply specifically so the operator
+  // can see the sheet's own "Import complete" panel with its created/updated counts — a reload that
+  // unmounts the sheet mid-callback destroys that confirmation before the operator ever sees it, and
+  // the sheet then remounts fresh (no applyResult) once loading flips back to false. `background:
+  // true` fetches the same data without touching `loading` at all, so the sheet — and everything
+  // else already on screen — stays mounted through the refresh.
+  const reload = useCallback(async (opts?: { background?: boolean }) => {
+    if (!opts?.background) setLoading(true);
     try {
       const data = await listFacilities();
       setRows(data);
@@ -48,7 +59,7 @@ export function Facilities() {
       // for data this attempt never actually saw, outliving the row set it was measured against.
       setTruncated(false);
     } finally {
-      setLoading(false);
+      if (!opts?.background) setLoading(false);
     }
   }, []);
 
@@ -116,6 +127,13 @@ export function Facilities() {
               <DropdownMenuContent align="end">
                 <DropdownMenuItem disabled={!hasForm} onSelect={() => setEditing(null)}>
                   {t('facilities.add')}
+                </DropdownMenuItem>
+                {/* No `!hasForm` gate here, unlike Add above — importing writes core facility
+                    columns directly (@openldr/bootstrap's importFacilities), not through the
+                    Facilities form, so a lab with rows already imported but its form later
+                    archived can still re-import (e.g. a refreshed national register). */}
+                <DropdownMenuItem onSelect={() => setImporting(true)}>
+                  {t('facilities.import.menuItem')}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -222,6 +240,14 @@ export function Facilities() {
             facility={editing}
             onOpenChange={(o) => { if (!o) setEditing(undefined); }}
             onSaved={(f) => { upsert(f); setEditing(undefined); }}
+          />
+        )}
+
+        {importing && (
+          <ImportFacilitiesSheet
+            open
+            onOpenChange={setImporting}
+            onImported={() => { void reload({ background: true }); }}
           />
         )}
 

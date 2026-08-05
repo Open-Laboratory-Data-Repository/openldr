@@ -120,7 +120,11 @@ const MAX_ADMIN_VALUES = 1000;
 
 type Row = InternalSchema['facility_registry'];
 
-function toRecord(r: Row): FacilityRecord {
+/** Exported for the bulk import path (facility-import.ts in @openldr/bootstrap): it writes rows via
+ *  a batched multi-row upsert instead of this store's one-row-per-transaction `upsert()`, but needs
+ *  the exact same camelCase <-> snake_case shape so a hand-entered facility, an interactively-edited
+ *  one, and a bulk-imported one all land identically. */
+export function toRecord(r: Row): FacilityRecord {
   return {
     id: r.id,
     localCode: r.local_code,
@@ -147,7 +151,7 @@ function toRecord(r: Row): FacilityRecord {
   };
 }
 
-function toRow(rec: FacilityRecord): Omit<Row, 'created_at' | 'updated_at'> {
+export function toRow(rec: FacilityRecord): Omit<Row, 'created_at' | 'updated_at'> {
   return {
     id: rec.id,
     local_code: rec.localCode ?? null,

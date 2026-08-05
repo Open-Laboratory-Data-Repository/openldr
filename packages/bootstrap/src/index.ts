@@ -1458,6 +1458,8 @@ export { migrateLegacySyncConfig } from './sync-settings-migrate';
 export { sealDefinitionSecrets } from './workflow-secret-seal';
 export { migrateWorkflowSecrets } from './workflow-secret-migrate';
 export { mergePatients } from './patient-merge';
+export { importFacilities } from './facility-import';
+export type { FacilityImportDeps, FacilityImportOptions, FacilityImportResult } from './facility-import';
 export {
   enrollSite,
   listSites,

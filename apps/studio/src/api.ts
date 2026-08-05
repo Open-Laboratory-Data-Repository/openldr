@@ -781,6 +781,33 @@ export const listFacilityAdminValues = (
   return apiGet(`/api/facilities/admin-values?${params.toString()}`, 'list facility admin values');
 };
 
+// Task 4: CSV import (Settings/Facilities page upload — wired by a later task). Mirrors the
+// server's FacilityImportResult (packages/bootstrap/src/facility-import.ts) verbatim: every counter
+// is always present, `duplicates: 0` on a clean import rather than absent, so a caller can never
+// confuse "0 found" with "not reported".
+export interface FacilityImportResult {
+  parsed: number;
+  skipped: number;
+  unknownColumns: string[];
+  created: number;
+  updated: number;
+  duplicates: number;
+}
+
+export interface FacilityImportRequest {
+  csv: string;
+  /** Which national register these codes belong to (HFR/MFL/etc). Required — the server never
+   *  defaults this to a hardcoded register (see facilities-routes.ts). */
+  nationalSystem: string;
+  /** Import despite unrecognised columns, carrying them into each row's extras. */
+  allowUnknownColumns?: boolean;
+  /** The caller opts IN to writing. Omitted/false ⇒ dry run: parse and report, write NOTHING. */
+  apply?: boolean;
+}
+
+export const importFacilitiesCsv = (body: FacilityImportRequest): Promise<FacilityImportResult> =>
+  authFetch('/api/facilities/import', jbody(body, 'POST')).then((r) => okJson<FacilityImportResult>(r, 'import facilities'));
+
 // Roles / capabilities (capability-based RBAC)
 export interface RoleRecord {
   id: string;
