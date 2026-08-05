@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { buildProgram } from './program';
 
 /**
  * Closes a review finding: `facilities.test.ts` calls `runFacilitiesImport()` directly with
@@ -43,7 +44,6 @@ describe('facilities import — commander parsing path (program.ts, not the func
     // buildProgram() returns a fresh, unstarted Command — constructing it here has no side
     // effect on the test runner's own argv (index.ts's module-level parseAsync(process.argv)
     // is never reached because we never import index.ts).
-    const { buildProgram } = await import('./program');
     const program = buildProgram().exitOverride();
 
     await program.parseAsync([
@@ -69,7 +69,6 @@ describe('facilities import — commander parsing path (program.ts, not the func
   it('parses --apply on the command line and resolves apply true (proves the above is not vacuous)', async () => {
     // A fresh Command per test — commander retains parsed option values across parseAsync calls
     // on the same Command instance, so reusing one across tests would order-couple them.
-    const { buildProgram } = await import('./program');
     const program = buildProgram().exitOverride();
 
     await program.parseAsync([
