@@ -35,8 +35,17 @@ export function Facilities() {
   // was cut is its own defect distinct from "no rows at all". See listFacilities in api.ts.
   const [truncated, setTruncated] = useState(false);
 
-  const reload = useCallback(async () => {
-    setLoading(true);
+  // F1 fix: a plain `reload()` flips `loading` to true, which the render below turns into a
+  // full-page `LoadingState` that UNMOUNTS everything else on the page — including a currently-open
+  // ImportFacilitiesSheet. That's fine (desirable, even) for the very first load, but the sheet's
+  // own onImported callback also calls this after a successful Apply specifically so the operator
+  // can see the sheet's own "Import complete" panel with its created/updated counts — a reload that
+  // unmounts the sheet mid-callback destroys that confirmation before the operator ever sees it, and
+  // the sheet then remounts fresh (no applyResult) once loading flips back to false. `background:
+  // true` fetches the same data without touching `loading` at all, so the sheet — and everything
+  // else already on screen — stays mounted through the refresh.
+  const reload = useCallback(async (opts?: { background?: boolean }) => {
+    if (!opts?.background) setLoading(true);
     try {
       const data = await listFacilities();
       setRows(data);
@@ -50,7 +59,7 @@ export function Facilities() {
       // for data this attempt never actually saw, outliving the row set it was measured against.
       setTruncated(false);
     } finally {
-      setLoading(false);
+      if (!opts?.background) setLoading(false);
     }
   }, []);
 
@@ -238,7 +247,7 @@ export function Facilities() {
           <ImportFacilitiesSheet
             open
             onOpenChange={setImporting}
-            onImported={() => { void reload(); }}
+            onImported={() => { void reload({ background: true }); }}
           />
         )}
 

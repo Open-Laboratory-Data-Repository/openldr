@@ -77,6 +77,19 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
     invalidatePreview();
   };
 
+  // F4 fix: the server's byte-size cap (MAX_IMPORT_CSV_BYTES, apps/server/src/facilities-routes.ts)
+  // returns a message written the same way the row-count cap's is — for a CLI/log reader, not this
+  // sheet — and unlike the row cap it can fire on a plain PREVIEW (it's checked before the dry-run
+  // parse even runs), not just on Apply. Only 'inline apply limit' was ever special-cased before;
+  // this recognises the size cap's message the same way and gives it the same plain-language
+  // treatment, in both the preview and apply catch blocks.
+  const friendlyImportErrorMessage = (raw: string): string => {
+    const lower = raw.toLowerCase();
+    if (lower.includes('inline apply limit')) return t('facilities.import.tooLargeError');
+    if (lower.includes('mb limit for this endpoint')) return t('facilities.import.tooLargeFileError');
+    return raw;
+  };
+
   const runPreview = async (allowOverride?: boolean): Promise<void> => {
     if (!csv || !nationalSystem.trim()) return;
     setPreviewing(true);
@@ -92,7 +105,8 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
       setPreviewResult(result);
     } catch (err) {
       setPreviewResult(null);
-      setError(err instanceof Error ? err.message : String(err));
+      const message = err instanceof Error ? err.message : String(err);
+      setError(friendlyImportErrorMessage(message));
     } finally {
       setPreviewing(false);
     }
@@ -119,12 +133,12 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
       onImported();
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      // The server's own over-cap message is written for someone reading server logs or a CLI
-      // terminal ("...use `openldr facilities import --apply` (the CLI) instead — it is not bound
-      // by an HTTP request deadline") — dumped verbatim into this sheet it reads as a stray
-      // fragment. A Settings-page operator may have no shell into the container at all, so this
-      // names the actual constraint (too large for the browser) before pointing at the CLI.
-      setError(message.toLowerCase().includes('inline apply limit') ? t('facilities.import.tooLargeError') : message);
+      // The server's own over-cap messages (row-count AND byte-size) are written for someone
+      // reading server logs or a CLI terminal — dumped verbatim into this sheet they read as a
+      // stray fragment. A Settings-page operator may have no shell into the container at all, so
+      // this names the actual constraint (too large for the browser) before pointing at the CLI.
+      // See friendlyImportErrorMessage above.
+      setError(friendlyImportErrorMessage(message));
     } finally {
       setApplying(false);
     }
@@ -135,12 +149,34 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   // already set but `csv` has not resolved yet. Without this, a click in that window would fall
   // through runPreview's own early return and silently do nothing — worse than a disabled button.
   const previewDisabled = !file || !csv || !nationalSystem.trim() || previewing || applying || !!applyResult;
+  // F5 fix: `!csv` covers "still reading" AND "0-byte file" identically (both leave `csv` falsy),
+  // so a genuinely empty file left Preview disabled forever with nothing on screen explaining why.
+  // `csv === ''` (as opposed to `null`) only ever happens once `File.text()` has actually resolved
+  // — a still-reading file has `csv === null` — so this fires exactly for "read finished, and it's
+  // empty", never during the async read window above.
+  const emptyFile = !!file && csv === '';
   // parsed === 0 covers BOTH the "nothing recognised" trap (unknownColumns populated, blocked
   // outright) and the "wrong file entirely" trap (parsed 0, unknownColumns empty) — neither has
   // anything to apply. Over the row cap is refused for the same reason a doomed request is: never
   // worth sending.
   const canApply = !!previewResult && previewResult.parsed > 0 && previewResult.parsed <= APPLY_ROW_CAP && !applyResult;
   const overCap = !!previewResult && previewResult.parsed > APPLY_ROW_CAP;
+  // F3 fix: `parsed` counts every accepted row INCLUDING rows `duplicates` later collapses down to
+  // one (see facility-import.ts's docblock on FacilityImportResult.parsed) — the headline number
+  // shown to the operator must describe what Apply will actually WRITE, not what the parser merely
+  // accepted before dedup. `duplicates` itself keeps reading off `parsed` unchanged elsewhere (the
+  // over-cap check mirrors the server's own cap, which is checked against `parsed`, not this).
+  const willWriteCount = previewResult ? previewResult.parsed - previewResult.duplicates : 0;
+  // F2 fix: `parsed === 0` must read as an unsuccessful outcome whether or not unknown columns were
+  // ever involved — EXCEPT while the file is still just sitting blocked on an unopted-in unknown-
+  // columns notice (unknownColumns present, box not yet ticked): that case already has its own
+  // explanation (the amber box below) and doesn't need a second, more confusing "no rows found"
+  // message layered on top. Once the operator HAS ticked the box (`allowUnknownColumns`) and the
+  // file still parses to nothing, that's the "wrong file entirely" trap surviving one click deeper
+  // — it must say so, same as the plain no-unknown-columns case does.
+  const noOutcomeStated = !!previewResult
+    && previewResult.parsed === 0
+    && (previewResult.unknownColumns.length === 0 || allowUnknownColumns);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -183,14 +219,19 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
 
           <div className="grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-3 px-6 py-4 border-b border-border">
             <Label htmlFor="facility-import-file" className="whitespace-nowrap">{t('facilities.import.fileLabel')}</Label>
-            <input
-              id="facility-import-file"
-              type="file"
-              accept=".csv,text/csv"
-              disabled={applying}
-              onChange={handleFileChange}
-              className="text-sm text-foreground file:mr-3 file:cursor-pointer file:rounded-md file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-xs file:font-medium disabled:cursor-not-allowed disabled:opacity-50"
-            />
+            <div>
+              <input
+                id="facility-import-file"
+                type="file"
+                accept=".csv,text/csv"
+                disabled={applying}
+                onChange={handleFileChange}
+                className="text-sm text-foreground file:mr-3 file:cursor-pointer file:rounded-md file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-xs file:font-medium disabled:cursor-not-allowed disabled:opacity-50"
+              />
+              {emptyFile && (
+                <p className="mt-1 text-xs text-destructive">{t('facilities.import.emptyFileHint')}</p>
+              )}
+            </div>
 
             <Label htmlFor="facility-import-national-system" className="whitespace-nowrap">{t('facilities.import.nationalSystemLabel')}</Label>
             <div>
@@ -207,8 +248,12 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
 
           {previewResult && !applyResult && (
             <div className="mx-6 mt-4 space-y-3 text-sm">
-              {previewResult.parsed === 0 && previewResult.unknownColumns.length === 0 && (
-                <p className="text-muted-foreground">{t('facilities.import.noRowsFound')}</p>
+              {noOutcomeStated && (
+                <p className="text-muted-foreground">
+                  {previewResult.skipped > 0
+                    ? t('facilities.import.noRowsFoundSkipped', { skipped: previewResult.skipped })
+                    : t('facilities.import.noRowsFound')}
+                </p>
               )}
 
               {previewResult.unknownColumns.length > 0 && (
@@ -228,7 +273,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
 
               {previewResult.parsed > 0 && (
                 <>
-                  <p>{t('facilities.import.previewSummary', { parsed: previewResult.parsed, skipped: previewResult.skipped })}</p>
+                  <p>{t('facilities.import.previewSummary', { parsed: willWriteCount, skipped: previewResult.skipped })}</p>
                   {previewResult.duplicates > 0 && (
                     <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700">
                       {t('facilities.import.duplicatesWarning', { count: previewResult.duplicates })}
@@ -260,8 +305,9 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
           open={confirmOpen}
           onOpenChange={setConfirmOpen}
           title={t('facilities.import.applyConfirmTitle')}
-          description={previewResult ? t('facilities.import.applyConfirmBody', { count: previewResult.parsed }) : undefined}
+          description={previewResult ? t('facilities.import.applyConfirmBody', { count: willWriteCount }) : undefined}
           confirmLabel={t('facilities.import.applyAction')}
+          cancelLabel={t('common.cancel')}
           onConfirm={() => { void handleApplyConfirm(); }}
         />
       </SheetContent>

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import '@/i18n';
+import i18n from '@/i18n';
 
 vi.mock('@/api', async (orig) => {
   const actual = await orig<typeof import('@/api')>();
@@ -223,5 +223,93 @@ describe('ImportFacilitiesSheet', () => {
 
     openMenu();
     expect(screen.getByRole('menuitem', { name: /^preview$/i })).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  it('F2: after opting into unknown columns, a wrong file still states an outcome and surfaces the skipped count', async () => {
+    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({ parsed: 0, skipped: 0, unknownColumns: ['patient_id', 'dob', 'sex'], created: 0, updated: 0, duplicates: 0 })
+      .mockResolvedValueOnce({ parsed: 0, skipped: 3000, unknownColumns: ['patient_id', 'dob', 'sex'], created: 0, updated: 0, duplicates: 0 });
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    pickFileAndSystem();
+    await previewNow();
+
+    expect(await screen.findByText(/patient_id, dob, sex/)).toBeInTheDocument();
+    // Before opting in, unknown-columns-blocked is its own distinct explanation — the "wrong file"
+    // message must not also render here (would be a second, confusing message for the same click).
+    expect(screen.queryByText(/no facility rows were found/i)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('checkbox'));
+
+    await waitFor(() => expect(api.importFacilitiesCsv).toHaveBeenCalledTimes(2));
+    expect(api.importFacilitiesCsv).toHaveBeenLastCalledWith(
+      expect.objectContaining({ allowUnknownColumns: true }),
+    );
+
+    // Once opted in, a file that still parses to zero rows must say so plainly, AND the 3000
+    // skipped rows (previously invisible — `skipped` only ever rendered inside the `parsed > 0`
+    // branch) must be visible.
+    expect(await screen.findByText(/3000 row\(s\).*skipped/i)).toBeInTheDocument();
+    expect(screen.queryByText(/row\(s\) will be imported/i)).not.toBeInTheDocument();
+  });
+
+  it('F3: the headline row count and the apply-confirm body reflect what will actually be written, not the raw parsed count', async () => {
+    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockResolvedValue({
+      parsed: 5, skipped: 0, unknownColumns: [], created: 0, updated: 0, duplicates: 2,
+    });
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    pickFileAndSystem();
+    await previewNow();
+
+    // 5 parsed rows minus 2 collapsed duplicates = 3 rows will actually land in the registry.
+    expect(await screen.findByText(/3 row\(s\) will be imported/i)).toBeInTheDocument();
+    expect(screen.queryByText(/5 row\(s\) will be imported/i)).not.toBeInTheDocument();
+
+    clickMenuItem(/^apply$/i);
+    expect(await screen.findByText(/this writes 3 facility row\(s\)/i)).toBeInTheDocument();
+    expect(screen.queryByText(/this writes 5 facility row\(s\)/i)).not.toBeInTheDocument();
+  });
+
+  it('F4: the 8MB size-cap 400 gets the same plain-language treatment as the row cap, including on a plain preview', async () => {
+    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockRejectedValue(
+      new Error('csv exceeds the 8MB limit for this endpoint; use `openldr facilities import` (the CLI) for a larger register'),
+    );
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    pickFileAndSystem();
+    await previewNow();
+
+    const friendly = await screen.findByText(/larger than this endpoint accepts/i);
+    expect(friendly).toBeInTheDocument();
+    expect(screen.queryByText(/csv exceeds the 8mb limit/i)).not.toBeInTheDocument();
+  });
+
+  it('F5: a 0-byte CSV explains why Preview stays disabled, instead of dead-ending with no explanation', async () => {
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    fireEvent.change(screen.getByLabelText('File'), { target: { files: [new File([''], 'empty.csv', { type: 'text/csv' })] } });
+    fireEvent.change(screen.getByLabelText('National system'), { target: { value: 'HFR' } });
+
+    expect(await screen.findByText(/this file is empty/i)).toBeInTheDocument();
+    openMenu();
+    expect(screen.getByRole('menuitem', { name: /^preview$/i })).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  it('F6: the apply-confirm Cancel button is translated, not left as the English literal default', async () => {
+    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockResolvedValue(cleanPreview);
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    pickFileAndSystem();
+    await previewNow();
+    clickMenuItem(/^apply$/i);
+    await screen.findByRole('button', { name: /^apply$/i });
+
+    await i18n.changeLanguage('fr');
+    try {
+      expect(await screen.findByRole('button', { name: 'Annuler' })).toBeInTheDocument();
+    } finally {
+      await i18n.changeLanguage('en');
+    }
   });
 });

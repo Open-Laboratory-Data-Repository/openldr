@@ -29,7 +29,7 @@ vi.mock('@/api', async (orig) => {
 const { useAuthMock } = vi.hoisted(() => ({ useAuthMock: vi.fn() }));
 vi.mock('@/auth/AuthProvider', () => ({ useAuth: useAuthMock }));
 
-import { listFacilities, listPublishedForms, getForm, FACILITIES_LIST_LIMIT, type Facility } from '@/api';
+import { listFacilities, listPublishedForms, getForm, importFacilitiesCsv, FACILITIES_LIST_LIMIT, type Facility } from '@/api';
 import { Facilities } from './Facilities';
 
 const publishedFacilityForm = {
@@ -81,6 +81,19 @@ function clickMenuItem(triggerName: string, itemName: string | RegExp) {
   if (!screen.queryByRole('menuitem', { name: itemName })) {
     fireEvent.keyDown(trigger, { key: 'Enter' });
   }
+  fireEvent.click(screen.getByRole('menuitem', { name: itemName }));
+}
+
+/** Open the Import sheet's own ⋯ "Import actions" menu and click `itemName`, waiting first for it
+ *  to be enabled (Preview stays `aria-disabled` until the async `File.text()` read resolves). Used
+ *  only by the F1 test below, which — unlike ImportFacilitiesSheet.test.tsx's own suite — renders
+ *  the REAL Facilities page around the sheet, because F1 is specifically about what happens to the
+ *  sheet when its caller's `reload()` runs, something a standalone-sheet render can never exercise. */
+async function clickImportMenuItem(itemName: string | RegExp) {
+  const trigger = screen.getByRole('button', { name: 'Import actions' });
+  fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+  if (!screen.queryByRole('menu')) fireEvent.keyDown(trigger, { key: 'Enter' });
+  await waitFor(() => expect(screen.getByRole('menuitem', { name: itemName })).not.toHaveAttribute('aria-disabled', 'true'));
   fireEvent.click(screen.getByRole('menuitem', { name: itemName }));
 }
 
@@ -293,5 +306,46 @@ describe('Facilities page', () => {
     // over from the earlier successful call would keep the banner up describing data this attempt
     // never saw.
     expect(screen.queryByText(/showing the first/i)).not.toBeInTheDocument();
+  });
+
+  it('F1: a successful apply keeps the Import sheet mounted so its own success confirmation survives the list refresh', async () => {
+    // This is the whole point of rendering the real Facilities page (not the sheet standalone, as
+    // ImportFacilitiesSheet.test.tsx does): `onImported` calls THIS page's `reload`, and it is that
+    // reload — not anything inside the sheet — that used to flip `loading` to true, which the page's
+    // own render swaps in a full-page LoadingState that unmounts everything below it, sheet included.
+    (listPublishedForms as ReturnType<typeof vi.fn>).mockResolvedValue([publishedFacilityForm]);
+    (listFacilities as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce([]) // initial load
+      .mockResolvedValueOnce([sampleFacility]); // background reload triggered by onImported
+    (importFacilitiesCsv as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({ parsed: 3, skipped: 0, unknownColumns: [], created: 0, updated: 0, duplicates: 0 })
+      .mockResolvedValueOnce({ parsed: 3, skipped: 0, unknownColumns: [], created: 2, updated: 1, duplicates: 0 });
+    show();
+    await waitFor(() => expect(screen.getByText(/no facilities yet/i)).toBeInTheDocument());
+
+    clickMenuItem('Facility actions', /import facilities/i);
+    expect(await screen.findByText(/^import facilities$/i)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('File'), {
+      target: { files: [new File(['local_code,name\nLAB01,Dodoma RRH\n'], 'register.csv', { type: 'text/csv' })] },
+    });
+    fireEvent.change(screen.getByLabelText('National system'), { target: { value: 'HFR' } });
+
+    await clickImportMenuItem(/^preview$/i);
+    await waitFor(() => expect(importFacilitiesCsv).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText(/3 row\(s\) will be imported/i)).toBeInTheDocument();
+
+    await clickImportMenuItem(/^apply$/i);
+    fireEvent.click(await screen.findByRole('button', { name: /^apply$/i }));
+
+    await waitFor(() => expect(importFacilitiesCsv).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(listFacilities).toHaveBeenCalledTimes(2));
+
+    // The sheet must still be showing ITS OWN success confirmation after the background reload
+    // settles — not a blank, freshly-remounted sheet with the result thrown away.
+    expect(await screen.findByText(/import complete/i)).toBeInTheDocument();
+    expect(screen.getByText(/created 2, updated 1, skipped 0/i)).toBeInTheDocument();
+    // And the underlying table did actually pick up the refreshed row from the background reload.
+    expect(await screen.findByText('Dodoma Regional Referral')).toBeInTheDocument();
   });
 });
