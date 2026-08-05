@@ -224,6 +224,12 @@ export function FacilityDialog({ open, onOpenChange, facility, onSaved }: Facili
               onSubmit={handleSubmit}
               fieldSuggestions={fieldSuggestions}
               onAnswersChange={reportAnswers}
+              suggestCopy={{
+                placeholder: t('facilities.suggest.placeholder'),
+                loadingLabel: t('facilities.suggest.loading'),
+                noSuggestionsLabel: t('facilities.suggest.empty'),
+                errorFallback: t('facilities.suggest.error'),
+              }}
               footer={<button ref={hiddenSubmitRef} type="submit" className="hidden" aria-hidden="true" />}
             />
           ) : (

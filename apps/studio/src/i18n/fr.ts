@@ -763,6 +763,12 @@ export const fr: EnShape = {
     deleteTitle: 'Supprimer {{name}} ?',
     deleteBody: 'Cette action supprime définitivement {{name}} du registre des établissements. Cette action est irréversible.',
     truncated: 'Affichage des {{limit}} premiers établissements. Le registre peut en contenir davantage que ce qui est affiché ici.',
+    suggest: {
+      placeholder: 'Saisir ou choisir une suggestion…',
+      loading: 'Chargement des suggestions…',
+      empty: 'Aucune suggestion',
+      error: 'Impossible de charger les suggestions',
+    },
   },
   query: {
     explorer: 'Explorateur', connectors: 'Connecteurs', datasets: 'Jeux de données', customQueries: 'Requêtes personnalisées',

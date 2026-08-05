@@ -25,6 +25,19 @@ export interface SuggestComboboxProps {
   label?: string;
   required?: boolean;
   disabled?: boolean;
+  /**
+   * Copy for the listbox's three non-option rows (loading / empty / error-fallback). This is a
+   * generic `ui/` primitive with no `useTranslation` of its own — same convention as `Combobox`
+   * (`combobox.tsx`), which takes its `placeholder`/`searchPlaceholder` as required props rather
+   * than importing i18n directly. These three are optional with English defaults instead (a
+   * `suggest` field's hardcoded fallback `placeholder` already worked this way) purely so an
+   * existing caller that hasn't been updated yet still renders something rather than blank text;
+   * a translated caller (FormRuntime's `suggestCopy` prop, sourced from FacilityDialog's `t()`)
+   * should always supply all four.
+   */
+  loadingLabel?: string;
+  noSuggestionsLabel?: string;
+  errorFallback?: string;
 }
 
 /**
@@ -37,7 +50,11 @@ export interface SuggestComboboxProps {
  */
 export function SuggestCombobox({
   id, value, onChange, options, status = 'ready', error = null,
-  placeholder, label, required, disabled,
+  placeholder = 'Type or pick a suggestion…',
+  loadingLabel = 'Loading suggestions…',
+  noSuggestionsLabel = 'No suggestions',
+  errorFallback = 'Could not load suggestions',
+  label, required, disabled,
 }: SuggestComboboxProps): JSX.Element {
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
@@ -85,7 +102,7 @@ export function SuggestCombobox({
         aria-activedescendant={active >= 0 && filtered[active] ? optionId(active) : undefined}
         aria-label={label}
         value={value}
-        placeholder={placeholder ?? 'Type or pick a suggestion…'}
+        placeholder={placeholder}
         required={required}
         disabled={disabled}
         onChange={(e) => onChange(e.target.value)}
@@ -102,16 +119,16 @@ export function SuggestCombobox({
           {status === 'loading' && (
             <div className="flex items-center gap-2 px-3 py-3 text-xs text-muted-foreground">
               <Spinner className="h-3 w-3" />
-              Loading suggestions…
+              {loadingLabel}
             </div>
           )}
           {status === 'error' && (
             <div className="px-3 py-3 text-xs text-destructive" role="alert">
-              {error ?? 'Could not load suggestions'}
+              {error ?? errorFallback}
             </div>
           )}
           {status === 'ready' && filtered.length === 0 && (
-            <div className="px-3 py-3 text-xs text-muted-foreground">No suggestions</div>
+            <div className="px-3 py-3 text-xs text-muted-foreground">{noSuggestionsLabel}</div>
           )}
           {status === 'ready' && filtered.map((opt, i) => (
             <button

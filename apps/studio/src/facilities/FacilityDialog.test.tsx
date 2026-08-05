@@ -256,6 +256,55 @@ describe('FacilityDialog', () => {
     expect(body.answers['f-district']).toBe('A Brand New Ward');
   });
 
+  it('an edit-mode dialog with all four admin levels populated still offers alternatives for Region (Important 1)', async () => {
+    // Every admin level (Zone/Region/District/Council) has a value — the common case, since the
+    // shipped form marks Zone/Region/District required. Under the old symmetric scoping, Region's
+    // own fetch would have been scoped by District+Council too, collapsing its options down to
+    // essentially the one value already in the field.
+    const schemaAllFourLevels = {
+      ...facilitySchema,
+      fields: [
+        ...facilitySchema.fields,
+        { id: 'f-zone', displayLabel: 'Zone', description: null, fieldType: 'suggest', apiProperty: 'zone', fhirPath: null, required: false, enabled: true, order: 4, cardinality: { min: 0, max: '1' } },
+        { id: 'f-region', displayLabel: 'Region', description: null, fieldType: 'suggest', apiProperty: 'region', fhirPath: null, required: false, enabled: true, order: 5, cardinality: { min: 0, max: '1' } },
+        { id: 'f-district', displayLabel: 'District', description: null, fieldType: 'suggest', apiProperty: 'district', fhirPath: null, required: false, enabled: true, order: 6, cardinality: { min: 0, max: '1' } },
+        { id: 'f-council', displayLabel: 'Council', description: null, fieldType: 'suggest', apiProperty: 'council', fhirPath: null, required: false, enabled: true, order: 7, cardinality: { min: 0, max: '1' } },
+      ],
+    };
+    (api.getForm as ReturnType<typeof vi.fn>).mockResolvedValue({
+      id: FORM_DEFINITION_ID, name: 'Facility', versionLabel: null, fhirResourceType: null, status: 'published', active: true,
+      schema: schemaAllFourLevels, targetPages: ['facilities'], createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z',
+    });
+    (api.listFacilityAdminValues as ReturnType<typeof vi.fn>).mockImplementation((level: string) =>
+      Promise.resolve(level === 'region'
+        ? [{ value: 'Dodoma', count: 3 }, { value: 'Mwanza', count: 2 }, { value: 'Arusha', count: 1 }]
+        : []),
+    );
+    const fullyPopulatedFacility: Facility = {
+      ...editFacility, zone: 'North', region: 'Dodoma', district: 'Dodoma Urban', council: 'Dodoma City',
+    };
+    render(<FacilityDialog open facility={fullyPopulatedFacility} onOpenChange={vi.fn()} onSaved={vi.fn()} />);
+
+    await waitFor(() => expect(screen.getByLabelText('Region')).toHaveValue('Dodoma'));
+    // Proves the SCOPE itself: Region's fetch carries Zone alone, not District/Council too.
+    await waitFor(() =>
+      expect(api.listFacilityAdminValues).toHaveBeenCalledWith('region', { zone: 'North' }),
+    );
+
+    // SuggestCombobox's own listbox filters by the CURRENT typed value (see suggest-combobox.tsx),
+    // so with 'Dodoma' still sitting in the field, only 'Dodoma' itself would show — that filtering
+    // is unrelated to this hook's scoping bug and would mask it. Clear the field, the way an
+    // operator changing Region actually would, to see the full fetched list.
+    fireEvent.change(screen.getByLabelText('Region'), { target: { value: '' } });
+    fireEvent.focus(screen.getByLabelText('Region'));
+    // Alternatives besides the value that was already in the field are present — a symmetric-scope
+    // fetch (Region also scoped by District+Council, both already filled in) would have returned
+    // nothing useful beyond Dodoma itself.
+    expect(await screen.findByText('Mwanza')).toBeInTheDocument();
+    expect(screen.getByText('Arusha')).toBeInTheDocument();
+    expect(screen.getByText('Dodoma')).toBeInTheDocument();
+  });
+
   it('a suggestions fetch failure degrades to free text rather than blocking the form', async () => {
     (api.listFacilityAdminValues as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('registry unreachable'));
     (api.createFacility as ReturnType<typeof vi.fn>).mockResolvedValue({ ...editFacility, id: 'new-3' });

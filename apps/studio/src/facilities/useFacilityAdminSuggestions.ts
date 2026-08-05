@@ -37,15 +37,25 @@ function adminLevelFields(schema: FormSchema | null): LevelFieldMap {
  * that owns the fetch, and `reportAnswers` (wired to `FormRuntime`'s `onAnswersChange`) is how it
  * learns what the operator has typed into the OTHER admin fields so it can scope each fetch.
  *
- * Cascading: a level's scope is every OTHER declared admin level's current value (e.g. District
- * is scoped by Zone/Region/Council, whichever are non-blank) — the server already treats a missing
- * scope key as unfiltered (facility-registry-store.ts's `distinctAdminValues`), so passing every
- * other level costs nothing when most are blank and gets tighter as the operator fills more in.
+ * Cascading: a level's scope is every level ABOVE it in the fixed hierarchy
+ * `zone < region < district < council` (`FACILITY_ADMIN_LEVELS`' own declaration order — one
+ * source of truth for the order, not a second hand-typed list here). Region is scoped by Zone
+ * alone; District by Zone+Region; Council by Zone+Region+District; Zone by nothing. A child is
+ * NEVER used to scope its own parent — the server's scope filter is exact equality
+ * (`facility-registry-store.ts`'s `distinctAdminValues` does `q.where(col, '=', v)`, not a range
+ * or prefix match), so a symmetric "every OTHER level" scope (an earlier version of this hook)
+ * made the district/council values already sitting in the form constrain Region right back down to
+ * the single value it already held — every dropdown on a fully-populated edit offered exactly one
+ * option, and a novel value typed into one field (typical for `suggest`, which exists precisely to
+ * accept values the registry has never seen) blanked every sibling's listbox instead of only
+ * narrowing levels below it.
  *
  * `reportAnswers` fires on every keystroke of ANY field (FormRuntime's `onAnswersChange` has no
- * finer granularity) — a scope signature is compared per level before scheduling a fetch, and the
- * fetch itself is debounced, so neither an unrelated field's keystroke nor rapid typing in a
- * parent field spams the endpoint.
+ * finer granularity) — a fetch is only (re)scheduled when the admin-level-relevant SLICE of
+ * `answers` actually changed since the last call (see `lastRelevantRef` below), so typing in an
+ * unrelated field (e.g. Name) never reschedules — let alone starves — a pending admin-level fetch.
+ * A scope signature is ALSO compared per level before issuing that level's request, and the fetch
+ * itself is debounced, so rapid typing in a parent field still collapses to one fetch per level.
  *
  * `resetKey` should be the SAME value passed as `FormRuntime`'s own `key` prop (`FacilityDialog`
  * builds it as `${schema.id}-${facility?.id ?? 'new'}`) — that remounts FormRuntime fresh on a
@@ -59,7 +69,13 @@ export function useFacilityAdminSuggestions(
 ): { suggestions: FieldSuggestions; reportAnswers: (answers: RuntimeAnswers) => void } {
   const [suggestions, setSuggestions] = useState<FieldSuggestions>({});
   const levelFields = useMemo(() => adminLevelFields(schema), [schema]);
-  const levels = useMemo(() => Object.keys(levelFields) as FacilityAdminLevel[], [levelFields]);
+  // Ordered by the fixed hierarchy (zone < region < district < council), NOT by whatever order the
+  // schema happens to declare its fields in — the scoping loop below relies on index order to know
+  // which levels are "above" a given one.
+  const levels = useMemo(
+    () => FACILITY_ADMIN_LEVELS.filter((level) => levelFields[level] !== undefined),
+    [levelFields],
+  );
 
   const mountedRef = useRef(true);
   useEffect(() => {
@@ -73,10 +89,19 @@ export function useFacilityAdminSuggestions(
   const lastScopeRef = useRef<Partial<Record<FacilityAdminLevel, string>>>({});
   const requestIdRef = useRef<Partial<Record<FacilityAdminLevel, number>>>({});
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  // The admin-level-relevant slice of the last `answers` a fetch was scheduled for (JSON of each
+  // level's value, in hierarchy order) — NOT the same thing as `lastScopeRef`, which is per-level
+  // and only updated once a fetch actually fires. This one gates whether `reportAnswers` reschedules
+  // the shared debounce timer AT ALL: without it, a keystroke in an unrelated field (e.g. Name) —
+  // which fires `reportAnswers` just the same, FormRuntime's `onAnswersChange` has no finer
+  // granularity — kept rearming the SAME 200ms timer, so a typing burst in Name starved every
+  // pending admin-level fetch for as long as the operator kept typing.
+  const lastRelevantRef = useRef<string | undefined>(undefined);
 
   useEffect(() => {
     lastScopeRef.current = {};
     requestIdRef.current = {};
+    lastRelevantRef.current = undefined;
     if (debounceRef.current) clearTimeout(debounceRef.current);
     setSuggestions({});
     // Deliberately keyed on resetKey alone — a facility/schema swap, not every render.
@@ -102,6 +127,12 @@ export function useFacilityAdminSuggestions(
       })
       .catch((e: unknown) => {
         if (!mountedRef.current || requestIdRef.current[level] !== myRequestId) return;
+        // Roll back the recorded scope for this level so a future `reportAnswers` cycle that
+        // computes the SAME scope signature (e.g. the operator changes nothing else, or changes
+        // and then reverts) does not treat this failed attempt as "already fetched" and skip
+        // retrying — without this, a level that failed once stayed in status:'error' for the rest
+        // of the dialog's life unless some OTHER admin field's value changed first.
+        delete lastScopeRef.current[level];
         setSuggestions((prev) => ({
           ...prev,
           [fieldId]: { status: 'error', options: [], error: e instanceof Error ? e.message : String(e) },
@@ -119,14 +150,28 @@ export function useFacilityAdminSuggestions(
       return v == null ? '' : String(v);
     };
 
+    // Only (re)schedule the debounce when a value an admin level actually depends on — one of the
+    // four level fields themselves — has changed since the last call. `reportAnswers` fires on
+    // EVERY keystroke of ANY field in the form (Name included), so without this guard, typing in an
+    // unrelated field kept clearing and restarting the same 200ms timer and no admin-level fetch
+    // ever got a clear 200ms window to fire.
+    const relevantSignature = JSON.stringify(levels.map(valueOf));
+    if (relevantSignature === lastRelevantRef.current) return;
+    lastRelevantRef.current = relevantSignature;
+
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      for (const level of levels) {
+      // `levels` is in fixed hierarchy order (zone < region < district < council) — index `i`'s
+      // scope is built ONLY from indices `< i` (the levels ABOVE it), never from indices after it.
+      // A child must never constrain its own parent: Region is scoped by Zone alone, District by
+      // Zone+Region, Council by Zone+Region+District, and Zone by nothing at all.
+      for (let i = 0; i < levels.length; i++) {
+        const level = levels[i]!;
         const scope: LevelScope = {};
-        for (const other of levels) {
-          if (other === level) continue;
-          const v = valueOf(other);
-          if (v) scope[other] = v;
+        for (let j = 0; j < i; j++) {
+          const above = levels[j]!;
+          const v = valueOf(above);
+          if (v) scope[above] = v;
         }
         const signature = JSON.stringify(scope);
         if (lastScopeRef.current[level] === signature) continue;

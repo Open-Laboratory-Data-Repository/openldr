@@ -16,6 +16,19 @@ import type { FieldSuggestions, FormField, FormSchema, FormSection, RuntimeAnswe
 import { cleanAnswers, fieldLabel, groupChildren, validate, visibleIds } from './runtime';
 import { ReferencePicker, type ReferenceValue } from './ReferencePicker';
 
+/**
+ * Translated copy for `SuggestCombobox`'s listbox chrome — shared by `FormRuntime`, `FieldRow` and
+ * `FieldControl` below so the shape is declared exactly once instead of three times as the prop
+ * threads down through this file's component split. See `FormRuntime`'s own `suggestCopy` doc
+ * comment for why this is a plain optional prop rather than `useTranslation` called in this file.
+ */
+type SuggestCopy = {
+  placeholder?: string;
+  loadingLabel?: string;
+  noSuggestionsLabel?: string;
+  errorFallback?: string;
+};
+
 // ── Public component ──────────────────────────────────────────────────────────
 
 export function FormRuntime({
@@ -30,6 +43,7 @@ export function FormRuntime({
   preview,
   fieldSuggestions,
   onAnswersChange,
+  suggestCopy,
 }: {
   schema: FormSchema;
   submitLabel?: string;
@@ -64,6 +78,17 @@ export function FormRuntime({
    * `fieldSuggestions`, same division of responsibility as that prop's doc comment above.
    */
   onAnswersChange?: (answers: RuntimeAnswers) => void;
+  /**
+   * Translated copy for `suggest` fields' listbox chrome (loading / empty / error-fallback /
+   * placeholder). FormRuntime is schema-driven and has no `useTranslation` of its own — every
+   * other piece of on-screen copy it renders comes from the schema (`displayLabel`, `placeholder`,
+   * ValueSet `display` text, etc.), never a literal. These four strings are the one exception
+   * (`SuggestCombobox`'s own listbox chrome, not schema data), so the caller that DOES have an
+   * i18n context — FacilityDialog, today's only `suggest`-field consumer — supplies them here
+   * rather than FormRuntime importing `react-i18next` for a single field type. Omitting this prop
+   * (or any key in it) falls through to `SuggestCombobox`'s own English defaults.
+   */
+  suggestCopy?: SuggestCopy;
 }): JSX.Element {
   const [answers, setAnswers] = useState<RuntimeAnswers>(initialAnswers ?? {});
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -165,6 +190,7 @@ export function FormRuntime({
         formDefinitionId={formDefinitionId}
         preview={preview}
         fieldSuggestions={fieldSuggestions}
+        suggestCopy={suggestCopy}
       />
     ));
   }
@@ -231,6 +257,7 @@ function FieldRow({
   formDefinitionId,
   preview,
   fieldSuggestions,
+  suggestCopy,
 }: {
   field: FormField;
   schema: FormSchema;
@@ -242,6 +269,7 @@ function FieldRow({
   formDefinitionId?: string;
   preview?: boolean;
   fieldSuggestions?: FieldSuggestions;
+  suggestCopy?: SuggestCopy;
 }) {
   const label = fieldLabel(field);
 
@@ -263,6 +291,7 @@ function FieldRow({
             formDefinitionId={formDefinitionId}
             preview={preview}
             fieldSuggestions={fieldSuggestions}
+            suggestCopy={suggestCopy}
           />
         ))}
       </fieldset>
@@ -308,6 +337,7 @@ function FieldRow({
           formDefinitionId={formDefinitionId}
           preview={preview}
           fieldSuggestions={fieldSuggestions}
+          suggestCopy={suggestCopy}
         />
         {error ? <p className="mt-1 text-xs text-destructive" role="alert">{error}</p> : null}
       </div>
@@ -324,6 +354,7 @@ function FieldControl({
   formDefinitionId,
   preview,
   fieldSuggestions,
+  suggestCopy,
 }: {
   field: FormField;
   value: unknown;
@@ -331,6 +362,7 @@ function FieldControl({
   formDefinitionId?: string;
   preview?: boolean;
   fieldSuggestions?: FieldSuggestions;
+  suggestCopy?: SuggestCopy;
 }) {
   const label = fieldLabel(field);
 
@@ -396,7 +428,10 @@ function FieldControl({
           options={suggestion?.options ?? []}
           status={suggestion?.status ?? 'ready'}
           error={suggestion?.error}
-          placeholder={field.placeholder}
+          placeholder={field.placeholder ?? suggestCopy?.placeholder}
+          loadingLabel={suggestCopy?.loadingLabel}
+          noSuggestionsLabel={suggestCopy?.noSuggestionsLabel}
+          errorFallback={suggestCopy?.errorFallback}
           label={label}
           required={field.required}
         />
