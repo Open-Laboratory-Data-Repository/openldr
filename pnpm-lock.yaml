@@ -114,6 +114,9 @@ importers:
       fastify:
         specifier: ^5.2.0
         version: 5.8.5
+      kysely:
+        specifier: ^0.28.17
+        version: 0.28.17
       pdfkit:
         specifier: ^0.15.0
         version: 0.15.2

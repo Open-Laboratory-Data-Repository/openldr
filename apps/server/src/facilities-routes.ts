@@ -1,9 +1,16 @@
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance, FastifyReply } from 'fastify';
+import type { Kysely } from 'kysely';
 import { z } from 'zod';
-import { importFacilities, type AppContext, type FacilityImportResult } from '@openldr/bootstrap';
-import { splitFacilityAnswers, CORE_FACILITY_KEYS, FACILITY_ADMIN_LEVELS, referenceCapture } from '@openldr/db';
-import type { FacilityAdminLevel } from '@openldr/db';
+import {
+  importFacilities, scanObservedFacilities, resolveObservedFacilities, publishFacilityMap,
+  type AppContext, type FacilityImportResult, type ScanResult, type PublishResult,
+} from '@openldr/bootstrap';
+import {
+  splitFacilityAnswers, CORE_FACILITY_KEYS, FACILITY_ADMIN_LEVELS, referenceCapture,
+  DEFAULT_OBSERVED_FACILITY_SYSTEM,
+} from '@openldr/db';
+import type { FacilityAdminLevel, ExternalSchema } from '@openldr/db';
 import { requireCapability } from './rbac';
 import { recordAudit } from './audit-helper';
 
@@ -307,6 +314,37 @@ function nameTypeError(name: unknown): { error: string } | undefined {
   return undefined;
 }
 
+// ── Task 6: observed-facility reconciliation ────────────────────────────────────────────────────
+//
+// A thin HTTP wrapper over `@openldr/bootstrap`'s scan/resolve/publish trio (Tasks 3-4), following
+// the same dry-run-by-default / explicit-`apply` / audit-only-on-a-real-write shape as the CSV
+// import route above.
+
+const ScanObservedSchema = z.object({
+  // Optional — `scanObservedFacilities` defaults to the site's default observed-facility system
+  // when omitted. A blank string is refused rather than silently reaching the store as `''`.
+  system: z.string().min(1).optional(),
+  apply: z.boolean().optional(),
+});
+
+const PublishSchema = z.object({
+  system: z.string().min(1).optional(),
+  apply: z.boolean().optional(),
+});
+
+/** `ReconcileDeps` for the three routes below. `ctx.store.db` is the target/warehouse handle —
+ *  same cast `createAppContext` itself uses (`packages/bootstrap/src/index.ts`'s
+ *  `store.db as unknown as Kysely<ExternalSchema>`) — and `ctx.terminology.admin` is the SAME
+ *  `TerminologyAdminStore` the rest of this file's terminology-facing code would reach through
+ *  `AppContext`, not a second store constructed here. */
+function reconcileDeps(ctx: AppContext) {
+  return {
+    internalDb: ctx.internalDb,
+    externalDb: ctx.store.db as unknown as Kysely<ExternalSchema>,
+    admin: ctx.terminology.admin,
+  };
+}
+
 // The national register runs 10-15k rows; an unbounded `limit` lets one request scan far past that
 // for no operator benefit. Comfortably above the whole register, well below "accidentally OOM".
 const MAX_LIST_LIMIT = 20000;
@@ -376,6 +414,104 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       // "match the empty string".
     }
     return ctx.facilityRegistry.distinctAdminValues(level, scope);
+  });
+
+  // Task 6: every observed facility string, resolved through its mapping, with a report-volume
+  // count per row — ranked by that count, which is the entire reason this surface exists over the
+  // generic `/terminology` page (an operator triages the highest-volume unmapped strings first).
+  //
+  // ⚠ Route ordering: registered BEFORE `/api/facilities/:id` below — Fastify would otherwise match
+  // the parameterised route first and read "observed" as a facility id.
+  //
+  // `resolveObservedFacilities` deliberately does not return a report count (Tasks 3-4's decision —
+  // see facility-reconcile.ts's doc comment on `ResolvedFacility`): it is a resolution function, and
+  // a count is a warehouse aggregate, not a resolution property. This route supplies it from a LIVE
+  // `diagnostic_reports` aggregate — the same table `resolveObservedFacilities` itself already reads
+  // its `(performer, source_system)` pairs from — rather than the count `scanObservedFacilities`
+  // snapshots into `terminology_concepts.properties.reportCount`. Two reasons: (1) granularity — the
+  // stored snapshot is grouped by `code` ALONE (see `scanObservedFacilities`'s own
+  // `groupBy('performer')`), which conflates two source systems sharing the same performer string,
+  // while this list is keyed per `(sourceSystem, sourceCode)` pair, exactly matching a live
+  // `groupBy(['performer', 'source_system'])`; (2) freshness — the stored snapshot only advances on
+  // a `facilities.manage`-gated scan, so a `facilities.view`-only operator would see a stale or
+  // all-zero count on an install where a scan has never been run, even though this route (like
+  // `resolveObservedFacilities`) needs no prior scan to work at all.
+  app.get('/api/facilities/observed', VIEW, async () => {
+    const deps = reconcileDeps(ctx);
+    const [resolved, counts] = await Promise.all([
+      resolveObservedFacilities(deps),
+      deps.externalDb
+        .selectFrom('diagnostic_reports')
+        .select(({ fn }) => ['performer', 'source_system', fn.countAll<number>().as('n')])
+        .where('performer', 'is not', null)
+        .groupBy(['performer', 'source_system'])
+        .execute(),
+    ]);
+
+    const countByKey = new Map<string, number>();
+    for (const c of counts) {
+      if (c.performer == null) continue;
+      countByKey.set(`${c.source_system}|${c.performer}`, Number(c.n));
+    }
+
+    return resolved
+      .map((r) => ({ ...r, reportCount: countByKey.get(`${r.sourceSystem}|${r.sourceCode}`) ?? 0 }))
+      .sort((a, b) => b.reportCount - a.reportCount);
+  });
+
+  // Task 6: discover new/changed observed-facility strings and record them as concepts (Task 3's
+  // `scanObservedFacilities`). `apply` is opt-in — omitted/false previews the counts and writes
+  // nothing, mirroring the import route's dry-run-by-default contract.
+  app.post('/api/facilities/scan-observed', MANAGE, async (req, reply) => {
+    const p = ScanObservedSchema.safeParse(req.body ?? {});
+    if (!p.success) { reply.code(400); return { error: p.error.message }; }
+
+    const result: ScanResult = await scanObservedFacilities(reconcileDeps(ctx), {
+      system: p.data.system,
+      apply: !!p.data.apply,
+    });
+
+    // A dry run writes nothing (scanObservedFacilities returns before touching the db when `apply`
+    // is falsy) and must not audit. `apply: true` always performs a real write here — even a
+    // discovery of zero new codes still (re)registers/re-activates the observed-facility
+    // `coding_systems` row — so auditing is unconditional on `apply`, not further gated on a count.
+    if (p.data.apply) {
+      await recordAudit(ctx, req, {
+        action: 'facility.scan',
+        entityType: 'facility',
+        entityId: p.data.system ?? DEFAULT_OBSERVED_FACILITY_SYSTEM,
+        before: null,
+        after: null,
+        metadata: { system: p.data.system ?? null, result },
+      });
+    }
+    return result;
+  });
+
+  // Task 6: rebuild `facility_map` (the warehouse-side reporting dimension) from the current
+  // resolution (Task 4's `publishFacilityMap`). Same dry-run-by-default contract as the scan above.
+  app.post('/api/facilities/publish', MANAGE, async (req, reply) => {
+    const p = PublishSchema.safeParse(req.body ?? {});
+    if (!p.success) { reply.code(400); return { error: p.error.message }; }
+
+    const result: PublishResult = await publishFacilityMap(reconcileDeps(ctx), {
+      system: p.data.system,
+      apply: !!p.data.apply,
+    });
+
+    // Same reasoning as the scan route above: `apply: true` always performs a real write (the
+    // delete-then-insert rebuild runs unconditionally), so auditing is unconditional on `apply`.
+    if (p.data.apply) {
+      await recordAudit(ctx, req, {
+        action: 'facility.publish',
+        entityType: 'facility',
+        entityId: p.data.system ?? DEFAULT_OBSERVED_FACILITY_SYSTEM,
+        before: null,
+        after: null,
+        metadata: { system: p.data.system ?? null, result },
+      });
+    }
+    return result;
   });
 
   app.get('/api/facilities/:id', VIEW, async (req, reply) => {
