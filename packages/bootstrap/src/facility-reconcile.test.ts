@@ -638,7 +638,7 @@ describe('captureObservedFacilityFromProjection', () => {
       performer: [{ display: 'Muhimbili National Hospital' }],
     };
 
-    await captureObservedFacilityFromProjection(deps, 'DiagnosticReport', resource, '2026-08-05T00:00:00.000Z');
+    await captureObservedFacilityFromProjection(deps, 'DiagnosticReport', resource, 'webhook-ingest', '2026-08-05T00:00:00.000Z');
 
     const { rows } = await deps.admin.terms.search('urn:openldr:default_fac', { limit: 10, offset: 0 });
     expect(rows.map((r) => r.code)).toEqual(['Muhimbili National Hospital']);
@@ -652,7 +652,7 @@ describe('captureObservedFacilityFromProjection', () => {
       performer: [{ display: 'Muhimbili National Hospital' }],
     };
 
-    await captureObservedFacilityFromProjection(deps, 'Patient', resource, '2026-08-05T00:00:00.000Z');
+    await captureObservedFacilityFromProjection(deps, 'Patient', resource, 'webhook-ingest', '2026-08-05T00:00:00.000Z');
 
     const { total } = await deps.admin.terms.search('urn:openldr:default_fac', { limit: 10, offset: 0 });
     expect(total).toBe(0);
@@ -662,9 +662,35 @@ describe('captureObservedFacilityFromProjection', () => {
     const deps = await makeReconcileDeps();
     const resource = { resourceType: 'DiagnosticReport', id: 'dr-2' };
 
-    await captureObservedFacilityFromProjection(deps, 'DiagnosticReport', resource, '2026-08-05T00:00:00.000Z');
+    await captureObservedFacilityFromProjection(deps, 'DiagnosticReport', resource, 'webhook-ingest', '2026-08-05T00:00:00.000Z');
 
     const { total } = await deps.admin.terms.search('urn:openldr:default_fac', { limit: 10, offset: 0 });
     expect(total).toBe(0);
+  });
+
+  // Gap 1 (Task 9b fix round 1): a resource projected from a NON-default feed must capture its
+  // concept into THAT feed's coding system, not the default one — the whole point of Task 9b's
+  // "one coding system per feed" design. Before this fix, `sourceSystem` was never threaded through
+  // this call at all, so every live-ingest capture landed under `DEFAULT_OBSERVED_FACILITY_SYSTEM`
+  // regardless of which feed produced the resource, until the next `scanObservedFacilities` scan
+  // corrected it.
+  it("captures a projected DiagnosticReport's performer into ITS OWN feed's system, not the default", async () => {
+    const deps = await makeReconcileDeps();
+    const resource = {
+      resourceType: 'DiagnosticReport',
+      id: 'dr-cdr-1',
+      performer: [{ display: 'NHL-01' }],
+    };
+
+    await captureObservedFacilityFromProjection(deps, 'DiagnosticReport', resource, 'cdr-import', '2026-08-05T00:00:00.000Z');
+
+    const cdrSystem = observedSystemForFeed('cdr-import');
+    expect(cdrSystem).not.toBe(DEFAULT_OBSERVED_FACILITY_SYSTEM);
+    const { rows } = await deps.admin.terms.search(cdrSystem, { limit: 10, offset: 0 });
+    expect(rows.map((r) => r.code)).toEqual(['NHL-01']);
+
+    // Must NOT have landed in the default system.
+    const { total: defaultTotal } = await deps.admin.terms.search(DEFAULT_OBSERVED_FACILITY_SYSTEM, { limit: 10, offset: 0 });
+    expect(defaultTotal).toBe(0);
   });
 });

@@ -971,8 +971,13 @@ const reporting: ReportingApi = {
     // failure be mistaken for a failed clinical projection. The filter/extract/capture logic lives
     // in `captureObservedFacilityFromProjection` (facility-reconcile.ts), extracted specifically so
     // it is unit-testable without booting the full `AppContext` this closure's outer scope needs.
-    onProjected: (resourceType, resource) =>
-      captureObservedFacilityFromProjection({ admin: termAdmin, internalDb: internal.db }, resourceType, resource, new Date().toISOString()),
+    //
+    // Task 9b fix round 1 (Gap 1): `provenance.sourceSystem` is the SAME provenance
+    // `applyProjection` just handed to `relationalWriter.write()` for this resource — i.e. the exact
+    // value about to land in `diagnostic_reports.source_system` — passed through so the capture
+    // lands in THAT feed's coding system rather than always the default one.
+    onProjected: (resourceType, resource, provenance) =>
+      captureObservedFacilityFromProjection({ admin: termAdmin, internalDb: internal.db }, resourceType, resource, provenance.sourceSystem ?? null, new Date().toISOString()),
   });
   const projectionWorker = createProjectionWorker({
     runCycle: () => projectionRunner.runCycle(),

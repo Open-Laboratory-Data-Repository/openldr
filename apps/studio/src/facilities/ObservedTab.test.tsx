@@ -275,6 +275,43 @@ describe('ObservedTab', () => {
     expect(await screen.findByText(/^new mapping$/i)).toBeInTheDocument();
   });
 
+  // Gap 2 (Task 9b fix round 1): each row belongs to its own ingest feed (`row.sourceSystem`), and
+  // the coding system the mapping is authored against must be DERIVED from that feed, not
+  // hardcoded to the default. A CDR-fed row sharing a code with a webhook-fed row must be mappable
+  // under ITS OWN system, or the resolver (which looks up mappings per-feed, see
+  // facility-reconcile.ts's `resolveObservedFacilities`) will never find the mapping. Asserts on the
+  // ACTUAL system string passed to `listTermMappings` and rendered by the real `TermMappingDialog` —
+  // not merely that some prop was defined.
+  it("derives the mapping dialog's coding system from the row's own sourceSystem, not the default", async () => {
+    const cdrSystem: CodingSystem = {
+      id: 'cs-2', systemCode: 'FAC_CDR_IMPORT', systemName: 'Observed facilities',
+      url: 'urn:openldr:fac_cdr_import', systemVersion: null, description: null, active: true,
+      publisherId: 'pub-system', seeded: false,
+    };
+    const cdrRow: ObservedFacility = { ...arusha, sourceSystem: 'cdr-import', sourceCode: 'NHL-01' };
+    (listObservedFacilities as ReturnType<typeof vi.fn>).mockResolvedValue([cdrRow]);
+    (listCodingSystems as ReturnType<typeof vi.fn>).mockResolvedValue([defaultFacSystem, cdrSystem]);
+    show();
+    await screen.findByText('NHL-01');
+
+    const trigger = screen.getByRole('button', { name: 'Observed facility actions NHL-01' });
+    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByRole('menuitem', { name: /^map$/i })) {
+      fireEvent.keyDown(trigger, { key: 'Enter' });
+    }
+    fireEvent.click(screen.getByRole('menuitem', { name: /^map$/i }));
+
+    // The pre-fill lookup must query the ROW's own derived system (`observedSystemForFeed`
+    // applied to 'cdr-import'), never `urn:openldr:default_fac`.
+    await waitFor(() => expect(listTermMappings).toHaveBeenCalledWith('urn:openldr:fac_cdr_import', 'NHL-01'));
+    // The dialog itself must have been opened against that same system: its header renders the
+    // FROM term as "<systemCode> <code>" (TermMappingDialog.tsx), so the SECOND system's code
+    // (FAC_CDR_IMPORT) must appear directly next to the observed code — not the default system's
+    // code (DEFAULT_FAC), and not blank (which `mappingSystemCode`'s `?? ''` fallback would produce
+    // if the lookup missed).
+    expect(await screen.findByText(/FAC_CDR_IMPORT NHL-01/)).toBeInTheDocument();
+  });
+
   it('opens the shipped TermMappingDialog in edit mode for an already-mapped row', async () => {
     const existing: TermMapping = {
       id: 'tm-1', fromSystem: 'urn:openldr:default_fac', fromCode: 'Dodoma',

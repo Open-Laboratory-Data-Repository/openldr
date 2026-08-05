@@ -5,7 +5,7 @@ import type { RelationalWriter } from '../relational-writer';
 import { planProjection, type ProjectionTask, type Gap } from './plan';
 import { readCursor, advanceCursor } from './cursor';
 import type { SafeFetchResult } from './fetch';
-import { provenanceFromRow } from '../provenance';
+import { provenanceFromRow, type Provenance } from '../provenance';
 
 export type FetchSafeRows = (db: Kysely<InternalSchema>, cursor: number, limit: number) => Promise<SafeFetchResult>;
 
@@ -23,8 +23,13 @@ export interface ProjectionDeps {
    *  e.g. facility-reconciliation's `captureObservedFacility` — without `applyProjection` or
    *  `projectResource` knowing anything about what the hook does. A throwing hook is caught and
    *  logged locally (see `applyProjection` below) so it can never abort a cycle or be mistaken for a
-   *  failed write: the clinical projection this task represents already landed by the time it runs. */
-  onProjected?: (resourceType: string, resource: Record<string, unknown>) => Promise<void>;
+   *  failed write: the clinical projection this task represents already landed by the time it runs.
+   *
+   *  `provenance` is the SAME value just handed to `relationalWriter.write()` — `getWithProvenance`
+   *  reads it off the canonical row alongside `resource` itself, so a hook that needs to know which
+   *  ingest feed produced this resource (e.g. facility-reconciliation routing a captured concept to
+   *  its feed's own coding system) does not have to re-derive or guess it. */
+  onProjected?: (resourceType: string, resource: Record<string, unknown>, provenance: Provenance) => Promise<void>;
 }
 
 export interface ProjectionRunner {
@@ -40,7 +45,7 @@ async function applyProjection(task: ProjectionTask, deps: ProjectionDeps): Prom
     await deps.relationalWriter.write(found.resource, found.provenance);
     if (deps.onProjected) {
       try {
-        await deps.onProjected(task.resourceType, found.resource as Record<string, unknown>);
+        await deps.onProjected(task.resourceType, found.resource as Record<string, unknown>, found.provenance);
       } catch (err) {
         // Deliberately a SEPARATE try/catch from the write above (and from the caller's own
         // per-task catch): the clinical projection already succeeded, so this must never be

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { MoreHorizontal, Building2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { DEFAULT_OBSERVED_FACILITY_SYSTEM } from '@openldr/db/facility-observed';
+import { DEFAULT_OBSERVED_FACILITY_SYSTEM, observedSystemForFeed } from '@openldr/db/facility-observed';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -147,12 +147,19 @@ export function ObservedTab(): JSX.Element {
     setMappingLoading(true);
     setError(null);
     try {
-      // Look up any mapping ALREADY authored for this observed code so the dialog opens in edit
-      // mode against it, rather than creating a second, ambiguous candidate row alongside it —
-      // `resolveObservedFacilities` has no tiebreak for two active mappings on the same code.
+      // Each row belongs to its OWN ingest feed (`row.sourceSystem`), and Task 9b binds every feed
+      // to its own coding system — `observedSystemForFeed` derives it the same way the resolver
+      // does. Looking this up under the DEFAULT system unconditionally would author a non-default
+      // feed's mapping where the resolver can never find it (see the module banner on
+      // `observedSystemForFeed` for the full precedence story).
+      const system = observedSystemForFeed(row.sourceSystem);
+      // Look up any mapping ALREADY authored for this observed code (under ITS system) so the
+      // dialog opens in edit mode against it, rather than creating a second, ambiguous candidate
+      // row alongside it — `resolveObservedFacilities` has no tiebreak for two active mappings on
+      // the same code.
       const [systems, mappings] = await Promise.all([
         listCodingSystems(),
-        listTermMappings(DEFAULT_OBSERVED_FACILITY_SYSTEM, row.sourceCode),
+        listTermMappings(system, row.sourceCode),
       ]);
       setMappingSystems(systems);
       setMappingExisting(mappings.outgoing[0] ?? null);
@@ -165,7 +172,11 @@ export function ObservedTab(): JSX.Element {
     }
   }, [mappingLoading]);
 
-  const mappingSystemCode = mappingSystems.find((s) => s.url === DEFAULT_OBSERVED_FACILITY_SYSTEM)?.systemCode ?? '';
+  // The system the currently-open row's mapping is authored against — derived from ITS
+  // `sourceSystem`, not the default. Falls back to the default system's url before a row is picked
+  // (dialog closed), which is harmless since `mappingSystems.find` then simply returns undefined.
+  const mappingSystemUrl = mappingRow ? observedSystemForFeed(mappingRow.sourceSystem) : DEFAULT_OBSERVED_FACILITY_SYSTEM;
+  const mappingSystemCode = mappingSystems.find((s) => s.url === mappingSystemUrl)?.systemCode ?? '';
 
   if (loading) {
     return <LoadingState className="flex-1" label={t('common.loading')} />;
@@ -289,7 +300,7 @@ export function ObservedTab(): JSX.Element {
           open={mappingDialogOpen}
           onOpenChange={(o) => { setMappingDialogOpen(o); if (!o) setMappingRow(null); }}
           fromTerm={{
-            system: DEFAULT_OBSERVED_FACILITY_SYSTEM,
+            system: mappingSystemUrl,
             code: mappingRow.sourceCode,
             display: mappingRow.sourceCode,
             systemCode: mappingSystemCode,

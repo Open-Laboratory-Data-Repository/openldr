@@ -506,15 +506,25 @@ export async function captureObservedFacility(
  * already applies to this resource, so the captured code cannot drift from the
  * `diagnostic_reports.performer` value `scanObservedFacilities` reads), and no-ops when there is no
  * performer (no facility string to capture).
+ *
+ * Task 9b fix round 1 (Gap 1): `sourceSystem` is the projected row's OWN provenance —
+ * `packages/db/src/projection/cycle.ts`'s `applyProjection` reads it via `getWithProvenance`
+ * alongside `resource` and hands it to this hook unchanged, so it is the SAME value the relational
+ * writer just stamped onto `diagnostic_reports.source_system` for this very resource (never a
+ * guess or a re-derivation). It is routed through `observedSystemForFeed` exactly as
+ * `scanObservedFacilities`/`resolveObservedFacilities` route `diagnostic_reports.source_system` —
+ * so a code captured here, from a non-default feed, lands directly in that feed's system instead of
+ * the default one until the next scan corrects it.
  */
 export async function captureObservedFacilityFromProjection(
   deps: Pick<ReconcileDeps, 'admin' | 'internalDb'>,
   resourceType: string,
   resource: Record<string, unknown>,
+  sourceSystem: string | null,
   now: string,
 ): Promise<void> {
   if (resourceType !== 'DiagnosticReport') return;
   const performer = projectDiagnosticReport(resource, {}).performer;
   if (!performer) return;
-  await captureObservedFacility(deps, DEFAULT_OBSERVED_FACILITY_SYSTEM, performer, now);
+  await captureObservedFacility(deps, observedSystemForFeed(sourceSystem), performer, now);
 }
