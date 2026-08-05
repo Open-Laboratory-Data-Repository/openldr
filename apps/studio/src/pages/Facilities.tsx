@@ -127,10 +127,13 @@ export function Facilities() {
 
         {/* The `TabsContent` primitive (components/ui/tabs.tsx) now defends against the
             flex-vs-[hidden] specificity trap (commit 5fc72756) itself via
-            `data-[state=inactive]:hidden`, so a `flex` utility here would no longer resurrect the
-            bug. `flex-1`/`min-h-0` are kept anyway — the flex LAYOUT itself lives on an inner div
-            (below) that never carries the `hidden` attribute. */}
-        <TabsContent value="registry" className="min-h-0 flex-1">
+            `data-[state=inactive]:hidden` (specificity 0,2,0, which beats a plain `.flex`
+            utility at 0,1,0 regardless of source order), so TabsContent itself can safely be the
+            flex container that hands height down to its children — without `flex flex-col`
+            here, the inner wrappers' `flex-1`/`h-full` have no flex/definite-height context to
+            resolve against, which is what left the Observed table sized to its content instead
+            of filling the pane (pagination stranded above a blank region). */}
+        <TabsContent value="registry" className="flex min-h-0 flex-1 flex-col">
         {registryLoading ? (
           <LoadingState className="flex-1" label={t('common.loading')} />
         ) : (
@@ -284,11 +287,11 @@ export function Facilities() {
         )}
         </TabsContent>
 
-        {/* ObservedTab supplies its own `flex min-h-0 flex-1 flex-col` root div — the same
-            display-utility-on-a-`[hidden]`-element hazard applies here too, so TabsContent again
-            stays display-neutral (`min-h-0 flex-1` only) and lets ObservedTab's own div do the
-            flex layout. */}
-        <TabsContent value="observed" className="min-h-0 flex-1">
+        {/* ObservedTab supplies its own `flex min-h-0 flex-1 flex-col` root div, but that
+            `flex-1` is inert unless ITS parent (this TabsContent) is a flex container — see the
+            comment on the registry TabsContent above for why `flex flex-col` is safe here now
+            that the primitive defends `[hidden]` itself. */}
+        <TabsContent value="observed" className="flex min-h-0 flex-1 flex-col">
           <ObservedTab />
         </TabsContent>
       </Tabs>
