@@ -104,13 +104,17 @@ describe('the seeded Facility form', () => {
     expect(missing, `fields with no apiProperty: ${missing.join(', ')}`).toEqual([]);
   });
 
-  it('carries exactly the agreed required set', () => {
-    // council is deliberately NOT in this set — it is the one optional field in the admin chain
-    // (nobody may be blocked from saving a facility when council data is unknown). This is the
-    // original eight required apiProperties, unchanged by council's addition.
-    expect(facility().fields.filter((f) => f.required).map((f) => f.apiProperty).sort()).toEqual(
-      ['country', 'district', 'level', 'localCode', 'name', 'region', 'status', 'zone'].sort(),
-    );
+  it('carries exactly the agreed OPTIONAL set — council alone', () => {
+    // The complement of 'marks the required fields required' below. The FULL 9-field apiProperty
+    // set is already pinned by 'every field carries an apiProperty from the full set...' below, so
+    // re-deriving that same array here (filtered by `.required` or not) would just duplicate it —
+    // this used to be an unfiltered full-set check itself, before council's addition made that
+    // collide with the required-set check below (both ended up comparing the same filtered
+    // 8-element array). Pinning the NOT-required side instead is genuinely new coverage: it catches
+    // a field silently losing its `required: true` from the opposite direction — council quietly
+    // gaining company, or a required field quietly becoming optional and this test not noticing
+    // because it only ever asserted equality on the required side.
+    expect(facility().fields.filter((f) => !f.required).map((f) => f.apiProperty)).toEqual(['council']);
   });
 
   it('every field carries an apiProperty from the full set, including the optional council', () => {
@@ -131,7 +135,8 @@ describe('the seeded Facility form', () => {
   });
 
   it('marks the required fields required', () => {
-    // council excluded — see 'carries exactly the agreed required set' above.
+    // council excluded — see 'carries exactly the agreed OPTIONAL set — council alone' above, which
+    // pins the complementary (not-required) side instead of re-deriving this same set.
     const required = facility().fields.filter((f) => f.required).map((f) => f.apiProperty).sort();
     expect(required).toEqual(['country', 'district', 'level', 'localCode', 'name', 'region', 'status', 'zone'].sort());
   });

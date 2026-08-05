@@ -65,14 +65,29 @@ describe('073_facility_country_and_admin_fields — Country ValueSet', () => {
 
   it('does NOT overwrite the HL7-published iso3166-1-3 ValueSet', async () => {
     const db = await makeMigratedDb();
-    const hl7 = await db.selectFrom('value_sets').select(['url', 'compose'])
-      .where('url', '=', 'http://hl7.org/fhir/ValueSet/iso3166-1-3').executeTakeFirst();
-    if (hl7) {
-      // If the bundled R4 catalog seeded it, its compose must be untouched by this migration —
-      // still filter-shaped, not rewritten to our enumerated concepts.
-      const compose = parseJson(hl7.compose) as { include: { filter?: unknown }[] };
-      expect(compose.include.some((inc) => inc.filter)).toBe(true);
-    }
+    // Nothing in this repo seeds http://hl7.org/fhir/ValueSet/iso3166-1-3 under makeMigratedDb()
+    // (that only happens via a real bundled R4-catalog import), so without a stand-in row this
+    // test's entire body used to sit inside `if (hl7)` and never ran — green while asserting
+    // nothing. Seed a stand-in row ourselves, filter-shaped like HL7's real publication (never
+    // `concept: [...]`, unlike this migration's own enumerated seed), so up() actually has
+    // something to potentially clobber.
+    const hl7Compose = { include: [{ system: 'urn:iso:std:iso:3166', filter: [{ property: 'code', op: 'regex', value: '^[A-Z]{3}$' }] }] };
+    await db.insertInto('value_sets').values({
+      id: 'vs-hl7-iso3166-1-3', url: 'http://hl7.org/fhir/ValueSet/iso3166-1-3', version: null,
+      name: 'iso3166-1-3', title: 'ISO 3166-1 (alpha-3)', status: 'active', experimental: false,
+      description: null, compose: JSON.stringify(hl7Compose) as never, immutable: false, category: null,
+      publisher_id: 'pub-hl7-fhir', expanded_at: null,
+    } as never).execute();
+
+    await up(db);
+
+    const hl7 = await db.selectFrom('value_sets').select(['id', 'status', 'compose'])
+      .where('url', '=', 'http://hl7.org/fhir/ValueSet/iso3166-1-3').executeTakeFirstOrThrow();
+    // Byte-identical to what was seeded: same id (no row swapped in under it), same status, and the
+    // compose is still filter-shaped rather than rewritten to our enumerated concepts.
+    expect(hl7.id).toBe('vs-hl7-iso3166-1-3');
+    expect(hl7.status).toBe('active');
+    expect(parseJson(hl7.compose)).toEqual(hl7Compose);
     await db.destroy();
   });
 
@@ -93,6 +108,43 @@ describe('073_facility_country_and_admin_fields — Country ValueSet', () => {
     const row = await db.selectFrom('terminology_systems').select(['url', 'kind'])
       .where('url', '=', 'urn:openldr:valueset:country').executeTakeFirstOrThrow();
     expect(row.kind).toBe('ValueSet');
+    await db.destroy();
+  });
+});
+
+describe('073_facility_country_and_admin_fields — coding_systems ownership (existing foreign-id row)', () => {
+  it('flips a PRE-EXISTING inactive urn:iso:std:iso:3166 row to active without inserting a duplicate, and down() leaves it alone', async () => {
+    // A real install could plausibly have imported ISO 3166 separately (a future terminology
+    // import, say), landing a coding_systems row for this url at some foreign id before this
+    // migration ever ran — same possibility 072 accounts for with STATUS_SYSTEM, and the same
+    // scenario that migration's own test pins for its own url. Nothing in makeMigratedDb() creates
+    // such a row on its own (only the fallback-insert branch runs there), so simulate it directly.
+    const db = await makeMigratedDb(); // 073 already ran once via makeMigratedDb(), inserting its own fallback row
+    await db.deleteFrom('coding_systems').where('url', '=', 'urn:iso:std:iso:3166').execute();
+    await db.insertInto('coding_systems' as never).values({
+      id: 'cs-live-random-uuid-iso3166', system_code: 'ISO-3166', system_name: 'ISO 3166-1 (imported)',
+      url: 'urn:iso:std:iso:3166', system_version: null, description: null,
+      active: false, publisher_id: 'pub-hl7-fhir', seeded: true,
+    } as never).execute();
+
+    await up(db);
+
+    const afterUp = await db.selectFrom('coding_systems').select(['id', 'active'])
+      .where('url', '=', 'urn:iso:std:iso:3166').execute();
+    expect(afterUp).toHaveLength(1);
+    expect(afterUp[0]!.id).toBe('cs-live-random-uuid-iso3166'); // the pre-existing row, not a new one
+    expect(afterUp[0]!.active).toBe(true);
+
+    await down(db);
+
+    // down() only ever deletes ITS OWN fallback id (COUNTRY_CS_FALLBACK_ID); since the "existing"
+    // branch ran above, that fallback row was never (re-)inserted, so down() has nothing of its own
+    // to remove here and the site's foreign-id row survives untouched.
+    const afterDown = await db.selectFrom('coding_systems').select(['id', 'active'])
+      .where('url', '=', 'urn:iso:std:iso:3166').execute();
+    expect(afterDown).toHaveLength(1);
+    expect(afterDown[0]!.id).toBe('cs-live-random-uuid-iso3166');
+    expect(afterDown[0]!.active).toBe(true);
     await db.destroy();
   });
 });

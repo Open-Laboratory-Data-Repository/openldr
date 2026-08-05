@@ -90,7 +90,9 @@ const facilityForm: FormSchema = {
     // below: a picker over an enumerated vocabulary instead of hand-typed strings. `valueSetUrl`
     // wins over `referenceTarget`, and the form linter warns when both are set, so `referenceTarget`
     // is deliberately absent. Both ValueSets are seeded by migration 072, which also repoints any
-    // already-migrated install's Facility form (see migration 071) to these exact shapes.
+    // already-migrated install's Facility form (see migration 071) to these exact shapes; migration
+    // 073 repoints the same form again afterwards, shifting status/level's `order` from 6/7 to 7/8
+    // to make room for the new council field, without touching either binding itself.
     {
       id: 'fld-fac-status', fhirPath: 'status', displayLabel: 'Status', description: null,
       fieldType: 'reference', required: true, enabled: true, order: 7,
