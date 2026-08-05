@@ -62,7 +62,17 @@ export interface ConceptRowInput {
  * because there the upper-cased value WAS the stored value.
  *
  * A re-scan must not destroy operator work: an existing `display` is preserved (the operator may
- * have curated it) and `firstSeen` is carried forward. Only `lastSeen` and `reportCount` advance.
+ * have curated it) and `firstSeen` is carried forward — SCAN TO SCAN. Only `lastSeen` and
+ * `reportCount` advance in that path.
+ *
+ * ⚠ This function cannot guarantee `firstSeen` survives an operator edit made through the
+ * terminology admin store's `terms.update()`. That path's `packProps` (`terminology-admin-store.ts`
+ * lines 185-193) keeps only `shortName`/`class`/`unit`/`replacedBy`/`metadata` and drops everything
+ * else, and `update` (lines 520-528) then overwrites `properties` unconditionally with whatever
+ * `packProps` returned — including `null`. So `input.existing.properties` handed to this function
+ * after such an edit is `null`, `firstSeen` falls through to `input.seenAt`, and the value is reset.
+ * This is a pre-existing bug in the shared terminology admin store, not something this function can
+ * fix locally; it is out of scope here.
  */
 export function observedFacilityConceptRow(input: ObservedFacilityInput): ConceptRowInput {
   const prior = (input.existing?.properties ?? null) as Partial<ObservedFacilityProperties> | null;

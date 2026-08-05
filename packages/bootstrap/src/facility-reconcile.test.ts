@@ -104,6 +104,82 @@ describe('scanObservedFacilities', () => {
     expect(propsAfterSecond.reportCount).toBe(15);
   });
 
+  // ⛔ PINS THE BUG, does not endorse it. `admin.terms.update()` (`terminology-admin-store.ts`
+  // `packProps`/`update`, lines 185-193 and 520-528) overwrites `properties` wholesale — an operator
+  // curating a facility's display through `/terminology` wipes `firstSeen`/`lastSeen`/`reportCount`.
+  // This test asserts the CONCRETE observed value (not merely "it is a string") so it breaks the
+  // moment that upstream bug is fixed, forcing whoever fixes it to find and update this test
+  // deliberately rather than leaving a stale doc comment behind.
+  it('firstSeen resets if an operator edits the term in /terminology (see terms.update properties loss)', async () => {
+    const deps = await makeReconcileDeps();
+    await seedPerformers(deps, [['Dodoma', 1]]);
+    await scanObservedFacilities(deps, { now: '2026-08-01T00:00:00.000Z', apply: true });
+
+    // Operator curates the display in /terminology. `terms.update` packs only shortName/class/
+    // unit/replacedBy/metadata — none supplied here — so `packProps` returns null and `update`
+    // writes `properties: null`, destroying the firstSeen/lastSeen/reportCount blob.
+    await deps.admin.terms.update('urn:openldr:default_fac', 'Dodoma', {
+      system: 'urn:openldr:default_fac',
+      code: 'Dodoma',
+      display: 'Dodoma Regional Hospital',
+      status: 'ACTIVE',
+    });
+
+    await seedPerformers(deps, [['Dodoma', 1]]);
+    await scanObservedFacilities(deps, { now: '2026-08-10T00:00:00.000Z', apply: true });
+
+    const raw = await deps.internalDb
+      .selectFrom('terminology_concepts')
+      .select(['properties'])
+      .where('system', '=', 'urn:openldr:default_fac')
+      .where('code', '=', 'Dodoma')
+      .executeTakeFirstOrThrow();
+    const props = (typeof raw.properties === 'string' ? JSON.parse(raw.properties) : raw.properties) as {
+      firstSeen: string;
+      lastSeen: string;
+      reportCount: number;
+    };
+    // The ACTUAL observed behaviour: firstSeen is NOT '2026-08-01...' (the original scan) — the
+    // operator edit wiped it, so the re-scan re-stamps it to its own `now`.
+    expect(props.firstSeen).toBe('2026-08-10T00:00:00.000Z');
+    expect(props.lastSeen).toBe('2026-08-10T00:00:00.000Z');
+    expect(props.reportCount).toBe(2);
+  });
+
+  it('registers a non-default opts.system under its own coding_systems row, distinct from the default system', async () => {
+    const deps = await makeReconcileDeps();
+    await seedPerformers(deps, [['Dodoma', 1]]);
+
+    await scanObservedFacilities(deps, { now: '2026-08-05T00:00:00.000Z', apply: true });
+    await scanObservedFacilities(deps, {
+      now: '2026-08-05T00:00:00.000Z',
+      apply: true,
+      system: 'urn:openldr:feed-b',
+    });
+
+    const defaultCs = await deps.admin.codingSystems.getByUrl('urn:openldr:default_fac');
+    const feedBCs = await deps.admin.codingSystems.getByUrl('urn:openldr:feed-b');
+    expect(defaultCs).not.toBeNull();
+    expect(feedBCs).not.toBeNull();
+    expect(feedBCs!.systemCode).not.toBe(defaultCs!.systemCode);
+    expect(defaultCs!.systemCode).toBe('DEFAULT_FAC');
+    expect(feedBCs!.systemCode).toBe('URN_OPENLDR_FEED_B');
+    expect(defaultCs!.active).toBe(true);
+    expect(feedBCs!.active).toBe(true);
+  });
+
+  it('a system url that slugifies to empty still gets a code distinct from DEFAULT_SYSTEM_CODE', async () => {
+    const deps = await makeReconcileDeps();
+    await seedPerformers(deps, [['Dodoma', 1]]);
+
+    await scanObservedFacilities(deps, { now: '2026-08-05T00:00:00.000Z', apply: true, system: '///' });
+
+    const cs = await deps.admin.codingSystems.getByUrl('///');
+    expect(cs).not.toBeNull();
+    expect(cs!.systemCode).not.toBe('DEFAULT_FAC');
+    expect(cs!.systemCode.startsWith('SYS_')).toBe(true);
+  });
+
   it('writes nothing when apply is falsy but still reports what it found', async () => {
     const deps = await makeReconcileDeps();
     await seedPerformers(deps, [['Dodoma', 247]]);

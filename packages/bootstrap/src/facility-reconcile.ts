@@ -36,6 +36,12 @@ const SYSTEM_PUBLISHER_ID = 'pub-system';
  * Derive a `coding_systems.system_code` for a given observed-facility system url. The default
  * system gets the reserved `DEFAULT_FAC` code; a second feed (a non-default `opts.system`) needs
  * its OWN code or it collides with the default system's `cs-url-DEFAULT_FAC` row.
+ *
+ * ⛔ A non-default url that slugifies to empty (e.g. `///` or a url made only of punctuation) must
+ * NOT fall back to `DEFAULT_SYSTEM_CODE` — that would collide with the real default system on
+ * `cs-url-DEFAULT_FAC`, exactly the collision this function exists to prevent. It falls back to a
+ * deterministic hash of the full url instead, so it stays reproducible across scans while staying
+ * distinct from the default code.
  */
 function systemCodeFor(system: string): string {
   if (system === DEFAULT_OBSERVED_FACILITY_SYSTEM) return DEFAULT_SYSTEM_CODE;
@@ -43,7 +49,34 @@ function systemCodeFor(system: string): string {
     .replace(/[^a-zA-Z0-9]+/g, '_')
     .replace(/^_+|_+$/g, '')
     .toUpperCase();
-  return slug.length > 0 ? slug.slice(0, 64) : DEFAULT_SYSTEM_CODE;
+  if (slug.length > 0) return slug.slice(0, 64);
+  return `SYS_${djb2Hex(system)}`;
+}
+
+/** A tiny, dependency-free stable hash — mirrors `facility-observed.ts`'s `djb2Hex`, reimplemented
+ *  here rather than imported because that one is not exported (this module's browser-safety
+ *  boundary is separate from that file's). */
+function djb2Hex(s: string): string {
+  let h = 5381;
+  for (let i = 0; i < s.length; i += 1) h = ((h << 5) + h + s.charCodeAt(i)) >>> 0;
+  return h.toString(16);
+}
+
+/**
+ * Parse a `terminology_concepts.properties` value into an object, treating an unparseable blob the
+ * same as an absent one rather than throwing and killing the whole scan. This matters beyond
+ * defensive coding: `admin.terms.update()` (`terminology-admin-store.ts` `packProps`/`update`) is
+ * not the only writer of this column, and this scan must survive whatever state an external writer
+ * leaves it in.
+ */
+function parseProperties(raw: unknown): Record<string, unknown> | null {
+  if (typeof raw !== 'string') return (raw as Record<string, unknown> | null) ?? null;
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -54,6 +87,18 @@ function systemCodeFor(system: string): string {
  * cannot. It backfills historical rows (a hook only ever sees new data); it computes `reportCount`,
  * which is an aggregate over the warehouse the hook cannot see from one row; and it repairs any gap
  * (a hook added after data landed, a failed cycle, a restored database).
+ *
+ * ⚠ `firstSeen` guarantee is WEAKER than it looks: it is carried forward across re-scans (see
+ * `does not advance firstSeen on a re-scan` in the test file), but an operator editing this facility's
+ * display through `/terminology` resets it. `admin.terms.update()` calls `packProps`
+ * (`terminology-admin-store.ts:185-193`), which keeps only `shortName`/`class`/`unit`/`replacedBy`/
+ * `metadata` and returns `null` otherwise; `update` (`terminology-admin-store.ts:520-528`) then
+ * writes `properties: props === null ? null : …` unconditionally, destroying the
+ * `firstSeen`/`lastSeen`/`reportCount` blob this function relies on. The next scan sees no prior
+ * `firstSeen` and re-stamps it to "now". This is a pre-existing bug in shared terminology code
+ * (also destroys `organism_type`/`result_role` elsewhere) and is out of scope here; see
+ * `firstSeen resets if an operator edits the term in /terminology` in the test file for the pinned
+ * behaviour.
  */
 export async function scanObservedFacilities(deps: ReconcileDeps, opts: ScanOptions = {}): Promise<ScanResult> {
   const system = opts.system ?? DEFAULT_OBSERVED_FACILITY_SYSTEM;
@@ -77,9 +122,7 @@ export async function scanObservedFacilities(deps: ReconcileDeps, opts: ScanOpti
     .execute();
   const existing = new Map<string, { display: string | null; properties: Record<string, unknown> | null }>();
   for (const r of existingRows) {
-    const properties =
-      typeof r.properties === 'string' ? (JSON.parse(r.properties) as Record<string, unknown>) : ((r.properties as Record<string, unknown> | null) ?? null);
-    existing.set(r.code, { display: r.display, properties });
+    existing.set(r.code, { display: r.display, properties: parseProperties(r.properties) });
   }
 
   const rows = observed
