@@ -3,18 +3,26 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 /**
  * Closes a review finding: `facilities.test.ts` calls `runFacilitiesImport()` directly with
  * hand-built option objects, so it never exercises commander's own `--apply` default at
- * `index.ts`'s `facilities import` registration — the actual seam an operator's real invocation
+ * `program.ts`'s `facilities import` registration — the actual seam an operator's real invocation
  * touches. A reviewer flipped that default from `false` to `true` and the full CLI suite still
  * passed 205/205. These tests drive the real parsing path (`program.parseAsync(argv)`) so a
  * regression there goes red.
  *
- * `index.ts` registers ~15 other command groups, which pulls in every workspace package those
- * commands depend on (`@openldr/bootstrap`, `@openldr/db`, `@openldr/sync`, ...) as real,
- * unmocked modules. That's fine here: none of it runs — a command's real work only happens when
- * its own action handler fires (module-level imports in this codebase are plain function/class
- * definitions, not connections), and this test only invokes `facilities import`, whose own
- * handler is intercepted below. Nothing here asserts on those other packages' behaviour, only on
- * the options commander resolves for the one command under test.
+ * `program.ts`'s `buildProgram()` registers ~15 other command groups, which pulls in every
+ * workspace package those commands depend on (`@openldr/bootstrap`, `@openldr/db`,
+ * `@openldr/sync`, ...) as real, unmocked modules. That's fine here: none of it runs — a
+ * command's real work only happens when its own action handler fires (module-level imports in
+ * this codebase are plain function/class definitions, not connections), and this test only
+ * invokes `facilities import`, whose own handler is intercepted below. Nothing here asserts on
+ * those other packages' behaviour, only on the options commander resolves for the one command
+ * under test.
+ *
+ * Each test calls `buildProgram()` itself to get a fresh `Command` — commander retains parsed
+ * option values (`_optionValues`) across `parseAsync` calls on the same instance, so sharing one
+ * `Command` across tests would order-couple them (a later test could pass only because an earlier
+ * one already set `apply` on the shared instance). `.exitOverride()` makes a commander parse
+ * error throw instead of calling `process.exit(1)`, which would otherwise hard-kill the vitest
+ * worker on a bad argv.
  */
 const mocks = vi.hoisted(() => ({
   runFacilitiesImport: vi.fn().mockResolvedValue(0),
@@ -26,16 +34,17 @@ vi.mock('./facilities', () => ({
   runFacilitiesImport: mocks.runFacilitiesImport,
 }));
 
-describe('facilities import — commander parsing path (index.ts, not the function directly)', () => {
+describe('facilities import — commander parsing path (program.ts, not the function directly)', () => {
   beforeEach(() => {
     mocks.runFacilitiesImport.mockClear();
   });
 
   it('parses a real argv with no --apply and resolves apply falsy', async () => {
-    // Importing index.ts here must NOT trigger its own top-level auto-parse of the *test
-    // runner's* argv — index.ts guards that with an is-main-module check keyed off
-    // process.argv[1], which vitest never points at this file.
-    const { program } = await import('./index');
+    // buildProgram() returns a fresh, unstarted Command — constructing it here has no side
+    // effect on the test runner's own argv (index.ts's module-level parseAsync(process.argv)
+    // is never reached because we never import index.ts).
+    const { buildProgram } = await import('./program');
+    const program = buildProgram().exitOverride();
 
     await program.parseAsync([
       'node',
@@ -58,7 +67,10 @@ describe('facilities import — commander parsing path (index.ts, not the functi
   });
 
   it('parses --apply on the command line and resolves apply true (proves the above is not vacuous)', async () => {
-    const { program } = await import('./index');
+    // A fresh Command per test — commander retains parsed option values across parseAsync calls
+    // on the same Command instance, so reusing one across tests would order-couple them.
+    const { buildProgram } = await import('./program');
+    const program = buildProgram().exitOverride();
 
     await program.parseAsync([
       'node',
