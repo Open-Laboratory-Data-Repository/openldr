@@ -72,6 +72,24 @@ function clearedCoreKeys(
 }
 
 /**
+ * `extras` keys the submitted form's field LIST claims ownership of — independent of whether this
+ * particular submission actually supplied a value for that field. Mirrors how `clearedCoreKeys`
+ * treats a core column: the FIELD determines ownership, the ANSWER only determines the value. A
+ * non-core field owns `apiProperty || field.id` in `extras` — exactly the key
+ * `splitFacilityAnswers` writes it under (see that function's `extras[key || field.id] = text`
+ * line) — so this set and that function agree on what "form-mapped" means without re-deriving it.
+ */
+function mappedExtrasKeys(fields: FieldRef[]): Set<string> {
+  const keys = new Set<string>();
+  for (const field of fields) {
+    const key = field.apiProperty ?? '';
+    if (CORE_FACILITY_KEYS.has(key)) continue;
+    keys.add(key || field.id);
+  }
+  return keys;
+}
+
+/**
  * Map a Postgres constraint violation an ordinary operator input can trigger onto a 4xx with an
  * operator-legible message, instead of letting a raw SQL message reach the generic 500 handler.
  * `local_code` is UNIQUE (23505 → 409, a conflict); `facility_registry_has_a_code` is a CHECK
@@ -351,6 +369,21 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     const { record, extras } = splitFacilityAnswers(fields, p.data.answers);
     const cleared = clearedCoreKeys(fields, p.data.answers, record as Record<string, unknown>);
 
+    // Preserve `extras` keys the submitted form's field list does NOT map (e.g. columns the CSV
+    // importer wrote under raw header names that no form field maps) — `extras` above is only
+    // authoritative for the keys the form DOES map (see mappedExtrasKeys' doc comment). Wholesale
+    // `{ ...before.extras, ...extras }` is deliberately NOT used: that would make it impossible for
+    // an operator to ever clear a form-mapped extra, since the stale `before` value would always
+    // survive a blank. Instead, form-mapped keys are dropped from `before.extras` unconditionally
+    // (including when this submission left the field unanswered, e.g. `answers: {}`) and replaced
+    // by whatever `extras` says — which correctly omits a key the operator just blanked.
+    const mappedExtras = mappedExtrasKeys(fields);
+    const mergedExtras: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(before.extras ?? {})) {
+      if (!mappedExtras.has(key)) mergedExtras[key] = value;
+    }
+    Object.assign(mergedExtras, extras);
+
     // `name` is NOT NULL — a blanked name can never become a null write, only a 400.
     if (cleared.has('name')) { reply.code(400); return { error: 'name is required' }; }
     const nameErr = nameTypeError(record.name);
@@ -371,7 +404,7 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     let after;
     try {
       after = await ctx.facilityRegistry.upsert({
-        ...before, ...record, ...nulls, id, name: record.name ?? before.name, extras,
+        ...before, ...record, ...nulls, id, name: record.name ?? before.name, extras: mergedExtras,
         // An edit never changes who manages the row.
         managedOrigin: before.managedOrigin, source: before.source,
       } as never);

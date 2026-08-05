@@ -381,6 +381,72 @@ describe('facilities routes', () => {
     expect(ctx.__audit.map((a: any) => a.action)).toEqual(['facility.create']); // no facility.update recorded
   });
 
+  // --- Task 1: importer-written `extras` keys the edit form does not map must survive a PUT ---
+  // (the CSV importer writes unrecognised columns into `extras` under raw header names —
+  // `seedAnswers` on the client only iterates the FORM's fields, so an edit form built before an
+  // import never asks about those keys, and a wholesale `extras: extras` assignment on PUT used to
+  // drop them silently. See facilities-routes.ts's `mappedExtrasKeys`.)
+
+  describe('Task 1: extras preserved through an edit', () => {
+    it('an extras key the submitted form does NOT map survives a PUT untouched', async () => {
+      const ctx = fakeCtx();
+      const app = await appWith(ctx);
+      const id = (await app.inject({ method: 'POST', url: '/api/facilities', payload: body })).json().id;
+      expect(ctx.__rows[0].extras).toEqual({ catchmentPop: '42000' });
+
+      // Simulate an importer-written extra under a raw CSV header name — no field in FORM_FIELDS
+      // maps to it, so the edit form submitted below never asks about it.
+      ctx.__rows[0].extras = { ...ctx.__rows[0].extras, 'Imported Region Code': 'TZ-01' };
+
+      const res = await app.inject({ method: 'PUT', url: `/api/facilities/${id}`, payload: body });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().extras).toEqual({ catchmentPop: '42000', 'Imported Region Code': 'TZ-01' });
+      expect(ctx.__rows[0].extras).toEqual({ catchmentPop: '42000', 'Imported Region Code': 'TZ-01' });
+    });
+
+    it('an extras key the form DOES map is still updated by the submission', async () => {
+      const ctx = fakeCtx();
+      const app = await appWith(ctx);
+      const id = (await app.inject({ method: 'POST', url: '/api/facilities', payload: body })).json().id;
+      expect(ctx.__rows[0].extras).toEqual({ catchmentPop: '42000' });
+
+      const updated = { ...body, answers: { ...body.answers, f4: '99000' } };
+      const res = await app.inject({ method: 'PUT', url: `/api/facilities/${id}`, payload: updated });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().extras).toEqual({ catchmentPop: '99000' });
+      expect(ctx.__rows[0].extras).toEqual({ catchmentPop: '99000' });
+    });
+
+    it('clearing a form-mapped extra still removes it (must not be traded away for the fix above)', async () => {
+      const ctx = fakeCtx();
+      const app = await appWith(ctx);
+      const id = (await app.inject({ method: 'POST', url: '/api/facilities', payload: body })).json().id;
+      expect(ctx.__rows[0].extras).toEqual({ catchmentPop: '42000' });
+
+      const cleared = { ...body, answers: { ...body.answers, f4: '' } };
+      const res = await app.inject({ method: 'PUT', url: `/api/facilities/${id}`, payload: cleared });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().extras).toEqual({});
+      expect(ctx.__rows[0].extras).toEqual({});
+    });
+
+    it('PUT {answers:{}} no longer wipes unmapped importer keys', async () => {
+      const ctx = fakeCtx();
+      const app = await appWith(ctx);
+      const id = (await app.inject({ method: 'POST', url: '/api/facilities', payload: body })).json().id;
+      ctx.__rows[0].extras = { ...ctx.__rows[0].extras, 'Imported Region Code': 'TZ-01' };
+
+      const res = await app.inject({
+        method: 'PUT', url: `/api/facilities/${id}`,
+        payload: { answers: {}, formSchemaId: 'form-sample-facility', formVersion: 1 },
+      });
+      expect(res.statusCode).toBe(200);
+      // The unmapped importer key survives untouched even though this submission answered nothing.
+      expect(res.json().extras).toEqual({ 'Imported Region Code': 'TZ-01' });
+      expect(ctx.__rows[0].extras).toEqual({ 'Imported Region Code': 'TZ-01' });
+    });
+  });
+
   // --- I3: ordinary operator input must never produce a raw 500 ------------------------------
 
   it('I3: a duplicate local code is a 409 with a human message, not a raw 500', async () => {
