@@ -73,7 +73,7 @@
 **Interfaces:**
 - Produces: table `facility_map` with columns `id, source_system, source_code, registry_id, name, level, status, region, district, council, national_system, national_code, resolved_via, updated_at`. `FacilityMapTable` on `ExternalSchema`.
 
-**⛔ Why `id` is synthetic and not a composite PK.** A composite `(source_system, source_code)` primary key would be two `keyType` columns. `keyType` is `varchar(255)` on MySQL and `nvarchar(255)` on MSSQL; MSSQL's index key limit is 900 **bytes**, and two nvarchar(255) columns are up to 1020 bytes — the table would create on Postgres and pg-mem and fail on MSSQL, which no test in this repo can see. `011_terminology_codes` made exactly this decision for exactly this reason; read its file-level comment before writing this one.
+**⛔ Why `id` is synthetic and not a composite PK.** A composite `(source_system, source_code)` primary key would be two `keyType` columns. `keyType` is `varchar(450)` on MSSQL and `varchar(255)` on MySQL (`packages/db/src/migrations/external/dialect.ts:13-17`). A PRIMARY KEY is CLUSTERED by default on MSSQL and its key is capped at 900 bytes — two `varchar(450)` columns land on **exactly** 900, with zero headroom if either column is ever widened. The nonclustered index below is unaffected (that cap is 1700), and MySQL's pair is 2040 bytes of its 3072. A synthetic key sheds the constraint entirely. `011_terminology_codes` made the same decision; read its file-level comment before writing this one.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -136,8 +136,12 @@ export async function up(db: Kysely<unknown>, engine: TargetEngine): Promise<voi
   let built = db.schema.createTable('facility_map')
     .addColumn('id', key, (c) => c.primaryKey())
     // Indexed below — the join predicate is (source_system, source_code), so both are keyType.
-    .addColumn('source_system', key)
-    .addColumn('source_code', key)
+    // ⛔ NOT NULL on both: `FacilityMapTable` types them `string` (not `string | null`), and every
+    // other table in schema/external.ts keeps type and DDL honest with each other. Without the
+    // constraint the type promises a guarantee the schema does not enforce, on the two columns
+    // every report join predicates on. The publish path always supplies both.
+    .addColumn('source_system', key, (c) => c.notNull())
+    .addColumn('source_code', key, (c) => c.notNull())
     // The resolved facility. NULL is a legitimate, meaningful state: the string was observed but is
     // not mapped, or its mapping's target no longer exists. A report falls back to the raw string.
     .addColumn('registry_id', text)
@@ -727,7 +731,7 @@ git commit -m "feat(bootstrap): re-runnable observed-facility discovery scan"
     targetMissing: boolean;
   }
   export function resolveObservedFacilities(deps: ReconcileDeps, opts?: { system?: string }): Promise<ResolvedFacility[]>;
-  export function publishFacilityMap(deps: ReconcileDeps, opts?: { system?: string; sourceSystem?: string; apply?: boolean }): Promise<PublishResult>;
+  export function publishFacilityMap(deps: ReconcileDeps, opts?: { system?: string; apply?: boolean }): Promise<PublishResult>;
   export interface PublishResult { resolved: number; unmapped: number; targetMissing: number; written: number }
   ```
 

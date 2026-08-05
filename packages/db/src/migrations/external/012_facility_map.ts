@@ -10,9 +10,11 @@ import { textType, keyType, timestampType, nowExpr } from './dialect';
 // One row per (source_system, source_code) — i.e. per observed facility string per feed.
 //
 // `id` is synthetic (`<source_system>|<source_code>`, hashed when long) rather than a composite
-// primary key on those two columns: both are `keyType` (varchar/nvarchar(255)), and MSSQL's 900-BYTE
-// index key limit cannot hold two of them (up to 1020 bytes as nvarchar). It must be DETERMINISTIC
-// because a re-publish recomputes it.
+// primary key on those two columns. `keyType` is `varchar(450)` on MSSQL, and a PRIMARY KEY is
+// CLUSTERED by default, whose key is capped at 900 bytes — two of them land on exactly 900, with
+// zero headroom for any later widening of either column. The nonclustered index below is fine (that
+// cap is 1700), and MySQL's `varchar(255)` utf8mb4 pair is 2040 of its 3072. A synthetic key sheds
+// the whole constraint. It must be DETERMINISTIC because a re-publish recomputes it.
 //
 // ⛔ NOT the same table as `facilities` — that is the uncurated projection of ingested
 // Organization/Location resources. These two look joinable and are not.
