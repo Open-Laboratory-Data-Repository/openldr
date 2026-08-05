@@ -53,15 +53,14 @@ export interface FacilityImportResult {
   updated: number;
   /** How many accepted rows shared a `national_code` (and therefore a generated `id`) with another
    *  row later in the same file — last row wins, matching what a per-row `store.upsert` loop would
-   *  have done. Only present (and only ever >0) when the file actually had a collision; omitted
-   *  entirely otherwise, so a clean file's result is unchanged. Present on a dry run too, so an
-   *  operator can be warned about a repeated code before ever applying. Why this matters: on real
-   *  Postgres, two rows carrying the same conflict key inside one multi-row
+   *  have done. Always present, 0 on a clean file, like every sibling counter here. Present on a
+   *  dry run too, so an operator can be warned about a repeated code before ever applying. Why this
+   *  matters: on real Postgres, two rows carrying the same conflict key inside one multi-row
    *  `INSERT ... ON CONFLICT (id) DO UPDATE` throw `ON CONFLICT DO UPDATE command cannot affect row
    *  a second time` and abort the WHOLE import — a routine hazard in national register exports
    *  (concatenated releases, re-appended files), so duplicates are collapsed before ever reaching
    *  the batch writer instead of being left to explode there. */
-  duplicates?: number;
+  duplicates: number;
 }
 
 // Bounds every chunked query below (existing-id lookup, reference_change_log batch insert) well
@@ -110,9 +109,13 @@ function contentHashOf(rec: FacilityRecord): string {
  * for an interactive form save, and exactly the thing to avoid at register scale: 14 000 rows through
  * 14 000 separate transactions. This function instead opens ONE transaction for the whole apply and
  * writes `facility_registry` with `insertBatchPg` (packages/db/batch-upsert.ts), which chunks by
- * Postgres's parameter budget (60 000 params / 23 columns per row here, including the `updated_at`
- * bump below ⇒ floor(60000/23) = 2 608 rows/statement, so a 14 000-row register lands in 6 multi-row
- * `INSERT ... ON CONFLICT (id) DO UPDATE` statements, not 14 000 single-row ones).
+ * Postgres's parameter budget: it sizes the chunk off the row's 23 keys (including the `updated_at`
+ * bump below) ⇒ floor(60000/23) = 2 608 rows/statement, so a 14 000-row register lands in 6 multi-row
+ * `INSERT ... ON CONFLICT (id) DO UPDATE` statements, not 14 000 single-row ones. That chunk size is
+ * conservative, not exact: `updated_at`'s value is the raw fragment `sql\`now()\``, which binds ZERO
+ * parameters, so a full 2 608-row chunk actually carries 22 real binds/row = 57 376 params, not
+ * 60 000 — comfortably under Postgres's 65 535-param hard limit, with more headroom than the
+ * 23-column arithmetic alone would suggest.
  *
  * ## `reference_change_log` — how many rows, and the batching that matters there too
  *
@@ -176,8 +179,23 @@ function contentHashOf(rec: FacilityRecord): string {
  *
  * The existing-row lookup that this merge (and the created/updated split above) depends on runs
  * INSIDE the same transaction as the write, not before it — a lookup on `deps.db` ahead of
- * `deps.db.transaction()` would leave a window for a concurrent insert to land between the two,
- * misclassifying a row that in fact already exists by commit time as `created`.
+ * `deps.db.transaction()` would make the window below strictly wider (the lookup and the write
+ * would no longer even be part of the same transaction). Moving it inside does NOT close the
+ * window, though: this database runs at the default `read committed` isolation (nothing in
+ * packages/db overrides it), so a concurrent commit landing between this SELECT and the later
+ * `INSERT ... ON CONFLICT DO UPDATE` is still possible and still visible to both:
+ *   - **Lost update**: an operator's hand-edit (e.g. adding an `extras` key) commits after this
+ *     SELECT reads the pre-edit row but before the upsert below writes its JS-computed merge —
+ *     the operator's edit is silently overwritten by this import's stale in-memory merge.
+ *   - **Misclassification**: a concurrent INSERT of the same id commits after this SELECT finds
+ *     it absent — the row is counted `created` and takes the batched change_log fast path (see
+ *     below) even though the upsert itself takes the DO UPDATE branch.
+ * Actually closing either window would need `.forUpdate()` on the lookup, `REPEATABLE READ` (or
+ * stricter) for the whole transaction, or a SQL-side merge (e.g.
+ * `extras = facility_registry.extras || excluded.extras`) instead of a JS-side one — the last of
+ * which would change `insertBatchPg` itself. None of those are done here: the exposure is a
+ * hand-edit racing a register import, narrow enough that this function only reports it honestly
+ * rather than closing it.
  */
 export async function importFacilities(
   deps: FacilityImportDeps,
@@ -193,9 +211,7 @@ export async function importFacilities(
   const { records, duplicates } = dedupeById(parsedRecords);
 
   if (!opts.apply || records.length === 0) {
-    const result: FacilityImportResult = { parsed: parsedRecords.length, skipped, unknownColumns, created: 0, updated: 0 };
-    if (duplicates > 0) result.duplicates = duplicates;
-    return result;
+    return { parsed: parsedRecords.length, skipped, unknownColumns, created: 0, updated: 0, duplicates };
   }
 
   const ids = records.map((r) => r.id);
@@ -257,7 +273,5 @@ export async function importFacilities(
     }
   });
 
-  const result: FacilityImportResult = { parsed: parsedRecords.length, skipped, unknownColumns, created, updated };
-  if (duplicates > 0) result.duplicates = duplicates;
-  return result;
+  return { parsed: parsedRecords.length, skipped, unknownColumns, created, updated, duplicates };
 }

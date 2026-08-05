@@ -26,7 +26,7 @@ describe('importFacilities', () => {
     const deps = await buildDeps();
     const body = csv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,', ',No Code,,,,,,,,,,,,,,']); // second row missing required national_code
     const result = await importFacilities(deps, body, { nationalSystem: SYSTEM });
-    expect(result).toEqual({ parsed: 1, skipped: 1, unknownColumns: [], created: 0, updated: 0 });
+    expect(result).toEqual({ parsed: 1, skipped: 1, unknownColumns: [], created: 0, updated: 0, duplicates: 0 });
     expect(await deps.db.selectFrom('facility_registry').selectAll().execute()).toHaveLength(0);
   });
 
@@ -77,7 +77,7 @@ describe('importFacilities', () => {
     const withExtra = ['national_code,name,beds', '100,Dodoma Regional Referral,250'].join('\n') + '\n';
 
     const blocked = await importFacilities(deps, withExtra, { nationalSystem: SYSTEM, apply: true });
-    expect(blocked).toEqual({ parsed: 0, skipped: 0, unknownColumns: ['beds'], created: 0, updated: 0 });
+    expect(blocked).toEqual({ parsed: 0, skipped: 0, unknownColumns: ['beds'], created: 0, updated: 0, duplicates: 0 });
     expect(await deps.db.selectFrom('facility_registry').selectAll().execute()).toHaveLength(0);
 
     const allowed = await importFacilities(deps, withExtra, { nationalSystem: SYSTEM, allowUnknownColumns: true, apply: true });
