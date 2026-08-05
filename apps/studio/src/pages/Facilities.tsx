@@ -7,12 +7,14 @@ import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/spinner';
 import { useAuth } from '@/auth/AuthProvider';
 import { listFacilities, deleteFacility, listPublishedForms, FACILITIES_LIST_LIMIT, type Facility } from '@/api';
 import { FacilityDialog } from '@/facilities/FacilityDialog';
 import { ImportFacilitiesSheet } from '@/facilities/ImportFacilitiesSheet';
+import { ObservedTab } from '@/facilities/ObservedTab';
 
 export function Facilities() {
   const { t } = useTranslation();
@@ -114,7 +116,16 @@ export function Facilities() {
 
   return (
     <AppShell title={t('nav.facilities')} fullBleed>
-      <div className="flex min-h-0 flex-1 flex-col">
+      <Tabs defaultValue="registry" className="flex min-h-0 flex-1 flex-col">
+        {/* fullBleed has zero page padding (unlike the p-4/p-6 settings pages `@/components/ui/
+            bleed` exists for), so the tab labels only need `px-4` to line up with the header row
+            below — there is no inset to negative-margin away. */}
+        <TabsList className="px-4">
+          <TabsTrigger value="registry">{t('facilities.tabs.registry')}</TabsTrigger>
+          <TabsTrigger value="observed">{t('facilities.tabs.observed')}</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="registry" className="flex min-h-0 flex-1 flex-col">
         <div className="flex items-center justify-between border-b border-border px-4 py-2">
           <span className="text-sm font-medium">{t('facilities.title')}</span>
           {canManage && (
@@ -260,7 +271,12 @@ export function Facilities() {
           destructive
           onConfirm={() => { void doDelete(); }}
         />
-      </div>
+        </TabsContent>
+
+        <TabsContent value="observed" className="flex min-h-0 flex-1 flex-col">
+          <ObservedTab />
+        </TabsContent>
+      </Tabs>
     </AppShell>
   );
 }

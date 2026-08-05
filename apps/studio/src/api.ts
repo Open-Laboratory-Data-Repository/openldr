@@ -808,6 +808,46 @@ export interface FacilityImportRequest {
 export const importFacilitiesCsv = (body: FacilityImportRequest): Promise<FacilityImportResult> =>
   authFetch('/api/facilities/import', jbody(body, 'POST')).then((r) => okJson<FacilityImportResult>(r, 'import facilities'));
 
+// Task 9: observed-facility reconciliation (the Observed tab). Mirrors the server's
+// `ResolvedFacility` (packages/bootstrap/src/facility-reconcile.ts) plus the live `reportCount`
+// the route joins in — see facilities-routes.ts's GET /api/facilities/observed. Already ordered by
+// `reportCount` descending server-side; this client does not re-sort.
+export interface ObservedFacility {
+  /** `diagnostic_reports.source_system` — the ingestion feed, e.g. `webhook-ingest`. Unrelated to
+   *  the coding system mappings are authored against (see `resolvedVia` below). */
+  sourceSystem: string;
+  /** The performer string EXACTLY as it arrived. Never normalised. */
+  sourceCode: string;
+  reportCount: number;
+  registryId: string | null;
+  name: string | null;
+  level: string | null;
+  status: string | null;
+  region: string | null;
+  district: string | null;
+  council: string | null;
+  nationalSystem: string | null;
+  nationalCode: string | null;
+  resolvedVia: 'registry' | 'national' | null;
+  /** A mapping exists, but its target resolves to no live registry row. */
+  targetMissing: boolean;
+}
+
+export const listObservedFacilities = (): Promise<ObservedFacility[]> =>
+  apiGet('/api/facilities/observed', 'list observed facilities');
+
+// Mirrors the server's ScanResult/PublishResult (packages/bootstrap/src/facility-reconcile.ts).
+// `apply` is opt-in on both — omitted/false is a dry run that writes nothing.
+export interface ScanObservedRequest { system?: string; apply?: boolean }
+export interface ScanObservedResult { discovered: number; created: number; updated: number; systemRegistered: boolean }
+export const scanObservedFacilities = (body: ScanObservedRequest = {}): Promise<ScanObservedResult> =>
+  authFetch('/api/facilities/scan-observed', jbody(body, 'POST')).then((r) => okJson<ScanObservedResult>(r, 'scan observed facilities'));
+
+export interface PublishFacilitiesRequest { system?: string; apply?: boolean }
+export interface PublishFacilitiesResult { resolved: number; unmapped: number; targetMissing: number; written: number }
+export const publishFacilities = (body: PublishFacilitiesRequest = {}): Promise<PublishFacilitiesResult> =>
+  authFetch('/api/facilities/publish', jbody(body, 'POST')).then((r) => okJson<PublishFacilitiesResult>(r, 'publish facilities'));
+
 // Roles / capabilities (capability-based RBAC)
 export interface RoleRecord {
   id: string;
