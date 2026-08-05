@@ -22,8 +22,12 @@ export async function up(db: Kysely<unknown>, engine: TargetEngine): Promise<voi
   let built = db.schema.createTable('facility_map')
     .addColumn('id', key, (c) => c.primaryKey())
     // Indexed below — the join predicate is (source_system, source_code), so both are keyType.
-    .addColumn('source_system', key)
-    .addColumn('source_code', key)
+    // ⛔ NOT NULL on both: `FacilityMapTable` types them `string` (not `string | null`), and every
+    // other table in schema/external.ts keeps type and DDL honest with each other. Without the
+    // constraint the type promises a guarantee the schema does not enforce, on the two columns
+    // every report join predicates on. The publish path always supplies both.
+    .addColumn('source_system', key, (c) => c.notNull())
+    .addColumn('source_code', key, (c) => c.notNull())
     // The resolved facility. NULL is a legitimate, meaningful state: the string was observed but is
     // not mapped, or its mapping's target no longer exists. A report falls back to the raw string.
     .addColumn('registry_id', text)

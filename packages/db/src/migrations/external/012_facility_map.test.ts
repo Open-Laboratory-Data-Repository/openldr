@@ -15,4 +15,16 @@ describe('012_facility_map', () => {
       { name: 'Dodoma Regional Referral Hospital', source_code: 'Dodoma' },
     ]);
   });
+
+  it('round-trips an unmapped row with registry_id and name left NULL', async () => {
+    const db = await makeMigratedExternalDb();
+    await sql`insert into facility_map
+      (id, source_system, source_code)
+      values ('webhook-ingest|Unmapped Clinic', 'webhook-ingest', 'Unmapped Clinic')`.execute(db);
+    const rows = await sql<{ registry_id: string | null; name: string | null; resolved_via: string | null }>`
+      select registry_id, name, resolved_via from facility_map`.execute(db);
+    expect(rows.rows).toEqual([
+      { registry_id: null, name: null, resolved_via: null },
+    ]);
+  });
 });
