@@ -125,7 +125,15 @@ export function Facilities() {
           <TabsTrigger value="observed">{t('facilities.tabs.observed')}</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="registry" className="flex min-h-0 flex-1 flex-col">
+        {/* ⛔ TabsContent must NOT carry a `flex` (display:flex) utility of its own: the browser's
+            `[hidden]{display:none}` UA rule and Tailwind's `.flex{display:flex}` have EQUAL
+            selector specificity, and Tailwind's generated stylesheet loads AFTER the UA sheet, so
+            `.flex` wins the tie — the inactive panel (which Radix marks `hidden`) keeps its
+            layout box instead of collapsing, stacking visibly above the active one. `flex-1` and
+            `min-h-0` are safe (neither declares `display`); the flex LAYOUT itself lives on an
+            inner div (below) that never carries the `hidden` attribute. */}
+        <TabsContent value="registry" className="min-h-0 flex-1">
+        <div className="flex min-h-0 h-full flex-col">
         <div className="flex items-center justify-between border-b border-border px-4 py-2">
           <span className="text-sm font-medium">{t('facilities.title')}</span>
           {canManage && (
@@ -271,9 +279,14 @@ export function Facilities() {
           destructive
           onConfirm={() => { void doDelete(); }}
         />
+        </div>
         </TabsContent>
 
-        <TabsContent value="observed" className="flex min-h-0 flex-1 flex-col">
+        {/* ObservedTab supplies its own `flex min-h-0 flex-1 flex-col` root div — the same
+            display-utility-on-a-`[hidden]`-element hazard applies here too, so TabsContent again
+            stays display-neutral (`min-h-0 flex-1` only) and lets ObservedTab's own div do the
+            flex layout. */}
+        <TabsContent value="observed" className="min-h-0 flex-1">
           <ObservedTab />
         </TabsContent>
       </Tabs>
