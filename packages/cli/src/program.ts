@@ -23,7 +23,7 @@ import { runRolesList, runRolesShow, runRolesCreate, runRolesEdit, runRolesDelet
 import { runDataExposureList, runDataExposureHide, runDataExposureShow } from './data-exposure';
 import { runSyncStatus, runSyncNow, runSyncEnroll, runSyncList, runSyncRotate, runSyncRevoke, runSyncAmend, runSyncMergePatient, runSyncExport, runSyncImport, runSyncQuarantineList, runSyncQuarantineRetry, runSyncDivergenceList, runSyncDivergenceShow, runSyncDivergenceClear } from './sync';
 import { runErrorsList } from './errors';
-import { runFacilitiesImport } from './facilities';
+import { runFacilitiesImport, runFacilitiesScanObserved, runFacilitiesPublish } from './facilities';
 import { setActorOverride } from './cli-actor';
 
 // Builds a fresh, unstarted `openldr` Command tree. Extracted out of index.ts so that:
@@ -254,6 +254,22 @@ export function buildProgram(): Command {
     .option('--json', 'emit machine-readable JSON', false)
     .action(async (path: string, opts: { nationalSystem: string; apply: boolean; allowUnknownColumns: boolean; json: boolean }) => {
       process.exitCode = await runFacilitiesImport(path, opts);
+    });
+  facilities
+    .command('scan-observed')
+    .description('Discover new/changed observed-facility strings from diagnostic report feeds and record them as concepts. DRY RUN BY DEFAULT — pass --apply to write.')
+    .option('--apply', 'write the scan (default: dry run — report counts, write nothing)', false)
+    .option('--json', 'emit machine-readable JSON', false)
+    .action(async (opts: { apply: boolean; json: boolean }) => {
+      process.exitCode = await runFacilitiesScanObserved(opts);
+    });
+  facilities
+    .command('publish')
+    .description('Rebuild facility_map (the warehouse-side reporting dimension) from the current resolution. DRY RUN BY DEFAULT — pass --apply to write.')
+    .option('--apply', 'write the publish (default: dry run — report counts, write nothing)', false)
+    .option('--json', 'emit machine-readable JSON', false)
+    .action(async (opts: { apply: boolean; json: boolean }) => {
+      process.exitCode = await runFacilitiesPublish(opts);
     });
 
   const syncGroup = program.command('sync').description('lab⇄central sync status + control');

@@ -1,7 +1,11 @@
 import { readFileSync } from 'node:fs';
+import type { Kysely } from 'kysely';
 import { loadConfig } from '@openldr/config';
-import { createAppContext, importFacilities, recordAuditEvent } from '@openldr/bootstrap';
-import { referenceCapture } from '@openldr/db';
+import {
+  createAppContext, importFacilities, recordAuditEvent, scanObservedFacilities, publishFacilityMap,
+  type AppContext, type ScanResult, type PublishResult,
+} from '@openldr/bootstrap';
+import { referenceCapture, type ExternalSchema } from '@openldr/db';
 import { cliActor } from './cli-actor';
 import { redactError } from './redact-error';
 
@@ -105,4 +109,139 @@ function formatHuman(
     );
   }
   return lines.join('\n');
+}
+
+// ── Task 8: observed-facility reconciliation CLI parity ────────────────────────────────────────
+//
+// Thin CLI wrappers over `@openldr/bootstrap`'s scan/publish pair (Tasks 3-4/9b) — the same
+// functions apps/server/src/facilities-routes.ts's `POST /api/facilities/scan-observed` and
+// `POST /api/facilities/publish` call, per the repo's CLI-parity rule. Both follow
+// `runFacilitiesImport`'s established shape above: `createAppContext(loadConfig())`,
+// `redactError` instead of a stack trace, a `--json` branch, dry-run-by-default with `--apply`
+// opting in, and an audit call only after an applied run.
+//
+// ⚠ Task 9b removed the caller-chosen destination `system` option entirely — both functions now
+// derive a coding system PER ROW from `diagnostic_reports.source_system`, so there is nothing left
+// for a CLI flag to select. Do not reintroduce `--system`.
+
+/** Assembles the same `ReconcileDeps` shape apps/server/src/facilities-routes.ts's own
+ *  `reconcileDeps` builds off an `AppContext` (`ctx.store.db` as the external/warehouse handle,
+ *  `ctx.terminology.admin` as the terminology admin store) — kept in lockstep here rather than
+ *  reached through a shared export, since the route's helper is a private, unexported function. */
+function reconcileDeps(ctx: AppContext) {
+  return {
+    internalDb: ctx.internalDb,
+    externalDb: ctx.store.db as unknown as Kysely<ExternalSchema>,
+    admin: ctx.terminology.admin,
+  };
+}
+
+export interface FacilitiesScanObservedOpts {
+  /** The caller opts IN to writing — omitted/false ⇒ dry run: report counts, write nothing. */
+  apply?: boolean;
+  json: boolean;
+}
+
+/**
+ * `openldr facilities scan-observed [--apply] [--json]`
+ *
+ * Discover new/changed observed-facility strings from diagnostic-report feeds and record them as
+ * concepts (`@openldr/bootstrap`'s `scanObservedFacilities`, Task 3). Dry-run by default.
+ */
+export async function runFacilitiesScanObserved(opts: FacilitiesScanObservedOpts): Promise<number> {
+  const ctx = await createAppContext(loadConfig());
+  try {
+    const result: ScanResult = await scanObservedFacilities(reconcileDeps(ctx), { apply: opts.apply });
+
+    // A dry run writes nothing, so it has nothing to audit — only an applied scan is recorded.
+    // Matches the HTTP route: `apply: true` always performs a real write (even a discovery of
+    // zero new codes still re-registers/re-activates the observed-facility coding systems), so
+    // auditing is unconditional on `apply`, not further gated on a count.
+    if (opts.apply) {
+      await recordAuditEvent(ctx, cliActor(), {
+        action: 'facility.scan',
+        entityType: 'facility',
+        // Task 9b: one call now scans every feed's system at once — there is no single system
+        // this audit entry is "about" (matches the HTTP route's entityId).
+        entityId: 'facility-observed:all-feeds',
+        before: null,
+        after: null,
+        metadata: { result },
+      });
+    }
+
+    if (opts.json) {
+      process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+    } else {
+      process.stdout.write(formatScanHuman(result, opts) + '\n');
+    }
+    return 0;
+  } catch (err) {
+    const msg = redactError(err);
+    if (opts.json) process.stdout.write(JSON.stringify({ error: msg }) + '\n');
+    else process.stderr.write(`facilities scan-observed failed: ${msg}\n`);
+    return 1;
+  } finally {
+    await ctx.close();
+  }
+}
+
+function formatScanHuman(result: ScanResult, opts: FacilitiesScanObservedOpts): string {
+  const counts = `discovered ${result.discovered}, created ${result.created}, updated ${result.updated}, system registered ${result.systemRegistered}`;
+  return opts.apply
+    ? `applied: ${counts}`
+    : `DRY RUN — nothing written. Rerun with --apply to write.\n${counts}`;
+}
+
+export interface FacilitiesPublishOpts {
+  /** The caller opts IN to writing — omitted/false ⇒ dry run: report counts, write nothing. */
+  apply?: boolean;
+  json: boolean;
+}
+
+/**
+ * `openldr facilities publish [--apply] [--json]`
+ *
+ * Rebuild `facility_map` (the warehouse-side reporting dimension) from the current resolution
+ * (`@openldr/bootstrap`'s `publishFacilityMap`, Task 4). Dry-run by default.
+ */
+export async function runFacilitiesPublish(opts: FacilitiesPublishOpts): Promise<number> {
+  const ctx = await createAppContext(loadConfig());
+  try {
+    const result: PublishResult = await publishFacilityMap(reconcileDeps(ctx), { apply: opts.apply });
+
+    // Same reasoning as scan-observed above: `apply: true` always performs a real write (the
+    // delete-then-insert rebuild runs unconditionally), so auditing is unconditional on `apply`.
+    if (opts.apply) {
+      await recordAuditEvent(ctx, cliActor(), {
+        action: 'facility.publish',
+        entityType: 'facility',
+        entityId: 'facility-observed:all-feeds',
+        before: null,
+        after: null,
+        metadata: { result },
+      });
+    }
+
+    if (opts.json) {
+      process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+    } else {
+      process.stdout.write(formatPublishHuman(result, opts) + '\n');
+    }
+    return 0;
+  } catch (err) {
+    const msg = redactError(err);
+    if (opts.json) process.stdout.write(JSON.stringify({ error: msg }) + '\n');
+    else process.stderr.write(`facilities publish failed: ${msg}\n`);
+    return 1;
+  } finally {
+    await ctx.close();
+  }
+}
+
+function formatPublishHuman(result: PublishResult, opts: FacilitiesPublishOpts): string {
+  const counts = `resolved ${result.resolved}, unmapped ${result.unmapped}, targetMissing ${result.targetMissing}, written ${result.written}`;
+  return opts.apply
+    ? `applied: ${counts}`
+    : `DRY RUN — nothing written. Rerun with --apply to write.\n${counts}`;
 }
