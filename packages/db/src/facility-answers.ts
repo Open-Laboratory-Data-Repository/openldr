@@ -57,6 +57,17 @@ export type FacilityAdminLevel = 'zone' | 'region' | 'district' | 'council';
  * (now-extra) `council: true` key fails to compile. `FACILITY_ADMIN_LEVELS` is derived FROM this
  * object (not hand-typed alongside it) so there is exactly one place the four names are spelled.
  */
+/**
+ * ⛔ KEY ORDER IS LOAD-BEARING — it is the parent→child admin hierarchy, not a style choice.
+ *
+ * `FACILITY_ADMIN_LEVELS` is `Object.keys` of this literal, and the studio's suggestion hook
+ * (`useFacilityAdminSuggestions`) scopes each level by the levels at a LOWER INDEX — Region is
+ * suggested within the chosen Zone, District within Zone+Region, and so on. Alphabetising these
+ * keys (`council, district, region, zone`) looks purely cosmetic and keeps `tsc` green, but it
+ * INVERTS the cascade: a child would constrain its parent, and editing a fully-populated facility
+ * would offer exactly one option per field — the value already in it. That was a real review
+ * finding. The hook's tests assert exact scopes and would catch it; do not rely on that alone.
+ */
 const FACILITY_ADMIN_LEVEL_SET: Record<FacilityAdminLevel, true> = {
   zone: true,
   region: true,
