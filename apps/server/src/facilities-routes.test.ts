@@ -1169,12 +1169,32 @@ describe('Task 6: POST /api/facilities/scan-observed', () => {
     expect(ctx.__audit.map((a: any) => a.action)).toEqual(['facility.scan']);
   });
 
-  it('rejects a blank system instead of silently scanning the default one', async () => {
+  // Task 9b: `system` (a caller-chosen destination) is gone from this route's body — scan now
+  // derives a coding system PER ROW from `source_system`, so an unknown field like `system` is
+  // simply stripped by zod rather than meaning anything. This is the direct replacement for the
+  // pre-Task-9b "rejects a blank system" test, which pinned a validation rule on a field this route
+  // no longer has.
+  it('scans every feed at once — a second, non-default feed resolves through its OWN system', async () => {
     const internalDb = await makeMigratedDb();
     const externalDb = await makeMigratedExternalDb();
-    const app = await appWith(fakeReconcileCtx(internalDb, externalDb));
-    const res = await app.inject({ method: 'POST', url: '/api/facilities/scan-observed', payload: { system: '' } });
-    expect(res.statusCode).toBe(400);
+    const rows = [
+      { id: `dr-${randomUUID()}`, performer: 'NHL-01', source_system: 'feed-a' },
+      { id: `dr-${randomUUID()}`, performer: 'NHL-01', source_system: 'feed-b' },
+    ];
+    await externalDb.insertInto('diagnostic_reports').values(rows).execute();
+    const ctx = fakeReconcileCtx(internalDb, externalDb);
+    const app = await appWith(ctx);
+
+    const res = await app.inject({ method: 'POST', url: '/api/facilities/scan-observed', payload: { apply: true } });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ discovered: 2, created: 2, systemRegistered: true });
+    expect(
+      await internalDb.selectFrom('coding_systems').where('url', '=', 'urn:openldr:fac_feed_a').selectAll().execute(),
+    ).toHaveLength(1);
+    expect(
+      await internalDb.selectFrom('coding_systems').where('url', '=', 'urn:openldr:fac_feed_b').selectAll().execute(),
+    ).toHaveLength(1);
   });
 });
 

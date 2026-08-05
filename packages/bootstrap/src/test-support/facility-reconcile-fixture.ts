@@ -53,15 +53,25 @@ export async function makeReconcileDeps(): Promise<ReconcileDeps> {
  * of `reportCount`, so `scanObservedFacilities`'s `count(*) group by performer` has real rows to
  * count rather than a synthetic total. `performer: null` is supported so callers can pin down the
  * "ignores null performers" behaviour.
+ *
+ * `opts.sourceSystem` defaults to `'webhook-ingest'` (the seeded workflow's default ingest feed —
+ * every pre-Task-9b test relies on this default and must keep working unchanged) but a caller can
+ * override it to seed a SECOND feed's rows — Task 9b's feed-aware scan/resolve needs two distinct
+ * `source_system` values reporting the SAME `performer` code to prove they resolve independently.
  */
-export async function seedPerformers(deps: ReconcileDeps, pairs: [string | null, number][]): Promise<void> {
+export async function seedPerformers(
+  deps: ReconcileDeps,
+  pairs: [string | null, number][],
+  opts: { sourceSystem?: string } = {},
+): Promise<void> {
+  const sourceSystem = opts.sourceSystem ?? 'webhook-ingest';
   // Random ids, not a sequence counter: `seedPerformers` is called more than once per test (a
   // second scan seeding more reports for an already-seeded performer), and a counter local to this
   // function would restart at `dr-1` on every call and collide with rows the first call inserted.
   const rows: { id: string; performer: string | null; source_system: string }[] = [];
   for (const [performer, count] of pairs) {
     for (let i = 0; i < count; i += 1) {
-      rows.push({ id: `dr-${randomUUID()}`, performer, source_system: 'webhook-ingest' });
+      rows.push({ id: `dr-${randomUUID()}`, performer, source_system: sourceSystem });
     }
   }
   if (rows.length === 0) return;

@@ -28,6 +28,22 @@ export const FACILITY_REGISTRY_SYSTEM = 'urn:openldr:cs:facility-registry';
 /** Bounded so the derived `facility_map.id` fits `keyType` (varchar(255)) on MySQL/MSSQL. */
 const MAX_ID_LENGTH = 200;
 
+/**
+ * The ingest workflow's Persist Store `source` — the ONE feed identity that predates Task 9b and
+ * whose 23 existing concepts + 2 mappings under `DEFAULT_OBSERVED_FACILITY_SYSTEM` must stay valid.
+ *
+ * Not a magic string: mirrors `INGEST_PERSIST_SOURCE` in `packages/workflows/src/sample-workflow.ts`
+ * (the seeded workflow's Persist Store `source` parameter), duplicated rather than imported because
+ * this module is zero-import by design (see the file banner) and reaching into `@openldr/workflows`
+ * from here would defeat that.
+ */
+const DEFAULT_INGEST_FEED = 'webhook-ingest';
+
+/** `urn:openldr:` namespace shared with `DEFAULT_OBSERVED_FACILITY_SYSTEM`/`FACILITY_REGISTRY_SYSTEM`
+ *  above; `fac_` (not `default_fac`) so a feed literally named `default_fac` cannot collide with the
+ *  default system's own url. */
+const FEED_SYSTEM_PREFIX = 'urn:openldr:fac_';
+
 export interface ObservedFacilityProperties {
   firstSeen: string;
   lastSeen: string;
@@ -84,6 +100,45 @@ export function observedFacilityConceptRow(input: ObservedFacilityInput): Concep
     status: 'ACTIVE',
     properties: { firstSeen, lastSeen: input.seenAt, reportCount: input.reportCount },
   };
+}
+
+/**
+ * Bind an ingest feed (`diagnostic_reports.source_system`) to ITS coding system — the piece the
+ * design called "one coding system per feed" but never actually wired (Task 9b). Two feeds sending
+ * the same observed code must never share a mapping, or a wrong-lab collision is silent (see the
+ * task's design doc for the concrete NHL-01 example).
+ *
+ * - The default ingest feed (`DEFAULT_INGEST_FEED`, i.e. `webhook-ingest`) maps to
+ *   `DEFAULT_OBSERVED_FACILITY_SYSTEM` — this is the one binding that predates Task 9b, and it must
+ *   keep every already-mapped code under `urn:openldr:default_fac` resolving exactly as before.
+ * - `null`/blank (including whitespace-only) also maps to the default system: before Task 9b every
+ *   feed's rows — including any with a missing `source_system` — were reconciled as one undivided
+ *   pool under the default system, so a row with NO feed identity at all is treated the same as the
+ *   original single feed rather than invented into a new "unknown feed" system. This is a judgement
+ *   call, not a discovered fact: a NULL row could equally belong to some OTHER feed whose identity
+ *   was simply lost, but there is no signal in the row to tell that apart from "no feed recorded is
+ *   the historical norm" and defaulting to a NEW system per NULL row would be non-deterministic
+ *   (every scan would invent a fresh empty-string system) — the diagnosed alternative is worse.
+ * - Any other feed gets its OWN system, deterministic (a re-scan recomputes the same url so a
+ *   `facility_map`/`coding_systems` rebuild never drifts) and namespaced under `FEED_SYSTEM_PREFIX`
+ *   so it can never collide with `DEFAULT_OBSERVED_FACILITY_SYSTEM` or `FACILITY_REGISTRY_SYSTEM`.
+ *   The slug uses the SAME normalisation discipline as `facility-reconcile.ts`'s `systemCodeFor`
+ *   (non-alphanumeric runs collapsed to one separator, trimmed edges) so the two stay conceptually
+ *   aligned, lower-cased to match this file's existing `urn:openldr:*` naming convention. Two feed
+ *   names that normalise to the same slug (e.g. `feed-a` and `feed_a`) WOULD still collide — the
+ *   same accepted risk `systemCodeFor` already carries for `coding_systems.system_code`.
+ */
+export function observedSystemForFeed(sourceSystem: string | null): string {
+  const trimmed = (sourceSystem ?? '').trim();
+  if (trimmed === '' || trimmed === DEFAULT_INGEST_FEED) return DEFAULT_OBSERVED_FACILITY_SYSTEM;
+  const slug = trimmed
+    .replace(/[^a-zA-Z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .toLowerCase();
+  // A url that slugifies to empty (e.g. `///`) must not collapse onto FEED_SYSTEM_PREFIX alone —
+  // that would collide with every other punctuation-only feed name. Fall back to a deterministic
+  // hash of the full string instead, mirroring `systemCodeFor`'s own `SYS_${djb2Hex(system)}` guard.
+  return slug.length > 0 ? `${FEED_SYSTEM_PREFIX}${slug}` : `${FEED_SYSTEM_PREFIX}${djb2Hex(trimmed)}`;
 }
 
 /**

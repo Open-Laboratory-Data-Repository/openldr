@@ -8,7 +8,7 @@ import {
 } from '@openldr/bootstrap';
 import {
   splitFacilityAnswers, CORE_FACILITY_KEYS, FACILITY_ADMIN_LEVELS, referenceCapture,
-  DEFAULT_OBSERVED_FACILITY_SYSTEM, FACILITY_REGISTRY_SYSTEM,
+  FACILITY_REGISTRY_SYSTEM,
 } from '@openldr/db';
 import type { FacilityAdminLevel, ExternalSchema } from '@openldr/db';
 import { requireCapability } from './rbac';
@@ -320,15 +320,15 @@ function nameTypeError(name: unknown): { error: string } | undefined {
 // the same dry-run-by-default / explicit-`apply` / audit-only-on-a-real-write shape as the CSV
 // import route above.
 
+// Task 9b: `system` (a caller-chosen DESTINATION coding system) is gone from both bodies below.
+// `scanObservedFacilities`/`publishFacilityMap` now derive a coding system PER ROW from
+// `diagnostic_reports.source_system` (`observedSystemForFeed`, `packages/db/src/facility-observed.ts`)
+// — one call correctly covers every feed, so there is no longer a single destination to pass.
 const ScanObservedSchema = z.object({
-  // Optional — `scanObservedFacilities` defaults to the site's default observed-facility system
-  // when omitted. A blank string is refused rather than silently reaching the store as `''`.
-  system: z.string().min(1).optional(),
   apply: z.boolean().optional(),
 });
 
 const PublishSchema = z.object({
-  system: z.string().min(1).optional(),
   apply: z.boolean().optional(),
 });
 
@@ -467,22 +467,24 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     if (!p.success) { reply.code(400); return { error: p.error.message }; }
 
     const result: ScanResult = await scanObservedFacilities(reconcileDeps(ctx), {
-      system: p.data.system,
       apply: !!p.data.apply,
     });
 
     // A dry run writes nothing (scanObservedFacilities returns before touching the db when `apply`
     // is falsy) and must not audit. `apply: true` always performs a real write here — even a
-    // discovery of zero new codes still (re)registers/re-activates the observed-facility
-    // `coding_systems` row — so auditing is unconditional on `apply`, not further gated on a count.
+    // discovery of zero new codes still (re)registers/re-activates every observed-facility
+    // `coding_systems` row it finds — so auditing is unconditional on `apply`, not further gated on
+    // a count.
     if (p.data.apply) {
       await recordAudit(ctx, req, {
         action: 'facility.scan',
         entityType: 'facility',
-        entityId: p.data.system ?? DEFAULT_OBSERVED_FACILITY_SYSTEM,
+        // Task 9b: one call now scans every feed's system at once — there is no longer a single
+        // system this audit entry is "about", so the entityId names the OPERATION, not a system.
+        entityId: 'facility-observed:all-feeds',
         before: null,
         after: null,
-        metadata: { system: p.data.system ?? null, result },
+        metadata: { result },
       });
     }
     return result;
@@ -495,7 +497,6 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     if (!p.success) { reply.code(400); return { error: p.error.message }; }
 
     const result: PublishResult = await publishFacilityMap(reconcileDeps(ctx), {
-      system: p.data.system,
       apply: !!p.data.apply,
     });
 
@@ -505,10 +506,10 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       await recordAudit(ctx, req, {
         action: 'facility.publish',
         entityType: 'facility',
-        entityId: p.data.system ?? DEFAULT_OBSERVED_FACILITY_SYSTEM,
+        entityId: 'facility-observed:all-feeds',
         before: null,
         after: null,
-        metadata: { system: p.data.system ?? null, result },
+        metadata: { result },
       });
     }
     return result;

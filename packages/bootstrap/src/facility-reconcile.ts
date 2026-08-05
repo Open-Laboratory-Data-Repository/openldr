@@ -1,6 +1,6 @@
 import type { Kysely } from 'kysely';
-import type { ExternalSchema, InternalSchema, TerminologyAdminStore } from '@openldr/db';
-import { DEFAULT_OBSERVED_FACILITY_SYSTEM, FACILITY_REGISTRY_SYSTEM, facilityMapId, observedFacilityConceptRow, projectDiagnosticReport } from '@openldr/db';
+import type { ConceptRowInput, ExternalSchema, InternalSchema, TerminologyAdminStore } from '@openldr/db';
+import { DEFAULT_OBSERVED_FACILITY_SYSTEM, FACILITY_REGISTRY_SYSTEM, facilityMapId, observedFacilityConceptRow, observedSystemForFeed, projectDiagnosticReport } from '@openldr/db';
 
 export interface ReconcileDeps {
   internalDb: Kysely<InternalSchema>;
@@ -16,13 +16,28 @@ export interface ScanResult {
 }
 
 export interface ScanOptions {
-  /** Which coding system these codes belong to. One per FEED; defaults to the site default. */
-  system?: string;
   /** ISO timestamp for this scan. Injected rather than read from a clock so the result is testable. */
   now?: string;
   /** The caller opts IN to writing, mirroring `importFacilities` and `openldr facilities import`. */
   apply?: boolean;
 }
+
+/**
+ * Task 9b decision: the `system` option that used to live on `ScanOptions` (and the equivalent
+ * `opts.system` on `resolveObservedFacilities`/`publishFacilityMap`) is DROPPED, not redefined as a
+ * filter.
+ *
+ * It used to mean "which coding system these codes belong to" — a DESTINATION the caller chose. That
+ * stopped being a coherent concept the moment scan/resolve became feed-aware: the destination is now
+ * DERIVED per row from `source_system` via `observedSystemForFeed`, so there is no longer one
+ * destination to name. A filter-shaped replacement ("only scan/resolve rows whose derived system
+ * equals X") was considered and rejected — nothing in this slice needs it (the HTTP routes and the
+ * Observed tab always want every feed at once; "One call correctly scans all feeds" is the brief's
+ * own acceptance bar), and adding an unused filter parameter would be speculative surface no caller
+ * exercises. Every caller (`apps/server/src/facilities-routes.ts`'s `scan-observed`/`publish` routes,
+ * `apps/studio/src/api.ts`'s request types, and every test that set `system` as a destination) is
+ * updated in the same change that removes it.
+ */
 
 /** The `coding_systems.system_code` for the default observed-facility system. `upsertByUrl` derives
  *  the row id as `cs-url-${systemCode}`, so this must stay unique among `urn:openldr:*` systems
@@ -34,8 +49,9 @@ const SYSTEM_PUBLISHER_ID = 'pub-system';
 
 /**
  * Derive a `coding_systems.system_code` for a given observed-facility system url. The default
- * system gets the reserved `DEFAULT_FAC` code; a second feed (a non-default `opts.system`) needs
- * its OWN code or it collides with the default system's `cs-url-DEFAULT_FAC` row.
+ * system gets the reserved `DEFAULT_FAC` code; a second feed's system (derived by
+ * `observedSystemForFeed`) needs its OWN code or it collides with the default system's
+ * `cs-url-DEFAULT_FAC` row.
  *
  * ⛔ A non-default url that slugifies to empty (e.g. `///` or a url made only of punctuation) must
  * NOT fall back to `DEFAULT_SYSTEM_CODE` — that would collide with the real default system on
@@ -99,45 +115,72 @@ function parseProperties(raw: unknown): Record<string, unknown> | null {
  * (also destroys `organism_type`/`result_role` elsewhere) and is out of scope here; see
  * `firstSeen resets if an operator edits the term in /terminology` in the test file for the pinned
  * behaviour.
+ *
+ * Feed-aware (Task 9b): groups by `(performer, source_system)`, not `performer` alone, then routes
+ * each group to ITS system via `observedSystemForFeed(source_system)`. Two `source_system` values
+ * that derive the SAME system (e.g. `null` and `'webhook-ingest'`, both the default) have their
+ * counts summed rather than kept as separate rows — a `terminology_concepts` row is keyed on
+ * `(system, code)`, so there is only ever one row to hold the total. A `coding_systems` row is
+ * registered per DISTINCT system encountered, so one call correctly scans every feed at once; the
+ * `system` destination option is gone (see the module-level note below `ScanOptions`) — there is no
+ * longer a single destination to choose.
  */
 export async function scanObservedFacilities(deps: ReconcileDeps, opts: ScanOptions = {}): Promise<ScanResult> {
-  const system = opts.system ?? DEFAULT_OBSERVED_FACILITY_SYSTEM;
   const now = opts.now ?? new Date().toISOString();
 
   const observed = await deps.externalDb
     .selectFrom('diagnostic_reports')
-    .select(({ fn }) => ['performer', fn.countAll<number>().as('n')])
+    .select(({ fn }) => ['performer', 'source_system', fn.countAll<number>().as('n')])
     .where('performer', 'is not', null)
-    .groupBy('performer')
+    .groupBy(['performer', 'source_system'])
     .execute();
 
-  // Read the raw stored row directly rather than through `admin.terms.search`: `Term` unpacks
+  // Fold the (performer, source_system) groups down to (system, code) totals — the level
+  // `terminology_concepts` is actually keyed at. `Map<system, Map<code, count>>` rather than a
+  // single string-joined key: a coding system url or an observed code can contain any character
+  // (including whatever a joined-key separator would be), so nesting sidesteps that risk entirely.
+  const bySystem = new Map<string, Map<string, number>>();
+  for (const o of observed) {
+    if (o.performer === null) continue;
+    const system = observedSystemForFeed(o.source_system);
+    const byCode = bySystem.get(system) ?? new Map<string, number>();
+    byCode.set(o.performer, (byCode.get(o.performer) ?? 0) + Number(o.n));
+    bySystem.set(system, byCode);
+  }
+  const systems = [...bySystem.keys()];
+
+  // Read the raw stored rows directly rather than through `admin.terms.search`: `Term` unpacks
   // `properties` into named fields (shortName/class/unit/metadata) and has nowhere to carry the
   // firstSeen/lastSeen/reportCount blob this scan depends on. Going through `terms.search` would
   // silently re-stamp `firstSeen` on every single scan, making the field meaningless.
-  const existingRows = await deps.internalDb
-    .selectFrom('terminology_concepts')
-    .select(['code', 'display', 'properties'])
-    .where('system', '=', system)
-    .execute();
+  const existingRows = systems.length > 0
+    ? await deps.internalDb
+        .selectFrom('terminology_concepts')
+        .select(['system', 'code', 'display', 'properties'])
+        .where('system', 'in', systems)
+        .execute()
+    : [];
   const existing = new Map<string, { display: string | null; properties: Record<string, unknown> | null }>();
   for (const r of existingRows) {
-    existing.set(r.code, { display: r.display, properties: parseProperties(r.properties) });
+    existing.set(`${r.system}\n${r.code}`, { display: r.display, properties: parseProperties(r.properties) });
   }
 
-  const rows = observed
-    .filter((o): o is { performer: string; n: number } => o.performer !== null)
-    .map((o) =>
-      observedFacilityConceptRow({
-        system,
-        code: o.performer,
-        seenAt: now,
-        reportCount: Number(o.n),
-        existing: existing.get(o.performer),
-      }),
-    );
+  const rows: ConceptRowInput[] = [];
+  for (const [system, byCode] of bySystem) {
+    for (const [code, n] of byCode) {
+      rows.push(
+        observedFacilityConceptRow({
+          system,
+          code,
+          seenAt: now,
+          reportCount: n,
+          existing: existing.get(`${system}\n${code}`),
+        }),
+      );
+    }
+  }
 
-  const created = rows.filter((r) => !existing.has(r.code)).length;
+  const created = rows.filter((r) => !existing.has(`${r.system}\n${r.code}`)).length;
   const result: ScanResult = {
     discovered: rows.length,
     created,
@@ -147,21 +190,24 @@ export async function scanObservedFacilities(deps: ReconcileDeps, opts: ScanOpti
 
   if (!opts.apply) return result;
 
-  // ⛔ MUST leave the row ACTIVE: `TermMappingDialog` builds its system dropdown from active
+  // ⛔ MUST leave each row ACTIVE: `TermMappingDialog` builds its system dropdown from active
   // `coding_systems` rows, so concepts without one are invisible to the operator who has to map
   // them. `upsertByUrl` inserts `active: true` but never re-activates an existing inactive row, so
-  // repair that explicitly.
-  await deps.admin.codingSystems.upsertByUrl({
-    url: system,
-    systemCode: systemCodeFor(system),
-    systemName: 'Observed facilities',
-    publisherId: SYSTEM_PUBLISHER_ID,
-  });
-  const cs = await deps.admin.codingSystems.getByUrl(system);
-  if (cs && !cs.active) {
-    await deps.internalDb.updateTable('coding_systems').set({ active: true }).where('url', '=', system).execute();
+  // repair that explicitly. Runs once per DISTINCT system encountered — a multi-feed scan registers
+  // every feed's system in the same call.
+  for (const system of systems) {
+    await deps.admin.codingSystems.upsertByUrl({
+      url: system,
+      systemCode: systemCodeFor(system),
+      systemName: 'Observed facilities',
+      publisherId: SYSTEM_PUBLISHER_ID,
+    });
+    const cs = await deps.admin.codingSystems.getByUrl(system);
+    if (cs && !cs.active) {
+      await deps.internalDb.updateTable('coding_systems').set({ active: true }).where('url', '=', system).execute();
+    }
   }
-  result.systemRegistered = true;
+  result.systemRegistered = systems.length > 0;
 
   if (rows.length > 0) await deps.admin.terms.importRows(rows);
 
@@ -202,17 +248,16 @@ export interface ResolvedFacility {
  * ⛔ Precedence is fixed and total: registry route, then national route, then unresolved. Never a
  * silent pick between two candidates.
  *
- * `opts.system` is the CODING SYSTEM used to author mappings (`term_mappings.from_system`, default
- * `DEFAULT_OBSERVED_FACILITY_SYSTEM`) — unrelated to `diagnostic_reports.source_system` (the
- * ingestion feed, e.g. `webhook-ingest`), which flows straight through into `sourceSystem` below and
- * is what `facility_map`/`facilityMapId` key on.
+ * Feed-aware (Task 9b): each `(performer, source_system)` row looks up mappings under ITS OWN
+ * coding system — `observedSystemForFeed(source_system)`, NOT one fixed system for every row — so
+ * two feeds sending the SAME `performer` code can carry entirely independent mappings and resolve to
+ * different facilities. Before Task 9b this function took a single `opts.system` (the coding system
+ * mappings are authored against, defaulting to `DEFAULT_OBSERVED_FACILITY_SYSTEM`) applied to every
+ * row regardless of its actual feed; that parameter is gone (see the module-level note below
+ * `ScanOptions`) because there is no longer one destination to pick — the system is now DERIVED per
+ * row, deterministically, from `source_system` itself.
  */
-export async function resolveObservedFacilities(
-  deps: ReconcileDeps,
-  opts: { system?: string } = {},
-): Promise<ResolvedFacility[]> {
-  const system = opts.system ?? DEFAULT_OBSERVED_FACILITY_SYSTEM;
-
+export async function resolveObservedFacilities(deps: ReconcileDeps): Promise<ResolvedFacility[]> {
   const observed = await deps.externalDb
     .selectFrom('diagnostic_reports')
     .select(['performer', 'source_system'])
@@ -220,12 +265,15 @@ export async function resolveObservedFacilities(
     .groupBy(['performer', 'source_system'])
     .execute();
 
-  const mappings = await deps.internalDb
-    .selectFrom('term_mappings')
-    .select(['from_code', 'to_system', 'to_code'])
-    .where('from_system', '=', system)
-    .where('is_active', '=', true)
-    .execute();
+  const systems = [...new Set(observed.map((o) => observedSystemForFeed(o.source_system)))];
+  const mappings = systems.length > 0
+    ? await deps.internalDb
+        .selectFrom('term_mappings')
+        .select(['from_system', 'from_code', 'to_system', 'to_code'])
+        .where('from_system', 'in', systems)
+        .where('is_active', '=', true)
+        .execute()
+    : [];
 
   const registry = await deps.internalDb.selectFrom('facility_registry').selectAll().execute();
   const byId = new Map(registry.map((r) => [r.id, r]));
@@ -235,17 +283,22 @@ export async function resolveObservedFacilities(
       .map((r) => [`${r.national_system}|${r.national_code}`, r]),
   );
 
+  // Keyed on (from_system, from_code) TOGETHER — a plain `from_code` key, as before Task 9b, would
+  // let a mapping authored under one feed's system answer a lookup for a different feed's identical
+  // code, exactly the collision this task exists to close.
   const byCode = new Map<string, { toSystem: string; toCode: string }[]>();
   for (const m of mappings) {
-    const list = byCode.get(m.from_code) ?? [];
+    const key = `${m.from_system}\n${m.from_code}`;
+    const list = byCode.get(key) ?? [];
     list.push({ toSystem: m.to_system, toCode: m.to_code });
-    byCode.set(m.from_code, list);
+    byCode.set(key, list);
   }
 
   return observed.map((o) => {
     const code = o.performer as string;
     const sourceSystem = o.source_system ?? '';
-    const candidates = byCode.get(code) ?? [];
+    const system = observedSystemForFeed(o.source_system);
+    const candidates = byCode.get(`${system}\n${code}`) ?? [];
 
     // 1. Registry route wins — the registry is what holds a printable name.
     const registryMapping = candidates.find((c) => c.toSystem === FACILITY_REGISTRY_SYSTEM);
@@ -293,14 +346,17 @@ export interface PublishResult {
  * and MSSQL caps at ~2000 bound parameters, so a `where id not in (...)` prune is unimplementable
  * at register scale — the same constraint that made `terminology_codes` delete-then-insert. One
  * transaction, so a concurrent reader never sees the dimension empty.
+ *
+ * `opts.system` is gone (Task 9b) along with `resolveObservedFacilities`'s — see the module-level
+ * note below `ScanOptions`.
  */
 export async function publishFacilityMap(
   deps: ReconcileDeps,
-  opts: { system?: string; apply?: boolean } = {},
+  opts: { apply?: boolean } = {},
 ): Promise<PublishResult> {
   if (opts.apply) await publishRegistryConcepts(deps, { apply: true });
 
-  const resolved = await resolveObservedFacilities(deps, { system: opts.system });
+  const resolved = await resolveObservedFacilities(deps);
 
   const result: PublishResult = {
     resolved: resolved.filter((r) => r.resolvedVia !== null).length,

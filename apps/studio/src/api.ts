@@ -841,13 +841,14 @@ export const listObservedFacilities = (): Promise<ObservedFacility[]> =>
   apiGet('/api/facilities/observed', 'list observed facilities');
 
 // Mirrors the server's ScanResult/PublishResult (packages/bootstrap/src/facility-reconcile.ts).
-// `apply` is opt-in on both — omitted/false is a dry run that writes nothing.
-export interface ScanObservedRequest { system?: string; apply?: boolean }
+// `apply` is opt-in on both — omitted/false is a dry run that writes nothing. Task 9b dropped
+// `system` — scan/publish now cover every ingest feed's own coding system in one call.
+export interface ScanObservedRequest { apply?: boolean }
 export interface ScanObservedResult { discovered: number; created: number; updated: number; systemRegistered: boolean }
 export const scanObservedFacilities = (body: ScanObservedRequest = {}): Promise<ScanObservedResult> =>
   authFetch('/api/facilities/scan-observed', jbody(body, 'POST')).then((r) => okJson<ScanObservedResult>(r, 'scan observed facilities'));
 
-export interface PublishFacilitiesRequest { system?: string; apply?: boolean }
+export interface PublishFacilitiesRequest { apply?: boolean }
 export interface PublishFacilitiesResult { resolved: number; unmapped: number; targetMissing: number; written: number }
 export const publishFacilities = (body: PublishFacilitiesRequest = {}): Promise<PublishFacilitiesResult> =>
   authFetch('/api/facilities/publish', jbody(body, 'POST')).then((r) => okJson<PublishFacilitiesResult>(r, 'publish facilities'));

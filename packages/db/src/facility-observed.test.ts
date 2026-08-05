@@ -6,6 +6,7 @@ import {
   FACILITY_REGISTRY_SYSTEM,
   observedFacilityConceptRow,
   facilityMapId,
+  observedSystemForFeed,
 } from './facility-observed';
 
 describe('facility-observed', () => {
@@ -78,6 +79,39 @@ describe('facility-observed', () => {
     expect(facilityMapId('webhook-ingest', 'Dodoma')).toBe(facilityMapId('webhook-ingest', 'Dodoma'));
     const long = facilityMapId('webhook-ingest', 'x'.repeat(400));
     expect(long.length).toBeLessThanOrEqual(200);
+  });
+});
+
+describe('observedSystemForFeed', () => {
+  it('maps the default ingest feed (webhook-ingest) to the default system', () => {
+    expect(observedSystemForFeed('webhook-ingest')).toBe(DEFAULT_OBSERVED_FACILITY_SYSTEM);
+  });
+
+  // Decision (task brief, resolved explicitly): a NULL/blank source_system is treated as the
+  // default feed, not a new "unknown feed" system — see the doc comment on observedSystemForFeed.
+  it('maps a null source_system to the default system', () => {
+    expect(observedSystemForFeed(null)).toBe(DEFAULT_OBSERVED_FACILITY_SYSTEM);
+  });
+
+  it('maps a blank/whitespace-only source_system to the default system', () => {
+    expect(observedSystemForFeed('')).toBe(DEFAULT_OBSERVED_FACILITY_SYSTEM);
+    expect(observedSystemForFeed('   ')).toBe(DEFAULT_OBSERVED_FACILITY_SYSTEM);
+  });
+
+  it('gives a non-default feed its own deterministic system, distinct from the default', () => {
+    const system = observedSystemForFeed('feed-a');
+    expect(system).not.toBe(DEFAULT_OBSERVED_FACILITY_SYSTEM);
+    expect(system).toBe(observedSystemForFeed('feed-a'));
+  });
+
+  it('gives two distinct feeds two distinct systems', () => {
+    expect(observedSystemForFeed('feed-a')).not.toBe(observedSystemForFeed('feed-b'));
+  });
+
+  it('a feed name that slugifies to empty still gets a system distinct from the default', () => {
+    const system = observedSystemForFeed('///');
+    expect(system).not.toBe(DEFAULT_OBSERVED_FACILITY_SYSTEM);
+    expect(system.startsWith('urn:openldr:fac_')).toBe(true);
   });
 });
 

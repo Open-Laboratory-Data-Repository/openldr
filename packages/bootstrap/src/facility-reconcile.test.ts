@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { DEFAULT_OBSERVED_FACILITY_SYSTEM, FACILITY_REGISTRY_SYSTEM, observedSystemForFeed } from '@openldr/db';
 import { scanObservedFacilities, resolveObservedFacilities, publishFacilityMap, publishRegistryConcepts, captureObservedFacility, captureObservedFacilityFromProjection } from './facility-reconcile';
 import { makeReconcileDeps, seedPerformers, seedRegistry, seedMapping } from './test-support/facility-reconcile-fixture';
 
@@ -146,38 +147,27 @@ describe('scanObservedFacilities', () => {
     expect(props.reportCount).toBe(2);
   });
 
-  it('registers a non-default opts.system under its own coding_systems row, distinct from the default system', async () => {
+  // Task 9b: `opts.system` (a caller-chosen DESTINATION) is gone — scan now derives a system per
+  // row from `source_system` via `observedSystemForFeed`, so a second feed's own system is reached
+  // by seeding a second `source_system`, not by passing a destination option. (Task 9b's own
+  // describe block below has the fuller multi-feed coverage; this one pins the exact `systemCode`
+  // string `systemCodeFor` derives, mirroring what this test asserted before Task 9b.)
+  it('registers a non-default feed under its own coding_systems row, distinct from the default system', async () => {
     const deps = await makeReconcileDeps();
     await seedPerformers(deps, [['Dodoma', 1]]);
+    await seedPerformers(deps, [['NHL-01', 1]], { sourceSystem: 'feed-b' });
 
     await scanObservedFacilities(deps, { now: '2026-08-05T00:00:00.000Z', apply: true });
-    await scanObservedFacilities(deps, {
-      now: '2026-08-05T00:00:00.000Z',
-      apply: true,
-      system: 'urn:openldr:feed-b',
-    });
 
     const defaultCs = await deps.admin.codingSystems.getByUrl('urn:openldr:default_fac');
-    const feedBCs = await deps.admin.codingSystems.getByUrl('urn:openldr:feed-b');
+    const feedBCs = await deps.admin.codingSystems.getByUrl('urn:openldr:fac_feed_b');
     expect(defaultCs).not.toBeNull();
     expect(feedBCs).not.toBeNull();
     expect(feedBCs!.systemCode).not.toBe(defaultCs!.systemCode);
     expect(defaultCs!.systemCode).toBe('DEFAULT_FAC');
-    expect(feedBCs!.systemCode).toBe('URN_OPENLDR_FEED_B');
+    expect(feedBCs!.systemCode).toBe('URN_OPENLDR_FAC_FEED_B');
     expect(defaultCs!.active).toBe(true);
     expect(feedBCs!.active).toBe(true);
-  });
-
-  it('a system url that slugifies to empty still gets a code distinct from DEFAULT_SYSTEM_CODE', async () => {
-    const deps = await makeReconcileDeps();
-    await seedPerformers(deps, [['Dodoma', 1]]);
-
-    await scanObservedFacilities(deps, { now: '2026-08-05T00:00:00.000Z', apply: true, system: '///' });
-
-    const cs = await deps.admin.codingSystems.getByUrl('///');
-    expect(cs).not.toBeNull();
-    expect(cs!.systemCode).not.toBe('DEFAULT_FAC');
-    expect(cs!.systemCode.startsWith('SYS_')).toBe(true);
   });
 
   it('writes nothing when apply is falsy but still reports what it found', async () => {
@@ -306,6 +296,84 @@ describe('resolveObservedFacilities', () => {
     const [row] = await resolveObservedFacilities(deps);
 
     expect(row.resolvedVia).toBeNull();
+  });
+});
+
+// Task 9b: the design says "one coding system per feed", but nothing bound a feed to a system —
+// `scanObservedFacilities` grouped by `performer` alone (no `source_system` split) and
+// `resolveObservedFacilities` looked up mappings with a single `from_system`, so two feeds sending
+// the SAME observed code resolved through the same mapping. See the task brief's concrete example:
+// two LIS feeds both send `NHL-01` meaning different laboratories.
+describe('Task 9b: feed-aware scan/resolve', () => {
+  it('resolves the same observed code from two different feeds to two different facilities', async () => {
+    const deps = await makeReconcileDeps();
+    await seedPerformers(deps, [['NHL-01', 1]], { sourceSystem: 'feed-a' });
+    await seedPerformers(deps, [['NHL-01', 1]], { sourceSystem: 'feed-b' });
+    await scanObservedFacilities(deps, { now: '2026-08-05T00:00:00.000Z', apply: true });
+
+    await seedRegistry(deps, { id: 'fac-a', name: 'Alpha Laboratory', localCode: 'ALPHA' });
+    await seedRegistry(deps, { id: 'fac-b', name: 'Beta Laboratory', localCode: 'BETA' });
+    await seedMapping(deps, {
+      fromSystem: observedSystemForFeed('feed-a'), fromCode: 'NHL-01',
+      toSystem: FACILITY_REGISTRY_SYSTEM, toCode: 'fac-a',
+    });
+    await seedMapping(deps, {
+      fromSystem: observedSystemForFeed('feed-b'), fromCode: 'NHL-01',
+      toSystem: FACILITY_REGISTRY_SYSTEM, toCode: 'fac-b',
+    });
+
+    const resolved = await resolveObservedFacilities(deps);
+
+    const rowA = resolved.find((r) => r.sourceSystem === 'feed-a');
+    const rowB = resolved.find((r) => r.sourceSystem === 'feed-b');
+    expect(rowA?.name).toBe('Alpha Laboratory');
+    expect(rowB?.name).toBe('Beta Laboratory');
+  });
+
+  // No regression for today's live data: the one existing feed (`webhook-ingest`) must keep
+  // resolving through `urn:openldr:default_fac` exactly as it did before Task 9b — the 23 concepts
+  // and 2 mappings already live under that system depend on this.
+  it('the default feed (webhook-ingest) still resolves through urn:openldr:default_fac', async () => {
+    const deps = await makeReconcileDeps();
+    await seedPerformers(deps, [['Dodoma', 1]]); // default sourceSystem: 'webhook-ingest'
+    await scanObservedFacilities(deps, { now: '2026-08-05T00:00:00.000Z', apply: true });
+    await seedRegistry(deps, { id: 'fac-1', name: 'Dodoma Regional Referral Hospital', localCode: 'DOD' });
+    await seedMapping(deps, {
+      fromSystem: DEFAULT_OBSERVED_FACILITY_SYSTEM, fromCode: 'Dodoma',
+      toSystem: FACILITY_REGISTRY_SYSTEM, toCode: 'fac-1',
+    });
+
+    const [row] = await resolveObservedFacilities(deps);
+
+    expect(row.name).toBe('Dodoma Regional Referral Hospital');
+    expect(row.resolvedVia).toBe('registry');
+  });
+
+  it('scan registers a distinct coding_systems row per distinct feed, plus the default', async () => {
+    const deps = await makeReconcileDeps();
+    await seedPerformers(deps, [['Dodoma', 1]]); // default feed: webhook-ingest
+    await seedPerformers(deps, [['NHL-01', 1]], { sourceSystem: 'feed-a' });
+    await seedPerformers(deps, [['NHL-01', 1]], { sourceSystem: 'feed-b' });
+
+    await scanObservedFacilities(deps, { now: '2026-08-05T00:00:00.000Z', apply: true });
+
+    const defaultCs = await deps.admin.codingSystems.getByUrl(DEFAULT_OBSERVED_FACILITY_SYSTEM);
+    const feedACs = await deps.admin.codingSystems.getByUrl(observedSystemForFeed('feed-a'));
+    const feedBCs = await deps.admin.codingSystems.getByUrl(observedSystemForFeed('feed-b'));
+    expect(defaultCs).not.toBeNull();
+    expect(feedACs).not.toBeNull();
+    expect(feedBCs).not.toBeNull();
+    expect(feedACs!.systemCode).not.toBe(feedBCs!.systemCode);
+    expect(feedACs!.systemCode).not.toBe(defaultCs!.systemCode);
+    expect(defaultCs!.active).toBe(true);
+    expect(feedACs!.active).toBe(true);
+    expect(feedBCs!.active).toBe(true);
+
+    // Each feed's concept lives under ITS OWN system, not lumped into the default.
+    const { rows: feedARows } = await deps.admin.terms.search(observedSystemForFeed('feed-a'), { limit: 10, offset: 0 });
+    const { rows: feedBRows } = await deps.admin.terms.search(observedSystemForFeed('feed-b'), { limit: 10, offset: 0 });
+    expect(feedARows.map((r) => r.code)).toEqual(['NHL-01']);
+    expect(feedBRows.map((r) => r.code)).toEqual(['NHL-01']);
   });
 });
 
