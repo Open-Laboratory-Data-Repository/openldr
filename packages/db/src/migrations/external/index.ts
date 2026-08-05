@@ -11,6 +11,7 @@ import * as m008 from './008_patients_merge';
 import * as m009 from './009_questionnaire_responses';
 import * as m010 from './010_diagnostic_report_facility';
 import * as m011 from './011_terminology_codes';
+import * as m012 from './012_facility_map';
 
 export function externalMigrations(engine: TargetEngine): Record<string, Migration> {
   return {
@@ -25,5 +26,6 @@ export function externalMigrations(engine: TargetEngine): Record<string, Migrati
     '009_questionnaire_responses': { up: (db) => m009.up(db, engine), down: m009.down },
     '010_diagnostic_report_facility': { up: (db) => m010.up(db, engine), down: m010.down },
     '011_terminology_codes': { up: (db) => m011.up(db, engine), down: m011.down },
+    '012_facility_map': { up: (db) => m012.up(db, engine), down: m012.down },
   };
 }

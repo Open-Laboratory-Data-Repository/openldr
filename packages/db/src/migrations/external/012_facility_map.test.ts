@@ -1,0 +1,18 @@
+import { describe, it, expect } from 'vitest';
+import { makeMigratedExternalDb } from '../../test-helpers-external';
+import { sql } from 'kysely';
+
+describe('012_facility_map', () => {
+  it('creates facility_map and round-trips a resolved row', async () => {
+    const db = await makeMigratedExternalDb();
+    await sql`insert into facility_map
+      (id, source_system, source_code, registry_id, name, resolved_via)
+      values ('webhook-ingest|Dodoma', 'webhook-ingest', 'Dodoma', 'fac-1',
+              'Dodoma Regional Referral Hospital', 'registry')`.execute(db);
+    const rows = await sql<{ name: string; source_code: string }>`
+      select name, source_code from facility_map`.execute(db);
+    expect(rows.rows).toEqual([
+      { name: 'Dodoma Regional Referral Hospital', source_code: 'Dodoma' },
+    ]);
+  });
+});
