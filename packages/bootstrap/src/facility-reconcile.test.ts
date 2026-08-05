@@ -189,6 +189,38 @@ describe('scanObservedFacilities', () => {
 
     expect(result.discovered).toBe(1);
   });
+
+  // Task 11 (whole-branch review, Fix 1): before this fix, `urn:openldr:cs:facility-registry` only
+  // got its `coding_systems` row from `publishFacilityMap` (via `publishRegistryConcepts`) — the ONE
+  // caller. An operator who opens the Observed tab and presses Scan (never Publish) found no registry
+  // system in `TermMappingDialog`'s dropdown, in either search or manual mode, because both build
+  // their target list from `systems.filter((s) => s.active)`. This pins that a Scan alone must leave
+  // the registry pickable, with one concept per `facility_registry` row.
+  it('also publishes the registry projection so a Scan-only operator can pick a mapping target', async () => {
+    const deps = await makeReconcileDeps();
+    await seedPerformers(deps, [['Dodoma', 5]]);
+    await seedRegistry(deps, { id: 'fac-1', name: 'Dodoma Regional Referral Hospital', localCode: 'DOD' });
+    await seedRegistry(deps, { id: 'fac-2', name: 'Muhimbili National Hospital', nationalSystem: 'urn:tz:hfr', nationalCode: 'TZ-001' });
+
+    await scanObservedFacilities(deps, { now: '2026-08-05T00:00:00.000Z', apply: true });
+
+    const cs = await deps.admin.codingSystems.getByUrl(FACILITY_REGISTRY_SYSTEM);
+    expect(cs).not.toBeNull();
+    expect(cs!.active).toBe(true);
+    const { rows } = await deps.admin.terms.search(FACILITY_REGISTRY_SYSTEM, { limit: 50, offset: 0 });
+    expect(rows.map((r) => r.code).sort()).toEqual(['fac-1', 'fac-2']);
+  });
+
+  // ⚠ Gating regression guard: a dry-run scan must not have this side effect either.
+  it('does NOT publish the registry projection on a dry-run scan', async () => {
+    const deps = await makeReconcileDeps();
+    await seedPerformers(deps, [['Dodoma', 5]]);
+    await seedRegistry(deps, { id: 'fac-1', name: 'Dodoma Regional Referral Hospital', localCode: 'DOD' });
+
+    await scanObservedFacilities(deps, { now: '2026-08-05T00:00:00.000Z' }); // apply omitted -> dry run
+
+    expect(await deps.admin.codingSystems.getByUrl(FACILITY_REGISTRY_SYSTEM)).toBeNull();
+  });
 });
 
 describe('resolveObservedFacilities', () => {
@@ -399,6 +431,30 @@ describe('publishFacilityMap', () => {
     expect(rows.find((r) => r.source_code === 'Dodoma')!.local_code).toBe('DOD');
     expect(rows.find((r) => r.source_code === 'Kibondo')!.name).toBeNull();
     expect(rows.find((r) => r.source_code === 'Kibondo')!.local_code).toBeNull();
+  });
+
+  // Task 11 (whole-branch review, Fix 3): `scanObservedFacilities` folds `(performer, source_system)`
+  // groups that derive the SAME coding system into one `(system, code)` total, but
+  // `resolveObservedFacilities` (and therefore this function) maps 1:1 over the raw groups instead. A
+  // warehouse holding BOTH a NULL and an empty-string `source_system` for the same performer therefore
+  // produces two resolved rows with an identical `facilityMapId` (both normalise `sourceSystem` to
+  // `''`) — before the fix, the delete-then-insert transaction below aborted on the primary key.
+  it('does not crash on a PK collision from a NULL and empty-string source_system for the same performer', async () => {
+    const deps = await makeReconcileDeps();
+    await deps.externalDb.insertInto('diagnostic_reports')
+      .values([
+        { id: 'dr-null-1', performer: 'Dodoma', source_system: null },
+        { id: 'dr-empty-1', performer: 'Dodoma', source_system: '' },
+      ] as never)
+      .execute();
+
+    const result = await publishFacilityMap(deps, { apply: true });
+
+    expect(result.written).toBe(2);
+    const rows = await deps.externalDb.selectFrom('facility_map').selectAll().execute();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].source_code).toBe('Dodoma');
+    expect(rows[0].source_system).toBe('');
   });
 });
 

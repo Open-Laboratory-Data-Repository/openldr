@@ -211,6 +211,16 @@ export async function scanObservedFacilities(deps: ReconcileDeps, opts: ScanOpti
 
   if (rows.length > 0) await deps.admin.terms.importRows(rows);
 
+  // Task 11 (whole-branch review, Fix 1): the operator journey must not dead-end at Map on a fresh
+  // install. `urn:openldr:cs:facility-registry` used to get its `coding_systems` row ONLY from
+  // `publishFacilityMap` (via `publishRegistryConcepts`) — an operator who opened the Observed tab,
+  // pressed Scan, then opened a row's Map action found no registry system in `TermMappingDialog`'s
+  // dropdown (built from `systems.filter((s) => s.active)`), because Scan alone never published it.
+  // Scan now publishes the registry projection too, so it alone leaves the registry pickable.
+  // ⚠ Gated on `opts.apply` exactly like the rest of this function's write path (the early return
+  // above) — a dry-run scan must still write nothing.
+  await publishRegistryConcepts(deps, { apply: true });
+
   return result;
 }
 
@@ -366,7 +376,7 @@ export async function publishFacilityMap(
   };
   if (!opts.apply) return result;
 
-  const rows = resolved.map((r) => ({
+  const allRows = resolved.map((r) => ({
     id: facilityMapId(r.sourceSystem, r.sourceCode),
     source_system: r.sourceSystem,
     source_code: r.sourceCode,
@@ -382,6 +392,21 @@ export async function publishFacilityMap(
     national_code: r.nationalCode,
     resolved_via: r.resolvedVia,
   }));
+
+  // Task 11 (whole-branch review, Fix 3): `scanObservedFacilities` folds `(performer, source_system)`
+  // groups that derive the SAME coding system into one `(system, code)` total, but
+  // `resolveObservedFacilities` maps 1:1 over the raw groups — so a warehouse holding both a NULL and
+  // an empty-string `source_system` for the same performer (both normalise to the SAME
+  // `facilityMapId`, since `facilityMapId` is derived from `r.sourceSystem` which is already `?? ''`)
+  // yields two rows with an identical `id`, and the delete-then-insert transaction below would abort
+  // on the primary key. Dedupe by `id` here, keeping the first occurrence, mirroring the fold
+  // `scanObservedFacilities` already does at the (system, code) level.
+  const seenIds = new Set<string>();
+  const rows = allRows.filter((r) => {
+    if (seenIds.has(r.id)) return false;
+    seenIds.add(r.id);
+    return true;
+  });
 
   await deps.externalDb.transaction().execute(async (trx) => {
     await trx.deleteFrom('facility_map').execute();

@@ -15,8 +15,10 @@ import type { ReconcileDeps } from '../facility-reconcile';
 // pg-mem does not support the regex operator (!~) used by Kysely's Migrator introspection, so each
 // migration's up() is run directly in order — same approach as `@openldr/db/testing`'s
 // `makeMigratedDb` and `packages/db/src/test-helpers-external.ts`'s `makeMigratedExternalDb`.
-// Reimplemented here (rather than imported) because neither of those pg-mem helpers is reachable
-// through `@openldr/db`'s package.json `exports` map from another workspace package.
+// Reimplemented here (rather than imported): `@openldr/db`'s package.json `exports` map DOES publish
+// both of those pg-mem helpers today (`./testing` and `./testing-external`, the latter added when
+// `apps/server/src/facilities-routes.test.ts` started using it) — this duplication is a pre-existing,
+// un-refactored follow-up, not a reachability gap.
 async function makeMigratedInternalDb(): Promise<Kysely<InternalSchema>> {
   const mem = newDb();
   const db = mem.adapters.createKysely() as Kysely<InternalSchema>;

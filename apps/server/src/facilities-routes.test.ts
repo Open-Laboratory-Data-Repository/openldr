@@ -1099,6 +1099,27 @@ describe('Task 6: GET /api/facilities/observed', () => {
     expect(res.json()).toEqual([expect.objectContaining({ sourceCode: 'Dodoma', reportCount: 5, resolvedVia: null })]);
   });
 
+  // Task 11 (whole-branch review, Fix 2 / triaged Minor M4-4): `relational-writer.ts` documents that
+  // the deferred projection wrote NULL `source_system`/`batch_id` into every row for months, so a
+  // legacy warehouse row with a NULL `source_system` is expected, not hypothetical.
+  // `resolveObservedFacilities` normalises that NULL to `''` (`sourceSystem: o.source_system ?? ''`),
+  // but this route used to build its count map with a raw template literal
+  // (`` `${c.source_system}|${c.performer}` ``), which stringifies NULL to the literal string
+  // `"null"` — a miss against the `''`-keyed resolved row (`` `${r.sourceSystem}|${r.sourceCode}` ``
+  // reads `"|Dodoma"` vs the stored `"null|Dodoma"`), landing exactly on the reason this surface
+  // exists: impact ordering by report count.
+  it('reports the true reportCount for an observed row with a NULL source_system', async () => {
+    const internalDb = await makeMigratedDb();
+    const externalDb = await makeMigratedExternalDb();
+    const rows = Array.from({ length: 5 }, () => ({ id: `dr-${randomUUID()}`, performer: 'Dodoma', source_system: null }));
+    await externalDb.insertInto('diagnostic_reports').values(rows as any).execute();
+    const app = await appWith(fakeReconcileCtx(internalDb, externalDb));
+
+    const res = await app.inject({ method: 'GET', url: '/api/facilities/observed' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual([expect.objectContaining({ sourceCode: 'Dodoma', reportCount: 5 })]);
+  });
+
   it('is gated on facilities.view', async () => {
     const internalDb = await makeMigratedDb();
     const externalDb = await makeMigratedExternalDb();

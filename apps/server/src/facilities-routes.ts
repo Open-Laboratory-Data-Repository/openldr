@@ -448,10 +448,16 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
         .execute(),
     ]);
 
+    // Task 11 (whole-branch review, Fix 2 / triaged Minor M4-4): a raw template literal stringifies a
+    // NULL `source_system` to the literal string `"null"`, while `resolveObservedFacilities`
+    // normalises the same NULL to `''` (`sourceSystem: o.source_system ?? ''`). Both sides of this
+    // lookup must go through the identical `?? ''` normalisation or a legacy warehouse row with a
+    // NULL `source_system` (`relational-writer.ts` documents this as the deferred projection's
+    // months-long behaviour, not a hypothetical) misses the count map and renders `reportCount: 0`.
     const countByKey = new Map<string, number>();
     for (const c of counts) {
       if (c.performer == null) continue;
-      countByKey.set(`${c.source_system}|${c.performer}`, Number(c.n));
+      countByKey.set(`${c.source_system ?? ''}|${c.performer}`, Number(c.n));
     }
 
     return resolved
