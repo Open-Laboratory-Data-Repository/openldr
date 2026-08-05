@@ -1296,8 +1296,21 @@ export async function captureObservedFacility(
   now: string,
 ): Promise<void> {
   if (!code) return;
-  const { rows } = await deps.admin.terms.search(system, { query: code, limit: 1, offset: 0 });
-  const existing = rows.find((r) => r.code === code);
+  // ⛔ Exact lookup against terminology_concepts, NOT `admin.terms.search`. `terms.search` runs
+  // `lower(code) like %query%` ordered by code (terminology-admin-store.ts:490-500), so a paged
+  // result can EXCLUDE the exact match when a lexicographically earlier code contains it as a
+  // substring. ⚠ NOT a prefix like `Aga Khan Hospital` — a prefix always sorts after the code
+  // itself. It takes a code that sorts BEFORE it, e.g. `AA Aga Khan Annex` shadowing `Aga Khan`.
+  // A missed hit falls through to
+  // importRows, whose ON CONFLICT overwrites display and properties wholesale, permanently
+  // destroying a curated display and resetting firstSeen. The scan cannot heal firstSeen: it
+  // carries forward whatever is stored, so there is no other source of truth.
+  const existing = await deps.internalDb
+    .selectFrom('terminology_concepts')
+    .select(['code'])
+    .where('system', '=', system)
+    .where('code', '=', code)
+    .executeTakeFirst();
   if (existing) return; // Already known; the scan advances lastSeen/reportCount.
   await deps.admin.terms.importRows([
     observedFacilityConceptRow({ system, code, seenAt: now, reportCount: 0 }),
@@ -1305,7 +1318,9 @@ export async function captureObservedFacility(
 }
 ```
 
-⚠ `terms.search` with `query` does a `lower(code) like %…%` match (`terminology-admin-store.ts:490-497`), so the `rows.find((r) => r.code === code)` exact filter above is load-bearing — a substring hit is not the same concept.
+⚠ The `deps` parameter is therefore `Pick<ReconcileDeps, 'admin' | 'internalDb'>`, not `'admin'` alone.
+
+⚠ **The idempotence test must not assert on row COUNT.** `importRows` upserts on `(system, code)`, so the count stays 1 whether the early return fired or the row was silently rewritten. Assert that `firstSeen` did not move after a second capture at a later timestamp — that is the only observable that distinguishes "skipped" from "re-imported".
 
 - [ ] **Step 4: Wire the hook**
 
