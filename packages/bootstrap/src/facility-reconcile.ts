@@ -1,6 +1,6 @@
 import type { Kysely } from 'kysely';
 import type { ExternalSchema, InternalSchema, TerminologyAdminStore } from '@openldr/db';
-import { DEFAULT_OBSERVED_FACILITY_SYSTEM, FACILITY_REGISTRY_SYSTEM, facilityMapId, observedFacilityConceptRow } from '@openldr/db';
+import { DEFAULT_OBSERVED_FACILITY_SYSTEM, FACILITY_REGISTRY_SYSTEM, facilityMapId, observedFacilityConceptRow, projectDiagnosticReport } from '@openldr/db';
 
 export interface ReconcileDeps {
   internalDb: Kysely<InternalSchema>;
@@ -394,18 +394,64 @@ export async function publishRegistryConcepts(
  * drift on concept shape. It deliberately does NOT compute `reportCount` — that is an aggregate
  * over the warehouse this path cannot see from a single resource; the scan owns it. A code first
  * seen here carries `reportCount: 0` until the next scan corrects it.
+ *
+ * ⛔ Do NOT go through `deps.admin.terms.search` to check for an existing concept, and do not
+ * "simplify" this back to that call. `terms.search` runs `lower(code) LIKE %query%` ordered by
+ * `code` (`terminology-admin-store.ts`'s `terms.search`) and this call sites a `limit: 1` page — so
+ * a lexicographically EARLIER code that merely CONTAINS this one as a substring, without this code
+ * being a PREFIX of it (e.g. `AA Aga Khan Annex` sorts before, and contains, `Aga Khan` — a
+ * superstring formed by simple suffix extension like `Aga Khan Hospital` can NOT shadow it, because
+ * a string is always <= any string it is a strict prefix of), can fill that single row and shadow
+ * the real exact match, even with an exact-match filter applied to the page afterward. When that
+ * happens `existing` comes back undefined for a code that already exists, and the fallthrough to
+ * `importRows`'s `ON CONFLICT (system, code) DO UPDATE` overwrites `display`/`properties`
+ * wholesale — permanently destroying a curated display and resetting `firstSeen` (which does not
+ * self-heal; see `scanObservedFacilities`'s doc comment). Querying `terminology_concepts` directly
+ * for the exact `(system, code)` pair sidesteps the substring/paging trap entirely. See
+ * `facility-reconcile.test.ts`'s `preserves a curated display and firstSeen when a lexicographically
+ * earlier concept contains the code as a substring` for the pinned repro.
  */
 export async function captureObservedFacility(
-  deps: Pick<ReconcileDeps, 'admin'>,
+  deps: Pick<ReconcileDeps, 'admin' | 'internalDb'>,
   system: string,
   code: string,
   now: string,
 ): Promise<void> {
   if (!code) return;
-  const { rows } = await deps.admin.terms.search(system, { query: code, limit: 1, offset: 0 });
-  const existing = rows.find((r) => r.code === code);
+  const existing = await deps.internalDb
+    .selectFrom('terminology_concepts')
+    .select(['code'])
+    .where('system', '=', system)
+    .where('code', '=', code)
+    .executeTakeFirst();
   if (existing) return; // Already known; the scan advances lastSeen/reportCount.
   await deps.admin.terms.importRows([
     observedFacilityConceptRow({ system, code, seenAt: now, reportCount: 0 }),
   ]);
+}
+
+/**
+ * The projection-runner `onProjected` closure, extracted from `packages/bootstrap/src/index.ts` so
+ * it is directly testable without booting the whole `AppContext` (`createAppContext` wires the real
+ * Keycloak/S3/event-bus/DB adapters just to construct `onProjected`'s outer scope, which is far more
+ * setup than this one filter+extract+capture decision needs). `index.ts`'s
+ * `createProjectionRunner({ onProjected: ... })` call is now a one-line delegate to this function —
+ * see the wiring comment there for why the filter/guard/extraction shape looks the way it does.
+ *
+ * Filters to `DiagnosticReport` (the only resource type with a `performer` this slice cares about),
+ * extracts `performer` via `projectDiagnosticReport` (the SAME extraction the relational writer
+ * already applies to this resource, so the captured code cannot drift from the
+ * `diagnostic_reports.performer` value `scanObservedFacilities` reads), and no-ops when there is no
+ * performer (no facility string to capture).
+ */
+export async function captureObservedFacilityFromProjection(
+  deps: Pick<ReconcileDeps, 'admin' | 'internalDb'>,
+  resourceType: string,
+  resource: Record<string, unknown>,
+  now: string,
+): Promise<void> {
+  if (resourceType !== 'DiagnosticReport') return;
+  const performer = projectDiagnosticReport(resource, {}).performer;
+  if (!performer) return;
+  await captureObservedFacility(deps, DEFAULT_OBSERVED_FACILITY_SYSTEM, performer, now);
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { scanObservedFacilities, resolveObservedFacilities, publishFacilityMap, publishRegistryConcepts, captureObservedFacility } from './facility-reconcile';
+import { scanObservedFacilities, resolveObservedFacilities, publishFacilityMap, publishRegistryConcepts, captureObservedFacility, captureObservedFacilityFromProjection } from './facility-reconcile';
 import { makeReconcileDeps, seedPerformers, seedRegistry, seedMapping } from './test-support/facility-reconcile-fixture';
 
 describe('scanObservedFacilities', () => {
@@ -413,7 +413,13 @@ describe('captureObservedFacility', () => {
     expect(rows.map((r) => r.code)).toEqual(['Namansi']);
   });
 
-  it('is idempotent for a performer already captured', async () => {
+  // `total === 1` alone cannot distinguish "skipped" from "re-imported": `importRows` upserts on
+  // `(system, code)`, so the count stays 1 either way — even if the `if (existing) return;` guard
+  // were deleted entirely. `firstSeen` is the only observable that tells the two apart: a re-import
+  // re-derives it from `now` (see `observedFacilityConceptRow`, called with no `existing`), while a
+  // skip leaves the original untouched. Capture at two DIFFERENT timestamps and assert `firstSeen`
+  // did not move to the second one.
+  it('is idempotent for a performer already captured (firstSeen does not advance on a repeat capture)', async () => {
     const deps = await makeReconcileDeps();
     await captureObservedFacility(deps, 'urn:openldr:default_fac', 'Namansi', '2026-08-05T00:00:00.000Z');
 
@@ -421,6 +427,14 @@ describe('captureObservedFacility', () => {
 
     const { total } = await deps.admin.terms.search('urn:openldr:default_fac', { limit: 10, offset: 0 });
     expect(total).toBe(1);
+    const raw = await deps.internalDb
+      .selectFrom('terminology_concepts')
+      .select(['properties'])
+      .where('system', '=', 'urn:openldr:default_fac')
+      .where('code', '=', 'Namansi')
+      .executeTakeFirstOrThrow();
+    const props = (typeof raw.properties === 'string' ? JSON.parse(raw.properties) : raw.properties) as { firstSeen: string };
+    expect(props.firstSeen).toBe('2026-08-05T00:00:00.000Z');
   });
 
   it('keeps the string byte-for-byte', async () => {
@@ -433,7 +447,10 @@ describe('captureObservedFacility', () => {
   });
 
   // ⚠ `terms.search` with a `query` does a substring match — a performer whose code is a SUBSTRING
-  // of an already-captured one (or vice versa) must still create its own, distinct concept.
+  // of an already-captured one (or vice versa) must still create its own, distinct concept. At this
+  // call order ('Aga Khan Hospital' first, then 'Aga Khan') the second capture's exact-match filter
+  // trivially returns undefined regardless of lookup strategy, because 'Aga Khan' does not exist
+  // yet — this does NOT exercise the shadowing trap Fix 1 addresses.
   it('creates a distinct concept even when the code is a substring of an existing one', async () => {
     const deps = await makeReconcileDeps();
     await captureObservedFacility(deps, 'urn:openldr:default_fac', 'Aga Khan Hospital', '2026-08-05T00:00:00.000Z');
@@ -442,6 +459,54 @@ describe('captureObservedFacility', () => {
 
     const { rows } = await deps.admin.terms.search('urn:openldr:default_fac', { limit: 10, offset: 0 });
     expect(rows.map((r) => r.code).sort()).toEqual(['Aga Khan', 'Aga Khan Hospital']);
+  });
+
+  // ⛔ THE actual shadowing trap. `terms.search(system, { query: 'Aga Khan', limit: 1, offset: 0 })`
+  // orders matches by `code` ASCENDING. Because 'Aga Khan' is a strict PREFIX of 'Aga Khan Hospital',
+  // 'Aga Khan' always sorts BEFORE any string that merely appends to it — a superstring extension can
+  // never shadow it out of a `limit: 1` page. The shadowing code must instead contain 'Aga Khan' as a
+  // substring WITHOUT it being a prefix, and sort lexicographically earlier: e.g. 'AA Aga Khan Annex'
+  // ('AA ' < 'Aga' because 'A' < 'g' at the second character) still matches the substring query
+  // `lower(code) LIKE '%aga khan%'`, but sorts before the exact match. A single-row page ordered by
+  // `code` then returns 'AA Aga Khan Annex' instead of 'Aga Khan', so an exact-match filter applied
+  // to that one-row page finds nothing — even though 'Aga Khan' exists, curated. The old
+  // `terms.search`-based lookup would treat it as unknown and `importRows`'s upsert would overwrite
+  // its curated display and reset `firstSeen`. The exact-query lookup (Fix 1) must find the exact row
+  // directly, regardless of what else exists or sorts first.
+  it('preserves a curated display and firstSeen when a lexicographically earlier concept contains the code as a substring', async () => {
+    const deps = await makeReconcileDeps();
+    // Seed the exact-match concept FIRST, with a curated display and a known firstSeen — via
+    // `importRows` directly (the same shape `observedFacilityConceptRow` produces), not
+    // `captureObservedFacility`, so the setup is independent of the function under test.
+    await deps.admin.terms.importRows([{
+      system: 'urn:openldr:default_fac',
+      code: 'Aga Khan',
+      display: 'Aga Khan Hospital, Dar es Salaam',
+      status: 'ACTIVE',
+      properties: { firstSeen: '2026-08-01T00:00:00.000Z', lastSeen: '2026-08-01T00:00:00.000Z', reportCount: 5 },
+    }]);
+
+    // Capture a lexicographically EARLIER concept that contains 'Aga Khan' as a substring without
+    // it being a prefix (see comment above for why a prefix extension cannot shadow).
+    await captureObservedFacility(deps, 'urn:openldr:default_fac', 'AA Aga Khan Annex', '2026-08-03T00:00:00.000Z');
+
+    // Re-capture the exact code that already exists — must be recognized as already known, not
+    // shadowed by 'AA Aga Khan Annex' filling a `limit: 1` page ordered by `code`.
+    await captureObservedFacility(deps, 'urn:openldr:default_fac', 'Aga Khan', '2026-08-05T00:00:00.000Z');
+
+    const { rows } = await deps.admin.terms.search('urn:openldr:default_fac', { limit: 10, offset: 0 });
+    const agaKhan = rows.find((r) => r.code === 'Aga Khan');
+    expect(agaKhan).toBeDefined();
+    expect(agaKhan!.display).toBe('Aga Khan Hospital, Dar es Salaam');
+
+    const raw = await deps.internalDb
+      .selectFrom('terminology_concepts')
+      .select(['properties'])
+      .where('system', '=', 'urn:openldr:default_fac')
+      .where('code', '=', 'Aga Khan')
+      .executeTakeFirstOrThrow();
+    const props = (typeof raw.properties === 'string' ? JSON.parse(raw.properties) : raw.properties) as { firstSeen: string };
+    expect(props.firstSeen).toBe('2026-08-01T00:00:00.000Z');
   });
 
   it('does nothing for an empty code', async () => {
@@ -471,5 +536,52 @@ describe('captureObservedFacility', () => {
     };
     expect(props.reportCount).toBe(0);
     expect(props.firstSeen).toBe('2026-08-05T00:00:00.000Z');
+  });
+});
+
+// Fix 4: exercises the real `onProjected` wiring closure (extracted from `index.ts`'s
+// `createProjectionRunner({...})` call into `captureObservedFacilityFromProjection` specifically so
+// it is reachable here without booting the full `AppContext`). Nothing previously tested the
+// resourceType filter, the empty-performer guard, or the call into `captureObservedFacility`
+// together — `cycle.test.ts` only exercises the generic `onProjected` contract with a mock, and the
+// tests above call `captureObservedFacility` directly with hand-picked arguments. A typo in the
+// resourceType string, or a broken `performer` extraction, would have passed the whole suite.
+describe('captureObservedFacilityFromProjection', () => {
+  it('creates a concept from a projected DiagnosticReport with a performer', async () => {
+    const deps = await makeReconcileDeps();
+    const resource = {
+      resourceType: 'DiagnosticReport',
+      id: 'dr-1',
+      performer: [{ display: 'Muhimbili National Hospital' }],
+    };
+
+    await captureObservedFacilityFromProjection(deps, 'DiagnosticReport', resource, '2026-08-05T00:00:00.000Z');
+
+    const { rows } = await deps.admin.terms.search('urn:openldr:default_fac', { limit: 10, offset: 0 });
+    expect(rows.map((r) => r.code)).toEqual(['Muhimbili National Hospital']);
+  });
+
+  it('does nothing for a non-DiagnosticReport resource, even one with a performer-shaped field', async () => {
+    const deps = await makeReconcileDeps();
+    const resource = {
+      resourceType: 'Patient',
+      id: 'p-1',
+      performer: [{ display: 'Muhimbili National Hospital' }],
+    };
+
+    await captureObservedFacilityFromProjection(deps, 'Patient', resource, '2026-08-05T00:00:00.000Z');
+
+    const { total } = await deps.admin.terms.search('urn:openldr:default_fac', { limit: 10, offset: 0 });
+    expect(total).toBe(0);
+  });
+
+  it('is a no-op for a DiagnosticReport with no performer', async () => {
+    const deps = await makeReconcileDeps();
+    const resource = { resourceType: 'DiagnosticReport', id: 'dr-2' };
+
+    await captureObservedFacilityFromProjection(deps, 'DiagnosticReport', resource, '2026-08-05T00:00:00.000Z');
+
+    const { total } = await deps.admin.terms.search('urn:openldr:default_fac', { limit: 10, offset: 0 });
+    expect(total).toBe(0);
   });
 });
