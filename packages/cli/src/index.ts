@@ -1,4 +1,5 @@
 import { Command } from 'commander';
+import { pathToFileURL } from 'node:url';
 import { loadConfig } from '@openldr/config';
 import { createAppContext } from '@openldr/bootstrap';
 import { exitCodeFor, formatHealthTable } from './format';
@@ -26,7 +27,7 @@ import { runErrorsList } from './errors';
 import { runFacilitiesImport } from './facilities';
 import { setActorOverride } from './cli-actor';
 
-const program = new Command();
+export const program = new Command();
 program.name('openldr').description('OpenLDR CE operator CLI');
 program.option('--actor <name>', 'audit actor name for this invocation (defaults to the OS user)');
 
@@ -706,4 +707,12 @@ artifact.command('publish <bundleDir>').requiredOption('--to <registryDir>').opt
 
 program.hook('preAction', () => setActorOverride(program.opts().actor as string | undefined));
 
-program.parseAsync(process.argv);
+// Only auto-parse when this module is the actual process entry point — i.e. `node dist/index.js`
+// (production/build:check) or dev.mjs's programmatic import, which points process.argv[1] at this
+// exact file before importing it (see dev.mjs's comment on why). This lets tests import `program`
+// to exercise commander's own option defaults (e.g. `facilities import`'s `--apply` default) without
+// triggering a real parse of the test runner's own argv.
+const isMainModule = !!process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url;
+if (isMainModule) {
+  program.parseAsync(process.argv);
+}
