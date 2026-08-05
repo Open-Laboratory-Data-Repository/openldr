@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -29,6 +29,7 @@ export function FormRuntime({
   formDefinitionId,
   preview,
   fieldSuggestions,
+  onAnswersChange,
 }: {
   schema: FormSchema;
   submitLabel?: string;
@@ -54,10 +55,27 @@ export function FormRuntime({
    * an infinite loading spinner, so the field stays usable before that wiring exists.
    */
   fieldSuggestions?: FieldSuggestions;
+  /**
+   * Read-only reporting hook: fires with the current `answers` on mount and after every change.
+   * `answers` is otherwise private state a caller has no way to observe — a cascading `suggest`
+   * field (Task 5: District scoped by the Region the operator just picked) needs its SIBLING
+   * fields' live values to build a fetch scope, not just its own. This does not make FormRuntime
+   * a fetcher itself: it only reports state a caller already owns the display of via
+   * `fieldSuggestions`, same division of responsibility as that prop's doc comment above.
+   */
+  onAnswersChange?: (answers: RuntimeAnswers) => void;
 }): JSX.Element {
   const [answers, setAnswers] = useState<RuntimeAnswers>(initialAnswers ?? {});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const visible = useMemo(() => visibleIds(schema, answers), [schema, answers]);
+
+  useEffect(() => {
+    onAnswersChange?.(answers);
+    // Deliberately keyed on `answers` alone: a parent's `onAnswersChange` is typically a fresh
+    // closure every render (e.g. FacilityDialog's hook-returned callback), and including it here
+    // would fire this on every parent re-render rather than only on an actual answer change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [answers]);
 
   const setField = (fieldId: string, value: unknown) => {
     setAnswers((prev) => {

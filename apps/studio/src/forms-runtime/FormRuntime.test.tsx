@@ -578,4 +578,50 @@ describe('FormRuntime', () => {
     fireEvent.change(input, { target: { value: 'Typed freely' } });
     expect((input as HTMLInputElement).value).toBe('Typed freely');
   });
+
+  // ── onAnswersChange ──────────────────────────────────────────────────────────
+  // FormRuntime keeps `answers` as private state (see the `useState` at the top of the
+  // component) — a caller like FacilityDialog needs the live, currently-typed values to build
+  // the scope for cascading `suggest` field suggestions (a parent field's value determines a
+  // child field's fetch), but has no other way to observe them. `onAnswersChange` is a plain
+  // read-only reporting callback: FormRuntime still owns the state and still never fetches
+  // anything itself (see the `fieldSuggestions` doc comment above) — this only notifies.
+
+  it('onAnswersChange fires once on mount with the initial answers', () => {
+    const onAnswersChange = vi.fn();
+    render(
+      <FormRuntime
+        schema={previewSchema}
+        submitLabel=""
+        footer={null}
+        onSubmit={() => {}}
+        initialAnswers={{ name: 'Seed' }}
+        onAnswersChange={onAnswersChange}
+      />,
+    );
+    expect(onAnswersChange).toHaveBeenCalledWith({ name: 'Seed' });
+  });
+
+  it('onAnswersChange fires again whenever a field value changes', () => {
+    const onAnswersChange = vi.fn();
+    render(
+      <FormRuntime
+        schema={previewSchema}
+        submitLabel=""
+        footer={null}
+        onSubmit={() => {}}
+        onAnswersChange={onAnswersChange}
+      />,
+    );
+    onAnswersChange.mockClear();
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: 'Typed' } });
+    expect(onAnswersChange).toHaveBeenCalledWith({ name: 'Typed' });
+  });
+
+  it('omitting onAnswersChange is safe — no crash, form still usable', () => {
+    render(<FormRuntime schema={previewSchema} submitLabel="" footer={null} onSubmit={() => {}} />);
+    const input = screen.getByLabelText('Name');
+    fireEvent.change(input, { target: { value: 'No listener' } });
+    expect((input as HTMLInputElement).value).toBe('No listener');
+  });
 });
