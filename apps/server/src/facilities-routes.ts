@@ -1,14 +1,64 @@
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
-import type { AppContext } from '@openldr/bootstrap';
-import { splitFacilityAnswers, CORE_FACILITY_KEYS, FACILITY_ADMIN_LEVELS } from '@openldr/db';
+import { importFacilities, type AppContext, type FacilityImportResult } from '@openldr/bootstrap';
+import { splitFacilityAnswers, CORE_FACILITY_KEYS, FACILITY_ADMIN_LEVELS, referenceCapture } from '@openldr/db';
 import type { FacilityAdminLevel } from '@openldr/db';
 import { requireCapability } from './rbac';
 import { recordAudit } from './audit-helper';
 
 const VIEW = { preHandler: requireCapability('facilities.view') };
 const MANAGE = { preHandler: requireCapability('facilities.manage') };
+
+// ── Task 4: CSV import ──────────────────────────────────────────────────────────────────────────
+//
+// A JSON-encoded CSV body large enough to comfortably cover the stated workload (a 14 000-row
+// national register, see facility-import.ts's docblock) — 8MB is roughly 3x a generous
+// bytes/row estimate at that row count — while still catching a config mistake or a client that
+// ignores this cap outright before Node fully buffers it. The check runs at the JS level (not left
+// to Fastify's own bodyLimit) so an oversized upload gets the SAME uniform `{ error }` 400 shape as
+// every other validation failure in this file, rather than Fastify's own 413.
+const MAX_IMPORT_CSV_BYTES = 8 * 1024 * 1024;
+// Fastify's `bodyLimit` route option is a backstop ABOVE the CSV cap, not the primary guard: it
+// exists so a request that ignores MAX_IMPORT_CSV_BYTES entirely (or one inflated by JSON
+// escaping/other fields) is rejected before Node buffers the whole thing into memory. Deliberately
+// higher than MAX_IMPORT_CSV_BYTES so a csv field right at that limit still reaches the JS-level
+// check above and gets the clearer 400 — Fastify's own body-too-large error is a 413, which would
+// otherwise win the race and pre-empt the check below.
+const MAX_IMPORT_REQUEST_BYTES = MAX_IMPORT_CSV_BYTES + 2 * 1024 * 1024;
+// Same gate as MANAGE (facilities.manage) — importing is a write — with the higher bodyLimit layered on.
+const IMPORT = { ...MANAGE, bodyLimit: MAX_IMPORT_REQUEST_BYTES };
+
+// A real applied import runs as ONE atomic transaction, and for every row that already exists in
+// facility_registry it falls back to a per-row SELECT + conditional INSERT into
+// reference_change_log (facility-import.ts's docblock: `capture.record()` per updated row) —
+// holding row locks for however long that takes. At full national-register scale (14 000 rows,
+// worst case all updates on a re-import) that is measured in tens of seconds, which is not
+// something to run inside one HTTP request/response cycle: a client timeout or a proxy's own
+// request deadline would abort the connection while the transaction keeps running server-side.
+//
+// Decision: bound APPLY to a row-count cap and point the operator at the CLI
+// (`openldr facilities import --apply`, packages/cli/src/facilities.ts) above it — the CLI runs
+// the identical `importFacilities` call with no request deadline. 2000 is comfortably inside "a few
+// seconds" even in the worst-case all-updates path, while still covering a district- or
+// council-scoped partial register (the common incremental-update case) without ever touching the
+// CLI. This is NOT a background-job system — a request over the cap is simply refused, nothing is
+// queued. A dry run (no `apply`) is exempt: it never opens a transaction, so a 14 000-row register
+// can always be PREVIEWED inline regardless of this cap.
+const MAX_INLINE_APPLY_ROWS = 2000;
+
+const ImportSchema = z.object({
+  csv: z.string(),
+  // ⛔ Required, never defaulted — HFR/MFL/etc differ per country/deployment (see
+  // facility-import.ts's `FacilityImportOptions.nationalSystem` doc comment). A hardcoded fallback
+  // here would eventually mislabel an import as belonging to the wrong national register.
+  nationalSystem: z.string().min(1),
+  allowUnknownColumns: z.boolean().optional(),
+  // The caller opts IN to writing (mirrors the CLI's `--apply`). Omitted/false ⇒ dry run: parse
+  // and report, write NOTHING — the default, so a 14 000-row register can never be silently
+  // rewritten by a client that forgot to set this.
+  apply: z.boolean().optional(),
+});
 
 // The client submits ANSWERS, never a pre-split record: deciding which answers become indexed
 // columns is the server's call, and duplicating the core-key list client-side would let the two
@@ -423,5 +473,58 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     await ctx.facilityRegistry.remove(id);
     await recordAudit(ctx, req, { action: 'facility.delete', entityType: 'facility', entityId: id, before, after: null });
     return { ok: true };
+  });
+
+  // Task 4: CSV import — a thin HTTP wrapper over `@openldr/bootstrap`'s `importFacilities`, the
+  // SAME function `openldr facilities import` (packages/cli/src/facilities.ts) calls, per the
+  // repo's CLI-parity rule. See the MAX_IMPORT_CSV_BYTES / MAX_INLINE_APPLY_ROWS comments above for
+  // the size-cap and inline-vs-bounded-apply decisions.
+  app.post('/api/facilities/import', IMPORT, async (req, reply) => {
+    const p = ImportSchema.safeParse(req.body);
+    if (!p.success) { reply.code(400); return { error: p.error.message }; }
+
+    // Enforced here at the JS level, not left to Fastify's own (higher) bodyLimit — see
+    // MAX_IMPORT_CSV_BYTES's doc comment for why the ordering matters.
+    const csvBytes = Buffer.byteLength(p.data.csv, 'utf8');
+    if (csvBytes > MAX_IMPORT_CSV_BYTES) {
+      reply.code(400);
+      return {
+        error: `csv exceeds the ${Math.floor(MAX_IMPORT_CSV_BYTES / (1024 * 1024))}MB limit for this endpoint; `
+          + `use \`openldr facilities import\` (the CLI) for a larger register`,
+      };
+    }
+
+    const deps = { db: ctx.internalDb, capture: referenceCapture };
+    const importOpts = { nationalSystem: p.data.nationalSystem, allowUnknownColumns: p.data.allowUnknownColumns };
+
+    // Always preview first (parse-only — importFacilities never opens a transaction when
+    // `apply` is falsy, see its own early-return). This gives an AUTHORITATIVE `parsed` count —
+    // not a cheap line-count approximation — to check the inline-apply cap against, before ever
+    // considering the write transaction below. Unknown columns (parser-blocked, per
+    // facility-csv.ts) and an empty/all-skipped file both surface here as `parsed: 0` and are
+    // reported back verbatim rather than swallowed — never treated as "safe to write".
+    const preview: FacilityImportResult = await importFacilities(deps, p.data.csv, { ...importOpts, apply: false });
+    if (!p.data.apply || preview.parsed === 0) return preview;
+
+    if (preview.parsed > MAX_INLINE_APPLY_ROWS) {
+      reply.code(400);
+      return {
+        error: `this register has ${preview.parsed} row(s), which exceeds the ${MAX_INLINE_APPLY_ROWS}-row inline apply `
+          + `limit; use \`openldr facilities import --apply\` (the CLI) instead — it is not bound by an HTTP request deadline`,
+      };
+    }
+
+    const result = await importFacilities(deps, p.data.csv, { ...importOpts, apply: true });
+    // A dry run (handled above) writes nothing and must not audit. This point is only reached
+    // once a real write happened (preview.parsed > 0 and under the inline cap).
+    await recordAudit(ctx, req, {
+      action: 'facility.import',
+      entityType: 'facility',
+      entityId: p.data.nationalSystem,
+      before: null,
+      after: null,
+      metadata: { nationalSystem: p.data.nationalSystem, allowUnknownColumns: !!p.data.allowUnknownColumns, result },
+    });
+    return result;
   });
 }

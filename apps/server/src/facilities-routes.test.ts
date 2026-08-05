@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import Fastify from 'fastify';
+import { makeMigratedDb } from '@openldr/db/testing';
 import { registerFacilitiesRoutes } from './facilities-routes';
 
 const FORM_FIELDS = [
@@ -737,5 +738,170 @@ describe('facilities routes', () => {
       const res = await app.inject({ method: 'GET', url: '/api/facilities/admin-values?level=district' });
       expect(res.statusCode).toBe(200);
     });
+  });
+});
+
+// --- Task 4: POST /api/facilities/import ------------------------------------------------------
+// Exercises the REAL `importFacilities` (packages/bootstrap/src/facility-import.ts) against a real
+// migrated Kysely db (pg-mem), not the in-memory `fakeCtx().facilityRegistry` used above — that fake
+// cannot exercise the store's actual transaction/batch-write path. Mirrors sync-routes.test.ts's
+// `fakeAmendCtx` pattern: a real `internalDb`, everything else this route doesn't touch left as a
+// minimal stub.
+
+const SYSTEM = 'urn:tz:hfr';
+const CSV_HEADER = 'national_code,name,level,ownership,status,country,zone,region,district,council,ward,village,address,phone,latitude,longitude';
+
+function facilityCsv(rows: string[]): string {
+  return [CSV_HEADER, ...rows].join('\n') + '\n';
+}
+
+function fakeImportCtx(db: any) {
+  const audit: any[] = [];
+  return {
+    internalDb: db,
+    audit: { record: async (e: any) => { audit.push(e); return e; } },
+    logger: { error() {}, warn() {}, info() {} },
+    forms: { get: async () => undefined },
+    facilityRegistry: {
+      list: async () => [],
+      get: async () => undefined,
+      distinctAdminValues: async () => [],
+      upsert: async () => { throw new Error('not used by the import route'); },
+      remove: async () => {},
+    },
+    __audit: audit,
+  } as any;
+}
+
+describe('POST /api/facilities/import', () => {
+  it('I5: gated on facilities.manage — a facilities.view-only user gets 403', async () => {
+    const db = await makeMigratedDb();
+    const app = await appWith(fakeImportCtx(db), ['facilities.view']);
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities/import',
+      payload: { csv: facilityCsv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,']), nationalSystem: SYSTEM },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(await db.selectFrom('facility_registry').selectAll().execute()).toHaveLength(0);
+  });
+
+  it('dry-run (no `apply`) returns the full summary and writes nothing', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const csv = facilityCsv([
+      '100,Dodoma Regional Referral,,,,,,,,,,,,,,',
+      ',No Code,,,,,,,,,,,,,,', // missing required national_code -> skipped
+    ]);
+    const res = await app.inject({ method: 'POST', url: '/api/facilities/import', payload: { csv, nationalSystem: SYSTEM } });
+    expect(res.statusCode).toBe(200);
+    // Every counter always present, even the zero ones — a client must never confuse "0 found"
+    // with "not reported".
+    expect(res.json()).toEqual({ parsed: 1, skipped: 1, unknownColumns: [], created: 0, updated: 0, duplicates: 0 });
+    expect(await db.selectFrom('facility_registry').selectAll().execute()).toHaveLength(0);
+    expect(ctx.__audit).toHaveLength(0); // a dry run writes nothing, so it must not audit
+  });
+
+  it('apply: true writes and returns created/updated counts', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const csv = facilityCsv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,', '101,Kongwa DDH,,,,,,,,,,,,,,']);
+    const res = await app.inject({ method: 'POST', url: '/api/facilities/import', payload: { csv, nationalSystem: SYSTEM, apply: true } });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ parsed: 2, created: 2, updated: 0, duplicates: 0 });
+    const rows = await db.selectFrom('facility_registry').selectAll().execute();
+    expect(rows).toHaveLength(2);
+  });
+
+  it('the applied mutation is audited as facility.import', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const csv = facilityCsv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,']);
+    await app.inject({ method: 'POST', url: '/api/facilities/import', payload: { csv, nationalSystem: SYSTEM, apply: true } });
+    expect(ctx.__audit.map((a: any) => a.action)).toEqual(['facility.import']);
+    expect(ctx.__audit[0].entityId).toBe(SYSTEM);
+  });
+
+  it('unknown columns are reported, never swallowed, and block the import unless explicitly allowed', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const csv = ['national_code,name,made_up_column', '100,Dodoma Regional Referral,xyz'].join('\n') + '\n';
+    const res = await app.inject({ method: 'POST', url: '/api/facilities/import', payload: { csv, nationalSystem: SYSTEM, apply: true } });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().unknownColumns).toEqual(['made_up_column']);
+    expect(res.json().parsed).toBe(0); // the parser blocks the whole file, per facility-csv.ts
+    expect(await db.selectFrom('facility_registry').selectAll().execute()).toHaveLength(0);
+    expect(ctx.__audit).toHaveLength(0); // nothing was actually written — must not be audited
+  });
+
+  it('allowUnknownColumns: true carries the unknown column into extras and still reports it', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const csv = ['national_code,name,made_up_column', '100,Dodoma Regional Referral,xyz'].join('\n') + '\n';
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities/import',
+      payload: { csv, nationalSystem: SYSTEM, apply: true, allowUnknownColumns: true },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ unknownColumns: ['made_up_column'], parsed: 1, created: 1 });
+    const row = await db.selectFrom('facility_registry').selectAll().executeTakeFirst();
+    expect(row?.extras).toEqual({ made_up_column: 'xyz' });
+  });
+
+  it('⛔ nationalSystem is required — an omitted value is a 400, never defaulted to a hardcoded register', async () => {
+    const db = await makeMigratedDb();
+    const app = await appWith(fakeImportCtx(db));
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities/import',
+      payload: { csv: facilityCsv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,']) },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(await db.selectFrom('facility_registry').selectAll().execute()).toHaveLength(0);
+  });
+
+  it('a non-string csv body is a clear 400, not a stack trace', async () => {
+    const db = await makeMigratedDb();
+    const app = await appWith(fakeImportCtx(db));
+    const res = await app.inject({ method: 'POST', url: '/api/facilities/import', payload: { csv: 12345, nationalSystem: SYSTEM } });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toBeTruthy();
+  });
+
+  it('an oversized csv body is rejected with a clear 400, not a stack trace', async () => {
+    const db = await makeMigratedDb();
+    const app = await appWith(fakeImportCtx(db));
+    // Deliberately over any reasonable national-register size (see the route's MAX_IMPORT_CSV_BYTES
+    // comment) — content doesn't need to be valid CSV, the size check runs before parsing.
+    const oversized = 'a'.repeat(9 * 1024 * 1024);
+    const res = await app.inject({ method: 'POST', url: '/api/facilities/import', payload: { csv: oversized, nationalSystem: SYSTEM } });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toBeTruthy();
+  });
+
+  it('⛔ apply is refused above the inline row cap — points the operator at the CLI instead of running a long transaction inline', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const rows = Array.from({ length: 2001 }, (_, i) => `${1000 + i},Facility ${i},,,,,,,,,,,,,,`);
+    const csv = facilityCsv(rows);
+    const res = await app.inject({ method: 'POST', url: '/api/facilities/import', payload: { csv, nationalSystem: SYSTEM, apply: true } });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toMatch(/cli/i);
+    expect(await db.selectFrom('facility_registry').selectAll().execute()).toHaveLength(0);
+    expect(ctx.__audit).toHaveLength(0);
+  });
+
+  it('a dry run (no apply) is NOT subject to the inline row cap — a large register can still be previewed', async () => {
+    const db = await makeMigratedDb();
+    const app = await appWith(fakeImportCtx(db));
+    const rows = Array.from({ length: 2001 }, (_, i) => `${1000 + i},Facility ${i},,,,,,,,,,,,,,`);
+    const csv = facilityCsv(rows);
+    const res = await app.inject({ method: 'POST', url: '/api/facilities/import', payload: { csv, nationalSystem: SYSTEM } });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().parsed).toBe(2001);
   });
 });
