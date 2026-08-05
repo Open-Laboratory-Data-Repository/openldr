@@ -1460,6 +1460,8 @@ export { migrateWorkflowSecrets } from './workflow-secret-migrate';
 export { mergePatients } from './patient-merge';
 export { importFacilities } from './facility-import';
 export type { FacilityImportDeps, FacilityImportOptions, FacilityImportResult } from './facility-import';
+export { scanObservedFacilities } from './facility-reconcile';
+export type { ReconcileDeps, ScanResult, ScanOptions } from './facility-reconcile';
 export {
   enrollSite,
   listSites,
