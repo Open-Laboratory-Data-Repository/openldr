@@ -16,50 +16,11 @@ describe('createFacilityRegistryStore', () => {
     expect(await s.get('f1')).toMatchObject({ id: 'f1', localCode: 'LAB01', name: 'Dodoma Regional Referral' });
   });
 
-  it('resolves an observed feed code to the facility it was attached to', async () => {
+  it('upsert updates a record in place, keyed on id (re-upsert is an in-place rename, not a new row)', async () => {
     const { s } = await store();
     await s.upsert(manual);
-    await s.attachAlias({ sourceSystem: 'urn:openldr:cdr:performer', sourceCode: 'Dodoma', registryId: 'f1' });
-    expect(await s.resolve('urn:openldr:cdr:performer', 'Dodoma')).toMatchObject({ id: 'f1' });
-    expect(await s.resolve('urn:openldr:cdr:performer', 'Mnazi Mmoja')).toBeUndefined();
-  });
-
-  it('stores an observed string EXACTLY as it arrived, truncation included', async () => {
-    // The 30-char truncation is a match key, not a name. Never normalise it.
-    const { s } = await store();
-    await s.upsert(manual);
-    const truncated = 'International School of Tangan';
-    await s.attachAlias({ sourceSystem: 'cdr', sourceCode: truncated, registryId: 'f1' });
-    expect(await s.resolve('cdr', truncated)).toMatchObject({ id: 'f1' });
-    expect(await s.resolve('cdr', 'International School of Tanganyika')).toBeUndefined();
-  });
-
-  it('is idempotent: re-attaching the same alias is a no-op, not a duplicate', async () => {
-    const { s } = await store();
-    await s.upsert(manual);
-    const a = { sourceSystem: 'cdr', sourceCode: 'Dodoma', registryId: 'f1' };
-    await s.attachAlias(a);
-    await s.attachAlias(a);
-    expect(await s.listAliases('f1')).toHaveLength(1);
-  });
-
-  it('re-points an alias when it is attached to a different facility', async () => {
-    const { s } = await store();
-    await s.upsert(manual);
-    await s.upsert({ id: 'f2', localCode: 'LAB02', name: 'Muhimbili', source: 'manual' });
-    await s.attachAlias({ sourceSystem: 'cdr', sourceCode: 'Dodoma', registryId: 'f1' });
-    await s.attachAlias({ sourceSystem: 'cdr', sourceCode: 'Dodoma', registryId: 'f2' });
-    expect(await s.resolve('cdr', 'Dodoma')).toMatchObject({ id: 'f2' });
-    expect(await s.listAliases('f1')).toHaveLength(0);
-  });
-
-  it('upsert updates in place, so aliases survive a rename', async () => {
-    const { s } = await store();
-    await s.upsert(manual);
-    await s.attachAlias({ sourceSystem: 'cdr', sourceCode: 'Dodoma', registryId: 'f1' });
     await s.upsert({ ...manual, name: 'Dodoma Regional Referral Hospital' });
     expect(await s.get('f1')).toMatchObject({ name: 'Dodoma Regional Referral Hospital' });
-    expect(await s.listAliases('f1')).toHaveLength(1);
   });
 
   it('captures a reference change on registry writes — unconditionally, not filtered by managedOrigin', async () => {
@@ -74,21 +35,6 @@ describe('createFacilityRegistryStore', () => {
       { entityType: 'facility_registry', entityId: 'f9', op: 'upsert' },
       { entityType: 'facility_registry', entityId: 'f9', op: 'delete' },
     ]);
-  });
-
-  it('does NOT capture alias writes — aliases are lab-local and must never sync', async () => {
-    // An alias maps ONE lab's feed codes; it is meaningless at central and actively wrong at another
-    // lab whose identical local code means a different facility.
-    const { db } = await store();
-    const seen: string[] = [];
-    const s = createFacilityRegistryStore(db as never, {
-      record: async (_trx, entityType) => { seen.push(entityType); },
-    });
-    await s.upsert(manual);
-    seen.length = 0;
-    await s.attachAlias({ sourceSystem: 'cdr', sourceCode: 'Dodoma', registryId: 'f1' });
-    await s.detachAlias('cdr', 'Dodoma');
-    expect(seen).toEqual([]);
   });
 
   it('round-trips extras through the store', async () => {

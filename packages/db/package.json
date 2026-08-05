@@ -7,7 +7,9 @@
     ".": "./src/index.ts",
     "./schema/external": "./src/schema/external.ts",
     "./testing": "./src/migrations/internal/test-helpers.ts",
-    "./facility-answers": "./src/facility-answers.ts"
+    "./testing-external": "./src/test-helpers-external.ts",
+    "./facility-answers": "./src/facility-answers.ts",
+    "./facility-observed": "./src/facility-observed.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

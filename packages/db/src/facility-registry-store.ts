@@ -44,13 +44,6 @@ export interface FacilityRecord {
   source: 'manual' | 'import';
 }
 
-export interface FacilityAlias {
-  sourceSystem: string;
-  sourceCode: string;
-  registryId: string;
-  createdBy?: string | null;
-}
-
 export interface FacilityListOptions {
   region?: string;
   district?: string;
@@ -101,12 +94,6 @@ export interface FacilityRegistryStore {
    */
   upsert(rec: FacilityRecord): Promise<FacilityRecord>;
   remove(id: string): Promise<void>;
-  /** Attach an observed feed code to a facility. Idempotent; re-points if already attached elsewhere. */
-  attachAlias(alias: FacilityAlias): Promise<void>;
-  detachAlias(sourceSystem: string, sourceCode: string): Promise<void>;
-  /** What facility did this feed's code mean? `undefined` when nothing has been attached yet. */
-  resolve(sourceSystem: string, sourceCode: string): Promise<FacilityRecord | undefined>;
-  listAliases(registryId: string): Promise<FacilityAlias[]>;
 }
 
 /** A national register runs 10-15k rows; `list()` with no options must not return all of them. */
@@ -293,61 +280,6 @@ export function createFacilityRegistryStore(
         await trx.deleteFrom('facility_registry').where('id', '=', id).execute();
         if (capture) await capture.record(trx, 'facility_registry', id, 'delete', null);
       });
-    },
-
-    // ⚠ Alias writes are NOT captured. An alias maps ONE lab's feed codes to a facility; it is
-    // meaningless at central and actively wrong at another lab whose identical code means something
-    // else. Registry syncs down; aliases stay local.
-    async attachAlias(alias) {
-      await db
-        .insertInto('facility_aliases')
-        .values({
-          source_system: alias.sourceSystem,
-          source_code: alias.sourceCode,
-          registry_id: alias.registryId,
-          created_by: alias.createdBy ?? null,
-        } as never)
-        .onConflict((oc) =>
-          // Only registry_id moves on a re-point. created_by is deliberately left alone — it
-          // records who FIRST created this alias, not who re-pointed it most recently. Creation
-          // provenance is separate from the alias's current target.
-          oc.columns(['source_system', 'source_code']).doUpdateSet({ registry_id: alias.registryId } as never),
-        )
-        .execute();
-    },
-
-    async detachAlias(sourceSystem, sourceCode) {
-      await db
-        .deleteFrom('facility_aliases')
-        .where('source_system', '=', sourceSystem)
-        .where('source_code', '=', sourceCode)
-        .execute();
-    },
-
-    async resolve(sourceSystem, sourceCode) {
-      const r = await db
-        .selectFrom('facility_aliases')
-        .innerJoin('facility_registry', 'facility_registry.id', 'facility_aliases.registry_id')
-        .selectAll('facility_registry')
-        .where('facility_aliases.source_system', '=', sourceSystem)
-        .where('facility_aliases.source_code', '=', sourceCode)
-        .executeTakeFirst();
-      return r ? toRecord(r as Row) : undefined;
-    },
-
-    async listAliases(registryId) {
-      const rows = await db
-        .selectFrom('facility_aliases')
-        .selectAll()
-        .where('registry_id', '=', registryId)
-        .orderBy('source_system', 'asc')
-        .execute();
-      return rows.map((r) => ({
-        sourceSystem: r.source_system,
-        sourceCode: r.source_code,
-        registryId: r.registry_id,
-        createdBy: r.created_by,
-      }));
     },
   };
 }

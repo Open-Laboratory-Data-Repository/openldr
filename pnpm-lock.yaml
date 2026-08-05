@@ -114,6 +114,9 @@ importers:
       fastify:
         specifier: ^5.2.0
         version: 5.8.5
+      kysely:
+        specifier: ^0.28.17
+        version: 0.28.17
       pdfkit:
         specifier: ^0.15.0
         version: 0.15.2
@@ -747,6 +750,9 @@ importers:
       adm-zip:
         specifier: ^0.5.16
         version: 0.5.17
+      pg-mem:
+        specifier: ^3.0.14
+        version: 3.0.14(kysely@0.28.17)
       typescript:
         specifier: ^5.7.2
         version: 5.9.3

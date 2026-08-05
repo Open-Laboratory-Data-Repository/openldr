@@ -3,12 +3,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   ctx: {
     internalDb: { marker: 'internalDb' },
+    store: { db: { marker: 'externalDb' } },
+    terminology: { admin: { marker: 'admin' } },
     audit: { marker: 'audit' },
     logger: { marker: 'logger' },
     close: vi.fn(),
   },
   createAppContext: vi.fn(),
   importFacilities: vi.fn(),
+  scanObservedFacilities: vi.fn(),
+  publishFacilityMap: vi.fn(),
   recordAuditEvent: vi.fn(),
   referenceCapture: { marker: 'referenceCapture' },
   readFileSync: vi.fn(),
@@ -21,6 +25,8 @@ vi.mock('@openldr/config', () => ({
 vi.mock('@openldr/bootstrap', () => ({
   createAppContext: mocks.createAppContext,
   importFacilities: mocks.importFacilities,
+  scanObservedFacilities: mocks.scanObservedFacilities,
+  publishFacilityMap: mocks.publishFacilityMap,
   recordAuditEvent: mocks.recordAuditEvent,
 }));
 
@@ -32,7 +38,7 @@ vi.mock('node:fs', () => ({
   readFileSync: mocks.readFileSync,
 }));
 
-import { runFacilitiesImport } from './facilities';
+import { runFacilitiesImport, runFacilitiesScanObserved, runFacilitiesPublish } from './facilities';
 
 const CLEAN_RESULT = { parsed: 10, skipped: 0, unknownColumns: [], created: 0, updated: 0, duplicates: 0 };
 
@@ -182,6 +188,165 @@ describe('facilities import CLI', () => {
 
     expect(code).toBe(1);
     expect(mocks.ctx.close).toHaveBeenCalledTimes(1);
+    const err = stderrSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(err).toMatch(/db exploded/);
+  });
+});
+
+const RECONCILE_DEPS = { internalDb: mocks.ctx.internalDb, externalDb: mocks.ctx.store.db, admin: mocks.ctx.terminology.admin };
+
+describe('facilities scan-observed CLI', () => {
+  let stdoutSpy: ReturnType<typeof vi.fn>;
+  let stderrSpy: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true) as unknown as ReturnType<typeof vi.fn>;
+    stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true) as unknown as ReturnType<typeof vi.fn>;
+    mocks.createAppContext.mockResolvedValue(mocks.ctx);
+    mocks.ctx.close.mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('dry-runs by default: does not set apply, prints discovered/created/updated, does not audit', async () => {
+    mocks.scanObservedFacilities.mockResolvedValue({ discovered: 5, created: 2, updated: 1, systemRegistered: true });
+
+    const code = await runFacilitiesScanObserved({ json: false });
+
+    expect(code).toBe(0);
+    expect(mocks.scanObservedFacilities).toHaveBeenCalledWith(RECONCILE_DEPS, { apply: undefined });
+    expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
+    const human = stdoutSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(human).toMatch(/dry run/i);
+    expect(human).toMatch(/nothing written|--apply/i);
+    expect(human).toMatch(/discovered 5/);
+    expect(human).toMatch(/created 2/);
+    expect(human).toMatch(/updated 1/);
+    expect(mocks.ctx.close).toHaveBeenCalledTimes(1);
+  });
+
+  it('dry-runs by default via --json and prints counts (brief Step 1)', async () => {
+    mocks.scanObservedFacilities.mockResolvedValue({ discovered: 5, created: 2, updated: 1, systemRegistered: true });
+
+    const code = await runFacilitiesScanObserved({ json: true });
+
+    expect(code).toBe(0);
+    expect(mocks.scanObservedFacilities).toHaveBeenCalledWith(RECONCILE_DEPS, { apply: undefined });
+    const printed = stdoutSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(JSON.parse(printed)).toMatchObject({ discovered: expect.any(Number), created: expect.any(Number) });
+  });
+
+  it('--apply writes and audits facility.scan', async () => {
+    mocks.scanObservedFacilities.mockResolvedValue({ discovered: 5, created: 2, updated: 1, systemRegistered: true });
+
+    const code = await runFacilitiesScanObserved({ apply: true, json: false });
+
+    expect(code).toBe(0);
+    expect(mocks.scanObservedFacilities).toHaveBeenCalledWith(RECONCILE_DEPS, { apply: true });
+    expect(mocks.recordAuditEvent).toHaveBeenCalledWith(
+      mocks.ctx,
+      expect.objectContaining({ actorType: 'cli' }),
+      expect.objectContaining({ action: 'facility.scan', entityType: 'facility' }),
+    );
+    const human = stdoutSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(human).toMatch(/created 2/);
+    expect(human).toMatch(/updated 1/);
+  });
+
+  it('--json emits the whole machine-readable result', async () => {
+    const result = { discovered: 0, created: 0, updated: 0, systemRegistered: false };
+    mocks.scanObservedFacilities.mockResolvedValue(result);
+
+    const code = await runFacilitiesScanObserved({ json: true });
+
+    expect(code).toBe(0);
+    expect(stdoutSpy).toHaveBeenCalledWith(JSON.stringify(result, null, 2) + '\n');
+  });
+
+  it('closes the app context even when scanObservedFacilities throws, and reports a redacted message', async () => {
+    mocks.scanObservedFacilities.mockRejectedValue(new Error('db exploded'));
+
+    const code = await runFacilitiesScanObserved({ json: false });
+
+    expect(code).toBe(1);
+    expect(mocks.ctx.close).toHaveBeenCalledTimes(1);
+    expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
+    const err = stderrSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(err).toMatch(/db exploded/);
+  });
+});
+
+describe('facilities publish CLI', () => {
+  let stdoutSpy: ReturnType<typeof vi.fn>;
+  let stderrSpy: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true) as unknown as ReturnType<typeof vi.fn>;
+    stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true) as unknown as ReturnType<typeof vi.fn>;
+    mocks.createAppContext.mockResolvedValue(mocks.ctx);
+    mocks.ctx.close.mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('dry-runs by default: does not set apply, prints resolved/unmapped/targetMissing/written, does not audit', async () => {
+    mocks.publishFacilityMap.mockResolvedValue({ resolved: 8, unmapped: 3, targetMissing: 1, written: 12 });
+
+    const code = await runFacilitiesPublish({ json: false });
+
+    expect(code).toBe(0);
+    expect(mocks.publishFacilityMap).toHaveBeenCalledWith(RECONCILE_DEPS, { apply: undefined });
+    expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
+    const human = stdoutSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(human).toMatch(/dry run/i);
+    expect(human).toMatch(/nothing written|--apply/i);
+    expect(human).toMatch(/resolved 8/);
+    expect(human).toMatch(/unmapped 3/);
+    expect(human).toMatch(/targetMissing 1/);
+    expect(human).toMatch(/written 12/);
+    expect(mocks.ctx.close).toHaveBeenCalledTimes(1);
+  });
+
+  it('--apply writes and audits facility.publish', async () => {
+    mocks.publishFacilityMap.mockResolvedValue({ resolved: 8, unmapped: 3, targetMissing: 1, written: 12 });
+
+    const code = await runFacilitiesPublish({ apply: true, json: false });
+
+    expect(code).toBe(0);
+    expect(mocks.publishFacilityMap).toHaveBeenCalledWith(RECONCILE_DEPS, { apply: true });
+    expect(mocks.recordAuditEvent).toHaveBeenCalledWith(
+      mocks.ctx,
+      expect.objectContaining({ actorType: 'cli' }),
+      expect.objectContaining({ action: 'facility.publish', entityType: 'facility' }),
+    );
+    const human = stdoutSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(human).toMatch(/written 12/);
+  });
+
+  it('--json emits the whole machine-readable result', async () => {
+    const result = { resolved: 0, unmapped: 0, targetMissing: 0, written: 0 };
+    mocks.publishFacilityMap.mockResolvedValue(result);
+
+    const code = await runFacilitiesPublish({ json: true });
+
+    expect(code).toBe(0);
+    expect(stdoutSpy).toHaveBeenCalledWith(JSON.stringify(result, null, 2) + '\n');
+  });
+
+  it('closes the app context even when publishFacilityMap throws, and reports a redacted message', async () => {
+    mocks.publishFacilityMap.mockRejectedValue(new Error('db exploded'));
+
+    const code = await runFacilitiesPublish({ json: false });
+
+    expect(code).toBe(1);
+    expect(mocks.ctx.close).toHaveBeenCalledTimes(1);
+    expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
     const err = stderrSpy.mock.calls.map((c) => String(c[0])).join('');
     expect(err).toMatch(/db exploded/);
   });

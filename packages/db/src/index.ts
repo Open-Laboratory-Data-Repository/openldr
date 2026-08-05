@@ -59,7 +59,6 @@ export * from './reference-search';
 export { createFacilityRegistryStore, FACILITY_ADMIN_LEVELS, toRow as facilityRecordToRow, toRecord as facilityRowToRecord } from './facility-registry-store';
 export type {
   FacilityRecord,
-  FacilityAlias,
   FacilityListOptions,
   FacilityRegistryStore,
   FacilityAdminLevel,
@@ -67,6 +66,8 @@ export type {
 } from './facility-registry-store';
 export { splitFacilityAnswers, CORE_FACILITY_KEYS } from './facility-answers';
 export type { AnswerField, FacilityAnswerSplit } from './facility-answers';
+export { DEFAULT_OBSERVED_FACILITY_SYSTEM, FACILITY_REGISTRY_SYSTEM, observedFacilityConceptRow, facilityMapId, observedSystemForFeed } from './facility-observed';
+export type { ObservedFacilityInput, ObservedFacilityProperties, ConceptRowInput } from './facility-observed';
 // Re-exported (not reachable via `export * from './migrations/internal/index'` above — that module
 // only exports the aggregated `internalMigrations` map, not individual migrations' constants) so
 // @openldr/forms can pin migration 071's frozen NEW_FIELDS snapshot against the CURRENT shipped

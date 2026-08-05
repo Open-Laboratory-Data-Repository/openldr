@@ -7,12 +7,14 @@ import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/spinner';
 import { useAuth } from '@/auth/AuthProvider';
 import { listFacilities, deleteFacility, listPublishedForms, FACILITIES_LIST_LIMIT, type Facility } from '@/api';
 import { FacilityDialog } from '@/facilities/FacilityDialog';
 import { ImportFacilitiesSheet } from '@/facilities/ImportFacilitiesSheet';
+import { ObservedTab } from '@/facilities/ObservedTab';
 
 export function Facilities() {
   const { t } = useTranslation();
@@ -97,24 +99,45 @@ export function Facilities() {
     }
   }, [confirming]);
 
-  if (loading || hasForm === null) {
-    return (
-      <AppShell title={t('nav.facilities')} fullBleed>
-        <LoadingState className="flex-1" label={t('common.loading')} />
-      </AppShell>
-    );
-  }
+  // Registry-only loading gate: `hasForm === null` means the listPublishedForms() effect hasn't
+  // settled yet. This used to gate the WHOLE page (return before Tabs even rendered), which meant a
+  // slow/failing Registry fetch (e.g. a large CSV import in flight) blocked the operator from even
+  // reaching the Observed tab's trigger — see the ⛔ review finding this replaced. The tab SHELL
+  // (Tabs/TabsList) now always renders below; only the Registry panel's own body swaps in
+  // LoadingState while this is true, so Observed stays reachable regardless.
+  const registryLoading = loading || hasForm === null;
 
   // Whether the operator can actually open the edit form and save it: requires facilities.manage
   // AND a published form to target. The per-row Edit menu item is `disabled={!hasForm}` and the
   // row's own click-to-edit handler is gated on this same `canEdit`, so a lab with no published
   // Facility form still sees its registry (I5, below) but cannot open the edit dialog from it — the
   // banner further down names that cause instead of leaving Add/Edit silently greyed out.
-  const canEdit = canManage && hasForm;
+  const canEdit = canManage && !!hasForm;
 
   return (
     <AppShell title={t('nav.facilities')} fullBleed>
-      <div className="flex min-h-0 flex-1 flex-col">
+      <Tabs defaultValue="registry" className="flex min-h-0 flex-1 flex-col">
+        {/* fullBleed has zero page padding (unlike the p-4/p-6 settings pages `@/components/ui/
+            bleed` exists for), so the tab labels only need `px-4` to line up with the header row
+            below — there is no inset to negative-margin away. */}
+        <TabsList className="px-4">
+          <TabsTrigger value="registry">{t('facilities.tabs.registry')}</TabsTrigger>
+          <TabsTrigger value="observed">{t('facilities.tabs.observed')}</TabsTrigger>
+        </TabsList>
+
+        {/* The `TabsContent` primitive (components/ui/tabs.tsx) now defends against the
+            flex-vs-[hidden] specificity trap (commit 5fc72756) itself via
+            `data-[state=inactive]:hidden` (specificity 0,2,0, which beats a plain `.flex`
+            utility at 0,1,0 regardless of source order), so TabsContent itself can safely be the
+            flex container that hands height down to its children — without `flex flex-col`
+            here, the inner wrappers' `flex-1`/`h-full` have no flex/definite-height context to
+            resolve against, which is what left the Observed table sized to its content instead
+            of filling the pane (pagination stranded above a blank region). */}
+        <TabsContent value="registry" className="flex min-h-0 flex-1 flex-col">
+        {registryLoading ? (
+          <LoadingState className="flex-1" label={t('common.loading')} />
+        ) : (
+        <div className="flex min-h-0 h-full flex-col">
         <div className="flex items-center justify-between border-b border-border px-4 py-2">
           <span className="text-sm font-medium">{t('facilities.title')}</span>
           {canManage && (
@@ -260,7 +283,18 @@ export function Facilities() {
           destructive
           onConfirm={() => { void doDelete(); }}
         />
-      </div>
+        </div>
+        )}
+        </TabsContent>
+
+        {/* ObservedTab supplies its own `flex min-h-0 flex-1 flex-col` root div, but that
+            `flex-1` is inert unless ITS parent (this TabsContent) is a flex container — see the
+            comment on the registry TabsContent above for why `flex flex-col` is safe here now
+            that the primitive defends `[hidden]` itself. */}
+        <TabsContent value="observed" className="flex min-h-0 flex-1 flex-col">
+          <ObservedTab />
+        </TabsContent>
+      </Tabs>
     </AppShell>
   );
 }

@@ -1,9 +1,16 @@
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance, FastifyReply } from 'fastify';
+import type { Kysely } from 'kysely';
 import { z } from 'zod';
-import { importFacilities, type AppContext, type FacilityImportResult } from '@openldr/bootstrap';
-import { splitFacilityAnswers, CORE_FACILITY_KEYS, FACILITY_ADMIN_LEVELS, referenceCapture } from '@openldr/db';
-import type { FacilityAdminLevel } from '@openldr/db';
+import {
+  importFacilities, scanObservedFacilities, resolveObservedFacilities, publishFacilityMap,
+  type AppContext, type FacilityImportResult, type ScanResult, type PublishResult,
+} from '@openldr/bootstrap';
+import {
+  splitFacilityAnswers, CORE_FACILITY_KEYS, FACILITY_ADMIN_LEVELS, referenceCapture,
+  FACILITY_REGISTRY_SYSTEM,
+} from '@openldr/db';
+import type { FacilityAdminLevel, ExternalSchema } from '@openldr/db';
 import { requireCapability } from './rbac';
 import { recordAudit } from './audit-helper';
 
@@ -307,6 +314,37 @@ function nameTypeError(name: unknown): { error: string } | undefined {
   return undefined;
 }
 
+// ── Task 6: observed-facility reconciliation ────────────────────────────────────────────────────
+//
+// A thin HTTP wrapper over `@openldr/bootstrap`'s scan/resolve/publish trio (Tasks 3-4), following
+// the same dry-run-by-default / explicit-`apply` / audit-only-on-a-real-write shape as the CSV
+// import route above.
+
+// Task 9b: `system` (a caller-chosen DESTINATION coding system) is gone from both bodies below.
+// `scanObservedFacilities`/`publishFacilityMap` now derive a coding system PER ROW from
+// `diagnostic_reports.source_system` (`observedSystemForFeed`, `packages/db/src/facility-observed.ts`)
+// — one call correctly covers every feed, so there is no longer a single destination to pass.
+const ScanObservedSchema = z.object({
+  apply: z.boolean().optional(),
+});
+
+const PublishSchema = z.object({
+  apply: z.boolean().optional(),
+});
+
+/** `ReconcileDeps` for the three routes below. `ctx.store.db` is the target/warehouse handle —
+ *  same cast `createAppContext` itself uses (`packages/bootstrap/src/index.ts`'s
+ *  `store.db as unknown as Kysely<ExternalSchema>`) — and `ctx.terminology.admin` is the SAME
+ *  `TerminologyAdminStore` the rest of this file's terminology-facing code would reach through
+ *  `AppContext`, not a second store constructed here. */
+function reconcileDeps(ctx: AppContext) {
+  return {
+    internalDb: ctx.internalDb,
+    externalDb: ctx.store.db as unknown as Kysely<ExternalSchema>,
+    admin: ctx.terminology.admin,
+  };
+}
+
 // The national register runs 10-15k rows; an unbounded `limit` lets one request scan far past that
 // for no operator benefit. Comfortably above the whole register, well below "accidentally OOM".
 const MAX_LIST_LIMIT = 20000;
@@ -378,11 +416,180 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     return ctx.facilityRegistry.distinctAdminValues(level, scope);
   });
 
+  // Task 6: every observed facility string, resolved through its mapping, with a report-volume
+  // count per row — ranked by that count, which is the entire reason this surface exists over the
+  // generic `/terminology` page (an operator triages the highest-volume unmapped strings first).
+  //
+  // ⚠ Route ordering: registered BEFORE `/api/facilities/:id` below — Fastify would otherwise match
+  // the parameterised route first and read "observed" as a facility id.
+  //
+  // `resolveObservedFacilities` deliberately does not return a report count (Tasks 3-4's decision —
+  // see facility-reconcile.ts's doc comment on `ResolvedFacility`): it is a resolution function, and
+  // a count is a warehouse aggregate, not a resolution property. This route supplies it from a LIVE
+  // `diagnostic_reports` aggregate — the same table `resolveObservedFacilities` itself already reads
+  // its `(performer, source_system)` pairs from — rather than the count `scanObservedFacilities`
+  // snapshots into `terminology_concepts.properties.reportCount`. Two reasons: (1) granularity — the
+  // stored snapshot is grouped by `code` ALONE (see `scanObservedFacilities`'s own
+  // `groupBy('performer')`), which conflates two source systems sharing the same performer string,
+  // while this list is keyed per `(sourceSystem, sourceCode)` pair, exactly matching a live
+  // `groupBy(['performer', 'source_system'])`; (2) freshness — the stored snapshot only advances on
+  // a `facilities.manage`-gated scan, so a `facilities.view`-only operator would see a stale or
+  // all-zero count on an install where a scan has never been run, even though this route (like
+  // `resolveObservedFacilities`) needs no prior scan to work at all.
+  app.get('/api/facilities/observed', VIEW, async () => {
+    const deps = reconcileDeps(ctx);
+    const [resolved, counts] = await Promise.all([
+      resolveObservedFacilities(deps),
+      deps.externalDb
+        .selectFrom('diagnostic_reports')
+        .select(({ fn }) => ['performer', 'source_system', fn.countAll<number>().as('n')])
+        .where('performer', 'is not', null)
+        .groupBy(['performer', 'source_system'])
+        .execute(),
+    ]);
+
+    // Task 11 (whole-branch review, Fix 2 / triaged Minor M4-4): a raw template literal stringifies a
+    // NULL `source_system` to the literal string `"null"`, while `resolveObservedFacilities`
+    // normalises the same NULL to `''` (`sourceSystem: o.source_system ?? ''`). Both sides of this
+    // lookup must go through the identical `?? ''` normalisation or a legacy warehouse row with a
+    // NULL `source_system` (`relational-writer.ts` documents this as the deferred projection's
+    // months-long behaviour, not a hypothetical) misses the count map and renders `reportCount: 0`.
+    const countByKey = new Map<string, number>();
+    for (const c of counts) {
+      if (c.performer == null) continue;
+      countByKey.set(`${c.source_system ?? ''}|${c.performer}`, Number(c.n));
+    }
+
+    return resolved
+      .map((r) => ({ ...r, reportCount: countByKey.get(`${r.sourceSystem}|${r.sourceCode}`) ?? 0 }))
+      .sort((a, b) => b.reportCount - a.reportCount);
+  });
+
+  // Task 6: discover new/changed observed-facility strings and record them as concepts (Task 3's
+  // `scanObservedFacilities`). `apply` is opt-in — omitted/false previews the counts and writes
+  // nothing, mirroring the import route's dry-run-by-default contract.
+  app.post('/api/facilities/scan-observed', MANAGE, async (req, reply) => {
+    const p = ScanObservedSchema.safeParse(req.body ?? {});
+    if (!p.success) { reply.code(400); return { error: p.error.message }; }
+
+    const result: ScanResult = await scanObservedFacilities(reconcileDeps(ctx), {
+      apply: !!p.data.apply,
+    });
+
+    // A dry run writes nothing (scanObservedFacilities returns before touching the db when `apply`
+    // is falsy) and must not audit. `apply: true` always performs a real write here — even a
+    // discovery of zero new codes still (re)registers/re-activates every observed-facility
+    // `coding_systems` row it finds — so auditing is unconditional on `apply`, not further gated on
+    // a count.
+    if (p.data.apply) {
+      await recordAudit(ctx, req, {
+        action: 'facility.scan',
+        entityType: 'facility',
+        // Task 9b: one call now scans every feed's system at once — there is no longer a single
+        // system this audit entry is "about", so the entityId names the OPERATION, not a system.
+        entityId: 'facility-observed:all-feeds',
+        before: null,
+        after: null,
+        metadata: { result },
+      });
+    }
+    return result;
+  });
+
+  // Task 6: rebuild `facility_map` (the warehouse-side reporting dimension) from the current
+  // resolution (Task 4's `publishFacilityMap`). Same dry-run-by-default contract as the scan above.
+  app.post('/api/facilities/publish', MANAGE, async (req, reply) => {
+    const p = PublishSchema.safeParse(req.body ?? {});
+    if (!p.success) { reply.code(400); return { error: p.error.message }; }
+
+    const result: PublishResult = await publishFacilityMap(reconcileDeps(ctx), {
+      apply: !!p.data.apply,
+    });
+
+    // Same reasoning as the scan route above: `apply: true` always performs a real write (the
+    // delete-then-insert rebuild runs unconditionally), so auditing is unconditional on `apply`.
+    if (p.data.apply) {
+      await recordAudit(ctx, req, {
+        action: 'facility.publish',
+        entityType: 'facility',
+        entityId: 'facility-observed:all-feeds',
+        before: null,
+        after: null,
+        metadata: { result },
+      });
+    }
+    return result;
+  });
+
   app.get('/api/facilities/:id', VIEW, async (req, reply) => {
     const { id } = req.params as { id: string };
     const rec = await ctx.facilityRegistry.get(id);
     if (!rec) { reply.code(404); return { error: 'not found' }; }
     return rec;
+  });
+
+  // Task 7: the delete guard's impact preview. A facility can be TARGETED by a mapping two ways —
+  // see `resolveObservedFacilities`'s fixed precedence (packages/bootstrap/src/facility-reconcile.ts):
+  // a registry-route mapping (`to_system = FACILITY_REGISTRY_SYSTEM AND to_code = <this id>`), or a
+  // national-route mapping (`to_system = <this facility's national_system> AND to_code = <its
+  // national_code>`). Both are counted here — deleting the facility does not retire either route, a
+  // mapping keeps resolving right up until the row disappears, and after that Task 4's
+  // `ResolvedFacility.targetMissing` is what surfaces the orphan.
+  //
+  // ⛔ A facility with no national code has no national-route mappings, by construction — the
+  // national-route query only runs when BOTH `nationalSystem` and `nationalCode` are present. It
+  // deliberately does NOT fall through to `.where('to_code', '=', facility.nationalCode)` with a null
+  // value: `to_code` is NOT NULL on `term_mappings`, so that comparison can never match a real row
+  // today, but a future caller "simplifying" this into `facility.nationalCode ?? ''` (or any other
+  // sentinel) would start matching a pathological empty-string mapping that belongs to nobody. Skip
+  // the query outright rather than leave that door open.
+  //
+  // `reportCount` sums the LIVE `diagnostic_reports` aggregate (same table/approach as
+  // `GET /api/facilities/observed` above) for the observed codes these mappings come from — NOT the
+  // scan's stored snapshot, for the same freshness reason documented on that route. Unlike that
+  // route's per-`(sourceSystem, sourceCode)` key, a `term_mappings` row carries no `source_system` of
+  // its own (`from_code` alone identifies the observed string), so counts here are summed across
+  // every source system reporting that code rather than kept split by feed.
+  app.get('/api/facilities/:id/impact', VIEW, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const facility = await ctx.facilityRegistry.get(id);
+    if (!facility) { reply.code(404); return { error: 'not found' }; }
+
+    const deps = reconcileDeps(ctx);
+
+    const registryMappings = await deps.internalDb
+      .selectFrom('term_mappings')
+      .select(['from_code'])
+      .where('to_system', '=', FACILITY_REGISTRY_SYSTEM)
+      .where('to_code', '=', id)
+      .where('is_active', '=', true)
+      .execute();
+
+    const nationalMappings = (facility.nationalSystem != null && facility.nationalCode != null)
+      ? await deps.internalDb
+          .selectFrom('term_mappings')
+          .select(['from_code'])
+          .where('to_system', '=', facility.nationalSystem)
+          .where('to_code', '=', facility.nationalCode)
+          .where('is_active', '=', true)
+          .execute()
+      : [];
+
+    const mappingCount = registryMappings.length + nationalMappings.length;
+
+    const observedCodes = [...new Set([...registryMappings, ...nationalMappings].map((m) => m.from_code))];
+    let reportCount = 0;
+    if (observedCodes.length > 0) {
+      const counts = await deps.externalDb
+        .selectFrom('diagnostic_reports')
+        .select(({ fn }) => ['performer', fn.countAll<number>().as('n')])
+        .where('performer', 'in', observedCodes)
+        .groupBy('performer')
+        .execute();
+      reportCount = counts.reduce((sum, c) => sum + Number(c.n), 0);
+    }
+
+    return { mappingCount, reportCount };
   });
 
   app.post('/api/facilities', MANAGE, async (req, reply) => {

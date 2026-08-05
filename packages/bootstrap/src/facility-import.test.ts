@@ -56,20 +56,19 @@ describe('importFacilities', () => {
     expect(await deps.db.selectFrom('facility_registry').selectAll().execute()).toHaveLength(1);
   });
 
-  it('a row already present keeps its id, and its attached facility_aliases survive', async () => {
+  it('a row already present keeps its id (re-import is an in-place update)', async () => {
     const deps = await buildDeps();
-    const store = createFacilityRegistryStore(deps.db);
     const first = csv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,']);
     await importFacilities(deps, first, { nationalSystem: SYSTEM, apply: true });
     const row = await rowFor(deps.db, '100');
     const id = row!.id;
-    await store.attachAlias({ sourceSystem: 'cdr', sourceCode: 'Dodoma', registryId: id });
 
     const renamed = csv(['100,Dodoma Regional Referral Hospital,,,,,,,,,,,,,,']);
     await importFacilities(deps, renamed, { nationalSystem: SYSTEM, apply: true });
 
-    expect(await store.resolve('cdr', 'Dodoma')).toMatchObject({ id });
-    expect(await store.listAliases(id)).toHaveLength(1);
+    const rowAfter = await rowFor(deps.db, '100');
+    expect(rowAfter?.id).toBe(id);
+    expect(rowAfter?.name).toBe('Dodoma Regional Referral Hospital');
   });
 
   it('unknown columns block the import unless allowed, then land in extras', async () => {

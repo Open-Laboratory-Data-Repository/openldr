@@ -20,6 +20,11 @@ vi.mock('@/api', async (orig) => {
     listPublishedForms: vi.fn(),
     getForm: vi.fn(),
     importFacilitiesCsv: vi.fn(),
+    // The Observed tab (Task 9) is its own component with its own test suite
+    // (ObservedTab.test.tsx) — stubbed here only so switching tabs on THIS page doesn't reach the
+    // real network; Radix Tabs unmounts the inactive TabsContent, so these are untouched by every
+    // test above that never clicks the Observed trigger.
+    listObservedFacilities: vi.fn(),
   };
 });
 
@@ -29,7 +34,7 @@ vi.mock('@/api', async (orig) => {
 const { useAuthMock } = vi.hoisted(() => ({ useAuthMock: vi.fn() }));
 vi.mock('@/auth/AuthProvider', () => ({ useAuth: useAuthMock }));
 
-import { listFacilities, listPublishedForms, getForm, importFacilitiesCsv, FACILITIES_LIST_LIMIT, type Facility } from '@/api';
+import { listFacilities, listPublishedForms, getForm, importFacilitiesCsv, listObservedFacilities, FACILITIES_LIST_LIMIT, type Facility } from '@/api';
 import { Facilities } from './Facilities';
 
 const publishedFacilityForm = {
@@ -102,6 +107,7 @@ describe('Facilities page', () => {
     vi.clearAllMocks();
     (listFacilities as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     (listPublishedForms as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (listObservedFacilities as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     // Default: a lab_admin-shaped actor who can both view and manage the registry. Individual
     // tests (I4) override this to a view-only actor.
     useAuthMock.mockReturnValue({
@@ -347,5 +353,50 @@ describe('Facilities page', () => {
     expect(screen.getByText(/created 2, updated 1, skipped 0/i)).toBeInTheDocument();
     // And the underlying table did actually pick up the refreshed row from the background reload.
     expect(await screen.findByText('Dodoma Regional Referral')).toBeInTheDocument();
+  });
+
+  describe('Task 9: Registry | Observed tabs', () => {
+    it('shows the Registry table by default, and switching to Observed mounts the Observed tab instead', async () => {
+      (listPublishedForms as ReturnType<typeof vi.fn>).mockResolvedValue([publishedFacilityForm]);
+      (listFacilities as ReturnType<typeof vi.fn>).mockResolvedValue([sampleFacility]);
+      (listObservedFacilities as ReturnType<typeof vi.fn>).mockResolvedValue([
+        { sourceSystem: 'webhook-ingest', sourceCode: 'Dodoma', reportCount: 247, registryId: null, localCode: null, name: null, level: null, status: null, region: null, district: null, council: null, nationalSystem: null, nationalCode: null, resolvedVia: null, targetMissing: false },
+      ]);
+      show();
+      await waitFor(() => expect(screen.getByText('Dodoma Regional Referral')).toBeInTheDocument());
+      // The Observed tab hasn't been clicked yet — Radix unmounts inactive TabsContent, so its
+      // fetch must not have fired.
+      expect(listObservedFacilities).not.toHaveBeenCalled();
+
+      // Radix's TabsTrigger switches tabs on `onMouseDown`, not `onClick` — a bare fireEvent.click
+      // fires neither event on its own in jsdom.
+      fireEvent.mouseDown(screen.getByRole('tab', { name: 'Observed' }), { button: 0, ctrlKey: false });
+      expect(await screen.findByText('Dodoma')).toBeInTheDocument();
+      // The Registry table is gone now that Observed is the active tab (Radix unmounts the
+      // inactive TabsContent, via an async Presence transition — wait for it rather than
+      // asserting synchronously).
+      await waitFor(() => expect(screen.queryByText('Dodoma Regional Referral')).not.toBeInTheDocument());
+    });
+
+    it('review finding: the Observed tab trigger is reachable while the Registry fetch is still pending', async () => {
+      // A slow/failing Registry fetch (e.g. a large CSV import in flight) used to gate the WHOLE
+      // page behind a full-page LoadingState rendered BEFORE Tabs even mounted — the operator
+      // couldn't even see the Observed trigger, let alone click it. listFacilities() here never
+      // resolves, simulating that slow fetch; listPublishedForms() likewise never resolves, so
+      // `hasForm` also never settles. Only the Registry panel's own body should show a spinner.
+      (listFacilities as ReturnType<typeof vi.fn>).mockReturnValue(new Promise(() => {}));
+      (listPublishedForms as ReturnType<typeof vi.fn>).mockReturnValue(new Promise(() => {}));
+      (listObservedFacilities as ReturnType<typeof vi.fn>).mockResolvedValue([
+        { sourceSystem: 'webhook-ingest', sourceCode: 'Dodoma', reportCount: 247, registryId: null, localCode: null, name: null, level: null, status: null, region: null, district: null, council: null, nationalSystem: null, nationalCode: null, resolvedVia: null, targetMissing: false },
+      ]);
+      show();
+
+      // The tab trigger itself is reachable immediately — the old code never rendered Tabs at all
+      // while loading, so this `getByRole` would have thrown before this fix.
+      const observedTrigger = await screen.findByRole('tab', { name: 'Observed' });
+      fireEvent.mouseDown(observedTrigger, { button: 0, ctrlKey: false });
+      // Observed fetches independently and is not blocked by the still-pending Registry calls.
+      expect(await screen.findByText('Dodoma')).toBeInTheDocument();
+    });
   });
 });

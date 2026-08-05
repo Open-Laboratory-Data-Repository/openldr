@@ -80,7 +80,11 @@ describe('ReferencePicker', () => {
     render(<ReferencePicker field={field} formDefinitionId="f1" multiple={false} value={null} onChange={onChange} />);
 
     await user.type(screen.getByRole('combobox'), 'doe');
-    await user.click(await screen.findByText('Doe Jane'));
+    // Explicit timeout: the component debounces search by 200ms (ReferencePicker.tsx:104),
+    // which restarts on every keystroke from user.type. Under a full-workspace `turbo` run
+    // the debounce + mocked search + re-render can exceed testing-library's 1000ms findBy*
+    // default, so give these post-type assertions real headroom instead of relying on it.
+    await user.click(await screen.findByText('Doe Jane', {}, { timeout: 5000 }));
     expect(onChange).toHaveBeenCalledWith({ reference: 'Patient/p1', display: 'Doe Jane' });
   });
 
@@ -91,7 +95,7 @@ describe('ReferencePicker', () => {
     render(<ReferencePicker field={field} formDefinitionId="f1" multiple={false} value={null} onChange={onChange} />);
 
     await user.type(screen.getByRole('combobox'), 'doe');
-    await screen.findByText('Doe Jane');
+    await screen.findByText('Doe Jane', {}, { timeout: 5000 });
     await user.keyboard('{ArrowDown}{Enter}');
     expect(onChange).toHaveBeenCalledWith({ reference: 'Patient/p1', display: 'Doe Jane' });
   });
@@ -133,7 +137,7 @@ describe('ReferencePicker', () => {
     const user = userEvent.setup();
     render(<ReferencePicker field={field} formDefinitionId="f1" multiple={false} value={null} onChange={() => {}} />);
     await user.type(screen.getByRole('combobox'), 'zzz');
-    expect(await screen.findByText(/no matches/i)).toBeInTheDocument();
+    expect(await screen.findByText(/no matches/i, {}, { timeout: 5000 })).toBeInTheDocument();
   });
 
   it('shows an error row when the search fails', async () => {
@@ -141,7 +145,7 @@ describe('ReferencePicker', () => {
     const user = userEvent.setup();
     render(<ReferencePicker field={field} formDefinitionId="f1" multiple={false} value={null} onChange={() => {}} />);
     await user.type(screen.getByRole('combobox'), 'doe');
-    expect(await screen.findByText(/boom/i)).toBeInTheDocument();
+    expect(await screen.findByText(/boom/i, {}, { timeout: 5000 })).toBeInTheDocument();
   });
 
   it('ignores a stale response that resolves after a newer one', async () => {
@@ -200,7 +204,7 @@ describe('ReferencePicker', () => {
 
     const combobox = screen.getByRole('combobox');
     await user.type(combobox, 'doe');
-    const option = await screen.findByText('Doe Jane');
+    const option = await screen.findByText('Doe Jane', {}, { timeout: 5000 });
 
     expect(combobox).not.toHaveAttribute('aria-activedescendant');
 

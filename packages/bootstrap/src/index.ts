@@ -58,6 +58,7 @@ import { createValidationStrictness, type ValidationStrictness } from './validat
 import { createLabIdentity, type LabIdentityService } from './lab-identity';
 export { createValidationStrictness, VALIDATION_STRICTNESS_KEY, type ValidationStrictness } from './validation-settings';
 import { createReportCategoriesService, type ReportCategoriesService } from './report-categories';
+import { captureObservedFacilityFromProjection } from './facility-reconcile';
 import { createPluginBroker, type PluginBroker } from './plugin-broker';
 import { policyFromConfig } from './policy';
 import { createPluginTarget } from './connector-target';
@@ -963,6 +964,20 @@ const reporting: ReportingApi = {
     relationalWriter: workflowRelationalWriter,
     logger,
     fetch: fetchSafeChangeRows,
+    // Facility-reconciliation: capture a DiagnosticReport's performer the moment it is projected,
+    // so a newly-seen facility string appears as a concept without waiting for the next
+    // `scanObservedFacilities` scan. `onProjected` itself already wraps this call and swallows any
+    // error (see `applyProjection` in `@openldr/db`'s cycle.ts) — never let a facility-capture
+    // failure be mistaken for a failed clinical projection. The filter/extract/capture logic lives
+    // in `captureObservedFacilityFromProjection` (facility-reconcile.ts), extracted specifically so
+    // it is unit-testable without booting the full `AppContext` this closure's outer scope needs.
+    //
+    // Task 9b fix round 1 (Gap 1): `provenance.sourceSystem` is the SAME provenance
+    // `applyProjection` just handed to `relationalWriter.write()` for this resource — i.e. the exact
+    // value about to land in `diagnostic_reports.source_system` — passed through so the capture
+    // lands in THAT feed's coding system rather than always the default one.
+    onProjected: (resourceType, resource, provenance) =>
+      captureObservedFacilityFromProjection({ admin: termAdmin, internalDb: internal.db }, resourceType, resource, provenance.sourceSystem ?? null, new Date().toISOString()),
   });
   const projectionWorker = createProjectionWorker({
     runCycle: () => projectionRunner.runCycle(),
@@ -1460,6 +1475,8 @@ export { migrateWorkflowSecrets } from './workflow-secret-migrate';
 export { mergePatients } from './patient-merge';
 export { importFacilities } from './facility-import';
 export type { FacilityImportDeps, FacilityImportOptions, FacilityImportResult } from './facility-import';
+export { scanObservedFacilities, resolveObservedFacilities, publishFacilityMap } from './facility-reconcile';
+export type { ReconcileDeps, ScanResult, ScanOptions, ResolvedFacility, ResolvedVia, PublishResult } from './facility-reconcile';
 export {
   enrollSite,
   listSites,

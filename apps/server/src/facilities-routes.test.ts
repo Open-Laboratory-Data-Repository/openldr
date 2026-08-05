@@ -1,6 +1,12 @@
+import { randomUUID } from 'node:crypto';
 import { describe, it, expect } from 'vitest';
 import Fastify from 'fastify';
 import { makeMigratedDb } from '@openldr/db/testing';
+import { makeMigratedExternalDb } from '@openldr/db/testing-external';
+import {
+  createTerminologyAdminStore, createFacilityRegistryStore,
+  DEFAULT_OBSERVED_FACILITY_SYSTEM, FACILITY_REGISTRY_SYSTEM,
+} from '@openldr/db';
 import { registerFacilitiesRoutes } from './facilities-routes';
 
 const FORM_FIELDS = [
@@ -1000,5 +1006,481 @@ describe('POST /api/facilities/import', () => {
     });
     expect(res.statusCode).toBe(400);
     expect(await db.selectFrom('facility_registry').selectAll().execute()).toHaveLength(0);
+  });
+});
+
+// --- Task 6: GET /api/facilities/observed, POST /scan-observed, POST /publish -----------------
+// Exercises the REAL scanObservedFacilities/resolveObservedFacilities/publishFacilityMap
+// (packages/bootstrap/src/facility-reconcile.ts) against REAL migrated internal AND external
+// (warehouse) pg-mem dbs — the fake `fakeCtx().facilityRegistry` used above has no `diagnostic_reports`
+// table for these to read, and a hand-rolled fake Kysely double for two independent group-by
+// aggregates would be more code (and less trustworthy) than the real thing. Mirrors
+// `fakeImportCtx`'s "real migrated db, everything else this route doesn't touch stays a minimal
+// stub" pattern immediately above, extended with a second (external/warehouse) migrated db and the
+// REAL `TerminologyAdminStore` (`createTerminologyAdminStore`) — the concrete store type
+// `ReconcileDeps.admin` requires, which the CSV-import fixture above never needed to construct.
+//
+// `@openldr/db`'s package.json only exported `./testing` (INTERNAL db) before this task; a
+// `./testing-external` subpath was added pointing at the pre-existing (but previously unexported)
+// `packages/db/src/test-helpers-external.ts`, so this file can build a migrated external db the
+// same way `packages/bootstrap/src/test-support/facility-reconcile-fixture.ts` already does for
+// bootstrap's own tests, without a second from-scratch reimplementation of the pg-mem
+// migration-runner in this file (a deep relative import of that fixture from apps/server is not
+// reachable through @openldr/bootstrap's package.json exports map, which only publishes `.`).
+
+function fakeReconcileCtx(internalDb: any, externalDb: any) {
+  const audit: any[] = [];
+  return {
+    internalDb,
+    store: { db: externalDb },
+    terminology: { admin: createTerminologyAdminStore(internalDb) },
+    audit: { record: async (e: any) => { audit.push(e); return e; } },
+    logger: { error() {}, warn() {}, info() {} },
+    forms: { get: async () => undefined },
+    facilityRegistry: {
+      list: async () => [],
+      get: async () => undefined,
+      distinctAdminValues: async () => [],
+      upsert: async () => { throw new Error('not used by the observed-facility routes'); },
+      remove: async () => {},
+    },
+    __audit: audit,
+  } as any;
+}
+
+/** Mirrors `packages/bootstrap/src/test-support/facility-reconcile-fixture.ts`'s `seedPerformers`:
+ *  one `diagnostic_reports` row per unit of report count, so the routes' own live
+ *  `groupBy(['performer', 'source_system'])` aggregate has real rows to count. */
+async function seedObservedReports(externalDb: any, pairs: [string, number][]): Promise<void> {
+  const rows: { id: string; performer: string; source_system: string }[] = [];
+  for (const [performer, count] of pairs) {
+    for (let i = 0; i < count; i += 1) {
+      rows.push({ id: `dr-${randomUUID()}`, performer, source_system: 'webhook-ingest' });
+    }
+  }
+  if (rows.length === 0) return;
+  const batchSize = 500;
+  for (let i = 0; i < rows.length; i += batchSize) {
+    await externalDb.insertInto('diagnostic_reports').values(rows.slice(i, i + batchSize)).execute();
+  }
+}
+
+describe('Task 6: GET /api/facilities/observed', () => {
+  it('lists observed facilities ordered by report count desc, with reportCount on each row', async () => {
+    const internalDb = await makeMigratedDb();
+    const externalDb = await makeMigratedExternalDb();
+    // Seeded LOWER-count-first (Kibondo, then Dodoma): pg-mem's unordered `group by` happens to
+    // come back in roughly insertion order, so seeding highest-count-first would let this test pass
+    // even with the route's `.sort()` deleted entirely (proven by a deliberate mutation experiment
+    // — see the task report). Seeding the smaller count first means an unsorted result would read
+    // ['Kibondo', 'Dodoma'] — the OPPOSITE of what's asserted below — so this only passes because
+    // the route actually sorts by reportCount desc.
+    await seedObservedReports(externalDb, [['Kibondo', 99], ['Dodoma', 247]]);
+    const app = await appWith(fakeReconcileCtx(internalDb, externalDb));
+
+    const res = await app.inject({ method: 'GET', url: '/api/facilities/observed' });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    // Pinned ordering (Kibondo has fewer reports than Dodoma): fails if the sort is removed or
+    // reversed, not just if reportCount happens to be present.
+    expect(body.map((r: any) => r.sourceCode)).toEqual(['Dodoma', 'Kibondo']);
+    expect(body[0].reportCount).toBe(247);
+    expect(body[1].reportCount).toBe(99);
+  });
+
+  it('needs no prior scan — resolves straight off the warehouse', async () => {
+    const internalDb = await makeMigratedDb();
+    const externalDb = await makeMigratedExternalDb();
+    await seedObservedReports(externalDb, [['Dodoma', 5]]);
+    const app = await appWith(fakeReconcileCtx(internalDb, externalDb));
+
+    const res = await app.inject({ method: 'GET', url: '/api/facilities/observed' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual([expect.objectContaining({ sourceCode: 'Dodoma', reportCount: 5, resolvedVia: null })]);
+  });
+
+  // Task 11 (whole-branch review, Fix 2 / triaged Minor M4-4): `relational-writer.ts` documents that
+  // the deferred projection wrote NULL `source_system`/`batch_id` into every row for months, so a
+  // legacy warehouse row with a NULL `source_system` is expected, not hypothetical.
+  // `resolveObservedFacilities` normalises that NULL to `''` (`sourceSystem: o.source_system ?? ''`),
+  // but this route used to build its count map with a raw template literal
+  // (`` `${c.source_system}|${c.performer}` ``), which stringifies NULL to the literal string
+  // `"null"` — a miss against the `''`-keyed resolved row (`` `${r.sourceSystem}|${r.sourceCode}` ``
+  // reads `"|Dodoma"` vs the stored `"null|Dodoma"`), landing exactly on the reason this surface
+  // exists: impact ordering by report count.
+  it('reports the true reportCount for an observed row with a NULL source_system', async () => {
+    const internalDb = await makeMigratedDb();
+    const externalDb = await makeMigratedExternalDb();
+    const rows = Array.from({ length: 5 }, () => ({ id: `dr-${randomUUID()}`, performer: 'Dodoma', source_system: null }));
+    await externalDb.insertInto('diagnostic_reports').values(rows as any).execute();
+    const app = await appWith(fakeReconcileCtx(internalDb, externalDb));
+
+    const res = await app.inject({ method: 'GET', url: '/api/facilities/observed' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual([expect.objectContaining({ sourceCode: 'Dodoma', reportCount: 5 })]);
+  });
+
+  it('is gated on facilities.view', async () => {
+    const internalDb = await makeMigratedDb();
+    const externalDb = await makeMigratedExternalDb();
+    const app = await appWith(fakeReconcileCtx(internalDb, externalDb), []);
+    const res = await app.inject({ method: 'GET', url: '/api/facilities/observed' });
+    expect(res.statusCode).toBe(403);
+  });
+
+  // ⚠ Route-ordering regression guard: `/api/facilities/:id` is ALSO gated on `facilities.view` and
+  // ALSO returns a 4xx for an id it can't find, so a `facilities.view`-only caller getting SOME 4xx
+  // out of `/api/facilities/observed` is not, by itself, proof this route (rather than the `:id`
+  // fallback reading "observed" as an id) was reached — the test above would pass either way. This
+  // one distinguishes them: only the REAL route returns 200 with an array body; the `:id` fallback
+  // (were `/observed` registered after it) would 404 with `{ error: 'not found' }` instead, since
+  // `fakeReconcileCtx`'s `facilityRegistry.get` always resolves to `undefined`.
+  it('⚠ a facilities.view-only caller reaches the real route, not the /:id fallback reading "observed" as an id', async () => {
+    const internalDb = await makeMigratedDb();
+    const externalDb = await makeMigratedExternalDb();
+    const app = await appWith(fakeReconcileCtx(internalDb, externalDb), ['facilities.view']);
+    const res = await app.inject({ method: 'GET', url: '/api/facilities/observed' });
+    expect(res.statusCode).toBe(200);
+    expect(Array.isArray(res.json())).toBe(true);
+  });
+});
+
+describe('Task 6: POST /api/facilities/scan-observed', () => {
+  it('refuses the scan without facilities.manage', async () => {
+    const internalDb = await makeMigratedDb();
+    const externalDb = await makeMigratedExternalDb();
+    const app = await appWith(fakeReconcileCtx(internalDb, externalDb), ['facilities.view']);
+    const res = await app.inject({ method: 'POST', url: '/api/facilities/scan-observed', payload: { apply: true } });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('dry-runs the scan by default: reports counts but writes NOTHING and does not audit', async () => {
+    const internalDb = await makeMigratedDb();
+    const externalDb = await makeMigratedExternalDb();
+    await seedObservedReports(externalDb, [['Dodoma', 3]]);
+    const ctx = fakeReconcileCtx(internalDb, externalDb);
+    const app = await appWith(ctx);
+
+    const res = await app.inject({ method: 'POST', url: '/api/facilities/scan-observed', payload: {} });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().created).toBeGreaterThan(0);
+    // Proof of "nothing written", not just "counts came back": no `Dodoma` concept lands under the
+    // observed-facility system (the migrated internal db seeds its OWN unrelated terminology, e.g.
+    // default organisms/parameters — an unscoped `selectAll` count would be nonzero regardless of
+    // this route, so the assertion is scoped to the system this scan would have written to) and the
+    // observed-facility coding_systems row was never registered.
+    expect(
+      await internalDb.selectFrom('terminology_concepts').where('system', '=', 'urn:openldr:default_fac').selectAll().execute(),
+    ).toHaveLength(0);
+    expect(await internalDb.selectFrom('coding_systems').where('url', '=', 'urn:openldr:default_fac').selectAll().execute()).toHaveLength(0);
+    expect(ctx.__audit).toHaveLength(0);
+  });
+
+  it('apply: true writes concepts and audits facility.scan (never on the dry run above)', async () => {
+    const internalDb = await makeMigratedDb();
+    const externalDb = await makeMigratedExternalDb();
+    await seedObservedReports(externalDb, [['Dodoma', 3]]);
+    const ctx = fakeReconcileCtx(internalDb, externalDb);
+    const app = await appWith(ctx);
+
+    const res = await app.inject({ method: 'POST', url: '/api/facilities/scan-observed', payload: { apply: true } });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ discovered: 1, created: 1, systemRegistered: true });
+    expect(await internalDb.selectFrom('terminology_concepts').where('code', '=', 'Dodoma').selectAll().execute()).toHaveLength(1);
+    expect(ctx.__audit.map((a: any) => a.action)).toEqual(['facility.scan']);
+  });
+
+  // Task 9b: `system` (a caller-chosen destination) is gone from this route's body — scan now
+  // derives a coding system PER ROW from `source_system`, so an unknown field like `system` is
+  // simply stripped by zod rather than meaning anything. This is the direct replacement for the
+  // pre-Task-9b "rejects a blank system" test, which pinned a validation rule on a field this route
+  // no longer has.
+  it('scans every feed at once — a second, non-default feed resolves through its OWN system', async () => {
+    const internalDb = await makeMigratedDb();
+    const externalDb = await makeMigratedExternalDb();
+    const rows = [
+      { id: `dr-${randomUUID()}`, performer: 'NHL-01', source_system: 'feed-a' },
+      { id: `dr-${randomUUID()}`, performer: 'NHL-01', source_system: 'feed-b' },
+    ];
+    await externalDb.insertInto('diagnostic_reports').values(rows).execute();
+    const ctx = fakeReconcileCtx(internalDb, externalDb);
+    const app = await appWith(ctx);
+
+    const res = await app.inject({ method: 'POST', url: '/api/facilities/scan-observed', payload: { apply: true } });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ discovered: 2, created: 2, systemRegistered: true });
+    expect(
+      await internalDb.selectFrom('coding_systems').where('url', '=', 'urn:openldr:fac_feed_a').selectAll().execute(),
+    ).toHaveLength(1);
+    expect(
+      await internalDb.selectFrom('coding_systems').where('url', '=', 'urn:openldr:fac_feed_b').selectAll().execute(),
+    ).toHaveLength(1);
+  });
+});
+
+describe('Task 6: POST /api/facilities/publish', () => {
+  it('refuses publish without facilities.manage', async () => {
+    const internalDb = await makeMigratedDb();
+    const externalDb = await makeMigratedExternalDb();
+    const app = await appWith(fakeReconcileCtx(internalDb, externalDb), ['facilities.view']);
+    const res = await app.inject({ method: 'POST', url: '/api/facilities/publish', payload: { apply: true } });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('dry-runs by default: reports the summary but writes NOTHING to facility_map and does not audit', async () => {
+    const internalDb = await makeMigratedDb();
+    const externalDb = await makeMigratedExternalDb();
+    await seedObservedReports(externalDb, [['Dodoma', 3]]);
+    const ctx = fakeReconcileCtx(internalDb, externalDb);
+    const app = await appWith(ctx);
+
+    const res = await app.inject({ method: 'POST', url: '/api/facilities/publish', payload: {} });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ written: 1, resolved: 0, unmapped: 1, targetMissing: 0 });
+    expect(await externalDb.selectFrom('facility_map').selectAll().execute()).toHaveLength(0);
+    expect(ctx.__audit).toHaveLength(0);
+  });
+
+  it('apply: true rebuilds facility_map and audits facility.publish (never on the dry run above)', async () => {
+    const internalDb = await makeMigratedDb();
+    const externalDb = await makeMigratedExternalDb();
+    await seedObservedReports(externalDb, [['Dodoma', 3]]);
+    const ctx = fakeReconcileCtx(internalDb, externalDb);
+    const app = await appWith(ctx);
+
+    const res = await app.inject({ method: 'POST', url: '/api/facilities/publish', payload: { apply: true } });
+    expect(res.statusCode).toBe(200);
+    const rows = await externalDb.selectFrom('facility_map').selectAll().execute();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].source_code).toBe('Dodoma');
+    expect(ctx.__audit.map((a: any) => a.action)).toEqual(['facility.publish']);
+  });
+
+  it('a second apply REPLACES facility_map rather than appending (delete-then-insert)', async () => {
+    const internalDb = await makeMigratedDb();
+    const externalDb = await makeMigratedExternalDb();
+    await seedObservedReports(externalDb, [['Dodoma', 1]]);
+    const ctx = fakeReconcileCtx(internalDb, externalDb);
+    const app = await appWith(ctx);
+
+    await app.inject({ method: 'POST', url: '/api/facilities/publish', payload: { apply: true } });
+    await app.inject({ method: 'POST', url: '/api/facilities/publish', payload: { apply: true } });
+    expect(await externalDb.selectFrom('facility_map').selectAll().execute()).toHaveLength(1);
+  });
+});
+
+// --- Task 7: GET /api/facilities/:id/impact -----------------------------------------------------
+// Reuses Task 6's harness (`fakeReconcileCtx`, `seedObservedReports`) rather than inventing a second
+// one — the only addition is swapping in the REAL `createFacilityRegistryStore` for
+// `ctx.facilityRegistry`, so `GET .../impact` and `DELETE .../:id` exercise the real store's
+// `get`/`remove` against a real migrated `facility_registry` table (`fakeReconcileCtx`'s own
+// `facilityRegistry` stub always resolves `get` to `undefined`, which is fine for the observed/scan/
+// publish routes above — none of them touch it — but this task's route reads `nationalSystem`/
+// `nationalCode` off it directly).
+
+function impactCtx(internalDb: any, externalDb: any) {
+  const ctx = fakeReconcileCtx(internalDb, externalDb);
+  ctx.facilityRegistry = createFacilityRegistryStore(internalDb);
+  return ctx;
+}
+
+/** Insert one `term_mappings` row directly — mirrors this file's existing pattern of hitting the
+ *  migrated db directly for setup the store interfaces don't expose (see e.g. `seedObservedReports`
+ *  above). Defaults to the registry-route mapping the main tests below need; callers override
+ *  whichever columns make theirs a national-route (or otherwise distinct) mapping. */
+async function seedMapping(internalDb: any, overrides: Record<string, unknown> = {}): Promise<void> {
+  await internalDb.insertInto('term_mappings').values({
+    id: `tm-${randomUUID()}`,
+    from_system: DEFAULT_OBSERVED_FACILITY_SYSTEM,
+    from_code: 'Dodoma',
+    to_system: FACILITY_REGISTRY_SYSTEM,
+    to_code: 'fac-1',
+    to_display: 'Dodoma Regional Referral',
+    map_type: 'equivalent',
+    relationship: null,
+    owner: null,
+    is_active: true,
+    ...overrides,
+  }).execute();
+}
+
+describe('Task 7: GET /api/facilities/:id/impact', () => {
+  it('reports how many observed codes and reports a facility affects', async () => {
+    const internalDb = await makeMigratedDb();
+    const externalDb = await makeMigratedExternalDb();
+    const ctx = impactCtx(internalDb, externalDb);
+    await ctx.facilityRegistry.upsert({ id: 'fac-1', name: 'Dodoma Regional Referral', localCode: 'LAB01', source: 'manual' });
+    await seedMapping(internalDb);
+    await seedObservedReports(externalDb, [['Dodoma', 247]]);
+    const app = await appWith(ctx);
+
+    const res = await app.inject({ method: 'GET', url: '/api/facilities/fac-1/impact' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ mappingCount: 1, reportCount: 247 });
+  });
+
+  it('leaves the mapping in place when the facility is deleted', async () => {
+    const internalDb = await makeMigratedDb();
+    const externalDb = await makeMigratedExternalDb();
+    const ctx = impactCtx(internalDb, externalDb);
+    await ctx.facilityRegistry.upsert({ id: 'fac-1', name: 'Dodoma Regional Referral', localCode: 'LAB01', source: 'manual' });
+    await seedMapping(internalDb);
+    await seedObservedReports(externalDb, [['Dodoma', 247]]);
+    const app = await appWith(ctx);
+
+    const del = await app.inject({ method: 'DELETE', url: '/api/facilities/fac-1' });
+    expect(del.statusCode).toBe(200);
+
+    // The mapping row itself is untouched by the delete — proof beyond the 200 status code.
+    const survivingMappings = await internalDb.selectFrom('term_mappings').selectAll().where('to_code', '=', 'fac-1').execute();
+    expect(survivingMappings).toHaveLength(1);
+
+    const observed = await app.inject({ method: 'GET', url: '/api/facilities/observed' });
+    const row = observed.json().find((r: { sourceCode: string }) => r.sourceCode === 'Dodoma');
+    expect(row.targetMissing).toBe(true);
+    expect(row.name).toBeNull();
+  });
+
+  it('counts both the registry-route and the national-route mapping, summing report counts across both', async () => {
+    const internalDb = await makeMigratedDb();
+    const externalDb = await makeMigratedExternalDb();
+    const ctx = impactCtx(internalDb, externalDb);
+    await ctx.facilityRegistry.upsert({
+      id: 'fac-1', name: 'Dodoma Regional Referral', localCode: 'LAB01',
+      nationalSystem: 'urn:tz:hfr', nationalCode: '100', source: 'manual',
+    });
+    await seedMapping(internalDb);
+    await seedMapping(internalDb, { from_code: 'DDM', to_system: 'urn:tz:hfr', to_code: '100' });
+    await seedObservedReports(externalDb, [['Dodoma', 100], ['DDM', 50]]);
+    const app = await appWith(ctx);
+
+    const res = await app.inject({ method: 'GET', url: '/api/facilities/fac-1/impact' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ mappingCount: 2, reportCount: 150 });
+  });
+
+  // A deactivated mapping still shows up as `targetMissing` on the observed list (Task 4's
+  // `resolveObservedFacilities` filters on `is_active = true` — see
+  // packages/bootstrap/src/facility-reconcile.ts:222-223) and a delete does not touch it either way,
+  // so it contributes NOTHING to the impact preview. Assert exact zeros, not merely "fewer than an
+  // active mapping would report" — a partial fix (e.g. filtering only one of the two queries, or a
+  // typo'd column) could still leave a nonzero count here.
+  it('ignores a deactivated mapping entirely: mappingCount and reportCount are both exactly 0', async () => {
+    const internalDb = await makeMigratedDb();
+    const externalDb = await makeMigratedExternalDb();
+    const ctx = impactCtx(internalDb, externalDb);
+    await ctx.facilityRegistry.upsert({ id: 'fac-1', name: 'Dodoma Regional Referral', localCode: 'LAB01', source: 'manual' });
+    await seedMapping(internalDb, { is_active: false });
+    await seedObservedReports(externalDb, [['Dodoma', 247]]);
+    const app = await appWith(ctx);
+
+    const res = await app.inject({ method: 'GET', url: '/api/facilities/fac-1/impact' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ mappingCount: 0, reportCount: 0 });
+  });
+
+  // Proves the filter is actually APPLIED (as opposed to, say, the whole query being broken and
+  // returning nothing regardless of `is_active`): one active + one inactive mapping for the same
+  // facility/observed-code pair must count exactly the active one.
+  it('counts only the active mapping when one active and one inactive mapping both target the facility', async () => {
+    const internalDb = await makeMigratedDb();
+    const externalDb = await makeMigratedExternalDb();
+    const ctx = impactCtx(internalDb, externalDb);
+    await ctx.facilityRegistry.upsert({ id: 'fac-1', name: 'Dodoma Regional Referral', localCode: 'LAB01', source: 'manual' });
+    await seedMapping(internalDb, { from_code: 'Dodoma', is_active: true });
+    await seedMapping(internalDb, { from_code: 'DDM-OLD', is_active: false });
+    await seedObservedReports(externalDb, [['Dodoma', 247], ['DDM-OLD', 999]]);
+    const app = await appWith(ctx);
+
+    const res = await app.inject({ method: 'GET', url: '/api/facilities/fac-1/impact' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ mappingCount: 1, reportCount: 247 });
+  });
+
+  // A facility with no national code has NO national-route mappings, by construction — proven here
+  // against the specific bug the brief calls out: a mapping row that happens to carry an
+  // empty-string `to_system`/`to_code` (a plausible pathological row, since `to_code` is only
+  // NOT NULL, not "non-blank") must never be picked up just because a naive implementation coerced
+  // the facility's absent `nationalCode` to `''` (e.g. `facility.nationalCode ?? ''`) instead of
+  // skipping the national-route query outright. A route built that way would wrongly report
+  // mappingCount: 1 / reportCount: 500 here; the guarded route reports zero.
+  it('a facility with no national code never matches an empty-string national mapping (NULL/blank-safety)', async () => {
+    const internalDb = await makeMigratedDb();
+    const externalDb = await makeMigratedExternalDb();
+    const ctx = impactCtx(internalDb, externalDb);
+    await ctx.facilityRegistry.upsert({ id: 'fac-1', name: 'Dodoma Regional Referral', localCode: 'LAB01', source: 'manual' });
+    await seedMapping(internalDb, { from_code: 'Rogue', to_system: '', to_code: '', to_display: null });
+    await seedObservedReports(externalDb, [['Rogue', 500]]);
+    const app = await appWith(ctx);
+
+    const res = await app.inject({ method: 'GET', url: '/api/facilities/fac-1/impact' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ mappingCount: 0, reportCount: 0 });
+  });
+
+  it('404s on an unknown id', async () => {
+    const internalDb = await makeMigratedDb();
+    const externalDb = await makeMigratedExternalDb();
+    const app = await appWith(impactCtx(internalDb, externalDb));
+    const res = await app.inject({ method: 'GET', url: '/api/facilities/nope/impact' });
+    expect(res.statusCode).toBe(404);
+    expect(res.json()).toEqual({ error: 'not found' });
+  });
+
+  it('is gated on facilities.view — a user without it gets 403', async () => {
+    const internalDb = await makeMigratedDb();
+    const externalDb = await makeMigratedExternalDb();
+    const app = await appWith(impactCtx(internalDb, externalDb), []);
+    const res = await app.inject({ method: 'GET', url: '/api/facilities/fac-1/impact' });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('a user with only facilities.view (no facilities.manage) CAN read the impact counts', async () => {
+    const internalDb = await makeMigratedDb();
+    const externalDb = await makeMigratedExternalDb();
+    const ctx = impactCtx(internalDb, externalDb);
+    await ctx.facilityRegistry.upsert({ id: 'fac-1', name: 'Dodoma Regional Referral', localCode: 'LAB01', source: 'manual' });
+    const app = await appWith(ctx, ['facilities.view']);
+    const res = await app.inject({ method: 'GET', url: '/api/facilities/fac-1/impact' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ mappingCount: 0, reportCount: 0 });
+  });
+
+  // --- Route-ordering verification (this task's own ambiguity to resolve, not inherited from Task 6):
+  // `/api/facilities/:id/impact` has a DIFFERENT segment count from `/api/facilities/:id`
+  // (`/api/facilities/observed` in Task 6 had the SAME segment count as `/api/facilities/:id`, which
+  // is why THAT route needed to be registered first). A same-segment-count collision is not possible
+  // here regardless of registration order, but rather than trust that, this proves both routes are
+  // independently reachable — including the adversarial case of a facility whose id is literally the
+  // string "impact", which a shadowing bug would most plausibly misroute.
+
+  it('⚠ a facility literally named "impact" is still reachable via GET /api/facilities/:id, not swallowed by the /impact suffix route', async () => {
+    const internalDb = await makeMigratedDb();
+    const externalDb = await makeMigratedExternalDb();
+    const ctx = impactCtx(internalDb, externalDb);
+    await ctx.facilityRegistry.upsert({ id: 'impact', name: 'A Facility Named Impact', localCode: 'IMP01', source: 'manual' });
+    const app = await appWith(ctx);
+
+    const res = await app.inject({ method: 'GET', url: '/api/facilities/impact' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ id: 'impact', name: 'A Facility Named Impact' });
+  });
+
+  it('⚠ GET /api/facilities/:id/impact returns the impact shape, not the plain facility record', async () => {
+    const internalDb = await makeMigratedDb();
+    const externalDb = await makeMigratedExternalDb();
+    const ctx = impactCtx(internalDb, externalDb);
+    await ctx.facilityRegistry.upsert({ id: 'fac-1', name: 'Dodoma Regional Referral', localCode: 'LAB01', source: 'manual' });
+    const app = await appWith(ctx);
+
+    const res = await app.inject({ method: 'GET', url: '/api/facilities/fac-1/impact' });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body).toEqual({ mappingCount: 0, reportCount: 0 });
+    // The plain facility record carries `name`/`localCode` — proof this is the impact route's own
+    // response shape, not the `:id` route's record leaking through.
+    expect(body.name).toBeUndefined();
+    expect(body.localCode).toBeUndefined();
   });
 });
