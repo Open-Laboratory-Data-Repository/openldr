@@ -23,6 +23,7 @@ import { runRolesList, runRolesShow, runRolesCreate, runRolesEdit, runRolesDelet
 import { runDataExposureList, runDataExposureHide, runDataExposureShow } from './data-exposure';
 import { runSyncStatus, runSyncNow, runSyncEnroll, runSyncList, runSyncRotate, runSyncRevoke, runSyncAmend, runSyncMergePatient, runSyncExport, runSyncImport, runSyncQuarantineList, runSyncQuarantineRetry, runSyncDivergenceList, runSyncDivergenceShow, runSyncDivergenceClear } from './sync';
 import { runErrorsList } from './errors';
+import { runFacilitiesImport } from './facilities';
 import { setActorOverride } from './cli-actor';
 
 const program = new Command();
@@ -234,6 +235,18 @@ dataExposure.command('hide <table> <columns...>').description('Hide columns from
 dataExposure.command('show <table> <columns...>').description('Expose columns to analytics').option('--json', 'emit JSON', false)
   .action(async (table: string, columns: string[], opts: { json: boolean }) => {
     try { process.exitCode = await runDataExposureShow(table, columns, opts); } catch (err) { process.stderr.write(`data-exposure show failed: ${redactError(err)}\n`); process.exitCode = 1; }
+  });
+
+const facilities = program.command('facilities').description('Facility registry (facility_registry)');
+facilities
+  .command('import <path>')
+  .description('Import a national facility register CSV. DRY RUN BY DEFAULT — pass --apply to write.')
+  .requiredOption('--national-system <sys>', 'canonical URI of the national facility register the codes belong to (e.g. urn:tz:hfr)')
+  .option('--apply', 'write the import (default: dry run — parse and report, write nothing)', false)
+  .option('--allow-unknown-columns', 'import despite unrecognised CSV columns (carried into each row\'s extras)', false)
+  .option('--json', 'emit machine-readable JSON', false)
+  .action(async (path: string, opts: { nationalSystem: string; apply: boolean; allowUnknownColumns: boolean; json: boolean }) => {
+    process.exitCode = await runFacilitiesImport(path, opts);
   });
 
 const syncGroup = program.command('sync').description('lab⇄central sync status + control');
