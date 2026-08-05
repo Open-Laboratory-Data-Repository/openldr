@@ -19,6 +19,7 @@ vi.mock('@/api', async (orig) => {
     deleteFacility: vi.fn(),
     listPublishedForms: vi.fn(),
     getForm: vi.fn(),
+    importFacilitiesCsv: vi.fn(),
   };
 });
 
@@ -128,6 +129,33 @@ describe('Facilities page', () => {
     expect(await screen.findByLabelText('Name')).toBeInTheDocument();
   });
 
+  it('offers Import facilities in the header ⋯ menu for a manage-capable actor, opening the upload sheet', async () => {
+    (listPublishedForms as ReturnType<typeof vi.fn>).mockResolvedValue([publishedFacilityForm]);
+    show();
+    await waitFor(() => expect(screen.getByText(/no facilities yet/i)).toBeInTheDocument());
+
+    clickMenuItem('Facility actions', /import facilities/i);
+    expect(await screen.findByText(/^import facilities$/i)).toBeInTheDocument();
+    expect(await screen.findByLabelText('File')).toBeInTheDocument();
+    expect(screen.getByLabelText('National system')).toBeInTheDocument();
+  });
+
+  it('offers Import facilities even without a published form — importing writes core columns directly, not through the form', async () => {
+    // Distinct from Add (disabled={!hasForm} above): a lab whose Facilities form was archived
+    // after the national register was already imported must still be able to re-import a
+    // refreshed register.
+    (listPublishedForms as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    show();
+    await waitFor(() => expect(screen.getByText(/no facility form/i)).toBeInTheDocument());
+
+    const trigger = screen.getByRole('button', { name: 'Facility actions' });
+    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByRole('menuitem', { name: /import facilities/i })) {
+      fireEvent.keyDown(trigger, { key: 'Enter' });
+    }
+    expect(screen.getByRole('menuitem', { name: /import facilities/i })).not.toHaveAttribute('aria-disabled', 'true');
+  });
+
   it('lists facilities with their code, name and region', async () => {
     (listPublishedForms as ReturnType<typeof vi.fn>).mockResolvedValue([publishedFacilityForm]);
     (listFacilities as ReturnType<typeof vi.fn>).mockResolvedValue([sampleFacility]);
@@ -190,6 +218,17 @@ describe('Facilities page', () => {
       show();
       await waitFor(() => expect(screen.getByText('Dodoma Regional Referral')).toBeInTheDocument());
       expect(screen.queryByRole('button', { name: 'Facility actions' })).not.toBeInTheDocument();
+    });
+
+    it('hides Import facilities along with the rest of the header ⋯ menu', async () => {
+      (listPublishedForms as ReturnType<typeof vi.fn>).mockResolvedValue([publishedFacilityForm]);
+      (listFacilities as ReturnType<typeof vi.fn>).mockResolvedValue([sampleFacility]);
+      show();
+      await waitFor(() => expect(screen.getByText('Dodoma Regional Referral')).toBeInTheDocument());
+      // The whole trigger is gone (asserted above), so there is no menu to open at all — this
+      // pins that Import specifically never renders unguarded elsewhere on the page either.
+      expect(screen.queryByRole('menuitem', { name: /import facilities/i })).not.toBeInTheDocument();
+      expect(screen.queryByText(/^import facilities$/i)).not.toBeInTheDocument();
     });
 
     it('hides the per-row Edit/Delete ⋯ menu', async () => {
