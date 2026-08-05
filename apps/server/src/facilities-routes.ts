@@ -48,7 +48,13 @@ const IMPORT = { ...MANAGE, bodyLimit: MAX_IMPORT_REQUEST_BYTES };
 const MAX_INLINE_APPLY_ROWS = 2000;
 
 const ImportSchema = z.object({
-  csv: z.string(),
+  // ⚠ Minor fix: blank/whitespace-only content is refused here, not left to reach
+  // `parseFacilityCsv` and come back as an all-zero `{ parsed: 0, ... }` 200 — a UI that only
+  // checks `res.ok` would otherwise report success for an upload that changed nothing. A single
+  // `.refine` (rather than `.min(1)` alone) catches BOTH the empty string and a
+  // whitespace/newline-only body (routine when a client trims a template file down to just blank
+  // lines), since `''.trim()` and `'   \n  \n'.trim()` both collapse to length 0.
+  csv: z.string().refine((v) => v.trim().length > 0, { message: 'csv must not be empty' }),
   // ⛔ Required, never defaulted — HFR/MFL/etc differ per country/deployment (see
   // facility-import.ts's `FacilityImportOptions.nationalSystem` doc comment). A hardcoded fallback
   // here would eventually mislabel an import as belonging to the wrong national register.
@@ -159,6 +165,45 @@ function mapFacilityDbError(err: unknown, reply: FastifyReply): { error: string 
     return { error: 'a facility must have a local code or a national code' };
   }
   throw err;
+}
+
+// ⛔ Blocking fix: `parseFacilityCsv` (packages/terminology/src/facility-csv.ts, called inside
+// `@openldr/bootstrap`'s `importFacilities`) hands off to `csv-parse/sync`, which THROWS
+// synchronously on malformed input (an unterminated quote, a stray `"` inside a facility name, a
+// `.json` file uploaded by mistake) instead of returning a result — that throw was reaching the
+// central error handler unclassified and coming back as a bare 500 "Internal Server Error", with
+// the actually-useful csv-parse message (which includes the line/column) discarded before it ever
+// reached the operator. See `IMPORT`'s handler below for where this is used.
+//
+// A closed enumeration of `csv-parse@5.6.0`'s own error codes (copied from that package's
+// `CsvError.js`/`api/index.js`/`api/normalize_options.js` call sites), not a shape heuristic —
+// apps/server deliberately does NOT depend on `csv-parse` directly (it is
+// `@openldr/terminology`'s implementation detail, reached only indirectly through
+// `importFacilities`), so `instanceof CsvError` is not available here, and a bare `.code` string
+// alone is not a safe enough signal: a Postgres constraint violation (`mapFacilityDbError`'s
+// 23505/23514) ALSO carries a `.code` — always a 5-character SQLSTATE, never one of the
+// ALL_CAPS/underscore identifiers below, but "always distinct today" is exactly the kind of thing
+// worth pinning to an explicit list rather than a `.length` heuristic. Anything NOT in this set —
+// a future csv-parse version's new code, or an unrelated error that happens to carry a `.code` —
+// falls through unrecognised and is rethrown, reaching the central error handler as the 500 it
+// actually is. That is the deliberate boundary: only a recognised parse failure becomes a 400; a
+// DB failure (or anything else) must keep surfacing as a 500 / going through
+// `mapFacilityDbError`, never be silently reclassified.
+const CSV_PARSE_ERROR_CODES = new Set([
+  'CSV_IGNORE_LAST_DELIMITERS_REQUIRES_COLUMNS', 'CSV_INVALID_ARGUMENT', 'CSV_INVALID_CLOSING_QUOTE',
+  'CSV_INVALID_COLUMN_DEFINITION', 'CSV_INVALID_COLUMN_MAPPING', 'CSV_INVALID_OPTION_BOM',
+  'CSV_INVALID_OPTION_CAST', 'CSV_INVALID_OPTION_CAST_DATE', 'CSV_INVALID_OPTION_COLUMNS',
+  'CSV_INVALID_OPTION_COMMENT', 'CSV_INVALID_OPTION_DELIMITER', 'CSV_INVALID_OPTION_ENCODING',
+  'CSV_INVALID_OPTION_GROUP_COLUMNS_BY_NAME', 'CSV_INVALID_OPTION_IGNORE_LAST_DELIMITERS',
+  'CSV_INVALID_OPTION_ON_RECORD', 'CSV_INVALID_OPTION_RECORD_DELIMITER', 'CSV_MAX_RECORD_SIZE',
+  'CSV_NON_TRIMABLE_CHAR_AFTER_CLOSING_QUOTE', 'CSV_OPTION_COLUMNS_MISSING_NAME',
+  'CSV_QUOTE_NOT_CLOSED', 'CSV_RECORD_INCONSISTENT_COLUMNS', 'CSV_RECORD_INCONSISTENT_FIELDS_LENGTH',
+  'INVALID_BUFFER_STATE', 'INVALID_OPENING_QUOTE',
+]);
+
+function isCsvParseError(err: unknown): err is Error & { code: string } {
+  const code = err instanceof Error ? (err as { code?: unknown }).code : undefined;
+  return typeof code === 'string' && CSV_PARSE_ERROR_CODES.has(code);
 }
 
 function firstString(v: unknown): string | undefined {
@@ -503,7 +548,19 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     // considering the write transaction below. Unknown columns (parser-blocked, per
     // facility-csv.ts) and an empty/all-skipped file both surface here as `parsed: 0` and are
     // reported back verbatim rather than swallowed — never treated as "safe to write".
-    const preview: FacilityImportResult = await importFacilities(deps, p.data.csv, { ...importOpts, apply: false });
+    //
+    // ⛔ Wrapped: `parseFacilityCsv` (reached inside `importFacilities`, before any DB access on
+    // this preview path) throws on malformed CSV rather than returning a result — see
+    // `isCsvParseError`'s doc comment. Only a RECOGNISED parse failure becomes a 400; anything
+    // else is rethrown unchanged and reaches the central error handler as the 500 it is.
+    let preview: FacilityImportResult;
+    try {
+      preview = await importFacilities(deps, p.data.csv, { ...importOpts, apply: false });
+    } catch (err) {
+      if (!isCsvParseError(err)) throw err;
+      reply.code(400);
+      return { error: err.message };
+    }
     if (!p.data.apply || preview.parsed === 0) return preview;
 
     if (preview.parsed > MAX_INLINE_APPLY_ROWS) {
@@ -514,7 +571,22 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       };
     }
 
-    const result = await importFacilities(deps, p.data.csv, { ...importOpts, apply: true });
+    // ⛔ Wrapped for the same reason as the preview call above. In practice the preview call
+    // above already parsed this exact `p.data.csv` successfully (a malformed file would have been
+    // caught and returned as a 400 before this line is ever reached), so `parseFacilityCsv`
+    // itself will not throw a second time here — this guard exists so the apply path does not
+    // silently regress to a raw 500 if that assumption ever stops holding (e.g. a future change
+    // that lets the two calls see different input), not because it is expected to fire today. A
+    // non-parse error (a DB failure from the write transaction this call opens) is rethrown
+    // unchanged, exactly as before this fix — it must still surface as a 500, never a 400.
+    let result: FacilityImportResult;
+    try {
+      result = await importFacilities(deps, p.data.csv, { ...importOpts, apply: true });
+    } catch (err) {
+      if (!isCsvParseError(err)) throw err;
+      reply.code(400);
+      return { error: err.message };
+    }
     // A dry run (handled above) writes nothing and must not audit. This point is only reached
     // once a real write happened (preview.parsed > 0 and under the inline cap).
     await recordAudit(ctx, req, {

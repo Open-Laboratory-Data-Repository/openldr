@@ -904,4 +904,101 @@ describe('POST /api/facilities/import', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json().parsed).toBe(2001);
   });
+
+  // --- Blocking fix: a malformed CSV is a 400 carrying csv-parse's own message, never a raw 500 ---
+  // `parseFacilityCsv` (via csv-parse/sync, inside `importFacilities`) throws synchronously on
+  // malformed input instead of returning a result. Three measured triggers, each exercised on BOTH
+  // the dry-run and apply paths (the route calls `importFacilities` once for the preview and, when
+  // `apply` is set and under the row cap, a second time for the real write — see isCsvParseError's
+  // doc comment in facilities-routes.ts).
+
+  describe('a malformed CSV is a 400 with the parser\'s own message, not a raw 500', () => {
+    // An operator upload of a `.json` file by mistake — the parser's first field starts with `{`
+    // (or `[`), which csv-parse's quote-scanning treats as an opening quote appearing mid-field.
+    const JSON_UPLOAD = '{"name":"A","code":"100"}';
+    // A truncated/unterminated quote — routine in a register export that got cut off mid-write.
+    const UNTERMINATED_QUOTE = 'national_code,name\n100,"Dodoma Regional\n101,Kongwa\n';
+    // A stray `"` inside a facility name that was never meant to open a quoted field.
+    const STRAY_QUOTE_IN_NAME = 'national_code,name\n100,St. Mary"s Dispensary\n';
+
+    const triggers: Array<[string, string]> = [
+      ['a .json file uploaded by mistake', JSON_UPLOAD],
+      ['a truncated/unterminated quote', UNTERMINATED_QUOTE],
+      ['a stray quote inside a facility name', STRAY_QUOTE_IN_NAME],
+    ];
+
+    for (const [label, csv] of triggers) {
+      it(`dry-run: ${label} -> 400 with the parser's message, not 500`, async () => {
+        const db = await makeMigratedDb();
+        const ctx = fakeImportCtx(db);
+        const app = await appWith(ctx);
+        const res = await app.inject({ method: 'POST', url: '/api/facilities/import', payload: { csv, nationalSystem: SYSTEM } });
+        expect(res.statusCode).toBe(400);
+        // The operator-facing message must be csv-parse's own (line/column-bearing) text, not the
+        // generic Fastify 500 body ("Internal Server Error") the studio's errorDetail would
+        // otherwise surface — see the route's isCsvParseError doc comment.
+        expect(res.json().error).toBeTruthy();
+        expect(res.json().error).not.toMatch(/internal server error/i);
+        expect(await db.selectFrom('facility_registry').selectAll().execute()).toHaveLength(0);
+        expect(ctx.__audit).toHaveLength(0);
+      });
+
+      it(`apply: ${label} -> 400 with the parser's message, not 500, and nothing is written`, async () => {
+        const db = await makeMigratedDb();
+        const ctx = fakeImportCtx(db);
+        const app = await appWith(ctx);
+        const res = await app.inject({
+          method: 'POST', url: '/api/facilities/import',
+          payload: { csv, nationalSystem: SYSTEM, apply: true },
+        });
+        expect(res.statusCode).toBe(400);
+        expect(res.json().error).toBeTruthy();
+        expect(res.json().error).not.toMatch(/internal server error/i);
+        expect(await db.selectFrom('facility_registry').selectAll().execute()).toHaveLength(0);
+        expect(ctx.__audit).toHaveLength(0);
+      });
+    }
+
+    // A genuine DB-layer failure must still surface as a 500 (or go through mapFacilityDbError) —
+    // the parse-error guard must only recognise csv-parse's own error shapes, never blanket-catch
+    // everything importFacilities can throw. Force a real (non-csv-parse) failure on the apply
+    // transaction by breaking the db handle after a WELL-FORMED preview has already succeeded, so
+    // only the write half is exercised.
+    it('⛔ a genuine DB failure during apply is rethrown as a 500, never reclassified as a parse-error 400', async () => {
+      const db = await makeMigratedDb();
+      const ctx = fakeImportCtx(db);
+      const app = await appWith(ctx);
+      const csv = facilityCsv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,']);
+      const dbError = new Error('simulated connection loss');
+      (db as unknown as { transaction: () => never }).transaction = () => { throw dbError; };
+      const res = await app.inject({
+        method: 'POST', url: '/api/facilities/import',
+        payload: { csv, nationalSystem: SYSTEM, apply: true },
+      });
+      expect(res.statusCode).toBe(500);
+      expect(ctx.__audit).toHaveLength(0);
+    });
+  });
+
+  // --- Minor fix: an empty or whitespace-only csv is a clear 400, never an all-zero 200 -----------
+  // A UI that only checks `res.ok` must not read success from an upload that changed nothing.
+
+  it('an empty csv is a 400, not an all-zero 200', async () => {
+    const db = await makeMigratedDb();
+    const app = await appWith(fakeImportCtx(db));
+    const res = await app.inject({ method: 'POST', url: '/api/facilities/import', payload: { csv: '', nationalSystem: SYSTEM } });
+    expect(res.statusCode).toBe(400);
+    expect(await db.selectFrom('facility_registry').selectAll().execute()).toHaveLength(0);
+  });
+
+  it('a whitespace-only csv is a 400, not an all-zero 200', async () => {
+    const db = await makeMigratedDb();
+    const app = await appWith(fakeImportCtx(db));
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities/import',
+      payload: { csv: '   \n  \n', nationalSystem: SYSTEM, apply: true },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(await db.selectFrom('facility_registry').selectAll().execute()).toHaveLength(0);
+  });
 });
