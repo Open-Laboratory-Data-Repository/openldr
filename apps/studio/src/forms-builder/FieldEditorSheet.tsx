@@ -2,6 +2,7 @@ import * as React from 'react';
 import { useState, useEffect } from 'react';
 import { MoreHorizontal } from 'lucide-react';
 import type { FormField, FormSchema } from '@openldr/forms/pure';
+import { FieldType } from '@openldr/forms/pure';
 import { OptionsEditor } from './field-editor/OptionsEditor';
 import { CodesEditor } from './field-editor/CodesEditor';
 import { TranslationsEditor } from './field-editor/TranslationsEditor';
@@ -26,26 +27,12 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 
-// All 17 field types in the order they appear in the FieldType enum.
-const FIELD_TYPES: { value: string; label: string }[] = [
-  { value: 'text',        label: 'text' },
-  { value: 'number',      label: 'number' },
-  { value: 'date',        label: 'date' },
-  { value: 'datetime',    label: 'datetime' },
-  { value: 'boolean',     label: 'boolean' },
-  { value: 'select',      label: 'select' },
-  { value: 'multiselect', label: 'multiselect' },
-  { value: 'phone',       label: 'phone' },
-  { value: 'email',       label: 'email' },
-  { value: 'address',     label: 'address' },
-  { value: 'identifier',  label: 'identifier' },
-  { value: 'attachment',  label: 'attachment' },
-  { value: 'organism',    label: 'organism' },
-  { value: 'antibiogram', label: 'antibiogram' },
-  { value: 'reference',   label: 'reference' },
-  { value: 'facility',    label: 'facility' },
-  { value: 'group',       label: 'group' },
-];
+// Derived from the FieldType zod enum (not hand-copied) so the picklist can
+// never drift from the schema: `.options` is a readonly tuple of the literal
+// strings in declaration order, which is exactly the order the UI wants.
+const FIELD_TYPES: { value: string; label: string }[] = FieldType.options.map(
+  (value) => ({ value, label: value }),
+);
 
 export interface FieldEditorSheetProps {
   field: FormField | null;

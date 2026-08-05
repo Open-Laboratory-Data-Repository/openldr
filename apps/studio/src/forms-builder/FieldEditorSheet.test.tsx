@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import type { FormField, FormSchema } from '@openldr/forms/pure';
+import { FieldType } from '@openldr/forms/pure';
 import { FieldEditorSheet } from './FieldEditorSheet';
 
 const BASE_FIELD: FormField = {
@@ -187,6 +188,15 @@ describe('FieldEditorSheet', () => {
       fireEvent.click(trigger);
       fireEvent.click(screen.getByText('number'));
       expect(onSave).not.toHaveBeenCalled();
+    });
+
+    it('offers every FieldType enum member as an option — no drift', () => {
+      renderSheet();
+      const trigger = screen.getByRole('combobox', { name: /field type/i });
+      fireEvent.click(trigger);
+      const optionValues = screen.getAllByRole('option').map((el) => el.textContent);
+      expect(optionValues).toEqual(expect.arrayContaining([...FieldType.options]));
+      expect(optionValues).toHaveLength(FieldType.options.length);
     });
   });
 
