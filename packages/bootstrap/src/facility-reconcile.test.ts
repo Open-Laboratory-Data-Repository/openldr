@@ -372,4 +372,33 @@ describe('publishRegistryConcepts', () => {
     const { total } = await deps.admin.terms.search('urn:openldr:cs:facility-registry', { limit: 10, offset: 0 });
     expect(total).toBe(1);
   });
+
+  // Regression guard, mirroring `scanObservedFacilities`'s equivalent test above: `upsertByUrl`'s
+  // `onConflict` update never touches `active`, so a row left inactive (operator, or an earlier bug)
+  // must be repaired explicitly. Force that state by deactivating the row directly, then confirm a
+  // re-publish repairs it.
+  it('re-activates a coding_systems row an operator (or an earlier bug) left inactive', async () => {
+    const deps = await makeReconcileDeps();
+    await seedRegistry(deps, { id: 'fac-1', name: 'Dodoma Regional Referral Hospital', localCode: 'DOD' });
+    await publishRegistryConcepts(deps, { apply: true });
+
+    await deps.internalDb.updateTable('coding_systems').set({ active: false })
+      .where('url', '=', 'urn:openldr:cs:facility-registry').execute();
+    expect((await deps.admin.codingSystems.getByUrl('urn:openldr:cs:facility-registry'))!.active).toBe(false);
+
+    await publishRegistryConcepts(deps, { apply: true });
+
+    expect((await deps.admin.codingSystems.getByUrl('urn:openldr:cs:facility-registry'))!.active).toBe(true);
+  });
+
+  it('writes nothing when apply is falsy', async () => {
+    const deps = await makeReconcileDeps();
+    await seedRegistry(deps, { id: 'fac-1', name: 'Dodoma Regional Referral Hospital', localCode: 'DOD' });
+
+    await publishRegistryConcepts(deps, {});
+
+    const { rows } = await deps.admin.terms.search('urn:openldr:cs:facility-registry', { limit: 10, offset: 0 });
+    expect(rows).toHaveLength(0);
+    expect(await deps.admin.codingSystems.getByUrl('urn:openldr:cs:facility-registry')).toBeNull();
+  });
 });
