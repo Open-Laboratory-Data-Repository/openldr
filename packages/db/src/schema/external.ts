@@ -80,9 +80,21 @@ export interface DiagnosticReportsTable extends ProvenanceColumns {
   issued: string | null;
   effective: string | null;
   conclusion: string | null;
-  /** Facility, from `DiagnosticReport.performer[0]` — the only facility dimension the CDR/DISA
-   *  source actually supplies (`patients.managing_organization` is never set by it). */
+  /** The facility MATCH KEY, from `DiagnosticReport.performer[0]` — the only facility dimension the
+   *  CDR/DISA source actually supplies (`patients.managing_organization` is never set by it).
+   *  Prefers `performer[0].identifier.value` (a FHIR logical reference — the correct match key for
+   *  a target with no resource to point at), falling back to `display` then the reference id when
+   *  no identifier is present. ⛔ NEVER `display` when an identifier exists: multiple distinct
+   *  facilities can share the same display (measured: five DISA facility codes all named "Aga
+   *  Khan"), and `display` is a human label, not an identity. */
   performer: string | null;
+  /** `DiagnosticReport.performer[0].display` — the human-readable facility name, carried alongside
+   *  the match key above so an operator sees "Aga Khan" rather than the bare code "BAMAA". Never
+   *  used for matching. */
+  performer_display: string | null;
+  /** `DiagnosticReport.performer[0].identifier.system` — the code's namespace, when the wire
+   *  supplies one. Null when the source has no system id for the facility code. */
+  performer_system: string | null;
   /** `DiagnosticReport.specimen[0]` — the key that ties a report to the AST results on the same
    *  specimen, without the patient-level fan-out. */
   specimen_id: string | null;
@@ -150,7 +162,7 @@ export const EXTERNAL_TABLE_COLUMNS: Record<keyof ExternalSchema, string[]> = {
   lab_results: ['id', 'request_id', 'observation_code', 'observation_system', 'observation_desc', 'result_type', 'numeric_value', 'numeric_units', 'coded_value', 'text_value', 'abnormal_flag', 'result_timestamp', 'patient_id', 'specimen_id', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at'],
   facilities: ['id', 'facility_code', 'facility_name', 'facility_type', 'source_resource', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at'],
   specimens: ['id', 'patient_id', 'received_time', 'accession', 'status', 'type_code', 'type_text', 'origin', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at'],
-  diagnostic_reports: ['id', 'patient_id', 'status', 'code_code', 'code_text', 'issued', 'effective', 'conclusion', 'performer', 'specimen_id', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at'],
+  diagnostic_reports: ['id', 'patient_id', 'status', 'code_code', 'code_text', 'issued', 'effective', 'conclusion', 'performer', 'performer_display', 'performer_system', 'specimen_id', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at'],
   questionnaire_responses: ['id', 'questionnaire', 'form_code', 'subject_id', 'authored', 'based_on_id', 'items', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at'],
   terminology_codes: ['id', 'value_set_id', 'value_set_url', 'system', 'code', 'display', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at'],
   facility_map: ['id', 'source_system', 'source_code', 'registry_id', 'local_code', 'name', 'level', 'status', 'region', 'district', 'council', 'national_system', 'national_code', 'resolved_via', 'updated_at'],

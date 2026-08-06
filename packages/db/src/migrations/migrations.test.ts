@@ -12,7 +12,7 @@ describe('migration maps', () => {
   });
   it('external has the flat_tables migration with up/down', () => {
     const ext = externalMigrations('postgres');
-    expect(Object.keys(ext)).toEqual(['001_flat_tables', '002_specimen_origin', '003_v2_core', '004_v2_patients_facility', '005_v2_specimen_diagreport', '006_v2_amr_links', '007_drop_thin_rename_v2', '008_patients_merge', '009_questionnaire_responses', '010_diagnostic_report_facility', '011_terminology_codes', '012_facility_map']);
+    expect(Object.keys(ext)).toEqual(['001_flat_tables', '002_specimen_origin', '003_v2_core', '004_v2_patients_facility', '005_v2_specimen_diagreport', '006_v2_amr_links', '007_drop_thin_rename_v2', '008_patients_merge', '009_questionnaire_responses', '010_diagnostic_report_facility', '011_terminology_codes', '012_facility_map', '013_diagnostic_report_performer_identity']);
     expect(typeof ext['001_flat_tables'].up).toBe('function');
     expect(typeof ext['001_flat_tables'].down).toBe('function');
   });
