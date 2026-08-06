@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { MoreHorizontal, Building2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { DEFAULT_OBSERVED_FACILITY_SYSTEM, observedSystemForFeed } from '@openldr/db/facility-observed';
+import { DEFAULT_OBSERVED_FACILITY_SYSTEM, FACILITY_REGISTRY_SYSTEM, observedSystemForFeed } from '@openldr/db/facility-observed';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -17,7 +17,6 @@ import {
   publishFacilities,
   listCodingSystems,
   listTermMappings,
-  listFacilityMappingTargetSystems,
   type ObservedFacility,
   type CodingSystem,
   type TermMapping,
@@ -163,13 +162,15 @@ export function ObservedTab({ actionsPortalTarget }: ObservedTabProps = {}): JSX
   // (below), which must resolve regardless of whether that system is a valid mapping TARGET (the
   // row's own observed system, e.g. a CDR feed's system, is never itself a facility register).
   const [mappingSystems, setMappingSystems] = useState<CodingSystem[]>([]);
-  // Fix 2 (self-mapping report): the systems `TermMappingDialog` is allowed to offer as a mapping
-  // TARGET — restricted to `mappingSystems` intersected with `listFacilityMappingTargetSystems()`
-  // (the registry system, plus any known `national_system`). This is a DELIBERATELY narrower list
-  // than `mappingSystems` above — passing the full active list here (DEFAULT_FAC, LOINC, ICD-10,
-  // UCUM…) is what let an operator map an observed code to itself, or to LOINC, and have it
-  // silently resolve as "target missing" (see `facility-reconcile.ts`'s `nonFacilityTarget`).
-  const [mappingTargetSystems, setMappingTargetSystems] = useState<CodingSystem[]>([]);
+  // The ONE system `TermMappingDialog` is allowed to offer as a mapping target: "we know we are
+  // only linking to FACILITY_REGISTRY" — a facility mapping is never authored against anything
+  // else, so the dialog gets no choice to make at all (see `TermMappingDialog`'s `lockedTargetSystem`
+  // prop). This SUPERSEDES the earlier "registry plus known national registers" dropdown — a
+  // national code is now an attribute of a registry row, not a separate mapping target an operator
+  // picks. `resolveObservedFacilities` still resolves the national route for mappings authored
+  // before this change (see that function's `knownNationalSystems`); this dialog just stops
+  // offering it going forward.
+  const [mappingTargetSystem, setMappingTargetSystem] = useState<CodingSystem | null>(null);
   const [mappingExisting, setMappingExisting] = useState<TermMapping | null>(null);
   const [mappingLoading, setMappingLoading] = useState(false);
   const [mappingDialogOpen, setMappingDialogOpen] = useState(false);
@@ -189,14 +190,18 @@ export function ObservedTab({ actionsPortalTarget }: ObservedTabProps = {}): JSX
       // dialog opens in edit mode against it, rather than creating a second, ambiguous candidate
       // row alongside it — `resolveObservedFacilities` has no tiebreak for two active mappings on
       // the same code.
-      const [systems, mappings, targetSystemUrls] = await Promise.all([
+      const [systems, mappings] = await Promise.all([
         listCodingSystems(),
         listTermMappings(system, row.sourceCode),
-        listFacilityMappingTargetSystems(),
       ]);
-      const targetUrlSet = new Set(targetSystemUrls);
+      const registrySystem = systems.find((s) => s.url === FACILITY_REGISTRY_SYSTEM) ?? null;
+      if (!registrySystem) {
+        // Defensive only — `ensureRegistrySystemActive` (packages/bootstrap) keeps this coding_system
+        // row active on every scan/publish, so a live install never reaches this branch.
+        throw new Error('facility registry coding system is not active');
+      }
       setMappingSystems(systems);
-      setMappingTargetSystems(systems.filter((s) => s.url !== null && targetUrlSet.has(s.url)));
+      setMappingTargetSystem(registrySystem);
       setMappingExisting(mappings.outgoing[0] ?? null);
       setMappingRow(row);
       setMappingDialogOpen(true);
@@ -363,7 +368,8 @@ export function ObservedTab({ actionsPortalTarget }: ObservedTabProps = {}): JSX
             display: mappingRow.sourceCode,
             systemCode: mappingSystemCode,
           }}
-          systems={mappingTargetSystems}
+          systems={mappingSystems}
+          lockedTargetSystem={mappingTargetSystem}
           mapping={mappingExisting}
           onSaved={() => {
             setMappingDialogOpen(false);

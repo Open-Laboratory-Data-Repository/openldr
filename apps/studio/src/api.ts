@@ -900,14 +900,6 @@ export interface ObservedFacility {
 export const listObservedFacilities = (): Promise<ObservedFacility[]> =>
   apiGet('/api/facilities/observed', 'list observed facilities');
 
-// Fix 2 (self-mapping report): the coding-system URLs valid as a facility-mapping TARGET — the
-// registry system, plus any `national_system` values actually present in `facility_registry`.
-// Backs ObservedTab's own restricted `TermMappingDialog` systems list — `/terminology`'s caller is
-// unaffected and keeps passing the full active coding_systems list. See
-// `facilityMappingTargetSystems`'s doc comment in packages/bootstrap/src/facility-reconcile.ts.
-export const listFacilityMappingTargetSystems = (): Promise<string[]> =>
-  apiGet('/api/facilities/mapping-target-systems', 'list facility mapping target systems');
-
 // Mirrors the server's ScanResult/PublishResult (packages/bootstrap/src/facility-reconcile.ts).
 // `apply` is opt-in on both — omitted/false is a dry run that writes nothing. Task 9b dropped
 // `system` — scan/publish now cover every ingest feed's own coding system in one call.

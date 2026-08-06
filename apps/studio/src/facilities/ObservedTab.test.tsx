@@ -13,7 +13,7 @@ vi.mock('@/api', async (orig) => {
     publishFacilities: vi.fn(),
     listCodingSystems: vi.fn(),
     listTermMappings: vi.fn(),
-    listFacilityMappingTargetSystems: vi.fn(),
+    createTermMapping: vi.fn(),
   };
 });
 
@@ -25,7 +25,7 @@ vi.mock('@/auth/AuthProvider', () => ({ useAuth: useAuthMock }));
 
 import {
   listObservedFacilities, scanObservedFacilities, publishFacilities, listCodingSystems, listTermMappings,
-  listFacilityMappingTargetSystems,
+  createTermMapping,
   type ObservedFacility, type CodingSystem, type TermMapping,
 } from '@/api';
 import { ObservedTab } from './ObservedTab';
@@ -92,9 +92,11 @@ describe('ObservedTab', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (listObservedFacilities as ReturnType<typeof vi.fn>).mockResolvedValue([dodoma]);
-    (listCodingSystems as ReturnType<typeof vi.fn>).mockResolvedValue([defaultFacSystem]);
+    // Includes registrySystem — openMapping() looks it up by url (FACILITY_REGISTRY_SYSTEM) to
+    // build TermMappingDialog's locked target; a suite that omits it entirely is exercising the
+    // (should-never-happen-live) defensive throw, not the normal open-mapping path.
+    (listCodingSystems as ReturnType<typeof vi.fn>).mockResolvedValue([defaultFacSystem, registrySystem]);
     (listTermMappings as ReturnType<typeof vi.fn>).mockResolvedValue({ outgoing: [], reverse: [] });
-    (listFacilityMappingTargetSystems as ReturnType<typeof vi.fn>).mockResolvedValue(['urn:openldr:cs:facility-registry']);
     // Default: a lab_admin-shaped actor who can both view and manage.
     useAuthMock.mockReturnValue({
       user: { id: 'me', username: 'me', displayName: null, roles: ['lab_admin'] },
@@ -361,7 +363,7 @@ describe('ObservedTab', () => {
     };
     const cdrRow: ObservedFacility = { ...arusha, sourceSystem: 'cdr-import', sourceCode: 'NHL-01' };
     (listObservedFacilities as ReturnType<typeof vi.fn>).mockResolvedValue([cdrRow]);
-    (listCodingSystems as ReturnType<typeof vi.fn>).mockResolvedValue([defaultFacSystem, cdrSystem]);
+    (listCodingSystems as ReturnType<typeof vi.fn>).mockResolvedValue([defaultFacSystem, cdrSystem, registrySystem]);
     show();
     await screen.findByText('NHL-01');
 
@@ -414,15 +416,12 @@ describe('ObservedTab', () => {
     expect(screen.queryByText(/target missing/i)).not.toBeInTheDocument();
   });
 
-  // Fix 2 (self-mapping report): the dialog's target-system dropdown must be restricted to the
-  // registry system plus PROVEN national registers — never the full active coding_systems list,
-  // which is what let an operator pick DEFAULT_FAC or LOINC as a mapping target in the first place.
-  it("restricts the mapping dialog's target systems to the registry and known national registers, excluding DEFAULT_FAC/LOINC", async () => {
+  // Operator's stronger call (supersedes the earlier "registry plus known national registers"
+  // dropdown): "we know we are only linking to FACILITY_REGISTRY" — the Observed tab's dialog
+  // offers NO system choice at all, in either mode, even when several OTHER systems are active.
+  it('offers no system selector when mapping from the Observed tab, in either search or manual mode', async () => {
     (listObservedFacilities as ReturnType<typeof vi.fn>).mockResolvedValue([arusha]);
     (listCodingSystems as ReturnType<typeof vi.fn>).mockResolvedValue([defaultFacSystem, loincSystem, registrySystem, hfrSystem]);
-    (listFacilityMappingTargetSystems as ReturnType<typeof vi.fn>).mockResolvedValue([
-      'urn:openldr:cs:facility-registry', 'urn:tz:hfr',
-    ]);
     show();
     await screen.findByText('Arusha');
 
@@ -434,27 +433,40 @@ describe('ObservedTab', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: /^map$/i }));
     await screen.findByText(/^new mapping$/i);
 
-    // Switch to manual mode, whose target-system Select always renders (unlike search mode's,
-    // which hides behind `activeSystems.length > 1`).
-    fireEvent.click(screen.getByRole('button', { name: /enter manually/i }));
-    // Two comboboxes render in manual mode — "Map type" (General section) and the target-system
-    // Select (Target section, this test's subject) — the LATTER is the one to open.
-    const comboboxes = screen.getAllByRole('combobox');
-    fireEvent.click(comboboxes[comboboxes.length - 1]);
+    // Search mode (the default on create): the ONLY combobox on the page is "Map type" — never a
+    // second one offering a choice of target system, even though 4 systems are active.
+    expect(screen.getAllByRole('combobox')).toHaveLength(1);
+    // The operator can still tell what they're mapping TO — a static label, not an empty gap —
+    // and none of the OTHER active systems appear anywhere on the page (nothing to open would
+    // reveal them; if they render at all, something is offering a choice).
+    expect(screen.getByText('FACILITY-REGISTRY')).toBeInTheDocument();
+    expect(screen.queryByText('LOINC')).not.toBeInTheDocument();
+    expect(screen.queryByText('HFR')).not.toBeInTheDocument();
+    expect(screen.queryByText('DEFAULT_FAC')).not.toBeInTheDocument();
 
-    expect(await screen.findByRole('option', { name: 'FACILITY-REGISTRY' })).toBeInTheDocument();
-    expect(screen.getByRole('option', { name: 'HFR' })).toBeInTheDocument();
-    expect(screen.queryByRole('option', { name: 'DEFAULT_FAC' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('option', { name: 'LOINC' })).not.toBeInTheDocument();
+    // Manual mode: same story. Still exactly one combobox, and the static label persists.
+    fireEvent.click(screen.getByRole('button', { name: /enter manually/i }));
+    expect(screen.getAllByRole('combobox')).toHaveLength(1);
+    expect(screen.getByText('FACILITY-REGISTRY')).toBeInTheDocument();
+    expect(screen.queryByText('LOINC')).not.toBeInTheDocument();
+    expect(screen.queryByText('HFR')).not.toBeInTheDocument();
+    expect(screen.queryByText('DEFAULT_FAC')).not.toBeInTheDocument();
   });
 
-  // ⚠ Edge case called out explicitly in the report: a fresh install (or a register built entirely
-  // from local codes) has ZERO national_system values — the dropdown must still be usable, offering
-  // the registry system alone, not an empty list.
-  it('still offers the registry system as a mapping target when facility_registry has no national_system values yet (fresh install)', async () => {
+  // The dialog's own state is the only thing exercised above — this pins the OUTCOME an operator
+  // actually cares about: the mapping that gets written targets FACILITY_REGISTRY_SYSTEM, not
+  // merely that some prop was passed correctly.
+  it('saves a mapping created from the Observed tab against FACILITY_REGISTRY_SYSTEM', async () => {
     (listObservedFacilities as ReturnType<typeof vi.fn>).mockResolvedValue([arusha]);
-    (listCodingSystems as ReturnType<typeof vi.fn>).mockResolvedValue([defaultFacSystem, registrySystem]);
-    (listFacilityMappingTargetSystems as ReturnType<typeof vi.fn>).mockResolvedValue(['urn:openldr:cs:facility-registry']);
+    (listCodingSystems as ReturnType<typeof vi.fn>).mockResolvedValue([defaultFacSystem, loincSystem, registrySystem, hfrSystem]);
+    (createTermMapping as ReturnType<typeof vi.fn>).mockResolvedValue({
+      mapping: {
+        id: 'tm-new', fromSystem: 'urn:openldr:default_fac', fromCode: 'Arusha',
+        toSystem: 'urn:openldr:cs:facility-registry', toCode: 'ARU', toDisplay: null,
+        mapType: 'SAME-AS', relationship: null, owner: null, isActive: true,
+      },
+      draftCreated: false,
+    });
     show();
     await screen.findByText('Arusha');
 
@@ -466,13 +478,23 @@ describe('ObservedTab', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: /^map$/i }));
     await screen.findByText(/^new mapping$/i);
 
+    // The target SYSTEM is fixed already — the operator only ever fills in the target CODE.
     fireEvent.click(screen.getByRole('button', { name: /enter manually/i }));
-    // Two comboboxes render in manual mode — "Map type" (General section) and the target-system
-    // Select (Target section, this test's subject) — the LATTER is the one to open.
-    const comboboxes = screen.getAllByRole('combobox');
-    fireEvent.click(comboboxes[comboboxes.length - 1]);
+    fireEvent.change(screen.getByPlaceholderText('441407007'), { target: { value: 'ARU' } });
 
-    expect(await screen.findByRole('option', { name: 'FACILITY-REGISTRY' })).toBeInTheDocument();
-    expect(screen.queryByRole('option', { name: 'DEFAULT_FAC' })).not.toBeInTheDocument();
+    const actionsBtn = screen.getByRole('button', { name: /actions/i });
+    fireEvent.pointerDown(actionsBtn, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByText('Create')) {
+      fireEvent.keyDown(actionsBtn, { key: 'Enter' });
+    }
+    const createItem = await screen.findByText('Create');
+    fireEvent.pointerMove(createItem);
+    fireEvent.click(createItem);
+
+    await waitFor(() => expect(createTermMapping).toHaveBeenCalledWith(
+      'urn:openldr:default_fac',
+      'Arusha',
+      expect.objectContaining({ toSystem: 'urn:openldr:cs:facility-registry', toCode: 'ARU' }),
+    ));
   });
 });
