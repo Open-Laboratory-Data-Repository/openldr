@@ -201,25 +201,35 @@ export const SEED_QUERIES: SeedQuery[] = [
     name: 'Facilities (options)',
     connectorId: '',
     params: [],
-    // R3c cutover: reads the v2 `patients` table (originally `v2_patients`, renamed to canonical
-    // `patients` in R3e — replacing the old thin `patients` table it superseded) —
-    // `managing_organization` is unchanged (still the full-organization-ref column) in v2, so this
-    // was a bare table-name swap. No postgres-isms at all — the mssql variant is byte-identical
-    // (see Task 2's porting notes).
+    // patients.managing_organization is set on 1 of 3714 rows (the seed) — the dropdown offered
+    // exactly one fake option. The real facility dimension is diagnostic_reports.performer,
+    // resolved through facility_map the same way q-clinical-micro-header resolves its
+    // performing_lab: fm.source_system = coalesce(dr.source_system, '') (the resolver normalises a
+    // NULL source_system to '' when building the dimension, and NULL = NULL is false) and
+    // fm.source_code = dr.performer. Column ORDER is the contract optionsDataDriven reads
+    // (column 0 = value, column 1 = label) — the value stays the CODE, never the resolved name:
+    // five DISA facility codes (BAMAA, BBFAF, CDABE, EAFAE, NDFAM) all display "Aga Khan", so
+    // filtering/grouping by the label would silently merge five laboratories. No postgres-isms at
+    // all — all three dialects are byte-identical.
     sql: {
-      postgres: `select distinct managing_organization as facility
-from patients
-where managing_organization is not null
-order by 1`,
-      mssql: `select distinct managing_organization as facility
-from patients
-where managing_organization is not null
-order by 1`,
-      // No postgres-isms at all — byte-identical (see Task 5's mysql porting notes).
-      mysql: `select distinct managing_organization as facility
-from patients
-where managing_organization is not null
-order by 1`,
+      postgres: `select distinct dr.performer as value,
+  coalesce(fm.name, dr.performer_display, dr.performer) as label
+from diagnostic_reports dr
+left join facility_map fm on fm.source_system = coalesce(dr.source_system, '') and fm.source_code = dr.performer
+where dr.performer is not null and dr.performer <> ''
+order by 2`,
+      mssql: `select distinct dr.performer as value,
+  coalesce(fm.name, dr.performer_display, dr.performer) as label
+from diagnostic_reports dr
+left join facility_map fm on fm.source_system = coalesce(dr.source_system, '') and fm.source_code = dr.performer
+where dr.performer is not null and dr.performer <> ''
+order by 2`,
+      mysql: `select distinct dr.performer as value,
+  coalesce(fm.name, dr.performer_display, dr.performer) as label
+from diagnostic_reports dr
+left join facility_map fm on fm.source_system = coalesce(dr.source_system, '') and fm.source_code = dr.performer
+where dr.performer is not null and dr.performer <> ''
+order by 2`,
     },
   },
   {
@@ -754,19 +764,21 @@ order by case band when '0-4' then 1 when '5-14' then 2 when '15-24' then 3 when
     ],
     sql: {
       postgres: `with facility_of as (
-  select specimen_id, min(performer) as performer
+  select specimen_id, min(performer) as performer, min(performer_display) as performer_display,
+    min(source_system) as source_system
   from diagnostic_reports
   where specimen_id is not null and specimen_id <> '' and performer is not null
   group by specimen_id
 )
 select
-  coalesce(f.performer, p.managing_organization) as facility,
+  coalesce(fm.name, f.performer_display, f.performer, p.managing_organization) as facility,
   count(*)::int as tested,
   sum(case when o.abnormal_flag = 'R' then 1 else 0 end)::int as resistant
 from lab_results o
 left join patients p on o.patient_id = p.id
 left join specimens s on o.specimen_id = s.id
 left join facility_of f on f.specimen_id = o.specimen_id
+left join facility_map fm on fm.source_system = coalesce(f.source_system, '') and fm.source_code = f.performer
 where o.abnormal_flag in ('S', 'I', 'R')
   and o.specimen_id is not null and o.specimen_id <> ''
   and exists (select 1 from lab_results g where g.observation_code = '634-6' and g.specimen_id = o.specimen_id)
@@ -774,24 +786,26 @@ where o.abnormal_flag in ('S', 'I', 'R')
   and (coalesce(o.result_timestamp, s.received_time) is null
        or (coalesce(o.result_timestamp, s.received_time) >= {{param.from}}
            and coalesce(o.result_timestamp, s.received_time) <= ({{param.to}} || 'T23:59:59.999Z')))
-group by coalesce(f.performer, p.managing_organization)
-order by coalesce(f.performer, p.managing_organization)`,
+group by f.performer, fm.name, f.performer_display, p.managing_organization
+order by 1`,
       // Task 2 port: ::int -> cast(...as int); end-of-day string || -> + (the `{{param.to}}`
       // concat).
       mssql: `with facility_of as (
-  select specimen_id, min(performer) as performer
+  select specimen_id, min(performer) as performer, min(performer_display) as performer_display,
+    min(source_system) as source_system
   from diagnostic_reports
   where specimen_id is not null and specimen_id <> '' and performer is not null
   group by specimen_id
 )
 select
-  coalesce(f.performer, p.managing_organization) as facility,
+  coalesce(fm.name, f.performer_display, f.performer, p.managing_organization) as facility,
   cast(count(*) as int) as tested,
   cast(sum(case when o.abnormal_flag = 'R' then 1 else 0 end) as int) as resistant
 from lab_results o
 left join patients p on o.patient_id = p.id
 left join specimens s on o.specimen_id = s.id
 left join facility_of f on f.specimen_id = o.specimen_id
+left join facility_map fm on fm.source_system = coalesce(f.source_system, '') and fm.source_code = f.performer
 where o.abnormal_flag in ('S', 'I', 'R')
   and o.specimen_id is not null and o.specimen_id <> ''
   and exists (select 1 from lab_results g where g.observation_code = '634-6' and g.specimen_id = o.specimen_id)
@@ -799,24 +813,26 @@ where o.abnormal_flag in ('S', 'I', 'R')
   and (coalesce(o.result_timestamp, s.received_time) is null
        or (coalesce(o.result_timestamp, s.received_time) >= {{param.from}}
            and coalesce(o.result_timestamp, s.received_time) <= ({{param.to}} + 'T23:59:59.999Z')))
-group by coalesce(f.performer, p.managing_organization)
-order by coalesce(f.performer, p.managing_organization)`,
+group by f.performer, fm.name, f.performer_display, p.managing_organization
+order by 1`,
       // Task 5 mysql port: ::int -> cast(...as signed); end-of-day string || -> concat().
       // Otherwise identical structure.
       mysql: `with facility_of as (
-  select specimen_id, min(performer) as performer
+  select specimen_id, min(performer) as performer, min(performer_display) as performer_display,
+    min(source_system) as source_system
   from diagnostic_reports
   where specimen_id is not null and specimen_id <> '' and performer is not null
   group by specimen_id
 )
 select
-  coalesce(f.performer, p.managing_organization) as facility,
+  coalesce(fm.name, f.performer_display, f.performer, p.managing_organization) as facility,
   cast(count(*) as signed) as tested,
   cast(sum(case when o.abnormal_flag = 'R' then 1 else 0 end) as signed) as resistant
 from lab_results o
 left join patients p on o.patient_id = p.id
 left join specimens s on o.specimen_id = s.id
 left join facility_of f on f.specimen_id = o.specimen_id
+left join facility_map fm on fm.source_system = coalesce(f.source_system, '') and fm.source_code = f.performer
 where o.abnormal_flag in ('S', 'I', 'R')
   and o.specimen_id is not null and o.specimen_id <> ''
   and exists (select 1 from lab_results g where g.observation_code = '634-6' and g.specimen_id = o.specimen_id)
@@ -824,8 +840,8 @@ where o.abnormal_flag in ('S', 'I', 'R')
   and (coalesce(o.result_timestamp, s.received_time) is null
        or (coalesce(o.result_timestamp, s.received_time) >= {{param.from}}
            and coalesce(o.result_timestamp, s.received_time) <= concat({{param.to}}, 'T23:59:59.999Z')))
-group by coalesce(f.performer, p.managing_organization)
-order by coalesce(f.performer, p.managing_organization)`,
+group by f.performer, fm.name, f.performer_display, p.managing_organization
+order by 1`,
     },
   },
   {

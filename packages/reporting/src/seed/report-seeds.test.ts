@@ -426,6 +426,58 @@ describe('SEED_QUERIES — q-amr-facility-summary takes its facility from the re
   });
 });
 
+describe('SEED_QUERIES — the facility picker offers real facilities', () => {
+  const q = () => SEED_QUERIES.find((x) => x.id === 'q-facilities')!;
+
+  it('reads the report performer, not the patient organization', () => {
+    // patients.managing_organization is set on 1 of 3714 rows — and that one is the seed — so the
+    // dropdown offered exactly one fake option, "Organization/seed-org".
+    for (const [dialect, sql] of Object.entries(q().sql)) {
+      expect(sql, `${dialect} still reads the patient organization`)
+        .not.toMatch(/managing_organization/);
+      expect(sql, `${dialect} does not read diagnostic_reports`).toContain('from diagnostic_reports');
+    }
+  });
+
+  it('returns the CODE first and the resolved NAME second', () => {
+    // Column ORDER is the contract optionsDataDriven reads: 0 = value, 1 = label.
+    for (const [dialect, sql] of Object.entries(q().sql)) {
+      expect(sql, `${dialect} lost the value column`).toMatch(/dr\.performer as value/);
+      expect(sql, `${dialect} lost the label column`)
+        .toContain('coalesce(fm.name, dr.performer_display, dr.performer) as label');
+    }
+  });
+
+  it('resolves through facility_map with the same NULL source_system guard as the clinical header', () => {
+    for (const [dialect, sql] of Object.entries(q().sql)) {
+      expect(sql, `${dialect}`).toMatch(/fm\.source_system\s*=\s*coalesce\(dr\.source_system, ''\)/);
+      expect(sql, `${dialect}`).toMatch(/fm\.source_code\s*=\s*dr\.performer\b/);
+    }
+  });
+});
+
+describe('SEED_QUERIES — q-amr-facility-summary labels by name but groups by code', () => {
+  const q = () => SEED_QUERIES.find((x) => x.id === 'q-amr-facility-summary')!;
+
+  it('projects a resolved name', () => {
+    // Since the feed split the facility into code + display, this rendered the raw code "NICD".
+    for (const [dialect, sql] of Object.entries(q().sql)) {
+      expect(sql, `${dialect} does not resolve the facility label`)
+        .toContain('coalesce(fm.name, f.performer_display, f.performer, p.managing_organization) as facility');
+    }
+  });
+
+  it('⛔ still GROUPS on the code, never on the resolved label', () => {
+    // Grouping by label merges the five "Aga Khan" laboratories into one row the day the other
+    // four codes arrive. The code is the identity; the label is presentation.
+    for (const [dialect, sql] of Object.entries(q().sql)) {
+      expect(sql, `${dialect} groups by the resolved label and will merge facilities`)
+        .not.toMatch(/group by coalesce\(fm\.name/);
+      expect(sql, `${dialect} lost the code grouping`).toMatch(/group by[\s\S]*f\.performer/);
+    }
+  });
+});
+
 // The human-facing AMR reports printed raw source codes (VIBCO, SHIFL, ACIBA) as the pathogen.
 // The display name sits beside the code in `lab_results.text_value` ("Vibrio cholera 01 Ogawa").
 describe('SEED_QUERIES — pathogens are labelled by name but grouped by code', () => {
