@@ -17,6 +17,7 @@ import {
   publishFacilities,
   listCodingSystems,
   listTermMappings,
+  listFacilityMappingTargetSystems,
   type ObservedFacility,
   type CodingSystem,
   type TermMapping,
@@ -158,7 +159,17 @@ export function ObservedTab({ actionsPortalTarget }: ObservedTabProps = {}): JSX
 
   // ── Map / Edit mapping (row ⋯ menu → shipped TermMappingDialog) ─────────────
   const [mappingRow, setMappingRow] = useState<ObservedFacility | null>(null);
+  // The FULL active coding_systems list — used ONLY to look up the FROM term's own `systemCode`
+  // (below), which must resolve regardless of whether that system is a valid mapping TARGET (the
+  // row's own observed system, e.g. a CDR feed's system, is never itself a facility register).
   const [mappingSystems, setMappingSystems] = useState<CodingSystem[]>([]);
+  // Fix 2 (self-mapping report): the systems `TermMappingDialog` is allowed to offer as a mapping
+  // TARGET — restricted to `mappingSystems` intersected with `listFacilityMappingTargetSystems()`
+  // (the registry system, plus any known `national_system`). This is a DELIBERATELY narrower list
+  // than `mappingSystems` above — passing the full active list here (DEFAULT_FAC, LOINC, ICD-10,
+  // UCUM…) is what let an operator map an observed code to itself, or to LOINC, and have it
+  // silently resolve as "target missing" (see `facility-reconcile.ts`'s `nonFacilityTarget`).
+  const [mappingTargetSystems, setMappingTargetSystems] = useState<CodingSystem[]>([]);
   const [mappingExisting, setMappingExisting] = useState<TermMapping | null>(null);
   const [mappingLoading, setMappingLoading] = useState(false);
   const [mappingDialogOpen, setMappingDialogOpen] = useState(false);
@@ -178,11 +189,14 @@ export function ObservedTab({ actionsPortalTarget }: ObservedTabProps = {}): JSX
       // dialog opens in edit mode against it, rather than creating a second, ambiguous candidate
       // row alongside it — `resolveObservedFacilities` has no tiebreak for two active mappings on
       // the same code.
-      const [systems, mappings] = await Promise.all([
+      const [systems, mappings, targetSystemUrls] = await Promise.all([
         listCodingSystems(),
         listTermMappings(system, row.sourceCode),
+        listFacilityMappingTargetSystems(),
       ]);
+      const targetUrlSet = new Set(targetSystemUrls);
       setMappingSystems(systems);
+      setMappingTargetSystems(systems.filter((s) => s.url !== null && targetUrlSet.has(s.url)));
       setMappingExisting(mappings.outgoing[0] ?? null);
       setMappingRow(row);
       setMappingDialogOpen(true);
@@ -196,6 +210,9 @@ export function ObservedTab({ actionsPortalTarget }: ObservedTabProps = {}): JSX
   // The system the currently-open row's mapping is authored against — derived from ITS
   // `sourceSystem`, not the default. Falls back to the default system's url before a row is picked
   // (dialog closed), which is harmless since `mappingSystems.find` then simply returns undefined.
+  // Looks up the FULL `mappingSystems` list (not the target-restricted one) — the FROM term's own
+  // system is very often NOT a valid mapping target (an observed feed's system is never itself a
+  // facility register) but must still display its real code, not blank out.
   const mappingSystemUrl = mappingRow ? observedSystemForFeed(mappingRow.sourceSystem) : DEFAULT_OBSERVED_FACILITY_SYSTEM;
   const mappingSystemCode = mappingSystems.find((s) => s.url === mappingSystemUrl)?.systemCode ?? '';
 
@@ -279,6 +296,8 @@ export function ObservedTab({ actionsPortalTarget }: ObservedTabProps = {}): JSX
                   <TableCell className="text-xs">
                     {row.targetMissing ? (
                       <span className="font-medium text-destructive">{t('facilities.observed.targetMissing')}</span>
+                    ) : row.nonFacilityTarget ? (
+                      <span className="font-medium text-destructive">{t('facilities.observed.nonFacilityTarget')}</span>
                     ) : row.resolvedVia ? (
                       <div className="flex flex-col">
                         <span>{row.name}</span>
@@ -303,7 +322,7 @@ export function ObservedTab({ actionsPortalTarget }: ObservedTabProps = {}): JSX
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem disabled={mappingLoading} onSelect={() => void openMapping(row)}>
-                            {row.resolvedVia || row.targetMissing ? t('facilities.observed.editMapping') : t('facilities.observed.map')}
+                            {row.resolvedVia || row.targetMissing || row.nonFacilityTarget ? t('facilities.observed.editMapping') : t('facilities.observed.map')}
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -344,7 +363,7 @@ export function ObservedTab({ actionsPortalTarget }: ObservedTabProps = {}): JSX
             display: mappingRow.sourceCode,
             systemCode: mappingSystemCode,
           }}
-          systems={mappingSystems}
+          systems={mappingTargetSystems}
           mapping={mappingExisting}
           onSaved={() => {
             setMappingDialogOpen(false);

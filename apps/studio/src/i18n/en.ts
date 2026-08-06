@@ -818,6 +818,9 @@ export const en = {
       count_other: '{{count}} observed facilities',
       unmapped: 'Not mapped',
       targetMissing: 'Target missing',
+      // Fix 1/2 (self-mapping report): distinct from `targetMissing` — a mapping was authored, but
+      // its target system is not a facility register at all (a self-mapping, or LOINC/ICD-10/UCUM).
+      nonFacilityTarget: 'Target is not a facility',
       viaRegistry: 'via registry',
       viaNational: 'via national',
       map: 'Map',
@@ -836,7 +839,7 @@ export const en = {
       // no longer depends on this action, and doesn't send a would-be mapper looking here.
       publish: 'Rebuild reports dimension',
       publishing: 'Rebuilding…',
-      publishDone: '{{resolved}} resolved, {{unmapped}} unmapped, {{targetMissing}} target missing, {{written}} written.',
+      publishDone: '{{resolved}} resolved, {{unmapped}} unmapped, {{targetMissing}} target missing, {{nonFacilityTarget}} non-facility target(s), {{written}} written.',
     },
   },
   query: {
