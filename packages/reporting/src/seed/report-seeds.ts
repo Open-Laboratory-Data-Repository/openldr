@@ -1757,18 +1757,78 @@ group by 1, 2, 3
 order by 1`,
     },
   },
-  // Patient/specimen header for the same request. Returns ONE row; the design binds it twice with
-  // different column projections (the panel strip, and the isolate on its own).
+  // Patient/specimen header for the same request. Returns ONE row; the design binds it several
+  // times with different column projections (the panel strip, the isolate, the barcode, the QR).
   // ⚠ `lab_results.request_id` references the ServiceRequest **id**, so `lab_requests` joins on
   // `id` — NOT on its own `request_id` column, which is the site's lab number. Getting that
   // backwards returns an empty header and looks exactly like a binding failure.
   // `max(...)` rather than `limit 1`/`top 1`: portable across all three dialects unchanged.
+  //
+  // ⛔ THE PERFORMING LABORATORY. `diagnostic_reports.performer` is the facility CODE (`BAMAA`);
+  // `performer_display` is the human name (`Aga Khan`). Resolution goes through `facility_map`, the
+  // external warehouse dimension — `facility_registry` is in the INTERNAL db and CANNOT be joined
+  // from here (the constraint `011_terminology_codes` documents and `012_facility_map` exists to
+  // work around).
+  //  - ⛔ NEVER key on `performer_display`: five DISA codes (BAMAA/BBFAF/CDABE/EAFAE/NDFAM) all
+  //    display "Aga Khan", in five different districts. FHIR says `Reference.display` must never be
+  //    used for matching, and keying on it once already collapsed five laboratories into one.
+  //  - name falls back CODE-resolved -> wire display -> bare code. `performer_display` is itself
+  //    30-char truncated upstream by DISA ("Ocean Road Cancer Institute (O"), so the fallback is
+  //    readable but clipped; only a registry mapping produces the full name.
+  //  - location falls back `facility_map` -> `facilities`. `facility_map` is rebuilt only by a
+  //    MANUAL publish while ingest runs continuously, so a site first seen since the last publish
+  //    has no `facility_map` row at all; `facilities` is written at ingest and is always current.
+  //    Preferring `facility_map` also keeps one measured bad row off the page — BAGAE's
+  //    `facilities` row carries a street address and a PO box where region/district belong.
+  //  - ⛔ `coalesce(fo.source_system, '')` on the facility_map side only: the resolver normalises a
+  //    NULL source_system to '' when building the dimension, and `NULL = NULL` is false, so a plain
+  //    equality join drops exactly the rows `relational-writer.ts` says exist.
+  //  - the `facility_of` CTE is the same per-specimen fold, for the same reason, as
+  //    `q-amr-facility-summary`: reports are per-ORDER, so joining `diagnostic_reports` directly
+  //    would fan this one-row header out. Measured: 0 of 3713 specimens disagree on `performer` and
+  //    0 of 88 codes carry two displays, so the three `min()`s cannot mix two facilities.
+  //  - ⛔ `facility_loc` folds `facilities` for the SAME reason `facility_of` folds the reports, and
+  //    it is NOT redundant with the composite join predicate. `facilities.id` is the raw FHIR
+  //    resource id and BOTH Organization and Location project into that table, so two resources
+  //    describing one facility are two rows sharing a (source_system, facility_code) pair — and this
+  //    query must return exactly ONE row, because the design binds rows[0] into the panel, the
+  //    barcode and the QR. Measured: 0 duplicate pairs today, 89 Organization + 1 Location. The fold
+  //    makes the single row structural instead of a property of the current feed.
+  //    ⚠ `min(region)` and `min(district)` are taken independently, so two rows for one facility
+  //    could contribute one field each. Deterministic and bounded (both describe the same facility),
+  //    and the same tradeoff `facility_of` already documents — but it is a tradeoff, not a proof.
   {
     id: 'q-clinical-micro-header',
     name: 'Clinical — patient & specimen header',
     connectorId: '',
     params: [{ id: 'request', label: 'Request ID', type: 'text', required: true }],
-    sql: { postgres: `select
+    sql: { postgres: `with facility_of as (
+  select specimen_id,
+    min(performer) as performer,
+    min(performer_display) as performer_display,
+    min(source_system) as source_system
+  from diagnostic_reports
+  where specimen_id is not null and specimen_id <> '' and performer is not null
+  group by specimen_id
+),
+facility_loc as (
+  select source_system, facility_code,
+    min(region) as region,
+    min(district) as district
+  from facilities
+  where facility_code is not null and facility_code <> ''
+  group by source_system, facility_code
+),
+facility as (
+  select fo.specimen_id,
+    coalesce(fm.name, fo.performer_display, fo.performer) as performing_lab,
+    coalesce(fm.district, fa.district) as district,
+    coalesce(fm.region, fa.region) as region
+  from facility_of fo
+  left join facility_map fm on fm.source_system = coalesce(fo.source_system, '') and fm.source_code = fo.performer
+  left join facility_loc fa on fa.source_system = fo.source_system and fa.facility_code = fo.performer
+)
+select
   p.surname as patient_surname,
   p.firstname as patient_firstname,
   p.sex as sex,
@@ -1778,11 +1838,42 @@ order by 1`,
   q.request_id as lab_number,
   q.panel_desc as panel,
   (select max(coalesce(o.text_value, o.coded_value)) from lab_results o
-     where o.request_id = q.id and o.observation_code in ('634-6', 'ORGS')) as organism
+     where o.request_id = q.id and o.observation_code in ('634-6', 'ORGS')) as organism,
+  f.performing_lab as performing_lab,
+  case when f.district is not null and f.region is not null
+       then f.district || ', ' || f.region
+       else coalesce(f.district, f.region) end as lab_location
 from lab_requests q
 left join patients p on p.id = q.patient_id
 left join specimens s on s.id = (select max(l.specimen_id) from lab_results l where l.request_id = q.id)
-where q.id = {{param.request}}`, mssql: `select
+left join facility f on f.specimen_id = (select max(l.specimen_id) from lab_results l where l.request_id = q.id)
+where q.id = {{param.request}}`, mssql: `with facility_of as (
+  select specimen_id,
+    min(performer) as performer,
+    min(performer_display) as performer_display,
+    min(source_system) as source_system
+  from diagnostic_reports
+  where specimen_id is not null and specimen_id <> '' and performer is not null
+  group by specimen_id
+),
+facility_loc as (
+  select source_system, facility_code,
+    min(region) as region,
+    min(district) as district
+  from facilities
+  where facility_code is not null and facility_code <> ''
+  group by source_system, facility_code
+),
+facility as (
+  select fo.specimen_id,
+    coalesce(fm.name, fo.performer_display, fo.performer) as performing_lab,
+    coalesce(fm.district, fa.district) as district,
+    coalesce(fm.region, fa.region) as region
+  from facility_of fo
+  left join facility_map fm on fm.source_system = coalesce(fo.source_system, '') and fm.source_code = fo.performer
+  left join facility_loc fa on fa.source_system = fo.source_system and fa.facility_code = fo.performer
+)
+select
   p.surname as patient_surname,
   p.firstname as patient_firstname,
   p.sex as sex,
@@ -1792,11 +1883,42 @@ where q.id = {{param.request}}`, mssql: `select
   q.request_id as lab_number,
   q.panel_desc as panel,
   (select max(coalesce(o.text_value, o.coded_value)) from lab_results o
-     where o.request_id = q.id and o.observation_code in ('634-6', 'ORGS')) as organism
+     where o.request_id = q.id and o.observation_code in ('634-6', 'ORGS')) as organism,
+  f.performing_lab as performing_lab,
+  case when f.district is not null and f.region is not null
+       then f.district + ', ' + f.region
+       else coalesce(f.district, f.region) end as lab_location
 from lab_requests q
 left join patients p on p.id = q.patient_id
 left join specimens s on s.id = (select max(l.specimen_id) from lab_results l where l.request_id = q.id)
-where q.id = {{param.request}}`, mysql: `select
+left join facility f on f.specimen_id = (select max(l.specimen_id) from lab_results l where l.request_id = q.id)
+where q.id = {{param.request}}`, mysql: `with facility_of as (
+  select specimen_id,
+    min(performer) as performer,
+    min(performer_display) as performer_display,
+    min(source_system) as source_system
+  from diagnostic_reports
+  where specimen_id is not null and specimen_id <> '' and performer is not null
+  group by specimen_id
+),
+facility_loc as (
+  select source_system, facility_code,
+    min(region) as region,
+    min(district) as district
+  from facilities
+  where facility_code is not null and facility_code <> ''
+  group by source_system, facility_code
+),
+facility as (
+  select fo.specimen_id,
+    coalesce(fm.name, fo.performer_display, fo.performer) as performing_lab,
+    coalesce(fm.district, fa.district) as district,
+    coalesce(fm.region, fa.region) as region
+  from facility_of fo
+  left join facility_map fm on fm.source_system = coalesce(fo.source_system, '') and fm.source_code = fo.performer
+  left join facility_loc fa on fa.source_system = fo.source_system and fa.facility_code = fo.performer
+)
+select
   p.surname as patient_surname,
   p.firstname as patient_firstname,
   p.sex as sex,
@@ -1806,10 +1928,15 @@ where q.id = {{param.request}}`, mysql: `select
   q.request_id as lab_number,
   q.panel_desc as panel,
   (select max(coalesce(o.text_value, o.coded_value)) from lab_results o
-     where o.request_id = q.id and o.observation_code in ('634-6', 'ORGS')) as organism
+     where o.request_id = q.id and o.observation_code in ('634-6', 'ORGS')) as organism,
+  f.performing_lab as performing_lab,
+  case when f.district is not null and f.region is not null
+       then concat(f.district, ', ', f.region)
+       else coalesce(f.district, f.region) end as lab_location
 from lab_requests q
 left join patients p on p.id = q.patient_id
 left join specimens s on s.id = (select max(l.specimen_id) from lab_results l where l.request_id = q.id)
+left join facility f on f.specimen_id = (select max(l.specimen_id) from lab_results l where l.request_id = q.id)
 where q.id = {{param.request}}` },
   },
 ];
@@ -1986,8 +2113,22 @@ export const SEED_DESIGNS: ReportDesign[] = [
       // Band 2 of the reference: a label→value metadata strip, NOT a one-row table. It was a table
       // with a header row until S4 gave the vocabulary a `keyvalue` panel; the column labels sat
       // above the values in a tinted band, which reads as a spreadsheet fragment rather than a
-      // patient header. Two pair columns, so the eight facts fill four lines instead of eight.
-      { id: 'hdr', kind: 'keyvalue', name: 'Patient & specimen', rect: { x: 40, y: 152, w: 700, h: 84 },
+      // patient header. Two pair columns, so the ten facts fill five lines instead of ten.
+      // ⛔ UNIT WARNING — this `rect` is px@96, but `pairRects`'s KV_PAD_Y/KV_INLINE_H constants are
+      // raw POINTS. `drawElement` converts the rect with `toPt` (×0.75) before calling `pairRects`,
+      // so the panel's real capacity must be computed in POINTS, not px@96 — mixing the two scales
+      // is exactly the bug that shipped a fifth row sliced in half by the `org` band below it while
+      // every test (and this comment) said it fit. Measured against the real path (`toPt` then
+      // `pairRects`): box = {x:30, y:114, w:525, h:78} pt, box bottom **192pt**. Pairs start at
+      // y=114+4=118pt and flow across then down at 14pt/row (KV_INLINE_H, raw pt); row 5 (pairs 9
+      // and 10) occupies **174 → 188pt**, inside the box bottom with 4pt to spare.
+      // ⛔ THIS PANEL IS NOW FULL. `pairRects` returns boxes past the bottom of the box and the
+      // drawer clips them — a sixth row disappears silently, with no error. Field eleven (row 6,
+      // 188 → 202pt) overflows a 192pt box. Whoever adds it must grow `h` again and push `org`,
+      // `band`, `bandt`, and `tbl` further down, exactly as this slice did when it went from eight
+      // pairs to ten (h: 84 → 104px; org/band/bandt/tbl each +20px). `report-seeds.test.ts` pins
+      // both the fit and the remaining capacity.
+      { id: 'hdr', kind: 'keyvalue', name: 'Patient & specimen', rect: { x: 40, y: 152, w: 700, h: 104 },
         layout: 'inline', panelColumns: 2,
         dataSource: { kind: 'custom-query', queryId: 'q-clinical-micro-header' },
         boundColumns: [
@@ -1999,19 +2140,21 @@ export const SEED_DESIGNS: ReportDesign[] = [
           { key: 'lab_number', label: 'Lab number', kind: 'label' },
           { key: 'dob', label: 'DOB', kind: 'label' },
           { key: 'panel', label: 'Panel', kind: 'label' },
+          { key: 'performing_lab', label: 'Performing lab', kind: 'label' },
+          { key: 'lab_location', label: 'Lab location', kind: 'label' },
         ] },
       // Band 4: a titled panel. Stacked, because an organism name ("Klebsiella pneumoniae") is
       // longer than the 40% an inline label would leave it, and it is the one fact on this page a
       // clinician looks for first.
-      { id: 'org', kind: 'keyvalue', name: 'Organism', rect: { x: 40, y: 244, w: 700, h: 58 },
+      { id: 'org', kind: 'keyvalue', name: 'Organism', rect: { x: 40, y: 264, w: 700, h: 58 },
         layout: 'stacked', text: 'ORGANISM ISOLATED', style: { fill: '#334155', strokeColor: '#cbd5e1' },
         dataSource: { kind: 'custom-query', queryId: 'q-clinical-micro-header' },
         boundColumns: [{ key: 'organism', label: 'Isolate', kind: 'label' }] },
-      { id: 'band', kind: 'rect', name: 'band', rect: { x: 40, y: 314, w: 700, h: 20 }, style: { fill: '#334155', strokeColor: '#334155' } },
-      { id: 'bandt', kind: 'text', name: 'bandt', rect: { x: 40, y: 319, w: 420, h: 16 }, text: '   ANTIMICROBIAL SUSCEPTIBILITY', style: { fontSize: 8, bold: true, color: '#ffffff' } },
+      { id: 'band', kind: 'rect', name: 'band', rect: { x: 40, y: 334, w: 700, h: 20 }, style: { fill: '#334155', strokeColor: '#334155' } },
+      { id: 'bandt', kind: 'text', name: 'bandt', rect: { x: 40, y: 339, w: 420, h: 16 }, text: '   ANTIMICROBIAL SUSCEPTIBILITY', style: { fontSize: 8, bold: true, color: '#ffffff' } },
       // Two columns, not three: the interpretation IS the result for a susceptibility test, and
       // carrying the same fact in two renderings is what let them visibly disagree.
-      { id: 'tbl', kind: 'table', name: 'Susceptibility', rect: { x: 40, y: 340, w: 700, h: 300 },
+      { id: 'tbl', kind: 'table', name: 'Susceptibility', rect: { x: 40, y: 360, w: 700, h: 300 },
         dataSource: { kind: 'custom-query', queryId: 'q-clinical-micro-ast' },
         boundColumns: [
           { key: 'test', label: 'Antimicrobial', kind: 'label' },

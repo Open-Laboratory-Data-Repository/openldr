@@ -9,6 +9,18 @@ export type ResolvedTable =
 
 export { resolveDesignTables, type RunQuery } from './resolve';
 
+// Widened to the package boundary for `@openldr/reporting`'s seed tests: a seeded design's keyvalue
+// panel has a FIXED box, and pairs past its bottom are clipped by the drawer rather than
+// overflowing — so a panel that has run out of room fails silently at render time. Exporting the
+// geometry lets the seed that owns the panel assert its own capacity.
+export { pairRects, type PairBox } from './draw';
+
+// Exported alongside `pairRects` because the two are only meaningful TOGETHER: `drawElement`
+// converts a design rect px@96 -> pt before handing it to `pairRects`, whose KV_* constants are
+// raw POINTS. A caller that measures a panel's capacity using the unconverted rect mixes two
+// scales and silently computes a row too many — the exact error that shipped a clipped row.
+export { toPt, PX_TO_PT } from './units';
+
 export interface RenderOptions {
   now?: Date;
   /**

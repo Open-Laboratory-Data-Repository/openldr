@@ -11,6 +11,7 @@ import {
   antibioticNormalizeSql,
   type SeedDataDrivenReportsDeps,
 } from './report-seeds';
+import { pairRects, toPt } from '@openldr/report-designer';
 
 // In-memory fakes — no real Kysely instance needed (unlike `packages/bootstrap/src/seed.ts`,
 // which builds `customQueries` from a real DB handle; here we inject fakes directly to unit-test
@@ -718,6 +719,47 @@ describe('SEED_DESIGNS — rt-clinical-micro uses real keyvalue panels', () => {
     expect(el('org').text).toBe('ORGANISM ISOLATED');
   });
 
+  it('names the performing laboratory and where it is', () => {
+    // The report never said which lab produced the result. On a national instance the letterhead is
+    // the MINISTRY, so nothing else on the page supplies it — and five DISA codes share the display
+    // "Aga Khan", so the name alone does not identify a laboratory either.
+    const keys = (el('hdr').boundColumns ?? []).map((c) => c.key);
+    expect(keys).toContain('performing_lab');
+    expect(keys).toContain('lab_location');
+  });
+
+  it('fits every header pair inside the panel box', () => {
+    // ⛔ `toPt` FIRST. `drawElement` converts the design rect px@96 -> pt and only then calls
+    // `pairRects`, whose KV_PAD_Y/KV_INLINE_H are raw POINTS. Measuring with the unconverted rect
+    // mixes two scales and reports a row that overflows as fitting — this test passed while the
+    // rendered page had its fifth row sliced in half by the band below it.
+    // ⛔ Pairs past the box bottom are CLIPPED by the drawer (`doc.clip()`), not overflowed, so an
+    // eleventh field would VANISH with no error. This assertion is the only thing that makes that
+    // a failing test instead of a silent regression.
+    const hdr = el('hdr');
+    const n = (hdr.boundColumns ?? []).length;
+    const box = toPt(hdr.rect);
+    const pairs = pairRects(box, n, 'inline', hdr.panelColumns ?? 1, !!(hdr.text ?? '').trim());
+    const last = pairs[n - 1];
+    expect(
+      last.y + last.h,
+      `pair ${n} falls outside the panel and will be silently clipped`,
+    ).toBeLessThanOrEqual(box.y + box.h);
+  });
+
+  it('has room for the ten pairs it binds and no more', () => {
+    // Measured against the real path (toPt then pairRects): at h=104px the box bottom is 192pt,
+    // ten pairs end at 188pt, twelve end at 202pt. Field eleven must therefore grow `h` AND push
+    // `org`/`band`/`bandt`/`tbl` down, exactly as this slice did when it went from eight to ten.
+    const hdr = el('hdr');
+    const box = toPt(hdr.rect);
+    const twoMore = pairRects(box, 12, 'inline', hdr.panelColumns ?? 1, false)[11];
+    expect(
+      twoMore.y + twoMore.h,
+      'the panel has silently gained room for another row — re-check the capacity comment',
+    ).toBeGreaterThan(box.y + box.h);
+  });
+
   it('leaves no element overprinting another', () => {
     // The panels are taller than the tables they replaced; a stale `y` silently overprints.
     // ⚠ Must be a 2D intersection. A vertical-band-only check calls every side-by-side pair an
@@ -767,6 +809,116 @@ describe('SEED_DESIGNS — rt-clinical-micro carries the scannable identifiers',
     // ...and still inside the bottom margin (32).
     for (const id of ['rule2', 'ft', 'sig', 'qr']) {
       expect(el(id).rect.y + el(id).rect.h).toBeLessThanOrEqual(pageH - 32);
+    }
+  });
+});
+
+// The report never said which laboratory performed the test. `performer` is the facility CODE
+// (BAMAA) and `performer_display` the human name (Aga Khan) — five DISA codes share that one
+// display, so the join keys on the code and the DISPLAY is only ever a fallback for printing.
+describe('SEED_QUERIES — q-clinical-micro-header names the performing laboratory', () => {
+  const q = () => SEED_QUERIES.find((x) => x.id === 'q-clinical-micro-header')!;
+
+  it('selects performing_lab and lab_location in every dialect', () => {
+    for (const [dialect, sql] of Object.entries(q().sql)) {
+      expect(sql, `${dialect} does not select performing_lab`).toMatch(/as performing_lab\b/);
+      expect(sql, `${dialect} does not select lab_location`).toMatch(/as lab_location\b/);
+    }
+  });
+
+  it('falls back name -> display -> code, so an unmapped facility never prints a bare code', () => {
+    // The three-level ladder is the whole point: performer_display is itself 30-char truncated
+    // upstream, but "Ocean Road Cancer Institute (O" is still readable and "BALAB" is not.
+    for (const [dialect, sql] of Object.entries(q().sql)) {
+      expect(sql, `${dialect} lost the three-level name fallback`)
+        .toContain('coalesce(fm.name, fo.performer_display, fo.performer) as performing_lab');
+    }
+  });
+
+  it('joins facility_map on the CODE, never on the human display', () => {
+    for (const [dialect, sql] of Object.entries(q().sql)) {
+      expect(sql, `${dialect} does not join facility_map on the code`)
+        .toMatch(/fm\.source_code\s*=\s*fo\.performer\b/);
+      expect(sql, `${dialect} matches on the display — five facilities share the string "Aga Khan"`)
+        .not.toMatch(/fm\.source_code\s*=\s*fo\.performer_display/);
+    }
+  });
+
+  it('guards the facility_map join against a NULL source_system', () => {
+    // resolveObservedFacilities normalises NULL source_system to '' when building facility_map,
+    // and relational-writer.ts documents having written NULL into every row for months. A plain
+    // equality join drops those rows silently, because NULL = NULL is false.
+    for (const [dialect, sql] of Object.entries(q().sql)) {
+      expect(sql, `${dialect} lost the NULL source_system guard`)
+        .toMatch(/fm\.source_system\s*=\s*coalesce\(fo\.source_system, ''\)/);
+    }
+  });
+
+  it('joins facilities on BOTH source_system and code — the fan-out guard', () => {
+    // `facilities` has no uniqueness constraint on (source_system, facility_code). This query
+    // returns ONE row that the design binds; a duplicate would fan it out to two and the keyvalue
+    // panel would silently render the first.
+    for (const [dialect, sql] of Object.entries(q().sql)) {
+      expect(sql, `${dialect} does not scope the facilities join by feed`)
+        .toMatch(/fa\.source_system\s*=\s*fo\.source_system\s+and\s+fa\.facility_code\s*=\s*fo\.performer/);
+    }
+  });
+
+  it('prefers the curated facility_map location over the ingested one', () => {
+    // One measured facilities row (BAGAE) carries a street address and a PO box where a region and
+    // district belong. It is the one facility that IS mapped, so this order is what keeps a PO box
+    // off a clinical report.
+    for (const [dialect, sql] of Object.entries(q().sql)) {
+      expect(sql, `${dialect} lost the district preference`)
+        .toContain('coalesce(fm.district, fa.district) as district');
+      expect(sql, `${dialect} lost the region preference`)
+        .toContain('coalesce(fm.region, fa.region) as region');
+    }
+  });
+
+  it('collapses reports to one row per specimen before joining — the fan-out guard', () => {
+    // Reports are per-ORDER, not per-specimen. Measured: 0 of 3713 specimens disagree on performer
+    // and 0 of 88 codes carry two displays, so the three min()s cannot splice one facility's code
+    // onto another's name.
+    for (const [dialect, sql] of Object.entries(q().sql)) {
+      expect(sql, `${dialect} lost the facility_of CTE`).toContain('facility_of as (');
+      expect(sql, `${dialect} does not fold reports per specimen`)
+        .toMatch(/min\(performer\) as performer[\s\S]*group by specimen_id/);
+      expect(sql, `${dialect} joins diagnostic_reports directly and will fan out`)
+        .not.toMatch(/join diagnostic_reports [a-z]+ on/);
+    }
+  });
+
+  it('reaches the facility through the same max(specimen_id) subselect, not through s.id', () => {
+    // `s` is LEFT joined, so a specimen_id present in lab_results but absent from `specimens`
+    // leaves s.id NULL and would silently drop the facility.
+    for (const [dialect, sql] of Object.entries(q().sql)) {
+      expect(sql, `${dialect} hangs the facility off the specimens join`)
+        .toContain('left join facility f on f.specimen_id = (select max(l.specimen_id) from lab_results l where l.request_id = q.id)');
+    }
+  });
+
+  it('composes the location with each dialect’s own concatenation', () => {
+    // CONCAT_WS would say this once for all three, but it arrived in SQL Server 2017 — exactly the
+    // floor docker-compose.yml documents — and it keeps '' while skipping NULL.
+    expect(q().sql.postgres).toContain("f.district || ', ' || f.region");
+    expect(q().sql.mssql).toContain("f.district + ', ' + f.region");
+    expect(q().sql.mysql).toContain("concat(f.district, ', ', f.region)");
+    for (const [dialect, sql] of Object.entries(q().sql)) {
+      expect(sql, `${dialect} smuggled in CONCAT_WS`).not.toMatch(/concat_ws/i);
+    }
+  });
+
+  it('folds facilities to one row per facility before joining — the header must stay single-row', () => {
+    // facilities.id is the raw FHIR resource id and BOTH Organization and Location project into
+    // that table, so one facility can be two rows. The design binds rows[0] into the panel, the
+    // barcode and the QR, so a fan-out would silently render whichever row came first.
+    for (const [dialect, sql] of Object.entries(q().sql)) {
+      expect(sql, `${dialect} lost the facilities fold`).toContain('facility_loc as (');
+      expect(sql, `${dialect} does not group the fold by facility`)
+        .toMatch(/from facilities[\s\S]*group by source_system, facility_code/);
+      expect(sql, `${dialect} still joins the raw facilities table and can fan out`)
+        .not.toMatch(/join facilities [a-z]+ on/);
     }
   });
 });
