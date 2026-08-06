@@ -64,16 +64,22 @@ export async function makeReconcileDeps(): Promise<ReconcileDeps> {
 export async function seedPerformers(
   deps: ReconcileDeps,
   pairs: [string | null, number][],
-  opts: { sourceSystem?: string } = {},
+  opts: { sourceSystem?: string; performerDisplay?: string | null; performerSystem?: string | null } = {},
 ): Promise<void> {
   const sourceSystem = opts.sourceSystem ?? 'webhook-ingest';
   // Random ids, not a sequence counter: `seedPerformers` is called more than once per test (a
   // second scan seeding more reports for an already-seeded performer), and a counter local to this
   // function would restart at `dr-1` on every call and collide with rows the first call inserted.
-  const rows: { id: string; performer: string | null; source_system: string }[] = [];
+  const rows: { id: string; performer: string | null; source_system: string; performer_display: string | null; performer_system: string | null }[] = [];
   for (const [performer, count] of pairs) {
     for (let i = 0; i < count; i += 1) {
-      rows.push({ id: `dr-${randomUUID()}`, performer, source_system: sourceSystem });
+      rows.push({
+        id: `dr-${randomUUID()}`,
+        performer,
+        source_system: sourceSystem,
+        performer_display: opts.performerDisplay ?? null,
+        performer_system: opts.performerSystem ?? null,
+      });
     }
   }
   if (rows.length === 0) return;

@@ -409,6 +409,112 @@ describe('Task 9b: feed-aware scan/resolve', () => {
   });
 });
 
+// `DisaGlobal.dbo.LOCNDIC4` holds five distinct facility codes (BAMAA/BBFAF/CDABE/EAFAE/NDFAM)
+// whose DESCRIPTION is all exactly 'Aga Khan'. The wire now carries the code on
+// `performer[0].identifier.value` (projected onto `diagnostic_reports.performer`, the match key)
+// and the shared name on `performer[0].display` (projected onto `performer_display`). Scan/resolve
+// must key everything off `performer` (already distinct per code) and use `performer_display` only
+// as a LABEL — never let it collapse two codes into one concept.
+describe('facility identifier: performer_display and performer_system', () => {
+  it('two facility codes sharing the same performer_display produce two distinct, separately-mappable concepts', async () => {
+    const deps = await makeReconcileDeps();
+    await seedPerformers(deps, [['BAMAA', 3]], { performerDisplay: 'Aga Khan' });
+    await seedPerformers(deps, [['CDABE', 2]], { performerDisplay: 'Aga Khan' });
+
+    await scanObservedFacilities(deps, { now: '2026-08-05T00:00:00.000Z', apply: true });
+
+    const { rows } = await deps.admin.terms.search(DEFAULT_OBSERVED_FACILITY_SYSTEM, { limit: 50, offset: 0 });
+    const bamaa = rows.find((r) => r.code === 'BAMAA');
+    const cdabe = rows.find((r) => r.code === 'CDABE');
+    expect(bamaa).toBeDefined();
+    expect(cdabe).toBeDefined();
+    expect(bamaa!.display).toBe('Aga Khan');
+    expect(cdabe!.display).toBe('Aga Khan');
+
+    // Map each code to its OWN facility — this is the entire point: the shared display must not
+    // stop the two codes from resolving to two different places.
+    await seedRegistry(deps, { id: 'fac-dar', name: 'Aga Khan Hospital, Dar es Salaam', localCode: 'BAMAA' });
+    await seedRegistry(deps, { id: 'fac-dodoma', name: 'Aga Khan Hospital, Dodoma', localCode: 'CDABE' });
+    await seedMapping(deps, { fromSystem: DEFAULT_OBSERVED_FACILITY_SYSTEM, fromCode: 'BAMAA', toSystem: FACILITY_REGISTRY_SYSTEM, toCode: 'fac-dar' });
+    await seedMapping(deps, { fromSystem: DEFAULT_OBSERVED_FACILITY_SYSTEM, fromCode: 'CDABE', toSystem: FACILITY_REGISTRY_SYSTEM, toCode: 'fac-dodoma' });
+
+    const resolved = await resolveObservedFacilities(deps);
+    const rowBamaa = resolved.find((r) => r.sourceCode === 'BAMAA');
+    const rowCdabe = resolved.find((r) => r.sourceCode === 'CDABE');
+    expect(rowBamaa?.name).toBe('Aga Khan Hospital, Dar es Salaam');
+    expect(rowCdabe?.name).toBe('Aga Khan Hospital, Dodoma');
+    expect(rowBamaa?.name).not.toBe(rowCdabe?.name);
+  });
+
+  it('scan seeds a new concept from performer_display, not the bare code', async () => {
+    const deps = await makeReconcileDeps();
+    await seedPerformers(deps, [['BAMAA', 1]], { performerDisplay: 'Aga Khan' });
+
+    await scanObservedFacilities(deps, { now: '2026-08-05T00:00:00.000Z', apply: true });
+
+    const { rows } = await deps.admin.terms.search(DEFAULT_OBSERVED_FACILITY_SYSTEM, { limit: 10, offset: 0 });
+    expect(rows).toHaveLength(1);
+    expect(rows[0].code).toBe('BAMAA');
+    expect(rows[0].display).toBe('Aga Khan');
+  });
+
+  it('scan falls back to the bare code as display when performer_display is absent', async () => {
+    const deps = await makeReconcileDeps();
+    await seedPerformers(deps, [['Dodoma', 1]]); // no performerDisplay
+
+    await scanObservedFacilities(deps, { now: '2026-08-05T00:00:00.000Z', apply: true });
+
+    const { rows } = await deps.admin.terms.search(DEFAULT_OBSERVED_FACILITY_SYSTEM, { limit: 10, offset: 0 });
+    expect(rows[0].display).toBe('Dodoma');
+  });
+
+  // The wire is more authoritative than our own source_system-based inference — a sender that
+  // supplies `identifier.system` gets its concept registered under THAT system, not the one
+  // `observedSystemForFeed(source_system)` would have derived.
+  it('scan prefers the wire-supplied performer_system over the source_system-derived default', async () => {
+    const deps = await makeReconcileDeps();
+    const wireSystem = 'urn:openldr:cdr:LOCNDIC4';
+    await seedPerformers(deps, [['BAMAA', 1]], { sourceSystem: 'webhook-ingest', performerSystem: wireSystem });
+
+    await scanObservedFacilities(deps, { now: '2026-08-05T00:00:00.000Z', apply: true });
+
+    const wireCs = await deps.admin.codingSystems.getByUrl(wireSystem);
+    expect(wireCs).not.toBeNull();
+    expect(wireCs!.active).toBe(true);
+    const { rows: wireRows } = await deps.admin.terms.search(wireSystem, { limit: 10, offset: 0 });
+    expect(wireRows.map((r) => r.code)).toEqual(['BAMAA']);
+    // Must NOT have landed under the source_system-derived default instead.
+    const { rows: defaultRows } = await deps.admin.terms.search(DEFAULT_OBSERVED_FACILITY_SYSTEM, { limit: 10, offset: 0 });
+    expect(defaultRows).toHaveLength(0);
+  });
+
+  // resolveObservedFacilities must derive its lookup system the SAME way scan derived the registration
+  // system, or a mapping authored under the wire's system is never found.
+  it('resolveObservedFacilities looks up a mapping under the wire-supplied performer_system', async () => {
+    const deps = await makeReconcileDeps();
+    const wireSystem = 'urn:openldr:cdr:LOCNDIC4';
+    await seedPerformers(deps, [['BAMAA', 1]], { performerSystem: wireSystem });
+    await seedRegistry(deps, { id: 'fac-1', name: 'Aga Khan Hospital, Dar es Salaam', localCode: 'BAMAA' });
+    await seedMapping(deps, { fromSystem: wireSystem, fromCode: 'BAMAA', toSystem: FACILITY_REGISTRY_SYSTEM, toCode: 'fac-1' });
+
+    const [row] = await resolveObservedFacilities(deps);
+
+    expect(row.name).toBe('Aga Khan Hospital, Dar es Salaam');
+    expect(row.resolvedVia).toBe('registry');
+  });
+
+  it('falls back to observedSystemForFeed(source_system) when performer_system is absent', async () => {
+    const deps = await makeReconcileDeps();
+    await seedPerformers(deps, [['Dodoma', 1]]); // no performerSystem -> default feed system
+    await seedRegistry(deps, { id: 'fac-1', name: 'Dodoma Regional Referral Hospital', localCode: 'DOD' });
+    await seedMapping(deps, { fromSystem: DEFAULT_OBSERVED_FACILITY_SYSTEM, fromCode: 'Dodoma', toSystem: FACILITY_REGISTRY_SYSTEM, toCode: 'fac-1' });
+
+    const [row] = await resolveObservedFacilities(deps);
+
+    expect(row.name).toBe('Dodoma Regional Referral Hospital');
+  });
+});
+
 describe('publishFacilityMap', () => {
   it('writes resolved rows to the warehouse and re-publishes without duplicating', async () => {
     const deps = await makeReconcileDeps();
@@ -746,6 +852,28 @@ describe('captureObservedFacilityFromProjection', () => {
     expect(rows.map((r) => r.code)).toEqual(['NHL-01']);
 
     // Must NOT have landed in the default system.
+    const { total: defaultTotal } = await deps.admin.terms.search(DEFAULT_OBSERVED_FACILITY_SYSTEM, { limit: 10, offset: 0 });
+    expect(defaultTotal).toBe(0);
+  });
+
+  // Same system preference as scan/resolve: a resource carrying `performer[0].identifier.system`
+  // must capture under THAT system, not `observedSystemForFeed(sourceSystem)` — otherwise the
+  // ingest-time capture and a later full scan would file the SAME code under two different
+  // systems until reconciled.
+  it("prefers the wire's identifier.system over observedSystemForFeed(sourceSystem)", async () => {
+    const deps = await makeReconcileDeps();
+    const wireSystem = 'urn:openldr:cdr:LOCNDIC4';
+    const resource = {
+      resourceType: 'DiagnosticReport',
+      id: 'dr-cdr-2',
+      performer: [{ identifier: { system: wireSystem, value: 'BAMAA' }, display: 'Aga Khan' }],
+    };
+
+    await captureObservedFacilityFromProjection(deps, 'DiagnosticReport', resource, 'webhook-ingest', '2026-08-05T00:00:00.000Z');
+
+    const { rows } = await deps.admin.terms.search(wireSystem, { limit: 10, offset: 0 });
+    expect(rows.map((r) => r.code)).toEqual(['BAMAA']);
+    // Must NOT have landed under the source_system-derived default.
     const { total: defaultTotal } = await deps.admin.terms.search(DEFAULT_OBSERVED_FACILITY_SYSTEM, { limit: 10, offset: 0 });
     expect(defaultTotal).toBe(0);
   });

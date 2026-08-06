@@ -130,22 +130,34 @@ export async function scanObservedFacilities(deps: ReconcileDeps, opts: ScanOpti
 
   const observed = await deps.externalDb
     .selectFrom('diagnostic_reports')
-    .select(({ fn }) => ['performer', 'source_system', fn.countAll<number>().as('n')])
+    .select(({ fn }) => ['performer', 'performer_display', 'performer_system', 'source_system', fn.countAll<number>().as('n')])
     .where('performer', 'is not', null)
-    .groupBy(['performer', 'source_system'])
+    .groupBy(['performer', 'performer_display', 'performer_system', 'source_system'])
     .execute();
 
   // Fold the (performer, source_system) groups down to (system, code) totals — the level
   // `terminology_concepts` is actually keyed at. `Map<system, Map<code, count>>` rather than a
   // single string-joined key: a coding system url or an observed code can contain any character
   // (including whatever a joined-key separator would be), so nesting sidesteps that risk entirely.
+  //
+  // The coding system a row folds into PREFERS the wire's own `performer_system` (`identifier.
+  // system`) over `observedSystemForFeed(source_system)` — the data is more authoritative than our
+  // own feed-based inference when it actually speaks. `source_system`-derivation remains the
+  // fallback for a sender that supplies no identifier system at all (display-only, or no
+  // identifier whatsoever).
   const bySystem = new Map<string, Map<string, number>>();
+  // The wire-supplied display, per (system, code) — seeds a NEW concept's display (see
+  // `observedFacilityConceptRow`'s `defaultDisplay`). Keeps the FIRST non-null display seen for a
+  // given key; real data is expected to agree across rows sharing a (system, code) pair.
+  const displayByKey = new Map<string, string>();
   for (const o of observed) {
     if (o.performer === null) continue;
-    const system = observedSystemForFeed(o.source_system);
+    const system = o.performer_system ?? observedSystemForFeed(o.source_system);
     const byCode = bySystem.get(system) ?? new Map<string, number>();
     byCode.set(o.performer, (byCode.get(o.performer) ?? 0) + Number(o.n));
     bySystem.set(system, byCode);
+    const key = `${system}\n${o.performer}`;
+    if (!displayByKey.has(key) && o.performer_display) displayByKey.set(key, o.performer_display);
   }
   const systems = [...bySystem.keys()];
 
@@ -175,6 +187,7 @@ export async function scanObservedFacilities(deps: ReconcileDeps, opts: ScanOpti
           seenAt: now,
           reportCount: n,
           existing: existing.get(`${system}\n${code}`),
+          defaultDisplay: displayByKey.get(`${system}\n${code}`),
         }),
       );
     }
@@ -229,6 +242,11 @@ export type ResolvedVia = 'registry' | 'national';
 export interface ResolvedFacility {
   sourceSystem: string;
   sourceCode: string;
+  /** `DiagnosticReport.performer[0].display` as observed on the wire (e.g. "Aga Khan") — the human
+   *  name for `sourceCode`, distinct from `name` below (the RESOLVED registry facility's name).
+   *  Lets the Observed tab show "BAMAA — Aga Khan" instead of a bare opaque code, without using the
+   *  display for matching. Null when the source never supplied one. */
+  sourceDisplay: string | null;
   registryId: string | null;
   /** `facility_registry.local_code` of the resolved row — OURS, distinct from `nationalCode`
    *  (THEIRS). Lets an operator tell apart two similarly-named facilities (e.g. "Dodoma Regional
@@ -270,12 +288,15 @@ export interface ResolvedFacility {
 export async function resolveObservedFacilities(deps: ReconcileDeps): Promise<ResolvedFacility[]> {
   const observed = await deps.externalDb
     .selectFrom('diagnostic_reports')
-    .select(['performer', 'source_system'])
+    .select(['performer', 'performer_display', 'performer_system', 'source_system'])
     .where('performer', 'is not', null)
-    .groupBy(['performer', 'source_system'])
+    .groupBy(['performer', 'performer_display', 'performer_system', 'source_system'])
     .execute();
 
-  const systems = [...new Set(observed.map((o) => observedSystemForFeed(o.source_system)))];
+  // Same preference as `scanObservedFacilities`: the wire's own `performer_system` wins over
+  // `observedSystemForFeed(source_system)` — a mapping authored under the wire's system must be
+  // found, or Task 9b's whole per-feed resolution silently misses it.
+  const systems = [...new Set(observed.map((o) => o.performer_system ?? observedSystemForFeed(o.source_system)))];
   const mappings = systems.length > 0
     ? await deps.internalDb
         .selectFrom('term_mappings')
@@ -307,7 +328,7 @@ export async function resolveObservedFacilities(deps: ReconcileDeps): Promise<Re
   return observed.map((o) => {
     const code = o.performer as string;
     const sourceSystem = o.source_system ?? '';
-    const system = observedSystemForFeed(o.source_system);
+    const system = o.performer_system ?? observedSystemForFeed(o.source_system);
     const candidates = byCode.get(`${system}\n${code}`) ?? [];
 
     // 1. Registry route wins — the registry is what holds a printable name.
@@ -325,6 +346,7 @@ export async function resolveObservedFacilities(deps: ReconcileDeps): Promise<Re
     return {
       sourceSystem,
       sourceCode: code,
+      sourceDisplay: o.performer_display ?? null,
       registryId: row?.id ?? null,
       localCode: row?.local_code ?? null,
       name: row?.name ?? null,
@@ -536,10 +558,13 @@ export async function captureObservedFacility(
  * `packages/db/src/projection/cycle.ts`'s `applyProjection` reads it via `getWithProvenance`
  * alongside `resource` and hands it to this hook unchanged, so it is the SAME value the relational
  * writer just stamped onto `diagnostic_reports.source_system` for this very resource (never a
- * guess or a re-derivation). It is routed through `observedSystemForFeed` exactly as
- * `scanObservedFacilities`/`resolveObservedFacilities` route `diagnostic_reports.source_system` —
- * so a code captured here, from a non-default feed, lands directly in that feed's system instead of
- * the default one until the next scan corrects it.
+ * guess or a re-derivation). Falls back through `observedSystemForFeed` exactly as
+ * `scanObservedFacilities`/`resolveObservedFacilities` fall back for `diagnostic_reports.
+ * source_system` — so a code captured here, from a non-default feed, lands directly in that feed's
+ * system instead of the default one until the next scan corrects it. The wire's own
+ * `projected.performer_system` (`identifier.system`) is preferred over that fallback when present,
+ * matching scan/resolve's own preference — otherwise this capture path and a later full scan would
+ * file the identical code under two different systems.
  */
 export async function captureObservedFacilityFromProjection(
   deps: Pick<ReconcileDeps, 'admin' | 'internalDb'>,
@@ -549,7 +574,12 @@ export async function captureObservedFacilityFromProjection(
   now: string,
 ): Promise<void> {
   if (resourceType !== 'DiagnosticReport') return;
-  const performer = projectDiagnosticReport(resource, {}).performer;
+  const projected = projectDiagnosticReport(resource, {});
+  const performer = projected.performer;
   if (!performer) return;
-  await captureObservedFacility(deps, observedSystemForFeed(sourceSystem), performer, now);
+  // Same system preference as scan/resolve: the wire's own `performer_system` (`identifier.
+  // system`) wins over the feed-based inference, so a code captured here at ingest time lands
+  // under the SAME system a later full scan would also file it under.
+  const system = projected.performer_system ?? observedSystemForFeed(sourceSystem);
+  await captureObservedFacility(deps, system, performer, now);
 }
