@@ -2114,11 +2114,21 @@ export const SEED_DESIGNS: ReportDesign[] = [
       // with a header row until S4 gave the vocabulary a `keyvalue` panel; the column labels sat
       // above the values in a tinted band, which reads as a spreadsheet fragment rather than a
       // patient header. Two pair columns, so the ten facts fill five lines instead of ten.
-      // ⛔ THIS PANEL IS NOW FULL. Pairs flow across then down at KV_INLINE_H (14) from y+4, so ten
-      // pairs end at y=226 inside a box ending at 236 — and an ELEVENTH lands at 240 and is
-      // silently clipped by the drawer, not overflowed. Field eleven must grow `h` and push `org`
-      // (y=244) and everything below it down. `report-seeds.test.ts` fails if it does not.
-      { id: 'hdr', kind: 'keyvalue', name: 'Patient & specimen', rect: { x: 40, y: 152, w: 700, h: 84 },
+      // ⛔ UNIT WARNING — this `rect` is px@96, but `pairRects`'s KV_PAD_Y/KV_INLINE_H constants are
+      // raw POINTS. `drawElement` converts the rect with `toPt` (×0.75) before calling `pairRects`,
+      // so the panel's real capacity must be computed in POINTS, not px@96 — mixing the two scales
+      // is exactly the bug that shipped a fifth row sliced in half by the `org` band below it while
+      // every test (and this comment) said it fit. Measured against the real path (`toPt` then
+      // `pairRects`): box = {x:30, y:114, w:525, h:78} pt, box bottom **192pt**. Pairs start at
+      // y=114+4=118pt and flow across then down at 14pt/row (KV_INLINE_H, raw pt); row 5 (pairs 9
+      // and 10) occupies **174 → 188pt**, inside the box bottom with 4pt to spare.
+      // ⛔ THIS PANEL IS NOW FULL. `pairRects` returns boxes past the bottom of the box and the
+      // drawer clips them — a sixth row disappears silently, with no error. Field eleven (row 6,
+      // 188 → 202pt) overflows a 192pt box. Whoever adds it must grow `h` again and push `org`,
+      // `band`, `bandt`, and `tbl` further down, exactly as this slice did when it went from eight
+      // pairs to ten (h: 84 → 104px; org/band/bandt/tbl each +20px). `report-seeds.test.ts` pins
+      // both the fit and the remaining capacity.
+      { id: 'hdr', kind: 'keyvalue', name: 'Patient & specimen', rect: { x: 40, y: 152, w: 700, h: 104 },
         layout: 'inline', panelColumns: 2,
         dataSource: { kind: 'custom-query', queryId: 'q-clinical-micro-header' },
         boundColumns: [
@@ -2136,15 +2146,15 @@ export const SEED_DESIGNS: ReportDesign[] = [
       // Band 4: a titled panel. Stacked, because an organism name ("Klebsiella pneumoniae") is
       // longer than the 40% an inline label would leave it, and it is the one fact on this page a
       // clinician looks for first.
-      { id: 'org', kind: 'keyvalue', name: 'Organism', rect: { x: 40, y: 244, w: 700, h: 58 },
+      { id: 'org', kind: 'keyvalue', name: 'Organism', rect: { x: 40, y: 264, w: 700, h: 58 },
         layout: 'stacked', text: 'ORGANISM ISOLATED', style: { fill: '#334155', strokeColor: '#cbd5e1' },
         dataSource: { kind: 'custom-query', queryId: 'q-clinical-micro-header' },
         boundColumns: [{ key: 'organism', label: 'Isolate', kind: 'label' }] },
-      { id: 'band', kind: 'rect', name: 'band', rect: { x: 40, y: 314, w: 700, h: 20 }, style: { fill: '#334155', strokeColor: '#334155' } },
-      { id: 'bandt', kind: 'text', name: 'bandt', rect: { x: 40, y: 319, w: 420, h: 16 }, text: '   ANTIMICROBIAL SUSCEPTIBILITY', style: { fontSize: 8, bold: true, color: '#ffffff' } },
+      { id: 'band', kind: 'rect', name: 'band', rect: { x: 40, y: 334, w: 700, h: 20 }, style: { fill: '#334155', strokeColor: '#334155' } },
+      { id: 'bandt', kind: 'text', name: 'bandt', rect: { x: 40, y: 339, w: 420, h: 16 }, text: '   ANTIMICROBIAL SUSCEPTIBILITY', style: { fontSize: 8, bold: true, color: '#ffffff' } },
       // Two columns, not three: the interpretation IS the result for a susceptibility test, and
       // carrying the same fact in two renderings is what let them visibly disagree.
-      { id: 'tbl', kind: 'table', name: 'Susceptibility', rect: { x: 40, y: 340, w: 700, h: 300 },
+      { id: 'tbl', kind: 'table', name: 'Susceptibility', rect: { x: 40, y: 360, w: 700, h: 300 },
         dataSource: { kind: 'custom-query', queryId: 'q-clinical-micro-ast' },
         boundColumns: [
           { key: 'test', label: 'Antimicrobial', kind: 'label' },

@@ -11,7 +11,7 @@ import {
   antibioticNormalizeSql,
   type SeedDataDrivenReportsDeps,
 } from './report-seeds';
-import { pairRects } from '@openldr/report-designer';
+import { pairRects, toPt } from '@openldr/report-designer';
 
 // In-memory fakes — no real Kysely instance needed (unlike `packages/bootstrap/src/seed.ts`,
 // which builds `customQueries` from a real DB handle; here we inject fakes directly to unit-test
@@ -729,19 +729,35 @@ describe('SEED_DESIGNS — rt-clinical-micro uses real keyvalue panels', () => {
   });
 
   it('fits every header pair inside the panel box', () => {
-    // ⛔ pairRects returns boxes past the bottom of the box and the drawer clips them, so an
-    // eleventh field does not overflow — it VANISHES, with no error. This is the only thing that
-    // turns that into a failing test. Ten pairs end at y=226 inside a box ending at 236; pair
-    // eleven starts a sixth row at 226 and ends at 240. Whoever adds field eleven must grow `h`
-    // and push `org` (y=244) and everything below it down.
+    // ⛔ `toPt` FIRST. `drawElement` converts the design rect px@96 -> pt and only then calls
+    // `pairRects`, whose KV_PAD_Y/KV_INLINE_H are raw POINTS. Measuring with the unconverted rect
+    // mixes two scales and reports a row that overflows as fitting — this test passed while the
+    // rendered page had its fifth row sliced in half by the band below it.
+    // ⛔ Pairs past the box bottom are CLIPPED by the drawer (`doc.clip()`), not overflowed, so an
+    // eleventh field would VANISH with no error. This assertion is the only thing that makes that
+    // a failing test instead of a silent regression.
     const hdr = el('hdr');
     const n = (hdr.boundColumns ?? []).length;
-    const pairs = pairRects(hdr.rect, n, 'inline', hdr.panelColumns ?? 1, !!(hdr.text ?? '').trim());
+    const box = toPt(hdr.rect);
+    const pairs = pairRects(box, n, 'inline', hdr.panelColumns ?? 1, !!(hdr.text ?? '').trim());
     const last = pairs[n - 1];
     expect(
       last.y + last.h,
       `pair ${n} falls outside the panel and will be silently clipped`,
-    ).toBeLessThanOrEqual(hdr.rect.y + hdr.rect.h);
+    ).toBeLessThanOrEqual(box.y + box.h);
+  });
+
+  it('has room for the ten pairs it binds and no more', () => {
+    // Measured against the real path (toPt then pairRects): at h=104px the box bottom is 192pt,
+    // ten pairs end at 188pt, twelve end at 202pt. Field eleven must therefore grow `h` AND push
+    // `org`/`band`/`bandt`/`tbl` down, exactly as this slice did when it went from eight to ten.
+    const hdr = el('hdr');
+    const box = toPt(hdr.rect);
+    const twoMore = pairRects(box, 12, 'inline', hdr.panelColumns ?? 1, false)[11];
+    expect(
+      twoMore.y + twoMore.h,
+      'the panel has silently gained room for another row — re-check the capacity comment',
+    ).toBeGreaterThan(box.y + box.h);
   });
 
   it('leaves no element overprinting another', () => {

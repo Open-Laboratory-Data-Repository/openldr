@@ -251,7 +251,7 @@ NULLs, but a warehouse restored from an older ingest would not. The `facilities`
 and the join misses either way — coalescing one side only would create a false match against a `''`
 row that means something else.
 
-### 3.4 Placement on the page — the existing panel, no layout shift
+### 3.4 Placement on the page — the existing panel, grown by 20px, and everything below it shifted
 
 The two facts append to `rt-clinical-micro`'s `hdr` keyvalue panel (`kind: 'keyvalue'`, `x:40 y:152
 w:700 h:84`, `layout: 'inline'`, `panelColumns: 2`), taking it from eight pairs to ten:
@@ -272,24 +272,43 @@ w:700 h:84`, `layout: 'inline'`, `panelColumns: 2`), taking it from eight pairs 
 Putting it in the letterhead would re-introduce the exact confusion the architecture correction
 resolved.
 
-**Geometry, computed from `pairRects` (`packages/report-designer/src/render/draw.ts`) — no element
-below the panel moves.** With `KV_PAD_Y` 4 and `KV_INLINE_H` 14 and no title, pairs start at
-`y = 152 + 4 = 156`; row 5 (pairs 9 and 10) occupies **212 → 226**, inside the box bottom of **236**
-with 10px to spare. `org` (y=244), the section band, the susceptibility table and the footer are
-untouched.
+**Geometry, computed from `pairRects` (`packages/report-designer/src/render/draw.ts`) — and it does
+not fit without moving everything below it.** The design's `rect` is authored in px@96, but
+`pairRects`'s `KV_PAD_Y`/`KV_INLINE_H` constants are raw **points**, not px. `drawElement` converts
+the rect with `toPt` (×0.75, `packages/report-designer/src/render/units.ts`) before ever calling
+`pairRects`, so the panel's true capacity has to be computed in points, on the *converted* box — not
+in px@96 on the authored one. That distinction is the whole story here: an earlier version of this
+section (and the fit test, and the seed's own comment) computed capacity in px@96 and concluded ten
+pairs fit with room to spare, which is what let the fifth row ship sliced in half by the `org` band
+below it. Nothing failed loudly; the number just happened to look plausible.
+
+Measured against the real path: `toPt({x:40, y:152, w:700, h:84})` = `{x:30, y:114, w:525, h:63}`pt,
+box bottom **177pt**. With `KV_PAD_Y` 4 and `KV_INLINE_H` 14 and no title, pairs start at
+`y = 114 + 4 = 118`pt; row 5 (pairs 9 and 10) occupies **174 → 188pt** — past the 177pt box bottom.
+The panel does not fit ten pairs at `h: 84`.
+
+Growing `h` to **104px** (`toPt` → 78pt, box bottom **192pt**) clears row 5 with 4pt to spare, and
+still leaves row 6 (pairs 11–12, 188 → 202pt) overflowing — so the panel is full at ten pairs, not
+merely fitting them. That +20px growth pushes everything below it down by the same +20px: `org`
+`y: 244 → 264`, `band` `y: 314 → 334`, `bandt` `y: 319 → 339`, `tbl` `y: 340 → 360`. The footer block
+(`rule2`/`qr`/`ft`/`sig`, anchored near `y: 1000`) does not move — the table's new bottom is `660`,
+nowhere near it.
 
 ⛔ **This panel is now FULL.** `pairRects` returns boxes past the bottom of the box and the drawer
 `doc.clip()`s them — a **sixth row disappears silently**, with no error and no overflow. Field eleven
-must grow `h` (and push `org` and everything below it down), not simply be appended.
+must grow `h` again (and push `org`/`band`/`bandt`/`tbl` further down), not simply be appended. This
+was caught by rendering a PDF and looking at it, not by any test — the original test computed
+capacity the same wrong (px@96) way the seed's comment did, so it passed on a page with a clipped row.
 
-**Cell width.** `cellW = (700 − 12 − 12) / 2 = 338px = 253.5pt`; inline splits it
-`KV_LABEL_FRAC 0.4` → label 101.4pt, value **152.1pt**. `National Public Health Laboratory` measures
-~132pt at 8pt Helvetica and fits; longer registry names ellipsize cleanly because keyvalue cells pass
-`height` (the `pdf-table-cell-overlap` fix — `ellipsis` is inert in pdfkit without it).
+**Cell width.** In points, on the converted box: `innerW = 525 − 6×2 = 513`pt,
+`cellW = (513 − 12) / 2 = 250.5`pt; inline splits it `KV_LABEL_FRAC 0.4` → label **100.2pt**, value
+**150.3pt**. `National Public Health Laboratory` measures ~132pt at 8pt Helvetica and fits; longer
+registry names ellipsize cleanly because keyvalue cells pass `height` (the `pdf-table-cell-overlap`
+fix — `ellipsis` is inert in pdfkit without it).
 
 **Labels.** `Performing lab` and `Lab location`, matching the terse register of the panel's existing
 labels (`Lab number`, `First name`, `DOB`). The formal `Performing laboratory` also fits (~73pt of
-101.4pt) if the operator prefers it.
+100.2pt) if the operator prefers it.
 
 **A blank location renders as an empty value, not a vanished pair** — the grid keeps its shape for
 the 32 of 88 facilities with no location on either side.
@@ -326,8 +345,9 @@ missing row means the facility was first seen *after* the last publish.
   stray comma; neither renders blank.
 - A specimen with **no** `diagnostic_reports` row yields null and the report still renders.
 - A report whose `source_system` is NULL still joins its `facility_map` row (the `coalesce` guard).
-- `pairRects` places pair 10 inside the `hdr` box — a regression test that pins the panel's capacity,
-  so field eleven fails loudly instead of disappearing.
+- `pairRects`, called on the `toPt`-converted box (matching what `drawElement` actually does), places
+  pair 10 inside the `hdr` box and pair 12 outside it — regression tests that pin the panel's
+  capacity in the right unit, so field eleven fails loudly instead of disappearing.
 - ⚠ Parity: `report-seeds.test.ts` and the per-report parity tests pin these queries. **All three
   dialect variants must stay in step.**
 - ⛔ **Render a PDF and look at it.** The operator asked for this explicitly: *"Show me a rendered PDF
