@@ -642,9 +642,57 @@ export async function captureObservedFacility(
     .where('code', '=', code)
     .executeTakeFirst();
   if (existing) return; // Already known; the scan advances lastSeen/reportCount.
+  // Registration is gated on the SAME "genuinely new concept" branch as the write below, not run
+  // unconditionally — see `registerObservedSystem`'s doc comment for why.
+  await registerObservedSystem(deps, system);
   await deps.admin.terms.importRows([
     observedFacilityConceptRow({ system, code, seenAt: now, reportCount: 0 }),
   ]);
+}
+
+/**
+ * Ensure `system` has an ACTIVE `coding_systems` row, mirroring the ⛔-flagged block in
+ * `scanObservedFacilities` (see that function's doc comment for the same trap: `upsertByUrl` inserts
+ * `active: true` on a fresh row but its `onConflict` never re-activates one an operator, or an
+ * earlier bug, left inactive).
+ *
+ * Called ONLY from `captureObservedFacility`'s "concept is genuinely new" branch — never
+ * unconditionally on every call. `captureObservedFacilityFromProjection` runs once per projected
+ * DiagnosticReport, i.e. on the ingest hot path, so registering on every call would add a
+ * `coding_systems` write per report even for codes seen thousands of times before. Gating on
+ * "concept just created" instead means the registration cost lands only on genuinely new codes —
+ * self-limiting by construction, since a system accumulates a bounded, small number of distinct
+ * facility codes relative to report volume. (A per-process memoisation cache was considered instead,
+ * but rejected: it would skip re-activating a row an operator deactivates mid-process, and it would
+ * need explicit invalidation to avoid going stale across a DB reset between tests — the
+ * newly-created-concept gate needs neither.)
+ *
+ * Never throws: a registration failure here must not take down the concept write, which is the
+ * operator-visible half of `captureObservedFacility` and would otherwise have succeeded on its own.
+ * `packages/db/src/projection/cycle.ts` wraps the whole `onProjected` hook in its own try/catch, but
+ * that containment drops the ENTIRE cycle's capture on any error — swallowing here keeps a
+ * `coding_systems` hiccup from taking the concept capture down with it.
+ */
+async function registerObservedSystem(
+  deps: Pick<ReconcileDeps, 'admin' | 'internalDb'>,
+  system: string,
+): Promise<void> {
+  try {
+    await deps.admin.codingSystems.upsertByUrl({
+      url: system,
+      systemCode: systemCodeFor(system),
+      systemName: 'Observed facilities',
+      publisherId: SYSTEM_PUBLISHER_ID,
+    });
+    const cs = await deps.admin.codingSystems.getByUrl(system);
+    if (cs && !cs.active) {
+      await deps.internalDb.updateTable('coding_systems').set({ active: true }).where('url', '=', system).execute();
+    }
+  } catch (err) {
+    // eslint-disable-next-line no-console -- deliberate: see doc comment above for why this must
+    // never propagate, and this module takes no logger dependency to report through otherwise.
+    console.error('[facility-reconcile] failed to register coding_systems row for observed facility system', system, err);
+  }
 }
 
 /**

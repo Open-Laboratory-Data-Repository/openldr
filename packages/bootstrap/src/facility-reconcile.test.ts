@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { DEFAULT_OBSERVED_FACILITY_SYSTEM, FACILITY_REGISTRY_SYSTEM, observedSystemForFeed } from '@openldr/db';
 import { scanObservedFacilities, resolveObservedFacilities, publishFacilityMap, publishRegistryConcepts, captureObservedFacility, captureObservedFacilityFromProjection } from './facility-reconcile';
 import { makeReconcileDeps, seedPerformers, seedRegistry, seedMapping } from './test-support/facility-reconcile-fixture';
@@ -874,6 +874,65 @@ describe('captureObservedFacility', () => {
     };
     expect(props.reportCount).toBe(0);
     expect(props.firstSeen).toBe('2026-08-05T00:00:00.000Z');
+  });
+
+  // Companion to `scanObservedFacilities`'s "registers an ACTIVE coding_systems row" test — the
+  // ingest-time capture path must leave the mapping UI able to see a brand-new feed's system too,
+  // not only a manually-triggered scan. Before this fix, `captureObservedFacility` called
+  // `admin.terms.importRows` directly and never touched `coding_systems` at all, so a facility
+  // captured only through ingest was invisible in `TermMappingDialog`'s system dropdown
+  // (`systems.filter((s) => s.active)`) until an operator ran a scan.
+  //
+  // ⛔ THE trap. Must fail if `active` is false, not merely if the row is absent — `upsertByUrl`
+  // inserts `active: true` on a fresh row, so "row exists" alone cannot catch a re-activation bug.
+  it('registers an ACTIVE coding_systems row for a system first seen through capture', async () => {
+    const deps = await makeReconcileDeps();
+
+    await captureObservedFacility(deps, 'urn:openldr:default_fac', 'Namansi', '2026-08-05T00:00:00.000Z');
+
+    const cs = await deps.admin.codingSystems.getByUrl('urn:openldr:default_fac');
+    expect(cs).not.toBeNull();
+    expect(cs!.active).toBe(true);
+  });
+
+  // Regression guard mirroring `scanObservedFacilities`'s equivalent test: `upsertByUrl`'s
+  // `onConflict` never re-activates a row that already exists with `active = false`, so capture
+  // must repair that explicitly, exactly like the scan path does.
+  it('re-activates a coding_systems row an operator (or an earlier bug) left inactive', async () => {
+    const deps = await makeReconcileDeps();
+    await deps.admin.codingSystems.upsertByUrl({
+      url: 'urn:openldr:default_fac',
+      systemCode: 'DEFAULT_FAC',
+      systemName: 'Observed facilities',
+      publisherId: null,
+    });
+    await deps.internalDb.updateTable('coding_systems').set({ active: false })
+      .where('url', '=', 'urn:openldr:default_fac').execute();
+    expect((await deps.admin.codingSystems.getByUrl('urn:openldr:default_fac'))!.active).toBe(false);
+
+    await captureObservedFacility(deps, 'urn:openldr:default_fac', 'Namansi', '2026-08-05T00:00:00.000Z');
+
+    expect((await deps.admin.codingSystems.getByUrl('urn:openldr:default_fac'))!.active).toBe(true);
+  });
+
+  // The hot-path guard this fix exists for: capturing a code that is ALREADY a known concept must
+  // not perform a redundant `coding_systems` registration write. Ingest calls this once per
+  // projected DiagnosticReport, so a naive "register on every call" would add one write per report
+  // even for a code seen a thousand times before — the function's own existing-concept early return
+  // is what this test pins as the thing that must also gate the new registration call.
+  it('does not perform a redundant coding_systems registration write for an already-known code', async () => {
+    const deps = await makeReconcileDeps();
+    const upsertSpy = vi.spyOn(deps.admin.codingSystems, 'upsertByUrl');
+
+    // First capture: the concept is genuinely new, so registration is expected exactly once.
+    await captureObservedFacility(deps, 'urn:openldr:default_fac', 'Namansi', '2026-08-05T00:00:00.000Z');
+    expect(upsertSpy).toHaveBeenCalledTimes(1);
+
+    // Second capture of the SAME code: `captureObservedFacility` already early-returns here (the
+    // concept exists), and that early return must also gate registration — the call count must NOT
+    // advance to 2.
+    await captureObservedFacility(deps, 'urn:openldr:default_fac', 'Namansi', '2026-08-06T00:00:00.000Z');
+    expect(upsertSpy).toHaveBeenCalledTimes(1);
   });
 });
 
