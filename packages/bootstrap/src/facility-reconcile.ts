@@ -314,6 +314,32 @@ export interface ResolvedFacility {
 }
 
 /**
+ * Enforces the invariant documented on `ResolvedFacility.nonFacilityTarget`: it holds today only
+ * because of HOW `resolveObservedFacilities` derives the three fields together (see that function's
+ * single call site, below) — nothing in the TYPE stops a future producer, or a hand-built test
+ * fixture, from constructing a `{ resolvedVia: 'registry', nonFacilityTarget: true }` row, which is
+ * meaningless by this field's own definition. A full status union collapsing the three fields into
+ * one would make that impossible by construction, but was judged too wide a refactor for this
+ * branch (every existing caller — `ObservedTab.tsx`, the routes, the CLI — already branches on three
+ * independent booleans). This is the cheap middle ground instead: assert the invariant at the one
+ * place that computes it today, so a future edit that breaks it fails LOUDLY (throws) rather than
+ * silently emitting a contradictory row that downstream consumers would have to individually guard
+ * against. Exported (not merely called inline) so it can be exercised directly by a test that proves
+ * it actually fires, without needing to contort `resolveObservedFacilities`'s real inputs into
+ * producing an impossible combination.
+ */
+export function assertResolvedFacilityInvariant(
+  row: Pick<ResolvedFacility, 'resolvedVia' | 'targetMissing' | 'nonFacilityTarget'>,
+): void {
+  if (row.nonFacilityTarget && (row.resolvedVia !== null || row.targetMissing)) {
+    throw new Error(
+      `ResolvedFacility invariant violated: nonFacilityTarget=true must imply resolvedVia=null and ` +
+      `targetMissing=false (got resolvedVia=${JSON.stringify(row.resolvedVia)}, targetMissing=${row.targetMissing})`,
+    );
+  }
+}
+
+/**
  * Resolve every observed facility code through its mapping to a registry row.
  *
  * ⛔ Reads `term_mappings`, NOT `concept_map_elements`. `term_mappings` is the authoritative table
@@ -492,6 +518,17 @@ export async function resolveObservedFacilities(deps: ReconcileDeps): Promise<Re
         : undefined;
 
     const resolvedVia: ResolvedVia | null = row ? (registryMapping ? 'registry' : 'national') : null;
+    // A GENUINE facility-route mapping (registry or a proven national register) was authored but
+    // points at nothing live — distinct from "never mapped" AND from `nonFacilityTarget` (Fix 1;
+    // see that field's doc comment for why "candidates.length > 0 && !row" was wrong).
+    const targetMissing = hasFacilityRouteCandidate && !row;
+
+    // Whole-branch review finding (fix round 1): this is the ONE place today that derives
+    // `resolvedVia`/`targetMissing`/`nonFacilityTarget` together — assert their invariant HERE,
+    // before the row escapes into `ResolvedFacility`, so a future edit that breaks it (or drifts the
+    // three fields apart) fails loudly instead of silently shipping a contradictory row. See
+    // `assertResolvedFacilityInvariant`'s doc comment for why this, not a status union.
+    assertResolvedFacilityInvariant({ resolvedVia, targetMissing, nonFacilityTarget });
 
     return {
       sourceSystem: r.sourceSystem,
@@ -509,10 +546,7 @@ export async function resolveObservedFacilities(deps: ReconcileDeps): Promise<Re
       nationalSystem: row?.national_system ?? null,
       nationalCode: row?.national_code ?? null,
       resolvedVia,
-      // A GENUINE facility-route mapping (registry or a proven national register) was authored but
-      // points at nothing live — distinct from "never mapped" AND from `nonFacilityTarget` (Fix 1;
-      // see that field's doc comment for why "candidates.length > 0 && !row" was wrong).
-      targetMissing: hasFacilityRouteCandidate && !row,
+      targetMissing,
       nonFacilityTarget,
     };
   });

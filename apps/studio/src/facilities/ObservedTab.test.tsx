@@ -436,18 +436,23 @@ describe('ObservedTab', () => {
     // Search mode (the default on create): the ONLY combobox on the page is "Map type" — never a
     // second one offering a choice of target system, even though 4 systems are active.
     expect(screen.getAllByRole('combobox')).toHaveLength(1);
-    // The operator can still tell what they're mapping TO — a static label, not an empty gap —
-    // and none of the OTHER active systems appear anywhere on the page (nothing to open would
-    // reveal them; if they render at all, something is offering a choice).
-    expect(screen.getByText('FACILITY-REGISTRY')).toBeInTheDocument();
+    // The operator can still tell what they're mapping TO — a real, accessibly-labelled field (Fix
+    // 1, facility-mapping-targets round 1: this used to be a plain text `<div>`, invisible to
+    // assistive tech; it's now a readOnly/disabled `<Input>` reachable via `getByLabelText`, whose
+    // VALUE carries the system code, not its text content — hence `getByDisplayValue` here, not
+    // `getByText`) — and none of the OTHER active systems appear anywhere on the page (nothing to
+    // open would reveal them; if they render at all, something is offering a choice).
+    expect(screen.getByLabelText('System')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('FACILITY-REGISTRY')).toBeInTheDocument();
     expect(screen.queryByText('LOINC')).not.toBeInTheDocument();
     expect(screen.queryByText('HFR')).not.toBeInTheDocument();
     expect(screen.queryByText('DEFAULT_FAC')).not.toBeInTheDocument();
 
-    // Manual mode: same story. Still exactly one combobox, and the static label persists.
+    // Manual mode: same story. Still exactly one combobox, and the accessible locked field persists.
     fireEvent.click(screen.getByRole('button', { name: /enter manually/i }));
     expect(screen.getAllByRole('combobox')).toHaveLength(1);
-    expect(screen.getByText('FACILITY-REGISTRY')).toBeInTheDocument();
+    expect(screen.getByLabelText('System')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('FACILITY-REGISTRY')).toBeInTheDocument();
     expect(screen.queryByText('LOINC')).not.toBeInTheDocument();
     expect(screen.queryByText('HFR')).not.toBeInTheDocument();
     expect(screen.queryByText('DEFAULT_FAC')).not.toBeInTheDocument();

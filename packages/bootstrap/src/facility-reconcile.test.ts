@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { DEFAULT_OBSERVED_FACILITY_SYSTEM, FACILITY_REGISTRY_SYSTEM, observedSystemForFeed } from '@openldr/db';
-import { scanObservedFacilities, resolveObservedFacilities, publishFacilityMap, publishRegistryConcepts, projectRegistryRows, captureObservedFacility, captureObservedFacilityFromProjection } from './facility-reconcile';
+import { scanObservedFacilities, resolveObservedFacilities, publishFacilityMap, publishRegistryConcepts, projectRegistryRows, captureObservedFacility, captureObservedFacilityFromProjection, assertResolvedFacilityInvariant } from './facility-reconcile';
 import { makeReconcileDeps, seedPerformers, seedRegistry, seedMapping } from './test-support/facility-reconcile-fixture';
 
 describe('scanObservedFacilities', () => {
@@ -416,6 +416,39 @@ describe('resolveObservedFacilities', () => {
     expect(row.resolvedVia).toBe('registry');
     expect(row.targetMissing).toBe(false);
     expect(row.nonFacilityTarget).toBe(false);
+  });
+});
+
+// Code-review finding (Fix 2, facility-mapping-targets round 1): `nonFacilityTarget`'s exclusivity
+// with `resolvedVia`/`targetMissing` holds inside `resolveObservedFacilities` today only because of
+// how the three fields happen to be derived together — nothing stops a future edit (or a hand-built
+// fixture) from emitting a contradictory row (e.g. `nonFacilityTarget: true` alongside
+// `resolvedVia: 'registry'`), which is meaningless by the field's own doc comment. A full status
+// union was judged too wide a refactor for this branch; this pins the cheap alternative — the
+// producer asserts the invariant itself, so a future break fails loudly instead of silently
+// emitting nonsense.
+describe('assertResolvedFacilityInvariant', () => {
+  it('throws when nonFacilityTarget is claimed alongside a resolved facility route', () => {
+    expect(() => assertResolvedFacilityInvariant({
+      resolvedVia: 'registry',
+      targetMissing: false,
+      nonFacilityTarget: true,
+    })).toThrow();
+  });
+
+  it('throws when nonFacilityTarget is claimed alongside targetMissing', () => {
+    expect(() => assertResolvedFacilityInvariant({
+      resolvedVia: null,
+      targetMissing: true,
+      nonFacilityTarget: true,
+    })).toThrow();
+  });
+
+  it('does not throw for the real, mutually-exclusive combinations', () => {
+    expect(() => assertResolvedFacilityInvariant({ resolvedVia: 'registry', targetMissing: false, nonFacilityTarget: false })).not.toThrow();
+    expect(() => assertResolvedFacilityInvariant({ resolvedVia: null, targetMissing: true, nonFacilityTarget: false })).not.toThrow();
+    expect(() => assertResolvedFacilityInvariant({ resolvedVia: null, targetMissing: false, nonFacilityTarget: true })).not.toThrow();
+    expect(() => assertResolvedFacilityInvariant({ resolvedVia: null, targetMissing: false, nonFacilityTarget: false })).not.toThrow();
   });
 });
 

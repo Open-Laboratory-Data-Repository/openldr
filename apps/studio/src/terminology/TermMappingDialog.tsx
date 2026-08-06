@@ -384,10 +384,22 @@ export function TermMappingDialog({
               <div className="space-y-3 py-4">
                 {locked ? (
                   <div className="grid grid-cols-[auto_1fr] items-center gap-x-4">
-                    <Label className="whitespace-nowrap">{L.manualSystem}</Label>
-                    <div className="flex h-9 items-center rounded-md border border-input bg-muted/40 px-3 text-sm text-muted-foreground">
-                      {lockedTargetSystem.systemCode}
-                    </div>
+                    <Label htmlFor="mapping-locked-system-search" className="whitespace-nowrap">{L.manualSystem}</Label>
+                    {/* Code-review finding (Fix 1, facility-mapping-targets round 1): this used to be a
+                        bare <div> — no role, no tabIndex, no accessible name, no id/label pairing. A
+                        sighted user reads "System: FACILITY-REGISTRY" by visual proximity; a
+                        screen-reader user tabbing the form got nothing. A real, disabled+readOnly
+                        <Input> paired to the Label via htmlFor/id matches this repo's established
+                        pattern for a field that can never accept input (see ReferencePicker.tsx's
+                        "unavailable" branch) — reachable via an accessible query, its label and value
+                        announced together, instead of invisible to assistive tech entirely. */}
+                    <Input
+                      id="mapping-locked-system-search"
+                      readOnly
+                      disabled
+                      value={lockedTargetSystem.systemCode}
+                      className="bg-muted/40 text-muted-foreground"
+                    />
                   </div>
                 ) : activeSystems.length > 1 && (
                   <div className="grid grid-cols-[auto_1fr] items-center gap-x-4">
@@ -418,11 +430,17 @@ export function TermMappingDialog({
               </div>
             ) : (
               <div className="grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-3 py-4">
-                <Label className="whitespace-nowrap">{L.manualSystem}</Label>
+                <Label htmlFor={locked ? 'mapping-locked-system-manual' : undefined} className="whitespace-nowrap">{L.manualSystem}</Label>
                 {locked ? (
-                  <div className="flex h-9 items-center rounded-md border border-input bg-muted/40 px-3 text-sm text-muted-foreground">
-                    {lockedTargetSystem.systemCode}
-                  </div>
+                  // See the search-mode branch above for why this is a real, disabled+readOnly
+                  // <Input> paired to the Label rather than a bare <div>.
+                  <Input
+                    id="mapping-locked-system-manual"
+                    readOnly
+                    disabled
+                    value={lockedTargetSystem.systemCode}
+                    className="bg-muted/40 text-muted-foreground"
+                  />
                 ) : (
                   <Select value={manualSystemId} onValueChange={setManualSystemId}>
                     <SelectTrigger>

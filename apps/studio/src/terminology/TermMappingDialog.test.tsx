@@ -43,6 +43,18 @@ const secondSystem: api.CodingSystem = {
   seeded: true,
 };
 
+const registrySystem: api.CodingSystem = {
+  id: 'sys-reg',
+  systemCode: 'FACILITY-REGISTRY',
+  systemName: 'OpenLDR facility registry',
+  url: 'urn:openldr:cs:facility-registry',
+  systemVersion: null,
+  description: null,
+  active: true,
+  publisherId: 'pub-system',
+  seeded: false,
+};
+
 const fromTerm = {
   system: 'http://x',
   code: 'AMP',
@@ -362,6 +374,82 @@ describe('TermMappingDialog', () => {
     fireEvent.click(comboboxes[comboboxes.length - 1]);
     expect(screen.getByRole('option', { name: 'LOINC' })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: 'ICD10' })).toBeInTheDocument();
+  });
+
+  // Code-review finding (Fix 1, facility-mapping-targets round 1): under `lockedTargetSystem`, the
+  // System control used to be replaced with a bare `<div>` — no role, no tabIndex, no accessible
+  // name, no id/label pairing. A sighted user reads "System: FACILITY-REGISTRY" by visual
+  // proximity; a screen-reader user tabbing the form got nothing at all. These pin that the field is
+  // now reachable by an ACCESSIBLE query (not merely visible text) and exposes the locked system's
+  // value, in both target modes.
+  it('exposes the locked target system as an accessible, labelled field in search mode', () => {
+    render(
+      <TermMappingDialog
+        open
+        fromTerm={fromTerm}
+        systems={[system]}
+        lockedTargetSystem={registrySystem}
+        mapping={null}
+        onOpenChange={() => {}}
+        onSaved={() => {}}
+      />,
+    );
+    // Create mode defaults to search mode — the locked field renders without switching.
+    const field = screen.getByLabelText('System') as HTMLInputElement;
+    expect(field.value).toBe('FACILITY-REGISTRY');
+  });
+
+  it('exposes the locked target system as an accessible, labelled field in manual mode', () => {
+    render(
+      <TermMappingDialog
+        open
+        fromTerm={fromTerm}
+        systems={[system]}
+        lockedTargetSystem={registrySystem}
+        mapping={null}
+        onOpenChange={() => {}}
+        onSaved={() => {}}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /manual/i }));
+    const field = screen.getByLabelText('System') as HTMLInputElement;
+    expect(field.value).toBe('FACILITY-REGISTRY');
+  });
+
+  // Fix 3 (mapping-targets report, "Locked target system" section): editing an existing mapping
+  // under lock jumps the manual System field to the LOCKED system regardless of the mapping's own
+  // `toSystem` — this is the operator's live scenario (their stale `BALAB -> DEFAULT_FAC|BALAB`
+  // self-mapping, opened from the Observed tab). Pins the DOCUMENTED current behaviour; the stale
+  // code is left untouched, so nothing auto-saves a retarget without the operator also fixing Code.
+  it('editing a non-facility mapping under lock pre-fills System to the locked system, not the mapping\'s own toSystem', () => {
+    const selfMapping: api.TermMapping = {
+      id: 'm-self',
+      fromSystem: 'urn:openldr:default_fac',
+      fromCode: 'BALAB',
+      toSystem: 'urn:openldr:default_fac',
+      toCode: 'BALAB',
+      toDisplay: null,
+      mapType: 'SAME-AS',
+      relationship: null,
+      owner: null,
+      isActive: true,
+    };
+    render(
+      <TermMappingDialog
+        open
+        fromTerm={{ system: 'urn:openldr:default_fac', code: 'BALAB', display: null, systemCode: 'DEFAULT_FAC' }}
+        systems={[system]}
+        lockedTargetSystem={registrySystem}
+        mapping={selfMapping}
+        onOpenChange={() => {}}
+        onSaved={() => {}}
+      />,
+    );
+    // Edit mode always opens in manual mode.
+    const field = screen.getByLabelText('System') as HTMLInputElement;
+    expect(field.value).toBe('FACILITY-REGISTRY');
+    // The stale code is NOT auto-corrected — the operator still has to retype/repick it themselves.
+    expect(screen.getByPlaceholderText('441407007')).toHaveValue('BALAB');
   });
 
   it('shows the status section with is-active checkbox checked by default', () => {
