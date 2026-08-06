@@ -395,8 +395,8 @@ describe('SEED_QUERIES — q-amr-facility-summary takes its facility from the re
 
   it('groups by the report performer, falling back to the patient organization', () => {
     for (const [dialect, sql] of Object.entries(q().sql)) {
-      expect(sql, `${dialect} does not read the report performer`)
-        .toContain('coalesce(f.performer, p.managing_organization)');
+      expect(sql, `${dialect} does not group by the report performer`)
+        .toContain('group by coalesce(f.performer, p.managing_organization)');
       expect(sql, `${dialect} still groups by the patient organization alone`)
         .not.toMatch(/group by p\.managing_organization/);
     }
@@ -461,19 +461,30 @@ describe('SEED_QUERIES — q-amr-facility-summary labels by name but groups by c
 
   it('projects a resolved name', () => {
     // Since the feed split the facility into code + display, this rendered the raw code "NICD".
+    // The label sources are aggregated (min()) so that display-text variance across specimens at
+    // the SAME facility (casing, whitespace) cannot fork the group below.
     for (const [dialect, sql] of Object.entries(q().sql)) {
       expect(sql, `${dialect} does not resolve the facility label`)
-        .toContain('coalesce(fm.name, f.performer_display, f.performer, p.managing_organization) as facility');
+        .toContain('coalesce(min(fm.name), min(f.performer_display), coalesce(f.performer, p.managing_organization)) as facility');
     }
   });
 
   it('⛔ still GROUPS on the code, never on the resolved label', () => {
     // Grouping by label merges the five "Aga Khan" laboratories into one row the day the other
     // four codes arrive. The code is the identity; the label is presentation.
+    //
+    // This asserts the OUTER GROUP BY clause EXACTLY, not an unanchored substring search — an
+    // earlier version of this test used `toMatch(/group by[\s\S]*f\.performer/)`, which is
+    // satisfied by the `facility_of` CTE's OWN `group by specimen_id` followed by the `f.performer`
+    // that legitimately reappears inside the projected label expression, so it kept passing even
+    // after the outer clause was mutated to the forbidden `group by 1`.
     for (const [dialect, sql] of Object.entries(q().sql)) {
       expect(sql, `${dialect} groups by the resolved label and will merge facilities`)
         .not.toMatch(/group by coalesce\(fm\.name/);
-      expect(sql, `${dialect} lost the code grouping`).toMatch(/group by[\s\S]*f\.performer/);
+      expect(sql, `${dialect} lost the code grouping`)
+        .toContain('group by coalesce(f.performer, p.managing_organization)');
+      expect(sql, `${dialect} groups by row position instead of the identity — splits one facility across rows`)
+        .not.toMatch(/group by 1\b/);
     }
   });
 });

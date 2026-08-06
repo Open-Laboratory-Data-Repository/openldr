@@ -771,7 +771,7 @@ order by case band when '0-4' then 1 when '5-14' then 2 when '15-24' then 3 when
   group by specimen_id
 )
 select
-  coalesce(fm.name, f.performer_display, f.performer, p.managing_organization) as facility,
+  coalesce(min(fm.name), min(f.performer_display), coalesce(f.performer, p.managing_organization)) as facility,
   count(*)::int as tested,
   sum(case when o.abnormal_flag = 'R' then 1 else 0 end)::int as resistant
 from lab_results o
@@ -786,7 +786,7 @@ where o.abnormal_flag in ('S', 'I', 'R')
   and (coalesce(o.result_timestamp, s.received_time) is null
        or (coalesce(o.result_timestamp, s.received_time) >= {{param.from}}
            and coalesce(o.result_timestamp, s.received_time) <= ({{param.to}} || 'T23:59:59.999Z')))
-group by f.performer, fm.name, f.performer_display, p.managing_organization
+group by coalesce(f.performer, p.managing_organization)
 order by 1`,
       // Task 2 port: ::int -> cast(...as int); end-of-day string || -> + (the `{{param.to}}`
       // concat).
@@ -798,7 +798,7 @@ order by 1`,
   group by specimen_id
 )
 select
-  coalesce(fm.name, f.performer_display, f.performer, p.managing_organization) as facility,
+  coalesce(min(fm.name), min(f.performer_display), coalesce(f.performer, p.managing_organization)) as facility,
   cast(count(*) as int) as tested,
   cast(sum(case when o.abnormal_flag = 'R' then 1 else 0 end) as int) as resistant
 from lab_results o
@@ -813,7 +813,7 @@ where o.abnormal_flag in ('S', 'I', 'R')
   and (coalesce(o.result_timestamp, s.received_time) is null
        or (coalesce(o.result_timestamp, s.received_time) >= {{param.from}}
            and coalesce(o.result_timestamp, s.received_time) <= ({{param.to}} + 'T23:59:59.999Z')))
-group by f.performer, fm.name, f.performer_display, p.managing_organization
+group by coalesce(f.performer, p.managing_organization)
 order by 1`,
       // Task 5 mysql port: ::int -> cast(...as signed); end-of-day string || -> concat().
       // Otherwise identical structure.
@@ -825,7 +825,7 @@ order by 1`,
   group by specimen_id
 )
 select
-  coalesce(fm.name, f.performer_display, f.performer, p.managing_organization) as facility,
+  coalesce(min(fm.name), min(f.performer_display), coalesce(f.performer, p.managing_organization)) as facility,
   cast(count(*) as signed) as tested,
   cast(sum(case when o.abnormal_flag = 'R' then 1 else 0 end) as signed) as resistant
 from lab_results o
@@ -840,7 +840,7 @@ where o.abnormal_flag in ('S', 'I', 'R')
   and (coalesce(o.result_timestamp, s.received_time) is null
        or (coalesce(o.result_timestamp, s.received_time) >= {{param.from}}
            and coalesce(o.result_timestamp, s.received_time) <= concat({{param.to}}, 'T23:59:59.999Z')))
-group by f.performer, fm.name, f.performer_display, p.managing_organization
+group by coalesce(f.performer, p.managing_organization)
 order by 1`,
     },
   },
