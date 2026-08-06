@@ -212,6 +212,10 @@ describe('scanObservedFacilities', () => {
   });
 
   // ⚠ Gating regression guard: a dry-run scan must not have this side effect either.
+  //
+  // Migration 075 now seeds the `coding_systems` row unconditionally on a fresh install, so the row's
+  // absence is no longer the right signal for "dry-run published nothing" — assert no CONCEPTS were
+  // published instead.
   it('does NOT publish the registry projection on a dry-run scan', async () => {
     const deps = await makeReconcileDeps();
     await seedPerformers(deps, [['Dodoma', 5]]);
@@ -219,7 +223,8 @@ describe('scanObservedFacilities', () => {
 
     await scanObservedFacilities(deps, { now: '2026-08-05T00:00:00.000Z' }); // apply omitted -> dry run
 
-    expect(await deps.admin.codingSystems.getByUrl(FACILITY_REGISTRY_SYSTEM)).toBeNull();
+    const { rows } = await deps.admin.terms.search(FACILITY_REGISTRY_SYSTEM, { limit: 50, offset: 0 });
+    expect(rows).toHaveLength(0);
   });
 });
 
@@ -732,12 +737,50 @@ describe('publishRegistryConcepts', () => {
   it('writes nothing when apply is falsy', async () => {
     const deps = await makeReconcileDeps();
     await seedRegistry(deps, { id: 'fac-1', name: 'Dodoma Regional Referral Hospital', localCode: 'DOD' });
+    // Migration 075 seeds the coding_systems row unconditionally now, so its presence is no longer
+    // evidence that publishRegistryConcepts ran — assert it is UNCHANGED rather than absent.
+    const before = await deps.admin.codingSystems.getByUrl('urn:openldr:cs:facility-registry');
 
     await publishRegistryConcepts(deps, {});
 
     const { rows } = await deps.admin.terms.search('urn:openldr:cs:facility-registry', { limit: 10, offset: 0 });
     expect(rows).toHaveLength(0);
-    expect(await deps.admin.codingSystems.getByUrl('urn:openldr:cs:facility-registry')).toBeNull();
+    expect(await deps.admin.codingSystems.getByUrl('urn:openldr:cs:facility-registry')).toEqual(before);
+  });
+
+  // Migration 075 seeds the row directly, ahead of any scan/publish — fixes the fresh-install defect
+  // where `TermMappingDialog`'s target-system dropdown had nothing to pick until an operator ran a
+  // publish. Asserted here (not just in `packages/db`) because it is `publishRegistryConcepts`'s
+  // downstream idempotency with that seed that this slice is really about.
+  describe('fresh-install seed (migration 075)', () => {
+    it('is present and ACTIVE before any scan/publish has ever run', async () => {
+      const deps = await makeReconcileDeps();
+
+      const cs = await deps.admin.codingSystems.getByUrl(FACILITY_REGISTRY_SYSTEM);
+      expect(cs).not.toBeNull();
+      expect(cs!.active).toBe(true);
+    });
+
+    it('does NOT seed the observed facility dictionary (urn:openldr:default_fac)', async () => {
+      const deps = await makeReconcileDeps();
+
+      expect(await deps.admin.codingSystems.getByUrl(DEFAULT_OBSERVED_FACILITY_SYSTEM)).toBeNull();
+    });
+
+    it('publishRegistryConcepts afterwards does not duplicate the seeded row or fight with it', async () => {
+      const deps = await makeReconcileDeps();
+      const seeded = await deps.admin.codingSystems.getByUrl(FACILITY_REGISTRY_SYSTEM);
+      await seedRegistry(deps, { id: 'fac-1', name: 'Dodoma Regional Referral Hospital', localCode: 'DOD' });
+
+      await publishRegistryConcepts(deps, { apply: true });
+
+      const all = await deps.internalDb.selectFrom('coding_systems')
+        .selectAll().where('url', '=', FACILITY_REGISTRY_SYSTEM).execute();
+      expect(all).toHaveLength(1);
+      const after = await deps.admin.codingSystems.getByUrl(FACILITY_REGISTRY_SYSTEM);
+      expect(after!.id).toBe(seeded!.id);
+      expect(after!.active).toBe(true);
+    });
   });
 });
 
