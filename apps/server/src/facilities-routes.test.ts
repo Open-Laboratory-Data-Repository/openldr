@@ -1051,11 +1051,15 @@ function fakeReconcileCtx(internalDb: any, externalDb: any) {
 /** Mirrors `packages/bootstrap/src/test-support/facility-reconcile-fixture.ts`'s `seedPerformers`:
  *  one `diagnostic_reports` row per unit of report count, so the routes' own live
  *  `groupBy(['performer', 'source_system'])` aggregate has real rows to count. */
-async function seedObservedReports(externalDb: any, pairs: [string, number][]): Promise<void> {
-  const rows: { id: string; performer: string; source_system: string }[] = [];
+async function seedObservedReports(
+  externalDb: any,
+  pairs: [string, number][],
+  opts: { performerDisplay?: string | null } = {},
+): Promise<void> {
+  const rows: { id: string; performer: string; source_system: string; performer_display: string | null }[] = [];
   for (const [performer, count] of pairs) {
     for (let i = 0; i < count; i += 1) {
-      rows.push({ id: `dr-${randomUUID()}`, performer, source_system: 'webhook-ingest' });
+      rows.push({ id: `dr-${randomUUID()}`, performer, source_system: 'webhook-ingest', performer_display: opts.performerDisplay ?? null });
     }
   }
   if (rows.length === 0) return;
@@ -1086,6 +1090,30 @@ describe('Task 6: GET /api/facilities/observed', () => {
     expect(body.map((r: any) => r.sourceCode)).toEqual(['Dodoma', 'Kibondo']);
     expect(body[0].reportCount).toBe(247);
     expect(body[1].reportCount).toBe(99);
+  });
+
+  // `DisaGlobal.dbo.LOCNDIC4` holds five distinct facility codes whose display is all exactly
+  // "Aga Khan" — the route must surface that display alongside the code so the operator does not
+  // see five identical, opaque codes.
+  it('returns the observed display (performer_display) alongside the observed code', async () => {
+    const internalDb = await makeMigratedDb();
+    const externalDb = await makeMigratedExternalDb();
+    await seedObservedReports(externalDb, [['BAMAA', 1]], { performerDisplay: 'Aga Khan' });
+    const app = await appWith(fakeReconcileCtx(internalDb, externalDb));
+
+    const res = await app.inject({ method: 'GET', url: '/api/facilities/observed' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual([expect.objectContaining({ sourceCode: 'BAMAA', sourceDisplay: 'Aga Khan' })]);
+  });
+
+  it('reports sourceDisplay as null when the source never supplied one', async () => {
+    const internalDb = await makeMigratedDb();
+    const externalDb = await makeMigratedExternalDb();
+    await seedObservedReports(externalDb, [['Dodoma', 1]]);
+    const app = await appWith(fakeReconcileCtx(internalDb, externalDb));
+
+    const res = await app.inject({ method: 'GET', url: '/api/facilities/observed' });
+    expect(res.json()).toEqual([expect.objectContaining({ sourceCode: 'Dodoma', sourceDisplay: null })]);
   });
 
   it('needs no prior scan — resolves straight off the warehouse', async () => {

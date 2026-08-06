@@ -29,7 +29,7 @@ import {
 import { ObservedTab } from './ObservedTab';
 
 const dodoma: ObservedFacility = {
-  sourceSystem: 'webhook-ingest', sourceCode: 'Dodoma', reportCount: 247,
+  sourceSystem: 'webhook-ingest', sourceCode: 'Dodoma', sourceDisplay: null, reportCount: 247,
   registryId: 'f1', localCode: 'DOD-REF', name: 'Dodoma Regional Referral Hospital', level: 'Hospital', status: null,
   region: 'Dodoma', district: 'Dodoma Urban', council: null, nationalSystem: null, nationalCode: null,
   resolvedVia: 'registry', targetMissing: false,
@@ -39,14 +39,23 @@ const dodoma: ObservedFacility = {
 // by accident (Minor finding: the old "Kibondo" fixture was alphabetical AND count-descending too,
 // so this fixture is deliberately renamed/reordered to break that coincidence).
 const arusha: ObservedFacility = {
-  sourceSystem: 'webhook-ingest', sourceCode: 'Arusha', reportCount: 148,
+  sourceSystem: 'webhook-ingest', sourceCode: 'Arusha', sourceDisplay: null, reportCount: 148,
   registryId: null, localCode: null, name: null, level: null, status: null, region: null, district: null,
   council: null, nationalSystem: null, nationalCode: null, resolvedVia: null, targetMissing: false,
 };
 const oceanRoad: ObservedFacility = {
-  sourceSystem: 'webhook-ingest', sourceCode: 'Ocean Road Cancer Institute (O', reportCount: 6,
+  sourceSystem: 'webhook-ingest', sourceCode: 'Ocean Road Cancer Institute (O', sourceDisplay: null, reportCount: 6,
   registryId: null, localCode: null, name: null, level: null, status: null, region: null, district: null,
   council: null, nationalSystem: null, nationalCode: null, resolvedVia: null, targetMissing: true,
+};
+// DisaGlobal.dbo.LOCNDIC4 holds five distinct facility codes whose DESCRIPTION is all exactly
+// "Aga Khan" — BAMAA is one of them. Used to pin that the observed-code cell shows the code AND
+// its name, so an operator sees "BAMAA — Aga Khan" rather than an opaque code indistinguishable
+// from the other four.
+const bamaa: ObservedFacility = {
+  sourceSystem: 'webhook-ingest', sourceCode: 'BAMAA', sourceDisplay: 'Aga Khan', reportCount: 12,
+  registryId: null, localCode: null, name: null, level: null, status: null, region: null, district: null,
+  council: null, nationalSystem: null, nationalCode: null, resolvedVia: null, targetMissing: false,
 };
 
 const defaultFacSystem: CodingSystem = {
@@ -79,6 +88,26 @@ describe('ObservedTab', () => {
     expect(within(rows[1]).getByText('Dodoma')).toBeInTheDocument();
     expect(within(rows[1]).getByText('Dodoma Regional Referral Hospital')).toBeInTheDocument();
     expect(within(rows[2]).getByText(/Arusha/)).toBeInTheDocument();
+  });
+
+  // ⛔ THE point of this whole slice: DisaGlobal holds 5 distinct facility codes (BAMAA/BBFAF/
+  // CDABE/EAFAE/NDFAM) whose display is all exactly "Aga Khan". Without the name shown alongside
+  // the code, an operator triaging the Observed tab sees five opaque, indistinguishable codes.
+  it('shows the observed display alongside the observed code (BAMAA — Aga Khan)', async () => {
+    (listObservedFacilities as ReturnType<typeof vi.fn>).mockResolvedValue([bamaa]);
+    show();
+    const rows = await screen.findAllByRole('row');
+    expect(within(rows[1]).getByText('BAMAA')).toBeInTheDocument();
+    expect(within(rows[1]).getByText('Aga Khan')).toBeInTheDocument();
+  });
+
+  it('shows no second line under the code when sourceDisplay is null', async () => {
+    (listObservedFacilities as ReturnType<typeof vi.fn>).mockResolvedValue([arusha]);
+    show();
+    const rows = await screen.findAllByRole('row');
+    // arusha.sourceDisplay is null, and it is unmapped — 'Arusha' must appear exactly once (the
+    // code cell), not doubled by a stray display line.
+    expect(within(rows[1]).getAllByText('Arusha')).toHaveLength(1);
   });
 
   it('shows the local code, level and admin area under a resolved name, so two similarly-named facilities are distinguishable', async () => {

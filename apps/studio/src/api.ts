@@ -818,6 +818,10 @@ export interface ObservedFacility {
   sourceSystem: string;
   /** The performer string EXACTLY as it arrived. Never normalised. */
   sourceCode: string;
+  /** `DiagnosticReport.performer[0].display` as observed on the wire (e.g. "Aga Khan") — the human
+   *  name for `sourceCode`, distinct from `name` below (the RESOLVED registry facility's name).
+   *  Null when the source never supplied one. */
+  sourceDisplay: string | null;
   reportCount: number;
   registryId: string | null;
   /** `facility_registry.local_code` of the resolved row — OURS, distinct from `nationalCode`
