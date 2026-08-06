@@ -238,7 +238,7 @@ describe('SEED_QUERIES — q-amr-facility-summary labels by name but groups by c
     // Since the feed split the facility into code + display, this rendered the raw code "NICD".
     for (const [dialect, sql] of Object.entries(q().sql)) {
       expect(sql, `${dialect} does not resolve the facility label`)
-        .toContain('coalesce(fm.name, f.performer_display, f.performer) as facility');
+        .toContain('coalesce(fm.name, f.performer_display, f.performer, p.managing_organization) as facility');
     }
   });
 
@@ -287,7 +287,7 @@ with facility_of as (
   group by specimen_id
 )
 select
-  coalesce(fm.name, f.performer_display, f.performer) as facility,
+  coalesce(fm.name, f.performer_display, f.performer, p.managing_organization) as facility,
   ...unchanged aggregate columns...
 from lab_results o
 left join patients p on o.patient_id = p.id
