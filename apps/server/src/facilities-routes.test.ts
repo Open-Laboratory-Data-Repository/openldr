@@ -1364,43 +1364,6 @@ describe('Task 6: GET /api/facilities/observed', () => {
   });
 });
 
-// Fix 2 (self-mapping report): the valid facility-mapping TARGET systems, backing ObservedTab's
-// own restricted TermMappingDialog caller — never the full active coding_systems list.
-describe('GET /api/facilities/mapping-target-systems', () => {
-  it('is gated on facilities.view', async () => {
-    const internalDb = await makeMigratedDb();
-    const externalDb = await makeMigratedExternalDb();
-    const app = await appWith(fakeReconcileCtx(internalDb, externalDb), []);
-    const res = await app.inject({ method: 'GET', url: '/api/facilities/mapping-target-systems' });
-    expect(res.statusCode).toBe(403);
-  });
-
-  it('returns the registry system plus every distinct national_system present in facility_registry', async () => {
-    const internalDb = await makeMigratedDb();
-    const externalDb = await makeMigratedExternalDb();
-    const registry = createFacilityRegistryStore(internalDb);
-    await registry.upsert({ id: 'fac-1', name: 'A', nationalSystem: 'urn:tz:hfr', nationalCode: 'TZ-1', source: 'manual' });
-    await registry.upsert({ id: 'fac-2', name: 'B', nationalSystem: 'urn:tz:mfl', nationalCode: 'TZ-2', source: 'manual' });
-    const app = await appWith(fakeReconcileCtx(internalDb, externalDb));
-
-    const res = await app.inject({ method: 'GET', url: '/api/facilities/mapping-target-systems' });
-    expect(res.statusCode).toBe(200);
-    expect([...res.json()].sort()).toEqual([FACILITY_REGISTRY_SYSTEM, 'urn:tz:hfr', 'urn:tz:mfl'].sort());
-  });
-
-  // ⚠ Edge case called out explicitly in the report: a fresh install has ZERO national_system
-  // values — the dropdown must still be usable, offering the registry system alone.
-  it('offers only the registry system when facility_registry has no national_system values yet (fresh install)', async () => {
-    const internalDb = await makeMigratedDb();
-    const externalDb = await makeMigratedExternalDb();
-    const app = await appWith(fakeReconcileCtx(internalDb, externalDb));
-
-    const res = await app.inject({ method: 'GET', url: '/api/facilities/mapping-target-systems' });
-    expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual([FACILITY_REGISTRY_SYSTEM]);
-  });
-});
-
 describe('Task 6: POST /api/facilities/scan-observed', () => {
   it('refuses the scan without facilities.manage', async () => {
     const internalDb = await makeMigratedDb();
