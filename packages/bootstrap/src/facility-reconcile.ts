@@ -656,22 +656,41 @@ async function ensureCodingSystemActive(
  * caller is CURRENTLY projecting, and only the ids `registryRowIdsWithSupersededIdConcept` names —
  * never anything for a facility absent from the caller's own `rows`/`registry` batch. A genuinely
  * deleted facility's concept is untouched by construction (see that function's doc comment).
+ *
+ * `ids` is a STATIC candidate list — `registryRowIdsWithSupersededIdConcept` flags a row whenever its
+ * computed preferred code differs from its own `id`, which is true for essentially every facility
+ * that has a `local_code`/`national_code`, whether or not a legacy id-keyed concept actually still
+ * exists for it. In steady state (every facility already reprojected past the `0518e7d3` key change)
+ * the `DELETE` below matches zero rows on almost every call. Rather than pay for the `term_mappings`
+ * lookup on every one of those no-op calls — this runs on every `projectRegistryRows` invocation,
+ * i.e. the facility create/update hot path — the delete goes first and the lookup only runs for
+ * whatever it actually returns via `RETURNING code`, so the common case is exactly one statement.
  */
 async function deleteSupersededIdConcepts(deps: Pick<ReconcileDeps, 'internalDb'>, ids: string[]): Promise<void> {
   if (ids.length === 0) return;
 
-  // A mapping already authored against the id-code being removed loses its target — the SAME
-  // consequence the `0518e7d3` key change already accepted, now actually happening for the first
-  // time. It surfaces on the Observed tab as `target missing`, not silently, but it is a genuine
-  // behaviour change for whoever mapped against the old code, so it is worth one log line to make
-  // debugging that "my mapping stopped working" report easy to trace back here. Scoped to
-  // `is_active` mappings only — an inactive one was already not resolving before this delete, so its
-  // target disappearing changes nothing observable.
+  const deleted = await deps.internalDb
+    .deleteFrom('terminology_concepts')
+    .where('system', '=', FACILITY_REGISTRY_SYSTEM)
+    .where('code', 'in', ids)
+    .returning('code')
+    .execute();
+  if (deleted.length === 0) return;
+  const deletedCodes = deleted.map((d) => d.code);
+
+  // A mapping authored against the id-code just removed did not just lose its target — it already
+  // HAD no target the moment this row's preferred code changed: `resolveObservedFacilities`
+  // recomputes `targetMissing` from a live `facility_registry` lookup keyed on the row's CURRENT
+  // preferred code, so the mapping was unresolvable before this delete ever ran. This delete only
+  // clears the stale id-keyed concept out of the mapping picker; it does not cause a new break. It is
+  // still worth one log line, scoped to `is_active` mappings only (an inactive one was already not
+  // resolving, so its target disappearing changes nothing observable), so a "my mapping stopped
+  // working" report is traceable back to the code change that actually caused it.
   const stillReferenced = await deps.internalDb
     .selectFrom('term_mappings')
     .select(['from_system', 'from_code', 'to_code'])
     .where('to_system', '=', FACILITY_REGISTRY_SYSTEM)
-    .where('to_code', 'in', ids)
+    .where('to_code', 'in', deletedCodes)
     .where('is_active', '=', true)
     .execute();
   for (const m of stillReferenced) {
@@ -679,15 +698,9 @@ async function deleteSupersededIdConcepts(deps: Pick<ReconcileDeps, 'internalDb'
     // the `err` catches below), and this is diagnostic-only, not an error this function acts on.
     console.warn(
       `[facility-reconcile] term_mappings (${m.from_system}, ${m.from_code}) -> ${FACILITY_REGISTRY_SYSTEM}/${m.to_code}` +
-        ' now points at a removed superseded concept; it will resolve as target missing until re-mapped',
+        ' already resolves as target missing (its preferred code changed); its stale id-keyed concept has now been removed from the mapping picker',
     );
   }
-
-  await deps.internalDb
-    .deleteFrom('terminology_concepts')
-    .where('system', '=', FACILITY_REGISTRY_SYSTEM)
-    .where('code', 'in', ids)
-    .execute();
 }
 
 /**

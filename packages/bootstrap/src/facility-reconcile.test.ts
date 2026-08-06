@@ -962,6 +962,52 @@ describe('projectRegistryRows', () => {
     expect(rows[0].code).toBe('111317-4');
   });
 
+  // The whole point of the `RETURNING code`-gated fix: `registryRowIdsWithSupersededIdConcept` names
+  // fac-1 as a candidate on EVERY call (its preferred code, `111317-4`, is permanently different from
+  // its own id) even once there is no legacy id-keyed concept left to delete — this is steady state,
+  // i.e. every facility save after the first. `deleteSupersededIdConcepts` must not pay for the
+  // `term_mappings` lookup on a `DELETE` that matched zero rows. Spies on `selectFrom` rather than on
+  // a specific store method because `term_mappings` is queried with a raw Kysely builder, not through
+  // `admin` — a table-name assertion is the only vantage point that would actually fail if the
+  // gating regressed back to running unconditionally.
+  it('does not query term_mappings when the delete matches nothing (steady-state hot path)', async () => {
+    const deps = await makeReconcileDeps();
+    await seedRegistry(deps, { id: 'fac-1', name: 'National Public Health Laboratory', localCode: '111317-4' });
+    // First save: fac-1 has never had an id-keyed concept, so this already exercises the zero-rows
+    // delete path once and establishes steady state.
+    await projectRegistryRows(deps, [{ id: 'fac-1', name: 'National Public Health Laboratory' }]);
+
+    const selectFromSpy = vi.spyOn(deps.internalDb, 'selectFrom');
+
+    // Second save (e.g. an operator edits the facility's name) — the hot path this finding is about.
+    await projectRegistryRows(deps, [{ id: 'fac-1', name: 'National Public Health Laboratory' }]);
+
+    const queriedTables = selectFromSpy.mock.calls.map((args) => args[0]);
+    expect(queriedTables).not.toContain('term_mappings');
+  });
+
+  // The other side of the same fix: when the delete DOES remove a real legacy id-keyed concept, the
+  // `term_mappings` lookup must still run and warn about a mapping authored against the code being
+  // removed — the gate must skip the zero-rows case without silencing the genuine one.
+  it('still warns about a term_mappings row referencing a concept the delete actually removed', async () => {
+    const deps = await makeReconcileDeps();
+    await seedRegistry(deps, { id: 'fac-1', name: 'National Public Health Laboratory', localCode: '111317-4' });
+    await deps.admin.terms.importRows([
+      { system: FACILITY_REGISTRY_SYSTEM, code: 'fac-1', display: 'National Public Health Laboratory', status: 'ACTIVE', properties: null },
+    ]);
+    await seedMapping(deps, { fromSystem: DEFAULT_OBSERVED_FACILITY_SYSTEM, fromCode: 'NPHL', toSystem: FACILITY_REGISTRY_SYSTEM, toCode: 'fac-1' });
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    await projectRegistryRows(deps, [{ id: 'fac-1', name: 'National Public Health Laboratory' }]);
+
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    const [message] = warnSpy.mock.calls[0] as [string];
+    expect(message).toContain(`(${DEFAULT_OBSERVED_FACILITY_SYSTEM}, NPHL) -> ${FACILITY_REGISTRY_SYSTEM}/fac-1`);
+    // Reworded per code review: the delete surfaces a pre-existing break, it does not cause one.
+    expect(message).not.toMatch(/will resolve as target missing/);
+    warnSpy.mockRestore();
+  });
+
   // The collision-fallback case, through the given-rows path: fac-a and fac-b collide (fac-a's
   // local_code equals fac-b's national_code), so both legitimately keep an id-keyed concept. Project
   // fac-a alone (mirroring a single facility's own create/update write) and confirm fac-b's
