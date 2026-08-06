@@ -1787,6 +1787,16 @@ order by 1`,
   //    `q-amr-facility-summary`: reports are per-ORDER, so joining `diagnostic_reports` directly
   //    would fan this one-row header out. Measured: 0 of 3713 specimens disagree on `performer` and
   //    0 of 88 codes carry two displays, so the three `min()`s cannot mix two facilities.
+  //  - ⛔ `facility_loc` folds `facilities` for the SAME reason `facility_of` folds the reports, and
+  //    it is NOT redundant with the composite join predicate. `facilities.id` is the raw FHIR
+  //    resource id and BOTH Organization and Location project into that table, so two resources
+  //    describing one facility are two rows sharing a (source_system, facility_code) pair — and this
+  //    query must return exactly ONE row, because the design binds rows[0] into the panel, the
+  //    barcode and the QR. Measured: 0 duplicate pairs today, 89 Organization + 1 Location. The fold
+  //    makes the single row structural instead of a property of the current feed.
+  //    ⚠ `min(region)` and `min(district)` are taken independently, so two rows for one facility
+  //    could contribute one field each. Deterministic and bounded (both describe the same facility),
+  //    and the same tradeoff `facility_of` already documents — but it is a tradeoff, not a proof.
   {
     id: 'q-clinical-micro-header',
     name: 'Clinical — patient & specimen header',
@@ -1801,6 +1811,14 @@ order by 1`,
   where specimen_id is not null and specimen_id <> '' and performer is not null
   group by specimen_id
 ),
+facility_loc as (
+  select source_system, facility_code,
+    min(region) as region,
+    min(district) as district
+  from facilities
+  where facility_code is not null and facility_code <> ''
+  group by source_system, facility_code
+),
 facility as (
   select fo.specimen_id,
     coalesce(fm.name, fo.performer_display, fo.performer) as performing_lab,
@@ -1808,7 +1826,7 @@ facility as (
     coalesce(fm.region, fa.region) as region
   from facility_of fo
   left join facility_map fm on fm.source_system = coalesce(fo.source_system, '') and fm.source_code = fo.performer
-  left join facilities fa on fa.source_system = fo.source_system and fa.facility_code = fo.performer
+  left join facility_loc fa on fa.source_system = fo.source_system and fa.facility_code = fo.performer
 )
 select
   p.surname as patient_surname,
@@ -1838,6 +1856,14 @@ where q.id = {{param.request}}`, mssql: `with facility_of as (
   where specimen_id is not null and specimen_id <> '' and performer is not null
   group by specimen_id
 ),
+facility_loc as (
+  select source_system, facility_code,
+    min(region) as region,
+    min(district) as district
+  from facilities
+  where facility_code is not null and facility_code <> ''
+  group by source_system, facility_code
+),
 facility as (
   select fo.specimen_id,
     coalesce(fm.name, fo.performer_display, fo.performer) as performing_lab,
@@ -1845,7 +1871,7 @@ facility as (
     coalesce(fm.region, fa.region) as region
   from facility_of fo
   left join facility_map fm on fm.source_system = coalesce(fo.source_system, '') and fm.source_code = fo.performer
-  left join facilities fa on fa.source_system = fo.source_system and fa.facility_code = fo.performer
+  left join facility_loc fa on fa.source_system = fo.source_system and fa.facility_code = fo.performer
 )
 select
   p.surname as patient_surname,
@@ -1875,6 +1901,14 @@ where q.id = {{param.request}}`, mysql: `with facility_of as (
   where specimen_id is not null and specimen_id <> '' and performer is not null
   group by specimen_id
 ),
+facility_loc as (
+  select source_system, facility_code,
+    min(region) as region,
+    min(district) as district
+  from facilities
+  where facility_code is not null and facility_code <> ''
+  group by source_system, facility_code
+),
 facility as (
   select fo.specimen_id,
     coalesce(fm.name, fo.performer_display, fo.performer) as performing_lab,
@@ -1882,7 +1916,7 @@ facility as (
     coalesce(fm.region, fa.region) as region
   from facility_of fo
   left join facility_map fm on fm.source_system = coalesce(fo.source_system, '') and fm.source_code = fo.performer
-  left join facilities fa on fa.source_system = fo.source_system and fa.facility_code = fo.performer
+  left join facility_loc fa on fa.source_system = fo.source_system and fa.facility_code = fo.performer
 )
 select
   p.surname as patient_surname,

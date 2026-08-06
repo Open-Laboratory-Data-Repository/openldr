@@ -214,13 +214,25 @@ ingest and is therefore always current. This is the same triage error the reconc
 already made once — deferring an ingest-time gap because "a scan covers it", when the scan is manual
 and the window is open *by default*.
 
-⚠ **`facilities` has no uniqueness constraint on `(source_system, facility_code)`** —
-`resolveObservedFacilities` guards it with a first-wins `Map` for precisely this reason. In SQL a
-duplicate would fan this **one-row** header query out to two rows, which the keyvalue panel would
-render as the first, silently. The composite predicate is sufficient today (measured: the only
-duplicate `facility_code` is NULL, on the two `seed` rows) and no `min()` wrapper is being pre-built
-for a collision that cannot currently occur — but this is the failure mode to check first if the
-header ever renders the wrong facility.
+⚠ **`facilities` has no uniqueness constraint on `(source_system, facility_code)`, and the query
+folds it structurally rather than relying on today's data staying collision-free.**
+`resolveObservedFacilities` guards its own `Map` with first-wins for precisely this reason, but that
+guard lives in application code and says nothing about the table the SQL query reads. `facilities.id`
+is the raw FHIR resource id (`packages/db/src/relational/facility.ts:25`), and **both** `Organization`
+and `Location` resources project into that table (`packages/db/src/relational/index.ts:37-38`), so two
+resources describing one facility are two rows sharing a `(source_system, facility_code)` pair — the
+composite predicate does not prevent that, it only scopes which rows can collide. Measured: zero
+duplicate pairs exist today, but the table is not empty on the `Location` side either — 89
+`Organization` rows and 1 `Location` row are live right now, so the second-resource case this join
+must survive is not hypothetical. A duplicate would fan this **one-row** header query out to two rows,
+which the keyvalue panel, the barcode and the QR would all render from the first, silently. The query
+therefore adds a `facility_loc` CTE — `select ... min(region), min(district) from facilities group by
+source_system, facility_code` — and joins that instead of the raw table, the same fold `facility_of`
+already applies to `diagnostic_reports` one CTE up. This makes the one-row guarantee structural instead
+of a property of the current feed. The two `min()`s are still taken independently, so a genuine
+two-resource collision could in principle contribute district from one row and region from the other —
+deterministic and bounded (both rows describe the same facility), but a tradeoff, not a proof, exactly
+like the `facility_of` fold above it.
 
 ⚠ **`coalesce(fo.source_system, '')` on the `facility_map` side is not defensive noise.**
 `resolveObservedFacilities` normalises a NULL `source_system` to `''` when building `facility_map`,

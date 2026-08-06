@@ -866,4 +866,17 @@ describe('SEED_QUERIES — q-clinical-micro-header names the performing laborato
       expect(sql, `${dialect} smuggled in CONCAT_WS`).not.toMatch(/concat_ws/i);
     }
   });
+
+  it('folds facilities to one row per facility before joining — the header must stay single-row', () => {
+    // facilities.id is the raw FHIR resource id and BOTH Organization and Location project into
+    // that table, so one facility can be two rows. The design binds rows[0] into the panel, the
+    // barcode and the QR, so a fan-out would silently render whichever row came first.
+    for (const [dialect, sql] of Object.entries(q().sql)) {
+      expect(sql, `${dialect} lost the facilities fold`).toContain('facility_loc as (');
+      expect(sql, `${dialect} does not group the fold by facility`)
+        .toMatch(/from facilities[\s\S]*group by source_system, facility_code/);
+      expect(sql, `${dialect} still joins the raw facilities table and can fan out`)
+        .not.toMatch(/join facilities [a-z]+ on/);
+    }
+  });
 });
