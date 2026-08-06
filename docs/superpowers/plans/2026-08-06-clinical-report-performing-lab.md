@@ -16,6 +16,29 @@ MSSQL + MySQL dialect variants maintained in parallel.
 
 **Spec:** `docs/superpowers/specs/2026-08-05-clinical-report-performing-lab-design.md`
 
+> ⛔ **Revised 2026-08-06 — this plan was executed, and review changed it in two ways. The spec is
+> now the accurate document; the code blocks below are the ORIGINAL prescriptions and two of them
+> are WRONG. Do not copy from this file.**
+>
+> **1. The `facilities` join fans out (`e4df8b9f`).** Task 1's SQL joins `facilities` directly.
+> `facilities.id` is the raw FHIR resource id and BOTH `Organization` and `Location` project into
+> that table, so one facility can be two rows and would fan this one-row header query out. The
+> shipped query folds it through a `facility_loc` CTE first. Task 1 Step 3's SQL and the
+> "Known residual risk, deliberately not engineered around" note in the Self-Review are both
+> superseded — it WAS engineered around.
+>
+> **2. The geometry arithmetic is in the wrong unit (`14d7983c`).** Task 3 computes the panel's
+> capacity in px@96. `drawElement` converts the rect px@96 → pt and then applies `KV_PAD_Y`/
+> `KV_INLINE_H` as RAW POINTS, so the real pitch is 14pt, not 14px@96. Ten pairs end at **188pt**
+> against a box bottom of **177pt** — they overflow and are silently clipped. Every number in Task
+> 3's geometry paragraph, its `h: 84` element block, and its `pairRects(hdr.rect, …)` fit test is
+> wrong. Shipped: `hdr.h` 84→**104**, `org`/`band`/`bandt`/`tbl` each **+20px**, and the fit test
+> calls **`toPt(hdr.rect)` first**.
+>
+> ⛔ **No test caught #2 — the rendered PDF did.** The fit test made the same unit error as the
+> plan, so it was green while the page had its fifth row sliced in half. That is the argument for
+> Task 4's "render a PDF and look at it" step, and it is why that step must never be dropped.
+
 ## Global Constraints
 
 - **All three dialect variants must stay in step.** `packages/reporting/src/seed/report-seeds.ts`
@@ -781,6 +804,10 @@ rm -f mapped.pdf unmapped.pdf gate.log
 **Type consistency.** `performing_lab` and `lab_location` are used identically in Task 1 (SQL
 aliases), Task 2 (result keys) and Task 3 (`boundColumns[].key`). `pairRects(box, n, layout,
 panelColumns, hasTitle)` matches its signature in `packages/report-designer/src/render/draw.ts:309`.
+
+⛔ **SUPERSEDED by `e4df8b9f` — the risk below WAS engineered around; see the banner at the top of
+this file. Kept only to record what the plan originally reasoned, and why that reasoning was too
+weak: "no duplicates today" is a property of the current feed, not of the schema.**
 
 **Known residual risk, deliberately not engineered around** (spec §3.3): `facilities` has no
 uniqueness constraint on `(source_system, facility_code)`. Today the only duplicate `facility_code`
