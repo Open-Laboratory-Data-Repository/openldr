@@ -14,6 +14,7 @@ vi.mock('@/api', async (orig) => {
     listCodingSystems: vi.fn(),
     listTermMappings: vi.fn(),
     createTermMapping: vi.fn(),
+    deleteTermMapping: vi.fn(),
   };
 });
 
@@ -25,7 +26,7 @@ vi.mock('@/auth/AuthProvider', () => ({ useAuth: useAuthMock }));
 
 import {
   listObservedFacilities, scanObservedFacilities, publishFacilities, listCodingSystems, listTermMappings,
-  createTermMapping,
+  createTermMapping, deleteTermMapping,
   type ObservedFacility, type CodingSystem, type TermMapping,
 } from '@/api';
 import { ObservedTab } from './ObservedTab';
@@ -501,5 +502,153 @@ describe('ObservedTab', () => {
       'Arusha',
       expect.objectContaining({ toSystem: 'urn:openldr:cs:facility-registry', toCode: 'ARU' }),
     ));
+  });
+
+  // ── Remove mapping ──────────────────────────────────────────────────────────
+  // The gap this closes: today an operator sees "BALAB → not a facility" on this very tab but has
+  // no way to clear it here — they must go to /terminology, find the term, open its Mappings tab,
+  // and delete from there. These tests pin the new row-level affordance.
+
+  it('offers Remove mapping in the row ⋯ menu for an already-mapped row (dodoma resolves via registry)', async () => {
+    show();
+    await screen.findByText('Dodoma');
+
+    const trigger = screen.getByRole('button', { name: 'Observed facility actions Dodoma' });
+    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByRole('menuitem', { name: /remove mapping/i })) {
+      fireEvent.keyDown(trigger, { key: 'Enter' });
+    }
+    expect(screen.getByRole('menuitem', { name: /remove mapping/i })).toBeInTheDocument();
+  });
+
+  it('does not offer Remove mapping for a row with no mapping at all', async () => {
+    (listObservedFacilities as ReturnType<typeof vi.fn>).mockResolvedValue([arusha]);
+    show();
+    await screen.findByText('Arusha');
+
+    const trigger = screen.getByRole('button', { name: 'Observed facility actions Arusha' });
+    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByRole('menuitem', { name: /^map$/i })) {
+      fireEvent.keyDown(trigger, { key: 'Enter' });
+    }
+    expect(screen.queryByRole('menuitem', { name: /remove mapping/i })).not.toBeInTheDocument();
+  });
+
+  it('never offers Remove mapping (or any row action) without facilities.manage', async () => {
+    useAuthMock.mockReturnValue({
+      user: { id: 'analyst', username: 'analyst', displayName: null, roles: ['data_analyst'] },
+      loading: false,
+      hasCapability: (cap: string) => cap === 'facilities.view',
+    });
+    show();
+    await screen.findByText('Dodoma');
+    // No row-level ⋯ trigger exists at all for a view-only actor, so there is no menu to open —
+    // "Remove mapping" text cannot be anywhere on the page either.
+    expect(screen.queryByRole('button', { name: /actions/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/remove mapping/i)).not.toBeInTheDocument();
+  });
+
+  it('confirming Remove mapping names the code and its current target, deletes it, and refreshes the list', async () => {
+    const existing: TermMapping = {
+      id: 'tm-1', fromSystem: 'urn:openldr:default_fac', fromCode: 'Dodoma',
+      toSystem: 'urn:openldr:cs:facility-registry', toCode: 'f1', toDisplay: 'Dodoma Regional Referral Hospital',
+      mapType: 'SAME-AS', relationship: null, owner: null, isActive: true,
+    };
+    (listTermMappings as ReturnType<typeof vi.fn>).mockResolvedValue({ outgoing: [existing], reverse: [] });
+    show();
+    await screen.findByText('Dodoma');
+
+    const trigger = screen.getByRole('button', { name: 'Observed facility actions Dodoma' });
+    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByRole('menuitem', { name: /remove mapping/i })) {
+      fireEvent.keyDown(trigger, { key: 'Enter' });
+    }
+    fireEvent.click(screen.getByRole('menuitem', { name: /remove mapping/i }));
+
+    // Names WHAT is being removed — the observed code and what it currently resolves to — rather
+    // than a generic "are you sure?". Scoped to the dialog itself: the table row behind it ALSO
+    // renders "Dodoma Regional Referral Hospital" in its resolves-to cell.
+    await screen.findByText(/remove mapping for dodoma/i);
+    const dialog = screen.getByRole('alertdialog');
+    expect(within(dialog).getByText(/dodoma regional referral hospital/i)).toBeInTheDocument();
+
+    fireEvent.click(within(dialog).getByRole('button', { name: /^remove mapping$/i }));
+
+    await waitFor(() => expect(deleteTermMapping).toHaveBeenCalledWith('tm-1'));
+    expect(deleteTermMapping).toHaveBeenCalledTimes(1);
+    // Refresh must be a BACKGROUND reload (never a bare reload() — that flips `loading` and
+    // unmounts the panel, per this page's own scar tissue), so the list still refetches once more.
+    await waitFor(() => expect(listObservedFacilities).toHaveBeenCalledTimes(2));
+  });
+
+  it('deletes nothing when the Remove mapping confirmation is dismissed', async () => {
+    const existing: TermMapping = {
+      id: 'tm-1', fromSystem: 'urn:openldr:default_fac', fromCode: 'Dodoma',
+      toSystem: 'urn:openldr:cs:facility-registry', toCode: 'f1', toDisplay: 'Dodoma Regional Referral Hospital',
+      mapType: 'SAME-AS', relationship: null, owner: null, isActive: true,
+    };
+    (listTermMappings as ReturnType<typeof vi.fn>).mockResolvedValue({ outgoing: [existing], reverse: [] });
+    show();
+    await screen.findByText('Dodoma');
+
+    const trigger = screen.getByRole('button', { name: 'Observed facility actions Dodoma' });
+    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByRole('menuitem', { name: /remove mapping/i })) {
+      fireEvent.keyDown(trigger, { key: 'Enter' });
+    }
+    fireEvent.click(screen.getByRole('menuitem', { name: /remove mapping/i }));
+    await screen.findByText(/remove mapping for dodoma/i);
+
+    fireEvent.click(screen.getByRole('button', { name: /^cancel$/i }));
+
+    await waitFor(() => expect(screen.queryByText(/remove mapping for dodoma/i)).not.toBeInTheDocument());
+    expect(deleteTermMapping).not.toHaveBeenCalled();
+    // No refresh either — dismissing changed nothing to refresh.
+    expect(listObservedFacilities).toHaveBeenCalledTimes(1);
+  });
+
+  // ⚠ The resolver reads a LIST of candidate mappings per (system, code) — `resolveObservedFacilities`
+  // in facility-reconcile.ts picks the first that resolves via registry, then national, then falls
+  // back to nonFacilityTarget when candidates exist but none resolve. Deleting only the ONE candidate
+  // that happened to win resolution would leave the others behind, and the row could still show a
+  // (different, equally wrong) target right after the operator was told "removed". Decision: Remove
+  // mapping clears the row back to fully unmapped by deleting every ACTIVE outgoing candidate for
+  // that code — never just one, and never touching an already-inactive mapping the operator didn't
+  // ask about.
+  it('removes every active mapping candidate for a row when more than one exists, and leaves inactive ones alone', async () => {
+    const selfMap: TermMapping = {
+      id: 'tm-self', fromSystem: 'urn:openldr:default_fac', fromCode: 'BALAB',
+      toSystem: 'urn:openldr:default_fac', toCode: 'BALAB', toDisplay: null,
+      mapType: 'SAME-AS', relationship: null, owner: null, isActive: true,
+    };
+    const loincMap: TermMapping = {
+      id: 'tm-loinc', fromSystem: 'urn:openldr:default_fac', fromCode: 'BALAB',
+      toSystem: 'http://loinc.org', toCode: '1234-5', toDisplay: null,
+      mapType: 'SAME-AS', relationship: null, owner: null, isActive: true,
+    };
+    const staleInactive: TermMapping = {
+      id: 'tm-stale', fromSystem: 'urn:openldr:default_fac', fromCode: 'BALAB',
+      toSystem: 'urn:openldr:cs:facility-registry', toCode: 'f9', toDisplay: null,
+      mapType: 'SAME-AS', relationship: null, owner: null, isActive: false,
+    };
+    (listObservedFacilities as ReturnType<typeof vi.fn>).mockResolvedValue([balab]);
+    (listTermMappings as ReturnType<typeof vi.fn>).mockResolvedValue({ outgoing: [selfMap, loincMap, staleInactive], reverse: [] });
+    show();
+    await screen.findByText('BALAB');
+
+    const trigger = screen.getByRole('button', { name: 'Observed facility actions BALAB' });
+    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByRole('menuitem', { name: /remove mapping/i })) {
+      fireEvent.keyDown(trigger, { key: 'Enter' });
+    }
+    fireEvent.click(screen.getByRole('menuitem', { name: /remove mapping/i }));
+    await screen.findByText(/remove mapping for balab/i);
+
+    fireEvent.click(screen.getByRole('button', { name: /^remove mapping$/i }));
+
+    await waitFor(() => expect(deleteTermMapping).toHaveBeenCalledTimes(2));
+    expect(deleteTermMapping).toHaveBeenCalledWith('tm-self');
+    expect(deleteTermMapping).toHaveBeenCalledWith('tm-loinc');
+    expect(deleteTermMapping).not.toHaveBeenCalledWith('tm-stale');
   });
 });

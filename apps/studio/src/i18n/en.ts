@@ -825,6 +825,13 @@ export const en = {
       viaNational: 'via national',
       map: 'Map',
       editMapping: 'Edit mapping',
+      // Fix (BALAB self-mapping report): the Observed tab could DIAGNOSE a bad mapping
+      // (nonFacilityTarget above) but offered no way to clear it — only /terminology's own Mappings
+      // tab could. The confirmation names what is being removed (code + current target) rather than
+      // asking a generic "are you sure?".
+      removeMapping: 'Remove mapping',
+      removeMappingTitle: 'Remove mapping for {{code}}?',
+      removeMappingBody: '{{code}} currently resolves to {{target}}. Removing the mapping clears it back to unmapped — you will need to map it again if this was a mistake.',
       empty: 'No observed facilities yet.',
       emptyHelp: 'Run a scan to discover facility strings from ingested reports.',
       scan: 'Scan for new facilities',

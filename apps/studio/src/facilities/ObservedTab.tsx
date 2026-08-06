@@ -10,6 +10,7 @@ import { TablePagination } from '@/components/ui/table-pagination';
 import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/spinner';
 import { TruncatedText } from '@/components/ui/truncated-text';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useAuth } from '@/auth/AuthProvider';
 import {
   listObservedFacilities,
@@ -17,6 +18,7 @@ import {
   publishFacilities,
   listCodingSystems,
   listTermMappings,
+  deleteTermMapping,
   type ObservedFacility,
   type CodingSystem,
   type TermMapping,
@@ -221,6 +223,49 @@ export function ObservedTab({ actionsPortalTarget }: ObservedTabProps = {}): JSX
   const mappingSystemUrl = mappingRow ? observedSystemForFeed(mappingRow.sourceSystem) : DEFAULT_OBSERVED_FACILITY_SYSTEM;
   const mappingSystemCode = mappingSystems.find((s) => s.url === mappingSystemUrl)?.systemCode ?? '';
 
+  // ── Remove mapping (row ⋯ menu → ConfirmDialog, no dialog reuse) ────────────
+  // The gap this closes: today the ONLY way to clear a bad mapping (e.g. the bug report's BALAB
+  // self-mapping) is /terminology's own Mappings tab — an operator who spots it HERE, on the tab
+  // that told them it was wrong, has no way to act on it without leaving the page.
+  const [removingRow, setRemovingRow] = useState<ObservedFacility | null>(null);
+
+  // What the confirmation names as "currently resolves to" — reuses the SAME three-way distinction
+  // the resolves-to column already renders (targetMissing / nonFacilityTarget / a real name), so the
+  // confirmation never contradicts what the operator is looking at. `row.name` is non-null exactly
+  // when `resolvedVia` is set (the only remaining case once the first two are excluded).
+  const removeMappingTarget = (row: ObservedFacility): string => {
+    if (row.nonFacilityTarget) return t('facilities.observed.nonFacilityTarget');
+    if (row.targetMissing) return t('facilities.observed.targetMissing');
+    return row.name ?? t('facilities.observed.unmapped');
+  };
+
+  // ⚠ `resolveObservedFacilities` (packages/bootstrap/src/facility-reconcile.ts) reads a LIST of
+  // candidate mappings per (system, code) and picks ONE (registry wins, then a proven national
+  // route, else the row is flagged `nonFacilityTarget`) — a code can carry MORE than one active
+  // `term_mappings` row. Deleting only the candidate that happened to win resolution would leave the
+  // others behind, so the row could still show a (different, equally wrong) target right after the
+  // operator was told "removed". Decision: "Remove mapping" clears the row back to fully unmapped by
+  // deleting EVERY active outgoing candidate for that code — never just one — while leaving any
+  // already-inactive mapping alone (it plays no part in resolution, and the operator never asked
+  // about it).
+  const doRemoveMapping = useCallback(async () => {
+    if (!removingRow) return;
+    const row = removingRow;
+    setRemovingRow(null);
+    setError(null);
+    try {
+      const system = observedSystemForFeed(row.sourceSystem);
+      const { outgoing } = await listTermMappings(system, row.sourceCode);
+      const activeIds = outgoing.filter((m) => m.isActive).map((m) => m.id);
+      await Promise.all(activeIds.map((id) => deleteTermMapping(id)));
+      // Background reload — see the module banner above `reload` itself: a bare `reload()` flips
+      // `loading` and unmounts this panel, blanking the just-closed confirmation.
+      await reload({ background: true });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }, [removingRow, reload]);
+
   if (loading) {
     return <LoadingState className="flex-1" label={t('common.loading')} />;
   }
@@ -284,7 +329,12 @@ export function ObservedTab({ actionsPortalTarget }: ObservedTabProps = {}): JSX
               </TableRow>
             </TableHeader>
             <TableBody className="[&_tr:last-child]:border-b">
-              {pageRows.map((row) => (
+              {pageRows.map((row) => {
+                // Single source of truth for "this row already has a mapping" — same condition the
+                // editMapping/map label switch below already uses, and now also the gate for
+                // offering Remove mapping at all (a row with no mapping has nothing to remove).
+                const hasMapping = !!(row.resolvedVia || row.targetMissing || row.nonFacilityTarget);
+                return (
                 <TableRow key={`${row.sourceSystem}|${row.sourceCode}`}>
                   <TableCell
                     className="max-w-[220px] text-xs"
@@ -327,14 +377,23 @@ export function ObservedTab({ actionsPortalTarget }: ObservedTabProps = {}): JSX
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem disabled={mappingLoading} onSelect={() => void openMapping(row)}>
-                            {row.resolvedVia || row.targetMissing || row.nonFacilityTarget ? t('facilities.observed.editMapping') : t('facilities.observed.map')}
+                            {hasMapping ? t('facilities.observed.editMapping') : t('facilities.observed.map')}
                           </DropdownMenuItem>
+                          {hasMapping && (
+                            <DropdownMenuItem
+                              className="text-destructive focus:text-destructive"
+                              onSelect={() => setRemovingRow(row)}
+                            >
+                              {t('facilities.observed.removeMapping')}
+                            </DropdownMenuItem>
+                          )}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     ) : null}
                   </TableCell>
                 </TableRow>
-              ))}
+                );
+              })}
             </TableBody>
           </Table>
         ) : error ? null : (
@@ -376,6 +435,22 @@ export function ObservedTab({ actionsPortalTarget }: ObservedTabProps = {}): JSX
             setMappingRow(null);
             void reload({ background: true });
           }}
+        />
+      )}
+
+      {removingRow && (
+        <ConfirmDialog
+          open={removingRow !== null}
+          onOpenChange={(o) => { if (!o) setRemovingRow(null); }}
+          title={t('facilities.observed.removeMappingTitle', { code: removingRow.sourceCode })}
+          description={t('facilities.observed.removeMappingBody', {
+            code: removingRow.sourceCode,
+            target: removeMappingTarget(removingRow),
+          })}
+          confirmLabel={t('facilities.observed.removeMapping')}
+          cancelLabel={t('common.cancel')}
+          destructive
+          onConfirm={() => void doRemoveMapping()}
         />
       )}
     </div>
