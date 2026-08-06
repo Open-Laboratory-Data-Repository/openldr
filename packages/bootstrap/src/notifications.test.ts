@@ -46,6 +46,20 @@ describe('auditRowToNotification', () => {
     expect(auditRowToNotification({ ...base, action: 'auth.failed', entityId: 'bad-signature' })).not.toBeNull();
   });
 
+  it('suppresses credential-less auth.failed (reason "missing") from notifications', () => {
+    // The studio nulls its own token on expiry, so a lapsed session arrives as `missing`, not
+    // `expired` — and the bell polls every 45s, so leaving this un-suppressed lets a token-less
+    // tab manufacture the notification it then displays, on a loop.
+    expect(auditRowToNotification({ ...base, action: 'auth.failed', entityId: 'missing' })).toBeNull();
+    expect(auditRowToNotification({ ...base, action: 'auth.failed', entityId: 'auth', metadata: { reason: 'missing' } })).toBeNull();
+  });
+
+  it('still notifies every auth.failed reason where a credential WAS presented and rejected', () => {
+    for (const reason of ['bad-signature', 'wrong-audience', 'wrong-issuer', 'no-matching-key', 'invalid', 'account-disabled', 'sync-failed']) {
+      expect(auditRowToNotification({ ...base, action: 'auth.failed', entityId: reason }), reason).not.toBeNull();
+    }
+  });
+
   it('maps plugin.crash → critical → /activity', () => {
     expect(auditRowToNotification({ ...base, action: 'plugin.crash', entityType: 'plugin' })!).toMatchObject({ type: 'plugin_crashed', priority: 'critical', linkTo: '/activity' });
   });

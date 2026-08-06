@@ -3,6 +3,9 @@ import { useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { authFetch, getMe, getMyCapabilities, type ClientConfig, type CurrentUser } from '@/api';
 import { getOidc, type OidcClient } from './oidc';
+// Aliased: `setAuthEnforced` is also this component's React state setter. The token-module copy is
+// what api.ts's authFetch reads, so both have to be kept in sync from the one /api/config response.
+import { setAuthEnforced as setAuthEnforcedForFetch } from './token';
 import { Button } from '@/components/ui/button';
 import { StripedEmpty } from '@/components/ui/striped-empty';
 
@@ -52,6 +55,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const r = await authFetch('/api/config');
         if (!r.ok) throw new Error('config');
         const cfg = await r.json() as ClientConfig;
+        // Module state, not component state — set it regardless of `active` so a remount can't
+        // leave authFetch on the fail-safe default while the server is actually in dev bypass.
+        setAuthEnforcedForFetch(cfg.authEnforced);
         if (active) setAuthEnforced(cfg.authEnforced);
 
         if (!cfg.authEnforced || !cfg.oidc) {

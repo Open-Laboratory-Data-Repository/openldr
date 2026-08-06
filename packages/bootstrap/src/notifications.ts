@@ -66,15 +66,39 @@ const AUDIT_MAP: Record<string, { type: NotificationType; priority: Notification
   'terminology.import.failed': { type: 'terminology_import_failed', priority: 'warning', linkTo: '/terminology', title: 'Terminology import failed' },
 };
 
+/**
+ * `auth.failed` reasons (`apps/server/src/auth-failed.ts`) that carry NO security signal, because
+ * no credential was presented that could have been forged:
+ *
+ *  - `expired` — a validly signed token that simply aged out while the user was idle.
+ *  - `missing` — no Authorization header at all. An absent credential says nothing about who sent
+ *    the request; it is the ordinary result of ANY un-authenticated client touching a protected
+ *    route, not a failed break-in.
+ *
+ * `missing` has to be here, not just `expired`: the studio nulls its own token the moment the
+ * session lapses (`addAccessTokenExpired` in apps/studio/src/auth/oidc.ts), so an expired session
+ * reaches the server carrying nothing and is recorded as `missing`. Suppressing only `expired`
+ * therefore never fired for the app that produces almost all of these rows — measured on a dev
+ * install, every single `auth.failed` row was `missing` and none was `expired`.
+ *
+ * Every other reason (bad-signature, wrong-audience, wrong-issuer, no-matching-key, invalid,
+ * account-disabled, sync-failed) means a credential WAS presented and rejected, which is a real
+ * signal and still notifies. Suppressed reasons are only kept off the bell — they stay in the
+ * audit log and remain visible on /audit.
+ */
+const AUTH_REASONS_WITHOUT_SECURITY_SIGNAL = new Set(['expired', 'missing']);
+
 export function auditRowToNotification(row: AuditEvent): Notification | null {
   const m = AUDIT_MAP[row.action];
   if (!m) return null;
-  // Routine session expiry (`auth.failed` reason `expired`) is benign self-expiry noise — a validly
-  // signed token that simply aged out while the user was idle, which cannot be forged and so carries
-  // no security signal. Keep it in the audit log, but don't raise a bell notification for it. Other
-  // reasons (bad-signature, invalid, wrong-audience, …) may indicate a real attempt and still notify.
-  if (row.action === 'auth.failed' && (row.entityId === 'expired' || (row.metadata as { reason?: unknown } | null)?.reason === 'expired')) {
-    return null;
+  if (row.action === 'auth.failed') {
+    // The reason is written to entityId, and duplicated into metadata.reason (auth-plugin.ts).
+    // Check both, so a row from either shape is suppressed.
+    const reason = (row.metadata as { reason?: unknown } | null)?.reason;
+    if (AUTH_REASONS_WITHOUT_SECURITY_SIGNAL.has(row.entityId)
+      || (typeof reason === 'string' && AUTH_REASONS_WITHOUT_SECURITY_SIGNAL.has(reason))) {
+      return null;
+    }
   }
   return {
     id: `audit:${row.id}`,

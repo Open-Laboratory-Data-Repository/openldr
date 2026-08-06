@@ -66,15 +66,31 @@ export function createOidc(cfg: OidcConfig): OidcClient {
   // login instead of leaving the UI showing raw "authentication required" errors. Guarded so
   // the many simultaneous 401s a page can emit don't fire multiple redirects, and debounced via
   // sessionStorage so a still-401 state right after login can't become a tight redirect loop.
+  //
+  // The guard must never LATCH. signinRedirect() resolves as soon as it has assigned
+  // window.location; the navigation that follows is asynchronous and can simply never happen — a
+  // backgrounded tab, a blocked navigation, an unreachable issuer. Clearing `reauthing` only in
+  // .catch meant that in exactly that case it stayed true for the life of the tab: every later
+  // notifyUnauthorized() returned early, no further redirect was ever attempted, and the session
+  // could not recover on its own. The tab just sat there polling.
+  //
+  // So clear it however the call settles, plus on a timer for the case where it never settles at
+  // all. This is surgical rather than a behaviour change: when the redirect really does navigate,
+  // the page is torn down and this module state dies with it, so `reauthing` was already being
+  // reset on every working path. The only case that changes is the stuck one. The sessionStorage
+  // debounce, which survives the navigation, remains the actual rate limiter.
+  const REAUTH_STUCK_TIMEOUT_MS = 15_000;
   let reauthing = false;
+  const endReauth = (): void => { reauthing = false; };
   setUnauthorizedHandler(() => {
     if (reauthing) return;
     const last = Number(sessionStorage.getItem('oidc:last-reauth') ?? '0');
     if (Date.now() - last < 5000) return;
     sessionStorage.setItem('oidc:last-reauth', String(Date.now()));
     reauthing = true;
+    setTimeout(endReauth, REAUTH_STUCK_TIMEOUT_MS);
     setAccessToken(null);
-    void mgr.signinRedirect().catch(() => { reauthing = false; });
+    void mgr.signinRedirect().finally(endReauth);
   });
 
   // The authorization code + PKCE state are single-use. React StrictMode invokes the

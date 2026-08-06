@@ -1,5 +1,6 @@
-import { describe, expect, it, vi } from 'vitest';
-import { createCodingSystem, fetchReport, formatApiError } from './api';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { authFetch, createCodingSystem, fetchReport, formatApiError } from './api';
+import { setAccessToken, setAuthEnforced, setUnauthorizedHandler } from './auth/token';
 
 describe('api error handling', () => {
   it('includes server error messages for failed JSON responses', async () => {
@@ -27,6 +28,89 @@ describe('api error handling', () => {
     await expect(fetchReport('r-amr-antibiogram')).rejects.toThrow(
       'report r-amr-antibiogram failed: required parameter: from · RP0001 · a1b2c3d4',
     );
+  });
+});
+
+// Regression cover for the notification loop: a tab whose token had lapsed kept polling
+// /api/notifications every 45s with no Authorization header, and each 401 wrote an
+// `auth.failed`/`missing` audit row that the bell then displayed as "Authentication failure" —
+// the poller manufacturing its own notification. A client that knows it has no credential must
+// answer locally instead of asking the server to reject it.
+describe('authFetch with no access token', () => {
+  afterEach(() => {
+    setAccessToken(null);
+    setAuthEnforced(false);
+    setUnauthorizedHandler(null);
+    vi.unstubAllGlobals();
+  });
+
+  it('short-circuits a protected route to 401 without issuing a request', async () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+    setAuthEnforced(true);
+
+    const res = await authFetch('/api/notifications?limit=50');
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(res.status).toBe(401);
+    await expect(res.json()).resolves.toEqual({ error: 'authentication required' });
+  });
+
+  it('still triggers re-login, so the session can recover', async () => {
+    vi.stubGlobal('fetch', vi.fn());
+    setAuthEnforced(true);
+    const onUnauthorized = vi.fn();
+    setUnauthorizedHandler(onUnauthorized);
+
+    await authFetch('/api/notifications');
+
+    expect(onUnauthorized).toHaveBeenCalledTimes(1);
+  });
+
+  it('still sends public routes — /api/config is read before any token exists', async () => {
+    const fetchSpy = vi.fn(async () => new Response('{}', { status: 200 }));
+    vi.stubGlobal('fetch', fetchSpy);
+    setAuthEnforced(true);
+
+    for (const path of ['/api/config', '/api/workflows/hooks/abc', '/api/sync/push', '/health']) {
+      await authFetch(path);
+    }
+
+    expect(fetchSpy).toHaveBeenCalledTimes(4);
+  });
+
+  it('still sends protected routes under AUTH_DEV_BYPASS, where the server supplies the actor', async () => {
+    const fetchSpy = vi.fn(async () => new Response('{}', { status: 200 }));
+    vi.stubGlobal('fetch', fetchSpy);
+    setAuthEnforced(false);
+
+    const res = await authFetch('/api/notifications');
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(res.status).toBe(200);
+  });
+
+  it('sends the request untouched once a token exists', async () => {
+    const fetchSpy = vi.fn(async () => new Response('{}', { status: 200 }));
+    vi.stubGlobal('fetch', fetchSpy);
+    setAuthEnforced(true);
+    setAccessToken('tok');
+
+    await authFetch('/api/notifications');
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const headers = new Headers((fetchSpy.mock.calls[0] as unknown as [string, RequestInit])[1].headers);
+    expect(headers.get('Authorization')).toBe('Bearer tok');
+  });
+
+  it('classifies absolute URLs and Request objects by pathname', async () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+    setAuthEnforced(true);
+
+    expect((await authFetch(new URL('http://localhost/api/notifications'))).status).toBe(401);
+    expect((await authFetch(new Request('http://localhost/api/notifications'))).status).toBe(401);
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
 

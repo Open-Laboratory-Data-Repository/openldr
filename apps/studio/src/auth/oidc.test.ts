@@ -37,6 +37,49 @@ describe('createOidc 401 handler', () => {
     expect(setAccessToken).toHaveBeenCalledWith(null);
     expect(signinRedirect).toHaveBeenCalledTimes(1);
   });
+
+  // Regression: the guard used to be cleared only in .catch, so a signinRedirect that RESOLVED
+  // without navigating away (backgrounded tab, blocked navigation, unreachable issuer) latched it
+  // true for the life of the tab. Every later 401 returned early, no redirect was ever retried,
+  // and the session could not recover — the tab sat polling silently instead of re-authenticating.
+  it('retries after a signinRedirect that resolves without navigating away', async () => {
+    signinRedirect.mockResolvedValue(undefined);
+    createOidc(oidcCfg);
+    const handler = vi.mocked(setUnauthorizedHandler).mock.calls[0]?.[0];
+
+    handler!();
+    await vi.waitFor(() => expect(signinRedirect).toHaveBeenCalledTimes(1));
+    await Promise.resolve(); // let the .finally settle the guard
+
+    // Past the sessionStorage debounce window, the next 401 must try again.
+    sessionStorage.setItem('oidc:last-reauth', String(Date.now() - 10_000));
+    handler!();
+    expect(signinRedirect).toHaveBeenCalledTimes(2);
+  });
+
+  it('recovers even when signinRedirect never settles at all', () => {
+    vi.useFakeTimers();
+    try {
+      signinRedirect.mockReturnValue(new Promise(() => { /* never settles */ }));
+      createOidc(oidcCfg);
+      const handler = vi.mocked(setUnauthorizedHandler).mock.calls[0]?.[0];
+
+      handler!();
+      expect(signinRedirect).toHaveBeenCalledTimes(1);
+
+      // Still inside the stuck-timeout: the guard legitimately holds.
+      vi.advanceTimersByTime(6_000);
+      handler!();
+      expect(signinRedirect).toHaveBeenCalledTimes(1);
+
+      // Past it: the guard releases and re-auth is attempted again.
+      vi.advanceTimersByTime(10_000);
+      handler!();
+      expect(signinRedirect).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe('createOidc', () => {
