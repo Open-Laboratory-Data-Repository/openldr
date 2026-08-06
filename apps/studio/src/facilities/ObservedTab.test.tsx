@@ -216,6 +216,25 @@ describe('ObservedTab', () => {
     expect(screen.queryByText(/run a scan/i)).not.toBeInTheDocument();
   });
 
+  // Fix 2 (mapping-ux report): 'Publish to reports' named only HALF of what this action does — it
+  // also reprojects the registry into the mapping vocabulary, and an operator trying to MAP a
+  // facility had no reason to press an action that only claims to touch reports. Fix 1 makes
+  // register/update/import auto-project immediately, so this action is now primarily the reports
+  // rebuild plus a repair/backfill path — the label must say that, not imply mapping needs it.
+  it('the header ⋯ menu\'s rebuild action is no longer labelled "Publish to reports" (misleads a would-be mapper) once Fix 1 lands', async () => {
+    show();
+    await screen.findByText('Dodoma');
+
+    const trigger = screen.getByRole('button', { name: 'Observed facility actions' });
+    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByRole('menuitem', { name: /rebuild|publish/i })) {
+      fireEvent.keyDown(trigger, { key: 'Enter' });
+    }
+
+    expect(screen.queryByRole('menuitem', { name: /^publish to reports$/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: /reports/i })).toBeInTheDocument();
+  });
+
   it('offers Scan and Publish in the header ⋯ menu for a manage-capable actor, and branches on the returned counters', async () => {
     (scanObservedFacilities as ReturnType<typeof vi.fn>).mockResolvedValue({ discovered: 23, created: 2, updated: 21, systemRegistered: true });
     show();
