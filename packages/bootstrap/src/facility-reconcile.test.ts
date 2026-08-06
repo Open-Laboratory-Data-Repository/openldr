@@ -515,6 +515,44 @@ describe('facility identifier: performer_display and performer_system', () => {
   });
 });
 
+// Review finding (whole-branch review): `resolveObservedFacilities` groups its warehouse SQL by all
+// FOUR of (performer, performer_display, performer_system, source_system), then used to return one
+// `ResolvedFacility` per raw SQL group — so a `(performer, source_system)` pair that ever reported
+// with a differing `performer_display` or `performer_system` produced MULTIPLE rows for the same
+// logical facility code. Reachable, not theoretical: a mid-rollout CDR identifier-fix cutover, or a
+// corrected `LOCNDIC4.DESCRIPTION`, both produce exactly this shape. Fixed by folding the raw groups
+// down to one row per (resolved system, code) — mirroring `scanObservedFacilities`'s `bySystem`/
+// `displayByKey` fold.
+describe('resolveObservedFacilities dedupes multiple raw groups for the same logical facility', () => {
+  it('two rows sharing (performer, source_system) but disagreeing on performer_display fold to ONE row, with the representative display backed by the most reports', async () => {
+    const deps = await makeReconcileDeps();
+    // Same performer + same (default) source_system, differing ONLY in performer_display — the
+    // renamed-facility case. The second call carries more reports, so it must win the display.
+    await seedPerformers(deps, [['BAMAA', 3]], { performerDisplay: 'Aga Khan (old)' });
+    await seedPerformers(deps, [['BAMAA', 5]], { performerDisplay: 'Aga Khan (new)' });
+
+    const resolved = await resolveObservedFacilities(deps);
+
+    const rows = resolved.filter((r) => r.sourceCode === 'BAMAA');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].sourceDisplay).toBe('Aga Khan (new)');
+  });
+
+  it('two rows sharing (performer, source_system) but with genuinely different performer_system stay as TWO separate rows', async () => {
+    const deps = await makeReconcileDeps();
+    // Same performer code and same source_system, but a different WIRE-supplied coding system on
+    // each — these are different facilities under Task 9b's per-feed system model, and folding them
+    // together would silently re-merge exactly what that work exists to keep apart.
+    await seedPerformers(deps, [['BAMAA', 1]], { performerSystem: 'urn:openldr:cdr:LOCNDIC4-a' });
+    await seedPerformers(deps, [['BAMAA', 1]], { performerSystem: 'urn:openldr:cdr:LOCNDIC4-b' });
+
+    const resolved = await resolveObservedFacilities(deps);
+
+    const rows = resolved.filter((r) => r.sourceCode === 'BAMAA');
+    expect(rows).toHaveLength(2);
+  });
+});
+
 describe('publishFacilityMap', () => {
   it('writes resolved rows to the warehouse and re-publishes without duplicating', async () => {
     const deps = await makeReconcileDeps();
@@ -540,11 +578,21 @@ describe('publishFacilityMap', () => {
   });
 
   // Task 11 (whole-branch review, Fix 3): `scanObservedFacilities` folds `(performer, source_system)`
-  // groups that derive the SAME coding system into one `(system, code)` total, but
-  // `resolveObservedFacilities` (and therefore this function) maps 1:1 over the raw groups instead. A
-  // warehouse holding BOTH a NULL and an empty-string `source_system` for the same performer therefore
-  // produces two resolved rows with an identical `facilityMapId` (both normalise `sourceSystem` to
-  // `''`) — before the fix, the delete-then-insert transaction below aborted on the primary key.
+  // groups that derive the SAME coding system into one `(system, code)` total. Originally
+  // `resolveObservedFacilities` (and therefore this function) mapped 1:1 over the raw groups instead,
+  // so a warehouse holding BOTH a NULL and an empty-string `source_system` for the same performer
+  // produced two resolved rows with an identical `facilityMapId` (both normalise `sourceSystem` to
+  // `''`) — before that fix, the delete-then-insert transaction below aborted on the primary key.
+  //
+  // Whole-branch review fix round 1: `resolveObservedFacilities` itself now folds its raw SQL groups
+  // down to one row per (resolved system, code) — see its doc comment — so NULL and `''`
+  // `source_system` (both deriving the SAME default system, since neither carries a `performer_system`
+  // here) are folded together BEFORE `publishFacilityMap` ever sees them. `result.written` therefore
+  // drops from 2 to 1: the PK collision this test guards against is now structurally prevented one
+  // layer up, not merely tolerated. Fix 3's dedupe-by-id below is retained regardless (see its own
+  // comment) — it remains the only defense against a DIFFERENT collision shape: two rows that resolve
+  // to genuinely different systems (so `resolveObservedFacilities` correctly keeps them separate) but
+  // happen to share the same raw `sourceSystem`/`sourceCode` pair `facilityMapId` is built from.
   it('does not crash on a PK collision from a NULL and empty-string source_system for the same performer', async () => {
     const deps = await makeReconcileDeps();
     await deps.externalDb.insertInto('diagnostic_reports')
@@ -556,7 +604,7 @@ describe('publishFacilityMap', () => {
 
     const result = await publishFacilityMap(deps, { apply: true });
 
-    expect(result.written).toBe(2);
+    expect(result.written).toBe(1);
     const rows = await deps.externalDb.selectFrom('facility_map').selectAll().execute();
     expect(rows).toHaveLength(1);
     expect(rows[0].source_code).toBe('Dodoma');

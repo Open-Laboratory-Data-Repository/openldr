@@ -284,19 +284,85 @@ export interface ResolvedFacility {
  * row regardless of its actual feed; that parameter is gone (see the module-level note below
  * `ScanOptions`) because there is no longer one destination to pick — the system is now DERIVED per
  * row, deterministically, from `source_system` itself.
+ *
+ * Returns one `ResolvedFacility` per (resolved system, code) — see the fold at the top of the
+ * function body for why that dedupe exists and how the representative display is chosen.
  */
 export async function resolveObservedFacilities(deps: ReconcileDeps): Promise<ResolvedFacility[]> {
   const observed = await deps.externalDb
     .selectFrom('diagnostic_reports')
-    .select(['performer', 'performer_display', 'performer_system', 'source_system'])
+    .select(({ fn }) => ['performer', 'performer_display', 'performer_system', 'source_system', fn.countAll<number>().as('n')])
     .where('performer', 'is not', null)
     .groupBy(['performer', 'performer_display', 'performer_system', 'source_system'])
     .execute();
 
+  // Whole-branch review finding (fix round 1): the SQL above groups by all FOUR of (performer,
+  // performer_display, performer_system, source_system), but only ONE `ResolvedFacility` should ever
+  // exist per logical facility — so the raw groups must be folded down before this function returns.
+  // Without this fold, any `(performer, source_system)` pair that ever reported with a differing
+  // `performer_display` or `performer_system` across its warehouse rows (a mid-rollout CDR
+  // identifier-fix cutover, a corrected `LOCNDIC4.DESCRIPTION`) yielded MULTIPLE resolved rows for
+  // what is really one facility code — and both `/api/facilities/observed` (duplicated `reportCount`
+  // from its 2-column count map) and `ObservedTab` (colliding `${sourceSystem}|${sourceCode}` React
+  // key) assume that never happens.
+  //
+  // Mirrors `scanObservedFacilities`'s `bySystem`/`displayByKey` Maps (see that function's doc
+  // comment, directly above) rather than inventing a second idiom: the fold key is (RESOLVED system,
+  // code) — NOT code alone. `performer_system` participates in the key, via the SAME
+  // `performer_system ?? observedSystemForFeed(source_system)` preference used everywhere else in
+  // this file, because two rows sharing a code under genuinely different coding systems ARE different
+  // facilities (the entire point of Task 9b's per-feed system work). Only `performer_display` is
+  // folded away.
+  //
+  // Representative-display rule (deterministic, so a re-run over UNCHANGED data can never flip the
+  // shown name): prefer a non-null display over a null one; among rows that both have (or both lack)
+  // a display, prefer the one backing the MOST reports (`n`); break any remaining tie by
+  // `source_system` ascending, for full reproducibility. "Whichever row the SQL driver happened to
+  // return first" is deliberately NOT the rule — that would let the identical warehouse state render
+  // a different name on every re-run.
+  interface FoldedGroup {
+    system: string;
+    code: string;
+    sourceSystem: string;
+    sourceDisplay: string | null;
+    n: number; // reports backing the CURRENT representative display; used only to break ties
+  }
+  const folded = new Map<string, FoldedGroup>();
+  for (const o of observed) {
+    if (o.performer === null) continue;
+    const system = o.performer_system ?? observedSystemForFeed(o.source_system);
+    const code = o.performer;
+    const key = `${system}\n${code}`;
+    const candidate: FoldedGroup = {
+      system,
+      code,
+      sourceSystem: o.source_system ?? '',
+      sourceDisplay: o.performer_display ?? null,
+      n: Number(o.n),
+    };
+    const current = folded.get(key);
+    if (!current) {
+      folded.set(key, candidate);
+      continue;
+    }
+    const currentHasDisplay = current.sourceDisplay !== null;
+    const candidateHasDisplay = candidate.sourceDisplay !== null;
+    let replace: boolean;
+    if (candidateHasDisplay !== currentHasDisplay) {
+      replace = candidateHasDisplay; // a non-null display always beats a null one
+    } else if (candidate.n !== current.n) {
+      replace = candidate.n > current.n; // more reports wins among equally null/non-null displays
+    } else {
+      replace = candidate.sourceSystem < current.sourceSystem; // final deterministic tiebreak
+    }
+    if (replace) folded.set(key, candidate);
+  }
+  const foldedRows = [...folded.values()];
+
   // Same preference as `scanObservedFacilities`: the wire's own `performer_system` wins over
   // `observedSystemForFeed(source_system)` — a mapping authored under the wire's system must be
   // found, or Task 9b's whole per-feed resolution silently misses it.
-  const systems = [...new Set(observed.map((o) => o.performer_system ?? observedSystemForFeed(o.source_system)))];
+  const systems = [...new Set(foldedRows.map((r) => r.system))];
   const mappings = systems.length > 0
     ? await deps.internalDb
         .selectFrom('term_mappings')
@@ -325,11 +391,8 @@ export async function resolveObservedFacilities(deps: ReconcileDeps): Promise<Re
     byCode.set(key, list);
   }
 
-  return observed.map((o) => {
-    const code = o.performer as string;
-    const sourceSystem = o.source_system ?? '';
-    const system = o.performer_system ?? observedSystemForFeed(o.source_system);
-    const candidates = byCode.get(`${system}\n${code}`) ?? [];
+  return foldedRows.map((r) => {
+    const candidates = byCode.get(`${r.system}\n${r.code}`) ?? [];
 
     // 1. Registry route wins — the registry is what holds a printable name.
     const registryMapping = candidates.find((c) => c.toSystem === FACILITY_REGISTRY_SYSTEM);
@@ -344,9 +407,9 @@ export async function resolveObservedFacilities(deps: ReconcileDeps): Promise<Re
     const resolvedVia: ResolvedVia | null = row ? (registryMapping ? 'registry' : 'national') : null;
 
     return {
-      sourceSystem,
-      sourceCode: code,
-      sourceDisplay: o.performer_display ?? null,
+      sourceSystem: r.sourceSystem,
+      sourceCode: r.code,
+      sourceDisplay: r.sourceDisplay,
       registryId: row?.id ?? null,
       localCode: row?.local_code ?? null,
       name: row?.name ?? null,

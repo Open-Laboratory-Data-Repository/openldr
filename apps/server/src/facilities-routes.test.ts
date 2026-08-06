@@ -1148,6 +1148,27 @@ describe('Task 6: GET /api/facilities/observed', () => {
     expect(res.json()).toEqual([expect.objectContaining({ sourceCode: 'Dodoma', reportCount: 5 })]);
   });
 
+  // Review finding: `resolveObservedFacilities` used to return one row per raw SQL group, grouped by
+  // all of (performer, performer_display, performer_system, source_system) — so a performer whose
+  // display changed mid-rollout (the renamed-facility case) produced TWO resolved rows for the same
+  // code, and each duplicate received the SAME full `reportCount` from this route's 2-column
+  // (performer, source_system) count map, doubling what the operator sees. Fixed upstream in
+  // `resolveObservedFacilities` (folds to one row per (system, code) before this route ever sees it);
+  // pinned here at the route boundary since that is the observable surface the finding named.
+  it('reports ONE row with the combined reportCount for a performer whose display changed mid-rollout, not a duplicated row', async () => {
+    const internalDb = await makeMigratedDb();
+    const externalDb = await makeMigratedExternalDb();
+    await seedObservedReports(externalDb, [['BAMAA', 3]], { performerDisplay: 'Aga Khan (old)' });
+    await seedObservedReports(externalDb, [['BAMAA', 5]], { performerDisplay: 'Aga Khan (new)' });
+    const app = await appWith(fakeReconcileCtx(internalDb, externalDb));
+
+    const res = await app.inject({ method: 'GET', url: '/api/facilities/observed' });
+    expect(res.statusCode).toBe(200);
+    const rows = res.json().filter((r: any) => r.sourceCode === 'BAMAA');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].reportCount).toBe(8);
+  });
+
   it('is gated on facilities.view', async () => {
     const internalDb = await makeMigratedDb();
     const externalDb = await makeMigratedExternalDb();
