@@ -104,6 +104,7 @@ export function TermMappingDialog({
   onOpenChange,
   fromTerm,
   systems,
+  lockedTargetSystem = null,
   mapping,
   distributions = {},
   onSaved,
@@ -112,11 +113,28 @@ export function TermMappingDialog({
   onOpenChange: (o: boolean) => void;
   fromTerm: { system: string; code: string; display: string | null; systemCode: string };
   systems: CodingSystem[];
+  /**
+   * When set, the ONLY system this dialog will ever offer as a mapping target — the "System"
+   * picker (both search mode's Select, shown only when there are 2+ active systems, and manual
+   * mode's, shown unconditionally) is replaced with a static, non-interactive label naming this
+   * system, and `systems` above is ignored for target-selection purposes entirely (it is still
+   * consulted by the caller for OTHER things, e.g. resolving the FROM term's own system code —
+   * that lookup lives in the caller, not here).
+   *
+   * `ObservedTab.tsx` passes this (fixed to `FACILITY_REGISTRY_SYSTEM`) because a mapping authored
+   * from the Observed tab is always meant to resolve a facility — offering the full active
+   * coding_systems list only sets the operator up to author a mapping that
+   * `resolveObservedFacilities` files under `nonFacilityTarget` (self-mapping, or a mapping to an
+   * unrelated system like LOINC). `/terminology`'s own `TermDialog` caller omits this prop and
+   * keeps the full multi-system picker unchanged.
+   */
+  lockedTargetSystem?: CodingSystem | null;
   mapping: TermMapping | null;
   distributions?: Record<string, OntologyDistribution>;
   onSaved: (mapping: TermMapping, draftCreated: boolean) => void;
 }): JSX.Element {
   const editing = mapping !== null;
+  const locked = lockedTargetSystem !== null;
 
   // ── mode ──────────────────────────────────────────────────────────────────
   const [mode, setMode] = useState<TargetMode>('search');
@@ -142,7 +160,12 @@ export function TermMappingDialog({
   const [browseOpen, setBrowseOpen] = useState(false);
 
   // ── derived ───────────────────────────────────────────────────────────────
-  const activeSystems = useMemo(() => systems.filter((s) => s.active), [systems]);
+  // Locked: the ONLY selectable system is the locked one, full stop — `systems` plays no role in
+  // target selection at all (see `lockedTargetSystem`'s doc comment above).
+  const activeSystems = useMemo(
+    () => (locked ? [lockedTargetSystem] : systems.filter((s) => s.active)),
+    [systems, locked, lockedTargetSystem],
+  );
 
   const manualTargetSystem = useMemo(
     () => activeSystems.find((s) => s.id === manualSystemId) ?? null,
@@ -177,8 +200,12 @@ export function TermMappingDialog({
       setMode('manual');
       setPicked(null);
       setSearchSystemId(activeSystems[0]?.id ?? '');
-      // Pre-fill the manual system by matching on url
-      const matchedSystem = activeSystems.find((s) => s.url === mapping.toSystem);
+      // Pre-fill the manual system by matching on url — EXCEPT when locked, where there is no
+      // other system this dialog can offer (no Select renders one), so the locked system wins
+      // outright even if the mapping being edited targets something else entirely (e.g. editing a
+      // stale self-mapping via ObservedTab's restricted dialog: the operator is meant to redirect
+      // it at the registry, not have the field go blank because the old target doesn't match).
+      const matchedSystem = locked ? lockedTargetSystem : activeSystems.find((s) => s.url === mapping.toSystem);
       setManualSystemId(matchedSystem?.id ?? '');
       setManualCode(mapping.toCode);
       setManualDisplay(mapping.toDisplay ?? '');
@@ -355,7 +382,14 @@ export function TermMappingDialog({
 
             {mode === 'search' ? (
               <div className="space-y-3 py-4">
-                {activeSystems.length > 1 && (
+                {locked ? (
+                  <div className="grid grid-cols-[auto_1fr] items-center gap-x-4">
+                    <Label className="whitespace-nowrap">{L.manualSystem}</Label>
+                    <div className="flex h-9 items-center rounded-md border border-input bg-muted/40 px-3 text-sm text-muted-foreground">
+                      {lockedTargetSystem.systemCode}
+                    </div>
+                  </div>
+                ) : activeSystems.length > 1 && (
                   <div className="grid grid-cols-[auto_1fr] items-center gap-x-4">
                     <Label className="whitespace-nowrap">{L.manualSystem}</Label>
                     <Select value={searchSystemId} onValueChange={(v) => { setSearchSystemId(v); setPicked(null); }}>
@@ -385,18 +419,24 @@ export function TermMappingDialog({
             ) : (
               <div className="grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-3 py-4">
                 <Label className="whitespace-nowrap">{L.manualSystem}</Label>
-                <Select value={manualSystemId} onValueChange={setManualSystemId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="—" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {activeSystems.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>
-                        {s.systemCode}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {locked ? (
+                  <div className="flex h-9 items-center rounded-md border border-input bg-muted/40 px-3 text-sm text-muted-foreground">
+                    {lockedTargetSystem.systemCode}
+                  </div>
+                ) : (
+                  <Select value={manualSystemId} onValueChange={setManualSystemId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="—" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {activeSystems.map((s) => (
+                        <SelectItem key={s.id} value={s.id}>
+                          {s.systemCode}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
 
                 <Label htmlFor="mapping-manual-code" className="whitespace-nowrap">
                   {L.manualCode}

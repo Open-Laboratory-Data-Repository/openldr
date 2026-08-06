@@ -31,6 +31,18 @@ const system: api.CodingSystem = {
   seeded: true,
 };
 
+const secondSystem: api.CodingSystem = {
+  id: 'sys2',
+  systemCode: 'ICD10',
+  systemName: 'ICD-10',
+  url: 'http://icd10.org',
+  systemVersion: null,
+  description: null,
+  active: true,
+  publisherId: 'p',
+  seeded: true,
+};
+
 const fromTerm = {
   system: 'http://x',
   code: 'AMP',
@@ -320,6 +332,36 @@ describe('TermMappingDialog', () => {
     // Clicking it must NOT invoke the API
     fireEvent.click(createItem);
     expect(api.createTermMapping).not.toHaveBeenCalled();
+  });
+
+  // Regression guard for the Observed tab's `lockedTargetSystem` prop (facility-mapping-targets
+  // slice): `/terminology`'s own `TermDialog` caller never passes it, and must keep offering the
+  // FULL multi-system picker exactly as before — this is the caller most at risk of an accidental
+  // behaviour change from a prop that defaults to "off" everywhere else. Asserts on what actually
+  // renders, not merely that `lockedTargetSystem` was omitted.
+  it("/terminology's caller (no lockedTargetSystem) still shows the full system selector, in both search and manual mode", () => {
+    render(
+      <TermMappingDialog
+        open
+        fromTerm={fromTerm}
+        systems={[system, secondSystem]}
+        mapping={null}
+        onOpenChange={() => {}}
+        onSaved={() => {}}
+      />,
+    );
+
+    // Search mode (default on create): 2+ active systems renders the "System" Select — a SECOND
+    // combobox alongside "Map type".
+    expect(screen.getAllByRole('combobox')).toHaveLength(2);
+
+    // Manual mode: same Select, unconditionally rendered, offering both systems.
+    fireEvent.click(screen.getByRole('button', { name: /manual/i }));
+    const comboboxes = screen.getAllByRole('combobox');
+    expect(comboboxes).toHaveLength(2);
+    fireEvent.click(comboboxes[comboboxes.length - 1]);
+    expect(screen.getByRole('option', { name: 'LOINC' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'ICD10' })).toBeInTheDocument();
   });
 
   it('shows the status section with is-active checkbox checked by default', () => {
