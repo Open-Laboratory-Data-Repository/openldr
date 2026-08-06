@@ -16,5 +16,5 @@
     "kysely": "^0.28.17",
     "zod": "^3.24.1"
   },
-  "devDependencies": { "typescript": "^5.7.2", "vitest": "^2.1.8" }
+  "devDependencies": { "@types/pg": "^8.11.10", "pg": "^8.13.1", "typescript": "^5.7.2", "vitest": "^2.1.8" }
 }
