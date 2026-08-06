@@ -518,32 +518,6 @@ export async function resolveObservedFacilities(deps: ReconcileDeps): Promise<Re
   });
 }
 
-/**
- * The coding-system URLs valid as a facility-mapping TARGET — the registry system, plus every
- * `national_system` value a LIVE `facility_registry` row actually carries. Backs the Observed tab's
- * OWN `TermMappingDialog` caller (Fix 2 of the self-mapping report): a mapping authored from the
- * Observed tab is always meant to resolve a facility, so offering the full active `coding_systems`
- * list (LOINC, ICD-10, UCUM, the observed system itself…) only sets the operator up to author a
- * mapping `resolveObservedFacilities` will file under `nonFacilityTarget` above. `/terminology`'s own
- * caller is UNCHANGED — it still passes the full list; this function is not wired into it.
- *
- * "Proven" mirrors `resolveObservedFacilities`'s own `knownNationalSystems` classification exactly —
- * never a hardcoded guess at what a national register's system might be called.
- *
- * ⚠ Always includes the registry system, even when the table holds ZERO `national_system` values (a
- * fresh install, or a register built entirely from local codes) — the dropdown must never be empty;
- * see this function's own test for the pinned fresh-install behaviour.
- */
-export async function facilityMappingTargetSystems(deps: Pick<ReconcileDeps, 'internalDb'>): Promise<string[]> {
-  const rows = await deps.internalDb
-    .selectFrom('facility_registry')
-    .select('national_system')
-    .where('national_system', 'is not', null)
-    .execute();
-  const nationalSystems = [...new Set(rows.map((r) => r.national_system).filter((s): s is string => s !== null))];
-  return [...new Set([FACILITY_REGISTRY_SYSTEM, ...nationalSystems.sort()])];
-}
-
 export interface PublishResult {
   resolved: number;
   unmapped: number;
