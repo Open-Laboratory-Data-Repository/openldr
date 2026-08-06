@@ -1,6 +1,6 @@
 import type { Kysely } from 'kysely';
 import type { ConceptRowInput, ExternalSchema, InternalSchema, RegistryRowForConcept, TerminologyAdminStore } from '@openldr/db';
-import { DEFAULT_OBSERVED_FACILITY_SYSTEM, FACILITY_REGISTRY_SYSTEM, FACILITY_REGISTRY_SYSTEM_CODE, FACILITY_REGISTRY_SYSTEM_NAME, facilityMapId, observedFacilityConceptRow, registryConceptRows, registryPreferredCode, observedSystemForFeed, projectDiagnosticReport } from '@openldr/db';
+import { DEFAULT_OBSERVED_FACILITY_SYSTEM, FACILITY_REGISTRY_SYSTEM, FACILITY_REGISTRY_SYSTEM_CODE, FACILITY_REGISTRY_SYSTEM_NAME, facilityMapId, observedFacilityConceptRow, registryConceptRows, registryPreferredCode, registryRowIdsWithSupersededIdConcept, observedSystemForFeed, projectDiagnosticReport } from '@openldr/db';
 
 export interface ReconcileDeps {
   internalDb: Kysely<InternalSchema>;
@@ -570,10 +570,14 @@ export async function publishFacilityMap(
  * the source of truth for a facility's name. That is the OPPOSITE of the observed-facility system,
  * where a curated display is preserved because the operator owns it. Both rules are deliberate.
  *
- * ⚠ A deleted facility leaves its concept behind. `importRows` upserts and never prunes, and that is
- * acceptable and deliberate here: the stale concept is what makes `targetMissing` (resolution) detectable
- * at all, since resolution checks the live `facility_registry` row rather than the concept. Do NOT add
- * a prune — it would silently erase the evidence the Observed tab exists to show.
+ * ⚠ A deleted facility leaves its concept behind — never pruned, deliberately. `registry` (read
+ * above) only ever holds LIVE `facility_registry` rows, so a facility with no row at all is never in
+ * it, and this function only ever deletes a concept keyed on the `id` of a row it IS projecting (see
+ * `deleteSupersededIdConcepts` below). Keeping a deleted facility's concept means a `term_mappings`
+ * row an operator already authored against it is not silently erased — it keeps resolving to a live
+ * concept even though its target facility is gone, which is a DIFFERENT, deliberately-kept gap from
+ * the one this function's own delete step closes (a row still present in the registry, whose concept
+ * merely moved to a different code).
  */
 export async function publishRegistryConcepts(
   deps: ReconcileDeps,
@@ -592,9 +596,11 @@ export async function publishRegistryConcepts(
     // `registry` IS the whole table here (this function reprojects everything, unlike the given-rows
     // `projectRegistryRows` below) — so `registryConceptRows`' own in-batch collision check already
     // sees every row that could possibly collide with any other. No extra lookup needed.
-    await deps.admin.terms.importRows(
-      registryConceptRows(registry.map((r): RegistryRowForConcept => ({ id: r.id, name: r.name, localCode: r.local_code, nationalCode: r.national_code }))),
-    );
+    const inputs = registry.map((r): RegistryRowForConcept => ({ id: r.id, name: r.name, localCode: r.local_code, nationalCode: r.national_code }));
+    await deps.admin.terms.importRows(registryConceptRows(inputs));
+    // Write the new projection FIRST, delete the superseded id-keyed leftover SECOND — see
+    // `deleteSupersededIdConcepts`'s doc comment for why the order matters.
+    await deleteSupersededIdConcepts(deps, registryRowIdsWithSupersededIdConcept(inputs));
   }
 
   return { concepts: registry.length, systemRegistered: true };
@@ -632,6 +638,68 @@ async function ensureCodingSystemActive(
   const cs = await deps.admin.codingSystems.getByUrl(input.url);
   if (cs && !cs.active) {
     await deps.internalDb.updateTable('coding_systems').set({ active: true }).where('url', '=', input.url).execute();
+  }
+}
+
+/**
+ * Delete the `FACILITY_REGISTRY_SYSTEM` concepts that `registryRowIdsWithSupersededIdConcept` says
+ * are superseded — the narrow, targeted counterpart to `admin.terms.importRows`' upsert-only write.
+ * Shared by `publishRegistryConcepts` and `projectRegistryRows` so the delete itself, not just the
+ * determination of WHICH ids, cannot drift between the two call sites.
+ *
+ * Callers run this AFTER their own `importRows` call, never before: the new preferred-code concept
+ * must already be written before its superseded id-keyed sibling is removed, so a mid-failure can
+ * never leave a facility with ZERO concepts (worst case, a failed delete just leaves the old one
+ * behind for the next projection to retry).
+ *
+ * ⛔ NOT a general prune. This only ever deletes a concept whose `code` is the `id` of a row the
+ * caller is CURRENTLY projecting, and only the ids `registryRowIdsWithSupersededIdConcept` names —
+ * never anything for a facility absent from the caller's own `rows`/`registry` batch. A genuinely
+ * deleted facility's concept is untouched by construction (see that function's doc comment).
+ *
+ * `ids` is a STATIC candidate list — `registryRowIdsWithSupersededIdConcept` flags a row whenever its
+ * computed preferred code differs from its own `id`, which is true for essentially every facility
+ * that has a `local_code`/`national_code`, whether or not a legacy id-keyed concept actually still
+ * exists for it. In steady state (every facility already reprojected past the `0518e7d3` key change)
+ * the `DELETE` below matches zero rows on almost every call. Rather than pay for the `term_mappings`
+ * lookup on every one of those no-op calls — this runs on every `projectRegistryRows` invocation,
+ * i.e. the facility create/update hot path — the delete goes first and the lookup only runs for
+ * whatever it actually returns via `RETURNING code`, so the common case is exactly one statement.
+ */
+async function deleteSupersededIdConcepts(deps: Pick<ReconcileDeps, 'internalDb'>, ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+
+  const deleted = await deps.internalDb
+    .deleteFrom('terminology_concepts')
+    .where('system', '=', FACILITY_REGISTRY_SYSTEM)
+    .where('code', 'in', ids)
+    .returning('code')
+    .execute();
+  if (deleted.length === 0) return;
+  const deletedCodes = deleted.map((d) => d.code);
+
+  // A mapping authored against the id-code just removed did not just lose its target — it already
+  // HAD no target the moment this row's preferred code changed: `resolveObservedFacilities`
+  // recomputes `targetMissing` from a live `facility_registry` lookup keyed on the row's CURRENT
+  // preferred code, so the mapping was unresolvable before this delete ever ran. This delete only
+  // clears the stale id-keyed concept out of the mapping picker; it does not cause a new break. It is
+  // still worth one log line, scoped to `is_active` mappings only (an inactive one was already not
+  // resolving, so its target disappearing changes nothing observable), so a "my mapping stopped
+  // working" report is traceable back to the code change that actually caused it.
+  const stillReferenced = await deps.internalDb
+    .selectFrom('term_mappings')
+    .select(['from_system', 'from_code', 'to_code'])
+    .where('to_system', '=', FACILITY_REGISTRY_SYSTEM)
+    .where('to_code', 'in', deletedCodes)
+    .where('is_active', '=', true)
+    .execute();
+  for (const m of stillReferenced) {
+    // eslint-disable-next-line no-console -- deliberate: this module takes no logger dependency (see
+    // the `err` catches below), and this is diagnostic-only, not an error this function acts on.
+    console.warn(
+      `[facility-reconcile] term_mappings (${m.from_system}, ${m.from_code}) -> ${FACILITY_REGISTRY_SYSTEM}/${m.to_code}` +
+        ' already resolves as target missing (its preferred code changed); its stale id-keyed concept has now been removed from the mapping picker',
+    );
   }
 }
 
@@ -747,6 +815,11 @@ export async function projectRegistryRows(
     }
 
     await deps.admin.terms.importRows(registryConceptRows(inputs, { forceOwnIdFor }));
+    // Write the new projection FIRST, delete the superseded id-keyed leftover SECOND — see
+    // `deleteSupersededIdConcepts`'s doc comment for why the order matters. Scoped to exactly the
+    // rows this call was handed, same as the write above — a facility outside `rows` (including one
+    // genuinely absent from `facility_registry`) is never touched.
+    await deleteSupersededIdConcepts(deps, registryRowIdsWithSupersededIdConcept(inputs, { forceOwnIdFor }));
   } catch (err) {
     // eslint-disable-next-line no-console -- deliberate: see doc comment above for why this must
     // never propagate, and this module takes no logger dependency to report through otherwise.

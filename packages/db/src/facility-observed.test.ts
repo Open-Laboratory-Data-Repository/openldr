@@ -7,6 +7,7 @@ import {
   observedFacilityConceptRow,
   registryConceptRows,
   registryPreferredCode,
+  registryRowIdsWithSupersededIdConcept,
   facilityMapId,
   observedSystemForFeed,
 } from './facility-observed';
@@ -86,6 +87,51 @@ describe('facility-observed', () => {
     expect(registryPreferredCode({ localCode: 'LC', nationalCode: 'NC' })).toBe('LC');
     expect(registryPreferredCode({ nationalCode: 'NC' })).toBe('NC');
     expect(registryPreferredCode({})).toBeNull();
+  });
+
+  // The defect this fix closes: `0518e7d3` moved a row's concept `code` off its `id` onto its
+  // operator-facing code, but projection is upsert-only, so the OLD id-keyed concept was left behind
+  // forever — the same facility showing twice in the mapping picker. This is the shared seam both
+  // `publishRegistryConcepts` and `projectRegistryRows` (packages/bootstrap/src/facility-reconcile.ts)
+  // call with the SAME rows/opts they just handed to `registryConceptRows`, so "superseded" can never
+  // drift from what was actually written.
+  describe('registryRowIdsWithSupersededIdConcept', () => {
+    it('flags a row whose id-keyed concept is superseded by a now-usable preferred code', () => {
+      const ids = registryRowIdsWithSupersededIdConcept([
+        { id: 'fac-1', name: 'National Public Health Laboratory', localCode: '111317-4' },
+      ]);
+      expect(ids).toEqual(['fac-1']);
+    });
+
+    // The collision-fallback case: the row's local_code differs from its id (so it is NOT the
+    // "both columns null" case, which the CHECK constraint makes impossible for a real row), but
+    // colliding with another row forces THIS row's projected code back to its own id anyway — so
+    // there is nothing superseded. Deleting here would destroy the row's ONLY concept.
+    it('does not flag a row whose candidate code collides and falls back to its own id', () => {
+      const rows = [
+        { id: 'fac-a', name: 'Facility A', localCode: 'X' },
+        { id: 'fac-b', name: 'Facility B', nationalCode: 'X' },
+      ];
+      expect(registryRowIdsWithSupersededIdConcept(rows)).toEqual([]);
+    });
+
+    // `opts.forceOwnIdFor` (the `projectRegistryRows` DB-lookup collision guard) must feed the SAME
+    // determination — a row forced to its own id by a collision discovered outside the batch is
+    // exactly as un-superseded as an in-batch collision.
+    it('does not flag a row forced to its own id via opts.forceOwnIdFor', () => {
+      const rows = [{ id: 'fac-1', name: 'Solo Facility', localCode: 'SOLO' }];
+      expect(
+        registryRowIdsWithSupersededIdConcept(rows, { forceOwnIdFor: new Set(['fac-1']) }),
+      ).toEqual([]);
+    });
+
+    it('returns ids only for rows actually passed in, never inventing one', () => {
+      const rows = [
+        { id: 'fac-1', name: 'National Public Health Laboratory', localCode: '111317-4' },
+        { id: 'fac-2', name: 'Muhimbili National Hospital', nationalCode: 'TZ-001' },
+      ];
+      expect(registryRowIdsWithSupersededIdConcept(rows).sort()).toEqual(['fac-1', 'fac-2']);
+    });
   });
 
   it('does not upper-case, unlike openldr-v2 normalizeCode', () => {

@@ -66,7 +66,7 @@ export type {
 } from './facility-registry-store';
 export { splitFacilityAnswers, CORE_FACILITY_KEYS } from './facility-answers';
 export type { AnswerField, FacilityAnswerSplit } from './facility-answers';
-export { DEFAULT_OBSERVED_FACILITY_SYSTEM, FACILITY_REGISTRY_SYSTEM, FACILITY_REGISTRY_SYSTEM_CODE, FACILITY_REGISTRY_SYSTEM_NAME, observedFacilityConceptRow, registryConceptRows, registryPreferredCode, facilityMapId, observedSystemForFeed } from './facility-observed';
+export { DEFAULT_OBSERVED_FACILITY_SYSTEM, FACILITY_REGISTRY_SYSTEM, FACILITY_REGISTRY_SYSTEM_CODE, FACILITY_REGISTRY_SYSTEM_NAME, observedFacilityConceptRow, registryConceptRows, registryPreferredCode, registryRowIdsWithSupersededIdConcept, facilityMapId, observedSystemForFeed } from './facility-observed';
 export type { ObservedFacilityInput, ObservedFacilityProperties, ConceptRowInput, RegistryRowForConcept } from './facility-observed';
 // Re-exported (not reachable via `export * from './migrations/internal/index'` above — that module
 // only exports the aggregated `internalMigrations` map, not individual migrations' constants) so
