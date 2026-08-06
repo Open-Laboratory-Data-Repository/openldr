@@ -77,7 +77,15 @@ const L = {
   switchToSearch: 'Search terms',
   isActive: 'Active mapping',
   browseSystem: (name: string) => `Browse ${name}`,
-  browseDisabledHint: 'Available once the target system\'s ontology index is built.',
+  // Distinct hints for two genuinely different disabled states (Fix 3, mapping-ux report):
+  // - `browseBuildingHint`: a distribution IS linked to this system, it just isn't indexed yet
+  //   (building, or errored) — accurate to say "available once built".
+  // - `browseNeverAvailableHint`: NO distribution is linked at all — a local/synthetic system such
+  //   as FACILITY-REGISTRY has no ontology to browse and never will via this dialog. Saying "once
+  //   built" here is actively misleading (it implies waiting helps); point at Search instead, which
+  //   is the mode that actually works for these systems.
+  browseBuildingHint: 'Available once the target system\'s ontology index is built.',
+  browseNeverAvailableHint: 'This system has no ontology to browse. Use Search terms instead.',
   // common.*
   save: 'Save',
   saving: 'Saving…',
@@ -141,7 +149,14 @@ export function TermMappingDialog({
     [activeSystems, manualSystemId],
   );
   const manualTargetSystemCode = manualTargetSystem?.systemCode ?? '';
-  const manualTargetReady = !!manualTargetSystem && distributions[manualTargetSystem.id]?.indexStatus === 'ready';
+  const manualTargetDistribution = manualTargetSystem ? distributions[manualTargetSystem.id] : undefined;
+  const manualTargetReady = manualTargetDistribution?.indexStatus === 'ready';
+  // Fix 3 (mapping-ux report): whether an ontology distribution has EVER been linked to this system
+  // at all — distinct from whether it's `ready`. `ObservedTab.tsx` never passes `distributions`
+  // (defaulting to `{}`), so a local/synthetic system like FACILITY-REGISTRY always lands here with
+  // no entry; that's a structurally different disabled reason than "still building" (see the two
+  // hints on `L` above), and the tooltip must say which one it actually is.
+  const manualTargetHasDistribution = manualTargetDistribution !== undefined;
 
   // For search mode: the system whose terms TermPicker will search
   const searchSystemObj = useMemo(
@@ -437,7 +452,9 @@ export function TermMappingDialog({
                               </Button>
                             </span>
                           </TooltipTrigger>
-                          <TooltipContent>{L.browseDisabledHint}</TooltipContent>
+                          <TooltipContent>
+                            {manualTargetHasDistribution ? L.browseBuildingHint : L.browseNeverAvailableHint}
+                          </TooltipContent>
                         </Tooltip>
                       </TooltipProvider>
                     )

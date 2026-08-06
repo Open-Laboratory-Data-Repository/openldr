@@ -827,8 +827,15 @@ export const en = {
       scan: 'Scan for new facilities',
       scanning: 'Scanning…',
       scanDone: '{{discovered}} discovered, {{created}} created, {{updated}} updated.',
-      publish: 'Publish to reports',
-      publishing: 'Publishing…',
+      // Fix 2 (mapping-ux report): this action rebuilds the `facility_map` reports dimension AND
+      // reprojects the registry into the mapping vocabulary — but with Fix 1 (create/update/import
+      // now project immediately), the mapping half is a repair/backfill path, not something an
+      // operator has to press to make a facility mappable. 'Publish to reports' named only the
+      // first half, so an operator trying to MAP had no reason to press it — exactly what the bug
+      // report describes. Naming it after the reports dimension alone is accurate now that mapping
+      // no longer depends on this action, and doesn't send a would-be mapper looking here.
+      publish: 'Rebuild reports dimension',
+      publishing: 'Rebuilding…',
       publishDone: '{{resolved}} resolved, {{unmapped}} unmapped, {{targetMissing}} target missing, {{written}} written.',
     },
   },

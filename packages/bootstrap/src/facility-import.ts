@@ -5,10 +5,12 @@ import {
   type FacilityRecord,
   type InternalSchema,
   type ReferenceCapture,
+  type TerminologyAdminStore,
   insertBatchPg,
   facilityRecordToRow,
   facilityRowToRecord,
 } from '@openldr/db';
+import { projectRegistryRows } from './facility-reconcile';
 
 // Task 2 of the facility-import slice: `parseFacilityCsv` (packages/terminology) exists, is tested,
 // and has ZERO callers — this is the one shared function that actually writes a parsed register into
@@ -20,6 +22,11 @@ export interface FacilityImportDeps {
   /** Reference-sync capture binding (see @openldr/db's ReferenceCapture). Omit to import without
    *  emitting reference_change_log rows at all — e.g. a throwaway/local import that must never sync. */
   capture?: ReferenceCapture;
+  /** Fix 1 (mapping-ux report): when supplied, every row this import writes is also projected into
+   *  `FACILITY_REGISTRY_SYSTEM` (`projectRegistryRows`, `facility-reconcile.ts`) so an imported
+   *  register is a usable mapping target immediately — no separate operator publish step. Omit to
+   *  import without projecting (e.g. a throwaway/local import, mirroring `capture` above). */
+  admin?: TerminologyAdminStore;
 }
 
 export interface FacilityImportOptions {
@@ -218,6 +225,10 @@ export async function importFacilities(
 
   let created = 0;
   let updated = 0;
+  // Populated inside the transaction below, read afterwards to drive the registry projection —
+  // see the projectRegistryRows call after the transaction commits for why that has to happen
+  // outside it.
+  let mergedRecords: FacilityRecord[] = [];
 
   await deps.db.transaction().execute(async (trx) => {
     // Existing-row lookup runs on `trx`, inside this transaction, not on `deps.db` before it opens
@@ -250,6 +261,8 @@ export async function importFacilities(
       };
     });
 
+    mergedRecords = merged;
+
     // sql`now()` on updated_at mirrors upsert()'s explicit bump on conflict — insertBatchPg's chunked
     // ON CONFLICT DO UPDATE otherwise leaves updated_at untouched on an update (it only ever writes
     // the columns present in the row).
@@ -272,6 +285,12 @@ export async function importFacilities(
       }
     }
   });
+
+  // Fix 1 (mapping-ux report): project every written row into FACILITY_REGISTRY_SYSTEM, outside the
+  // transaction above and after it has committed — a projection failure must not roll back (or even
+  // slow down) the facility_registry write itself, and `projectRegistryRows` already swallows its
+  // own failures (see that function's doc comment) so this call cannot throw.
+  if (deps.admin) await projectRegistryRows({ internalDb: deps.db, admin: deps.admin }, mergedRecords);
 
   return { parsed: parsedRecords.length, skipped, unknownColumns, created, updated, duplicates };
 }

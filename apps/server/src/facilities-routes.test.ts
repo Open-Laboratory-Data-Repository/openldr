@@ -101,6 +101,20 @@ function fakeCtx() {
       },
       remove: async (id: string) => { const i = rows.findIndex((r) => r.id === id); if (i >= 0) rows.splice(i, 1); },
     },
+    // Fix 1 (mapping-ux report): POST/PUT now project the written row into FACILITY_REGISTRY_SYSTEM
+    // (`projectRegistryRows`). This file's ~100 other POST/PUT tests don't care about that
+    // projection at all — a minimal in-memory double (never asserted on here) is enough to keep the
+    // route from crashing on `ctx.terminology.admin`; the real projection behaviour is exercised
+    // against a REAL TerminologyAdminStore in the dedicated describe block below.
+    terminology: {
+      admin: {
+        codingSystems: {
+          upsertByUrl: async () => {},
+          getByUrl: async () => ({ id: 'cs-facility-registry', active: true } as any),
+        },
+        terms: { importRows: async () => ({ imported: 0 }) },
+      },
+    },
     __rows: rows,
     __audit: audit,
     get __lastListOptions() { return lastListOptions; },
@@ -747,6 +761,86 @@ describe('facilities routes', () => {
   });
 });
 
+// --- Fix 1 (mapping-ux report): creating/updating a facility projects it into FACILITY_REGISTRY_SYSTEM
+// immediately — the load-bearing behaviour behind the operator's "Map found nothing to search"
+// report. Exercises the REAL `createTerminologyAdminStore`/`createFacilityRegistryStore` against a
+// real migrated internal db (pg-mem) — `fakeCtx()`'s in-memory `facilityRegistry`/`terminology`
+// doubles above cannot prove a row is actually pickable via `admin.terms.search`, only that the
+// route didn't crash.
+
+function fakeCreateCtx(internalDb: any) {
+  const audit: any[] = [];
+  const forms: Record<string, any> = {
+    'form-sample-facility': { id: 'form-sample-facility', schema: { fields: FORM_FIELDS }, targetPages: ['facilities'] },
+  };
+  return {
+    internalDb,
+    terminology: { admin: createTerminologyAdminStore(internalDb) },
+    audit: { record: async (e: any) => { audit.push(e); return e; } },
+    logger: { error() {}, warn() {}, info() {} },
+    forms: { get: async (formId: string) => forms[formId] },
+    facilityRegistry: createFacilityRegistryStore(internalDb),
+    __audit: audit,
+  } as any;
+}
+
+describe('Fix 1: POST/PUT /api/facilities project the row into FACILITY_REGISTRY_SYSTEM', () => {
+  // ⛔ THE load-bearing test: an operator who registers a facility and immediately opens
+  // TermMappingDialog's search mode (target system FACILITY-REGISTRY) must find it — with NO
+  // publish/scan step in between. Before Fix 1 this only happened via an operator manually pressing
+  // Publish (`publishRegistryConcepts`), which is exactly the gap the bug report describes.
+  it('a facility created via POST is immediately findable via admin.terms.search(FACILITY_REGISTRY_SYSTEM, ...), with no publish step', async () => {
+    const internalDb = await makeMigratedDb();
+    const ctx = fakeCreateCtx(internalDb);
+    const app = await appWith(ctx);
+
+    const res = await app.inject({ method: 'POST', url: '/api/facilities', payload: body });
+    expect(res.statusCode).toBe(201);
+    const created = res.json();
+
+    const { rows } = await ctx.terminology.admin.terms.search(FACILITY_REGISTRY_SYSTEM, { limit: 10, offset: 0 });
+    expect(rows).toEqual([expect.objectContaining({ code: created.id, display: 'Dodoma Regional Referral' })]);
+  });
+
+  it('registers FACILITY_REGISTRY_SYSTEM as an ACTIVE coding_systems row on first create', async () => {
+    const internalDb = await makeMigratedDb();
+    const ctx = fakeCreateCtx(internalDb);
+    const app = await appWith(ctx);
+
+    await app.inject({ method: 'POST', url: '/api/facilities', payload: body });
+
+    const cs = await ctx.terminology.admin.codingSystems.getByUrl(FACILITY_REGISTRY_SYSTEM);
+    expect(cs).not.toBeNull();
+    expect(cs!.active).toBe(true);
+  });
+
+  it('a rename via PUT updates the projected concept\'s display', async () => {
+    const internalDb = await makeMigratedDb();
+    const ctx = fakeCreateCtx(internalDb);
+    const app = await appWith(ctx);
+    const id = (await app.inject({ method: 'POST', url: '/api/facilities', payload: body })).json().id;
+
+    const renamed = { ...body, answers: { ...body.answers, f2: 'Dodoma Regional Referral Hospital' } };
+    const res = await app.inject({ method: 'PUT', url: `/api/facilities/${id}`, payload: renamed });
+    expect(res.statusCode).toBe(200);
+
+    const { rows } = await ctx.terminology.admin.terms.search(FACILITY_REGISTRY_SYSTEM, { limit: 10, offset: 0 });
+    expect(rows).toEqual([expect.objectContaining({ code: id, display: 'Dodoma Regional Referral Hospital' })]);
+  });
+
+  // ⛔ The projection must never take the facility write down with it.
+  it('a projection failure does not prevent the facility from being created', async () => {
+    const internalDb = await makeMigratedDb();
+    const ctx = fakeCreateCtx(internalDb);
+    ctx.terminology.admin.terms.importRows = async () => { throw new Error('simulated terminology store failure'); };
+    const app = await appWith(ctx);
+
+    const res = await app.inject({ method: 'POST', url: '/api/facilities', payload: body });
+    expect(res.statusCode).toBe(201);
+    expect(await internalDb.selectFrom('facility_registry').selectAll().execute()).toHaveLength(1);
+  });
+});
+
 // --- Task 4: POST /api/facilities/import ------------------------------------------------------
 // Exercises the REAL `importFacilities` (packages/bootstrap/src/facility-import.ts) against a real
 // migrated Kysely db (pg-mem), not the in-memory `fakeCtx().facilityRegistry` used above — that fake
@@ -765,6 +859,19 @@ function fakeImportCtx(db: any) {
   const audit: any[] = [];
   return {
     internalDb: db,
+    // Fix 1 (mapping-ux report): the import route now passes `admin` through to `importFacilities`
+    // so a CSV upload projects into FACILITY_REGISTRY_SYSTEM too. Real projection behaviour is
+    // exercised for real against `createTerminologyAdminStore` in `packages/bootstrap`'s own
+    // facility-import.test.ts — this stub only needs to exist so the route doesn't crash.
+    terminology: {
+      admin: {
+        codingSystems: {
+          upsertByUrl: async () => {},
+          getByUrl: async () => ({ id: 'cs-facility-registry', active: true } as any),
+        },
+        terms: { importRows: async () => ({ imported: 0 }) },
+      },
+    },
     audit: { record: async (e: any) => { audit.push(e); return e; } },
     logger: { error() {}, warn() {}, info() {} },
     forms: { get: async () => undefined },

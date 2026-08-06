@@ -1,7 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import type { Kysely } from 'kysely';
 import { makeMigratedDb } from '@openldr/db/testing';
-import { createFacilityRegistryStore, referenceCapture, type InternalSchema } from '@openldr/db';
+import {
+  createFacilityRegistryStore, createTerminologyAdminStore, referenceCapture,
+  FACILITY_REGISTRY_SYSTEM, type InternalSchema, type TerminologyAdminStore,
+} from '@openldr/db';
 import { importFacilities, type FacilityImportDeps } from './facility-import';
 
 const SYSTEM = 'urn:tz:hfr';
@@ -281,5 +284,45 @@ describe('importFacilities', () => {
 
     const after = await store.get(id);
     expect(after?.extras).toMatchObject({ beds: '300', ward_contact: 'Ada' });
+  });
+});
+
+// Fix 1 (mapping-ux report): a bulk-imported register must be mappable immediately too — the same
+// requirement as a single facility create/update, applied to the CSV path shared by the CLI and the
+// Facilities-page upload.
+describe('importFacilities projects into FACILITY_REGISTRY_SYSTEM', () => {
+  async function buildDepsWithAdmin(): Promise<FacilityImportDeps & { db: Kysely<InternalSchema>; admin: TerminologyAdminStore }> {
+    const db = (await makeMigratedDb()) as Kysely<InternalSchema>;
+    return { db, capture: referenceCapture, admin: createTerminologyAdminStore(db) };
+  }
+
+  it('an applied import makes every imported row pickable as a mapping target, with no separate publish step', async () => {
+    const deps = await buildDepsWithAdmin();
+    const body = csv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,', '101,Kongwa DDH,,,,,,,,,,,,,,']);
+
+    await importFacilities(deps, body, { nationalSystem: SYSTEM, apply: true });
+
+    const { rows } = await deps.admin.terms.search(FACILITY_REGISTRY_SYSTEM, { limit: 10, offset: 0 });
+    expect(rows.map((r) => r.display).sort()).toEqual(['Dodoma Regional Referral', 'Kongwa DDH']);
+  });
+
+  it('a dry run projects nothing', async () => {
+    const deps = await buildDepsWithAdmin();
+    const body = csv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,']);
+
+    await importFacilities(deps, body, { nationalSystem: SYSTEM });
+
+    const { total } = await deps.admin.terms.search(FACILITY_REGISTRY_SYSTEM, { limit: 10, offset: 0 });
+    expect(total).toBe(0);
+  });
+
+  it('omitting admin skips projection without failing the import', async () => {
+    const deps = await buildDeps(); // no `admin` in deps
+    const body = csv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,']);
+
+    const result = await importFacilities(deps, body, { nationalSystem: SYSTEM, apply: true });
+
+    expect(result).toMatchObject({ created: 1 });
+    expect(await rowFor(deps.db, '100')).toBeDefined();
   });
 });

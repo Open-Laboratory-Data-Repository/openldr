@@ -3,7 +3,7 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 import type { Kysely } from 'kysely';
 import { z } from 'zod';
 import {
-  importFacilities, scanObservedFacilities, resolveObservedFacilities, publishFacilityMap,
+  importFacilities, scanObservedFacilities, resolveObservedFacilities, publishFacilityMap, projectRegistryRows,
   type AppContext, type FacilityImportResult, type ScanResult, type PublishResult,
 } from '@openldr/bootstrap';
 import {
@@ -620,6 +620,11 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       return mapFacilityDbError(err, reply);
     }
 
+    // Fix 1 (mapping-ux report): the facility must be a usable mapping target the MOMENT it is
+    // created — no separate operator publish step. `projectRegistryRows` never throws (see its doc
+    // comment), so this cannot turn a successful create into a failed response.
+    await projectRegistryRows({ internalDb: ctx.internalDb, admin: ctx.terminology.admin }, [{ id: created.id, name: created.name }]);
+
     await recordAudit(ctx, req, { action: 'facility.create', entityType: 'facility', entityId: created.id, before: null, after: created });
     reply.code(201);
     return created;
@@ -690,6 +695,10 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       return mapFacilityDbError(err, reply);
     }
 
+    // Same immediate-mapping requirement as POST above — a renamed facility's projected concept
+    // must track the new name, not just a create-time snapshot.
+    await projectRegistryRows({ internalDb: ctx.internalDb, admin: ctx.terminology.admin }, [{ id: after.id, name: after.name }]);
+
     await recordAudit(ctx, req, { action: 'facility.update', entityType: 'facility', entityId: id, before, after });
     return after;
   });
@@ -722,7 +731,10 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       };
     }
 
-    const deps = { db: ctx.internalDb, capture: referenceCapture };
+    // Fix 1 (mapping-ux report): `admin` lets `importFacilities` project every written row into
+    // FACILITY_REGISTRY_SYSTEM — the Facilities-page upload gets the same immediate-mapping
+    // behaviour as a single facility create/update (POST/PUT above) and the CLI.
+    const deps = { db: ctx.internalDb, capture: referenceCapture, admin: ctx.terminology.admin };
     const importOpts = { nationalSystem: p.data.nationalSystem, allowUnknownColumns: p.data.allowUnknownColumns };
 
     // Always preview first (parse-only — importFacilities never opens a transaction when

@@ -1,6 +1,6 @@
 import type { Kysely } from 'kysely';
 import type { ConceptRowInput, ExternalSchema, InternalSchema, TerminologyAdminStore } from '@openldr/db';
-import { DEFAULT_OBSERVED_FACILITY_SYSTEM, FACILITY_REGISTRY_SYSTEM, facilityMapId, observedFacilityConceptRow, observedSystemForFeed, projectDiagnosticReport } from '@openldr/db';
+import { DEFAULT_OBSERVED_FACILITY_SYSTEM, FACILITY_REGISTRY_SYSTEM, FACILITY_REGISTRY_SYSTEM_CODE, FACILITY_REGISTRY_SYSTEM_NAME, facilityMapId, observedFacilityConceptRow, registryConceptRow, observedSystemForFeed, projectDiagnosticReport } from '@openldr/db';
 
 export interface ReconcileDeps {
   internalDb: Kysely<InternalSchema>;
@@ -224,20 +224,20 @@ export async function scanObservedFacilities(deps: ReconcileDeps, opts: ScanOpti
 
   // ⛔ MUST leave each row ACTIVE: `TermMappingDialog` builds its system dropdown from active
   // `coding_systems` rows, so concepts without one are invisible to the operator who has to map
-  // them. `upsertByUrl` inserts `active: true` but never re-activates an existing inactive row, so
-  // repair that explicitly. Runs once per DISTINCT system encountered — a multi-feed scan registers
-  // every feed's system in the same call.
+  // them. `ensureCodingSystemActive` is the shared upsert→getByUrl→conditional-reactivate sequence
+  // (see its doc comment) — repair that explicitly. Runs once per DISTINCT system encountered — a
+  // multi-feed scan registers every feed's system in the same call.
+  //
+  // No try/catch here, matching this function's pre-existing semantics: `scanObservedFacilities` is
+  // an explicit operator-triggered action (via the scan-observed HTTP route / CLI), not the ingest
+  // hot path, so a `coding_systems` failure here is allowed to propagate and fail the scan rather
+  // than be silently swallowed.
   for (const system of systems) {
-    await deps.admin.codingSystems.upsertByUrl({
+    await ensureCodingSystemActive(deps, {
       url: system,
       systemCode: systemCodeFor(system),
       systemName: 'Observed facilities',
-      publisherId: SYSTEM_PUBLISHER_ID,
     });
-    const cs = await deps.admin.codingSystems.getByUrl(system);
-    if (cs && !cs.active) {
-      await deps.internalDb.updateTable('coding_systems').set({ active: true }).where('url', '=', system).execute();
-    }
   }
   result.systemRegistered = systems.length > 0;
 
@@ -574,34 +574,102 @@ export async function publishRegistryConcepts(
 
   if (!opts.apply) return { concepts: registry.length, systemRegistered: false };
 
-  // ⛔ MUST leave the row ACTIVE: see `scanObservedFacilities` above for the same trap.
-  // `systemCode` must stay distinct from `DEFAULT_SYSTEM_CODE` ('DEFAULT_FAC') and any
-  // `systemCodeFor`-derived observed-facility code.
-  await deps.admin.codingSystems.upsertByUrl({
-    url: FACILITY_REGISTRY_SYSTEM,
-    systemCode: 'FACILITY-REGISTRY',
-    systemName: 'OpenLDR facility registry',
-    publisherId: SYSTEM_PUBLISHER_ID,
-  });
-  const cs = await deps.admin.codingSystems.getByUrl(FACILITY_REGISTRY_SYSTEM);
-  if (cs && !cs.active) {
-    await deps.internalDb.updateTable('coding_systems').set({ active: true })
-      .where('url', '=', FACILITY_REGISTRY_SYSTEM).execute();
-  }
+  await ensureRegistrySystemActive(deps);
 
   if (registry.length > 0) {
-    await deps.admin.terms.importRows(
-      registry.map((r) => ({
-        system: FACILITY_REGISTRY_SYSTEM,
-        code: r.id,
-        display: r.name,
-        status: 'ACTIVE',
-        properties: null,
-      })),
-    );
+    await deps.admin.terms.importRows(registry.map(registryConceptRow));
   }
 
   return { concepts: registry.length, systemRegistered: true };
+}
+
+/**
+ * Upsert `url`'s `coding_systems` row and repair its `active` flag when a prior write (an operator
+ * deactivation, or an earlier bug) left it inactive — `upsertByUrl` inserts `active: true` on a
+ * fresh row but its `onConflict` never touches `active` on one that already exists
+ * (`terminology-admin-store.ts`'s `upsertByUrl`), so this second step is not optional.
+ *
+ * The ONE definition of this sequence, shared by `ensureRegistrySystemActive` (the registry
+ * system) and `registerObservedSystem` (an observed-facility feed's system) — before this
+ * extraction the two independently re-typed the identical upsert→getByUrl→conditional-reactivate
+ * steps, differing only in which `url`/`systemCode`/`systemName` they passed in, which is exactly
+ * the kind of parallel implementation that drifts.
+ *
+ * Deliberately NO try/catch here. `ensureRegistrySystemActive` and `registerObservedSystem` have
+ * genuinely different containment requirements at their own call sites — an explicit operator
+ * publish (`publishRegistryConcepts`) is allowed to propagate a failure, while the ingest hot path
+ * (`captureObservedFacility` via `registerObservedSystem`) must never fail an ingest cycle over a
+ * `coding_systems` hiccup. Folding a try/catch into this shared helper would flatten that
+ * distinction; each caller keeps its own.
+ */
+async function ensureCodingSystemActive(
+  deps: Pick<ReconcileDeps, 'admin' | 'internalDb'>,
+  input: { url: string; systemCode: string; systemName: string },
+): Promise<void> {
+  await deps.admin.codingSystems.upsertByUrl({
+    url: input.url,
+    systemCode: input.systemCode,
+    systemName: input.systemName,
+    publisherId: SYSTEM_PUBLISHER_ID,
+  });
+  const cs = await deps.admin.codingSystems.getByUrl(input.url);
+  if (cs && !cs.active) {
+    await deps.internalDb.updateTable('coding_systems').set({ active: true }).where('url', '=', input.url).execute();
+  }
+}
+
+/**
+ * Ensure `FACILITY_REGISTRY_SYSTEM`'s `coding_systems` row exists and is ACTIVE. Shared by
+ * `publishRegistryConcepts` (the full reprojection) and `projectRegistryRows` (the given-rows path
+ * below) so the two agree on exactly one registration.
+ *
+ * No try/catch here (see `ensureCodingSystemActive`'s doc comment) — `publishRegistryConcepts`
+ * lets a failure propagate as an explicit operator action, while `projectRegistryRows` supplies its
+ * own containment around this call.
+ */
+async function ensureRegistrySystemActive(deps: Pick<ReconcileDeps, 'admin' | 'internalDb'>): Promise<void> {
+  // ⛔ `systemCode` must stay distinct from `DEFAULT_SYSTEM_CODE` ('DEFAULT_FAC') and any
+  // `systemCodeFor`-derived observed-facility code.
+  await ensureCodingSystemActive(deps, {
+    url: FACILITY_REGISTRY_SYSTEM,
+    systemCode: FACILITY_REGISTRY_SYSTEM_CODE,
+    systemName: FACILITY_REGISTRY_SYSTEM_NAME,
+  });
+}
+
+/**
+ * Project ONLY the given `facility_registry` rows into `FACILITY_REGISTRY_SYSTEM` — the write-time
+ * counterpart to `publishRegistryConcepts`'s full reprojection.
+ *
+ * A facility must be a usable mapping target the MOMENT it is created or updated (Fix 1 of the
+ * mapping-ux report: an operator who registers a facility and immediately opens `TermMappingDialog`
+ * must find it, with no "press Publish first" step). `publishRegistryConcepts` cannot be that path —
+ * it reprojects the WHOLE registry on every call, which is fine for an explicit operator repair/
+ * backfill action but not something to run on every single facility save at national-register scale
+ * (10-15k rows). This function instead takes the exact rows that just changed — one row from the
+ * POST/PUT routes, the whole batch from a CSV import — and writes only those.
+ *
+ * Shares `registryConceptRow` with `publishRegistryConcepts` so the two projections can never drift
+ * on shape (code = the row's `id`, display = its `name`).
+ *
+ * ⛔ Never throws. A projection failure must NOT take a facility write down with it — mirrors
+ * `registerObservedSystem`'s containment on the ingest hot path (see that function's doc comment).
+ * The caller (a facility create/update, a CSV import) has already committed its own write by the
+ * time this runs; this is a best-effort catch-up, not a step the write depends on.
+ */
+export async function projectRegistryRows(
+  deps: Pick<ReconcileDeps, 'admin' | 'internalDb'>,
+  rows: { id: string; name: string }[],
+): Promise<void> {
+  if (rows.length === 0) return;
+  try {
+    await ensureRegistrySystemActive(deps);
+    await deps.admin.terms.importRows(rows.map(registryConceptRow));
+  } catch (err) {
+    // eslint-disable-next-line no-console -- deliberate: see doc comment above for why this must
+    // never propagate, and this module takes no logger dependency to report through otherwise.
+    console.error('[facility-reconcile] failed to project facility_registry row(s) into FACILITY_REGISTRY_SYSTEM', err);
+  }
 }
 
 /**
@@ -642,9 +710,52 @@ export async function captureObservedFacility(
     .where('code', '=', code)
     .executeTakeFirst();
   if (existing) return; // Already known; the scan advances lastSeen/reportCount.
+  // Registration is gated on the SAME "genuinely new concept" branch as the write below, not run
+  // unconditionally — see `registerObservedSystem`'s doc comment for why.
+  await registerObservedSystem(deps, system);
   await deps.admin.terms.importRows([
     observedFacilityConceptRow({ system, code, seenAt: now, reportCount: 0 }),
   ]);
+}
+
+/**
+ * Ensure `system` has an ACTIVE `coding_systems` row, mirroring the ⛔-flagged block in
+ * `scanObservedFacilities` (see that function's doc comment for the same trap: `upsertByUrl` inserts
+ * `active: true` on a fresh row but its `onConflict` never re-activates one an operator, or an
+ * earlier bug, left inactive).
+ *
+ * Called ONLY from `captureObservedFacility`'s "concept is genuinely new" branch — never
+ * unconditionally on every call. `captureObservedFacilityFromProjection` runs once per projected
+ * DiagnosticReport, i.e. on the ingest hot path, so registering on every call would add a
+ * `coding_systems` write per report even for codes seen thousands of times before. Gating on
+ * "concept just created" instead means the registration cost lands only on genuinely new codes —
+ * self-limiting by construction, since a system accumulates a bounded, small number of distinct
+ * facility codes relative to report volume. (A per-process memoisation cache was considered instead,
+ * but rejected: it would skip re-activating a row an operator deactivates mid-process, and it would
+ * need explicit invalidation to avoid going stale across a DB reset between tests — the
+ * newly-created-concept gate needs neither.)
+ *
+ * Never throws: a registration failure here must not take down the concept write, which is the
+ * operator-visible half of `captureObservedFacility` and would otherwise have succeeded on its own.
+ * `packages/db/src/projection/cycle.ts` wraps the whole `onProjected` hook in its own try/catch, but
+ * that containment drops the ENTIRE cycle's capture on any error — swallowing here keeps a
+ * `coding_systems` hiccup from taking the concept capture down with it.
+ */
+async function registerObservedSystem(
+  deps: Pick<ReconcileDeps, 'admin' | 'internalDb'>,
+  system: string,
+): Promise<void> {
+  try {
+    await ensureCodingSystemActive(deps, {
+      url: system,
+      systemCode: systemCodeFor(system),
+      systemName: 'Observed facilities',
+    });
+  } catch (err) {
+    // eslint-disable-next-line no-console -- deliberate: see doc comment above for why this must
+    // never propagate, and this module takes no logger dependency to report through otherwise.
+    console.error('[facility-reconcile] failed to register coding_systems row for observed facility system', system, err);
+  }
 }
 
 /**

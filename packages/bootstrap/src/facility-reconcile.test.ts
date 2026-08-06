@@ -1,6 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { DEFAULT_OBSERVED_FACILITY_SYSTEM, FACILITY_REGISTRY_SYSTEM, observedSystemForFeed } from '@openldr/db';
-import { scanObservedFacilities, resolveObservedFacilities, publishFacilityMap, publishRegistryConcepts, captureObservedFacility, captureObservedFacilityFromProjection } from './facility-reconcile';
+import { scanObservedFacilities, resolveObservedFacilities, publishFacilityMap, publishRegistryConcepts, projectRegistryRows, captureObservedFacility, captureObservedFacilityFromProjection } from './facility-reconcile';
 import { makeReconcileDeps, seedPerformers, seedRegistry, seedMapping } from './test-support/facility-reconcile-fixture';
 
 describe('scanObservedFacilities', () => {
@@ -212,6 +212,10 @@ describe('scanObservedFacilities', () => {
   });
 
   // ⚠ Gating regression guard: a dry-run scan must not have this side effect either.
+  //
+  // Migration 075 now seeds the `coding_systems` row unconditionally on a fresh install, so the row's
+  // absence is no longer the right signal for "dry-run published nothing" — assert no CONCEPTS were
+  // published instead.
   it('does NOT publish the registry projection on a dry-run scan', async () => {
     const deps = await makeReconcileDeps();
     await seedPerformers(deps, [['Dodoma', 5]]);
@@ -219,7 +223,8 @@ describe('scanObservedFacilities', () => {
 
     await scanObservedFacilities(deps, { now: '2026-08-05T00:00:00.000Z' }); // apply omitted -> dry run
 
-    expect(await deps.admin.codingSystems.getByUrl(FACILITY_REGISTRY_SYSTEM)).toBeNull();
+    const { rows } = await deps.admin.terms.search(FACILITY_REGISTRY_SYSTEM, { limit: 50, offset: 0 });
+    expect(rows).toHaveLength(0);
   });
 });
 
@@ -732,12 +737,119 @@ describe('publishRegistryConcepts', () => {
   it('writes nothing when apply is falsy', async () => {
     const deps = await makeReconcileDeps();
     await seedRegistry(deps, { id: 'fac-1', name: 'Dodoma Regional Referral Hospital', localCode: 'DOD' });
+    // Migration 075 seeds the coding_systems row unconditionally now, so its presence is no longer
+    // evidence that publishRegistryConcepts ran — assert it is UNCHANGED rather than absent.
+    const before = await deps.admin.codingSystems.getByUrl('urn:openldr:cs:facility-registry');
 
     await publishRegistryConcepts(deps, {});
 
     const { rows } = await deps.admin.terms.search('urn:openldr:cs:facility-registry', { limit: 10, offset: 0 });
     expect(rows).toHaveLength(0);
-    expect(await deps.admin.codingSystems.getByUrl('urn:openldr:cs:facility-registry')).toBeNull();
+    expect(await deps.admin.codingSystems.getByUrl('urn:openldr:cs:facility-registry')).toEqual(before);
+  });
+
+  // Migration 075 seeds the row directly, ahead of any scan/publish — fixes the fresh-install defect
+  // where `TermMappingDialog`'s target-system dropdown had nothing to pick until an operator ran a
+  // publish. Asserted here (not just in `packages/db`) because it is `publishRegistryConcepts`'s
+  // downstream idempotency with that seed that this slice is really about.
+  describe('fresh-install seed (migration 075)', () => {
+    it('is present and ACTIVE before any scan/publish has ever run', async () => {
+      const deps = await makeReconcileDeps();
+
+      const cs = await deps.admin.codingSystems.getByUrl(FACILITY_REGISTRY_SYSTEM);
+      expect(cs).not.toBeNull();
+      expect(cs!.active).toBe(true);
+    });
+
+    it('does NOT seed the observed facility dictionary (urn:openldr:default_fac)', async () => {
+      const deps = await makeReconcileDeps();
+
+      expect(await deps.admin.codingSystems.getByUrl(DEFAULT_OBSERVED_FACILITY_SYSTEM)).toBeNull();
+    });
+
+    it('publishRegistryConcepts afterwards does not duplicate the seeded row or fight with it', async () => {
+      const deps = await makeReconcileDeps();
+      const seeded = await deps.admin.codingSystems.getByUrl(FACILITY_REGISTRY_SYSTEM);
+      await seedRegistry(deps, { id: 'fac-1', name: 'Dodoma Regional Referral Hospital', localCode: 'DOD' });
+
+      await publishRegistryConcepts(deps, { apply: true });
+
+      const all = await deps.internalDb.selectFrom('coding_systems')
+        .selectAll().where('url', '=', FACILITY_REGISTRY_SYSTEM).execute();
+      expect(all).toHaveLength(1);
+      const after = await deps.admin.codingSystems.getByUrl(FACILITY_REGISTRY_SYSTEM);
+      expect(after!.id).toBe(seeded!.id);
+      expect(after!.active).toBe(true);
+    });
+  });
+});
+
+// Fix 1 (mapping-ux report): registering a facility must make it mappable IMMEDIATELY — no operator
+// publish step. `publishRegistryConcepts` reprojects the WHOLE registry (fine for an explicit
+// operator repair/backfill, unacceptable per-write at 14k-row national-register scale), so the
+// create/update/import write paths instead call this given-rows path, which touches only the rows
+// handed to it.
+describe('projectRegistryRows', () => {
+  it('makes the given row pickable as a mapping target, without touching any other registry row', async () => {
+    const deps = await makeReconcileDeps();
+    await seedRegistry(deps, { id: 'fac-1', name: 'National Public Health Laboratory', localCode: '111317-4' });
+    await seedRegistry(deps, { id: 'fac-2', name: 'Muhimbili National Hospital', nationalSystem: 'urn:tz:hfr', nationalCode: 'TZ-001' });
+
+    await projectRegistryRows(deps, [{ id: 'fac-1', name: 'National Public Health Laboratory' }]);
+
+    const { rows } = await deps.admin.terms.search(FACILITY_REGISTRY_SYSTEM, { limit: 50, offset: 0 });
+    // Only fac-1 was handed in — fac-2 must NOT have been reprojected as a side effect.
+    expect(rows.map((r) => r.code)).toEqual(['fac-1']);
+    expect(rows[0].display).toBe('National Public Health Laboratory');
+  });
+
+  it('registers an ACTIVE coding_systems row', async () => {
+    const deps = await makeReconcileDeps();
+    await seedRegistry(deps, { id: 'fac-1', name: 'National Public Health Laboratory', localCode: '111317-4' });
+
+    await projectRegistryRows(deps, [{ id: 'fac-1', name: 'National Public Health Laboratory' }]);
+
+    const cs = await deps.admin.codingSystems.getByUrl(FACILITY_REGISTRY_SYSTEM);
+    expect(cs).not.toBeNull();
+    expect(cs!.active).toBe(true);
+  });
+
+  // Mirrors publishRegistryConcepts's own re-activation regression guard above.
+  it('re-activates a coding_systems row an operator (or an earlier bug) left inactive', async () => {
+    const deps = await makeReconcileDeps();
+    await seedRegistry(deps, { id: 'fac-1', name: 'National Public Health Laboratory', localCode: '111317-4' });
+    await deps.internalDb.updateTable('coding_systems').set({ active: false })
+      .where('url', '=', FACILITY_REGISTRY_SYSTEM).execute();
+
+    await projectRegistryRows(deps, [{ id: 'fac-1', name: 'National Public Health Laboratory' }]);
+
+    expect((await deps.admin.codingSystems.getByUrl(FACILITY_REGISTRY_SYSTEM))!.active).toBe(true);
+  });
+
+  it('is a no-op for an empty rows array', async () => {
+    const deps = await makeReconcileDeps();
+    const before = await deps.admin.codingSystems.getByUrl(FACILITY_REGISTRY_SYSTEM);
+
+    await projectRegistryRows(deps, []);
+
+    expect(await deps.admin.codingSystems.getByUrl(FACILITY_REGISTRY_SYSTEM)).toEqual(before);
+  });
+
+  // ⛔ Must NEVER throw: a facility save (or a CSV import) must succeed even when the projection
+  // fails, mirroring `registerObservedSystem`'s containment on the ingest hot path.
+  it('swallows a projection failure instead of throwing', async () => {
+    const deps = await makeReconcileDeps();
+    const failingAdmin = {
+      ...deps.admin,
+      terms: {
+        ...deps.admin.terms,
+        importRows: async () => { throw new Error('simulated terminology store failure'); },
+      },
+    };
+
+    await expect(
+      projectRegistryRows({ ...deps, admin: failingAdmin }, [{ id: 'fac-1', name: 'National Public Health Laboratory' }]),
+    ).resolves.toBeUndefined();
   });
 });
 
@@ -874,6 +986,65 @@ describe('captureObservedFacility', () => {
     };
     expect(props.reportCount).toBe(0);
     expect(props.firstSeen).toBe('2026-08-05T00:00:00.000Z');
+  });
+
+  // Companion to `scanObservedFacilities`'s "registers an ACTIVE coding_systems row" test — the
+  // ingest-time capture path must leave the mapping UI able to see a brand-new feed's system too,
+  // not only a manually-triggered scan. Before this fix, `captureObservedFacility` called
+  // `admin.terms.importRows` directly and never touched `coding_systems` at all, so a facility
+  // captured only through ingest was invisible in `TermMappingDialog`'s system dropdown
+  // (`systems.filter((s) => s.active)`) until an operator ran a scan.
+  //
+  // ⛔ THE trap. Must fail if `active` is false, not merely if the row is absent — `upsertByUrl`
+  // inserts `active: true` on a fresh row, so "row exists" alone cannot catch a re-activation bug.
+  it('registers an ACTIVE coding_systems row for a system first seen through capture', async () => {
+    const deps = await makeReconcileDeps();
+
+    await captureObservedFacility(deps, 'urn:openldr:default_fac', 'Namansi', '2026-08-05T00:00:00.000Z');
+
+    const cs = await deps.admin.codingSystems.getByUrl('urn:openldr:default_fac');
+    expect(cs).not.toBeNull();
+    expect(cs!.active).toBe(true);
+  });
+
+  // Regression guard mirroring `scanObservedFacilities`'s equivalent test: `upsertByUrl`'s
+  // `onConflict` never re-activates a row that already exists with `active = false`, so capture
+  // must repair that explicitly, exactly like the scan path does.
+  it('re-activates a coding_systems row an operator (or an earlier bug) left inactive', async () => {
+    const deps = await makeReconcileDeps();
+    await deps.admin.codingSystems.upsertByUrl({
+      url: 'urn:openldr:default_fac',
+      systemCode: 'DEFAULT_FAC',
+      systemName: 'Observed facilities',
+      publisherId: null,
+    });
+    await deps.internalDb.updateTable('coding_systems').set({ active: false })
+      .where('url', '=', 'urn:openldr:default_fac').execute();
+    expect((await deps.admin.codingSystems.getByUrl('urn:openldr:default_fac'))!.active).toBe(false);
+
+    await captureObservedFacility(deps, 'urn:openldr:default_fac', 'Namansi', '2026-08-05T00:00:00.000Z');
+
+    expect((await deps.admin.codingSystems.getByUrl('urn:openldr:default_fac'))!.active).toBe(true);
+  });
+
+  // The hot-path guard this fix exists for: capturing a code that is ALREADY a known concept must
+  // not perform a redundant `coding_systems` registration write. Ingest calls this once per
+  // projected DiagnosticReport, so a naive "register on every call" would add one write per report
+  // even for a code seen a thousand times before — the function's own existing-concept early return
+  // is what this test pins as the thing that must also gate the new registration call.
+  it('does not perform a redundant coding_systems registration write for an already-known code', async () => {
+    const deps = await makeReconcileDeps();
+    const upsertSpy = vi.spyOn(deps.admin.codingSystems, 'upsertByUrl');
+
+    // First capture: the concept is genuinely new, so registration is expected exactly once.
+    await captureObservedFacility(deps, 'urn:openldr:default_fac', 'Namansi', '2026-08-05T00:00:00.000Z');
+    expect(upsertSpy).toHaveBeenCalledTimes(1);
+
+    // Second capture of the SAME code: `captureObservedFacility` already early-returns here (the
+    // concept exists), and that early return must also gate registration — the call count must NOT
+    // advance to 2.
+    await captureObservedFacility(deps, 'urn:openldr:default_fac', 'Namansi', '2026-08-06T00:00:00.000Z');
+    expect(upsertSpy).toHaveBeenCalledTimes(1);
   });
 });
 

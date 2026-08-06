@@ -66,7 +66,7 @@ describe('facilities import CLI', () => {
 
     expect(code).toBe(0);
     expect(mocks.importFacilities).toHaveBeenCalledWith(
-      { db: mocks.ctx.internalDb, capture: mocks.referenceCapture },
+      { db: mocks.ctx.internalDb, capture: mocks.referenceCapture, admin: mocks.ctx.terminology.admin },
       'national_code,name\n100,Dodoma\n',
       { nationalSystem: 'urn:tz:hfr', allowUnknownColumns: undefined, apply: undefined },
     );
@@ -84,7 +84,7 @@ describe('facilities import CLI', () => {
 
     expect(code).toBe(0);
     expect(mocks.importFacilities).toHaveBeenCalledWith(
-      { db: mocks.ctx.internalDb, capture: mocks.referenceCapture },
+      { db: mocks.ctx.internalDb, capture: mocks.referenceCapture, admin: mocks.ctx.terminology.admin },
       expect.any(String),
       { nationalSystem: 'urn:tz:hfr', allowUnknownColumns: undefined, apply: true },
     );

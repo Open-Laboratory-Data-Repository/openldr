@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { TermMappingDialog } from './TermMappingDialog';
 import * as api from '../api';
 
@@ -205,6 +206,69 @@ describe('TermMappingDialog', () => {
     expect(screen.getByPlaceholderText('441407007')).toHaveValue('718-7');
     expect(screen.getByPlaceholderText('Human-readable label')).toHaveValue('Hemoglobin');
   });
+
+  // Fix 3 (mapping-ux report): a target system whose ontology distribution EXISTS but isn't ready
+  // yet (still building, or errored) really is "coming soon" — the existing tooltip wording is
+  // accurate for this case and must be UNCHANGED.
+  it('a target system with a distribution that is still building shows "not built yet", and Browse stays disabled', async () => {
+    const user = userEvent.setup();
+    render(
+      <TermMappingDialog
+        open
+        fromTerm={fromTerm}
+        systems={[system]}
+        distributions={{
+          sys1: {
+            codingSystemId: 'sys1', ontologyType: 'loinc', sourcePath: 'D:\\terminology\\loinc',
+            indexStatus: 'building', indexError: null, nodeCount: null, edgeCount: null,
+            builtAt: null, updatedAt: '2026-08-05T00:00:00.000Z', stale: false,
+          },
+        }}
+        mapping={null}
+        onOpenChange={() => {}}
+        onSaved={() => {}}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /manual/i }));
+    const browseBtn = screen.getByRole('button', { name: /browse loinc/i });
+    expect(browseBtn).toBeDisabled();
+
+    await user.hover(browseBtn.closest('span') ?? browseBtn);
+    const tooltip = await screen.findByRole('tooltip');
+    expect(tooltip.textContent).toMatch(/ontology index is built/i);
+  }, 15000);
+
+  // ⛔ THE bug report's Fix 3 scenario: `ObservedTab.tsx` (the operator's actual path — registering
+  // a facility, then Map on an Observed row) never passes `distributions` at all, so it defaults to
+  // `{}` — meaning `FACILITY-REGISTRY` (and any other local, never-ontology-backed system) NEVER has
+  // a distribution entry. The old single tooltip wording ("Available once the target system's
+  // ontology index is built") falsely implies this is merely pending, when for a system like this it
+  // can never happen. The disabled affordance must say so and point at Search instead.
+  it('a target system with NO ontology distribution at all (distributions omitted, mirroring ObservedTab) shows a "never browsable — use Search" hint, not "not built yet"', async () => {
+    const user = userEvent.setup();
+    render(
+      <TermMappingDialog
+        open
+        fromTerm={fromTerm}
+        systems={[system]}
+        // `distributions` deliberately omitted — this is exactly how ObservedTab.tsx renders this
+        // dialog today (it never passes the prop), so this reproduces the operator's real path.
+        mapping={null}
+        onOpenChange={() => {}}
+        onSaved={() => {}}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /manual/i }));
+    const browseBtn = screen.getByRole('button', { name: /browse loinc/i });
+    expect(browseBtn).toBeDisabled();
+
+    await user.hover(browseBtn.closest('span') ?? browseBtn);
+    // Scoped to the tooltip content itself (role="tooltip") — the mode-toggle button also reads
+    // "Search terms" once in manual mode, which would false-positive a bare page-wide text query.
+    const tooltip = await screen.findByRole('tooltip');
+    expect(tooltip.textContent).toMatch(/search/i);
+    expect(tooltip.textContent).not.toMatch(/ontology index is built/i);
+  }, 15000);
 
   it('shows general section fields: map-type select, relationship, owner', () => {
     render(
