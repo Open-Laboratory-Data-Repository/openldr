@@ -409,6 +409,195 @@ describe('Task 9b: feed-aware scan/resolve', () => {
   });
 });
 
+// `DisaGlobal.dbo.LOCNDIC4` holds five distinct facility codes (BAMAA/BBFAF/CDABE/EAFAE/NDFAM)
+// whose DESCRIPTION is all exactly 'Aga Khan'. The wire now carries the code on
+// `performer[0].identifier.value` (projected onto `diagnostic_reports.performer`, the match key)
+// and the shared name on `performer[0].display` (projected onto `performer_display`). Scan/resolve
+// must key everything off `performer` (already distinct per code) and use `performer_display` only
+// as a LABEL — never let it collapse two codes into one concept.
+describe('facility identifier: performer_display and performer_system', () => {
+  it('two facility codes sharing the same performer_display produce two distinct, separately-mappable concepts', async () => {
+    const deps = await makeReconcileDeps();
+    await seedPerformers(deps, [['BAMAA', 3]], { performerDisplay: 'Aga Khan' });
+    await seedPerformers(deps, [['CDABE', 2]], { performerDisplay: 'Aga Khan' });
+
+    await scanObservedFacilities(deps, { now: '2026-08-05T00:00:00.000Z', apply: true });
+
+    const { rows } = await deps.admin.terms.search(DEFAULT_OBSERVED_FACILITY_SYSTEM, { limit: 50, offset: 0 });
+    const bamaa = rows.find((r) => r.code === 'BAMAA');
+    const cdabe = rows.find((r) => r.code === 'CDABE');
+    expect(bamaa).toBeDefined();
+    expect(cdabe).toBeDefined();
+    expect(bamaa!.display).toBe('Aga Khan');
+    expect(cdabe!.display).toBe('Aga Khan');
+
+    // Map each code to its OWN facility — this is the entire point: the shared display must not
+    // stop the two codes from resolving to two different places.
+    await seedRegistry(deps, { id: 'fac-dar', name: 'Aga Khan Hospital, Dar es Salaam', localCode: 'BAMAA' });
+    await seedRegistry(deps, { id: 'fac-dodoma', name: 'Aga Khan Hospital, Dodoma', localCode: 'CDABE' });
+    await seedMapping(deps, { fromSystem: DEFAULT_OBSERVED_FACILITY_SYSTEM, fromCode: 'BAMAA', toSystem: FACILITY_REGISTRY_SYSTEM, toCode: 'fac-dar' });
+    await seedMapping(deps, { fromSystem: DEFAULT_OBSERVED_FACILITY_SYSTEM, fromCode: 'CDABE', toSystem: FACILITY_REGISTRY_SYSTEM, toCode: 'fac-dodoma' });
+
+    const resolved = await resolveObservedFacilities(deps);
+    const rowBamaa = resolved.find((r) => r.sourceCode === 'BAMAA');
+    const rowCdabe = resolved.find((r) => r.sourceCode === 'CDABE');
+    expect(rowBamaa?.name).toBe('Aga Khan Hospital, Dar es Salaam');
+    expect(rowCdabe?.name).toBe('Aga Khan Hospital, Dodoma');
+    expect(rowBamaa?.name).not.toBe(rowCdabe?.name);
+  });
+
+  it('scan seeds a new concept from performer_display, not the bare code', async () => {
+    const deps = await makeReconcileDeps();
+    await seedPerformers(deps, [['BAMAA', 1]], { performerDisplay: 'Aga Khan' });
+
+    await scanObservedFacilities(deps, { now: '2026-08-05T00:00:00.000Z', apply: true });
+
+    const { rows } = await deps.admin.terms.search(DEFAULT_OBSERVED_FACILITY_SYSTEM, { limit: 10, offset: 0 });
+    expect(rows).toHaveLength(1);
+    expect(rows[0].code).toBe('BAMAA');
+    expect(rows[0].display).toBe('Aga Khan');
+  });
+
+  it('scan falls back to the bare code as display when performer_display is absent', async () => {
+    const deps = await makeReconcileDeps();
+    await seedPerformers(deps, [['Dodoma', 1]]); // no performerDisplay
+
+    await scanObservedFacilities(deps, { now: '2026-08-05T00:00:00.000Z', apply: true });
+
+    const { rows } = await deps.admin.terms.search(DEFAULT_OBSERVED_FACILITY_SYSTEM, { limit: 10, offset: 0 });
+    expect(rows[0].display).toBe('Dodoma');
+  });
+
+  // The wire is more authoritative than our own source_system-based inference — a sender that
+  // supplies `identifier.system` gets its concept registered under THAT system, not the one
+  // `observedSystemForFeed(source_system)` would have derived.
+  it('scan prefers the wire-supplied performer_system over the source_system-derived default', async () => {
+    const deps = await makeReconcileDeps();
+    const wireSystem = 'urn:openldr:cdr:LOCNDIC4';
+    await seedPerformers(deps, [['BAMAA', 1]], { sourceSystem: 'webhook-ingest', performerSystem: wireSystem });
+
+    await scanObservedFacilities(deps, { now: '2026-08-05T00:00:00.000Z', apply: true });
+
+    const wireCs = await deps.admin.codingSystems.getByUrl(wireSystem);
+    expect(wireCs).not.toBeNull();
+    expect(wireCs!.active).toBe(true);
+    const { rows: wireRows } = await deps.admin.terms.search(wireSystem, { limit: 10, offset: 0 });
+    expect(wireRows.map((r) => r.code)).toEqual(['BAMAA']);
+    // Must NOT have landed under the source_system-derived default instead.
+    const { rows: defaultRows } = await deps.admin.terms.search(DEFAULT_OBSERVED_FACILITY_SYSTEM, { limit: 10, offset: 0 });
+    expect(defaultRows).toHaveLength(0);
+  });
+
+  // resolveObservedFacilities must derive its lookup system the SAME way scan derived the registration
+  // system, or a mapping authored under the wire's system is never found.
+  it('resolveObservedFacilities looks up a mapping under the wire-supplied performer_system', async () => {
+    const deps = await makeReconcileDeps();
+    const wireSystem = 'urn:openldr:cdr:LOCNDIC4';
+    await seedPerformers(deps, [['BAMAA', 1]], { performerSystem: wireSystem });
+    await seedRegistry(deps, { id: 'fac-1', name: 'Aga Khan Hospital, Dar es Salaam', localCode: 'BAMAA' });
+    await seedMapping(deps, { fromSystem: wireSystem, fromCode: 'BAMAA', toSystem: FACILITY_REGISTRY_SYSTEM, toCode: 'fac-1' });
+
+    const [row] = await resolveObservedFacilities(deps);
+
+    expect(row.name).toBe('Aga Khan Hospital, Dar es Salaam');
+    expect(row.resolvedVia).toBe('registry');
+  });
+
+  it('falls back to observedSystemForFeed(source_system) when performer_system is absent', async () => {
+    const deps = await makeReconcileDeps();
+    await seedPerformers(deps, [['Dodoma', 1]]); // no performerSystem -> default feed system
+    await seedRegistry(deps, { id: 'fac-1', name: 'Dodoma Regional Referral Hospital', localCode: 'DOD' });
+    await seedMapping(deps, { fromSystem: DEFAULT_OBSERVED_FACILITY_SYSTEM, fromCode: 'Dodoma', toSystem: FACILITY_REGISTRY_SYSTEM, toCode: 'fac-1' });
+
+    const [row] = await resolveObservedFacilities(deps);
+
+    expect(row.name).toBe('Dodoma Regional Referral Hospital');
+  });
+});
+
+// Review finding (whole-branch review): `resolveObservedFacilities` groups its warehouse SQL by all
+// FOUR of (performer, performer_display, performer_system, source_system), then used to return one
+// `ResolvedFacility` per raw SQL group — so a `(performer, source_system)` pair that ever reported
+// with a differing `performer_display` or `performer_system` produced MULTIPLE rows for the same
+// logical facility code. Reachable, not theoretical: a mid-rollout CDR identifier-fix cutover, or a
+// corrected `LOCNDIC4.DESCRIPTION`, both produce exactly this shape. Fixed by folding the raw groups
+// down to one row per (resolved system, code) — mirroring `scanObservedFacilities`'s `bySystem`/
+// `displayByKey` fold.
+describe('resolveObservedFacilities dedupes multiple raw groups for the same logical facility', () => {
+  it('two rows sharing (performer, source_system) but disagreeing on performer_display fold to ONE row, with the representative display backed by the most reports', async () => {
+    const deps = await makeReconcileDeps();
+    // Same performer + same (default) source_system, differing ONLY in performer_display — the
+    // renamed-facility case. The second call carries more reports, so it must win the display.
+    await seedPerformers(deps, [['BAMAA', 3]], { performerDisplay: 'Aga Khan (old)' });
+    await seedPerformers(deps, [['BAMAA', 5]], { performerDisplay: 'Aga Khan (new)' });
+
+    const resolved = await resolveObservedFacilities(deps);
+
+    const rows = resolved.filter((r) => r.sourceCode === 'BAMAA');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].sourceDisplay).toBe('Aga Khan (new)');
+  });
+
+  it('two rows sharing (performer, source_system) but with genuinely different performer_system stay as TWO separate rows', async () => {
+    const deps = await makeReconcileDeps();
+    // Same performer code and same source_system, but a different WIRE-supplied coding system on
+    // each — these are different facilities under Task 9b's per-feed system model, and folding them
+    // together would silently re-merge exactly what that work exists to keep apart.
+    await seedPerformers(deps, [['BAMAA', 1]], { performerSystem: 'urn:openldr:cdr:LOCNDIC4-a' });
+    await seedPerformers(deps, [['BAMAA', 1]], { performerSystem: 'urn:openldr:cdr:LOCNDIC4-b' });
+
+    const resolved = await resolveObservedFacilities(deps);
+
+    const rows = resolved.filter((r) => r.sourceCode === 'BAMAA');
+    expect(rows).toHaveLength(2);
+  });
+
+  // Task 11 (whole-branch review round 2, Fix 1): two feeds can share the SAME wire-supplied
+  // `performer_system` while differing in `source_system` — the same facility namespace ingested
+  // through two feeds (e.g. a webhook feed and a CDR-import feed both sending LOCNDIC4 identifiers).
+  // These fold into ONE `ResolvedFacility` (same resolved system, same code), and that folded row
+  // must report the SUM of every raw group's reports, not merely the winning representative's count
+  // — the representative-display rule (above) picks a WINNER for `sourceDisplay`/`sourceSystem`, but
+  // `reportCount` is a warehouse aggregate that must never drop a feed's contribution just because
+  // that feed's row lost the display tiebreak.
+  it('two feeds sharing a wire performer_system but differing source_system report the SUMMED count, not just the winning representative\'s', async () => {
+    const deps = await makeReconcileDeps();
+    const wireSystem = 'urn:openldr:cdr:LOCNDIC4';
+    await seedPerformers(deps, [['NHL-01', 3]], { sourceSystem: 'feed-a', performerSystem: wireSystem });
+    await seedPerformers(deps, [['NHL-01', 5]], { sourceSystem: 'feed-b', performerSystem: wireSystem });
+
+    const resolved = await resolveObservedFacilities(deps);
+
+    const rows = resolved.filter((r) => r.sourceCode === 'NHL-01');
+    expect(rows).toHaveLength(1); // same wire system -> same (system, code) fold key -> ONE row
+    expect(rows[0].reportCount).toBe(8); // 3 + 5 summed, not just feed-b's winning 5
+  });
+});
+
+// Task 11 (whole-branch review round 2, Fix 2): the representative-display rule's FIRST tier (a
+// non-null display always beats a null one, regardless of report count) had no dedicated test — every
+// existing case in the block above varies count and "has a display" together, so a mutation flipping
+// `replace = candidateHasDisplay` to `replace = !candidateHasDisplay` passed unnoticed. This isolates
+// the first tier: the row WITH a display must win even though it backs FEWER reports.
+describe('resolveObservedFacilities representative-display rule: non-null beats null regardless of report count', () => {
+  it('a row with a display wins over a sibling with more reports but no display', async () => {
+    const deps = await makeReconcileDeps();
+    // Same performer + same (default) source_system + same (default, absent performer_system)
+    // resolved system, so both fold into one key. The row WITH a display backs FEWER reports (1)
+    // than the row WITHOUT one (10) — if the display-priority tier were broken (or removed, falling
+    // through to the report-count tier), the no-display row would win instead.
+    await seedPerformers(deps, [['BAMAAX', 1]], { performerDisplay: 'Aga Khan Hospital' });
+    await seedPerformers(deps, [['BAMAAX', 10]]);
+
+    const resolved = await resolveObservedFacilities(deps);
+
+    const rows = resolved.filter((r) => r.sourceCode === 'BAMAAX');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].sourceDisplay).toBe('Aga Khan Hospital');
+    expect(rows[0].reportCount).toBe(11); // both rows' reports still summed regardless of who wins display
+  });
+});
+
 describe('publishFacilityMap', () => {
   it('writes resolved rows to the warehouse and re-publishes without duplicating', async () => {
     const deps = await makeReconcileDeps();
@@ -434,11 +623,21 @@ describe('publishFacilityMap', () => {
   });
 
   // Task 11 (whole-branch review, Fix 3): `scanObservedFacilities` folds `(performer, source_system)`
-  // groups that derive the SAME coding system into one `(system, code)` total, but
-  // `resolveObservedFacilities` (and therefore this function) maps 1:1 over the raw groups instead. A
-  // warehouse holding BOTH a NULL and an empty-string `source_system` for the same performer therefore
-  // produces two resolved rows with an identical `facilityMapId` (both normalise `sourceSystem` to
-  // `''`) — before the fix, the delete-then-insert transaction below aborted on the primary key.
+  // groups that derive the SAME coding system into one `(system, code)` total. Originally
+  // `resolveObservedFacilities` (and therefore this function) mapped 1:1 over the raw groups instead,
+  // so a warehouse holding BOTH a NULL and an empty-string `source_system` for the same performer
+  // produced two resolved rows with an identical `facilityMapId` (both normalise `sourceSystem` to
+  // `''`) — before that fix, the delete-then-insert transaction below aborted on the primary key.
+  //
+  // Whole-branch review fix round 1: `resolveObservedFacilities` itself now folds its raw SQL groups
+  // down to one row per (resolved system, code) — see its doc comment — so NULL and `''`
+  // `source_system` (both deriving the SAME default system, since neither carries a `performer_system`
+  // here) are folded together BEFORE `publishFacilityMap` ever sees them. `result.written` therefore
+  // drops from 2 to 1: the PK collision this test guards against is now structurally prevented one
+  // layer up, not merely tolerated. Fix 3's dedupe-by-id below is retained regardless (see its own
+  // comment) — it remains the only defense against a DIFFERENT collision shape: two rows that resolve
+  // to genuinely different systems (so `resolveObservedFacilities` correctly keeps them separate) but
+  // happen to share the same raw `sourceSystem`/`sourceCode` pair `facilityMapId` is built from.
   it('does not crash on a PK collision from a NULL and empty-string source_system for the same performer', async () => {
     const deps = await makeReconcileDeps();
     await deps.externalDb.insertInto('diagnostic_reports')
@@ -450,7 +649,7 @@ describe('publishFacilityMap', () => {
 
     const result = await publishFacilityMap(deps, { apply: true });
 
-    expect(result.written).toBe(2);
+    expect(result.written).toBe(1);
     const rows = await deps.externalDb.selectFrom('facility_map').selectAll().execute();
     expect(rows).toHaveLength(1);
     expect(rows[0].source_code).toBe('Dodoma');
@@ -746,6 +945,28 @@ describe('captureObservedFacilityFromProjection', () => {
     expect(rows.map((r) => r.code)).toEqual(['NHL-01']);
 
     // Must NOT have landed in the default system.
+    const { total: defaultTotal } = await deps.admin.terms.search(DEFAULT_OBSERVED_FACILITY_SYSTEM, { limit: 10, offset: 0 });
+    expect(defaultTotal).toBe(0);
+  });
+
+  // Same system preference as scan/resolve: a resource carrying `performer[0].identifier.system`
+  // must capture under THAT system, not `observedSystemForFeed(sourceSystem)` — otherwise the
+  // ingest-time capture and a later full scan would file the SAME code under two different
+  // systems until reconciled.
+  it("prefers the wire's identifier.system over observedSystemForFeed(sourceSystem)", async () => {
+    const deps = await makeReconcileDeps();
+    const wireSystem = 'urn:openldr:cdr:LOCNDIC4';
+    const resource = {
+      resourceType: 'DiagnosticReport',
+      id: 'dr-cdr-2',
+      performer: [{ identifier: { system: wireSystem, value: 'BAMAA' }, display: 'Aga Khan' }],
+    };
+
+    await captureObservedFacilityFromProjection(deps, 'DiagnosticReport', resource, 'webhook-ingest', '2026-08-05T00:00:00.000Z');
+
+    const { rows } = await deps.admin.terms.search(wireSystem, { limit: 10, offset: 0 });
+    expect(rows.map((r) => r.code)).toEqual(['BAMAA']);
+    // Must NOT have landed under the source_system-derived default.
     const { total: defaultTotal } = await deps.admin.terms.search(DEFAULT_OBSERVED_FACILITY_SYSTEM, { limit: 10, offset: 0 });
     expect(defaultTotal).toBe(0);
   });

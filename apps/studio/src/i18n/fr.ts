@@ -807,6 +807,7 @@ export const fr: EnShape = {
       title: 'Établissements observés',
       actions: 'Actions sur l’établissement observé',
       code: 'Code observé',
+      codeWithName: '{{code}} — {{name}}',
       reports: 'Rapports',
       resolvesTo: 'Résout vers',
       count_one: '{{count}} établissement observé',

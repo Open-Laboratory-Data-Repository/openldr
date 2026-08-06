@@ -55,6 +55,43 @@ describe('facility-observed', () => {
     });
   });
 
+  // The wire's `performer[0].display` ("Aga Khan") seeds a NEW concept's display so the operator
+  // sees a name, not the bare code ("BAMAA") — but only until an operator curates it (see the
+  // `existing` case below, which must still win).
+  it('seeds a new concept from defaultDisplay when there is no existing curated display', () => {
+    const row = observedFacilityConceptRow({
+      system: DEFAULT_OBSERVED_FACILITY_SYSTEM,
+      code: 'BAMAA',
+      seenAt: '2026-08-05T00:00:00.000Z',
+      reportCount: 5,
+      defaultDisplay: 'Aga Khan',
+    });
+    expect(row.code).toBe('BAMAA');
+    expect(row.display).toBe('Aga Khan');
+  });
+
+  it('falls back to the bare code when defaultDisplay is absent', () => {
+    const row = observedFacilityConceptRow({
+      system: DEFAULT_OBSERVED_FACILITY_SYSTEM,
+      code: 'BAMAA',
+      seenAt: '2026-08-05T00:00:00.000Z',
+      reportCount: 5,
+    });
+    expect(row.display).toBe('BAMAA');
+  });
+
+  it('an existing curated display always wins over defaultDisplay', () => {
+    const row = observedFacilityConceptRow({
+      system: DEFAULT_OBSERVED_FACILITY_SYSTEM,
+      code: 'BAMAA',
+      seenAt: '2026-08-05T00:00:00.000Z',
+      reportCount: 5,
+      defaultDisplay: 'Aga Khan',
+      existing: { display: 'Aga Khan Hospital, Dar es Salaam', properties: null },
+    });
+    expect(row.display).toBe('Aga Khan Hospital, Dar es Salaam');
+  });
+
   it('preserves firstSeen and a curated display when merging over an existing concept', () => {
     const row = observedFacilityConceptRow({
       system: DEFAULT_OBSERVED_FACILITY_SYSTEM,

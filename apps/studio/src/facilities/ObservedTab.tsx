@@ -233,8 +233,16 @@ export function ObservedTab(): JSX.Element {
             <TableBody className="[&_tr:last-child]:border-b">
               {pageRows.map((row) => (
                 <TableRow key={`${row.sourceSystem}|${row.sourceCode}`}>
-                  <TableCell className="max-w-[220px] text-xs">
-                    <TruncatedText text={row.sourceCode} />
+                  <TableCell
+                    className="max-w-[220px] text-xs"
+                    aria-label={row.sourceDisplay ? t('facilities.observed.codeWithName', { code: row.sourceCode, name: row.sourceDisplay }) : row.sourceCode}
+                  >
+                    <div className="flex flex-col">
+                      <TruncatedText text={row.sourceCode} />
+                      {row.sourceDisplay && (
+                        <span className="text-[11px] text-muted-foreground">{row.sourceDisplay}</span>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell className="text-right text-xs">{row.reportCount}</TableCell>
                   <TableCell className="text-xs">

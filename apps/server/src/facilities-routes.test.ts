@@ -1051,11 +1051,15 @@ function fakeReconcileCtx(internalDb: any, externalDb: any) {
 /** Mirrors `packages/bootstrap/src/test-support/facility-reconcile-fixture.ts`'s `seedPerformers`:
  *  one `diagnostic_reports` row per unit of report count, so the routes' own live
  *  `groupBy(['performer', 'source_system'])` aggregate has real rows to count. */
-async function seedObservedReports(externalDb: any, pairs: [string, number][]): Promise<void> {
-  const rows: { id: string; performer: string; source_system: string }[] = [];
+async function seedObservedReports(
+  externalDb: any,
+  pairs: [string, number][],
+  opts: { performerDisplay?: string | null } = {},
+): Promise<void> {
+  const rows: { id: string; performer: string; source_system: string; performer_display: string | null }[] = [];
   for (const [performer, count] of pairs) {
     for (let i = 0; i < count; i += 1) {
-      rows.push({ id: `dr-${randomUUID()}`, performer, source_system: 'webhook-ingest' });
+      rows.push({ id: `dr-${randomUUID()}`, performer, source_system: 'webhook-ingest', performer_display: opts.performerDisplay ?? null });
     }
   }
   if (rows.length === 0) return;
@@ -1088,6 +1092,30 @@ describe('Task 6: GET /api/facilities/observed', () => {
     expect(body[1].reportCount).toBe(99);
   });
 
+  // `DisaGlobal.dbo.LOCNDIC4` holds five distinct facility codes whose display is all exactly
+  // "Aga Khan" — the route must surface that display alongside the code so the operator does not
+  // see five identical, opaque codes.
+  it('returns the observed display (performer_display) alongside the observed code', async () => {
+    const internalDb = await makeMigratedDb();
+    const externalDb = await makeMigratedExternalDb();
+    await seedObservedReports(externalDb, [['BAMAA', 1]], { performerDisplay: 'Aga Khan' });
+    const app = await appWith(fakeReconcileCtx(internalDb, externalDb));
+
+    const res = await app.inject({ method: 'GET', url: '/api/facilities/observed' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual([expect.objectContaining({ sourceCode: 'BAMAA', sourceDisplay: 'Aga Khan' })]);
+  });
+
+  it('reports sourceDisplay as null when the source never supplied one', async () => {
+    const internalDb = await makeMigratedDb();
+    const externalDb = await makeMigratedExternalDb();
+    await seedObservedReports(externalDb, [['Dodoma', 1]]);
+    const app = await appWith(fakeReconcileCtx(internalDb, externalDb));
+
+    const res = await app.inject({ method: 'GET', url: '/api/facilities/observed' });
+    expect(res.json()).toEqual([expect.objectContaining({ sourceCode: 'Dodoma', sourceDisplay: null })]);
+  });
+
   it('needs no prior scan — resolves straight off the warehouse', async () => {
     const internalDb = await makeMigratedDb();
     const externalDb = await makeMigratedExternalDb();
@@ -1118,6 +1146,57 @@ describe('Task 6: GET /api/facilities/observed', () => {
     const res = await app.inject({ method: 'GET', url: '/api/facilities/observed' });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual([expect.objectContaining({ sourceCode: 'Dodoma', reportCount: 5 })]);
+  });
+
+  // Review finding: `resolveObservedFacilities` used to return one row per raw SQL group, grouped by
+  // all of (performer, performer_display, performer_system, source_system) — so a performer whose
+  // display changed mid-rollout (the renamed-facility case) produced TWO resolved rows for the same
+  // code, and each duplicate received the SAME full `reportCount` from this route's 2-column
+  // (performer, source_system) count map, doubling what the operator sees. Fixed upstream in
+  // `resolveObservedFacilities` (folds to one row per (system, code) before this route ever sees it);
+  // pinned here at the route boundary since that is the observable surface the finding named.
+  it('reports ONE row with the combined reportCount for a performer whose display changed mid-rollout, not a duplicated row', async () => {
+    const internalDb = await makeMigratedDb();
+    const externalDb = await makeMigratedExternalDb();
+    await seedObservedReports(externalDb, [['BAMAA', 3]], { performerDisplay: 'Aga Khan (old)' });
+    await seedObservedReports(externalDb, [['BAMAA', 5]], { performerDisplay: 'Aga Khan (new)' });
+    const app = await appWith(fakeReconcileCtx(internalDb, externalDb));
+
+    const res = await app.inject({ method: 'GET', url: '/api/facilities/observed' });
+    expect(res.statusCode).toBe(200);
+    const rows = res.json().filter((r: any) => r.sourceCode === 'BAMAA');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].reportCount).toBe(8);
+  });
+
+  // Task 11 (whole-branch review round 2, Fix 1): this route USED to compute its own
+  // `diagnostic_reports` count query, grouped by `(performer, source_system)` — 2 columns, omitting
+  // `performer_system` — and join it back onto the resolved rows by `${sourceSystem}|${sourceCode}`.
+  // `resolveObservedFacilities` folds by (resolved system, code), where the resolved system prefers
+  // the wire's `performer_system` over a `source_system`-derived default — so two feeds sharing the
+  // SAME wire `performer_system` but differing `source_system` fold into ONE `ResolvedFacility`
+  // carrying only the WINNING representative's `sourceSystem`. The route's own count query, still
+  // split by the LOSING feed's raw `source_system`, could never fully match that folded row, silently
+  // dropping one feed's contribution. Fixed by reading `reportCount` straight off the already-folded
+  // `ResolvedFacility` (which sums both feeds) instead of re-deriving a second, differently-keyed count.
+  it('reports the SUMMED reportCount for two feeds sharing a wire performer_system but differing source_system', async () => {
+    const internalDb = await makeMigratedDb();
+    const externalDb = await makeMigratedExternalDb();
+    const wireSystem = 'urn:openldr:cdr:LOCNDIC4';
+    const rowsA = Array.from({ length: 3 }, () => ({
+      id: `dr-${randomUUID()}`, performer: 'NHL-01', source_system: 'feed-a', performer_system: wireSystem,
+    }));
+    const rowsB = Array.from({ length: 5 }, () => ({
+      id: `dr-${randomUUID()}`, performer: 'NHL-01', source_system: 'feed-b', performer_system: wireSystem,
+    }));
+    await externalDb.insertInto('diagnostic_reports').values([...rowsA, ...rowsB] as any).execute();
+    const app = await appWith(fakeReconcileCtx(internalDb, externalDb));
+
+    const res = await app.inject({ method: 'GET', url: '/api/facilities/observed' });
+    expect(res.statusCode).toBe(200);
+    const rows = res.json().filter((r: any) => r.sourceCode === 'NHL-01');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].reportCount).toBe(8); // 3 + 5, not just the winning feed's count
   });
 
   it('is gated on facilities.view', async () => {

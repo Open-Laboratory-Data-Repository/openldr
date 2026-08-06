@@ -807,6 +807,7 @@ export const pt: EnShape = {
       title: 'Unidades observadas',
       actions: 'Ações da unidade observada',
       code: 'Código observado',
+      codeWithName: '{{code}} — {{name}}',
       reports: 'Relatórios',
       resolvesTo: 'Resolve para',
       count_one: '{{count}} unidade observada',

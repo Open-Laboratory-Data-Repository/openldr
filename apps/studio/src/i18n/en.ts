@@ -811,6 +811,7 @@ export const en = {
       title: 'Observed facilities',
       actions: 'Observed facility actions',
       code: 'Observed code',
+      codeWithName: '{{code}} — {{name}}',
       reports: 'Reports',
       resolvesTo: 'Resolves to',
       count_one: '{{count}} observed facility',

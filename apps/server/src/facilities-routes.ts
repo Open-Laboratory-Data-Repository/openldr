@@ -423,46 +423,22 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
   // ⚠ Route ordering: registered BEFORE `/api/facilities/:id` below — Fastify would otherwise match
   // the parameterised route first and read "observed" as a facility id.
   //
-  // `resolveObservedFacilities` deliberately does not return a report count (Tasks 3-4's decision —
-  // see facility-reconcile.ts's doc comment on `ResolvedFacility`): it is a resolution function, and
-  // a count is a warehouse aggregate, not a resolution property. This route supplies it from a LIVE
-  // `diagnostic_reports` aggregate — the same table `resolveObservedFacilities` itself already reads
-  // its `(performer, source_system)` pairs from — rather than the count `scanObservedFacilities`
-  // snapshots into `terminology_concepts.properties.reportCount`. Two reasons: (1) granularity — the
-  // stored snapshot is grouped by `code` ALONE (see `scanObservedFacilities`'s own
-  // `groupBy('performer')`), which conflates two source systems sharing the same performer string,
-  // while this list is keyed per `(sourceSystem, sourceCode)` pair, exactly matching a live
-  // `groupBy(['performer', 'source_system'])`; (2) freshness — the stored snapshot only advances on
-  // a `facilities.manage`-gated scan, so a `facilities.view`-only operator would see a stale or
-  // all-zero count on an install where a scan has never been run, even though this route (like
-  // `resolveObservedFacilities`) needs no prior scan to work at all.
+  // Task 11 (whole-branch review round 2, Fix 1): `reportCount` now comes straight off
+  // `ResolvedFacility` — `resolveObservedFacilities` sums it while folding raw
+  // `(performer, performer_display, performer_system, source_system)` groups down to one row per
+  // (resolved system, code) (see that function's doc comment). This route USED to compute its own
+  // second `diagnostic_reports` aggregate, keyed on `(performer, source_system)` (2 columns), and
+  // join it back onto the resolved rows by `${sourceSystem}|${sourceCode}` — a key that omitted
+  // `performer_system`, the column that actually decides the fold. Two feeds sharing the SAME
+  // wire-supplied `performer_system` but differing `source_system` fold into ONE `ResolvedFacility`
+  // upstream, carrying only the winning representative's `sourceSystem` — so the route's own count
+  // query (still split by the raw `source_system`) could never fully match it, silently dropping one
+  // feed's contribution. Reading `reportCount` off the already-folded row removes that two-sided key
+  // by construction: there is only one place the fold happens, and only one place the count is summed.
   app.get('/api/facilities/observed', VIEW, async () => {
     const deps = reconcileDeps(ctx);
-    const [resolved, counts] = await Promise.all([
-      resolveObservedFacilities(deps),
-      deps.externalDb
-        .selectFrom('diagnostic_reports')
-        .select(({ fn }) => ['performer', 'source_system', fn.countAll<number>().as('n')])
-        .where('performer', 'is not', null)
-        .groupBy(['performer', 'source_system'])
-        .execute(),
-    ]);
-
-    // Task 11 (whole-branch review, Fix 2 / triaged Minor M4-4): a raw template literal stringifies a
-    // NULL `source_system` to the literal string `"null"`, while `resolveObservedFacilities`
-    // normalises the same NULL to `''` (`sourceSystem: o.source_system ?? ''`). Both sides of this
-    // lookup must go through the identical `?? ''` normalisation or a legacy warehouse row with a
-    // NULL `source_system` (`relational-writer.ts` documents this as the deferred projection's
-    // months-long behaviour, not a hypothetical) misses the count map and renders `reportCount: 0`.
-    const countByKey = new Map<string, number>();
-    for (const c of counts) {
-      if (c.performer == null) continue;
-      countByKey.set(`${c.source_system ?? ''}|${c.performer}`, Number(c.n));
-    }
-
-    return resolved
-      .map((r) => ({ ...r, reportCount: countByKey.get(`${r.sourceSystem}|${r.sourceCode}`) ?? 0 }))
-      .sort((a, b) => b.reportCount - a.reportCount);
+    const resolved = await resolveObservedFacilities(deps);
+    return [...resolved].sort((a, b) => b.reportCount - a.reportCount);
   });
 
   // Task 6: discover new/changed observed-facility strings and record them as concepts (Task 3's
