@@ -243,7 +243,7 @@ export async function runFacilitiesPublish(opts: FacilitiesPublishOpts): Promise
 }
 
 function formatPublishHuman(result: PublishResult, opts: FacilitiesPublishOpts): string {
-  const counts = `resolved ${result.resolved}, unmapped ${result.unmapped}, targetMissing ${result.targetMissing}, written ${result.written}`;
+  const counts = `resolved ${result.resolved}, unmapped ${result.unmapped}, targetMissing ${result.targetMissing}, nonFacilityTarget ${result.nonFacilityTarget}, written ${result.written}`;
   return opts.apply
     ? `applied: ${counts}`
     : `DRY RUN — nothing written. Rerun with --apply to write.\n${counts}`;
