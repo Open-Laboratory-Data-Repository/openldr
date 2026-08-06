@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { DEFAULT_OBSERVED_FACILITY_SYSTEM, FACILITY_REGISTRY_SYSTEM, observedSystemForFeed } from '@openldr/db';
-import { scanObservedFacilities, resolveObservedFacilities, publishFacilityMap, publishRegistryConcepts, captureObservedFacility, captureObservedFacilityFromProjection } from './facility-reconcile';
+import { scanObservedFacilities, resolveObservedFacilities, publishFacilityMap, publishRegistryConcepts, projectRegistryRows, captureObservedFacility, captureObservedFacilityFromProjection } from './facility-reconcile';
 import { makeReconcileDeps, seedPerformers, seedRegistry, seedMapping } from './test-support/facility-reconcile-fixture';
 
 describe('scanObservedFacilities', () => {
@@ -781,6 +781,75 @@ describe('publishRegistryConcepts', () => {
       expect(after!.id).toBe(seeded!.id);
       expect(after!.active).toBe(true);
     });
+  });
+});
+
+// Fix 1 (mapping-ux report): registering a facility must make it mappable IMMEDIATELY — no operator
+// publish step. `publishRegistryConcepts` reprojects the WHOLE registry (fine for an explicit
+// operator repair/backfill, unacceptable per-write at 14k-row national-register scale), so the
+// create/update/import write paths instead call this given-rows path, which touches only the rows
+// handed to it.
+describe('projectRegistryRows', () => {
+  it('makes the given row pickable as a mapping target, without touching any other registry row', async () => {
+    const deps = await makeReconcileDeps();
+    await seedRegistry(deps, { id: 'fac-1', name: 'National Public Health Laboratory', localCode: '111317-4' });
+    await seedRegistry(deps, { id: 'fac-2', name: 'Muhimbili National Hospital', nationalSystem: 'urn:tz:hfr', nationalCode: 'TZ-001' });
+
+    await projectRegistryRows(deps, [{ id: 'fac-1', name: 'National Public Health Laboratory' }]);
+
+    const { rows } = await deps.admin.terms.search(FACILITY_REGISTRY_SYSTEM, { limit: 50, offset: 0 });
+    // Only fac-1 was handed in — fac-2 must NOT have been reprojected as a side effect.
+    expect(rows.map((r) => r.code)).toEqual(['fac-1']);
+    expect(rows[0].display).toBe('National Public Health Laboratory');
+  });
+
+  it('registers an ACTIVE coding_systems row', async () => {
+    const deps = await makeReconcileDeps();
+    await seedRegistry(deps, { id: 'fac-1', name: 'National Public Health Laboratory', localCode: '111317-4' });
+
+    await projectRegistryRows(deps, [{ id: 'fac-1', name: 'National Public Health Laboratory' }]);
+
+    const cs = await deps.admin.codingSystems.getByUrl(FACILITY_REGISTRY_SYSTEM);
+    expect(cs).not.toBeNull();
+    expect(cs!.active).toBe(true);
+  });
+
+  // Mirrors publishRegistryConcepts's own re-activation regression guard above.
+  it('re-activates a coding_systems row an operator (or an earlier bug) left inactive', async () => {
+    const deps = await makeReconcileDeps();
+    await seedRegistry(deps, { id: 'fac-1', name: 'National Public Health Laboratory', localCode: '111317-4' });
+    await deps.internalDb.updateTable('coding_systems').set({ active: false })
+      .where('url', '=', FACILITY_REGISTRY_SYSTEM).execute();
+
+    await projectRegistryRows(deps, [{ id: 'fac-1', name: 'National Public Health Laboratory' }]);
+
+    expect((await deps.admin.codingSystems.getByUrl(FACILITY_REGISTRY_SYSTEM))!.active).toBe(true);
+  });
+
+  it('is a no-op for an empty rows array', async () => {
+    const deps = await makeReconcileDeps();
+    const before = await deps.admin.codingSystems.getByUrl(FACILITY_REGISTRY_SYSTEM);
+
+    await projectRegistryRows(deps, []);
+
+    expect(await deps.admin.codingSystems.getByUrl(FACILITY_REGISTRY_SYSTEM)).toEqual(before);
+  });
+
+  // ⛔ Must NEVER throw: a facility save (or a CSV import) must succeed even when the projection
+  // fails, mirroring `registerObservedSystem`'s containment on the ingest hot path.
+  it('swallows a projection failure instead of throwing', async () => {
+    const deps = await makeReconcileDeps();
+    const failingAdmin = {
+      ...deps.admin,
+      terms: {
+        ...deps.admin.terms,
+        importRows: async () => { throw new Error('simulated terminology store failure'); },
+      },
+    };
+
+    await expect(
+      projectRegistryRows({ ...deps, admin: failingAdmin }, [{ id: 'fac-1', name: 'National Public Health Laboratory' }]),
+    ).resolves.toBeUndefined();
   });
 });
 

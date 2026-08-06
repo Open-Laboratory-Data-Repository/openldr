@@ -109,6 +109,22 @@ export function observedFacilityConceptRow(input: ObservedFacilityInput): Concep
 }
 
 /**
+ * Shape one `facility_registry` row into its `FACILITY_REGISTRY_SYSTEM` projection concept.
+ *
+ * The ONE definition of "what a registry row's concept looks like" — shared by
+ * `publishRegistryConcepts` (bulk reprojection of every row, `packages/bootstrap/src/facility-
+ * reconcile.ts`) and `projectRegistryRows` (the given-rows path run on facility create/update/import)
+ * so the two can never independently drift on the shape.
+ *
+ * ⛔ `display` TRACKS `name` — the opposite convention from `observedFacilityConceptRow`, where a
+ * curated display is preserved because the operator owns it. This concept is a projection FROM the
+ * registry, and the registry is the source of truth for a facility's name.
+ */
+export function registryConceptRow(row: { id: string; name: string }): ConceptRowInput {
+  return { system: FACILITY_REGISTRY_SYSTEM, code: row.id, display: row.name, status: 'ACTIVE', properties: null };
+}
+
+/**
  * Bind an ingest feed (`diagnostic_reports.source_system`) to ITS coding system — the piece the
  * design called "one coding system per feed" but never actually wired (Task 9b). Two feeds sending
  * the same observed code must never share a mapping, or a wrong-lab collision is silent (see the

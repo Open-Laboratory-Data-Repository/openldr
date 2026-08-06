@@ -43,7 +43,10 @@ export async function runFacilitiesImport(path: string, opts: FacilitiesImportOp
   const ctx = await createAppContext(loadConfig());
   try {
     const result = await importFacilities(
-      { db: ctx.internalDb, capture: referenceCapture },
+      // Fix 1 (mapping-ux report): `admin` lets importFacilities project every written row into
+      // FACILITY_REGISTRY_SYSTEM as part of the import — the CLI gets the same immediate-mapping
+      // behaviour as the HTTP route, per the repo's CLI-parity rule.
+      { db: ctx.internalDb, capture: referenceCapture, admin: ctx.terminology.admin },
       csv,
       { nationalSystem: opts.nationalSystem, allowUnknownColumns: opts.allowUnknownColumns, apply: opts.apply },
     );

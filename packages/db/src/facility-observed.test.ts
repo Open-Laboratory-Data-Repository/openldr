@@ -5,6 +5,7 @@ import {
   DEFAULT_OBSERVED_FACILITY_SYSTEM,
   FACILITY_REGISTRY_SYSTEM,
   observedFacilityConceptRow,
+  registryConceptRow,
   facilityMapId,
   observedSystemForFeed,
 } from './facility-observed';
@@ -28,6 +29,17 @@ describe('facility-observed', () => {
     expect(row.code).toBe('Ocean Road Cancer Institute (O');
     expect(row.display).toBe('Ocean Road Cancer Institute (O');
     expect(row.status).toBe('ACTIVE');
+  });
+
+  it('registryConceptRow shapes a facility_registry row into the FACILITY_REGISTRY_SYSTEM concept, keyed on id, displayed as name', () => {
+    const row = registryConceptRow({ id: 'fac-1', name: 'Dodoma Regional Referral Hospital' });
+    expect(row).toEqual({
+      system: FACILITY_REGISTRY_SYSTEM,
+      code: 'fac-1',
+      display: 'Dodoma Regional Referral Hospital',
+      status: 'ACTIVE',
+      properties: null,
+    });
   });
 
   it('does not upper-case, unlike openldr-v2 normalizeCode', () => {

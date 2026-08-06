@@ -1,6 +1,6 @@
 import type { Kysely } from 'kysely';
 import type { ConceptRowInput, ExternalSchema, InternalSchema, TerminologyAdminStore } from '@openldr/db';
-import { DEFAULT_OBSERVED_FACILITY_SYSTEM, FACILITY_REGISTRY_SYSTEM, facilityMapId, observedFacilityConceptRow, observedSystemForFeed, projectDiagnosticReport } from '@openldr/db';
+import { DEFAULT_OBSERVED_FACILITY_SYSTEM, FACILITY_REGISTRY_SYSTEM, facilityMapId, observedFacilityConceptRow, registryConceptRow, observedSystemForFeed, projectDiagnosticReport } from '@openldr/db';
 
 export interface ReconcileDeps {
   internalDb: Kysely<InternalSchema>;
@@ -574,8 +574,24 @@ export async function publishRegistryConcepts(
 
   if (!opts.apply) return { concepts: registry.length, systemRegistered: false };
 
-  // ⛔ MUST leave the row ACTIVE: see `scanObservedFacilities` above for the same trap.
-  // `systemCode` must stay distinct from `DEFAULT_SYSTEM_CODE` ('DEFAULT_FAC') and any
+  await ensureRegistrySystemActive(deps);
+
+  if (registry.length > 0) {
+    await deps.admin.terms.importRows(registry.map(registryConceptRow));
+  }
+
+  return { concepts: registry.length, systemRegistered: true };
+}
+
+/**
+ * Ensure `FACILITY_REGISTRY_SYSTEM`'s `coding_systems` row exists and is ACTIVE. Shared by
+ * `publishRegistryConcepts` (the full reprojection) and `projectRegistryRows` (the given-rows path
+ * below) so the two agree on exactly one registration — see `scanObservedFacilities`'s doc comment
+ * for why re-activation has to be repaired explicitly (`upsertByUrl`'s `onConflict` never touches
+ * `active`).
+ */
+async function ensureRegistrySystemActive(deps: Pick<ReconcileDeps, 'admin' | 'internalDb'>): Promise<void> {
+  // ⛔ `systemCode` must stay distinct from `DEFAULT_SYSTEM_CODE` ('DEFAULT_FAC') and any
   // `systemCodeFor`-derived observed-facility code.
   await deps.admin.codingSystems.upsertByUrl({
     url: FACILITY_REGISTRY_SYSTEM,
@@ -588,20 +604,41 @@ export async function publishRegistryConcepts(
     await deps.internalDb.updateTable('coding_systems').set({ active: true })
       .where('url', '=', FACILITY_REGISTRY_SYSTEM).execute();
   }
+}
 
-  if (registry.length > 0) {
-    await deps.admin.terms.importRows(
-      registry.map((r) => ({
-        system: FACILITY_REGISTRY_SYSTEM,
-        code: r.id,
-        display: r.name,
-        status: 'ACTIVE',
-        properties: null,
-      })),
-    );
+/**
+ * Project ONLY the given `facility_registry` rows into `FACILITY_REGISTRY_SYSTEM` — the write-time
+ * counterpart to `publishRegistryConcepts`'s full reprojection.
+ *
+ * A facility must be a usable mapping target the MOMENT it is created or updated (Fix 1 of the
+ * mapping-ux report: an operator who registers a facility and immediately opens `TermMappingDialog`
+ * must find it, with no "press Publish first" step). `publishRegistryConcepts` cannot be that path —
+ * it reprojects the WHOLE registry on every call, which is fine for an explicit operator repair/
+ * backfill action but not something to run on every single facility save at national-register scale
+ * (10-15k rows). This function instead takes the exact rows that just changed — one row from the
+ * POST/PUT routes, the whole batch from a CSV import — and writes only those.
+ *
+ * Shares `registryConceptRow` with `publishRegistryConcepts` so the two projections can never drift
+ * on shape (code = the row's `id`, display = its `name`).
+ *
+ * ⛔ Never throws. A projection failure must NOT take a facility write down with it — mirrors
+ * `registerObservedSystem`'s containment on the ingest hot path (see that function's doc comment).
+ * The caller (a facility create/update, a CSV import) has already committed its own write by the
+ * time this runs; this is a best-effort catch-up, not a step the write depends on.
+ */
+export async function projectRegistryRows(
+  deps: Pick<ReconcileDeps, 'admin' | 'internalDb'>,
+  rows: { id: string; name: string }[],
+): Promise<void> {
+  if (rows.length === 0) return;
+  try {
+    await ensureRegistrySystemActive(deps);
+    await deps.admin.terms.importRows(rows.map(registryConceptRow));
+  } catch (err) {
+    // eslint-disable-next-line no-console -- deliberate: see doc comment above for why this must
+    // never propagate, and this module takes no logger dependency to report through otherwise.
+    console.error('[facility-reconcile] failed to project facility_registry row(s) into FACILITY_REGISTRY_SYSTEM', err);
   }
-
-  return { concepts: registry.length, systemRegistered: true };
 }
 
 /**
