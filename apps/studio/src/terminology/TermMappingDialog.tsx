@@ -86,6 +86,12 @@ const L = {
   //   is the mode that actually works for these systems.
   browseBuildingHint: 'Available once the target system\'s ontology index is built.',
   browseNeverAvailableHint: 'This system has no ontology to browse. Use Search terms instead.',
+  // Fix round 2 (mapping-targets report): when `lockedTargetSystem` is set and an existing
+  // mapping's stored `toSystem` disagrees with it, saving must never silently rewrite `toSystem` to
+  // the locked system. The field instead shows the REAL stored target, flagged, until the operator
+  // takes the explicit retarget action below.
+  targetMismatchHint: 'This mapping targets a different system than the one expected here. Saving will not change it.',
+  retargetAction: (name: string) => `Point at ${name} instead`,
   // common.*
   save: 'Save',
   saving: 'Saving…',
@@ -104,6 +110,7 @@ export function TermMappingDialog({
   onOpenChange,
   fromTerm,
   systems,
+  lockedTargetSystem = null,
   mapping,
   distributions = {},
   onSaved,
@@ -112,11 +119,28 @@ export function TermMappingDialog({
   onOpenChange: (o: boolean) => void;
   fromTerm: { system: string; code: string; display: string | null; systemCode: string };
   systems: CodingSystem[];
+  /**
+   * When set, the ONLY system this dialog will ever offer as a mapping target — the "System"
+   * picker (both search mode's Select, shown only when there are 2+ active systems, and manual
+   * mode's, shown unconditionally) is replaced with a static, non-interactive label naming this
+   * system, and `systems` above is ignored for target-selection purposes entirely (it is still
+   * consulted by the caller for OTHER things, e.g. resolving the FROM term's own system code —
+   * that lookup lives in the caller, not here).
+   *
+   * `ObservedTab.tsx` passes this (fixed to `FACILITY_REGISTRY_SYSTEM`) because a mapping authored
+   * from the Observed tab is always meant to resolve a facility — offering the full active
+   * coding_systems list only sets the operator up to author a mapping that
+   * `resolveObservedFacilities` files under `nonFacilityTarget` (self-mapping, or a mapping to an
+   * unrelated system like LOINC). `/terminology`'s own `TermDialog` caller omits this prop and
+   * keeps the full multi-system picker unchanged.
+   */
+  lockedTargetSystem?: CodingSystem | null;
   mapping: TermMapping | null;
   distributions?: Record<string, OntologyDistribution>;
   onSaved: (mapping: TermMapping, draftCreated: boolean) => void;
 }): JSX.Element {
   const editing = mapping !== null;
+  const locked = lockedTargetSystem !== null;
 
   // ── mode ──────────────────────────────────────────────────────────────────
   const [mode, setMode] = useState<TargetMode>('search');
@@ -129,6 +153,11 @@ export function TermMappingDialog({
   const [manualSystemId, setManualSystemId] = useState<string>('');
   const [manualCode, setManualCode] = useState('');
   const [manualDisplay, setManualDisplay] = useState('');
+  // Fix round 2 (mapping-targets report): set only when `locked` AND editing an existing mapping
+  // whose stored `toSystem` does not equal `lockedTargetSystem.url`. Holds the REAL stored target so
+  // save() can round-trip it unchanged instead of silently substituting the locked system — see the
+  // `targetMismatchHint` comment above. Cleared by the explicit "Point at …" retarget action.
+  const [targetMismatch, setTargetMismatch] = useState<{ url: string; label: string } | null>(null);
 
   // ── general ───────────────────────────────────────────────────────────────
   const [mapType, setMapType] = useState<MapType>('SAME-AS');
@@ -142,7 +171,12 @@ export function TermMappingDialog({
   const [browseOpen, setBrowseOpen] = useState(false);
 
   // ── derived ───────────────────────────────────────────────────────────────
-  const activeSystems = useMemo(() => systems.filter((s) => s.active), [systems]);
+  // Locked: the ONLY selectable system is the locked one, full stop — `systems` plays no role in
+  // target selection at all (see `lockedTargetSystem`'s doc comment above).
+  const activeSystems = useMemo(
+    () => (locked ? [lockedTargetSystem] : systems.filter((s) => s.active)),
+    [systems, locked, lockedTargetSystem],
+  );
 
   const manualTargetSystem = useMemo(
     () => activeSystems.find((s) => s.id === manualSystemId) ?? null,
@@ -177,15 +211,32 @@ export function TermMappingDialog({
       setMode('manual');
       setPicked(null);
       setSearchSystemId(activeSystems[0]?.id ?? '');
-      // Pre-fill the manual system by matching on url
-      const matchedSystem = activeSystems.find((s) => s.url === mapping.toSystem);
-      setManualSystemId(matchedSystem?.id ?? '');
+      if (locked && mapping.toSystem !== lockedTargetSystem.url) {
+        // Fix round 2 (mapping-targets report): the stored mapping targets a DIFFERENT system than
+        // the one this dialog is locked to (e.g. the operator's live `BALAB -> DEFAULT_FAC|BALAB`
+        // self-mapping, opened via ObservedTab's registry-locked dialog). Saving must never silently
+        // normalise `toSystem` to the locked system — that is exactly how a mapping honestly labelled
+        // "not a facility mapping" turns into a DIFFERENT broken mapping ("Target missing") with no
+        // visible signal to the operator. Surface what is really stored instead of the locked system,
+        // and leave `manualSystemId` unset so nothing here silently claims to be the locked system.
+        const label = systems.find((s) => s.url === mapping.toSystem)?.systemCode ?? mapping.toSystem;
+        setTargetMismatch({ url: mapping.toSystem, label });
+        setManualSystemId('');
+      } else {
+        // Either unlocked (full selector, pre-fill by matching url as before) or locked AND the
+        // stored target already agrees with the lock — no disagreement to surface.
+        setTargetMismatch(null);
+        const matchedSystem = locked ? lockedTargetSystem : activeSystems.find((s) => s.url === mapping.toSystem);
+        setManualSystemId(matchedSystem?.id ?? '');
+      }
       setManualCode(mapping.toCode);
       setManualDisplay(mapping.toDisplay ?? '');
     } else {
-      // Create mode — default to search mode, empty
+      // Create mode — default to search mode, empty. A new mapping under lock still targets the
+      // locked system outright — there is no stored value to disagree with.
       setMode('search');
       setPicked(null);
+      setTargetMismatch(null);
       setSearchSystemId(activeSystems[0]?.id ?? '');
       setManualSystemId(activeSystems[0]?.id ?? '');
       setManualCode('');
@@ -198,10 +249,14 @@ export function TermMappingDialog({
   }, [open, mapping]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── canSave ───────────────────────────────────────────────────────────────
+  // Manual mode: normally requires a resolved target system. When `targetMismatch` is set, the
+  // stored (mismatched) system stands in for that requirement — round-tripping the mapping
+  // unchanged (Owner/Relationship/Status-only edits) must remain possible without forcing the
+  // operator to first resolve the disagreement.
   const canSave =
     mode === 'search'
       ? picked !== null
-      : manualSystemId.length > 0 && manualCode.trim().length > 0;
+      : (manualSystemId.length > 0 || targetMismatch !== null) && manualCode.trim().length > 0;
 
   // ── save ──────────────────────────────────────────────────────────────────
   const handleSave = async (): Promise<void> => {
@@ -210,10 +265,14 @@ export function TermMappingDialog({
     setError(null);
     try {
       // Build the body — toSystem is the url, not the id
+      // Fix round 2 (mapping-targets report): when editing under lock with a `targetMismatch`, the
+      // stored `toSystem` wins — never the locked system — unless the operator took the explicit
+      // "Point at …" retarget action (which clears `targetMismatch` and resolves `manualTargetSystem`
+      // normally, same as any other manual-mode save).
       const toSystemUrl =
         mode === 'search'
           ? (picked!.system)
-          : (manualTargetSystem?.url ?? '');
+          : (targetMismatch ? targetMismatch.url : (manualTargetSystem?.url ?? ''));
       const toCode = mode === 'search' ? picked!.code : manualCode.trim();
       const toDisplay = mode === 'search' ? picked!.display : manualDisplay.trim() || null;
 
@@ -293,6 +352,22 @@ export function TermMappingDialog({
                   >
                     {saving ? L.saving : editing ? L.save : L.create}
                   </DropdownMenuItem>
+                  {targetMismatch && lockedTargetSystem && (
+                    <DropdownMenuItem
+                      onClick={() => {
+                        // Explicit retarget: the operator has chosen to point this mapping at the
+                        // locked system. Clear the mismatch AND the stale code — carrying over a code
+                        // that belonged to the old system is exactly the second broken mapping this
+                        // fix exists to prevent (see the report).
+                        setTargetMismatch(null);
+                        setManualSystemId(lockedTargetSystem.id);
+                        setManualCode('');
+                        setManualDisplay('');
+                      }}
+                    >
+                      {L.retargetAction(lockedTargetSystem.systemCode)}
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={() => onOpenChange(false)}>
                     {L.cancel}
@@ -355,7 +430,26 @@ export function TermMappingDialog({
 
             {mode === 'search' ? (
               <div className="space-y-3 py-4">
-                {activeSystems.length > 1 && (
+                {locked ? (
+                  <div className="grid grid-cols-[auto_1fr] items-center gap-x-4">
+                    <Label htmlFor="mapping-locked-system-search" className="whitespace-nowrap">{L.manualSystem}</Label>
+                    {/* Code-review finding (Fix 1, facility-mapping-targets round 1): this used to be a
+                        bare <div> — no role, no tabIndex, no accessible name, no id/label pairing. A
+                        sighted user reads "System: FACILITY-REGISTRY" by visual proximity; a
+                        screen-reader user tabbing the form got nothing. A real, disabled+readOnly
+                        <Input> paired to the Label via htmlFor/id matches this repo's established
+                        pattern for a field that can never accept input (see ReferencePicker.tsx's
+                        "unavailable" branch) — reachable via an accessible query, its label and value
+                        announced together, instead of invisible to assistive tech entirely. */}
+                    <Input
+                      id="mapping-locked-system-search"
+                      readOnly
+                      disabled
+                      value={lockedTargetSystem.systemCode}
+                      className="bg-muted/40 text-muted-foreground"
+                    />
+                  </div>
+                ) : activeSystems.length > 1 && (
                   <div className="grid grid-cols-[auto_1fr] items-center gap-x-4">
                     <Label className="whitespace-nowrap">{L.manualSystem}</Label>
                     <Select value={searchSystemId} onValueChange={(v) => { setSearchSystemId(v); setPicked(null); }}>
@@ -384,19 +478,37 @@ export function TermMappingDialog({
               </div>
             ) : (
               <div className="grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-3 py-4">
-                <Label className="whitespace-nowrap">{L.manualSystem}</Label>
-                <Select value={manualSystemId} onValueChange={setManualSystemId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="—" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {activeSystems.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>
-                        {s.systemCode}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label htmlFor={locked ? 'mapping-locked-system-manual' : undefined} className="whitespace-nowrap">{L.manualSystem}</Label>
+                {locked ? (
+                  // See the search-mode branch above for why this is a real, disabled+readOnly
+                  // <Input> paired to the Label rather than a bare <div>. Fix round 2: when the
+                  // stored mapping disagrees with the lock, show what is REALLY stored (flagged),
+                  // never the locked system standing in for it.
+                  <Input
+                    id="mapping-locked-system-manual"
+                    readOnly
+                    disabled
+                    value={targetMismatch ? targetMismatch.label : lockedTargetSystem.systemCode}
+                    className={
+                      targetMismatch
+                        ? 'border-amber-500/60 bg-amber-500/10 text-amber-700 dark:text-amber-400'
+                        : 'bg-muted/40 text-muted-foreground'
+                    }
+                  />
+                ) : (
+                  <Select value={manualSystemId} onValueChange={setManualSystemId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="—" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {activeSystems.map((s) => (
+                        <SelectItem key={s.id} value={s.id}>
+                          {s.systemCode}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
 
                 <Label htmlFor="mapping-manual-code" className="whitespace-nowrap">
                   {L.manualCode}
@@ -418,6 +530,12 @@ export function TermMappingDialog({
                   onChange={(e) => setManualDisplay(e.target.value)}
                   placeholder={L.manualDisplayPlaceholder}
                 />
+
+                {targetMismatch && (
+                  <p className="col-span-2 text-[11px] text-amber-700 dark:text-amber-400">
+                    {L.targetMismatchHint}
+                  </p>
+                )}
 
                 <div className="col-span-2 flex items-center justify-between gap-2">
                   <p className="text-[11px] text-muted-foreground">{L.manualHint}</p>

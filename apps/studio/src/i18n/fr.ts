@@ -814,6 +814,7 @@ export const fr: EnShape = {
       count_other: '{{count}} établissements observés',
       unmapped: 'Non associé',
       targetMissing: 'Cible manquante',
+      nonFacilityTarget: 'La cible n’est pas un établissement',
       viaRegistry: 'via le registre',
       viaNational: 'via le national',
       map: 'Associer',
@@ -825,7 +826,7 @@ export const fr: EnShape = {
       scanDone: '{{discovered}} découvert(s), {{created}} créé(s), {{updated}} mis à jour.',
       publish: 'Reconstruire la dimension des rapports',
       publishing: 'Reconstruction en cours…',
-      publishDone: '{{resolved}} résolu(s), {{unmapped}} non associé(s), {{targetMissing}} cible(s) manquante(s), {{written}} écrit(s).',
+      publishDone: '{{resolved}} résolu(s), {{unmapped}} non associé(s), {{targetMissing}} cible(s) manquante(s), {{nonFacilityTarget}} cible(s) non-établissement, {{written}} écrit(s).',
     },
   },
   query: {

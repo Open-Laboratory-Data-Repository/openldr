@@ -13,6 +13,7 @@ vi.mock('@/api', async (orig) => {
     publishFacilities: vi.fn(),
     listCodingSystems: vi.fn(),
     listTermMappings: vi.fn(),
+    createTermMapping: vi.fn(),
   };
 });
 
@@ -24,6 +25,7 @@ vi.mock('@/auth/AuthProvider', () => ({ useAuth: useAuthMock }));
 
 import {
   listObservedFacilities, scanObservedFacilities, publishFacilities, listCodingSystems, listTermMappings,
+  createTermMapping,
   type ObservedFacility, type CodingSystem, type TermMapping,
 } from '@/api';
 import { ObservedTab } from './ObservedTab';
@@ -32,7 +34,7 @@ const dodoma: ObservedFacility = {
   sourceSystem: 'webhook-ingest', sourceCode: 'Dodoma', sourceDisplay: null, reportCount: 247,
   registryId: 'f1', localCode: 'DOD-REF', name: 'Dodoma Regional Referral Hospital', level: 'Hospital', status: null,
   region: 'Dodoma', district: 'Dodoma Urban', council: null, nationalSystem: null, nationalCode: null,
-  resolvedVia: 'registry', targetMissing: false,
+  resolvedVia: 'registry', targetMissing: false, nonFacilityTarget: false,
 };
 // Alphabetically "Arusha" sorts BEFORE "Dodoma", but carries fewer reports (148 < 247) — deliberately
 // the opposite of alphabetical order, so a sort-by-code mutation cannot pass the ordering test below
@@ -41,12 +43,12 @@ const dodoma: ObservedFacility = {
 const arusha: ObservedFacility = {
   sourceSystem: 'webhook-ingest', sourceCode: 'Arusha', sourceDisplay: null, reportCount: 148,
   registryId: null, localCode: null, name: null, level: null, status: null, region: null, district: null,
-  council: null, nationalSystem: null, nationalCode: null, resolvedVia: null, targetMissing: false,
+  council: null, nationalSystem: null, nationalCode: null, resolvedVia: null, targetMissing: false, nonFacilityTarget: false,
 };
 const oceanRoad: ObservedFacility = {
   sourceSystem: 'webhook-ingest', sourceCode: 'Ocean Road Cancer Institute (O', sourceDisplay: null, reportCount: 6,
   registryId: null, localCode: null, name: null, level: null, status: null, region: null, district: null,
-  council: null, nationalSystem: null, nationalCode: null, resolvedVia: null, targetMissing: true,
+  council: null, nationalSystem: null, nationalCode: null, resolvedVia: null, targetMissing: true, nonFacilityTarget: false,
 };
 // DisaGlobal.dbo.LOCNDIC4 holds five distinct facility codes whose DESCRIPTION is all exactly
 // "Aga Khan" — BAMAA is one of them. Used to pin that the observed-code cell shows the code AND
@@ -55,13 +57,33 @@ const oceanRoad: ObservedFacility = {
 const bamaa: ObservedFacility = {
   sourceSystem: 'webhook-ingest', sourceCode: 'BAMAA', sourceDisplay: 'Aga Khan', reportCount: 12,
   registryId: null, localCode: null, name: null, level: null, status: null, region: null, district: null,
-  council: null, nationalSystem: null, nationalCode: null, resolvedVia: null, targetMissing: false,
+  council: null, nationalSystem: null, nationalCode: null, resolvedVia: null, targetMissing: false, nonFacilityTarget: false,
+};
+// ⛔ THE bug report's exact scenario: BALAB mapped to ITSELF (DEFAULT_FAC|BALAB). Fix 1 files this
+// as `nonFacilityTarget`, not `targetMissing`.
+const balab: ObservedFacility = {
+  sourceSystem: 'webhook-ingest', sourceCode: 'BALAB', sourceDisplay: null, reportCount: 6,
+  registryId: null, localCode: null, name: null, level: null, status: null, region: null, district: null,
+  council: null, nationalSystem: null, nationalCode: null, resolvedVia: null, targetMissing: false, nonFacilityTarget: true,
 };
 
 const defaultFacSystem: CodingSystem = {
   id: 'cs-1', systemCode: 'DEFAULT_FAC', systemName: 'Observed facilities',
   url: 'urn:openldr:default_fac', systemVersion: null, description: null, active: true,
   publisherId: 'pub-system', seeded: false,
+};
+const registrySystem: CodingSystem = {
+  id: 'cs-reg', systemCode: 'FACILITY-REGISTRY', systemName: 'OpenLDR facility registry',
+  url: 'urn:openldr:cs:facility-registry', systemVersion: null, description: null, active: true,
+  publisherId: 'pub-system', seeded: false,
+};
+const loincSystem: CodingSystem = {
+  id: 'cs-loinc', systemCode: 'LOINC', systemName: 'LOINC', url: 'http://loinc.org',
+  systemVersion: null, description: null, active: true, publisherId: 'p', seeded: true,
+};
+const hfrSystem: CodingSystem = {
+  id: 'cs-hfr', systemCode: 'HFR', systemName: 'Tanzania HFR', url: 'urn:tz:hfr',
+  systemVersion: null, description: null, active: true, publisherId: 'p', seeded: false,
 };
 
 const show = () => render(<ObservedTab />);
@@ -70,7 +92,10 @@ describe('ObservedTab', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (listObservedFacilities as ReturnType<typeof vi.fn>).mockResolvedValue([dodoma]);
-    (listCodingSystems as ReturnType<typeof vi.fn>).mockResolvedValue([defaultFacSystem]);
+    // Includes registrySystem — openMapping() looks it up by url (FACILITY_REGISTRY_SYSTEM) to
+    // build TermMappingDialog's locked target; a suite that omits it entirely is exercising the
+    // (should-never-happen-live) defensive throw, not the normal open-mapping path.
+    (listCodingSystems as ReturnType<typeof vi.fn>).mockResolvedValue([defaultFacSystem, registrySystem]);
     (listTermMappings as ReturnType<typeof vi.fn>).mockResolvedValue({ outgoing: [], reverse: [] });
     // Default: a lab_admin-shaped actor who can both view and manage.
     useAuthMock.mockReturnValue({
@@ -338,7 +363,7 @@ describe('ObservedTab', () => {
     };
     const cdrRow: ObservedFacility = { ...arusha, sourceSystem: 'cdr-import', sourceCode: 'NHL-01' };
     (listObservedFacilities as ReturnType<typeof vi.fn>).mockResolvedValue([cdrRow]);
-    (listCodingSystems as ReturnType<typeof vi.fn>).mockResolvedValue([defaultFacSystem, cdrSystem]);
+    (listCodingSystems as ReturnType<typeof vi.fn>).mockResolvedValue([defaultFacSystem, cdrSystem, registrySystem]);
     show();
     await screen.findByText('NHL-01');
 
@@ -378,5 +403,103 @@ describe('ObservedTab', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: /edit mapping/i }));
 
     expect(await screen.findByText(/^edit mapping$/i)).toBeInTheDocument();
+  });
+
+  // ⛔ THE bug report: marks a mapping to a non-facility target (BALAB mapped to itself) with a
+  // message distinct from "target missing" — that message promises a facility was DELETED, which
+  // is false here; nothing was ever a facility.
+  it('marks a mapping to a non-facility target distinctly from "target missing"', async () => {
+    (listObservedFacilities as ReturnType<typeof vi.fn>).mockResolvedValue([balab]);
+    show();
+
+    expect(await screen.findByText(/not a facility/i)).toBeInTheDocument();
+    expect(screen.queryByText(/target missing/i)).not.toBeInTheDocument();
+  });
+
+  // Operator's stronger call (supersedes the earlier "registry plus known national registers"
+  // dropdown): "we know we are only linking to FACILITY_REGISTRY" — the Observed tab's dialog
+  // offers NO system choice at all, in either mode, even when several OTHER systems are active.
+  it('offers no system selector when mapping from the Observed tab, in either search or manual mode', async () => {
+    (listObservedFacilities as ReturnType<typeof vi.fn>).mockResolvedValue([arusha]);
+    (listCodingSystems as ReturnType<typeof vi.fn>).mockResolvedValue([defaultFacSystem, loincSystem, registrySystem, hfrSystem]);
+    show();
+    await screen.findByText('Arusha');
+
+    const trigger = screen.getByRole('button', { name: 'Observed facility actions Arusha' });
+    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByRole('menuitem', { name: /^map$/i })) {
+      fireEvent.keyDown(trigger, { key: 'Enter' });
+    }
+    fireEvent.click(screen.getByRole('menuitem', { name: /^map$/i }));
+    await screen.findByText(/^new mapping$/i);
+
+    // Search mode (the default on create): the ONLY combobox on the page is "Map type" — never a
+    // second one offering a choice of target system, even though 4 systems are active.
+    expect(screen.getAllByRole('combobox')).toHaveLength(1);
+    // The operator can still tell what they're mapping TO — a real, accessibly-labelled field (Fix
+    // 1, facility-mapping-targets round 1: this used to be a plain text `<div>`, invisible to
+    // assistive tech; it's now a readOnly/disabled `<Input>` reachable via `getByLabelText`, whose
+    // VALUE carries the system code, not its text content — hence `getByDisplayValue` here, not
+    // `getByText`) — and none of the OTHER active systems appear anywhere on the page (nothing to
+    // open would reveal them; if they render at all, something is offering a choice).
+    expect(screen.getByLabelText('System')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('FACILITY-REGISTRY')).toBeInTheDocument();
+    expect(screen.queryByText('LOINC')).not.toBeInTheDocument();
+    expect(screen.queryByText('HFR')).not.toBeInTheDocument();
+    expect(screen.queryByText('DEFAULT_FAC')).not.toBeInTheDocument();
+
+    // Manual mode: same story. Still exactly one combobox, and the accessible locked field persists.
+    fireEvent.click(screen.getByRole('button', { name: /enter manually/i }));
+    expect(screen.getAllByRole('combobox')).toHaveLength(1);
+    expect(screen.getByLabelText('System')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('FACILITY-REGISTRY')).toBeInTheDocument();
+    expect(screen.queryByText('LOINC')).not.toBeInTheDocument();
+    expect(screen.queryByText('HFR')).not.toBeInTheDocument();
+    expect(screen.queryByText('DEFAULT_FAC')).not.toBeInTheDocument();
+  });
+
+  // The dialog's own state is the only thing exercised above — this pins the OUTCOME an operator
+  // actually cares about: the mapping that gets written targets FACILITY_REGISTRY_SYSTEM, not
+  // merely that some prop was passed correctly.
+  it('saves a mapping created from the Observed tab against FACILITY_REGISTRY_SYSTEM', async () => {
+    (listObservedFacilities as ReturnType<typeof vi.fn>).mockResolvedValue([arusha]);
+    (listCodingSystems as ReturnType<typeof vi.fn>).mockResolvedValue([defaultFacSystem, loincSystem, registrySystem, hfrSystem]);
+    (createTermMapping as ReturnType<typeof vi.fn>).mockResolvedValue({
+      mapping: {
+        id: 'tm-new', fromSystem: 'urn:openldr:default_fac', fromCode: 'Arusha',
+        toSystem: 'urn:openldr:cs:facility-registry', toCode: 'ARU', toDisplay: null,
+        mapType: 'SAME-AS', relationship: null, owner: null, isActive: true,
+      },
+      draftCreated: false,
+    });
+    show();
+    await screen.findByText('Arusha');
+
+    const trigger = screen.getByRole('button', { name: 'Observed facility actions Arusha' });
+    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByRole('menuitem', { name: /^map$/i })) {
+      fireEvent.keyDown(trigger, { key: 'Enter' });
+    }
+    fireEvent.click(screen.getByRole('menuitem', { name: /^map$/i }));
+    await screen.findByText(/^new mapping$/i);
+
+    // The target SYSTEM is fixed already — the operator only ever fills in the target CODE.
+    fireEvent.click(screen.getByRole('button', { name: /enter manually/i }));
+    fireEvent.change(screen.getByPlaceholderText('441407007'), { target: { value: 'ARU' } });
+
+    const actionsBtn = screen.getByRole('button', { name: /actions/i });
+    fireEvent.pointerDown(actionsBtn, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByText('Create')) {
+      fireEvent.keyDown(actionsBtn, { key: 'Enter' });
+    }
+    const createItem = await screen.findByText('Create');
+    fireEvent.pointerMove(createItem);
+    fireEvent.click(createItem);
+
+    await waitFor(() => expect(createTermMapping).toHaveBeenCalledWith(
+      'urn:openldr:default_fac',
+      'Arusha',
+      expect.objectContaining({ toSystem: 'urn:openldr:cs:facility-registry', toCode: 'ARU' }),
+    ));
   });
 });

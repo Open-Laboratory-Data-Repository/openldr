@@ -814,6 +814,7 @@ export const pt: EnShape = {
       count_other: '{{count}} unidades observadas',
       unmapped: 'Não associada',
       targetMissing: 'Destino em falta',
+      nonFacilityTarget: 'O destino não é uma unidade',
       viaRegistry: 'via registo',
       viaNational: 'via nacional',
       map: 'Associar',
@@ -825,7 +826,7 @@ export const pt: EnShape = {
       scanDone: '{{discovered}} encontrada(s), {{created}} criada(s), {{updated}} atualizada(s).',
       publish: 'Reconstruir a dimensão de relatórios',
       publishing: 'A reconstruir…',
-      publishDone: '{{resolved}} resolvida(s), {{unmapped}} não associada(s), {{targetMissing}} com destino em falta, {{written}} escrita(s).',
+      publishDone: '{{resolved}} resolvida(s), {{unmapped}} não associada(s), {{targetMissing}} com destino em falta, {{nonFacilityTarget}} com destino não-unidade, {{written}} escrita(s).',
     },
   },
   query: {

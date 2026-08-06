@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { DEFAULT_OBSERVED_FACILITY_SYSTEM, FACILITY_REGISTRY_SYSTEM, observedSystemForFeed } from '@openldr/db';
-import { scanObservedFacilities, resolveObservedFacilities, publishFacilityMap, publishRegistryConcepts, projectRegistryRows, captureObservedFacility, captureObservedFacilityFromProjection } from './facility-reconcile';
+import { scanObservedFacilities, resolveObservedFacilities, publishFacilityMap, publishRegistryConcepts, projectRegistryRows, captureObservedFacility, captureObservedFacilityFromProjection, assertResolvedFacilityInvariant } from './facility-reconcile';
 import { makeReconcileDeps, seedPerformers, seedRegistry, seedMapping } from './test-support/facility-reconcile-fixture';
 
 describe('scanObservedFacilities', () => {
@@ -333,6 +333,122 @@ describe('resolveObservedFacilities', () => {
     const [row] = await resolveObservedFacilities(deps);
 
     expect(row.resolvedVia).toBeNull();
+  });
+
+  // ⛔ THE bug report: an operator mapped BALAB to ITSELF (target system = the observed system,
+  // same code) via TermMappingDialog. The old classification treated "anything that is not the
+  // registry system" as automatically a national-register route — so this self-mapping was looked
+  // up in `byNational` (built only from registry rows that actually carry a `national_system`),
+  // found nothing, and reported `targetMissing`. That is a lie: nothing is missing, the target was
+  // never a facility. `nonFacilityTarget` is the honest state — a mapping was authored, but it does
+  // not resolve to a facility at all.
+  it('reports a self-mapping (observed system as its own target) as nonFacilityTarget, not targetMissing', async () => {
+    const deps = await makeReconcileDeps();
+    await seedPerformers(deps, [['BALAB', 6]]);
+    await scanObservedFacilities(deps, { now: '2026-08-05T00:00:00.000Z', apply: true });
+    await seedMapping(deps, {
+      fromSystem: 'urn:openldr:default_fac', fromCode: 'BALAB',
+      toSystem: 'urn:openldr:default_fac', toCode: 'BALAB',
+    });
+
+    const [row] = await resolveObservedFacilities(deps);
+
+    expect(row.targetMissing).toBe(false);
+    expect(row.resolvedVia).toBeNull();
+    expect(row.nonFacilityTarget).toBe(true);
+  });
+
+  // Same defect, different target: a mapping to LOINC (or any other unrelated ACTIVE coding
+  // system — ICD-10, UCUM, LOCAL) is not a national facility register just because it fails the
+  // one exclusion ("not the registry system"). Distinguishes `nonFacilityTarget` from `targetMissing`.
+  it('reports a mapping to an unrelated active system (e.g. LOINC) as nonFacilityTarget, not targetMissing', async () => {
+    const deps = await makeReconcileDeps();
+    await seedPerformers(deps, [['BALAB', 6]]);
+    await scanObservedFacilities(deps, { now: '2026-08-05T00:00:00.000Z', apply: true });
+    await seedMapping(deps, {
+      fromSystem: 'urn:openldr:default_fac', fromCode: 'BALAB',
+      toSystem: 'http://loinc.org', toCode: '12345-6',
+    });
+
+    const [row] = await resolveObservedFacilities(deps);
+
+    expect(row.targetMissing).toBe(false);
+    expect(row.resolvedVia).toBeNull();
+    expect(row.nonFacilityTarget).toBe(true);
+  });
+
+  // The flip side: a mapping to a system that genuinely IS a facility register (proven by a LIVE
+  // `facility_registry` row carrying that `national_system`) but whose code matches no row must
+  // still report `targetMissing` — that meaning must survive Fix 1's tighter classification.
+  it('still flags targetMissing for a national-route mapping whose code matches no registry row', async () => {
+    const deps = await makeReconcileDeps();
+    await seedPerformers(deps, [['Muhimbili', 1], ['Ghost', 1]]);
+    await scanObservedFacilities(deps, { now: '2026-08-05T00:00:00.000Z', apply: true });
+    // Establishes 'urn:tz:hfr' as a KNOWN national system (a live row actually carries it).
+    await seedRegistry(deps, { id: 'fac-2', name: 'Muhimbili National Hospital', nationalSystem: 'urn:tz:hfr', nationalCode: 'TZ-001' });
+    await seedMapping(deps, {
+      fromSystem: 'urn:openldr:default_fac', fromCode: 'Ghost',
+      toSystem: 'urn:tz:hfr', toCode: 'TZ-999', // no registry row carries this code
+    });
+
+    const rows = await resolveObservedFacilities(deps);
+    const row = rows.find((r) => r.sourceCode === 'Ghost')!;
+
+    expect(row.targetMissing).toBe(true);
+    expect(row.nonFacilityTarget).toBe(false);
+    expect(row.resolvedVia).toBeNull();
+  });
+
+  // Regression guard for Fix 1: the two real routes, and registry-beats-national precedence, must
+  // be unaffected by the tighter national-route classification.
+  it('still resolves a valid registry-route mapping, and registry still beats national, with nonFacilityTarget false', async () => {
+    const deps = await makeReconcileDeps();
+    await seedPerformers(deps, [['Mnazi Mmoja', 182]]);
+    await scanObservedFacilities(deps, { now: '2026-08-05T00:00:00.000Z', apply: true });
+    await seedRegistry(deps, { id: 'fac-3', name: 'Mnazi Mmoja Hospital', localCode: 'MMH' });
+    await seedRegistry(deps, { id: 'fac-4', name: 'Some Other Hospital', nationalSystem: 'urn:tz:hfr', nationalCode: 'TZ-999' });
+    await seedMapping(deps, { fromSystem: 'urn:openldr:default_fac', fromCode: 'Mnazi Mmoja', toSystem: 'urn:tz:hfr', toCode: 'TZ-999' });
+    await seedMapping(deps, { fromSystem: 'urn:openldr:default_fac', fromCode: 'Mnazi Mmoja', toSystem: 'urn:openldr:cs:facility-registry', toCode: 'MMH' });
+
+    const [row] = await resolveObservedFacilities(deps);
+
+    expect(row.name).toBe('Mnazi Mmoja Hospital');
+    expect(row.resolvedVia).toBe('registry');
+    expect(row.targetMissing).toBe(false);
+    expect(row.nonFacilityTarget).toBe(false);
+  });
+});
+
+// Code-review finding (Fix 2, facility-mapping-targets round 1): `nonFacilityTarget`'s exclusivity
+// with `resolvedVia`/`targetMissing` holds inside `resolveObservedFacilities` today only because of
+// how the three fields happen to be derived together — nothing stops a future edit (or a hand-built
+// fixture) from emitting a contradictory row (e.g. `nonFacilityTarget: true` alongside
+// `resolvedVia: 'registry'`), which is meaningless by the field's own doc comment. A full status
+// union was judged too wide a refactor for this branch; this pins the cheap alternative — the
+// producer asserts the invariant itself, so a future break fails loudly instead of silently
+// emitting nonsense.
+describe('assertResolvedFacilityInvariant', () => {
+  it('throws when nonFacilityTarget is claimed alongside a resolved facility route', () => {
+    expect(() => assertResolvedFacilityInvariant({
+      resolvedVia: 'registry',
+      targetMissing: false,
+      nonFacilityTarget: true,
+    })).toThrow();
+  });
+
+  it('throws when nonFacilityTarget is claimed alongside targetMissing', () => {
+    expect(() => assertResolvedFacilityInvariant({
+      resolvedVia: null,
+      targetMissing: true,
+      nonFacilityTarget: true,
+    })).toThrow();
+  });
+
+  it('does not throw for the real, mutually-exclusive combinations', () => {
+    expect(() => assertResolvedFacilityInvariant({ resolvedVia: 'registry', targetMissing: false, nonFacilityTarget: false })).not.toThrow();
+    expect(() => assertResolvedFacilityInvariant({ resolvedVia: null, targetMissing: true, nonFacilityTarget: false })).not.toThrow();
+    expect(() => assertResolvedFacilityInvariant({ resolvedVia: null, targetMissing: false, nonFacilityTarget: true })).not.toThrow();
+    expect(() => assertResolvedFacilityInvariant({ resolvedVia: null, targetMissing: false, nonFacilityTarget: false })).not.toThrow();
   });
 });
 

@@ -1316,6 +1316,37 @@ describe('Task 6: GET /api/facilities/observed', () => {
     expect(res.statusCode).toBe(403);
   });
 
+  // ⛔ THE bug report, end to end: an operator mapped BALAB to ITSELF (target system =
+  // urn:openldr:default_fac, same code) via TermMappingDialog. The old classification treated
+  // "anything that is not the registry system" as automatically a national-register route, so this
+  // self-mapping was looked up in `byNational`, found nothing, and reported `targetMissing` — a
+  // lie, since nothing was ever missing. Fix 1's `nonFacilityTarget` is the honest state.
+  it('reports a self-mapping as nonFacilityTarget, not targetMissing (the reported bug)', async () => {
+    const internalDb = await makeMigratedDb();
+    const externalDb = await makeMigratedExternalDb();
+    await seedObservedReports(externalDb, [['BALAB', 6]]);
+    await internalDb.insertInto('term_mappings').values({
+      id: `tm-${randomUUID()}`,
+      from_system: DEFAULT_OBSERVED_FACILITY_SYSTEM,
+      from_code: 'BALAB',
+      to_system: DEFAULT_OBSERVED_FACILITY_SYSTEM,
+      to_code: 'BALAB',
+      to_display: null,
+      map_type: 'equivalent',
+      relationship: null,
+      owner: null,
+      is_active: true,
+    }).execute();
+    const app = await appWith(fakeReconcileCtx(internalDb, externalDb));
+
+    const res = await app.inject({ method: 'GET', url: '/api/facilities/observed' });
+    expect(res.statusCode).toBe(200);
+    const row = res.json().find((r: any) => r.sourceCode === 'BALAB');
+    expect(row.targetMissing).toBe(false);
+    expect(row.nonFacilityTarget).toBe(true);
+    expect(row.resolvedVia).toBeNull();
+  });
+
   // ⚠ Route-ordering regression guard: `/api/facilities/:id` is ALSO gated on `facilities.view` and
   // ALSO returns a 4xx for an id it can't find, so a `facilities.view`-only caller getting SOME 4xx
   // out of `/api/facilities/observed` is not, by itself, proof this route (rather than the `:id`

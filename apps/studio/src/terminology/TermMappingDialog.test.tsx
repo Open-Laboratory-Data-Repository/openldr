@@ -31,6 +31,30 @@ const system: api.CodingSystem = {
   seeded: true,
 };
 
+const secondSystem: api.CodingSystem = {
+  id: 'sys2',
+  systemCode: 'ICD10',
+  systemName: 'ICD-10',
+  url: 'http://icd10.org',
+  systemVersion: null,
+  description: null,
+  active: true,
+  publisherId: 'p',
+  seeded: true,
+};
+
+const registrySystem: api.CodingSystem = {
+  id: 'sys-reg',
+  systemCode: 'FACILITY-REGISTRY',
+  systemName: 'OpenLDR facility registry',
+  url: 'urn:openldr:cs:facility-registry',
+  systemVersion: null,
+  description: null,
+  active: true,
+  publisherId: 'pub-system',
+  seeded: false,
+};
+
 const fromTerm = {
   system: 'http://x',
   code: 'AMP',
@@ -320,6 +344,160 @@ describe('TermMappingDialog', () => {
     // Clicking it must NOT invoke the API
     fireEvent.click(createItem);
     expect(api.createTermMapping).not.toHaveBeenCalled();
+  });
+
+  // Regression guard for the Observed tab's `lockedTargetSystem` prop (facility-mapping-targets
+  // slice): `/terminology`'s own `TermDialog` caller never passes it, and must keep offering the
+  // FULL multi-system picker exactly as before — this is the caller most at risk of an accidental
+  // behaviour change from a prop that defaults to "off" everywhere else. Asserts on what actually
+  // renders, not merely that `lockedTargetSystem` was omitted.
+  it("/terminology's caller (no lockedTargetSystem) still shows the full system selector, in both search and manual mode", () => {
+    render(
+      <TermMappingDialog
+        open
+        fromTerm={fromTerm}
+        systems={[system, secondSystem]}
+        mapping={null}
+        onOpenChange={() => {}}
+        onSaved={() => {}}
+      />,
+    );
+
+    // Search mode (default on create): 2+ active systems renders the "System" Select — a SECOND
+    // combobox alongside "Map type".
+    expect(screen.getAllByRole('combobox')).toHaveLength(2);
+
+    // Manual mode: same Select, unconditionally rendered, offering both systems.
+    fireEvent.click(screen.getByRole('button', { name: /manual/i }));
+    const comboboxes = screen.getAllByRole('combobox');
+    expect(comboboxes).toHaveLength(2);
+    fireEvent.click(comboboxes[comboboxes.length - 1]);
+    expect(screen.getByRole('option', { name: 'LOINC' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'ICD10' })).toBeInTheDocument();
+  });
+
+  // Code-review finding (Fix 1, facility-mapping-targets round 1): under `lockedTargetSystem`, the
+  // System control used to be replaced with a bare `<div>` — no role, no tabIndex, no accessible
+  // name, no id/label pairing. A sighted user reads "System: FACILITY-REGISTRY" by visual
+  // proximity; a screen-reader user tabbing the form got nothing at all. These pin that the field is
+  // now reachable by an ACCESSIBLE query (not merely visible text) and exposes the locked system's
+  // value, in both target modes.
+  it('exposes the locked target system as an accessible, labelled field in search mode', () => {
+    render(
+      <TermMappingDialog
+        open
+        fromTerm={fromTerm}
+        systems={[system]}
+        lockedTargetSystem={registrySystem}
+        mapping={null}
+        onOpenChange={() => {}}
+        onSaved={() => {}}
+      />,
+    );
+    // Create mode defaults to search mode — the locked field renders without switching.
+    const field = screen.getByLabelText('System') as HTMLInputElement;
+    expect(field.value).toBe('FACILITY-REGISTRY');
+  });
+
+  it('exposes the locked target system as an accessible, labelled field in manual mode', () => {
+    render(
+      <TermMappingDialog
+        open
+        fromTerm={fromTerm}
+        systems={[system]}
+        lockedTargetSystem={registrySystem}
+        mapping={null}
+        onOpenChange={() => {}}
+        onSaved={() => {}}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /manual/i }));
+    const field = screen.getByLabelText('System') as HTMLInputElement;
+    expect(field.value).toBe('FACILITY-REGISTRY');
+  });
+
+  // Fix round 2 (mapping-targets report): the PRIOR behaviour (jumping the manual System field to
+  // the locked system regardless of the mapping's own `toSystem`, while leaving Code untouched) was
+  // a silent-overwrite trap — see the report's "Fix 3" note. The operator's live
+  // `BALAB -> DEFAULT_FAC|BALAB` self-mapping (correctly `nonFacilityTarget` on the Observed tab)
+  // would silently become a DIFFERENT broken mapping (`toSystem` rewritten to the registry, `Code`
+  // still `BALAB`, which no registry row has) the moment they saved for any unrelated reason. The
+  // dialog must now surface what is REALLY stored, not what the lock says it should be.
+  const selfMapping: api.TermMapping = {
+    id: 'm-self',
+    fromSystem: 'urn:openldr:default_fac',
+    fromCode: 'BALAB',
+    toSystem: 'urn:openldr:default_fac',
+    toCode: 'BALAB',
+    toDisplay: null,
+    mapType: 'SAME-AS',
+    relationship: null,
+    owner: null,
+    isActive: true,
+  };
+
+  it('editing a mapping whose stored toSystem disagrees with the locked system surfaces the STORED system, not the locked one', () => {
+    render(
+      <TermMappingDialog
+        open
+        fromTerm={{ system: 'urn:openldr:default_fac', code: 'BALAB', display: null, systemCode: 'DEFAULT_FAC' }}
+        systems={[system]}
+        lockedTargetSystem={registrySystem}
+        mapping={selfMapping}
+        onOpenChange={() => {}}
+        onSaved={() => {}}
+      />,
+    );
+    // Edit mode always opens in manual mode.
+    const field = screen.getByLabelText('System') as HTMLInputElement;
+    // Must NOT silently present the locked (registry) system as though it were the truth.
+    expect(field.value).not.toBe('FACILITY-REGISTRY');
+    // Must show what is really stored instead.
+    expect(field.value).toBe('urn:openldr:default_fac');
+    // Code is untouched.
+    expect(screen.getByPlaceholderText('441407007')).toHaveValue('BALAB');
+  });
+
+  // The load-bearing regression test: an operator opens this same mapping to change something
+  // wholly unrelated (Owner) and saves. The payload sent to the API must round-trip toSystem/toCode
+  // EXACTLY as stored — an unrelated edit must never silently retarget the mapping.
+  it('editing that mapping and changing only Owner leaves toSystem/toCode exactly as stored on save (round-trip)', async () => {
+    vi.spyOn(api, 'updateTermMapping').mockResolvedValue(selfMapping);
+    render(
+      <TermMappingDialog
+        open
+        fromTerm={{ system: 'urn:openldr:default_fac', code: 'BALAB', display: null, systemCode: 'DEFAULT_FAC' }}
+        systems={[system]}
+        lockedTargetSystem={registrySystem}
+        mapping={selfMapping}
+        onOpenChange={() => {}}
+        onSaved={() => {}}
+      />,
+    );
+
+    // Change ONLY Owner — System and Code are left exactly as pre-filled.
+    const ownerInput = screen.getByPlaceholderText('e.g. WHO');
+    fireEvent.change(ownerInput, { target: { value: 'Lab Ops' } });
+
+    const actionsBtn = screen.getByRole('button', { name: /actions/i });
+    fireEvent.pointerDown(actionsBtn, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByText('Save')) {
+      fireEvent.keyDown(actionsBtn, { key: 'Enter' });
+    }
+    const saveItem = await screen.findByText('Save');
+    fireEvent.pointerMove(saveItem);
+    fireEvent.click(saveItem);
+
+    await waitFor(() => {
+      expect(api.updateTermMapping).toHaveBeenCalledWith(
+        'm-self',
+        expect.objectContaining({
+          toSystem: 'urn:openldr:default_fac',
+          toCode: 'BALAB',
+          owner: 'Lab Ops',
+        }),
+      );
+    });
   });
 
   it('shows the status section with is-active checkbox checked by default', () => {

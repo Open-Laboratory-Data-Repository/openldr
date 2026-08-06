@@ -885,8 +885,16 @@ export interface ObservedFacility {
   nationalSystem: string | null;
   nationalCode: string | null;
   resolvedVia: 'registry' | 'national' | null;
-  /** A mapping exists, but its target resolves to no live registry row. */
+  /** A GENUINE facility-route mapping (registry, or a proven national register) was authored but
+   *  resolves to no live registry row. ⛔ Means exactly this one thing — never true for
+   *  `nonFacilityTarget` below (self-mapping report, Fix 1). */
   targetMissing: boolean;
+  /** A mapping exists, but its target SYSTEM is not a facility register at all (a self-mapping to
+   *  the observed system itself, or an unrelated active system such as LOINC/ICD-10/UCUM). Distinct
+   *  from `targetMissing` (a genuine facility-register mapping whose CODE doesn't resolve) and from
+   *  "never mapped". See `ResolvedFacility.nonFacilityTarget` in
+   *  packages/bootstrap/src/facility-reconcile.ts for the bug this split fixes. */
+  nonFacilityTarget: boolean;
 }
 
 export const listObservedFacilities = (): Promise<ObservedFacility[]> =>
@@ -901,7 +909,13 @@ export const scanObservedFacilities = (body: ScanObservedRequest = {}): Promise<
   authFetch('/api/facilities/scan-observed', jbody(body, 'POST')).then((r) => okJson<ScanObservedResult>(r, 'scan observed facilities'));
 
 export interface PublishFacilitiesRequest { apply?: boolean }
-export interface PublishFacilitiesResult { resolved: number; unmapped: number; targetMissing: number; written: number }
+export interface PublishFacilitiesResult {
+  resolved: number; unmapped: number; targetMissing: number;
+  /** Fix 1: rows filed under `ResolvedFacility.nonFacilityTarget` — counted separately so
+   *  `unmapped` never silently absorbs them. */
+  nonFacilityTarget: number;
+  written: number;
+}
 export const publishFacilities = (body: PublishFacilitiesRequest = {}): Promise<PublishFacilitiesResult> =>
   authFetch('/api/facilities/publish', jbody(body, 'POST')).then((r) => okJson<PublishFacilitiesResult>(r, 'publish facilities'));
 

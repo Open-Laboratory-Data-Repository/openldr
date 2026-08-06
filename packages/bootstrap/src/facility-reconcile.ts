@@ -287,9 +287,56 @@ export interface ResolvedFacility {
   nationalSystem: string | null;
   nationalCode: string | null;
   resolvedVia: ResolvedVia | null;
-  /** A mapping exists, but its target resolves to no live registry row. Surfaced on the Observed
-   *  tab; the report still falls back to the raw string. */
+  /** A mapping exists, and its target system genuinely IS a facility register (the registry
+   *  system, or a `national_system` some LIVE `facility_registry` row actually carries), but the
+   *  target code resolves to no live row. Surfaced on the Observed tab; the report still falls
+   *  back to the raw string. ⛔ Means exactly this ONE thing — never true for `nonFacilityTarget`
+   *  below, which is a DIFFERENT failure (see that field's doc comment for the bug this split
+   *  fixes). */
   targetMissing: boolean;
+  /** A mapping exists, but its target SYSTEM is not a facility register at all — the observed
+   *  system itself (a self-mapping), or an unrelated active system (LOINC, ICD-10, UCUM, LOCAL).
+   *  Distinct from `targetMissing` (a genuine facility-register mapping whose CODE doesn't
+   *  resolve) and from "never mapped" (`resolvedVia === null && !targetMissing && !nonFacilityTarget`):
+   *  the operator DID author a mapping here, and deserves to be told it doesn't resolve to a
+   *  facility, not "target missing" (which promises a facility was deleted — nothing here was ever
+   *  a facility) and not silence (which would hide that anything was authored at all).
+   *
+   *  ⛔ Bug this closes: the pre-Fix-1 code classified "any candidate whose `toSystem` is not the
+   *  registry system" as a national-register route, unconditionally — so a self-mapping (an
+   *  operator mapping an observed code to itself under `DEFAULT_OBSERVED_FACILITY_SYSTEM`) or a
+   *  mapping to LOINC/ICD-10/UCUM/LOCAL was looked up in `byNational` (which only ever contains
+   *  LIVE registry rows' `national_system`), found nothing, and reported `targetMissing` — a lie:
+   *  nothing was ever missing, because the target was never a facility. A national route is now
+   *  only recognised when the target system is PROVEN a facility register by the registry's own
+   *  data (`knownNationalSystems`, below) — never merely "not the registry system". */
+  nonFacilityTarget: boolean;
+}
+
+/**
+ * Enforces the invariant documented on `ResolvedFacility.nonFacilityTarget`: it holds today only
+ * because of HOW `resolveObservedFacilities` derives the three fields together (see that function's
+ * single call site, below) — nothing in the TYPE stops a future producer, or a hand-built test
+ * fixture, from constructing a `{ resolvedVia: 'registry', nonFacilityTarget: true }` row, which is
+ * meaningless by this field's own definition. A full status union collapsing the three fields into
+ * one would make that impossible by construction, but was judged too wide a refactor for this
+ * branch (every existing caller — `ObservedTab.tsx`, the routes, the CLI — already branches on three
+ * independent booleans). This is the cheap middle ground instead: assert the invariant at the one
+ * place that computes it today, so a future edit that breaks it fails LOUDLY (throws) rather than
+ * silently emitting a contradictory row that downstream consumers would have to individually guard
+ * against. Exported (not merely called inline) so it can be exercised directly by a test that proves
+ * it actually fires, without needing to contort `resolveObservedFacilities`'s real inputs into
+ * producing an impossible combination.
+ */
+export function assertResolvedFacilityInvariant(
+  row: Pick<ResolvedFacility, 'resolvedVia' | 'targetMissing' | 'nonFacilityTarget'>,
+): void {
+  if (row.nonFacilityTarget && (row.resolvedVia !== null || row.targetMissing)) {
+    throw new Error(
+      `ResolvedFacility invariant violated: nonFacilityTarget=true must imply resolvedVia=null and ` +
+      `targetMissing=false (got resolvedVia=${JSON.stringify(row.resolvedVia)}, targetMissing=${row.targetMissing})`,
+    );
+  }
 }
 
 /**
@@ -411,6 +458,13 @@ export async function resolveObservedFacilities(deps: ReconcileDeps): Promise<Re
     : [];
 
   const registry = await deps.internalDb.selectFrom('facility_registry').selectAll().execute();
+  // Fix 1: the set of `national_system` values PROVEN a facility register by the registry's own
+  // data — a LIVE row actually carries it. This, not "anything that isn't the registry system", is
+  // what makes a candidate's `toSystem` a genuine national route (see `ResolvedFacility
+  // .nonFacilityTarget`'s doc comment for the bug this replaces).
+  const knownNationalSystems = new Set(
+    registry.map((r) => r.national_system).filter((s): s is string => s !== null),
+  );
   // The registry-route mapping's `to_code` is whatever code `TermMappingDialog` showed the operator
   // when they picked this row as a target — i.e. exactly what `registryConceptRows`
   // (packages/db/src/facility-observed.ts) currently projects it as: `local_code`, else
@@ -446,7 +500,16 @@ export async function resolveObservedFacilities(deps: ReconcileDeps): Promise<Re
 
     // 1. Registry route wins — the registry is what holds a printable name.
     const registryMapping = candidates.find((c) => c.toSystem === FACILITY_REGISTRY_SYSTEM);
-    const nationalMapping = candidates.find((c) => c.toSystem !== FACILITY_REGISTRY_SYSTEM);
+    // 2. National route: the candidate's target system must be PROVEN a facility register by
+    //    `knownNationalSystems` — never merely "not the registry system" (Fix 1; see
+    //    `ResolvedFacility.nonFacilityTarget`'s doc comment). Only checked when registry didn't win.
+    const nationalMapping = registryMapping
+      ? undefined
+      : candidates.find((c) => knownNationalSystems.has(c.toSystem));
+    // 3. Anything else the operator mapped to (the observed system itself, an unrelated active
+    //    system such as LOINC) is a real, saved mapping that resolves to NEITHER real route.
+    const hasFacilityRouteCandidate = !!registryMapping || !!nationalMapping;
+    const nonFacilityTarget = !hasFacilityRouteCandidate && candidates.length > 0;
 
     const row = registryMapping
       ? byRegistryCode.get(registryMapping.toCode)
@@ -455,6 +518,17 @@ export async function resolveObservedFacilities(deps: ReconcileDeps): Promise<Re
         : undefined;
 
     const resolvedVia: ResolvedVia | null = row ? (registryMapping ? 'registry' : 'national') : null;
+    // A GENUINE facility-route mapping (registry or a proven national register) was authored but
+    // points at nothing live — distinct from "never mapped" AND from `nonFacilityTarget` (Fix 1;
+    // see that field's doc comment for why "candidates.length > 0 && !row" was wrong).
+    const targetMissing = hasFacilityRouteCandidate && !row;
+
+    // Whole-branch review finding (fix round 1): this is the ONE place today that derives
+    // `resolvedVia`/`targetMissing`/`nonFacilityTarget` together — assert their invariant HERE,
+    // before the row escapes into `ResolvedFacility`, so a future edit that breaks it (or drifts the
+    // three fields apart) fails loudly instead of silently shipping a contradictory row. See
+    // `assertResolvedFacilityInvariant`'s doc comment for why this, not a status union.
+    assertResolvedFacilityInvariant({ resolvedVia, targetMissing, nonFacilityTarget });
 
     return {
       sourceSystem: r.sourceSystem,
@@ -472,8 +546,8 @@ export async function resolveObservedFacilities(deps: ReconcileDeps): Promise<Re
       nationalSystem: row?.national_system ?? null,
       nationalCode: row?.national_code ?? null,
       resolvedVia,
-      // A mapping was authored but points at nothing live — distinct from "never mapped".
-      targetMissing: candidates.length > 0 && !row,
+      targetMissing,
+      nonFacilityTarget,
     };
   });
 }
@@ -482,6 +556,10 @@ export interface PublishResult {
   resolved: number;
   unmapped: number;
   targetMissing: number;
+  /** Fix 1: rows whose mapping resolves to `ResolvedFacility.nonFacilityTarget` — a real, saved
+   *  mapping that targets neither the registry nor a proven national register. Counted separately
+   *  so `unmapped` never silently absorbs it (see that field's doc comment). */
+  nonFacilityTarget: number;
   written: number;
 }
 
@@ -506,8 +584,11 @@ export async function publishFacilityMap(
 
   const result: PublishResult = {
     resolved: resolved.filter((r) => r.resolvedVia !== null).length,
-    unmapped: resolved.filter((r) => r.resolvedVia === null && !r.targetMissing).length,
+    // Fix 1: a `nonFacilityTarget` row must NOT fall into this bucket — it is not "never mapped",
+    // it is a real mapping that just doesn't target a facility (see its own counter below).
+    unmapped: resolved.filter((r) => r.resolvedVia === null && !r.targetMissing && !r.nonFacilityTarget).length,
     targetMissing: resolved.filter((r) => r.targetMissing).length,
+    nonFacilityTarget: resolved.filter((r) => r.nonFacilityTarget).length,
     written: resolved.length,
   };
   if (!opts.apply) return result;
