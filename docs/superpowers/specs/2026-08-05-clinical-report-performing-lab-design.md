@@ -107,7 +107,7 @@ anyway.
 
 ### 3.1 The query — `q-clinical-micro-header` gains two bound columns
 
-Two CTEs and one join, in all three dialect variants:
+Three CTEs and one join, in all three dialect variants:
 
 ```sql
 with facility_of as (
@@ -119,6 +119,14 @@ with facility_of as (
   where specimen_id is not null and specimen_id <> '' and performer is not null
   group by specimen_id
 ),
+facility_loc as (
+  select source_system, facility_code,
+         min(region)   as region,
+         min(district) as district
+  from facilities
+  where facility_code is not null and facility_code <> ''
+  group by source_system, facility_code
+),
 facility as (
   select fo.specimen_id,
          coalesce(fm.name, fo.performer_display, fo.performer) as performing_lab,
@@ -128,7 +136,7 @@ facility as (
   left join facility_map fm
     on fm.source_system = coalesce(fo.source_system, '')
    and fm.source_code   = fo.performer
-  left join facilities fa
+  left join facility_loc fa
     on fa.source_system = fo.source_system
    and fa.facility_code = fo.performer
 )
