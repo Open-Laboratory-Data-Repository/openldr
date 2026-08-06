@@ -416,24 +416,27 @@ describe('TermMappingDialog', () => {
     expect(field.value).toBe('FACILITY-REGISTRY');
   });
 
-  // Fix 3 (mapping-targets report, "Locked target system" section): editing an existing mapping
-  // under lock jumps the manual System field to the LOCKED system regardless of the mapping's own
-  // `toSystem` — this is the operator's live scenario (their stale `BALAB -> DEFAULT_FAC|BALAB`
-  // self-mapping, opened from the Observed tab). Pins the DOCUMENTED current behaviour; the stale
-  // code is left untouched, so nothing auto-saves a retarget without the operator also fixing Code.
-  it('editing a non-facility mapping under lock pre-fills System to the locked system, not the mapping\'s own toSystem', () => {
-    const selfMapping: api.TermMapping = {
-      id: 'm-self',
-      fromSystem: 'urn:openldr:default_fac',
-      fromCode: 'BALAB',
-      toSystem: 'urn:openldr:default_fac',
-      toCode: 'BALAB',
-      toDisplay: null,
-      mapType: 'SAME-AS',
-      relationship: null,
-      owner: null,
-      isActive: true,
-    };
+  // Fix round 2 (mapping-targets report): the PRIOR behaviour (jumping the manual System field to
+  // the locked system regardless of the mapping's own `toSystem`, while leaving Code untouched) was
+  // a silent-overwrite trap — see the report's "Fix 3" note. The operator's live
+  // `BALAB -> DEFAULT_FAC|BALAB` self-mapping (correctly `nonFacilityTarget` on the Observed tab)
+  // would silently become a DIFFERENT broken mapping (`toSystem` rewritten to the registry, `Code`
+  // still `BALAB`, which no registry row has) the moment they saved for any unrelated reason. The
+  // dialog must now surface what is REALLY stored, not what the lock says it should be.
+  const selfMapping: api.TermMapping = {
+    id: 'm-self',
+    fromSystem: 'urn:openldr:default_fac',
+    fromCode: 'BALAB',
+    toSystem: 'urn:openldr:default_fac',
+    toCode: 'BALAB',
+    toDisplay: null,
+    mapType: 'SAME-AS',
+    relationship: null,
+    owner: null,
+    isActive: true,
+  };
+
+  it('editing a mapping whose stored toSystem disagrees with the locked system surfaces the STORED system, not the locked one', () => {
     render(
       <TermMappingDialog
         open
@@ -447,9 +450,54 @@ describe('TermMappingDialog', () => {
     );
     // Edit mode always opens in manual mode.
     const field = screen.getByLabelText('System') as HTMLInputElement;
-    expect(field.value).toBe('FACILITY-REGISTRY');
-    // The stale code is NOT auto-corrected — the operator still has to retype/repick it themselves.
+    // Must NOT silently present the locked (registry) system as though it were the truth.
+    expect(field.value).not.toBe('FACILITY-REGISTRY');
+    // Must show what is really stored instead.
+    expect(field.value).toBe('urn:openldr:default_fac');
+    // Code is untouched.
     expect(screen.getByPlaceholderText('441407007')).toHaveValue('BALAB');
+  });
+
+  // The load-bearing regression test: an operator opens this same mapping to change something
+  // wholly unrelated (Owner) and saves. The payload sent to the API must round-trip toSystem/toCode
+  // EXACTLY as stored — an unrelated edit must never silently retarget the mapping.
+  it('editing that mapping and changing only Owner leaves toSystem/toCode exactly as stored on save (round-trip)', async () => {
+    vi.spyOn(api, 'updateTermMapping').mockResolvedValue(selfMapping);
+    render(
+      <TermMappingDialog
+        open
+        fromTerm={{ system: 'urn:openldr:default_fac', code: 'BALAB', display: null, systemCode: 'DEFAULT_FAC' }}
+        systems={[system]}
+        lockedTargetSystem={registrySystem}
+        mapping={selfMapping}
+        onOpenChange={() => {}}
+        onSaved={() => {}}
+      />,
+    );
+
+    // Change ONLY Owner — System and Code are left exactly as pre-filled.
+    const ownerInput = screen.getByPlaceholderText('e.g. WHO');
+    fireEvent.change(ownerInput, { target: { value: 'Lab Ops' } });
+
+    const actionsBtn = screen.getByRole('button', { name: /actions/i });
+    fireEvent.pointerDown(actionsBtn, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByText('Save')) {
+      fireEvent.keyDown(actionsBtn, { key: 'Enter' });
+    }
+    const saveItem = await screen.findByText('Save');
+    fireEvent.pointerMove(saveItem);
+    fireEvent.click(saveItem);
+
+    await waitFor(() => {
+      expect(api.updateTermMapping).toHaveBeenCalledWith(
+        'm-self',
+        expect.objectContaining({
+          toSystem: 'urn:openldr:default_fac',
+          toCode: 'BALAB',
+          owner: 'Lab Ops',
+        }),
+      );
+    });
   });
 
   it('shows the status section with is-active checkbox checked by default', () => {
