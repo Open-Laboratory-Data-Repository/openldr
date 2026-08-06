@@ -27,6 +27,39 @@ describe('relational projectResource', () => {
     expect(loc).toMatchObject({ table: 'facilities', rows: [{ id: 'loc1', facility_name: 'Ward A', source_resource: 'Location' }] });
   });
 
+  // The CDR toolchain now sends an `Organization` per testing facility with `address[0]` carrying
+  // `state` (region) and `district` — the two disambiguators for DISA's five identically-named
+  // "Aga Khan" facility codes. Measured: no `line`/`city`/`postalCode`/`country` on the wire.
+  it('maps Organization.address[0].state/district -> facilities.region/district', () => {
+    const org = projectResource({
+      resourceType: 'Organization', id: 'facility-BAMAA', identifier: [{ system: 'urn:openldr:default_fac', value: 'BAMAA' }],
+      name: 'Aga Khan', address: [{ state: 'Dar es Salaam', district: 'Ilala' }],
+    });
+    expect(org).toMatchObject({ table: 'facilities', rows: [{ id: 'facility-BAMAA', facility_code: 'BAMAA', region: 'Dar es Salaam', district: 'Ilala' }] });
+  });
+
+  it('projects region/district as null when a sender supplies no address at all', () => {
+    const org = projectResource({ resourceType: 'Organization', id: 'org2', identifier: [{ value: 'F2' }], name: 'No Address Lab' });
+    expect(org).toMatchObject({ table: 'facilities', rows: [{ id: 'org2', region: null, district: null }] });
+  });
+
+  it('projects region/district as null (no crash) when address is an empty array', () => {
+    const org = projectResource({ resourceType: 'Organization', id: 'org3', identifier: [{ value: 'F3' }], name: 'Empty Address Lab', address: [] });
+    expect(org).toMatchObject({ table: 'facilities', rows: [{ id: 'org3', region: null, district: null }] });
+  });
+
+  it('projects whichever of region/district is missing as null, keeping the other', () => {
+    const stateOnly = projectResource({ resourceType: 'Organization', id: 'org4', identifier: [{ value: 'F4' }], name: 'State Only Lab', address: [{ state: 'Tanga' }] });
+    expect(stateOnly).toMatchObject({ table: 'facilities', rows: [{ id: 'org4', region: 'Tanga', district: null }] });
+    const districtOnly = projectResource({ resourceType: 'Organization', id: 'org5', identifier: [{ value: 'F5' }], name: 'District Only Lab', address: [{ district: 'Kinondoni' }] });
+    expect(districtOnly).toMatchObject({ table: 'facilities', rows: [{ id: 'org5', region: null, district: 'Kinondoni' }] });
+  });
+
+  it('still projects a Location with no address exactly as before (region/district null)', () => {
+    const loc = projectResource({ resourceType: 'Location', id: 'loc2', name: 'Ward B' });
+    expect(loc).toMatchObject({ table: 'facilities', rows: [{ id: 'loc2', facility_name: 'Ward B', region: null, district: null }] });
+  });
+
   it('maps Specimen -> specimens (bare patient_id, received_time)', () => {
     const out = projectResource({ resourceType: 'Specimen', id: 'sp1', subject: { reference: 'Patient/p1' }, receivedTime: '2026-01-01T00:00:00Z', type: { text: 'Blood' }, status: 'available' });
     expect(out?.table).toBe('specimens');

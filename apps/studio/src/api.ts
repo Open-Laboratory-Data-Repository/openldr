@@ -870,6 +870,14 @@ export interface ObservedFacility {
    *  name for `sourceCode`, distinct from `name` below (the RESOLVED registry facility's name).
    *  Null when the source never supplied one. */
   sourceDisplay: string | null;
+  /** `facilities.region`/`facilities.district` (`Organization.address[0].state`/`.district`) for
+   *  `sourceCode`, WITHIN `sourceSystem` — location CE already knows about the OBSERVED facility
+   *  itself, independent of any curated registry mapping. Lets an operator tell apart DISA's five
+   *  facility codes sharing the display "Aga Khan" by district BEFORE mapping any of them. Null
+   *  when `facilities` holds no matching row (the common case — most codes arrive with no
+   *  `Organization` alongside them) or that row's own address omitted the part. */
+  sourceRegion: string | null;
+  sourceDistrict: string | null;
   reportCount: number;
   registryId: string | null;
   /** `facility_registry.local_code` of the resolved row — OURS, distinct from `nationalCode`

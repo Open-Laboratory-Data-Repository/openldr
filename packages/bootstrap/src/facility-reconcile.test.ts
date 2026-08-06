@@ -419,6 +419,82 @@ describe('resolveObservedFacilities', () => {
   });
 });
 
+// The CDR toolchain now sends an `Organization` per testing facility alongside the report
+// (`facility-reconcile.md`), carrying an `address` `projectFacility` (packages/db) projects into
+// `facilities.region`/`facilities.district`. `resolveObservedFacilities` joins that onto an
+// OBSERVED (pre-mapping) row — the entire point being that DISA's five facility codes sharing the
+// display "Aga Khan" (BAMAA/BBFAF/CDABE/EAFAE/NDFAM) become distinguishable BEFORE an operator maps
+// anything, not only after.
+describe('resolveObservedFacilities: observed facility location (facilities table)', () => {
+  it('joins facilities.region/district onto an unmapped row by (facility_code, source_system)', async () => {
+    const deps = await makeReconcileDeps();
+    await seedPerformers(deps, [['BAMAA', 12]], { performerDisplay: 'Aga Khan' });
+    await deps.externalDb.insertInto('facilities').values({
+      id: 'facility-BAMAA', facility_code: 'BAMAA', facility_name: 'Aga Khan',
+      region: 'Dar es Salaam', district: 'Ilala', source_system: 'webhook-ingest',
+    } as never).execute();
+
+    const [row] = await resolveObservedFacilities(deps);
+
+    expect(row.sourceCode).toBe('BAMAA');
+    expect(row.resolvedVia).toBeNull(); // still unmapped — location is known independent of mapping
+    expect(row.sourceRegion).toBe('Dar es Salaam');
+    expect(row.sourceDistrict).toBe('Ilala');
+  });
+
+  it('leaves sourceRegion/sourceDistrict null when no facilities row matches the code (the common case)', async () => {
+    const deps = await makeReconcileDeps();
+    await seedPerformers(deps, [['Kibondo', 148]]);
+
+    const [row] = await resolveObservedFacilities(deps);
+
+    expect(row.sourceRegion).toBeNull();
+    expect(row.sourceDistrict).toBeNull();
+  });
+
+  // The disambiguation case: two of DISA's five identically-displayed "Aga Khan" codes, each
+  // carrying its OWN Organization/address, must resolve to their OWN, distinct locations.
+  it('distinguishes two facilities sharing a display but differing in district', async () => {
+    const deps = await makeReconcileDeps();
+    await seedPerformers(deps, [['BAMAA', 12]], { performerDisplay: 'Aga Khan' });
+    await seedPerformers(deps, [['BBFAF', 5]], { performerDisplay: 'Aga Khan' });
+    await deps.externalDb.insertInto('facilities').values([
+      { id: 'facility-BAMAA', facility_code: 'BAMAA', facility_name: 'Aga Khan', region: 'Dar es Salaam', district: 'Ilala', source_system: 'webhook-ingest' },
+      { id: 'facility-BBFAF', facility_code: 'BBFAF', facility_name: 'Aga Khan', region: 'Dar es Salaam', district: 'Kinondoni', source_system: 'webhook-ingest' },
+    ] as never).execute();
+
+    const rows = await resolveObservedFacilities(deps);
+    const bamaa = rows.find((r) => r.sourceCode === 'BAMAA')!;
+    const bbfaf = rows.find((r) => r.sourceCode === 'BBFAF')!;
+
+    expect(bamaa.sourceDistrict).toBe('Ilala');
+    expect(bbfaf.sourceDistrict).toBe('Kinondoni');
+    expect(bamaa.sourceDistrict).not.toBe(bbfaf.sourceDistrict);
+  });
+
+  // ⛔ The join is scoped by (facility_code, source_system) TOGETHER, "within the same source
+  // system" — a `facilities` row belonging to one feed must never be attributed to another feed's
+  // report just because the bare code matches. Two feeds independently reporting a code named
+  // "BAMAA" are not necessarily the same facility.
+  it('does not leak a facilities row into a different feed reporting the same code', async () => {
+    const deps = await makeReconcileDeps();
+    await seedPerformers(deps, [['BAMAA', 12]], { sourceSystem: 'webhook-ingest', performerDisplay: 'Aga Khan' });
+    await seedPerformers(deps, [['BAMAA', 3]], { sourceSystem: 'cdr-import', performerDisplay: 'Aga Khan' });
+    // Only the webhook-ingest feed has a facilities row for BAMAA.
+    await deps.externalDb.insertInto('facilities').values({
+      id: 'facility-BAMAA', facility_code: 'BAMAA', facility_name: 'Aga Khan',
+      region: 'Dar es Salaam', district: 'Ilala', source_system: 'webhook-ingest',
+    } as never).execute();
+
+    const rows = await resolveObservedFacilities(deps);
+    const webhookRow = rows.find((r) => r.sourceCode === 'BAMAA' && r.sourceSystem === 'webhook-ingest')!;
+    const cdrRow = rows.find((r) => r.sourceCode === 'BAMAA' && r.sourceSystem === 'cdr-import')!;
+
+    expect(webhookRow.sourceDistrict).toBe('Ilala');
+    expect(cdrRow.sourceDistrict).toBeNull();
+  });
+});
+
 // Code-review finding (Fix 2, facility-mapping-targets round 1): `nonFacilityTarget`'s exclusivity
 // with `resolvedVia`/`targetMissing` holds inside `resolveObservedFacilities` today only because of
 // how the three fields happen to be derived together — nothing stops a future edit (or a hand-built

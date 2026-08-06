@@ -13,6 +13,7 @@ import * as m010 from './010_diagnostic_report_facility';
 import * as m011 from './011_terminology_codes';
 import * as m012 from './012_facility_map';
 import * as m013 from './013_diagnostic_report_performer_identity';
+import * as m014 from './014_facility_location';
 
 export function externalMigrations(engine: TargetEngine): Record<string, Migration> {
   return {
@@ -29,5 +30,6 @@ export function externalMigrations(engine: TargetEngine): Record<string, Migrati
     '011_terminology_codes': { up: (db) => m011.up(db, engine), down: m011.down },
     '012_facility_map': { up: (db) => m012.up(db, engine), down: m012.down },
     '013_diagnostic_report_performer_identity': { up: (db) => m013.up(db, engine), down: m013.down },
+    '014_facility_location': { up: (db) => m014.up(db, engine), down: m014.down },
   };
 }
