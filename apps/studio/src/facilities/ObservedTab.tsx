@@ -25,6 +25,14 @@ import {
 } from '@/api';
 import { TermMappingDialog } from '@/terminology/TermMappingDialog';
 
+/** `district, region` (both known), or just whichever of the two is known, or `null` when
+ *  neither is — never a stray leading/trailing/doubled separator. Shared by the resolved-facility
+ *  detail line below and the observed-facility (pre-mapping) location line, so the two admin-area
+ *  renderings can never drift apart on formatting. */
+function adminAreaLine(district: string | null, region: string | null): string | null {
+  return district && region ? `${district}, ${region}` : (district || region || null);
+}
+
 /**
  * The operator-visible second line under a resolved facility's name: local code (only when it
  * differs from the observed code already shown in column 1), level, and admin area
@@ -42,9 +50,7 @@ import { TermMappingDialog } from '@/terminology/TermMappingDialog';
  * here would hide a genuine case-only difference between two codes.
  */
 function facilityDetailLine(row: ObservedFacility, viaLabel: string): string {
-  const adminArea = row.district && row.region
-    ? `${row.district}, ${row.region}`
-    : (row.district || row.region || null);
+  const adminArea = adminAreaLine(row.district, row.region);
   const localCode = row.localCode && row.localCode !== row.sourceCode ? row.localCode : null;
   return [localCode, row.level, adminArea, viaLabel].filter((part): part is string => !!part).join(' · ');
 }
@@ -334,16 +340,32 @@ export function ObservedTab({ actionsPortalTarget }: ObservedTabProps = {}): JSX
                 // editMapping/map label switch below already uses, and now also the gate for
                 // offering Remove mapping at all (a row with no mapping has nothing to remove).
                 const hasMapping = !!(row.resolvedVia || row.targetMissing || row.nonFacilityTarget);
+                // The location CE already knows about the OBSERVED facility itself
+                // (`facilities.region`/`.district`, from `Organization.address`) — independent of any
+                // curated mapping. THE point of this whole slice: DISA's five facility codes sharing
+                // the display "Aga Khan" become distinguishable by district right here, BEFORE an
+                // operator maps any of them. Null (renders nothing) when CE has no matching
+                // `facilities` row — the common case today.
+                const sourceLocation = adminAreaLine(row.sourceDistrict, row.sourceRegion);
                 return (
                 <TableRow key={`${row.sourceSystem}|${row.sourceCode}`}>
                   <TableCell
                     className="max-w-[220px] text-xs"
-                    aria-label={row.sourceDisplay ? t('facilities.observed.codeWithName', { code: row.sourceCode, name: row.sourceDisplay }) : row.sourceCode}
+                    aria-label={
+                      row.sourceDisplay && sourceLocation
+                        ? t('facilities.observed.codeWithNameAndLocation', { code: row.sourceCode, name: row.sourceDisplay, location: sourceLocation })
+                        : row.sourceDisplay
+                          ? t('facilities.observed.codeWithName', { code: row.sourceCode, name: row.sourceDisplay })
+                          : row.sourceCode
+                    }
                   >
                     <div className="flex flex-col">
                       <TruncatedText text={row.sourceCode} />
                       {row.sourceDisplay && (
                         <span className="text-[11px] text-muted-foreground">{row.sourceDisplay}</span>
+                      )}
+                      {sourceLocation && (
+                        <span className="text-[11px] text-muted-foreground">{sourceLocation}</span>
                       )}
                     </div>
                   </TableCell>

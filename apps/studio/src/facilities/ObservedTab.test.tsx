@@ -32,7 +32,7 @@ import {
 import { ObservedTab } from './ObservedTab';
 
 const dodoma: ObservedFacility = {
-  sourceSystem: 'webhook-ingest', sourceCode: 'Dodoma', sourceDisplay: null, reportCount: 247,
+  sourceSystem: 'webhook-ingest', sourceCode: 'Dodoma', sourceDisplay: null, sourceRegion: null, sourceDistrict: null, reportCount: 247,
   registryId: 'f1', localCode: 'DOD-REF', name: 'Dodoma Regional Referral Hospital', level: 'Hospital', status: null,
   region: 'Dodoma', district: 'Dodoma Urban', council: null, nationalSystem: null, nationalCode: null,
   resolvedVia: 'registry', targetMissing: false, nonFacilityTarget: false,
@@ -42,12 +42,12 @@ const dodoma: ObservedFacility = {
 // by accident (Minor finding: the old "Kibondo" fixture was alphabetical AND count-descending too,
 // so this fixture is deliberately renamed/reordered to break that coincidence).
 const arusha: ObservedFacility = {
-  sourceSystem: 'webhook-ingest', sourceCode: 'Arusha', sourceDisplay: null, reportCount: 148,
+  sourceSystem: 'webhook-ingest', sourceCode: 'Arusha', sourceDisplay: null, sourceRegion: null, sourceDistrict: null, reportCount: 148,
   registryId: null, localCode: null, name: null, level: null, status: null, region: null, district: null,
   council: null, nationalSystem: null, nationalCode: null, resolvedVia: null, targetMissing: false, nonFacilityTarget: false,
 };
 const oceanRoad: ObservedFacility = {
-  sourceSystem: 'webhook-ingest', sourceCode: 'Ocean Road Cancer Institute (O', sourceDisplay: null, reportCount: 6,
+  sourceSystem: 'webhook-ingest', sourceCode: 'Ocean Road Cancer Institute (O', sourceDisplay: null, sourceRegion: null, sourceDistrict: null, reportCount: 6,
   registryId: null, localCode: null, name: null, level: null, status: null, region: null, district: null,
   council: null, nationalSystem: null, nationalCode: null, resolvedVia: null, targetMissing: true, nonFacilityTarget: false,
 };
@@ -56,14 +56,20 @@ const oceanRoad: ObservedFacility = {
 // its name, so an operator sees "BAMAA — Aga Khan" rather than an opaque code indistinguishable
 // from the other four.
 const bamaa: ObservedFacility = {
-  sourceSystem: 'webhook-ingest', sourceCode: 'BAMAA', sourceDisplay: 'Aga Khan', reportCount: 12,
+  sourceSystem: 'webhook-ingest', sourceCode: 'BAMAA', sourceDisplay: 'Aga Khan', sourceRegion: null, sourceDistrict: null, reportCount: 12,
   registryId: null, localCode: null, name: null, level: null, status: null, region: null, district: null,
   council: null, nationalSystem: null, nationalCode: null, resolvedVia: null, targetMissing: false, nonFacilityTarget: false,
+};
+// A second of the five "Aga Khan" codes — BBFAF — sharing bamaa's display but carrying its OWN
+// `Organization.address`, so the two are distinguishable by district BEFORE either is mapped. This
+// is the entire point of surfacing `sourceRegion`/`sourceDistrict` on the Observed tab.
+const bbfaf: ObservedFacility = {
+  ...bamaa, sourceCode: 'BBFAF', sourceRegion: 'Dar es Salaam', sourceDistrict: 'Kinondoni',
 };
 // ⛔ THE bug report's exact scenario: BALAB mapped to ITSELF (DEFAULT_FAC|BALAB). Fix 1 files this
 // as `nonFacilityTarget`, not `targetMissing`.
 const balab: ObservedFacility = {
-  sourceSystem: 'webhook-ingest', sourceCode: 'BALAB', sourceDisplay: null, reportCount: 6,
+  sourceSystem: 'webhook-ingest', sourceCode: 'BALAB', sourceDisplay: null, sourceRegion: null, sourceDistrict: null, reportCount: 6,
   registryId: null, localCode: null, name: null, level: null, status: null, region: null, district: null,
   council: null, nationalSystem: null, nationalCode: null, resolvedVia: null, targetMissing: false, nonFacilityTarget: true,
 };
@@ -134,6 +140,36 @@ describe('ObservedTab', () => {
     // arusha.sourceDisplay is null, and it is unmapped — 'Arusha' must appear exactly once (the
     // code cell), not doubled by a stray display line.
     expect(within(rows[1]).getAllByText('Arusha')).toHaveLength(1);
+  });
+
+  // ⛔ THE point of this whole slice, restated: five DISA facility codes share the display "Aga
+  // Khan" — the district is what tells them apart, and it must show BEFORE either is mapped.
+  it('shows the observed district/region under the code+name, distinguishing two same-display facilities', async () => {
+    (listObservedFacilities as ReturnType<typeof vi.fn>).mockResolvedValue([bamaa, bbfaf]);
+    show();
+    const rows = await screen.findAllByRole('row');
+    // bamaa carries no location (facilities has no matching row) — no third line at all.
+    expect(within(rows[1]).queryByText(/Dar es Salaam/)).not.toBeInTheDocument();
+    // bbfaf carries district+region — both distinguishable Aga Khans in the SAME code cell,
+    // without opening the mapping dialog.
+    expect(within(rows[2]).getByText('BBFAF')).toBeInTheDocument();
+    expect(within(rows[2]).getByText('Aga Khan')).toBeInTheDocument();
+    expect(within(rows[2]).getByText('Kinondoni, Dar es Salaam')).toBeInTheDocument();
+  });
+
+  it('shows no location line when neither sourceRegion nor sourceDistrict is known', async () => {
+    (listObservedFacilities as ReturnType<typeof vi.fn>).mockResolvedValue([bamaa]);
+    show();
+    const rows = await screen.findAllByRole('row');
+    expect(within(rows[1]).queryByText(/,/)).not.toBeInTheDocument();
+  });
+
+  it('shows just the district (or just the region) rather than a stray leading/trailing comma when only one is known', async () => {
+    const districtOnly = { ...bbfaf, sourceCode: 'CDABE', sourceRegion: null, sourceDistrict: 'Temeke' };
+    (listObservedFacilities as ReturnType<typeof vi.fn>).mockResolvedValue([districtOnly]);
+    show();
+    const rows = await screen.findAllByRole('row');
+    expect(within(rows[1]).getByText('Temeke')).toBeInTheDocument();
   });
 
   it('shows the local code, level and admin area under a resolved name, so two similarly-named facilities are distinguishable', async () => {

@@ -812,6 +812,10 @@ export const en = {
       actions: 'Observed facility actions',
       code: 'Observed code',
       codeWithName: '{{code}} — {{name}}',
+      // Task: an observed row can also carry the district/region CE already knows about the
+      // facility itself (from an ingested Organization) — lets an operator distinguish, e.g., two
+      // "Aga Khan" facility codes by location before either is mapped.
+      codeWithNameAndLocation: '{{code}} — {{name}} ({{location}})',
       reports: 'Reports',
       resolvesTo: 'Resolves to',
       count_one: '{{count}} observed facility',
