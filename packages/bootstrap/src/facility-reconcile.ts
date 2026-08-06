@@ -517,14 +517,19 @@ export async function publishFacilityMap(
     resolved_via: r.resolvedVia,
   }));
 
-  // Task 11 (whole-branch review, Fix 3): `scanObservedFacilities` folds `(performer, source_system)`
-  // groups that derive the SAME coding system into one `(system, code)` total, but
-  // `resolveObservedFacilities` maps 1:1 over the raw groups — so a warehouse holding both a NULL and
-  // an empty-string `source_system` for the same performer (both normalise to the SAME
-  // `facilityMapId`, since `facilityMapId` is derived from `r.sourceSystem` which is already `?? ''`)
-  // yields two rows with an identical `id`, and the delete-then-insert transaction below would abort
-  // on the primary key. Dedupe by `id` here, keeping the first occurrence, mirroring the fold
-  // `scanObservedFacilities` already does at the (system, code) level.
+  // Dedupe by `id` before the delete-then-insert below, or a duplicate primary key aborts the whole
+  // transaction.
+  //
+  // ⚠ This is NOT redundant with `resolveObservedFacilities`' own fold, and the two guard DIFFERENT
+  // collisions. That fold keys on `(resolved system, code)`, so it deliberately keeps two rows apart
+  // when they share a code but resolve to different coding systems — that separation is the entire
+  // point of the per-feed system work. But `facilityMapId` is derived from `(sourceSystem, sourceCode)`
+  // and knows nothing about the resolved system, so those two legitimately-distinct rows still collide
+  // on one `facility_map.id`. This dedupe is the only thing standing between that and a failed publish.
+  //
+  // (Originally added for a narrower case — a warehouse holding both NULL and empty-string
+  // `source_system` for one performer. `resolveObservedFacilities` now folds that case away upstream,
+  // but the different-resolved-system case above remains live.)
   const seenIds = new Set<string>();
   const rows = allRows.filter((r) => {
     if (seenIds.has(r.id)) return false;
