@@ -4,6 +4,7 @@ import type { Kysely } from 'kysely';
 import { z } from 'zod';
 import {
   importFacilities, scanObservedFacilities, resolveObservedFacilities, publishFacilityMap, projectRegistryRows,
+  facilityMappingTargetSystems,
   type AppContext, type FacilityImportResult, type ScanResult, type PublishResult,
 } from '@openldr/bootstrap';
 import {
@@ -439,6 +440,17 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     const deps = reconcileDeps(ctx);
     const resolved = await resolveObservedFacilities(deps);
     return [...resolved].sort((a, b) => b.reportCount - a.reportCount);
+  });
+
+  // Fix 2 (self-mapping report): the valid facility-mapping TARGET systems — the registry system,
+  // plus every `national_system` value a LIVE `facility_registry` row actually carries. Backs the
+  // Observed tab's OWN `TermMappingDialog` caller, which must offer ONLY these — never the full
+  // active coding_systems list `/terminology`'s own caller passes (see
+  // `facilityMappingTargetSystems`'s doc comment in `@openldr/bootstrap`). Gated the same as GET
+  // .../observed — this is read-only data an operator needs before they can even open the Map
+  // dialog, same as `listCodingSystems`.
+  app.get('/api/facilities/mapping-target-systems', VIEW, async () => {
+    return facilityMappingTargetSystems(reconcileDeps(ctx));
   });
 
   // Task 6: discover new/changed observed-facility strings and record them as concepts (Task 3's

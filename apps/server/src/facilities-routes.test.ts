@@ -1316,6 +1316,37 @@ describe('Task 6: GET /api/facilities/observed', () => {
     expect(res.statusCode).toBe(403);
   });
 
+  // ⛔ THE bug report, end to end: an operator mapped BALAB to ITSELF (target system =
+  // urn:openldr:default_fac, same code) via TermMappingDialog. The old classification treated
+  // "anything that is not the registry system" as automatically a national-register route, so this
+  // self-mapping was looked up in `byNational`, found nothing, and reported `targetMissing` — a
+  // lie, since nothing was ever missing. Fix 1's `nonFacilityTarget` is the honest state.
+  it('reports a self-mapping as nonFacilityTarget, not targetMissing (the reported bug)', async () => {
+    const internalDb = await makeMigratedDb();
+    const externalDb = await makeMigratedExternalDb();
+    await seedObservedReports(externalDb, [['BALAB', 6]]);
+    await internalDb.insertInto('term_mappings').values({
+      id: `tm-${randomUUID()}`,
+      from_system: DEFAULT_OBSERVED_FACILITY_SYSTEM,
+      from_code: 'BALAB',
+      to_system: DEFAULT_OBSERVED_FACILITY_SYSTEM,
+      to_code: 'BALAB',
+      to_display: null,
+      map_type: 'equivalent',
+      relationship: null,
+      owner: null,
+      is_active: true,
+    }).execute();
+    const app = await appWith(fakeReconcileCtx(internalDb, externalDb));
+
+    const res = await app.inject({ method: 'GET', url: '/api/facilities/observed' });
+    expect(res.statusCode).toBe(200);
+    const row = res.json().find((r: any) => r.sourceCode === 'BALAB');
+    expect(row.targetMissing).toBe(false);
+    expect(row.nonFacilityTarget).toBe(true);
+    expect(row.resolvedVia).toBeNull();
+  });
+
   // ⚠ Route-ordering regression guard: `/api/facilities/:id` is ALSO gated on `facilities.view` and
   // ALSO returns a 4xx for an id it can't find, so a `facilities.view`-only caller getting SOME 4xx
   // out of `/api/facilities/observed` is not, by itself, proof this route (rather than the `:id`
@@ -1330,6 +1361,43 @@ describe('Task 6: GET /api/facilities/observed', () => {
     const res = await app.inject({ method: 'GET', url: '/api/facilities/observed' });
     expect(res.statusCode).toBe(200);
     expect(Array.isArray(res.json())).toBe(true);
+  });
+});
+
+// Fix 2 (self-mapping report): the valid facility-mapping TARGET systems, backing ObservedTab's
+// own restricted TermMappingDialog caller — never the full active coding_systems list.
+describe('GET /api/facilities/mapping-target-systems', () => {
+  it('is gated on facilities.view', async () => {
+    const internalDb = await makeMigratedDb();
+    const externalDb = await makeMigratedExternalDb();
+    const app = await appWith(fakeReconcileCtx(internalDb, externalDb), []);
+    const res = await app.inject({ method: 'GET', url: '/api/facilities/mapping-target-systems' });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('returns the registry system plus every distinct national_system present in facility_registry', async () => {
+    const internalDb = await makeMigratedDb();
+    const externalDb = await makeMigratedExternalDb();
+    const registry = createFacilityRegistryStore(internalDb);
+    await registry.upsert({ id: 'fac-1', name: 'A', nationalSystem: 'urn:tz:hfr', nationalCode: 'TZ-1', source: 'manual' });
+    await registry.upsert({ id: 'fac-2', name: 'B', nationalSystem: 'urn:tz:mfl', nationalCode: 'TZ-2', source: 'manual' });
+    const app = await appWith(fakeReconcileCtx(internalDb, externalDb));
+
+    const res = await app.inject({ method: 'GET', url: '/api/facilities/mapping-target-systems' });
+    expect(res.statusCode).toBe(200);
+    expect([...res.json()].sort()).toEqual([FACILITY_REGISTRY_SYSTEM, 'urn:tz:hfr', 'urn:tz:mfl'].sort());
+  });
+
+  // ⚠ Edge case called out explicitly in the report: a fresh install has ZERO national_system
+  // values — the dropdown must still be usable, offering the registry system alone.
+  it('offers only the registry system when facility_registry has no national_system values yet (fresh install)', async () => {
+    const internalDb = await makeMigratedDb();
+    const externalDb = await makeMigratedExternalDb();
+    const app = await appWith(fakeReconcileCtx(internalDb, externalDb));
+
+    const res = await app.inject({ method: 'GET', url: '/api/facilities/mapping-target-systems' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual([FACILITY_REGISTRY_SYSTEM]);
   });
 });
 
