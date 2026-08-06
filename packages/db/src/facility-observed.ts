@@ -60,6 +60,11 @@ export interface ObservedFacilityInput {
   reportCount: number;
   /** The already-stored concept, when re-scanning. */
   existing?: { display: string | null; properties: Record<string, unknown> | null };
+  /** The wire-supplied display (`DiagnosticReport.performer[0].display`, e.g. "Aga Khan") to seed a
+   *  NEW concept's display with, in preference to the bare code ("BAMAA"). Never overrides an
+   *  operator-curated `existing.display` — that always wins. Falls back to `code` when absent
+   *  (a sender with no display either) or blank. */
+  defaultDisplay?: string | null;
 }
 
 export interface ConceptRowInput {
@@ -93,10 +98,11 @@ export interface ConceptRowInput {
 export function observedFacilityConceptRow(input: ObservedFacilityInput): ConceptRowInput {
   const prior = (input.existing?.properties ?? null) as Partial<ObservedFacilityProperties> | null;
   const firstSeen = typeof prior?.firstSeen === 'string' ? prior.firstSeen : input.seenAt;
+  const defaultDisplay = input.defaultDisplay && input.defaultDisplay.trim() !== '' ? input.defaultDisplay : null;
   return {
     system: input.system,
     code: input.code,
-    display: input.existing?.display ?? input.code,
+    display: input.existing?.display ?? defaultDisplay ?? input.code,
     status: 'ACTIVE',
     properties: { firstSeen, lastSeen: input.seenAt, reportCount: input.reportCount },
   };
