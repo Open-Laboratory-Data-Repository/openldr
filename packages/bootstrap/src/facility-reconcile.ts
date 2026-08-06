@@ -224,20 +224,20 @@ export async function scanObservedFacilities(deps: ReconcileDeps, opts: ScanOpti
 
   // ⛔ MUST leave each row ACTIVE: `TermMappingDialog` builds its system dropdown from active
   // `coding_systems` rows, so concepts without one are invisible to the operator who has to map
-  // them. `upsertByUrl` inserts `active: true` but never re-activates an existing inactive row, so
-  // repair that explicitly. Runs once per DISTINCT system encountered — a multi-feed scan registers
-  // every feed's system in the same call.
+  // them. `ensureCodingSystemActive` is the shared upsert→getByUrl→conditional-reactivate sequence
+  // (see its doc comment) — repair that explicitly. Runs once per DISTINCT system encountered — a
+  // multi-feed scan registers every feed's system in the same call.
+  //
+  // No try/catch here, matching this function's pre-existing semantics: `scanObservedFacilities` is
+  // an explicit operator-triggered action (via the scan-observed HTTP route / CLI), not the ingest
+  // hot path, so a `coding_systems` failure here is allowed to propagate and fail the scan rather
+  // than be silently swallowed.
   for (const system of systems) {
-    await deps.admin.codingSystems.upsertByUrl({
+    await ensureCodingSystemActive(deps, {
       url: system,
       systemCode: systemCodeFor(system),
       systemName: 'Observed facilities',
-      publisherId: SYSTEM_PUBLISHER_ID,
     });
-    const cs = await deps.admin.codingSystems.getByUrl(system);
-    if (cs && !cs.active) {
-      await deps.internalDb.updateTable('coding_systems').set({ active: true }).where('url', '=', system).execute();
-    }
   }
   result.systemRegistered = systems.length > 0;
 
