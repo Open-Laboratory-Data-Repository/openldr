@@ -945,7 +945,7 @@ Expected: non-zero.
 - [ ] **Step 2: Render one PDF per report and look at every one**
 
 ```bash
-npx tsx packages/cli/src/index.ts report run r-amr-resistance --format pdf --param from=2018-01-01 --param to=2026-12-31 --out amr.pdf
+npx tsx packages/cli/src/index.ts report run r-amr-resistance --format pdf --param from=2010-01-01 --param to=2014-12-31 --out amr.pdf
 ```
 
 Repeat for `r-test-volume`, `r-turnaround-time`, `r-patient-demographics`, `r-amr-facility-summary`,
@@ -970,8 +970,8 @@ Then use the `Read` tool on each PDF (`pages: "1"`) and confirm by eye:
 The strongest check, and the one no unit test makes: run one report twice.
 
 ```bash
-npx tsx packages/cli/src/index.ts report run r-test-volume --param from=2018-01-01 --param to=2026-12-31 --csv > all.csv
-npx tsx packages/cli/src/index.ts report run r-test-volume --param from=2018-01-01 --param to=2026-12-31 --param facility=BAMAD --csv > one.csv
+npx tsx packages/cli/src/index.ts report run r-test-volume --param from=2010-01-01 --param to=2014-12-31 --csv > all.csv
+npx tsx packages/cli/src/index.ts report run r-test-volume --param from=2010-01-01 --param to=2014-12-31 --param facility=BAMAD --csv > one.csv
 wc -l all.csv one.csv
 ```
 
