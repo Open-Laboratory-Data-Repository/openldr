@@ -183,12 +183,14 @@ export function registryPreferredCode(row: { localCode?: string | null; national
  * in-batch check above is already complete.
  *
  * ⚠ CONSEQUENCE, stated explicitly rather than silently absorbed: this changes what `code` already-
- * projected concepts carry. A concept written under the old `code = id` scheme is left behind
- * un-migrated (never pruned — see `publishRegistryConcepts`'s doc comment on why pruning is
- * deliberately never done), and any `term_mappings` row an operator already authored against that old
- * UUID code will no longer match a re-projected concept. Accepted here because this code has never
- * shipped (no production data depends on it) and the only pre-existing dev data is one facility in one
- * operator's registry — but it is a real, deliberate break, not a compatibility-preserving change.
+ * projected concepts carry. A concept written under the old `code = id` scheme is superseded once a
+ * row starts projecting on its preferred code — see `registryRowIdsWithSupersededIdConcept` below,
+ * which both `publishRegistryConcepts` and `projectRegistryRows`
+ * (`packages/bootstrap/src/facility-reconcile.ts`) call to delete exactly that leftover — and any
+ * `term_mappings` row an operator already authored against the old UUID code will no longer match a
+ * re-projected concept. This is the SAME consequence the key change already had; it now surfaces as
+ * `target missing` on the Observed tab instead of the mapping picker silently showing the facility
+ * twice.
  */
 export function registryConceptRows(
   rows: RegistryRowForConcept[],
@@ -207,6 +209,37 @@ export function registryConceptRows(
     const code = collidesWithinBatch || forced ? r.id : candidate;
     return { system: FACILITY_REGISTRY_SYSTEM, code, display: r.name, status: 'ACTIVE', properties: null };
   });
+}
+
+/**
+ * IDs from `rows` whose `FACILITY_REGISTRY_SYSTEM` concept used to be keyed on their own `id` (the
+ * pre-`0518e7d3` scheme) but is now superseded, because `registryConceptRows(rows, opts)` — called
+ * here with the SAME `rows`/`opts` a caller just passed it — projects that row onto a DIFFERENT code.
+ * A caller safe to delete `(FACILITY_REGISTRY_SYSTEM, id)` for exactly these ids, and no others: this
+ * function only ever answers for a row it was GIVEN, so a facility absent from `rows` (including one
+ * genuinely deleted from `facility_registry`) is never returned — its concept, if any, is untouched.
+ *
+ * The comparison is against `registryConceptRows`' actual OUTPUT `code`, not the bare
+ * `registryPreferredCode(row) !== row.id` check — a row whose preferred code collides with another
+ * row's (or is forced via `opts.forceOwnIdFor`) still projects to its own `id`, and in that case the
+ * id-keyed concept is not a leftover to clean up; it is the row's one and only live concept.
+ *
+ * Exported so `publishRegistryConcepts` and `projectRegistryRows`
+ * (`packages/bootstrap/src/facility-reconcile.ts`) share ONE definition of "this row's id-keyed
+ * concept is now superseded" instead of two independently-typed copies that could drift — each of
+ * them already calls `registryConceptRows` with its own `rows`/`opts` to WRITE the new concept; this
+ * is the same computation, reused, to know what to delete alongside that write.
+ */
+export function registryRowIdsWithSupersededIdConcept(
+  rows: RegistryRowForConcept[],
+  opts: { forceOwnIdFor?: ReadonlySet<string> } = {},
+): string[] {
+  const concepts = registryConceptRows(rows, opts);
+  const superseded: string[] = [];
+  for (let i = 0; i < rows.length; i += 1) {
+    if (concepts[i].code !== rows[i].id) superseded.push(rows[i].id);
+  }
+  return superseded;
 }
 
 /**

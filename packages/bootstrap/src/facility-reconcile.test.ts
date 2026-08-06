@@ -764,6 +764,61 @@ describe('publishRegistryConcepts', () => {
     expect(await deps.admin.codingSystems.getByUrl('urn:openldr:cs:facility-registry')).toEqual(before);
   });
 
+  // The defect commit 0518e7d3 introduced: it moved the concept key off `facility_registry.id` onto
+  // the operator-facing code, but projection is upsert-only, so a concept written under the OLD
+  // id-keyed scheme is left behind — the same facility shows twice in the mapping picker. Simulates
+  // that pre-existing legacy state directly (importRows, not publish, since publish never wrote the
+  // id-keyed shape to begin with), then proves a re-publish leaves exactly ONE concept, keyed on the
+  // preferred code — a count-only assertion would pass if the wrong one survived.
+  it('drops a superseded id-keyed concept on re-publish, leaving exactly one concept keyed on the preferred code', async () => {
+    const deps = await makeReconcileDeps();
+    await seedRegistry(deps, { id: 'fac-1', name: 'National Public Health Laboratory', localCode: '111317-4' });
+    // The legacy projection this facility would have had before 0518e7d3.
+    await deps.admin.terms.importRows([
+      { system: FACILITY_REGISTRY_SYSTEM, code: 'fac-1', display: 'National Public Health Laboratory', status: 'ACTIVE', properties: null },
+    ]);
+
+    await publishRegistryConcepts(deps, { apply: true });
+
+    const { rows } = await deps.admin.terms.search(FACILITY_REGISTRY_SYSTEM, { limit: 50, offset: 0 });
+    expect(rows).toHaveLength(1);
+    expect(rows[0].code).toBe('111317-4');
+  });
+
+  // The collision-fallback case: fac-a's local_code collides with fac-b's national_code, so BOTH
+  // rows' preferred code legitimately falls back to their own id (the CHECK constraint makes "both
+  // code columns null" impossible for a real row, so this is the only way a row's live concept is
+  // genuinely id-keyed). Re-publishing must not delete that id-keyed concept — it is the row's ONLY
+  // concept, not a superseded leftover.
+  it('keeps an id-keyed concept that legitimately IS the preferred code (collision fallback)', async () => {
+    const deps = await makeReconcileDeps();
+    await seedRegistry(deps, { id: 'fac-a', name: 'Facility A', localCode: 'X' });
+    await seedRegistry(deps, { id: 'fac-b', name: 'Facility B', nationalSystem: 'urn:tz:hfr', nationalCode: 'X' });
+    await publishRegistryConcepts(deps, { apply: true });
+
+    await publishRegistryConcepts(deps, { apply: true });
+
+    const { rows } = await deps.admin.terms.search(FACILITY_REGISTRY_SYSTEM, { limit: 50, offset: 0 });
+    expect(rows.map((r) => r.code).sort()).toEqual(['fac-a', 'fac-b']);
+  });
+
+  // A genuinely deleted facility (no `facility_registry` row at all, not merely absent from this
+  // call's visibility) must keep its concept — this is the existing "never prune" behaviour and it
+  // must stay unchanged. `publishRegistryConcepts` only ever considers deleting a concept keyed on a
+  // row it is CURRENTLY projecting; a row that no longer exists is never in that set.
+  it('does not delete a concept for a facility no longer in facility_registry', async () => {
+    const deps = await makeReconcileDeps();
+    await deps.admin.terms.importRows([
+      { system: FACILITY_REGISTRY_SYSTEM, code: 'fac-ghost', display: 'Deleted Facility', status: 'ACTIVE', properties: null },
+    ]);
+    await seedRegistry(deps, { id: 'fac-1', name: 'Dodoma Regional Referral Hospital', localCode: 'DOD' });
+
+    await publishRegistryConcepts(deps, { apply: true });
+
+    const { rows } = await deps.admin.terms.search(FACILITY_REGISTRY_SYSTEM, { limit: 50, offset: 0 });
+    expect(rows.map((r) => r.code).sort()).toEqual(['DOD', 'fac-ghost']);
+  });
+
   // Migration 075 seeds the row directly, ahead of any scan/publish — fixes the fresh-install defect
   // where `TermMappingDialog`'s target-system dropdown had nothing to pick until an operator ran a
   // publish. Asserted here (not just in `packages/db`) because it is `publishRegistryConcepts`'s
@@ -887,6 +942,55 @@ describe('projectRegistryRows', () => {
     await projectRegistryRows(deps, [{ id: 'fac-1', name: 'National Public Health Laboratory' }]);
 
     expect((await deps.admin.codingSystems.getByUrl(FACILITY_REGISTRY_SYSTEM))!.active).toBe(true);
+  });
+
+  // Same defect as `publishRegistryConcepts`'s equivalent test above, exercised through the
+  // given-rows write-time path instead of the full reprojection — the two paths must not drift on
+  // this behaviour. A count-only assertion would pass if the wrong concept survived, so this also
+  // pins the code.
+  it('drops a superseded id-keyed concept, leaving exactly one concept keyed on the preferred code', async () => {
+    const deps = await makeReconcileDeps();
+    await seedRegistry(deps, { id: 'fac-1', name: 'National Public Health Laboratory', localCode: '111317-4' });
+    await deps.admin.terms.importRows([
+      { system: FACILITY_REGISTRY_SYSTEM, code: 'fac-1', display: 'National Public Health Laboratory', status: 'ACTIVE', properties: null },
+    ]);
+
+    await projectRegistryRows(deps, [{ id: 'fac-1', name: 'National Public Health Laboratory' }]);
+
+    const { rows } = await deps.admin.terms.search(FACILITY_REGISTRY_SYSTEM, { limit: 50, offset: 0 });
+    expect(rows).toHaveLength(1);
+    expect(rows[0].code).toBe('111317-4');
+  });
+
+  // The collision-fallback case, through the given-rows path: fac-a and fac-b collide (fac-a's
+  // local_code equals fac-b's national_code), so both legitimately keep an id-keyed concept. Project
+  // fac-a alone (mirroring a single facility's own create/update write) and confirm fac-b's
+  // unrelated, already-id-keyed concept is untouched.
+  it('keeps an id-keyed concept that legitimately IS the preferred code (collision fallback)', async () => {
+    const deps = await makeReconcileDeps();
+    await seedRegistry(deps, { id: 'fac-a', name: 'Facility A', localCode: 'X' });
+    await seedRegistry(deps, { id: 'fac-b', name: 'Facility B', nationalSystem: 'urn:tz:hfr', nationalCode: 'X' });
+    await projectRegistryRows(deps, [{ id: 'fac-a', name: 'Facility A' }, { id: 'fac-b', name: 'Facility B' }]);
+
+    await projectRegistryRows(deps, [{ id: 'fac-a', name: 'Facility A' }]);
+
+    const { rows } = await deps.admin.terms.search(FACILITY_REGISTRY_SYSTEM, { limit: 50, offset: 0 });
+    expect(rows.map((r) => r.code).sort()).toEqual(['fac-a', 'fac-b']);
+  });
+
+  // A genuinely deleted facility keeps its concept — `projectRegistryRows` only ever considers
+  // deleting a concept keyed on a row it was actually HANDED, never anything outside `rows`.
+  it('does not delete a concept for a facility no longer in facility_registry', async () => {
+    const deps = await makeReconcileDeps();
+    await deps.admin.terms.importRows([
+      { system: FACILITY_REGISTRY_SYSTEM, code: 'fac-ghost', display: 'Deleted Facility', status: 'ACTIVE', properties: null },
+    ]);
+    await seedRegistry(deps, { id: 'fac-1', name: 'National Public Health Laboratory', localCode: '111317-4' });
+
+    await projectRegistryRows(deps, [{ id: 'fac-1', name: 'National Public Health Laboratory' }]);
+
+    const { rows } = await deps.admin.terms.search(FACILITY_REGISTRY_SYSTEM, { limit: 50, offset: 0 });
+    expect(rows.map((r) => r.code).sort()).toEqual(['111317-4', 'fac-ghost']);
   });
 
   it('is a no-op for an empty rows array', async () => {
