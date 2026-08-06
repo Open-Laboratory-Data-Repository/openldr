@@ -1,6 +1,6 @@
 import type { Kysely } from 'kysely';
 import type { ConceptRowInput, ExternalSchema, InternalSchema, TerminologyAdminStore } from '@openldr/db';
-import { DEFAULT_OBSERVED_FACILITY_SYSTEM, FACILITY_REGISTRY_SYSTEM, facilityMapId, observedFacilityConceptRow, registryConceptRow, observedSystemForFeed, projectDiagnosticReport } from '@openldr/db';
+import { DEFAULT_OBSERVED_FACILITY_SYSTEM, FACILITY_REGISTRY_SYSTEM, FACILITY_REGISTRY_SYSTEM_CODE, FACILITY_REGISTRY_SYSTEM_NAME, facilityMapId, observedFacilityConceptRow, registryConceptRow, observedSystemForFeed, projectDiagnosticReport } from '@openldr/db';
 
 export interface ReconcileDeps {
   internalDb: Kysely<InternalSchema>;
@@ -584,26 +584,57 @@ export async function publishRegistryConcepts(
 }
 
 /**
+ * Upsert `url`'s `coding_systems` row and repair its `active` flag when a prior write (an operator
+ * deactivation, or an earlier bug) left it inactive — `upsertByUrl` inserts `active: true` on a
+ * fresh row but its `onConflict` never touches `active` on one that already exists
+ * (`terminology-admin-store.ts`'s `upsertByUrl`), so this second step is not optional.
+ *
+ * The ONE definition of this sequence, shared by `ensureRegistrySystemActive` (the registry
+ * system) and `registerObservedSystem` (an observed-facility feed's system) — before this
+ * extraction the two independently re-typed the identical upsert→getByUrl→conditional-reactivate
+ * steps, differing only in which `url`/`systemCode`/`systemName` they passed in, which is exactly
+ * the kind of parallel implementation that drifts.
+ *
+ * Deliberately NO try/catch here. `ensureRegistrySystemActive` and `registerObservedSystem` have
+ * genuinely different containment requirements at their own call sites — an explicit operator
+ * publish (`publishRegistryConcepts`) is allowed to propagate a failure, while the ingest hot path
+ * (`captureObservedFacility` via `registerObservedSystem`) must never fail an ingest cycle over a
+ * `coding_systems` hiccup. Folding a try/catch into this shared helper would flatten that
+ * distinction; each caller keeps its own.
+ */
+async function ensureCodingSystemActive(
+  deps: Pick<ReconcileDeps, 'admin' | 'internalDb'>,
+  input: { url: string; systemCode: string; systemName: string },
+): Promise<void> {
+  await deps.admin.codingSystems.upsertByUrl({
+    url: input.url,
+    systemCode: input.systemCode,
+    systemName: input.systemName,
+    publisherId: SYSTEM_PUBLISHER_ID,
+  });
+  const cs = await deps.admin.codingSystems.getByUrl(input.url);
+  if (cs && !cs.active) {
+    await deps.internalDb.updateTable('coding_systems').set({ active: true }).where('url', '=', input.url).execute();
+  }
+}
+
+/**
  * Ensure `FACILITY_REGISTRY_SYSTEM`'s `coding_systems` row exists and is ACTIVE. Shared by
  * `publishRegistryConcepts` (the full reprojection) and `projectRegistryRows` (the given-rows path
- * below) so the two agree on exactly one registration — see `scanObservedFacilities`'s doc comment
- * for why re-activation has to be repaired explicitly (`upsertByUrl`'s `onConflict` never touches
- * `active`).
+ * below) so the two agree on exactly one registration.
+ *
+ * No try/catch here (see `ensureCodingSystemActive`'s doc comment) — `publishRegistryConcepts`
+ * lets a failure propagate as an explicit operator action, while `projectRegistryRows` supplies its
+ * own containment around this call.
  */
 async function ensureRegistrySystemActive(deps: Pick<ReconcileDeps, 'admin' | 'internalDb'>): Promise<void> {
   // ⛔ `systemCode` must stay distinct from `DEFAULT_SYSTEM_CODE` ('DEFAULT_FAC') and any
   // `systemCodeFor`-derived observed-facility code.
-  await deps.admin.codingSystems.upsertByUrl({
+  await ensureCodingSystemActive(deps, {
     url: FACILITY_REGISTRY_SYSTEM,
-    systemCode: 'FACILITY-REGISTRY',
-    systemName: 'OpenLDR facility registry',
-    publisherId: SYSTEM_PUBLISHER_ID,
+    systemCode: FACILITY_REGISTRY_SYSTEM_CODE,
+    systemName: FACILITY_REGISTRY_SYSTEM_NAME,
   });
-  const cs = await deps.admin.codingSystems.getByUrl(FACILITY_REGISTRY_SYSTEM);
-  if (cs && !cs.active) {
-    await deps.internalDb.updateTable('coding_systems').set({ active: true })
-      .where('url', '=', FACILITY_REGISTRY_SYSTEM).execute();
-  }
 }
 
 /**
@@ -715,16 +746,11 @@ async function registerObservedSystem(
   system: string,
 ): Promise<void> {
   try {
-    await deps.admin.codingSystems.upsertByUrl({
+    await ensureCodingSystemActive(deps, {
       url: system,
       systemCode: systemCodeFor(system),
       systemName: 'Observed facilities',
-      publisherId: SYSTEM_PUBLISHER_ID,
     });
-    const cs = await deps.admin.codingSystems.getByUrl(system);
-    if (cs && !cs.active) {
-      await deps.internalDb.updateTable('coding_systems').set({ active: true }).where('url', '=', system).execute();
-    }
   } catch (err) {
     // eslint-disable-next-line no-console -- deliberate: see doc comment above for why this must
     // never propagate, and this module takes no logger dependency to report through otherwise.

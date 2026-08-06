@@ -15,6 +15,17 @@ import { FACILITY_REGISTRY_SYSTEM } from '../../facility-observed';
 // to `codingSystems.upsertByUrl` exactly, or the two create competing rows: `upsertByUrl` derives
 // the row id as `cs-url-${systemCode}` (`terminology-admin-store.ts`), so matching `systemCode`
 // is what makes this migration's row and `upsertByUrl`'s row the SAME row.
+//
+// ⛔ Deliberately INLINED, not imported, even though the runtime side now has exported constants
+// for two of these three values (`FACILITY_REGISTRY_SYSTEM_CODE`/`FACILITY_REGISTRY_SYSTEM_NAME`
+// in `packages/db/src/facility-observed.ts`; the third, `publisherId`, is `SYSTEM_PUBLISHER_ID` in
+// `packages/bootstrap/src/facility-reconcile.ts`). A migration is a frozen snapshot of what it
+// wrote at the time it ran — importing a live constant a later change could edit would let this
+// migration's behaviour drift out from under it. If the runtime constants below are ever changed,
+// leave these three values exactly as they are:
+//   SYSTEM_CODE  must equal `FACILITY_REGISTRY_SYSTEM_CODE`
+//   SYSTEM_NAME  must equal `FACILITY_REGISTRY_SYSTEM_NAME`
+//   PUBLISHER_ID must equal `SYSTEM_PUBLISHER_ID`
 const SYSTEM_CODE = 'FACILITY-REGISTRY';
 const SYSTEM_NAME = 'OpenLDR facility registry';
 const PUBLISHER_ID = 'pub-system';

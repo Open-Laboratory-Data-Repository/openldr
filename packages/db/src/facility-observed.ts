@@ -25,6 +25,20 @@ export const DEFAULT_OBSERVED_FACILITY_SYSTEM = 'urn:openldr:default_fac';
  *  table's only guarantee is the `facility_registry_has_a_code` CHECK that at least one exists. */
 export const FACILITY_REGISTRY_SYSTEM = 'urn:openldr:cs:facility-registry';
 
+/** `coding_systems.system_code`/`system_name` for `FACILITY_REGISTRY_SYSTEM`'s row — the ONE
+ *  non-migration definition. `ensureRegistrySystemActive`
+ *  (`packages/bootstrap/src/facility-reconcile.ts`) imports these rather than re-typing the
+ *  literals, so the runtime upsert can never drift from itself.
+ *
+ *  Migration `075_facility_registry_coding_system.ts` inlines its OWN copy of these two values
+ *  instead of importing them, DELIBERATELY: a migration is a frozen snapshot of what it wrote at
+ *  the time it ran, and importing a "live" constant that later code could edit would let the
+ *  migration's behaviour drift out from under it after the fact (same reasoning as the RBAC frozen
+ *  capability list). If either value here ever changes, migration 075's inlined copy must be left
+ *  exactly as it was — do not "fix" it to match. */
+export const FACILITY_REGISTRY_SYSTEM_CODE = 'FACILITY-REGISTRY';
+export const FACILITY_REGISTRY_SYSTEM_NAME = 'OpenLDR facility registry';
+
 /** Bounded so the derived `facility_map.id` fits `keyType` (varchar(255)) on MySQL/MSSQL. */
 const MAX_ID_LENGTH = 200;
 
