@@ -770,3 +770,100 @@ describe('SEED_DESIGNS — rt-clinical-micro carries the scannable identifiers',
     }
   });
 });
+
+// The report never said which laboratory performed the test. `performer` is the facility CODE
+// (BAMAA) and `performer_display` the human name (Aga Khan) — five DISA codes share that one
+// display, so the join keys on the code and the DISPLAY is only ever a fallback for printing.
+describe('SEED_QUERIES — q-clinical-micro-header names the performing laboratory', () => {
+  const q = () => SEED_QUERIES.find((x) => x.id === 'q-clinical-micro-header')!;
+
+  it('selects performing_lab and lab_location in every dialect', () => {
+    for (const [dialect, sql] of Object.entries(q().sql)) {
+      expect(sql, `${dialect} does not select performing_lab`).toMatch(/as performing_lab\b/);
+      expect(sql, `${dialect} does not select lab_location`).toMatch(/as lab_location\b/);
+    }
+  });
+
+  it('falls back name -> display -> code, so an unmapped facility never prints a bare code', () => {
+    // The three-level ladder is the whole point: performer_display is itself 30-char truncated
+    // upstream, but "Ocean Road Cancer Institute (O" is still readable and "BALAB" is not.
+    for (const [dialect, sql] of Object.entries(q().sql)) {
+      expect(sql, `${dialect} lost the three-level name fallback`)
+        .toContain('coalesce(fm.name, fo.performer_display, fo.performer) as performing_lab');
+    }
+  });
+
+  it('joins facility_map on the CODE, never on the human display', () => {
+    for (const [dialect, sql] of Object.entries(q().sql)) {
+      expect(sql, `${dialect} does not join facility_map on the code`)
+        .toMatch(/fm\.source_code\s*=\s*fo\.performer\b/);
+      expect(sql, `${dialect} matches on the display — five facilities share the string "Aga Khan"`)
+        .not.toMatch(/fm\.source_code\s*=\s*fo\.performer_display/);
+    }
+  });
+
+  it('guards the facility_map join against a NULL source_system', () => {
+    // resolveObservedFacilities normalises NULL source_system to '' when building facility_map,
+    // and relational-writer.ts documents having written NULL into every row for months. A plain
+    // equality join drops those rows silently, because NULL = NULL is false.
+    for (const [dialect, sql] of Object.entries(q().sql)) {
+      expect(sql, `${dialect} lost the NULL source_system guard`)
+        .toMatch(/fm\.source_system\s*=\s*coalesce\(fo\.source_system, ''\)/);
+    }
+  });
+
+  it('joins facilities on BOTH source_system and code — the fan-out guard', () => {
+    // `facilities` has no uniqueness constraint on (source_system, facility_code). This query
+    // returns ONE row that the design binds; a duplicate would fan it out to two and the keyvalue
+    // panel would silently render the first.
+    for (const [dialect, sql] of Object.entries(q().sql)) {
+      expect(sql, `${dialect} does not scope the facilities join by feed`)
+        .toMatch(/fa\.source_system\s*=\s*fo\.source_system\s+and\s+fa\.facility_code\s*=\s*fo\.performer/);
+    }
+  });
+
+  it('prefers the curated facility_map location over the ingested one', () => {
+    // One measured facilities row (BAGAE) carries a street address and a PO box where a region and
+    // district belong. It is the one facility that IS mapped, so this order is what keeps a PO box
+    // off a clinical report.
+    for (const [dialect, sql] of Object.entries(q().sql)) {
+      expect(sql, `${dialect} lost the district preference`)
+        .toContain('coalesce(fm.district, fa.district) as district');
+      expect(sql, `${dialect} lost the region preference`)
+        .toContain('coalesce(fm.region, fa.region) as region');
+    }
+  });
+
+  it('collapses reports to one row per specimen before joining — the fan-out guard', () => {
+    // Reports are per-ORDER, not per-specimen. Measured: 0 of 3713 specimens disagree on performer
+    // and 0 of 88 codes carry two displays, so the three min()s cannot splice one facility's code
+    // onto another's name.
+    for (const [dialect, sql] of Object.entries(q().sql)) {
+      expect(sql, `${dialect} lost the facility_of CTE`).toContain('facility_of as (');
+      expect(sql, `${dialect} does not fold reports per specimen`)
+        .toMatch(/min\(performer\) as performer[\s\S]*group by specimen_id/);
+      expect(sql, `${dialect} joins diagnostic_reports directly and will fan out`)
+        .not.toMatch(/join diagnostic_reports [a-z]+ on/);
+    }
+  });
+
+  it('reaches the facility through the same max(specimen_id) subselect, not through s.id', () => {
+    // `s` is LEFT joined, so a specimen_id present in lab_results but absent from `specimens`
+    // leaves s.id NULL and would silently drop the facility.
+    for (const [dialect, sql] of Object.entries(q().sql)) {
+      expect(sql, `${dialect} hangs the facility off the specimens join`)
+        .toContain('left join facility f on f.specimen_id = (select max(l.specimen_id) from lab_results l where l.request_id = q.id)');
+    }
+  });
+
+  it('composes the location with each dialect’s own concatenation', () => {
+    // CONCAT_WS would say this once for all three, but it arrived in SQL Server 2017 — exactly the
+    // floor docker-compose.yml documents — and it keeps '' while skipping NULL.
+    expect(q().sql.postgres).toContain("f.district || ', ' || f.region");
+    expect(q().sql.mssql).toContain("f.district + ', ' + f.region");
+    expect(q().sql.mysql).toContain("concat(f.district, ', ', f.region)");
+    for (const [dialect, sql] of Object.entries(q().sql)) {
+      expect(sql, `${dialect} smuggled in CONCAT_WS`).not.toMatch(/concat_ws/i);
+    }
+  });
+});
