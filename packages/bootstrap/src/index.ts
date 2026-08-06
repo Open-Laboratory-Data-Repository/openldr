@@ -134,6 +134,12 @@ export interface DashboardsApi {
   reloadColumnPolicy(): Promise<void>;
 }
 
+/** One choice in a report parameter's select. `value` is what the query filters on; `label` is
+ *  what the operator reads. They differ deliberately — see the "Aga Khan" constraint: five DISA
+ *  facility codes all display as "Aga Khan" in different districts, so a name-valued dropdown
+ *  would silently merge distinct laboratories. */
+export interface ReportParamOption { value: string; label: string; }
+
 export interface ReportingApi {
   list(): ReportSummary[];
   listAll(): Promise<ReportSummary[]>;
@@ -142,7 +148,7 @@ export interface ReportingApi {
   runEventSource(id: string, window: { from: string; to: string }): Promise<{ rows: Record<string, unknown>[] }>;
   eventSources(): { id: string; name: string; columns: { key: string; label: string }[] }[];
   renderPdf(id: string, rawParams: unknown): Promise<Buffer>;
-  options(id: string): Promise<Record<string, string[]>>;
+  options(id: string): Promise<Record<string, ReportParamOption[]>>;
 }
 
 export function reportDefToSummary(def: ReportRecord, design: ReportDesign): ReportSummary {
@@ -236,13 +242,19 @@ function createDataDrivenReporting(deps: ReportingDataDrivenDeps) {
     return deps.renderReportDesignPdf(design, resolved, { identity });
   }
 
-  async function optionsDataDriven(id: string): Promise<Record<string, string[]>> {
+  async function optionsDataDriven(id: string): Promise<Record<string, ReportParamOption[]>> {
     const def = (await deps.reportDefs.get(id))!;
-    const out: Record<string, string[]> = {};
+    const out: Record<string, ReportParamOption[]> = {};
     for (const [paramKey, queryId] of Object.entries(def.paramOptions ?? {})) {
       const { columns, rows } = await deps.runStoredQuery(queryId, {});
-      const col = columns[0]?.key;
-      out[paramKey] = col ? rows.map((r) => String(r[col])).filter((v) => v !== 'null' && v !== '') : [];
+      const valueCol = columns[0]?.key;
+      // Column 1 is the human label when the query supplies one. A ONE-COLUMN options query still
+      // works, with label = value — that is what keeps this widening additive.
+      const labelCol = columns[1]?.key ?? valueCol;
+      if (!valueCol) { out[paramKey] = []; continue; }
+      out[paramKey] = rows
+        .map((r) => ({ value: String(r[valueCol]), label: String(r[labelCol!] ?? r[valueCol]) }))
+        .filter((o) => o.value !== 'null' && o.value !== '');
     }
     return out;
   }

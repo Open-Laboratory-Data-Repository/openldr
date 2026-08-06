@@ -6,7 +6,7 @@ import { isNarrowViewport } from '@/lib/viewport';
 import { FileText } from 'lucide-react';
 import {
   fetchReports, fetchReport, fetchReportOptions, logReportRun,
-  type ReportSummary, type ReportResult,
+  type ReportSummary, type ReportResult, type ReportParamOption,
 } from '../api';
 import { ReportLibrary } from '../reports/ReportLibrary';
 import { TruncatedText } from '@/components/ui/truncated-text';
@@ -50,7 +50,7 @@ export function Reports() {
   // PDF + spreadsheet/CSV) always reflect the run that produced `result`, even if the
   // user edits the parameter controls afterwards without re-running.
   const [ranParams, setRanParams] = useState<Record<string, string>>({});
-  const [options, setOptions] = useState<Record<string, string[]>>({});
+  const [options, setOptions] = useState<Record<string, ReportParamOption[]>>({});
   const [result, setResult] = useState<ReportResult | null>(null);
   const [running, setRunning] = useState(false);
   const [ranAt, setRanAt] = useState('');

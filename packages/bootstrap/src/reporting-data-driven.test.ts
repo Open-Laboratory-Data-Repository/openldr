@@ -8,16 +8,43 @@ const design = { id: 'd1', name: 'AMR', paper: 'A4', orientation: 'portrait',
 const def = { id: 'r1', name: 'AMR', description: '', category: 'amr', designId: 'd1',
   primaryQueryId: 'q1', summaryMetrics: null, chart: { type: 'bar', x: 'a', y: 'b' },
   paramOptions: { facility: 'q-fac' }, status: 'published' } as any;
+// Task 1 fixtures: a two-column options query (code + name) and a one-column options query, to
+// prove the value/label split and the single-column fallback respectively.
+const defWithFacility = { id: 'r-with-facility', name: 'AMR', description: '', category: 'amr', designId: 'd1',
+  primaryQueryId: 'q1', summaryMetrics: null, chart: { type: 'bar', x: 'a', y: 'b' },
+  paramOptions: { facility: 'q-fac-2col' }, status: 'published' } as any;
+const defWithSingleColumnOptions = { id: 'r-with-single-column-options', name: 'AMR', description: '', category: 'amr', designId: 'd1',
+  primaryQueryId: 'q1', summaryMetrics: null, chart: { type: 'bar', x: 'a', y: 'b' },
+  paramOptions: { facility: 'q-single' }, status: 'published' } as any;
 
 let lastRunStoredQueryValues: Record<string, unknown> | undefined;
 const deps = {
-  reportDefs: { list: async () => [def], get: async (id: string) => id === 'r1' ? def : undefined },
+  reportDefs: {
+    list: async () => [def],
+    get: async (id: string) => {
+      if (id === 'r1') return def;
+      if (id === 'r-with-facility') return defWithFacility;
+      if (id === 'r-with-single-column-options') return defWithSingleColumnOptions;
+      return undefined;
+    },
+  },
   reportDesigns: { get: async (id: string) => id === 'd1' ? design : undefined },
   runStoredQuery: async (queryId: string, values: Record<string, unknown>) => {
     lastRunStoredQueryValues = values;
-    return queryId === 'q-fac'
-      ? { columns: [{ key: 'v', label: 'v' }], rows: [{ v: 'Ndola' }, { v: 'Lusaka' }] }
-      : { columns: [{ key: 'a', label: 'a' }], rows: [{ a: 1 }, { a: 2 }] };
+    if (queryId === 'q-fac') return { columns: [{ key: 'v', label: 'v' }], rows: [{ v: 'Ndola' }, { v: 'Lusaka' }] };
+    // Column 0 = code (the filter value), column 1 = display name (the label) — the "Aga Khan"
+    // shape: five DISA facility codes share the display name, so the code must survive as the value.
+    if (queryId === 'q-fac-2col') {
+      return {
+        columns: [{ key: 'code', label: 'code' }, { key: 'name', label: 'name' }],
+        rows: [
+          { code: 'BAGAE', name: 'National Public Health Laboratory' },
+          { code: 'BAMAA', name: 'Aga Khan' },
+        ],
+      };
+    }
+    if (queryId === 'q-single') return { columns: [{ key: 'v', label: 'v' }], rows: [{ v: 'Only' }] };
+    return { columns: [{ key: 'a', label: 'a' }], rows: [{ a: 1 }, { a: 2 }] };
   },
   resolveDesignTables: async () => new Map([['t', { columns: [{ key: 'a', label: 'a' }], rows: [{ a: 1 }] }]]),
   renderReportDesignPdf: async () => Buffer.from('%PDF-1.4 fake'),
@@ -46,6 +73,22 @@ describe('reporting data-driven branch', () => {
     expect((await reporting.renderPdf('r1', { facility: 'Ndola' })).toString()).toContain('%PDF');
   });
   it('options resolves select dropdowns from paramOptions queries', async () => {
-    expect(await reporting.options('r1')).toEqual({ facility: ['Ndola', 'Lusaka'] });
+    expect(await reporting.options('r1')).toEqual({
+      facility: [{ value: 'Ndola', label: 'Ndola' }, { value: 'Lusaka', label: 'Lusaka' }],
+    });
+  });
+  it('maps column 0 to the value and column 1 to the label', async () => {
+    // The facility filter must carry the CODE while showing the NAME: five DISA codes share the
+    // display "Aga Khan", so a name-valued select would silently merge five laboratories.
+    const opts = await reporting.options('r-with-facility');
+    expect(opts.facility).toEqual([
+      { value: 'BAGAE', label: 'National Public Health Laboratory' },
+      { value: 'BAMAA', label: 'Aga Khan' },
+    ]);
+  });
+  it('falls back to label = value when the options query returns ONE column', async () => {
+    // Keeps the widening additive — a single-column options query is still valid.
+    const opts = await reporting.options('r-with-single-column-options');
+    expect(opts.facility).toEqual([{ value: 'Only', label: 'Only' }]);
   });
 });

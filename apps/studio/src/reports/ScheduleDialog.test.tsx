@@ -20,7 +20,7 @@ describe('ScheduleDialog', () => {
     const onSaved = vi.fn();
     render(
       <ScheduleDialog open reportId="amr-resistance" parameters={parameters}
-        options={{ facility: ['F1'] }} initialParams={{ facility: 'F1' }}
+        options={{ facility: [{ value: 'F1', label: 'F1' }] }} initialParams={{ facility: 'F1' }}
         onClose={() => {}} onSaved={onSaved} />,
     );
     expect(screen.queryByText(/day of week|jour de la semaine|dia da semana/i)).not.toBeInTheDocument();

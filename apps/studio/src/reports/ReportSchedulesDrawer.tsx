@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { Plus, Play, Pencil, Trash2 } from 'lucide-react';
-import { fetchSchedules, updateSchedule, runScheduleNow, deleteSchedule, type ReportSchedule, type ReportParamMeta } from '../api';
+import { fetchSchedules, updateSchedule, runScheduleNow, deleteSchedule, type ReportSchedule, type ReportParamMeta, type ReportParamOption } from '../api';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -15,7 +15,7 @@ interface Props {
   open: boolean;
   reportId: string;
   parameters: ReportParamMeta[];
-  options: Record<string, string[]>;
+  options: Record<string, ReportParamOption[]>;
   currentParams: Record<string, string>;
   onClose: () => void;
 }
