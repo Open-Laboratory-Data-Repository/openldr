@@ -398,5 +398,34 @@ describe('Facilities page', () => {
       // Observed fetches independently and is not blocked by the still-pending Registry calls.
       expect(await screen.findByText('Dodoma')).toBeInTheDocument();
     });
+
+    it('hosts a single ⋯ on the tab strip that swaps content with the active tab, instead of a second header row per tab', async () => {
+      (listPublishedForms as ReturnType<typeof vi.fn>).mockResolvedValue([publishedFacilityForm]);
+      (listFacilities as ReturnType<typeof vi.fn>).mockResolvedValue([sampleFacility]);
+      (listObservedFacilities as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+      show();
+      await waitFor(() => expect(screen.getByText('Dodoma Regional Referral')).toBeInTheDocument());
+
+      // Registry's ⋯ is present, and neither tab's old redundant title row survives (both were
+      // there purely to host the ⋯ this now replaces).
+      expect(screen.getByRole('button', { name: 'Facility actions' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Observed facility actions' })).not.toBeInTheDocument();
+      expect(screen.queryByText('Observed facilities')).not.toBeInTheDocument();
+
+      fireEvent.mouseDown(screen.getByRole('tab', { name: 'Observed' }), { button: 0, ctrlKey: false });
+      await waitFor(() => expect(screen.queryByRole('button', { name: 'Facility actions' })).not.toBeInTheDocument());
+
+      // Exactly one ⋯ trigger exists at a time, and it is now Observed's own (Scan/Publish) menu —
+      // the two menus stay entirely separate, never merged into one combined menu. Registry's own
+      // items (Add facility / Import facilities) must not have bled into it.
+      expect(screen.getAllByRole('button', { name: 'Observed facility actions' })).toHaveLength(1);
+      const trigger = screen.getByRole('button', { name: 'Observed facility actions' });
+      fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+      if (!screen.queryByRole('menuitem', { name: /scan for new facilities/i })) fireEvent.keyDown(trigger, { key: 'Enter' });
+      expect(screen.getByRole('menuitem', { name: /scan for new facilities/i })).toBeInTheDocument();
+      expect(screen.getByRole('menuitem', { name: /rebuild reports dimension/i })).toBeInTheDocument();
+      expect(screen.queryByRole('menuitem', { name: /add facility/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('menuitem', { name: /import facilities/i })).not.toBeInTheDocument();
+    });
   });
 });

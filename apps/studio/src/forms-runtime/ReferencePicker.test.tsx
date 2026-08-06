@@ -3,6 +3,20 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ReferencePicker } from './ReferencePicker';
 
+// ⛔ Do not add a per-call `{ timeout: N }` to any `findBy*`/`waitFor` in this file.
+// `setupTests.ts` already raises the default async-utility budget to 15000ms
+// (`configure({ asyncUtilTimeout: 15000 })`), so an explicit `{ timeout: 5000 }` here would
+// LOWER the effective budget below that, not extend it — this file carried exactly that mistake
+// for a while (twice), misdiagnosed as "needs a longer timeout" when the actual failure was
+// never a timeout at all: `findByText` was resolving fine, but the returned element reference
+// went stale (detached from the DOM by a later re-render) before the following synchronous
+// `toBeInTheDocument()` assertion ran, which reports as `expect(element).toBeInTheDocument()`
+// failing — a materially different error from `findByText` itself rejecting ("Unable to find an
+// element with the text ..."). See "shows an empty state when nothing matches" below for the one
+// place in this file where that race is real, and why the fix is to re-query on every poll
+// (`waitFor(() => expect(screen.getByText(...)).toBeInTheDocument())`) instead of resolving a
+// `findByText` once and asserting on the stale reference.
+
 vi.mock('@/api', () => ({
   referenceSearch: vi.fn(),
   referenceSearchPreview: vi.fn(),
@@ -80,11 +94,11 @@ describe('ReferencePicker', () => {
     render(<ReferencePicker field={field} formDefinitionId="f1" multiple={false} value={null} onChange={onChange} />);
 
     await user.type(screen.getByRole('combobox'), 'doe');
-    // Explicit timeout: the component debounces search by 200ms (ReferencePicker.tsx:104),
-    // which restarts on every keystroke from user.type. Under a full-workspace `turbo` run
-    // the debounce + mocked search + re-render can exceed testing-library's 1000ms findBy*
-    // default, so give these post-type assertions real headroom instead of relying on it.
-    await user.click(await screen.findByText('Doe Jane', {}, { timeout: 5000 }));
+    // `findByText` here waits on the configured default (setupTests.ts's `asyncUtilTimeout:
+    // 15000`, see ReferencePicker.test.tsx's file-level note) — do NOT add a per-call
+    // `{ timeout: ... }` override; that LOWERS the effective budget below the configured 15s
+    // rather than raising it.
+    await user.click(await screen.findByText('Doe Jane'));
     expect(onChange).toHaveBeenCalledWith({ reference: 'Patient/p1', display: 'Doe Jane' });
   });
 
@@ -95,7 +109,7 @@ describe('ReferencePicker', () => {
     render(<ReferencePicker field={field} formDefinitionId="f1" multiple={false} value={null} onChange={onChange} />);
 
     await user.type(screen.getByRole('combobox'), 'doe');
-    await screen.findByText('Doe Jane', {}, { timeout: 5000 });
+    await screen.findByText('Doe Jane');
     await user.keyboard('{ArrowDown}{Enter}');
     expect(onChange).toHaveBeenCalledWith({ reference: 'Patient/p1', display: 'Doe Jane' });
   });
@@ -132,12 +146,29 @@ describe('ReferencePicker', () => {
     expect(screen.getByText('Doe John')).toBeInTheDocument();
   });
 
+  // ⛔ THE transient-node trap this file exists to document (see the file-level note above): the
+  // listbox opens as soon as `query.trim().length >= 2` (ReferencePicker.tsx's `open && query.trim
+  // ().length >= 2` render guard), and "No matches" (`!busy && !error && rows.length === 0`)
+  // renders IMMEDIATELY at that instant — `busy` only flips true once the 200ms debounce actually
+  // fires (ReferencePicker.tsx:104). So "No matches" shows PRE-debounce, gets replaced by
+  // "Searching…" ~200ms later, then (once the mocked response resolves) reflects whatever the mock
+  // actually returned. A single `findByText` resolves against the FIRST (pre-debounce) occurrence
+  // and hands back a node reference that gets detached before the following `toBeInTheDocument()`
+  // runs — `waitFor` re-querying the DOM on every poll fixes THAT failure mode, but on its own it
+  // is not enough: a bare `waitFor(() => expect(screen.getByText(/no matches/i))...)` right after
+  // `user.type` is satisfied by that SAME pre-debounce flash on its very first (synchronous) check,
+  // before the mocked search has even been called — so it would pass even if the mock were changed
+  // to return real rows (verified: mutating the mock to `entityResult` here left this test green
+  // until the explicit wait for `referenceSearch` below was added). Waiting for `referenceSearch`
+  // to have been called first guarantees the debounce has fired and the assertion after it is
+  // checking the SETTLED result, not the transient pre-debounce placeholder.
   it('shows an empty state when nothing matches', async () => {
     vi.mocked(referenceSearch).mockResolvedValue({ kind: 'entity', rows: [], total: 0 });
     const user = userEvent.setup();
     render(<ReferencePicker field={field} formDefinitionId="f1" multiple={false} value={null} onChange={() => {}} />);
     await user.type(screen.getByRole('combobox'), 'zzz');
-    expect(await screen.findByText(/no matches/i, {}, { timeout: 5000 })).toBeInTheDocument();
+    await waitFor(() => expect(referenceSearch).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByText(/no matches/i)).toBeInTheDocument());
   });
 
   it('shows an error row when the search fails', async () => {
@@ -145,7 +176,7 @@ describe('ReferencePicker', () => {
     const user = userEvent.setup();
     render(<ReferencePicker field={field} formDefinitionId="f1" multiple={false} value={null} onChange={() => {}} />);
     await user.type(screen.getByRole('combobox'), 'doe');
-    expect(await screen.findByText(/boom/i, {}, { timeout: 5000 })).toBeInTheDocument();
+    expect(await screen.findByText(/boom/i)).toBeInTheDocument();
   });
 
   it('ignores a stale response that resolves after a newer one', async () => {
@@ -204,7 +235,7 @@ describe('ReferencePicker', () => {
 
     const combobox = screen.getByRole('combobox');
     await user.type(combobox, 'doe');
-    const option = await screen.findByText('Doe Jane', {}, { timeout: 5000 });
+    const option = await screen.findByText('Doe Jane');
 
     expect(combobox).not.toHaveAttribute('aria-activedescendant');
 

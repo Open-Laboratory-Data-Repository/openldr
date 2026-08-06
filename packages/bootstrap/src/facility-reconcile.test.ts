@@ -208,7 +208,7 @@ describe('scanObservedFacilities', () => {
     expect(cs).not.toBeNull();
     expect(cs!.active).toBe(true);
     const { rows } = await deps.admin.terms.search(FACILITY_REGISTRY_SYSTEM, { limit: 50, offset: 0 });
-    expect(rows.map((r) => r.code).sort()).toEqual(['fac-1', 'fac-2']);
+    expect(rows.map((r) => r.code).sort()).toEqual(['DOD', 'TZ-001']);
   });
 
   // ⚠ Gating regression guard: a dry-run scan must not have this side effect either.
@@ -236,7 +236,7 @@ describe('resolveObservedFacilities', () => {
     await seedRegistry(deps, { id: 'fac-1', name: 'Dodoma Regional Referral Hospital', localCode: 'DOD', region: 'Dodoma' });
     await seedMapping(deps, {
       fromSystem: 'urn:openldr:default_fac', fromCode: 'Dodoma',
-      toSystem: 'urn:openldr:cs:facility-registry', toCode: 'fac-1',
+      toSystem: 'urn:openldr:cs:facility-registry', toCode: 'DOD',
     });
 
     const [row] = await resolveObservedFacilities(deps);
@@ -284,7 +284,7 @@ describe('resolveObservedFacilities', () => {
     await seedRegistry(deps, { id: 'fac-3', name: 'Mnazi Mmoja Hospital', localCode: 'MMH' });
     await seedRegistry(deps, { id: 'fac-4', name: 'Some Other Hospital', nationalSystem: 'urn:tz:hfr', nationalCode: 'TZ-999' });
     await seedMapping(deps, { fromSystem: 'urn:openldr:default_fac', fromCode: 'Mnazi Mmoja', toSystem: 'urn:tz:hfr', toCode: 'TZ-999' });
-    await seedMapping(deps, { fromSystem: 'urn:openldr:default_fac', fromCode: 'Mnazi Mmoja', toSystem: 'urn:openldr:cs:facility-registry', toCode: 'fac-3' });
+    await seedMapping(deps, { fromSystem: 'urn:openldr:default_fac', fromCode: 'Mnazi Mmoja', toSystem: 'urn:openldr:cs:facility-registry', toCode: 'MMH' });
 
     const [row] = await resolveObservedFacilities(deps);
 
@@ -327,7 +327,7 @@ describe('resolveObservedFacilities', () => {
     await seedRegistry(deps, { id: 'fac-1', name: 'Dodoma Regional Referral Hospital', localCode: 'DOD' });
     await seedMapping(deps, {
       fromSystem: 'urn:openldr:default_fac', fromCode: 'Dodoma',
-      toSystem: 'urn:openldr:cs:facility-registry', toCode: 'fac-1', isActive: false,
+      toSystem: 'urn:openldr:cs:facility-registry', toCode: 'DOD', isActive: false,
     });
 
     const [row] = await resolveObservedFacilities(deps);
@@ -352,11 +352,11 @@ describe('Task 9b: feed-aware scan/resolve', () => {
     await seedRegistry(deps, { id: 'fac-b', name: 'Beta Laboratory', localCode: 'BETA' });
     await seedMapping(deps, {
       fromSystem: observedSystemForFeed('feed-a'), fromCode: 'NHL-01',
-      toSystem: FACILITY_REGISTRY_SYSTEM, toCode: 'fac-a',
+      toSystem: FACILITY_REGISTRY_SYSTEM, toCode: 'ALPHA',
     });
     await seedMapping(deps, {
       fromSystem: observedSystemForFeed('feed-b'), fromCode: 'NHL-01',
-      toSystem: FACILITY_REGISTRY_SYSTEM, toCode: 'fac-b',
+      toSystem: FACILITY_REGISTRY_SYSTEM, toCode: 'BETA',
     });
 
     const resolved = await resolveObservedFacilities(deps);
@@ -377,7 +377,7 @@ describe('Task 9b: feed-aware scan/resolve', () => {
     await seedRegistry(deps, { id: 'fac-1', name: 'Dodoma Regional Referral Hospital', localCode: 'DOD' });
     await seedMapping(deps, {
       fromSystem: DEFAULT_OBSERVED_FACILITY_SYSTEM, fromCode: 'Dodoma',
-      toSystem: FACILITY_REGISTRY_SYSTEM, toCode: 'fac-1',
+      toSystem: FACILITY_REGISTRY_SYSTEM, toCode: 'DOD',
     });
 
     const [row] = await resolveObservedFacilities(deps);
@@ -440,8 +440,8 @@ describe('facility identifier: performer_display and performer_system', () => {
     // stop the two codes from resolving to two different places.
     await seedRegistry(deps, { id: 'fac-dar', name: 'Aga Khan Hospital, Dar es Salaam', localCode: 'BAMAA' });
     await seedRegistry(deps, { id: 'fac-dodoma', name: 'Aga Khan Hospital, Dodoma', localCode: 'CDABE' });
-    await seedMapping(deps, { fromSystem: DEFAULT_OBSERVED_FACILITY_SYSTEM, fromCode: 'BAMAA', toSystem: FACILITY_REGISTRY_SYSTEM, toCode: 'fac-dar' });
-    await seedMapping(deps, { fromSystem: DEFAULT_OBSERVED_FACILITY_SYSTEM, fromCode: 'CDABE', toSystem: FACILITY_REGISTRY_SYSTEM, toCode: 'fac-dodoma' });
+    await seedMapping(deps, { fromSystem: DEFAULT_OBSERVED_FACILITY_SYSTEM, fromCode: 'BAMAA', toSystem: FACILITY_REGISTRY_SYSTEM, toCode: 'BAMAA' });
+    await seedMapping(deps, { fromSystem: DEFAULT_OBSERVED_FACILITY_SYSTEM, fromCode: 'CDABE', toSystem: FACILITY_REGISTRY_SYSTEM, toCode: 'CDABE' });
 
     const resolved = await resolveObservedFacilities(deps);
     const rowBamaa = resolved.find((r) => r.sourceCode === 'BAMAA');
@@ -500,7 +500,7 @@ describe('facility identifier: performer_display and performer_system', () => {
     const wireSystem = 'urn:openldr:cdr:LOCNDIC4';
     await seedPerformers(deps, [['BAMAA', 1]], { performerSystem: wireSystem });
     await seedRegistry(deps, { id: 'fac-1', name: 'Aga Khan Hospital, Dar es Salaam', localCode: 'BAMAA' });
-    await seedMapping(deps, { fromSystem: wireSystem, fromCode: 'BAMAA', toSystem: FACILITY_REGISTRY_SYSTEM, toCode: 'fac-1' });
+    await seedMapping(deps, { fromSystem: wireSystem, fromCode: 'BAMAA', toSystem: FACILITY_REGISTRY_SYSTEM, toCode: 'BAMAA' });
 
     const [row] = await resolveObservedFacilities(deps);
 
@@ -512,7 +512,7 @@ describe('facility identifier: performer_display and performer_system', () => {
     const deps = await makeReconcileDeps();
     await seedPerformers(deps, [['Dodoma', 1]]); // no performerSystem -> default feed system
     await seedRegistry(deps, { id: 'fac-1', name: 'Dodoma Regional Referral Hospital', localCode: 'DOD' });
-    await seedMapping(deps, { fromSystem: DEFAULT_OBSERVED_FACILITY_SYSTEM, fromCode: 'Dodoma', toSystem: FACILITY_REGISTRY_SYSTEM, toCode: 'fac-1' });
+    await seedMapping(deps, { fromSystem: DEFAULT_OBSERVED_FACILITY_SYSTEM, fromCode: 'Dodoma', toSystem: FACILITY_REGISTRY_SYSTEM, toCode: 'DOD' });
 
     const [row] = await resolveObservedFacilities(deps);
 
@@ -611,7 +611,7 @@ describe('publishFacilityMap', () => {
     await seedRegistry(deps, { id: 'fac-1', name: 'Dodoma Regional Referral Hospital', localCode: 'DOD' });
     await seedMapping(deps, {
       fromSystem: 'urn:openldr:default_fac', fromCode: 'Dodoma',
-      toSystem: 'urn:openldr:cs:facility-registry', toCode: 'fac-1',
+      toSystem: 'urn:openldr:cs:facility-registry', toCode: 'DOD',
     });
 
     const first = await publishFacilityMap(deps, { apply: true });
@@ -674,11 +674,27 @@ describe('publishRegistryConcepts', () => {
 
     expect(result).toMatchObject({ concepts: 2, systemRegistered: true });
     const { rows } = await deps.admin.terms.search('urn:openldr:cs:facility-registry', { limit: 50, offset: 0 });
+    // Operator-facing codes, not the rows' opaque ids: local_code when present, else national_code.
     expect(rows.map((r) => ({ code: r.code, display: r.display })).sort((a, b) => a.code.localeCompare(b.code)))
       .toEqual([
-        { code: 'fac-1', display: 'Dodoma Regional Referral Hospital' },
-        { code: 'fac-2', display: 'Muhimbili National Hospital' },
+        { code: 'DOD', display: 'Dodoma Regional Referral Hospital' },
+        { code: 'TZ-001', display: 'Muhimbili National Hospital' },
       ]);
+  });
+
+  // ⛔ THE load-bearing collision test at this level: local_code is globally unique and
+  // (national_system, national_code) is only unique as a pair, so nothing stops row A's local_code
+  // equalling row B's national_code. publishRegistryConcepts sees the WHOLE registry in one call, so
+  // it must catch this itself (no DB lookup needed — see registryConceptRows' doc comment).
+  it('falls back to id for a colliding pair, so the two stay distinct concepts', async () => {
+    const deps = await makeReconcileDeps();
+    await seedRegistry(deps, { id: 'fac-collide-a', name: 'Facility A', localCode: 'X' });
+    await seedRegistry(deps, { id: 'fac-collide-b', name: 'Facility B', nationalSystem: 'urn:tz:hfr', nationalCode: 'X' });
+
+    await publishRegistryConcepts(deps, { apply: true });
+
+    const { rows } = await deps.admin.terms.search('urn:openldr:cs:facility-registry', { limit: 50, offset: 0 });
+    expect(rows.map((r) => r.code).sort()).toEqual(['fac-collide-a', 'fac-collide-b']);
   });
 
   it('registers an ACTIVE coding_systems row', async () => {
@@ -798,9 +814,56 @@ describe('projectRegistryRows', () => {
     await projectRegistryRows(deps, [{ id: 'fac-1', name: 'National Public Health Laboratory' }]);
 
     const { rows } = await deps.admin.terms.search(FACILITY_REGISTRY_SYSTEM, { limit: 50, offset: 0 });
-    // Only fac-1 was handed in — fac-2 must NOT have been reprojected as a side effect.
-    expect(rows.map((r) => r.code)).toEqual(['fac-1']);
+    // Only fac-1 was handed in — fac-2 must NOT have been reprojected as a side effect. The code is
+    // fac-1's local_code (111317-4), the operator-facing code, not its opaque id — this is exactly
+    // the "single-row projection path" case: `rows` supplied only {id, name}, so the function had to
+    // go look up fac-1's own local_code itself before it could compute this.
+    expect(rows.map((r) => r.code)).toEqual(['111317-4']);
     expect(rows[0].display).toBe('National Public Health Laboratory');
+  });
+
+  // The DB-lookup collision guard: `rows` here carries only fac-a's {id, name} — a single-row call —
+  // yet the pre-existing fac-b (seeded separately, never mentioned in this call's `rows`) already
+  // claims the SAME candidate code via its national_code. Proves the "widen visibility via a DB
+  // lookup" design actually works for the single-row path, not just the in-memory batch path.
+  it('a single-row call still detects a collision against a DIFFERENT, unmentioned registry row', async () => {
+    const deps = await makeReconcileDeps();
+    await seedRegistry(deps, { id: 'fac-a', name: 'Facility A', localCode: 'X' });
+    await seedRegistry(deps, { id: 'fac-b', name: 'Facility B', nationalSystem: 'urn:tz:hfr', nationalCode: 'X' });
+
+    await projectRegistryRows(deps, [{ id: 'fac-a', name: 'Facility A' }]);
+
+    const { rows } = await deps.admin.terms.search(FACILITY_REGISTRY_SYSTEM, { limit: 50, offset: 0 });
+    expect(rows.map((r) => r.code)).toEqual(['fac-a']);
+  });
+
+  // The symmetric case: projecting fac-b (the LATER-seeded row) alone must also detect the collision
+  // against the earlier, unmentioned fac-a.
+  it('detects the same collision from the other row\'s side of a single-row call', async () => {
+    const deps = await makeReconcileDeps();
+    await seedRegistry(deps, { id: 'fac-a', name: 'Facility A', localCode: 'X' });
+    await seedRegistry(deps, { id: 'fac-b', name: 'Facility B', nationalSystem: 'urn:tz:hfr', nationalCode: 'X' });
+
+    await projectRegistryRows(deps, [{ id: 'fac-b', name: 'Facility B' }]);
+
+    const { rows } = await deps.admin.terms.search(FACILITY_REGISTRY_SYSTEM, { limit: 50, offset: 0 });
+    expect(rows.map((r) => r.code)).toEqual(['fac-b']);
+  });
+
+  // A CSV import batch calls this with MULTIPLE just-written rows at once — the given-rows path must
+  // catch a collision between two rows in the SAME call too, not only against pre-existing rows.
+  it('a multi-row call detects a collision between two rows in the SAME batch', async () => {
+    const deps = await makeReconcileDeps();
+    await seedRegistry(deps, { id: 'fac-a', name: 'Facility A', localCode: 'X' });
+    await seedRegistry(deps, { id: 'fac-b', name: 'Facility B', nationalSystem: 'urn:tz:hfr', nationalCode: 'X' });
+
+    await projectRegistryRows(deps, [
+      { id: 'fac-a', name: 'Facility A' },
+      { id: 'fac-b', name: 'Facility B' },
+    ]);
+
+    const { rows } = await deps.admin.terms.search(FACILITY_REGISTRY_SYSTEM, { limit: 50, offset: 0 });
+    expect(rows.map((r) => r.code).sort()).toEqual(['fac-a', 'fac-b']);
   });
 
   it('registers an ACTIVE coding_systems row', async () => {

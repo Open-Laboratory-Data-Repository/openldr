@@ -799,7 +799,8 @@ describe('Fix 1: POST/PUT /api/facilities project the row into FACILITY_REGISTRY
     const created = res.json();
 
     const { rows } = await ctx.terminology.admin.terms.search(FACILITY_REGISTRY_SYSTEM, { limit: 10, offset: 0 });
-    expect(rows).toEqual([expect.objectContaining({ code: created.id, display: 'Dodoma Regional Referral' })]);
+    // The operator-facing code (local_code = 'LAB01', see `body` above), not the row's opaque id.
+    expect(rows).toEqual([expect.objectContaining({ code: 'LAB01', display: 'Dodoma Regional Referral' })]);
   });
 
   it('registers FACILITY_REGISTRY_SYSTEM as an ACTIVE coding_systems row on first create', async () => {
@@ -825,7 +826,8 @@ describe('Fix 1: POST/PUT /api/facilities project the row into FACILITY_REGISTRY
     expect(res.statusCode).toBe(200);
 
     const { rows } = await ctx.terminology.admin.terms.search(FACILITY_REGISTRY_SYSTEM, { limit: 10, offset: 0 });
-    expect(rows).toEqual([expect.objectContaining({ code: id, display: 'Dodoma Regional Referral Hospital' })]);
+    // localCode ('LAB01') is unchanged by this rename, so the code stays the same across the update.
+    expect(rows).toEqual([expect.objectContaining({ code: 'LAB01', display: 'Dodoma Regional Referral Hospital' })]);
   });
 
   // ⛔ The projection must never take the facility write down with it.

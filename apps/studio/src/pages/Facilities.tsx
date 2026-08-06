@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { MoreHorizontal, Building2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
@@ -36,6 +37,16 @@ export function Facilities() {
   // national register can run 10-15k rows, and presenting a capped page with no indication anything
   // was cut is its own defect distinct from "no rows at all". See listFacilities in api.ts.
   const [truncated, setTruncated] = useState(false);
+  // Task: one `⋯` on the TAB STRIP itself, right-aligned, instead of each tab wasting a second
+  // header row purely to host its own. The strip owns ONE portal target; whichever tab is actually
+  // mounted (Radix unmounts the inactive `TabsContent`'s whole subtree — see the comment on
+  // `TabsContent` below) is the only one that ever portals a menu into it, so the Registry menu and
+  // the Observed tab's Scan/Publish menu can never both be present at once, and each keeps its own
+  // items without merging into a combined menu (the operator's explicit instruction). A DOM node
+  // (not a ref) because `createPortal` needs an actual element to target, and only `useState`'s
+  // setter re-renders the children that are waiting on it — a plain `useRef` would leave them
+  // permanently rendering against `null`.
+  const [actionsEl, setActionsEl] = useState<HTMLDivElement | null>(null);
 
   // F1 fix: a plain `reload()` flips `loading` to true, which the render below turns into a
   // full-page `LoadingState` that UNMOUNTS everything else on the page — including a currently-open
@@ -118,12 +129,19 @@ export function Facilities() {
     <AppShell title={t('nav.facilities')} fullBleed>
       <Tabs defaultValue="registry" className="flex min-h-0 flex-1 flex-col">
         {/* fullBleed has zero page padding (unlike the p-4/p-6 settings pages `@/components/ui/
-            bleed` exists for), so the tab labels only need `px-4` to line up with the header row
-            below — there is no inset to negative-margin away. */}
-        <TabsList className="px-4">
-          <TabsTrigger value="registry">{t('facilities.tabs.registry')}</TabsTrigger>
-          <TabsTrigger value="observed">{t('facilities.tabs.observed')}</TabsTrigger>
-        </TabsList>
+            bleed` exists for), so `px-4` on this row lines it up with the content below — there is
+            no inset to negative-margin away. The row itself carries the ONE `border-b` rule for
+            both the tab labels and the `⋯` slot; `TabsList` drops its own (`border-b-0`) so the
+            two don't stack into a double line. */}
+        <div className="flex items-center justify-between border-b border-border px-4">
+          <TabsList className="border-b-0">
+            <TabsTrigger value="registry">{t('facilities.tabs.registry')}</TabsTrigger>
+            <TabsTrigger value="observed">{t('facilities.tabs.observed')}</TabsTrigger>
+          </TabsList>
+          {/* Portal target for whichever tab's `⋯` menu is currently mounted — see `actionsEl`'s
+              doc comment above. */}
+          <div ref={setActionsEl} className="flex items-center" />
+        </div>
 
         {/* The `TabsContent` primitive (components/ui/tabs.tsx) now defends against the
             flex-vs-[hidden] specificity trap (commit 5fc72756) itself via
@@ -138,30 +156,32 @@ export function Facilities() {
           <LoadingState className="flex-1" label={t('common.loading')} />
         ) : (
         <div className="flex min-h-0 h-full flex-col">
-        <div className="flex items-center justify-between border-b border-border px-4 py-2">
-          <span className="text-sm font-medium">{t('facilities.title')}</span>
-          {canManage && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-8 w-8" aria-label={t('facilities.actions')}>
-                  <MoreHorizontal className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem disabled={!hasForm} onSelect={() => setEditing(null)}>
-                  {t('facilities.add')}
-                </DropdownMenuItem>
-                {/* No `!hasForm` gate here, unlike Add above — importing writes core facility
-                    columns directly (@openldr/bootstrap's importFacilities), not through the
-                    Facilities form, so a lab with rows already imported but its form later
-                    archived can still re-import (e.g. a refreshed national register). */}
-                <DropdownMenuItem onSelect={() => setImporting(true)}>
-                  {t('facilities.import.menuItem')}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
-        </div>
+        {/* Task: the ⋯ now lives on the shared tab strip (see `actionsEl` above), not a second
+            header row here — portaled only while THIS panel is actually mounted (Radix unmounts
+            the inactive `TabsContent`, so the Observed tab's own menu can never be portaled into
+            the same node at the same time; the two stay entirely separate menus, never merged). */}
+        {canManage && actionsEl && createPortal(
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8" aria-label={t('facilities.actions')}>
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem disabled={!hasForm} onSelect={() => setEditing(null)}>
+                {t('facilities.add')}
+              </DropdownMenuItem>
+              {/* No `!hasForm` gate here, unlike Add above — importing writes core facility
+                  columns directly (@openldr/bootstrap's importFacilities), not through the
+                  Facilities form, so a lab with rows already imported but its form later
+                  archived can still re-import (e.g. a refreshed national register). */}
+              <DropdownMenuItem onSelect={() => setImporting(true)}>
+                {t('facilities.import.menuItem')}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>,
+          actionsEl,
+        )}
 
         {error && (
           <div className="mx-4 mt-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
@@ -292,7 +312,7 @@ export function Facilities() {
             comment on the registry TabsContent above for why `flex flex-col` is safe here now
             that the primitive defends `[hidden]` itself. */}
         <TabsContent value="observed" className="flex min-h-0 flex-1 flex-col">
-          <ObservedTab />
+          <ObservedTab actionsPortalTarget={actionsEl} />
         </TabsContent>
       </Tabs>
     </AppShell>

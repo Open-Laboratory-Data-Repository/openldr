@@ -1,6 +1,6 @@
 import type { Kysely } from 'kysely';
-import type { ConceptRowInput, ExternalSchema, InternalSchema, TerminologyAdminStore } from '@openldr/db';
-import { DEFAULT_OBSERVED_FACILITY_SYSTEM, FACILITY_REGISTRY_SYSTEM, FACILITY_REGISTRY_SYSTEM_CODE, FACILITY_REGISTRY_SYSTEM_NAME, facilityMapId, observedFacilityConceptRow, registryConceptRow, observedSystemForFeed, projectDiagnosticReport } from '@openldr/db';
+import type { ConceptRowInput, ExternalSchema, InternalSchema, RegistryRowForConcept, TerminologyAdminStore } from '@openldr/db';
+import { DEFAULT_OBSERVED_FACILITY_SYSTEM, FACILITY_REGISTRY_SYSTEM, FACILITY_REGISTRY_SYSTEM_CODE, FACILITY_REGISTRY_SYSTEM_NAME, facilityMapId, observedFacilityConceptRow, registryConceptRows, registryPreferredCode, observedSystemForFeed, projectDiagnosticReport } from '@openldr/db';
 
 export interface ReconcileDeps {
   internalDb: Kysely<InternalSchema>;
@@ -411,7 +411,19 @@ export async function resolveObservedFacilities(deps: ReconcileDeps): Promise<Re
     : [];
 
   const registry = await deps.internalDb.selectFrom('facility_registry').selectAll().execute();
-  const byId = new Map(registry.map((r) => [r.id, r]));
+  // The registry-route mapping's `to_code` is whatever code `TermMappingDialog` showed the operator
+  // when they picked this row as a target — i.e. exactly what `registryConceptRows`
+  // (packages/db/src/facility-observed.ts) currently projects it as: `local_code`, else
+  // `national_code`, else the row's `id` on a collision. Resolution has to derive that SAME code the
+  // SAME way, over the SAME full-registry visibility `publishRegistryConcepts` gives it (so the
+  // in-batch collision check inside `registryConceptRows` sees the whole table here too), or a
+  // mapping authored against the current projection would fail to resolve. A plain `byId` keyed on
+  // the row's bare `id` was correct back when every concept's code WAS the id; it is retired here for
+  // that reason, not merely renamed.
+  const registryConcepts = registryConceptRows(
+    registry.map((r): RegistryRowForConcept => ({ id: r.id, name: r.name, localCode: r.local_code, nationalCode: r.national_code })),
+  );
+  const byRegistryCode = new Map(registry.map((r, i) => [registryConcepts[i].code, r]));
   const byNational = new Map(
     registry
       .filter((r) => r.national_system && r.national_code)
@@ -437,7 +449,7 @@ export async function resolveObservedFacilities(deps: ReconcileDeps): Promise<Re
     const nationalMapping = candidates.find((c) => c.toSystem !== FACILITY_REGISTRY_SYSTEM);
 
     const row = registryMapping
-      ? byId.get(registryMapping.toCode)
+      ? byRegistryCode.get(registryMapping.toCode)
       : nationalMapping
         ? byNational.get(`${nationalMapping.toSystem}|${nationalMapping.toCode}`)
         : undefined;
@@ -569,7 +581,7 @@ export async function publishRegistryConcepts(
 ): Promise<{ concepts: number; systemRegistered: boolean }> {
   const registry = await deps.internalDb
     .selectFrom('facility_registry')
-    .select(['id', 'name'])
+    .select(['id', 'name', 'local_code', 'national_code'])
     .execute();
 
   if (!opts.apply) return { concepts: registry.length, systemRegistered: false };
@@ -577,7 +589,12 @@ export async function publishRegistryConcepts(
   await ensureRegistrySystemActive(deps);
 
   if (registry.length > 0) {
-    await deps.admin.terms.importRows(registry.map(registryConceptRow));
+    // `registry` IS the whole table here (this function reprojects everything, unlike the given-rows
+    // `projectRegistryRows` below) — so `registryConceptRows`' own in-batch collision check already
+    // sees every row that could possibly collide with any other. No extra lookup needed.
+    await deps.admin.terms.importRows(
+      registryConceptRows(registry.map((r): RegistryRowForConcept => ({ id: r.id, name: r.name, localCode: r.local_code, nationalCode: r.national_code }))),
+    );
   }
 
   return { concepts: registry.length, systemRegistered: true };
@@ -649,8 +666,23 @@ async function ensureRegistrySystemActive(deps: Pick<ReconcileDeps, 'admin' | 'i
  * (10-15k rows). This function instead takes the exact rows that just changed — one row from the
  * POST/PUT routes, the whole batch from a CSV import — and writes only those.
  *
- * Shares `registryConceptRow` with `publishRegistryConcepts` so the two projections can never drift
- * on shape (code = the row's `id`, display = its `name`).
+ * Shares `registryConceptRows` with `publishRegistryConcepts` so the two projections can never drift
+ * on shape (code = `local_code`, else `national_code`, else the row's `id` on a collision; display =
+ * its `name`).
+ *
+ * ⚠ Collision detection with only PARTIAL visibility: `rows` carries only `{id, name}` — the caller
+ * (a POST/PUT route, the CSV importer) hands in exactly what it just wrote, nothing more — so this
+ * function cannot compute a candidate code, let alone detect a collision, from its arguments alone
+ * the way `publishRegistryConcepts` can (that one already has the WHOLE registry loaded). It goes and
+ * looks instead: it re-reads the given rows' own `local_code`/`national_code`, then queries for any
+ * OTHER `facility_registry` row anywhere in the table that claims one of the same candidate codes,
+ * and forces THOSE rows' concepts to fall back to their own `id` via `registryConceptRows`'
+ * `forceOwnIdFor`. This is safe specifically because every caller of this function invokes it AFTER
+ * its own write has already committed (see the doc comments on the create/update routes and
+ * `facility-import.ts`'s call site) — by the time this runs, the live table already reflects both
+ * "the rest of this batch" (a multi-row CSV import) and "everything pre-existing", so there is no
+ * third category of row a DB lookup here could miss. A single-row call (the common POST/PUT case)
+ * gets exactly the same protection as a batch, at the cost of two extra reads.
  *
  * ⛔ Never throws. A projection failure must NOT take a facility write down with it — mirrors
  * `registerObservedSystem`'s containment on the ingest hot path (see that function's doc comment).
@@ -664,7 +696,57 @@ export async function projectRegistryRows(
   if (rows.length === 0) return;
   try {
     await ensureRegistrySystemActive(deps);
-    await deps.admin.terms.importRows(rows.map(registryConceptRow));
+
+    const ids = rows.map((r) => r.id);
+    const own = await deps.internalDb
+      .selectFrom('facility_registry')
+      .select(['id', 'local_code', 'national_code'])
+      .where('id', 'in', ids)
+      .execute();
+    const ownById = new Map(own.map((r) => [r.id, r]));
+
+    const inputs: RegistryRowForConcept[] = rows.map((r) => {
+      const found = ownById.get(r.id);
+      return { id: r.id, name: r.name, localCode: found?.local_code ?? null, nationalCode: found?.national_code ?? null };
+    });
+
+    // Candidate codes this batch WANTS to use — dedup'd, since two of the given rows could (rarely)
+    // want the same code and both need to be included in the collision lookup below.
+    const candidates = [...new Set(inputs.map((r) => registryPreferredCode(r)).filter((c): c is string => c !== null))];
+
+    const forceOwnIdFor = new Set<string>();
+    if (candidates.length > 0) {
+      // Every OTHER row in the table (this batch's own rows included — a row always "claims" its own
+      // code) that claims one of our candidate codes via EITHER column. Matching on `local_code` OR
+      // `national_code` independently, not paired with `national_system`, mirrors what
+      // `registryPreferredCode` itself compares: a concept's `code` is a bare string, so a collision
+      // is possible against either column regardless of which system a national code belongs to.
+      const claimants = await deps.internalDb
+        .selectFrom('facility_registry')
+        .select(['id', 'local_code', 'national_code'])
+        .where((eb) => eb.or([eb('local_code', 'in', candidates), eb('national_code', 'in', candidates)]))
+        .execute();
+      const claimantIdsByCode = new Map<string, Set<string>>();
+      const addClaim = (code: string | null, id: string): void => {
+        if (code === null || !candidates.includes(code)) return;
+        const set = claimantIdsByCode.get(code) ?? new Set<string>();
+        set.add(id);
+        claimantIdsByCode.set(code, set);
+      };
+      for (const c of claimants) {
+        addClaim(c.local_code, c.id);
+        addClaim(c.national_code, c.id);
+      }
+      for (const r of inputs) {
+        const candidate = registryPreferredCode(r);
+        // More than one DISTINCT row id claiming this code means at least one OTHER row (not just
+        // this one) wants it too — a real collision, not just this row seeing its own claim reflected
+        // back.
+        if (candidate && (claimantIdsByCode.get(candidate)?.size ?? 0) > 1) forceOwnIdFor.add(r.id);
+      }
+    }
+
+    await deps.admin.terms.importRows(registryConceptRows(inputs, { forceOwnIdFor }));
   } catch (err) {
     // eslint-disable-next-line no-console -- deliberate: see doc comment above for why this must
     // never propagate, and this module takes no logger dependency to report through otherwise.

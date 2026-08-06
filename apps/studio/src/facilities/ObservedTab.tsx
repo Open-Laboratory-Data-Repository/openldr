@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { MoreHorizontal, Building2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { DEFAULT_OBSERVED_FACILITY_SYSTEM, observedSystemForFeed } from '@openldr/db/facility-observed';
@@ -56,7 +57,27 @@ function facilityDetailLine(row: ObservedFacility, viaLabel: string): string {
  * Self-contained: fetches its own data, exactly like `Facilities.tsx` fetches the registry — the
  * page just switches which of the two is mounted (Radix `Tabs` unmounts the inactive one).
  */
-export function ObservedTab(): JSX.Element {
+export interface ObservedTabProps {
+  /**
+   * Task: `Facilities.tsx` hosts a single `⋯` on the shared tab strip instead of every tab wasting
+   * a second header row purely to host its own — this is that strip's portal target.
+   *
+   * Three states, deliberately distinguished (not just truthy/falsy):
+   * - `undefined` (prop omitted): standalone mode. Renders the OLD self-contained header row
+   *   (title + menu) exactly as before, so `ObservedTab` stays a fully self-sufficient component —
+   *   this is what keeps this file's own test suite (which renders `<ObservedTab />` with no
+   *   parent page at all) working unchanged.
+   * - `null`: integrated mode, but the parent's portal container hasn't mounted yet (its `ref`
+   *   callback fires during commit, one render after the parent's own first pass) — render
+   *   NEITHER the header row NOR the menu, rather than flashing the standalone header in for one
+   *   frame and then tearing it back out.
+   * - an `HTMLElement`: integrated mode, ready — portal ONLY the menu (no title span; the parent
+   *   already dropped that row entirely) into it.
+   */
+  actionsPortalTarget?: HTMLElement | null;
+}
+
+export function ObservedTab({ actionsPortalTarget }: ObservedTabProps = {}): JSX.Element {
   const { t } = useTranslation();
   const { hasCapability } = useAuth();
   // data_analyst/system_auditor hold facilities.view WITHOUT facilities.manage (see
@@ -184,28 +205,38 @@ export function ObservedTab(): JSX.Element {
 
   const pageRows = rows.slice(page * pageSize, page * pageSize + pageSize);
 
+  // Shared between standalone (inline) and integrated (portaled) rendering below — see
+  // `ObservedTabProps.actionsPortalTarget`'s doc comment for the three-state distinction.
+  const actionsMenu = canManage ? (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon" className="h-8 w-8" aria-label={t('facilities.observed.actions')}>
+          <MoreHorizontal className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem disabled={scanning} onSelect={() => void runScan()}>
+          {scanning ? t('facilities.observed.scanning') : t('facilities.observed.scan')}
+        </DropdownMenuItem>
+        <DropdownMenuItem disabled={publishing} onSelect={() => void runPublish()}>
+          {publishing ? t('facilities.observed.publishing') : t('facilities.observed.publish')}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  ) : null;
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex items-center justify-between border-b border-border px-4 py-2">
-        <span className="text-sm font-medium">{t('facilities.observed.title')}</span>
-        {canManage && (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8" aria-label={t('facilities.observed.actions')}>
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem disabled={scanning} onSelect={() => void runScan()}>
-                {scanning ? t('facilities.observed.scanning') : t('facilities.observed.scan')}
-              </DropdownMenuItem>
-              <DropdownMenuItem disabled={publishing} onSelect={() => void runPublish()}>
-                {publishing ? t('facilities.observed.publishing') : t('facilities.observed.publish')}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
-      </div>
+      {actionsPortalTarget === undefined ? (
+        // Standalone mode: no parent page supplied a portal target, so this stays the fully
+        // self-contained header row it always was.
+        <div className="flex items-center justify-between border-b border-border px-4 py-2">
+          <span className="text-sm font-medium">{t('facilities.observed.title')}</span>
+          {actionsMenu}
+        </div>
+      ) : (
+        actionsPortalTarget && createPortal(actionsMenu, actionsPortalTarget)
+      )}
 
       {error && (
         <div className="mx-4 mt-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">

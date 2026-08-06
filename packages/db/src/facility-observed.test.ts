@@ -5,7 +5,8 @@ import {
   DEFAULT_OBSERVED_FACILITY_SYSTEM,
   FACILITY_REGISTRY_SYSTEM,
   observedFacilityConceptRow,
-  registryConceptRow,
+  registryConceptRows,
+  registryPreferredCode,
   facilityMapId,
   observedSystemForFeed,
 } from './facility-observed';
@@ -31,15 +32,60 @@ describe('facility-observed', () => {
     expect(row.status).toBe('ACTIVE');
   });
 
-  it('registryConceptRow shapes a facility_registry row into the FACILITY_REGISTRY_SYSTEM concept, keyed on id, displayed as name', () => {
-    const row = registryConceptRow({ id: 'fac-1', name: 'Dodoma Regional Referral Hospital' });
+  it('registryConceptRows keys the concept on local_code when present, displayed as name', () => {
+    const [row] = registryConceptRows([
+      { id: 'fac-1', name: 'National Public Health Laboratory', localCode: '111317-4' },
+    ]);
     expect(row).toEqual({
       system: FACILITY_REGISTRY_SYSTEM,
-      code: 'fac-1',
-      display: 'Dodoma Regional Referral Hospital',
+      code: '111317-4',
+      display: 'National Public Health Laboratory',
       status: 'ACTIVE',
       properties: null,
     });
+  });
+
+  it('registryConceptRows falls back to national_code when local_code is absent', () => {
+    const [row] = registryConceptRows([
+      { id: 'fac-2', name: 'Muhimbili National Hospital', nationalCode: 'TZ-001' },
+    ]);
+    expect(row.code).toBe('TZ-001');
+  });
+
+  // ⛔ The load-bearing collision guard. local_code is globally unique and (national_system,
+  // national_code) is unique as a PAIR — but nothing stops row A's local_code from equalling row B's
+  // national_code. Since concepts are keyed on (system, code) alone, a naive `localCode ?? nationalCode`
+  // would silently merge these two DIFFERENT facilities into ONE concept.
+  it('falls back to id for BOTH rows when their candidate codes collide, keeping them distinct', () => {
+    const rows = registryConceptRows([
+      { id: 'fac-a', name: 'Facility A', localCode: 'X' },
+      { id: 'fac-b', name: 'Facility B', nationalCode: 'X' },
+    ]);
+    expect(rows.map((r) => r.code).sort()).toEqual(['fac-a', 'fac-b']);
+  });
+
+  it('a row whose candidate code is unique within the batch is unaffected by an unrelated collision elsewhere', () => {
+    const rows = registryConceptRows([
+      { id: 'fac-a', name: 'Facility A', localCode: 'X' },
+      { id: 'fac-b', name: 'Facility B', nationalCode: 'X' },
+      { id: 'fac-c', name: 'Facility C', localCode: 'UNIQUE' },
+    ]);
+    const c = rows.find((r) => r.display === 'Facility C');
+    expect(c?.code).toBe('UNIQUE');
+  });
+
+  it('opts.forceOwnIdFor forces a row to its own id even without an in-batch collision', () => {
+    const [row] = registryConceptRows(
+      [{ id: 'fac-1', name: 'Solo Facility', localCode: 'SOLO' }],
+      { forceOwnIdFor: new Set(['fac-1']) },
+    );
+    expect(row.code).toBe('fac-1');
+  });
+
+  it('registryPreferredCode prefers localCode, falls back to nationalCode, then null', () => {
+    expect(registryPreferredCode({ localCode: 'LC', nationalCode: 'NC' })).toBe('LC');
+    expect(registryPreferredCode({ nationalCode: 'NC' })).toBe('NC');
+    expect(registryPreferredCode({})).toBeNull();
   });
 
   it('does not upper-case, unlike openldr-v2 normalizeCode', () => {
