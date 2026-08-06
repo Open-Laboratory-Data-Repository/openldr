@@ -43,6 +43,18 @@ export const Reference = z
   .object({
     reference: z.string().optional(),
     type: fhirUri.optional(),
+    // A logical reference (R4 `Reference.identifier`): the target is named by an Identifier rather
+    // than pointed at via `reference`, for a source with no resource to reference — exactly what
+    // the CDR toolchain now sends for a DiagnosticReport's performing facility (a code with no
+    // Organization resource behind it). `Identifier` is the schema declared immediately above.
+    // ⛔ `Reference.display` is a human label ONLY — never a match key. Never derive identity from
+    // it; use `identifier.value` for that.
+    //
+    // `assigner` (also on R4's `Reference`) is deliberately NOT modelled here: it is itself a
+    // `Reference`, so typing it would need `z.lazy(() => Reference)` for the self-referential
+    // schema, and nothing in this codebase reads `Reference.assigner` today. `.passthrough()`
+    // still accepts it unvalidated if a sender includes it.
+    identifier: Identifier.optional(),
     display: z.string().optional(),
   })
   .passthrough();

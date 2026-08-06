@@ -18,6 +18,23 @@ describe('fhir complex datatypes', () => {
     expect(Reference.safeParse({ reference: 'Patient/1' }).success).toBe(true);
     expect(HumanName.safeParse({ family: 'Doe', given: ['Jane'] }).success).toBe(true);
   });
+  // A logical reference (R4 `Reference.identifier`): no resource to point at, so the target is
+  // named by an Identifier instead of `reference`. This is how the CDR toolchain now sends a
+  // facility performer: `{ identifier: { system, value }, display }`.
+  it('Reference models identifier as a real Identifier, not merely passthrough', () => {
+    const ok = Reference.safeParse({
+      identifier: { system: 'urn:openldr:default_fac', value: 'BAMAA' },
+      display: 'Aga Khan',
+    });
+    expect(ok.success).toBe(true);
+    if (ok.success) {
+      expect((ok.data as { identifier?: unknown }).identifier).toEqual({ system: 'urn:openldr:default_fac', value: 'BAMAA' });
+    }
+    // Proves `identifier` is actually VALIDATED against the Identifier schema, not just carried
+    // through by `.passthrough()` — an invalid nested `use` must fail parsing.
+    const bad = Reference.safeParse({ identifier: { use: 'bogus', value: 'BAMAA' } });
+    expect(bad.success).toBe(false);
+  });
   it('Quantity rejects a non-numeric value', () => {
     expect(Quantity.safeParse({ value: 'high' }).success).toBe(false);
   });
