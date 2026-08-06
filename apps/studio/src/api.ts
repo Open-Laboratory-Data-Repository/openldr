@@ -1,4 +1,4 @@
-import { getAccessToken, notifyUnauthorized } from './auth/token';
+import { getAccessToken, isAuthEnforced, notifyUnauthorized } from './auth/token';
 import type { PluginBrokerOp, PluginRpcResult } from '@openldr/plugin-ui-sdk';
 import type { ReportDesign } from '@openldr/report-designer/pure';
 // Browser-safe subpath — no kysely/pg. Same seam FacilityDialog.tsx already imports
@@ -6,11 +6,57 @@ import type { ReportDesign } from '@openldr/report-designer/pure';
 // itself now comes from here too instead of being hand-duplicated.
 import type { FacilityAdminLevel } from '@openldr/db/facility-answers';
 
+/** Routes the server answers WITHOUT a bearer token. Mirrors the public-path checks at the top of
+ *  the `onRequest` hook in `apps/server/src/auth-plugin.ts` — keep the two in step.
+ *
+ *  The list deliberately errs towards "public": misclassifying a protected path as public here
+ *  only falls back to the previous behaviour (send it, take the 401), whereas the reverse would
+ *  short-circuit a call the server would happily have answered. */
+function isPublicApiPath(path: string): boolean {
+  // /health and the static SPA are not under /api at all.
+  if (path !== '/api' && !path.startsWith('/api/')) return true;
+  // The SPA reads OIDC settings here before it has a token — must never be short-circuited.
+  if (path === '/api/config') return true;
+  // Webhook triggers and sync push authenticate via their own per-route secret, not a session.
+  if (path.startsWith('/api/workflows/hooks/')) return true;
+  if (path.startsWith('/api/sync/')) return true;
+  return false;
+}
+
+/** Path component of any `fetch` input form (relative string, absolute string, URL, Request). */
+function apiPathOf(input: RequestInfo | URL): string {
+  const raw = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+  const base = globalThis.location?.origin ?? 'http://localhost';
+  try {
+    return new URL(raw, base).pathname;
+  } catch {
+    return raw.split('?')[0];
+  }
+}
+
 /** fetch wrapper that attaches the bearer token when one is present. */
 export async function authFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const token = getAccessToken();
   let res: Response;
   if (!token) {
+    // We hold no credential to offer. When the server enforces auth, sending the request anyway is
+    // a guaranteed 401 that ALSO writes an `auth.failed`/`missing` row via auth-plugin.ts — and
+    // because NotificationBell polls every 45s, a tab whose token has lapsed manufactures the very
+    // "Authentication failure" notification the bell then shows, once per throttle window, forever.
+    // A client that knows it is unauthenticated must not generate a security audit event.
+    //
+    // Answer locally instead: same status and body the server sends (auth-plugin.ts), and the same
+    // notifyUnauthorized() re-login trigger, minus the request and the audit row.
+    //
+    // Gated on isAuthEnforced() because under AUTH_DEV_BYPASS the server injects the dev actor for
+    // exactly these token-less requests — short-circuiting there would break the whole dev mode.
+    if (isAuthEnforced() && !isPublicApiPath(apiPathOf(input))) {
+      notifyUnauthorized();
+      return new Response(JSON.stringify({ error: 'authentication required' }), {
+        status: 401,
+        headers: { 'content-type': 'application/json' },
+      });
+    }
     res = init !== undefined ? await fetch(input, init) : await fetch(input);
   } else {
     const headers = new Headers(init?.headers);
