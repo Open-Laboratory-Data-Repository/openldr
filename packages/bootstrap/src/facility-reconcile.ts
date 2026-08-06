@@ -266,6 +266,27 @@ export interface ResolvedFacility {
    *  Lets the Observed tab show "BAMAA — Aga Khan" instead of a bare opaque code, without using the
    *  display for matching. Null when the source never supplied one. */
   sourceDisplay: string | null;
+  /** `facilities.region`/`facilities.district` (`Organization.address[0].state`/`.district`,
+   *  migration 014) for `sourceCode`, joined WITHIN `sourceSystem` above — i.e.
+   *  `facilities.facility_code = sourceCode AND facilities.source_system = sourceSystem`. This is
+   *  location CE already knows about the OBSERVED facility itself, independent of any curated
+   *  `facility_registry` mapping — the whole point being that an operator can tell DISA's five
+   *  facility codes sharing the display "Aga Khan" (BAMAA/BBFAF/CDABE/EAFAE/NDFAM) apart by district
+   *  BEFORE mapping any of them, not only after. Null when `facilities` holds no matching row (the
+   *  common case today — most codes arrive with no `Organization` alongside them) or when the
+   *  matching row's own `address` omitted that part (see `projectFacility`'s doc comment).
+   *
+   *  ⛔ Scoped by source system on PURPOSE, not merely by code: `facilities.id` is a bare
+   *  per-(deterministic-id) upsert key with no source scoping (`relational-writer.ts`'s
+   *  `upsertOn`/`insertBatchPg` conflict on `id` alone), so if two feeds ever emit an Organization
+   *  under the exact same id for the exact same code, only ONE of them can survive in `facilities`
+   *  at all — whichever wrote last — and its `source_system` column reflects that write. Scoping
+   *  this join by `source_system` is what stops the LOSING feed's reports from silently inheriting
+   *  the WINNING feed's location: they correctly see `null` (no known location) rather than a
+   *  location that was never theirs. The data genuinely cannot distinguish the two feeds in that
+   *  collision case — only that it must never guess. */
+  sourceRegion: string | null;
+  sourceDistrict: string | null;
   /** SUM of `diagnostic_reports` rows folded into this (resolved system, code) row, across every
    *  raw `(performer, source_system)` group that shares the fold key — including groups that did
    *  NOT win the representative-display tiebreak below. A route or CLI consumer wanting a report
@@ -444,6 +465,28 @@ export async function resolveObservedFacilities(deps: ReconcileDeps): Promise<Re
   }
   const foldedRows = [...folded.values()];
 
+  // Location CE already knows about the OBSERVED facility itself (`facilities.region`/`.district`,
+  // populated from `Organization.address`, migration 014) — independent of any curated mapping. See
+  // `ResolvedFacility.sourceRegion`'s doc comment for why the join is scoped by `(facility_code,
+  // source_system)` TOGETHER, and what it means when that scoping can't fully distinguish two feeds.
+  // Loaded whole and joined here in memory, the same way `registry` (a few lines below) is — the
+  // `facilities` dimension is the same order of magnitude as `facility_registry`, not the report
+  // volume in `diagnostic_reports`.
+  const facilityRows = await deps.externalDb
+    .selectFrom('facilities')
+    .select(['id', 'facility_code', 'source_system', 'region', 'district'])
+    .where('facility_code', 'is not', null)
+    .execute();
+  // Deterministic by `id` ascending, first-seen-wins: guards the (should-not-happen-today) case of
+  // two DISTINCT `facilities` rows somehow claiming the same (source_system, facility_code) pair, so
+  // a re-run over UNCHANGED data can never flip which location is shown — same discipline as the
+  // sourceDisplay/sourceSystem tiebreak above.
+  const facilityLocationByKey = new Map<string, { region: string | null; district: string | null }>();
+  for (const f of [...facilityRows].sort((a, b) => a.id.localeCompare(b.id))) {
+    const key = `${f.source_system ?? ''}\n${f.facility_code}`;
+    if (!facilityLocationByKey.has(key)) facilityLocationByKey.set(key, { region: f.region, district: f.district });
+  }
+
   // Same preference as `scanObservedFacilities`: the wire's own `performer_system` wins over
   // `observedSystemForFeed(source_system)` — a mapping authored under the wire's system must be
   // found, or Task 9b's whole per-feed resolution silently misses it.
@@ -530,10 +573,14 @@ export async function resolveObservedFacilities(deps: ReconcileDeps): Promise<Re
     // `assertResolvedFacilityInvariant`'s doc comment for why this, not a status union.
     assertResolvedFacilityInvariant({ resolvedVia, targetMissing, nonFacilityTarget });
 
+    const location = facilityLocationByKey.get(`${r.sourceSystem}\n${r.code}`) ?? { region: null, district: null };
+
     return {
       sourceSystem: r.sourceSystem,
       sourceCode: r.code,
       sourceDisplay: r.sourceDisplay,
+      sourceRegion: location.region,
+      sourceDistrict: location.district,
       reportCount: r.reportCount,
       registryId: row?.id ?? null,
       localCode: row?.local_code ?? null,
