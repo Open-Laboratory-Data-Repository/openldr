@@ -9,6 +9,12 @@ export type ResolvedTable =
 
 export { resolveDesignTables, type RunQuery } from './resolve';
 
+// Widened to the package boundary for `@openldr/reporting`'s seed tests: a seeded design's keyvalue
+// panel has a FIXED box, and pairs past its bottom are clipped by the drawer rather than
+// overflowing — so a panel that has run out of room fails silently at render time. Exporting the
+// geometry lets the seed that owns the panel assert its own capacity.
+export { pairRects, type PairBox } from './draw';
+
 export interface RenderOptions {
   now?: Date;
   /**

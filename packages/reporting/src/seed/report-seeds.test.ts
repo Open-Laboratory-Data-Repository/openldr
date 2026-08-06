@@ -11,6 +11,7 @@ import {
   antibioticNormalizeSql,
   type SeedDataDrivenReportsDeps,
 } from './report-seeds';
+import { pairRects } from '@openldr/report-designer';
 
 // In-memory fakes — no real Kysely instance needed (unlike `packages/bootstrap/src/seed.ts`,
 // which builds `customQueries` from a real DB handle; here we inject fakes directly to unit-test
@@ -716,6 +717,31 @@ describe('SEED_DESIGNS — rt-clinical-micro uses real keyvalue panels', () => {
     expect(el('hdr').panelColumns).toBe(2);
     expect(el('org').layout).toBe('stacked');
     expect(el('org').text).toBe('ORGANISM ISOLATED');
+  });
+
+  it('names the performing laboratory and where it is', () => {
+    // The report never said which lab produced the result. On a national instance the letterhead is
+    // the MINISTRY, so nothing else on the page supplies it — and five DISA codes share the display
+    // "Aga Khan", so the name alone does not identify a laboratory either.
+    const keys = (el('hdr').boundColumns ?? []).map((c) => c.key);
+    expect(keys).toContain('performing_lab');
+    expect(keys).toContain('lab_location');
+  });
+
+  it('fits every header pair inside the panel box', () => {
+    // ⛔ pairRects returns boxes past the bottom of the box and the drawer clips them, so an
+    // eleventh field does not overflow — it VANISHES, with no error. This is the only thing that
+    // turns that into a failing test. Ten pairs end at y=226 inside a box ending at 236; pair
+    // eleven starts a sixth row at 226 and ends at 240. Whoever adds field eleven must grow `h`
+    // and push `org` (y=244) and everything below it down.
+    const hdr = el('hdr');
+    const n = (hdr.boundColumns ?? []).length;
+    const pairs = pairRects(hdr.rect, n, 'inline', hdr.panelColumns ?? 1, !!(hdr.text ?? '').trim());
+    const last = pairs[n - 1];
+    expect(
+      last.y + last.h,
+      `pair ${n} falls outside the panel and will be silently clipped`,
+    ).toBeLessThanOrEqual(hdr.rect.y + hdr.rect.h);
   });
 
   it('leaves no element overprinting another', () => {

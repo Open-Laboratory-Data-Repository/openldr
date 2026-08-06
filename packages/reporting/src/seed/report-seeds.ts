@@ -2113,7 +2113,11 @@ export const SEED_DESIGNS: ReportDesign[] = [
       // Band 2 of the reference: a label→value metadata strip, NOT a one-row table. It was a table
       // with a header row until S4 gave the vocabulary a `keyvalue` panel; the column labels sat
       // above the values in a tinted band, which reads as a spreadsheet fragment rather than a
-      // patient header. Two pair columns, so the eight facts fill four lines instead of eight.
+      // patient header. Two pair columns, so the ten facts fill five lines instead of ten.
+      // ⛔ THIS PANEL IS NOW FULL. Pairs flow across then down at KV_INLINE_H (14) from y+4, so ten
+      // pairs end at y=226 inside a box ending at 236 — and an ELEVENTH lands at 240 and is
+      // silently clipped by the drawer, not overflowed. Field eleven must grow `h` and push `org`
+      // (y=244) and everything below it down. `report-seeds.test.ts` fails if it does not.
       { id: 'hdr', kind: 'keyvalue', name: 'Patient & specimen', rect: { x: 40, y: 152, w: 700, h: 84 },
         layout: 'inline', panelColumns: 2,
         dataSource: { kind: 'custom-query', queryId: 'q-clinical-micro-header' },
@@ -2126,6 +2130,8 @@ export const SEED_DESIGNS: ReportDesign[] = [
           { key: 'lab_number', label: 'Lab number', kind: 'label' },
           { key: 'dob', label: 'DOB', kind: 'label' },
           { key: 'panel', label: 'Panel', kind: 'label' },
+          { key: 'performing_lab', label: 'Performing lab', kind: 'label' },
+          { key: 'lab_location', label: 'Lab location', kind: 'label' },
         ] },
       // Band 4: a titled panel. Stacked, because an organism name ("Klebsiella pneumoniae") is
       // longer than the 40% an inline label would leave it, and it is the one fact on this page a
