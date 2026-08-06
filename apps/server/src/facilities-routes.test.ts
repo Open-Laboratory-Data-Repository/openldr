@@ -1169,6 +1169,36 @@ describe('Task 6: GET /api/facilities/observed', () => {
     expect(rows[0].reportCount).toBe(8);
   });
 
+  // Task 11 (whole-branch review round 2, Fix 1): this route USED to compute its own
+  // `diagnostic_reports` count query, grouped by `(performer, source_system)` — 2 columns, omitting
+  // `performer_system` — and join it back onto the resolved rows by `${sourceSystem}|${sourceCode}`.
+  // `resolveObservedFacilities` folds by (resolved system, code), where the resolved system prefers
+  // the wire's `performer_system` over a `source_system`-derived default — so two feeds sharing the
+  // SAME wire `performer_system` but differing `source_system` fold into ONE `ResolvedFacility`
+  // carrying only the WINNING representative's `sourceSystem`. The route's own count query, still
+  // split by the LOSING feed's raw `source_system`, could never fully match that folded row, silently
+  // dropping one feed's contribution. Fixed by reading `reportCount` straight off the already-folded
+  // `ResolvedFacility` (which sums both feeds) instead of re-deriving a second, differently-keyed count.
+  it('reports the SUMMED reportCount for two feeds sharing a wire performer_system but differing source_system', async () => {
+    const internalDb = await makeMigratedDb();
+    const externalDb = await makeMigratedExternalDb();
+    const wireSystem = 'urn:openldr:cdr:LOCNDIC4';
+    const rowsA = Array.from({ length: 3 }, () => ({
+      id: `dr-${randomUUID()}`, performer: 'NHL-01', source_system: 'feed-a', performer_system: wireSystem,
+    }));
+    const rowsB = Array.from({ length: 5 }, () => ({
+      id: `dr-${randomUUID()}`, performer: 'NHL-01', source_system: 'feed-b', performer_system: wireSystem,
+    }));
+    await externalDb.insertInto('diagnostic_reports').values([...rowsA, ...rowsB] as any).execute();
+    const app = await appWith(fakeReconcileCtx(internalDb, externalDb));
+
+    const res = await app.inject({ method: 'GET', url: '/api/facilities/observed' });
+    expect(res.statusCode).toBe(200);
+    const rows = res.json().filter((r: any) => r.sourceCode === 'NHL-01');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].reportCount).toBe(8); // 3 + 5, not just the winning feed's count
+  });
+
   it('is gated on facilities.view', async () => {
     const internalDb = await makeMigratedDb();
     const externalDb = await makeMigratedExternalDb();

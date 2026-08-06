@@ -809,9 +809,11 @@ export const importFacilitiesCsv = (body: FacilityImportRequest): Promise<Facili
   authFetch('/api/facilities/import', jbody(body, 'POST')).then((r) => okJson<FacilityImportResult>(r, 'import facilities'));
 
 // Task 9: observed-facility reconciliation (the Observed tab). Mirrors the server's
-// `ResolvedFacility` (packages/bootstrap/src/facility-reconcile.ts) plus the live `reportCount`
-// the route joins in — see facilities-routes.ts's GET /api/facilities/observed. Already ordered by
-// `reportCount` descending server-side; this client does not re-sort.
+// `ResolvedFacility` (packages/bootstrap/src/facility-reconcile.ts) 1:1 — `reportCount` is a field
+// on `ResolvedFacility` itself (Task 11, whole-branch review round 2: `resolveObservedFacilities`
+// sums it while folding raw groups, so the route no longer runs a second query to join it in). See
+// facilities-routes.ts's GET /api/facilities/observed. Already ordered by `reportCount` descending
+// server-side; this client does not re-sort.
 export interface ObservedFacility {
   /** `diagnostic_reports.source_system` — the ingestion feed, e.g. `webhook-ingest`. Unrelated to
    *  the coding system mappings are authored against (see `resolvedVia` below). */

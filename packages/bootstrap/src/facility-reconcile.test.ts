@@ -551,6 +551,51 @@ describe('resolveObservedFacilities dedupes multiple raw groups for the same log
     const rows = resolved.filter((r) => r.sourceCode === 'BAMAA');
     expect(rows).toHaveLength(2);
   });
+
+  // Task 11 (whole-branch review round 2, Fix 1): two feeds can share the SAME wire-supplied
+  // `performer_system` while differing in `source_system` — the same facility namespace ingested
+  // through two feeds (e.g. a webhook feed and a CDR-import feed both sending LOCNDIC4 identifiers).
+  // These fold into ONE `ResolvedFacility` (same resolved system, same code), and that folded row
+  // must report the SUM of every raw group's reports, not merely the winning representative's count
+  // — the representative-display rule (above) picks a WINNER for `sourceDisplay`/`sourceSystem`, but
+  // `reportCount` is a warehouse aggregate that must never drop a feed's contribution just because
+  // that feed's row lost the display tiebreak.
+  it('two feeds sharing a wire performer_system but differing source_system report the SUMMED count, not just the winning representative\'s', async () => {
+    const deps = await makeReconcileDeps();
+    const wireSystem = 'urn:openldr:cdr:LOCNDIC4';
+    await seedPerformers(deps, [['NHL-01', 3]], { sourceSystem: 'feed-a', performerSystem: wireSystem });
+    await seedPerformers(deps, [['NHL-01', 5]], { sourceSystem: 'feed-b', performerSystem: wireSystem });
+
+    const resolved = await resolveObservedFacilities(deps);
+
+    const rows = resolved.filter((r) => r.sourceCode === 'NHL-01');
+    expect(rows).toHaveLength(1); // same wire system -> same (system, code) fold key -> ONE row
+    expect(rows[0].reportCount).toBe(8); // 3 + 5 summed, not just feed-b's winning 5
+  });
+});
+
+// Task 11 (whole-branch review round 2, Fix 2): the representative-display rule's FIRST tier (a
+// non-null display always beats a null one, regardless of report count) had no dedicated test — every
+// existing case in the block above varies count and "has a display" together, so a mutation flipping
+// `replace = candidateHasDisplay` to `replace = !candidateHasDisplay` passed unnoticed. This isolates
+// the first tier: the row WITH a display must win even though it backs FEWER reports.
+describe('resolveObservedFacilities representative-display rule: non-null beats null regardless of report count', () => {
+  it('a row with a display wins over a sibling with more reports but no display', async () => {
+    const deps = await makeReconcileDeps();
+    // Same performer + same (default) source_system + same (default, absent performer_system)
+    // resolved system, so both fold into one key. The row WITH a display backs FEWER reports (1)
+    // than the row WITHOUT one (10) — if the display-priority tier were broken (or removed, falling
+    // through to the report-count tier), the no-display row would win instead.
+    await seedPerformers(deps, [['BAMAAX', 1]], { performerDisplay: 'Aga Khan Hospital' });
+    await seedPerformers(deps, [['BAMAAX', 10]]);
+
+    const resolved = await resolveObservedFacilities(deps);
+
+    const rows = resolved.filter((r) => r.sourceCode === 'BAMAAX');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].sourceDisplay).toBe('Aga Khan Hospital');
+    expect(rows[0].reportCount).toBe(11); // both rows' reports still summed regardless of who wins display
+  });
 });
 
 describe('publishFacilityMap', () => {

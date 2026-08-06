@@ -79,6 +79,25 @@ function djb2Hex(s: string): string {
 }
 
 /**
+ * The coding system a raw `(performer, source_system)` row resolves into. The wire's own
+ * `performer_system` (`identifier.system`) is authoritative when present — the data is more
+ * trustworthy than our own feed-based inference. `observedSystemForFeed(sourceSystem)` is the
+ * fallback for a sender that supplies no identifier system at all (display-only, or no identifier
+ * whatsoever).
+ *
+ * Extracted so `scanObservedFacilities`, `resolveObservedFacilities`, and
+ * `captureObservedFacilityFromProjection` share ONE definition of this preference instead of three
+ * independently-typed copies of `performer_system ?? observedSystemForFeed(source_system)` that
+ * could silently drift apart.
+ */
+function resolvedObservedSystem(
+  performerSystem: string | null | undefined,
+  sourceSystem: string | null | undefined,
+): string {
+  return performerSystem ?? observedSystemForFeed(sourceSystem ?? null);
+}
+
+/**
  * Parse a `terminology_concepts.properties` value into an object, treating an unparseable blob the
  * same as an absent one rather than throwing and killing the whole scan. This matters beyond
  * defensive coding: `admin.terms.update()` (`terminology-admin-store.ts` `packProps`/`update`) is
@@ -152,7 +171,7 @@ export async function scanObservedFacilities(deps: ReconcileDeps, opts: ScanOpti
   const displayByKey = new Map<string, string>();
   for (const o of observed) {
     if (o.performer === null) continue;
-    const system = o.performer_system ?? observedSystemForFeed(o.source_system);
+    const system = resolvedObservedSystem(o.performer_system, o.source_system);
     const byCode = bySystem.get(system) ?? new Map<string, number>();
     byCode.set(o.performer, (byCode.get(o.performer) ?? 0) + Number(o.n));
     bySystem.set(system, byCode);
@@ -247,6 +266,13 @@ export interface ResolvedFacility {
    *  Lets the Observed tab show "BAMAA — Aga Khan" instead of a bare opaque code, without using the
    *  display for matching. Null when the source never supplied one. */
   sourceDisplay: string | null;
+  /** SUM of `diagnostic_reports` rows folded into this (resolved system, code) row, across every
+   *  raw `(performer, source_system)` group that shares the fold key — including groups that did
+   *  NOT win the representative-display tiebreak below. A route or CLI consumer wanting a report
+   *  count reads this field directly rather than re-querying `diagnostic_reports` itself, which is
+   *  what let a route-level join key drift out of sync with this function's own fold key (Task 11,
+   *  whole-branch review round 2, Fix 1). */
+  reportCount: number;
   registryId: string | null;
   /** `facility_registry.local_code` of the resolved row — OURS, distinct from `nationalCode`
    *  (THEIRS). Lets an operator tell apart two similarly-named facilities (e.g. "Dodoma Regional
@@ -320,29 +346,40 @@ export async function resolveObservedFacilities(deps: ReconcileDeps): Promise<Re
   // `source_system` ascending, for full reproducibility. "Whichever row the SQL driver happened to
   // return first" is deliberately NOT the rule — that would let the identical warehouse state render
   // a different name on every re-run.
+  //
+  // Task 11 (whole-branch review round 2, Fix 1): `reportCount` accumulates the SUM of every raw
+  // group's `n` folded into this key — independent of which raw group wins the display tiebreak
+  // above. This is what makes this function the single owner of the report count: a caller (route,
+  // CLI) that instead re-derives its own count via a DIFFERENT grouping/key and joins it back in
+  // risks that key silently drifting from this function's own fold key, dropping a feed's
+  // contribution (exactly the bug this fix closes — see the route's prior 2-column
+  // `(performer, source_system)` join key, which didn't include `performer_system` and so joined the
+  // wrong thing whenever two feeds shared a wire system but differed in `source_system`).
   interface FoldedGroup {
     system: string;
     code: string;
     sourceSystem: string;
     sourceDisplay: string | null;
     n: number; // reports backing the CURRENT representative display; used only to break ties
+    reportCount: number; // SUM of every raw group's `n` folded into this key so far
   }
   const folded = new Map<string, FoldedGroup>();
   for (const o of observed) {
     if (o.performer === null) continue;
-    const system = o.performer_system ?? observedSystemForFeed(o.source_system);
+    const system = resolvedObservedSystem(o.performer_system, o.source_system);
     const code = o.performer;
     const key = `${system}\n${code}`;
-    const candidate: FoldedGroup = {
+    const n = Number(o.n);
+    const candidate: Omit<FoldedGroup, 'reportCount'> = {
       system,
       code,
       sourceSystem: o.source_system ?? '',
       sourceDisplay: o.performer_display ?? null,
-      n: Number(o.n),
+      n,
     };
     const current = folded.get(key);
     if (!current) {
-      folded.set(key, candidate);
+      folded.set(key, { ...candidate, reportCount: n });
       continue;
     }
     const currentHasDisplay = current.sourceDisplay !== null;
@@ -355,7 +392,8 @@ export async function resolveObservedFacilities(deps: ReconcileDeps): Promise<Re
     } else {
       replace = candidate.sourceSystem < current.sourceSystem; // final deterministic tiebreak
     }
-    if (replace) folded.set(key, candidate);
+    const reportCount = current.reportCount + n; // summed regardless of which side wins the display
+    folded.set(key, replace ? { ...candidate, reportCount } : { ...current, reportCount });
   }
   const foldedRows = [...folded.values()];
 
@@ -410,6 +448,7 @@ export async function resolveObservedFacilities(deps: ReconcileDeps): Promise<Re
       sourceSystem: r.sourceSystem,
       sourceCode: r.code,
       sourceDisplay: r.sourceDisplay,
+      reportCount: r.reportCount,
       registryId: row?.id ?? null,
       localCode: row?.local_code ?? null,
       name: row?.name ?? null,
@@ -643,6 +682,6 @@ export async function captureObservedFacilityFromProjection(
   // Same system preference as scan/resolve: the wire's own `performer_system` (`identifier.
   // system`) wins over the feed-based inference, so a code captured here at ingest time lands
   // under the SAME system a later full scan would also file it under.
-  const system = projected.performer_system ?? observedSystemForFeed(sourceSystem);
+  const system = resolvedObservedSystem(projected.performer_system, sourceSystem);
   await captureObservedFacility(deps, system, performer, now);
 }
