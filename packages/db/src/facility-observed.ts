@@ -20,9 +20,12 @@
 export const DEFAULT_OBSERVED_FACILITY_SYSTEM = 'urn:openldr:default_fac';
 
 /** One concept per `facility_registry` row, so `TermMappingDialog`'s search mode has something to
- *  pick. The concept `code` is the registry row's `id` — neither `local_code` (NULL on every
- *  imported row) nor `national_code` (NULL on hand-created rows) is universally present; the
- *  table's only guarantee is the `facility_registry_has_a_code` CHECK that at least one exists. */
+ *  pick. The concept `code` is the row's own operator-facing code — `local_code`, else
+ *  `national_code` — not its opaque `id`; see `registryConceptRows` below for the derivation and
+ *  the collision it has to guard against. The table's `facility_registry_has_a_code` CHECK
+ *  (`local_code is not null or national_code is not null`) guarantees at least one is always
+ *  present, so the fallback to `id` in `registryConceptRows` is reached only on a genuine
+ *  code collision between two different rows, never merely because a row lacks a code. */
 export const FACILITY_REGISTRY_SYSTEM = 'urn:openldr:cs:facility-registry';
 
 /** `coding_systems.system_code`/`system_name` for `FACILITY_REGISTRY_SYSTEM`'s row — the ONE
@@ -122,8 +125,33 @@ export function observedFacilityConceptRow(input: ObservedFacilityInput): Concep
   };
 }
 
+export interface RegistryRowForConcept {
+  id: string;
+  name: string;
+  /** OURS. `null`/`undefined` both mean "absent", mirroring `FacilityRecord.localCode`. */
+  localCode?: string | null;
+  /** THEIRS. Only consulted when `localCode` is absent. */
+  nationalCode?: string | null;
+}
+
 /**
- * Shape one `facility_registry` row into its `FACILITY_REGISTRY_SYSTEM` projection concept.
+ * The operator-facing code a `facility_registry` row WANTS to project as — `local_code` when
+ * present, else `national_code`. `null` only when both are absent, which the
+ * `facility_registry_has_a_code` CHECK constraint makes impossible for a real stored row (a caller
+ * assembling a `RegistryRowForConcept` by hand, e.g. in a test, can still omit both).
+ *
+ * Exported so a caller with only partial registry visibility (`projectRegistryRows`,
+ * `packages/bootstrap/src/facility-reconcile.ts`) can compute a row's candidate code the SAME way
+ * `registryConceptRows` does, without duplicating the preference order, when it has to go looking for
+ * OTHER rows that might collide with it.
+ */
+export function registryPreferredCode(row: { localCode?: string | null; nationalCode?: string | null }): string | null {
+  return row.localCode ?? row.nationalCode ?? null;
+}
+
+/**
+ * Shape a BATCH of `facility_registry` rows into their `FACILITY_REGISTRY_SYSTEM` projection
+ * concepts.
  *
  * The ONE definition of "what a registry row's concept looks like" — shared by
  * `publishRegistryConcepts` (bulk reprojection of every row, `packages/bootstrap/src/facility-
@@ -133,9 +161,52 @@ export function observedFacilityConceptRow(input: ObservedFacilityInput): Concep
  * ⛔ `display` TRACKS `name` — the opposite convention from `observedFacilityConceptRow`, where a
  * curated display is preserved because the operator owns it. This concept is a projection FROM the
  * registry, and the registry is the source of truth for a facility's name.
+ *
+ * `code` prefers `registryPreferredCode(row)` (operator-facing: `local_code`, else `national_code`)
+ * over the row's opaque `id` — an operator opening the mapping picker should see `111317-4`, not
+ * `04ad4974-f901-429e-882a-65bd895d42f7`. But `local_code` is only unique on its own, and
+ * `(national_system, national_code)` only unique as a PAIR: nothing in the schema stops row A's
+ * `local_code` from equalling row B's `national_code` (or a `national_code` under a DIFFERENT
+ * `national_system` from equalling another row's). Concepts are keyed on `(system, code)` alone, so
+ * two rows landing on the same candidate code would silently merge into ONE concept — exactly the
+ * class of bug this whole workstream exists to fix (five DISA facilities named "Aga Khan" collapsing
+ * into one). So: any row whose candidate code is shared by another row in THIS `rows` array — or is
+ * named in `opts.forceOwnIdFor` — falls back to its own `id` instead, keeping the two apart. A row
+ * with a candidate unique within `rows` (and not forced) is unaffected.
+ *
+ * ⚠ This function only ever sees what it is GIVEN. It cannot detect a collision against a
+ * `facility_registry` row that is not present in `rows` — a caller with partial visibility (a single
+ * create/update, `projectRegistryRows` below) has to widen that visibility itself (typically a DB
+ * lookup) and pass the result via `opts.forceOwnIdFor` if it wants protection against the whole
+ * table, not merely against the rows it happened to receive. `publishRegistryConcepts` needs no such
+ * lookup: it already reprojects the ENTIRE registry in one call, so `rows` IS the whole table and the
+ * in-batch check above is already complete.
+ *
+ * ⚠ CONSEQUENCE, stated explicitly rather than silently absorbed: this changes what `code` already-
+ * projected concepts carry. A concept written under the old `code = id` scheme is left behind
+ * un-migrated (never pruned — see `publishRegistryConcepts`'s doc comment on why pruning is
+ * deliberately never done), and any `term_mappings` row an operator already authored against that old
+ * UUID code will no longer match a re-projected concept. Accepted here because this code has never
+ * shipped (no production data depends on it) and the only pre-existing dev data is one facility in one
+ * operator's registry — but it is a real, deliberate break, not a compatibility-preserving change.
  */
-export function registryConceptRow(row: { id: string; name: string }): ConceptRowInput {
-  return { system: FACILITY_REGISTRY_SYSTEM, code: row.id, display: row.name, status: 'ACTIVE', properties: null };
+export function registryConceptRows(
+  rows: RegistryRowForConcept[],
+  opts: { forceOwnIdFor?: ReadonlySet<string> } = {},
+): ConceptRowInput[] {
+  const candidateOf = (r: RegistryRowForConcept): string => registryPreferredCode(r) ?? r.id;
+  const counts = new Map<string, number>();
+  for (const r of rows) {
+    const candidate = candidateOf(r);
+    counts.set(candidate, (counts.get(candidate) ?? 0) + 1);
+  }
+  return rows.map((r) => {
+    const candidate = candidateOf(r);
+    const collidesWithinBatch = (counts.get(candidate) ?? 0) > 1;
+    const forced = opts.forceOwnIdFor?.has(r.id) ?? false;
+    const code = collidesWithinBatch || forced ? r.id : candidate;
+    return { system: FACILITY_REGISTRY_SYSTEM, code, display: r.name, status: 'ACTIVE', properties: null };
+  });
 }
 
 /**
