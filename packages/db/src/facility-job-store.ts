@@ -13,8 +13,8 @@ export interface FacilityJob {
 }
 
 export interface FacilityJobStore {
-  /** `coalesced: true` means an identical request was ALREADY queued and this one was absorbed —
-   *  not that it failed. `job` is null in that case. */
+  /** `coalesced: true` means a request of the same identity was ALREADY queued and this one was
+   *  absorbed — not that it failed. `job` is null in that case. */
   enqueue(input: { kind: FacilityJobKind; registryId?: string | null; requestedBy?: string | null }): Promise<{ job: FacilityJob | null; coalesced: boolean }>;
   claimNext(): Promise<FacilityJob | null>;
   finish(id: string, status: 'done' | 'failed', opts: { error?: string | null; resultCount?: number | null }): Promise<void>;
@@ -109,9 +109,11 @@ export function createFacilityJobStore(db: Kysely<InternalSchema>): FacilityJobS
     async enqueue(input) {
       // The invariant is "at most one ACTIVE job per identity", and it lives in `active_key`:
       // non-null only while a row is 'queued', cleared by claimNext in the same statement that sets
-      // 'running'. So a request arriving while one is QUEUED is absorbed, while one arriving during a
-      // RUNNING build is not — that build may already have read the data. The pre-check below is what
-      // enforces this; the unique index on `active_key` (migration 079) is the race backstop.
+      // 'running' -- though a queued row may also carry a NULL key after a retry finds its identity
+      // still held; see `requeue`. So a request arriving while one is QUEUED is absorbed, while one
+      // arriving during a RUNNING build is not — that build may already have read the data. The
+      // pre-check below is what enforces this; the unique index on `active_key` (migration 079) is
+      // the race backstop.
       //
       // The pre-check is not a stylistic choice: the brief's detection -- inspect
       // `numInsertedOrUpdatedRows` after `.onConflict(...).doNothing()` -- was measured NOT to work
@@ -218,6 +220,12 @@ export function createFacilityJobStore(db: Kysely<InternalSchema>): FacilityJobS
       return row ? toJob(row) : null;
     },
 
+    /** Can return MORE THAN ONE row for the same identity -- e.g. one 'running' plus one 'queued'
+     *  from the enqueue-during-RUNNING asymmetry, or two 'queued' rows when `retry`/
+     *  `retryPreservingAttempts` re-queues under contention and yields the `active_key` (see
+     *  `requeue`). This is safe to consume as-is: both kinds are idempotent, the redundant row
+     *  genuinely runs, and a caller counting or displaying unresolved work should not assume
+     *  at-most-one-per-identity here. */
     async listUnresolved() {
       const rows = await db.selectFrom('facility_jobs').selectAll()
         .where('status', 'in', ['queued', 'running']).orderBy('requested_at', 'asc').execute();

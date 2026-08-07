@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { makeMigratedDb } from './migrations/internal/test-helpers';
+import { makeMigratedDb, makeMigratedDbWithMem } from './migrations/internal/test-helpers';
 import { createFacilityJobStore } from './facility-job-store';
 
 // Lets one test force an id COLLISION, which is the only way to make the store's insert raise a
@@ -53,6 +53,56 @@ describe('createFacilityJobStore', () => {
     expect(first).not.toBeNull();
     expect(second).toBeNull();
     expect(first?.attempts).toBe(1);
+  });
+
+  it('claimNext advances to the next candidate when a concurrent claimer wins the guarded UPDATE first', async () => {
+    // Stages the race the guarded UPDATE exists for: something else takes the head-of-queue row
+    // between claimNext's own SELECT and its own UPDATE, so that UPDATE matches 0 rows. claimNext
+    // must advance to the next candidate rather than reporting the queue idle.
+    const { db, mem } = await makeMigratedDbWithMem();
+    const store = createFacilityJobStore(db);
+    await store.enqueue({ kind: PROJECTION, registryId: 'fac-A' });
+    await store.enqueue({ kind: PROJECTION, registryId: 'fac-B' });
+
+    // Same ordering claimNext itself queries by, so this really is "the row it will try first".
+    const head = await db.selectFrom('facility_jobs').select('id')
+      .where('status', '=', 'queued')
+      .orderBy('requested_at', 'asc').orderBy('id', 'asc')
+      .limit(1).executeTakeFirstOrThrow();
+
+    let stolen = false;
+    mem.public.interceptQueries((sqlText: string) => {
+      if (!stolen && /update facility_jobs/i.test(sqlText) && sqlText.includes(head.id)) {
+        stolen = true; // guard: the steal query below is itself an UPDATE matching head.id
+        mem.public.none(`update facility_jobs set status='running', active_key=null where id='${head.id}'`);
+      }
+      return null; // fall through to the real query, which the steal above now makes match 0 rows
+    });
+
+    const claimed = await store.claimNext();
+
+    expect(claimed).not.toBeNull();
+    expect(claimed!.id).not.toBe(head.id);
+    expect(claimed!.status).toBe('running');
+  });
+
+  it('claimNext breaks a requested_at tie by id, not by insertion order', async () => {
+    // Two rows with a LITERAL identical requested_at (not just close). Inserted in the OPPOSITE of
+    // id order, so if the `id` tiebreaker were not applied, pg-mem's default scan order (insertion
+    // order, here) would return 'fj_bbb' first instead -- the two orders cannot agree by luck.
+    const db = await makeMigratedDb();
+    const store = createFacilityJobStore(db);
+    const tie = new Date('2026-01-01T00:00:00Z');
+    await db.insertInto('facility_jobs')
+      .values({ id: 'fj_bbb', kind: REBUILD, status: 'queued', attempts: 0, requested_at: tie, active_key: null })
+      .execute();
+    await db.insertInto('facility_jobs')
+      .values({ id: 'fj_aaa', kind: REBUILD, status: 'queued', attempts: 0, requested_at: tie, active_key: null })
+      .execute();
+
+    const claimed = await store.claimNext();
+
+    expect(claimed?.id).toBe('fj_aaa');
   });
 
   it('finish records the result count and clears the row from unresolved', async () => {

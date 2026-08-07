@@ -227,6 +227,11 @@ documents the pg-mem planner bug that makes partial indexes unusable here."
     retryPreservingAttempts(id: string): Promise<void>;
     failStaleRunning(error: string): Promise<number>;
     latest(kind: FacilityJobKind): Promise<FacilityJob | null>;
+    // Can return MORE THAN ONE row for the same identity -- one 'running' + one 'queued' from the
+    // enqueue-during-RUNNING asymmetry, or two 'queued' rows when a retry re-queues under contention
+    // and yields the active_key instead of throwing. This is safe: both job kinds are idempotent and
+    // the redundant row genuinely runs. A consumer (Task 11's health computation included) must not
+    // assume at-most-one-row-per-identity here.
     listUnresolved(): Promise<FacilityJob[]>;
     countFailed(kind: FacilityJobKind): Promise<number>;
   }
@@ -456,14 +461,18 @@ export interface FacilityJob {
 }
 
 export interface FacilityJobStore {
-  /** `coalesced: true` means an identical request was ALREADY queued and this one was absorbed —
-   *  not that it failed. `job` is null in that case. */
+  /** `coalesced: true` means a request of the same identity was ALREADY queued and this one was
+   *  absorbed — not that it failed. `job` is null in that case. */
   enqueue(input: { kind: FacilityJobKind; registryId?: string | null; requestedBy?: string | null }): Promise<{ job: FacilityJob | null; coalesced: boolean }>;
   claimNext(): Promise<FacilityJob | null>;
   finish(id: string, status: 'done' | 'failed', opts: { error?: string | null; resultCount?: number | null }): Promise<void>;
   retry(id: string): Promise<void>;
   failStaleRunning(error: string): Promise<number>;
   latest(kind: FacilityJobKind): Promise<FacilityJob | null>;
+  /** Can return MORE THAN ONE row for the same identity -- e.g. one 'running' plus one 'queued'
+   *  from the enqueue-during-RUNNING asymmetry, or two 'queued' rows when `retry`/
+   *  `retryPreservingAttempts` re-queues under contention and yields the `active_key`. Safe to
+   *  consume as-is: both kinds are idempotent and the redundant row genuinely runs. */
   listUnresolved(): Promise<FacilityJob[]>;
   countFailed(kind: FacilityJobKind): Promise<number>;
 }
