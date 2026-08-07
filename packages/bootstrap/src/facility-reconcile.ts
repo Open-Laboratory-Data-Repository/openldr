@@ -1375,6 +1375,21 @@ export interface ReprojectResult {
  * have genuinely different containment needs (an explicit operator Publish may propagate; the
  * facility-save hot path must not), exactly as `ensureCodingSystemActive`'s doc comment reasons about
  * the same split. `projectRegistryRows`' try/catch stays where it is.
+ *
+ * ⛔ THE CONTESTED-CODE REFUSAL IS A DEAD END, NOT A RETRY — stated here rather than left to be
+ * discovered from a warning. When two `facility_concept_projection` rows name one `concept_code`
+ * (migration 077's backfill still produces that for two facilities sharing a human code when neither
+ * has an id-keyed concept — see 077's ⚠ note, and the `contestedInBatch` guard below), the guard
+ * refuses the carry-over for BOTH rows. The consequence, in full:
+ *  - the `term_mappings` on that code NEVER migrate — not on this Publish and not on any later one,
+ *    because nothing about the condition changes by re-running;
+ *  - every Publish warns again, and reports `carryOverSkipped` for those rows, indefinitely;
+ *  - there is NO repair tool. `reprojectRegistryRows` only ever upserts a row's OWN link, so it
+ *    cannot un-share the code, and no CLI command (`facilities repair-links` or otherwise) exists.
+ *    Settling it means an operator hand-editing `facility_concept_projection` to say which facility
+ *    genuinely owned the code, then re-publishing.
+ * Refusing is still the right trade — the alternative is silently re-pointing an operator's mapping
+ * at the wrong lab — but nobody should read the warning expecting the next run to clear it.
  */
 export async function reprojectRegistryRows(
   deps: Pick<ReconcileDeps, 'admin' | 'internalDb'>,
@@ -1479,10 +1494,14 @@ export async function reprojectRegistryRows(
     // `widenToCollidingRows` runs first and GUARANTEES a collision partner is pulled IN, so the one
     // shape it was written for is the one shape it can never catch.
     //
-    // Two link rows can name the SAME `concept_code` — migration 077's backfill used to create
-    // exactly that (see its ⛔ note; both a parked row and its partner matched the leftover shared
-    // concept, and nothing conflicted on insert), and a database restored from a dump taken before
-    // that fix still holds it. Both rows then compute `from` = that one code, and the loop below
+    // Two link rows can name the SAME `concept_code`, and migration 077's backfill STILL PRODUCES
+    // that — its `distinct on (r.id)` guarantees one link per FACILITY and prefers a row's id-keyed
+    // concept when one exists, but two rows claiming the same human code with no id-keyed concept of
+    // their own have that shared concept as their only candidate, and nothing conflicts on insert
+    // (the `registry_id`s differ). See 077's own ⚠ note for how a row ends up with no concept of its
+    // own. A database restored from a dump written before that backfill was made deterministic can
+    // hold the state for the wider set of reasons the ordering now excludes. Nothing in this
+    // codebase clears it once it exists. Both rows then compute `from` = that one code, and the loop
     // would run the carry-over TWICE against ONE `staleByCode` snapshot: the first pass repoints
     // every mapping on the shared code to row 1's new code, the second pass repoints the SAME
     // mappings — they are still in the snapshot — to row 2's. Last writer wins, silently, with

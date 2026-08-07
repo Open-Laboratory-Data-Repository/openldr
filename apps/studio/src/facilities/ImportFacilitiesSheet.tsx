@@ -106,7 +106,19 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
         csv,
         nationalSystem: nationalSystem.trim(),
         allowUnknownColumns: allowOverride ?? allowUnknownColumns,
-        allowMalformedRows,
+        // ⛔ ALWAYS `false`, deliberately, and never the live checkbox: this request is what makes
+        // `blocked`/`blockedReason` a STABLE BASELINE the checkbox can be toggled against in both
+        // directions. Sending the override would make the server answer for the override too, and
+        // then un-ticking the box could not re-impose the block — the previewed answer would already
+        // say `blocked: false` (measured: preview → tick → re-Preview → un-tick left Apply on the
+        // menu, and the Apply request then sent `allowMalformedRows: false` for a write the server
+        // refuses, so the operator saw an "applied" result that wrote and audited nothing).
+        // Costless: a dry run writes nothing, so the flag changes NOTHING else in the response — see
+        // `importFacilities`' docblock ("A dry run always reports both `quarantined` and
+        // `duplicateColumns` regardless of the override") and its early return, which reports the
+        // same `parsed`/`skipped`/`duplicates` either way. Apply still sends the operator's real
+        // answer (see handleApplyConfirm), which is the only request the flag actually gates.
+        allowMalformedRows: false,
         apply: false,
       });
       setPreviewResult(result);
@@ -187,13 +199,20 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   // catch what it missed. A duplicate-header file that still parsed rows would have offered Apply
   // for a write the server refuses.
   //
-  // The ONE thing re-applied here rather than read: the malformed-rows OVERRIDE. `blocked` answers
-  // for the options the PREVIEW ran with, and the checkbox deliberately does not re-preview (see
-  // `toggleAllowMalformedRows` — the quarantine list is a property of the file, so a second request
-  // would discover nothing), so the live checkbox can be ahead of the previewed answer. Only the
-  // overridable reason is re-evaluated; `'duplicate-columns'` has no override and is taken verbatim.
+  // The ONE thing re-applied here rather than read: the malformed-rows OVERRIDE. The checkbox
+  // deliberately does not re-preview (see `toggleAllowMalformedRows` — the quarantine list is a
+  // property of the file, so a second request would discover nothing), so the live checkbox is
+  // always ahead of the previewed answer and something has to apply it.
+  //
+  // ⛔ THIS IS A TOGGLE, NOT A RELEASE VALVE, and that only works because `runPreview` pins
+  // `allowMalformedRows: false` on every preview request (see its comment). `blockedReason` therefore
+  // always reports the UN-OVERRIDDEN reason, so ticking the box releases the block and un-ticking
+  // re-imposes it — pinned by "re-imposes the quarantine block when the operator un-ticks the
+  // override". Nothing here re-derives the server's predicate from `quarantined`/`duplicateColumns`;
+  // it reads the server's reason and suppresses exactly the one that has an override.
+  // `'duplicate-columns'` has none, so it is taken verbatim and no checkbox can clear it.
   const blockedByImport = !!previewResult && previewResult.blocked
-    && (previewResult.blockedReason !== 'quarantined-rows' || !allowMalformedRows);
+    && !(previewResult.blockedReason === 'quarantined-rows' && allowMalformedRows);
   const canApply = !!previewResult && previewResult.parsed > 0 && previewResult.parsed <= APPLY_ROW_CAP
     && !blockedByImport && !applyResult;
   const overCap = !!previewResult && previewResult.parsed > APPLY_ROW_CAP;

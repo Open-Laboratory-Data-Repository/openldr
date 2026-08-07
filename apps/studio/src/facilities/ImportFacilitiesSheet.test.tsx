@@ -250,6 +250,57 @@ describe('ImportFacilitiesSheet', () => {
     await waitFor(() => expect(onImported).toHaveBeenCalled());
   });
 
+  // ⛔ THE OVERRIDE HAS TO WORK IN BOTH DIRECTIONS. `blocked` is baked at PREVIEW time, so if the
+  // preview request carries the checkbox's value the server answers `blocked: false` and the local
+  // re-application has nothing left to re-impose: un-ticking cannot block again. Measured before the
+  // fix — preview, tick, re-Preview (the ⋯ item re-previews), un-tick — and Apply stayed on the menu;
+  // the Apply request then sent `allowMalformedRows: false`, the server refused it, and the operator
+  // got an "applied" result that wrote nothing and audited nothing. `toggleAllowUnknownColumns`
+  // reaches the same state with no manual re-preview at all, because it re-previews by itself.
+  //
+  // The mock is an IMPLEMENTATION, not a fixed value, precisely so it answers the way the server
+  // does — `blocked` computed from the request's own `allowMalformedRows` (facility-import.ts). A
+  // constant payload would pass no matter what the sheet sends, which is what made this reachable.
+  it('re-imposes the quarantine block when the operator un-ticks the override after a re-preview', async () => {
+    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockImplementation(
+      async (req: { allowMalformedRows: boolean }) => ({
+        parsed: 1, skipped: 0, unknownColumns: [], duplicateColumns: [],
+        quarantined: [{ line: 3, raw: '2,Bad,Extra', reason: 'too_many_fields' }],
+        created: 0, updated: 0, duplicates: 0,
+        blocked: !req.allowMalformedRows,
+        blockedReason: req.allowMalformedRows ? null : 'quarantined-rows',
+      }),
+    );
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    pickFileAndSystem();
+    await previewNow();
+
+    fireEvent.click(await screen.findByRole('checkbox'));
+    openMenu();
+    expect(screen.getByRole('menuitem', { name: /^apply$/i })).toBeInTheDocument();
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+
+    // A second Preview while the box is ticked — the state the re-applied override has to survive.
+    clickMenuItem(/^preview$/i);
+    await waitFor(() => expect(api.importFacilitiesCsv).toHaveBeenCalledTimes(2));
+    // THE LOAD-BEARING REQUEST: the preview asks for the UN-OVERRIDDEN answer even though the
+    // operator has opted in, so `blockedReason` stays 'quarantined-rows' for the checkbox to toggle
+    // against. Sending `true` here is exactly what makes the un-tick below unrepresentable.
+    expect(api.importFacilitiesCsv).toHaveBeenLastCalledWith(
+      expect.objectContaining({ allowMalformedRows: false, apply: false }),
+    );
+    // The opt-in survives the re-preview (nothing resets the checkbox), so Apply is still offered.
+    openMenu();
+    expect(screen.getByRole('menuitem', { name: /^apply$/i })).toBeInTheDocument();
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+
+    // …and taking it back takes Apply away again.
+    fireEvent.click(screen.getByRole('checkbox'));
+    openMenu();
+    expect(screen.queryByRole('menuitem', { name: /^apply$/i })).not.toBeInTheDocument();
+  });
+
   it('surfaces duplicates as a plainly-visible warning, not a buried number', async () => {
     (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockResolvedValue({
       parsed: 5, skipped: 0, unknownColumns: [], duplicateColumns: [], quarantined: [], created: 0, updated: 0, duplicates: 2, blocked: false, blockedReason: null,

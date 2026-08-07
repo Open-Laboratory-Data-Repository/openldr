@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { DEFAULT_OBSERVED_FACILITY_SYSTEM, FACILITY_REGISTRY_SYSTEM, observedSystemForFeed } from '@openldr/db';
+import { DEFAULT_OBSERVED_FACILITY_SYSTEM, FACILITY_REGISTRY_SYSTEM, internalMigrations, observedSystemForFeed } from '@openldr/db';
 import { scanObservedFacilities, resolveObservedFacilities, publishFacilityMap, publishRegistryConcepts, projectRegistryRows, reprojectRegistryRows, retireRegistryConcepts, reprojectAfterRegistryDelete, captureObservedFacility, captureObservedFacilityFromProjection, assertResolvedFacilityInvariant } from './facility-reconcile';
 import { makeReconcileDeps, seedPerformers, seedRegistry, seedMapping, currentConceptCode, dropOneActiveFacilityResolutionIndex } from './test-support/facility-reconcile-fixture';
 
@@ -2012,9 +2012,11 @@ describe('reprojectRegistryRows', () => {
   // writer wins, silently, with `carryOverSkipped: false`. Measured before the fix: the mapping
   // authored when 'X' meant Alpha ended up on 'fac-B' (Beta) with no warning anywhere.
   //
-  // The shared-link state is seeded directly because it is a state a REPAIRED 077 no longer creates
-  // — an install restored from a dump taken before that fix still holds it, and nothing else in the
-  // codebase removes it.
+  // The shared-link state is seeded DIRECTLY here, so this test pins the guard and nothing else. The
+  // test immediately below builds the same state out of migration 077's REAL backfill instead —
+  // because 077 still produces it (`distinct on (r.id)` bounds links per FACILITY, not per code), so
+  // "a repaired 077 no longer creates this" would be false. Nothing in the codebase removes the
+  // state once it exists.
   it('refuses the carry-over for BOTH rows when two link rows name the same previous code', async () => {
     const deps = await makeReconcileDeps();
     await seedPerformers(deps, [['BALAB', 1]]);
@@ -2046,6 +2048,70 @@ describe('reprojectRegistryRows', () => {
     // so, so a Publish summary can surface it.
     expect(await currentConceptCode(deps, 'fac-A')).toBe('fac-A');
     expect(await currentConceptCode(deps, 'fac-B')).toBe('fac-B');
+    expect([...r.codeChanges].sort((a, b) => a.registryId.localeCompare(b.registryId))).toEqual([
+      { registryId: 'fac-A', from: 'X', to: 'fac-A', mappingsMigrated: 0, carryOverSkipped: true },
+      { registryId: 'fac-B', from: 'X', to: 'fac-B', mappingsMigrated: 0, carryOverSkipped: true },
+    ]);
+  });
+
+  // ⛔ THE SAME GUARD, over a state built by migration 077's OWN SQL rather than seeded — because the
+  // claim "the deterministic backfill cannot create a shared link" is FALSE and three comments used
+  // to imply it. `distinct on (r.id)` bounds the result to one link per FACILITY and the `order by`
+  // prefers a row's id-keyed concept WHEN ONE EXISTS; with two rows claiming one human code and
+  // NEITHER carrying an id-keyed concept, that shared concept is the only candidate either row has,
+  // and both links name it. That shape is reachable on a real install: `projectRegistryRows` never
+  // throws and swallows its own failures, so a registry row can exist having never had a concept of
+  // its own written.
+  //
+  // 077's `up()` is run for real (the fixture already applied it, so the table is dropped first)
+  // rather than the links being seeded, so this fails the moment anyone "fixes" 077 to dedupe by
+  // code — at which point 077's ⚠ note and this guard's doc comment both need rewriting too.
+  it('refuses the carry-over when 077\'s own backfill links two facilities to one code', async () => {
+    const deps = await makeReconcileDeps();
+    await seedPerformers(deps, [['BALAB', 1]]);
+    await seedRegistry(deps, { id: 'fac-A', name: 'Alpha', localCode: 'X' });
+    await seedRegistry(deps, { id: 'fac-B', name: 'Beta', nationalSystem: 'urn:nat', nationalCode: 'X' });
+    // The operator's mapping, authored when 'X' meant Alpha. `seedMapping` goes through
+    // `admin.termMappings.create`, which also creates the 'X' concept it points at — and that is the
+    // ONLY facility-registry concept in the database: neither row has ever been projected, so
+    // neither has an id-keyed concept for the `order by` to prefer.
+    await seedMapping(deps, { fromSystem: DEFAULT_OBSERVED_FACILITY_SYSTEM, fromCode: 'BALAB', toSystem: FACILITY_REGISTRY_SYSTEM, toCode: 'X' });
+    const mappingBefore = await deps.internalDb.selectFrom('term_mappings').selectAll()
+      .where('to_system', '=', FACILITY_REGISTRY_SYSTEM).execute();
+
+    await deps.internalDb.schema.dropTable('facility_concept_projection').execute();
+    // The explicit index drop is NOT redundant: pg-mem keeps the primary key's implicit index
+    // registered after `drop table`, so 077's `create table` then dies on
+    // `relation "facility_concept_projection_pkey" already exists`. Real Postgres drops it with the
+    // table; this line is pg-mem's bookkeeping only.
+    await deps.internalDb.schema.dropIndex('facility_concept_projection_pkey').ifExists().execute();
+    await internalMigrations['077_facility_concept_projection'].up(deps.internalDb as never);
+
+    // FIRST: the backfill really does produce the shared link. If this ever stops holding, the
+    // comments that now say it does are the things to change, not this assertion.
+    const links = await deps.internalDb.selectFrom('facility_concept_projection')
+      .select(['registry_id', 'concept_code']).orderBy('registry_id').execute();
+    expect(links).toEqual([
+      { registry_id: 'fac-A', concept_code: 'X' },
+      { registry_id: 'fac-B', concept_code: 'X' },
+    ]);
+
+    // One row in; `widenToCollidingRows` pulls the other in because both claim 'X'.
+    const r = await reprojectRegistryRows(deps, [{ id: 'fac-A', name: 'Alpha' }]);
+
+    // THE SUBSTANTIVE HALF: the mapping row is byte-for-byte what it was — not merely still pointing
+    // at 'X', but untouched, so nothing in `concept_map_elements`/`reference_change_log` moved either
+    // (those follow `admin.termMappings.update`, which the guard prevents from running at all).
+    const mappingAfter = await deps.internalDb.selectFrom('term_mappings').selectAll()
+      .where('to_system', '=', FACILITY_REGISTRY_SYSTEM).execute();
+    expect(mappingAfter).toEqual(mappingBefore);
+    expect(mappingAfter.map((m) => m.to_code)).toEqual(['X']);
+    // And the concept it names survives — deleting it would take the operator's choice out of the
+    // picker as well as off the report.
+    const codes = await deps.internalDb.selectFrom('terminology_concepts')
+      .select('code').where('system', '=', FACILITY_REGISTRY_SYSTEM).execute();
+    expect(codes.map((c) => c.code).sort()).toEqual(['X', 'fac-A', 'fac-B']);
+
     expect([...r.codeChanges].sort((a, b) => a.registryId.localeCompare(b.registryId))).toEqual([
       { registryId: 'fac-A', from: 'X', to: 'fac-A', mappingsMigrated: 0, carryOverSkipped: true },
       { registryId: 'fac-B', from: 'X', to: 'fac-B', mappingsMigrated: 0, carryOverSkipped: true },

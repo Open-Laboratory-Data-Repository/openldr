@@ -34,9 +34,7 @@ export async function up(db: Kysely<unknown>): Promise<void> {
   // join happens to yield first, and `on conflict (registry_id) do nothing` cannot help — the two
   // candidate rows have DIFFERENT `registry_id`s, so nothing conflicts and BOTH facilities can be
   // linked to the SAME `concept_code`. Measured under pg-mem: the unordered form links fac-A and
-  // fac-B both to `'X'`. Two link rows sharing a code is a state `reprojectRegistryRows` has to
-  // refuse outright (it cannot tell whose mappings the shared code's are), so it must not be created
-  // here in the first place.
+  // fac-B both to `'X'`, the ordered form gives each its own id.
   //
   // The tie is broken TOWARDS the id-keyed concept, which is the safe candidate in both directions:
   //  - a PARKED row (the case above) is genuinely projected under its id, so this records the truth;
@@ -45,6 +43,25 @@ export async function up(db: Kysely<unknown>): Promise<void> {
   //    code` — exactly the repair `deleteSupersededIdConcepts` already exists to perform.
   // And no other registry row can ever claim this row's id, so an id-keyed link is unshareable by
   // construction.
+  //
+  // ⚠ EXACTLY WHAT THAT BUYS, AND WHAT IT DOES NOT. `distinct on (r.id)` guarantees AT MOST ONE LINK
+  // PER FACILITY, and the `order by` guarantees the id-keyed concept is preferred WHEN ONE EXISTS.
+  // Neither makes `concept_code` unique ACROSS facilities. If two registry rows claim the same human
+  // code and NEITHER has a concept keyed on its own id, the shared concept is each row's ONLY
+  // candidate, and this insert still writes two links naming it — nothing conflicts, the
+  // `registry_id`s differ. That state is reachable, not theoretical: `projectRegistryRows` never
+  // throws and swallows its own failures (called from apps/server/src/facilities-routes.ts and
+  // packages/bootstrap/src/facility-import.ts), so a registry row can exist having never had a
+  // concept of its own written. Installs whose concepts predate commit 0518e7d3 are id-keyed and
+  // unaffected; the exposure is a post-0518e7d3 install where a projection call was swallowed.
+  //
+  // What CONTAINS that residual is downstream, not here: `reprojectRegistryRows`' in-batch
+  // duplicate-`from` guard refuses the carry-over for every row naming a contested code, reports
+  // `carryOverSkipped: true` and warns, rather than silently re-pointing an operator's mapping at
+  // the wrong facility. Both halves — this insert producing the shared link, and the guard refusing
+  // it — are pinned end-to-end by facility-reconcile.test.ts's "refuses the carry-over when 077's
+  // own backfill links two facilities to one code". See that guard's comment for what an operator is
+  // then left with: there is no repair tool.
   //
   // `on conflict (registry_id) do nothing` is kept as a belt-and-braces no-op: `distinct on (r.id)`
   // already emits at most one row per facility, and the table was created empty two statements ago.
