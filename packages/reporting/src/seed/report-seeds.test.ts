@@ -11,7 +11,7 @@ import {
   antibioticNormalizeSql,
   type SeedDataDrivenReportsDeps,
 } from './report-seeds';
-import { pairRects, toPt, type ReportDesign } from '@openldr/report-designer';
+import { pairRects, toPt, paperSizePt, type ReportDesign } from '@openldr/report-designer';
 
 // In-memory fakes — no real Kysely instance needed (unlike `packages/bootstrap/src/seed.ts`,
 // which builds `customQueries` from a real DB handle; here we inject fakes directly to unit-test
@@ -1081,11 +1081,16 @@ describe('SEED_DESIGNS — every report carries a letterhead and a scope panel',
   });
 
   it('keeps every element clear of the page-number band', () => {
-    // drawPageFooter writes at hPt - 24 = 817.89pt ≈ 1090px on A4.
+    // Computed from the design's OWN paper/orientation, not a hardcoded A4-portrait number — that
+    // hardcoding is exactly what let a footer render off the bottom of the two Letter/landscape
+    // seeded designs (rt-amr-glass-ris, rt-amr-antibiogram) while this test stayed green.
+    // drawPageFooter writes the page number at `hPt - 24` points; px@96 = pt / 0.75.
     for (const d of simple()) {
+      const [, hPt] = paperSizePt(d.paper, d.orientation);
+      const pageNumYpx = (hPt - 24) / 0.75;
       for (const e of d.pages[0].elements) {
         expect(e.rect.y + e.rect.h, `${d.id}/${e.id} collides with the page number`)
-          .toBeLessThanOrEqual(1085);
+          .toBeLessThanOrEqual(pageNumYpx);
       }
     }
   });

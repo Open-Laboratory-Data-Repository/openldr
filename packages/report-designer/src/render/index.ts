@@ -21,6 +21,12 @@ export { pairRects, type PairBox } from './draw';
 // scales and silently computes a row too many — the exact error that shipped a clipped row.
 export { toPt, PX_TO_PT } from './units';
 
+// Exported for the same reason as `toPt`/`PX_TO_PT`: a seed that lays out page-relative elements
+// (a footer pinned near the bottom edge) needs the SAME page-size math this renderer uses, not a
+// hardcoded A4-portrait number — that hardcoding is exactly what shipped a footer off the bottom
+// of the two Letter/landscape seeded designs.
+export { paperSizePt } from './units';
+
 export interface RenderOptions {
   now?: Date;
   /**
