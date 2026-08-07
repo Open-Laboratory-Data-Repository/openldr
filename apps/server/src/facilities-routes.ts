@@ -4,6 +4,7 @@ import type { Kysely } from 'kysely';
 import { z } from 'zod';
 import {
   importFacilities, scanObservedFacilities, resolveObservedFacilities, publishFacilityMap, projectRegistryRows,
+  retireRegistryConcepts, reprojectAfterRegistryDelete,
   type AppContext, type FacilityImportResult, type ScanResult, type PublishResult,
 } from '@openldr/bootstrap';
 import {
@@ -732,7 +733,41 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     const { id } = req.params as { id: string };
     const before = await ctx.facilityRegistry.get(id);
     if (!before) { reply.code(404); return { error: 'not found' }; }
+
+    // ⛔ ORDER IS LOAD-BEARING, and the two halves pull in OPPOSITE directions around the removal —
+    // which is why they are two calls straddling it rather than one wrapper on either side.
+    //
+    //  1. RETIRE FIRST. `retireRegistryConcepts` locates this facility's concept through
+    //     `facility_concept_projection`, the only durable record of what the row actually projected
+    //     as (its collision fallback is not recomputable once its partner is gone). That table is
+    //     `ON DELETE CASCADE`, so the link — and with it any chance of finding the concept — vanishes
+    //     the instant the facility does.
+    //  2. REPROJECT LAST. `reprojectAfterRegistryDelete` reacts to the row being ABSENT: it looks for
+    //     surviving facilities that can now claim the code this deletion freed. Run before the
+    //     removal it would still find the doomed row contesting its own code and conclude nothing was
+    //     freed.
+    //
+    // Both are best-effort catch-up around a deletion the operator asked for, exactly as the
+    // projection on POST/PUT is (see the comment there): neither may turn a successful delete into a
+    // failed response. `reprojectAfterRegistryDelete` contains its own errors;
+    // `retireRegistryConcepts` deliberately does not (its containment belongs to the caller, like
+    // `reprojectRegistryRows`), so it is wrapped here — and an uncontained throw would be worse than
+    // a 500, because it fires BEFORE the removal and would leave the facility undeleted.
+    const deps = { internalDb: ctx.internalDb, admin: ctx.terminology.admin };
+    try {
+      await retireRegistryConcepts(deps, [id]);
+    } catch (err) {
+      ctx.logger?.error({ err, facilityId: id }, 'failed to retire the deleted facility\'s registry concept');
+    }
+
     await ctx.facilityRegistry.remove(id);
+
+    await reprojectAfterRegistryDelete(deps, {
+      id,
+      localCode: before.localCode ?? null,
+      nationalCode: before.nationalCode ?? null,
+    });
+
     await recordAudit(ctx, req, { action: 'facility.delete', entityType: 'facility', entityId: id, before, after: null });
     return { ok: true };
   });

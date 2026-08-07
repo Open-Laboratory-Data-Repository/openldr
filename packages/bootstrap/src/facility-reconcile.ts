@@ -1092,7 +1092,19 @@ async function widenToCollidingRows(
  *
  * ⚠ So a single-row call CAN write more than one row's concept, and that is intended: a facility
  * whose code collides with the one just written is reprojected too, as is a facility the write frees
- * from a collision. It never touches a row whose own projection this batch cannot change.
+ * from a collision.
+ *
+ * ⚠ And it writes MORE than just those, which a reviewer measured and this comment used to deny. It
+ * claimed the call "never touches a row whose own projection this batch cannot change"; that is
+ * FALSE. When the batch holds a PARKED row, `widenToCollidingRows` pulls in the registry's ENTIRE
+ * parked set — it has no cheaper way to find which parked rows this batch might free (see the
+ * `batchHoldsParkedRow` branch) — so with two INDEPENDENT collision pairs (A/B on 'X', C/D on 'Z'), a
+ * batch naming only fac-A reprojects C and D as well. Measured: all four
+ * `facility_concept_projection` rows get a fresh `updated_at`. It is behaviourally invisible — an
+ * unrelated parked row recomputes to the identical code and its `terminology_concepts` upsert is a
+ * no-op write of the same values, so no concept, mapping or link CONTENT changes — but it is real
+ * work, and the honest bound is "the batch, plus everything it can collide with, plus every parked
+ * row in the registry whenever the batch holds one", not "only what this batch can change".
  *
  * ⛔ Never throws. A projection failure must NOT take a facility write down with it — mirrors
  * `registerObservedSystem`'s containment on the ingest hot path (see that function's doc comment).
@@ -1408,6 +1420,160 @@ export async function reprojectRegistryRows(
   await deleteSupersededIdConcepts(deps, registryRowIdsWithSupersededIdConcept(inputs));
 
   return { projected: inputs.length, codeChanges };
+}
+
+/**
+ * Mark the given facilities' projected concepts RETIRED — the FIRST half of what deleting a facility
+ * has to do to the projection.
+ *
+ * ⛔ Deliberately NOT a delete, and not `terms.delete`. An operator who already mapped an observed
+ * code onto this facility has historical `diagnostic_reports` that resolved through this concept; the
+ * mapping must keep naming a concept that EXISTS so those reports stay interpretable and the Observed
+ * tab does not start reporting `targetMissing` for a decision that was correct when it was made.
+ * RETIRED is exactly the split we need: still resolvable, excluded from new selection — the same
+ * split `TermPicker`'s ACTIVE-only status filter expresses (see `TermMappingDialog`'s `statuses` prop,
+ * which passes `['ACTIVE']` under `lockedTargetSystem` precisely so this retirement takes effect).
+ * Leaving the concept ACTIVE, which is what a delete used to do, left a selectable ghost in the
+ * picker pointing at a facility that no longer exists.
+ *
+ * ⛔ MUST run BEFORE the `facility_registry` row is deleted. `facility_concept_projection` is the
+ * only durable record of what a row actually projected as (collision fallback included — the code is
+ * NOT recomputable from `local_code`/`national_code` once its collision partner is gone), and that
+ * table is `ON DELETE CASCADE`: the link vanishes the instant the facility does.
+ * `reprojectAfterRegistryDelete` is the other half and must run AFTER, since it reacts to the row
+ * being gone; see its doc comment.
+ *
+ * ⛔ A link row can DISAGREE with reality, and that is guarded here rather than trusted. Migration
+ * 077's backfill matched a facility against either its human code or its id and took whichever the
+ * join happened to yield first, so a link can name a code some OTHER, LIVE facility genuinely
+ * projects as. Retiring that would pull a live lab out of the mapping picker over a deletion that had
+ * nothing to do with it — and, because a retired concept still resolves, entirely silently. So a code
+ * still claimed by a surviving facility is skipped. This is the same targeted defence
+ * `reprojectRegistryRows` applies to its own destructive steps (`linkedElsewhere`), asking the
+ * question the way `widenToCollidingRows` asks it: "claims a code" is `registryPreferredCode(row) ===
+ * code` and nothing else, so the SQL below is a deliberately WIDE prefilter narrowed IN MEMORY.
+ *
+ * ⚠ `registryIds` are still present in `facility_registry` when this runs (that is the whole point of
+ * the ordering), so they are excluded from the claimant set explicitly — otherwise a facility being
+ * deleted would be read as the live claimant of its own code and nothing would ever retire.
+ *
+ * Returns how many concept rows were actually updated, so a caller can tell "retired it" from
+ * "there was nothing projected to retire" and from "we refused to retire a live facility's code".
+ *
+ * ⚠ Throws on failure, like `reprojectRegistryRows` and for the same reason: containment belongs to
+ * the caller, whose needs differ (the delete route must not fail a successful deletion over this).
+ */
+export async function retireRegistryConcepts(
+  deps: Pick<ReconcileDeps, 'internalDb'>,
+  registryIds: string[],
+): Promise<number> {
+  if (registryIds.length === 0) return 0;
+
+  const links = await deps.internalDb
+    .selectFrom('facility_concept_projection')
+    .select('concept_code')
+    .where('registry_id', 'in', registryIds)
+    .execute();
+  if (links.length === 0) return 0;
+  const codes = [...new Set(links.map((l) => l.concept_code))];
+
+  // The wide prefilter: any registry row CARRYING one of these codes in either column. Narrowed to
+  // real claims below — a row that carries the code in a non-preferred column does not project as it
+  // and is not a claimant (the same distinction `widenToCollidingRows`' ⛔ note is built around).
+  const doomed = new Set(registryIds);
+  const claimed = new Set(
+    (await deps.internalDb
+      .selectFrom('facility_registry')
+      .select(['id', 'local_code', 'national_code'])
+      .where((eb) => eb.or([eb('local_code', 'in', codes), eb('national_code', 'in', codes)]))
+      .execute())
+      .filter((r) => !doomed.has(r.id))
+      .map((r) => registryPreferredCode({ localCode: r.local_code, nationalCode: r.national_code }))
+      .filter((c): c is string => c !== null),
+  );
+
+  const retirable = codes.filter((c) => !claimed.has(c));
+  if (retirable.length === 0) return 0;
+
+  const res = await deps.internalDb
+    .updateTable('terminology_concepts')
+    .set({ status: 'RETIRED' })
+    .where('system', '=', FACILITY_REGISTRY_SYSTEM)
+    .where('code', 'in', retirable)
+    .executeTakeFirst();
+  return Number(res.numUpdatedRows ?? 0);
+}
+
+/**
+ * Reproject whatever a facility DELETE just freed — the SECOND half, and the one code-release path
+ * that used to have no reprojection at all.
+ *
+ * A facility's concept code is `local_code ?? national_code`, falling back to the row's own `id`
+ * ("parking") when two rows would project to the same code. So deleting one side of a collision FREES
+ * the other to move back up to the human code: `resolveObservedFacilities` re-derives preferred codes
+ * over the WHOLE registry, so it starts resolving the survivor through the human code the instant the
+ * delete commits, while the operator's `term_mappings` row still names the survivor's id. The mapping
+ * breaks with nobody having touched it, and stays broken until somebody presses Scan. This is exactly
+ * the failure `reprojectRegistryRows` closes for a RENAME; the delete route was the remaining hole.
+ *
+ * ⛔ MUST run AFTER the `facility_registry` row is gone — it reacts to the row's absence, and the
+ * claimant lookup below would otherwise still find the deleted facility contesting its own code and
+ * conclude nothing was freed. That is the opposite ordering constraint to `retireRegistryConcepts`,
+ * which must run BEFORE (the link it reads cascades away with the row). Hence two calls around the
+ * delete rather than one wrapper on either side of it.
+ *
+ * ⛔ The deleted row is NEVER handed to `reprojectRegistryRows`. `registryConceptRows` happily
+ * projects a row it cannot find — both code columns read as absent, so it falls back to the id — and
+ * `importRows` upserts `status: 'ACTIVE'`, so passing the deleted id straight through would write a
+ * fresh ACTIVE concept for a facility that no longer exists, resurrecting the very ghost
+ * `retireRegistryConcepts` just put down. Only SURVIVING claimants of the freed code go in.
+ *
+ * ⚠ The freed code is the deleted row's PREFERRED code (`registryPreferredCode`), not the code it was
+ * projected under. Those differ in precisely the case that matters: a parked row was projected under
+ * its own `id`, which no other row can ever claim, while the string it was CONTESTING — the one whose
+ * release frees the survivor — is its preferred code. Both are read from the caller's pre-delete
+ * snapshot of the row, because the row itself is already gone by the time this runs.
+ *
+ * ⛔ Never throws, for the same reason as `projectRegistryRows` (which it delegates the projection
+ * to, inheriting that containment): the deletion has already committed, and a best-effort catch-up
+ * must not turn a successful DELETE into a 500.
+ */
+export async function reprojectAfterRegistryDelete(
+  deps: Pick<ReconcileDeps, 'admin' | 'internalDb'>,
+  deleted: { id: string; localCode: string | null; nationalCode: string | null },
+): Promise<void> {
+  try {
+    const freed = registryPreferredCode({ localCode: deleted.localCode, nationalCode: deleted.nationalCode });
+    // `facility_registry_has_a_code` makes this unreachable for a real row, but the caller hands in a
+    // snapshot, not the row — a codeless snapshot frees nothing and must not become a bare query.
+    if (freed === null) return;
+
+    // Wide prefilter, narrowed in memory to rows that would genuinely PROJECT as `freed` — the same
+    // `registryPreferredCode`-and-nothing-else rule `widenToCollidingRows` documents at length.
+    // `deleted.id` is filtered out defensively: the row should already be gone, and if a caller got
+    // the ordering wrong this refuses to reproject a facility it was told was deleted rather than
+    // writing an ACTIVE concept for it.
+    const survivors = (await deps.internalDb
+      .selectFrom('facility_registry')
+      .select(['id', 'name', 'local_code', 'national_code'])
+      .where((eb) => eb.or([eb('local_code', '=', freed), eb('national_code', '=', freed)]))
+      .execute())
+      .filter((r) => r.id !== deleted.id
+        && registryPreferredCode({ localCode: r.local_code, nationalCode: r.national_code }) === freed)
+      .map((r) => ({ id: r.id, name: r.name }));
+
+    if (survivors.length === 0) return;
+
+    // Through `projectRegistryRows`, not `reprojectRegistryRows` directly: the widening, the mapping
+    // carry-over and the containment are all things this path needs and none of them are this
+    // function's to re-implement. A single surviving claimant is enough to hand over — the widening
+    // pulls in the rest of the collision set from there.
+    await projectRegistryRows(deps, survivors);
+  } catch (err) {
+    // eslint-disable-next-line no-console -- deliberate: see doc comment above for why this must
+    // never propagate, and this module takes no logger dependency to report through otherwise.
+    console.error('[facility-reconcile] failed to reproject after deleting facility_registry row', deleted.id, err);
+  }
 }
 
 /**

@@ -416,6 +416,55 @@ describe('TermMappingDialog', () => {
     expect(field.value).toBe('FACILITY-REGISTRY');
   });
 
+  // ⛔ Task 9's UI half, and the thing that makes retiring a deleted facility's concept mean anything
+  // at all. `TermPicker` only forwards a status filter to the API when EXACTLY ONE status is
+  // selected — with two, it sends none, and the server returns every status including RETIRED. So the
+  // registry-locked flow (the Observed tab's facility mapping) has to ask for ACTIVE alone, or a
+  // deleted facility stays selectable in the picker and the retirement is invisible. Asserts the
+  // ARGUMENT reaching `searchTerms`, not the rendered list: a rendered-results assertion would pass
+  // against a picker that requested everything and happened to be handed a filtered stub.
+  it('the registry-locked flow asks the API for ACTIVE terms only, so a retired facility cannot be picked', async () => {
+    const searchSpy = vi.spyOn(api, 'searchTerms').mockResolvedValue({ rows: [], total: 0 });
+    render(
+      <TermMappingDialog
+        open
+        fromTerm={{ system: 'urn:openldr:default_fac', code: 'BALAB', display: null, systemCode: 'DEFAULT_FAC' }}
+        systems={[system]}
+        lockedTargetSystem={registrySystem}
+        mapping={null}
+        onOpenChange={() => {}}
+        onSaved={() => {}}
+      />,
+    );
+
+    fireEvent.change(screen.getByPlaceholderText('Search terms…'), { target: { value: 'L-1' } });
+
+    await waitFor(() => expect(searchSpy).toHaveBeenCalled());
+    expect(searchSpy.mock.calls.at(-1)).toEqual(['sys-reg', expect.objectContaining({ q: 'L-1', status: 'ACTIVE' })]);
+  });
+
+  // The other side of the same switch: /terminology's own mapping dialog is unchanged. It offers
+  // DRAFT targets too (a mapping to a not-yet-curated concept is legitimate there), and because two
+  // statuses collapse to no filter at all, that flow deliberately sends none.
+  it('the unlocked /terminology flow still sends no status filter', async () => {
+    const searchSpy = vi.spyOn(api, 'searchTerms').mockResolvedValue({ rows: [], total: 0 });
+    render(
+      <TermMappingDialog
+        open
+        fromTerm={fromTerm}
+        systems={[system]}
+        mapping={null}
+        onOpenChange={() => {}}
+        onSaved={() => {}}
+      />,
+    );
+
+    fireEvent.change(screen.getByPlaceholderText('Search terms…'), { target: { value: 'hemo' } });
+
+    await waitFor(() => expect(searchSpy).toHaveBeenCalled());
+    expect(searchSpy.mock.calls.at(-1)![1].status).toBeUndefined();
+  });
+
   // Fix round 2 (mapping-targets report): the PRIOR behaviour (jumping the manual System field to
   // the locked system regardless of the mapping's own `toSystem`, while leaving Code untouched) was
   // a silent-overwrite trap — see the report's "Fix 3" note. The operator's live

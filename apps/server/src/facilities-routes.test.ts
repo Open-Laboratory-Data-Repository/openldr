@@ -7,6 +7,7 @@ import {
   createTerminologyAdminStore, createFacilityRegistryStore,
   DEFAULT_OBSERVED_FACILITY_SYSTEM, FACILITY_REGISTRY_SYSTEM,
 } from '@openldr/db';
+import { projectRegistryRows } from '@openldr/bootstrap';
 import { registerFacilitiesRoutes } from './facilities-routes';
 
 const FORM_FIELDS = [
@@ -840,6 +841,97 @@ describe('Fix 1: POST/PUT /api/facilities project the row into FACILITY_REGISTRY
     const res = await app.inject({ method: 'POST', url: '/api/facilities', payload: body });
     expect(res.statusCode).toBe(201);
     expect(await internalDb.selectFrom('facility_registry').selectAll().execute()).toHaveLength(1);
+  });
+});
+
+// --- Task 9: DELETE is the third code-release path, and used to be the only one with no projection
+// work at all. It has TWO obligations, in a fixed order around the row removal — see
+// `retireRegistryConcepts`/`reprojectAfterRegistryDelete` in packages/bootstrap for why the order is
+// forced (the link cascades away with the row; the reprojection reacts to the row being gone).
+
+describe('Task 9: DELETE /api/facilities/:id and the projection', () => {
+  it('retires the deleted facility\'s concept rather than leaving a selectable ghost', async () => {
+    const internalDb = await makeMigratedDb();
+    const ctx = fakeCreateCtx(internalDb);
+    const app = await appWith(ctx);
+    const id = (await app.inject({ method: 'POST', url: '/api/facilities', payload: body })).json().id;
+    // Not vacuous: the concept is ACTIVE and pickable before the delete.
+    expect((await ctx.terminology.admin.terms.search(FACILITY_REGISTRY_SYSTEM, { statuses: ['ACTIVE'], limit: 10, offset: 0 })).rows
+      .map((r: any) => r.code)).toEqual(['LAB01']);
+
+    const res = await app.inject({ method: 'DELETE', url: `/api/facilities/${id}` });
+    expect(res.statusCode).toBe(200);
+
+    // Gone from new selection…
+    expect((await ctx.terminology.admin.terms.search(FACILITY_REGISTRY_SYSTEM, { statuses: ['ACTIVE'], limit: 10, offset: 0 })).rows)
+      .toEqual([]);
+    // …but still THERE, so a mapping authored against it still resolves for history.
+    const concept = await internalDb.selectFrom('terminology_concepts').selectAll()
+      .where('system', '=', FACILITY_REGISTRY_SYSTEM).where('code', '=', 'LAB01').executeTakeFirstOrThrow();
+    expect(concept.status).toBe('RETIRED');
+  });
+
+  // ⛔ The regression this route was missing entirely. Alpha and Beta collide on 'X', so both park on
+  // their ids and the operator's mapping is authored against Beta's id. Deleting Alpha frees 'X', and
+  // `resolveObservedFacilities` re-derives preferred codes over the whole registry — so Beta starts
+  // resolving through 'X' the moment the DELETE commits, while the mapping still says 'fac-B'. The
+  // route must carry the mapping across at that moment, not leave it for the next Scan.
+  //
+  // Seeded through the real `facilityRegistry` store rather than POSTed, because the facilities form
+  // fixture in this file maps no `nationalCode` field — the collision needs one row's local_code to
+  // equal another's national_code.
+  it('carries the surviving side of a collision, and its mapping, across without a Scan', async () => {
+    const internalDb = await makeMigratedDb();
+    const ctx = fakeCreateCtx(internalDb);
+    const app = await appWith(ctx);
+    const deps = { internalDb, admin: ctx.terminology.admin };
+
+    await ctx.facilityRegistry.upsert({ id: 'fac-A', name: 'Alpha', localCode: 'X', source: 'manual' } as any);
+    await ctx.facilityRegistry.upsert({ id: 'fac-B', name: 'Beta', nationalSystem: 'urn:tz:hfr', nationalCode: 'X', source: 'manual' } as any);
+    await projectRegistryRows(deps, [{ id: 'fac-A', name: 'Alpha' }, { id: 'fac-B', name: 'Beta' }]);
+    // Both parked on their ids — the state the operator authored the mapping in.
+    expect((await internalDb.selectFrom('facility_concept_projection').select(['registry_id', 'concept_code']).execute())
+      .map((l: any) => l.concept_code).sort()).toEqual(['fac-A', 'fac-B']);
+    await ctx.terminology.admin.termMappings.create({
+      fromSystem: DEFAULT_OBSERVED_FACILITY_SYSTEM, fromCode: 'BALAB',
+      toSystem: FACILITY_REGISTRY_SYSTEM, toCode: 'fac-B', toDisplay: null, mapType: 'SAME-AS', isActive: true,
+    });
+
+    const res = await app.inject({ method: 'DELETE', url: '/api/facilities/fac-A' });
+    expect(res.statusCode).toBe(200);
+
+    // Beta followed the freed code at the moment the deletion happened…
+    expect((await internalDb.selectFrom('facility_concept_projection').select('concept_code')
+      .where('registry_id', '=', 'fac-B').executeTakeFirstOrThrow()).concept_code).toBe('X');
+    // …and the operator's mapping came with it, so it still names Beta's live concept.
+    expect((await internalDb.selectFrom('term_mappings').select(['to_system', 'to_code'])
+      .where('from_code', '=', 'BALAB').executeTakeFirstOrThrow()))
+      .toEqual({ to_system: FACILITY_REGISTRY_SYSTEM, to_code: 'X' });
+    // And Beta is still selectable — the delete's retirement must not have caught it.
+    expect((await ctx.terminology.admin.terms.search(FACILITY_REGISTRY_SYSTEM, { statuses: ['ACTIVE'], limit: 10, offset: 0 })).rows
+      .map((r: any) => r.code)).toEqual(['X']);
+  });
+
+  // Same containment contract as POST/PUT above. `retireRegistryConcepts` THROWS by design (its
+  // containment belongs to the caller), so the route has to hold it — and the retirement runs BEFORE
+  // the removal, which makes an uncontained throw worse than a 500: it would abort the request before
+  // the facility was ever deleted. Broken at `updateTable`, which retirement is the only thing in
+  // this request path to use (the registry store's `remove` is a `deleteFrom`).
+  it('a retirement failure fails neither the delete nor the response', async () => {
+    const internalDb = await makeMigratedDb();
+    const ctx = fakeCreateCtx(internalDb);
+    const app = await appWith(ctx);
+    const id = (await app.inject({ method: 'POST', url: '/api/facilities', payload: body })).json().id;
+    ctx.internalDb = new Proxy(internalDb, {
+      get: (t: any, p) => (p === 'updateTable'
+        ? () => { throw new Error('simulated terminology store failure'); }
+        : t[p]?.bind?.(t) ?? t[p]),
+    });
+
+    const res = await app.inject({ method: 'DELETE', url: `/api/facilities/${id}` });
+
+    expect(res.statusCode).toBe(200);
+    expect(await internalDb.selectFrom('facility_registry').selectAll().execute()).toEqual([]);
   });
 });
 
