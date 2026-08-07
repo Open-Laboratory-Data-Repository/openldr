@@ -17,6 +17,7 @@
 - **Migrations inline their constants**, never import live ones — a migration is a frozen snapshot. Follow `075_facility_registry_coding_system.ts`'s pattern and its `⛔ Deliberately INLINED` comment.
 - **Never write new `reference_change_log` rows from a migration.** Deleting is safe; inserting perturbs the global `seq` and every site's `pendingPush` baseline.
 - **`term_mappings` is authoritative; `concept_map_elements` is a mirror.** Any write to `term_mappings` must go through `admin.termMappings.*` so the mirror and `reference_change_log` capture both happen. Never `UPDATE term_mappings` directly.
+  - **Migration exception (adjudicated 2026-08-07):** a migration cannot reach the store, and it must not write `reference_change_log`. Migration `078` therefore writes `term_mappings` in raw SQL and **must delete the corresponding `concept_map_elements` rows itself** so the mirror stays consistent. Skipping capture is correct here: every install runs the migration, so each lab deactivates its own duplicates locally — nothing needs to propagate from central.
 - **CLI parity:** any new operator-facing capability needs an `openldr` command too.
 - **Commit trailer:** never add `Co-Authored-By: Claude` or any AI co-author trailer.
 - **Gate:** `pnpm turbo run typecheck test --force`. Never pipe turbo through `tail` — the shell reports tail's exit code. Redirect to a log and echo `$?`.
@@ -442,7 +443,11 @@ export function parseFacilityCsv(csv: string, opts: FacilityCsvOptions): Facilit
     bom: true,
     relax_column_count: true,
     info: true,
-  }) as { record: string[]; info: { lines: number } }[];
+    // `raw: true` gives the row's ORIGINAL text. Reconstructing it by joining the parsed fields
+    // would be a different string — `trim` has already eaten the whitespace and the original
+    // quoting is gone — and an operator has to find this row in their own file.
+    raw: true,
+  }) as { record: string[]; info: { lines: number }; raw: string }[];
 
   if (rows.length === 0) {
     return { records: [], unknownColumns: [], duplicateColumns: [], quarantined: [], skipped: 0 };
@@ -463,11 +468,11 @@ export function parseFacilityCsv(csv: string, opts: FacilityCsvOptions): Facilit
   let skipped = 0;
   const records: FacilityRecord[] = [];
 
-  for (const { record, info } of rows.slice(1)) {
+  for (const { record, info, raw } of rows.slice(1)) {
     if (record.length !== headers.length) {
       quarantined.push({
         line: info.lines,
-        raw: record.join(','),
+        raw: raw.trim(),
         reason: record.length > headers.length ? 'too_many_fields' : 'too_few_fields',
       });
       continue;
@@ -1664,6 +1669,23 @@ it('records a conflicting set, deactivates every member, and creates the index',
   expect(conflicts[0]).toMatchObject({ from_system: 'S', from_code: 'BALAB', kind: 'duplicate' });
 });
 
+it('deletes the concept_map_elements mirror rows for the mappings it deactivated', async () => {
+  const db = await makeMigrationDb();
+  await db.insertInto('term_mappings').values([
+    { id: 'tm-1', from_system: 'S', from_code: 'BALAB', to_system: REGISTRY, to_code: 'L-1', map_type: 'SAME-AS', is_active: true },
+    { id: 'tm-2', from_system: 'S', from_code: 'BALAB', to_system: REGISTRY, to_code: 'L-2', map_type: 'SAME-AS', is_active: true },
+  ] as never).execute();
+  await db.insertInto('concept_map_elements').values([
+    { map_url: LOCAL_MAP_URL, source_system: 'S', source_code: 'BALAB', target_system: REGISTRY, target_code: 'L-1', equivalence: 'SAME-AS' },
+    { map_url: LOCAL_MAP_URL, source_system: 'S', source_code: 'BALAB', target_system: REGISTRY, target_code: 'L-2', equivalence: 'SAME-AS' },
+  ] as never).execute();
+
+  await up(db as never);
+
+  // A deactivated mapping must not keep appearing in the exported FHIR ConceptMap.
+  expect(await db.selectFrom('concept_map_elements').selectAll().execute()).toEqual([]);
+});
+
 it('records an unsupported map_type WITHOUT deactivating it', async () => {
   const db = await makeMigrationDb();
   await db.insertInto('term_mappings').values(
@@ -1763,6 +1785,20 @@ export async function up(db: Kysely<unknown>): Promise<void> {
          select 1 from facility_mapping_conflicts c
           where c.kind = 'duplicate' and c.from_system = m.from_system and c.from_code = m.from_code
        )
+  `.execute(anyDb);
+
+  // 3b: keep the mirror consistent. `concept_map_elements` mirrors `term_mappings`, and a migration
+  // cannot go through `admin.termMappings` to update both. Leaving the mirror alone would keep a
+  // deactivated mapping visible in the exported FHIR ConceptMap. Capture is deliberately skipped:
+  // every install runs this migration, so each lab deactivates its own duplicates locally and
+  // nothing needs to propagate from central. (Adjudicated 2026-08-07.)
+  await sql`
+    delete from concept_map_elements e
+     using term_mappings m, facility_mapping_conflicts c
+     where e.source_system = m.from_system and e.source_code = m.from_code
+       and e.target_system = m.to_system and e.target_code = m.to_code
+       and c.kind = 'duplicate' and c.from_system = m.from_system and c.from_code = m.from_code
+       and m.to_system = ${REGISTRY_SYSTEM} and m.map_type = 'SAME-AS' and not m.is_active
   `.execute(anyDb);
 
   // 4: record unsupported semantics WITHOUT deactivating — the resolver already refuses to resolve
