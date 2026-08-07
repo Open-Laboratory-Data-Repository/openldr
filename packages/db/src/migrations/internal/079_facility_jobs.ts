@@ -5,12 +5,14 @@ import { type Kysely, sql } from 'kysely';
 // action and a failed projection was a `console.error` -- the interface could report success while
 // reports disagreed.
 //
-// ⛔ `active_key` is an app-managed mirror of `kind`, non-null ONLY while the row is 'queued', and
-// cleared by `claimNext` in the same statement that sets 'running'. A PLAIN unique index on it then
-// buys two different properties:
-//   - a rebuild request arriving while one is already QUEUED collides and is absorbed (coalescing),
+// ⛔ `active_key` is an app-managed IDENTITY key, non-null ONLY while the row is 'queued', and
+// cleared by `claimNext` in the same statement that sets 'running'. Its value is the job kind for a
+// whole-dimension `facility-map-rebuild` (every such request is interchangeable) but `kind:registryId`
+// for a `registry-projection`, which repairs ONE named facility — see `facility-job-store.ts`.
+// A PLAIN unique index on it then buys two different properties:
+//   - a request arriving while one of the SAME identity is already QUEUED is absorbed (coalescing),
 //     so a 14 000-row CSV import enqueues one rebuild rather than 14 000;
-//   - a request arriving while a rebuild is RUNNING sees a NULL active_key, so it inserts a FRESH
+//   - a request arriving while that job is RUNNING sees a NULL active_key, so it inserts a FRESH
 //     queued job instead of being swallowed by a build that has already read the data.
 // The second property is the one an obvious implementation gets wrong.
 //

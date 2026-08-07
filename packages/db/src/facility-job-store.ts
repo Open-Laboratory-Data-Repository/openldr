@@ -34,6 +34,27 @@ type Row = {
 
 const iso = (d: Date | null): string | null => (d ? new Date(d).toISOString() : null);
 
+/** The IDENTITY of a job — two requests share an identity exactly when running one of them makes the
+ *  other redundant, which is precisely when it is safe to coalesce them.
+ *
+ *  - `facility-map-rebuild` rebuilds the WHOLE report-facing dimension, so every rebuild request is
+ *    interchangeable and the identity is the kind alone. That is what makes a 14 000-row CSV import
+ *    enqueue one rebuild rather than 14 000.
+ *  - `registry-projection` repairs ONE named facility, so its identity includes that facility. Keying
+ *    it on the kind alone would let the first failing facility's repair absorb every other facility's,
+ *    leaving them unmapped with nothing recording why.
+ *
+ *  A `registry-projection` with no `registryId` names no facility to repair; such (malformed) requests
+ *  all share the key `registry-projection:` rather than getting a silent per-request identity. */
+function activeKeyFor(kind: FacilityJobKind, registryId: string | null): string {
+  return kind === 'registry-projection' ? `${kind}:${registryId ?? ''}` : kind;
+}
+
+function isUniqueViolation(err: unknown): boolean {
+  const e = err as { code?: string; message?: string };
+  return e?.code === '23505' || /unique|duplicate/i.test(e?.message ?? '');
+}
+
 function toJob(r: Row): FacilityJob {
   return {
     id: r.id, kind: r.kind as FacilityJobKind, status: r.status as FacilityJobStatus,
@@ -44,63 +65,109 @@ function toJob(r: Row): FacilityJob {
   };
 }
 
+/** How many queued rows `claimNext` will try before giving up for this tick. Only reached when a
+ *  concurrent claimer wins the guarded UPDATE, so a bound this small just means "another worker took
+ *  the whole head of the queue in the time it took us to read it" — idling one tick is correct then. */
+const CLAIM_CANDIDATES = 10;
+
 export function createFacilityJobStore(db: Kysely<InternalSchema>): FacilityJobStore {
+  /** The id of an ACTIVE (queued) job with this identity, if one exists. `excludeId` skips the row
+   *  being re-queued, which still carries its own history. */
+  const findActiveId = async (activeKey: string, excludeId?: string): Promise<string | undefined> => {
+    let q = db.selectFrom('facility_jobs').select('id').where('active_key', '=', activeKey);
+    if (excludeId !== undefined) q = q.where('id', '!=', excludeId);
+    return (await q.executeTakeFirst())?.id;
+  };
+
+  /** Re-queue a finished job, re-arming its `active_key` only when that identity is free.
+   *
+   *  Re-arming matters: without it a later request would not coalesce onto the re-queued job. But the
+   *  design deliberately allows a second job of the same identity to be QUEUED while the first RUNS,
+   *  so a run that then fails is re-queued into a state where the key is already held. Setting it
+   *  unconditionally raises a 23505 out of the worker's retry loop and out of the operator's Retry
+   *  button. We yield the key instead: the row goes back to `queued` and really will run, while the
+   *  job already holding the key does the same work — so the retry is honoured either way. */
+  const requeue = async (
+    job: { id: string; kind: string; registry_id: string | null },
+    apply: (activeKey: string | null) => Promise<unknown>,
+  ): Promise<void> => {
+    const key = activeKeyFor(job.kind as FacilityJobKind, job.registry_id);
+    if (await findActiveId(key, job.id)) {
+      await apply(null);
+      return;
+    }
+    try {
+      await apply(key);
+    } catch (err) {
+      // Lost a race to a concurrent enqueue between the check and the update: same conclusion.
+      if (!isUniqueViolation(err) || !(await findActiveId(key, job.id))) throw err;
+      await apply(null);
+    }
+  };
+
   return {
     async enqueue(input) {
-      // The unique index on `active_key` (migration 079) IS the coalescing mechanism: a row is only
-      // "active" while queued, so a second insert with the same active_key collides with a pending
-      // request (absorbed) but never with a RUNNING one (whose active_key claimNext already cleared).
+      // The invariant is "at most one ACTIVE job per identity", and it lives in `active_key`:
+      // non-null only while a row is 'queued', cleared by claimNext in the same statement that sets
+      // 'running'. So a request arriving while one is QUEUED is absorbed, while one arriving during a
+      // RUNNING build is not — that build may already have read the data. The pre-check below is what
+      // enforces this; the unique index on `active_key` (migration 079) is the race backstop.
       //
-      // Detection: the brief's approach -- inspect `numInsertedOrUpdatedRows` after
-      // `.onConflict(...).doNothing()` -- was verified NOT to work here. Measured against pg-mem, a
-      // skipped (conflicting) insert still reports `numInsertedOrUpdatedRows: "1"`, and a
-      // `.returningAll()` on the same skipped insert returns the OTHER (pre-existing) row rather than
-      // an empty set -- pg-mem does not model DO NOTHING's "no row returned on conflict" semantics.
-      // Both would misreport a coalesce as a fresh enqueue.
-      //
-      // Instead we pre-check for an existing active row (deterministic on both pg-mem and Postgres),
-      // and keep the unique index only as a race backstop for real concurrent Postgres callers -- a
-      // window this single-threaded test suite never exercises.
-      const existing = await db.selectFrom('facility_jobs').select('id')
-        .where('active_key', '=', input.kind).executeTakeFirst();
-      if (existing) return { job: null, coalesced: true };
+      // The pre-check is not a stylistic choice: the brief's detection -- inspect
+      // `numInsertedOrUpdatedRows` after `.onConflict(...).doNothing()` -- was measured NOT to work
+      // here. Against pg-mem a skipped (conflicting) insert still reports
+      // `numInsertedOrUpdatedRows: "1"`, and `.returningAll()` on that same skipped insert returns the
+      // OTHER (pre-existing) row rather than an empty set. Both would misreport a coalesce as a fresh
+      // enqueue. A SELECT is deterministic on both pg-mem and real Postgres.
+      const activeKey = activeKeyFor(input.kind, input.registryId ?? null);
+      if (await findActiveId(activeKey)) return { job: null, coalesced: true };
 
-      const id = `fj_${randomUUID().slice(0, 8)}`;
+      const id = `fj_${randomUUID()}`;
       try {
         await db.insertInto('facility_jobs')
           .values({
             id, kind: input.kind, status: 'queued', attempts: 0,
             registry_id: input.registryId ?? null, requested_by: input.requestedBy ?? null,
-            active_key: input.kind,
-          } as never)
+            active_key: activeKey,
+          })
           .execute();
       } catch (err) {
-        const e = err as { code?: string; message?: string };
-        const isUnique = e.code === '23505' || /unique|duplicate/i.test(e.message ?? '');
-        if (isUnique) return { job: null, coalesced: true };
+        // Only an `active_key` collision means "already queued". Reporting `coalesced` for any unique
+        // violation would silently DROP the request on, say, a primary-key collision -- the caller
+        // would be told the work is pending when nothing is. Re-check before concluding.
+        if (isUniqueViolation(err) && (await findActiveId(activeKey))) return { job: null, coalesced: true };
         throw err;
       }
       const row = await db.selectFrom('facility_jobs').selectAll().where('id', '=', id).executeTakeFirstOrThrow();
-      return { job: toJob(row as never), coalesced: false };
+      return { job: toJob(row), coalesced: false };
     },
 
     async claimNext() {
-      const next = await db.selectFrom('facility_jobs').select('id')
-        .where('status', '=', 'queued').orderBy('requested_at', 'asc').limit(1).executeTakeFirst();
-      if (!next) return null;
+      // `requested_at` defaults to now(), which is TRANSACTION time in Postgres -- rows enqueued in one
+      // transaction tie. The `id` tiebreaker makes the order total instead of engine-dependent.
+      const candidates = await db.selectFrom('facility_jobs').select('id')
+        .where('status', '=', 'queued')
+        .orderBy('requested_at', 'asc').orderBy('id', 'asc')
+        .limit(CLAIM_CANDIDATES).execute();
+
       // Guarded UPDATE rather than SELECT ... FOR UPDATE SKIP LOCKED: pg-mem cannot do the latter in
       // a correlated subquery, and the `and status = 'queued'` guard is race-safe in real Postgres
-      // anyway (a second claimer updates 0 rows instead of double-claiming).
+      // anyway (a second claimer updates 0 rows instead of double-claiming). Losing that guard means
+      // another worker took this row, NOT that the queue is empty -- so advance to the next candidate
+      // rather than reporting idle while work is still queued.
       // ⛔ `active_key = null` here, NOT in finish(): that is what lets a change arriving mid-build
       // enqueue a fresh job instead of being swallowed.
-      const rows = await sql<Row>`
-        update facility_jobs
-        set status = 'running', started_at = now(), attempts = attempts + 1, active_key = null
-        where id = ${next.id} and status = 'queued'
-        returning *
-      `.execute(db);
-      const r = rows.rows[0];
-      return r ? toJob(r) : null;
+      for (const candidate of candidates) {
+        const rows = await sql<Row>`
+          update facility_jobs
+          set status = 'running', started_at = now(), attempts = attempts + 1, active_key = null
+          where id = ${candidate.id} and status = 'queued'
+          returning *
+        `.execute(db);
+        const r = rows.rows[0];
+        if (r) return toJob(r);
+      }
+      return null;
     },
 
     async finish(id, status, opts) {
@@ -108,7 +175,7 @@ export function createFacilityJobStore(db: Kysely<InternalSchema>): FacilityJobS
         .set({
           status, last_error: opts.error ?? null,
           result_count: opts.resultCount ?? null,
-          finished_at: sql`now()` as never,
+          finished_at: sql<Date>`now()`,
         })
         .where('id', '=', id)
         .execute();
@@ -119,10 +186,10 @@ export function createFacilityJobStore(db: Kysely<InternalSchema>): FacilityJobS
       if (!job) return;
       // attempts reset to 0 deliberately: this is the OPERATOR's explicit action, and someone who
       // has fixed the underlying cause must not be locked out by a previously exhausted budget.
-      await db.updateTable('facility_jobs')
-        .set({ status: 'queued', attempts: 0, last_error: null, started_at: null, finished_at: null, active_key: job.kind })
+      await requeue(job, (activeKey) => db.updateTable('facility_jobs')
+        .set({ status: 'queued', attempts: 0, last_error: null, started_at: null, finished_at: null, active_key: activeKey })
         .where('id', '=', id)
-        .execute();
+        .execute());
     },
 
     async retryPreservingAttempts(id) {
@@ -131,15 +198,15 @@ export function createFacilityJobStore(db: Kysely<InternalSchema>): FacilityJobS
       // The WORKER's automatic retry. Deliberately does NOT touch `attempts` — that counter is what
       // bounds the retry loop, so resetting it here would spin forever on a permanently failing job.
       // The distinction from `retry` above is the whole reason both exist.
-      await db.updateTable('facility_jobs')
-        .set({ status: 'queued', started_at: null, finished_at: null, active_key: job.kind })
+      await requeue(job, (activeKey) => db.updateTable('facility_jobs')
+        .set({ status: 'queued', started_at: null, finished_at: null, active_key: activeKey })
         .where('id', '=', id)
-        .execute();
+        .execute());
     },
 
     async failStaleRunning(error) {
       const res = await db.updateTable('facility_jobs')
-        .set({ status: 'failed', last_error: error, finished_at: sql`now()` as never, active_key: null })
+        .set({ status: 'failed', last_error: error, finished_at: sql<Date>`now()`, active_key: null })
         .where('status', '=', 'running')
         .executeTakeFirst();
       return Number(res?.numUpdatedRows ?? 0);
@@ -148,13 +215,13 @@ export function createFacilityJobStore(db: Kysely<InternalSchema>): FacilityJobS
     async latest(kind) {
       const row = await db.selectFrom('facility_jobs').selectAll()
         .where('kind', '=', kind).orderBy('requested_at', 'desc').limit(1).executeTakeFirst();
-      return row ? toJob(row as never) : null;
+      return row ? toJob(row) : null;
     },
 
     async listUnresolved() {
       const rows = await db.selectFrom('facility_jobs').selectAll()
         .where('status', 'in', ['queued', 'running']).orderBy('requested_at', 'asc').execute();
-      return rows.map((r) => toJob(r as never));
+      return rows.map((r) => toJob(r));
     },
 
     async countFailed(kind) {
