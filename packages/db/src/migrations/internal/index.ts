@@ -75,6 +75,7 @@ import * as m073 from './073_facility_country_and_admin_fields';
 import * as m074 from './074_drop_facility_aliases';
 import * as m075 from './075_facility_registry_coding_system';
 import * as m076 from './076_suspend_facility_registry_sync';
+import * as m077 from './077_facility_concept_projection';
 
 export const internalMigrations: Record<string, Migration> = {
   '001_fhir_resources': { up: m001.up, down: m001.down },
@@ -153,4 +154,5 @@ export const internalMigrations: Record<string, Migration> = {
   '074_drop_facility_aliases': { up: m074.up, down: m074.down },
   '075_facility_registry_coding_system': { up: m075.up, down: m075.down },
   '076_suspend_facility_registry_sync': { up: m076.up, down: m076.down },
+  '077_facility_concept_projection': { up: m077.up, down: m077.down },
 };

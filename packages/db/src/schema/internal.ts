@@ -267,6 +267,16 @@ export interface FacilityRegistryTable {
   updated_at: string;
 }
 
+/** The durable answer to "what code does this `facility_registry` row currently project as?" —
+ *  read/written by the mapping-migration layer (task 7), never by the projection itself. Deliberately
+ *  a table, not a concept `properties` key: `terms.update` rewrites `properties` wholesale and would
+ *  silently destroy this link (see migration 077). */
+export interface FacilityConceptProjectionTable {
+  registry_id: string;
+  concept_code: string;
+  updated_at: Generated<Date>;
+}
+
 export interface TerminologyConceptsTable {
   system: string;
   code: string;
@@ -783,6 +793,7 @@ export interface InternalSchema {
   dashboards: DashboardsTable;
   column_exposure_policy: ColumnExposurePolicyTable;
   facility_registry: FacilityRegistryTable;
+  facility_concept_projection: FacilityConceptProjectionTable;
   form_definitions: FormDefinitionsTable;
   form_versions: FormVersionsTable;
   user_profiles: UserProfilesTable;
