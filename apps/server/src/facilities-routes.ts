@@ -36,22 +36,35 @@ const MAX_IMPORT_REQUEST_BYTES = MAX_IMPORT_CSV_BYTES + 2 * 1024 * 1024;
 // Same gate as MANAGE (facilities.manage) — importing is a write — with the higher bodyLimit layered on.
 const IMPORT = { ...MANAGE, bodyLimit: MAX_IMPORT_REQUEST_BYTES };
 
-// A real applied import runs as ONE atomic transaction, and for every row that already exists in
-// facility_registry it falls back to a per-row SELECT + conditional INSERT into
-// reference_change_log (facility-import.ts's docblock: `capture.record()` per updated row) —
-// holding row locks for however long that takes. At full national-register scale (14 000 rows,
-// worst case all updates on a re-import) that is measured in tens of seconds, which is not
-// something to run inside one HTTP request/response cycle: a client timeout or a proxy's own
-// request deadline would abort the connection while the transaction keeps running server-side.
+// This comment used to justify the cap by the per-row SELECT + conditional INSERT into
+// reference_change_log that `capture.record()` ran for every already-existing row (measured in
+// tens of seconds at full national-register scale). That cost is GONE: facilities-phase-0 Task 1
+// suspended facility_registry's reference-sync capture (see SUSPENDED_REFERENCE_ENTITY_TYPES in
+// reference-change-log.ts), and facility-import.ts's `importFacilities` no longer calls
+// `capture.record()` at all. The facility_registry write itself is now a single batched
+// `insertBatchPg` call (packages/db/batch-upsert.ts) chunked to ~2 608 rows/statement, not one
+// row-per-transaction fallback — comfortably fast even at 14 000 rows.
+//
+// What still runs inside this request/response cycle, and still scales with row count: parsing
+// the CSV (`parseFacilityCsv`, CPU-bound on file size), the transaction's existing-id lookup and
+// the batched write above, and then — AFTER that transaction commits — `projectRegistryRows`
+// (facility-reconcile.ts), which `importFacilities` awaits before returning. That projection
+// builds one terminology concept per imported row, runs collision-detection queries whose IN-lists
+// scale with the row count, and writes the result through `admin.terms.importRows` (itself
+// internally batched, 1000 rows/statement). None of this holds facility_registry row locks the way
+// the deleted per-row capture path did, but it is still real, row-count-proportional work sitting
+// inside one HTTP request — a client timeout or a proxy's own request deadline can still abort the
+// connection while a large enough apply keeps running server-side.
 //
 // Decision: bound APPLY to a row-count cap and point the operator at the CLI
 // (`openldr facilities import --apply`, packages/cli/src/facilities.ts) above it — the CLI runs
-// the identical `importFacilities` call with no request deadline. 2000 is comfortably inside "a few
-// seconds" even in the worst-case all-updates path, while still covering a district- or
-// council-scoped partial register (the common incremental-update case) without ever touching the
-// CLI. This is NOT a background-job system — a request over the cap is simply refused, nothing is
-// queued. A dry run (no `apply`) is exempt: it never opens a transaction, so a 14 000-row register
-// can always be PREVIEWED inline regardless of this cap.
+// the identical `importFacilities` call with no request deadline. 2000 stays a generous bound for
+// the common case (a district- or council-scoped partial register, the routine incremental update)
+// without ever touching the CLI, while keeping the worst case — a full re-import's CSV parse,
+// batched write, and registry projection, all synchronous in one request — well clear of a client
+// or proxy timeout. This is NOT a background-job system — a request over the cap is simply
+// refused, nothing is queued. A dry run (no `apply`) is exempt: it never opens a transaction (or
+// projects), so a 14 000-row register can always be PREVIEWED inline regardless of this cap.
 const MAX_INLINE_APPLY_ROWS = 2000;
 
 const ImportSchema = z.object({

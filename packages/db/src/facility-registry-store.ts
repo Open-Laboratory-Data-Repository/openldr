@@ -1,5 +1,4 @@
 import { type Kysely, sql } from 'kysely';
-import { canonicalHash } from '@openldr/core';
 import type { InternalSchema } from './schema/internal';
 import type { ReferenceCapture } from './reference-capture';
 import { FACILITY_ADMIN_LEVELS, type FacilityAdminLevel } from './facility-answers';
@@ -163,17 +162,6 @@ export function toRow(rec: FacilityRecord): Omit<Row, 'created_at' | 'updated_at
     managed_origin: rec.managedOrigin ?? null,
     source: rec.source,
   };
-}
-
-// canonicalHash matches the established pattern in report-store.ts's hashOf. Its difference from
-// a plain JSON.stringify (order-independence on jsonb key order) is NOT currently reachable here:
-// upsert() hashes the row it reads back from the transaction, and by the time that SELECT runs,
-// Postgres (and pg-mem, faithfully) has already canonicalized the jsonb's key order in storage —
-// so the input to this function is already order-normalized. It is kept anyway as cheap insurance:
-// the hash would become order-sensitive the moment upsert() is changed to hash the incoming record
-// instead of the stored one.
-function hashOf(rec: FacilityRecord): string {
-  return canonicalHash(rec);
 }
 
 /**

@@ -1,5 +1,4 @@
 import { type Kysely, sql } from 'kysely';
-import { canonicalHash } from '@openldr/core';
 import { parseFacilityCsv } from '@openldr/terminology';
 import {
   type FacilityRecord,
@@ -8,7 +7,6 @@ import {
   type TerminologyAdminStore,
   insertBatchPg,
   facilityRecordToRow,
-  facilityRowToRecord,
 } from '@openldr/db';
 import { projectRegistryRows } from './facility-reconcile';
 
@@ -97,14 +95,6 @@ function dedupeById(records: FacilityRecord[]): { records: FacilityRecord[]; dup
   const byId = new Map<string, FacilityRecord>();
   for (const r of records) byId.set(r.id, r); // re-`set`ting an existing key overwrites its value, not its position — last row wins.
   return { records: [...byId.values()], duplicates: records.length - byId.size };
-}
-
-/** Same hash `facility-registry-store.ts`'s interactive `upsert()` would log: `canonicalHash` of the
- *  record round-tripped through the row shape (`toRow` then `toRecord`), so a bulk-imported row and a
- *  later hand-edit of the same row compare against a matching content_hash in reference_change_log —
- *  not two independent hashing schemes drifting apart entity by entity. */
-function contentHashOf(rec: FacilityRecord): string {
-  return canonicalHash(facilityRowToRecord(facilityRecordToRow(rec) as never));
 }
 
 /**
@@ -216,10 +206,11 @@ export async function importFacilities(
     for (const id of ids) if (existingById.has(id)) updated += 1; else created += 1;
 
     // Merge forward what the importer is NOT authoritative for (see the docblock above) before
-    // deriving either the row to write or the content_hash to log — both need to reflect what
-    // actually lands in facility_registry, not the raw parsed record, or the hash logged here would
-    // drift from `hashOf(stored)` in facility-registry-store.ts's `upsert()` for exactly the rows
-    // this merge touches.
+    // deriving the row to write — it needs to reflect what actually lands in facility_registry, not
+    // the raw parsed record, for exactly the rows this merge touches. (This step used to also feed a
+    // content_hash logged into reference_change_log via `contentHashOf`/`hashOf`; both were removed
+    // as dead code once facilities-phase-0 Task 1 suspended that capture — see the "SUSPENDED"
+    // docblock section above.)
     const merged: FacilityRecord[] = records.map((r) => {
       const existing = existingById.get(r.id);
       if (!existing) return r;
