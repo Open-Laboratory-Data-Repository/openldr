@@ -929,10 +929,11 @@ export interface ObservedFacility {
    *  "never mapped". See `ResolvedFacility.nonFacilityTarget` in
    *  packages/bootstrap/src/facility-reconcile.ts for the bug this split fixes. */
   nonFacilityTarget: boolean;
-  /** Task 10: several ACTIVE `SAME-AS` mappings compete to resolve this code, so NOTHING resolves —
-   *  the resolver never picks an arbitrary winner. Mutually exclusive with `resolvedVia`, and never
-   *  set alongside `targetMissing`/`nonFacilityTarget`. See `ResolvedFacility.ambiguous` in
-   *  packages/bootstrap/src/facility-reconcile.ts. */
+  /** Task 10: ACTIVE `SAME-AS` mappings on this code name more than one DISTINCT facility, so
+   *  NOTHING resolves — the resolver never picks an arbitrary winner. Duplicate mappings naming the
+   *  SAME facility are not a conflict and resolve normally. Mutually exclusive with `resolvedVia`,
+   *  and never set alongside `targetMissing`/`nonFacilityTarget`. See `ResolvedFacility.ambiguous`
+   *  in packages/bootstrap/src/facility-reconcile.ts. */
   ambiguous: boolean;
 }
 

@@ -195,9 +195,9 @@ export function ObservedTab({ actionsPortalTarget }: ObservedTabProps = {}): JSX
       // `observedSystemForFeed` for the full precedence story).
       const system = observedSystemForFeed(row.sourceSystem);
       // Look up any mapping ALREADY authored for this observed code (under ITS system) so the
-      // dialog opens in edit mode against it, rather than creating a second, ambiguous candidate
-      // row alongside it — `resolveObservedFacilities` has no tiebreak for two active mappings on
-      // the same code.
+      // dialog opens in edit mode against it, rather than creating a second candidate row alongside
+      // it — `resolveObservedFacilities` has no tiebreak for two active mappings that name
+      // DIFFERENT facilities; it reports them as `ambiguous` and resolves neither.
       const [systems, mappings] = await Promise.all([
         listCodingSystems(),
         listTermMappings(system, row.sourceCode),
@@ -343,9 +343,17 @@ export function ObservedTab({ actionsPortalTarget }: ObservedTabProps = {}): JSX
                 // Single source of truth for "this row already has a mapping" — same condition the
                 // editMapping/map label switch below already uses, and now also the gate for
                 // offering Remove mapping at all (a row with no mapping has nothing to remove).
-                // Task 10: `ambiguous` counts as "has a mapping" — it means the row has TWO, and
-                // Remove mapping (which deletes every active outgoing candidate) is precisely the
-                // action the state calls for.
+                // Task 10: `ambiguous` counts as "has a mapping" — it means the row has two naming
+                // DIFFERENT facilities, and Remove mapping (which deletes every active outgoing
+                // candidate) is precisely the action the state calls for.
+                //
+                // ⚠ Known residual, deliberately not closed here: a row whose ONLY mappings are
+                // non-SAME-AS has all four flags false (the resolver says nothing about such rows —
+                // see `ResolvedFacility.ambiguous`'s ⚠ note), so it reads as "Map", not "Edit".
+                // Closing it needs a NEW resolver field for the unsupported semantic, which is
+                // Task 12's scope. Mitigated meanwhile: `openMapping` above passes
+                // `mappings.outgoing[0]` regardless of these flags, so "Map" still opens the dialog
+                // in EDIT mode against the existing row with the Map type select reachable.
                 const hasMapping = !!(row.resolvedVia || row.targetMissing || row.nonFacilityTarget || row.ambiguous);
                 // The location CE already knows about the OBSERVED facility itself
                 // (`facilities.region`/`.district`, from `Organization.address`) — independent of any
@@ -379,7 +387,8 @@ export function ObservedTab({ actionsPortalTarget }: ObservedTabProps = {}): JSX
                   <TableCell className="text-right text-xs">{row.reportCount}</TableCell>
                   <TableCell className="text-xs">
                     {row.ambiguous ? (
-                      // Task 10: competing active SAME-AS mappings, so the row resolves to NOTHING.
+                      // Task 10: active SAME-AS mappings naming DIFFERENT facilities, so the row
+                      // resolves to NOTHING.
                       // Destructive styling like the other two failure states — an official report
                       // is currently missing this facility entirely, and only the operator can fix
                       // it by removing one of the mappings.

@@ -357,12 +357,20 @@ export interface ResolvedFacility {
    *  only recognised when the target system is PROVEN a facility register by the registry's own
    *  data (`knownNationalSystems`, below) — never merely "not the registry system". */
   nonFacilityTarget: boolean;
-  /** More than one ACTIVE `SAME-AS` mapping competes to resolve this observed `(system, code)` —
-   *  either several into the facility registry, or (when no registry mapping exists at all)
-   *  several into proven national registers. The row resolves to NOTHING; there is never an
-   *  arbitrary winner. Which facility appeared in a report used to depend on database row order
-   *  (`candidates.find(...)` over an unordered query), and a nondeterministic answer is worse than
-   *  a visibly absent one, so the conflict is reported and the operator settles it.
+  /** ACTIVE `SAME-AS` mappings on this observed `(system, code)` name more than one DISTINCT
+   *  facility — either several distinct rows in the facility registry, or (when no registry mapping
+   *  exists at all) several distinct targets in proven national registers. The row resolves to
+   *  NOTHING; there is never an arbitrary winner. Which of the competing facilities appeared in a
+   *  report used to depend on database row order (`candidates.find(...)` over an unordered query),
+   *  and a nondeterministic answer is worse than a visibly absent one, so the conflict is reported
+   *  and the operator settles it.
+   *
+   *  ⛔ DISTINCT targets, not mapping ROWS. `term_mappings` permits duplicates (no unique index; no
+   *  duplicate guard on the mappings POST route; `reference-apply` upserts by `id`), so two rows may
+   *  carry an identical `(from, to)`. Those agree on the answer, so they are NOT ambiguous and the
+   *  row resolves exactly as one of them alone would — anything else would delete a
+   *  correctly-resolving facility from a report over a non-conflict. See the dedupe note in
+   *  `resolveObservedFacilities`.
    *
    *  ⛔ Competition WITHIN one route kind only. Registry-beats-national is a fixed, documented total
    *  order between two DIFFERENT kinds (see the precedence note on `resolveObservedFacilities`), so
@@ -634,11 +642,32 @@ export async function resolveObservedFacilities(deps: ReconcileDeps): Promise<Re
     const nationalCandidates = registryCandidates.length > 0
       ? []
       : candidates.filter((c) => knownNationalSystems.has(c.toSystem));
-    // Task 10: two active SAME-AS mappings competing WITHIN one route kind. The pair used to be
-    // settled by `candidates.find(...)` over a query with no `orderBy`, i.e. by whatever the
-    // database returned first. Neither wins now — see `ResolvedFacility.ambiguous` for why nothing
-    // at all is the chosen answer, and why registry-beats-national is precedence, not ambiguity.
-    const ambiguous = registryCandidates.length > 1 || nationalCandidates.length > 1;
+    // Task 10: two active SAME-AS mappings naming DIFFERENT facilities WITHIN one route kind. The
+    // pair used to be settled by `candidates.find(...)` over a query with no `orderBy`, i.e. by
+    // whatever the database returned first. Neither wins now — see `ResolvedFacility.ambiguous` for
+    // why nothing at all is the chosen answer, and why registry-beats-national is precedence, not
+    // ambiguity.
+    //
+    // ⛔ Counted over DISTINCT TARGETS, not over candidate ROWS. `term_mappings` has no unique index
+    // (migration 013 creates two non-unique indexes only), the mappings POST route has no duplicate
+    // guard, and central→lab `reference-apply` upserts by `id` — so two rows with different ids and
+    // an identical `(from, to)` are reachable, and land here as two candidates. Those name the SAME
+    // facility: nothing competes, there is no row-order nondeterminism to protect the operator from,
+    // and reporting it would make a correctly-resolving facility VANISH from a report while telling
+    // the operator to "remove one" of a non-conflict. `(from, to)` is the identity the rest of the
+    // code already uses — `termMappings.create` delete-then-inserts the `concept_map_elements`
+    // mirror keyed on `(map_url, source_system, source_code, target_system, target_code)`, which
+    // dedupes exactly this way; only `term_mappings` itself does not.
+    //
+    // Registry targets key on `toCode` alone (every registry candidate shares
+    // `FACILITY_REGISTRY_SYSTEM` by construction, two lines up); national targets key on
+    // `toSystem|toCode`, since two different proven national registers may legitimately use the same
+    // code for two different facilities.
+    const registryTargets = new Set(registryCandidates.map((c) => c.toCode));
+    const nationalTargets = new Set(nationalCandidates.map((c) => `${c.toSystem}|${c.toCode}`));
+    const ambiguous = registryTargets.size > 1 || nationalTargets.size > 1;
+    // Safe to take `[0]` once `ambiguous` is false: every remaining candidate on the surviving route
+    // names the SAME target, so the answer does not depend on which duplicate row came back first.
     const registryMapping = ambiguous ? undefined : registryCandidates[0];
     const nationalMapping = ambiguous ? undefined : nationalCandidates[0];
     // 3. Anything else the operator mapped to (the observed system itself, an unrelated active

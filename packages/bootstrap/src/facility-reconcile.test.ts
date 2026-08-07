@@ -614,6 +614,79 @@ describe('Task 10: only SAME-AS resolves, and competing mappings resolve to noth
     expect(row.name).toBe('Alpha');
   });
 
+  // ⛔ Review fix: ambiguity counts DISTINCT TARGETS, not candidate ROWS. Two `term_mappings` rows
+  // that both say SAME-AS → registry L-1 are DUPLICATES, not competitors: they agree on the answer,
+  // there is no row-order nondeterminism, and the pre-Task-10 code resolved this row correctly
+  // whatever order the database returned. Counting rows made it report `ambiguous` — deleting a
+  // correctly-resolving facility from an official report and telling the operator to "remove one" of
+  // a non-conflict.
+  //
+  // Reachable, not theoretical: `term_mappings` has NO unique index (migration 013 creates two
+  // non-unique indexes only), the mappings POST route has no duplicate guard, and `reference-apply`
+  // upserts by `id` — so two central rows with distinct ids and identical `(from, to)` land as two
+  // lab rows. `termMappings.create` (used by `seedMapping`) mints a fresh `newId('tm')` per call and
+  // does not dedupe, which is exactly how the two rows below arise here.
+  it('does not count a DUPLICATE mapping to the SAME registry facility as a competing one', async () => {
+    const deps = await makeReconcileDeps();
+    await seedPerformers(deps, [['BALAB', 6]]);
+    await scanObservedFacilities(deps, { now: '2026-08-07T00:00:00.000Z', apply: true });
+    await seedRegistry(deps, { id: 'fac-A', name: 'Alpha', localCode: 'L-1' });
+    await seedMapping(deps, { fromSystem: OBSERVED, fromCode: 'BALAB', toSystem: FACILITY_REGISTRY_SYSTEM, toCode: 'L-1' });
+    await seedMapping(deps, { fromSystem: OBSERVED, fromCode: 'BALAB', toSystem: FACILITY_REGISTRY_SYSTEM, toCode: 'L-1' });
+
+    // Two rows, one target — confirms the fixture really produced the duplicate this test is about
+    // (if `create` ever gained a dedupe guard, the test would otherwise pass vacuously).
+    const outgoing = await deps.admin.termMappings.listOutgoing(OBSERVED, 'BALAB');
+    expect(outgoing).toHaveLength(2);
+
+    const row = (await resolveObservedFacilities(deps)).find((r) => r.sourceCode === 'BALAB')!;
+
+    expect(row.ambiguous).toBe(false);
+    expect(row.resolvedVia).toBe('registry');
+    expect(row.name).toBe('Alpha');
+    expect(row.registryId).toBe('fac-A');
+  });
+
+  // The same rule on the national route, where the target identity is `toSystem|toCode` rather than
+  // the code alone (two different proven national registers may legitimately reuse a code).
+  it('does not count a DUPLICATE mapping to the SAME national target as a competing one', async () => {
+    const deps = await makeReconcileDeps();
+    await seedPerformers(deps, [['BALAB', 6]]);
+    await scanObservedFacilities(deps, { now: '2026-08-07T00:00:00.000Z', apply: true });
+    await seedRegistry(deps, { id: 'fac-A', name: 'Alpha', nationalSystem: 'urn:tz:hfr', nationalCode: 'TZ-001' });
+    await seedMapping(deps, { fromSystem: OBSERVED, fromCode: 'BALAB', toSystem: 'urn:tz:hfr', toCode: 'TZ-001' });
+    await seedMapping(deps, { fromSystem: OBSERVED, fromCode: 'BALAB', toSystem: 'urn:tz:hfr', toCode: 'TZ-001' });
+
+    const outgoing = await deps.admin.termMappings.listOutgoing(OBSERVED, 'BALAB');
+    expect(outgoing).toHaveLength(2);
+
+    const row = (await resolveObservedFacilities(deps)).find((r) => r.sourceCode === 'BALAB')!;
+
+    expect(row.ambiguous).toBe(false);
+    expect(row.resolvedVia).toBe('national');
+    expect(row.name).toBe('Alpha');
+  });
+
+  // ⛔ The dedupe above must not swallow the real conflict. Two national-route mappings that share a
+  // CODE but sit in DIFFERENT proven registers are two different facilities, so `toCode` alone would
+  // be the wrong identity there — this pins the `toSystem|toCode` key, which the two-distinct-target
+  // tests above (which use distinct codes too) would not catch.
+  it('still reports two national targets that share a code across DIFFERENT registers as ambiguous', async () => {
+    const deps = await makeReconcileDeps();
+    await seedPerformers(deps, [['BALAB', 6]]);
+    await scanObservedFacilities(deps, { now: '2026-08-07T00:00:00.000Z', apply: true });
+    await seedRegistry(deps, { id: 'fac-A', name: 'Alpha', nationalSystem: 'urn:tz:hfr', nationalCode: 'SHARED' });
+    await seedRegistry(deps, { id: 'fac-B', name: 'Beta', nationalSystem: 'urn:tz:mfl', nationalCode: 'SHARED' });
+    await seedMapping(deps, { fromSystem: OBSERVED, fromCode: 'BALAB', toSystem: 'urn:tz:hfr', toCode: 'SHARED' });
+    await seedMapping(deps, { fromSystem: OBSERVED, fromCode: 'BALAB', toSystem: 'urn:tz:mfl', toCode: 'SHARED' });
+
+    const row = (await resolveObservedFacilities(deps)).find((r) => r.sourceCode === 'BALAB')!;
+
+    expect(row.ambiguous).toBe(true);
+    expect(row.resolvedVia).toBeNull();
+    expect(row.name).toBeNull();
+  });
+
   // `publishFacilityMap` counts an ambiguous row in its OWN bucket. Without this it lands in
   // `unmapped`, which is the same silent absorption `nonFacilityTarget` was split out to stop — and
   // "3 unmapped" tells an operator to go author a mapping, when what they must actually do is
