@@ -464,8 +464,11 @@ describe('SEED_QUERIES — q-amr-facility-summary labels by name but groups by c
     // The label sources are aggregated (min()) so that display-text variance across specimens at
     // the SAME facility (casing, whitespace) cannot fork the group below.
     for (const [dialect, sql] of Object.entries(q().sql)) {
+      // Every branch is its own aggregate (not nested inside the outer coalesce) so MySQL 8's
+      // default ONLY_FULL_GROUP_BY accepts it — see the ⛔ MYSQL ONLY_FULL_GROUP_BY comment on
+      // q-amr-facility-summary in report-seeds.ts.
       expect(sql, `${dialect} does not resolve the facility label`)
-        .toContain('coalesce(min(fm.name), min(f.performer_display), coalesce(f.performer, p.managing_organization)) as facility');
+        .toContain('coalesce(min(fm.name), min(f.performer_display), min(f.performer), min(p.managing_organization)) as facility');
     }
   });
 

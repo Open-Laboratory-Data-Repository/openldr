@@ -758,6 +758,23 @@ order by case band when '0-4' then 1 when '5-14' then 2 when '15-24' then 3 when
     //    ever disagrees, `min` still picks deterministically and still cannot fan out.
     //  - the patient join is LEFT, not inner: the facility no longer comes from the patient, so a
     //    result whose patient row is missing must not be dropped from its facility's totals.
+    //  - ⛔ MYSQL ONLY_FULL_GROUP_BY: the projected label used to nest the raw fallback expression
+    //    `coalesce(f.performer, p.managing_organization)` inside the outer `coalesce(...)` (i.e.
+    //    `coalesce(min(fm.name), min(f.performer_display), coalesce(f.performer,
+    //    p.managing_organization))`). Postgres and mssql accept that nested form because they
+    //    recognise it as syntactically identical to the `group by` item even inside another
+    //    function call; MySQL 8's default `sql_mode=ONLY_FULL_GROUP_BY` does NOT extend that
+    //    recognition to a nested position and rejects it with ERROR 1055. Fixed by wrapping every
+    //    branch in its own aggregate: `min(f.performer)`, `min(p.managing_organization)`. This is
+    //    semantically identical, not just syntactically legal: every row in a group agrees on
+    //    `coalesce(f.performer, p.managing_organization)` by definition of the group key, so if any
+    //    row has a non-null `f.performer`, that value IS the group's code and `min(f.performer)`
+    //    recovers it; if every row's `f.performer` is null, they all necessarily share the same
+    //    `p.managing_organization` and `min(p.managing_organization)` recovers that instead. The
+    //    fallback order is unchanged: resolved registry name, then wire display, then the code,
+    //    then the patient organization. All three dialects were re-ported in lockstep even though
+    //    only mysql's strict mode rejects the nested form, per this file's own "spelled out" rule
+    //    at the ONLY_FULL_GROUP_BY comment on q-test-volume above.
     params: [
       { id: 'from', label: 'From', type: 'text', required: true },
       { id: 'to', label: 'To', type: 'text', required: true },
@@ -771,7 +788,7 @@ order by case band when '0-4' then 1 when '5-14' then 2 when '15-24' then 3 when
   group by specimen_id
 )
 select
-  coalesce(min(fm.name), min(f.performer_display), coalesce(f.performer, p.managing_organization)) as facility,
+  coalesce(min(fm.name), min(f.performer_display), min(f.performer), min(p.managing_organization)) as facility,
   count(*)::int as tested,
   sum(case when o.abnormal_flag = 'R' then 1 else 0 end)::int as resistant
 from lab_results o
@@ -798,7 +815,7 @@ order by 1`,
   group by specimen_id
 )
 select
-  coalesce(min(fm.name), min(f.performer_display), coalesce(f.performer, p.managing_organization)) as facility,
+  coalesce(min(fm.name), min(f.performer_display), min(f.performer), min(p.managing_organization)) as facility,
   cast(count(*) as int) as tested,
   cast(sum(case when o.abnormal_flag = 'R' then 1 else 0 end) as int) as resistant
 from lab_results o
@@ -825,7 +842,7 @@ order by 1`,
   group by specimen_id
 )
 select
-  coalesce(min(fm.name), min(f.performer_display), coalesce(f.performer, p.managing_organization)) as facility,
+  coalesce(min(fm.name), min(f.performer_display), min(f.performer), min(p.managing_organization)) as facility,
   cast(count(*) as signed) as tested,
   cast(sum(case when o.abnormal_flag = 'R' then 1 else 0 end) as signed) as resistant
 from lab_results o
