@@ -37,4 +37,33 @@ describe('079 facility_jobs', () => {
 
     expect(await db.selectFrom('facility_jobs').selectAll().execute()).toHaveLength(2);
   });
+
+  it('finds a row by active_key after its status leaves "queued" — proves the index is NOT partial', async () => {
+    // Precedent: 061_terminology_ingest_jobs.ts:21-32 documents a real pg-mem planner bug — once a
+    // row's status transitions out of a `WHERE status = 'queued'` partial predicate, pg-mem excludes
+    // that row from ANY later query filtering on the indexed column, even a query with no status
+    // filter. This test reproduces exactly that transition: seed a row with `active_key` set and
+    // `status: 'queued'`, move its status to 'running' while leaving `active_key` set (real app code
+    // clears `active_key` on this same transition via `claimNext`, per the migration's own comment;
+    // this test deliberately does not, so it can still filter on `active_key` afterwards), then query
+    // filtering on `active_key` alone.
+    //
+    // What this proves: the index on `active_key` is a plain (non-partial) index. Under a
+    // `WHERE status = 'queued'` partial index, pg-mem's planner would drop this row from the result
+    // once status is 'running', and the assertion below would fail.
+    // What this does NOT prove: the migration's uniqueness guarantee (covered by the two tests
+    // above), or anything about real Postgres — a partial index behaves correctly there, so this
+    // test's discriminating power comes entirely from the pg-mem quirk 061 also relies on.
+    const db = await makeMigratedDb();
+    await db.insertInto('facility_jobs').values({
+      id: 'fj1', kind: 'facility-map-rebuild', status: 'queued', attempts: 0, active_key: 'facility-map-rebuild',
+    } as never).execute();
+
+    await db.updateTable('facility_jobs').set({ status: 'running' } as never)
+      .where('id', '=', 'fj1').execute();
+
+    const rows = await db.selectFrom('facility_jobs').selectAll()
+      .where('active_key', '=', 'facility-map-rebuild').execute();
+    expect(rows).toHaveLength(1);
+  });
 });
