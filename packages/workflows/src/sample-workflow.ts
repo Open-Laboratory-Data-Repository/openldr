@@ -38,7 +38,11 @@ import type { Workflow } from './types';
 // `enableIngestWorkflow` in seed.ts, which flips just the `enabled` flag and leaves the operator's
 // stored graph alone. `wf-sample-reactive` is NOT repaired that way: nothing depends on it.
 
-/** Ingest webhook path. The CDR toolchain sets OPENLDR_CE_HOOK_PATH=ingest to target it. */
+/** Ingest webhook path, served under `/api/workflows/hooks/`. The CDR toolchain
+ *  joins OPENLDR_CE_URL + OPENLDR_CE_HOOK_PATH, so that variable takes the FULL
+ *  path `/api/workflows/hooks/ingest` — which is already its default, so a CE
+ *  target needs no hook-path config at all. Setting it to the bare `ingest`
+ *  used to be documented here and 404s. */
 const INGEST_WEBHOOK_PATH = 'ingest';
 /** Ingest Persist Store `source` — MUST match the reactive Event Trigger `source`. */
 const INGEST_PERSIST_SOURCE = 'webhook-ingest';
