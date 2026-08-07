@@ -3,6 +3,7 @@ import { parseFacilityCsv, FACILITY_CSV_TEMPLATE } from './facility-csv';
 
 const HFR = 'urn:tz:hfr';
 const csv = (body: string) => parseFacilityCsv(body, { nationalSystem: HFR });
+const opts = { nationalSystem: HFR };
 
 describe('parseFacilityCsv', () => {
   it('parses the documented column contract into records', () => {
@@ -98,9 +99,10 @@ describe('parseFacilityCsv', () => {
     expect(r.unknownColumns).toEqual([]);
   });
 
-  it('counts a ragged row as skipped instead of throwing, and still imports the good rows', () => {
-    // csv-parse throws "Invalid Record Length" on a row whose field count differs from the header
-    // unless relax_column_count is set. A single malformed line must not reject the whole file.
+  it('quarantines a ragged row instead of shifting it into the wrong columns, and still imports the good rows', () => {
+    // Was: csv-parse's relax_column_count padded/shifted a short row into place and it silently
+    // imported. That is the exact defect this slice fixes — the row must now be quarantined, not
+    // counted as `skipped` (which means something else: a well-formed row missing a required field).
     const r = csv(
       'national_code,name,level\n' +
       '122023-5,BAHEBE,Level IA2\n' +
@@ -108,6 +110,56 @@ describe('parseFacilityCsv', () => {
       '999-9,GOOD ROW,Level IB\n',
     );
     expect(r.records.map((rec) => rec.nationalCode)).toEqual(['122023-5', '999-9']);
-    expect(r.skipped).toBe(1);
+    expect(r.skipped).toBe(0);
+    expect(r.quarantined).toEqual([{ line: 3, raw: 'TOOFEW', reason: 'too_few_fields' }]);
+  });
+
+  it('quarantines a row with an unescaped comma instead of shifting values into the wrong columns', () => {
+    // The audit's exact reproduction. Before this fix relax_column_count accepted the row and mapped
+    // level:'East', region:'Hospital', silently dropping 'Dodoma'.
+    const csvText = 'national_code,name,level,region\n1,Clinic, East,Hospital,Dodoma\n';
+
+    const r = parseFacilityCsv(csvText, opts);
+
+    expect(r.records).toEqual([]);
+    expect(r.quarantined).toEqual([
+      { line: 2, raw: '1,Clinic, East,Hospital,Dodoma', reason: 'too_many_fields' },
+    ]);
+  });
+
+  it('quarantines a row with too few fields', () => {
+    const csvText = 'national_code,name,level,region\n1,Clinic\n';
+    const r = parseFacilityCsv(csvText, opts);
+    expect(r.records).toEqual([]);
+    expect(r.quarantined).toEqual([{ line: 2, raw: '1,Clinic', reason: 'too_few_fields' }]);
+  });
+
+  it('never throws on a ragged row — one bad row must not kill a national import', () => {
+    const csvText = 'national_code,name\n1,Good\n2,Bad,Extra\n3,AlsoGood\n';
+    const r = parseFacilityCsv(csvText, opts);
+    expect(r.records.map((x) => x.nationalCode)).toEqual(['1', '3']);
+    expect(r.quarantined).toHaveLength(1);
+    expect(r.quarantined[0].line).toBe(3);
+  });
+
+  it('accepts a quoted comma and a quoted multiline name as WELL-FORMED', () => {
+    const csvText = 'national_code,name\n1,"St. Mary, Annex"\n2,"Line\nTwo"\n';
+    const r = parseFacilityCsv(csvText, opts);
+    expect(r.quarantined).toEqual([]);
+    expect(r.records.map((x) => x.name)).toEqual(['St. Mary, Annex', 'Line\nTwo']);
+  });
+
+  it('handles CRLF line endings without quarantining every row', () => {
+    const csvText = 'national_code,name\r\n1,Clinic\r\n2,Other\r\n';
+    const r = parseFacilityCsv(csvText, opts);
+    expect(r.quarantined).toEqual([]);
+    expect(r.records).toHaveLength(2);
+  });
+
+  it('reports a duplicate header as an unknown-column style failure rather than mapping it twice', () => {
+    const csvText = 'national_code,name,name\n1,A,B\n';
+    const r = parseFacilityCsv(csvText, opts);
+    expect(r.records).toEqual([]);
+    expect(r.duplicateColumns).toEqual(['name']);
   });
 });
