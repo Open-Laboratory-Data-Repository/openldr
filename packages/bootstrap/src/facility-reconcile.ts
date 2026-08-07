@@ -1041,12 +1041,15 @@ export interface ReprojectResult {
  * cheaply be made one. `admin.termMappings.update` opens its OWN transaction internally
  * (`db.transaction().execute(...)` in `terminology-admin-store.ts`) over the `Kysely` instance it
  * was constructed with, and it takes no `Transaction` parameter to join an outer one. Wrapping this
- * sequence in `internalDb.transaction()` would therefore not nest a savepoint; on the same
- * connection it would issue a second `BEGIN` (a no-op PostgreSQL warns about) whose eventual inner
- * `COMMIT` commits the OUTER transaction — so a later failure would roll back nothing while LOOKING
- * atomic. That is strictly worse than not wrapping at all: it would trade an honest, converging
- * partial state for a silent one. Making it genuinely atomic means threading a `Transaction` through
- * the admin store's whole `termMappings` surface, which is a store change, not a change here.
+ * sequence in `internalDb.transaction()` would therefore not nest a savepoint and would not even
+ * share a session: Kysely's `TransactionBuilder.execute` goes through `provideConnection` →
+ * `driver.acquireConnection()`, so the store's inner transaction runs on a DIFFERENT pooled
+ * connection. Its `COMMIT` commits only its own work, independently of the outer transaction, which
+ * means a later rollback would NOT undo the mapping rewrites — the sequence would LOOK atomic and
+ * silently not be. (On a small pool it can also deadlock against locks the outer transaction holds.)
+ * That is strictly worse than not wrapping at all: it would trade an honest, converging partial
+ * state for a silent one. Making it genuinely atomic means threading a `Transaction` through the
+ * admin store's whole `termMappings` surface, which is a store change, not a change here.
  *
  * What each mid-failure actually leaves behind, and why the next run repairs it:
  *  - Failure in STEP 1 (`importRows`): nothing else has run. The link table still names the old
