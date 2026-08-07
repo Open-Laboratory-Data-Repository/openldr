@@ -1966,10 +1966,11 @@ describe('reprojectRegistryRows', () => {
   });
 
   // ⛔ PINS THE `linkedElsewhere` GUARD. A link row can name a code some OTHER facility durably
-  // projects as (migration 077's backfill has no ORDER BY), and then the mappings on that code are
-  // that other facility's: migrating them would re-point an operator's mapping at the wrong lab, and
-  // deleting the concept would take a LIVE facility out of the picker. Neutering the guard to
-  // `if (true)` used to pass every test in this file.
+  // projects as (an install restored from a dump written before migration 077's backfill was made
+  // deterministic can hold exactly that), and then the mappings on that code are that other
+  // facility's: migrating them would re-point an operator's mapping at the wrong lab, and deleting
+  // the concept would take a LIVE facility out of the picker. Neutering the guard to `if (true)`
+  // used to pass every test in this file.
   it('does not migrate or delete a code still linked by a facility outside the batch', async () => {
     const deps = await makeReconcileDeps();
     await seedPerformers(deps, [['BALAB', 1]]);
@@ -2001,6 +2002,54 @@ describe('reprojectRegistryRows', () => {
     // "there was nothing to carry": both report `mappingsMigrated: 0`.
     expect(await currentConceptCode(deps, 'fac-A')).toBe('NEW-A');
     expect(r.codeChanges).toEqual([{ registryId: 'fac-A', from: 'SHARED', to: 'NEW-A', mappingsMigrated: 0, carryOverSkipped: true }]);
+  });
+
+  // ⛔ PINS THE `contestedInBatch` GUARD — the case `linkedElsewhere` STRUCTURALLY CANNOT catch.
+  // `linkedElsewhere` only fires for a claimant OUTSIDE the batch, but `widenToCollidingRows` runs
+  // first and guarantees a collision partner is pulled IN, so a shared link inside the batch slips
+  // straight past it. Both rows then compute the same `from`, and the loop runs the carry-over twice
+  // against ONE pre-read snapshot: the second pass repoints the SAME mappings again and the last
+  // writer wins, silently, with `carryOverSkipped: false`. Measured before the fix: the mapping
+  // authored when 'X' meant Alpha ended up on 'fac-B' (Beta) with no warning anywhere.
+  //
+  // The shared-link state is seeded directly because it is a state a REPAIRED 077 no longer creates
+  // — an install restored from a dump taken before that fix still holds it, and nothing else in the
+  // codebase removes it.
+  it('refuses the carry-over for BOTH rows when two link rows name the same previous code', async () => {
+    const deps = await makeReconcileDeps();
+    await seedPerformers(deps, [['BALAB', 1]]);
+    await seedRegistry(deps, { id: 'fac-A', name: 'Alpha', localCode: 'X' });
+    await seedRegistry(deps, { id: 'fac-B', name: 'Beta', nationalSystem: 'urn:nat', nationalCode: 'X' });
+    // The operator's mapping, authored when 'X' meant Alpha. `seedMapping` goes through
+    // `admin.termMappings.create`, which also creates the 'X' concept it points at.
+    await seedMapping(deps, { fromSystem: DEFAULT_OBSERVED_FACILITY_SYSTEM, fromCode: 'BALAB', toSystem: FACILITY_REGISTRY_SYSTEM, toCode: 'X' });
+    // The damaged link state: BOTH facilities recorded as projecting 'X'.
+    await deps.internalDb.insertInto('facility_concept_projection').values([
+      { registry_id: 'fac-A', concept_code: 'X', updated_at: new Date() },
+      { registry_id: 'fac-B', concept_code: 'X', updated_at: new Date() },
+    ]).execute();
+
+    // One row in; `widenToCollidingRows` pulls the other in because both claim 'X'.
+    const r = await reprojectRegistryRows(deps, [{ id: 'fac-A', name: 'Alpha' }]);
+
+    // THE SUBSTANTIVE HALF FIRST: the mapping is untouched, still naming the code it was authored
+    // against, and that concept still exists — so the Observed tab keeps showing the operator what
+    // was chosen instead of quietly resolving to the wrong lab.
+    const mappings = await deps.internalDb.selectFrom('term_mappings')
+      .select(['to_code']).where('to_system', '=', FACILITY_REGISTRY_SYSTEM).execute();
+    expect(mappings.map((m) => m.to_code)).toEqual(['X']);
+    const codes = await deps.internalDb.selectFrom('terminology_concepts')
+      .select('code').where('system', '=', FACILITY_REGISTRY_SYSTEM).execute();
+    expect(codes.map((c) => c.code).sort()).toEqual(['X', 'fac-A', 'fac-B']);
+
+    // Both rows still ADVANCE to their parked codes — only the carry-over is refused — and BOTH say
+    // so, so a Publish summary can surface it.
+    expect(await currentConceptCode(deps, 'fac-A')).toBe('fac-A');
+    expect(await currentConceptCode(deps, 'fac-B')).toBe('fac-B');
+    expect([...r.codeChanges].sort((a, b) => a.registryId.localeCompare(b.registryId))).toEqual([
+      { registryId: 'fac-A', from: 'X', to: 'fac-A', mappingsMigrated: 0, carryOverSkipped: true },
+      { registryId: 'fac-B', from: 'X', to: 'fac-B', mappingsMigrated: 0, carryOverSkipped: true },
+    ]);
   });
 
   // ⛔ PINS THE SNAPSHOT-ONCE INVARIANT: the stale mappings are read ONCE, BEFORE any rewrite, so the

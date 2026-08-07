@@ -76,6 +76,45 @@ describe('077 facility_concept_projection', () => {
     await db.destroy();
   });
 
+  // ⛔ THE state that must never be created: two facilities linked to ONE concept_code. Reachable on
+  // exactly the installs this migration targets — fac-A owns 'X', fac-B is imported carrying
+  // `national_code = 'X'`, a Scan parks both onto their ids and leaves the unowned 'X' concept
+  // behind — so BOTH rows match the backfill join twice (their id AND 'X'). Nothing conflicts on
+  // insert (different registry_ids), so an unordered pick can link both to 'X', and
+  // `reprojectRegistryRows` then has two facilities' mappings hanging off one code with no way to
+  // tell whose they are. Measured: the pre-fix SQL produced exactly that under pg-mem, so this test
+  // fails without the `distinct on`/`order by`.
+  it('never links two facilities to the same concept_code when both match a leftover shared concept', async () => {
+    const db = await makeDbBefore077();
+    await db.insertInto('facility_registry').values([
+      { id: 'fac-A', name: 'Alpha', local_code: 'X', source: 'manual' },
+      { id: 'fac-B', name: 'Beta', national_code: 'X', national_system: 'urn:nat', source: 'manual' },
+    ] as never).execute();
+    // Insertion ORDER mirrors the history and is load-bearing for the mutation check: 'X' was
+    // written first, when fac-A owned the code alone; the two id-keyed concepts came later, when
+    // fac-B's arrival parked both rows and the upsert-only write left 'X' behind unowned. pg-mem
+    // scans this table in insertion order, so under the pre-fix SQL 'X' is the first match for BOTH
+    // facilities — which is precisely how the duplicate link gets created.
+    await db.insertInto('terminology_concepts').values([
+      { system: 'urn:openldr:cs:facility-registry', code: 'X', display: 'Alpha', status: 'ACTIVE' },
+      { system: 'urn:openldr:cs:facility-registry', code: 'fac-A', display: 'Alpha', status: 'ACTIVE' },
+      { system: 'urn:openldr:cs:facility-registry', code: 'fac-B', display: 'Beta', status: 'ACTIVE' },
+    ] as never).execute();
+
+    await up(db as never);
+
+    const rows = await db.selectFrom('facility_concept_projection').selectAll().orderBy('registry_id').execute();
+    // Each row keeps its OWN id — the one candidate no other facility can ever claim.
+    expect(rows.map((r) => ({ registry_id: r.registry_id, concept_code: r.concept_code }))).toEqual([
+      { registry_id: 'fac-A', concept_code: 'fac-A' },
+      { registry_id: 'fac-B', concept_code: 'fac-B' },
+    ]);
+    // Stated separately from the equality above: the equality happens to imply it, but THIS is the
+    // invariant, and it must keep being asserted if the expected codes above ever change.
+    expect(new Set(rows.map((r) => r.concept_code)).size).toBe(rows.length);
+    await db.destroy();
+  });
+
   it('cascades the link away when its facility is deleted', async () => {
     const db = await makeMigratedDb();
     await db.insertInto('facility_registry').values({ id: 'fac-1', name: 'C', local_code: 'L', source: 'manual' } as never).execute();

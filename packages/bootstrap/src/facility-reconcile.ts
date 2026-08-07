@@ -1253,8 +1253,10 @@ export interface ReprojectResult {
     from: string;
     to: string;
     mappingsMigrated: number;
-    /** TRUE when the carry-over was deliberately SKIPPED because `from` is still linked by a
-     *  facility outside this batch (see the `linkedElsewhere` guard below). Without this flag the
+    /** TRUE when the carry-over was deliberately SKIPPED because the identity of `from`'s mappings
+     *  is not decidable: either `from` is still linked by a facility OUTSIDE this batch (the
+     *  `linkedElsewhere` guard below), or two rows INSIDE this batch both name it as their previous
+     *  code (the `contestedInBatch` guard). Without this flag the
      *  skip is indistinguishable from the ordinary "there were no mappings on the old code" case —
      *  both report `mappingsMigrated: 0` — and the guard can suppress the exact repair this function
      *  exists to perform, silently. An operator reading a Publish summary needs to be able to tell
@@ -1440,6 +1442,32 @@ export async function reprojectRegistryRows(
         .map((l) => l.concept_code),
     );
 
+    // ⛔ THE SAME HAZARD AS `linkedElsewhere`, from INSIDE the batch — and `linkedElsewhere` cannot
+    // see it, by construction. That guard only fires for a claimant OUTSIDE the batch, but
+    // `widenToCollidingRows` runs first and GUARANTEES a collision partner is pulled IN, so the one
+    // shape it was written for is the one shape it can never catch.
+    //
+    // Two link rows can name the SAME `concept_code` — migration 077's backfill used to create
+    // exactly that (see its ⛔ note; both a parked row and its partner matched the leftover shared
+    // concept, and nothing conflicted on insert), and a database restored from a dump taken before
+    // that fix still holds it. Both rows then compute `from` = that one code, and the loop below
+    // would run the carry-over TWICE against ONE `staleByCode` snapshot: the first pass repoints
+    // every mapping on the shared code to row 1's new code, the second pass repoints the SAME
+    // mappings — they are still in the snapshot — to row 2's. Last writer wins, silently, with
+    // `carryOverSkipped: false` and no warning. A mapping authored when the code meant facility A
+    // then resolves to facility B in an official report, and the `facility_map` mirror is rebuilt to
+    // agree. Confidently wrong master data is strictly worse than a visible refusal.
+    //
+    // So: if two rows in this batch claim one `from`, NOBODY carries it over. There is no signal
+    // here that could pick the rightful owner — the link table is the only record of what the code
+    // meant, and it disagrees with itself. The rows still MOVE to their new codes (that part is
+    // unambiguous and is what unbreaks the projection); only the two destructive steps are refused,
+    // exactly as for `linkedElsewhere`, and an operator gets a warning plus `carryOverSkipped: true`
+    // to act on.
+    const fromCount = new Map<string, number>();
+    for (const m of moved) fromCount.set(m.from, (fromCount.get(m.from) ?? 0) + 1);
+    const contestedInBatch = new Set([...fromCount].filter(([, n]) => n > 1).map(([code]) => code));
+
     // A code this batch is HANDING OVER: one row moves off it in the same call another row moves on
     // to it (an operator renaming a facility and giving its old code to a new one in a single
     // import). The mappings still migrate — they were authored when the code meant the OLD facility,
@@ -1449,21 +1477,29 @@ export async function reprojectRegistryRows(
 
     for (const m of moved) {
       let mappingsMigrated = 0;
-      const carryOverSkipped = linkedElsewhere.has(m.from);
+      const contested = contestedInBatch.has(m.from);
+      const carryOverSkipped = linkedElsewhere.has(m.from) || contested;
       if (carryOverSkipped) {
-        // ⛔ Say so out loud. Skipping is the RIGHT call (see the guard above), but it suppresses
+        // ⛔ Say so out loud. Skipping is the RIGHT call (see both guards above), but it suppresses
         // the exact repair this function exists to perform, and `mappingsMigrated: 0` alone reads
         // identically to "there was nothing on the old code to carry". A skip that cannot be told
         // apart from a no-op is a skip nobody will ever investigate. Same containment reasoning as
-        // `deleteSupersededIdConcepts`' warn, for a strictly more alarming case.
+        // `deleteSupersededIdConcepts`' warn, for a strictly more alarming case. The two reasons get
+        // two messages because the REPAIR differs: one is fixed by widening the batch, the other by
+        // fixing the link rows that disagree.
         // eslint-disable-next-line no-console -- deliberate: this module takes no logger dependency
         // (see the `err` catches elsewhere in this file); diagnostic-only, and mirrored on the
         // result as `carryOverSkipped` for callers that render a summary.
         console.warn(
-          `[facility-reconcile] facility ${m.registryId} now projects as '${m.to}', but its previous code '${m.from}'` +
-            ' is still linked by a facility outside this batch — its term_mappings were NOT migrated and the stale' +
-            ' concept was NOT removed. Re-publish the WHOLE registry so both facilities are in one batch, or repair' +
-            ' the mapping by hand.',
+          contested
+            ? `[facility-reconcile] facility ${m.registryId} now projects as '${m.to}', but its previous code '${m.from}'`
+              + ' is recorded in facility_concept_projection as MORE THAN ONE facility\'s projection, so there is no way'
+              + ' to tell whose mappings it carries — its term_mappings were NOT migrated and the stale concept was NOT'
+              + ' removed. Repair the link rows sharing that code, then re-publish.'
+            : `[facility-reconcile] facility ${m.registryId} now projects as '${m.to}', but its previous code '${m.from}'`
+              + ' is still linked by a facility outside this batch — its term_mappings were NOT migrated and the stale'
+              + ' concept was NOT removed. Re-publish the WHOLE registry so both facilities are in one batch, or repair'
+              + ' the mapping by hand.',
         );
       } else {
         // STEP 2: repoint the mappings, through the admin store so `concept_map_elements` and
