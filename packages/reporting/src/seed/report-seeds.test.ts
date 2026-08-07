@@ -988,3 +988,51 @@ describe('SEED_QUERIES — q-clinical-micro-header names the performing laborato
     }
   });
 });
+
+describe('SEED_QUERIES — the facility filter filters on the report performer', () => {
+  const ids = ['q-amr-resistance', 'q-test-volume', 'q-turnaround-time', 'q-patient-demographics'] as const;
+
+  it('no query filters on the patient organization any more', () => {
+    // Measured: patients.managing_organization is set on 1 of 3714 rows, so every one of these
+    // predicates selected nothing on real data.
+    for (const id of ids) {
+      const q = SEED_QUERIES.find((x) => x.id === id)!;
+      for (const [dialect, sql] of Object.entries(q.sql)) {
+        expect(sql, `${id}/${dialect} still filters on managing_organization`)
+          .not.toMatch(/managing_organization = \{\{param\.facility\}\}/);
+      }
+    }
+  });
+
+  it('every query that DECLARES a facility control actually references it', () => {
+    // q-test-volume rendered the control and ignored it: choosing a facility changed nothing,
+    // which reads as "the data is wrong" rather than "the filter is broken".
+    for (const id of ids) {
+      const q = SEED_QUERIES.find((x) => x.id === id)!;
+      for (const [dialect, sql] of Object.entries(q.sql)) {
+        expect(sql, `${id}/${dialect} declares the facility param but never uses it`)
+          .toContain('{{param.facility}}');
+      }
+    }
+  });
+
+  it('keeps the "All" escape so an unset filter still returns everything', () => {
+    for (const id of ids) {
+      const q = SEED_QUERIES.find((x) => x.id === id)!;
+      for (const [dialect, sql] of Object.entries(q.sql)) {
+        expect(sql, `${id}/${dialect} lost the All escape`)
+          .toMatch(/\{\{param\.facility\}\} = ''\s+or/);
+      }
+    }
+  });
+
+  it('routes test volume through its SPECIMENS, not through its patient', () => {
+    // A patient served by two laboratories would otherwise have all their requests attributed to
+    // whichever lab tested any one of them.
+    const q = SEED_QUERIES.find((x) => x.id === 'q-test-volume')!;
+    for (const [dialect, sql] of Object.entries(q.sql)) {
+      expect(sql, `${dialect} attributes by patient`).not.toMatch(/sr\.patient_id in \(select patient_id from diagnostic_reports/);
+      expect(sql, `${dialect}`).toContain('select l.request_id from lab_results l join diagnostic_reports d on d.specimen_id = l.specimen_id');
+    }
+  });
+});

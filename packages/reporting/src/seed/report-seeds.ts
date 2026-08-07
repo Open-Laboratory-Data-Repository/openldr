@@ -258,13 +258,14 @@ order by 2`,
     //  - row order: `percentR` DESCENDING, matching pivotResistance's `b.percentR - a.percentR`
     //    (the catalog has no secondary tiebreaker, so tie order is nondeterministic there)
     //  - date range: `effective_date_time >= from` and `<= to || 'T23:59:59.999Z'` (== endOfDay)
-    //  - facility: optional equality on patients.managing_organization, mapped to
-    //    subject_ref = 'Patient/'||id (catalog's `subjectRefs` mapping). The `{{param.facility}}`
-    //    token is a plain string substitution — an UNSET token throws "unbound parameter" even
-    //    when the param is declared `required:false` (see custom-query-run.ts). So this filter
-    //    is only truly optional if every caller always supplies `facility` (empty string for
-    //    "no filter"); the seeded design's `facility` param should default to `''` for this
-    //    reason. Confirmed live in the Task 4.2 parity check.
+    //  - facility: filters through the result's own specimen
+    //    (o.specimen_id in diagnostic_reports.performer), the same value space the picker now
+    //    offers (Task 3 — patients.managing_organization is set on 1 of 3714 rows, so the old
+    //    predicate selected nothing on real data). The `{{param.facility}}` token is a plain
+    //    string substitution — an UNSET token throws "unbound parameter" even when the param is
+    //    declared `required:false` (see custom-query-run.ts). So this filter is only truly
+    //    optional if every caller always supplies `facility` (empty string for "no filter"); the
+    //    seeded design's `facility` param should default to `''` for this reason.
     //  - R3d cutover: reads lab_results (observation_desc/abnormal_flag/result_timestamp);
     //    facility subquery via bare patient_id against patients. No specimen, no gender.
     //  - ⛔ ISOLATE ANCHOR — `abnormal_flag in ('S','I','R')` ALONE IS NOT "an antibiotic
@@ -301,8 +302,8 @@ where o.abnormal_flag in ('S', 'I', 'R')
   and (coalesce(o.result_timestamp, s.received_time) is null
        or (coalesce(o.result_timestamp, s.received_time) >= {{param.from}}
            and coalesce(o.result_timestamp, s.received_time) <= ({{param.to}} || 'T23:59:59.999Z')))
-  and ({{param.facility}} = '' or o.patient_id in (
-    select p.id from patients p where p.managing_organization = {{param.facility}}
+  and ({{param.facility}} = '' or o.specimen_id in (
+    select specimen_id from diagnostic_reports where performer = {{param.facility}}
   ))
 group by coalesce(o.observation_desc, '(unknown)')
 order by "percentR" desc`,
@@ -325,8 +326,8 @@ where o.abnormal_flag in ('S', 'I', 'R')
   and (coalesce(o.result_timestamp, s.received_time) is null
        or (coalesce(o.result_timestamp, s.received_time) >= {{param.from}}
            and coalesce(o.result_timestamp, s.received_time) <= ({{param.to}} + 'T23:59:59.999Z')))
-  and ({{param.facility}} = '' or o.patient_id in (
-    select p.id from patients p where p.managing_organization = {{param.facility}}
+  and ({{param.facility}} = '' or o.specimen_id in (
+    select specimen_id from diagnostic_reports where performer = {{param.facility}}
   ))
 group by coalesce(o.observation_desc, '(unknown)')
 order by "percentR" desc`,
@@ -348,8 +349,8 @@ where o.abnormal_flag in ('S', 'I', 'R')
   and (coalesce(o.result_timestamp, s.received_time) is null
        or (coalesce(o.result_timestamp, s.received_time) >= {{param.from}}
            and coalesce(o.result_timestamp, s.received_time) <= concat({{param.to}}, 'T23:59:59.999Z')))
-  and ({{param.facility}} = '' or o.patient_id in (
-    select p.id from patients p where p.managing_organization = {{param.facility}}
+  and ({{param.facility}} = '' or o.specimen_id in (
+    select specimen_id from diagnostic_reports where performer = {{param.facility}}
   ))
 group by coalesce(o.observation_desc, '(unknown)')
 order by \`percentR\` desc`,
@@ -362,8 +363,12 @@ order by \`percentR\` desc`,
     // Mirrors packages/reporting/src/reports/test-volume.ts exactly: group service_requests by
     // month(authored_on) x test (code_text, coalesced to '(unknown)'), COUNT(*). The catalog also
     // declares a `facility` select parameter but never actually applies it in `run()` (only
-    // p.from/p.to are read) — reproduced faithfully by exposing `facility` on the seeded DESIGN's
-    // filter bar (so the UI matches) without referencing `{{param.facility}}` in this SQL at all.
+    // p.from/p.to are read); this seeded DESIGN now DOES apply it (Task 3), closing that gap.
+    //  - facility: filters through the request's own SPECIMENS
+    //    (lab_results -> diagnostic_reports.performer), NOT through sr.patient_id. A patient may be
+    //    served by more than one laboratory, and a patient-keyed predicate would attribute all of
+    //    that patient's requests to whichever lab tested any one of them. Previously this query
+    //    declared the control and ignored it, so choosing a facility silently changed nothing.
     //  - month bucket: to_char(date_trunc('month', authored_on), 'YYYY-MM'), matching monthKey()'s
     //    `${getFullYear()}-${pad(getMonth()+1)}` (dev DB session TimeZone is UTC and authored_on is
     //    a date-only string, so there's no local-vs-UTC boundary ambiguity here).
@@ -376,10 +381,11 @@ order by \`percentR\` desc`,
     //    `.sort((a,b) => month asc, then test.localeCompare(test))`.
     //  - R3c cutover: reads `lab_requests` (not the thin `service_requests` table) —
     //    `authored_at`/`panel_desc` in place of thin `authored_on`/`code_text`; no other behavior
-    //    change (still no patient join, no facility filter).
+    //    change.
     params: [
       { id: 'from', label: 'From', type: 'text', required: true },
       { id: 'to', label: 'To', type: 'text', required: true },
+      { id: 'facility', label: 'Facility', type: 'text', required: false },
     ],
     sql: {
       postgres: `select
@@ -389,6 +395,9 @@ order by \`percentR\` desc`,
 from lab_requests sr
 where sr.authored_at >= {{param.from}}
   and sr.authored_at <= ({{param.to}} || 'T23:59:59.999Z')
+  and ({{param.facility}} = '' or sr.id in (
+    select l.request_id from lab_results l join diagnostic_reports d on d.specimen_id = l.specimen_id where d.performer = {{param.facility}}
+  ))
 group by 1, 2
 order by 1, 2`,
       // Task 2 port: to_char(date_trunc('month', ...), 'YYYY-MM') -> format(cast(...as
@@ -402,6 +411,9 @@ order by 1, 2`,
 from lab_requests sr
 where sr.authored_at >= {{param.from}}
   and sr.authored_at <= ({{param.to}} + 'T23:59:59.999Z')
+  and ({{param.facility}} = '' or sr.id in (
+    select l.request_id from lab_results l join diagnostic_reports d on d.specimen_id = l.specimen_id where d.performer = {{param.facility}}
+  ))
 group by format(cast(sr.authored_at as datetime2), 'yyyy-MM'), coalesce(sr.panel_desc, '(unknown)')
 order by 1, 2`,
       // Task 5 mysql port: authored_on is an ISO 'YYYY-MM-DD...' string, so substr(...,1,7) IS
@@ -416,6 +428,9 @@ order by 1, 2`,
 from lab_requests sr
 where sr.authored_at >= {{param.from}}
   and sr.authored_at <= concat({{param.to}}, 'T23:59:59.999Z')
+  and ({{param.facility}} = '' or sr.id in (
+    select l.request_id from lab_results l join diagnostic_reports d on d.specimen_id = l.specimen_id where d.performer = {{param.facility}}
+  ))
 group by substr(sr.authored_at, 1, 7), coalesce(sr.panel_desc, '(unknown)')
 order by 1, 2`,
     },
@@ -436,17 +451,17 @@ order by 1, 2`,
     // first, THEN averages those rounded values, THEN rounds the average to 1 decimal — the CTE's
     // `hours` column is that first whole-number rounding), minHours/maxHours = min/max of the same
     // whole-hour values.
-    //  - facility filter (optional): same '' = no-filter guard as q-amr-resistance, applied to
-    //    diagnostic_reports.subject_ref via patients.managing_organization.
+    //  - facility filter (optional): same '' = no-filter guard as q-amr-resistance, direct
+    //    equality on dr.performer — the same diagnostic_reports.performer value space the picker
+    //    now offers (Task 3 — patients.managing_organization is set on 1 of 3714 rows, so the old
+    //    subquery via managing_organization selected nothing on real data).
     //  - R3c cutover: reads the v2 `specimens`/`diagnostic_reports`/`patients` tables (originally
     //    `v2_specimens`/`v2_diagnostic_reports`/`v2_patients`, renamed to canonical in R3e —
     //    replacing the old thin `specimens`/`diagnostic_reports`/`patients` tables they superseded).
     //    v2 stores the bare FHIR id directly
     //    (`patient_id`) rather than a `Patient/`-prefixed reference string (`subject_ref`), so the
-    //    `received` CTE keys on `patient_id`, the report<->specimen join compares `patient_id` to
-    //    `patient_id`, and the facility subquery compares the bare `dr.patient_id` against bare
-    //    `patients.id` (no `'Patient/' ||` prefix needed). `managing_organization` itself is
-    //    unchanged.
+    //    `received` CTE keys on `patient_id` and the report<->specimen join compares `patient_id`
+    //    to `patient_id`.
     //  - PRECISION GUARD (both sides): `specimens.received_time` and `diagnostic_reports.issued`
     //    are TEXT columns holding whatever FHIR supplied, verbatim. `Specimen.receivedTime` is a
     //    FHIR `dateTime`, and CE's DATETIME_RE (packages/fhir/src/datatypes/primitives.ts) accepts
@@ -500,9 +515,7 @@ paired as (
     and dr.issued >= r.received_time
     and dr.issued >= {{param.from}}
     and dr.issued <= ({{param.to}} || 'T23:59:59.999Z')
-    and ({{param.facility}} = '' or dr.patient_id in (
-      select p.id from patients p where p.managing_organization = {{param.facility}}
-    ))
+    and ({{param.facility}} = '' or dr.performer = {{param.facility}})
 )
 select
   test,
@@ -539,9 +552,7 @@ paired as (
     and dr.issued >= r.received_time
     and dr.issued >= {{param.from}}
     and dr.issued <= ({{param.to}} + 'T23:59:59.999Z')
-    and ({{param.facility}} = '' or dr.patient_id in (
-      select p.id from patients p where p.managing_organization = {{param.facility}}
-    ))
+    and ({{param.facility}} = '' or dr.performer = {{param.facility}})
 )
 select
   test,
@@ -577,9 +588,7 @@ paired as (
     and dr.issued >= r.received_time
     and dr.issued >= {{param.from}}
     and dr.issued <= concat({{param.to}}, 'T23:59:59.999Z')
-    and ({{param.facility}} = '' or dr.patient_id in (
-      select p.id from patients p where p.managing_organization = {{param.facility}}
-    ))
+    and ({{param.facility}} = '' or dr.performer = {{param.facility}})
 )
 select
   test,
@@ -608,9 +617,10 @@ order by \`avgHours\` desc, test asc`,
     //    everything else (including null) to 'other', preserving the same male/female/other shape.
     //  - `asOf` (optional, a single reference date — NOT a range): catalog defaults to
     //    '2026-01-01T00:00:00Z' when unset/empty. Same '' = "use default" guard as facility below.
-    //  - facility filter (optional): same '' = no-filter guard as q-amr-resistance; direct equality
-    //    on patients.managing_organization (no subject_ref indirection — this query reads
-    //    `patients` directly, unlike the AMR/TAT queries).
+    //  - facility filter (optional): same '' = no-filter guard as q-amr-resistance; matches the
+    //    patient against diagnostic_reports.performer, the same value space the picker now offers
+    //    (Task 3 — patients.managing_organization is set on 1 of 3714 rows, so the old direct
+    //    equality selected nothing on real data).
     //  - row order: the FIXED band order ['0-4','5-14','15-24','25-49','50+','unknown'], NOT a
     //    count-based sort — matches the catalog's `ORDER.filter(b => counts.has(b)).map(...)`.
     params: [
@@ -634,7 +644,7 @@ banded as (
     end as band,
     p.sex
   from patients p, params pr
-  where ({{param.facility}} = '' or p.managing_organization = {{param.facility}})
+  where ({{param.facility}} = '' or p.id in (select patient_id from diagnostic_reports where performer = {{param.facility}}))
 )
 select
   band,
@@ -671,7 +681,7 @@ banded as (
     end as band,
     p.sex
   from patients p cross join params pr
-  where ({{param.facility}} = '' or p.managing_organization = {{param.facility}})
+  where ({{param.facility}} = '' or p.id in (select patient_id from diagnostic_reports where performer = {{param.facility}}))
 )
 select
   band,
@@ -705,7 +715,7 @@ banded as (
     end as band,
     p.sex
   from patients p cross join params pr
-  where ({{param.facility}} = '' or p.managing_organization = {{param.facility}})
+  where ({{param.facility}} = '' or p.id in (select patient_id from diagnostic_reports where performer = {{param.facility}}))
 )
 select
   band,
