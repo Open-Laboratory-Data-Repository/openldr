@@ -35,7 +35,7 @@ const dodoma: ObservedFacility = {
   sourceSystem: 'webhook-ingest', sourceCode: 'Dodoma', sourceDisplay: null, sourceRegion: null, sourceDistrict: null, reportCount: 247,
   registryId: 'f1', localCode: 'DOD-REF', name: 'Dodoma Regional Referral Hospital', level: 'Hospital', status: null,
   region: 'Dodoma', district: 'Dodoma Urban', council: null, nationalSystem: null, nationalCode: null,
-  resolvedVia: 'registry', targetMissing: false, nonFacilityTarget: false,
+  resolvedVia: 'registry', targetMissing: false, nonFacilityTarget: false, ambiguous: false,
 };
 // Alphabetically "Arusha" sorts BEFORE "Dodoma", but carries fewer reports (148 < 247) — deliberately
 // the opposite of alphabetical order, so a sort-by-code mutation cannot pass the ordering test below
@@ -44,12 +44,12 @@ const dodoma: ObservedFacility = {
 const arusha: ObservedFacility = {
   sourceSystem: 'webhook-ingest', sourceCode: 'Arusha', sourceDisplay: null, sourceRegion: null, sourceDistrict: null, reportCount: 148,
   registryId: null, localCode: null, name: null, level: null, status: null, region: null, district: null,
-  council: null, nationalSystem: null, nationalCode: null, resolvedVia: null, targetMissing: false, nonFacilityTarget: false,
+  council: null, nationalSystem: null, nationalCode: null, resolvedVia: null, targetMissing: false, nonFacilityTarget: false, ambiguous: false,
 };
 const oceanRoad: ObservedFacility = {
   sourceSystem: 'webhook-ingest', sourceCode: 'Ocean Road Cancer Institute (O', sourceDisplay: null, sourceRegion: null, sourceDistrict: null, reportCount: 6,
   registryId: null, localCode: null, name: null, level: null, status: null, region: null, district: null,
-  council: null, nationalSystem: null, nationalCode: null, resolvedVia: null, targetMissing: true, nonFacilityTarget: false,
+  council: null, nationalSystem: null, nationalCode: null, resolvedVia: null, targetMissing: true, nonFacilityTarget: false, ambiguous: false,
 };
 // DisaGlobal.dbo.LOCNDIC4 holds five distinct facility codes whose DESCRIPTION is all exactly
 // "Aga Khan" — BAMAA is one of them. Used to pin that the observed-code cell shows the code AND
@@ -58,7 +58,7 @@ const oceanRoad: ObservedFacility = {
 const bamaa: ObservedFacility = {
   sourceSystem: 'webhook-ingest', sourceCode: 'BAMAA', sourceDisplay: 'Aga Khan', sourceRegion: null, sourceDistrict: null, reportCount: 12,
   registryId: null, localCode: null, name: null, level: null, status: null, region: null, district: null,
-  council: null, nationalSystem: null, nationalCode: null, resolvedVia: null, targetMissing: false, nonFacilityTarget: false,
+  council: null, nationalSystem: null, nationalCode: null, resolvedVia: null, targetMissing: false, nonFacilityTarget: false, ambiguous: false,
 };
 // A second of the five "Aga Khan" codes — BBFAF — sharing bamaa's display but carrying its OWN
 // `Organization.address`, so the two are distinguishable by district BEFORE either is mapped. This
@@ -71,7 +71,14 @@ const bbfaf: ObservedFacility = {
 const balab: ObservedFacility = {
   sourceSystem: 'webhook-ingest', sourceCode: 'BALAB', sourceDisplay: null, sourceRegion: null, sourceDistrict: null, reportCount: 6,
   registryId: null, localCode: null, name: null, level: null, status: null, region: null, district: null,
-  council: null, nationalSystem: null, nationalCode: null, resolvedVia: null, targetMissing: false, nonFacilityTarget: true,
+  council: null, nationalSystem: null, nationalCode: null, resolvedVia: null, targetMissing: false, nonFacilityTarget: true, ambiguous: false,
+};
+
+// Task 10: the SAME observed code carrying TWO active SAME-AS mappings into the registry. The
+// resolver refuses to pick between them, so every resolved field stays null and only `ambiguous`
+// is set — this fixture is the shape `resolveObservedFacilities` actually emits for that case.
+const conflicted: ObservedFacility = {
+  ...balab, targetMissing: false, nonFacilityTarget: false, ambiguous: true,
 };
 
 const defaultFacSystem: CodingSystem = {
@@ -451,6 +458,38 @@ describe('ObservedTab', () => {
 
     expect(await screen.findByText(/not a facility/i)).toBeInTheDocument();
     expect(screen.queryByText(/target missing/i)).not.toBeInTheDocument();
+  });
+
+  // Task 10: a row with two competing active SAME-AS mappings resolves to NOTHING. All three of the
+  // other cell states would misinform the operator here — "Not mapped" sends them to author yet
+  // another mapping (the exact opposite of the fix), "Target missing" claims a facility was deleted,
+  // and "Target is not a facility" claims the wrong target system.
+  it('marks a row with conflicting mappings distinctly from unmapped, target-missing and non-facility', async () => {
+    (listObservedFacilities as ReturnType<typeof vi.fn>).mockResolvedValue([conflicted]);
+    show();
+
+    expect(await screen.findByText(/conflicting mappings/i)).toBeInTheDocument();
+    expect(screen.queryByText(/not mapped/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/target missing/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/not a facility/i)).not.toBeInTheDocument();
+  });
+
+  // A conflicted row's fix IS "Remove mapping" (it deletes every active outgoing candidate, so it
+  // clears both sides of the conflict at once) — the ⋯ menu must therefore offer it. Before Task 10
+  // the `hasMapping` gate tested only the other three flags, so this row would have been treated as
+  // never-mapped and offered no way out.
+  it('offers Remove mapping on a row with conflicting mappings', async () => {
+    (listObservedFacilities as ReturnType<typeof vi.fn>).mockResolvedValue([conflicted]);
+    show();
+    await screen.findByText('BALAB');
+
+    const trigger = screen.getByRole('button', { name: 'Observed facility actions BALAB' });
+    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByRole('menuitem', { name: /remove mapping/i })) {
+      fireEvent.keyDown(trigger, { key: 'Enter' });
+    }
+
+    expect(screen.getByRole('menuitem', { name: /remove mapping/i })).toBeInTheDocument();
   });
 
   // Operator's stronger call (supersedes the earlier "registry plus known national registers"

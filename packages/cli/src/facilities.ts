@@ -3,7 +3,8 @@ import type { Kysely } from 'kysely';
 import { loadConfig } from '@openldr/config';
 import {
   createAppContext, importFacilities, recordAuditEvent, scanObservedFacilities, publishFacilityMap,
-  type AppContext, type ScanResult, type PublishResult,
+  listFacilityMappingConflicts,
+  type AppContext, type ScanResult, type PublishResult, type FacilityMappingConflict,
 } from '@openldr/bootstrap';
 import { referenceCapture, type ExternalSchema } from '@openldr/db';
 import { cliActor } from './cli-actor';
@@ -16,6 +17,10 @@ export interface FacilitiesImportOpts {
    *  14 000-row national register can never be silently rewritten by forgetting a flag. */
   apply?: boolean;
   allowUnknownColumns?: boolean;
+  /** Import despite structurally malformed rows (see facility-import.ts's
+   *  `FacilityImportOptions.allowMalformedRows`) — the explicit "I have seen the line numbers,
+   *  import the rest" override, mirroring `allowUnknownColumns` above. */
+  allowMalformedRows?: boolean;
   json: boolean;
 }
 
@@ -48,7 +53,10 @@ export async function runFacilitiesImport(path: string, opts: FacilitiesImportOp
       // behaviour as the HTTP route, per the repo's CLI-parity rule.
       { db: ctx.internalDb, capture: referenceCapture, admin: ctx.terminology.admin },
       csv,
-      { nationalSystem: opts.nationalSystem, allowUnknownColumns: opts.allowUnknownColumns, apply: opts.apply },
+      {
+        nationalSystem: opts.nationalSystem, allowUnknownColumns: opts.allowUnknownColumns,
+        allowMalformedRows: opts.allowMalformedRows, apply: opts.apply,
+      },
     );
 
     // Refuse loudly and name the columns rather than let the caller read a generic all-zero
@@ -66,13 +74,48 @@ export async function runFacilitiesImport(path: string, opts: FacilitiesImportOp
       return 1;
     }
 
+    // Task 5: same "explicit override" idiom as unknown columns above, for structurally malformed
+    // rows (see facility-import.ts's `FacilityImportOptions.allowMalformedRows`). Unlike
+    // unknownColumns, `parsed` does NOT drop to 0 here — the well-formed rows in the file still
+    // parse (facility-csv.ts) — so this is its own check, not covered by the block above. Fires
+    // on a dry run too: the line numbers are exactly what a preview exists to surface before the
+    // operator ever considers --apply.
+    //
+    // ⛔ `result.blocked` is READ, not re-derived (see `FacilityImportResult.blocked`): it is the
+    // same predicate `importFacilities` itself applies, so this exit code can no longer disagree
+    // with whether the file was actually written. `blockedReason` picks which explanation to print
+    // — duplicate headers have no override, so telling an operator to pass --allow-malformed-rows
+    // would be pointing at a switch that cannot help them.
+    if (result.blocked) {
+      if (opts.json) {
+        process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+      } else if (result.blockedReason === 'duplicate-columns') {
+        process.stderr.write(
+          `facilities import refused: duplicate column header(s) in ${path}: ${result.duplicateColumns.join(', ')}\n` +
+            'which of two identically-named columns wins is arbitrary, so there is no override — ' +
+            'remove or rename the duplicate(s) and re-run\n',
+        );
+      } else {
+        for (const row of result.quarantined) {
+          process.stderr.write(`line ${row.line}: ${row.reason} — ${row.raw}\n`);
+        }
+        process.stderr.write(
+          `${result.quarantined.length} row(s) quarantined; re-run with --allow-malformed-rows to import the rest\n`,
+        );
+      }
+      return 1;
+    }
+
     // A dry run writes nothing, so it has nothing to audit — only an applied import is recorded.
     if (opts.apply) {
       await recordAuditEvent(ctx, cliActor(), {
         action: 'facility.import',
         entityType: 'facility',
         entityId: opts.nationalSystem,
-        metadata: { path, nationalSystem: opts.nationalSystem, allowUnknownColumns: !!opts.allowUnknownColumns, result },
+        metadata: {
+          path, nationalSystem: opts.nationalSystem, allowUnknownColumns: !!opts.allowUnknownColumns,
+          allowMalformedRows: !!opts.allowMalformedRows, result,
+        },
       });
     }
 
@@ -243,8 +286,66 @@ export async function runFacilitiesPublish(opts: FacilitiesPublishOpts): Promise
 }
 
 function formatPublishHuman(result: PublishResult, opts: FacilitiesPublishOpts): string {
-  const counts = `resolved ${result.resolved}, unmapped ${result.unmapped}, targetMissing ${result.targetMissing}, nonFacilityTarget ${result.nonFacilityTarget}, written ${result.written}`;
+  const counts = `resolved ${result.resolved}, unmapped ${result.unmapped}, targetMissing ${result.targetMissing}, nonFacilityTarget ${result.nonFacilityTarget}, ambiguous ${result.ambiguous}, written ${result.written}`;
   return opts.apply
     ? `applied: ${counts}`
     : `DRY RUN — nothing written. Rerun with --apply to write.\n${counts}`;
+}
+
+// ── Task 13: the mapping-conflict review queue ─────────────────────────────────────────────────
+
+export interface FacilitiesConflictsOpts {
+  json: boolean;
+}
+
+/**
+ * `openldr facilities conflicts [--json]`
+ *
+ * List every unresolved row of `facility_mapping_conflicts` — the violations migration 078 recorded
+ * (and, for the 'duplicate' kind, DEACTIVATED) when it closed "one active SAME-AS resolution per
+ * observed facility key" at the database. CLI parity for
+ * `GET /api/facilities/mapping-conflicts` (apps/server/src/facilities-routes.ts): both call the
+ * same `listFacilityMappingConflicts`.
+ *
+ * ⚠ Read-only, so — unlike import/scan/publish above — there is no `--apply`, and nothing is
+ * audited. There is no `--all` either: `listFacilityMappingConflicts` filters to `resolved_at is
+ * null` and nothing in CE ever sets that column, so a flag to show settled rows would today be a
+ * flag that changes nothing.
+ */
+export async function runFacilitiesConflicts(opts: FacilitiesConflictsOpts): Promise<number> {
+  const ctx = await createAppContext(loadConfig());
+  try {
+    const conflicts = await listFacilityMappingConflicts({ internalDb: ctx.internalDb });
+
+    if (opts.json) {
+      process.stdout.write(JSON.stringify(conflicts, null, 2) + '\n');
+    } else {
+      process.stdout.write(formatConflictsHuman(conflicts) + '\n');
+    }
+    // An empty queue is the healthy state, not a failure — exiting non-zero would break any script
+    // running this as a check.
+    return 0;
+  } catch (err) {
+    const msg = redactError(err);
+    if (opts.json) process.stdout.write(JSON.stringify({ error: msg }) + '\n');
+    else process.stderr.write(`facilities conflicts failed: ${msg}\n`);
+    return 1;
+  } finally {
+    await ctx.close();
+  }
+}
+
+function formatConflictsHuman(conflicts: FacilityMappingConflict[]): string {
+  if (conflicts.length === 0) return 'no unresolved facility mapping conflicts';
+
+  // Column widths are computed from the rows actually present rather than hardcoded: `from_system`
+  // is a full URI whose length varies per deployment, so a fixed width would either waste most of
+  // the line or ragged-wrap every row.
+  const rows = conflicts.map((c) => [c.fromSystem, c.fromCode, c.kind, c.mappingIds.join(',')]);
+  const header = ['from_system', 'from_code', 'kind', 'mapping_ids'];
+  const widths = header.map((h, i) => Math.max(h.length, ...rows.map((r) => r[i].length)));
+  // The last column is never padded — trailing whitespace on every line for no visual benefit.
+  const line = (cells: string[]) => cells.map((c, i) => (i === cells.length - 1 ? c : c.padEnd(widths[i]))).join('  ');
+
+  return [line(header), ...rows.map(line)].join('\n');
 }

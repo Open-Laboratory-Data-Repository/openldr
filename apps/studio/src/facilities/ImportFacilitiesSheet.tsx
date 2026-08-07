@@ -43,6 +43,11 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   const [csv, setCsv] = useState<string | null>(null);
   const [nationalSystem, setNationalSystem] = useState('');
   const [allowUnknownColumns, setAllowUnknownColumns] = useState(false);
+  // Task 5: the explicit "I have seen the line numbers, import the rest" override for structurally
+  // malformed (quarantined) rows — same shape as `allowUnknownColumns` above, but unlike that flag,
+  // toggling it does NOT need a new preview: `quarantined` is a property of the file itself (see
+  // facility-csv.ts), not of this flag, so nothing about the preview's own content can change.
+  const [allowMalformedRows, setAllowMalformedRows] = useState(false);
 
   const [previewing, setPreviewing] = useState(false);
   const [previewResult, setPreviewResult] = useState<FacilityImportResult | null>(null);
@@ -64,6 +69,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
     const f = e.target.files?.[0] ?? null;
     setFile(f);
     setAllowUnknownColumns(false);
+    setAllowMalformedRows(false);
     invalidatePreview();
     if (!f) { setCsv(null); return; }
     void f.text().then(setCsv).catch((err: unknown) => {
@@ -100,6 +106,19 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
         csv,
         nationalSystem: nationalSystem.trim(),
         allowUnknownColumns: allowOverride ?? allowUnknownColumns,
+        // ⛔ ALWAYS `false`, deliberately, and never the live checkbox: this request is what makes
+        // `blocked`/`blockedReason` a STABLE BASELINE the checkbox can be toggled against in both
+        // directions. Sending the override would make the server answer for the override too, and
+        // then un-ticking the box could not re-impose the block — the previewed answer would already
+        // say `blocked: false` (measured: preview → tick → re-Preview → un-tick left Apply on the
+        // menu, and the Apply request then sent `allowMalformedRows: false` for a write the server
+        // refuses, so the operator saw an "applied" result that wrote and audited nothing).
+        // Costless: a dry run writes nothing, so the flag changes NOTHING else in the response — see
+        // `importFacilities`' docblock ("A dry run always reports both `quarantined` and
+        // `duplicateColumns` regardless of the override") and its early return, which reports the
+        // same `parsed`/`skipped`/`duplicates` either way. Apply still sends the operator's real
+        // answer (see handleApplyConfirm), which is the only request the flag actually gates.
+        allowMalformedRows: false,
         apply: false,
       });
       setPreviewResult(result);
@@ -117,6 +136,14 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
     void runPreview(checked);
   };
 
+  // Deliberately does NOT re-run the preview — see `allowMalformedRows`'s doc comment above: the
+  // set of quarantined rows is a property of the file, not of this flag, so there is nothing new
+  // for a second preview request to discover. Toggling it only changes whether Apply is allowed
+  // to proceed.
+  const toggleAllowMalformedRows = (checked: boolean) => {
+    setAllowMalformedRows(checked);
+  };
+
   const handleApplyConfirm = async (): Promise<void> => {
     if (!csv || !previewResult) return;
     setConfirmOpen(false);
@@ -127,6 +154,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
         csv,
         nationalSystem: nationalSystem.trim(),
         allowUnknownColumns,
+        allowMalformedRows,
         apply: true,
       });
       setApplyResult(result);
@@ -159,7 +187,34 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   // outright) and the "wrong file entirely" trap (parsed 0, unknownColumns empty) — neither has
   // anything to apply. Over the row cap is refused for the same reason a doomed request is: never
   // worth sending.
-  const canApply = !!previewResult && previewResult.parsed > 0 && previewResult.parsed <= APPLY_ROW_CAP && !applyResult;
+  // Task 5: a quarantined row blocks Apply the same way unresolved unknown columns block Preview
+  // from ever reporting anything to apply — except quarantined rows don't zero out `parsed` (the
+  // rest of the file still parses, see facility-csv.ts), so this needs its own term rather than
+  // riding along on `previewResult.parsed > 0` above. `allowMalformedRows` is the release valve.
+  //
+  // ⛔ `blocked`/`blockedReason` come from `importFacilities` itself (see
+  // `FacilityImportResult.blocked`) instead of this sheet rebuilding the predicate. The version it
+  // used to spell out covered only quarantined rows, and agreed with the server purely because
+  // `parseFacilityCsv` zeroes `records` on duplicate headers — so `parsed > 0` above happened to
+  // catch what it missed. A duplicate-header file that still parsed rows would have offered Apply
+  // for a write the server refuses.
+  //
+  // The ONE thing re-applied here rather than read: the malformed-rows OVERRIDE. The checkbox
+  // deliberately does not re-preview (see `toggleAllowMalformedRows` — the quarantine list is a
+  // property of the file, so a second request would discover nothing), so the live checkbox is
+  // always ahead of the previewed answer and something has to apply it.
+  //
+  // ⛔ THIS IS A TOGGLE, NOT A RELEASE VALVE, and that only works because `runPreview` pins
+  // `allowMalformedRows: false` on every preview request (see its comment). `blockedReason` therefore
+  // always reports the UN-OVERRIDDEN reason, so ticking the box releases the block and un-ticking
+  // re-imposes it — pinned by "re-imposes the quarantine block when the operator un-ticks the
+  // override". Nothing here re-derives the server's predicate from `quarantined`/`duplicateColumns`;
+  // it reads the server's reason and suppresses exactly the one that has an override.
+  // `'duplicate-columns'` has none, so it is taken verbatim and no checkbox can clear it.
+  const blockedByImport = !!previewResult && previewResult.blocked
+    && !(previewResult.blockedReason === 'quarantined-rows' && allowMalformedRows);
+  const canApply = !!previewResult && previewResult.parsed > 0 && previewResult.parsed <= APPLY_ROW_CAP
+    && !blockedByImport && !applyResult;
   const overCap = !!previewResult && previewResult.parsed > APPLY_ROW_CAP;
   // F3 fix: `parsed` counts every accepted row INCLUDING rows `duplicates` later collapses down to
   // one (see facility-import.ts's docblock on FacilityImportResult.parsed) — the headline number
@@ -174,9 +229,13 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   // message layered on top. Once the operator HAS ticked the box (`allowUnknownColumns`) and the
   // file still parses to nothing, that's the "wrong file entirely" trap surviving one click deeper
   // — it must say so, same as the plain no-unknown-columns case does.
+  // Task 5: same reasoning as the unknownColumns exception above — a file that quarantined every
+  // row already has its own explanation (the quarantine block below) and must not also show the
+  // generic "no rows found" message.
   const noOutcomeStated = !!previewResult
     && previewResult.parsed === 0
-    && (previewResult.unknownColumns.length === 0 || allowUnknownColumns);
+    && (previewResult.unknownColumns.length === 0 || allowUnknownColumns)
+    && previewResult.quarantined.length === 0;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -267,6 +326,26 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
                       onCheckedChange={(c) => toggleAllowUnknownColumns(c === true)}
                     />
                     <span>{t('facilities.import.allowUnknownColumns')}</span>
+                  </label>
+                </div>
+              )}
+
+              {previewResult.quarantined.length > 0 && (
+                <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700">
+                  <p className="font-medium">{t('facilities.import.quarantinedTitle')}</p>
+                  <p>{t('facilities.import.quarantinedCount', { count: previewResult.quarantined.length })}</p>
+                  <ul className="mt-2 max-h-32 space-y-0.5 overflow-y-auto">
+                    {previewResult.quarantined.map((row) => (
+                      <li key={row.line}>{t('facilities.import.quarantinedLine', { line: row.line, raw: row.raw })}</li>
+                    ))}
+                  </ul>
+                  <label className="mt-2 flex items-center gap-2">
+                    <Checkbox
+                      checked={allowMalformedRows}
+                      disabled={previewing}
+                      onCheckedChange={(c) => toggleAllowMalformedRows(c === true)}
+                    />
+                    <span>{t('facilities.import.allowMalformedRows')}</span>
                   </label>
                 </div>
               )}

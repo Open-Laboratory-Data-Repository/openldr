@@ -1,7 +1,8 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { gunzipSync } from 'node:zlib';
 import { resolveCodingSystemId, type AppContext } from '@openldr/bootstrap';
-import { redact } from '@openldr/core';
+import { appError, redact } from '@openldr/core';
+import { FACILITY_REGISTRY_SYSTEM } from '@openldr/db';
 import { z } from 'zod';
 import { recordAudit } from './audit-helper';
 import { requireCapability } from './rbac';
@@ -237,22 +238,43 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
   app.post('/api/terminology/terms/:system/:code/mappings', MANAGE, async (req, reply) => {
     const parsed = mappingInput.safeParse(req.body);
     if (!parsed.success) { reply.code(400); return { error: parsed.error.message }; }
+    // ⛔ OUTSIDE the try below on purpose — `mapErr` classifies everything it catches as
+    // 404/409/500/503, which would bury this coded 400. Letting the AppError propagate reaches the
+    // central error handler, which is what puts `code: 'FAC0010'` on the wire.
+    assertFacilityMappingSemantic(parsed.data);
     try {
       const system = decodeURIComponent((req.params as { system: string; code: string }).system);
       const code = decodeURIComponent((req.params as { system: string; code: string }).code);
-      const created = await admin.termMappings.create({ fromSystem: system, fromCode: code, ...parsed.data, toDisplay: parsed.data.toDisplay ?? null });
-      await recordAudit(ctx, req, { action: 'term_mapping.create', entityType: 'term_mapping', entityId: created.mapping.id, before: null, after: created.mapping, metadata: { draftCreated: created.draftCreated } });
+      const input = { fromSystem: system, fromCode: code, ...parsed.data, toDisplay: parsed.data.toDisplay ?? null };
+      const created = isFacilityTarget(parsed.data)
+        ? await admin.termMappings.saveExclusive(input)
+        : { ...await admin.termMappings.create(input), superseded: [] as string[] };
+      await recordAudit(ctx, req, { action: 'term_mapping.create', entityType: 'term_mapping', entityId: created.mapping.id, before: null, after: created.mapping, metadata: { draftCreated: created.draftCreated, superseded: created.superseded } });
       reply.code(201);
-      return created;
+      // The response shape is unchanged (`{ mapping, draftCreated }`, what studio's
+      // `createTermMapping` reads) — `superseded` is an operator-accountability fact and belongs on
+      // the audit entry above, not in a client payload nothing consumes.
+      return { mapping: created.mapping, draftCreated: created.draftCreated };
     } catch (e) { return mapErr(e, reply); }
   });
   app.put('/api/terminology/mappings/:id', MANAGE, async (req, reply) => {
     const parsed = mappingUpdateInput.safeParse(req.body);
     if (!parsed.success) { reply.code(400); return { error: parsed.error.message }; }
+    assertFacilityMappingSemantic(parsed.data); // outside the try — see the POST above
     try {
-      const updated = await admin.termMappings.update((req.params as IdParam).id, { ...parsed.data, toDisplay: parsed.data.toDisplay ?? null });
-      await recordAudit(ctx, req, { action: 'term_mapping.update', entityType: 'term_mapping', entityId: (req.params as IdParam).id, before: null, after: updated });
-      return updated;
+      const id = (req.params as IdParam).id;
+      const input = { ...parsed.data, toDisplay: parsed.data.toDisplay ?? null };
+      // A PUT retargets one existing row, so it cannot ADD a competing active mapping — but it can
+      // re-activate a superseded one while another is active, which is the same violation by a
+      // different route. `saveExclusive` with this row's id covers both.
+      const saved = isFacilityTarget(parsed.data)
+        ? await admin.termMappings.saveExclusive(input, { id })
+        : { mapping: await admin.termMappings.update(id, input), superseded: [] as string[] };
+      // A PUT supersedes too, so it owes the same accountability record the POST above writes —
+      // otherwise a deactivation reached through PUT is invisible in the audit log while the
+      // identical one reached through POST is not. The response shape is unchanged.
+      await recordAudit(ctx, req, { action: 'term_mapping.update', entityType: 'term_mapping', entityId: id, before: null, after: saved.mapping, metadata: { superseded: saved.superseded } });
+      return saved.mapping;
     }
     catch (e) { return mapErr(e, reply); }
   });
@@ -484,6 +506,44 @@ function isAdminError(err: unknown): err is { message: string; kind: 'not-found'
     (err as { name?: string }).name === 'TerminologyAdminError' &&
     typeof (err as { kind?: unknown }).kind === 'string'
   );
+}
+
+/** Whether this mapping write TARGETS the facility registry — the only coding system the two rules
+ *  below apply to. Every other system keeps the full five-value `MapType` vocabulary and may hold
+ *  as many active mappings per source term as an operator curates. */
+function isFacilityTarget(input: { toSystem: string }): boolean {
+  return input.toSystem === FACILITY_REGISTRY_SYSTEM;
+}
+
+/**
+ * facilities-phase-0 Task 11 — domain-layer enforcement of the mapping semantic the facility
+ * resolver actually honours.
+ *
+ * `resolveObservedFacilities` (packages/bootstrap/src/facility-reconcile.ts) resolves ONLY through
+ * `map_type = 'SAME-AS'`; a NARROWER-THAN/RELATED-TO/etc mapping onto a registry facility is
+ * accepted, stored, shown in the mapping list, and then silently resolves to nothing. The
+ * Facilities Observed tab's dialog already defaults to SAME-AS — but a default in a dialog is not
+ * enforcement, and this route is reachable without it.
+ *
+ * ⚠ Written as "anything that is not exactly SAME-AS", NOT as an enumeration of the four other
+ * `MapType` values. `term_mappings.map_type` has no CHECK constraint and `reference-apply.ts`
+ * round-trips arbitrary values in from central sync (`'equivalent'`, a FHIR equivalence code and
+ * not a `MapType` at all, appears in existing tests) — an enumeration would let every value nobody
+ * thought of through. The zod schema on these two routes happens to narrow `mapType` to the five
+ * known values before this runs, so today the check only ever sees those; the inequality is how it
+ * stays correct if that schema is ever widened, not a claim that it currently sees more.
+ *
+ * ⛔ Existing non-SAME-AS rows are NOT touched by this — nothing here deactivates one. They stay
+ * active and simply do not resolve.
+ */
+function assertFacilityMappingSemantic(input: { toSystem: string; mapType: string }): void {
+  if (!isFacilityTarget(input)) return;
+  if (input.mapType !== 'SAME-AS') {
+    throw appError('FAC0010', {
+      message: `facility resolution requires map_type SAME-AS, got ${input.mapType}`,
+      details: { toSystem: input.toSystem, mapType: input.mapType },
+    });
+  }
 }
 
 function mapErr(err: unknown, reply: FastifyReply) {

@@ -4,6 +4,7 @@ import type { Kysely } from 'kysely';
 import { z } from 'zod';
 import {
   importFacilities, scanObservedFacilities, resolveObservedFacilities, publishFacilityMap, projectRegistryRows,
+  retireRegistryConcepts, reprojectAfterRegistryDelete, listFacilityMappingConflicts,
   type AppContext, type FacilityImportResult, type ScanResult, type PublishResult,
 } from '@openldr/bootstrap';
 import {
@@ -36,22 +37,35 @@ const MAX_IMPORT_REQUEST_BYTES = MAX_IMPORT_CSV_BYTES + 2 * 1024 * 1024;
 // Same gate as MANAGE (facilities.manage) — importing is a write — with the higher bodyLimit layered on.
 const IMPORT = { ...MANAGE, bodyLimit: MAX_IMPORT_REQUEST_BYTES };
 
-// A real applied import runs as ONE atomic transaction, and for every row that already exists in
-// facility_registry it falls back to a per-row SELECT + conditional INSERT into
-// reference_change_log (facility-import.ts's docblock: `capture.record()` per updated row) —
-// holding row locks for however long that takes. At full national-register scale (14 000 rows,
-// worst case all updates on a re-import) that is measured in tens of seconds, which is not
-// something to run inside one HTTP request/response cycle: a client timeout or a proxy's own
-// request deadline would abort the connection while the transaction keeps running server-side.
+// This comment used to justify the cap by the per-row SELECT + conditional INSERT into
+// reference_change_log that `capture.record()` ran for every already-existing row (measured in
+// tens of seconds at full national-register scale). That cost is GONE: facilities-phase-0 Task 1
+// suspended facility_registry's reference-sync capture (see SUSPENDED_REFERENCE_ENTITY_TYPES in
+// reference-change-log.ts), and facility-import.ts's `importFacilities` no longer calls
+// `capture.record()` at all. The facility_registry write itself is now a single batched
+// `insertBatchPg` call (packages/db/batch-upsert.ts) chunked to ~2 608 rows/statement, not one
+// row-per-transaction fallback — comfortably fast even at 14 000 rows.
+//
+// What still runs inside this request/response cycle, and still scales with row count: parsing
+// the CSV (`parseFacilityCsv`, CPU-bound on file size), the transaction's existing-id lookup and
+// the batched write above, and then — AFTER that transaction commits — `projectRegistryRows`
+// (facility-reconcile.ts), which `importFacilities` awaits before returning. That projection
+// builds one terminology concept per imported row, runs collision-detection queries whose IN-lists
+// scale with the row count, and writes the result through `admin.terms.importRows` (itself
+// internally batched, 1000 rows/statement). None of this holds facility_registry row locks the way
+// the deleted per-row capture path did, but it is still real, row-count-proportional work sitting
+// inside one HTTP request — a client timeout or a proxy's own request deadline can still abort the
+// connection while a large enough apply keeps running server-side.
 //
 // Decision: bound APPLY to a row-count cap and point the operator at the CLI
 // (`openldr facilities import --apply`, packages/cli/src/facilities.ts) above it — the CLI runs
-// the identical `importFacilities` call with no request deadline. 2000 is comfortably inside "a few
-// seconds" even in the worst-case all-updates path, while still covering a district- or
-// council-scoped partial register (the common incremental-update case) without ever touching the
-// CLI. This is NOT a background-job system — a request over the cap is simply refused, nothing is
-// queued. A dry run (no `apply`) is exempt: it never opens a transaction, so a 14 000-row register
-// can always be PREVIEWED inline regardless of this cap.
+// the identical `importFacilities` call with no request deadline. 2000 stays a generous bound for
+// the common case (a district- or council-scoped partial register, the routine incremental update)
+// without ever touching the CLI, while keeping the worst case — a full re-import's CSV parse,
+// batched write, and registry projection, all synchronous in one request — well clear of a client
+// or proxy timeout. This is NOT a background-job system — a request over the cap is simply
+// refused, nothing is queued. A dry run (no `apply`) is exempt: it never opens a transaction (or
+// projects), so a 14 000-row register can always be PREVIEWED inline regardless of this cap.
 const MAX_INLINE_APPLY_ROWS = 2000;
 
 const ImportSchema = z.object({
@@ -67,6 +81,11 @@ const ImportSchema = z.object({
   // here would eventually mislabel an import as belonging to the wrong national register.
   nationalSystem: z.string().min(1),
   allowUnknownColumns: z.boolean().optional(),
+  // Task 5: the explicit "I have seen the line numbers, import the rest" override for structurally
+  // malformed rows (see facility-import.ts's `FacilityImportOptions.allowMalformedRows`) — the same
+  // opt-in shape as `allowUnknownColumns` above. Without this key in the schema, zod's default
+  // "strip unknown keys" behaviour would silently discard anything the client sent under this name.
+  allowMalformedRows: z.boolean().optional(),
   // The caller opts IN to writing (mirrors the CLI's `--apply`). Omitted/false ⇒ dry run: parse
   // and report, write NOTHING — the default, so a 14 000-row register can never be silently
   // rewritten by a client that forgot to set this.
@@ -420,8 +439,12 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
   // count per row — ranked by that count, which is the entire reason this surface exists over the
   // generic `/terminology` page (an operator triages the highest-volume unmapped strings first).
   //
-  // ⚠ Route ordering: registered BEFORE `/api/facilities/:id` below — Fastify would otherwise match
-  // the parameterised route first and read "observed" as a facility id.
+  // ⚠ Route ordering is NOT load-bearing, contrary to what this comment used to assert. Fastify's
+  // router (find-my-way) always prefers a STATIC segment over a parametric one regardless of
+  // registration order, so this route would still win over `/api/facilities/:id` below if it were
+  // registered after it — measured with a standalone Fastify probe; see the same ⚠ note on
+  // `/api/facilities/mapping-conflicts`. It sits above `:id` for legibility, with this file's other
+  // static `/api/facilities/*` routes.
   //
   // Task 11 (whole-branch review round 2, Fix 1): `reportCount` now comes straight off
   // `ResolvedFacility` — `resolveObservedFacilities` sums it while folding raw
@@ -457,6 +480,13 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     // discovery of zero new codes still (re)registers/re-activates every observed-facility
     // `coding_systems` row it finds — so auditing is unconditional on `apply`, not further gated on
     // a count.
+    //
+    // ⛔ `metadata: { result }` is what makes a Scan's REGISTRY REPROJECTION accountable, not just
+    // its observed-facility discovery. A scan republishes the registry projection, which can move a
+    // facility's concept code and rewrite every `term_mappings` row pointing at the old one —
+    // `ScanResult.registryCodeChanges` counts exactly that, and this entry is the only durable place
+    // an operator can later find it. Spreading named fields here instead of the whole result would
+    // silently drop it (and the next field like it).
     if (p.data.apply) {
       await recordAudit(ctx, req, {
         action: 'facility.scan',
@@ -495,6 +525,29 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       });
     }
     return result;
+  });
+
+  // Task 13: the review queue for the conflicts migration 078 recorded when it closed "one active
+  // SAME-AS resolution per observed facility key" at the database. Clearing the violations standing
+  // in that index's way meant DEACTIVATING an operator's competing mappings (the 'duplicate' kind;
+  // 'unsupported_map_type' rows were recorded but left alone). `facility_mapping_conflicts` was the
+  // only record of having done so, and until this route it had no reader — the mappings simply
+  // stopped driving reports with nothing anywhere to explain it.
+  //
+  // Gated on MANAGE, not VIEW: the queue names an operator's own mappings and exists only to drive
+  // a write (settle the conflict by removing one of them). Read-only itself, so nothing to audit.
+  //
+  // ⚠ MEASURED, because the obvious assumption is wrong: this route shares a segment count with
+  // `/api/facilities/:id` below, but registration order does NOT decide the match. Fastify's router
+  // (find-my-way) always prefers a STATIC segment over a parametric one, so moving this
+  // registration below `:id` leaves every one of this route's tests green (verified by doing
+  // exactly that). It sits here for legibility, above `:id` with this file's other static
+  // `/api/facilities/*` routes, not because the position is load-bearing. What IS real: a facility
+  // whose id were literally
+  // "mapping-conflicts" would be unreachable via `:id` — harmless, since `facility_registry.id` is
+  // always a generated UUID or a sha256-derived digest.
+  app.get('/api/facilities/mapping-conflicts', MANAGE, async () => {
+    return listFacilityMappingConflicts({ internalDb: ctx.internalDb });
   });
 
   app.get('/api/facilities/:id', VIEW, async (req, reply) => {
@@ -707,7 +760,45 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     const { id } = req.params as { id: string };
     const before = await ctx.facilityRegistry.get(id);
     if (!before) { reply.code(404); return { error: 'not found' }; }
+
+    // ⛔ ORDER IS LOAD-BEARING, and the two halves pull in OPPOSITE directions around the removal —
+    // which is why they are two calls straddling it rather than one wrapper on either side.
+    //
+    //  1. RETIRE FIRST. `retireRegistryConcepts` locates this facility's concept through
+    //     `facility_concept_projection`, the only durable record of what the row actually projected
+    //     as (its collision fallback is not recomputable once its partner is gone). That table is
+    //     `ON DELETE CASCADE`, so the link — and with it any chance of finding the concept — vanishes
+    //     the instant the facility does.
+    //  2. REPROJECT LAST. `reprojectAfterRegistryDelete` reacts to the row being ABSENT: it looks for
+    //     surviving facilities that can now claim the code this deletion freed. Run before the
+    //     removal it would still find the doomed row contesting its own code and conclude nothing was
+    //     freed.
+    //
+    // Both are best-effort catch-up around a deletion the operator asked for, exactly as the
+    // projection on POST/PUT is (see the comment there): neither may turn a successful delete into a
+    // failed response. `reprojectAfterRegistryDelete` contains its own errors;
+    // `retireRegistryConcepts` deliberately does not (its containment belongs to the caller, like
+    // `reprojectRegistryRows`), so it is wrapped here — and an uncontained throw would be worse than
+    // a 500, because it fires BEFORE the removal and would leave the facility undeleted.
+    const deps = { internalDb: ctx.internalDb, admin: ctx.terminology.admin };
+    try {
+      await retireRegistryConcepts(deps, [id]);
+    } catch (err) {
+      // NOT optional-chained. `AppContext.logger` is a required `Logger`, and this is the only
+      // record that a retirement failed — the delete still succeeds and returns 200, so a swallowed
+      // log leaves a live ACTIVE concept for a facility that no longer exists with nothing anywhere
+      // to say so. A test fixture that omits `logger` is a fixture bug, not a case to tolerate here.
+      ctx.logger.error({ err, facilityId: id }, 'failed to retire the deleted facility\'s registry concept');
+    }
+
     await ctx.facilityRegistry.remove(id);
+
+    await reprojectAfterRegistryDelete(deps, {
+      id,
+      localCode: before.localCode ?? null,
+      nationalCode: before.nationalCode ?? null,
+    });
+
     await recordAudit(ctx, req, { action: 'facility.delete', entityType: 'facility', entityId: id, before, after: null });
     return { ok: true };
   });
@@ -735,7 +826,11 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     // FACILITY_REGISTRY_SYSTEM — the Facilities-page upload gets the same immediate-mapping
     // behaviour as a single facility create/update (POST/PUT above) and the CLI.
     const deps = { db: ctx.internalDb, capture: referenceCapture, admin: ctx.terminology.admin };
-    const importOpts = { nationalSystem: p.data.nationalSystem, allowUnknownColumns: p.data.allowUnknownColumns };
+    const importOpts = {
+      nationalSystem: p.data.nationalSystem,
+      allowUnknownColumns: p.data.allowUnknownColumns,
+      allowMalformedRows: p.data.allowMalformedRows,
+    };
 
     // Always preview first (parse-only — importFacilities never opens a transaction when
     // `apply` is falsy, see its own early-return). This gives an AUTHORITATIVE `parsed` count —
@@ -745,8 +840,12 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     // reported back verbatim rather than swallowed — never treated as "safe to write".
     //
     // ⛔ Wrapped: `parseFacilityCsv` (reached inside `importFacilities`, before any DB access on
-    // this preview path) throws on malformed CSV rather than returning a result — see
-    // `isCsvParseError`'s doc comment. Only a RECOGNISED parse failure becomes a 400; anything
+    // this preview path) can throw rather than return a result — see `isCsvParseError`'s doc
+    // comment. It throws only on STRUCTURALLY UNPARSEABLE input, i.e. text csv-parse cannot
+    // tokenise at all, such as an unterminated quote. A merely RAGGED row (field count disagreeing
+    // with the header's) does NOT throw: `relax_column_count` is on, and Task 3 made those rows
+    // QUARANTINED and reported with line numbers, which is a normal 200 result carrying
+    // `quarantined`/`blocked`, not an error. Only a RECOGNISED parse failure becomes a 400; anything
     // else is rethrown unchanged and reaches the central error handler as the 500 it is.
     let preview: FacilityImportResult;
     try {
@@ -757,6 +856,20 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       return { error: err.message };
     }
     if (!p.data.apply || preview.parsed === 0) return preview;
+
+    // Task 5: mirrors the `preview.parsed === 0` short-circuit above, but needs its own check —
+    // unlike unknown columns (which zero out `parsed` for the whole file), a quarantined row does
+    // NOT drop `parsed` to 0 (see facility-csv.ts: only the malformed rows themselves are excluded,
+    // the rest of the file still parses). Without this, the route would open a real write
+    // transaction whose OWN internal `blocked` check (facility-import.ts) makes it a no-op, then
+    // still audit an "import" that wrote nothing.
+    //
+    // ⛔ READ off the preview, never re-derived. This guard fronts a WRITE transaction, and the
+    // predicate it needs is `importFacilities`' own — which also blocks on duplicate headers. The
+    // quarantine-only version this line used to spell out agreed with it purely because
+    // `parseFacilityCsv` zeroes `records` on duplicate headers, so the `parsed === 0` check above
+    // happened to cover the difference. That is the parser's shape, not a contract.
+    if (preview.blocked) return preview;
 
     if (preview.parsed > MAX_INLINE_APPLY_ROWS) {
       reply.code(400);
@@ -790,7 +903,10 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       entityId: p.data.nationalSystem,
       before: null,
       after: null,
-      metadata: { nationalSystem: p.data.nationalSystem, allowUnknownColumns: !!p.data.allowUnknownColumns, result },
+      metadata: {
+        nationalSystem: p.data.nationalSystem, allowUnknownColumns: !!p.data.allowUnknownColumns,
+        allowMalformedRows: !!p.data.allowMalformedRows, result,
+      },
     });
     return result;
   });

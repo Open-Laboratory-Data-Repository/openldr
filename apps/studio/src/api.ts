@@ -836,13 +836,37 @@ export const listFacilityAdminValues = (
 // server's FacilityImportResult (packages/bootstrap/src/facility-import.ts) verbatim: every counter
 // is always present, `duplicates: 0` on a clean import rather than absent, so a caller can never
 // confuse "0 found" with "not reported".
+// Task 5: a row whose field count did not match the header's — never mapped to columns (see the
+// server's facility-csv.ts `QuarantinedRow`). Defined locally, not imported from
+// `@openldr/terminology`: this app has no dependency on that package (see `FacilityImportResult`'s
+// own doc comment above — the same "mirrored, not shared" reasoning as the rest of this interface).
+export interface FacilityImportQuarantinedRow {
+  line: number;
+  /** The row exactly as it appeared in the operator's file, so they can find and fix it there. */
+  raw: string;
+  reason: 'too_few_fields' | 'too_many_fields';
+}
+
 export interface FacilityImportResult {
   parsed: number;
   skipped: number;
   unknownColumns: string[];
+  /** Headers appearing more than once — see the server's `FacilityCsvResult.duplicateColumns`.
+   *  Non-empty ⇒ apply is always blocked; there is no override (unlike `quarantined` below). */
+  duplicateColumns: string[];
+  /** Structurally malformed rows, never mapped to columns — see `FacilityImportQuarantinedRow`.
+   *  Non-empty ⇒ apply is blocked unless the caller sets `allowMalformedRows`. */
+  quarantined: FacilityImportQuarantinedRow[];
   created: number;
   updated: number;
   duplicates: number;
+  /** Whether the server refused to apply this file — the server's OWN answer, mirrored from
+   *  `@openldr/bootstrap`'s `FacilityImportResult.blocked`. Read it; do not rebuild the predicate
+   *  out of `duplicateColumns`/`quarantined` here (that is exactly what this field exists to stop). */
+  blocked: boolean;
+  /** Which of the two block reasons applied, or null when `blocked` is false. `'duplicate-columns'`
+   *  has NO override; `'quarantined-rows'` is released by `allowMalformedRows`. */
+  blockedReason: 'duplicate-columns' | 'quarantined-rows' | null;
 }
 
 export interface FacilityImportRequest {
@@ -852,6 +876,10 @@ export interface FacilityImportRequest {
   nationalSystem: string;
   /** Import despite unrecognised columns, carrying them into each row's extras. */
   allowUnknownColumns?: boolean;
+  /** Task 5: import despite structurally malformed (quarantined) rows — the explicit "I have seen
+   *  the line numbers, import the rest" override, mirroring `allowUnknownColumns` above. There is
+   *  no equivalent override for duplicate headers (see `FacilityImportResult.duplicateColumns`). */
+  allowMalformedRows?: boolean;
   /** The caller opts IN to writing. Omitted/false ⇒ dry run: parse and report, write NOTHING. */
   apply?: boolean;
 }
@@ -908,6 +936,12 @@ export interface ObservedFacility {
    *  "never mapped". See `ResolvedFacility.nonFacilityTarget` in
    *  packages/bootstrap/src/facility-reconcile.ts for the bug this split fixes. */
   nonFacilityTarget: boolean;
+  /** Task 10: ACTIVE `SAME-AS` mappings on this code name more than one DISTINCT facility, so
+   *  NOTHING resolves — the resolver never picks an arbitrary winner. Duplicate mappings naming the
+   *  SAME facility are not a conflict and resolve normally. Mutually exclusive with `resolvedVia`,
+   *  and never set alongside `targetMissing`/`nonFacilityTarget`. See `ResolvedFacility.ambiguous`
+   *  in packages/bootstrap/src/facility-reconcile.ts. */
+  ambiguous: boolean;
 }
 
 export const listObservedFacilities = (): Promise<ObservedFacility[]> =>
@@ -927,6 +961,9 @@ export interface PublishFacilitiesResult {
   /** Fix 1: rows filed under `ResolvedFacility.nonFacilityTarget` — counted separately so
    *  `unmapped` never silently absorbs them. */
   nonFacilityTarget: number;
+  /** Task 10: rows filed under `ResolvedFacility.ambiguous` — competing active SAME-AS mappings, so
+   *  nothing resolved. Counted separately for the same reason as `nonFacilityTarget`. */
+  ambiguous: number;
   written: number;
 }
 export const publishFacilities = (body: PublishFacilitiesRequest = {}): Promise<PublishFacilitiesResult> =>

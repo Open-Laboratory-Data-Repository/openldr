@@ -324,8 +324,12 @@ describe('Facilities page', () => {
       .mockResolvedValueOnce([]) // initial load
       .mockResolvedValueOnce([sampleFacility]); // background reload triggered by onImported
     (importFacilitiesCsv as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce({ parsed: 3, skipped: 0, unknownColumns: [], created: 0, updated: 0, duplicates: 0 })
-      .mockResolvedValueOnce({ parsed: 3, skipped: 0, unknownColumns: [], created: 2, updated: 1, duplicates: 0 });
+      .mockResolvedValueOnce({
+        parsed: 3, skipped: 0, unknownColumns: [], duplicateColumns: [], quarantined: [], created: 0, updated: 0, duplicates: 0,
+      })
+      .mockResolvedValueOnce({
+        parsed: 3, skipped: 0, unknownColumns: [], duplicateColumns: [], quarantined: [], created: 2, updated: 1, duplicates: 0,
+      });
     show();
     await waitFor(() => expect(screen.getByText(/no facilities yet/i)).toBeInTheDocument());
 

@@ -793,6 +793,11 @@ export const en = {
       unknownColumnsTitle: 'Unrecognised columns',
       unknownColumnsBody: 'This file has columns the importer does not recognise: {{columns}}. Nothing is imported unless you opt in below.',
       allowUnknownColumns: 'Import anyway, keeping unrecognised columns as extra data',
+      quarantinedTitle: 'Rows that could not be read',
+      quarantinedCount_one: '{{count}} row could not be read (its column count did not match the header) and will not be imported unless you opt in below.',
+      quarantinedCount_other: '{{count}} rows could not be read (their column count did not match the header) and will not be imported unless you opt in below.',
+      quarantinedLine: 'line {{line}} — {{raw}}',
+      allowMalformedRows: 'Import anyway, skipping the rows that could not be read',
       previewSummary: '{{parsed}} row(s) will be imported ({{skipped}} skipped).',
       duplicatesWarning: '{{count}} duplicate national code(s) were found in this file; only the last row for each was kept.',
       tooLargeTitle: 'Too large to apply here',
@@ -825,6 +830,11 @@ export const en = {
       // Fix 1/2 (self-mapping report): distinct from `targetMissing` — a mapping was authored, but
       // its target system is not a facility register at all (a self-mapping, or LOINC/ICD-10/UCUM).
       nonFacilityTarget: 'Target is not a facility',
+      // Task 10: this code's active SAME-AS mappings name two DIFFERENT facilities, so NOTHING
+      // resolves — the resolver refuses to pick a winner. (Duplicate mappings naming the SAME
+      // facility are not a conflict and never show this.) Worded as an instruction, not a status,
+      // because the fix is entirely in the operator's hands: remove one of the two mappings.
+      ambiguous: 'Conflicting mappings — remove one',
       viaRegistry: 'via registry',
       viaNational: 'via national',
       map: 'Map',
@@ -850,7 +860,7 @@ export const en = {
       // no longer depends on this action, and doesn't send a would-be mapper looking here.
       publish: 'Rebuild reports dimension',
       publishing: 'Rebuilding…',
-      publishDone: '{{resolved}} resolved, {{unmapped}} unmapped, {{targetMissing}} target missing, {{nonFacilityTarget}} non-facility target(s), {{written}} written.',
+      publishDone: '{{resolved}} resolved, {{unmapped}} unmapped, {{targetMissing}} target missing, {{nonFacilityTarget}} non-facility target(s), {{ambiguous}} conflicting, {{written}} written.',
     },
   },
   query: {

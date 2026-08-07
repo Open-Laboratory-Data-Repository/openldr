@@ -20,8 +20,7 @@ export type ReferenceEntityType =
   | 'coding_system'
   | 'term_mapping'
   | 'terminology_system'
-  | 'concept_map'
-  | 'facility_registry';
+  | 'concept_map';
 // Order matters for a first-pull replay: a report's dependencies are listed BEFORE `report`, and
 // the seed writes queries -> designs -> report defs, so seq order already delivers deps first.
 // (No FK constraints exist between the three tables, so an out-of-order arrival cannot error —
@@ -29,8 +28,21 @@ export type ReferenceEntityType =
 export const ENTITY_TYPES: ReferenceEntityType[] = [
   'form', 'dashboard', 'custom_query', 'report_design', 'report', 'setting',
   'publisher', 'coding_system', 'term_mapping', 'terminology_system', 'concept_map',
-  'facility_registry',
 ];
+
+/**
+ * Entity types whose change capture is DELIBERATELY suspended: they were registered on the bus
+ * before their serve/apply support existed, which made an upsert with no body resolver serve as a
+ * bogus DELETE (`packages/bootstrap/src/sync-serve.ts` — a null body downgrades to a delete). The
+ * type is named here rather than merely deleted from `ENTITY_TYPES` so serve and apply can both
+ * refuse it EXPLICITLY: an older central still holds logged rows for it, and "not in the union" is a
+ * compile-time fact that does nothing about a payload already on the wire.
+ *
+ * ⛔ Re-enabling one of these means landing its serve case, its apply case, and a central→lab
+ * integration test in the SAME change. Do not re-add it to `ENTITY_TYPES` alone.
+ */
+export const SUSPENDED_REFERENCE_ENTITY_TYPES: readonly string[] = ['facility_registry'];
+
 export type ReferenceOp = 'upsert' | 'delete';
 
 /** Append a reference-data change to the log — but only if it differs from the entity's latest logged

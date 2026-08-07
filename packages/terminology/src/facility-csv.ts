@@ -22,10 +22,24 @@ export interface FacilityCsvOptions {
   allowUnknownColumns?: boolean;
 }
 
+export interface QuarantinedRow {
+  line: number;
+  /** The row exactly as it appeared, so an operator can find and fix it in their source file. */
+  raw: string;
+  reason: 'too_few_fields' | 'too_many_fields';
+}
+
 export interface FacilityCsvResult {
   records: FacilityRecord[];
   /** Columns the contract does not define. Non-empty ⇒ nothing imported unless explicitly allowed. */
   unknownColumns: string[];
+  /** Headers appearing more than once. Non-empty ⇒ nothing imported: which column wins is arbitrary,
+   *  so mapping either one is a guess about master data. */
+  duplicateColumns: string[];
+  /** Rows whose field count did not match the header's. NEVER mapped to columns — that is the whole
+   *  point (see the docblock). Distinct from `skipped`, which counts well-formed rows missing a
+   *  REQUIRED value. */
+  quarantined: QuarantinedRow[];
   /** Rows dropped for missing a required field. */
   skipped: number;
 }
@@ -63,25 +77,61 @@ const num = (v: string | undefined): number | null => {
  * is an AUTHORING path, not a receiving one: if this parser stamped 'central' itself, a future
  * central down-sync would be free to delete a lab's own freshly-imported rows. The stamp belongs to
  * whichever code path actually receives a sync payload, not to this one.
+ *
+ * A row whose field count differs from the header's is QUARANTINED, never mapped. `relax_column_count`
+ * stays on so the parser still cannot throw — one unescaped comma must not kill a 14 000-row national
+ * import, which is why it was set in the first place — but the row is now reported with its line number
+ * instead of silently having its values shifted one column left.
  */
 export function parseFacilityCsv(csv: string, opts: FacilityCsvOptions): FacilityCsvResult {
+  // ARRAY mode, not `columns`. The object mapping is done by hand below so a row's RAW field count is
+  // observable — `columns` applies relax_column_count's pad/truncate before we ever see the row, which
+  // is exactly how a shifted row used to arrive looking well-formed.
   const rows = parseCsvSync(csv, {
-    columns: (header: string[]) => header.map((h) => h.trim().toLowerCase()),
+    columns: false,
     skip_empty_lines: true,
     trim: true,
     bom: true,
     relax_column_count: true,
-  }) as Record<string, string>[];
-  const headers = rows.length > 0 ? Object.keys(rows[0]) : csvHeader(csv);
-  const unknownColumns = headers.filter((h) => h !== '' && !KNOWN.has(h));
+    info: true,
+    // `raw: true` gives the row's ORIGINAL text. Reconstructing it by joining the parsed fields
+    // would be a different string — `trim` has already eaten the whitespace and the original
+    // quoting is gone — and an operator has to find this row in their own file.
+    raw: true,
+  }) as { record: string[]; info: { lines: number }; raw: string }[];
 
-  if (unknownColumns.length > 0 && !opts.allowUnknownColumns) {
-    return { records: [], unknownColumns, skipped: 0 };
+  if (rows.length === 0) {
+    return { records: [], unknownColumns: [], duplicateColumns: [], quarantined: [], skipped: 0 };
   }
 
+  const headers = rows[0].record.map((h) => h.trim().toLowerCase());
+  const duplicateColumns = headers.filter((h, i) => h !== '' && headers.indexOf(h) !== i);
+  const unknownColumns = headers.filter((h, i) => h !== '' && headers.indexOf(h) === i && !KNOWN.has(h));
+
+  if (duplicateColumns.length > 0) {
+    return { records: [], unknownColumns, duplicateColumns: [...new Set(duplicateColumns)], quarantined: [], skipped: 0 };
+  }
+  if (unknownColumns.length > 0 && !opts.allowUnknownColumns) {
+    return { records: [], unknownColumns, duplicateColumns: [], quarantined: [], skipped: 0 };
+  }
+
+  const quarantined: QuarantinedRow[] = [];
   let skipped = 0;
   const records: FacilityRecord[] = [];
-  for (const r of rows) {
+
+  for (const { record, info, raw } of rows.slice(1)) {
+    if (record.length !== headers.length) {
+      quarantined.push({
+        line: info.lines,
+        raw: raw.trim(),
+        reason: record.length > headers.length ? 'too_many_fields' : 'too_few_fields',
+      });
+      continue;
+    }
+
+    const r: Record<string, string> = {};
+    headers.forEach((h, i) => { r[h] = record[i]; });
+
     const nationalCode = text(r.national_code);
     const name = text(r.name);
     if (!nationalCode || !name) { skipped += 1; continue; }
@@ -116,13 +166,6 @@ export function parseFacilityCsv(csv: string, opts: FacilityCsvOptions): Facilit
       source: 'import',
     });
   }
-  return { records, unknownColumns, skipped };
-}
 
-/** Header of a file with no data rows — `csv-parse` yields nothing to read keys from. Normalised
- *  identically to the `columns` callback above: BOM stripped, lowercased, trimmed. */
-function csvHeader(csv: string): string[] {
-  let first = csv.split(/\r?\n/, 1)[0] ?? '';
-  if (first.charCodeAt(0) === 0xfeff) first = first.slice(1);
-  return first.split(',').map((h) => h.trim().toLowerCase());
+  return { records, unknownColumns, duplicateColumns: [], quarantined, skipped };
 }

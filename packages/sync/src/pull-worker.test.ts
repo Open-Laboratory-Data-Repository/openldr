@@ -482,6 +482,57 @@ describe('createSyncPullRunner', () => {
     expect(r.outcome).toBe('failed'); // NOT 'progressed' — the drain loop must not spin on this
   });
 
+  // ⛔ PINNED REGRESSION TEST — facilities-phase-0 Task 13. This test PASSED the moment it was
+  // written; nothing in the runner had to change for it. It is kept deliberately, not as proof of
+  // new behaviour but as a tripwire on an existing property that a database constraint added in
+  // migration 078 now depends on.
+  //
+  // 078 created a partial unique index (`term_mappings_one_active_facility_resolution`) enforcing
+  // "at most one active SAME-AS facility mapping per observed (from_system, from_code)". Choosing a
+  // DB constraint over app-only enforcement was safe ONLY because 'term_mapping' is not in
+  // `defaultIsHoldRecord` — so an incoming central mapping that collides with a lab-local one is
+  // quarantined (logged, skipped, activity-recorded) and the cursor advances PAST it, rather than
+  // holding and re-failing the identical record every cycle forever. Adding 'term_mapping' to the
+  // hold list would silently turn one rejected mapping into a permanently wedged pull stream for
+  // that lab; this test is what goes red if someone does.
+  //
+  // ⚠ It pins the runner's routing, NOT the database: `applyRecord` throws a hand-written imitation
+  // of the index's Postgres message. Nothing here executes SQL or proves the index exists — that is
+  // 078's own migration test. What is proven here is that a per-record apply failure of THIS entity
+  // type takes the quarantine branch.
+  it('quarantines a conflicting synced facility mapping (term_mapping) and still advances the cursor', async () => {
+    const advanceCursor = vi.fn(async () => {});
+    const logger = fakeLogger();
+    const mappingRec: PullRecord = {
+      seq: 5, entityType: 'term_mapping', entityId: 'tm-central-1', op: 'upsert', contentHash: 'h-tm', body: {},
+    };
+    const applyRecord = vi.fn(async (r: PullRecord) => {
+      if (r.entityType === 'term_mapping') {
+        throw new Error(
+          'duplicate key value violates unique constraint "term_mappings_one_active_facility_resolution"',
+        );
+      }
+      return 'applied' as const;
+    });
+    const deps: PullDeps = {
+      postPull: async () => ({ records: [mappingRec, rec(6, 'f6')], nextSeq: 6 }),
+      getToken: async () => 't',
+      applyRecord,
+      readCursor: async () => 0,
+      advanceCursor,
+      // No isHoldRecord override: the DEFAULT predicate is the thing under test.
+      logger,
+    };
+
+    const r = await createSyncPullRunner(deps).runCycle();
+
+    expect(applyRecord).toHaveBeenCalledTimes(2); // the rejected mapping did not stop the loop
+    expect(r.outcome).toBe('progressed');
+    expect(advanceCursor).toHaveBeenCalledWith(6); // advanced PAST the rejected mapping
+    expect(logger.warns).toHaveLength(1);
+    expect(logger.warns[0]).toMatchObject({ entityType: 'term_mapping', entityId: 'tm-central-1', seq: 5 });
+  });
+
   it('never calls holdFailure on a transport failure (outer catch)', async () => {
     let called = false;
     const runner = createSyncPullRunner({

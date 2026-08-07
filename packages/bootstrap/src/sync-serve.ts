@@ -1,3 +1,4 @@
+import { SUSPENDED_REFERENCE_ENTITY_TYPES } from '@openldr/db';
 import { formSyncBody, type FormRow } from '@openldr/forms';
 import type {
   PullRecord,
@@ -44,6 +45,10 @@ export async function servePull(ctx: AppContext, fromSeq: number): Promise<PullR
   for (const r of latest.values()) {
     const entityType = r.entity_type as PullRecord['entityType'];
     const seq = Number(r.seq);
+    // A suspended type can still have rows in an existing install's log. Skip it BEFORE the delete
+    // branch below — `fetchReferenceBody` has no case for it, so falling through would emit a
+    // delete the lab has no applier for.
+    if (SUSPENDED_REFERENCE_ENTITY_TYPES.includes(entityType)) continue;
     if (r.op === 'delete') {
       records.push({ seq, entityType, entityId: r.entity_id, op: 'delete' });
       continue;

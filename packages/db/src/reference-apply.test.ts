@@ -264,4 +264,33 @@ describe('applyReferenceChange', () => {
     expect(row?.connector_id).toBe('central-conn');
     await db.destroy();
   });
+
+  // Task 1: facility_registry is registered on the reference bus but has neither a serve nor an
+  // apply case — an older central can still hold logged rows for it. The guard must name the real
+  // cause (suspended) rather than fall through to the generic "unknown entityType" default.
+  it('rejects a suspended facility_registry record by name, not as an unknown entity', async () => {
+    const db = await makeMigratedDb();
+    const apply = createReferenceApplier(db);
+    await expect(
+      apply({ entityType: 'facility_registry' as never, entityId: 'fac-1', op: 'upsert', body: {} }),
+    ).rejects.toThrow(/facility_registry.*suspended/i);
+    await db.destroy();
+  });
+
+  // ⛔ ORDER OF THE TWO GUARDS. This is the shape the pipeline actually produces for a suspended
+  // type — `sync-serve.ts` has no `fetchReferenceBody` case for it, so the body arrives null — and
+  // with the body check running first it was refused as "upsert requires body", which sends whoever
+  // reads the quarantine reason hunting for a missing payload. Asserting the suspension message is
+  // half of it; asserting it is NOT the body message is what fails if the guards are swapped back.
+  it('names suspension, not a missing body, for a suspended upsert that arrived with no body', async () => {
+    const db = await makeMigratedDb();
+    const apply = createReferenceApplier(db);
+    await expect(
+      apply({ entityType: 'facility_registry' as never, entityId: 'fac-1', op: 'upsert', body: null }),
+    ).rejects.toThrow(/facility_registry.*suspended/i);
+    await expect(
+      apply({ entityType: 'facility_registry' as never, entityId: 'fac-1', op: 'upsert', body: null }),
+    ).rejects.not.toThrow(/requires body/);
+    await db.destroy();
+  });
 });

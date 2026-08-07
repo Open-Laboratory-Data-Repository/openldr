@@ -1,6 +1,5 @@
-import { type Kysely, type Transaction, sql } from 'kysely';
-import { canonicalHash } from '@openldr/core';
-import { parseFacilityCsv } from '@openldr/terminology';
+import { type Kysely, sql } from 'kysely';
+import { parseFacilityCsv, type QuarantinedRow } from '@openldr/terminology';
 import {
   type FacilityRecord,
   type InternalSchema,
@@ -8,7 +7,6 @@ import {
   type TerminologyAdminStore,
   insertBatchPg,
   facilityRecordToRow,
-  facilityRowToRecord,
 } from '@openldr/db';
 import { projectRegistryRows } from './facility-reconcile';
 
@@ -35,6 +33,11 @@ export interface FacilityImportOptions {
   nationalSystem: string;
   /** Import despite unrecognised columns, carrying them into each record's `extras`. */
   allowUnknownColumns?: boolean;
+  /** Apply despite structurally malformed rows (see `FacilityImportResult.quarantined`) — the
+   *  explicit "I have seen the line numbers, import the rest" override, mirroring
+   *  `allowUnknownColumns` above so a problem file has exactly one idiom for proceeding anyway.
+   *  There is no equivalent override for duplicate headers: see `duplicateColumns` below. */
+  allowMalformedRows?: boolean;
   /** The caller opts IN to writing. Omitted/false ⇒ dry run: parse and report, write NOTHING. A
    *  14 000-row register is exactly the kind of file nobody should be able to silently rewrite by
    *  forgetting a flag. */
@@ -52,6 +55,15 @@ export interface FacilityImportResult {
    *  `parsed`/`skipped` are both 0 — the parser blocks the whole file rather than importing it
    *  missing data (see facility-csv.ts's docblock). */
   unknownColumns: string[];
+  /** Headers appearing more than once (see facility-csv.ts's `duplicateColumns`). Non-empty ⇒
+   *  `apply` is always blocked — there is no override, unlike `quarantined` below: which of two
+   *  identically-named columns wins is arbitrary, so applying either is a guess about master data. */
+  duplicateColumns: string[];
+  /** Rows whose field count did not match the header's — never mapped to columns (see
+   *  facility-csv.ts's `QuarantinedRow`). Non-empty ⇒ `apply` is blocked unless the caller sets
+   *  `allowMalformedRows`. Present on a dry run too, same as every sibling counter here, so an
+   *  operator can see the damage before ever applying. */
+  quarantined: QuarantinedRow[];
   /** Rows written that did not previously exist. Always 0 on a dry run. */
   created: number;
   /** Rows written that already existed (same nationalSystem+nationalCode ⇒ same hashed id, so this
@@ -68,6 +80,25 @@ export interface FacilityImportResult {
    *  (concatenated releases, re-appended files), so duplicates are collapsed before ever reaching
    *  the batch writer instead of being left to explode there. */
   duplicates: number;
+  /** Whether this file may be applied AT ALL — the ONE authoritative answer, computed once in
+   *  `importFacilities` and reported rather than re-derived.
+   *
+   *  ⛔ Every consumer that gates on "is this import blocked?" must read THIS, not rebuild the
+   *  predicate. The route, the CLI and the Studio import sheet each used to re-derive a strictly
+   *  NARROWER version (the quarantine clause only) and agreed with the importer purely by accident:
+   *  `parseFacilityCsv` returns `records: []` whenever headers are duplicated, so a separate
+   *  "nothing parsed" guard happened to catch the case their own predicate missed. That is a
+   *  coincidence of the parser's shape, not a contract — and one of the three re-derivations guards
+   *  a WRITE transaction. */
+  blocked: boolean;
+  /** Why `blocked` is true, or null when it is false. A machine token, not a message: each consumer
+   *  already renders its own explanation for these two cases (line-numbered quarantine detail, the
+   *  duplicate column names), and this exists so a consumer can tell them apart without inspecting
+   *  `duplicateColumns`/`quarantined` and re-deriving the precedence.
+   *
+   *  `'duplicate-columns'` wins when both hold: it has NO override, so reporting the overridable
+   *  reason would offer an operator a switch that cannot unblock the file. */
+  blockedReason: 'duplicate-columns' | 'quarantined-rows' | null;
 }
 
 // Bounds every chunked query below (existing-id lookup, reference_change_log batch insert) well
@@ -99,16 +130,19 @@ function dedupeById(records: FacilityRecord[]): { records: FacilityRecord[]; dup
   return { records: [...byId.values()], duplicates: records.length - byId.size };
 }
 
-/** Same hash `facility-registry-store.ts`'s interactive `upsert()` would log: `canonicalHash` of the
- *  record round-tripped through the row shape (`toRow` then `toRecord`), so a bulk-imported row and a
- *  later hand-edit of the same row compare against a matching content_hash in reference_change_log —
- *  not two independent hashing schemes drifting apart entity by entity. */
-function contentHashOf(rec: FacilityRecord): string {
-  return canonicalHash(facilityRowToRecord(facilityRecordToRow(rec) as never));
-}
-
 /**
  * Parse a national facility CSV and, if `apply` is set, write it into `facility_registry`.
+ *
+ * ## Structural damage blocks apply (facilities-phase-0 Task 4)
+ *
+ * A row whose field count disagrees with the header's is QUARANTINED by `parseFacilityCsv`, not
+ * mapped into a record at all (see facility-csv.ts). `apply` refuses to run while any such row
+ * exists, unless the caller sets `allowMalformedRows` — the same explicit-override shape as
+ * `allowUnknownColumns`, so a problem file has exactly one idiom for proceeding anyway. Duplicate
+ * headers get NO override, ever: which of two identically-named columns wins is arbitrary, so
+ * applying either is a guess about master data rather than a documented trade. A dry run always
+ * reports both `quarantined` and `duplicateColumns` regardless of the override, since a dry run
+ * writes nothing to begin with.
  *
  * ## Batching decision (14 000-row workload)
  *
@@ -124,48 +158,17 @@ function contentHashOf(rec: FacilityRecord): string {
  * 60 000 — comfortably under Postgres's 65 535-param hard limit, with more headroom than the
  * 23-column arithmetic alone would suggest.
  *
- * ## `reference_change_log` — how many rows, and the batching that matters there too
+ * ## `reference_change_log` — SUSPENDED (facilities-phase-0 Task 1)
  *
- * `facility_registry` is a synced reference-entity type (see reference-change-log.ts's
- * `ENTITY_TYPES`), so every applied row legitimately needs a change_log entry for a lab's import to
- * ever reach central. On the FIRST import of a fresh register (the dominant real case — an empty or
- * sparsely-populated registry), that is up to 14 000 new reference_change_log rows. That volume is
- * correct, not a bug to eliminate — it is the record of 14 000 distinct entities that now need to sync.
- *
- * What DOES need batching is how those rows get written. The store's `capture.record()` binding
- * (`recordReferenceChange`) does one SELECT (find the entity's latest logged state) plus a conditional
- * INSERT — calling it per row, 14 000 times, is 14 000-28 000 sequential round trips even inside a
- * single transaction. This function splits on the existing-id lookup it already needs (to report
- * `created`/`updated`):
- *   - **Created rows** (id not already in `facility_registry`) are assumed to never hit
- *     `recordReferenceChange`'s dedup-skip: that skip only fires when the latest logged op is
- *     `'upsert'` with a matching content_hash, and under normal write paths an id currently absent
- *     from `facility_registry` has no logged `'upsert'` as its latest state (the only way to be
- *     absent is to have never been written, or to have been logged `'delete'` most recently —
- *     either way the next op is written unconditionally). So created rows skip the SELECT entirely
- *     and go straight into one batched multi-row `INSERT INTO reference_change_log` (chunked at
- *     `CHUNK` rows) — for the dominant first-import case this collapses the capture leg from up to
- *     14 000 round trips to a small, constant number of statements.
- *     ⚠ This is NOT airtight against a raw/manual delete: `DELETE FROM facility_registry` run
- *     outside `store.remove()` (which itself calls `capture.record(..., 'delete', null)`) leaves
- *     `reference_change_log`'s latest entry for that id as `'upsert'`. A subsequent re-import of the
- *     same id is then misclassified as `created` (the row IS absent from `facility_registry`) and
- *     takes this fast path — producing a second, identical `'upsert'` log row that `recordReferenceChange`
- *     would otherwise have deduped away. Reachable only via a raw/manual delete that bypasses the
- *     store, so harmless in practice, but real: do not read the paragraph above as a proof with no
- *     counter-example.
- *   - **Updated rows** (id already present) still go through `capture.record()` per row, one at a
- *     time, because whether their content actually changed can only be answered by the dedup check
- *     `recordReferenceChange` already owns — reimplementing that comparison here would either
- *     duplicate its logic (drift risk: two hash-compare implementations disagreeing over time) or
- *     require its own extra bulk-fetch-and-compare pass, which is a reasonable follow-up but is
- *     deliberately NOT built in this task. A re-import of an already-imported register (the idempotent
- *     case the tests assert) is therefore the slower path — bounded by how many rows genuinely already
- *     exist, not by the full register size — and still correctly produces ZERO new change_log rows
- *     when nothing changed.
- *
- * `deps.capture` is optional; passing nothing skips reference_change_log entirely (no rows written,
- * import still applies to `facility_registry`).
+ * This import used to also write `reference_change_log` rows for every applied row — batched for
+ * created rows, per-row through `deps.capture.record()` for updated rows (the design that batching
+ * split is history now; see git blame if you need the "why batch at all" reasoning). It doesn't
+ * anymore: `facility_registry` was registered as a synced reference-entity type before its serve and
+ * apply cases existed, which made every upsert this importer logged reach a lab as a bogus DELETE
+ * (`sync-serve.ts`'s `fetchReferenceBody` had no case for it, so a null body downgraded the record).
+ * See `SUSPENDED_REFERENCE_ENTITY_TYPES` in `reference-change-log.ts`. `deps.capture` stays on
+ * `FacilityImportDeps` — unused for now — so re-enabling is restoring this section, not reshaping
+ * the deps the CLI and HTTP route already pass in.
  *
  * `managed_origin` is never set here — it stays NULL on every imported row (see facility-csv.ts's
  * docblock: the sync APPLIER stamps `'central'` on arrival, not an authoring path like this one).
@@ -209,16 +212,35 @@ export async function importFacilities(
   csv: string,
   opts: FacilityImportOptions,
 ): Promise<FacilityImportResult> {
-  const { records: parsedRecords, unknownColumns, skipped } = parseFacilityCsv(csv, {
-    nationalSystem: opts.nationalSystem,
-    allowUnknownColumns: opts.allowUnknownColumns,
-  });
+  const { records: parsedRecords, unknownColumns, duplicateColumns, quarantined, skipped } =
+    parseFacilityCsv(csv, {
+      nationalSystem: opts.nationalSystem,
+      allowUnknownColumns: opts.allowUnknownColumns,
+    });
   // Collapse same-id rows (a repeated national_code within one file) BEFORE anything downstream
   // ever sees them — see dedupeById's docblock for why this can't wait until insertBatchPg.
   const { records, duplicates } = dedupeById(parsedRecords);
 
-  if (!opts.apply || records.length === 0) {
-    return { parsed: parsedRecords.length, skipped, unknownColumns, created: 0, updated: 0, duplicates };
+  // Structural damage BLOCKS apply. `allowMalformedRows` is the explicit "I have seen the line
+  // numbers, import the rest" override — the same shape as `allowUnknownColumns` above, so a file
+  // with something wrong with it has exactly one idiom for proceeding anyway. Duplicate headers have
+  // NO override: which of two identically-named columns wins is arbitrary, so applying either is a
+  // guess about master data rather than a documented trade.
+  //
+  // Both are REPORTED on the result (`blocked`/`blockedReason`), not merely acted on here: three
+  // separate consumers gate on this same question, and each one that re-derives it is a chance to
+  // derive it differently. See `FacilityImportResult.blocked`.
+  const blockedReason: FacilityImportResult['blockedReason'] =
+    duplicateColumns.length > 0
+      ? 'duplicate-columns'
+      : (quarantined.length > 0 && !opts.allowMalformedRows ? 'quarantined-rows' : null);
+  const blocked = blockedReason !== null;
+
+  if (!opts.apply || blocked || records.length === 0) {
+    return {
+      parsed: parsedRecords.length, skipped, unknownColumns, duplicateColumns, quarantined,
+      created: 0, updated: 0, duplicates, blocked, blockedReason,
+    };
   }
 
   const ids = records.map((r) => r.id);
@@ -247,10 +269,11 @@ export async function importFacilities(
     for (const id of ids) if (existingById.has(id)) updated += 1; else created += 1;
 
     // Merge forward what the importer is NOT authoritative for (see the docblock above) before
-    // deriving either the row to write or the content_hash to log — both need to reflect what
-    // actually lands in facility_registry, not the raw parsed record, or the hash logged here would
-    // drift from `hashOf(stored)` in facility-registry-store.ts's `upsert()` for exactly the rows
-    // this merge touches.
+    // deriving the row to write — it needs to reflect what actually lands in facility_registry, not
+    // the raw parsed record, for exactly the rows this merge touches. (This step used to also feed a
+    // content_hash logged into reference_change_log via `contentHashOf`/`hashOf`; both were removed
+    // as dead code once facilities-phase-0 Task 1 suspended that capture — see the "SUSPENDED"
+    // docblock section above.)
     const merged: FacilityRecord[] = records.map((r) => {
       const existing = existingById.get(r.id);
       if (!existing) return r;
@@ -269,21 +292,12 @@ export async function importFacilities(
     const rows = merged.map((r) => ({ ...facilityRecordToRow(r), updated_at: sql`now()` }));
     await insertBatchPg(trx as unknown as Kysely<any>, 'facility_registry', rows as unknown as Record<string, unknown>[]);
 
-    if (deps.capture) {
-      const createdRows: { entity_type: 'facility_registry'; entity_id: string; op: 'upsert'; content_hash: string }[] = [];
-      for (const rec of merged) {
-        if (existingById.has(rec.id)) continue; // updated rows go through capture.record below
-        createdRows.push({ entity_type: 'facility_registry', entity_id: rec.id, op: 'upsert', content_hash: contentHashOf(rec) });
-      }
-      for (const rowChunk of chunk(createdRows, CHUNK)) {
-        await (trx as Transaction<InternalSchema>).insertInto('reference_change_log').values(rowChunk).execute();
-      }
-
-      for (const rec of merged) {
-        if (!existingById.has(rec.id)) continue; // created rows were already batched above
-        await deps.capture.record(trx, 'facility_registry', rec.id, 'upsert', contentHashOf(rec));
-      }
-    }
+    // Capture SUSPENDED (Task 1 of the facilities-phase-0 slice) — see SUSPENDED_REFERENCE_ENTITY_TYPES
+    // in reference-change-log.ts. This batch import path used to write reference_change_log rows
+    // directly (bypassing capture.record for the fast "created" leg — see the docblock above) AND call
+    // deps.capture.record per updated row; both are gone now that facility_registry is not in
+    // ReferenceEntityType. `deps.capture` stays on FacilityImportDeps so re-enabling is restoring this
+    // block, not re-wiring the deps shape.
   });
 
   // Fix 1 (mapping-ux report): project every written row into FACILITY_REGISTRY_SYSTEM, outside the
@@ -292,5 +306,10 @@ export async function importFacilities(
   // own failures (see that function's doc comment) so this call cannot throw.
   if (deps.admin) await projectRegistryRows({ internalDb: deps.db, admin: deps.admin }, mergedRecords);
 
-  return { parsed: parsedRecords.length, skipped, unknownColumns, created, updated, duplicates };
+  // `blocked` is necessarily false here — the early return above is the only path a blocked file
+  // takes — but it is spelled out rather than hardcoded so the two returns cannot drift.
+  return {
+    parsed: parsedRecords.length, skipped, unknownColumns, duplicateColumns, quarantined,
+    created, updated, duplicates, blocked, blockedReason,
+  };
 }

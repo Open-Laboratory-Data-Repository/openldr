@@ -204,7 +204,14 @@ mid-failure leaves a stale concept for the next projection to retry, never a fac
 concepts.
 
 Retirement: a retired or deleted facility's concept is set to `status = 'RETIRED'` rather than
-deleted. Still resolvable so historical mappings stay interpretable; excluded from new selection.
+deleted, so the operator's existing `term_mappings` row keeps naming a concept that exists instead
+of a dangling code, and the concept is excluded from new selection (the picker is ACTIVE-only).
+
+⚠ Corrected after measurement (whole-branch review): retirement does NOT keep the facility
+resolvable. `resolveObservedFacilities` never reads `terminology_concepts` — it re-derives codes
+from the live `facility_registry` — so retiring a concept is inert to resolution, and a DELETED
+facility resolves as `targetMissing` with reports falling back to the raw performer string.
+Retirement's real, and only, effect is picker exclusion plus keeping the mapping's target visible.
 
 Migration `077` (internal) creates the table and backfills it: populate `facility_concept_projection` for every existing registry row from its
 current live concept, and report (not delete) concepts in `FACILITY_REGISTRY_SYSTEM` with no
@@ -273,8 +280,11 @@ Drawn from the audit's own minimum acceptance list, narrowed to this task's scop
   single bad row never kills a national-scale import.
 - A facility identifier change does not break an existing mapping — including when the change is
   caused by an unrelated facility being added.
-- Retired and deleted facilities cannot be selected for a new mapping, but remain resolvable for
-  history.
+- Retired and deleted facilities cannot be selected for a new mapping, and an existing mapping onto
+  one is not silently erased — it keeps naming a concept that exists, so an operator can still see
+  what was chosen. A DELETED facility resolves as `targetMissing` and the report falls back to the
+  raw performer string. (Originally written as "remain resolvable for history"; corrected after
+  measuring — see the Retirement section.)
 - One observed `(system, code)` has at most one active facility resolution, enforced in the database.
 - An unsupported mapping semantic cannot resolve a facility.
 - Every one of the above has a regression test that fails against the current code.

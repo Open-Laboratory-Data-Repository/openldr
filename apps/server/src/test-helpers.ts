@@ -169,6 +169,40 @@ function buildFakeAdmin(): FakeAdmin {
         if (idx === -1) throw adminErr(`mapping not found: ${id}`, 'not-found');
         mappings.splice(idx, 1);
       },
+      // facilities-phase-0 Task 11. Mirrors the real store's contract (see its doc comment in
+      // packages/db/src/terminology-admin-store.ts): resolve the row to write into, deactivate the
+      // OTHER rows active in the same (toSystem, mapType) scope for this (fromSystem, fromCode).
+      // The real store does all of that in ONE transaction; this double is a plain array, so it
+      // reproduces the RESULT, not the atomicity — a test that needs the transaction to be real
+      // must use `makeMigratedDb` + `createTerminologyAdminStore`, as
+      // terminology-admin-routes.test.ts's facility-mapping suite does.
+      async saveExclusive(input, opts) {
+        const superseded: string[] = [];
+        let target = opts?.id ? mappings.find((x) => x.id === opts.id) : undefined;
+        if (opts?.id && !target) throw adminErr(`mapping not found: ${opts.id}`, 'not-found');
+        // Like the real store: on the id path the EXISTING row's source term wins.
+        const fromSystem = target?.fromSystem ?? input.fromSystem;
+        const fromCode = target?.fromCode ?? input.fromCode;
+        const inScope = mappings.filter((m) => m.isActive
+          && m.fromSystem === fromSystem && m.fromCode === fromCode
+          && m.toSystem === input.toSystem && m.mapType === input.mapType);
+        target ??= inScope.find((m) => m.toCode === input.toCode);
+        if (input.isActive) {
+          for (const m of inScope) {
+            if (m.id === target?.id) continue;
+            m.isActive = false;
+            superseded.push(m.id);
+          }
+        }
+        const fields = {
+          fromSystem, fromCode, toSystem: input.toSystem, toCode: input.toCode,
+          toDisplay: input.toDisplay ?? null, mapType: input.mapType, relationship: input.relationship ?? null,
+          owner: input.owner ?? null, isActive: input.isActive,
+        };
+        if (target) Object.assign(target, fields);
+        else { target = { id: `tm-test-${++tmSeq}`, ...fields }; mappings.push(target); }
+        return { mapping: target as never, draftCreated: false, superseded };
+      },
     },
     valueSets: {
       async list(publisherId) {

@@ -175,12 +175,19 @@ export function registryPreferredCode(row: { localCode?: string | null; national
  * with a candidate unique within `rows` (and not forced) is unaffected.
  *
  * ⚠ This function only ever sees what it is GIVEN. It cannot detect a collision against a
- * `facility_registry` row that is not present in `rows` — a caller with partial visibility (a single
- * create/update, `projectRegistryRows` below) has to widen that visibility itself (typically a DB
- * lookup) and pass the result via `opts.forceOwnIdFor` if it wants protection against the whole
- * table, not merely against the rows it happened to receive. `publishRegistryConcepts` needs no such
- * lookup: it already reprojects the ENTIRE registry in one call, so `rows` IS the whole table and the
- * in-batch check above is already complete.
+ * `facility_registry` row that is not present in `rows`, so a caller with partial visibility has to
+ * close that gap itself. The way it is closed, for every caller in this repo, is by WIDENING THE
+ * BATCH: `reprojectRegistryRows` (`packages/bootstrap/src/facility-reconcile.ts`) pulls every row
+ * that could collide with the given ones into `rows` before calling this, so the in-batch check below
+ * is complete by construction — and, because those rows are then genuinely reprojected, the incumbent
+ * side of a collision moves at the moment its code actually changes instead of on some later Publish.
+ * `publishRegistryConcepts` needs no widening at all: it already hands over the ENTIRE registry.
+ *
+ * ⚠ `opts.forceOwnIdFor` is the OTHER way to close it — a caller answers "does anything outside the
+ * batch claim this code?" with its own lookup and forces the given row down without reprojecting the
+ * incumbent. It is retained (and pinned by this package's own tests) but has NO production caller
+ * since the widening replaced `facility-reconcile.ts`'s `collidingRegistryIds`: once the batch is
+ * closed under collision, anything this option could force is already forced by the in-batch check.
  *
  * ⚠ CONSEQUENCE, stated explicitly rather than silently absorbed: this changes what `code` already-
  * projected concepts carry. A concept written under the old `code = id` scheme is superseded once a

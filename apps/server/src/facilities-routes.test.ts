@@ -1,12 +1,14 @@
 import { randomUUID } from 'node:crypto';
 import { describe, it, expect } from 'vitest';
 import Fastify from 'fastify';
+import { sql } from 'kysely';
 import { makeMigratedDb } from '@openldr/db/testing';
 import { makeMigratedExternalDb } from '@openldr/db/testing-external';
 import {
   createTerminologyAdminStore, createFacilityRegistryStore,
   DEFAULT_OBSERVED_FACILITY_SYSTEM, FACILITY_REGISTRY_SYSTEM,
 } from '@openldr/db';
+import { projectRegistryRows } from '@openldr/bootstrap';
 import { registerFacilitiesRoutes } from './facilities-routes';
 
 const FORM_FIELDS = [
@@ -843,6 +845,97 @@ describe('Fix 1: POST/PUT /api/facilities project the row into FACILITY_REGISTRY
   });
 });
 
+// --- Task 9: DELETE is the third code-release path, and used to be the only one with no projection
+// work at all. It has TWO obligations, in a fixed order around the row removal — see
+// `retireRegistryConcepts`/`reprojectAfterRegistryDelete` in packages/bootstrap for why the order is
+// forced (the link cascades away with the row; the reprojection reacts to the row being gone).
+
+describe('Task 9: DELETE /api/facilities/:id and the projection', () => {
+  it('retires the deleted facility\'s concept rather than leaving a selectable ghost', async () => {
+    const internalDb = await makeMigratedDb();
+    const ctx = fakeCreateCtx(internalDb);
+    const app = await appWith(ctx);
+    const id = (await app.inject({ method: 'POST', url: '/api/facilities', payload: body })).json().id;
+    // Not vacuous: the concept is ACTIVE and pickable before the delete.
+    expect((await ctx.terminology.admin.terms.search(FACILITY_REGISTRY_SYSTEM, { statuses: ['ACTIVE'], limit: 10, offset: 0 })).rows
+      .map((r: any) => r.code)).toEqual(['LAB01']);
+
+    const res = await app.inject({ method: 'DELETE', url: `/api/facilities/${id}` });
+    expect(res.statusCode).toBe(200);
+
+    // Gone from new selection…
+    expect((await ctx.terminology.admin.terms.search(FACILITY_REGISTRY_SYSTEM, { statuses: ['ACTIVE'], limit: 10, offset: 0 })).rows)
+      .toEqual([]);
+    // …but still THERE, so a mapping authored against it still resolves for history.
+    const concept = await internalDb.selectFrom('terminology_concepts').selectAll()
+      .where('system', '=', FACILITY_REGISTRY_SYSTEM).where('code', '=', 'LAB01').executeTakeFirstOrThrow();
+    expect(concept.status).toBe('RETIRED');
+  });
+
+  // ⛔ The regression this route was missing entirely. Alpha and Beta collide on 'X', so both park on
+  // their ids and the operator's mapping is authored against Beta's id. Deleting Alpha frees 'X', and
+  // `resolveObservedFacilities` re-derives preferred codes over the whole registry — so Beta starts
+  // resolving through 'X' the moment the DELETE commits, while the mapping still says 'fac-B'. The
+  // route must carry the mapping across at that moment, not leave it for the next Scan.
+  //
+  // Seeded through the real `facilityRegistry` store rather than POSTed, because the facilities form
+  // fixture in this file maps no `nationalCode` field — the collision needs one row's local_code to
+  // equal another's national_code.
+  it('carries the surviving side of a collision, and its mapping, across without a Scan', async () => {
+    const internalDb = await makeMigratedDb();
+    const ctx = fakeCreateCtx(internalDb);
+    const app = await appWith(ctx);
+    const deps = { internalDb, admin: ctx.terminology.admin };
+
+    await ctx.facilityRegistry.upsert({ id: 'fac-A', name: 'Alpha', localCode: 'X', source: 'manual' } as any);
+    await ctx.facilityRegistry.upsert({ id: 'fac-B', name: 'Beta', nationalSystem: 'urn:tz:hfr', nationalCode: 'X', source: 'manual' } as any);
+    await projectRegistryRows(deps, [{ id: 'fac-A', name: 'Alpha' }, { id: 'fac-B', name: 'Beta' }]);
+    // Both parked on their ids — the state the operator authored the mapping in.
+    expect((await internalDb.selectFrom('facility_concept_projection').select(['registry_id', 'concept_code']).execute())
+      .map((l: any) => l.concept_code).sort()).toEqual(['fac-A', 'fac-B']);
+    await ctx.terminology.admin.termMappings.create({
+      fromSystem: DEFAULT_OBSERVED_FACILITY_SYSTEM, fromCode: 'BALAB',
+      toSystem: FACILITY_REGISTRY_SYSTEM, toCode: 'fac-B', toDisplay: null, mapType: 'SAME-AS', isActive: true,
+    });
+
+    const res = await app.inject({ method: 'DELETE', url: '/api/facilities/fac-A' });
+    expect(res.statusCode).toBe(200);
+
+    // Beta followed the freed code at the moment the deletion happened…
+    expect((await internalDb.selectFrom('facility_concept_projection').select('concept_code')
+      .where('registry_id', '=', 'fac-B').executeTakeFirstOrThrow()).concept_code).toBe('X');
+    // …and the operator's mapping came with it, so it still names Beta's live concept.
+    expect((await internalDb.selectFrom('term_mappings').select(['to_system', 'to_code'])
+      .where('from_code', '=', 'BALAB').executeTakeFirstOrThrow()))
+      .toEqual({ to_system: FACILITY_REGISTRY_SYSTEM, to_code: 'X' });
+    // And Beta is still selectable — the delete's retirement must not have caught it.
+    expect((await ctx.terminology.admin.terms.search(FACILITY_REGISTRY_SYSTEM, { statuses: ['ACTIVE'], limit: 10, offset: 0 })).rows
+      .map((r: any) => r.code)).toEqual(['X']);
+  });
+
+  // Same containment contract as POST/PUT above. `retireRegistryConcepts` THROWS by design (its
+  // containment belongs to the caller), so the route has to hold it — and the retirement runs BEFORE
+  // the removal, which makes an uncontained throw worse than a 500: it would abort the request before
+  // the facility was ever deleted. Broken at `updateTable`, which retirement is the only thing in
+  // this request path to use (the registry store's `remove` is a `deleteFrom`).
+  it('a retirement failure fails neither the delete nor the response', async () => {
+    const internalDb = await makeMigratedDb();
+    const ctx = fakeCreateCtx(internalDb);
+    const app = await appWith(ctx);
+    const id = (await app.inject({ method: 'POST', url: '/api/facilities', payload: body })).json().id;
+    ctx.internalDb = new Proxy(internalDb, {
+      get: (t: any, p) => (p === 'updateTable'
+        ? () => { throw new Error('simulated terminology store failure'); }
+        : t[p]?.bind?.(t) ?? t[p]),
+    });
+
+    const res = await app.inject({ method: 'DELETE', url: `/api/facilities/${id}` });
+
+    expect(res.statusCode).toBe(200);
+    expect(await internalDb.selectFrom('facility_registry').selectAll().execute()).toEqual([]);
+  });
+});
+
 // --- Task 4: POST /api/facilities/import ------------------------------------------------------
 // Exercises the REAL `importFacilities` (packages/bootstrap/src/facility-import.ts) against a real
 // migrated Kysely db (pg-mem), not the in-memory `fakeCtx().facilityRegistry` used above — that fake
@@ -911,10 +1004,86 @@ describe('POST /api/facilities/import', () => {
     const res = await app.inject({ method: 'POST', url: '/api/facilities/import', payload: { csv, nationalSystem: SYSTEM } });
     expect(res.statusCode).toBe(200);
     // Every counter always present, even the zero ones — a client must never confuse "0 found"
-    // with "not reported".
-    expect(res.json()).toEqual({ parsed: 1, skipped: 1, unknownColumns: [], created: 0, updated: 0, duplicates: 0 });
+    // with "not reported". Task 5: `quarantined`/`duplicateColumns` (Task 4's additions to
+    // FacilityImportResult) now reach the response body too.
+    expect(res.json()).toEqual({
+      parsed: 1, skipped: 1, unknownColumns: [], duplicateColumns: [], quarantined: [],
+      created: 0, updated: 0, duplicates: 0, blocked: false, blockedReason: null,
+    });
     expect(await db.selectFrom('facility_registry').selectAll().execute()).toHaveLength(0);
     expect(ctx.__audit).toHaveLength(0); // a dry run writes nothing, so it must not audit
+  });
+
+  // Task 5: surface Task 4's `quarantined`/`allowMalformedRows` through this route. A row whose
+  // field count disagrees with the header's is never mapped to columns (facility-csv.ts) — the
+  // route must report its line number/reason verbatim, and `apply` must stay blocked until the
+  // operator explicitly opts in with `allowMalformedRows`.
+  it('returns quarantined rows with line numbers and applies nothing', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities/import',
+      payload: { csv: 'national_code,name\n1,Good\n2,Bad,Extra\n', nationalSystem: SYSTEM, apply: true },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({
+      created: 0,
+      quarantined: [{ line: 3, reason: 'too_many_fields', raw: '2,Bad,Extra' }],
+      // The importer's own verdict, reaching the client. This route's pre-transaction guard reads
+      // THIS field rather than rebuilding the predicate, and the Studio sheet reads it off the
+      // response for the same reason (see `FacilityImportResult.blocked`).
+      blocked: true, blockedReason: 'quarantined-rows',
+    });
+    expect(await db.selectFrom('facility_registry').selectAll().execute()).toHaveLength(0);
+    expect(ctx.__audit).toHaveLength(0); // blocked apply writes nothing, so it must not audit
+  });
+
+  // The other block reason, end to end. `parsed` is 0 here — `parseFacilityCsv` returns no records
+  // for a duplicate header — so the route's earlier `parsed === 0` short-circuit is what actually
+  // returns, and `blocked` is carried on the body regardless. That is the point: the two guards no
+  // longer have to agree by coincidence, because only one of them decides.
+  it('reports a duplicate-header file as blocked, with no override offered', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities/import',
+      payload: {
+        csv: 'national_code,name,name\n1,A,B\n',
+        nationalSystem: SYSTEM, apply: true, allowMalformedRows: true,
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({
+      created: 0, duplicateColumns: ['name'], blocked: true, blockedReason: 'duplicate-columns',
+    });
+    expect(await db.selectFrom('facility_registry').selectAll().execute()).toHaveLength(0);
+    expect(ctx.__audit).toHaveLength(0);
+  });
+
+  it('allowMalformedRows: true applies the well-formed rows despite the quarantined one, and still reports it', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities/import',
+      payload: {
+        csv: 'national_code,name\n1,Good\n2,Bad,Extra\n',
+        nationalSystem: SYSTEM, apply: true, allowMalformedRows: true,
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({
+      created: 1,
+      quarantined: [{ line: 3, reason: 'too_many_fields' }],
+    });
+    const rows = await db.selectFrom('facility_registry').selectAll().execute();
+    expect(rows).toHaveLength(1);
+    expect(ctx.__audit).toHaveLength(1); // this apply DID write, so it must be audited
   });
 
   it('apply: true writes and returns created/updated counts', async () => {
@@ -1332,7 +1501,13 @@ describe('Task 6: GET /api/facilities/observed', () => {
       to_system: DEFAULT_OBSERVED_FACILITY_SYSTEM,
       to_code: 'BALAB',
       to_display: null,
-      map_type: 'equivalent',
+      // ⛔ 'SAME-AS', not the 'equivalent' this fixture used to write. `map_type` is a free-text
+      // NOT NULL column with no CHECK, so 'equivalent' inserted fine — but it is a FHIR ConceptMap
+      // `equivalence` value, not one of the five `MapType`s `TermMappingDialog` can produce, and
+      // this test's whole premise is a mapping an operator authored through that dialog. Task 10
+      // made `resolveObservedFacilities` resolve only through `SAME-AS`, so the unrealistic value
+      // silently stopped exercising the self-mapping path this test exists to pin.
+      map_type: 'SAME-AS',
       relationship: null,
       owner: null,
       is_active: true,
@@ -1345,6 +1520,48 @@ describe('Task 6: GET /api/facilities/observed', () => {
     expect(row.targetMissing).toBe(false);
     expect(row.nonFacilityTarget).toBe(true);
     expect(row.resolvedVia).toBeNull();
+  });
+
+  // Task 10, end to end: two competing ACTIVE SAME-AS mappings resolve to NOTHING and the row is
+  // reported `ambiguous`. Worth a route-level test on top of the bootstrap one because this route
+  // is what the Observed tab actually branches on — the field has to survive the route's sort and
+  // JSON serialisation, not merely exist on `ResolvedFacility`.
+  it('reports two competing SAME-AS mappings as ambiguous, resolving neither', async () => {
+    const internalDb = await makeMigratedDb();
+    const externalDb = await makeMigratedExternalDb();
+    await seedObservedReports(externalDb, [['BALAB', 6]]);
+    await createFacilityRegistryStore(internalDb).upsert({ id: 'fac-A', name: 'Alpha', localCode: 'L-1', source: 'manual' });
+    await createFacilityRegistryStore(internalDb).upsert({ id: 'fac-B', name: 'Beta', localCode: 'L-2', source: 'manual' });
+    // ⛔ Migration 078 added a partial unique index that makes this state UNREACHABLE through the
+    // database, which is the point of it — so the index has to come off before the state can be
+    // constructed at all. The resolver's `ambiguous` verdict is still worth pinning as defence in
+    // depth: an install restored from a dump older than 078, or any future writer that bypasses the
+    // index, must still resolve to nothing rather than confidently pick one of the two.
+    await sql`drop index term_mappings_one_active_facility_resolution`.execute(internalDb);
+    for (const toCode of ['L-1', 'L-2']) {
+      await internalDb.insertInto('term_mappings').values({
+        id: `tm-${randomUUID()}`,
+        from_system: DEFAULT_OBSERVED_FACILITY_SYSTEM,
+        from_code: 'BALAB',
+        to_system: FACILITY_REGISTRY_SYSTEM,
+        to_code: toCode,
+        to_display: null,
+        map_type: 'SAME-AS',
+        relationship: null,
+        owner: null,
+        is_active: true,
+      }).execute();
+    }
+    const app = await appWith(fakeReconcileCtx(internalDb, externalDb));
+
+    const res = await app.inject({ method: 'GET', url: '/api/facilities/observed' });
+    expect(res.statusCode).toBe(200);
+    const row = res.json().find((r: any) => r.sourceCode === 'BALAB');
+    expect(row.ambiguous).toBe(true);
+    expect(row.registryId).toBeNull();
+    expect(row.resolvedVia).toBeNull();
+    expect(row.targetMissing).toBe(false);
+    expect(row.nonFacilityTarget).toBe(false);
   });
 
   // ⚠ Route-ordering regression guard: `/api/facilities/:id` is ALSO gated on `facilities.view` and
@@ -1407,6 +1624,38 @@ describe('Task 6: POST /api/facilities/scan-observed', () => {
     expect(res.json()).toMatchObject({ discovered: 1, created: 1, systemRegistered: true });
     expect(await internalDb.selectFrom('terminology_concepts').where('code', '=', 'Dodoma').selectAll().execute()).toHaveLength(1);
     expect(ctx.__audit.map((a: any) => a.action)).toEqual(['facility.scan']);
+  });
+
+  // ⛔ PINS THE ONE ROUTE BY WHICH A MASS MAPPING REWRITE BECOMES VISIBLE TO AN OPERATOR. A scan
+  // republishes the registry projection, and that reprojection can move a facility's concept code and
+  // rewrite every `term_mappings` row pointing at the old one — underneath whoever authored them,
+  // with no UI anywhere reporting it. `ScanResult.registryCodeChanges` counts those moves and this
+  // audit entry is where they are kept; before it, the only trace was a `console.warn`.
+  //
+  // Both entries are asserted, not just the second: a field that is ALWAYS whatever the last scan
+  // happened to produce would satisfy a single-value check, and "0 when nothing moved" is what makes
+  // the 1 mean something.
+  it('records how many registry codes the scan moved in the facility.scan audit entry', async () => {
+    const internalDb = await makeMigratedDb();
+    const externalDb = await makeMigratedExternalDb();
+    await seedObservedReports(externalDb, [['Dodoma', 1]]);
+    const ctx = fakeReconcileCtx(internalDb, externalDb);
+    const app = await appWith(ctx);
+    await internalDb.insertInto('facility_registry')
+      .values({ id: 'fac-1', name: 'Alpha Clinic', local_code: 'OLD-1', source: 'manual' }).execute();
+
+    // First scan projects fac-1 as 'OLD-1' and records the link it will later be compared against.
+    await app.inject({ method: 'POST', url: '/api/facilities/scan-observed', payload: { apply: true } });
+    // The code changes without this route being involved — a national import, an out-of-band
+    // correction. Exactly the case where nobody would otherwise know their mappings just moved.
+    await internalDb.updateTable('facility_registry').set({ local_code: 'NEW-1' }).where('id', '=', 'fac-1').execute();
+
+    const res = await app.inject({ method: 'POST', url: '/api/facilities/scan-observed', payload: { apply: true } });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().registryCodeChanges).toBe(1);
+    const scans = ctx.__audit.filter((a: any) => a.action === 'facility.scan');
+    expect(scans.map((a: any) => a.metadata.result.registryCodeChanges)).toEqual([0, 1]);
   });
 
   // Task 9b: `system` (a caller-chosen destination) is gone from this route's body — scan now
@@ -1516,7 +1765,9 @@ async function seedMapping(internalDb: any, overrides: Record<string, unknown> =
     to_system: FACILITY_REGISTRY_SYSTEM,
     to_code: 'fac-1',
     to_display: 'Dodoma Regional Referral',
-    map_type: 'equivalent',
+    // 'SAME-AS' — the only semantic Task 10's resolver treats as a facility equivalence. See the
+    // note on the self-mapping fixture above for why 'equivalent' was wrong here even before that.
+    map_type: 'SAME-AS',
     relationship: null,
     owner: null,
     is_active: true,
@@ -1701,5 +1952,138 @@ describe('Task 7: GET /api/facilities/:id/impact', () => {
     // response shape, not the `:id` route's record leaking through.
     expect(body.name).toBeUndefined();
     expect(body.localCode).toBeUndefined();
+  });
+});
+
+// ── Task 13: GET /api/facilities/mapping-conflicts ──────────────────────────────────────────────
+//
+// `facility_mapping_conflicts` is written once, by migration 078, when it closed "one active
+// SAME-AS resolution per observed facility key" at the database and had to clear the pre-existing
+// violations standing in the index's way. Until this route it had NO reader at all: for the
+// 'duplicate' kind the migration DEACTIVATED an operator's competing mappings and left the only
+// record of having done so in a table nothing could show them. ('unsupported_map_type' rows were
+// recorded but never deactivated — they do not violate the index; the record only explains why the
+// resolver already refuses them.)
+//
+// `store.db` is `null` in these tests, deliberately: this route reads `ctx.internalDb` only — it
+// never builds `reconcileDeps` and never touches the warehouse — so constructing a migrated
+// external db here would be several seconds per test buying nothing. A regression that made the
+// route reach for the external handle would throw rather than pass quietly.
+function conflictsCtx(internalDb: any) {
+  return fakeReconcileCtx(internalDb, null);
+}
+
+/** Insert one `facility_mapping_conflicts` row directly, the same way `seedMapping` above hits the
+ *  migrated db for setup no store interface exposes. Defaults to the 'duplicate' kind (competing
+ *  DISTINCT targets — see migration 078's docblock for why that name is acknowledged as poor). */
+async function seedConflict(internalDb: any, overrides: Record<string, unknown> = {}): Promise<void> {
+  await internalDb.insertInto('facility_mapping_conflicts').values({
+    from_system: DEFAULT_OBSERVED_FACILITY_SYSTEM,
+    from_code: 'BALAB',
+    kind: 'duplicate',
+    mapping_ids: JSON.stringify(['tm-1', 'tm-2']),
+    detail: JSON.stringify([{ id: 'tm-1', toCode: 'fac-A' }, { id: 'tm-2', toCode: 'fac-B' }]),
+    ...overrides,
+  }).execute();
+}
+
+describe('Task 13: GET /api/facilities/mapping-conflicts', () => {
+  it('lists unresolved mapping conflicts for review, in camelCase', async () => {
+    const internalDb = await makeMigratedDb();
+    await seedConflict(internalDb);
+    const app = await appWith(conflictsCtx(internalDb));
+
+    const res = await app.inject({ method: 'GET', url: '/api/facilities/mapping-conflicts' });
+
+    expect(res.statusCode).toBe(200);
+    const rows = res.json();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      fromSystem: DEFAULT_OBSERVED_FACILITY_SYSTEM,
+      fromCode: 'BALAB',
+      kind: 'duplicate',
+      mappingIds: ['tm-1', 'tm-2'],
+    });
+    // `detail` is what tells the operator WHICH facilities were competing — the whole reason a
+    // 'duplicate' row is actionable rather than just alarming. Dropping it would leave them a
+    // conflict with no way to see what to choose between.
+    expect(rows[0].detail).toEqual([{ id: 'tm-1', toCode: 'fac-A' }, { id: 'tm-2', toCode: 'fac-B' }]);
+  });
+
+  it('carries the unsupported_map_type kind through too, not just duplicates', async () => {
+    const internalDb = await makeMigratedDb();
+    await seedConflict(internalDb, {
+      from_code: 'X-RAY',
+      kind: 'unsupported_map_type',
+      mapping_ids: JSON.stringify(['tm-9']),
+      detail: JSON.stringify({ mapType: 'RELATED-TO', toCode: 'fac-A' }),
+    });
+    const app = await appWith(conflictsCtx(internalDb));
+
+    const res = await app.inject({ method: 'GET', url: '/api/facilities/mapping-conflicts' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject([{ fromCode: 'X-RAY', kind: 'unsupported_map_type', mappingIds: ['tm-9'] }]);
+  });
+
+  // The listing exists to be a QUEUE — a settled conflict must leave it, or an operator can never
+  // tell what still needs them. `resolved_at` is the only signal of that (078 writes it NULL for
+  // every row it records).
+  it('excludes a settled conflict (resolved_at set)', async () => {
+    const internalDb = await makeMigratedDb();
+    await seedConflict(internalDb, { from_code: 'SETTLED', resolved_at: new Date() });
+    await seedConflict(internalDb, { from_code: 'STILL-OPEN' });
+    const app = await appWith(conflictsCtx(internalDb));
+
+    const res = await app.inject({ method: 'GET', url: '/api/facilities/mapping-conflicts' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().map((r: any) => r.fromCode)).toEqual(['STILL-OPEN']);
+  });
+
+  it('returns an empty list on a clean install (no conflicts recorded)', async () => {
+    const internalDb = await makeMigratedDb();
+    const app = await appWith(conflictsCtx(internalDb));
+
+    const res = await app.inject({ method: 'GET', url: '/api/facilities/mapping-conflicts' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual([]);
+  });
+
+  // Gated on facilities.manage, not facilities.view: the queue names an operator's own mappings and
+  // exists only to drive a WRITE (settle the conflict by removing one of them).
+  it('is gated on facilities.manage — facilities.view alone gets 403', async () => {
+    const internalDb = await makeMigratedDb();
+    const app = await appWith(conflictsCtx(internalDb), ['facilities.view']);
+
+    const res = await app.inject({ method: 'GET', url: '/api/facilities/mapping-conflicts' });
+
+    expect(res.statusCode).toBe(403);
+  });
+
+  // ⛔ This test does NOT pin registration order, and must not be described as if it did. Measured:
+  // moving the route's registration below `/api/facilities/:id` leaves this test — and every other
+  // one in this block — green, because Fastify's router (find-my-way) always prefers a STATIC
+  // segment over a parametric one regardless of the order the two were registered in.
+  //
+  // What it DOES pin is the resulting behaviour, with the shadowing case made as tempting as
+  // possible: a real facility whose id IS the literal string still does not divert this URL to the
+  // `:id` handler. The trade-off, recorded rather than pretended away — that facility is then
+  // unreachable through `GET /api/facilities/:id`. Harmless: `facility_registry.id` is either a
+  // generated UUID (POST) or a sha256-derived hex digest (CSV import), so no real row carries it.
+  it('⚠ resolves to the conflicts list, not the :id route, even with a facility of that literal id', async () => {
+    const internalDb = await makeMigratedDb();
+    const externalDb = await makeMigratedExternalDb();
+    const ctx = impactCtx(internalDb, externalDb); // needs a REAL facilityRegistry for the :id lookup
+    await ctx.facilityRegistry.upsert({ id: 'mapping-conflicts', name: 'Oddly Named', localCode: 'ODD01', source: 'manual' });
+    await seedConflict(internalDb);
+    const app = await appWith(ctx);
+
+    const res = await app.inject({ method: 'GET', url: '/api/facilities/mapping-conflicts' });
+
+    expect(res.statusCode).toBe(200);
+    // The conflicts list, NOT the facility record — a shadowed route would return `{ id, name }`.
+    expect(res.json()).toMatchObject([{ fromCode: 'BALAB', kind: 'duplicate' }]);
   });
 });

@@ -86,4 +86,43 @@ describe('facilities import — commander parsing path (program.ts, not the func
     const [, opts] = mocks.runFacilitiesImport.mock.calls[0] as [string, { apply?: boolean }];
     expect(opts.apply).toBe(true);
   });
+
+  // Task 5: same seam, same reasoning, for `--allow-malformed-rows` — the CLI-parity flag for
+  // Task 4's `allowMalformedRows` override (see facility-import.ts's `FacilityImportOptions`).
+  it('parses --allow-malformed-rows on the command line and resolves allowMalformedRows true', async () => {
+    const program = buildProgram().exitOverride();
+
+    await program.parseAsync([
+      'node',
+      'openldr',
+      'facilities',
+      'import',
+      '/some/national-register.csv',
+      '--national-system',
+      'urn:tz:hfr',
+      '--allow-malformed-rows',
+    ]);
+
+    expect(mocks.runFacilitiesImport).toHaveBeenCalledTimes(1);
+    const [, opts] = mocks.runFacilitiesImport.mock.calls[0] as [string, { allowMalformedRows?: boolean }];
+    expect(opts.allowMalformedRows).toBe(true);
+  });
+
+  it('no --allow-malformed-rows resolves allowMalformedRows falsy', async () => {
+    const program = buildProgram().exitOverride();
+
+    await program.parseAsync([
+      'node',
+      'openldr',
+      'facilities',
+      'import',
+      '/some/national-register.csv',
+      '--national-system',
+      'urn:tz:hfr',
+    ]);
+
+    expect(mocks.runFacilitiesImport).toHaveBeenCalledTimes(1);
+    const [, opts] = mocks.runFacilitiesImport.mock.calls[0] as [string, { allowMalformedRows?: boolean }];
+    expect(opts.allowMalformedRows).toBeFalsy();
+  });
 });

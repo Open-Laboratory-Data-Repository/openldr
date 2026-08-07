@@ -1,5 +1,5 @@
 import type { Kysely } from 'kysely';
-import type { ConceptRowInput, ExternalSchema, InternalSchema, RegistryRowForConcept, TerminologyAdminStore } from '@openldr/db';
+import type { ConceptRowInput, ExternalSchema, InternalSchema, MapType, RegistryRowForConcept, TerminologyAdminStore } from '@openldr/db';
 import { DEFAULT_OBSERVED_FACILITY_SYSTEM, FACILITY_REGISTRY_SYSTEM, FACILITY_REGISTRY_SYSTEM_CODE, FACILITY_REGISTRY_SYSTEM_NAME, facilityMapId, observedFacilityConceptRow, registryConceptRows, registryPreferredCode, registryRowIdsWithSupersededIdConcept, observedSystemForFeed, projectDiagnosticReport } from '@openldr/db';
 
 export interface ReconcileDeps {
@@ -13,6 +13,24 @@ export interface ScanResult {
   created: number;
   updated: number;
   systemRegistered: boolean;
+  /** How many facilities the registry reprojection this scan performs MOVED to a different concept
+   *  code — each one a `term_mappings` rewrite done underneath whoever authored the mapping.
+   *
+   *  ⛔ This is the ONLY route by which that number reaches an operator. `scanObservedFacilities` is
+   *  the one caller of `publishRegistryConcepts` that is itself reachable from outside this package,
+   *  and pressing Scan can now rewrite mappings in bulk (a code collision resolved, an import that
+   *  renamed codes). Carrying the count here puts it in the `facility.scan` audit entry's metadata —
+   *  both the HTTP route's and the CLI's, which both audit `{ result }` — so "my mappings all point
+   *  somewhere else since this morning" is answerable from the audit log instead of from a
+   *  `console.warn` nobody kept. It needs no new UI string: `apps/studio`'s `ScanObservedResult` is a
+   *  structural mirror that simply ignores fields its banner does not interpolate.
+   *
+   *  ⚠ Always 0 on a DRY RUN, and that is a limit, not a preview: a dry-run scan returns before the
+   *  reprojection, and `publishRegistryConcepts({ apply: false })` deliberately returns without
+   *  reading a single code — so there is no computed-but-unwritten answer to report. Making a dry run
+   *  predict the rewrites means teaching the reprojection to compute without writing, which is a
+   *  change to that function, not to this field. */
+  registryCodeChanges: number;
 }
 
 export interface ScanOptions {
@@ -218,6 +236,7 @@ export async function scanObservedFacilities(deps: ReconcileDeps, opts: ScanOpti
     created,
     updated: rows.length - created,
     systemRegistered: false,
+    registryCodeChanges: 0,
   };
 
   if (!opts.apply) return result;
@@ -251,7 +270,13 @@ export async function scanObservedFacilities(deps: ReconcileDeps, opts: ScanOpti
   // Scan now publishes the registry projection too, so it alone leaves the registry pickable.
   // ⚠ Gated on `opts.apply` exactly like the rest of this function's write path (the early return
   // above) — a dry-run scan must still write nothing.
-  await publishRegistryConcepts(deps, { apply: true });
+  //
+  // ⛔ The result is NOT discarded. This reprojection can rewrite `term_mappings` in bulk (see
+  // `reprojectRegistryRows`), and this call is the only path by which pressing Scan does so — so the
+  // count of moved codes is carried out on `ScanResult`, where both audit callers already record the
+  // whole result. See `ScanResult.registryCodeChanges` for why that is the chosen surface.
+  const projection = await publishRegistryConcepts(deps, { apply: true });
+  result.registryCodeChanges = projection.codeChanges;
 
   return result;
 }
@@ -332,6 +357,39 @@ export interface ResolvedFacility {
    *  only recognised when the target system is PROVEN a facility register by the registry's own
    *  data (`knownNationalSystems`, below) — never merely "not the registry system". */
   nonFacilityTarget: boolean;
+  /** ACTIVE `SAME-AS` mappings on this observed `(system, code)` name more than one DISTINCT
+   *  facility — either several distinct rows in the facility registry, or (when no registry mapping
+   *  exists at all) several distinct targets in proven national registers. The row resolves to
+   *  NOTHING; there is never an arbitrary winner. Which of the competing facilities appeared in a
+   *  report used to depend on database row order (`candidates.find(...)` over an unordered query),
+   *  and a nondeterministic answer is worse than a visibly absent one, so the conflict is reported
+   *  and the operator settles it.
+   *
+   *  ⛔ DISTINCT targets, not mapping ROWS. `term_mappings` permits duplicates (no unique index; no
+   *  duplicate guard on the mappings POST route; `reference-apply` upserts by `id`), so two rows may
+   *  carry an identical `(from, to)`. Those agree on the answer, so they are NOT ambiguous and the
+   *  row resolves exactly as one of them alone would — anything else would delete a
+   *  correctly-resolving facility from a report over a non-conflict. See the dedupe note in
+   *  `resolveObservedFacilities`.
+   *
+   *  ⛔ Competition WITHIN one route kind only. Registry-beats-national is a fixed, documented total
+   *  order between two DIFFERENT kinds (see the precedence note on `resolveObservedFacilities`), so
+   *  one registry mapping alongside any number of national ones is NOT ambiguous — the registry one
+   *  wins, as it always has.
+   *
+   *  ⛔ Mutually exclusive with `resolvedVia` — enforced by `assertResolvedFacilityInvariant`. Also
+   *  never set alongside `targetMissing` or `nonFacilityTarget`, both of which would misdescribe
+   *  it: the targets here are facility-register targets (so not `nonFacilityTarget`) and they are
+   *  not being reported as absent (the resolver simply refuses to choose between them, whether or
+   *  not they resolve). That exclusion is by construction in `resolveObservedFacilities`, and
+   *  pinned by 'reports an ambiguous row as neither nonFacilityTarget nor targetMissing' in the
+   *  test file — it is NOT asserted by `assertResolvedFacilityInvariant`.
+   *
+   *  ⚠ Says nothing about non-`SAME-AS` mappings. Those never resolve (see the `map_type` filter in
+   *  `resolveObservedFacilities`) and never compete either, so a row carrying only, say, an
+   *  UNMAPPED-FROM mapping reads here exactly like a row carrying none: all four flags false.
+   *  Surfacing an unsupported semantic to the operator is not this field. */
+  ambiguous: boolean;
 }
 
 /**
@@ -350,12 +408,23 @@ export interface ResolvedFacility {
  * producing an impossible combination.
  */
 export function assertResolvedFacilityInvariant(
-  row: Pick<ResolvedFacility, 'resolvedVia' | 'targetMissing' | 'nonFacilityTarget'>,
+  row: Pick<ResolvedFacility, 'resolvedVia' | 'targetMissing' | 'nonFacilityTarget' | 'ambiguous'>,
 ): void {
   if (row.nonFacilityTarget && (row.resolvedVia !== null || row.targetMissing)) {
     throw new Error(
       `ResolvedFacility invariant violated: nonFacilityTarget=true must imply resolvedVia=null and ` +
       `targetMissing=false (got resolvedVia=${JSON.stringify(row.resolvedVia)}, targetMissing=${row.targetMissing})`,
+    );
+  }
+  // Task 10. `ambiguous` means the resolver REFUSED to pick between competing mappings, so a row
+  // claiming both it and a resolution is meaningless by that field's own definition — and it is
+  // exactly the shape a future edit would produce by adding a new resolution branch that forgets
+  // the ambiguity gate. Separate `throw` with its own message rather than a widened condition on
+  // the one above, so a break is attributable to THIS rule.
+  if (row.ambiguous && row.resolvedVia !== null) {
+    throw new Error(
+      `ResolvedFacility invariant violated: ambiguous=true must imply resolvedVia=null ` +
+      `(got resolvedVia=${JSON.stringify(row.resolvedVia)})`,
     );
   }
 }
@@ -368,7 +437,14 @@ export function assertResolvedFacilityInvariant(
  * alongside), and only it carries `is_active` — an operator-deactivated mapping must not resolve.
  *
  * ⛔ Precedence is fixed and total: registry route, then national route, then unresolved. Never a
- * silent pick between two candidates.
+ * silent pick between two candidates — and since Task 10 that is enforced rather than merely
+ * intended: two competing candidates within ONE route kind resolve to NOTHING and set
+ * `ResolvedFacility.ambiguous`, where the code previously took whichever the database returned
+ * first. Precedence BETWEEN the two kinds is unchanged and is not ambiguity.
+ *
+ * ⛔ Only `map_type = 'SAME-AS'` resolves (Task 10). The other four semantics `TermMappingDialog`
+ * offers stay active in `term_mappings` and are simply invisible here — see the `map_type` filter
+ * on the mapping query below for why it is applied in SQL rather than after the fact.
  *
  * Feed-aware (Task 9b): each `(performer, source_system)` row looks up mappings under ITS OWN
  * coding system — `observedSystemForFeed(source_system)`, NOT one fixed system for every row — so
@@ -497,6 +573,21 @@ export async function resolveObservedFacilities(deps: ReconcileDeps): Promise<Re
         .select(['from_system', 'from_code', 'to_system', 'to_code'])
         .where('from_system', 'in', systems)
         .where('is_active', '=', true)
+        // Task 10: only an exact equivalence resolves a facility. `TermMappingDialog` is the generic
+        // terminology dialog and offers all five `MapType`s; this resolver used to honour every one
+        // of them, so recording UNMAPPED-FROM — the operator's way of saying "this does NOT
+        // correspond" — still drove official reports to that facility.
+        //
+        // ⛔ Filtered in SQL, not after the fact, and that placement is load-bearing: everything
+        // below reasons about `candidates`, and `nonFacilityTarget` in particular is derived from
+        // `candidates.length > 0`. Filtering later would leave a non-SAME-AS registry mapping in the
+        // list and report it as "the target system is not a facility register" — a lie about a
+        // mapping pointing squarely at the registry. Excluded here, such a row reads as unmapped for
+        // resolution purposes, which is all this function claims about it.
+        //
+        // ⚠ These mappings stay ACTIVE in `term_mappings`. Nothing here deactivates one; only their
+        // ability to resolve is removed.
+        .where('map_type', '=', 'SAME-AS')
         .execute()
     : [];
 
@@ -542,16 +633,49 @@ export async function resolveObservedFacilities(deps: ReconcileDeps): Promise<Re
     const candidates = byCode.get(`${r.system}\n${r.code}`) ?? [];
 
     // 1. Registry route wins — the registry is what holds a printable name.
-    const registryMapping = candidates.find((c) => c.toSystem === FACILITY_REGISTRY_SYSTEM);
+    const registryCandidates = candidates.filter((c) => c.toSystem === FACILITY_REGISTRY_SYSTEM);
     // 2. National route: the candidate's target system must be PROVEN a facility register by
     //    `knownNationalSystems` — never merely "not the registry system" (Fix 1; see
-    //    `ResolvedFacility.nonFacilityTarget`'s doc comment). Only checked when registry didn't win.
-    const nationalMapping = registryMapping
-      ? undefined
-      : candidates.find((c) => knownNationalSystems.has(c.toSystem));
+    //    `ResolvedFacility.nonFacilityTarget`'s doc comment). Only considered when the registry
+    //    route is absent ENTIRELY — including when it is absent because it is contested, since a
+    //    contested registry route must not silently demote the row to a national answer either.
+    const nationalCandidates = registryCandidates.length > 0
+      ? []
+      : candidates.filter((c) => knownNationalSystems.has(c.toSystem));
+    // Task 10: two active SAME-AS mappings naming DIFFERENT facilities WITHIN one route kind. The
+    // pair used to be settled by `candidates.find(...)` over a query with no `orderBy`, i.e. by
+    // whatever the database returned first. Neither wins now — see `ResolvedFacility.ambiguous` for
+    // why nothing at all is the chosen answer, and why registry-beats-national is precedence, not
+    // ambiguity.
+    //
+    // ⛔ Counted over DISTINCT TARGETS, not over candidate ROWS. `term_mappings` has no unique index
+    // (migration 013 creates two non-unique indexes only), the mappings POST route has no duplicate
+    // guard, and central→lab `reference-apply` upserts by `id` — so two rows with different ids and
+    // an identical `(from, to)` are reachable, and land here as two candidates. Those name the SAME
+    // facility: nothing competes, there is no row-order nondeterminism to protect the operator from,
+    // and reporting it would make a correctly-resolving facility VANISH from a report while telling
+    // the operator to "remove one" of a non-conflict. `(from, to)` is the identity the rest of the
+    // code already uses — `termMappings.create` delete-then-inserts the `concept_map_elements`
+    // mirror keyed on `(map_url, source_system, source_code, target_system, target_code)`, which
+    // dedupes exactly this way; only `term_mappings` itself does not.
+    //
+    // Registry targets key on `toCode` alone (every registry candidate shares
+    // `FACILITY_REGISTRY_SYSTEM` by construction, two lines up); national targets key on
+    // `toSystem|toCode`, since two different proven national registers may legitimately use the same
+    // code for two different facilities.
+    const registryTargets = new Set(registryCandidates.map((c) => c.toCode));
+    const nationalTargets = new Set(nationalCandidates.map((c) => `${c.toSystem}|${c.toCode}`));
+    const ambiguous = registryTargets.size > 1 || nationalTargets.size > 1;
+    // Safe to take `[0]` once `ambiguous` is false: every remaining candidate on the surviving route
+    // names the SAME target, so the answer does not depend on which duplicate row came back first.
+    const registryMapping = ambiguous ? undefined : registryCandidates[0];
+    const nationalMapping = ambiguous ? undefined : nationalCandidates[0];
     // 3. Anything else the operator mapped to (the observed system itself, an unrelated active
     //    system such as LOINC) is a real, saved mapping that resolves to NEITHER real route.
-    const hasFacilityRouteCandidate = !!registryMapping || !!nationalMapping;
+    //
+    // ⛔ Derived from the CANDIDATE LISTS, not from the chosen mappings: an ambiguous row has
+    // facility-route candidates (too many of them) and must never be reported as having none.
+    const hasFacilityRouteCandidate = registryCandidates.length > 0 || nationalCandidates.length > 0;
     const nonFacilityTarget = !hasFacilityRouteCandidate && candidates.length > 0;
 
     const row = registryMapping
@@ -564,14 +688,20 @@ export async function resolveObservedFacilities(deps: ReconcileDeps): Promise<Re
     // A GENUINE facility-route mapping (registry or a proven national register) was authored but
     // points at nothing live — distinct from "never mapped" AND from `nonFacilityTarget` (Fix 1;
     // see that field's doc comment for why "candidates.length > 0 && !row" was wrong).
-    const targetMissing = hasFacilityRouteCandidate && !row;
+    //
+    // ⛔ `!ambiguous` is not belt-and-braces. An ambiguous row deliberately looks up NO target, so
+    // `!row` is trivially true for it — without this guard every ambiguous row would additionally
+    // claim its target had been deleted, which is false whenever the competing facilities are both
+    // live (the normal case).
+    const targetMissing = !ambiguous && hasFacilityRouteCandidate && !row;
 
     // Whole-branch review finding (fix round 1): this is the ONE place today that derives
-    // `resolvedVia`/`targetMissing`/`nonFacilityTarget` together — assert their invariant HERE,
-    // before the row escapes into `ResolvedFacility`, so a future edit that breaks it (or drifts the
-    // three fields apart) fails loudly instead of silently shipping a contradictory row. See
-    // `assertResolvedFacilityInvariant`'s doc comment for why this, not a status union.
-    assertResolvedFacilityInvariant({ resolvedVia, targetMissing, nonFacilityTarget });
+    // `resolvedVia`/`targetMissing`/`nonFacilityTarget`/`ambiguous` together — assert their
+    // invariant HERE, before the row escapes into `ResolvedFacility`, so a future edit that breaks
+    // it (or drifts the four fields apart) fails loudly instead of silently shipping a
+    // contradictory row. See `assertResolvedFacilityInvariant`'s doc comment for why this, not a
+    // status union.
+    assertResolvedFacilityInvariant({ resolvedVia, targetMissing, nonFacilityTarget, ambiguous });
 
     const location = facilityLocationByKey.get(`${r.sourceSystem}\n${r.code}`) ?? { region: null, district: null };
 
@@ -595,6 +725,7 @@ export async function resolveObservedFacilities(deps: ReconcileDeps): Promise<Re
       resolvedVia,
       targetMissing,
       nonFacilityTarget,
+      ambiguous,
     };
   });
 }
@@ -607,6 +738,11 @@ export interface PublishResult {
    *  mapping that targets neither the registry nor a proven national register. Counted separately
    *  so `unmapped` never silently absorbs it (see that field's doc comment). */
   nonFacilityTarget: number;
+  /** Task 10: rows whose mapping resolves to `ResolvedFacility.ambiguous` — competing active
+   *  SAME-AS mappings, so nothing resolved. Counted separately for the same reason as
+   *  `nonFacilityTarget`: folded into `unmapped` it would tell an operator to go author a mapping,
+   *  when what they must actually do is remove one of the two they already have. */
+  ambiguous: number;
   written: number;
 }
 
@@ -632,10 +768,12 @@ export async function publishFacilityMap(
   const result: PublishResult = {
     resolved: resolved.filter((r) => r.resolvedVia !== null).length,
     // Fix 1: a `nonFacilityTarget` row must NOT fall into this bucket — it is not "never mapped",
-    // it is a real mapping that just doesn't target a facility (see its own counter below).
-    unmapped: resolved.filter((r) => r.resolvedVia === null && !r.targetMissing && !r.nonFacilityTarget).length,
+    // it is a real mapping that just doesn't target a facility (see its own counter below). Task 10
+    // excludes `ambiguous` for the same reason: it is over-mapped, not unmapped.
+    unmapped: resolved.filter((r) => r.resolvedVia === null && !r.targetMissing && !r.nonFacilityTarget && !r.ambiguous).length,
     targetMissing: resolved.filter((r) => r.targetMissing).length,
     nonFacilityTarget: resolved.filter((r) => r.nonFacilityTarget).length,
+    ambiguous: resolved.filter((r) => r.ambiguous).length,
     written: resolved.length,
   };
   if (!opts.apply) return result;
@@ -700,38 +838,78 @@ export async function publishFacilityMap(
  *
  * ⚠ A deleted facility leaves its concept behind — never pruned, deliberately. `registry` (read
  * above) only ever holds LIVE `facility_registry` rows, so a facility with no row at all is never in
- * it, and this function only ever deletes a concept keyed on the `id` of a row it IS projecting (see
- * `deleteSupersededIdConcepts` below). Keeping a deleted facility's concept means a `term_mappings`
- * row an operator already authored against it is not silently erased — it keeps resolving to a live
- * concept even though its target facility is gone, which is a DIFFERENT, deliberately-kept gap from
- * the one this function's own delete step closes (a row still present in the registry, whose concept
- * merely moved to a different code).
+ * it, and the delegated projection only ever deletes a concept keyed on a row it IS projecting (see
+ * `reprojectRegistryRows` and `deleteSupersededIdConcepts`). Keeping a deleted facility's concept
+ * means a `term_mappings` row an operator already authored against it is not silently erased — it
+ * keeps resolving to a live concept even though its target facility is gone, which is a DIFFERENT,
+ * deliberately-kept gap from the one the projection's own delete step closes (a row still present in
+ * the registry, whose concept merely moved to a different code).
+ *
+ * ⛔ This does NOT project by itself any more — it delegates the whole write to
+ * `reprojectRegistryRows`, exactly as `projectRegistryRows` does. That is the entire point: the two
+ * paths used to answer the same question DIFFERENTLY. This one reprojects the whole table, so it
+ * forced BOTH sides of a code collision onto their ids; the given-rows path forced only ITS OWN
+ * batch and left the incumbent on the shared human code. A facility's code therefore moved on the
+ * next Scan as a consequence of a write to a DIFFERENT facility, orphaning whatever was authored
+ * against the old code. One shared implementation — including the batch widening, which is a no-op
+ * here because this path's batch IS the whole table — is what makes that structurally impossible,
+ * and it is also what gives this path the mapping carry-over it never had.
+ *
+ * `deleteSupersededIdConcepts` is NOT called here any more either — `reprojectRegistryRows` already
+ * runs it, in the same position (after the write), on the same inputs. Calling it here too would run
+ * it twice per publish.
  */
 export async function publishRegistryConcepts(
   deps: ReconcileDeps,
   opts: { apply?: boolean } = {},
-): Promise<{ concepts: number; systemRegistered: boolean }> {
+): Promise<{ concepts: number; systemRegistered: boolean; codeChanges: number; carryOverSkipped: number }> {
+  // `local_code`/`national_code` are deliberately NOT selected: `reprojectRegistryRows` re-reads them
+  // for whatever rows it is handed, and a second copy read here would only be a second thing to keep
+  // in sync with the code-derivation rule.
   const registry = await deps.internalDb
     .selectFrom('facility_registry')
-    .select(['id', 'name', 'local_code', 'national_code'])
+    .select(['id', 'name'])
     .execute();
 
-  if (!opts.apply) return { concepts: registry.length, systemRegistered: false };
+  if (!opts.apply) return { concepts: registry.length, systemRegistered: false, codeChanges: 0, carryOverSkipped: 0 };
 
+  // Kept here, not left to `reprojectRegistryRows`: that function returns early on an empty batch, so
+  // an EMPTY registry would otherwise stop registering the system at all — and `TermMappingDialog`
+  // builds its system dropdown from `coding_systems`, so a fresh install with no facilities yet must
+  // still end up with a pickable (empty) registry system. Idempotent, so the second call the
+  // delegation makes below costs nothing but an upsert.
   await ensureRegistrySystemActive(deps);
 
+  let result: ReprojectResult = { projected: 0, codeChanges: [] };
   if (registry.length > 0) {
-    // `registry` IS the whole table here (this function reprojects everything, unlike the given-rows
-    // `projectRegistryRows` below) — so `registryConceptRows`' own in-batch collision check already
-    // sees every row that could possibly collide with any other. No extra lookup needed.
-    const inputs = registry.map((r): RegistryRowForConcept => ({ id: r.id, name: r.name, localCode: r.local_code, nationalCode: r.national_code }));
-    await deps.admin.terms.importRows(registryConceptRows(inputs));
-    // Write the new projection FIRST, delete the superseded id-keyed leftover SECOND — see
-    // `deleteSupersededIdConcepts`'s doc comment for why the order matters.
-    await deleteSupersededIdConcepts(deps, registryRowIdsWithSupersededIdConcept(inputs));
+    // `registry` IS the whole table, which is exactly the batch `reprojectRegistryRows` wants for the
+    // widest possible collision detection AND for the mapping carry-over: a code's old and new owners
+    // are guaranteed to be in the same batch here, so the `linkedElsewhere` guard (which refuses a
+    // carry-over across batch boundaries) can never fire on this path.
+    result = await reprojectRegistryRows(deps, registry.map((r) => ({ id: r.id, name: r.name })));
   }
 
-  return { concepts: registry.length, systemRegistered: true };
+  return {
+    concepts: registry.length,
+    systemRegistered: true,
+    // `codeChanges` REACHES AN OPERATOR, and that is the only reason it is here: `scanObservedFacilities`
+    // (the one caller of this function that anything outside the package can invoke) carries it out
+    // on `ScanResult.registryCodeChanges`, which both the HTTP route and the CLI record in the
+    // `facility.scan` audit entry. A moved code means a mapping was repointed underneath whoever
+    // authored it; a count nobody stores would not have made that answerable afterwards.
+    //
+    // ⚠ `carryOverSkipped` is 0 BY CONSTRUCTION from this path (see the batch note above) and, unlike
+    // `codeChanges`, reaches NOBODY — no caller of this function reads it. Said plainly rather than
+    // dressed up as future-proofing: the only producer that can make it non-zero is
+    // `projectRegistryRows`, whose signature is `Promise<void>`, so today the sole operator-visible
+    // signal for a refused carry-over remains `reprojectRegistryRows`' `console.warn`. It is reported
+    // here because it costs nothing and because narrowing this path's batch (the thing that would
+    // make it reachable) should not also have to re-add the field — but if a later change wants an
+    // operator to SEE a refused carry-over, this field is not yet that, and the honest fix is a
+    // return value on `projectRegistryRows`.
+    codeChanges: result.codeChanges.length,
+    carryOverSkipped: result.codeChanges.filter((c) => c.carryOverSkipped).length,
+  };
 }
 
 /**
@@ -772,10 +950,12 @@ async function ensureCodingSystemActive(
 /**
  * Delete the `FACILITY_REGISTRY_SYSTEM` concepts that `registryRowIdsWithSupersededIdConcept` says
  * are superseded — the narrow, targeted counterpart to `admin.terms.importRows`' upsert-only write.
- * Shared by `publishRegistryConcepts` and `projectRegistryRows` so the delete itself, not just the
- * determination of WHICH ids, cannot drift between the two call sites.
  *
- * Callers run this AFTER their own `importRows` call, never before: the new preferred-code concept
+ * ⛔ Called from exactly ONE place since Task 8: `reprojectRegistryRows`, which both projection paths
+ * now delegate to. It used to be called from each path separately; adding a second call site back
+ * would run this twice per publish, because the delegation already includes it.
+ *
+ * The caller runs this AFTER its own `importRows` call, never before: the new preferred-code concept
  * must already be written before its superseded id-keyed sibling is removed, so a mid-failure can
  * never leave a facility with ZERO concepts (worst case, a failed delete just leaves the old one
  * behind for the next projection to retry).
@@ -832,13 +1012,15 @@ async function deleteSupersededIdConcepts(deps: Pick<ReconcileDeps, 'internalDb'
 }
 
 /**
- * Ensure `FACILITY_REGISTRY_SYSTEM`'s `coding_systems` row exists and is ACTIVE. Shared by
- * `publishRegistryConcepts` (the full reprojection) and `projectRegistryRows` (the given-rows path
- * below) so the two agree on exactly one registration.
+ * Ensure `FACILITY_REGISTRY_SYSTEM`'s `coding_systems` row exists and is ACTIVE. Called by
+ * `reprojectRegistryRows` (which both projection paths delegate to) and, once more, directly by
+ * `publishRegistryConcepts` — see the comment at that second call site for why the redundancy is
+ * load-bearing rather than an oversight (an EMPTY registry never reaches the delegation, and a fresh
+ * install must still leave the system pickable). Idempotent, so the extra call costs one upsert.
  *
  * No try/catch here (see `ensureCodingSystemActive`'s doc comment) — `publishRegistryConcepts`
  * lets a failure propagate as an explicit operator action, while `projectRegistryRows` supplies its
- * own containment around this call.
+ * own containment around the whole delegation.
  */
 async function ensureRegistrySystemActive(deps: Pick<ReconcileDeps, 'admin' | 'internalDb'>): Promise<void> {
   // ⛔ `systemCode` must stay distinct from `DEFAULT_SYSTEM_CODE` ('DEFAULT_FAC') and any
@@ -848,6 +1030,181 @@ async function ensureRegistrySystemActive(deps: Pick<ReconcileDeps, 'admin' | 'i
     systemCode: FACILITY_REGISTRY_SYSTEM_CODE,
     systemName: FACILITY_REGISTRY_SYSTEM_NAME,
   });
+}
+
+/**
+ * `rows` widened to a batch that is CLOSED under collision: every `facility_registry` row whose own
+ * projection can change because of what this batch just wrote is in the returned array.
+ *
+ * This is what lets `registryConceptRows`' in-batch collision check be the ONE definition of
+ * "collision" in the codebase. That check can only see the rows it is given, so a caller with partial
+ * visibility (`projectRegistryRows` is handed the one row a POST/PUT just wrote) used to need a
+ * SECOND, separately-typed collision detector reading the table directly (`collidingRegistryIds`,
+ * removed in the same change as this comment) whose answer it passed back in as `forceOwnIdFor`.
+ * Widening the BATCH instead of widening one row's answer covers strictly more: the incumbent is not
+ * merely accounted for, it is REPROJECTED — at the moment its code actually moves, with its
+ * `term_mappings` carried across — instead of silently drifting until somebody presses Scan.
+ *
+ * ⛔ TWO DIRECTIONS, and the first fix only covered one:
+ *
+ *  1. ACQUIRING a contested code. The batch's rows claim codes some other row already projects as;
+ *     both sides must fall back to their ids, so both must be in the batch. Reached below through
+ *     `candidates` -> `claimants`.
+ *
+ *  2. RELEASING a contested code. Two rows collide on 'X', so both are PARKED on their own ids; the
+ *     batch renames one of them, which leaves the other as 'X''s sole claimant and moves it onto 'X'.
+ *     Nothing in direction 1 finds that row — the batch's new candidate is the new name, and the
+ *     batch row's own previous PROJECTED code is its id, because the collision is exactly why it was
+ *     parked. The string 'X' the batch used to contest is recorded NOWHERE. So the signal used here
+ *     is the parking itself: `facility_concept_projection.concept_code === registry_id` means this
+ *     row's code was decided by SOME OTHER row, and any write to it can free somebody. When a batch
+ *     row is parked, every OTHER parked row joins the batch and re-answers the question. This is
+ *     `resolveObservedFacilities`' view too — it re-derives preferred codes over the whole registry —
+ *     so a parked row that has been freed is ALREADY resolving through the human code while its
+ *     `term_mappings` still name the id. That window is the bug; this closes it at the write.
+ *
+ * The parked set is small (it is exactly the registry's live collisions) and closed under collision:
+ * a row colliding with a parked row is itself parked, by definition of the fallback. So pulling in
+ * all of it costs a bounded, idempotent reprojection — a parked row that is still contested simply
+ * projects to its id again.
+ *
+ * ⚠ A batch row's previous projected code is also added to `candidates` (unless it is the id-parking
+ * marker, which no other row can claim). In a consistent registry this finds nothing new — a row
+ * claiming the code the batch is vacating would have collided with it, and both would be parked, and
+ * direction 2 already covers that. It matters after a projection that FAILED (this path is
+ * best-effort and swallows, see `projectRegistryRows`) left a stale link behind: then the vacated
+ * code can genuinely have a live claimant that nothing else would reproject. It costs no extra query.
+ *
+ * ⛔ "Claims a code" is `registryPreferredCode(row) === code`, and NOTHING else. A row only ever
+ * PROJECTS as its preferred code (`local_code`, else `national_code`) — that is what
+ * `registryConceptRows` writes and what `resolveObservedFacilities` re-derives to match a mapping
+ * back to a facility — so a collision is two rows whose PREFERRED codes are equal, not two rows that
+ * happen to share a string across two different columns. Registry rows A `{local_code:'X'}` and B
+ * `{local_code:'Y', national_code:'X'}` do not collide at all (B projects as `'Y'`); treating B's
+ * `national_code` as a claim on `'X'` would drag B into the batch and force BOTH onto their UUIDs,
+ * leaving a ghost `'X'` concept and moving A onto a code `resolveObservedFacilities` can never
+ * resolve. The SQL predicate below is therefore a deliberately WIDE prefilter — the preference order
+ * lives in `registryPreferredCode` and expressing it as a `coalesce(...)` here would be a second copy
+ * of it in a dialect pg-mem must also agree with — narrowed to real claims IN MEMORY. Pinned by
+ * "does not widen to a row that merely carries the code in a NON-preferred column".
+ *
+ * One pass is enough: every row this adds projects to a code already in `candidates` (direction 1) or
+ * is parked (direction 2, and the parked set is added whole), so a second pass could discover no code
+ * the first did not.
+ */
+/**
+ * "Which `facility_registry` rows would PROJECT as one of `codes`?" — the one implementation of the
+ * claimant question, previously written out three times (batch widening, retirement, post-delete
+ * reprojection) in the same shape with the same "the same rule" comment on each copy.
+ *
+ * ⛔ The distinction the whole thing exists for: a claim is `registryPreferredCode(row) === code`,
+ * NOT "the row carries the string somewhere". Row B `{local_code:'Y', national_code:'X'}` projects
+ * as `'Y'` and does not claim `'X'`; counting it would drag it into a collision it is not part of
+ * (see `widenToCollidingRows`' ⛔ note for what that costs). The SQL is therefore a deliberately
+ * WIDE prefilter — expressing the preference order as a `coalesce(...)` here would be a second copy
+ * of `registryPreferredCode` in a dialect pg-mem must also agree with — narrowed IN MEMORY.
+ *
+ * `exclude` drops rows the caller already knows are not live claimants: a facility being deleted is
+ * still present in `facility_registry` while `retireRegistryConcepts` runs, and would otherwise read
+ * as the claimant of its own code.
+ *
+ * Returns the claiming rows paired with the code each claims, so a caller can use either.
+ */
+async function claimantsOf(
+  deps: Pick<ReconcileDeps, 'internalDb'>,
+  codes: string[],
+  exclude: ReadonlySet<string> = new Set(),
+): Promise<{ id: string; name: string; claimed: string }[]> {
+  if (codes.length === 0) return [];
+  const wanted = new Set(codes);
+  const rows = await deps.internalDb
+    .selectFrom('facility_registry')
+    .select(['id', 'name', 'local_code', 'national_code'])
+    .where((eb) => eb.or([eb('local_code', 'in', codes), eb('national_code', 'in', codes)]))
+    .execute();
+  const out: { id: string; name: string; claimed: string }[] = [];
+  for (const r of rows) {
+    if (exclude.has(r.id)) continue;
+    const claimed = registryPreferredCode({ localCode: r.local_code, nationalCode: r.national_code });
+    if (claimed === null || !wanted.has(claimed)) continue;
+    out.push({ id: r.id, name: r.name, claimed });
+  }
+  return out;
+}
+
+async function widenToCollidingRows(
+  deps: Pick<ReconcileDeps, 'internalDb'>,
+  rows: { id: string; name: string }[],
+): Promise<{ id: string; name: string }[]> {
+  const ids = rows.map((r) => r.id);
+  const own = await deps.internalDb
+    .selectFrom('facility_registry')
+    .select(['id', 'local_code', 'national_code'])
+    .where('id', 'in', ids)
+    .execute();
+
+  const candidates = new Set<string>();
+  for (const r of own) {
+    const c = registryPreferredCode({ localCode: r.local_code, nationalCode: r.national_code });
+    if (c !== null) candidates.add(c);
+  }
+
+  // Keyed by id so a row already in `rows` keeps the caller's own `name` — the caller just wrote it,
+  // and its copy is at least as fresh as the one this read returned. Also why `rows` is seeded first:
+  // a row the caller named that no longer exists in `facility_registry` must stay in the batch (it is
+  // still projected, and `reprojectRegistryRows` handles it), not be silently dropped.
+  const byId = new Map(rows.map((r) => [r.id, r]));
+
+  const links = await deps.internalDb
+    .selectFrom('facility_concept_projection')
+    .select(['registry_id', 'concept_code'])
+    .where('registry_id', 'in', ids)
+    .execute();
+  // Direction 2's trigger. `concept_code === registry_id` is the id-parking marker: this row's code
+  // was decided by another row's, so writing it can free that other row.
+  const batchHoldsParkedRow = links.some((l) => l.concept_code === l.registry_id);
+  for (const l of links) if (l.concept_code !== l.registry_id) candidates.add(l.concept_code);
+
+  if (batchHoldsParkedRow) {
+    // Filtered in memory, not with a SQL column-to-column predicate. Same reasoning as the
+    // `linkedElsewhere` filter in `reprojectRegistryRows`: pg-mem (the test double behind every test
+    // in this module) has already been caught crashing on a non-trivial predicate against this
+    // table's indexed primary key, so a filter that is free to do in memory is not worth pushing
+    // down. ⚠ The read itself is NOT free — it is one row per PROJECTED facility, unbounded by the
+    // batch — which is why it is gated on the batch actually holding a parked row above. A registry
+    // with no live collisions never runs it.
+    const parkedIds = (await deps.internalDb
+      .selectFrom('facility_concept_projection')
+      .select(['registry_id', 'concept_code'])
+      .execute())
+      .filter((l) => l.concept_code === l.registry_id && !byId.has(l.registry_id))
+      .map((l) => l.registry_id);
+    if (parkedIds.length > 0) {
+      const parked = await deps.internalDb
+        .selectFrom('facility_registry')
+        .select(['id', 'name', 'local_code', 'national_code'])
+        .where('id', 'in', parkedIds)
+        .execute();
+      for (const p of parked) {
+        byId.set(p.id, { id: p.id, name: p.name });
+        // A freed row's candidate must join `candidates` too, or the claimant lookup below cannot
+        // tell whether it is still contested.
+        const c = registryPreferredCode({ localCode: p.local_code, nationalCode: p.national_code });
+        if (c !== null) candidates.add(c);
+      }
+    }
+  }
+
+  // Nothing to collide ON — every row in the batch is either absent from `facility_registry` (a
+  // caller naming a row that no longer exists) or carries no code at all.
+  if (candidates.size === 0) return [...byId.values()];
+
+  // `claimantsOf` asks the SAME question `registryConceptRows` and `resolveObservedFacilities` ask —
+  // what would this row project as? — and not "does this row contain the string anywhere?".
+  for (const c of await claimantsOf(deps, [...candidates])) {
+    if (!byId.has(c.id)) byId.set(c.id, { id: c.id, name: c.name });
+  }
+  return [...byId.values()];
 }
 
 /**
@@ -862,23 +1219,37 @@ async function ensureRegistrySystemActive(deps: Pick<ReconcileDeps, 'admin' | 'i
  * (10-15k rows). This function instead takes the exact rows that just changed — one row from the
  * POST/PUT routes, the whole batch from a CSV import — and writes only those.
  *
- * Shares `registryConceptRows` with `publishRegistryConcepts` so the two projections can never drift
- * on shape (code = `local_code`, else `national_code`, else the row's `id` on a collision; display =
- * its `name`).
+ * ⛔ This shares its ENTIRE projection with `publishRegistryConcepts` — both delegate to
+ * `reprojectRegistryRows`, which now also owns the batch widening — so the two cannot drift on shape
+ * (code = `local_code`, else `national_code`, else the row's `id` on a collision; display = its
+ * `name`), on collision scope, or on what happens to a mapping whose target code moves. ALL that is
+ * left in this function is the containment below.
  *
- * ⚠ Collision detection with only PARTIAL visibility: `rows` carries only `{id, name}` — the caller
- * (a POST/PUT route, the CSV importer) hands in exactly what it just wrote, nothing more — so this
- * function cannot compute a candidate code, let alone detect a collision, from its arguments alone
- * the way `publishRegistryConcepts` can (that one already has the WHOLE registry loaded). It goes and
- * looks instead: it re-reads the given rows' own `local_code`/`national_code`, then queries for any
- * OTHER `facility_registry` row anywhere in the table that claims one of the same candidate codes,
- * and forces THOSE rows' concepts to fall back to their own `id` via `registryConceptRows`'
- * `forceOwnIdFor`. This is safe specifically because every caller of this function invokes it AFTER
- * its own write has already committed (see the doc comments on the create/update routes and
- * `facility-import.ts`'s call site) — by the time this runs, the live table already reflects both
- * "the rest of this batch" (a multi-row CSV import) and "everything pre-existing", so there is no
- * third category of row a DB lookup here could miss. A single-row call (the common POST/PUT case)
- * gets exactly the same protection as a batch, at the cost of two extra reads.
+ * ⚠ PARTIAL visibility is handled one layer down, not here: `rows` carries only `{id, name}` — the
+ * caller (a POST/PUT route, the CSV importer) hands in exactly what it just wrote, nothing more — so
+ * neither this function nor `registryConceptRows` can see a collision against a row outside the
+ * batch. `reprojectRegistryRows` widens the batch until it is closed under collision (see
+ * `widenToCollidingRows`) before projecting anything. That is safe specifically because every caller
+ * of this function invokes it AFTER its own write has already committed (see the doc comments on the
+ * create/update routes and `facility-import.ts`'s call site) — by the time this runs, the live table
+ * already reflects both "the rest of this batch" (a multi-row CSV import) and "everything
+ * pre-existing", so there is no category of row the widening's lookup could miss.
+ *
+ * ⚠ So a single-row call CAN write more than one row's concept, and that is intended: a facility
+ * whose code collides with the one just written is reprojected too, as is a facility the write frees
+ * from a collision.
+ *
+ * ⚠ And it writes MORE than just those, which a reviewer measured and this comment used to deny. It
+ * claimed the call "never touches a row whose own projection this batch cannot change"; that is
+ * FALSE. When the batch holds a PARKED row, `widenToCollidingRows` pulls in the registry's ENTIRE
+ * parked set — it has no cheaper way to find which parked rows this batch might free (see the
+ * `batchHoldsParkedRow` branch) — so with two INDEPENDENT collision pairs (A/B on 'X', C/D on 'Z'), a
+ * batch naming only fac-A reprojects C and D as well. Measured: all four
+ * `facility_concept_projection` rows get a fresh `updated_at`. It is behaviourally invisible — an
+ * unrelated parked row recomputes to the identical code and its `terminology_concepts` upsert is a
+ * no-op write of the same values, so no concept, mapping or link CONTENT changes — but it is real
+ * work, and the honest bound is "the batch, plus everything it can collide with, plus every parked
+ * row in the registry whenever the batch holds one", not "only what this batch can change".
  *
  * ⛔ Never throws. A projection failure must NOT take a facility write down with it — mirrors
  * `registerObservedSystem`'s containment on the ingest hot path (see that function's doc comment).
@@ -891,67 +1262,508 @@ export async function projectRegistryRows(
 ): Promise<void> {
   if (rows.length === 0) return;
   try {
-    await ensureRegistrySystemActive(deps);
-
-    const ids = rows.map((r) => r.id);
-    const own = await deps.internalDb
-      .selectFrom('facility_registry')
-      .select(['id', 'local_code', 'national_code'])
-      .where('id', 'in', ids)
-      .execute();
-    const ownById = new Map(own.map((r) => [r.id, r]));
-
-    const inputs: RegistryRowForConcept[] = rows.map((r) => {
-      const found = ownById.get(r.id);
-      return { id: r.id, name: r.name, localCode: found?.local_code ?? null, nationalCode: found?.national_code ?? null };
-    });
-
-    // Candidate codes this batch WANTS to use — dedup'd, since two of the given rows could (rarely)
-    // want the same code and both need to be included in the collision lookup below.
-    const candidates = [...new Set(inputs.map((r) => registryPreferredCode(r)).filter((c): c is string => c !== null))];
-
-    const forceOwnIdFor = new Set<string>();
-    if (candidates.length > 0) {
-      // Every OTHER row in the table (this batch's own rows included — a row always "claims" its own
-      // code) that claims one of our candidate codes via EITHER column. Matching on `local_code` OR
-      // `national_code` independently, not paired with `national_system`, mirrors what
-      // `registryPreferredCode` itself compares: a concept's `code` is a bare string, so a collision
-      // is possible against either column regardless of which system a national code belongs to.
-      const claimants = await deps.internalDb
-        .selectFrom('facility_registry')
-        .select(['id', 'local_code', 'national_code'])
-        .where((eb) => eb.or([eb('local_code', 'in', candidates), eb('national_code', 'in', candidates)]))
-        .execute();
-      const claimantIdsByCode = new Map<string, Set<string>>();
-      const addClaim = (code: string | null, id: string): void => {
-        if (code === null || !candidates.includes(code)) return;
-        const set = claimantIdsByCode.get(code) ?? new Set<string>();
-        set.add(id);
-        claimantIdsByCode.set(code, set);
-      };
-      for (const c of claimants) {
-        addClaim(c.local_code, c.id);
-        addClaim(c.national_code, c.id);
-      }
-      for (const r of inputs) {
-        const candidate = registryPreferredCode(r);
-        // More than one DISTINCT row id claiming this code means at least one OTHER row (not just
-        // this one) wants it too — a real collision, not just this row seeing its own claim reflected
-        // back.
-        if (candidate && (claimantIdsByCode.get(candidate)?.size ?? 0) > 1) forceOwnIdFor.add(r.id);
-      }
-    }
-
-    await deps.admin.terms.importRows(registryConceptRows(inputs, { forceOwnIdFor }));
-    // Write the new projection FIRST, delete the superseded id-keyed leftover SECOND — see
-    // `deleteSupersededIdConcepts`'s doc comment for why the order matters. Scoped to exactly the
-    // rows this call was handed, same as the write above — a facility outside `rows` (including one
-    // genuinely absent from `facility_registry`) is never touched.
-    await deleteSupersededIdConcepts(deps, registryRowIdsWithSupersededIdConcept(inputs, { forceOwnIdFor }));
+    // Everything — widening the batch until it is closed under collision, registering the coding
+    // system, writing the concepts, migrating the mappings whose target code moved, deleting the
+    // superseded id-keyed leftover — lives in ONE place, shared with `publishRegistryConcepts`. This
+    // function's own remaining job is the containment below.
+    await reprojectRegistryRows(deps, rows);
   } catch (err) {
     // eslint-disable-next-line no-console -- deliberate: see doc comment above for why this must
     // never propagate, and this module takes no logger dependency to report through otherwise.
     console.error('[facility-reconcile] failed to project facility_registry row(s) into FACILITY_REGISTRY_SYSTEM', err);
+  }
+}
+
+export interface ReprojectResult {
+  /** How many rows were projected — every row handed in, whether or not its code moved. */
+  projected: number;
+  /** One entry per row whose projected code ACTUALLY moved. A row projected for the first time (no
+   *  `facility_concept_projection` link yet) is NOT a code change — there is no old code to move
+   *  away from, and nothing could have been authored against one. */
+  codeChanges: {
+    registryId: string;
+    from: string;
+    to: string;
+    mappingsMigrated: number;
+    /** TRUE when the carry-over was deliberately SKIPPED because the identity of `from`'s mappings
+     *  is not decidable: either `from` is still linked by a facility OUTSIDE this batch (the
+     *  `linkedElsewhere` guard below), or two rows INSIDE this batch both name it as their previous
+     *  code (the `contestedInBatch` guard). Without this flag the
+     *  skip is indistinguishable from the ordinary "there were no mappings on the old code" case —
+     *  both report `mappingsMigrated: 0` — and the guard can suppress the exact repair this function
+     *  exists to perform, silently. An operator reading a Publish summary needs to be able to tell
+     *  "nothing to carry" from "we refused to carry it". A `console.warn` fires alongside, matching
+     *  `deleteSupersededIdConcepts`' precedent for a strictly less alarming case. */
+    carryOverSkipped: boolean;
+  }[];
+}
+
+/**
+ * Project the given `facility_registry` rows AND migrate any `term_mappings` whose target code moves
+ * as a result.
+ *
+ * ⚠ It projects MORE rows than it is given, always: the first thing it does is widen `rows` into a
+ * batch closed under collision (`widenToCollidingRows`), because `registryConceptRows`' in-batch
+ * check — the one collision implementation there is — can only answer for rows it can see. A caller
+ * that hands in the whole registry (`publishRegistryConcepts`) is unaffected; a caller that hands in
+ * one row (`projectRegistryRows`, via a POST/PUT or a CSV import) gets the identical answer instead
+ * of a narrower one. `projected` therefore counts the WIDENED batch, not the caller's array.
+ *
+ * A facility's concept code is DERIVED (`local_code`, else `national_code`, else its own `id` on a
+ * collision — see `registryConceptRows`), so it can move without anyone editing that facility:
+ * importing an unrelated row whose `national_code` equals this row's `local_code` makes BOTH fall
+ * back to their UUIDs on the next full reprojection. A mapping an operator authored against the
+ * human code then points at nothing, and — because the concept write is upsert-only — the orphaned
+ * concept stays in the picker, selectable, resolving to no facility.
+ *
+ * `facility_concept_projection` is what makes "moved" OBSERVABLE. Without a durable record of what a
+ * row projected as LAST time, a projection can only compute a desired code; it has no way to know
+ * which old code's mappings to carry forward. That is also why the link is read as-is and never
+ * re-derived from `local_code`/`national_code` here: the link records what was actually WRITTEN,
+ * collision fallback included, and recomputing it would invent a move that never happened.
+ *
+ * ⛔ ORDERING IS LOAD-BEARING, and it is the same contract `deleteSupersededIdConcepts` documents:
+ * write the new concepts FIRST, rewrite the mappings SECOND, delete the old concept LAST. A
+ * mid-failure must leave a stale concept behind for the next projection to retry, never a facility
+ * with ZERO concepts. Deleting the old concept before the mapping rewrite would strand every mapping
+ * still pointing at it if the rewrite then failed. Pinned by the test "leaves the old concept in
+ * place when the mapping rewrite fails" — reordering the delete ahead of the rewrite fails it.
+ *
+ * ⛔ AND THE ORDER IS ALL THE SAFETY THERE IS: these three steps are NOT one transaction, and cannot
+ * cheaply be made one. `admin.termMappings.update` opens its OWN transaction internally
+ * (`db.transaction().execute(...)` in `terminology-admin-store.ts`) over the `Kysely` instance it
+ * was constructed with, and it takes no `Transaction` parameter to join an outer one. Wrapping this
+ * sequence in `internalDb.transaction()` would therefore not nest a savepoint and would not even
+ * share a session: Kysely's `TransactionBuilder.execute` goes through `provideConnection` →
+ * `driver.acquireConnection()`, so the store's inner transaction runs on a DIFFERENT pooled
+ * connection. Its `COMMIT` commits only its own work, independently of the outer transaction, which
+ * means a later rollback would NOT undo the mapping rewrites — the sequence would LOOK atomic and
+ * silently not be. (On a small pool it can also deadlock against locks the outer transaction holds.)
+ * That is strictly worse than not wrapping at all: it would trade an honest, converging partial
+ * state for a silent one. Making it genuinely atomic means threading a `Transaction` through the
+ * admin store's whole `termMappings` surface, which is a store change, not a change here.
+ *
+ * What each mid-failure actually leaves behind, and why the next run repairs it:
+ *  - Failure in STEP 1 (`importRows`): nothing else has run. The link table still names the old
+ *    code, the old concept is intact, mappings are untouched. A re-run recomputes the identical
+ *    `moved` set and starts over. Fully self-healing.
+ *  - Failure DURING STEP 2 (some mappings rewritten, some not): both concepts exist — the new one
+ *    was written in step 1 and the old one is not deleted until step 3 — so EVERY mapping, migrated
+ *    or not, still points at a live concept and still resolves. The link table is not advanced
+ *    either (it is written after the loop), so a re-run computes the SAME `from` -> `to` and the
+ *    already-migrated rows are simply not in its `to_code in (fromCodes)` snapshot any more. Fully
+ *    self-healing.
+ *  - Failure BETWEEN steps 2 and 3, or during the link write: mappings are correct, but the old
+ *    concept lingers in the picker as a ghost and the link still names the old code. A re-run
+ *    recomputes the same move, finds zero stale mappings, and deletes the ghost. Self-healing.
+ *
+ * ⚠ The ONE residual that does NOT self-heal, stated rather than glossed: a crash mid-loop (or
+ * before the link write) followed by the registry changing that row's code AGAIN before the next
+ * run. The re-run's `from` is read from the link, which still names the FIRST code — so the second
+ * hop's mappings are computed against a code that has already been vacated, and any mapping the
+ * crashed run had already migrated now sits on the intermediate code, which no link record names and
+ * no future run will look at. It resolves as `targetMissing` on the Observed tab (visible, not
+ * silent) and needs an operator to re-point it. Closing it needs real atomicity, i.e. the store
+ * change described above — not more ordering.
+ *
+ * ⛔ Mappings are rewritten through `admin.termMappings.update`, NEVER with a direct
+ * `UPDATE term_mappings`. `term_mappings` is authoritative and `concept_map_elements` is its mirror;
+ * a raw UPDATE would leave the mirror pointing at the old code and skip `reference_change_log`
+ * capture.
+ *
+ * ⚠ Throws on failure, deliberately — this function does not contain its own errors. Its callers
+ * have genuinely different containment needs (an explicit operator Publish may propagate; the
+ * facility-save hot path must not), exactly as `ensureCodingSystemActive`'s doc comment reasons about
+ * the same split. `projectRegistryRows`' try/catch stays where it is.
+ *
+ * ⛔ THE CONTESTED-CODE REFUSAL IS A DEAD END, NOT A RETRY — stated here rather than left to be
+ * discovered from a warning. When two `facility_concept_projection` rows name one `concept_code`
+ * (migration 077's backfill still produces that for two facilities sharing a human code when neither
+ * has an id-keyed concept — see 077's ⚠ note, and the `contestedInBatch` guard below), the guard
+ * refuses the carry-over for BOTH rows. The consequence, in full:
+ *  - the `term_mappings` on that code NEVER migrate — not on this Publish and not on any later one,
+ *    because nothing about the condition changes by re-running;
+ *  - every Publish warns again, and reports `carryOverSkipped` for those rows, indefinitely;
+ *  - there is NO repair tool. `reprojectRegistryRows` only ever upserts a row's OWN link, so it
+ *    cannot un-share the code, and no CLI command (`facilities repair-links` or otherwise) exists.
+ *    Settling it means an operator hand-editing `facility_concept_projection` to say which facility
+ *    genuinely owned the code, then re-publishing.
+ * Refusing is still the right trade — the alternative is silently re-pointing an operator's mapping
+ * at the wrong lab — but nobody should read the warning expecting the next run to clear it.
+ */
+export async function reprojectRegistryRows(
+  deps: Pick<ReconcileDeps, 'admin' | 'internalDb'>,
+  rows: { id: string; name: string }[],
+): Promise<ReprojectResult> {
+  if (rows.length === 0) return { projected: 0, codeChanges: [] };
+
+  await ensureRegistrySystemActive(deps);
+
+  // ⛔ FIRST, and for every caller. `registryConceptRows`' in-batch check is the ONE collision
+  // implementation in the codebase, and it can only see the batch — so the batch is made COMPLETE
+  // here rather than the check being second-guessed by a separate table lookup afterwards. A
+  // `publishRegistryConcepts` call already hands in the whole registry, so this is a no-op for it; a
+  // `projectRegistryRows` call hands in one row and this is what gives it the same answer.
+  const widened = await widenToCollidingRows(deps, rows);
+
+  const ids = widened.map((r) => r.id);
+  const own = await deps.internalDb
+    .selectFrom('facility_registry')
+    .select(['id', 'local_code', 'national_code'])
+    .where('id', 'in', ids)
+    .execute();
+  const ownById = new Map(own.map((r) => [r.id, r]));
+
+  const inputs: RegistryRowForConcept[] = widened.map((r) => {
+    const found = ownById.get(r.id);
+    return { id: r.id, name: r.name, localCode: found?.local_code ?? null, nationalCode: found?.national_code ?? null };
+  });
+
+  // No `forceOwnIdFor`: the widening above guarantees that every row projecting to one of this
+  // batch's candidate codes IS in the batch, so the in-batch check already sees both sides of every
+  // collision. Passing a second, separately-computed collision set (the removed
+  // `collidingRegistryIds`) would be a strict subset of what the in-batch check catches, bought with
+  // a second execution of the same full-table query the widening just ran.
+  const desired = registryConceptRows(inputs);
+
+  const links = await deps.internalDb
+    .selectFrom('facility_concept_projection')
+    .select(['registry_id', 'concept_code'])
+    .where('registry_id', 'in', ids)
+    .execute();
+  const previousById = new Map(links.map((l) => [l.registry_id, l.concept_code]));
+
+  // STEP 1 of the ordering contract above: the new concepts exist before anything is pointed at them
+  // and before anything old is removed.
+  await deps.admin.terms.importRows(desired);
+
+  const moved = inputs
+    .map((r, i) => ({ registryId: r.id, from: previousById.get(r.id), to: desired[i].code }))
+    .filter((m): m is { registryId: string; from: string; to: string } => m.from !== undefined && m.from !== m.to);
+
+  const codeChanges: ReprojectResult['codeChanges'] = [];
+
+  if (moved.length > 0) {
+    const fromCodes = [...new Set(moved.map((m) => m.from))];
+
+    // SNAPSHOT the mappings BEFORE rewriting any of them. Two rows swapping codes with each other in
+    // one batch (A: X->Y while B: Y->X) is rare but legal, and re-reading per row mid-loop would let
+    // A's freshly-rewritten mappings be picked up again as B's "stale" ones and rewritten a second
+    // time. One read of the pre-change state cannot do that.
+    const staleRows = await deps.internalDb
+      .selectFrom('term_mappings')
+      .selectAll()
+      .where('to_system', '=', FACILITY_REGISTRY_SYSTEM)
+      .where('to_code', 'in', fromCodes)
+      .execute();
+    const staleByCode = new Map<string, typeof staleRows>();
+    for (const m of staleRows) {
+      const list = staleByCode.get(m.to_code) ?? [];
+      list.push(m);
+      staleByCode.set(m.to_code, list);
+    }
+
+    // ⛔ A link row can DISAGREE with reality: migration 077's backfill matches a facility against
+    // either its human code or its id and takes whichever the join happens to yield first, so a row
+    // that somehow carried both concepts got a non-deterministic link. If such a link names a code
+    // some OTHER facility genuinely projects as, then the mappings on that code are that other
+    // facility's, not this one's — migrating them here would silently re-point an operator's mapping
+    // at the wrong lab, and deleting the concept would take a LIVE facility out of the picker. So a
+    // `from` claimed by a facility outside this batch is left strictly alone (the row still moves to
+    // its new code; only the carry-over is skipped). This is a targeted defence on the two
+    // DESTRUCTIVE steps, not a re-derivation of the link — second-guessing the link against live
+    // concepts is exactly the recompute migration 077 deliberately avoided.
+    //
+    // "Outside this batch" is filtered in memory rather than with a SQL `not in`: the result set is
+    // already bounded by `concept_code in (the codes that moved)` — at most one link row per facility
+    // that claims one — so the filter is free, and pg-mem (the test double behind every test in this
+    // module) crashes outright on `not in` against this table's indexed primary key.
+    const batchIds = new Set(ids);
+    const linkedElsewhere = new Set(
+      (await deps.internalDb
+        .selectFrom('facility_concept_projection')
+        .select(['registry_id', 'concept_code'])
+        .where('concept_code', 'in', fromCodes)
+        .execute())
+        .filter((l) => !batchIds.has(l.registry_id))
+        .map((l) => l.concept_code),
+    );
+
+    // ⛔ THE SAME HAZARD AS `linkedElsewhere`, from INSIDE the batch — and `linkedElsewhere` cannot
+    // see it, by construction. That guard only fires for a claimant OUTSIDE the batch, but
+    // `widenToCollidingRows` runs first and GUARANTEES a collision partner is pulled IN, so the one
+    // shape it was written for is the one shape it can never catch.
+    //
+    // Two link rows can name the SAME `concept_code`, and migration 077's backfill STILL PRODUCES
+    // that — its `distinct on (r.id)` guarantees one link per FACILITY and prefers a row's id-keyed
+    // concept when one exists, but two rows claiming the same human code with no id-keyed concept of
+    // their own have that shared concept as their only candidate, and nothing conflicts on insert
+    // (the `registry_id`s differ). See 077's own ⚠ note for how a row ends up with no concept of its
+    // own. A database restored from a dump written before that backfill was made deterministic can
+    // hold the state for the wider set of reasons the ordering now excludes. Nothing in this
+    // codebase clears it once it exists. Both rows then compute `from` = that one code, and the loop
+    // would run the carry-over TWICE against ONE `staleByCode` snapshot: the first pass repoints
+    // every mapping on the shared code to row 1's new code, the second pass repoints the SAME
+    // mappings — they are still in the snapshot — to row 2's. Last writer wins, silently, with
+    // `carryOverSkipped: false` and no warning. A mapping authored when the code meant facility A
+    // then resolves to facility B in an official report, and the `facility_map` mirror is rebuilt to
+    // agree. Confidently wrong master data is strictly worse than a visible refusal.
+    //
+    // So: if two rows in this batch claim one `from`, NOBODY carries it over. There is no signal
+    // here that could pick the rightful owner — the link table is the only record of what the code
+    // meant, and it disagrees with itself. The rows still MOVE to their new codes (that part is
+    // unambiguous and is what unbreaks the projection); only the two destructive steps are refused,
+    // exactly as for `linkedElsewhere`, and an operator gets a warning plus `carryOverSkipped: true`
+    // to act on.
+    const fromCount = new Map<string, number>();
+    for (const m of moved) fromCount.set(m.from, (fromCount.get(m.from) ?? 0) + 1);
+    const contestedInBatch = new Set([...fromCount].filter(([, n]) => n > 1).map(([code]) => code));
+
+    // A code this batch is HANDING OVER: one row moves off it in the same call another row moves on
+    // to it (an operator renaming a facility and giving its old code to a new one in a single
+    // import). The mappings still migrate — they were authored when the code meant the OLD facility,
+    // and the snapshot above makes that safe — but the concept must NOT be deleted: `importRows`
+    // just wrote it for its new owner.
+    const reclaimedInBatch = new Set(desired.map((d) => d.code));
+
+    for (const m of moved) {
+      let mappingsMigrated = 0;
+      const contested = contestedInBatch.has(m.from);
+      const carryOverSkipped = linkedElsewhere.has(m.from) || contested;
+      if (carryOverSkipped) {
+        // ⛔ Say so out loud. Skipping is the RIGHT call (see both guards above), but it suppresses
+        // the exact repair this function exists to perform, and `mappingsMigrated: 0` alone reads
+        // identically to "there was nothing on the old code to carry". A skip that cannot be told
+        // apart from a no-op is a skip nobody will ever investigate. Same containment reasoning as
+        // `deleteSupersededIdConcepts`' warn, for a strictly more alarming case. The two reasons get
+        // two messages because the REPAIR differs: one is fixed by widening the batch, the other by
+        // fixing the link rows that disagree.
+        // eslint-disable-next-line no-console -- deliberate: this module takes no logger dependency
+        // (see the `err` catches elsewhere in this file); diagnostic-only, and mirrored on the
+        // result as `carryOverSkipped` for callers that render a summary.
+        console.warn(
+          contested
+            ? `[facility-reconcile] facility ${m.registryId} now projects as '${m.to}', but its previous code '${m.from}'`
+              + ' is recorded in facility_concept_projection as MORE THAN ONE facility\'s projection, so there is no way'
+              + ' to tell whose mappings it carries — its term_mappings were NOT migrated and the stale concept was NOT'
+              + ' removed. Repair the link rows sharing that code, then re-publish.'
+            : `[facility-reconcile] facility ${m.registryId} now projects as '${m.to}', but its previous code '${m.from}'`
+              + ' is still linked by a facility outside this batch — its term_mappings were NOT migrated and the stale'
+              + ' concept was NOT removed. Re-publish the WHOLE registry so both facilities are in one batch, or repair'
+              + ' the mapping by hand.',
+        );
+      } else {
+        // STEP 2: repoint the mappings, through the admin store so `concept_map_elements` and
+        // `reference_change_log` follow. The full `TermMappingInput` is required (it is a replace,
+        // not a patch), so every other field is carried across verbatim — including `to_display`,
+        // which is the operator's own denormalised label and not this function's to re-curate.
+        for (const stale of staleByCode.get(m.from) ?? []) {
+          await deps.admin.termMappings.update(stale.id, {
+            fromSystem: stale.from_system,
+            fromCode: stale.from_code,
+            toSystem: FACILITY_REGISTRY_SYSTEM,
+            toCode: m.to,
+            toDisplay: stale.to_display,
+            mapType: stale.map_type as MapType,
+            relationship: stale.relationship,
+            owner: stale.owner,
+            isActive: stale.is_active,
+          });
+          mappingsMigrated += 1;
+        }
+
+        // STEP 3, and only now: the old concept is unreferenced. Doing this before the rewrite above
+        // would strand every mapping still pointing at it if the rewrite then failed.
+        if (!reclaimedInBatch.has(m.from)) {
+          await deps.internalDb
+            .deleteFrom('terminology_concepts')
+            .where('system', '=', FACILITY_REGISTRY_SYSTEM)
+            .where('code', '=', m.from)
+            .execute();
+        }
+      }
+      codeChanges.push({ registryId: m.registryId, from: m.from, to: m.to, mappingsMigrated, carryOverSkipped });
+    }
+  }
+
+  // Record what every row projected as THIS time — the rows that did not move included (the write is
+  // idempotent) and the rows projected for the FIRST time (no prior link). Batched, not one statement
+  // per row: a national register runs 10-15k rows and `publishRegistryConcepts` hands all of them
+  // over in a single call.
+  //
+  // ⛔ Only rows that ACTUALLY exist in `facility_registry` get a link. `rows` is whatever a caller
+  // handed in, and `registryConceptRows` happily projects a row it cannot find (both code columns
+  // read as absent, so it falls back to the id) — but `facility_concept_projection.registry_id` is a
+  // FOREIGN KEY, so linking one would throw and take the entire projection down with it, including
+  // for every legitimate row in the same batch.
+  const linkRows = inputs
+    .map((r, i) => ({ registry_id: r.id, concept_code: desired[i].code, updated_at: new Date() }))
+    .filter((l) => ownById.has(l.registry_id));
+  const batchSize = 1000; // Same bound `admin.terms.importRows` uses, for the same parameter-limit reason.
+  for (let i = 0; i < linkRows.length; i += batchSize) {
+    await deps.internalDb
+      .insertInto('facility_concept_projection')
+      .values(linkRows.slice(i, i + batchSize))
+      .onConflict((oc) => oc.column('registry_id').doUpdateSet((eb) => ({
+        concept_code: eb.ref('excluded.concept_code'),
+        updated_at: eb.ref('excluded.updated_at'),
+      })))
+      .execute();
+  }
+
+  // The pre-link-table leftover, kept because the link cannot see it: a concept written under the old
+  // `code = id` scheme (commit 0518e7d3) for a facility that has never been projected since, so it
+  // has no link row for the loop above to have noticed a move from. Same call, same arguments, same
+  // position (after the write) as both projection paths used to make it themselves — Task 8 routed
+  // them through this function, so THIS is now the only call site and dropping it here would
+  // silently retire that cleanup for both.
+  await deleteSupersededIdConcepts(deps, registryRowIdsWithSupersededIdConcept(inputs));
+
+  return { projected: inputs.length, codeChanges };
+}
+
+/**
+ * Mark the given facilities' projected concepts RETIRED — the FIRST half of what deleting a facility
+ * has to do to the projection.
+ *
+ * ⛔ Deliberately NOT a delete, and not `terms.delete`. An operator who already mapped an observed
+ * code onto this facility chose that target deliberately; the mapping must keep naming a concept
+ * that EXISTS, so the choice stays visible in the Observed tab and in `term_mappings` instead of
+ * being silently reduced to a dangling code. Retirement's OTHER half is exclusion from new
+ * selection — the split `TermPicker`'s ACTIVE-only status filter expresses (see
+ * `TermMappingDialog`'s `statuses` prop, which passes `['ACTIVE']` under `lockedTargetSystem`
+ * precisely so this retirement takes effect). Leaving the concept ACTIVE, which is what a delete
+ * used to do, left a selectable ghost in the picker pointing at a facility that no longer exists.
+ *
+ * ⛔ What retirement does NOT do, stated because four places in this codebase used to claim it did:
+ * it does NOT keep the facility resolvable. `resolveObservedFacilities` never reads
+ * `terminology_concepts` at all — it re-derives codes from the live `facility_registry` via
+ * `registryConceptRows` — so retiring the concept is INERT to resolution. Once the registry row is
+ * gone, the mapping resolves as `targetMissing` and reports fall back to the raw performer string.
+ * Measured, and pinned by "retires a deleted facility's concept instead of deleting it, so the
+ * mapping still names something that exists", which runs the whole DELETE sequence and asserts
+ * `targetMissing === true`. Keeping history resolvable would need a different mechanism entirely
+ * (a tombstone the resolver reads), which this slice does not build.
+ *
+ * ⛔ MUST run BEFORE the `facility_registry` row is deleted. `facility_concept_projection` is the
+ * only durable record of what a row actually projected as (collision fallback included — the code is
+ * NOT recomputable from `local_code`/`national_code` once its collision partner is gone), and that
+ * table is `ON DELETE CASCADE`: the link vanishes the instant the facility does.
+ * `reprojectAfterRegistryDelete` is the other half and must run AFTER, since it reacts to the row
+ * being gone; see its doc comment.
+ *
+ * ⛔ A link row can DISAGREE with reality, and that is guarded here rather than trusted. Migration
+ * 077's backfill matched a facility against either its human code or its id and took whichever the
+ * join happened to yield first, so a link can name a code some OTHER, LIVE facility genuinely
+ * projects as. Retiring that would pull a live lab out of the mapping picker over a deletion that had
+ * nothing to do with it — and, because a retired concept still resolves, entirely silently. So a code
+ * still claimed by a surviving facility is skipped. This is the same targeted defence
+ * `reprojectRegistryRows` applies to its own destructive steps (`linkedElsewhere`), and it asks the
+ * claimant question through the shared `claimantsOf` helper — "claims a code" is
+ * `registryPreferredCode(row) === code` and nothing else.
+ *
+ * ⚠ `registryIds` are still present in `facility_registry` when this runs (that is the whole point of
+ * the ordering), so they are excluded from the claimant set explicitly — otherwise a facility being
+ * deleted would be read as the live claimant of its own code and nothing would ever retire.
+ *
+ * Returns how many concept rows were actually updated, so a caller can tell "retired it" from
+ * "there was nothing projected to retire" and from "we refused to retire a live facility's code".
+ *
+ * ⚠ Throws on failure, like `reprojectRegistryRows` and for the same reason: containment belongs to
+ * the caller, whose needs differ (the delete route must not fail a successful deletion over this).
+ */
+export async function retireRegistryConcepts(
+  deps: Pick<ReconcileDeps, 'internalDb'>,
+  registryIds: string[],
+): Promise<number> {
+  if (registryIds.length === 0) return 0;
+
+  const links = await deps.internalDb
+    .selectFrom('facility_concept_projection')
+    .select('concept_code')
+    .where('registry_id', 'in', registryIds)
+    .execute();
+  if (links.length === 0) return 0;
+  const codes = [...new Set(links.map((l) => l.concept_code))];
+
+  // The facilities being deleted are still IN `facility_registry` while this runs (that is the whole
+  // point of the ordering), so they are excluded explicitly — otherwise a facility being deleted
+  // would read as the live claimant of its own code and nothing would ever retire.
+  const claimed = new Set((await claimantsOf(deps, codes, new Set(registryIds))).map((c) => c.claimed));
+
+  const retirable = codes.filter((c) => !claimed.has(c));
+  if (retirable.length === 0) return 0;
+
+  const res = await deps.internalDb
+    .updateTable('terminology_concepts')
+    .set({ status: 'RETIRED' })
+    .where('system', '=', FACILITY_REGISTRY_SYSTEM)
+    .where('code', 'in', retirable)
+    .executeTakeFirst();
+  return Number(res.numUpdatedRows ?? 0);
+}
+
+/**
+ * Reproject whatever a facility DELETE just freed — the SECOND half, and the one code-release path
+ * that used to have no reprojection at all.
+ *
+ * A facility's concept code is `local_code ?? national_code`, falling back to the row's own `id`
+ * ("parking") when two rows would project to the same code. So deleting one side of a collision FREES
+ * the other to move back up to the human code: `resolveObservedFacilities` re-derives preferred codes
+ * over the WHOLE registry, so it starts resolving the survivor through the human code the instant the
+ * delete commits, while the operator's `term_mappings` row still names the survivor's id. The mapping
+ * breaks with nobody having touched it, and stays broken until somebody presses Scan. This is exactly
+ * the failure `reprojectRegistryRows` closes for a RENAME; the delete route was the remaining hole.
+ *
+ * ⛔ MUST run AFTER the `facility_registry` row is gone — it reacts to the row's absence, and the
+ * claimant lookup below would otherwise still find the deleted facility contesting its own code and
+ * conclude nothing was freed. That is the opposite ordering constraint to `retireRegistryConcepts`,
+ * which must run BEFORE (the link it reads cascades away with the row). Hence two calls around the
+ * delete rather than one wrapper on either side of it.
+ *
+ * ⛔ The deleted row is NEVER handed to `reprojectRegistryRows`. `registryConceptRows` happily
+ * projects a row it cannot find — both code columns read as absent, so it falls back to the id — and
+ * `importRows` upserts `status: 'ACTIVE'`, so passing the deleted id straight through would write a
+ * fresh ACTIVE concept for a facility that no longer exists, resurrecting the very ghost
+ * `retireRegistryConcepts` just put down. Only SURVIVING claimants of the freed code go in.
+ *
+ * ⚠ The freed code is the deleted row's PREFERRED code (`registryPreferredCode`), not the code it was
+ * projected under. Those differ in precisely the case that matters: a parked row was projected under
+ * its own `id`, which no other row can ever claim, while the string it was CONTESTING — the one whose
+ * release frees the survivor — is its preferred code. Both are read from the caller's pre-delete
+ * snapshot of the row, because the row itself is already gone by the time this runs.
+ *
+ * ⛔ Never throws, for the same reason as `projectRegistryRows` (which it delegates the projection
+ * to, inheriting that containment): the deletion has already committed, and a best-effort catch-up
+ * must not turn a successful DELETE into a 500.
+ */
+export async function reprojectAfterRegistryDelete(
+  deps: Pick<ReconcileDeps, 'admin' | 'internalDb'>,
+  deleted: { id: string; localCode: string | null; nationalCode: string | null },
+): Promise<void> {
+  try {
+    const freed = registryPreferredCode({ localCode: deleted.localCode, nationalCode: deleted.nationalCode });
+    // `facility_registry_has_a_code` makes this unreachable for a real row, but the caller hands in a
+    // snapshot, not the row — a codeless snapshot frees nothing and must not become a bare query.
+    if (freed === null) return;
+
+    // `deleted.id` is excluded defensively: the row should already be gone, and if a caller got the
+    // ordering wrong this refuses to reproject a facility it was told was deleted rather than
+    // writing an ACTIVE concept for it.
+    const survivors = (await claimantsOf(deps, [freed], new Set([deleted.id])))
+      .map((r) => ({ id: r.id, name: r.name }));
+
+    if (survivors.length === 0) return;
+
+    // Through `projectRegistryRows`, not `reprojectRegistryRows` directly: the widening, the mapping
+    // carry-over and the containment are all things this path needs and none of them are this
+    // function's to re-implement. A single surviving claimant is enough to hand over — the widening
+    // pulls in the rest of the collision set from there.
+    await projectRegistryRows(deps, survivors);
+  } catch (err) {
+    // eslint-disable-next-line no-console -- deliberate: see doc comment above for why this must
+    // never propagate, and this module takes no logger dependency to report through otherwise.
+    console.error('[facility-reconcile] failed to reproject after deleting facility_registry row', deleted.id, err);
   }
 }
 
@@ -1083,4 +1895,70 @@ export async function captureObservedFacilityFromProjection(
   // under the SAME system a later full scan would also file it under.
   const system = resolvedObservedSystem(projected.performer_system, sourceSystem);
   await captureObservedFacility(deps, system, performer, now);
+}
+
+// ── Task 13: the mapping-conflict review queue ─────────────────────────────────────────────────
+
+/** One unresolved row of `facility_mapping_conflicts`, in the camelCase shape the HTTP route and
+ *  the CLI both hand on. See `FacilityMappingConflictsTable` (packages/db/src/schema/internal.ts)
+ *  and migration 078 for what wrote each field. */
+export interface FacilityMappingConflict {
+  id: number;
+  fromSystem: string;
+  fromCode: string;
+  /** `'duplicate'` — a set of active SAME-AS mappings on one observed key naming DIFFERENT
+   *  facilities; every member was deactivated. `'unsupported_map_type'` — one mapping whose
+   *  `map_type` is not SAME-AS; it was left exactly as it was.
+   *
+   *  ⚠ Typed `string`, not a union: `kind` carries no CHECK constraint, so narrowing it here would
+   *  be a promise about the column this reader cannot keep. */
+  kind: string;
+  /** Every mapping id in the recorded set, oldest first. */
+  mappingIds: string[];
+  /** Shape depends on `kind` — see `FacilityMappingConflictsTable.detail`. Passed through
+   *  unexamined: this is what tells an operator WHICH facilities were competing. */
+  detail: unknown;
+  detectedAt: Date;
+}
+
+/**
+ * Every conflict migration 078 recorded that nobody has settled yet.
+ *
+ * ⛔ `resolved_at is null` is not an optional filter — this is a QUEUE, and a settled row that
+ * stayed in it would make it impossible to tell what still needs an operator. 078 writes every row
+ * it records with `resolved_at` NULL.
+ *
+ * ⚠ Read-only, and `resolved_at` has no writer: measured — migration 078 is the only code path in
+ * the repo that touches this table at all, and it never sets that column. So an operator who fixes
+ * the underlying mappings still sees the row listed here forever. A known gap, deliberately not
+ * closed: this task's job was to stop the table being invisible, not to build a resolution
+ * workflow. The filter is still written as a filter so a future settle path has somewhere to land.
+ *
+ * Unbounded by design. The row count is bounded by how many facility mappings an install had
+ * violating the invariant when 078 ran — a one-off backlog measured in tens, not a growing feed
+ * (no code path inserts into this table after the migration).
+ */
+export async function listFacilityMappingConflicts(
+  deps: Pick<ReconcileDeps, 'internalDb'>,
+): Promise<FacilityMappingConflict[]> {
+  const rows = await deps.internalDb
+    .selectFrom('facility_mapping_conflicts')
+    .select(['id', 'from_system', 'from_code', 'kind', 'mapping_ids', 'detail', 'detected_at'])
+    .where('resolved_at', 'is', null)
+    // Newest first, `id` breaking the tie: 078 records every row inside one transaction, so every
+    // row from a given install shares one `detected_at` and ordering on it alone would be
+    // nondeterministic.
+    .orderBy('detected_at', 'desc')
+    .orderBy('id')
+    .execute();
+
+  return rows.map((r) => ({
+    id: Number(r.id),
+    fromSystem: r.from_system,
+    fromCode: r.from_code,
+    kind: r.kind,
+    mappingIds: r.mapping_ids as unknown as string[],
+    detail: r.detail as unknown,
+    detectedAt: r.detected_at,
+  }));
 }

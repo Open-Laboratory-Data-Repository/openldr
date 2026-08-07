@@ -29,7 +29,10 @@ describe('importFacilities', () => {
     const deps = await buildDeps();
     const body = csv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,', ',No Code,,,,,,,,,,,,,,']); // second row missing required national_code
     const result = await importFacilities(deps, body, { nationalSystem: SYSTEM });
-    expect(result).toEqual({ parsed: 1, skipped: 1, unknownColumns: [], created: 0, updated: 0, duplicates: 0 });
+    expect(result).toEqual({
+      parsed: 1, skipped: 1, unknownColumns: [], duplicateColumns: [], quarantined: [],
+      created: 0, updated: 0, duplicates: 0, blocked: false, blockedReason: null,
+    });
     expect(await deps.db.selectFrom('facility_registry').selectAll().execute()).toHaveLength(0);
   });
 
@@ -79,7 +82,12 @@ describe('importFacilities', () => {
     const withExtra = ['national_code,name,beds', '100,Dodoma Regional Referral,250'].join('\n') + '\n';
 
     const blocked = await importFacilities(deps, withExtra, { nationalSystem: SYSTEM, apply: true });
-    expect(blocked).toEqual({ parsed: 0, skipped: 0, unknownColumns: ['beds'], created: 0, updated: 0, duplicates: 0 });
+    expect(blocked).toEqual({
+      parsed: 0, skipped: 0, unknownColumns: ['beds'], duplicateColumns: [], quarantined: [],
+      // NOT blocked: unrecognised columns are refused by the PARSER (records: []), which is a
+      // different mechanism from `blocked` — that one is about a file the parser accepted.
+      created: 0, updated: 0, duplicates: 0, blocked: false, blockedReason: null,
+    });
     expect(await deps.db.selectFrom('facility_registry').selectAll().execute()).toHaveLength(0);
 
     const allowed = await importFacilities(deps, withExtra, { nationalSystem: SYSTEM, allowUnknownColumns: true, apply: true });
@@ -126,18 +134,18 @@ describe('importFacilities', () => {
     for (const r of rows) expect(r.managed_origin).toBeNull();
   });
 
-  it('logs a reference_change_log row for a newly created row, and none on an unchanged re-import', async () => {
+  // Task 1 (facilities-phase-0): this used to assert the OPPOSITE — that a created row (and an
+  // unchanged re-import) DID land reference_change_log rows. That pinned the defective behaviour:
+  // facility_registry had capture live with no serve/apply case, so a logged upsert reached a lab as
+  // a bogus delete. The batched-create + per-row-update capture legs are gone from importFacilities
+  // now; see SUSPENDED_REFERENCE_ENTITY_TYPES in reference-change-log.ts.
+  it('does not log any reference_change_log row for a created row, even with capture supplied', async () => {
     const deps = await buildDeps();
     const body = csv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,']);
     await importFacilities(deps, body, { nationalSystem: SYSTEM, apply: true });
-    const afterFirst = await deps.db.selectFrom('reference_change_log').selectAll().where('entity_type', '=', 'facility_registry').execute();
-    expect(afterFirst).toHaveLength(1);
-    expect(afterFirst[0].op).toBe('upsert');
-
-    // Re-importing byte-identical content must NOT append a redundant log row.
-    await importFacilities(deps, body, { nationalSystem: SYSTEM, apply: true });
-    const afterSecond = await deps.db.selectFrom('reference_change_log').selectAll().where('entity_type', '=', 'facility_registry').execute();
-    expect(afterSecond).toHaveLength(1);
+    await importFacilities(deps, body, { nationalSystem: SYSTEM, apply: true }); // unchanged re-import (update leg)
+    const log = await deps.db.selectFrom('reference_change_log').selectAll().where('entity_type', '=', 'facility_registry').execute();
+    expect(log).toEqual([]);
   });
 
   it('omitting capture writes facility_registry rows without touching reference_change_log', async () => {
@@ -151,12 +159,12 @@ describe('importFacilities', () => {
   // ⛔ Critical 1 regression test. pg-mem (this suite's oracle) does NOT enforce Postgres's rule
   // that a single multi-row `INSERT ... ON CONFLICT (id) DO UPDATE` may not target the same
   // conflict key twice — so asserting only that the import "succeeds" proves nothing here; it would
-  // succeed on pg-mem either way. Instead this pins the observable side effects that ONLY read
-  // right when the duplicate is collapsed before the create/update split and before the
-  // reference_change_log write: without dedupe, both same-id rows are (wrongly) classified as
-  // `created` against the pre-write existing-id lookup, so `created` would read 2 (not 1) and TWO
-  // reference_change_log rows would land for the one surviving entity id (not 1) — both visible on
-  // pg-mem, no real Postgres required to catch the regression.
+  // succeed on pg-mem either way. Instead this pins the observable side effect that only reads right
+  // when the duplicate is collapsed before the create/update split: without dedupe, both same-id
+  // rows are (wrongly) classified as `created` against the pre-write existing-id lookup, so
+  // `created` would read 2, not 1. (This regression test originally also checked for a doubled
+  // reference_change_log row on the surviving id — moot now that facility_registry capture is
+  // suspended; see the test above.)
   it('duplicate national_code rows within one file collapse to one row (last wins) and are reported', async () => {
     const deps = await buildDeps();
     const body = csv([
@@ -169,14 +177,6 @@ describe('importFacilities', () => {
     const rows = await deps.db.selectFrom('facility_registry').selectAll().where('national_code', '=', '100').execute();
     expect(rows).toHaveLength(1);
     expect(rows[0].name).toBe('Second Name (final)');
-
-    const log = await deps.db
-      .selectFrom('reference_change_log')
-      .selectAll()
-      .where('entity_type', '=', 'facility_registry')
-      .where('entity_id', '=', rows[0].id)
-      .execute();
-    expect(log).toHaveLength(1);
   });
 
   it('a dry run also reports duplicates, without writing anything', async () => {
@@ -190,32 +190,12 @@ describe('importFacilities', () => {
     expect(await deps.db.selectFrom('facility_registry').selectAll().execute()).toHaveLength(0);
   });
 
-  // 🟠 Important 1 regression test. The reviewer's mutation replaced contentHashOf's body with a
-  // direct `canonicalHash(rec)`, dropping the toRow -> toRecord round trip, and every existing test
-  // still passed — they only compare the import path against itself. Feeding the STORED record back
-  // through the interactive store.upsert() path exercises the OTHER hashing call
-  // (facility-registry-store.ts's hashOf), so if the two schemes ever disagree,
-  // recordReferenceChange sees a content_hash that doesn't match what importFacilities logged and
-  // appends a second row here.
-  it('a stored, imported row fed back through store.upsert hashes identically (no spurious reference_change_log row)', async () => {
-    const deps = await buildDeps();
-    const store = createFacilityRegistryStore(deps.db, deps.capture);
-    const body = csv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,']);
-    await importFacilities(deps, body, { nationalSystem: SYSTEM, apply: true });
-    const row = await rowFor(deps.db, '100');
-    const id = row!.id;
-
-    const stored = await store.get(id);
-    await store.upsert(stored!);
-
-    const log = await deps.db
-      .selectFrom('reference_change_log')
-      .selectAll()
-      .where('entity_type', '=', 'facility_registry')
-      .where('entity_id', '=', id)
-      .execute();
-    expect(log).toHaveLength(1);
-  });
+  // The 🟠 Important 1 regression test that used to live here (hashOf/contentHashOf drift caught via
+  // a spurious second reference_change_log row) is removed: its whole premise was comparing the two
+  // hashing schemes' effect on a log write, and neither path writes to reference_change_log anymore
+  // (facility_registry capture is suspended — see the test above). A `toHaveLength(0)` here would
+  // hold regardless of whether the two hashers agree, so it would no longer catch that drift; it
+  // would just be theatre.
 
   // Pins `updated_at: sql`now()`` on the row importFacilities writes for an UPDATE (line ~240):
   // insertBatchPg's ON CONFLICT DO UPDATE only ever updates the columns present in the row, so if
@@ -284,6 +264,93 @@ describe('importFacilities', () => {
 
     const after = await store.get(id);
     expect(after?.extras).toMatchObject({ beds: '300', ward_contact: 'Ada' });
+  });
+
+  // Task 4 (facilities-phase-0): a structurally malformed row (field count != header's — see
+  // facility-csv.ts's `quarantined`) must not be silently skipped into an otherwise-successful apply.
+  // These tests use raw CSV bodies rather than the `csv()` helper above, since that helper always
+  // pads to the fixed 16-column HEADER and can't produce a row whose field count actually disagrees.
+  it('refuses to apply while any row is quarantined, and writes nothing', async () => {
+    const deps = await buildDeps();
+    const body = 'national_code,name\n1,Good\n2,Bad,Extra\n';
+
+    const result = await importFacilities(deps, body, { nationalSystem: SYSTEM, apply: true });
+
+    expect(result.created).toBe(0);
+    expect(result.updated).toBe(0);
+    expect(result.quarantined).toHaveLength(1);
+    expect(await deps.db.selectFrom('facility_registry').selectAll().execute()).toHaveLength(0);
+  });
+
+  it('applies the good rows when allowMalformedRows is set, and still reports the bad one', async () => {
+    const deps = await buildDeps();
+    const body = 'national_code,name\n1,Good\n2,Bad,Extra\n3,AlsoGood\n';
+
+    const result = await importFacilities(deps, body, {
+      nationalSystem: SYSTEM, apply: true, allowMalformedRows: true,
+    });
+
+    expect(result.created).toBe(2);
+    expect(result.quarantined).toHaveLength(1);
+    expect(await deps.db.selectFrom('facility_registry').selectAll().execute()).toHaveLength(2);
+  });
+
+  it('reports quarantined rows on a dry run without needing the override', async () => {
+    const deps = await buildDeps();
+    const body = 'national_code,name\n1,Good\n2,Bad,Extra\n';
+
+    const result = await importFacilities(deps, body, { nationalSystem: SYSTEM });
+
+    expect(result.quarantined).toHaveLength(1);
+    expect(result.parsed).toBe(1);
+  });
+
+  it('refuses to apply a file with duplicate headers', async () => {
+    const deps = await buildDeps();
+
+    const result = await importFacilities(deps, 'national_code,name,name\n1,A,B\n', {
+      nationalSystem: SYSTEM, apply: true, allowMalformedRows: true,
+    });
+
+    expect(result.created).toBe(0);
+    expect(result.duplicateColumns).toEqual(['name']);
+    // ⛔ THIS is what makes the duplicate-header clause of `blocked` observable at all. Nothing was
+    // written either way — `parseFacilityCsv` returns `records: []` for a duplicate header, so the
+    // `records.length === 0` fallback in the same condition already prevents the write — which is
+    // why the two assertions above passed with the clause DELETED. `blocked`/`blockedReason` are
+    // reported rather than inferred, so they distinguish "we refused this file" from "there was
+    // nothing in it", and removing `duplicateColumns.length > 0` from the predicate fails here.
+    expect(result.blocked).toBe(true);
+    expect(result.blockedReason).toBe('duplicate-columns');
+  });
+
+  // The precedence the two consumers depend on, and the only place both reasons hold at once.
+  // Constructed directly because `parseFacilityCsv` can never produce it: it returns early on a
+  // duplicate header, before any row is examined, so `quarantined` is always empty in that result.
+  // `'duplicate-columns'` must win — it has NO override, and reporting the overridable reason would
+  // point an operator at `--allow-malformed-rows` / the sheet's checkbox, neither of which can
+  // unblock the file.
+  it('reports duplicate-columns rather than quarantined-rows when a caller could see both', async () => {
+    const deps = await buildDeps();
+
+    const result = await importFacilities(deps, 'national_code,name,name\n1,A,B\n2,C\n', {
+      nationalSystem: SYSTEM, apply: true,
+    });
+
+    expect(result.duplicateColumns).toEqual(['name']);
+    expect(result.blockedReason).toBe('duplicate-columns');
+  });
+
+  // A file the parser ACCEPTED and that has rows to write is not blocked — otherwise `blocked`
+  // would be a constant and every consumer reading it would silently refuse every good import.
+  it('is not blocked for a clean file', async () => {
+    const deps = await buildDeps();
+
+    const result = await importFacilities(deps, csv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,']), {
+      nationalSystem: SYSTEM, apply: true,
+    });
+
+    expect(result).toMatchObject({ created: 1, blocked: false, blockedReason: null });
   });
 });
 

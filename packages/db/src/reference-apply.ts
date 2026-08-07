@@ -1,6 +1,6 @@
 import { type Kysely, sql } from 'kysely';
 import type { InternalSchema } from './schema/internal';
-import type { ReferenceEntityType, ReferenceOp } from './reference-change-log';
+import { SUSPENDED_REFERENCE_ENTITY_TYPES, type ReferenceEntityType, type ReferenceOp } from './reference-change-log';
 
 // Distributed sync S2: capture-free reference-data applier. A LAB uses this to apply reference
 // changes PULLED from central. Unlike the capturing config stores (createDashboardStore/…), this
@@ -307,6 +307,18 @@ async function applySetting(db: Kysely<InternalSchema>, rec: ReferenceRecord): P
 
 export function createReferenceApplier(db: Kysely<InternalSchema>) {
   return async function applyReferenceChange(rec: ReferenceRecord): Promise<ApplyRefResult> {
+    // Suspension is checked FIRST, ahead of the body check below: a suspended type has no apply
+    // support at all, so the reason it is refused is suspension whatever its `op`/`body` look like.
+    // Ordered the other way, a suspended `{op:'upsert', body:null}` — the exact shape the sync
+    // pipeline produces when `sync-serve.ts` has no `fetchReferenceBody` case for a type — was
+    // rejected as "upsert requires body", sending whoever read the quarantine reason looking for a
+    // missing payload instead of at the suspension list.
+    if (SUSPENDED_REFERENCE_ENTITY_TYPES.includes(rec.entityType)) {
+      throw new Error(
+        `applyReferenceChange: entityType ${rec.entityType} is suspended — its serve/apply support ` +
+        `is not implemented. See SUSPENDED_REFERENCE_ENTITY_TYPES in reference-change-log.ts.`,
+      );
+    }
     // Validate before writing: an upsert must carry a body (guards the non-null cast in the row
     // builders and avoids an opaque NOT NULL violation deep in the insert).
     if (rec.op === 'upsert' && rec.body == null) throw new Error('applyReferenceChange: upsert requires body');

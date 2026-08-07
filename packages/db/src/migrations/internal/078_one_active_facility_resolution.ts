@@ -1,0 +1,185 @@
+import { sql, type Kysely } from 'kysely';
+
+// ⛔ Deliberately INLINED, not imported from `FACILITY_REGISTRY_SYSTEM`/`LOCAL_MAP_URL`:
+// frozen-snapshot rule (see 075's docblock and 077's). A migration is a record of what it wrote at
+// the time it ran; importing a live constant a later change could edit would let this migration's
+// behaviour drift out from under it.
+const REGISTRY_SYSTEM = 'urn:openldr:cs:facility-registry';
+const LOCAL_MAP_URL = 'urn:openldr:terminology:local-map';
+const INDEX_NAME = 'term_mappings_one_active_facility_resolution';
+
+type MappingRow = {
+  id: string;
+  from_system: string;
+  from_code: string;
+  to_system: string;
+  to_code: string;
+  map_type: string;
+  created_at: Date | string;
+};
+
+const scopeKey = (r: MappingRow) => `${r.from_system}\u0000${r.from_code}`;
+
+/**
+ * Closes the "one active resolution per observed facility key" invariant at the DATABASE, after the
+ * resolver (task 10) and the API boundary (task 11) closed it above.
+ *
+ * ORDER IS LOAD-BEARING and not rearrangeable: the partial unique index cannot be created while
+ * violating rows exist, so every violation must be detected, recorded and cleared first.
+ *
+ *   1. detect + record conflicting sets   2. deactivate every member of each
+ *   3. dedupe surviving identical copies  4. create the index
+ *
+ * ⛔ A conflict is about DISTINCT TARGETS, not row count. Two active SAME-AS mappings carrying the
+ * IDENTICAL (from_system, from_code, to_system, to_code) name the SAME facility — they do not
+ * compete, and the resolver already resolves them correctly. Grouping on `count(*) > 1` would
+ * condemn such a pair and deactivate both copies, blanking a perfectly good facility out of official
+ * reports. They are still two active rows on one observed key, though, so the index below would
+ * reject them: step 3 deduplicates them (oldest copy stays active) instead.
+ *
+ * ⛔ Deactivating EVERY member of a genuine conflicting set — rather than keeping the oldest — is the
+ * deliberate choice. Picking a winner here would change published report output as an invisible side
+ * effect of a migration. Zero active members means the observed row resolves to nothing and falls
+ * back to the raw performer string, which is visibly unresolved rather than confidently wrong, and
+ * the set survives in `facility_mapping_conflicts` for an operator to settle.
+ *
+ * ⛔ Detection of unsupported semantics is `map_type <> 'SAME-AS'`, never an enumeration.
+ * `map_type` carries no CHECK constraint and `reference-apply.ts` round-trips whatever central sends,
+ * so values outside the five `MapType` names (`'equivalent'`, a FHIR equivalence code, is live in
+ * existing tests) reach this table. Those rows are RECORDED but NOT deactivated: the resolver
+ * already refuses to resolve through them, so nothing about the stored row needs to change; the
+ * record only explains to the operator why their mapping stopped driving reports.
+ *
+ * The detection is done in TypeScript rather than one `INSERT ... SELECT ... GROUP BY ... HAVING`
+ * because the set being scanned is bounded by the number of facility mappings (tens to hundreds),
+ * because "distinct targets" and "identical copies" are two different verdicts on the same group
+ * that a single HAVING cannot express, and because pg-mem — which every migration test runs on —
+ * implements neither `HAVING` nor `jsonb_build_object` nor `DELETE ... USING`.
+ */
+export async function up(db: Kysely<unknown>): Promise<void> {
+  const anyDb = db as Kysely<any>;
+
+  await anyDb.schema
+    .createTable('facility_mapping_conflicts')
+    .addColumn('id', 'serial', (c) => c.primaryKey())
+    .addColumn('from_system', 'text', (c) => c.notNull())
+    .addColumn('from_code', 'text', (c) => c.notNull())
+    .addColumn('kind', 'text', (c) => c.notNull()) // 'duplicate' | 'unsupported_map_type'
+    .addColumn('mapping_ids', 'jsonb', (c) => c.notNull())
+    .addColumn('detail', 'jsonb')
+    .addColumn('detected_at', 'timestamptz', (c) => c.notNull().defaultTo(sql`now()`))
+    .addColumn('resolved_at', 'timestamptz')
+    .execute();
+
+  // Only ACTIVE rows targeting the registry can violate the index, so only they are examined. An
+  // already-superseded row is invisible here and is neither recorded nor touched.
+  const rows: MappingRow[] = await anyDb.selectFrom('term_mappings')
+    .select(['id', 'from_system', 'from_code', 'to_system', 'to_code', 'map_type', 'created_at'])
+    .where('to_system', '=', REGISTRY_SYSTEM)
+    .where('is_active', '=', true)
+    // `created_at` first so "oldest copy survives" is meaningful; `id` breaks the tie deterministically
+    // (a bulk import gives every row the same `now()`).
+    .orderBy('created_at')
+    .orderBy('id')
+    .execute();
+
+  const conflicts: Array<{ from_system: string; from_code: string; kind: string; mapping_ids: string; detail: string }> = [];
+  const deactivate: string[] = [];
+  // The four mirror coordinates whose `concept_map_elements` row must go, collected only from
+  // conflict sets — see the dedupe branch for why identical copies are excluded.
+  const clearMirror: MappingRow[] = [];
+
+  const groups = new Map<string, MappingRow[]>();
+  for (const row of rows.filter((r) => r.map_type === 'SAME-AS')) {
+    const key = scopeKey(row);
+    const bucket = groups.get(key);
+    if (bucket) bucket.push(row); else groups.set(key, [row]);
+  }
+
+  for (const members of groups.values()) {
+    if (members.length === 1) continue;
+    const targets = new Set(members.map((m) => m.to_code));
+
+    if (targets.size > 1) {
+      // 1+2: a genuine conflict — record the whole set, then deactivate all of it.
+      conflicts.push({
+        from_system: members[0].from_system,
+        from_code: members[0].from_code,
+        kind: 'duplicate',
+        mapping_ids: JSON.stringify(members.map((m) => m.id)),
+        detail: JSON.stringify(members.map((m) => ({ id: m.id, toCode: m.to_code, createdAt: m.created_at }))),
+      });
+      deactivate.push(...members.map((m) => m.id));
+      clearMirror.push(...members);
+      continue;
+    }
+
+    // 3: identical copies of one resolution. Not a conflict and not recorded — there is nothing for
+    // an operator to settle and reports are unaffected — but the index still needs exactly one
+    // active row, so every copy after the oldest is superseded.
+    //
+    // ⛔ Their `concept_map_elements` mirror is deliberately LEFT ALONE. The mirror is keyed on the
+    // four coordinates, which are identical across the copies by definition, so the copies share ONE
+    // mirror row — and it belongs to the survivor. Deleting it would strip a still-active mapping out
+    // of the exported FHIR ConceptMap.
+    deactivate.push(...members.slice(1).map((m) => m.id));
+  }
+
+  // 4: unsupported semantics — recorded, never deactivated.
+  for (const row of rows.filter((r) => r.map_type !== 'SAME-AS')) {
+    conflicts.push({
+      from_system: row.from_system,
+      from_code: row.from_code,
+      kind: 'unsupported_map_type',
+      mapping_ids: JSON.stringify([row.id]),
+      detail: JSON.stringify({ mapType: row.map_type, toCode: row.to_code }),
+    });
+  }
+
+  if (conflicts.length) {
+    await anyDb.insertInto('facility_mapping_conflicts').values(conflicts as never).execute();
+  }
+
+  if (deactivate.length) {
+    await anyDb.updateTable('term_mappings')
+      .set({ is_active: false, updated_at: sql`now()` })
+      .where('id', 'in', deactivate)
+      .execute();
+  }
+
+  // Keep the mirror consistent. `concept_map_elements` mirrors `term_mappings`, and a migration
+  // cannot go through `admin.termMappings` to update both. Leaving the mirror alone would keep a
+  // deactivated mapping visible in the exported FHIR ConceptMap (`sync-serve.ts` ships it).
+  //
+  // Scoped to CE's OWN mirror map: an element that arrived inside some other ConceptMap merely
+  // happens to sit at these coordinates, and deleting it would silently edit an imported resource.
+  //
+  // Change capture is deliberately skipped: every install runs this migration, so each lab clears
+  // its own violations locally and nothing needs to propagate from central. (Adjudicated 2026-08-07.)
+  for (const row of clearMirror) {
+    await anyDb.deleteFrom('concept_map_elements')
+      .where('map_url', '=', LOCAL_MAP_URL)
+      .where('source_system', '=', row.from_system)
+      .where('source_code', '=', row.from_code)
+      .where('target_system', '=', row.to_system)
+      .where('target_code', '=', row.to_code)
+      .execute();
+  }
+
+  // 5: the invariant.
+  //
+  // ⛔ `sql.lit`, not `${}`. A `${}` binding would emit a `$1` parameter, and PostgreSQL does not
+  // accept parameters inside an index predicate — the statement would fail on a real database while
+  // passing under pg-mem, which substitutes them.
+  await sql`
+    create unique index ${sql.raw(INDEX_NAME)}
+      on term_mappings (from_system, from_code)
+      where is_active and to_system = ${sql.lit(REGISTRY_SYSTEM)} and map_type = ${sql.lit('SAME-AS')}
+  `.execute(anyDb);
+}
+
+export async function down(db: Kysely<unknown>): Promise<void> {
+  const anyDb = db as Kysely<any>;
+  await sql`drop index if exists ${sql.raw(INDEX_NAME)}`.execute(anyDb);
+  await anyDb.schema.dropTable('facility_mapping_conflicts').execute();
+}
