@@ -525,9 +525,10 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
 
   // Task 13: the review queue for the conflicts migration 078 recorded when it closed "one active
   // SAME-AS resolution per observed facility key" at the database. Clearing the violations standing
-  // in that index's way meant DEACTIVATING an operator's competing mappings; `facility_mapping_
-  // conflicts` was the only record of having done so, and until this route it had no reader — the
-  // mappings simply stopped driving reports with nothing anywhere to explain it.
+  // in that index's way meant DEACTIVATING an operator's competing mappings (the 'duplicate' kind;
+  // 'unsupported_map_type' rows were recorded but left alone). `facility_mapping_conflicts` was the
+  // only record of having done so, and until this route it had no reader — the mappings simply
+  // stopped driving reports with nothing anywhere to explain it.
   //
   // Gated on MANAGE, not VIEW: the queue names an operator's own mappings and exists only to drive
   // a write (settle the conflict by removing one of them). Read-only itself, so nothing to audit.

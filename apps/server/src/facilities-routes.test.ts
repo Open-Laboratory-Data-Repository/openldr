@@ -1931,9 +1931,11 @@ describe('Task 7: GET /api/facilities/:id/impact', () => {
 //
 // `facility_mapping_conflicts` is written once, by migration 078, when it closed "one active
 // SAME-AS resolution per observed facility key" at the database and had to clear the pre-existing
-// violations standing in the index's way. Until this route it had NO reader at all: the migration
-// deactivated an operator's competing mappings and left the only record of having done so in a
-// table nothing could show them.
+// violations standing in the index's way. Until this route it had NO reader at all: for the
+// 'duplicate' kind the migration DEACTIVATED an operator's competing mappings and left the only
+// record of having done so in a table nothing could show them. ('unsupported_map_type' rows were
+// recorded but never deactivated — they do not violate the index; the record only explains why the
+// resolver already refuses them.)
 //
 // `store.db` is `null` in these tests, deliberately: this route reads `ctx.internalDb` only — it
 // never builds `reconcileDeps` and never touches the warehouse — so constructing a migrated
