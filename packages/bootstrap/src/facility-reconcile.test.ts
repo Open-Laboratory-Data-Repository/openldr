@@ -419,6 +419,223 @@ describe('resolveObservedFacilities', () => {
   });
 });
 
+// Task 10 (Slice 4). Two defects, both in `resolveObservedFacilities`:
+//
+//   1. It never looked at `map_type`. `TermMappingDialog` offers five semantics (SAME-AS,
+//      NARROWER-THAN, BROADER-THAN, RELATED-TO, UNMAPPED-FROM) and ALL FIVE resolved identically —
+//      so an operator who recorded UNMAPPED-FROM, explicitly saying "this does NOT correspond",
+//      still drove official reports to that facility.
+//   2. With several active mappings for one observed key it took whichever row the database
+//      returned first (no `orderBy`, then `.find()`), so which facility appeared in a Ministry
+//      report depended on row order.
+//
+// Operator's decision on (2): a contested row resolves to NOTHING and is reported `ambiguous`.
+// Never a winner, not even a deterministic one — a nondeterministic answer is worse than a visibly
+// absent one, and a silently-chosen one is worse still.
+describe('Task 10: only SAME-AS resolves, and competing mappings resolve to nothing', () => {
+  const OBSERVED = 'urn:openldr:default_fac';
+
+  // Non-SAME-AS mappings stay ACTIVE in the database — only their ability to RESOLVE is removed.
+  // The row therefore reads as "never mapped" here (all four flags false), NOT as
+  // `nonFacilityTarget`: that field means "the target SYSTEM is not a facility register at all",
+  // which would be a lie about a mapping that points squarely at the registry. Surfacing the
+  // unsupported semantic to the operator is Task 12's job (it records such rows for review); this
+  // task's only claim is that they no longer resolve.
+  it('does not resolve through an UNMAPPED-FROM mapping', async () => {
+    const deps = await makeReconcileDeps();
+    await seedPerformers(deps, [['BALAB', 6]]);
+    await scanObservedFacilities(deps, { now: '2026-08-07T00:00:00.000Z', apply: true });
+    await seedRegistry(deps, { id: 'fac-A', name: 'Alpha', localCode: 'L-1' });
+    await seedMapping(deps, {
+      fromSystem: OBSERVED, fromCode: 'BALAB',
+      toSystem: FACILITY_REGISTRY_SYSTEM, toCode: 'L-1', mapType: 'UNMAPPED-FROM',
+    });
+
+    const row = (await resolveObservedFacilities(deps)).find((r) => r.sourceCode === 'BALAB')!;
+
+    expect(row.registryId).toBeNull();
+    expect(row.resolvedVia).toBeNull();
+    expect(row.name).toBeNull();
+    expect(row.targetMissing).toBe(false);
+    expect(row.nonFacilityTarget).toBe(false);
+    expect(row.ambiguous).toBe(false);
+  });
+
+  it('does not resolve through a RELATED-TO mapping', async () => {
+    const deps = await makeReconcileDeps();
+    await seedPerformers(deps, [['BALAB', 6]]);
+    await scanObservedFacilities(deps, { now: '2026-08-07T00:00:00.000Z', apply: true });
+    await seedRegistry(deps, { id: 'fac-A', name: 'Alpha', localCode: 'L-1' });
+    await seedMapping(deps, {
+      fromSystem: OBSERVED, fromCode: 'BALAB',
+      toSystem: FACILITY_REGISTRY_SYSTEM, toCode: 'L-1', mapType: 'RELATED-TO',
+    });
+
+    const row = (await resolveObservedFacilities(deps)).find((r) => r.sourceCode === 'BALAB')!;
+
+    expect(row.resolvedVia).toBeNull();
+    expect(row.registryId).toBeNull();
+  });
+
+  // The same rule on the OTHER route: a national-register mapping is only an equivalence when it
+  // says so. Without this, filtering SAME-AS on the registry route alone would leave the identical
+  // hole open one branch over.
+  it('does not resolve through a NARROWER-THAN mapping on the national route', async () => {
+    const deps = await makeReconcileDeps();
+    await seedPerformers(deps, [['Muhimbili', 3]]);
+    await scanObservedFacilities(deps, { now: '2026-08-07T00:00:00.000Z', apply: true });
+    await seedRegistry(deps, { id: 'fac-2', name: 'Muhimbili National Hospital', nationalSystem: 'urn:tz:hfr', nationalCode: 'TZ-001' });
+    await seedMapping(deps, {
+      fromSystem: OBSERVED, fromCode: 'Muhimbili',
+      toSystem: 'urn:tz:hfr', toCode: 'TZ-001', mapType: 'NARROWER-THAN',
+    });
+
+    const row = (await resolveObservedFacilities(deps)).find((r) => r.sourceCode === 'Muhimbili')!;
+
+    expect(row.resolvedVia).toBeNull();
+    expect(row.registryId).toBeNull();
+    expect(row.targetMissing).toBe(false);
+    expect(row.nonFacilityTarget).toBe(false);
+  });
+
+  it('reports two competing active SAME-AS mappings as ambiguous and resolves NEITHER', async () => {
+    const deps = await makeReconcileDeps();
+    await seedPerformers(deps, [['BALAB', 6]]);
+    await scanObservedFacilities(deps, { now: '2026-08-07T00:00:00.000Z', apply: true });
+    await seedRegistry(deps, { id: 'fac-A', name: 'Alpha', localCode: 'L-1' });
+    await seedRegistry(deps, { id: 'fac-B', name: 'Beta', localCode: 'L-2' });
+    await seedMapping(deps, { fromSystem: OBSERVED, fromCode: 'BALAB', toSystem: FACILITY_REGISTRY_SYSTEM, toCode: 'L-1' });
+    await seedMapping(deps, { fromSystem: OBSERVED, fromCode: 'BALAB', toSystem: FACILITY_REGISTRY_SYSTEM, toCode: 'L-2' });
+
+    const row = (await resolveObservedFacilities(deps)).find((r) => r.sourceCode === 'BALAB')!;
+
+    expect(row.ambiguous).toBe(true);
+    expect(row.registryId).toBeNull();
+    expect(row.resolvedVia).toBeNull();
+    expect(row.name).toBeNull();
+  });
+
+  // ⛔ An ambiguous row must be classified HONESTLY, not merely left unresolved. Both of the other
+  // "didn't resolve" flags would be a lie here: `nonFacilityTarget` claims the target system is not
+  // a facility register (both targets ARE the registry), and `targetMissing` claims the target
+  // resolves to no live row (both resolve to live rows — the resolver simply refuses to choose).
+  it('reports an ambiguous row as neither nonFacilityTarget nor targetMissing', async () => {
+    const deps = await makeReconcileDeps();
+    await seedPerformers(deps, [['BALAB', 6]]);
+    await scanObservedFacilities(deps, { now: '2026-08-07T00:00:00.000Z', apply: true });
+    await seedRegistry(deps, { id: 'fac-A', name: 'Alpha', localCode: 'L-1' });
+    await seedRegistry(deps, { id: 'fac-B', name: 'Beta', localCode: 'L-2' });
+    await seedMapping(deps, { fromSystem: OBSERVED, fromCode: 'BALAB', toSystem: FACILITY_REGISTRY_SYSTEM, toCode: 'L-1' });
+    await seedMapping(deps, { fromSystem: OBSERVED, fromCode: 'BALAB', toSystem: FACILITY_REGISTRY_SYSTEM, toCode: 'L-2' });
+
+    const row = (await resolveObservedFacilities(deps)).find((r) => r.sourceCode === 'BALAB')!;
+
+    // Asserted first, and not merely as setup: without it the two expectations below hold for the
+    // OLD behaviour too (which quietly resolved one of the pair), and this test would pass either
+    // way — pinning nothing.
+    expect(row.ambiguous).toBe(true);
+    expect(row.nonFacilityTarget).toBe(false);
+    expect(row.targetMissing).toBe(false);
+  });
+
+  // The nondeterminism this closes lived in `.find()`, and `.find()` picked the national route too.
+  // Two SAME-AS mappings into DIFFERENT proven national registers is the same coin flip one branch
+  // over, so it is the same answer: resolve nothing, report the conflict.
+  it('reports two competing national-route SAME-AS mappings as ambiguous and resolves NEITHER', async () => {
+    const deps = await makeReconcileDeps();
+    await seedPerformers(deps, [['BALAB', 6]]);
+    await scanObservedFacilities(deps, { now: '2026-08-07T00:00:00.000Z', apply: true });
+    await seedRegistry(deps, { id: 'fac-A', name: 'Alpha', nationalSystem: 'urn:tz:hfr', nationalCode: 'TZ-001' });
+    await seedRegistry(deps, { id: 'fac-B', name: 'Beta', nationalSystem: 'urn:tz:mfl', nationalCode: 'TZ-002' });
+    await seedMapping(deps, { fromSystem: OBSERVED, fromCode: 'BALAB', toSystem: 'urn:tz:hfr', toCode: 'TZ-001' });
+    await seedMapping(deps, { fromSystem: OBSERVED, fromCode: 'BALAB', toSystem: 'urn:tz:mfl', toCode: 'TZ-002' });
+
+    const row = (await resolveObservedFacilities(deps)).find((r) => r.sourceCode === 'BALAB')!;
+
+    expect(row.ambiguous).toBe(true);
+    expect(row.resolvedVia).toBeNull();
+    expect(row.registryId).toBeNull();
+  });
+
+  // ⛔ Registry-beats-national is NOT ambiguity and must not become it. It is a fixed, documented
+  // total order between two DIFFERENT route kinds (pinned by 'prefers the registry route when both
+  // mappings exist', above); ambiguity is competition WITHIN one kind. One registry candidate still
+  // resolves, however many national candidates sit beside it.
+  it('does not call registry-beats-national precedence ambiguous', async () => {
+    const deps = await makeReconcileDeps();
+    await seedPerformers(deps, [['Mnazi Mmoja', 182]]);
+    await scanObservedFacilities(deps, { now: '2026-08-07T00:00:00.000Z', apply: true });
+    await seedRegistry(deps, { id: 'fac-3', name: 'Mnazi Mmoja Hospital', localCode: 'MMH' });
+    await seedRegistry(deps, { id: 'fac-4', name: 'Some Other Hospital', nationalSystem: 'urn:tz:hfr', nationalCode: 'TZ-999' });
+    await seedMapping(deps, { fromSystem: OBSERVED, fromCode: 'Mnazi Mmoja', toSystem: 'urn:tz:hfr', toCode: 'TZ-999' });
+    await seedMapping(deps, { fromSystem: OBSERVED, fromCode: 'Mnazi Mmoja', toSystem: FACILITY_REGISTRY_SYSTEM, toCode: 'MMH' });
+
+    const row = (await resolveObservedFacilities(deps)).find((r) => r.sourceCode === 'Mnazi Mmoja')!;
+
+    expect(row.ambiguous).toBe(false);
+    expect(row.resolvedVia).toBe('registry');
+    expect(row.name).toBe('Mnazi Mmoja Hospital');
+  });
+
+  // A deactivated mapping plays no part in resolution, so it cannot make a row contested either —
+  // otherwise deactivating the loser of a conflict would leave the row stuck as ambiguous forever.
+  it('does not count an INACTIVE second mapping as a competing one', async () => {
+    const deps = await makeReconcileDeps();
+    await seedPerformers(deps, [['BALAB', 6]]);
+    await scanObservedFacilities(deps, { now: '2026-08-07T00:00:00.000Z', apply: true });
+    await seedRegistry(deps, { id: 'fac-A', name: 'Alpha', localCode: 'L-1' });
+    await seedRegistry(deps, { id: 'fac-B', name: 'Beta', localCode: 'L-2' });
+    await seedMapping(deps, { fromSystem: OBSERVED, fromCode: 'BALAB', toSystem: FACILITY_REGISTRY_SYSTEM, toCode: 'L-1' });
+    await seedMapping(deps, { fromSystem: OBSERVED, fromCode: 'BALAB', toSystem: FACILITY_REGISTRY_SYSTEM, toCode: 'L-2', isActive: false });
+
+    const row = (await resolveObservedFacilities(deps)).find((r) => r.sourceCode === 'BALAB')!;
+
+    expect(row.ambiguous).toBe(false);
+    expect(row.resolvedVia).toBe('registry');
+    expect(row.name).toBe('Alpha');
+  });
+
+  // Nor can a non-SAME-AS mapping make a row contested: it is not a competing claim of equivalence,
+  // it is not a claim of equivalence at all. Without this, an operator could not record "BALAB is
+  // NARROWER-THAN Beta" alongside the one real equivalence without breaking the real one.
+  it('does not count a non-SAME-AS second mapping as a competing one', async () => {
+    const deps = await makeReconcileDeps();
+    await seedPerformers(deps, [['BALAB', 6]]);
+    await scanObservedFacilities(deps, { now: '2026-08-07T00:00:00.000Z', apply: true });
+    await seedRegistry(deps, { id: 'fac-A', name: 'Alpha', localCode: 'L-1' });
+    await seedRegistry(deps, { id: 'fac-B', name: 'Beta', localCode: 'L-2' });
+    await seedMapping(deps, { fromSystem: OBSERVED, fromCode: 'BALAB', toSystem: FACILITY_REGISTRY_SYSTEM, toCode: 'L-1' });
+    await seedMapping(deps, { fromSystem: OBSERVED, fromCode: 'BALAB', toSystem: FACILITY_REGISTRY_SYSTEM, toCode: 'L-2', mapType: 'NARROWER-THAN' });
+
+    const row = (await resolveObservedFacilities(deps)).find((r) => r.sourceCode === 'BALAB')!;
+
+    expect(row.ambiguous).toBe(false);
+    expect(row.resolvedVia).toBe('registry');
+    expect(row.name).toBe('Alpha');
+  });
+
+  // `publishFacilityMap` counts an ambiguous row in its OWN bucket. Without this it lands in
+  // `unmapped`, which is the same silent absorption `nonFacilityTarget` was split out to stop — and
+  // "3 unmapped" tells an operator to go author a mapping, when what they must actually do is
+  // remove one of the two they already have.
+  it('counts an ambiguous row separately from unmapped in publishFacilityMap', async () => {
+    const deps = await makeReconcileDeps();
+    await seedPerformers(deps, [['BALAB', 6]]);
+    await seedPerformers(deps, [['Kibondo', 2]]);
+    await scanObservedFacilities(deps, { now: '2026-08-07T00:00:00.000Z', apply: true });
+    await seedRegistry(deps, { id: 'fac-A', name: 'Alpha', localCode: 'L-1' });
+    await seedRegistry(deps, { id: 'fac-B', name: 'Beta', localCode: 'L-2' });
+    await seedMapping(deps, { fromSystem: OBSERVED, fromCode: 'BALAB', toSystem: FACILITY_REGISTRY_SYSTEM, toCode: 'L-1' });
+    await seedMapping(deps, { fromSystem: OBSERVED, fromCode: 'BALAB', toSystem: FACILITY_REGISTRY_SYSTEM, toCode: 'L-2' });
+
+    const result = await publishFacilityMap(deps, { apply: true });
+
+    expect(result.ambiguous).toBe(1);
+    expect(result.unmapped).toBe(1); // Kibondo, which genuinely has no mapping at all
+    expect(result.resolved).toBe(0);
+  });
+});
+
 // The CDR toolchain now sends an `Organization` per testing facility alongside the report
 // (`facility-reconcile.md`), carrying an `address` `projectFacility` (packages/db) projects into
 // `facilities.region`/`facilities.district`. `resolveObservedFacilities` joins that onto an
@@ -509,6 +726,7 @@ describe('assertResolvedFacilityInvariant', () => {
       resolvedVia: 'registry',
       targetMissing: false,
       nonFacilityTarget: true,
+      ambiguous: false,
     })).toThrow();
   });
 
@@ -517,14 +735,28 @@ describe('assertResolvedFacilityInvariant', () => {
       resolvedVia: null,
       targetMissing: true,
       nonFacilityTarget: true,
+      ambiguous: false,
     })).toThrow();
   });
 
+  // Task 10: the whole point of `ambiguous` is that the row resolves to NOTHING, so a row claiming
+  // both is meaningless by that field's own definition. The message names `ambiguous` so a future
+  // break is attributable to THIS rule rather than to the nonFacilityTarget one above.
+  it('throws when an ambiguous row also claims a resolution', () => {
+    expect(() => assertResolvedFacilityInvariant({
+      resolvedVia: 'registry',
+      targetMissing: false,
+      nonFacilityTarget: false,
+      ambiguous: true,
+    })).toThrow(/ambiguous/i);
+  });
+
   it('does not throw for the real, mutually-exclusive combinations', () => {
-    expect(() => assertResolvedFacilityInvariant({ resolvedVia: 'registry', targetMissing: false, nonFacilityTarget: false })).not.toThrow();
-    expect(() => assertResolvedFacilityInvariant({ resolvedVia: null, targetMissing: true, nonFacilityTarget: false })).not.toThrow();
-    expect(() => assertResolvedFacilityInvariant({ resolvedVia: null, targetMissing: false, nonFacilityTarget: true })).not.toThrow();
-    expect(() => assertResolvedFacilityInvariant({ resolvedVia: null, targetMissing: false, nonFacilityTarget: false })).not.toThrow();
+    expect(() => assertResolvedFacilityInvariant({ resolvedVia: 'registry', targetMissing: false, nonFacilityTarget: false, ambiguous: false })).not.toThrow();
+    expect(() => assertResolvedFacilityInvariant({ resolvedVia: null, targetMissing: true, nonFacilityTarget: false, ambiguous: false })).not.toThrow();
+    expect(() => assertResolvedFacilityInvariant({ resolvedVia: null, targetMissing: false, nonFacilityTarget: true, ambiguous: false })).not.toThrow();
+    expect(() => assertResolvedFacilityInvariant({ resolvedVia: null, targetMissing: false, nonFacilityTarget: false, ambiguous: false })).not.toThrow();
+    expect(() => assertResolvedFacilityInvariant({ resolvedVia: null, targetMissing: false, nonFacilityTarget: false, ambiguous: true })).not.toThrow();
   });
 });
 

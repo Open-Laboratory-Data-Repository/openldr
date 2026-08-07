@@ -363,7 +363,7 @@ describe('facilities publish CLI', () => {
   });
 
   it('dry-runs by default: does not set apply, prints resolved/unmapped/targetMissing/written, does not audit', async () => {
-    mocks.publishFacilityMap.mockResolvedValue({ resolved: 8, unmapped: 3, targetMissing: 1, written: 12 });
+    mocks.publishFacilityMap.mockResolvedValue({ resolved: 8, unmapped: 3, targetMissing: 1, nonFacilityTarget: 2, ambiguous: 1, written: 12 });
 
     const code = await runFacilitiesPublish({ json: false });
 
@@ -376,12 +376,16 @@ describe('facilities publish CLI', () => {
     expect(human).toMatch(/resolved 8/);
     expect(human).toMatch(/unmapped 3/);
     expect(human).toMatch(/targetMissing 1/);
+    // Task 10: `ambiguous` gets its own count in the human line. Folded into `unmapped` it would
+    // tell an operator to go author a mapping, when the fix is to REMOVE one of the two they have.
+    expect(human).toMatch(/nonFacilityTarget 2/);
+    expect(human).toMatch(/ambiguous 1/);
     expect(human).toMatch(/written 12/);
     expect(mocks.ctx.close).toHaveBeenCalledTimes(1);
   });
 
   it('--apply writes and audits facility.publish', async () => {
-    mocks.publishFacilityMap.mockResolvedValue({ resolved: 8, unmapped: 3, targetMissing: 1, written: 12 });
+    mocks.publishFacilityMap.mockResolvedValue({ resolved: 8, unmapped: 3, targetMissing: 1, nonFacilityTarget: 2, ambiguous: 1, written: 12 });
 
     const code = await runFacilitiesPublish({ apply: true, json: false });
 

@@ -235,20 +235,24 @@ export function ObservedTab({ actionsPortalTarget }: ObservedTabProps = {}): JSX
   // that told them it was wrong, has no way to act on it without leaving the page.
   const [removingRow, setRemovingRow] = useState<ObservedFacility | null>(null);
 
-  // What the confirmation names as "currently resolves to" — reuses the SAME three-way distinction
-  // the resolves-to column already renders (targetMissing / nonFacilityTarget / a real name), so the
-  // confirmation never contradicts what the operator is looking at. `row.name` is non-null exactly
-  // when `resolvedVia` is set (the only remaining case once the first two are excluded).
+  // What the confirmation names as "currently resolves to" — reuses the SAME set of states the
+  // resolves-to column already renders (ambiguous / targetMissing / nonFacilityTarget / a real
+  // name), so the confirmation never contradicts what the operator is looking at. The four are
+  // mutually exclusive on a row (see `ResolvedFacility` in packages/bootstrap), so the order these
+  // are tested in does not affect the answer. `row.name` is non-null exactly when `resolvedVia` is
+  // set (the only remaining case once the others are excluded).
   const removeMappingTarget = (row: ObservedFacility): string => {
+    if (row.ambiguous) return t('facilities.observed.ambiguous');
     if (row.nonFacilityTarget) return t('facilities.observed.nonFacilityTarget');
     if (row.targetMissing) return t('facilities.observed.targetMissing');
     return row.name ?? t('facilities.observed.unmapped');
   };
 
   // ⚠ `resolveObservedFacilities` (packages/bootstrap/src/facility-reconcile.ts) reads a LIST of
-  // candidate mappings per (system, code) and picks ONE (registry wins, then a proven national
-  // route, else the row is flagged `nonFacilityTarget`) — a code can carry MORE than one active
-  // `term_mappings` row. Deleting only the candidate that happened to win resolution would leave the
+  // candidate mappings per (system, code) and resolves through at most ONE of them (registry route
+  // beats a proven national route; two candidates within one route kind resolve to NOTHING and set
+  // `ambiguous`; a mapping to neither kind sets `nonFacilityTarget`) — a code can carry MORE than
+  // one active `term_mappings` row. Deleting only the candidate that won resolution would leave the
   // others behind, so the row could still show a (different, equally wrong) target right after the
   // operator was told "removed". Decision: "Remove mapping" clears the row back to fully unmapped by
   // deleting EVERY active outgoing candidate for that code — never just one — while leaving any
@@ -339,7 +343,10 @@ export function ObservedTab({ actionsPortalTarget }: ObservedTabProps = {}): JSX
                 // Single source of truth for "this row already has a mapping" — same condition the
                 // editMapping/map label switch below already uses, and now also the gate for
                 // offering Remove mapping at all (a row with no mapping has nothing to remove).
-                const hasMapping = !!(row.resolvedVia || row.targetMissing || row.nonFacilityTarget);
+                // Task 10: `ambiguous` counts as "has a mapping" — it means the row has TWO, and
+                // Remove mapping (which deletes every active outgoing candidate) is precisely the
+                // action the state calls for.
+                const hasMapping = !!(row.resolvedVia || row.targetMissing || row.nonFacilityTarget || row.ambiguous);
                 // The location CE already knows about the OBSERVED facility itself
                 // (`facilities.region`/`.district`, from `Organization.address`) — independent of any
                 // curated mapping. THE point of this whole slice: DISA's five facility codes sharing
@@ -371,7 +378,13 @@ export function ObservedTab({ actionsPortalTarget }: ObservedTabProps = {}): JSX
                   </TableCell>
                   <TableCell className="text-right text-xs">{row.reportCount}</TableCell>
                   <TableCell className="text-xs">
-                    {row.targetMissing ? (
+                    {row.ambiguous ? (
+                      // Task 10: competing active SAME-AS mappings, so the row resolves to NOTHING.
+                      // Destructive styling like the other two failure states — an official report
+                      // is currently missing this facility entirely, and only the operator can fix
+                      // it by removing one of the mappings.
+                      <span className="font-medium text-destructive">{t('facilities.observed.ambiguous')}</span>
+                    ) : row.targetMissing ? (
                       <span className="font-medium text-destructive">{t('facilities.observed.targetMissing')}</span>
                     ) : row.nonFacilityTarget ? (
                       <span className="font-medium text-destructive">{t('facilities.observed.nonFacilityTarget')}</span>

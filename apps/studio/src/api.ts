@@ -929,6 +929,11 @@ export interface ObservedFacility {
    *  "never mapped". See `ResolvedFacility.nonFacilityTarget` in
    *  packages/bootstrap/src/facility-reconcile.ts for the bug this split fixes. */
   nonFacilityTarget: boolean;
+  /** Task 10: several ACTIVE `SAME-AS` mappings compete to resolve this code, so NOTHING resolves —
+   *  the resolver never picks an arbitrary winner. Mutually exclusive with `resolvedVia`, and never
+   *  set alongside `targetMissing`/`nonFacilityTarget`. See `ResolvedFacility.ambiguous` in
+   *  packages/bootstrap/src/facility-reconcile.ts. */
+  ambiguous: boolean;
 }
 
 export const listObservedFacilities = (): Promise<ObservedFacility[]> =>
@@ -948,6 +953,9 @@ export interface PublishFacilitiesResult {
   /** Fix 1: rows filed under `ResolvedFacility.nonFacilityTarget` — counted separately so
    *  `unmapped` never silently absorbs them. */
   nonFacilityTarget: number;
+  /** Task 10: rows filed under `ResolvedFacility.ambiguous` — competing active SAME-AS mappings, so
+   *  nothing resolved. Counted separately for the same reason as `nonFacilityTarget`. */
+  ambiguous: number;
   written: number;
 }
 export const publishFacilities = (body: PublishFacilitiesRequest = {}): Promise<PublishFacilitiesResult> =>

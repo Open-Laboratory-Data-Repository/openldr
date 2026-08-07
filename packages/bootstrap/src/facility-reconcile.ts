@@ -357,6 +357,31 @@ export interface ResolvedFacility {
    *  only recognised when the target system is PROVEN a facility register by the registry's own
    *  data (`knownNationalSystems`, below) — never merely "not the registry system". */
   nonFacilityTarget: boolean;
+  /** More than one ACTIVE `SAME-AS` mapping competes to resolve this observed `(system, code)` —
+   *  either several into the facility registry, or (when no registry mapping exists at all)
+   *  several into proven national registers. The row resolves to NOTHING; there is never an
+   *  arbitrary winner. Which facility appeared in a report used to depend on database row order
+   *  (`candidates.find(...)` over an unordered query), and a nondeterministic answer is worse than
+   *  a visibly absent one, so the conflict is reported and the operator settles it.
+   *
+   *  ⛔ Competition WITHIN one route kind only. Registry-beats-national is a fixed, documented total
+   *  order between two DIFFERENT kinds (see the precedence note on `resolveObservedFacilities`), so
+   *  one registry mapping alongside any number of national ones is NOT ambiguous — the registry one
+   *  wins, as it always has.
+   *
+   *  ⛔ Mutually exclusive with `resolvedVia` — enforced by `assertResolvedFacilityInvariant`. Also
+   *  never set alongside `targetMissing` or `nonFacilityTarget`, both of which would misdescribe
+   *  it: the targets here are facility-register targets (so not `nonFacilityTarget`) and they are
+   *  not being reported as absent (the resolver simply refuses to choose between them, whether or
+   *  not they resolve). That exclusion is by construction in `resolveObservedFacilities`, and
+   *  pinned by 'reports an ambiguous row as neither nonFacilityTarget nor targetMissing' in the
+   *  test file — it is NOT asserted by `assertResolvedFacilityInvariant`.
+   *
+   *  ⚠ Says nothing about non-`SAME-AS` mappings. Those never resolve (see the `map_type` filter in
+   *  `resolveObservedFacilities`) and never compete either, so a row carrying only, say, an
+   *  UNMAPPED-FROM mapping reads here exactly like a row carrying none: all four flags false.
+   *  Surfacing an unsupported semantic to the operator is not this field. */
+  ambiguous: boolean;
 }
 
 /**
@@ -375,12 +400,23 @@ export interface ResolvedFacility {
  * producing an impossible combination.
  */
 export function assertResolvedFacilityInvariant(
-  row: Pick<ResolvedFacility, 'resolvedVia' | 'targetMissing' | 'nonFacilityTarget'>,
+  row: Pick<ResolvedFacility, 'resolvedVia' | 'targetMissing' | 'nonFacilityTarget' | 'ambiguous'>,
 ): void {
   if (row.nonFacilityTarget && (row.resolvedVia !== null || row.targetMissing)) {
     throw new Error(
       `ResolvedFacility invariant violated: nonFacilityTarget=true must imply resolvedVia=null and ` +
       `targetMissing=false (got resolvedVia=${JSON.stringify(row.resolvedVia)}, targetMissing=${row.targetMissing})`,
+    );
+  }
+  // Task 10. `ambiguous` means the resolver REFUSED to pick between competing mappings, so a row
+  // claiming both it and a resolution is meaningless by that field's own definition — and it is
+  // exactly the shape a future edit would produce by adding a new resolution branch that forgets
+  // the ambiguity gate. Separate `throw` with its own message rather than a widened condition on
+  // the one above, so a break is attributable to THIS rule.
+  if (row.ambiguous && row.resolvedVia !== null) {
+    throw new Error(
+      `ResolvedFacility invariant violated: ambiguous=true must imply resolvedVia=null ` +
+      `(got resolvedVia=${JSON.stringify(row.resolvedVia)})`,
     );
   }
 }
@@ -393,7 +429,14 @@ export function assertResolvedFacilityInvariant(
  * alongside), and only it carries `is_active` — an operator-deactivated mapping must not resolve.
  *
  * ⛔ Precedence is fixed and total: registry route, then national route, then unresolved. Never a
- * silent pick between two candidates.
+ * silent pick between two candidates — and since Task 10 that is enforced rather than merely
+ * intended: two competing candidates within ONE route kind resolve to NOTHING and set
+ * `ResolvedFacility.ambiguous`, where the code previously took whichever the database returned
+ * first. Precedence BETWEEN the two kinds is unchanged and is not ambiguity.
+ *
+ * ⛔ Only `map_type = 'SAME-AS'` resolves (Task 10). The other four semantics `TermMappingDialog`
+ * offers stay active in `term_mappings` and are simply invisible here — see the `map_type` filter
+ * on the mapping query below for why it is applied in SQL rather than after the fact.
  *
  * Feed-aware (Task 9b): each `(performer, source_system)` row looks up mappings under ITS OWN
  * coding system — `observedSystemForFeed(source_system)`, NOT one fixed system for every row — so
@@ -522,6 +565,21 @@ export async function resolveObservedFacilities(deps: ReconcileDeps): Promise<Re
         .select(['from_system', 'from_code', 'to_system', 'to_code'])
         .where('from_system', 'in', systems)
         .where('is_active', '=', true)
+        // Task 10: only an exact equivalence resolves a facility. `TermMappingDialog` is the generic
+        // terminology dialog and offers all five `MapType`s; this resolver used to honour every one
+        // of them, so recording UNMAPPED-FROM — the operator's way of saying "this does NOT
+        // correspond" — still drove official reports to that facility.
+        //
+        // ⛔ Filtered in SQL, not after the fact, and that placement is load-bearing: everything
+        // below reasons about `candidates`, and `nonFacilityTarget` in particular is derived from
+        // `candidates.length > 0`. Filtering later would leave a non-SAME-AS registry mapping in the
+        // list and report it as "the target system is not a facility register" — a lie about a
+        // mapping pointing squarely at the registry. Excluded here, such a row reads as unmapped for
+        // resolution purposes, which is all this function claims about it.
+        //
+        // ⚠ These mappings stay ACTIVE in `term_mappings`. Nothing here deactivates one; only their
+        // ability to resolve is removed.
+        .where('map_type', '=', 'SAME-AS')
         .execute()
     : [];
 
@@ -567,16 +625,28 @@ export async function resolveObservedFacilities(deps: ReconcileDeps): Promise<Re
     const candidates = byCode.get(`${r.system}\n${r.code}`) ?? [];
 
     // 1. Registry route wins — the registry is what holds a printable name.
-    const registryMapping = candidates.find((c) => c.toSystem === FACILITY_REGISTRY_SYSTEM);
+    const registryCandidates = candidates.filter((c) => c.toSystem === FACILITY_REGISTRY_SYSTEM);
     // 2. National route: the candidate's target system must be PROVEN a facility register by
     //    `knownNationalSystems` — never merely "not the registry system" (Fix 1; see
-    //    `ResolvedFacility.nonFacilityTarget`'s doc comment). Only checked when registry didn't win.
-    const nationalMapping = registryMapping
-      ? undefined
-      : candidates.find((c) => knownNationalSystems.has(c.toSystem));
+    //    `ResolvedFacility.nonFacilityTarget`'s doc comment). Only considered when the registry
+    //    route is absent ENTIRELY — including when it is absent because it is contested, since a
+    //    contested registry route must not silently demote the row to a national answer either.
+    const nationalCandidates = registryCandidates.length > 0
+      ? []
+      : candidates.filter((c) => knownNationalSystems.has(c.toSystem));
+    // Task 10: two active SAME-AS mappings competing WITHIN one route kind. The pair used to be
+    // settled by `candidates.find(...)` over a query with no `orderBy`, i.e. by whatever the
+    // database returned first. Neither wins now — see `ResolvedFacility.ambiguous` for why nothing
+    // at all is the chosen answer, and why registry-beats-national is precedence, not ambiguity.
+    const ambiguous = registryCandidates.length > 1 || nationalCandidates.length > 1;
+    const registryMapping = ambiguous ? undefined : registryCandidates[0];
+    const nationalMapping = ambiguous ? undefined : nationalCandidates[0];
     // 3. Anything else the operator mapped to (the observed system itself, an unrelated active
     //    system such as LOINC) is a real, saved mapping that resolves to NEITHER real route.
-    const hasFacilityRouteCandidate = !!registryMapping || !!nationalMapping;
+    //
+    // ⛔ Derived from the CANDIDATE LISTS, not from the chosen mappings: an ambiguous row has
+    // facility-route candidates (too many of them) and must never be reported as having none.
+    const hasFacilityRouteCandidate = registryCandidates.length > 0 || nationalCandidates.length > 0;
     const nonFacilityTarget = !hasFacilityRouteCandidate && candidates.length > 0;
 
     const row = registryMapping
@@ -589,14 +659,20 @@ export async function resolveObservedFacilities(deps: ReconcileDeps): Promise<Re
     // A GENUINE facility-route mapping (registry or a proven national register) was authored but
     // points at nothing live — distinct from "never mapped" AND from `nonFacilityTarget` (Fix 1;
     // see that field's doc comment for why "candidates.length > 0 && !row" was wrong).
-    const targetMissing = hasFacilityRouteCandidate && !row;
+    //
+    // ⛔ `!ambiguous` is not belt-and-braces. An ambiguous row deliberately looks up NO target, so
+    // `!row` is trivially true for it — without this guard every ambiguous row would additionally
+    // claim its target had been deleted, which is false whenever the competing facilities are both
+    // live (the normal case).
+    const targetMissing = !ambiguous && hasFacilityRouteCandidate && !row;
 
     // Whole-branch review finding (fix round 1): this is the ONE place today that derives
-    // `resolvedVia`/`targetMissing`/`nonFacilityTarget` together — assert their invariant HERE,
-    // before the row escapes into `ResolvedFacility`, so a future edit that breaks it (or drifts the
-    // three fields apart) fails loudly instead of silently shipping a contradictory row. See
-    // `assertResolvedFacilityInvariant`'s doc comment for why this, not a status union.
-    assertResolvedFacilityInvariant({ resolvedVia, targetMissing, nonFacilityTarget });
+    // `resolvedVia`/`targetMissing`/`nonFacilityTarget`/`ambiguous` together — assert their
+    // invariant HERE, before the row escapes into `ResolvedFacility`, so a future edit that breaks
+    // it (or drifts the four fields apart) fails loudly instead of silently shipping a
+    // contradictory row. See `assertResolvedFacilityInvariant`'s doc comment for why this, not a
+    // status union.
+    assertResolvedFacilityInvariant({ resolvedVia, targetMissing, nonFacilityTarget, ambiguous });
 
     const location = facilityLocationByKey.get(`${r.sourceSystem}\n${r.code}`) ?? { region: null, district: null };
 
@@ -620,6 +696,7 @@ export async function resolveObservedFacilities(deps: ReconcileDeps): Promise<Re
       resolvedVia,
       targetMissing,
       nonFacilityTarget,
+      ambiguous,
     };
   });
 }
@@ -632,6 +709,11 @@ export interface PublishResult {
    *  mapping that targets neither the registry nor a proven national register. Counted separately
    *  so `unmapped` never silently absorbs it (see that field's doc comment). */
   nonFacilityTarget: number;
+  /** Task 10: rows whose mapping resolves to `ResolvedFacility.ambiguous` — competing active
+   *  SAME-AS mappings, so nothing resolved. Counted separately for the same reason as
+   *  `nonFacilityTarget`: folded into `unmapped` it would tell an operator to go author a mapping,
+   *  when what they must actually do is remove one of the two they already have. */
+  ambiguous: number;
   written: number;
 }
 
@@ -657,10 +739,12 @@ export async function publishFacilityMap(
   const result: PublishResult = {
     resolved: resolved.filter((r) => r.resolvedVia !== null).length,
     // Fix 1: a `nonFacilityTarget` row must NOT fall into this bucket — it is not "never mapped",
-    // it is a real mapping that just doesn't target a facility (see its own counter below).
-    unmapped: resolved.filter((r) => r.resolvedVia === null && !r.targetMissing && !r.nonFacilityTarget).length,
+    // it is a real mapping that just doesn't target a facility (see its own counter below). Task 10
+    // excludes `ambiguous` for the same reason: it is over-mapped, not unmapped.
+    unmapped: resolved.filter((r) => r.resolvedVia === null && !r.targetMissing && !r.nonFacilityTarget && !r.ambiguous).length,
     targetMissing: resolved.filter((r) => r.targetMissing).length,
     nonFacilityTarget: resolved.filter((r) => r.nonFacilityTarget).length,
+    ambiguous: resolved.filter((r) => r.ambiguous).length,
     written: resolved.length,
   };
   if (!opts.apply) return result;

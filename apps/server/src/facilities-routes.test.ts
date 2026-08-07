@@ -1472,7 +1472,13 @@ describe('Task 6: GET /api/facilities/observed', () => {
       to_system: DEFAULT_OBSERVED_FACILITY_SYSTEM,
       to_code: 'BALAB',
       to_display: null,
-      map_type: 'equivalent',
+      // ⛔ 'SAME-AS', not the 'equivalent' this fixture used to write. `map_type` is a free-text
+      // NOT NULL column with no CHECK, so 'equivalent' inserted fine — but it is a FHIR ConceptMap
+      // `equivalence` value, not one of the five `MapType`s `TermMappingDialog` can produce, and
+      // this test's whole premise is a mapping an operator authored through that dialog. Task 10
+      // made `resolveObservedFacilities` resolve only through `SAME-AS`, so the unrealistic value
+      // silently stopped exercising the self-mapping path this test exists to pin.
+      map_type: 'SAME-AS',
       relationship: null,
       owner: null,
       is_active: true,
@@ -1485,6 +1491,42 @@ describe('Task 6: GET /api/facilities/observed', () => {
     expect(row.targetMissing).toBe(false);
     expect(row.nonFacilityTarget).toBe(true);
     expect(row.resolvedVia).toBeNull();
+  });
+
+  // Task 10, end to end: two competing ACTIVE SAME-AS mappings resolve to NOTHING and the row is
+  // reported `ambiguous`. Worth a route-level test on top of the bootstrap one because this route
+  // is what the Observed tab actually branches on — the field has to survive the route's sort and
+  // JSON serialisation, not merely exist on `ResolvedFacility`.
+  it('reports two competing SAME-AS mappings as ambiguous, resolving neither', async () => {
+    const internalDb = await makeMigratedDb();
+    const externalDb = await makeMigratedExternalDb();
+    await seedObservedReports(externalDb, [['BALAB', 6]]);
+    await createFacilityRegistryStore(internalDb).upsert({ id: 'fac-A', name: 'Alpha', localCode: 'L-1', source: 'manual' });
+    await createFacilityRegistryStore(internalDb).upsert({ id: 'fac-B', name: 'Beta', localCode: 'L-2', source: 'manual' });
+    for (const toCode of ['L-1', 'L-2']) {
+      await internalDb.insertInto('term_mappings').values({
+        id: `tm-${randomUUID()}`,
+        from_system: DEFAULT_OBSERVED_FACILITY_SYSTEM,
+        from_code: 'BALAB',
+        to_system: FACILITY_REGISTRY_SYSTEM,
+        to_code: toCode,
+        to_display: null,
+        map_type: 'SAME-AS',
+        relationship: null,
+        owner: null,
+        is_active: true,
+      }).execute();
+    }
+    const app = await appWith(fakeReconcileCtx(internalDb, externalDb));
+
+    const res = await app.inject({ method: 'GET', url: '/api/facilities/observed' });
+    expect(res.statusCode).toBe(200);
+    const row = res.json().find((r: any) => r.sourceCode === 'BALAB');
+    expect(row.ambiguous).toBe(true);
+    expect(row.registryId).toBeNull();
+    expect(row.resolvedVia).toBeNull();
+    expect(row.targetMissing).toBe(false);
+    expect(row.nonFacilityTarget).toBe(false);
   });
 
   // ⚠ Route-ordering regression guard: `/api/facilities/:id` is ALSO gated on `facilities.view` and
@@ -1688,7 +1730,9 @@ async function seedMapping(internalDb: any, overrides: Record<string, unknown> =
     to_system: FACILITY_REGISTRY_SYSTEM,
     to_code: 'fac-1',
     to_display: 'Dodoma Regional Referral',
-    map_type: 'equivalent',
+    // 'SAME-AS' — the only semantic Task 10's resolver treats as a facility equivalence. See the
+    // note on the self-mapping fixture above for why 'equivalent' was wrong here even before that.
+    map_type: 'SAME-AS',
     relationship: null,
     owner: null,
     is_active: true,

@@ -830,6 +830,10 @@ export const en = {
       // Fix 1/2 (self-mapping report): distinct from `targetMissing` — a mapping was authored, but
       // its target system is not a facility register at all (a self-mapping, or LOINC/ICD-10/UCUM).
       nonFacilityTarget: 'Target is not a facility',
+      // Task 10: two active SAME-AS mappings compete for this code, so NOTHING resolves — the
+      // resolver refuses to pick a winner. Worded as an instruction, not a status, because the fix
+      // is entirely in the operator's hands: remove one of the two mappings.
+      ambiguous: 'Conflicting mappings — remove one',
       viaRegistry: 'via registry',
       viaNational: 'via national',
       map: 'Map',
@@ -855,7 +859,7 @@ export const en = {
       // no longer depends on this action, and doesn't send a would-be mapper looking here.
       publish: 'Rebuild reports dimension',
       publishing: 'Rebuilding…',
-      publishDone: '{{resolved}} resolved, {{unmapped}} unmapped, {{targetMissing}} target missing, {{nonFacilityTarget}} non-facility target(s), {{written}} written.',
+      publishDone: '{{resolved}} resolved, {{unmapped}} unmapped, {{targetMissing}} target missing, {{nonFacilityTarget}} non-facility target(s), {{ambiguous}} conflicting, {{written}} written.',
     },
   },
   query: {

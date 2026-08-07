@@ -8,6 +8,7 @@ import {
   createFacilityRegistryStore,
   type ExternalSchema,
   type InternalSchema,
+  type MapType,
   type TerminologyAdminStore,
 } from '@openldr/db';
 import type { ReconcileDeps } from '../facility-reconcile';
@@ -132,6 +133,10 @@ export interface SeedMappingInput {
   /** Defaults to true. Task 4's "ignores an inactive mapping" test passes `false` here to pin the
    *  `term_mappings.is_active` filter. */
   isActive?: boolean;
+  /** Defaults to `'SAME-AS'` — every pre-Task-10 test authored an equivalence and must keep
+   *  resolving unchanged. Task 10 needs the OTHER four semantics `TermMappingDialog` offers, to pin
+   *  that they no longer resolve a facility. */
+  mapType?: MapType;
 }
 
 /**
@@ -148,7 +153,7 @@ export async function seedMapping(deps: ReconcileDeps, input: SeedMappingInput):
     toSystem: input.toSystem,
     toCode: input.toCode,
     toDisplay: null,
-    mapType: 'SAME-AS',
+    mapType: input.mapType ?? 'SAME-AS',
     isActive: input.isActive ?? true,
   });
 }

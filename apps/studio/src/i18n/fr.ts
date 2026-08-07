@@ -821,6 +821,7 @@ export const fr: EnShape = {
       unmapped: 'Non associé',
       targetMissing: 'Cible manquante',
       nonFacilityTarget: 'La cible n’est pas un établissement',
+      ambiguous: 'Associations en conflit — supprimez-en une',
       viaRegistry: 'via le registre',
       viaNational: 'via le national',
       map: 'Associer',
@@ -835,7 +836,7 @@ export const fr: EnShape = {
       scanDone: '{{discovered}} découvert(s), {{created}} créé(s), {{updated}} mis à jour.',
       publish: 'Reconstruire la dimension des rapports',
       publishing: 'Reconstruction en cours…',
-      publishDone: '{{resolved}} résolu(s), {{unmapped}} non associé(s), {{targetMissing}} cible(s) manquante(s), {{nonFacilityTarget}} cible(s) non-établissement, {{written}} écrit(s).',
+      publishDone: '{{resolved}} résolu(s), {{unmapped}} non associé(s), {{targetMissing}} cible(s) manquante(s), {{nonFacilityTarget}} cible(s) non-établissement, {{ambiguous}} en conflit, {{written}} écrit(s).',
     },
   },
   query: {
