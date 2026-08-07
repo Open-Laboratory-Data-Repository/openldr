@@ -36,7 +36,7 @@ import { createReportScheduler, type ReportScheduler } from './report-scheduler'
 import { createPluginScheduleApi, createPluginScheduleRunner, type PluginScheduleRunner } from './plugin-schedule';
 import { createFormArtifactInstaller, type FormArtifactInstaller } from './form-artifact-install';
 import { type PluginRuntime } from '@openldr/plugins';
-import { createConnectorStore, createPluginDataStore, type PluginDataStore, type ConnectorStore, createReportStore, type ReportStore, type ReportRecord, createCustomQueryStore, createSyncSiteStore, type SyncSiteStore, createWorkflowSecretStore, type WorkflowSecretStore, createSyncQuarantineStore, createSyncDivergenceStore, createSyncSiteCursorStore, type SyncSiteCursorStore, createSyncActivityStore, createTerminologyIngestJobStore, type TerminologyIngestJobStore } from '@openldr/db';
+import { createConnectorStore, createPluginDataStore, type PluginDataStore, type ConnectorStore, createReportStore, type ReportStore, type ReportRecord, createCustomQueryStore, createSyncSiteStore, type SyncSiteStore, createWorkflowSecretStore, type WorkflowSecretStore, createSyncQuarantineStore, createSyncDivergenceStore, createSyncSiteCursorStore, type SyncSiteCursorStore, createSyncActivityStore, createTerminologyIngestJobStore, type TerminologyIngestJobStore, createFacilityJobStore, type FacilityJobStore } from '@openldr/db';
 import type { ReportDesign } from '@openldr/report-designer/pure';
 import { createBatchStore } from '@openldr/ingest';
 import { createSyncPushRunner, createSyncPullRunner, createAmendmentPullRunner, createSyncTokenProvider, createTerminologyBulkSync, readSyncConfig, combineCycleResults, type PushBatch, type PushResponse, type SyncConfig } from '@openldr/sync';
@@ -58,7 +58,8 @@ import { createValidationStrictness, type ValidationStrictness } from './validat
 import { createLabIdentity, type LabIdentityService } from './lab-identity';
 export { createValidationStrictness, VALIDATION_STRICTNESS_KEY, type ValidationStrictness } from './validation-settings';
 import { createReportCategoriesService, type ReportCategoriesService } from './report-categories';
-import { captureObservedFacilityFromProjection } from './facility-reconcile';
+import { captureObservedFacilityFromProjection, publishFacilityMap, projectRegistryRows } from './facility-reconcile';
+import { createFacilityJobWorker } from './facility-job-worker';
 import { createPluginBroker, type PluginBroker } from './plugin-broker';
 import { policyFromConfig } from './policy';
 import { createPluginTarget } from './connector-target';
@@ -458,6 +459,11 @@ export interface AppContext {
    *  retain-latest). The worker built alongside it (see `terminologyIngestWorker` in
    *  `createAppContext`) polls this store; Task 7's routes read/enqueue against it. */
   terminologyJobs: TerminologyIngestJobStore;
+  /** Facility durable-updates (Task 4): queue/claim/progress store for facility-map rebuilds and
+   *  per-registry-row projections. The polling worker that drains it (`facilityJobWorker`, built
+   *  alongside it in `createAppContext`) is not exposed here — only the store is, since routes and
+   *  the CLI (Tasks 5-11) only ever enqueue against it and read its state, never drive it directly. */
+  facilityJobs: FacilityJobStore;
   /** The re-runnable sync worker lifecycle. reconcile() re-reads config and rebuilds the workers,
    *  which is how a Settings toggle takes effect without a restart (Task 4 calls it). */
   syncRuntime: SyncRuntime;
@@ -858,6 +864,27 @@ const reporting: ReportingApi = {
     workDirBase: terminologyWorkDirBase,
     logger,
     runIngest: createRunIngest({ blob, terminology, workDirBase: terminologyWorkDirBase }),
+  });
+
+  // Task 4 (facility durable updates): job store (queue/claim/progress) + the polling worker that
+  // drains it, wired to the SAME ReconcileDeps shape the facilities routes/CLI already build (see
+  // `reconcileDeps(ctx)` in apps/server/src/facilities-routes.ts) rather than a second one — the
+  // runners below just close over that shape's three pieces directly.
+  const facilityJobs = createFacilityJobStore(internal.db);
+  const facilityJobWorker = createFacilityJobWorker({
+    jobs: facilityJobs,
+    runRebuild: async () => {
+      const r = await publishFacilityMap({ internalDb: internal.db, externalDb, admin: termAdmin }, { apply: true });
+      return { written: r.written };
+    },
+    runProjection: async (registryId) => {
+      // The row may have been deleted between enqueue and run — nothing left to project, so the
+      // job completes rather than fails (projectRegistryRows itself never throws either way).
+      const row = await internal.db.selectFrom('facility_registry')
+        .select(['id', 'name']).where('id', '=', registryId).executeTakeFirst();
+      if (row) await projectRegistryRows({ internalDb: internal.db, admin: termAdmin }, [row]);
+    },
+    logger,
   });
 
   const connectorStore = createConnectorStore(internal.db);
@@ -1461,6 +1488,7 @@ const reporting: ReportingApi = {
     appSettings,
     labIdentity,
     facilityRegistry,
+    facilityJobs,
     featureFlags,
     numberSettings,
     validationStrictness,
@@ -1478,6 +1506,7 @@ const reporting: ReportingApi = {
       await syncRuntime.stop();
       await projectionWorker.stop();
       await terminologyIngestWorker.stop();
+      await facilityJobWorker.stop();
       if (projectionListenConnected) await projectionListenClient.end().catch(() => undefined);
       await Promise.allSettled([eventing.close(), store.close(), internal.close()]);
     },
