@@ -170,7 +170,11 @@ export interface TerminologyAdminStore {
      *
      * Which row `input` lands in, in order:
      *   1. `opts.id`, when given (the caller is editing a specific mapping; throws `not-found` if
-     *      it does not exist).
+     *      it does not exist). On this path the EXISTING row's `from_system`/`from_code` win and
+     *      `input`'s are ignored — the same contract as `update`, whose `set` clause touches no
+     *      `from_*` column. An edit retargets what a term maps TO; it never moves which term is
+     *      being mapped. The scope below is read against that existing source term, not the
+     *      submitted one.
      *   2. An in-scope ACTIVE row that already names `input.toCode` — a re-save of the same target
      *      rewrites that row rather than superseding it into a second one. `term_mappings` would
      *      happily hold both and they would resolve identically, but the uniqueness above is keyed
@@ -675,12 +679,18 @@ export function createTerminologyAdminStore(db: Kysely<InternalSchema>, projecti
             if (!previous) throw new TerminologyAdminError(`mapping not found: ${id}`, 'not-found');
           }
 
+          // ⛔ On the `opts.id` path the EXISTING row's source term wins and the input's is ignored
+          // — exactly what `update()` above does (its `set` clause touches no `from_*` column). A
+          // mapping edit retargets what a term maps TO; it never moves which term is being mapped.
+          const fromSystem = previous?.from_system ?? input.fromSystem;
+          const fromCode = previous?.from_code ?? input.fromCode;
+
           // The scope, matching Task 12's partial unique index exactly: active rows for this
           // (from_system, from_code) whose target system AND map type are the ones being written.
           // `is_active` is part of the predicate, so an already-inactive row is invisible here and
           // is neither re-deactivated nor captured a second time.
           const inScope = await trx.selectFrom('term_mappings').selectAll()
-            .where('from_system', '=', input.fromSystem).where('from_code', '=', input.fromCode)
+            .where('from_system', '=', fromSystem).where('from_code', '=', fromCode)
             .where('to_system', '=', input.toSystem).where('map_type', '=', input.mapType)
             .where('is_active', '=', true).execute();
 
@@ -720,23 +730,22 @@ export function createTerminologyAdminStore(db: Kysely<InternalSchema>, projecti
               .where('source_system', '=', previous.from_system).where('source_code', '=', previous.from_code)
               .where('target_system', '=', previous.to_system).where('target_code', '=', previous.to_code).execute();
             await trx.updateTable('term_mappings').set({
-              from_system: input.fromSystem, from_code: input.fromCode,
               to_system: input.toSystem, to_code: input.toCode, to_display: input.toDisplay, map_type: input.mapType,
               relationship: input.relationship ?? null, owner: input.owner ?? null, is_active: input.isActive,
               updated_at: sql`now()`,
             }).where('id', '=', id).execute();
           } else {
             await trx.insertInto('term_mappings').values({
-              id, from_system: input.fromSystem, from_code: input.fromCode, to_system: input.toSystem, to_code: input.toCode,
+              id, from_system: fromSystem, from_code: fromCode, to_system: input.toSystem, to_code: input.toCode,
               to_display: input.toDisplay, map_type: input.mapType, relationship: input.relationship ?? null,
               owner: input.owner ?? null, is_active: input.isActive,
             }).execute();
           }
           await trx.deleteFrom('concept_map_elements')
-            .where('map_url', '=', LOCAL_MAP_URL).where('source_system', '=', input.fromSystem).where('source_code', '=', input.fromCode)
+            .where('map_url', '=', LOCAL_MAP_URL).where('source_system', '=', fromSystem).where('source_code', '=', fromCode)
             .where('target_system', '=', input.toSystem).where('target_code', '=', input.toCode).execute();
           await trx.insertInto('concept_map_elements').values({
-            map_url: LOCAL_MAP_URL, source_system: input.fromSystem, source_code: input.fromCode,
+            map_url: LOCAL_MAP_URL, source_system: fromSystem, source_code: fromCode,
             target_system: input.toSystem, target_code: input.toCode, equivalence: input.mapType,
           }).execute();
 

@@ -180,8 +180,11 @@ function buildFakeAdmin(): FakeAdmin {
         const superseded: string[] = [];
         let target = opts?.id ? mappings.find((x) => x.id === opts.id) : undefined;
         if (opts?.id && !target) throw adminErr(`mapping not found: ${opts.id}`, 'not-found');
+        // Like the real store: on the id path the EXISTING row's source term wins.
+        const fromSystem = target?.fromSystem ?? input.fromSystem;
+        const fromCode = target?.fromCode ?? input.fromCode;
         const inScope = mappings.filter((m) => m.isActive
-          && m.fromSystem === input.fromSystem && m.fromCode === input.fromCode
+          && m.fromSystem === fromSystem && m.fromCode === fromCode
           && m.toSystem === input.toSystem && m.mapType === input.mapType);
         target ??= inScope.find((m) => m.toCode === input.toCode);
         if (input.isActive) {
@@ -192,7 +195,7 @@ function buildFakeAdmin(): FakeAdmin {
           }
         }
         const fields = {
-          fromSystem: input.fromSystem, fromCode: input.fromCode, toSystem: input.toSystem, toCode: input.toCode,
+          fromSystem, fromCode, toSystem: input.toSystem, toCode: input.toCode,
           toDisplay: input.toDisplay ?? null, mapType: input.mapType, relationship: input.relationship ?? null,
           owner: input.owner ?? null, isActive: input.isActive,
         };

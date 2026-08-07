@@ -287,6 +287,19 @@ describe('terminology admin store', () => {
         .toEqual([{ id: b.mapping.id, to_code: 'L-3' }]);
     });
 
+    // ⛔ Same contract as `update`: an edit retargets what a term maps TO, never which term is
+    // being mapped. Without this, a PUT body carrying a wrong `fromSystem`/`fromCode` would move
+    // an operator's mapping onto a different observed string — a power the route never had.
+    it('saveExclusive with an id ignores the submitted source term, like update does', async () => {
+      const { db, s } = await store();
+      const a = await s.termMappings.create(exclusiveInput('L-1'));
+
+      await s.termMappings.saveExclusive(exclusiveInput('L-2', { fromCode: 'SOMEWHERE-ELSE' }), { id: a.mapping.id });
+
+      expect(await db.selectFrom('term_mappings').select(['from_code', 'to_code']).execute())
+        .toEqual([{ from_code: 'BALAB', to_code: 'L-2' }]);
+    });
+
     it('saveExclusive throws not-found for an id that does not exist', async () => {
       const { s } = await store();
       await expect(s.termMappings.saveExclusive(exclusiveInput('L-1'), { id: 'no-such' }))
