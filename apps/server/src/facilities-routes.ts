@@ -780,7 +780,11 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     try {
       await retireRegistryConcepts(deps, [id]);
     } catch (err) {
-      ctx.logger?.error({ err, facilityId: id }, 'failed to retire the deleted facility\'s registry concept');
+      // NOT optional-chained. `AppContext.logger` is a required `Logger`, and this is the only
+      // record that a retirement failed — the delete still succeeds and returns 200, so a swallowed
+      // log leaves a live ACTIVE concept for a facility that no longer exists with nothing anywhere
+      // to say so. A test fixture that omits `logger` is a fixture bug, not a case to tolerate here.
+      ctx.logger.error({ err, facilityId: id }, 'failed to retire the deleted facility\'s registry concept');
     }
 
     await ctx.facilityRegistry.remove(id);
@@ -851,7 +855,13 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     // the rest of the file still parses). Without this, the route would open a real write
     // transaction whose OWN internal `blocked` check (facility-import.ts) makes it a no-op, then
     // still audit an "import" that wrote nothing.
-    if (preview.quarantined.length > 0 && !p.data.allowMalformedRows) return preview;
+    //
+    // ⛔ READ off the preview, never re-derived. This guard fronts a WRITE transaction, and the
+    // predicate it needs is `importFacilities`' own — which also blocks on duplicate headers. The
+    // quarantine-only version this line used to spell out agreed with it purely because
+    // `parseFacilityCsv` zeroes `records` on duplicate headers, so the `parsed === 0` check above
+    // happened to cover the difference. That is the parser's shape, not a contract.
+    if (preview.blocked) return preview;
 
     if (preview.parsed > MAX_INLINE_APPLY_ROWS) {
       reply.code(400);

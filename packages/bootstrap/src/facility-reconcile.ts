@@ -1092,6 +1092,46 @@ async function ensureRegistrySystemActive(deps: Pick<ReconcileDeps, 'admin' | 'i
  * is parked (direction 2, and the parked set is added whole), so a second pass could discover no code
  * the first did not.
  */
+/**
+ * "Which `facility_registry` rows would PROJECT as one of `codes`?" — the one implementation of the
+ * claimant question, previously written out three times (batch widening, retirement, post-delete
+ * reprojection) in the same shape with the same "the same rule" comment on each copy.
+ *
+ * ⛔ The distinction the whole thing exists for: a claim is `registryPreferredCode(row) === code`,
+ * NOT "the row carries the string somewhere". Row B `{local_code:'Y', national_code:'X'}` projects
+ * as `'Y'` and does not claim `'X'`; counting it would drag it into a collision it is not part of
+ * (see `widenToCollidingRows`' ⛔ note for what that costs). The SQL is therefore a deliberately
+ * WIDE prefilter — expressing the preference order as a `coalesce(...)` here would be a second copy
+ * of `registryPreferredCode` in a dialect pg-mem must also agree with — narrowed IN MEMORY.
+ *
+ * `exclude` drops rows the caller already knows are not live claimants: a facility being deleted is
+ * still present in `facility_registry` while `retireRegistryConcepts` runs, and would otherwise read
+ * as the claimant of its own code.
+ *
+ * Returns the claiming rows paired with the code each claims, so a caller can use either.
+ */
+async function claimantsOf(
+  deps: Pick<ReconcileDeps, 'internalDb'>,
+  codes: string[],
+  exclude: ReadonlySet<string> = new Set(),
+): Promise<{ id: string; name: string; claimed: string }[]> {
+  if (codes.length === 0) return [];
+  const wanted = new Set(codes);
+  const rows = await deps.internalDb
+    .selectFrom('facility_registry')
+    .select(['id', 'name', 'local_code', 'national_code'])
+    .where((eb) => eb.or([eb('local_code', 'in', codes), eb('national_code', 'in', codes)]))
+    .execute();
+  const out: { id: string; name: string; claimed: string }[] = [];
+  for (const r of rows) {
+    if (exclude.has(r.id)) continue;
+    const claimed = registryPreferredCode({ localCode: r.local_code, nationalCode: r.national_code });
+    if (claimed === null || !wanted.has(claimed)) continue;
+    out.push({ id: r.id, name: r.name, claimed });
+  }
+  return out;
+}
+
 async function widenToCollidingRows(
   deps: Pick<ReconcileDeps, 'internalDb'>,
   rows: { id: string; name: string }[],
@@ -1159,17 +1199,9 @@ async function widenToCollidingRows(
   // caller naming a row that no longer exists) or carries no code at all.
   if (candidates.size === 0) return [...byId.values()];
 
-  const candidateList = [...candidates];
-  const claimants = await deps.internalDb
-    .selectFrom('facility_registry')
-    .select(['id', 'name', 'local_code', 'national_code'])
-    .where((eb) => eb.or([eb('local_code', 'in', candidateList), eb('national_code', 'in', candidateList)]))
-    .execute();
-  for (const c of claimants) {
-    // The SAME question `registryConceptRows` and `resolveObservedFacilities` ask — what would this
-    // row project as? — and not "does this row contain the string anywhere?".
-    const claimed = registryPreferredCode({ localCode: c.local_code, nationalCode: c.national_code });
-    if (claimed === null || !candidates.has(claimed)) continue;
+  // `claimantsOf` asks the SAME question `registryConceptRows` and `resolveObservedFacilities` ask —
+  // what would this row project as? — and not "does this row contain the string anywhere?".
+  for (const c of await claimantsOf(deps, [...candidates])) {
     if (!byId.has(c.id)) byId.set(c.id, { id: c.id, name: c.name });
   }
   return [...byId.values()];
@@ -1598,9 +1630,9 @@ export async function reprojectRegistryRows(
  * projects as. Retiring that would pull a live lab out of the mapping picker over a deletion that had
  * nothing to do with it — and, because a retired concept still resolves, entirely silently. So a code
  * still claimed by a surviving facility is skipped. This is the same targeted defence
- * `reprojectRegistryRows` applies to its own destructive steps (`linkedElsewhere`), asking the
- * question the way `widenToCollidingRows` asks it: "claims a code" is `registryPreferredCode(row) ===
- * code` and nothing else, so the SQL below is a deliberately WIDE prefilter narrowed IN MEMORY.
+ * `reprojectRegistryRows` applies to its own destructive steps (`linkedElsewhere`), and it asks the
+ * claimant question through the shared `claimantsOf` helper — "claims a code" is
+ * `registryPreferredCode(row) === code` and nothing else.
  *
  * ⚠ `registryIds` are still present in `facility_registry` when this runs (that is the whole point of
  * the ordering), so they are excluded from the claimant set explicitly — otherwise a facility being
@@ -1626,20 +1658,10 @@ export async function retireRegistryConcepts(
   if (links.length === 0) return 0;
   const codes = [...new Set(links.map((l) => l.concept_code))];
 
-  // The wide prefilter: any registry row CARRYING one of these codes in either column. Narrowed to
-  // real claims below — a row that carries the code in a non-preferred column does not project as it
-  // and is not a claimant (the same distinction `widenToCollidingRows`' ⛔ note is built around).
-  const doomed = new Set(registryIds);
-  const claimed = new Set(
-    (await deps.internalDb
-      .selectFrom('facility_registry')
-      .select(['id', 'local_code', 'national_code'])
-      .where((eb) => eb.or([eb('local_code', 'in', codes), eb('national_code', 'in', codes)]))
-      .execute())
-      .filter((r) => !doomed.has(r.id))
-      .map((r) => registryPreferredCode({ localCode: r.local_code, nationalCode: r.national_code }))
-      .filter((c): c is string => c !== null),
-  );
+  // The facilities being deleted are still IN `facility_registry` while this runs (that is the whole
+  // point of the ordering), so they are excluded explicitly — otherwise a facility being deleted
+  // would read as the live claimant of its own code and nothing would ever retire.
+  const claimed = new Set((await claimantsOf(deps, codes, new Set(registryIds))).map((c) => c.claimed));
 
   const retirable = codes.filter((c) => !claimed.has(c));
   if (retirable.length === 0) return 0;
@@ -1697,18 +1719,10 @@ export async function reprojectAfterRegistryDelete(
     // snapshot, not the row — a codeless snapshot frees nothing and must not become a bare query.
     if (freed === null) return;
 
-    // Wide prefilter, narrowed in memory to rows that would genuinely PROJECT as `freed` — the same
-    // `registryPreferredCode`-and-nothing-else rule `widenToCollidingRows` documents at length.
-    // `deleted.id` is filtered out defensively: the row should already be gone, and if a caller got
-    // the ordering wrong this refuses to reproject a facility it was told was deleted rather than
+    // `deleted.id` is excluded defensively: the row should already be gone, and if a caller got the
+    // ordering wrong this refuses to reproject a facility it was told was deleted rather than
     // writing an ACTIVE concept for it.
-    const survivors = (await deps.internalDb
-      .selectFrom('facility_registry')
-      .select(['id', 'name', 'local_code', 'national_code'])
-      .where((eb) => eb.or([eb('local_code', '=', freed), eb('national_code', '=', freed)]))
-      .execute())
-      .filter((r) => r.id !== deleted.id
-        && registryPreferredCode({ localCode: r.local_code, nationalCode: r.national_code }) === freed)
+    const survivors = (await claimantsOf(deps, [freed], new Set([deleted.id])))
       .map((r) => ({ id: r.id, name: r.name }));
 
     if (survivors.length === 0) return;

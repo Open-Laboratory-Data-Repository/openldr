@@ -80,6 +80,25 @@ export interface FacilityImportResult {
    *  (concatenated releases, re-appended files), so duplicates are collapsed before ever reaching
    *  the batch writer instead of being left to explode there. */
   duplicates: number;
+  /** Whether this file may be applied AT ALL — the ONE authoritative answer, computed once in
+   *  `importFacilities` and reported rather than re-derived.
+   *
+   *  ⛔ Every consumer that gates on "is this import blocked?" must read THIS, not rebuild the
+   *  predicate. The route, the CLI and the Studio import sheet each used to re-derive a strictly
+   *  NARROWER version (the quarantine clause only) and agreed with the importer purely by accident:
+   *  `parseFacilityCsv` returns `records: []` whenever headers are duplicated, so a separate
+   *  "nothing parsed" guard happened to catch the case their own predicate missed. That is a
+   *  coincidence of the parser's shape, not a contract — and one of the three re-derivations guards
+   *  a WRITE transaction. */
+  blocked: boolean;
+  /** Why `blocked` is true, or null when it is false. A machine token, not a message: each consumer
+   *  already renders its own explanation for these two cases (line-numbered quarantine detail, the
+   *  duplicate column names), and this exists so a consumer can tell them apart without inspecting
+   *  `duplicateColumns`/`quarantined` and re-deriving the precedence.
+   *
+   *  `'duplicate-columns'` wins when both hold: it has NO override, so reporting the overridable
+   *  reason would offer an operator a switch that cannot unblock the file. */
+  blockedReason: 'duplicate-columns' | 'quarantined-rows' | null;
 }
 
 // Bounds every chunked query below (existing-id lookup, reference_change_log batch insert) well
@@ -207,13 +226,20 @@ export async function importFacilities(
   // with something wrong with it has exactly one idiom for proceeding anyway. Duplicate headers have
   // NO override: which of two identically-named columns wins is arbitrary, so applying either is a
   // guess about master data rather than a documented trade.
-  const blocked =
-    duplicateColumns.length > 0 || (quarantined.length > 0 && !opts.allowMalformedRows);
+  //
+  // Both are REPORTED on the result (`blocked`/`blockedReason`), not merely acted on here: three
+  // separate consumers gate on this same question, and each one that re-derives it is a chance to
+  // derive it differently. See `FacilityImportResult.blocked`.
+  const blockedReason: FacilityImportResult['blockedReason'] =
+    duplicateColumns.length > 0
+      ? 'duplicate-columns'
+      : (quarantined.length > 0 && !opts.allowMalformedRows ? 'quarantined-rows' : null);
+  const blocked = blockedReason !== null;
 
   if (!opts.apply || blocked || records.length === 0) {
     return {
       parsed: parsedRecords.length, skipped, unknownColumns, duplicateColumns, quarantined,
-      created: 0, updated: 0, duplicates,
+      created: 0, updated: 0, duplicates, blocked, blockedReason,
     };
   }
 
@@ -280,8 +306,10 @@ export async function importFacilities(
   // own failures (see that function's doc comment) so this call cannot throw.
   if (deps.admin) await projectRegistryRows({ internalDb: deps.db, admin: deps.admin }, mergedRecords);
 
+  // `blocked` is necessarily false here — the early return above is the only path a blocked file
+  // takes — but it is spelled out rather than hardcoded so the two returns cannot drift.
   return {
     parsed: parsedRecords.length, skipped, unknownColumns, duplicateColumns, quarantined,
-    created, updated, duplicates,
+    created, updated, duplicates, blocked, blockedReason,
   };
 }

@@ -860,6 +860,13 @@ export interface FacilityImportResult {
   created: number;
   updated: number;
   duplicates: number;
+  /** Whether the server refused to apply this file — the server's OWN answer, mirrored from
+   *  `@openldr/bootstrap`'s `FacilityImportResult.blocked`. Read it; do not rebuild the predicate
+   *  out of `duplicateColumns`/`quarantined` here (that is exactly what this field exists to stop). */
+  blocked: boolean;
+  /** Which of the two block reasons applied, or null when `blocked` is false. `'duplicate-columns'`
+   *  has NO override; `'quarantined-rows'` is released by `allowMalformedRows`. */
+  blockedReason: 'duplicate-columns' | 'quarantined-rows' | null;
 }
 
 export interface FacilityImportRequest {

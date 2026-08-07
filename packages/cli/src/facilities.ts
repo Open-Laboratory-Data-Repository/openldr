@@ -80,9 +80,21 @@ export async function runFacilitiesImport(path: string, opts: FacilitiesImportOp
     // parse (facility-csv.ts) — so this is its own check, not covered by the block above. Fires
     // on a dry run too: the line numbers are exactly what a preview exists to surface before the
     // operator ever considers --apply.
-    if (result.quarantined.length > 0 && !opts.allowMalformedRows) {
+    //
+    // ⛔ `result.blocked` is READ, not re-derived (see `FacilityImportResult.blocked`): it is the
+    // same predicate `importFacilities` itself applies, so this exit code can no longer disagree
+    // with whether the file was actually written. `blockedReason` picks which explanation to print
+    // — duplicate headers have no override, so telling an operator to pass --allow-malformed-rows
+    // would be pointing at a switch that cannot help them.
+    if (result.blocked) {
       if (opts.json) {
         process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+      } else if (result.blockedReason === 'duplicate-columns') {
+        process.stderr.write(
+          `facilities import refused: duplicate column header(s) in ${path}: ${result.duplicateColumns.join(', ')}\n` +
+            'which of two identically-named columns wins is arbitrary, so there is no override — ' +
+            'remove or rename the duplicate(s) and re-run\n',
+        );
       } else {
         for (const row of result.quarantined) {
           process.stderr.write(`line ${row.line}: ${row.reason} — ${row.raw}\n`);

@@ -1008,7 +1008,7 @@ describe('POST /api/facilities/import', () => {
     // FacilityImportResult) now reach the response body too.
     expect(res.json()).toEqual({
       parsed: 1, skipped: 1, unknownColumns: [], duplicateColumns: [], quarantined: [],
-      created: 0, updated: 0, duplicates: 0,
+      created: 0, updated: 0, duplicates: 0, blocked: false, blockedReason: null,
     });
     expect(await db.selectFrom('facility_registry').selectAll().execute()).toHaveLength(0);
     expect(ctx.__audit).toHaveLength(0); // a dry run writes nothing, so it must not audit
@@ -1031,9 +1031,37 @@ describe('POST /api/facilities/import', () => {
     expect(res.json()).toMatchObject({
       created: 0,
       quarantined: [{ line: 3, reason: 'too_many_fields', raw: '2,Bad,Extra' }],
+      // The importer's own verdict, reaching the client. This route's pre-transaction guard reads
+      // THIS field rather than rebuilding the predicate, and the Studio sheet reads it off the
+      // response for the same reason (see `FacilityImportResult.blocked`).
+      blocked: true, blockedReason: 'quarantined-rows',
     });
     expect(await db.selectFrom('facility_registry').selectAll().execute()).toHaveLength(0);
     expect(ctx.__audit).toHaveLength(0); // blocked apply writes nothing, so it must not audit
+  });
+
+  // The other block reason, end to end. `parsed` is 0 here — `parseFacilityCsv` returns no records
+  // for a duplicate header — so the route's earlier `parsed === 0` short-circuit is what actually
+  // returns, and `blocked` is carried on the body regardless. That is the point: the two guards no
+  // longer have to agree by coincidence, because only one of them decides.
+  it('reports a duplicate-header file as blocked, with no override offered', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities/import',
+      payload: {
+        csv: 'national_code,name,name\n1,A,B\n',
+        nationalSystem: SYSTEM, apply: true, allowMalformedRows: true,
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({
+      created: 0, duplicateColumns: ['name'], blocked: true, blockedReason: 'duplicate-columns',
+    });
+    expect(await db.selectFrom('facility_registry').selectAll().execute()).toHaveLength(0);
+    expect(ctx.__audit).toHaveLength(0);
   });
 
   it('allowMalformedRows: true applies the well-formed rows despite the quarantined one, and still reports it', async () => {

@@ -44,7 +44,7 @@ import { runFacilitiesImport, runFacilitiesScanObserved, runFacilitiesPublish, r
 
 const CLEAN_RESULT = {
   parsed: 10, skipped: 0, unknownColumns: [], duplicateColumns: [], quarantined: [],
-  created: 0, updated: 0, duplicates: 0,
+  created: 0, updated: 0, duplicates: 0, blocked: false, blockedReason: null,
 };
 
 describe('facilities import CLI', () => {
@@ -166,7 +166,7 @@ describe('facilities import CLI', () => {
     mocks.importFacilities.mockResolvedValue({
       parsed: 1, skipped: 0, unknownColumns: [], duplicateColumns: [],
       quarantined: [{ line: 3, reason: 'too_many_fields', raw: '2,Bad,Extra' }],
-      created: 0, updated: 0, duplicates: 0,
+      created: 0, updated: 0, duplicates: 0, blocked: true, blockedReason: 'quarantined-rows',
     });
 
     const code = await runFacilitiesImport('/some/file.csv', { nationalSystem: 'urn:tz:hfr', apply: true, json: false });
@@ -182,7 +182,7 @@ describe('facilities import CLI', () => {
     mocks.importFacilities.mockResolvedValue({
       parsed: 1, skipped: 0, unknownColumns: [], duplicateColumns: [],
       quarantined: [{ line: 3, reason: 'too_many_fields', raw: '2,Bad,Extra' }],
-      created: 1, updated: 0, duplicates: 0,
+      created: 1, updated: 0, duplicates: 0, blocked: false, blockedReason: null,
     });
 
     const code = await runFacilitiesImport(
@@ -204,7 +204,7 @@ describe('facilities import CLI', () => {
     const result = {
       parsed: 1, skipped: 0, unknownColumns: [], duplicateColumns: [],
       quarantined: [{ line: 3, reason: 'too_many_fields', raw: '2,Bad,Extra' }],
-      created: 0, updated: 0, duplicates: 0,
+      created: 0, updated: 0, duplicates: 0, blocked: true, blockedReason: 'quarantined-rows',
     };
     mocks.importFacilities.mockResolvedValue(result);
 
@@ -212,6 +212,27 @@ describe('facilities import CLI', () => {
 
     expect(code).toBe(1);
     expect(stdoutSpy).toHaveBeenCalledWith(JSON.stringify(result, null, 2) + '\n');
+  });
+
+  // ⛔ The block reason with NO override, which this CLI previously had no message for at all: a
+  // duplicate-header file printed as an undifferentiated "0 rows found" summary and exit 0, because
+  // the only refusal check here was the quarantine one. `result.blocked` is the importer's own
+  // verdict (see `FacilityImportResult.blocked`), so the exit code can no longer disagree with
+  // whether anything was written, and `blockedReason` keeps the message from pointing an operator at
+  // --allow-malformed-rows, which cannot help them here.
+  it('duplicate headers refuse with the columns named and no override suggested', async () => {
+    mocks.importFacilities.mockResolvedValue({
+      parsed: 0, skipped: 0, unknownColumns: [], duplicateColumns: ['name'], quarantined: [],
+      created: 0, updated: 0, duplicates: 0, blocked: true, blockedReason: 'duplicate-columns',
+    });
+
+    const code = await runFacilitiesImport('/some/file.csv', { nationalSystem: 'urn:tz:hfr', apply: true, json: false });
+
+    expect(code).toBe(1);
+    const err = stderrSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(err).toMatch(/duplicate column header\(s\) in \/some\/file\.csv: name/);
+    expect(err).not.toMatch(/--allow-malformed-rows/);
+    expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
   });
 
   it('a missing file exits non-zero with a clear message, not a stack trace', async () => {

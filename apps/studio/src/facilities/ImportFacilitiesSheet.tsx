@@ -179,9 +179,23 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   // from ever reporting anything to apply — except quarantined rows don't zero out `parsed` (the
   // rest of the file still parses, see facility-csv.ts), so this needs its own term rather than
   // riding along on `previewResult.parsed > 0` above. `allowMalformedRows` is the release valve.
-  const blockedByQuarantine = !!previewResult && previewResult.quarantined.length > 0 && !allowMalformedRows;
+  //
+  // ⛔ `blocked`/`blockedReason` come from `importFacilities` itself (see
+  // `FacilityImportResult.blocked`) instead of this sheet rebuilding the predicate. The version it
+  // used to spell out covered only quarantined rows, and agreed with the server purely because
+  // `parseFacilityCsv` zeroes `records` on duplicate headers — so `parsed > 0` above happened to
+  // catch what it missed. A duplicate-header file that still parsed rows would have offered Apply
+  // for a write the server refuses.
+  //
+  // The ONE thing re-applied here rather than read: the malformed-rows OVERRIDE. `blocked` answers
+  // for the options the PREVIEW ran with, and the checkbox deliberately does not re-preview (see
+  // `toggleAllowMalformedRows` — the quarantine list is a property of the file, so a second request
+  // would discover nothing), so the live checkbox can be ahead of the previewed answer. Only the
+  // overridable reason is re-evaluated; `'duplicate-columns'` has no override and is taken verbatim.
+  const blockedByImport = !!previewResult && previewResult.blocked
+    && (previewResult.blockedReason !== 'quarantined-rows' || !allowMalformedRows);
   const canApply = !!previewResult && previewResult.parsed > 0 && previewResult.parsed <= APPLY_ROW_CAP
-    && !blockedByQuarantine && !applyResult;
+    && !blockedByImport && !applyResult;
   const overCap = !!previewResult && previewResult.parsed > APPLY_ROW_CAP;
   // F3 fix: `parsed` counts every accepted row INCLUDING rows `duplicates` later collapses down to
   // one (see facility-import.ts's docblock on FacilityImportResult.parsed) — the headline number

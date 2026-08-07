@@ -31,7 +31,7 @@ describe('importFacilities', () => {
     const result = await importFacilities(deps, body, { nationalSystem: SYSTEM });
     expect(result).toEqual({
       parsed: 1, skipped: 1, unknownColumns: [], duplicateColumns: [], quarantined: [],
-      created: 0, updated: 0, duplicates: 0,
+      created: 0, updated: 0, duplicates: 0, blocked: false, blockedReason: null,
     });
     expect(await deps.db.selectFrom('facility_registry').selectAll().execute()).toHaveLength(0);
   });
@@ -84,7 +84,9 @@ describe('importFacilities', () => {
     const blocked = await importFacilities(deps, withExtra, { nationalSystem: SYSTEM, apply: true });
     expect(blocked).toEqual({
       parsed: 0, skipped: 0, unknownColumns: ['beds'], duplicateColumns: [], quarantined: [],
-      created: 0, updated: 0, duplicates: 0,
+      // NOT blocked: unrecognised columns are refused by the PARSER (records: []), which is a
+      // different mechanism from `blocked` — that one is about a file the parser accepted.
+      created: 0, updated: 0, duplicates: 0, blocked: false, blockedReason: null,
     });
     expect(await deps.db.selectFrom('facility_registry').selectAll().execute()).toHaveLength(0);
 
@@ -312,6 +314,43 @@ describe('importFacilities', () => {
 
     expect(result.created).toBe(0);
     expect(result.duplicateColumns).toEqual(['name']);
+    // ⛔ THIS is what makes the duplicate-header clause of `blocked` observable at all. Nothing was
+    // written either way — `parseFacilityCsv` returns `records: []` for a duplicate header, so the
+    // `records.length === 0` fallback in the same condition already prevents the write — which is
+    // why the two assertions above passed with the clause DELETED. `blocked`/`blockedReason` are
+    // reported rather than inferred, so they distinguish "we refused this file" from "there was
+    // nothing in it", and removing `duplicateColumns.length > 0` from the predicate fails here.
+    expect(result.blocked).toBe(true);
+    expect(result.blockedReason).toBe('duplicate-columns');
+  });
+
+  // The precedence the two consumers depend on, and the only place both reasons hold at once.
+  // Constructed directly because `parseFacilityCsv` can never produce it: it returns early on a
+  // duplicate header, before any row is examined, so `quarantined` is always empty in that result.
+  // `'duplicate-columns'` must win — it has NO override, and reporting the overridable reason would
+  // point an operator at `--allow-malformed-rows` / the sheet's checkbox, neither of which can
+  // unblock the file.
+  it('reports duplicate-columns rather than quarantined-rows when a caller could see both', async () => {
+    const deps = await buildDeps();
+
+    const result = await importFacilities(deps, 'national_code,name,name\n1,A,B\n2,C\n', {
+      nationalSystem: SYSTEM, apply: true,
+    });
+
+    expect(result.duplicateColumns).toEqual(['name']);
+    expect(result.blockedReason).toBe('duplicate-columns');
+  });
+
+  // A file the parser ACCEPTED and that has rows to write is not blocked — otherwise `blocked`
+  // would be a constant and every consumer reading it would silently refuse every good import.
+  it('is not blocked for a clean file', async () => {
+    const deps = await buildDeps();
+
+    const result = await importFacilities(deps, csv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,']), {
+      nationalSystem: SYSTEM, apply: true,
+    });
+
+    expect(result).toMatchObject({ created: 1, blocked: false, blockedReason: null });
   });
 });
 
