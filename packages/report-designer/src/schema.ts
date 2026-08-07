@@ -65,6 +65,23 @@ export const DesignElementSchema = z.object({
   /** picked/reordered/relabeled projection of the query's result columns.
    *  On a `keyvalue` element each entry is ONE label→value pair, valued from row 0. */
   boundColumns: z.array(BoundColumnSchema).optional(),
+  /** `table`: flip the bound result so the query's COLUMNS become the rows and its first column's
+   *  values become the headers.
+   *
+   *  For a matrix whose column count is fixed and large while its row count is small and
+   *  data-driven, the natural orientation cannot fit a page at any font: the cumulative antibiogram
+   *  is 29 drug columns wide, and 30 columns of `100% (12)` need ~840pt where landscape Letter has
+   *  696pt. Transposed it is 29 rows by however many organisms cleared the isolate threshold, which
+   *  fits with room to spare and prints every drug name in full.
+   *
+   *  Applied to the RESOLVED table, so headers, row chunking, column widths and cell statuses all
+   *  derive from one flipped source and cannot disagree. A transposed table should leave
+   *  `boundColumns` empty — the headers come from the data, not from the design. */
+  transpose: z.boolean().optional(),
+  /** Header for a transposed table's first column, which holds the ORIGINAL column labels
+   *  (default `''`). The original header of that column describes the values that are now the
+   *  headers, so it cannot be reused. */
+  transposeLabel: z.string().optional(),
   /** `keyvalue` pair arrangement (default `inline`) */
   layout: z.enum(['inline', 'stacked']).optional(),
   /** `keyvalue` pairs side by side per line (default 1). Capped at 4 — beyond that a pair's share of

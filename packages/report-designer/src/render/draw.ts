@@ -210,13 +210,57 @@ export function interpolate(input: string, tokens: Map<string, string>): string 
     .replace(/\{\{\s*date\s*\}\}/g, tokens.get('date') ?? '');
 }
 
+/**
+ * Flip a resolved table: the query's COLUMNS become the rows, and its FIRST column's values become
+ * the headers.
+ *
+ * Why this exists rather than a wider table or a smaller font: a matrix with a fixed, large column
+ * count and a small data-driven row count cannot fit a page in its natural orientation at any font,
+ * because the CELLS set the floor, not the headers. The cumulative antibiogram is 29 drug columns;
+ * thirty columns of `100% (12)` need ~840pt where landscape Letter offers 696pt. Flipped, it is 29
+ * rows against however many organisms cleared the isolate threshold.
+ *
+ * The original first column is consumed — its values are now the headers, so leaving it in the body
+ * would print a row of organism names under an organism-named column.
+ *
+ * ⚠ Header KEYS are made unique by index, not taken from the value: two rows sharing a first-column
+ * value are two distinct columns, and keying both on the value would silently collapse them into
+ * one.
+ */
+export function transposeResolved(
+  resolved: { columns: { key: string; label: string }[]; rows: Record<string, unknown>[] },
+  firstColumnLabel = '',
+): { columns: { key: string; label: string }[]; rows: Record<string, unknown>[] } {
+  const [head, ...rest] = resolved.columns;
+  if (!head) return { columns: [], rows: [] };
+  const columns = [
+    { key: 'c0', label: firstColumnLabel },
+    ...resolved.rows.map((row, i) => ({ key: `c${i + 1}`, label: String(row[head.key] ?? '') })),
+  ];
+  const rows = rest.map((col) => {
+    const out: Record<string, unknown> = { c0: col.label };
+    resolved.rows.forEach((row, i) => { out[`c${i + 1}`] = String(row[col.key] ?? ''); });
+    return out;
+  });
+  return { columns, rows };
+}
+
+/** The resolved table a table element actually draws from — flipped when `transpose` is set, so
+ *  headers, body rows, chunking and column widths all derive from ONE source and cannot disagree. */
+function effectiveResolved(el: DesignElement, resolved: ResolvedTable | undefined): ResolvedTable | undefined {
+  if (!resolved || 'error' in resolved) return resolved;
+  if (el.kind !== 'table' || !el.transpose) return resolved;
+  return transposeResolved(resolved, el.transposeLabel ?? '');
+}
+
 /** The projected body rows for a table element (bound → project columns from resolved.rows; static → el.rows; error/unresolved → []). */
 export function rowsFor(el: DesignElement, resolved: ResolvedTable | undefined): string[][] {
   if (el.kind !== 'table') return [];
   if (el.dataSource) {
-    if (!resolved || 'error' in resolved) return [];
-    const cols = el.boundColumns && el.boundColumns.length ? el.boundColumns : resolved.columns;
-    return resolved.rows.map((row) => cols.map((c) => String(row[c.key] ?? '')));
+    const rt = effectiveResolved(el, resolved);
+    if (!rt || 'error' in rt) return [];
+    const cols = el.boundColumns && el.boundColumns.length ? el.boundColumns : rt.columns;
+    return rt.rows.map((row) => cols.map((c) => String(row[c.key] ?? '')));
   }
   return el.rows ?? [];
 }
@@ -655,11 +699,12 @@ function drawTable(doc: Doc, el: DesignElement, r: Box, resolved: ResolvedTable 
   drawGrid(doc, r, headers, allRows, chunk, statuses, emphasis, kinds);
 }
 
-function tableHeaders(el: DesignElement, resolved: ResolvedTable | undefined): string[] {
+export function tableHeaders(el: DesignElement, resolved: ResolvedTable | undefined): string[] {
   if (!el.dataSource) return el.columns ?? [];
+  const rt = effectiveResolved(el, resolved);
   const cols = el.boundColumns && el.boundColumns.length
     ? el.boundColumns
-    : (resolved && !('error' in resolved) ? resolved.columns : []);
+    : (rt && !('error' in rt) ? rt.columns : []);
   return cols.map((c) => c.label);
 }
 

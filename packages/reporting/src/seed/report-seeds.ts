@@ -2124,6 +2124,20 @@ export const SEED_DESIGNS: ReportDesign[] = [
     queryId: 'q-amr-antibiogram',
     paper: 'Letter',
     orientation: 'landscape',
+    // ⛔ TRANSPOSED, and it has to be. The panel is 29 drug columns wide (28 agents + the review
+    // bucket) against a handful of organism rows — only those that cleared the isolate threshold.
+    // Thirty columns of `100% (12)` need roughly 840pt and a landscape Letter body offers 696pt, so
+    // the conventional organism-rows × drug-columns orientation cannot fit at ANY font: it is the
+    // CELLS that set the floor, not the headers, which is why abbreviating the drug names does not
+    // rescue it either. Rendered unflipped, every header and every cell ellipsized to "…" and the
+    // report was unreadable.
+    //
+    // Flipped it is 29 rows × (1 + organisms) columns, which fits with room to spare and prints
+    // each drug name in full. `columns` below is still the authoritative panel — it is what the
+    // QUERY projects — but the design emits no `boundColumns`, because after the flip the headers
+    // are the organisms, which no static design can enumerate.
+    transpose: true,
+    transposeLabel: 'Antibiotic',
     columns: [
       { key: 'pathogen', label: 'Pathogen' },
       ...ANTIBIOGRAM_PANEL.map((a) => ({ key: a, label: a })),

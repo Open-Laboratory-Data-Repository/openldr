@@ -594,13 +594,21 @@ describe('SEED_QUERIES — q-amr-antibiogram', () => {
 });
 
 describe('SEED_DESIGNS — rt-amr-antibiogram', () => {
-  it('binds pathogen + every panel antibiotic as a Letter/landscape table', () => {
+  it('covers pathogen + every panel antibiotic, on a Letter/landscape page', () => {
+    // ⚠ This used to assert the DESIGN's boundColumns listed the whole panel. The design is now
+    // transposed and deliberately emits none — after the flip its headers are the organisms, which
+    // a static design cannot enumerate. The coverage guarantee therefore moved to the QUERY, which
+    // is where it actually lives: if the query stops projecting an agent, that column disappears
+    // from the report no matter what the design says.
     const d = SEED_DESIGNS.find((x) => x.id === 'rt-amr-antibiogram');
     expect(d).toBeTruthy();
     expect(d?.paper).toBe('Letter');
     expect(d?.orientation).toBe('landscape');
-    const table = d?.pages[0].elements.find((e) => e.kind === 'table');
-    expect(table?.boundColumns?.map((c) => c.key)).toEqual(['pathogen', ...ANTIBIOGRAM_PANEL]);
+    const sql = SEED_QUERIES.find((q) => q.id === 'q-amr-antibiogram')!.sql.postgres;
+    expect(sql).toContain('as pathogen');
+    for (const agent of ANTIBIOGRAM_PANEL) {
+      expect(sql, `q-amr-antibiogram stopped projecting ${agent}`).toContain(agent);
+    }
   });
 });
 
@@ -1148,6 +1156,49 @@ describe('SEED_DESIGNS — every report carries a letterhead and a scope panel',
           const hit = a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
           if (hit) expect.fail(`${d.id}: ${els[i].id} overprints ${els[j].id}`);
         }
+      }
+    }
+  });
+});
+
+describe('SEED_DESIGNS — the antibiogram is transposed because it cannot fit otherwise', () => {
+  const design = () => SEED_DESIGNS.find((d) => d.id === 'rt-amr-antibiogram')!;
+  const table = () => design().pages[0].elements.find((e) => e.id === 'rt-amr-antibiogram-table')!;
+
+  it('flips the matrix and heads the first column', () => {
+    // 29 drug columns of "100% (12)" need ~840pt; a landscape Letter body offers 696pt. The cells
+    // set that floor, so no font or header abbreviation rescues the unflipped orientation — every
+    // header and cell ellipsized to "…".
+    expect(table().transpose).toBe(true);
+    expect(table().transposeLabel).toBe('Antibiotic');
+  });
+
+  it('emits NO boundColumns — after the flip the headers are the organisms', () => {
+    // A static design cannot enumerate which organisms cleared the isolate threshold; the renderer
+    // must fall back to the resolved columns.
+    expect(table().boundColumns ?? []).toHaveLength(0);
+  });
+
+  it('uses the landscape page width instead of the portrait body width', () => {
+    // Letter landscape is 1056px; the body was 700, leaving ~260px empty on the one report that
+    // needs the room most.
+    expect(table().rect.w).toBeGreaterThan(700);
+    expect(table().rect.x + table().rect.w).toBeLessThanOrEqual(1056 - 40);
+  });
+
+  it('leaves the A4 portrait reports at their original body width', () => {
+    // The floor at 700 exists so widening does not churn every other design by two pixels.
+    const a4 = SEED_DESIGNS.find((d) => d.id === 'rt-amr-resistance')!;
+    const t = a4.pages[0].elements.find((e) => e.id === 'rt-amr-resistance-table')!;
+    expect(t.rect.w).toBe(700);
+  });
+
+  it('keeps every OTHER seeded table bound to its declared columns', () => {
+    // Only the antibiogram is transposed; a stray flag elsewhere would silently blank that report's
+    // headers, since a transposed table takes its headers from the data.
+    for (const d of SEED_DESIGNS.filter((x) => x.id !== 'rt-amr-antibiogram')) {
+      for (const e of d.pages[0].elements.filter((x) => x.kind === 'table')) {
+        expect(e.transpose ?? false, `${d.id}/${e.id} is unexpectedly transposed`).toBe(false);
       }
     }
   });

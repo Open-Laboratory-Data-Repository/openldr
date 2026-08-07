@@ -13,6 +13,14 @@ export interface SimpleDesignSpec {
   parameters: ReportDesign['parameters'];
   paper?: 'A4' | 'Letter';
   orientation?: 'portrait' | 'landscape';
+  /** Flip the result so the query's COLUMNS are the rows. For a matrix with a fixed, large column
+   *  count and a small data-driven row count, the natural orientation cannot fit a page at ANY font
+   *  because the cells set the floor: the antibiogram's 30 columns of `100% (12)` need ~840pt where
+   *  landscape Letter has 696pt. `transposeLabel` heads the first column, which now holds the
+   *  original column labels. A transposed design emits NO `boundColumns` — the headers come from
+   *  the data (the organisms that cleared the isolate threshold), which a static design cannot know. */
+  transpose?: boolean;
+  transposeLabel?: string;
 }
 
 /** `pairRects`'s KV_PAD_Y/KV_INLINE_H, raw POINTS (not px@96) — see the height comment below. */
@@ -60,8 +68,14 @@ export function simpleTableDesign(spec: SimpleDesignSpec): ReportDesign {
   // The page's own height in px@96. Two of the seeded designs are Letter/landscape (816px tall),
   // where an A4-portrait-hardcoded footer renders ~180px below the page edge and the table overruns
   // it. `paperSizePt` swaps the axes for landscape; PX_TO_PT is 0.75.
-  const [, pageHpt] = paperSizePt(spec.paper ?? 'A4', spec.orientation ?? 'portrait');
+  const [pageWpt, pageHpt] = paperSizePt(spec.paper ?? 'A4', spec.orientation ?? 'portrait');
   const pageHpx = pageHpt / 0.75;
+  // Body width follows the page. `Math.max(700, ...)` deliberately floors it at the historical
+  // A4-portrait 700 so that layout is byte-identical (A4 portrait is 794px, i.e. 698 usable -- two
+  // pixels narrower, which would churn every design for nothing). A landscape Letter sheet is
+  // 1056px, so this recovers ~260px the body was leaving empty -- which is what gives a transposed
+  // antibiogram room for organism columns as more of them clear the isolate threshold.
+  const contentW = Math.max(700, Math.round(pageWpt / 0.75) - 96);
   // Keeps the same visual proportions the A4-portrait layout already had: its footer rule sat
   // 122.5px above the page bottom (1122.52 - 1000 = 122.52, rounded).
   const footRuleY = pageHpx - 122.5;
@@ -84,21 +98,26 @@ export function simpleTableDesign(spec: SimpleDesignSpec): ReportDesign {
           { id: `${spec.id}-labname`, kind: 'text', name: 'Lab name', rect: { x: 112, y: 30, w: 430, h: 18 }, text: '{{lab.name}}', style: { fontSize: 13, bold: true, color: '#0f172a' } },
           { id: `${spec.id}-labaddr`, kind: 'text', name: 'Lab address', rect: { x: 112, y: 48, w: 430, h: 22 }, text: '{{lab.address}}', style: { fontSize: 7.5, color: '#64748b' } },
           { id: `${spec.id}-labcontact`, kind: 'text', name: 'Lab contact', rect: { x: 112, y: 71, w: 430, h: 13 }, text: '{{lab.contact}}', style: { fontSize: 7.5, color: '#64748b' } },
-          { id: `${spec.id}-rule1`, kind: 'line', name: 'rule1', rect: { x: 48, y: 92, w: 700, h: 0 }, style: { strokeColor: '#cbd5e1', strokeWidth: 0.75 } },
+          { id: `${spec.id}-rule1`, kind: 'line', name: 'rule1', rect: { x: 48, y: 92, w: contentW, h: 0 }, style: { strokeColor: '#cbd5e1', strokeWidth: 0.75 } },
           { id: `${spec.id}-title`, kind: 'text', name: 'Title', rect: { x: 48, y: 102, w: 600, h: 28 }, text: spec.name, style: { fontSize: 18, bold: true } },
           // Band 2 — the scope panel: what this run's numbers were computed over, and when they
           // were generated. UNBOUND (`rows`, not `dataSource`) — a bound keyvalue value is
           // deliberately NOT interpolated, so only an unbound pair can carry `{{param.*}}`/`{{date}}`.
           {
-            id: `${spec.id}-meta`, kind: 'keyvalue', name: 'Scope', rect: { x: 48, y: 138, w: 700, h: panelHpx },
+            id: `${spec.id}-meta`, kind: 'keyvalue', name: 'Scope', rect: { x: 48, y: 138, w: contentW, h: panelHpx },
             layout: 'inline', panelColumns: 2, rows: pairs,
           },
           {
-            id: `${spec.id}-table`, kind: 'table', name: 'Data', rect: { x: 48, y: tableY, w: 700, h: footRuleY - tableY - 8 },
+            id: `${spec.id}-table`, kind: 'table', name: 'Data', rect: { x: 48, y: tableY, w: contentW, h: footRuleY - tableY - 8 },
             dataSource: { kind: 'custom-query', queryId: spec.queryId },
-            boundColumns: spec.columns,
+            // ⛔ A transposed table emits NO boundColumns: its headers are the organisms that
+            // cleared the isolate threshold, which a static design cannot enumerate. The renderer
+            // falls back to the resolved columns, which `transpose` has already flipped.
+            ...(spec.transpose
+              ? { transpose: true, transposeLabel: spec.transposeLabel ?? '' }
+              : { boundColumns: spec.columns }),
           },
-          { id: `${spec.id}-rule2`, kind: 'line', name: 'rule2', rect: { x: 48, y: footRuleY, w: 700, h: 0 }, style: { strokeColor: '#cbd5e1', strokeWidth: 0.75 } },
+          { id: `${spec.id}-rule2`, kind: 'line', name: 'rule2', rect: { x: 48, y: footRuleY, w: contentW, h: 0 }, style: { strokeColor: '#cbd5e1', strokeWidth: 0.75 } },
           { id: `${spec.id}-foot`, kind: 'text', name: 'Footer', rect: { x: 48, y: footTextY, w: 500, h: 16 }, text: 'Generated by OpenLDR — figures reflect data available at time of generation.', style: { fontSize: 7, color: '#94a3b8' } },
         ],
       },
