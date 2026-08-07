@@ -18,6 +18,11 @@ const defWithSingleColumnOptions = { id: 'r-with-single-column-options', name: '
   paramOptions: { facility: 'q-single' }, status: 'published' } as any;
 
 let lastRunStoredQueryValues: Record<string, unknown> | undefined;
+// Captures the third argument `renderReportDesignPdf` was actually called with, so the bootstrap
+// wiring line (`packages/bootstrap/src/index.ts:242`, `{ identity, values }`) has a test pinning it
+// — an opaque mock that ignores its arguments would keep passing if that line reverted to dropping
+// `values` (or `identity`) entirely.
+let lastRenderOptions: { identity?: unknown; values?: Record<string, unknown> } | undefined;
 const deps = {
   reportDefs: {
     list: async () => [def],
@@ -47,7 +52,10 @@ const deps = {
     return { columns: [{ key: 'a', label: 'a' }], rows: [{ a: 1 }, { a: 2 }] };
   },
   resolveDesignTables: async () => new Map([['t', { columns: [{ key: 'a', label: 'a' }], rows: [{ a: 1 }] }]]),
-  renderReportDesignPdf: async () => Buffer.from('%PDF-1.4 fake'),
+  renderReportDesignPdf: async (_design: unknown, _resolved: unknown, opts: { identity?: unknown; values?: Record<string, unknown> }) => {
+    lastRenderOptions = opts;
+    return Buffer.from('%PDF-1.4 fake');
+  },
 };
 
 describe('reporting data-driven branch', () => {
@@ -71,6 +79,13 @@ describe('reporting data-driven branch', () => {
   });
   it('renderPdf resolves tables and returns a PDF buffer', async () => {
     expect((await reporting.renderPdf('r1', { facility: 'Ndola' })).toString()).toContain('%PDF');
+  });
+  it('renderPdf forwards the resolved run parameters through to renderReportDesignPdf as `values`', async () => {
+    // Pins packages/bootstrap/src/index.ts:242 — `deps.renderReportDesignPdf(design, resolved,
+    // { identity, values })`. `values` is the design defaults merged with the caller's params, so
+    // an override must survive the merge, not just equal what was passed in.
+    await reporting.renderPdf('r1', { facility: 'Ndola' });
+    expect(lastRenderOptions?.values).toEqual({ facility: 'Ndola' });
   });
   it('options resolves select dropdowns from paramOptions queries', async () => {
     expect(await reporting.options('r1')).toEqual({

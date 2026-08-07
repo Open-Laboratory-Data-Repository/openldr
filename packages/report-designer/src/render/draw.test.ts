@@ -78,7 +78,12 @@ describe('drawKeyValue interpolates authored pairs but never query data', () => 
       dataSource: { kind: 'custom-query', queryId: 'q' },
       boundColumns: [{ key: 'note', label: 'Note' }] } as unknown as DesignElement;
     const resolved = { columns: [{ key: 'note', label: 'Note' }], rows: [{ note: '{{lab.name}}' }] };
-    expect(interpolatedPairValues(el, resolved, new Map([['lab:name', 'Ministry of Health']])))
+    // The key MUST be 'lab.name' (LAB_TOKEN_PREFIX = 'lab.', a dot — draw.ts:156), so the token map
+    // actually HITS. A mismatched key (e.g. 'lab:name') would make this pass for the wrong reason:
+    // the lookup misses regardless of the bound/unbound gate, so a wrongly-interpolated value would
+    // render as '' rather than as the forged 'Ministry of Health' text — the assertion would pass
+    // even if the security gate were inverted.
+    expect(interpolatedPairValues(el, resolved, new Map([['lab.name', 'Ministry of Health']])))
       .toEqual(['{{lab.name}}']);
   });
 });

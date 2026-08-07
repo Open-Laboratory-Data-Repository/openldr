@@ -612,6 +612,47 @@ describe('barcode and qrcode rendering', () => {
   });
 });
 
+describe('renderReportDesignPdf prefers RUN parameter values over the design defaults', () => {
+  // The design's authored default (2000-*) is deliberately DIFFERENT from the run values (2026-*):
+  // if the render path silently fell back to the design default, the "not contain 2000-*"
+  // assertions would catch it, whereas a design whose default equalled the run value would let a
+  // reverted wiring change pass by coincidence.
+  const paramDesign = (): ReportDesign => ({
+    id: 'd', name: 'N', paper: 'A4', orientation: 'portrait',
+    parameters: [{ key: 'dateRange', label: 'Range', type: 'daterange',
+      value: { from: '2000-01-01', to: '2000-12-31' } }],
+    pages: [{ id: 'p', elements: [
+      { id: 'txt', kind: 'text', name: 'T', rect: { x: 0, y: 0, w: 400, h: 20 },
+        text: 'Period: {{param.from}} to {{param.to}}' },
+    ] }],
+  } as ReportDesign);
+
+  it('renders the flat from/to the run supplies, not the design default', async () => {
+    const texts = pdfTexts(await renderReportDesignPdf(paramDesign(), new Map(), {
+      now: NOW, values: { from: '2026-01-01', to: '2026-03-31' },
+    }));
+    expect(texts.some((t) => t.includes('2026-01-01') && t.includes('2026-03-31'))).toBe(true);
+    expect(texts.join('')).not.toContain('2000-01-01');
+    expect(texts.join('')).not.toContain('2000-12-31');
+  });
+
+  it('interpolates an UNBOUND keyvalue pair with the run value too, not the literal token', async () => {
+    const design: ReportDesign = {
+      ...paramDesign(),
+      pages: [{ id: 'p', elements: [
+        { id: 'k', kind: 'keyvalue', name: 'K', rect: { x: 0, y: 0, w: 400, h: 60 },
+          rows: [['Reporting period', '{{param.from}} to {{param.to}}']] },
+      ] }],
+    } as ReportDesign;
+    const texts = pdfTexts(await renderReportDesignPdf(design, new Map(), {
+      now: NOW, values: { from: '2026-01-01', to: '2026-03-31' },
+    }));
+    expect(texts.some((t) => t.includes('2026-01-01') && t.includes('2026-03-31'))).toBe(true);
+    expect(texts.join('')).not.toContain('{{param.from}}');
+    expect(texts.join('')).not.toContain('2000-01-01');
+  });
+});
+
 describe('letterhead identity rendering', () => {
   const headerDesign = (): ReportDesign => ({
     id: 'd', name: 'N', paper: 'A4', orientation: 'portrait', parameters: [],
