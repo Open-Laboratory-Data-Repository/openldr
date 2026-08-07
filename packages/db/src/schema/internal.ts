@@ -277,6 +277,29 @@ export interface FacilityConceptProjectionTable {
   updated_at: Generated<Date>;
 }
 
+/** Pre-existing violations of "one active SAME-AS resolution per observed facility key", recorded by
+ *  migration 078 when it closed that invariant at the database, for an operator to settle.
+ *
+ *  `kind: 'duplicate'` — a set of active SAME-AS mappings on one observed key naming DIFFERENT
+ *  facilities. Every member was deactivated (the migration refuses to pick a winner), so the observed
+ *  string now falls back to the raw performer text until someone chooses.
+ *  `kind: 'unsupported_map_type'` — one mapping whose `map_type` is not `SAME-AS`. It was left exactly
+ *  as it was; the resolver already refuses to resolve through it, and this row only explains why. */
+export interface FacilityMappingConflictsTable {
+  id: Generated<number>;
+  from_system: string;
+  from_code: string;
+  kind: string;
+  /** Every mapping id in the recorded set, oldest first. */
+  mapping_ids: JSONColumnType<string[]>;
+  /** Shape depends on `kind`: an array of `{ id, toCode, createdAt }` for 'duplicate', a single
+   *  `{ mapType, toCode }` for 'unsupported_map_type'. */
+  detail: JSONColumnType<Record<string, unknown> | unknown[]> | null;
+  detected_at: Generated<Date>;
+  /** Set when an operator settles the set; NULL while it still needs review. */
+  resolved_at: Date | null;
+}
+
 export interface TerminologyConceptsTable {
   system: string;
   code: string;
@@ -794,6 +817,7 @@ export interface InternalSchema {
   column_exposure_policy: ColumnExposurePolicyTable;
   facility_registry: FacilityRegistryTable;
   facility_concept_projection: FacilityConceptProjectionTable;
+  facility_mapping_conflicts: FacilityMappingConflictsTable;
   form_definitions: FormDefinitionsTable;
   form_versions: FormVersionsTable;
   user_profiles: UserProfilesTable;
