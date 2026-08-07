@@ -11,7 +11,7 @@ import {
   antibioticNormalizeSql,
   type SeedDataDrivenReportsDeps,
 } from './report-seeds';
-import { pairRects, toPt } from '@openldr/report-designer';
+import { pairRects, toPt, paperSizePt, type ReportDesign } from '@openldr/report-designer';
 
 // In-memory fakes — no real Kysely instance needed (unlike `packages/bootstrap/src/seed.ts`,
 // which builds `customQueries` from a real DB handle; here we inject fakes directly to unit-test
@@ -395,8 +395,8 @@ describe('SEED_QUERIES — q-amr-facility-summary takes its facility from the re
 
   it('groups by the report performer, falling back to the patient organization', () => {
     for (const [dialect, sql] of Object.entries(q().sql)) {
-      expect(sql, `${dialect} does not read the report performer`)
-        .toContain('coalesce(f.performer, p.managing_organization)');
+      expect(sql, `${dialect} does not group by the report performer`)
+        .toContain('group by coalesce(f.performer, p.managing_organization)');
       expect(sql, `${dialect} still groups by the patient organization alone`)
         .not.toMatch(/group by p\.managing_organization/);
     }
@@ -422,6 +422,88 @@ describe('SEED_QUERIES — q-amr-facility-summary takes its facility from the re
     for (const [dialect, sql] of Object.entries(q().sql)) {
       expect(sql, `${dialect} still inner-joins patients`).not.toMatch(/\njoin patients p on/);
       expect(sql, `${dialect}`).toContain('left join patients p on o.patient_id = p.id');
+    }
+  });
+});
+
+describe('SEED_QUERIES — the facility picker offers real facilities', () => {
+  const q = () => SEED_QUERIES.find((x) => x.id === 'q-facilities')!;
+
+  it('reads the report performer, not the patient organization', () => {
+    // patients.managing_organization is set on 1 of 3714 rows — and that one is the seed — so the
+    // dropdown offered exactly one fake option, "Organization/seed-org".
+    for (const [dialect, sql] of Object.entries(q().sql)) {
+      expect(sql, `${dialect} still reads the patient organization`)
+        .not.toMatch(/managing_organization/);
+      expect(sql, `${dialect} does not read diagnostic_reports`).toContain('from diagnostic_reports');
+    }
+  });
+
+  it('returns the CODE first and the resolved NAME second', () => {
+    // Column ORDER is the contract optionsDataDriven reads: 0 = value, 1 = label.
+    for (const [dialect, sql] of Object.entries(q().sql)) {
+      expect(sql, `${dialect} lost the value column`).toMatch(/dr\.performer as value/);
+      expect(sql, `${dialect} lost the label column`)
+        .toContain('min(coalesce(fm.name, dr.performer_display, dr.performer)) as label');
+    }
+  });
+
+  it('resolves through facility_map with the same NULL source_system guard as the clinical header', () => {
+    for (const [dialect, sql] of Object.entries(q().sql)) {
+      expect(sql, `${dialect}`).toMatch(/fm\.source_system\s*=\s*coalesce\(dr\.source_system, ''\)/);
+      expect(sql, `${dialect}`).toMatch(/fm\.source_code\s*=\s*dr\.performer\b/);
+    }
+  });
+
+  it('GROUPS by the code instead of SELECT DISTINCT on the (code, label) pair', () => {
+    // `dr.performer_display` is free text off the wire (fm.name is null for 87 of 88 live
+    // codes), so the label almost always falls through to it. `select distinct value, label`
+    // dedupes the PAIR, not the code — two reports at one facility whose display text differs
+    // by casing/whitespace produced two options sharing one `value`: a duplicate React key and
+    // a duplicated, ambiguous dropdown entry. Same defect as q-amr-facility-summary, fixed the
+    // same way: group by the code, aggregate (min()) the label.
+    for (const [dialect, sql] of Object.entries(q().sql)) {
+      expect(sql, `${dialect} still SELECT DISTINCTs the pair instead of grouping the code`)
+        .not.toMatch(/select distinct/i);
+      expect(sql, `${dialect} lost the code grouping`).toMatch(/group by dr\.performer\b/);
+      expect(sql, `${dialect} label is not aggregated and can fork per code`)
+        .toMatch(/min\(coalesce\(fm\.name, dr\.performer_display, dr\.performer\)\) as label/);
+    }
+  });
+});
+
+describe('SEED_QUERIES — q-amr-facility-summary labels by name but groups by code', () => {
+  const q = () => SEED_QUERIES.find((x) => x.id === 'q-amr-facility-summary')!;
+
+  it('projects a resolved name', () => {
+    // Since the feed split the facility into code + display, this rendered the raw code "NICD".
+    // The label sources are aggregated (min()) so that display-text variance across specimens at
+    // the SAME facility (casing, whitespace) cannot fork the group below.
+    for (const [dialect, sql] of Object.entries(q().sql)) {
+      // Every branch is its own aggregate (not nested inside the outer coalesce) so MySQL 8's
+      // default ONLY_FULL_GROUP_BY accepts it — see the ⛔ MYSQL ONLY_FULL_GROUP_BY comment on
+      // q-amr-facility-summary in report-seeds.ts.
+      expect(sql, `${dialect} does not resolve the facility label`)
+        .toContain('coalesce(min(fm.name), min(f.performer_display), min(f.performer), min(p.managing_organization)) as facility');
+    }
+  });
+
+  it('⛔ still GROUPS on the code, never on the resolved label', () => {
+    // Grouping by label merges the five "Aga Khan" laboratories into one row the day the other
+    // four codes arrive. The code is the identity; the label is presentation.
+    //
+    // This asserts the OUTER GROUP BY clause EXACTLY, not an unanchored substring search — an
+    // earlier version of this test used `toMatch(/group by[\s\S]*f\.performer/)`, which is
+    // satisfied by the `facility_of` CTE's OWN `group by specimen_id` followed by the `f.performer`
+    // that legitimately reappears inside the projected label expression, so it kept passing even
+    // after the outer clause was mutated to the forbidden `group by 1`.
+    for (const [dialect, sql] of Object.entries(q().sql)) {
+      expect(sql, `${dialect} groups by the resolved label and will merge facilities`)
+        .not.toMatch(/group by coalesce\(fm\.name/);
+      expect(sql, `${dialect} lost the code grouping`)
+        .toContain('group by coalesce(f.performer, p.managing_organization)');
+      expect(sql, `${dialect} groups by row position instead of the identity — splits one facility across rows`)
+        .not.toMatch(/group by 1\b/);
     }
   });
 });
@@ -919,6 +1001,154 @@ describe('SEED_QUERIES — q-clinical-micro-header names the performing laborato
         .toMatch(/from facilities[\s\S]*group by source_system, facility_code/);
       expect(sql, `${dialect} still joins the raw facilities table and can fan out`)
         .not.toMatch(/join facilities [a-z]+ on/);
+    }
+  });
+});
+
+describe('SEED_QUERIES — the facility filter filters on the report performer', () => {
+  const ids = ['q-amr-resistance', 'q-test-volume', 'q-turnaround-time', 'q-patient-demographics'] as const;
+
+  it('no query filters on the patient organization any more', () => {
+    // Measured: patients.managing_organization is set on 1 of 3714 rows, so every one of these
+    // predicates selected nothing on real data.
+    for (const id of ids) {
+      const q = SEED_QUERIES.find((x) => x.id === id)!;
+      for (const [dialect, sql] of Object.entries(q.sql)) {
+        expect(sql, `${id}/${dialect} still filters on managing_organization`)
+          .not.toMatch(/managing_organization = \{\{param\.facility\}\}/);
+      }
+    }
+  });
+
+  it('every query that DECLARES a facility control actually references it', () => {
+    // q-test-volume rendered the control and ignored it: choosing a facility changed nothing,
+    // which reads as "the data is wrong" rather than "the filter is broken".
+    for (const id of ids) {
+      const q = SEED_QUERIES.find((x) => x.id === id)!;
+      for (const [dialect, sql] of Object.entries(q.sql)) {
+        expect(sql, `${id}/${dialect} declares the facility param but never uses it`)
+          .toContain('{{param.facility}}');
+      }
+    }
+  });
+
+  it('keeps the "All" escape so an unset filter still returns everything', () => {
+    for (const id of ids) {
+      const q = SEED_QUERIES.find((x) => x.id === id)!;
+      for (const [dialect, sql] of Object.entries(q.sql)) {
+        expect(sql, `${id}/${dialect} lost the All escape`)
+          .toMatch(/\{\{param\.facility\}\} = ''\s+or/);
+      }
+    }
+  });
+
+  it('routes test volume through its SPECIMENS, not through its patient', () => {
+    // A patient served by two laboratories would otherwise have all their requests attributed to
+    // whichever lab tested any one of them.
+    const q = SEED_QUERIES.find((x) => x.id === 'q-test-volume')!;
+    for (const [dialect, sql] of Object.entries(q.sql)) {
+      expect(sql, `${dialect} attributes by patient`).not.toMatch(/sr\.patient_id in \(select patient_id from diagnostic_reports/);
+      expect(sql, `${dialect}`).toContain('select l.request_id from lab_results l join diagnostic_reports d on d.specimen_id = l.specimen_id');
+    }
+  });
+
+  // The tests above only assert the ABSENCE of managing_organization and the presence of the ''
+  // escape — they'd pass just as happily if a predicate were quietly swapped to
+  // performer_display or facility_map.source_code, silently re-breaking the filter this whole
+  // slice exists to protect. Pin each predicate to the actual column, via the actual route.
+  it('q-amr-resistance filters through its specimen against diagnostic_reports.performer', () => {
+    const q = SEED_QUERIES.find((x) => x.id === 'q-amr-resistance')!;
+    for (const [dialect, sql] of Object.entries(q.sql)) {
+      expect(sql, `${dialect} does not filter its specimen subquery on performer`)
+        .toContain('select specimen_id from diagnostic_reports where performer = {{param.facility}}');
+    }
+  });
+
+  it('q-turnaround-time filters directly on diagnostic_reports.performer', () => {
+    const q = SEED_QUERIES.find((x) => x.id === 'q-turnaround-time')!;
+    for (const [dialect, sql] of Object.entries(q.sql)) {
+      expect(sql, `${dialect} does not filter dr.performer directly`)
+        .toContain("({{param.facility}} = '' or dr.performer = {{param.facility}})");
+    }
+  });
+
+  it('q-patient-demographics filters through the patient’s reports against diagnostic_reports.performer', () => {
+    const q = SEED_QUERIES.find((x) => x.id === 'q-patient-demographics')!;
+    for (const [dialect, sql] of Object.entries(q.sql)) {
+      expect(sql, `${dialect} does not filter its patient subquery on performer`)
+        .toContain('select patient_id from diagnostic_reports where performer = {{param.facility}}');
+    }
+  });
+});
+
+describe('SEED_DESIGNS — every report carries a letterhead and a scope panel', () => {
+  const simple = () => SEED_DESIGNS.filter((d) => d.id !== 'rt-clinical-micro');
+  const el = (d: ReportDesign, suffix: string) =>
+    d.pages[0].elements.find((e) => e.id === `${d.id}${suffix}`)!;
+
+  it('gives every aggregate report the identity band', () => {
+    // They were three elements — title, date, table — and read as unbranded printouts beside the
+    // clinical report.
+    for (const d of simple()) {
+      expect(el(d, '-logo').src, `${d.id} has no logo`).toBe('{{lab.logo}}');
+      expect(el(d, '-labname').text, `${d.id} has no lab name`).toBe('{{lab.name}}');
+      expect(el(d, '-rule1'), `${d.id} has no closing rule`).toBeDefined();
+    }
+  });
+
+  it('describes its own scope from its own declared parameters', () => {
+    for (const d of simple()) {
+      const rows = el(d, '-meta').rows ?? [];
+      expect(rows[rows.length - 1], `${d.id} does not stamp Generated`).toEqual(['Generated', '{{date}}']);
+      for (const p of d.parameters) {
+        const expected = p.type === 'daterange' ? 'Reporting period' : p.label;
+        expect(rows.map((r) => r[0]), `${d.id} omits ${p.key}`).toContain(expected);
+      }
+    }
+  });
+
+  it('sizes the panel to its pairs, in POINTS', () => {
+    // ⛔ pairRects returns boxes past the box bottom and the drawer CLIPS them — an over-full panel
+    // loses a row silently. The rect is converted with toPt (×0.75) while KV_* are already points;
+    // the previous slice shipped a clipped row by mixing those.
+    for (const d of simple()) {
+      const meta = el(d, '-meta');
+      const n = (meta.rows ?? []).length;
+      const pairs = pairRects(
+        { x: meta.rect.x * 0.75, y: meta.rect.y * 0.75, w: meta.rect.w * 0.75, h: meta.rect.h * 0.75 },
+        n, 'inline', meta.panelColumns ?? 1, false,
+      );
+      const last = pairs[n - 1];
+      expect(last.y + last.h, `${d.id} pair ${n} is clipped`)
+        .toBeLessThanOrEqual(meta.rect.y * 0.75 + meta.rect.h * 0.75);
+    }
+  });
+
+  it('keeps every element clear of the page-number band', () => {
+    // Computed from the design's OWN paper/orientation, not a hardcoded A4-portrait number — that
+    // hardcoding is exactly what let a footer render off the bottom of the two Letter/landscape
+    // seeded designs (rt-amr-glass-ris, rt-amr-antibiogram) while this test stayed green.
+    // drawPageFooter writes the page number at `hPt - 24` points; px@96 = pt / 0.75.
+    for (const d of simple()) {
+      const [, hPt] = paperSizePt(d.paper, d.orientation);
+      const pageNumYpx = (hPt - 24) / 0.75;
+      for (const e of d.pages[0].elements) {
+        expect(e.rect.y + e.rect.h, `${d.id}/${e.id} collides with the page number`)
+          .toBeLessThanOrEqual(pageNumYpx);
+      }
+    }
+  });
+
+  it('leaves no element overprinting another', () => {
+    for (const d of simple()) {
+      const els = d.pages[0].elements;
+      for (let i = 0; i < els.length; i += 1) {
+        for (let j = i + 1; j < els.length; j += 1) {
+          const a = els[i].rect, b = els[j].rect;
+          const hit = a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+          if (hit) expect.fail(`${d.id}: ${els[i].id} overprints ${els[j].id}`);
+        }
+      }
     }
   });
 });

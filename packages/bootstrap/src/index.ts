@@ -134,6 +134,12 @@ export interface DashboardsApi {
   reloadColumnPolicy(): Promise<void>;
 }
 
+/** One choice in a report parameter's select. `value` is what the query filters on; `label` is
+ *  what the operator reads. They differ deliberately — see the "Aga Khan" constraint: five DISA
+ *  facility codes all display as "Aga Khan" in different districts, so a name-valued dropdown
+ *  would silently merge distinct laboratories. */
+export interface ReportParamOption { value: string; label: string; }
+
 export interface ReportingApi {
   list(): ReportSummary[];
   listAll(): Promise<ReportSummary[]>;
@@ -142,7 +148,7 @@ export interface ReportingApi {
   runEventSource(id: string, window: { from: string; to: string }): Promise<{ rows: Record<string, unknown>[] }>;
   eventSources(): { id: string; name: string; columns: { key: string; label: string }[] }[];
   renderPdf(id: string, rawParams: unknown): Promise<Buffer>;
-  options(id: string): Promise<Record<string, string[]>>;
+  options(id: string): Promise<Record<string, ReportParamOption[]>>;
 }
 
 export function reportDefToSummary(def: ReportRecord, design: ReportDesign): ReportSummary {
@@ -231,18 +237,55 @@ function createDataDrivenReporting(deps: ReportingDataDrivenDeps) {
     const design = await deps.reportDesigns.get(def.designId);
     if (!design) throw new ReportNotFoundError(def.designId);
     const values = { ...designDefaults(design), ...valuesOf(rawParams) };
+    // ⛔ resolveDesignTables MUST see the RAW (coded) values — the design's bound queries filter
+    // on the code (e.g. `dr.performer = {{param.facility}}`). If a resolved display label ever
+    // reached this call instead, the filter would match nothing and the report would silently
+    // render empty. Any "Name (CODE)" substitution for the scope panel happens strictly AFTER
+    // this call returns, on a SEPARATE copy — see `withDisplayLabels` — and that copy must never
+    // be fed back into resolveDesignTables.
     const resolved = await deps.resolveDesignTables(design, values, deps.runStoredQuery);
     const identity = await deps.labIdentity?.tokens();
-    return deps.renderReportDesignPdf(design, resolved, { identity });
+    const displayValues = await withDisplayLabels(id, def, design, values);
+    return deps.renderReportDesignPdf(design, resolved, { identity, values: displayValues });
   }
 
-  async function optionsDataDriven(id: string): Promise<Record<string, string[]>> {
+  /** Scope-panel display copy of `values`: each `paramOptions`-backed select parameter's raw code
+   *  is replaced with "Name (CODE)" — both parts, because e.g. five DISA facility codes all share
+   *  the display "Aga Khan" and a bare name would be ambiguous (see `ReportParamOption`'s doc
+   *  comment). Falls back to printing the raw value when the code has no matching option (a
+   *  facility that has since disappeared from the picker), rather than going blank. Only looks up
+   *  options for a select parameter that actually has a non-empty value, so an untouched filter
+   *  never triggers the options query for nothing.
+   *  ⛔ The result must NEVER be passed to resolveDesignTables — see the caller. */
+  async function withDisplayLabels(
+    id: string, def: ReportRecord, design: ReportDesign, values: Record<string, unknown>,
+  ): Promise<Record<string, unknown>> {
+    const targets = design.parameters.filter((p) =>
+      p.type === 'select' && def.paramOptions?.[p.key] && typeof values[p.key] === 'string' && values[p.key] !== '');
+    if (targets.length === 0) return values;
+    const options = await optionsDataDriven(id);
+    const out = { ...values };
+    for (const p of targets) {
+      const raw = values[p.key] as string;
+      const match = options[p.key]?.find((o) => o.value === raw);
+      out[p.key] = match ? `${match.label} (${match.value})` : raw;
+    }
+    return out;
+  }
+
+  async function optionsDataDriven(id: string): Promise<Record<string, ReportParamOption[]>> {
     const def = (await deps.reportDefs.get(id))!;
-    const out: Record<string, string[]> = {};
+    const out: Record<string, ReportParamOption[]> = {};
     for (const [paramKey, queryId] of Object.entries(def.paramOptions ?? {})) {
       const { columns, rows } = await deps.runStoredQuery(queryId, {});
-      const col = columns[0]?.key;
-      out[paramKey] = col ? rows.map((r) => String(r[col])).filter((v) => v !== 'null' && v !== '') : [];
+      const valueCol = columns[0]?.key;
+      // Column 1 is the human label when the query supplies one. A ONE-COLUMN options query still
+      // works, with label = value — that is what keeps this widening additive.
+      const labelCol = columns[1]?.key ?? valueCol;
+      if (!valueCol) { out[paramKey] = []; continue; }
+      out[paramKey] = rows
+        .map((r) => ({ value: String(r[valueCol]), label: String(r[labelCol!] ?? r[valueCol]) }))
+        .filter((o) => o.value !== 'null' && o.value !== '');
     }
     return out;
   }

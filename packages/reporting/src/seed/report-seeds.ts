@@ -201,25 +201,46 @@ export const SEED_QUERIES: SeedQuery[] = [
     name: 'Facilities (options)',
     connectorId: '',
     params: [],
-    // R3c cutover: reads the v2 `patients` table (originally `v2_patients`, renamed to canonical
-    // `patients` in R3e — replacing the old thin `patients` table it superseded) —
-    // `managing_organization` is unchanged (still the full-organization-ref column) in v2, so this
-    // was a bare table-name swap. No postgres-isms at all — the mssql variant is byte-identical
-    // (see Task 2's porting notes).
+    // patients.managing_organization is set on 1 of 3714 rows (the seed) — the dropdown offered
+    // exactly one fake option. The real facility dimension is diagnostic_reports.performer,
+    // resolved through facility_map the same way q-clinical-micro-header resolves its
+    // performing_lab: fm.source_system = coalesce(dr.source_system, '') (the resolver normalises a
+    // NULL source_system to '' when building the dimension, and NULL = NULL is false) and
+    // fm.source_code = dr.performer. Column ORDER is the contract optionsDataDriven reads
+    // (column 0 = value, column 1 = label) — the value stays the CODE, never the resolved name:
+    // five DISA facility codes (BAMAA, BBFAF, CDABE, EAFAE, NDFAM) all display "Aga Khan", so
+    // filtering/grouping by the label would silently merge five laboratories. No postgres-isms at
+    // all — all three dialects are byte-identical.
+    // ⛔ GROUP BY dr.performer, not SELECT DISTINCT: `dr.performer_display` is free text off the
+    // wire (fm.name is null for 87 of 88 live codes, so the label almost always falls through to
+    // it), and `select distinct value, label` dedupes the PAIR, not the code — two reports at one
+    // facility whose display text differs by casing/whitespace produced two options sharing one
+    // `value`, a duplicate React key and an ambiguous select. Same defect as q-amr-facility-summary
+    // (fixed in db932117), fixed the same way here: group by the code, `min()` the label. Legal
+    // under MySQL's default ONLY_FULL_GROUP_BY because the only non-aggregate in the SELECT list
+    // (`dr.performer`) IS the GROUP BY item itself — verified against a live MySQL 8.4 container.
     sql: {
-      postgres: `select distinct managing_organization as facility
-from patients
-where managing_organization is not null
-order by 1`,
-      mssql: `select distinct managing_organization as facility
-from patients
-where managing_organization is not null
-order by 1`,
-      // No postgres-isms at all — byte-identical (see Task 5's mysql porting notes).
-      mysql: `select distinct managing_organization as facility
-from patients
-where managing_organization is not null
-order by 1`,
+      postgres: `select dr.performer as value,
+  min(coalesce(fm.name, dr.performer_display, dr.performer)) as label
+from diagnostic_reports dr
+left join facility_map fm on fm.source_system = coalesce(dr.source_system, '') and fm.source_code = dr.performer
+where dr.performer is not null and dr.performer <> ''
+group by dr.performer
+order by 2`,
+      mssql: `select dr.performer as value,
+  min(coalesce(fm.name, dr.performer_display, dr.performer)) as label
+from diagnostic_reports dr
+left join facility_map fm on fm.source_system = coalesce(dr.source_system, '') and fm.source_code = dr.performer
+where dr.performer is not null and dr.performer <> ''
+group by dr.performer
+order by 2`,
+      mysql: `select dr.performer as value,
+  min(coalesce(fm.name, dr.performer_display, dr.performer)) as label
+from diagnostic_reports dr
+left join facility_map fm on fm.source_system = coalesce(dr.source_system, '') and fm.source_code = dr.performer
+where dr.performer is not null and dr.performer <> ''
+group by dr.performer
+order by 2`,
     },
   },
   {
@@ -248,13 +269,14 @@ order by 1`,
     //  - row order: `percentR` DESCENDING, matching pivotResistance's `b.percentR - a.percentR`
     //    (the catalog has no secondary tiebreaker, so tie order is nondeterministic there)
     //  - date range: `effective_date_time >= from` and `<= to || 'T23:59:59.999Z'` (== endOfDay)
-    //  - facility: optional equality on patients.managing_organization, mapped to
-    //    subject_ref = 'Patient/'||id (catalog's `subjectRefs` mapping). The `{{param.facility}}`
-    //    token is a plain string substitution — an UNSET token throws "unbound parameter" even
-    //    when the param is declared `required:false` (see custom-query-run.ts). So this filter
-    //    is only truly optional if every caller always supplies `facility` (empty string for
-    //    "no filter"); the seeded design's `facility` param should default to `''` for this
-    //    reason. Confirmed live in the Task 4.2 parity check.
+    //  - facility: filters through the result's own specimen
+    //    (o.specimen_id in diagnostic_reports.performer), the same value space the picker now
+    //    offers (Task 3 — patients.managing_organization is set on 1 of 3714 rows, so the old
+    //    predicate selected nothing on real data). The `{{param.facility}}` token is a plain
+    //    string substitution — an UNSET token throws "unbound parameter" even when the param is
+    //    declared `required:false` (see custom-query-run.ts). So this filter is only truly
+    //    optional if every caller always supplies `facility` (empty string for "no filter"); the
+    //    seeded design's `facility` param should default to `''` for this reason.
     //  - R3d cutover: reads lab_results (observation_desc/abnormal_flag/result_timestamp);
     //    facility subquery via bare patient_id against patients. No specimen, no gender.
     //  - ⛔ ISOLATE ANCHOR — `abnormal_flag in ('S','I','R')` ALONE IS NOT "an antibiotic
@@ -291,8 +313,8 @@ where o.abnormal_flag in ('S', 'I', 'R')
   and (coalesce(o.result_timestamp, s.received_time) is null
        or (coalesce(o.result_timestamp, s.received_time) >= {{param.from}}
            and coalesce(o.result_timestamp, s.received_time) <= ({{param.to}} || 'T23:59:59.999Z')))
-  and ({{param.facility}} = '' or o.patient_id in (
-    select p.id from patients p where p.managing_organization = {{param.facility}}
+  and ({{param.facility}} = '' or o.specimen_id in (
+    select specimen_id from diagnostic_reports where performer = {{param.facility}}
   ))
 group by coalesce(o.observation_desc, '(unknown)')
 order by "percentR" desc`,
@@ -315,8 +337,8 @@ where o.abnormal_flag in ('S', 'I', 'R')
   and (coalesce(o.result_timestamp, s.received_time) is null
        or (coalesce(o.result_timestamp, s.received_time) >= {{param.from}}
            and coalesce(o.result_timestamp, s.received_time) <= ({{param.to}} + 'T23:59:59.999Z')))
-  and ({{param.facility}} = '' or o.patient_id in (
-    select p.id from patients p where p.managing_organization = {{param.facility}}
+  and ({{param.facility}} = '' or o.specimen_id in (
+    select specimen_id from diagnostic_reports where performer = {{param.facility}}
   ))
 group by coalesce(o.observation_desc, '(unknown)')
 order by "percentR" desc`,
@@ -338,8 +360,8 @@ where o.abnormal_flag in ('S', 'I', 'R')
   and (coalesce(o.result_timestamp, s.received_time) is null
        or (coalesce(o.result_timestamp, s.received_time) >= {{param.from}}
            and coalesce(o.result_timestamp, s.received_time) <= concat({{param.to}}, 'T23:59:59.999Z')))
-  and ({{param.facility}} = '' or o.patient_id in (
-    select p.id from patients p where p.managing_organization = {{param.facility}}
+  and ({{param.facility}} = '' or o.specimen_id in (
+    select specimen_id from diagnostic_reports where performer = {{param.facility}}
   ))
 group by coalesce(o.observation_desc, '(unknown)')
 order by \`percentR\` desc`,
@@ -352,8 +374,12 @@ order by \`percentR\` desc`,
     // Mirrors packages/reporting/src/reports/test-volume.ts exactly: group service_requests by
     // month(authored_on) x test (code_text, coalesced to '(unknown)'), COUNT(*). The catalog also
     // declares a `facility` select parameter but never actually applies it in `run()` (only
-    // p.from/p.to are read) — reproduced faithfully by exposing `facility` on the seeded DESIGN's
-    // filter bar (so the UI matches) without referencing `{{param.facility}}` in this SQL at all.
+    // p.from/p.to are read); this seeded DESIGN now DOES apply it (Task 3), closing that gap.
+    //  - facility: filters through the request's own SPECIMENS
+    //    (lab_results -> diagnostic_reports.performer), NOT through sr.patient_id. A patient may be
+    //    served by more than one laboratory, and a patient-keyed predicate would attribute all of
+    //    that patient's requests to whichever lab tested any one of them. Previously this query
+    //    declared the control and ignored it, so choosing a facility silently changed nothing.
     //  - month bucket: to_char(date_trunc('month', authored_on), 'YYYY-MM'), matching monthKey()'s
     //    `${getFullYear()}-${pad(getMonth()+1)}` (dev DB session TimeZone is UTC and authored_on is
     //    a date-only string, so there's no local-vs-UTC boundary ambiguity here).
@@ -366,10 +392,11 @@ order by \`percentR\` desc`,
     //    `.sort((a,b) => month asc, then test.localeCompare(test))`.
     //  - R3c cutover: reads `lab_requests` (not the thin `service_requests` table) —
     //    `authored_at`/`panel_desc` in place of thin `authored_on`/`code_text`; no other behavior
-    //    change (still no patient join, no facility filter).
+    //    change.
     params: [
       { id: 'from', label: 'From', type: 'text', required: true },
       { id: 'to', label: 'To', type: 'text', required: true },
+      { id: 'facility', label: 'Facility', type: 'text', required: false },
     ],
     sql: {
       postgres: `select
@@ -379,6 +406,9 @@ order by \`percentR\` desc`,
 from lab_requests sr
 where sr.authored_at >= {{param.from}}
   and sr.authored_at <= ({{param.to}} || 'T23:59:59.999Z')
+  and ({{param.facility}} = '' or sr.id in (
+    select l.request_id from lab_results l join diagnostic_reports d on d.specimen_id = l.specimen_id where d.performer = {{param.facility}}
+  ))
 group by 1, 2
 order by 1, 2`,
       // Task 2 port: to_char(date_trunc('month', ...), 'YYYY-MM') -> format(cast(...as
@@ -392,6 +422,9 @@ order by 1, 2`,
 from lab_requests sr
 where sr.authored_at >= {{param.from}}
   and sr.authored_at <= ({{param.to}} + 'T23:59:59.999Z')
+  and ({{param.facility}} = '' or sr.id in (
+    select l.request_id from lab_results l join diagnostic_reports d on d.specimen_id = l.specimen_id where d.performer = {{param.facility}}
+  ))
 group by format(cast(sr.authored_at as datetime2), 'yyyy-MM'), coalesce(sr.panel_desc, '(unknown)')
 order by 1, 2`,
       // Task 5 mysql port: authored_on is an ISO 'YYYY-MM-DD...' string, so substr(...,1,7) IS
@@ -406,6 +439,9 @@ order by 1, 2`,
 from lab_requests sr
 where sr.authored_at >= {{param.from}}
   and sr.authored_at <= concat({{param.to}}, 'T23:59:59.999Z')
+  and ({{param.facility}} = '' or sr.id in (
+    select l.request_id from lab_results l join diagnostic_reports d on d.specimen_id = l.specimen_id where d.performer = {{param.facility}}
+  ))
 group by substr(sr.authored_at, 1, 7), coalesce(sr.panel_desc, '(unknown)')
 order by 1, 2`,
     },
@@ -426,17 +462,17 @@ order by 1, 2`,
     // first, THEN averages those rounded values, THEN rounds the average to 1 decimal — the CTE's
     // `hours` column is that first whole-number rounding), minHours/maxHours = min/max of the same
     // whole-hour values.
-    //  - facility filter (optional): same '' = no-filter guard as q-amr-resistance, applied to
-    //    diagnostic_reports.subject_ref via patients.managing_organization.
+    //  - facility filter (optional): same '' = no-filter guard as q-amr-resistance, direct
+    //    equality on dr.performer — the same diagnostic_reports.performer value space the picker
+    //    now offers (Task 3 — patients.managing_organization is set on 1 of 3714 rows, so the old
+    //    subquery via managing_organization selected nothing on real data).
     //  - R3c cutover: reads the v2 `specimens`/`diagnostic_reports`/`patients` tables (originally
     //    `v2_specimens`/`v2_diagnostic_reports`/`v2_patients`, renamed to canonical in R3e —
     //    replacing the old thin `specimens`/`diagnostic_reports`/`patients` tables they superseded).
     //    v2 stores the bare FHIR id directly
     //    (`patient_id`) rather than a `Patient/`-prefixed reference string (`subject_ref`), so the
-    //    `received` CTE keys on `patient_id`, the report<->specimen join compares `patient_id` to
-    //    `patient_id`, and the facility subquery compares the bare `dr.patient_id` against bare
-    //    `patients.id` (no `'Patient/' ||` prefix needed). `managing_organization` itself is
-    //    unchanged.
+    //    `received` CTE keys on `patient_id` and the report<->specimen join compares `patient_id`
+    //    to `patient_id`.
     //  - PRECISION GUARD (both sides): `specimens.received_time` and `diagnostic_reports.issued`
     //    are TEXT columns holding whatever FHIR supplied, verbatim. `Specimen.receivedTime` is a
     //    FHIR `dateTime`, and CE's DATETIME_RE (packages/fhir/src/datatypes/primitives.ts) accepts
@@ -490,9 +526,7 @@ paired as (
     and dr.issued >= r.received_time
     and dr.issued >= {{param.from}}
     and dr.issued <= ({{param.to}} || 'T23:59:59.999Z')
-    and ({{param.facility}} = '' or dr.patient_id in (
-      select p.id from patients p where p.managing_organization = {{param.facility}}
-    ))
+    and ({{param.facility}} = '' or dr.performer = {{param.facility}})
 )
 select
   test,
@@ -529,9 +563,7 @@ paired as (
     and dr.issued >= r.received_time
     and dr.issued >= {{param.from}}
     and dr.issued <= ({{param.to}} + 'T23:59:59.999Z')
-    and ({{param.facility}} = '' or dr.patient_id in (
-      select p.id from patients p where p.managing_organization = {{param.facility}}
-    ))
+    and ({{param.facility}} = '' or dr.performer = {{param.facility}})
 )
 select
   test,
@@ -567,9 +599,7 @@ paired as (
     and dr.issued >= r.received_time
     and dr.issued >= {{param.from}}
     and dr.issued <= concat({{param.to}}, 'T23:59:59.999Z')
-    and ({{param.facility}} = '' or dr.patient_id in (
-      select p.id from patients p where p.managing_organization = {{param.facility}}
-    ))
+    and ({{param.facility}} = '' or dr.performer = {{param.facility}})
 )
 select
   test,
@@ -598,9 +628,10 @@ order by \`avgHours\` desc, test asc`,
     //    everything else (including null) to 'other', preserving the same male/female/other shape.
     //  - `asOf` (optional, a single reference date — NOT a range): catalog defaults to
     //    '2026-01-01T00:00:00Z' when unset/empty. Same '' = "use default" guard as facility below.
-    //  - facility filter (optional): same '' = no-filter guard as q-amr-resistance; direct equality
-    //    on patients.managing_organization (no subject_ref indirection — this query reads
-    //    `patients` directly, unlike the AMR/TAT queries).
+    //  - facility filter (optional): same '' = no-filter guard as q-amr-resistance; matches the
+    //    patient against diagnostic_reports.performer, the same value space the picker now offers
+    //    (Task 3 — patients.managing_organization is set on 1 of 3714 rows, so the old direct
+    //    equality selected nothing on real data).
     //  - row order: the FIXED band order ['0-4','5-14','15-24','25-49','50+','unknown'], NOT a
     //    count-based sort — matches the catalog's `ORDER.filter(b => counts.has(b)).map(...)`.
     params: [
@@ -624,7 +655,7 @@ banded as (
     end as band,
     p.sex
   from patients p, params pr
-  where ({{param.facility}} = '' or p.managing_organization = {{param.facility}})
+  where ({{param.facility}} = '' or p.id in (select patient_id from diagnostic_reports where performer = {{param.facility}}))
 )
 select
   band,
@@ -661,7 +692,7 @@ banded as (
     end as band,
     p.sex
   from patients p cross join params pr
-  where ({{param.facility}} = '' or p.managing_organization = {{param.facility}})
+  where ({{param.facility}} = '' or p.id in (select patient_id from diagnostic_reports where performer = {{param.facility}}))
 )
 select
   band,
@@ -695,7 +726,7 @@ banded as (
     end as band,
     p.sex
   from patients p cross join params pr
-  where ({{param.facility}} = '' or p.managing_organization = {{param.facility}})
+  where ({{param.facility}} = '' or p.id in (select patient_id from diagnostic_reports where performer = {{param.facility}}))
 )
 select
   band,
@@ -748,25 +779,44 @@ order by case band when '0-4' then 1 when '5-14' then 2 when '15-24' then 3 when
     //    ever disagrees, `min` still picks deterministically and still cannot fan out.
     //  - the patient join is LEFT, not inner: the facility no longer comes from the patient, so a
     //    result whose patient row is missing must not be dropped from its facility's totals.
+    //  - ⛔ MYSQL ONLY_FULL_GROUP_BY: the projected label used to nest the raw fallback expression
+    //    `coalesce(f.performer, p.managing_organization)` inside the outer `coalesce(...)` (i.e.
+    //    `coalesce(min(fm.name), min(f.performer_display), coalesce(f.performer,
+    //    p.managing_organization))`). Postgres and mssql accept that nested form because they
+    //    recognise it as syntactically identical to the `group by` item even inside another
+    //    function call; MySQL 8's default `sql_mode=ONLY_FULL_GROUP_BY` does NOT extend that
+    //    recognition to a nested position and rejects it with ERROR 1055. Fixed by wrapping every
+    //    branch in its own aggregate: `min(f.performer)`, `min(p.managing_organization)`. This is
+    //    semantically identical, not just syntactically legal: every row in a group agrees on
+    //    `coalesce(f.performer, p.managing_organization)` by definition of the group key, so if any
+    //    row has a non-null `f.performer`, that value IS the group's code and `min(f.performer)`
+    //    recovers it; if every row's `f.performer` is null, they all necessarily share the same
+    //    `p.managing_organization` and `min(p.managing_organization)` recovers that instead. The
+    //    fallback order is unchanged: resolved registry name, then wire display, then the code,
+    //    then the patient organization. All three dialects were re-ported in lockstep even though
+    //    only mysql's strict mode rejects the nested form, per this file's own "spelled out" rule
+    //    at the ONLY_FULL_GROUP_BY comment on q-test-volume above.
     params: [
       { id: 'from', label: 'From', type: 'text', required: true },
       { id: 'to', label: 'To', type: 'text', required: true },
     ],
     sql: {
       postgres: `with facility_of as (
-  select specimen_id, min(performer) as performer
+  select specimen_id, min(performer) as performer, min(performer_display) as performer_display,
+    min(source_system) as source_system
   from diagnostic_reports
   where specimen_id is not null and specimen_id <> '' and performer is not null
   group by specimen_id
 )
 select
-  coalesce(f.performer, p.managing_organization) as facility,
+  coalesce(min(fm.name), min(f.performer_display), min(f.performer), min(p.managing_organization)) as facility,
   count(*)::int as tested,
   sum(case when o.abnormal_flag = 'R' then 1 else 0 end)::int as resistant
 from lab_results o
 left join patients p on o.patient_id = p.id
 left join specimens s on o.specimen_id = s.id
 left join facility_of f on f.specimen_id = o.specimen_id
+left join facility_map fm on fm.source_system = coalesce(f.source_system, '') and fm.source_code = f.performer
 where o.abnormal_flag in ('S', 'I', 'R')
   and o.specimen_id is not null and o.specimen_id <> ''
   and exists (select 1 from lab_results g where g.observation_code = '634-6' and g.specimen_id = o.specimen_id)
@@ -775,23 +825,25 @@ where o.abnormal_flag in ('S', 'I', 'R')
        or (coalesce(o.result_timestamp, s.received_time) >= {{param.from}}
            and coalesce(o.result_timestamp, s.received_time) <= ({{param.to}} || 'T23:59:59.999Z')))
 group by coalesce(f.performer, p.managing_organization)
-order by coalesce(f.performer, p.managing_organization)`,
+order by 1`,
       // Task 2 port: ::int -> cast(...as int); end-of-day string || -> + (the `{{param.to}}`
       // concat).
       mssql: `with facility_of as (
-  select specimen_id, min(performer) as performer
+  select specimen_id, min(performer) as performer, min(performer_display) as performer_display,
+    min(source_system) as source_system
   from diagnostic_reports
   where specimen_id is not null and specimen_id <> '' and performer is not null
   group by specimen_id
 )
 select
-  coalesce(f.performer, p.managing_organization) as facility,
+  coalesce(min(fm.name), min(f.performer_display), min(f.performer), min(p.managing_organization)) as facility,
   cast(count(*) as int) as tested,
   cast(sum(case when o.abnormal_flag = 'R' then 1 else 0 end) as int) as resistant
 from lab_results o
 left join patients p on o.patient_id = p.id
 left join specimens s on o.specimen_id = s.id
 left join facility_of f on f.specimen_id = o.specimen_id
+left join facility_map fm on fm.source_system = coalesce(f.source_system, '') and fm.source_code = f.performer
 where o.abnormal_flag in ('S', 'I', 'R')
   and o.specimen_id is not null and o.specimen_id <> ''
   and exists (select 1 from lab_results g where g.observation_code = '634-6' and g.specimen_id = o.specimen_id)
@@ -800,23 +852,25 @@ where o.abnormal_flag in ('S', 'I', 'R')
        or (coalesce(o.result_timestamp, s.received_time) >= {{param.from}}
            and coalesce(o.result_timestamp, s.received_time) <= ({{param.to}} + 'T23:59:59.999Z')))
 group by coalesce(f.performer, p.managing_organization)
-order by coalesce(f.performer, p.managing_organization)`,
+order by 1`,
       // Task 5 mysql port: ::int -> cast(...as signed); end-of-day string || -> concat().
       // Otherwise identical structure.
       mysql: `with facility_of as (
-  select specimen_id, min(performer) as performer
+  select specimen_id, min(performer) as performer, min(performer_display) as performer_display,
+    min(source_system) as source_system
   from diagnostic_reports
   where specimen_id is not null and specimen_id <> '' and performer is not null
   group by specimen_id
 )
 select
-  coalesce(f.performer, p.managing_organization) as facility,
+  coalesce(min(fm.name), min(f.performer_display), min(f.performer), min(p.managing_organization)) as facility,
   cast(count(*) as signed) as tested,
   cast(sum(case when o.abnormal_flag = 'R' then 1 else 0 end) as signed) as resistant
 from lab_results o
 left join patients p on o.patient_id = p.id
 left join specimens s on o.specimen_id = s.id
 left join facility_of f on f.specimen_id = o.specimen_id
+left join facility_map fm on fm.source_system = coalesce(f.source_system, '') and fm.source_code = f.performer
 where o.abnormal_flag in ('S', 'I', 'R')
   and o.specimen_id is not null and o.specimen_id <> ''
   and exists (select 1 from lab_results g where g.observation_code = '634-6' and g.specimen_id = o.specimen_id)
@@ -825,7 +879,7 @@ where o.abnormal_flag in ('S', 'I', 'R')
        or (coalesce(o.result_timestamp, s.received_time) >= {{param.from}}
            and coalesce(o.result_timestamp, s.received_time) <= concat({{param.to}}, 'T23:59:59.999Z')))
 group by coalesce(f.performer, p.managing_organization)
-order by coalesce(f.performer, p.managing_organization)`,
+order by 1`,
     },
   },
   {
@@ -1971,8 +2025,10 @@ export const SEED_DESIGNS: ReportDesign[] = [
     ],
     parameters: [
       { key: 'dateRange', label: 'Date range', type: 'daterange', required: true },
-      // Unused by the query itself (see q-test-volume's comment) — kept only so the filter bar
-      // matches the catalog, which also declares (but never applies) a facility select.
+      // Applied by the query (see q-test-volume's comment): filters through the request's own
+      // specimens (lab_results -> diagnostic_reports.performer). The catalog's own `run()` never
+      // applied this control — this seeded query closes that gap, so unlike the catalog, choosing
+      // a facility here actually changes the result.
       { key: 'facility', label: 'Facility', type: 'select', required: false, value: '' },
     ],
   }),

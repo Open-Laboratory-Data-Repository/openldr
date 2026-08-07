@@ -21,6 +21,12 @@ export { pairRects, type PairBox } from './draw';
 // scales and silently computes a row too many — the exact error that shipped a clipped row.
 export { toPt, PX_TO_PT } from './units';
 
+// Exported for the same reason as `toPt`/`PX_TO_PT`: a seed that lays out page-relative elements
+// (a footer pinned near the bottom edge) needs the SAME page-size math this renderer uses, not a
+// hardcoded A4-portrait number — that hardcoding is exactly what shipped a footer off the bottom
+// of the two Letter/landscape seeded designs.
+export { paperSizePt } from './units';
+
 export interface RenderOptions {
   now?: Date;
   /**
@@ -32,6 +38,10 @@ export interface RenderOptions {
    * `{{lab.*}}` resolves to '' and a design referencing identity still renders.
    */
   identity?: Record<string, string>;
+  /** The RUN's parameter values. Supplied by the caller because the renderer is handed the stored
+   *  design, whose `parameters[].value` are the AUTHORED DEFAULTS — a header built from those
+   *  describes the design rather than the run it is printed from. */
+  values?: Record<string, unknown>;
 }
 
 export function renderReportDesignPdf(
@@ -40,7 +50,7 @@ export function renderReportDesignPdf(
   opts: RenderOptions = {},
 ): Promise<Buffer> {
   const now = opts.now ?? new Date();
-  const tokens = paramMap(design, now, opts.identity);
+  const tokens = paramMap(design, now, opts.identity, opts.values);
   const pages = design.pages.length ? design.pages : [{ id: '_empty', elements: [] }];
   const [w, h] = paperSizePt(design.paper, design.orientation);
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { interpolate, paramMap, tableChunkCount, pageChunkCount, rowsFor, totalPhysicalPages, pageFooterLabel, cellTextOptions, columnWidths, isNumericColumn, CELL_TEXT_H, ROW_H, asCellStatus, cellStatusesFor, isRightAligned, keyValuePairs, pairRects, elementValue } from './draw';
+import { interpolate, paramMap, tableChunkCount, pageChunkCount, rowsFor, totalPhysicalPages, pageFooterLabel, cellTextOptions, columnWidths, isNumericColumn, CELL_TEXT_H, ROW_H, asCellStatus, cellStatusesFor, isRightAligned, keyValuePairs, pairRects, elementValue, interpolatedPairValues } from './draw';
 import type { ReportDesign, DesignElement, DesignPage } from '../schema';
 import type { ResolvedTable } from './index';
 
@@ -23,10 +23,68 @@ describe('paramMap', () => {
     expect(m.get('date')).toBe(NOW.toLocaleDateString());
   });
 
-  it('ignores params with no value but still sets date', () => {
+  it('renders a declared-but-unset param as an em dash, and still sets date', () => {
+    // A blank beside a label reads as a failed render; "—" reads as "not filtered". (Previously this
+    // param was left out of the map entirely — that changed when `paramMap` started always emitting
+    // a declared parameter's token, so a design that prints it never shows a literal `{{param.x}}`.)
     const m = paramMap(design({ parameters: [{ key: 'empty', label: 'E', type: 'text' }] }), NOW);
-    expect(m.has('empty')).toBe(false);
+    expect(m.get('empty')).toBe('—');
     expect(m.get('date')).toBe(NOW.toLocaleDateString());
+  });
+});
+
+describe('paramMap prefers the RUN values over the design defaults', () => {
+  const paramDesign = design({
+    parameters: [
+      { key: 'dateRange', label: 'Range', type: 'daterange', required: true, value: { from: '2000-01-01', to: '2000-12-31' } },
+      { key: 'facility', label: 'Facility', type: 'select', required: false, value: '' },
+    ],
+  });
+
+  it('reads a daterange from the FLAT from/to the runtime actually supplies', () => {
+    // ⛔ The run values are flat — the Studio's picker writes top-level from/to and the seeded
+    // queries declare from/to as their own params, so values['dateRange'] is always undefined.
+    // Keying on the parameter's own name renders every date range as two em dashes.
+    const m = paramMap(paramDesign, NOW, undefined, { from: '2026-01-01', to: '2026-03-31', facility: 'BAMAA' });
+    expect(m.get('from')).toBe('2026-01-01');
+    expect(m.get('to')).toBe('2026-03-31');
+    expect(m.get('facility')).toBe('BAMAA');
+  });
+
+  it('renders a declared-but-unset parameter as an em dash, not blank', () => {
+    // A blank beside a label reads as a failure; "—" reads as "not filtered".
+    const m = paramMap(paramDesign, NOW, undefined, { from: '2026-01-01', to: '2026-03-31' });
+    expect(m.get('facility')).toBe('—');
+  });
+
+  it('still falls back to the design defaults when no run values are supplied', () => {
+    const m = paramMap(paramDesign, NOW);
+    expect(m.get('from')).toBe('2000-01-01');
+  });
+});
+
+describe('drawKeyValue interpolates authored pairs but never query data', () => {
+  it('resolves tokens in an UNBOUND pair value', () => {
+    const el = { id: 'k', kind: 'keyvalue', name: 'K', rect: { x: 0, y: 0, w: 400, h: 60 },
+      rows: [['Reporting period', '{{param.from}} – {{param.to}}']] } as unknown as DesignElement;
+    const pairs = keyValuePairs(el, undefined);
+    expect(interpolatedPairValues(el, undefined, new Map([['from', '2026-01-01'], ['to', '2026-03-31']])))
+      .toEqual(['2026-01-01 – 2026-03-31']);
+    expect(pairs[0].value).toBe('{{param.from}} – {{param.to}}'); // raw at the pair layer
+  });
+
+  it('⛔ does NOT interpolate a BOUND value — that would let query data forge letterhead', () => {
+    const el = { id: 'k', kind: 'keyvalue', name: 'K', rect: { x: 0, y: 0, w: 400, h: 60 },
+      dataSource: { kind: 'custom-query', queryId: 'q' },
+      boundColumns: [{ key: 'note', label: 'Note' }] } as unknown as DesignElement;
+    const resolved = { columns: [{ key: 'note', label: 'Note' }], rows: [{ note: '{{lab.name}}' }] };
+    // The key MUST be 'lab.name' (LAB_TOKEN_PREFIX = 'lab.', a dot — draw.ts:156), so the token map
+    // actually HITS. A mismatched key (e.g. 'lab:name') would make this pass for the wrong reason:
+    // the lookup misses regardless of the bound/unbound gate, so a wrongly-interpolated value would
+    // render as '' rather than as the forged 'Ministry of Health' text — the assertion would pass
+    // even if the security gate were inverted.
+    expect(interpolatedPairValues(el, resolved, new Map([['lab.name', 'Ministry of Health']])))
+      .toEqual(['{{lab.name}}']);
   });
 });
 

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
-import { createSchedule, updateSchedule, type ReportSchedule, type ReportParamMeta, type ScheduleInput } from '../api';
+import { createSchedule, updateSchedule, type ReportSchedule, type ReportParamMeta, type ScheduleInput, type ReportParamOption } from '../api';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,7 +18,7 @@ interface Props {
   open: boolean;
   reportId: string;
   parameters: ReportParamMeta[];
-  options: Record<string, string[]>;
+  options: Record<string, ReportParamOption[]>;
   initialParams: Record<string, string>;
   existing?: ReportSchedule;
   onClose: () => void;
@@ -144,7 +144,7 @@ export function ScheduleDialog({ open, reportId, parameters, options, initialPar
                   <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value={ALL}>{t('reports.all')}</SelectItem>
-                    {(p.optionsKey ? options[p.optionsKey] ?? [] : []).map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+                    {(p.optionsKey ? options[p.optionsKey] ?? [] : []).map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
                   </SelectContent>
                 </Select>
               ) : (

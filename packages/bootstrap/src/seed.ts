@@ -9,6 +9,7 @@ import { BUNDLED_TERMINOLOGY, readBundledTerminology, createCustomQueryStore, re
 import { FEATURE_FLAGS } from '@openldr/config';
 import type { DbContext } from './db-context';
 import { REPORT_CATEGORIES_SETTING_KEY } from './report-categories';
+import { LAB_IDENTITY_DEFAULTS } from './lab-identity-defaults';
 
 export interface SeedResult {
   resources: { id: string; flattened: string }[];
@@ -367,6 +368,17 @@ export async function seedDatabase(db: DbContext, app: FormSeedTarget): Promise<
     const existing = await app.appSettings.get(f.id);
     if (!existing) {
       await app.appSettings.set(f.id, f.default ? 'true' : 'false', 'system');
+      settingsSeeded++;
+    }
+  }
+
+  // Letterhead identity defaults (OpenLDR mark + product name as the default issuing lab) —
+  // same create-if-absent idiom as the feature flags above, so an operator's own Settings ▸
+  // Laboratory configuration is never clobbered on reseed.
+  for (const d of LAB_IDENTITY_DEFAULTS) {
+    const existing = await app.appSettings.get(d.id);
+    if (!existing) {
+      await app.appSettings.set(d.id, d.value, 'system');
       settingsSeeded++;
     }
   }

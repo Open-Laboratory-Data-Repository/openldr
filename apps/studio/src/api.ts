@@ -129,10 +129,15 @@ export async function fetchReport(id: string, params: Record<string, string> = {
   return okJson<ReportResult>(res, `report ${id}`);
 }
 
-export async function fetchReportOptions(id: string): Promise<Record<string, string[]>> {
+/** One choice in a report parameter's select. `value` is what the query filters on; `label` is
+ *  what the operator reads. They differ deliberately: five DISA facility codes all display as
+ *  "Aga Khan" in different districts, so a name-valued dropdown would silently merge them. */
+export interface ReportParamOption { value: string; label: string; }
+
+export async function fetchReportOptions(id: string): Promise<Record<string, ReportParamOption[]>> {
   const res = await authFetch(`/api/reports/${encodeURIComponent(id)}/options`);
   if (!res.ok) throw new Error(`report options ${id} failed: ${res.status}`);
-  return res.json() as Promise<Record<string, string[]>>;
+  return res.json() as Promise<Record<string, ReportParamOption[]>>;
 }
 
 export async function fetchReportPdf(id: string, params: Record<string, string> = {}): Promise<Blob> {

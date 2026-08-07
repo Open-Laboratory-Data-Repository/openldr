@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { FEATURE_FLAGS } from '@openldr/config';
+import { FEATURE_FLAGS, validateLabIdentityValue } from '@openldr/config';
 import { seedDatabase, seedDefaultConnector, seedEssentials, type FormSeedTarget } from './seed';
 import type { DbContext } from './db-context';
+import { LAB_IDENTITY_DEFAULTS } from './lab-identity-defaults';
 
 // In-memory fakes so we exercise the real seedDatabase logic without a database.
 function fakeApp(cfg: FormSeedTarget['cfg'] = {}) {
@@ -505,13 +506,44 @@ describe('seedDatabase — sample dashboard', () => {
 describe('seedDatabase — feature-flag defaults', () => {
   it('seeds every registry flag once and is idempotent on reseed', async () => {
     const { app } = fakeApp();
-    // First run against an empty appSettings fake writes one row per registry flag.
+    // First run against an empty appSettings fake writes one row per registry flag, plus one
+    // row per letterhead identity default seeded alongside it.
     const first = await seedDatabase(fakeDb, app);
-    expect(first.settingsSeeded).toBe(FEATURE_FLAGS.length);
+    expect(first.settingsSeeded).toBe(FEATURE_FLAGS.length + LAB_IDENTITY_DEFAULTS.length);
     // Reusing the SAME fake app (persisted settings Map) — the second run finds every
     // flag already present and re-writes nothing, so an operator's later toggle survives.
     const second = await seedDatabase(fakeDb, app);
     expect(second.settingsSeeded).toBe(0);
+  });
+
+  it('seeds the OpenLDR mark and a default laboratory name', async () => {
+    // The letterhead rendered blank on every report: app_settings held no lab.* key at all.
+    const { app } = fakeApp();
+    await seedDatabase(fakeDb, app);
+    expect((await app.appSettings.get('lab.logo'))?.value).toMatch(/^data:image\/png;base64,/);
+    expect((await app.appSettings.get('lab.name'))?.value).toBe('OpenLDR');
+  });
+
+  it('never reverts an identity the operator has set', async () => {
+    // Create-if-absent, exactly like the feature-flag defaults. An operator who has configured
+    // their own letterhead must not have it silently restored to ours on the next boot.
+    const { app } = fakeApp();
+    await seedDatabase(fakeDb, app);
+    await app.appSettings.set('lab.name', 'Muhimbili National Hospital', 'operator');
+    const second = await seedDatabase(fakeDb, app);
+    expect(second.settingsSeeded).toBe(0);
+    expect((await app.appSettings.get('lab.name'))?.value).toBe('Muhimbili National Hospital');
+  });
+
+  it('every seeded identity default is itself valid per validateLabIdentityValue', () => {
+    // The seed writes LAB_IDENTITY_DEFAULTS straight through appSettings.set, never running them
+    // through validateLabIdentityValue — only the operator-facing Settings ▸ Laboratory path does
+    // that. The values are valid today, but nothing catches a future careless edit (e.g. an
+    // https:// logo URL, which pdfkit silently renders as a blank placeholder rather than
+    // rejecting) until someone actually prints a report. Pin the invariant here instead.
+    for (const d of LAB_IDENTITY_DEFAULTS) {
+      expect(validateLabIdentityValue(d.id, d.value), `${d.id} fails its own validator`).toBeNull();
+    }
   });
 });
 

@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import type { ReportSummary, ReportParamMeta } from '../api';
+import type { ReportSummary, ReportParamMeta, ReportParamOption } from '../api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 interface Props {
   report: ReportSummary;
   params: Record<string, string>;
-  options: Record<string, string[]>;
+  options: Record<string, ReportParamOption[]>;
   onChange: (params: Record<string, string>) => void;
   onRun: () => void;
   running: boolean;
@@ -54,7 +54,7 @@ export function ReportParametersBar({ report, params, options, onChange, onRun, 
           <SelectTrigger className="h-9 w-48 text-xs"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value={ALL}>{t('reports.all')}</SelectItem>
-            {opts.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+            {opts.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
           </SelectContent>
         </Select>
       );

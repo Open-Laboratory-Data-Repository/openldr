@@ -167,17 +167,22 @@ describe('report routes', () => {
 });
 
 describe('GET /api/reports/:id/options', () => {
+  // `ReportingApi.options()` returns `Record<string, ReportParamOption[]>` — {value,label} pairs,
+  // not bare strings. This fixture used to be `{ facility: ['F1', 'F2'] }`, which only passed
+  // because `appWith` casts the context to `never`, erasing the type check that would otherwise
+  // have caught the mismatch. Match the real contract so the HTTP seam actually exercises it.
   const reporting = {
     list: vi.fn(),
     run: vi.fn(),
-    options: async (id: string) => (id === 'amr-resistance' ? { facility: ['F1', 'F2'] } : {}),
+    options: async (id: string) =>
+      (id === 'amr-resistance' ? { facility: [{ value: 'F1', label: 'Facility One' }, { value: 'F2', label: 'Facility Two' }] } : {}),
   };
 
   it('returns the option map for a report', async () => {
     const app = appWith(reporting);
     const res = await app.inject({ method: 'GET', url: '/api/reports/amr-resistance/options' });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ facility: ['F1', 'F2'] });
+    expect(res.json()).toEqual({ facility: [{ value: 'F1', label: 'Facility One' }, { value: 'F2', label: 'Facility Two' }] });
   });
 
   it('returns {} for reports without options', async () => {
