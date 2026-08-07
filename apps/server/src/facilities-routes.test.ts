@@ -1457,6 +1457,38 @@ describe('Task 6: POST /api/facilities/scan-observed', () => {
     expect(ctx.__audit.map((a: any) => a.action)).toEqual(['facility.scan']);
   });
 
+  // ⛔ PINS THE ONE ROUTE BY WHICH A MASS MAPPING REWRITE BECOMES VISIBLE TO AN OPERATOR. A scan
+  // republishes the registry projection, and that reprojection can move a facility's concept code and
+  // rewrite every `term_mappings` row pointing at the old one — underneath whoever authored them,
+  // with no UI anywhere reporting it. `ScanResult.registryCodeChanges` counts those moves and this
+  // audit entry is where they are kept; before it, the only trace was a `console.warn`.
+  //
+  // Both entries are asserted, not just the second: a field that is ALWAYS whatever the last scan
+  // happened to produce would satisfy a single-value check, and "0 when nothing moved" is what makes
+  // the 1 mean something.
+  it('records how many registry codes the scan moved in the facility.scan audit entry', async () => {
+    const internalDb = await makeMigratedDb();
+    const externalDb = await makeMigratedExternalDb();
+    await seedObservedReports(externalDb, [['Dodoma', 1]]);
+    const ctx = fakeReconcileCtx(internalDb, externalDb);
+    const app = await appWith(ctx);
+    await internalDb.insertInto('facility_registry')
+      .values({ id: 'fac-1', name: 'Alpha Clinic', local_code: 'OLD-1', source: 'manual' }).execute();
+
+    // First scan projects fac-1 as 'OLD-1' and records the link it will later be compared against.
+    await app.inject({ method: 'POST', url: '/api/facilities/scan-observed', payload: { apply: true } });
+    // The code changes without this route being involved — a national import, an out-of-band
+    // correction. Exactly the case where nobody would otherwise know their mappings just moved.
+    await internalDb.updateTable('facility_registry').set({ local_code: 'NEW-1' }).where('id', '=', 'fac-1').execute();
+
+    const res = await app.inject({ method: 'POST', url: '/api/facilities/scan-observed', payload: { apply: true } });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().registryCodeChanges).toBe(1);
+    const scans = ctx.__audit.filter((a: any) => a.action === 'facility.scan');
+    expect(scans.map((a: any) => a.metadata.result.registryCodeChanges)).toEqual([0, 1]);
+  });
+
   // Task 9b: `system` (a caller-chosen destination) is gone from this route's body — scan now
   // derives a coding system PER ROW from `source_system`, so an unknown field like `system` is
   // simply stripped by zod rather than meaning anything. This is the direct replacement for the

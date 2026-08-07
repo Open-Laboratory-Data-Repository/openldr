@@ -475,6 +475,13 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     // discovery of zero new codes still (re)registers/re-activates every observed-facility
     // `coding_systems` row it finds — so auditing is unconditional on `apply`, not further gated on
     // a count.
+    //
+    // ⛔ `metadata: { result }` is what makes a Scan's REGISTRY REPROJECTION accountable, not just
+    // its observed-facility discovery. A scan republishes the registry projection, which can move a
+    // facility's concept code and rewrite every `term_mappings` row pointing at the old one —
+    // `ScanResult.registryCodeChanges` counts exactly that, and this entry is the only durable place
+    // an operator can later find it. Spreading named fields here instead of the whole result would
+    // silently drop it (and the next field like it).
     if (p.data.apply) {
       await recordAudit(ctx, req, {
         action: 'facility.scan',
