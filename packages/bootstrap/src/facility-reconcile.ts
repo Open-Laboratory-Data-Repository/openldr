@@ -1,5 +1,5 @@
 import type { Kysely } from 'kysely';
-import type { ConceptRowInput, ExternalSchema, InternalSchema, RegistryRowForConcept, TerminologyAdminStore } from '@openldr/db';
+import type { ConceptRowInput, ExternalSchema, InternalSchema, MapType, RegistryRowForConcept, TerminologyAdminStore } from '@openldr/db';
 import { DEFAULT_OBSERVED_FACILITY_SYSTEM, FACILITY_REGISTRY_SYSTEM, FACILITY_REGISTRY_SYSTEM_CODE, FACILITY_REGISTRY_SYSTEM_NAME, facilityMapId, observedFacilityConceptRow, registryConceptRows, registryPreferredCode, registryRowIdsWithSupersededIdConcept, observedSystemForFeed, projectDiagnosticReport } from '@openldr/db';
 
 export interface ReconcileDeps {
@@ -851,6 +851,59 @@ async function ensureRegistrySystemActive(deps: Pick<ReconcileDeps, 'admin' | 'i
 }
 
 /**
+ * The registry ids from `inputs` whose preferred code is claimed by MORE THAN ONE `facility_registry`
+ * row anywhere in the table, and which must therefore fall back to their own `id` — i.e. exactly the
+ * set `registryConceptRows`' `forceOwnIdFor` option wants.
+ *
+ * Moved here VERBATIM out of `projectRegistryRows`, where it used to be inline, so that function and
+ * `reprojectRegistryRows` share ONE definition of "collision" rather than two that can drift. See
+ * `projectRegistryRows`' doc comment for why a DB lookup is needed at all (a caller handed only
+ * `{id, name}` cannot see the rest of the table) and why the lookup is complete (every caller runs
+ * after its own write has committed, so the live table already reflects the whole batch).
+ */
+async function collidingRegistryIds(
+  deps: Pick<ReconcileDeps, 'internalDb'>,
+  inputs: RegistryRowForConcept[],
+): Promise<Set<string>> {
+  // Candidate codes this batch WANTS to use — dedup'd, since two of the given rows could (rarely)
+  // want the same code and both need to be included in the collision lookup below.
+  const candidates = [...new Set(inputs.map((r) => registryPreferredCode(r)).filter((c): c is string => c !== null))];
+
+  const forceOwnIdFor = new Set<string>();
+  if (candidates.length > 0) {
+    // Every OTHER row in the table (this batch's own rows included — a row always "claims" its own
+    // code) that claims one of our candidate codes via EITHER column. Matching on `local_code` OR
+    // `national_code` independently, not paired with `national_system`, mirrors what
+    // `registryPreferredCode` itself compares: a concept's `code` is a bare string, so a collision
+    // is possible against either column regardless of which system a national code belongs to.
+    const claimants = await deps.internalDb
+      .selectFrom('facility_registry')
+      .select(['id', 'local_code', 'national_code'])
+      .where((eb) => eb.or([eb('local_code', 'in', candidates), eb('national_code', 'in', candidates)]))
+      .execute();
+    const claimantIdsByCode = new Map<string, Set<string>>();
+    const addClaim = (code: string | null, id: string): void => {
+      if (code === null || !candidates.includes(code)) return;
+      const set = claimantIdsByCode.get(code) ?? new Set<string>();
+      set.add(id);
+      claimantIdsByCode.set(code, set);
+    };
+    for (const c of claimants) {
+      addClaim(c.local_code, c.id);
+      addClaim(c.national_code, c.id);
+    }
+    for (const r of inputs) {
+      const candidate = registryPreferredCode(r);
+      // More than one DISTINCT row id claiming this code means at least one OTHER row (not just
+      // this one) wants it too — a real collision, not just this row seeing its own claim reflected
+      // back.
+      if (candidate && (claimantIdsByCode.get(candidate)?.size ?? 0) > 1) forceOwnIdFor.add(r.id);
+    }
+  }
+  return forceOwnIdFor;
+}
+
+/**
  * Project ONLY the given `facility_registry` rows into `FACILITY_REGISTRY_SYSTEM` — the write-time
  * counterpart to `publishRegistryConcepts`'s full reprojection.
  *
@@ -906,41 +959,7 @@ export async function projectRegistryRows(
       return { id: r.id, name: r.name, localCode: found?.local_code ?? null, nationalCode: found?.national_code ?? null };
     });
 
-    // Candidate codes this batch WANTS to use — dedup'd, since two of the given rows could (rarely)
-    // want the same code and both need to be included in the collision lookup below.
-    const candidates = [...new Set(inputs.map((r) => registryPreferredCode(r)).filter((c): c is string => c !== null))];
-
-    const forceOwnIdFor = new Set<string>();
-    if (candidates.length > 0) {
-      // Every OTHER row in the table (this batch's own rows included — a row always "claims" its own
-      // code) that claims one of our candidate codes via EITHER column. Matching on `local_code` OR
-      // `national_code` independently, not paired with `national_system`, mirrors what
-      // `registryPreferredCode` itself compares: a concept's `code` is a bare string, so a collision
-      // is possible against either column regardless of which system a national code belongs to.
-      const claimants = await deps.internalDb
-        .selectFrom('facility_registry')
-        .select(['id', 'local_code', 'national_code'])
-        .where((eb) => eb.or([eb('local_code', 'in', candidates), eb('national_code', 'in', candidates)]))
-        .execute();
-      const claimantIdsByCode = new Map<string, Set<string>>();
-      const addClaim = (code: string | null, id: string): void => {
-        if (code === null || !candidates.includes(code)) return;
-        const set = claimantIdsByCode.get(code) ?? new Set<string>();
-        set.add(id);
-        claimantIdsByCode.set(code, set);
-      };
-      for (const c of claimants) {
-        addClaim(c.local_code, c.id);
-        addClaim(c.national_code, c.id);
-      }
-      for (const r of inputs) {
-        const candidate = registryPreferredCode(r);
-        // More than one DISTINCT row id claiming this code means at least one OTHER row (not just
-        // this one) wants it too — a real collision, not just this row seeing its own claim reflected
-        // back.
-        if (candidate && (claimantIdsByCode.get(candidate)?.size ?? 0) > 1) forceOwnIdFor.add(r.id);
-      }
-    }
+    const forceOwnIdFor = await collidingRegistryIds(deps, inputs);
 
     await deps.admin.terms.importRows(registryConceptRows(inputs, { forceOwnIdFor }));
     // Write the new projection FIRST, delete the superseded id-keyed leftover SECOND — see
@@ -953,6 +972,213 @@ export async function projectRegistryRows(
     // never propagate, and this module takes no logger dependency to report through otherwise.
     console.error('[facility-reconcile] failed to project facility_registry row(s) into FACILITY_REGISTRY_SYSTEM', err);
   }
+}
+
+export interface ReprojectResult {
+  /** How many rows were projected — every row handed in, whether or not its code moved. */
+  projected: number;
+  /** One entry per row whose projected code ACTUALLY moved. A row projected for the first time (no
+   *  `facility_concept_projection` link yet) is NOT a code change — there is no old code to move
+   *  away from, and nothing could have been authored against one. */
+  codeChanges: { registryId: string; from: string; to: string; mappingsMigrated: number }[];
+}
+
+/**
+ * Project the given `facility_registry` rows AND migrate any `term_mappings` whose target code moves
+ * as a result.
+ *
+ * A facility's concept code is DERIVED (`local_code`, else `national_code`, else its own `id` on a
+ * collision — see `registryConceptRows`), so it can move without anyone editing that facility:
+ * importing an unrelated row whose `national_code` equals this row's `local_code` makes BOTH fall
+ * back to their UUIDs on the next full reprojection. A mapping an operator authored against the
+ * human code then points at nothing, and — because the concept write is upsert-only — the orphaned
+ * concept stays in the picker, selectable, resolving to no facility.
+ *
+ * `facility_concept_projection` is what makes "moved" OBSERVABLE. Without a durable record of what a
+ * row projected as LAST time, a projection can only compute a desired code; it has no way to know
+ * which old code's mappings to carry forward. That is also why the link is read as-is and never
+ * re-derived from `local_code`/`national_code` here: the link records what was actually WRITTEN,
+ * collision fallback included, and recomputing it would invent a move that never happened.
+ *
+ * ⛔ ORDERING IS LOAD-BEARING, and it is the same contract `deleteSupersededIdConcepts` documents:
+ * write the new concepts FIRST, rewrite the mappings SECOND, delete the old concept LAST. A
+ * mid-failure must leave a stale concept behind for the next projection to retry, never a facility
+ * with ZERO concepts. Deleting the old concept before the mapping rewrite would strand every mapping
+ * still pointing at it if the rewrite then failed.
+ *
+ * ⛔ Mappings are rewritten through `admin.termMappings.update`, NEVER with a direct
+ * `UPDATE term_mappings`. `term_mappings` is authoritative and `concept_map_elements` is its mirror;
+ * a raw UPDATE would leave the mirror pointing at the old code and skip `reference_change_log`
+ * capture.
+ *
+ * ⚠ Throws on failure, deliberately — this function does not contain its own errors. Its callers
+ * have genuinely different containment needs (an explicit operator Publish may propagate; the
+ * facility-save hot path must not), exactly as `ensureCodingSystemActive`'s doc comment reasons about
+ * the same split. `projectRegistryRows`' try/catch stays where it is.
+ */
+export async function reprojectRegistryRows(
+  deps: Pick<ReconcileDeps, 'admin' | 'internalDb'>,
+  rows: { id: string; name: string }[],
+): Promise<ReprojectResult> {
+  if (rows.length === 0) return { projected: 0, codeChanges: [] };
+
+  await ensureRegistrySystemActive(deps);
+
+  const ids = rows.map((r) => r.id);
+  const own = await deps.internalDb
+    .selectFrom('facility_registry')
+    .select(['id', 'local_code', 'national_code'])
+    .where('id', 'in', ids)
+    .execute();
+  const ownById = new Map(own.map((r) => [r.id, r]));
+
+  const inputs: RegistryRowForConcept[] = rows.map((r) => {
+    const found = ownById.get(r.id);
+    return { id: r.id, name: r.name, localCode: found?.local_code ?? null, nationalCode: found?.national_code ?? null };
+  });
+
+  const forceOwnIdFor = await collidingRegistryIds(deps, inputs);
+  const desired = registryConceptRows(inputs, { forceOwnIdFor });
+
+  const links = await deps.internalDb
+    .selectFrom('facility_concept_projection')
+    .select(['registry_id', 'concept_code'])
+    .where('registry_id', 'in', ids)
+    .execute();
+  const previousById = new Map(links.map((l) => [l.registry_id, l.concept_code]));
+
+  // STEP 1 of the ordering contract above: the new concepts exist before anything is pointed at them
+  // and before anything old is removed.
+  await deps.admin.terms.importRows(desired);
+
+  const moved = inputs
+    .map((r, i) => ({ registryId: r.id, from: previousById.get(r.id), to: desired[i].code }))
+    .filter((m): m is { registryId: string; from: string; to: string } => m.from !== undefined && m.from !== m.to);
+
+  const codeChanges: ReprojectResult['codeChanges'] = [];
+
+  if (moved.length > 0) {
+    const fromCodes = [...new Set(moved.map((m) => m.from))];
+
+    // SNAPSHOT the mappings BEFORE rewriting any of them. Two rows swapping codes with each other in
+    // one batch (A: X->Y while B: Y->X) is rare but legal, and re-reading per row mid-loop would let
+    // A's freshly-rewritten mappings be picked up again as B's "stale" ones and rewritten a second
+    // time. One read of the pre-change state cannot do that.
+    const staleRows = await deps.internalDb
+      .selectFrom('term_mappings')
+      .selectAll()
+      .where('to_system', '=', FACILITY_REGISTRY_SYSTEM)
+      .where('to_code', 'in', fromCodes)
+      .execute();
+    const staleByCode = new Map<string, typeof staleRows>();
+    for (const m of staleRows) {
+      const list = staleByCode.get(m.to_code) ?? [];
+      list.push(m);
+      staleByCode.set(m.to_code, list);
+    }
+
+    // ⛔ A link row can DISAGREE with reality: migration 077's backfill matches a facility against
+    // either its human code or its id and takes whichever the join happens to yield first, so a row
+    // that somehow carried both concepts got a non-deterministic link. If such a link names a code
+    // some OTHER facility genuinely projects as, then the mappings on that code are that other
+    // facility's, not this one's — migrating them here would silently re-point an operator's mapping
+    // at the wrong lab, and deleting the concept would take a LIVE facility out of the picker. So a
+    // `from` claimed by a facility outside this batch is left strictly alone (the row still moves to
+    // its new code; only the carry-over is skipped). This is a targeted defence on the two
+    // DESTRUCTIVE steps, not a re-derivation of the link — second-guessing the link against live
+    // concepts is exactly the recompute migration 077 deliberately avoided.
+    //
+    // "Outside this batch" is filtered in memory rather than with a SQL `not in`: the result set is
+    // already bounded by `concept_code in (the codes that moved)` — at most one link row per facility
+    // that claims one — so the filter is free, and pg-mem (the test double behind every test in this
+    // module) crashes outright on `not in` against this table's indexed primary key.
+    const batchIds = new Set(ids);
+    const linkedElsewhere = new Set(
+      (await deps.internalDb
+        .selectFrom('facility_concept_projection')
+        .select(['registry_id', 'concept_code'])
+        .where('concept_code', 'in', fromCodes)
+        .execute())
+        .filter((l) => !batchIds.has(l.registry_id))
+        .map((l) => l.concept_code),
+    );
+
+    // A code this batch is HANDING OVER: one row moves off it in the same call another row moves on
+    // to it (an operator renaming a facility and giving its old code to a new one in a single
+    // import). The mappings still migrate — they were authored when the code meant the OLD facility,
+    // and the snapshot above makes that safe — but the concept must NOT be deleted: `importRows`
+    // just wrote it for its new owner.
+    const reclaimedInBatch = new Set(desired.map((d) => d.code));
+
+    for (const m of moved) {
+      let mappingsMigrated = 0;
+      if (!linkedElsewhere.has(m.from)) {
+        // STEP 2: repoint the mappings, through the admin store so `concept_map_elements` and
+        // `reference_change_log` follow. The full `TermMappingInput` is required (it is a replace,
+        // not a patch), so every other field is carried across verbatim — including `to_display`,
+        // which is the operator's own denormalised label and not this function's to re-curate.
+        for (const stale of staleByCode.get(m.from) ?? []) {
+          await deps.admin.termMappings.update(stale.id, {
+            fromSystem: stale.from_system,
+            fromCode: stale.from_code,
+            toSystem: FACILITY_REGISTRY_SYSTEM,
+            toCode: m.to,
+            toDisplay: stale.to_display,
+            mapType: stale.map_type as MapType,
+            relationship: stale.relationship,
+            owner: stale.owner,
+            isActive: stale.is_active,
+          });
+          mappingsMigrated += 1;
+        }
+
+        // STEP 3, and only now: the old concept is unreferenced. Doing this before the rewrite above
+        // would strand every mapping still pointing at it if the rewrite then failed.
+        if (!reclaimedInBatch.has(m.from)) {
+          await deps.internalDb
+            .deleteFrom('terminology_concepts')
+            .where('system', '=', FACILITY_REGISTRY_SYSTEM)
+            .where('code', '=', m.from)
+            .execute();
+        }
+      }
+      codeChanges.push({ registryId: m.registryId, from: m.from, to: m.to, mappingsMigrated });
+    }
+  }
+
+  // Record what every row projected as THIS time — the rows that did not move included (the write is
+  // idempotent) and the rows projected for the FIRST time (no prior link). Batched, not one statement
+  // per row: a national register runs 10-15k rows and `publishRegistryConcepts` hands all of them
+  // over in a single call.
+  //
+  // ⛔ Only rows that ACTUALLY exist in `facility_registry` get a link. `rows` is whatever a caller
+  // handed in, and `registryConceptRows` happily projects a row it cannot find (both code columns
+  // read as absent, so it falls back to the id) — but `facility_concept_projection.registry_id` is a
+  // FOREIGN KEY, so linking one would throw and take the entire projection down with it, including
+  // for every legitimate row in the same batch.
+  const linkRows = inputs
+    .map((r, i) => ({ registry_id: r.id, concept_code: desired[i].code, updated_at: new Date() }))
+    .filter((l) => ownById.has(l.registry_id));
+  const batchSize = 1000; // Same bound `admin.terms.importRows` uses, for the same parameter-limit reason.
+  for (let i = 0; i < linkRows.length; i += batchSize) {
+    await deps.internalDb
+      .insertInto('facility_concept_projection')
+      .values(linkRows.slice(i, i + batchSize))
+      .onConflict((oc) => oc.column('registry_id').doUpdateSet((eb) => ({
+        concept_code: eb.ref('excluded.concept_code'),
+        updated_at: eb.ref('excluded.updated_at'),
+      })))
+      .execute();
+  }
+
+  // The pre-link-table leftover, kept because the link cannot see it: a concept written under the old
+  // `code = id` scheme (commit 0518e7d3) for a facility that has never been projected since, so it
+  // has no link row for the loop above to have noticed a move from. Same call, same arguments, same
+  // position (after the write) as both existing projection paths already make it — this function is
+  // what Task 8 routes them through, so dropping it here would silently retire that cleanup.
+  await deleteSupersededIdConcepts(deps, registryRowIdsWithSupersededIdConcept(inputs, { forceOwnIdFor }));
+
+  return { projected: inputs.length, codeChanges };
 }
 
 /**

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { DEFAULT_OBSERVED_FACILITY_SYSTEM, FACILITY_REGISTRY_SYSTEM, observedSystemForFeed } from '@openldr/db';
-import { scanObservedFacilities, resolveObservedFacilities, publishFacilityMap, publishRegistryConcepts, projectRegistryRows, captureObservedFacility, captureObservedFacilityFromProjection, assertResolvedFacilityInvariant } from './facility-reconcile';
-import { makeReconcileDeps, seedPerformers, seedRegistry, seedMapping } from './test-support/facility-reconcile-fixture';
+import { scanObservedFacilities, resolveObservedFacilities, publishFacilityMap, publishRegistryConcepts, projectRegistryRows, reprojectRegistryRows, captureObservedFacility, captureObservedFacilityFromProjection, assertResolvedFacilityInvariant } from './facility-reconcile';
+import { makeReconcileDeps, seedPerformers, seedRegistry, seedMapping, currentConceptCode } from './test-support/facility-reconcile-fixture';
 
 describe('scanObservedFacilities', () => {
   it('discovers distinct performers and creates concepts', async () => {
@@ -1255,6 +1255,173 @@ describe('projectRegistryRows', () => {
     await expect(
       projectRegistryRows({ ...deps, admin: failingAdmin }, [{ id: 'fac-1', name: 'National Public Health Laboratory' }]),
     ).resolves.toBeUndefined();
+  });
+});
+
+// The mapping-migration layer. A facility's concept code is DERIVED (local_code, else
+// national_code, else its own id on a collision), so it can move without anyone editing that
+// facility — and `term_mappings` rows an operator authored against the old code have to be carried
+// across the move or they silently stop resolving.
+//
+// ⚠ These tests drive `reprojectRegistryRows` DIRECTLY, including where the scenario is really "the
+// operator pressed Publish". Task 8 is what routes `publishRegistryConcepts`/`projectRegistryRows`
+// through this function; until it lands, calling `publishRegistryConcepts` here would exercise the
+// OLD path and test nothing. Passing the whole registry as `rows` is exactly what
+// `publishRegistryConcepts` will hand it.
+describe('reprojectRegistryRows', () => {
+  // ⛔ THE ANCHOR. The audit's FAC-P0-04, sharpened: nobody edits Alpha, yet importing an unrelated
+  // facility whose national_code happens to equal Alpha's local_code makes BOTH rows fall back to
+  // their UUIDs on the next full reprojection — so Alpha's concept code moves off '111317-4', the
+  // mapping authored against '111317-4' points at nothing, and (because the concept write is
+  // upsert-only) the orphaned '111317-4' concept stays selectable in the picker.
+  it('ANCHOR: an unrelated facility colliding on a code does not orphan an existing mapping', async () => {
+    const deps = await makeReconcileDeps();
+    await seedPerformers(deps, [['BALAB', 3]]);
+    await seedRegistry(deps, { id: 'fac-A', name: 'Alpha Clinic', localCode: '111317-4' });
+    await reprojectRegistryRows(deps, [{ id: 'fac-A', name: 'Alpha Clinic' }]);
+    await seedMapping(deps, { fromSystem: DEFAULT_OBSERVED_FACILITY_SYSTEM, fromCode: 'BALAB', toSystem: FACILITY_REGISTRY_SYSTEM, toCode: '111317-4' });
+
+    // The unrelated import. Alpha is untouched; Beta merely claims the same string as a NATIONAL
+    // code, which is legal (local_code and (national_system, national_code) are separately unique).
+    await seedRegistry(deps, { id: 'fac-B', name: 'Beta Clinic', nationalSystem: 'urn:tz:hfr', nationalCode: '111317-4' });
+    await reprojectRegistryRows(deps, [{ id: 'fac-A', name: 'Alpha Clinic' }, { id: 'fac-B', name: 'Beta Clinic' }]);
+
+    const resolved = await resolveObservedFacilities(deps);
+    const row = resolved.find((r) => r.sourceCode === 'BALAB')!;
+    expect(row.registryId).toBe('fac-A');
+    expect(row.targetMissing).toBe(false);
+  });
+
+  it('follows a local_code rename on a facility that already has a mapping', async () => {
+    const deps = await makeReconcileDeps();
+    await seedPerformers(deps, [['BALAB', 1]]);
+    await seedRegistry(deps, { id: 'fac-A', name: 'Alpha', localCode: 'OLD-1' });
+    await reprojectRegistryRows(deps, [{ id: 'fac-A', name: 'Alpha' }]);
+    await seedMapping(deps, { fromSystem: DEFAULT_OBSERVED_FACILITY_SYSTEM, fromCode: 'BALAB', toSystem: FACILITY_REGISTRY_SYSTEM, toCode: 'OLD-1' });
+
+    await deps.internalDb.updateTable('facility_registry').set({ local_code: 'NEW-1' }).where('id', '=', 'fac-A').execute();
+    const r = await reprojectRegistryRows(deps, [{ id: 'fac-A', name: 'Alpha' }]);
+
+    expect(r.codeChanges).toEqual([{ registryId: 'fac-A', from: 'OLD-1', to: 'NEW-1', mappingsMigrated: 1 }]);
+    const resolved = await resolveObservedFacilities(deps);
+    expect(resolved.find((x) => x.sourceCode === 'BALAB')!.registryId).toBe('fac-A');
+  });
+
+  // The upsert-only write is what leaves the ghost: nothing removes the concept a facility USED to
+  // project as, so it stays in the mapping picker, selectable, pointing at a code no facility
+  // resolves through any more.
+  it('leaves no ghost concept behind after a code change', async () => {
+    const deps = await makeReconcileDeps();
+    await seedRegistry(deps, { id: 'fac-A', name: 'Alpha', localCode: 'OLD-1' });
+    await reprojectRegistryRows(deps, [{ id: 'fac-A', name: 'Alpha' }]);
+    await deps.internalDb.updateTable('facility_registry').set({ local_code: 'NEW-1' }).where('id', '=', 'fac-A').execute();
+    await reprojectRegistryRows(deps, [{ id: 'fac-A', name: 'Alpha' }]);
+
+    const codes = await deps.internalDb.selectFrom('terminology_concepts')
+      .select('code').where('system', '=', FACILITY_REGISTRY_SYSTEM).execute();
+    expect(codes.map((c) => c.code)).toEqual(['NEW-1']);
+  });
+
+  // ⛔ Proves the rewrite went through `admin.termMappings.update` and not a raw
+  // `UPDATE term_mappings`. `term_mappings` is authoritative and `concept_map_elements` is its
+  // mirror; a direct UPDATE would leave this mirror row still pointing at 'OLD-1' (and would skip
+  // `reference_change_log` capture), which no assertion on `term_mappings` alone would catch.
+  it('mirrors the migrated mapping into concept_map_elements', async () => {
+    const deps = await makeReconcileDeps();
+    await seedRegistry(deps, { id: 'fac-A', name: 'Alpha', localCode: 'OLD-1' });
+    await reprojectRegistryRows(deps, [{ id: 'fac-A', name: 'Alpha' }]);
+    await seedMapping(deps, { fromSystem: DEFAULT_OBSERVED_FACILITY_SYSTEM, fromCode: 'BALAB', toSystem: FACILITY_REGISTRY_SYSTEM, toCode: 'OLD-1' });
+
+    await deps.internalDb.updateTable('facility_registry').set({ local_code: 'NEW-1' }).where('id', '=', 'fac-A').execute();
+    await reprojectRegistryRows(deps, [{ id: 'fac-A', name: 'Alpha' }]);
+
+    const mirror = await deps.internalDb.selectFrom('concept_map_elements')
+      .select(['target_code']).where('target_system', '=', FACILITY_REGISTRY_SYSTEM).execute();
+    expect(mirror.map((m) => m.target_code)).toEqual(['NEW-1']);
+  });
+
+  // The move runs BOTH ways. Deleting the colliding facility releases the human code, so the
+  // survivor stops falling back to its UUID — and the mapping authored against that UUID has to
+  // follow it back, or resolving an operator's collision silently breaks their mapping.
+  it('follows the code back when a collision is resolved by deleting the other facility', async () => {
+    const deps = await makeReconcileDeps();
+    await seedPerformers(deps, [['BALAB', 1]]);
+    await seedRegistry(deps, { id: 'fac-A', name: 'Alpha', localCode: '111317-4' });
+    await seedRegistry(deps, { id: 'fac-B', name: 'Beta', nationalSystem: 'urn:tz:hfr', nationalCode: '111317-4' });
+    await reprojectRegistryRows(deps, [{ id: 'fac-A', name: 'Alpha' }, { id: 'fac-B', name: 'Beta' }]);
+    await seedMapping(deps, { fromSystem: DEFAULT_OBSERVED_FACILITY_SYSTEM, fromCode: 'BALAB', toSystem: FACILITY_REGISTRY_SYSTEM, toCode: 'fac-A' });
+
+    await deps.internalDb.deleteFrom('facility_registry').where('id', '=', 'fac-B').execute();
+    await reprojectRegistryRows(deps, [{ id: 'fac-A', name: 'Alpha' }]);
+
+    expect(await currentConceptCode(deps, 'fac-A')).toBe('111317-4');
+    const resolved = await resolveObservedFacilities(deps);
+    expect(resolved.find((x) => x.sourceCode === 'BALAB')!.registryId).toBe('fac-A');
+  });
+
+  // ⛔ The delete of the OLD concept must never remove a code some OTHER row is projecting as RIGHT
+  // NOW. An operator renaming Alpha and handing its old code to a brand-new facility in the same
+  // import is the realistic version: an unguarded "delete whatever `from` was" would wipe the
+  // concept `importRows` had just written for Beta, making a live facility unpickable.
+  it('does not delete an old code another facility in the same batch has just taken over', async () => {
+    const deps = await makeReconcileDeps();
+    await seedPerformers(deps, [['BALAB', 1]]);
+    await seedRegistry(deps, { id: 'fac-A', name: 'Alpha', localCode: 'X' });
+    await reprojectRegistryRows(deps, [{ id: 'fac-A', name: 'Alpha' }]);
+    await seedMapping(deps, { fromSystem: DEFAULT_OBSERVED_FACILITY_SYSTEM, fromCode: 'BALAB', toSystem: FACILITY_REGISTRY_SYSTEM, toCode: 'X' });
+
+    await deps.internalDb.updateTable('facility_registry').set({ local_code: 'Y' }).where('id', '=', 'fac-A').execute();
+    await seedRegistry(deps, { id: 'fac-B', name: 'Beta', localCode: 'X' });
+    await reprojectRegistryRows(deps, [{ id: 'fac-A', name: 'Alpha' }, { id: 'fac-B', name: 'Beta' }]);
+
+    const codes = await deps.internalDb.selectFrom('terminology_concepts')
+      .select('code').where('system', '=', FACILITY_REGISTRY_SYSTEM).execute();
+    expect(codes.map((c) => c.code).sort()).toEqual(['X', 'Y']);
+    // And the mapping still followed ALPHA, not the code — it was authored when 'X' meant Alpha.
+    const resolved = await resolveObservedFacilities(deps);
+    expect(resolved.find((x) => x.sourceCode === 'BALAB')!.registryId).toBe('fac-A');
+  });
+
+  // ⛔ `facility_concept_projection.registry_id` is a FOREIGN KEY, and `rows` is whatever the caller
+  // handed in — a facility deleted between the caller's own read and this call is not hypothetical
+  // (the CSV importer and the delete route both write before projecting). Linking a row that no
+  // longer exists would throw and lose the projection for every legitimate row in the same batch.
+  it('projects a batch containing a facility that no longer exists without failing the whole batch', async () => {
+    const deps = await makeReconcileDeps();
+    await seedRegistry(deps, { id: 'fac-A', name: 'Alpha', localCode: 'A-1' });
+
+    const r = await reprojectRegistryRows(deps, [{ id: 'fac-A', name: 'Alpha' }, { id: 'fac-gone', name: 'Deleted' }]);
+
+    expect(r.projected).toBe(2);
+    expect(await currentConceptCode(deps, 'fac-A')).toBe('A-1');
+    expect(await currentConceptCode(deps, 'fac-gone')).toBeNull();
+  });
+
+  it('is a no-op for an empty rows array', async () => {
+    const deps = await makeReconcileDeps();
+    const before = await deps.admin.codingSystems.getByUrl(FACILITY_REGISTRY_SYSTEM);
+
+    expect(await reprojectRegistryRows(deps, [])).toEqual({ projected: 0, codeChanges: [] });
+
+    expect(await deps.admin.codingSystems.getByUrl(FACILITY_REGISTRY_SYSTEM)).toEqual(before);
+    expect(await deps.internalDb.selectFrom('facility_concept_projection').selectAll().execute()).toEqual([]);
+  });
+
+  // Steady state — every facility save after the first, and every re-Publish over an unchanged
+  // registry. Nothing moved, so no mapping lookup and no concept delete may run at all. Spies on
+  // `selectFrom` (not on a store method) because `term_mappings` is read with a raw Kysely builder;
+  // a table-name assertion is the only vantage point that would fail if the gating regressed.
+  it('does not touch term_mappings when nothing moved', async () => {
+    const deps = await makeReconcileDeps();
+    await seedRegistry(deps, { id: 'fac-A', name: 'Alpha', localCode: 'OLD-1' });
+    await reprojectRegistryRows(deps, [{ id: 'fac-A', name: 'Alpha' }]);
+
+    const selectFromSpy = vi.spyOn(deps.internalDb, 'selectFrom');
+    const r = await reprojectRegistryRows(deps, [{ id: 'fac-A', name: 'Alpha' }]);
+
+    expect(r.codeChanges).toEqual([]);
+    expect(selectFromSpy.mock.calls.map((args) => args[0])).not.toContain('term_mappings');
+    selectFromSpy.mockRestore();
   });
 });
 

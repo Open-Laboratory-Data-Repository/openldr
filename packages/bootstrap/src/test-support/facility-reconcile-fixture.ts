@@ -152,3 +152,20 @@ export async function seedMapping(deps: ReconcileDeps, input: SeedMappingInput):
     isActive: input.isActive ?? true,
   });
 }
+
+/**
+ * The code facility `registryId` CURRENTLY projects as, read from `facility_concept_projection`.
+ *
+ * Deliberately reads the link table rather than recomputing `local_code ?? national_code`: the link
+ * is the durable record of what was ACTUALLY written, collision fallback included, and recomputing
+ * here would make a test agree with an implementation bug it is supposed to catch. `null` when the
+ * facility has never been projected.
+ */
+export async function currentConceptCode(deps: ReconcileDeps, registryId: string): Promise<string | null> {
+  const row = await deps.internalDb
+    .selectFrom('facility_concept_projection')
+    .select(['concept_code'])
+    .where('registry_id', '=', registryId)
+    .executeTakeFirst();
+  return row?.concept_code ?? null;
+}
