@@ -347,11 +347,14 @@ export function ObservedTab({ actionsPortalTarget }: ObservedTabProps = {}): JSX
                 // DIFFERENT facilities, and Remove mapping (which deletes every active outgoing
                 // candidate) is precisely the action the state calls for.
                 //
-                // ⚠ Known residual, deliberately not closed here: a row whose ONLY mappings are
-                // non-SAME-AS has all four flags false (the resolver says nothing about such rows —
-                // see `ResolvedFacility.ambiguous`'s ⚠ note), so it reads as "Map", not "Edit".
-                // Closing it needs a NEW resolver field for the unsupported semantic, which is
-                // Task 12's scope. Mitigated meanwhile: `openMapping` above passes
+                // ⚠ Known residual, still OPEN at the end of this slice: a row whose ONLY mappings
+                // are non-SAME-AS has all four flags false (the resolver says nothing about such
+                // rows — see `ResolvedFacility.ambiguous`'s ⚠ note), so it reads as "Map", not
+                // "Edit". Closing it needs a NEW resolver field for the unsupported semantic, which
+                // nothing has built: migration 078 records such mappings in
+                // `facility_mapping_conflicts` as `unsupported_map_type` (a separate table the
+                // review queue reads), but `ResolvedFacility` gained no field for them, so this row
+                // still cannot tell. Mitigated meanwhile: `openMapping` above passes
                 // `mappings.outgoing[0]` regardless of these flags, so "Map" still opens the dialog
                 // in EDIT mode against the existing row with the Map type select reachable.
                 const hasMapping = !!(row.resolvedVia || row.targetMissing || row.nonFacilityTarget || row.ambiguous);

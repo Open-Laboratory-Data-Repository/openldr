@@ -473,10 +473,14 @@ export function TermMappingDialog({
                   // `['ACTIVE', 'DRAFT']` sends NO filter at all and the server answers with every
                   // status — RETIRED included. The registry-locked flow is the facility mapping
                   // picker, and a deleted facility's concept is RETIRED rather than deleted
-                  // (`retireRegistryConcepts`, packages/bootstrap/src/facility-reconcile.ts) so
-                  // historical reports still resolve through it. Asking for two statuses here would
-                  // make that retirement invisible and keep offering deleted facilities as mapping
-                  // targets — the exact ghost the retirement exists to remove. Nothing is lost:
+                  // (`retireRegistryConcepts`, packages/bootstrap/src/facility-reconcile.ts) so the
+                  // operator's existing mapping keeps naming a concept that EXISTS instead of a
+                  // dangling code. (It does NOT stay resolvable — `resolveObservedFacilities`
+                  // re-derives codes from `facility_registry` and never reads the concept, so a
+                  // deleted facility reads as `targetMissing`; see that function's doc comment.)
+                  // Asking for two statuses here would make the retirement invisible and keep
+                  // offering deleted facilities as mapping targets — the exact ghost the retirement
+                  // exists to remove. Nothing is lost:
                   // `registryConceptRows` writes registry concepts as ACTIVE unconditionally, so
                   // there is no such thing as a DRAFT facility to exclude.
                   //

@@ -439,8 +439,12 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
   // count per row — ranked by that count, which is the entire reason this surface exists over the
   // generic `/terminology` page (an operator triages the highest-volume unmapped strings first).
   //
-  // ⚠ Route ordering: registered BEFORE `/api/facilities/:id` below — Fastify would otherwise match
-  // the parameterised route first and read "observed" as a facility id.
+  // ⚠ Route ordering is NOT load-bearing, contrary to what this comment used to assert. Fastify's
+  // router (find-my-way) always prefers a STATIC segment over a parametric one regardless of
+  // registration order, so this route would still win over `/api/facilities/:id` below if it were
+  // registered after it — measured with a standalone Fastify probe; see the same ⚠ note on
+  // `/api/facilities/mapping-conflicts`. It sits above `:id` for legibility, with this file's other
+  // static `/api/facilities/*` routes.
   //
   // Task 11 (whole-branch review round 2, Fix 1): `reportCount` now comes straight off
   // `ResolvedFacility` — `resolveObservedFacilities` sums it while folding raw
@@ -836,8 +840,12 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     // reported back verbatim rather than swallowed — never treated as "safe to write".
     //
     // ⛔ Wrapped: `parseFacilityCsv` (reached inside `importFacilities`, before any DB access on
-    // this preview path) throws on malformed CSV rather than returning a result — see
-    // `isCsvParseError`'s doc comment. Only a RECOGNISED parse failure becomes a 400; anything
+    // this preview path) can throw rather than return a result — see `isCsvParseError`'s doc
+    // comment. It throws only on STRUCTURALLY UNPARSEABLE input, i.e. text csv-parse cannot
+    // tokenise at all, such as an unterminated quote. A merely RAGGED row (field count disagreeing
+    // with the header's) does NOT throw: `relax_column_count` is on, and Task 3 made those rows
+    // QUARANTINED and reported with line numbers, which is a normal 200 result carrying
+    // `quarantined`/`blocked`, not an error. Only a RECOGNISED parse failure becomes a 400; anything
     // else is rethrown unchanged and reaches the central error handler as the 500 it is.
     let preview: FacilityImportResult;
     try {

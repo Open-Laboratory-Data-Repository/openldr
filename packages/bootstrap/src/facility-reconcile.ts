@@ -1608,14 +1608,23 @@ export async function reprojectRegistryRows(
  * has to do to the projection.
  *
  * ⛔ Deliberately NOT a delete, and not `terms.delete`. An operator who already mapped an observed
- * code onto this facility has historical `diagnostic_reports` that resolved through this concept; the
- * mapping must keep naming a concept that EXISTS so those reports stay interpretable and the Observed
- * tab does not start reporting `targetMissing` for a decision that was correct when it was made.
- * RETIRED is exactly the split we need: still resolvable, excluded from new selection — the same
- * split `TermPicker`'s ACTIVE-only status filter expresses (see `TermMappingDialog`'s `statuses` prop,
- * which passes `['ACTIVE']` under `lockedTargetSystem` precisely so this retirement takes effect).
- * Leaving the concept ACTIVE, which is what a delete used to do, left a selectable ghost in the
- * picker pointing at a facility that no longer exists.
+ * code onto this facility chose that target deliberately; the mapping must keep naming a concept
+ * that EXISTS, so the choice stays visible in the Observed tab and in `term_mappings` instead of
+ * being silently reduced to a dangling code. Retirement's OTHER half is exclusion from new
+ * selection — the split `TermPicker`'s ACTIVE-only status filter expresses (see
+ * `TermMappingDialog`'s `statuses` prop, which passes `['ACTIVE']` under `lockedTargetSystem`
+ * precisely so this retirement takes effect). Leaving the concept ACTIVE, which is what a delete
+ * used to do, left a selectable ghost in the picker pointing at a facility that no longer exists.
+ *
+ * ⛔ What retirement does NOT do, stated because four places in this codebase used to claim it did:
+ * it does NOT keep the facility resolvable. `resolveObservedFacilities` never reads
+ * `terminology_concepts` at all — it re-derives codes from the live `facility_registry` via
+ * `registryConceptRows` — so retiring the concept is INERT to resolution. Once the registry row is
+ * gone, the mapping resolves as `targetMissing` and reports fall back to the raw performer string.
+ * Measured, and pinned by "retires a deleted facility's concept instead of deleting it, so the
+ * mapping still names something that exists", which runs the whole DELETE sequence and asserts
+ * `targetMissing === true`. Keeping history resolvable would need a different mechanism entirely
+ * (a tombstone the resolver reads), which this slice does not build.
  *
  * ⛔ MUST run BEFORE the `facility_registry` row is deleted. `facility_concept_projection` is the
  * only durable record of what a row actually projected as (collision fallback included — the code is

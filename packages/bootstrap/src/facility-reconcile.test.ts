@@ -2108,20 +2108,39 @@ describe('reprojectRegistryRows', () => {
 // ── Task 9: what a facility DELETE has to do to the projection ─────────────────────────────────
 
 describe('retireRegistryConcepts', () => {
-  // ⛔ RETIRED, never deleted. An operator who already mapped an observed code onto this facility has
-  // historical reports that resolved through the concept; deleting it would leave those mappings
-  // pointing at nothing and the Observed tab reporting `targetMissing` for a decision that was
-  // correct when it was made. Asserting the row still EXISTS (executeTakeFirstOrThrow) is half the
-  // point — a `status` assertion alone would pass against a store that deleted the row if the read
-  // tolerated `undefined`.
-  it('retires a deleted facility\'s concept instead of deleting it, so history still resolves', async () => {
+  // ⛔ RETIRED, never deleted — and this test states EXACTLY what that buys, having previously been
+  // titled "…so history still resolves" while never deleting the registry row and never calling
+  // `resolveObservedFacilities`. It passed, but not for the reason its title claimed.
+  //
+  // What retirement actually does: the operator's `term_mappings` row keeps naming a concept that
+  // EXISTS, so the choice they made is still visible and is not silently erased, and the concept is
+  // out of the ACTIVE-only picker so it can never be chosen again.
+  //
+  // ⛔ What it does NOT do — asserted below over the REAL delete sequence, because four places in
+  // this codebase used to claim otherwise: it does not keep the facility RESOLVABLE.
+  // `resolveObservedFacilities` never reads `terminology_concepts` at all — it re-derives codes from
+  // the live `facility_registry` (`registryConceptRows`) — so once the registry row is gone the
+  // mapping resolves as `targetMissing` and the report falls back to the raw performer string.
+  // Retirement is inert to resolution in BOTH directions; its real effect is picker exclusion, which
+  // the next test pins.
+  it('retires a deleted facility\'s concept instead of deleting it, so the mapping still names something that exists', async () => {
     const deps = await makeReconcileDeps();
+    await seedPerformers(deps, [['BALAB', 3]]);
     await seedRegistry(deps, { id: 'fac-A', name: 'Alpha', localCode: 'L-1' });
     await reprojectRegistryRows(deps, [{ id: 'fac-A', name: 'Alpha' }]);
     await seedMapping(deps, { fromSystem: DEFAULT_OBSERVED_FACILITY_SYSTEM, fromCode: 'BALAB', toSystem: FACILITY_REGISTRY_SYSTEM, toCode: 'L-1' });
+    // Not vacuous: it resolves BEFORE the deletion.
+    expect((await resolveObservedFacilities(deps)).find((r) => r.sourceCode === 'BALAB')!.name).toBe('Alpha');
 
+    // The DELETE route's exact sequence (facilities-routes.ts): retire while the link still exists,
+    // remove the row, then reproject whatever the removal freed.
     expect(await retireRegistryConcepts(deps, ['fac-A'])).toBe(1);
+    await deps.internalDb.deleteFrom('facility_registry').where('id', '=', 'fac-A').execute();
+    await reprojectAfterRegistryDelete(deps, { id: 'fac-A', localCode: 'L-1', nationalCode: null });
 
+    // Asserting the row still EXISTS (executeTakeFirstOrThrow) is half the point — a `status`
+    // assertion alone would pass against a store that deleted the row if the read tolerated
+    // `undefined`.
     const concept = await deps.internalDb
       .selectFrom('terminology_concepts')
       .selectAll()
@@ -2129,13 +2148,19 @@ describe('retireRegistryConcepts', () => {
       .where('code', '=', 'L-1')
       .executeTakeFirstOrThrow();
     expect(concept.status).toBe('RETIRED');
-    // And the operator's mapping still names it — retirement is not a mapping edit.
+    // And the operator's mapping is UNCHANGED — retirement is not a mapping edit, and neither is the
+    // deletion. This is what stops the decision being silently erased.
     const mapping = await deps.internalDb
       .selectFrom('term_mappings')
-      .select(['to_system', 'to_code'])
+      .select(['to_system', 'to_code', 'is_active'])
       .where('from_code', '=', 'BALAB')
       .executeTakeFirstOrThrow();
-    expect(mapping).toEqual({ to_system: FACILITY_REGISTRY_SYSTEM, to_code: 'L-1' });
+    expect(mapping).toEqual({ to_system: FACILITY_REGISTRY_SYSTEM, to_code: 'L-1', is_active: true });
+
+    // ⛔ AND THE HONEST HALF: it does NOT still resolve. Measured, not assumed.
+    const row = (await resolveObservedFacilities(deps)).find((r) => r.sourceCode === 'BALAB')!;
+    expect(row.targetMissing).toBe(true);
+    expect(row.name).toBeNull();
   });
 
   // The whole reason RETIRED is the right status rather than a delete: it is exactly the split the
