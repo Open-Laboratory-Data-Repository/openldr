@@ -270,7 +270,8 @@ export function createFacilityRegistryStore(
         const stored = toRecord(
           (await trx.selectFrom('facility_registry').selectAll().where('id', '=', rec.id).executeTakeFirstOrThrow()) as Row,
         );
-        if (capture) await capture.record(trx, 'facility_registry', rec.id, 'upsert', hashOf(stored));
+        // Capture SUSPENDED — see SUSPENDED_REFERENCE_ENTITY_TYPES in reference-change-log.ts. The
+        // `capture` dep stays on this store's interface so re-enabling is one line, not a re-wiring.
         return stored;
       });
     },
@@ -278,7 +279,8 @@ export function createFacilityRegistryStore(
     async remove(id) {
       await db.transaction().execute(async (trx) => {
         await trx.deleteFrom('facility_registry').where('id', '=', id).execute();
-        if (capture) await capture.record(trx, 'facility_registry', id, 'delete', null);
+        // Capture SUSPENDED — see SUSPENDED_REFERENCE_ENTITY_TYPES in reference-change-log.ts. The
+        // `capture` dep stays on this store's interface so re-enabling is one line, not a re-wiring.
       });
     },
   };

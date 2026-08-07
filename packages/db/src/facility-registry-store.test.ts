@@ -23,18 +23,22 @@ describe('createFacilityRegistryStore', () => {
     expect(await s.get('f1')).toMatchObject({ name: 'Dodoma Regional Referral Hospital' });
   });
 
-  it('captures a reference change on registry writes — unconditionally, not filtered by managedOrigin', async () => {
+  // Task 1: facility_registry was registered on the reference-data bus with change capture live but
+  // no serve/apply support — a logged upsert got served to labs as a bogus delete. This test used to
+  // assert the OPPOSITE (that upsert/remove DO land reference_change_log rows); that pinned the
+  // defective behaviour. Capture is now suspended at the source, see SUSPENDED_REFERENCE_ENTITY_TYPES
+  // in reference-change-log.ts.
+  it('does not capture facility_registry into reference_change_log (sync suspended)', async () => {
     const { db } = await store();
-    const seen: { entityType: string; entityId: string; op: string }[] = [];
+    const captured: { entityType: string; entityId: string; op: string }[] = [];
     const s = createFacilityRegistryStore(db as never, {
-      record: async (_trx, entityType, entityId, op) => { seen.push({ entityType, entityId, op }); },
+      record: async (_trx, entityType, entityId, op) => { captured.push({ entityType, entityId, op }); },
     });
-    await s.upsert({ id: 'f9', nationalSystem: 'urn:tz:hfr', nationalCode: '122023-5', name: 'Bahebe', source: 'import' });
+
+    await s.upsert({ id: 'f9', name: 'Clinic', localCode: 'L9', source: 'manual' } as never);
     await s.remove('f9');
-    expect(seen).toEqual([
-      { entityType: 'facility_registry', entityId: 'f9', op: 'upsert' },
-      { entityType: 'facility_registry', entityId: 'f9', op: 'delete' },
-    ]);
+
+    expect(captured).toEqual([]);
   });
 
   it('round-trips extras through the store', async () => {

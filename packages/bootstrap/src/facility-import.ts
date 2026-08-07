@@ -1,4 +1,4 @@
-import { type Kysely, type Transaction, sql } from 'kysely';
+import { type Kysely, sql } from 'kysely';
 import { canonicalHash } from '@openldr/core';
 import { parseFacilityCsv } from '@openldr/terminology';
 import {
@@ -124,48 +124,17 @@ function contentHashOf(rec: FacilityRecord): string {
  * 60 000 — comfortably under Postgres's 65 535-param hard limit, with more headroom than the
  * 23-column arithmetic alone would suggest.
  *
- * ## `reference_change_log` — how many rows, and the batching that matters there too
+ * ## `reference_change_log` — SUSPENDED (facilities-phase-0 Task 1)
  *
- * `facility_registry` is a synced reference-entity type (see reference-change-log.ts's
- * `ENTITY_TYPES`), so every applied row legitimately needs a change_log entry for a lab's import to
- * ever reach central. On the FIRST import of a fresh register (the dominant real case — an empty or
- * sparsely-populated registry), that is up to 14 000 new reference_change_log rows. That volume is
- * correct, not a bug to eliminate — it is the record of 14 000 distinct entities that now need to sync.
- *
- * What DOES need batching is how those rows get written. The store's `capture.record()` binding
- * (`recordReferenceChange`) does one SELECT (find the entity's latest logged state) plus a conditional
- * INSERT — calling it per row, 14 000 times, is 14 000-28 000 sequential round trips even inside a
- * single transaction. This function splits on the existing-id lookup it already needs (to report
- * `created`/`updated`):
- *   - **Created rows** (id not already in `facility_registry`) are assumed to never hit
- *     `recordReferenceChange`'s dedup-skip: that skip only fires when the latest logged op is
- *     `'upsert'` with a matching content_hash, and under normal write paths an id currently absent
- *     from `facility_registry` has no logged `'upsert'` as its latest state (the only way to be
- *     absent is to have never been written, or to have been logged `'delete'` most recently —
- *     either way the next op is written unconditionally). So created rows skip the SELECT entirely
- *     and go straight into one batched multi-row `INSERT INTO reference_change_log` (chunked at
- *     `CHUNK` rows) — for the dominant first-import case this collapses the capture leg from up to
- *     14 000 round trips to a small, constant number of statements.
- *     ⚠ This is NOT airtight against a raw/manual delete: `DELETE FROM facility_registry` run
- *     outside `store.remove()` (which itself calls `capture.record(..., 'delete', null)`) leaves
- *     `reference_change_log`'s latest entry for that id as `'upsert'`. A subsequent re-import of the
- *     same id is then misclassified as `created` (the row IS absent from `facility_registry`) and
- *     takes this fast path — producing a second, identical `'upsert'` log row that `recordReferenceChange`
- *     would otherwise have deduped away. Reachable only via a raw/manual delete that bypasses the
- *     store, so harmless in practice, but real: do not read the paragraph above as a proof with no
- *     counter-example.
- *   - **Updated rows** (id already present) still go through `capture.record()` per row, one at a
- *     time, because whether their content actually changed can only be answered by the dedup check
- *     `recordReferenceChange` already owns — reimplementing that comparison here would either
- *     duplicate its logic (drift risk: two hash-compare implementations disagreeing over time) or
- *     require its own extra bulk-fetch-and-compare pass, which is a reasonable follow-up but is
- *     deliberately NOT built in this task. A re-import of an already-imported register (the idempotent
- *     case the tests assert) is therefore the slower path — bounded by how many rows genuinely already
- *     exist, not by the full register size — and still correctly produces ZERO new change_log rows
- *     when nothing changed.
- *
- * `deps.capture` is optional; passing nothing skips reference_change_log entirely (no rows written,
- * import still applies to `facility_registry`).
+ * This import used to also write `reference_change_log` rows for every applied row — batched for
+ * created rows, per-row through `deps.capture.record()` for updated rows (the design that batching
+ * split is history now; see git blame if you need the "why batch at all" reasoning). It doesn't
+ * anymore: `facility_registry` was registered as a synced reference-entity type before its serve and
+ * apply cases existed, which made every upsert this importer logged reach a lab as a bogus DELETE
+ * (`sync-serve.ts`'s `fetchReferenceBody` had no case for it, so a null body downgraded the record).
+ * See `SUSPENDED_REFERENCE_ENTITY_TYPES` in `reference-change-log.ts`. `deps.capture` stays on
+ * `FacilityImportDeps` — unused for now — so re-enabling is restoring this section, not reshaping
+ * the deps the CLI and HTTP route already pass in.
  *
  * `managed_origin` is never set here — it stays NULL on every imported row (see facility-csv.ts's
  * docblock: the sync APPLIER stamps `'central'` on arrival, not an authoring path like this one).
@@ -269,21 +238,12 @@ export async function importFacilities(
     const rows = merged.map((r) => ({ ...facilityRecordToRow(r), updated_at: sql`now()` }));
     await insertBatchPg(trx as unknown as Kysely<any>, 'facility_registry', rows as unknown as Record<string, unknown>[]);
 
-    if (deps.capture) {
-      const createdRows: { entity_type: 'facility_registry'; entity_id: string; op: 'upsert'; content_hash: string }[] = [];
-      for (const rec of merged) {
-        if (existingById.has(rec.id)) continue; // updated rows go through capture.record below
-        createdRows.push({ entity_type: 'facility_registry', entity_id: rec.id, op: 'upsert', content_hash: contentHashOf(rec) });
-      }
-      for (const rowChunk of chunk(createdRows, CHUNK)) {
-        await (trx as Transaction<InternalSchema>).insertInto('reference_change_log').values(rowChunk).execute();
-      }
-
-      for (const rec of merged) {
-        if (!existingById.has(rec.id)) continue; // created rows were already batched above
-        await deps.capture.record(trx, 'facility_registry', rec.id, 'upsert', contentHashOf(rec));
-      }
-    }
+    // Capture SUSPENDED (Task 1 of the facilities-phase-0 slice) — see SUSPENDED_REFERENCE_ENTITY_TYPES
+    // in reference-change-log.ts. This batch import path used to write reference_change_log rows
+    // directly (bypassing capture.record for the fast "created" leg — see the docblock above) AND call
+    // deps.capture.record per updated row; both are gone now that facility_registry is not in
+    // ReferenceEntityType. `deps.capture` stays on FacilityImportDeps so re-enabling is restoring this
+    // block, not re-wiring the deps shape.
   });
 
   // Fix 1 (mapping-ux report): project every written row into FACILITY_REGISTRY_SYSTEM, outside the

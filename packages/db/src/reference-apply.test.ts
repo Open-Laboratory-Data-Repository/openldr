@@ -264,4 +264,16 @@ describe('applyReferenceChange', () => {
     expect(row?.connector_id).toBe('central-conn');
     await db.destroy();
   });
+
+  // Task 1: facility_registry is registered on the reference bus but has neither a serve nor an
+  // apply case — an older central can still hold logged rows for it. The guard must name the real
+  // cause (suspended) rather than fall through to the generic "unknown entityType" default.
+  it('rejects a suspended facility_registry record by name, not as an unknown entity', async () => {
+    const db = await makeMigratedDb();
+    const apply = createReferenceApplier(db);
+    await expect(
+      apply({ entityType: 'facility_registry' as never, entityId: 'fac-1', op: 'upsert', body: {} }),
+    ).rejects.toThrow(/facility_registry.*suspended/i);
+    await db.destroy();
+  });
 });

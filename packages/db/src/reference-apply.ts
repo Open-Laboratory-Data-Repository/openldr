@@ -1,6 +1,6 @@
 import { type Kysely, sql } from 'kysely';
 import type { InternalSchema } from './schema/internal';
-import type { ReferenceEntityType, ReferenceOp } from './reference-change-log';
+import { SUSPENDED_REFERENCE_ENTITY_TYPES, type ReferenceEntityType, type ReferenceOp } from './reference-change-log';
 
 // Distributed sync S2: capture-free reference-data applier. A LAB uses this to apply reference
 // changes PULLED from central. Unlike the capturing config stores (createDashboardStore/…), this
@@ -310,6 +310,12 @@ export function createReferenceApplier(db: Kysely<InternalSchema>) {
     // Validate before writing: an upsert must carry a body (guards the non-null cast in the row
     // builders and avoids an opaque NOT NULL violation deep in the insert).
     if (rec.op === 'upsert' && rec.body == null) throw new Error('applyReferenceChange: upsert requires body');
+    if (SUSPENDED_REFERENCE_ENTITY_TYPES.includes(rec.entityType)) {
+      throw new Error(
+        `applyReferenceChange: entityType ${rec.entityType} is suspended — its serve/apply support ` +
+        `is not implemented. See SUSPENDED_REFERENCE_ENTITY_TYPES in reference-change-log.ts.`,
+      );
+    }
     switch (rec.entityType) {
       case 'dashboard':
         return upsertOrDelete(db, 'dashboards', rec.entityId, rec.op, rec.body, dashboardRow);
