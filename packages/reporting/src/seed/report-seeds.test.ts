@@ -11,7 +11,7 @@ import {
   antibioticNormalizeSql,
   type SeedDataDrivenReportsDeps,
 } from './report-seeds';
-import { pairRects, toPt } from '@openldr/report-designer';
+import { pairRects, toPt, type ReportDesign } from '@openldr/report-designer';
 
 // In-memory fakes — no real Kysely instance needed (unlike `packages/bootstrap/src/seed.ts`,
 // which builds `customQueries` from a real DB handle; here we inject fakes directly to unit-test
@@ -1033,6 +1033,73 @@ describe('SEED_QUERIES — the facility filter filters on the report performer',
     for (const [dialect, sql] of Object.entries(q.sql)) {
       expect(sql, `${dialect} attributes by patient`).not.toMatch(/sr\.patient_id in \(select patient_id from diagnostic_reports/);
       expect(sql, `${dialect}`).toContain('select l.request_id from lab_results l join diagnostic_reports d on d.specimen_id = l.specimen_id');
+    }
+  });
+});
+
+describe('SEED_DESIGNS — every report carries a letterhead and a scope panel', () => {
+  const simple = () => SEED_DESIGNS.filter((d) => d.id !== 'rt-clinical-micro');
+  const el = (d: ReportDesign, suffix: string) =>
+    d.pages[0].elements.find((e) => e.id === `${d.id}${suffix}`)!;
+
+  it('gives every aggregate report the identity band', () => {
+    // They were three elements — title, date, table — and read as unbranded printouts beside the
+    // clinical report.
+    for (const d of simple()) {
+      expect(el(d, '-logo').src, `${d.id} has no logo`).toBe('{{lab.logo}}');
+      expect(el(d, '-labname').text, `${d.id} has no lab name`).toBe('{{lab.name}}');
+      expect(el(d, '-rule1'), `${d.id} has no closing rule`).toBeDefined();
+    }
+  });
+
+  it('describes its own scope from its own declared parameters', () => {
+    for (const d of simple()) {
+      const rows = el(d, '-meta').rows ?? [];
+      expect(rows[rows.length - 1], `${d.id} does not stamp Generated`).toEqual(['Generated', '{{date}}']);
+      for (const p of d.parameters) {
+        const expected = p.type === 'daterange' ? 'Reporting period' : p.label;
+        expect(rows.map((r) => r[0]), `${d.id} omits ${p.key}`).toContain(expected);
+      }
+    }
+  });
+
+  it('sizes the panel to its pairs, in POINTS', () => {
+    // ⛔ pairRects returns boxes past the box bottom and the drawer CLIPS them — an over-full panel
+    // loses a row silently. The rect is converted with toPt (×0.75) while KV_* are already points;
+    // the previous slice shipped a clipped row by mixing those.
+    for (const d of simple()) {
+      const meta = el(d, '-meta');
+      const n = (meta.rows ?? []).length;
+      const pairs = pairRects(
+        { x: meta.rect.x * 0.75, y: meta.rect.y * 0.75, w: meta.rect.w * 0.75, h: meta.rect.h * 0.75 },
+        n, 'inline', meta.panelColumns ?? 1, false,
+      );
+      const last = pairs[n - 1];
+      expect(last.y + last.h, `${d.id} pair ${n} is clipped`)
+        .toBeLessThanOrEqual(meta.rect.y * 0.75 + meta.rect.h * 0.75);
+    }
+  });
+
+  it('keeps every element clear of the page-number band', () => {
+    // drawPageFooter writes at hPt - 24 = 817.89pt ≈ 1090px on A4.
+    for (const d of simple()) {
+      for (const e of d.pages[0].elements) {
+        expect(e.rect.y + e.rect.h, `${d.id}/${e.id} collides with the page number`)
+          .toBeLessThanOrEqual(1085);
+      }
+    }
+  });
+
+  it('leaves no element overprinting another', () => {
+    for (const d of simple()) {
+      const els = d.pages[0].elements;
+      for (let i = 0; i < els.length; i += 1) {
+        for (let j = i + 1; j < els.length; j += 1) {
+          const a = els[i].rect, b = els[j].rect;
+          const hit = a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+          if (hit) expect.fail(`${d.id}: ${els[i].id} overprints ${els[j].id}`);
+        }
+      }
     }
   });
 });
