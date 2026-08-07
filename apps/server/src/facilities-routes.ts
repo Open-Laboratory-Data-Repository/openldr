@@ -682,7 +682,17 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     // rebuild talks to the EXTERNAL warehouse, and an operator's facility save must not fail because
     // that warehouse hiccuped. Coalescing (facility-job-store.ts's `activeKeyFor`) means a bulk
     // import enqueues one job, not one per row — this route never needs to de-duplicate on its own.
-    await ctx.facilityJobs.enqueue({ kind: 'facility-map-rebuild', requestedBy: actorFromRequest(req).actorId });
+    //
+    // Wrapped, and this sits before `recordAudit` — `recordAudit` is itself deliberately contained
+    // (see record-audit.ts's `safeRecord`) so auditing can never fail a mutation, and leaving this
+    // call unwrapped would defeat that: an enqueue throw would both 500 an already-committed create
+    // and skip the audit write below it. Logged rather than swallowed silently, since a lost enqueue
+    // means a permanently stale dimension until something else notices.
+    try {
+      await ctx.facilityJobs.enqueue({ kind: 'facility-map-rebuild', requestedBy: actorFromRequest(req).actorId });
+    } catch (err) {
+      ctx.logger.error({ err, facilityId: created.id }, 'failed to enqueue a facility-map-rebuild job after creating a facility');
+    }
 
     await recordAudit(ctx, req, { action: 'facility.create', entityType: 'facility', entityId: created.id, before: null, after: created });
     reply.code(201);
@@ -758,8 +768,15 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     // must track the new name, not just a create-time snapshot.
     await projectRegistryRows({ internalDb: ctx.internalDb, admin: ctx.terminology.admin }, [{ id: after.id, name: after.name }]);
 
-    // Task 5: same reasoning as POST above — enqueue, never rebuild inline.
-    await ctx.facilityJobs.enqueue({ kind: 'facility-map-rebuild', requestedBy: actorFromRequest(req).actorId });
+    // Task 5: same reasoning as POST above — enqueue, never rebuild inline. Wrapped for the same
+    // reason as POST's call too: it sits before `recordAudit` (deliberately contained, see
+    // record-audit.ts), so an unwrapped throw here would both 500 an already-committed update and
+    // skip the audit write. Logged, not swallowed — a lost enqueue leaves the dimension stale.
+    try {
+      await ctx.facilityJobs.enqueue({ kind: 'facility-map-rebuild', requestedBy: actorFromRequest(req).actorId });
+    } catch (err) {
+      ctx.logger.error({ err, facilityId: id }, 'failed to enqueue a facility-map-rebuild job after updating a facility');
+    }
 
     await recordAudit(ctx, req, { action: 'facility.update', entityType: 'facility', entityId: id, before, after });
     return after;
@@ -809,8 +826,15 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     });
 
     // Task 5: removing a facility changes what the dimension should contain, same reasoning as
-    // POST/PUT above — enqueue, never rebuild inline.
-    await ctx.facilityJobs.enqueue({ kind: 'facility-map-rebuild', requestedBy: actorFromRequest(req).actorId });
+    // POST/PUT above — enqueue, never rebuild inline. Wrapped for the same reason as those two:
+    // it sits before `recordAudit` (deliberately contained, see record-audit.ts), so an unwrapped
+    // throw here would both 500 an already-committed delete and skip the audit write. Logged, not
+    // swallowed — a lost enqueue leaves the dimension stale.
+    try {
+      await ctx.facilityJobs.enqueue({ kind: 'facility-map-rebuild', requestedBy: actorFromRequest(req).actorId });
+    } catch (err) {
+      ctx.logger.error({ err, facilityId: id }, 'failed to enqueue a facility-map-rebuild job after deleting a facility');
+    }
 
     await recordAudit(ctx, req, { action: 'facility.delete', entityType: 'facility', entityId: id, before, after: null });
     return { ok: true };

@@ -405,8 +405,8 @@ describe('importFacilities enqueues a facility-map-rebuild', () => {
   }
 
   // ⛔ The load-bearing assertion of this whole task. `importFacilities` calls `enqueue` once per
-  // import (after the whole batch write commits), not once per row — proven at the code review
-  // stage by temporarily making it call `enqueue` once per row instead: with the real store's
+  // import (after the whole batch write commits), not once per row — proven at implementation
+  // time by temporarily making it call `enqueue` once per row instead: with the real store's
   // coalescing (facility-job-store.ts's `activeKeyFor`) intact this assertion still held (only the
   // first of 50 calls finds the identity free), and disabling that coalescing made it fail with 50
   // jobs. So this assertion holds for TWO independent reasons — the call site's own shape AND the

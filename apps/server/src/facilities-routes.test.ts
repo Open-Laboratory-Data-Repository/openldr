@@ -1067,6 +1067,12 @@ function fakeImportCtx(db: any) {
       upsert: async () => { throw new Error('not used by the import route'); },
       remove: async () => {},
     },
+    // Real store (not a hand-rolled fake), same reasoning as `fakeCreateCtx` above: the import
+    // route passes `ctx.facilityJobs` straight into `importFacilities`' `deps.facilityJobs`, and
+    // an undefined/fake-without-`.enqueue` value would leave that call a permanent silent no-op
+    // (it sits behind `if (deps.facilityJobs)`) in every test using this context — including the
+    // one below asserting an applied import actually queues a rebuild.
+    facilityJobs: createFacilityJobStore(db),
     __audit: audit,
   } as any;
 }
@@ -1186,6 +1192,25 @@ describe('POST /api/facilities/import', () => {
     expect(res.json()).toMatchObject({ parsed: 2, created: 2, updated: 0, duplicates: 0 });
     const rows = await db.selectFrom('facility_registry').selectAll().execute();
     expect(rows).toHaveLength(2);
+  });
+
+  // Task 5, closing the gap the reviewer found: `fakeImportCtx` above previously had no
+  // `facilityJobs` store at all (`ctx.facilityJobs` was `undefined`), so `importFacilities`'s own
+  // `if (deps.facilityJobs)` guard made every enqueue call in every import-route test a silent
+  // no-op — 120/120 tests stayed green even with `facilityJobs: ctx.facilityJobs` deleted from the
+  // route's `deps` object at the top of this describe block's route. This test exercises the real
+  // `createFacilityJobStore` now wired into `fakeImportCtx` and is the one that actually pins the
+  // wiring: an HTTP CSV upload through this route must leave a `facility-map-rebuild` job queued,
+  // the same as a single facility create/update/delete does.
+  it('an applied import leaves a facility-map-rebuild job queued', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const csv = facilityCsv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,']);
+    const res = await app.inject({ method: 'POST', url: '/api/facilities/import', payload: { csv, nationalSystem: SYSTEM, apply: true } });
+    expect(res.statusCode).toBe(200);
+    const queued = await ctx.facilityJobs.listUnresolved();
+    expect(queued.map((j: any) => j.kind)).toEqual(['facility-map-rebuild']);
   });
 
   it('the applied mutation is audited as facility.import', async () => {
