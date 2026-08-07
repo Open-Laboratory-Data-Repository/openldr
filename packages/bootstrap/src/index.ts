@@ -1518,8 +1518,8 @@ export { migrateWorkflowSecrets } from './workflow-secret-migrate';
 export { mergePatients } from './patient-merge';
 export { importFacilities } from './facility-import';
 export type { FacilityImportDeps, FacilityImportOptions, FacilityImportResult } from './facility-import';
-export { scanObservedFacilities, resolveObservedFacilities, publishFacilityMap, projectRegistryRows, retireRegistryConcepts, reprojectAfterRegistryDelete } from './facility-reconcile';
-export type { ReconcileDeps, ScanResult, ScanOptions, ResolvedFacility, ResolvedVia, PublishResult } from './facility-reconcile';
+export { scanObservedFacilities, resolveObservedFacilities, publishFacilityMap, projectRegistryRows, retireRegistryConcepts, reprojectAfterRegistryDelete, listFacilityMappingConflicts } from './facility-reconcile';
+export type { ReconcileDeps, ScanResult, ScanOptions, ResolvedFacility, ResolvedVia, PublishResult, FacilityMappingConflict } from './facility-reconcile';
 export {
   enrollSite,
   listSites,

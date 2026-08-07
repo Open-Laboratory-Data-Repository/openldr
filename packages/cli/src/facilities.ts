@@ -3,7 +3,8 @@ import type { Kysely } from 'kysely';
 import { loadConfig } from '@openldr/config';
 import {
   createAppContext, importFacilities, recordAuditEvent, scanObservedFacilities, publishFacilityMap,
-  type AppContext, type ScanResult, type PublishResult,
+  listFacilityMappingConflicts,
+  type AppContext, type ScanResult, type PublishResult, type FacilityMappingConflict,
 } from '@openldr/bootstrap';
 import { referenceCapture, type ExternalSchema } from '@openldr/db';
 import { cliActor } from './cli-actor';
@@ -277,4 +278,62 @@ function formatPublishHuman(result: PublishResult, opts: FacilitiesPublishOpts):
   return opts.apply
     ? `applied: ${counts}`
     : `DRY RUN — nothing written. Rerun with --apply to write.\n${counts}`;
+}
+
+// ── Task 13: the mapping-conflict review queue ─────────────────────────────────────────────────
+
+export interface FacilitiesConflictsOpts {
+  json: boolean;
+}
+
+/**
+ * `openldr facilities conflicts [--json]`
+ *
+ * List every unresolved row of `facility_mapping_conflicts` — the violations migration 078 recorded
+ * (and, for the 'duplicate' kind, DEACTIVATED) when it closed "one active SAME-AS resolution per
+ * observed facility key" at the database. CLI parity for
+ * `GET /api/facilities/mapping-conflicts` (apps/server/src/facilities-routes.ts): both call the
+ * same `listFacilityMappingConflicts`.
+ *
+ * ⚠ Read-only, so — unlike import/scan/publish above — there is no `--apply`, and nothing is
+ * audited. There is no `--all` either: `listFacilityMappingConflicts` filters to `resolved_at is
+ * null` and nothing in CE ever sets that column, so a flag to show settled rows would today be a
+ * flag that changes nothing.
+ */
+export async function runFacilitiesConflicts(opts: FacilitiesConflictsOpts): Promise<number> {
+  const ctx = await createAppContext(loadConfig());
+  try {
+    const conflicts = await listFacilityMappingConflicts({ internalDb: ctx.internalDb });
+
+    if (opts.json) {
+      process.stdout.write(JSON.stringify(conflicts, null, 2) + '\n');
+    } else {
+      process.stdout.write(formatConflictsHuman(conflicts) + '\n');
+    }
+    // An empty queue is the healthy state, not a failure — exiting non-zero would break any script
+    // running this as a check.
+    return 0;
+  } catch (err) {
+    const msg = redactError(err);
+    if (opts.json) process.stdout.write(JSON.stringify({ error: msg }) + '\n');
+    else process.stderr.write(`facilities conflicts failed: ${msg}\n`);
+    return 1;
+  } finally {
+    await ctx.close();
+  }
+}
+
+function formatConflictsHuman(conflicts: FacilityMappingConflict[]): string {
+  if (conflicts.length === 0) return 'no unresolved facility mapping conflicts';
+
+  // Column widths are computed from the rows actually present rather than hardcoded: `from_system`
+  // is a full URI whose length varies per deployment, so a fixed width would either waste most of
+  // the line or ragged-wrap every row.
+  const rows = conflicts.map((c) => [c.fromSystem, c.fromCode, c.kind, c.mappingIds.join(',')]);
+  const header = ['from_system', 'from_code', 'kind', 'mapping_ids'];
+  const widths = header.map((h, i) => Math.max(h.length, ...rows.map((r) => r[i].length)));
+  // The last column is never padded — trailing whitespace on every line for no visual benefit.
+  const line = (cells: string[]) => cells.map((c, i) => (i === cells.length - 1 ? c : c.padEnd(widths[i]))).join('  ');
+
+  return [line(header), ...rows.map(line)].join('\n');
 }

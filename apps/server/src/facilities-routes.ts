@@ -4,7 +4,7 @@ import type { Kysely } from 'kysely';
 import { z } from 'zod';
 import {
   importFacilities, scanObservedFacilities, resolveObservedFacilities, publishFacilityMap, projectRegistryRows,
-  retireRegistryConcepts, reprojectAfterRegistryDelete,
+  retireRegistryConcepts, reprojectAfterRegistryDelete, listFacilityMappingConflicts,
   type AppContext, type FacilityImportResult, type ScanResult, type PublishResult,
 } from '@openldr/bootstrap';
 import {
@@ -521,6 +521,28 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       });
     }
     return result;
+  });
+
+  // Task 13: the review queue for the conflicts migration 078 recorded when it closed "one active
+  // SAME-AS resolution per observed facility key" at the database. Clearing the violations standing
+  // in that index's way meant DEACTIVATING an operator's competing mappings; `facility_mapping_
+  // conflicts` was the only record of having done so, and until this route it had no reader — the
+  // mappings simply stopped driving reports with nothing anywhere to explain it.
+  //
+  // Gated on MANAGE, not VIEW: the queue names an operator's own mappings and exists only to drive
+  // a write (settle the conflict by removing one of them). Read-only itself, so nothing to audit.
+  //
+  // ⚠ MEASURED, because the obvious assumption is wrong: this route shares a segment count with
+  // `/api/facilities/:id` below, but registration order does NOT decide the match. Fastify's router
+  // (find-my-way) always prefers a STATIC segment over a parametric one, so moving this
+  // registration below `:id` leaves every one of this route's tests green (verified by doing
+  // exactly that). It sits here for legibility, above `:id` with this file's other static
+  // `/api/facilities/*` routes, not because the position is load-bearing. What IS real: a facility
+  // whose id were literally
+  // "mapping-conflicts" would be unreachable via `:id` — harmless, since `facility_registry.id` is
+  // always a generated UUID or a sha256-derived digest.
+  app.get('/api/facilities/mapping-conflicts', MANAGE, async () => {
+    return listFacilityMappingConflicts({ internalDb: ctx.internalDb });
   });
 
   app.get('/api/facilities/:id', VIEW, async (req, reply) => {

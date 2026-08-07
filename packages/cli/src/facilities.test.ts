@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   importFacilities: vi.fn(),
   scanObservedFacilities: vi.fn(),
   publishFacilityMap: vi.fn(),
+  listFacilityMappingConflicts: vi.fn(),
   recordAuditEvent: vi.fn(),
   referenceCapture: { marker: 'referenceCapture' },
   readFileSync: vi.fn(),
@@ -27,6 +28,7 @@ vi.mock('@openldr/bootstrap', () => ({
   importFacilities: mocks.importFacilities,
   scanObservedFacilities: mocks.scanObservedFacilities,
   publishFacilityMap: mocks.publishFacilityMap,
+  listFacilityMappingConflicts: mocks.listFacilityMappingConflicts,
   recordAuditEvent: mocks.recordAuditEvent,
 }));
 
@@ -38,7 +40,7 @@ vi.mock('node:fs', () => ({
   readFileSync: mocks.readFileSync,
 }));
 
-import { runFacilitiesImport, runFacilitiesScanObserved, runFacilitiesPublish } from './facilities';
+import { runFacilitiesImport, runFacilitiesScanObserved, runFacilitiesPublish, runFacilitiesConflicts } from './facilities';
 
 const CLEAN_RESULT = {
   parsed: 10, skipped: 0, unknownColumns: [], duplicateColumns: [], quarantined: [],
@@ -418,6 +420,102 @@ describe('facilities publish CLI', () => {
     expect(code).toBe(1);
     expect(mocks.ctx.close).toHaveBeenCalledTimes(1);
     expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
+    const err = stderrSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(err).toMatch(/db exploded/);
+  });
+});
+
+// ── Task 13: `openldr facilities conflicts` ────────────────────────────────────────────────────
+//
+// CLI parity for `GET /api/facilities/mapping-conflicts` (apps/server/src/facilities-routes.ts) —
+// both call the SAME `listFacilityMappingConflicts` (@openldr/bootstrap), mocked here for the same
+// reason every other run* function's collaborator is: this file is about what the CLI wrapper does
+// with the result, not about the query.
+const CONFLICT = {
+  id: 1,
+  fromSystem: 'urn:openldr:cs:observed-facility',
+  fromCode: 'BALAB',
+  kind: 'duplicate',
+  mappingIds: ['tm-1', 'tm-2'],
+  detail: [{ id: 'tm-1', toCode: 'fac-A' }, { id: 'tm-2', toCode: 'fac-B' }],
+  detectedAt: new Date('2026-08-07T00:00:00.000Z'),
+};
+
+describe('facilities conflicts CLI', () => {
+  let stdoutSpy: ReturnType<typeof vi.fn>;
+  let stderrSpy: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true) as unknown as ReturnType<typeof vi.fn>;
+    stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true) as unknown as ReturnType<typeof vi.fn>;
+    mocks.createAppContext.mockResolvedValue(mocks.ctx);
+    mocks.ctx.close.mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('prints from_system, from_code, kind and mapping_ids for each unresolved conflict', async () => {
+    mocks.listFacilityMappingConflicts.mockResolvedValue([CONFLICT]);
+
+    const code = await runFacilitiesConflicts({ json: false });
+
+    expect(code).toBe(0);
+    expect(mocks.listFacilityMappingConflicts).toHaveBeenCalledWith({ internalDb: mocks.ctx.internalDb });
+    const human = stdoutSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(human).toMatch(/urn:openldr:cs:observed-facility/);
+    expect(human).toMatch(/BALAB/);
+    expect(human).toMatch(/duplicate/);
+    // The mapping ids are the actionable part — they are what an operator looks up to decide which
+    // of the competing rows to remove. Printing a count instead would make the line unusable.
+    expect(human).toMatch(/tm-1/);
+    expect(human).toMatch(/tm-2/);
+    expect(mocks.ctx.close).toHaveBeenCalledTimes(1);
+  });
+
+  it('says so plainly when there is nothing to review, rather than printing a bare header', async () => {
+    mocks.listFacilityMappingConflicts.mockResolvedValue([]);
+
+    const code = await runFacilitiesConflicts({ json: false });
+
+    expect(code).toBe(0);
+    const human = stdoutSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(human).toMatch(/no unresolved facility mapping conflicts/i);
+  });
+
+  // Read-only: an empty queue is the healthy state, not an error. Exiting non-zero would break any
+  // script that runs this as a check.
+  it('exits 0 on an empty queue', async () => {
+    mocks.listFacilityMappingConflicts.mockResolvedValue([]);
+    expect(await runFacilitiesConflicts({ json: true })).toBe(0);
+  });
+
+  it('never audits — it writes nothing', async () => {
+    mocks.listFacilityMappingConflicts.mockResolvedValue([CONFLICT]);
+
+    await runFacilitiesConflicts({ json: false });
+
+    expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it('--json emits the whole machine-readable result', async () => {
+    mocks.listFacilityMappingConflicts.mockResolvedValue([CONFLICT]);
+
+    const code = await runFacilitiesConflicts({ json: true });
+
+    expect(code).toBe(0);
+    expect(stdoutSpy).toHaveBeenCalledWith(JSON.stringify([CONFLICT], null, 2) + '\n');
+  });
+
+  it('closes the app context even when the query throws, and reports a redacted message', async () => {
+    mocks.listFacilityMappingConflicts.mockRejectedValue(new Error('db exploded'));
+
+    const code = await runFacilitiesConflicts({ json: false });
+
+    expect(code).toBe(1);
+    expect(mocks.ctx.close).toHaveBeenCalledTimes(1);
     const err = stderrSpy.mock.calls.map((c) => String(c[0])).join('');
     expect(err).toMatch(/db exploded/);
   });

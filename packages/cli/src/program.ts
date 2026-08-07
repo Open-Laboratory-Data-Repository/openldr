@@ -23,7 +23,7 @@ import { runRolesList, runRolesShow, runRolesCreate, runRolesEdit, runRolesDelet
 import { runDataExposureList, runDataExposureHide, runDataExposureShow } from './data-exposure';
 import { runSyncStatus, runSyncNow, runSyncEnroll, runSyncList, runSyncRotate, runSyncRevoke, runSyncAmend, runSyncMergePatient, runSyncExport, runSyncImport, runSyncQuarantineList, runSyncQuarantineRetry, runSyncDivergenceList, runSyncDivergenceShow, runSyncDivergenceClear } from './sync';
 import { runErrorsList } from './errors';
-import { runFacilitiesImport, runFacilitiesScanObserved, runFacilitiesPublish } from './facilities';
+import { runFacilitiesImport, runFacilitiesScanObserved, runFacilitiesPublish, runFacilitiesConflicts } from './facilities';
 import { setActorOverride } from './cli-actor';
 
 // Builds a fresh, unstarted `openldr` Command tree. Extracted out of index.ts so that:
@@ -271,6 +271,14 @@ export function buildProgram(): Command {
     .option('--json', 'emit machine-readable JSON', false)
     .action(async (opts: { apply: boolean; json: boolean }) => {
       process.exitCode = await runFacilitiesPublish(opts);
+    });
+  // Task 13: CLI parity for `GET /api/facilities/mapping-conflicts`. Read-only, so no --apply.
+  facilities
+    .command('conflicts')
+    .description('List unresolved facility mapping conflicts recorded when the one-active-resolution invariant was enforced (migration 078).')
+    .option('--json', 'emit machine-readable JSON', false)
+    .action(async (opts: { json: boolean }) => {
+      process.exitCode = await runFacilitiesConflicts(opts);
     });
 
   const syncGroup = program.command('sync').description('lab⇄central sync status + control');

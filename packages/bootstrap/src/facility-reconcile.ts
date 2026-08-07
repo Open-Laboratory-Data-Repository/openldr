@@ -1818,3 +1818,69 @@ export async function captureObservedFacilityFromProjection(
   const system = resolvedObservedSystem(projected.performer_system, sourceSystem);
   await captureObservedFacility(deps, system, performer, now);
 }
+
+// ── Task 13: the mapping-conflict review queue ─────────────────────────────────────────────────
+
+/** One unresolved row of `facility_mapping_conflicts`, in the camelCase shape the HTTP route and
+ *  the CLI both hand on. See `FacilityMappingConflictsTable` (packages/db/src/schema/internal.ts)
+ *  and migration 078 for what wrote each field. */
+export interface FacilityMappingConflict {
+  id: number;
+  fromSystem: string;
+  fromCode: string;
+  /** `'duplicate'` — a set of active SAME-AS mappings on one observed key naming DIFFERENT
+   *  facilities; every member was deactivated. `'unsupported_map_type'` — one mapping whose
+   *  `map_type` is not SAME-AS; it was left exactly as it was.
+   *
+   *  ⚠ Typed `string`, not a union: `kind` carries no CHECK constraint, so narrowing it here would
+   *  be a promise about the column this reader cannot keep. */
+  kind: string;
+  /** Every mapping id in the recorded set, oldest first. */
+  mappingIds: string[];
+  /** Shape depends on `kind` — see `FacilityMappingConflictsTable.detail`. Passed through
+   *  unexamined: this is what tells an operator WHICH facilities were competing. */
+  detail: unknown;
+  detectedAt: Date;
+}
+
+/**
+ * Every conflict migration 078 recorded that nobody has settled yet.
+ *
+ * ⛔ `resolved_at is null` is not an optional filter — this is a QUEUE, and a settled row that
+ * stayed in it would make it impossible to tell what still needs an operator. 078 writes every row
+ * it records with `resolved_at` NULL.
+ *
+ * ⚠ Read-only, and `resolved_at` has no writer: measured — migration 078 is the only code path in
+ * the repo that touches this table at all, and it never sets that column. So an operator who fixes
+ * the underlying mappings still sees the row listed here forever. A known gap, deliberately not
+ * closed: this task's job was to stop the table being invisible, not to build a resolution
+ * workflow. The filter is still written as a filter so a future settle path has somewhere to land.
+ *
+ * Unbounded by design. The row count is bounded by how many facility mappings an install had
+ * violating the invariant when 078 ran — a one-off backlog measured in tens, not a growing feed
+ * (no code path inserts into this table after the migration).
+ */
+export async function listFacilityMappingConflicts(
+  deps: Pick<ReconcileDeps, 'internalDb'>,
+): Promise<FacilityMappingConflict[]> {
+  const rows = await deps.internalDb
+    .selectFrom('facility_mapping_conflicts')
+    .select(['id', 'from_system', 'from_code', 'kind', 'mapping_ids', 'detail', 'detected_at'])
+    .where('resolved_at', 'is', null)
+    // Newest first, `id` breaking the tie: 078 records every row inside one transaction, so every
+    // row from a given install shares one `detected_at` and ordering on it alone would be
+    // nondeterministic.
+    .orderBy('detected_at', 'desc')
+    .orderBy('id')
+    .execute();
+
+  return rows.map((r) => ({
+    id: Number(r.id),
+    fromSystem: r.from_system,
+    fromCode: r.from_code,
+    kind: r.kind,
+    mappingIds: r.mapping_ids as unknown as string[],
+    detail: r.detail as unknown,
+    detectedAt: r.detected_at,
+  }));
+}

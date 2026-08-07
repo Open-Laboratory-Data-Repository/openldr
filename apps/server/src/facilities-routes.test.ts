@@ -1926,3 +1926,134 @@ describe('Task 7: GET /api/facilities/:id/impact', () => {
     expect(body.localCode).toBeUndefined();
   });
 });
+
+// ── Task 13: GET /api/facilities/mapping-conflicts ──────────────────────────────────────────────
+//
+// `facility_mapping_conflicts` is written once, by migration 078, when it closed "one active
+// SAME-AS resolution per observed facility key" at the database and had to clear the pre-existing
+// violations standing in the index's way. Until this route it had NO reader at all: the migration
+// deactivated an operator's competing mappings and left the only record of having done so in a
+// table nothing could show them.
+//
+// `store.db` is `null` in these tests, deliberately: this route reads `ctx.internalDb` only — it
+// never builds `reconcileDeps` and never touches the warehouse — so constructing a migrated
+// external db here would be several seconds per test buying nothing. A regression that made the
+// route reach for the external handle would throw rather than pass quietly.
+function conflictsCtx(internalDb: any) {
+  return fakeReconcileCtx(internalDb, null);
+}
+
+/** Insert one `facility_mapping_conflicts` row directly, the same way `seedMapping` above hits the
+ *  migrated db for setup no store interface exposes. Defaults to the 'duplicate' kind (competing
+ *  DISTINCT targets — see migration 078's docblock for why that name is acknowledged as poor). */
+async function seedConflict(internalDb: any, overrides: Record<string, unknown> = {}): Promise<void> {
+  await internalDb.insertInto('facility_mapping_conflicts').values({
+    from_system: DEFAULT_OBSERVED_FACILITY_SYSTEM,
+    from_code: 'BALAB',
+    kind: 'duplicate',
+    mapping_ids: JSON.stringify(['tm-1', 'tm-2']),
+    detail: JSON.stringify([{ id: 'tm-1', toCode: 'fac-A' }, { id: 'tm-2', toCode: 'fac-B' }]),
+    ...overrides,
+  }).execute();
+}
+
+describe('Task 13: GET /api/facilities/mapping-conflicts', () => {
+  it('lists unresolved mapping conflicts for review, in camelCase', async () => {
+    const internalDb = await makeMigratedDb();
+    await seedConflict(internalDb);
+    const app = await appWith(conflictsCtx(internalDb));
+
+    const res = await app.inject({ method: 'GET', url: '/api/facilities/mapping-conflicts' });
+
+    expect(res.statusCode).toBe(200);
+    const rows = res.json();
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      fromSystem: DEFAULT_OBSERVED_FACILITY_SYSTEM,
+      fromCode: 'BALAB',
+      kind: 'duplicate',
+      mappingIds: ['tm-1', 'tm-2'],
+    });
+    // `detail` is what tells the operator WHICH facilities were competing — the whole reason a
+    // 'duplicate' row is actionable rather than just alarming. Dropping it would leave them a
+    // conflict with no way to see what to choose between.
+    expect(rows[0].detail).toEqual([{ id: 'tm-1', toCode: 'fac-A' }, { id: 'tm-2', toCode: 'fac-B' }]);
+  });
+
+  it('carries the unsupported_map_type kind through too, not just duplicates', async () => {
+    const internalDb = await makeMigratedDb();
+    await seedConflict(internalDb, {
+      from_code: 'X-RAY',
+      kind: 'unsupported_map_type',
+      mapping_ids: JSON.stringify(['tm-9']),
+      detail: JSON.stringify({ mapType: 'RELATED-TO', toCode: 'fac-A' }),
+    });
+    const app = await appWith(conflictsCtx(internalDb));
+
+    const res = await app.inject({ method: 'GET', url: '/api/facilities/mapping-conflicts' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject([{ fromCode: 'X-RAY', kind: 'unsupported_map_type', mappingIds: ['tm-9'] }]);
+  });
+
+  // The listing exists to be a QUEUE — a settled conflict must leave it, or an operator can never
+  // tell what still needs them. `resolved_at` is the only signal of that (078 writes it NULL for
+  // every row it records).
+  it('excludes a settled conflict (resolved_at set)', async () => {
+    const internalDb = await makeMigratedDb();
+    await seedConflict(internalDb, { from_code: 'SETTLED', resolved_at: new Date() });
+    await seedConflict(internalDb, { from_code: 'STILL-OPEN' });
+    const app = await appWith(conflictsCtx(internalDb));
+
+    const res = await app.inject({ method: 'GET', url: '/api/facilities/mapping-conflicts' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().map((r: any) => r.fromCode)).toEqual(['STILL-OPEN']);
+  });
+
+  it('returns an empty list on a clean install (no conflicts recorded)', async () => {
+    const internalDb = await makeMigratedDb();
+    const app = await appWith(conflictsCtx(internalDb));
+
+    const res = await app.inject({ method: 'GET', url: '/api/facilities/mapping-conflicts' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual([]);
+  });
+
+  // Gated on facilities.manage, not facilities.view: the queue names an operator's own mappings and
+  // exists only to drive a WRITE (settle the conflict by removing one of them).
+  it('is gated on facilities.manage — facilities.view alone gets 403', async () => {
+    const internalDb = await makeMigratedDb();
+    const app = await appWith(conflictsCtx(internalDb), ['facilities.view']);
+
+    const res = await app.inject({ method: 'GET', url: '/api/facilities/mapping-conflicts' });
+
+    expect(res.statusCode).toBe(403);
+  });
+
+  // ⛔ This test does NOT pin registration order, and must not be described as if it did. Measured:
+  // moving the route's registration below `/api/facilities/:id` leaves this test — and every other
+  // one in this block — green, because Fastify's router (find-my-way) always prefers a STATIC
+  // segment over a parametric one regardless of the order the two were registered in.
+  //
+  // What it DOES pin is the resulting behaviour, with the shadowing case made as tempting as
+  // possible: a real facility whose id IS the literal string still does not divert this URL to the
+  // `:id` handler. The trade-off, recorded rather than pretended away — that facility is then
+  // unreachable through `GET /api/facilities/:id`. Harmless: `facility_registry.id` is either a
+  // generated UUID (POST) or a sha256-derived hex digest (CSV import), so no real row carries it.
+  it('⚠ resolves to the conflicts list, not the :id route, even with a facility of that literal id', async () => {
+    const internalDb = await makeMigratedDb();
+    const externalDb = await makeMigratedExternalDb();
+    const ctx = impactCtx(internalDb, externalDb); // needs a REAL facilityRegistry for the :id lookup
+    await ctx.facilityRegistry.upsert({ id: 'mapping-conflicts', name: 'Oddly Named', localCode: 'ODD01', source: 'manual' });
+    await seedConflict(internalDb);
+    const app = await appWith(ctx);
+
+    const res = await app.inject({ method: 'GET', url: '/api/facilities/mapping-conflicts' });
+
+    expect(res.statusCode).toBe(200);
+    // The conflicts list, NOT the facility record — a shadowed route would return `{ id, name }`.
+    expect(res.json()).toMatchObject([{ fromCode: 'BALAB', kind: 'duplicate' }]);
+  });
+});
