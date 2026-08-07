@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { describe, it, expect } from 'vitest';
 import Fastify from 'fastify';
+import { sql } from 'kysely';
 import { makeMigratedDb } from '@openldr/db/testing';
 import { makeMigratedExternalDb } from '@openldr/db/testing-external';
 import {
@@ -1503,6 +1504,12 @@ describe('Task 6: GET /api/facilities/observed', () => {
     await seedObservedReports(externalDb, [['BALAB', 6]]);
     await createFacilityRegistryStore(internalDb).upsert({ id: 'fac-A', name: 'Alpha', localCode: 'L-1', source: 'manual' });
     await createFacilityRegistryStore(internalDb).upsert({ id: 'fac-B', name: 'Beta', localCode: 'L-2', source: 'manual' });
+    // ⛔ Migration 078 added a partial unique index that makes this state UNREACHABLE through the
+    // database, which is the point of it — so the index has to come off before the state can be
+    // constructed at all. The resolver's `ambiguous` verdict is still worth pinning as defence in
+    // depth: an install restored from a dump older than 078, or any future writer that bypasses the
+    // index, must still resolve to nothing rather than confidently pick one of the two.
+    await sql`drop index term_mappings_one_active_facility_resolution`.execute(internalDb);
     for (const toCode of ['L-1', 'L-2']) {
       await internalDb.insertInto('term_mappings').values({
         id: `tm-${randomUUID()}`,

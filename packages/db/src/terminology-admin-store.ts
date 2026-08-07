@@ -708,13 +708,19 @@ export function createTerminologyAdminStore(db: Kysely<InternalSchema>, projecti
           if (input.isActive) {
             for (const row of inScope) {
               if (row.id === id) continue;
-              // `is_active` alone changes — `to_system`/`to_code` are untouched, so the
-              // `concept_map_elements` mirror still sits at this row's own coordinates and needs no
-              // rewrite. This is precisely the state `update()` would leave for an isActive-only
-              // edit, and it is why this is not a raw UPDATE bypassing the store: the capture below
-              // still fires, so the deactivation reaches `reference_change_log` like any other edit.
+              // Not a raw UPDATE bypassing the store: the capture below still fires, so the
+              // deactivation reaches `reference_change_log` like any other edit.
               await trx.updateTable('term_mappings').set({ is_active: false, updated_at: sql`now()` })
                 .where('id', '=', row.id).execute();
+              // ⛔ The superseded row's `concept_map_elements` mirror goes with it. `sync-serve.ts`
+              // exports that mirror as the FHIR ConceptMap, so leaving it would publish the observed
+              // string as resolving to BOTH facilities — the exact ambiguity this writer removes —
+              // and would re-accumulate the drift migration 078 cleared out of existing installs.
+              // Safe to delete here even when the row being written lands on these same coordinates:
+              // the new row's mirror is deleted-and-reinserted further down, after this loop.
+              await trx.deleteFrom('concept_map_elements').where('map_url', '=', LOCAL_MAP_URL)
+                .where('source_system', '=', row.from_system).where('source_code', '=', row.from_code)
+                .where('target_system', '=', row.to_system).where('target_code', '=', row.to_code).execute();
               if (capture) {
                 const persisted = await trx.selectFrom('term_mappings').selectAll().where('id', '=', row.id).executeTakeFirstOrThrow();
                 await capture.record(trx, 'term_mapping', row.id, 'upsert', tmContentHash(persisted));

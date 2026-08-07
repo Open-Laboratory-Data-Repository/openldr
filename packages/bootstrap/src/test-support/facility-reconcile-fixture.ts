@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { Kysely } from 'kysely';
+import { Kysely, sql } from 'kysely';
 import { newDb } from 'pg-mem';
 import {
   internalMigrations,
@@ -156,6 +156,23 @@ export async function seedMapping(deps: ReconcileDeps, input: SeedMappingInput):
     mapType: input.mapType ?? 'SAME-AS',
     isActive: input.isActive ?? true,
   });
+}
+
+/**
+ * Drops migration 078's `term_mappings_one_active_facility_resolution` partial unique index.
+ *
+ * ⛔ Not a workaround — the state the index forbids (two ACTIVE `SAME-AS` mappings on one
+ * `(from_system, from_code)`, whether they compete or merely duplicate each other) is exactly what
+ * Task 10's resolver tests must construct, and after 078 the database refuses to hold it. That is
+ * the index doing its job; the resolver behaviour behind it is still worth pinning as defence in
+ * depth, for an install restored from a dump older than 078 or any future writer that bypasses the
+ * index. Migration 078's own tests pin the index itself, so nothing goes unchecked by this.
+ *
+ * Call it BEFORE the offending `seedMapping` calls, never as a blanket fixture step: any test that
+ * does not need the pre-078 state must keep running against the index a real install has.
+ */
+export async function dropOneActiveFacilityResolutionIndex(deps: ReconcileDeps): Promise<void> {
+  await sql`drop index term_mappings_one_active_facility_resolution`.execute(deps.internalDb);
 }
 
 /**

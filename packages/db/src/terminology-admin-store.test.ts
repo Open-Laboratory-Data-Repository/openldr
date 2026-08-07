@@ -255,6 +255,30 @@ describe('terminology admin store', () => {
         .toHaveLength(1);
     });
 
+    // ⛔ Superseding a row must take its `concept_map_elements` mirror with it. The mirror is what
+    // `sync-serve.ts` exports as the FHIR ConceptMap, so leaving it behind ships the observed string
+    // as resolving to BOTH facilities — exactly the ambiguity this writer exists to remove — and
+    // re-accumulates the drift migration 078 just cleaned out of existing installs.
+    it('saveExclusive takes the superseded row’s mirror element with it', async () => {
+      const { db, s } = await store();
+      await s.termMappings.saveExclusive(exclusiveInput('L-1'));
+      await s.termMappings.saveExclusive(exclusiveInput('L-2'));
+
+      expect(await db.selectFrom('concept_map_elements').select(['target_code']).where('source_code', '=', 'BALAB').execute())
+        .toEqual([{ target_code: 'L-2' }]);
+    });
+
+    it('saveExclusive with an id takes the superseded competitor’s mirror element too', async () => {
+      const { db, s } = await store();
+      await s.termMappings.create(exclusiveInput('L-1'));
+      const b = await s.termMappings.create(exclusiveInput('L-2'));
+
+      await s.termMappings.saveExclusive(exclusiveInput('L-3'), { id: b.mapping.id });
+
+      expect(await db.selectFrom('concept_map_elements').select(['target_code']).where('source_code', '=', 'BALAB').execute())
+        .toEqual([{ target_code: 'L-3' }]);
+    });
+
     it('saveExclusive supersedes only its OWN (toSystem, mapType) scope', async () => {
       const { db, s } = await store();
       // A different map_type onto the same target system, and a SAME-AS onto a different target

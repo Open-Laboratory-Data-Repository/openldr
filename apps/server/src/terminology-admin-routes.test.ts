@@ -365,4 +365,20 @@ describe('facility mapping semantics (terminology mapping routes)', () => {
 
     expect(auditEvents.at(-1)).toMatchObject({ action: 'term_mapping.create', metadata: { superseded: [first] } });
   });
+
+  // The PUT path supersedes too (see the re-activation test above), so it owes the operator the
+  // same accountability record. Without it a deactivation reached through PUT is invisible in the
+  // audit log while the identical one reached through POST is not.
+  it('records the superseded mapping ids on the audit entry for a PUT as well', async () => {
+    const { app, auditEvents } = await realApp();
+    const first = (await saveMapping(app, mappingBody({ toCode: 'L-1' }))).json().mapping.id;
+    const second = (await saveMapping(app, mappingBody({ toCode: 'L-2' }))).json().mapping.id;
+
+    await app.inject({
+      method: 'PUT', url: `/api/terminology/mappings/${first}`,
+      payload: { ...mappingBody({ toCode: 'L-1' }), fromSystem: OBSERVED, fromCode: 'BALAB' },
+    });
+
+    expect(auditEvents.at(-1)).toMatchObject({ action: 'term_mapping.update', metadata: { superseded: [second] } });
+  });
 });

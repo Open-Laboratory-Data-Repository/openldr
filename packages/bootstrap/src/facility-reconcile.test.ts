@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { DEFAULT_OBSERVED_FACILITY_SYSTEM, FACILITY_REGISTRY_SYSTEM, observedSystemForFeed } from '@openldr/db';
 import { scanObservedFacilities, resolveObservedFacilities, publishFacilityMap, publishRegistryConcepts, projectRegistryRows, reprojectRegistryRows, retireRegistryConcepts, reprojectAfterRegistryDelete, captureObservedFacility, captureObservedFacilityFromProjection, assertResolvedFacilityInvariant } from './facility-reconcile';
-import { makeReconcileDeps, seedPerformers, seedRegistry, seedMapping, currentConceptCode } from './test-support/facility-reconcile-fixture';
+import { makeReconcileDeps, seedPerformers, seedRegistry, seedMapping, currentConceptCode, dropOneActiveFacilityResolutionIndex } from './test-support/facility-reconcile-fixture';
 
 describe('scanObservedFacilities', () => {
   it('discovers distinct performers and creates concepts', async () => {
@@ -504,6 +504,8 @@ describe('Task 10: only SAME-AS resolves, and competing mappings resolve to noth
     await scanObservedFacilities(deps, { now: '2026-08-07T00:00:00.000Z', apply: true });
     await seedRegistry(deps, { id: 'fac-A', name: 'Alpha', localCode: 'L-1' });
     await seedRegistry(deps, { id: 'fac-B', name: 'Beta', localCode: 'L-2' });
+    // The pre-078 state this test is about; see the fixture helper's docblock.
+    await dropOneActiveFacilityResolutionIndex(deps);
     await seedMapping(deps, { fromSystem: OBSERVED, fromCode: 'BALAB', toSystem: FACILITY_REGISTRY_SYSTEM, toCode: 'L-1' });
     await seedMapping(deps, { fromSystem: OBSERVED, fromCode: 'BALAB', toSystem: FACILITY_REGISTRY_SYSTEM, toCode: 'L-2' });
 
@@ -525,6 +527,8 @@ describe('Task 10: only SAME-AS resolves, and competing mappings resolve to noth
     await scanObservedFacilities(deps, { now: '2026-08-07T00:00:00.000Z', apply: true });
     await seedRegistry(deps, { id: 'fac-A', name: 'Alpha', localCode: 'L-1' });
     await seedRegistry(deps, { id: 'fac-B', name: 'Beta', localCode: 'L-2' });
+    // The pre-078 state this test is about; see the fixture helper's docblock.
+    await dropOneActiveFacilityResolutionIndex(deps);
     await seedMapping(deps, { fromSystem: OBSERVED, fromCode: 'BALAB', toSystem: FACILITY_REGISTRY_SYSTEM, toCode: 'L-1' });
     await seedMapping(deps, { fromSystem: OBSERVED, fromCode: 'BALAB', toSystem: FACILITY_REGISTRY_SYSTEM, toCode: 'L-2' });
 
@@ -631,6 +635,8 @@ describe('Task 10: only SAME-AS resolves, and competing mappings resolve to noth
     await seedPerformers(deps, [['BALAB', 6]]);
     await scanObservedFacilities(deps, { now: '2026-08-07T00:00:00.000Z', apply: true });
     await seedRegistry(deps, { id: 'fac-A', name: 'Alpha', localCode: 'L-1' });
+    // The pre-078 state this test is about; see the fixture helper's docblock.
+    await dropOneActiveFacilityResolutionIndex(deps);
     await seedMapping(deps, { fromSystem: OBSERVED, fromCode: 'BALAB', toSystem: FACILITY_REGISTRY_SYSTEM, toCode: 'L-1' });
     await seedMapping(deps, { fromSystem: OBSERVED, fromCode: 'BALAB', toSystem: FACILITY_REGISTRY_SYSTEM, toCode: 'L-1' });
 
@@ -698,6 +704,8 @@ describe('Task 10: only SAME-AS resolves, and competing mappings resolve to noth
     await scanObservedFacilities(deps, { now: '2026-08-07T00:00:00.000Z', apply: true });
     await seedRegistry(deps, { id: 'fac-A', name: 'Alpha', localCode: 'L-1' });
     await seedRegistry(deps, { id: 'fac-B', name: 'Beta', localCode: 'L-2' });
+    // The pre-078 state this test is about; see the fixture helper's docblock.
+    await dropOneActiveFacilityResolutionIndex(deps);
     await seedMapping(deps, { fromSystem: OBSERVED, fromCode: 'BALAB', toSystem: FACILITY_REGISTRY_SYSTEM, toCode: 'L-1' });
     await seedMapping(deps, { fromSystem: OBSERVED, fromCode: 'BALAB', toSystem: FACILITY_REGISTRY_SYSTEM, toCode: 'L-2' });
 

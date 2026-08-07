@@ -267,11 +267,14 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
       // A PUT retargets one existing row, so it cannot ADD a competing active mapping — but it can
       // re-activate a superseded one while another is active, which is the same violation by a
       // different route. `saveExclusive` with this row's id covers both.
-      const updated = isFacilityTarget(parsed.data)
-        ? (await admin.termMappings.saveExclusive(input, { id })).mapping
-        : await admin.termMappings.update(id, input);
-      await recordAudit(ctx, req, { action: 'term_mapping.update', entityType: 'term_mapping', entityId: id, before: null, after: updated });
-      return updated;
+      const saved = isFacilityTarget(parsed.data)
+        ? await admin.termMappings.saveExclusive(input, { id })
+        : { mapping: await admin.termMappings.update(id, input), superseded: [] as string[] };
+      // A PUT supersedes too, so it owes the same accountability record the POST above writes —
+      // otherwise a deactivation reached through PUT is invisible in the audit log while the
+      // identical one reached through POST is not. The response shape is unchanged.
+      await recordAudit(ctx, req, { action: 'term_mapping.update', entityType: 'term_mapping', entityId: id, before: null, after: saved.mapping, metadata: { superseded: saved.superseded } });
+      return saved.mapping;
     }
     catch (e) { return mapErr(e, reply); }
   });
