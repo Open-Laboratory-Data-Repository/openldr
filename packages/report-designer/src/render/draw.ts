@@ -165,11 +165,33 @@ export function isRightAligned(rows: string[][], ci: number, kind: ColumnKind | 
  *  can never collide with a design parameter that happens to be called `name`. */
 const LAB_TOKEN_PREFIX = 'lab.';
 
-export function paramMap(design: ReportDesign, now: Date, identity?: Record<string, string>): Map<string, string> {
+/** Rendered in place of a declared-but-unset parameter. A blank beside a label reads as a failed
+ *  render; an em dash reads as "not filtered". */
+const UNSET = '—';
+
+export function paramMap(
+  design: ReportDesign, now: Date, identity?: Record<string, string>, values?: Record<string, unknown>,
+): Map<string, string> {
   const m = new Map<string, string>();
   for (const p of design.parameters) {
-    if (typeof p.value === 'string') m.set(p.key, p.value);
-    else if (p.value) { m.set('from', p.value.from); m.set('to', p.value.to); }
+    // ⛔ A daterange's RUN values are FLAT `from`/`to`, NOT nested under the parameter's own key.
+    // The Studio's picker writes top-level `from`/`to` (ReportParametersBar.tsx:38) and the seeded
+    // queries declare `from`/`to` as their own text params, so `values['dateRange']` is ALWAYS
+    // undefined. Keying on p.key here renders every date range as two em dashes.
+    if (p.type === 'daterange') {
+      const dflt = (p.value ?? {}) as { from?: string; to?: string };
+      m.set('from', (values?.from as string) || dflt.from || UNSET);
+      m.set('to', (values?.to as string) || dflt.to || UNSET);
+      continue;
+    }
+    // Every other parameter is keyed by its own name in both places. The RUN's value wins over the
+    // authored default — without that a header describes the design rather than the run it is
+    // printed from, which is correct-looking and wrong.
+    const run = values?.[p.key];
+    const v = run !== undefined && run !== '' ? run : p.value;
+    // Declared but unset renders an em dash, not ''. A blank beside a label reads as a failed
+    // render, where "—" reads as "not filtered".
+    m.set(p.key, typeof v === 'string' && v !== '' ? v : UNSET);
   }
   m.set('date', now.toLocaleDateString());
   // Namespaced, and added LAST so a design parameter can never shadow the lab's own identity —
@@ -340,11 +362,23 @@ export function pairRects(
   });
 }
 
-function drawKeyValue(doc: Doc, el: DesignElement, r: Box, resolved: ResolvedTable | undefined): void {
+/** Pair values as DRAWN: authored (unbound) values resolve `{{...}}` tokens exactly as a text
+ *  element does; BOUND values never do.
+ *  ⛔ The asymmetry is a security property, not an oversight — interpolating query data would let a
+ *  result cell containing `{{lab.name}}` forge letterhead into the body of a report. */
+export function interpolatedPairValues(
+  el: DesignElement, resolved: ResolvedTable | undefined, tokens: Map<string, string>,
+): string[] {
+  const bound = Boolean(el.kind === 'keyvalue' && el.dataSource);
+  return keyValuePairs(el, resolved).map((p) => (bound ? p.value : interpolate(p.value, tokens)));
+}
+
+function drawKeyValue(doc: Doc, el: DesignElement, r: Box, resolved: ResolvedTable | undefined, tokens: Map<string, string>): void {
   if (el.dataSource && resolved && 'error' in resolved) { drawErrorPlaceholder(doc, r, resolved.error); return; }
   const s = el.style ?? {};
-  const title = (el.text ?? '').trim();
+  const title = interpolate(el.text ?? '', tokens).trim();
   const pairs = keyValuePairs(el, resolved);
+  const values = interpolatedPairValues(el, resolved, tokens);
   const layout = el.layout ?? 'inline';
 
   doc.save().rect(r.x, r.y, r.w, r.h).clip();
@@ -382,17 +416,18 @@ function drawKeyValue(doc: Doc, el: DesignElement, r: Box, resolved: ResolvedTab
     // rather than the pair row so it hugs the value in BOTH layouts (a stacked pair's row also
     // contains its label, which a chip must not cover).
     doc.font('Helvetica').fontSize(valueSize);
+    const value = values[i];
     const chip = p.status && p.emphasis === 'fill';
     const pad = chip ? CELL_PAD : 0;
     let valueColor = BODY_TEXT;
     if (chip) {
-      const w = Math.min(doc.widthOfString(p.value) + pad * 2, b.value.w);
+      const w = Math.min(doc.widthOfString(value) + pad * 2, b.value.w);
       doc.rect(b.value.x, b.value.y - CHIP_INSET_Y, w, b.value.h + CHIP_INSET_Y * 2).fill(STATUS_CHIP_FILL[p.status!]);
       valueColor = STATUS_CHIP_TEXT[p.status!];
     } else if (p.status) {
       valueColor = STATUS_TEXT_COLOR[p.status];
     }
-    doc.fillColor(valueColor).text(p.value, b.value.x + pad, b.value.y,
+    doc.fillColor(valueColor).text(value, b.value.x + pad, b.value.y,
       { width: Math.max(0, b.value.w - pad), height: b.value.h, ellipsis: true });
   });
 
@@ -585,7 +620,7 @@ export function drawElement(
       return;
     }
     case 'keyvalue': {
-      drawKeyValue(doc, el, r, resolved);
+      drawKeyValue(doc, el, r, resolved, tokens);
       return;
     }
     case 'barcode': {

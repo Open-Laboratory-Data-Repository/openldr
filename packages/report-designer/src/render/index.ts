@@ -32,6 +32,10 @@ export interface RenderOptions {
    * `{{lab.*}}` resolves to '' and a design referencing identity still renders.
    */
   identity?: Record<string, string>;
+  /** The RUN's parameter values. Supplied by the caller because the renderer is handed the stored
+   *  design, whose `parameters[].value` are the AUTHORED DEFAULTS — a header built from those
+   *  describes the design rather than the run it is printed from. */
+  values?: Record<string, unknown>;
 }
 
 export function renderReportDesignPdf(
@@ -40,7 +44,7 @@ export function renderReportDesignPdf(
   opts: RenderOptions = {},
 ): Promise<Buffer> {
   const now = opts.now ?? new Date();
-  const tokens = paramMap(design, now, opts.identity);
+  const tokens = paramMap(design, now, opts.identity, opts.values);
   const pages = design.pages.length ? design.pages : [{ id: '_empty', elements: [] }];
   const [w, h] = paperSizePt(design.paper, design.orientation);
 

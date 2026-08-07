@@ -239,7 +239,7 @@ function createDataDrivenReporting(deps: ReportingDataDrivenDeps) {
     const values = { ...designDefaults(design), ...valuesOf(rawParams) };
     const resolved = await deps.resolveDesignTables(design, values, deps.runStoredQuery);
     const identity = await deps.labIdentity?.tokens();
-    return deps.renderReportDesignPdf(design, resolved, { identity });
+    return deps.renderReportDesignPdf(design, resolved, { identity, values });
   }
 
   async function optionsDataDriven(id: string): Promise<Record<string, ReportParamOption[]>> {
