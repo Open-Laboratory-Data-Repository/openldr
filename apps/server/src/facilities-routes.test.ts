@@ -911,10 +911,58 @@ describe('POST /api/facilities/import', () => {
     const res = await app.inject({ method: 'POST', url: '/api/facilities/import', payload: { csv, nationalSystem: SYSTEM } });
     expect(res.statusCode).toBe(200);
     // Every counter always present, even the zero ones — a client must never confuse "0 found"
-    // with "not reported".
-    expect(res.json()).toEqual({ parsed: 1, skipped: 1, unknownColumns: [], created: 0, updated: 0, duplicates: 0 });
+    // with "not reported". Task 5: `quarantined`/`duplicateColumns` (Task 4's additions to
+    // FacilityImportResult) now reach the response body too.
+    expect(res.json()).toEqual({
+      parsed: 1, skipped: 1, unknownColumns: [], duplicateColumns: [], quarantined: [],
+      created: 0, updated: 0, duplicates: 0,
+    });
     expect(await db.selectFrom('facility_registry').selectAll().execute()).toHaveLength(0);
     expect(ctx.__audit).toHaveLength(0); // a dry run writes nothing, so it must not audit
+  });
+
+  // Task 5: surface Task 4's `quarantined`/`allowMalformedRows` through this route. A row whose
+  // field count disagrees with the header's is never mapped to columns (facility-csv.ts) — the
+  // route must report its line number/reason verbatim, and `apply` must stay blocked until the
+  // operator explicitly opts in with `allowMalformedRows`.
+  it('returns quarantined rows with line numbers and applies nothing', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities/import',
+      payload: { csv: 'national_code,name\n1,Good\n2,Bad,Extra\n', nationalSystem: SYSTEM, apply: true },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({
+      created: 0,
+      quarantined: [{ line: 3, reason: 'too_many_fields', raw: '2,Bad,Extra' }],
+    });
+    expect(await db.selectFrom('facility_registry').selectAll().execute()).toHaveLength(0);
+    expect(ctx.__audit).toHaveLength(0); // blocked apply writes nothing, so it must not audit
+  });
+
+  it('allowMalformedRows: true applies the well-formed rows despite the quarantined one, and still reports it', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities/import',
+      payload: {
+        csv: 'national_code,name\n1,Good\n2,Bad,Extra\n',
+        nationalSystem: SYSTEM, apply: true, allowMalformedRows: true,
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({
+      created: 1,
+      quarantined: [{ line: 3, reason: 'too_many_fields' }],
+    });
+    const rows = await db.selectFrom('facility_registry').selectAll().execute();
+    expect(rows).toHaveLength(1);
+    expect(ctx.__audit).toHaveLength(1); // this apply DID write, so it must be audited
   });
 
   it('apply: true writes and returns created/updated counts', async () => {

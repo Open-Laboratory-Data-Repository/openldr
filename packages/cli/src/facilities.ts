@@ -16,6 +16,10 @@ export interface FacilitiesImportOpts {
    *  14 000-row national register can never be silently rewritten by forgetting a flag. */
   apply?: boolean;
   allowUnknownColumns?: boolean;
+  /** Import despite structurally malformed rows (see facility-import.ts's
+   *  `FacilityImportOptions.allowMalformedRows`) — the explicit "I have seen the line numbers,
+   *  import the rest" override, mirroring `allowUnknownColumns` above. */
+  allowMalformedRows?: boolean;
   json: boolean;
 }
 
@@ -48,7 +52,10 @@ export async function runFacilitiesImport(path: string, opts: FacilitiesImportOp
       // behaviour as the HTTP route, per the repo's CLI-parity rule.
       { db: ctx.internalDb, capture: referenceCapture, admin: ctx.terminology.admin },
       csv,
-      { nationalSystem: opts.nationalSystem, allowUnknownColumns: opts.allowUnknownColumns, apply: opts.apply },
+      {
+        nationalSystem: opts.nationalSystem, allowUnknownColumns: opts.allowUnknownColumns,
+        allowMalformedRows: opts.allowMalformedRows, apply: opts.apply,
+      },
     );
 
     // Refuse loudly and name the columns rather than let the caller read a generic all-zero
@@ -66,13 +73,36 @@ export async function runFacilitiesImport(path: string, opts: FacilitiesImportOp
       return 1;
     }
 
+    // Task 5: same "explicit override" idiom as unknown columns above, for structurally malformed
+    // rows (see facility-import.ts's `FacilityImportOptions.allowMalformedRows`). Unlike
+    // unknownColumns, `parsed` does NOT drop to 0 here — the well-formed rows in the file still
+    // parse (facility-csv.ts) — so this is its own check, not covered by the block above. Fires
+    // on a dry run too: the line numbers are exactly what a preview exists to surface before the
+    // operator ever considers --apply.
+    if (result.quarantined.length > 0 && !opts.allowMalformedRows) {
+      if (opts.json) {
+        process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+      } else {
+        for (const row of result.quarantined) {
+          process.stderr.write(`line ${row.line}: ${row.reason} — ${row.raw}\n`);
+        }
+        process.stderr.write(
+          `${result.quarantined.length} row(s) quarantined; re-run with --allow-malformed-rows to import the rest\n`,
+        );
+      }
+      return 1;
+    }
+
     // A dry run writes nothing, so it has nothing to audit — only an applied import is recorded.
     if (opts.apply) {
       await recordAuditEvent(ctx, cliActor(), {
         action: 'facility.import',
         entityType: 'facility',
         entityId: opts.nationalSystem,
-        metadata: { path, nationalSystem: opts.nationalSystem, allowUnknownColumns: !!opts.allowUnknownColumns, result },
+        metadata: {
+          path, nationalSystem: opts.nationalSystem, allowUnknownColumns: !!opts.allowUnknownColumns,
+          allowMalformedRows: !!opts.allowMalformedRows, result,
+        },
       });
     }
 

@@ -251,8 +251,9 @@ export function buildProgram(): Command {
     .requiredOption('--national-system <sys>', 'canonical URI of the national facility register the codes belong to (e.g. urn:tz:hfr)')
     .option('--apply', 'write the import (default: dry run — parse and report, write nothing)', false)
     .option('--allow-unknown-columns', 'import despite unrecognised CSV columns (carried into each row\'s extras)', false)
+    .option('--allow-malformed-rows', 'import despite structurally malformed rows (quarantined rows are printed with their line number and skipped either way)', false)
     .option('--json', 'emit machine-readable JSON', false)
-    .action(async (path: string, opts: { nationalSystem: string; apply: boolean; allowUnknownColumns: boolean; json: boolean }) => {
+    .action(async (path: string, opts: { nationalSystem: string; apply: boolean; allowUnknownColumns: boolean; allowMalformedRows: boolean; json: boolean }) => {
       process.exitCode = await runFacilitiesImport(path, opts);
     });
   facilities

@@ -49,7 +49,9 @@ async function previewNow() {
   fireEvent.click(screen.getByRole('menuitem', { name: /^preview$/i }));
 }
 
-const cleanPreview = { parsed: 3, skipped: 0, unknownColumns: [], created: 0, updated: 0, duplicates: 0 };
+const cleanPreview = {
+  parsed: 3, skipped: 0, unknownColumns: [], duplicateColumns: [], quarantined: [], created: 0, updated: 0, duplicates: 0,
+};
 
 describe('ImportFacilitiesSheet', () => {
   beforeEach(() => {
@@ -81,7 +83,9 @@ describe('ImportFacilitiesSheet', () => {
   it('shows the dry-run summary before any Apply confirmation, then applies and reloads on confirm', async () => {
     (api.importFacilitiesCsv as ReturnType<typeof vi.fn>)
       .mockResolvedValueOnce(cleanPreview)
-      .mockResolvedValueOnce({ parsed: 3, skipped: 0, unknownColumns: [], created: 2, updated: 1, duplicates: 0 });
+      .mockResolvedValueOnce({
+        parsed: 3, skipped: 0, unknownColumns: [], duplicateColumns: [], quarantined: [], created: 2, updated: 1, duplicates: 0,
+      });
     const onImported = vi.fn();
     const onOpenChange = vi.fn();
     render(<ImportFacilitiesSheet open onOpenChange={onOpenChange} onImported={onImported} />);
@@ -108,7 +112,7 @@ describe('ImportFacilitiesSheet', () => {
 
   it('a parseable-but-wrong file (parsed: 0, no unknown columns) reads as "nothing found", not success', async () => {
     (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockResolvedValue({
-      parsed: 0, skipped: 0, unknownColumns: [], created: 0, updated: 0, duplicates: 0,
+      parsed: 0, skipped: 0, unknownColumns: [], duplicateColumns: [], quarantined: [], created: 0, updated: 0, duplicates: 0,
     });
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
@@ -123,8 +127,12 @@ describe('ImportFacilitiesSheet', () => {
 
   it('shows unknown columns with an explicit opt-in, naming the columns, and re-previews once checked', async () => {
     (api.importFacilitiesCsv as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce({ parsed: 0, skipped: 0, unknownColumns: ['weird_col', 'other_col'], created: 0, updated: 0, duplicates: 0 })
-      .mockResolvedValueOnce({ parsed: 3, skipped: 0, unknownColumns: ['weird_col', 'other_col'], created: 0, updated: 0, duplicates: 0 });
+      .mockResolvedValueOnce({
+        parsed: 0, skipped: 0, unknownColumns: ['weird_col', 'other_col'], duplicateColumns: [], quarantined: [], created: 0, updated: 0, duplicates: 0,
+      })
+      .mockResolvedValueOnce({
+        parsed: 3, skipped: 0, unknownColumns: ['weird_col', 'other_col'], duplicateColumns: [], quarantined: [], created: 0, updated: 0, duplicates: 0,
+      });
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
     pickFileAndSystem();
@@ -144,9 +152,73 @@ describe('ImportFacilitiesSheet', () => {
     expect(await screen.findByText(/3 row\(s\) will be imported/i)).toBeInTheDocument();
   });
 
+  // Task 5: surface Task 4's `quarantined` (facility-import.ts) — a structurally malformed row's
+  // line number and raw content, and the `allowMalformedRows` override, reusing the same
+  // control/copy pattern as the unknown-columns opt-in above (see the brief).
+  it('lists quarantined line numbers, states the count, and blocks Apply until the operator opts in', async () => {
+    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockResolvedValue({
+      parsed: 1, skipped: 0, unknownColumns: [], duplicateColumns: [],
+      quarantined: [{ line: 3, raw: '2,Bad,Extra', reason: 'too_many_fields' }],
+      created: 0, updated: 0, duplicates: 0,
+    });
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    pickFileAndSystem();
+    await previewNow();
+
+    expect(await screen.findByText(/line 3/i)).toBeInTheDocument();
+    expect(screen.getByText(/2,Bad,Extra/)).toBeInTheDocument();
+    expect(screen.getByText(/1 row could not be read/i)).toBeInTheDocument();
+
+    // Apply is not offered while a quarantined row is blocking and not yet allowed — same
+    // "not offered" idiom this sheet already uses for the unknown-columns-blocked and over-cap
+    // cases above, not a disabled control with no explanation.
+    openMenu();
+    expect(screen.queryByRole('menuitem', { name: /^apply$/i })).not.toBeInTheDocument();
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+
+    // Opting in unblocks Apply locally — `allowMalformedRows` does not change what the parser
+    // finds (see facility-import.ts's docblock: it only gates whether APPLY proceeds), so this
+    // must NOT re-trigger a preview request, unlike the unknown-columns checkbox above.
+    fireEvent.click(screen.getByRole('checkbox'));
+    expect(api.importFacilitiesCsv).toHaveBeenCalledTimes(1);
+
+    openMenu();
+    expect(screen.getByRole('menuitem', { name: /^apply$/i })).toBeInTheDocument();
+  });
+
+  it('sends allowMalformedRows: true on Apply once the operator has opted in past quarantined rows', async () => {
+    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({
+        parsed: 1, skipped: 0, unknownColumns: [], duplicateColumns: [],
+        quarantined: [{ line: 3, raw: '2,Bad,Extra', reason: 'too_many_fields' }],
+        created: 0, updated: 0, duplicates: 0,
+      })
+      .mockResolvedValueOnce({
+        parsed: 1, skipped: 0, unknownColumns: [], duplicateColumns: [],
+        quarantined: [{ line: 3, raw: '2,Bad,Extra', reason: 'too_many_fields' }],
+        created: 1, updated: 0, duplicates: 0,
+      });
+    const onImported = vi.fn();
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={onImported} />);
+
+    pickFileAndSystem();
+    await previewNow();
+    fireEvent.click(await screen.findByRole('checkbox'));
+
+    clickMenuItem(/^apply$/i);
+    fireEvent.click(await screen.findByRole('button', { name: /^apply$/i }));
+
+    await waitFor(() => expect(api.importFacilitiesCsv).toHaveBeenCalledTimes(2));
+    expect(api.importFacilitiesCsv).toHaveBeenLastCalledWith(
+      expect.objectContaining({ allowMalformedRows: true, apply: true }),
+    );
+    await waitFor(() => expect(onImported).toHaveBeenCalled());
+  });
+
   it('surfaces duplicates as a plainly-visible warning, not a buried number', async () => {
     (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockResolvedValue({
-      parsed: 5, skipped: 0, unknownColumns: [], created: 0, updated: 0, duplicates: 2,
+      parsed: 5, skipped: 0, unknownColumns: [], duplicateColumns: [], quarantined: [], created: 0, updated: 0, duplicates: 2,
     });
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
@@ -204,7 +276,7 @@ describe('ImportFacilitiesSheet', () => {
 
   it('proactively warns when a clean dry run itself already exceeds the 2000-row apply cap, without offering Apply', async () => {
     (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockResolvedValue({
-      parsed: 14000, skipped: 0, unknownColumns: [], created: 0, updated: 0, duplicates: 0,
+      parsed: 14000, skipped: 0, unknownColumns: [], duplicateColumns: [], quarantined: [], created: 0, updated: 0, duplicates: 0,
     });
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
@@ -227,8 +299,12 @@ describe('ImportFacilitiesSheet', () => {
 
   it('F2: after opting into unknown columns, a wrong file still states an outcome and surfaces the skipped count', async () => {
     (api.importFacilitiesCsv as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce({ parsed: 0, skipped: 0, unknownColumns: ['patient_id', 'dob', 'sex'], created: 0, updated: 0, duplicates: 0 })
-      .mockResolvedValueOnce({ parsed: 0, skipped: 3000, unknownColumns: ['patient_id', 'dob', 'sex'], created: 0, updated: 0, duplicates: 0 });
+      .mockResolvedValueOnce({
+        parsed: 0, skipped: 0, unknownColumns: ['patient_id', 'dob', 'sex'], duplicateColumns: [], quarantined: [], created: 0, updated: 0, duplicates: 0,
+      })
+      .mockResolvedValueOnce({
+        parsed: 0, skipped: 3000, unknownColumns: ['patient_id', 'dob', 'sex'], duplicateColumns: [], quarantined: [], created: 0, updated: 0, duplicates: 0,
+      });
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
     pickFileAndSystem();
@@ -255,7 +331,7 @@ describe('ImportFacilitiesSheet', () => {
 
   it('F3: the headline row count and the apply-confirm body reflect what will actually be written, not the raw parsed count', async () => {
     (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockResolvedValue({
-      parsed: 5, skipped: 0, unknownColumns: [], created: 0, updated: 0, duplicates: 2,
+      parsed: 5, skipped: 0, unknownColumns: [], duplicateColumns: [], quarantined: [], created: 0, updated: 0, duplicates: 2,
     });
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 

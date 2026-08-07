@@ -40,7 +40,10 @@ vi.mock('node:fs', () => ({
 
 import { runFacilitiesImport, runFacilitiesScanObserved, runFacilitiesPublish } from './facilities';
 
-const CLEAN_RESULT = { parsed: 10, skipped: 0, unknownColumns: [], created: 0, updated: 0, duplicates: 0 };
+const CLEAN_RESULT = {
+  parsed: 10, skipped: 0, unknownColumns: [], duplicateColumns: [], quarantined: [],
+  created: 0, updated: 0, duplicates: 0,
+};
 
 describe('facilities import CLI', () => {
   let stdoutSpy: ReturnType<typeof vi.fn>;
@@ -68,7 +71,7 @@ describe('facilities import CLI', () => {
     expect(mocks.importFacilities).toHaveBeenCalledWith(
       { db: mocks.ctx.internalDb, capture: mocks.referenceCapture, admin: mocks.ctx.terminology.admin },
       'national_code,name\n100,Dodoma\n',
-      { nationalSystem: 'urn:tz:hfr', allowUnknownColumns: undefined, apply: undefined },
+      { nationalSystem: 'urn:tz:hfr', allowUnknownColumns: undefined, allowMalformedRows: undefined, apply: undefined },
     );
     expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
     const human = stdoutSpy.mock.calls.map((c) => String(c[0])).join('');
@@ -78,7 +81,9 @@ describe('facilities import CLI', () => {
   });
 
   it('--apply writes and reports created/updated, and audits the import', async () => {
-    mocks.importFacilities.mockResolvedValue({ parsed: 3, skipped: 0, unknownColumns: [], created: 2, updated: 1, duplicates: 0 });
+    mocks.importFacilities.mockResolvedValue({
+      parsed: 3, skipped: 0, unknownColumns: [], duplicateColumns: [], quarantined: [], created: 2, updated: 1, duplicates: 0,
+    });
 
     const code = await runFacilitiesImport('/some/file.csv', { nationalSystem: 'urn:tz:hfr', apply: true, json: false });
 
@@ -86,7 +91,7 @@ describe('facilities import CLI', () => {
     expect(mocks.importFacilities).toHaveBeenCalledWith(
       { db: mocks.ctx.internalDb, capture: mocks.referenceCapture, admin: mocks.ctx.terminology.admin },
       expect.any(String),
-      { nationalSystem: 'urn:tz:hfr', allowUnknownColumns: undefined, apply: true },
+      { nationalSystem: 'urn:tz:hfr', allowUnknownColumns: undefined, allowMalformedRows: undefined, apply: true },
     );
     expect(mocks.recordAuditEvent).toHaveBeenCalledWith(
       mocks.ctx,
@@ -103,7 +108,9 @@ describe('facilities import CLI', () => {
   });
 
   it('surfaces duplicates as a warning, not just a count', async () => {
-    mocks.importFacilities.mockResolvedValue({ parsed: 2, skipped: 0, unknownColumns: [], created: 1, updated: 0, duplicates: 1 });
+    mocks.importFacilities.mockResolvedValue({
+      parsed: 2, skipped: 0, unknownColumns: [], duplicateColumns: [], quarantined: [], created: 1, updated: 0, duplicates: 1,
+    });
 
     await runFacilitiesImport('/some/file.csv', { nationalSystem: 'urn:tz:hfr', apply: true, json: false });
 
@@ -122,7 +129,9 @@ describe('facilities import CLI', () => {
   });
 
   it('unknown columns without --allow-unknown-columns refuse and name the columns; no audit', async () => {
-    mocks.importFacilities.mockResolvedValue({ parsed: 0, skipped: 0, unknownColumns: ['beds', 'foo'], created: 0, updated: 0, duplicates: 0 });
+    mocks.importFacilities.mockResolvedValue({
+      parsed: 0, skipped: 0, unknownColumns: ['beds', 'foo'], duplicateColumns: [], quarantined: [], created: 0, updated: 0, duplicates: 0,
+    });
 
     const code = await runFacilitiesImport('/some/file.csv', { nationalSystem: 'urn:tz:hfr', apply: true, json: false });
 
@@ -135,7 +144,9 @@ describe('facilities import CLI', () => {
   });
 
   it('--allow-unknown-columns lets an import with unknown columns proceed', async () => {
-    mocks.importFacilities.mockResolvedValue({ parsed: 1, skipped: 0, unknownColumns: ['beds'], created: 1, updated: 0, duplicates: 0 });
+    mocks.importFacilities.mockResolvedValue({
+      parsed: 1, skipped: 0, unknownColumns: ['beds'], duplicateColumns: [], quarantined: [], created: 1, updated: 0, duplicates: 0,
+    });
 
     const code = await runFacilitiesImport('/some/file.csv', { nationalSystem: 'urn:tz:hfr', apply: true, allowUnknownColumns: true, json: false });
 
@@ -145,6 +156,60 @@ describe('facilities import CLI', () => {
       expect.any(String),
       expect.objectContaining({ allowUnknownColumns: true }),
     );
+  });
+
+  // Task 5: surface Task 4's `quarantined`/`allowMalformedRows` (facility-import.ts) through the CLI,
+  // per the repo's CLI-parity rule — mirrors the unknown-columns refusal above.
+  it('quarantined rows without --allow-malformed-rows refuse and print each line/reason; no audit', async () => {
+    mocks.importFacilities.mockResolvedValue({
+      parsed: 1, skipped: 0, unknownColumns: [], duplicateColumns: [],
+      quarantined: [{ line: 3, reason: 'too_many_fields', raw: '2,Bad,Extra' }],
+      created: 0, updated: 0, duplicates: 0,
+    });
+
+    const code = await runFacilitiesImport('/some/file.csv', { nationalSystem: 'urn:tz:hfr', apply: true, json: false });
+
+    expect(code).toBe(1);
+    const err = stderrSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(err).toMatch(/line 3: too_many_fields — 2,Bad,Extra/);
+    expect(err).toMatch(/1 row\(s\) quarantined; re-run with --allow-malformed-rows to import the rest/);
+    expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it('--allow-malformed-rows lets an import with quarantined rows proceed', async () => {
+    mocks.importFacilities.mockResolvedValue({
+      parsed: 1, skipped: 0, unknownColumns: [], duplicateColumns: [],
+      quarantined: [{ line: 3, reason: 'too_many_fields', raw: '2,Bad,Extra' }],
+      created: 1, updated: 0, duplicates: 0,
+    });
+
+    const code = await runFacilitiesImport(
+      '/some/file.csv',
+      { nationalSystem: 'urn:tz:hfr', apply: true, allowMalformedRows: true, json: false },
+    );
+
+    expect(code).toBe(0);
+    expect(mocks.importFacilities).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.any(String),
+      expect.objectContaining({ allowMalformedRows: true }),
+    );
+    const human = stdoutSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(human).toMatch(/created 1/);
+  });
+
+  it('--json still refuses on quarantined rows, with quarantined present in the JSON payload', async () => {
+    const result = {
+      parsed: 1, skipped: 0, unknownColumns: [], duplicateColumns: [],
+      quarantined: [{ line: 3, reason: 'too_many_fields', raw: '2,Bad,Extra' }],
+      created: 0, updated: 0, duplicates: 0,
+    };
+    mocks.importFacilities.mockResolvedValue(result);
+
+    const code = await runFacilitiesImport('/some/file.csv', { nationalSystem: 'urn:tz:hfr', apply: true, json: true });
+
+    expect(code).toBe(1);
+    expect(stdoutSpy).toHaveBeenCalledWith(JSON.stringify(result, null, 2) + '\n');
   });
 
   it('a missing file exits non-zero with a clear message, not a stack trace', async () => {
@@ -172,7 +237,9 @@ describe('facilities import CLI', () => {
   });
 
   it('--json still refuses on unknown columns, with unknownColumns present in the JSON payload', async () => {
-    const result = { parsed: 0, skipped: 0, unknownColumns: ['beds'], created: 0, updated: 0, duplicates: 0 };
+    const result = {
+      parsed: 0, skipped: 0, unknownColumns: ['beds'], duplicateColumns: [], quarantined: [], created: 0, updated: 0, duplicates: 0,
+    };
     mocks.importFacilities.mockResolvedValue(result);
 
     const code = await runFacilitiesImport('/some/file.csv', { nationalSystem: 'urn:tz:hfr', json: true });

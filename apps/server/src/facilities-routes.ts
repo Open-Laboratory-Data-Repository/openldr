@@ -80,6 +80,11 @@ const ImportSchema = z.object({
   // here would eventually mislabel an import as belonging to the wrong national register.
   nationalSystem: z.string().min(1),
   allowUnknownColumns: z.boolean().optional(),
+  // Task 5: the explicit "I have seen the line numbers, import the rest" override for structurally
+  // malformed rows (see facility-import.ts's `FacilityImportOptions.allowMalformedRows`) — the same
+  // opt-in shape as `allowUnknownColumns` above. Without this key in the schema, zod's default
+  // "strip unknown keys" behaviour would silently discard anything the client sent under this name.
+  allowMalformedRows: z.boolean().optional(),
   // The caller opts IN to writing (mirrors the CLI's `--apply`). Omitted/false ⇒ dry run: parse
   // and report, write NOTHING — the default, so a 14 000-row register can never be silently
   // rewritten by a client that forgot to set this.
@@ -748,7 +753,11 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     // FACILITY_REGISTRY_SYSTEM — the Facilities-page upload gets the same immediate-mapping
     // behaviour as a single facility create/update (POST/PUT above) and the CLI.
     const deps = { db: ctx.internalDb, capture: referenceCapture, admin: ctx.terminology.admin };
-    const importOpts = { nationalSystem: p.data.nationalSystem, allowUnknownColumns: p.data.allowUnknownColumns };
+    const importOpts = {
+      nationalSystem: p.data.nationalSystem,
+      allowUnknownColumns: p.data.allowUnknownColumns,
+      allowMalformedRows: p.data.allowMalformedRows,
+    };
 
     // Always preview first (parse-only — importFacilities never opens a transaction when
     // `apply` is falsy, see its own early-return). This gives an AUTHORITATIVE `parsed` count —
@@ -770,6 +779,14 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       return { error: err.message };
     }
     if (!p.data.apply || preview.parsed === 0) return preview;
+
+    // Task 5: mirrors the `preview.parsed === 0` short-circuit above, but needs its own check —
+    // unlike unknown columns (which zero out `parsed` for the whole file), a quarantined row does
+    // NOT drop `parsed` to 0 (see facility-csv.ts: only the malformed rows themselves are excluded,
+    // the rest of the file still parses). Without this, the route would open a real write
+    // transaction whose OWN internal `blocked` check (facility-import.ts) makes it a no-op, then
+    // still audit an "import" that wrote nothing.
+    if (preview.quarantined.length > 0 && !p.data.allowMalformedRows) return preview;
 
     if (preview.parsed > MAX_INLINE_APPLY_ROWS) {
       reply.code(400);
@@ -803,7 +820,10 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       entityId: p.data.nationalSystem,
       before: null,
       after: null,
-      metadata: { nationalSystem: p.data.nationalSystem, allowUnknownColumns: !!p.data.allowUnknownColumns, result },
+      metadata: {
+        nationalSystem: p.data.nationalSystem, allowUnknownColumns: !!p.data.allowUnknownColumns,
+        allowMalformedRows: !!p.data.allowMalformedRows, result,
+      },
     });
     return result;
   });
