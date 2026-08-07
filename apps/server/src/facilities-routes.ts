@@ -13,7 +13,7 @@ import {
 } from '@openldr/db';
 import type { FacilityAdminLevel, ExternalSchema } from '@openldr/db';
 import { requireCapability } from './rbac';
-import { recordAudit } from './audit-helper';
+import { recordAudit, actorFromRequest } from './audit-helper';
 
 const VIEW = { preHandler: requireCapability('facilities.view') };
 const MANAGE = { preHandler: requireCapability('facilities.manage') };
@@ -678,6 +678,12 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     // comment), so this cannot turn a successful create into a failed response.
     await projectRegistryRows({ internalDb: ctx.internalDb, admin: ctx.terminology.admin }, [{ id: created.id, name: created.name }]);
 
+    // Task 5: the report-facing dimension is now stale. Enqueue rather than rebuild inline: a
+    // rebuild talks to the EXTERNAL warehouse, and an operator's facility save must not fail because
+    // that warehouse hiccuped. Coalescing (facility-job-store.ts's `activeKeyFor`) means a bulk
+    // import enqueues one job, not one per row — this route never needs to de-duplicate on its own.
+    await ctx.facilityJobs.enqueue({ kind: 'facility-map-rebuild', requestedBy: actorFromRequest(req).actorId });
+
     await recordAudit(ctx, req, { action: 'facility.create', entityType: 'facility', entityId: created.id, before: null, after: created });
     reply.code(201);
     return created;
@@ -752,6 +758,9 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     // must track the new name, not just a create-time snapshot.
     await projectRegistryRows({ internalDb: ctx.internalDb, admin: ctx.terminology.admin }, [{ id: after.id, name: after.name }]);
 
+    // Task 5: same reasoning as POST above — enqueue, never rebuild inline.
+    await ctx.facilityJobs.enqueue({ kind: 'facility-map-rebuild', requestedBy: actorFromRequest(req).actorId });
+
     await recordAudit(ctx, req, { action: 'facility.update', entityType: 'facility', entityId: id, before, after });
     return after;
   });
@@ -799,6 +808,10 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       nationalCode: before.nationalCode ?? null,
     });
 
+    // Task 5: removing a facility changes what the dimension should contain, same reasoning as
+    // POST/PUT above — enqueue, never rebuild inline.
+    await ctx.facilityJobs.enqueue({ kind: 'facility-map-rebuild', requestedBy: actorFromRequest(req).actorId });
+
     await recordAudit(ctx, req, { action: 'facility.delete', entityType: 'facility', entityId: id, before, after: null });
     return { ok: true };
   });
@@ -825,7 +838,10 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     // Fix 1 (mapping-ux report): `admin` lets `importFacilities` project every written row into
     // FACILITY_REGISTRY_SYSTEM — the Facilities-page upload gets the same immediate-mapping
     // behaviour as a single facility create/update (POST/PUT above) and the CLI.
-    const deps = { db: ctx.internalDb, capture: referenceCapture, admin: ctx.terminology.admin };
+    // Task 5: `facilityJobs` lets an applied import enqueue the same `facility-map-rebuild` job a
+    // single create/update/delete does (see importFacilities' own matching comment for why that is
+    // a single call per import already, not per row).
+    const deps = { db: ctx.internalDb, capture: referenceCapture, admin: ctx.terminology.admin, facilityJobs: ctx.facilityJobs };
     const importOpts = {
       nationalSystem: p.data.nationalSystem,
       allowUnknownColumns: p.data.allowUnknownColumns,

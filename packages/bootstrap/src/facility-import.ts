@@ -5,6 +5,7 @@ import {
   type InternalSchema,
   type ReferenceCapture,
   type TerminologyAdminStore,
+  type FacilityJobStore,
   insertBatchPg,
   facilityRecordToRow,
 } from '@openldr/db';
@@ -25,6 +26,12 @@ export interface FacilityImportDeps {
    *  register is a usable mapping target immediately — no separate operator publish step. Omit to
    *  import without projecting (e.g. a throwaway/local import, mirroring `capture` above). */
   admin?: TerminologyAdminStore;
+  /** Task 5 (facility-durable-updates): when supplied, an applied import enqueues ONE
+   *  `facility-map-rebuild` job — the report-facing `facility_map` dimension is stale the moment
+   *  this write commits, same as a single create/update/delete through the Facilities page. Optional,
+   *  mirroring `admin`/`capture` above, so the CLI and any existing caller that omits it keeps
+   *  working unchanged. */
+  facilityJobs?: FacilityJobStore;
 }
 
 export interface FacilityImportOptions {
@@ -305,6 +312,15 @@ export async function importFacilities(
   // slow down) the facility_registry write itself, and `projectRegistryRows` already swallows its
   // own failures (see that function's doc comment) so this call cannot throw.
   if (deps.admin) await projectRegistryRows({ internalDb: deps.db, admin: deps.admin }, mergedRecords);
+
+  // Task 5: the write above just committed, so the report-facing `facility_map` dimension is now
+  // stale — enqueue a rebuild rather than running one inline here (see facilities-routes.ts's
+  // matching comment: a rebuild talks to the EXTERNAL warehouse, and this import must not fail
+  // because that warehouse hiccuped). Called once per import here, not per row, so a 14 000-row
+  // register enqueues one job on its own merits — but it is still the store's coalescing
+  // (facility-job-store.ts's `activeKeyFor`) that keeps this call from piling up a second queued
+  // job on top of one an operator's own create/update/delete already left queued.
+  if (deps.facilityJobs) await deps.facilityJobs.enqueue({ kind: 'facility-map-rebuild' });
 
   // `blocked` is necessarily false here — the early return above is the only path a blocked file
   // takes — but it is spelled out rather than hardcoded so the two returns cannot drift.

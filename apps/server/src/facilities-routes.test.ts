@@ -5,7 +5,7 @@ import { sql } from 'kysely';
 import { makeMigratedDb } from '@openldr/db/testing';
 import { makeMigratedExternalDb } from '@openldr/db/testing-external';
 import {
-  createTerminologyAdminStore, createFacilityRegistryStore,
+  createTerminologyAdminStore, createFacilityRegistryStore, createFacilityJobStore,
   DEFAULT_OBSERVED_FACILITY_SYSTEM, FACILITY_REGISTRY_SYSTEM,
 } from '@openldr/db';
 import { projectRegistryRows } from '@openldr/bootstrap';
@@ -39,6 +39,45 @@ const GENERIC_CORE_FIELD_FORM_FIELDS = [{ id: 'g1', apiProperty: 'name' }];
 // test built on it, stubbing `hasCoreField` to `() => true` would leave every test in this file
 // green — see hasCoreField's doc comment in facilities-routes.ts.
 const NO_CORE_FIELD_FORM_FIELDS = [{ id: 'n1', apiProperty: 'notes' }];
+
+/** A minimal in-memory `FacilityJobStore` double for `fakeCtx()`, which has no real db to hand
+ *  `createFacilityJobStore` (packages/db). It mirrors just enough of the real store's coalescing
+ *  contract — one 'queued' job per identity, `enqueue` reports `coalesced: true` rather than
+ *  inserting a second one — since the routes' own enqueue calls rely on that to not need any
+ *  de-duplication of their own (see facility-job-store.ts's `activeKeyFor` for the real rule). Every
+ *  mutation this file's routes enqueue is a bare 'facility-map-rebuild', so identity here is simply
+ *  the kind. */
+function fakeFacilityJobStore() {
+  const jobs: any[] = [];
+  return {
+    async enqueue(input: { kind: string; registryId?: string | null; requestedBy?: string | null }) {
+      if (jobs.some((j) => j.kind === input.kind && j.status === 'queued')) {
+        return { job: null, coalesced: true };
+      }
+      const job = {
+        id: `fj-${jobs.length}`, kind: input.kind, status: 'queued', attempts: 0,
+        lastError: null, registryId: input.registryId ?? null, resultCount: null,
+        requestedBy: input.requestedBy ?? null, requestedAt: new Date().toISOString(),
+        startedAt: null, finishedAt: null,
+      };
+      jobs.push(job);
+      return { job, coalesced: false };
+    },
+    async listUnresolved() {
+      return jobs.filter((j) => j.status === 'queued' || j.status === 'running');
+    },
+    __jobs: jobs,
+    // Test-only escape hatch: simulates the worker having drained every job enqueued so far, the
+    // same way `finish()` would on the real store. Needed because coalescing means a job an EARLIER
+    // mutation enqueued is still sitting `queued` when a LATER mutation's own `enqueue` call runs —
+    // that later call coalesces onto it (correctly), so a test isolating the later mutation's own
+    // enqueue behaviour must first clear the earlier one, or the assertion passes trivially off the
+    // earlier job even with the later mutation's enqueue call deleted entirely.
+    __resolveAll() {
+      for (const j of jobs) j.status = 'done';
+    },
+  };
+}
 
 function fakeCtx() {
   const rows: any[] = [];
@@ -77,6 +116,7 @@ function fakeCtx() {
     audit: { record: async (e: any) => { audit.push(e); return e; } },
     logger: { error() {}, warn() {}, info() {} },
     forms: { get: async (formId: string) => forms[formId] },
+    facilityJobs: fakeFacilityJobStore(),
     facilityRegistry: {
       list: async (opts?: any) => { lastListOptions = opts; return rows; },
       distinctAdminValues: async (level: any, scope?: any) => {
@@ -763,6 +803,52 @@ describe('facilities routes', () => {
   });
 });
 
+// --- Task 5: a facility mutation must ENQUEUE a report-facing dimension rebuild -------------------
+// Saving a mapping through the Facilities page used to leave `facility_map` stale until an operator
+// found a separate, hidden "rebuild" menu action — reports kept reading the old/raw facility while
+// the UI already said "mapped". A rebuild is enqueued (never run inline) because it talks to the
+// EXTERNAL warehouse, and an operator's save must not fail because that warehouse hiccuped.
+
+describe('Task 5: facility mutations enqueue a facility-map-rebuild', () => {
+  it('enqueues a rebuild after creating a facility', async () => {
+    const ctx = fakeCtx();
+    const app = await appWith(ctx);
+    const res = await app.inject({ method: 'POST', url: '/api/facilities', payload: body });
+    expect(res.statusCode).toBe(201);
+    const queued = await ctx.facilityJobs.listUnresolved();
+    expect(queued.map((j: any) => j.kind)).toContain('facility-map-rebuild');
+  });
+
+  it('enqueues a rebuild after updating a facility', async () => {
+    const ctx = fakeCtx();
+    const app = await appWith(ctx);
+    const id = (await app.inject({ method: 'POST', url: '/api/facilities', payload: body })).json().id;
+    // The create above already enqueued a job; coalescing means it is still sitting there, queued,
+    // when PUT runs. Resolve it first so the assertion below can only be explained by PUT's OWN
+    // enqueue call — see fakeFacilityJobStore's `__resolveAll` doc comment.
+    ctx.facilityJobs.__resolveAll();
+
+    const res = await app.inject({ method: 'PUT', url: `/api/facilities/${id}`, payload: body });
+    expect(res.statusCode).toBe(200);
+    const queued = await ctx.facilityJobs.listUnresolved();
+    expect(queued.map((j: any) => j.kind)).toContain('facility-map-rebuild');
+  });
+
+  it('enqueues a rebuild after deleting a facility', async () => {
+    const ctx = fakeCtx();
+    const app = await appWith(ctx);
+    const id = (await app.inject({ method: 'POST', url: '/api/facilities', payload: body })).json().id;
+    // Same reasoning as the update test above — isolate DELETE's own enqueue call from the one
+    // CREATE already made.
+    ctx.facilityJobs.__resolveAll();
+
+    const res = await app.inject({ method: 'DELETE', url: `/api/facilities/${id}` });
+    expect(res.statusCode).toBe(200);
+    const queued = await ctx.facilityJobs.listUnresolved();
+    expect(queued.map((j: any) => j.kind)).toContain('facility-map-rebuild');
+  });
+});
+
 // --- Fix 1 (mapping-ux report): creating/updating a facility projects it into FACILITY_REGISTRY_SYSTEM
 // immediately — the load-bearing behaviour behind the operator's "Map found nothing to search"
 // report. Exercises the REAL `createTerminologyAdminStore`/`createFacilityRegistryStore` against a
@@ -782,6 +868,10 @@ function fakeCreateCtx(internalDb: any) {
     logger: { error() {}, warn() {}, info() {} },
     forms: { get: async (formId: string) => forms[formId] },
     facilityRegistry: createFacilityRegistryStore(internalDb),
+    // Real store (not a hand-rolled fake) — this file's POST/PUT/DELETE tests below assert real
+    // create/update/delete flows against a real migrated db, and Task 5's enqueue calls need a
+    // working `ctx.facilityJobs` the same way they need a working `ctx.facilityRegistry` above.
+    facilityJobs: createFacilityJobStore(internalDb),
     __audit: audit,
   } as any;
 }
@@ -1322,6 +1412,9 @@ function fakeReconcileCtx(internalDb: any, externalDb: any) {
       upsert: async () => { throw new Error('not used by the observed-facility routes'); },
       remove: async () => {},
     },
+    // `impactCtx` (Task 7, below) swaps in the real `facilityRegistry` and reaches DELETE — Task 5's
+    // enqueue call there needs a working store, same reasoning as `fakeCreateCtx` above.
+    facilityJobs: createFacilityJobStore(internalDb),
     __audit: audit,
   } as any;
 }
