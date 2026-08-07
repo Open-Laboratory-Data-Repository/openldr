@@ -60,6 +60,7 @@ export { createValidationStrictness, VALIDATION_STRICTNESS_KEY, type ValidationS
 import { createReportCategoriesService, type ReportCategoriesService } from './report-categories';
 import { captureObservedFacilityFromProjection, publishFacilityMap, projectRegistryRows } from './facility-reconcile';
 import { createFacilityJobWorker } from './facility-job-worker';
+import { createFacilityJobRunners } from './facility-job-runners';
 import { createPluginBroker, type PluginBroker } from './plugin-broker';
 import { policyFromConfig } from './policy';
 import { createPluginTarget } from './connector-target';
@@ -868,22 +869,16 @@ const reporting: ReportingApi = {
 
   // Task 4 (facility durable updates): job store (queue/claim/progress) + the polling worker that
   // drains it, wired to the SAME ReconcileDeps shape the facilities routes/CLI already build (see
-  // `reconcileDeps(ctx)` in apps/server/src/facilities-routes.ts) rather than a second one — the
-  // runners below just close over that shape's three pieces directly.
+  // `reconcileDeps(ctx)` in apps/server/src/facilities-routes.ts) rather than a second one. The two
+  // runner closures themselves live in `createFacilityJobRunners` (facility-job-runners.ts), not
+  // inline here, so they are unit-testable independent of standing up this whole app context.
   const facilityJobs = createFacilityJobStore(internal.db);
   const facilityJobWorker = createFacilityJobWorker({
     jobs: facilityJobs,
-    runRebuild: async () => {
-      const r = await publishFacilityMap({ internalDb: internal.db, externalDb, admin: termAdmin }, { apply: true });
-      return { written: r.written };
-    },
-    runProjection: async (registryId) => {
-      // The row may have been deleted between enqueue and run — nothing left to project, so the
-      // job completes rather than fails (projectRegistryRows itself never throws either way).
-      const row = await internal.db.selectFrom('facility_registry')
-        .select(['id', 'name']).where('id', '=', registryId).executeTakeFirst();
-      if (row) await projectRegistryRows({ internalDb: internal.db, admin: termAdmin }, [row]);
-    },
+    ...createFacilityJobRunners({
+      internalDb: internal.db, externalDb, admin: termAdmin,
+      publishFacilityMap, projectRegistryRows,
+    }),
     logger,
   });
 
