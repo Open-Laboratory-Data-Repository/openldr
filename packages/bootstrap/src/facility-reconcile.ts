@@ -855,11 +855,27 @@ async function ensureRegistrySystemActive(deps: Pick<ReconcileDeps, 'admin' | 'i
  * row anywhere in the table, and which must therefore fall back to their own `id` — i.e. exactly the
  * set `registryConceptRows`' `forceOwnIdFor` option wants.
  *
- * Moved here VERBATIM out of `projectRegistryRows`, where it used to be inline, so that function and
+ * Extracted out of `projectRegistryRows`, where it used to be inline, so that function and
  * `reprojectRegistryRows` share ONE definition of "collision" rather than two that can drift. See
  * `projectRegistryRows`' doc comment for why a DB lookup is needed at all (a caller handed only
  * `{id, name}` cannot see the rest of the table) and why the lookup is complete (every caller runs
  * after its own write has committed, so the live table already reflects the whole batch).
+ *
+ * ⛔ "Claims a code" means `registryPreferredCode(row) === code`, and NOTHING else. A row only ever
+ * PROJECTS as its preferred code (`local_code`, else `national_code`) — that is what
+ * `registryConceptRows` writes and what `resolveObservedFacilities` re-derives to match a mapping
+ * back to a facility — so a collision is two rows whose PREFERRED codes are equal, not two rows that
+ * happen to share a string across two different columns. The earlier version of this block counted a
+ * claim from EITHER column independently, which invented collisions that do not exist: registry rows
+ * A `{local_code:'X'}` and B `{local_code:'Y', national_code:'X'}` do not collide at all (B projects
+ * as `'Y'`), yet B's `national_code` was counted as a claim on `'X'` and forced A onto its UUID —
+ * leaving a ghost `'X'` concept behind and moving A onto a code `resolveObservedFacilities`, which
+ * computes preferred codes, can never resolve. Pinned by `reprojectRegistryRows`' regression test
+ * "does not force a row onto its id when another row merely carries its code in a NON-preferred
+ * column".
+ *
+ * The precedence is never re-derived here: `registryPreferredCode` (`@openldr/db`) is the one
+ * definition, shared with `registryConceptRows` and `resolveObservedFacilities`.
  */
 async function collidingRegistryIds(
   deps: Pick<ReconcileDeps, 'internalDb'>,
@@ -871,26 +887,27 @@ async function collidingRegistryIds(
 
   const forceOwnIdFor = new Set<string>();
   if (candidates.length > 0) {
-    // Every OTHER row in the table (this batch's own rows included — a row always "claims" its own
-    // code) that claims one of our candidate codes via EITHER column. Matching on `local_code` OR
-    // `national_code` independently, not paired with `national_system`, mirrors what
-    // `registryPreferredCode` itself compares: a concept's `code` is a bare string, so a collision
-    // is possible against either column regardless of which system a national code belongs to.
+    // A deliberately WIDE prefilter, narrowed to real claims in memory below. A row whose PREFERRED
+    // code is one of `candidates` necessarily has that string in `local_code`, or has `local_code`
+    // absent and that string in `national_code` — so the `either column` predicate is a strict
+    // SUPERSET of the rows that matter and cannot miss one. It stays a superset (rather than being
+    // tightened into SQL) because the preference order lives in `registryPreferredCode`, and
+    // expressing it as a `coalesce(...)` predicate here would be a second copy of it in a dialect
+    // pg-mem would also have to agree with.
     const claimants = await deps.internalDb
       .selectFrom('facility_registry')
       .select(['id', 'local_code', 'national_code'])
       .where((eb) => eb.or([eb('local_code', 'in', candidates), eb('national_code', 'in', candidates)]))
       .execute();
     const claimantIdsByCode = new Map<string, Set<string>>();
-    const addClaim = (code: string | null, id: string): void => {
-      if (code === null || !candidates.includes(code)) return;
-      const set = claimantIdsByCode.get(code) ?? new Set<string>();
-      set.add(id);
-      claimantIdsByCode.set(code, set);
-    };
     for (const c of claimants) {
-      addClaim(c.local_code, c.id);
-      addClaim(c.national_code, c.id);
+      // The SAME question `registryConceptRows` and `resolveObservedFacilities` ask — what would
+      // this row project as? — and not "does this row contain the string anywhere?".
+      const claimed = registryPreferredCode({ localCode: c.local_code, nationalCode: c.national_code });
+      if (claimed === null || !candidates.includes(claimed)) continue;
+      const set = claimantIdsByCode.get(claimed) ?? new Set<string>();
+      set.add(c.id);
+      claimantIdsByCode.set(claimed, set);
     }
     for (const r of inputs) {
       const candidate = registryPreferredCode(r);
@@ -980,7 +997,20 @@ export interface ReprojectResult {
   /** One entry per row whose projected code ACTUALLY moved. A row projected for the first time (no
    *  `facility_concept_projection` link yet) is NOT a code change — there is no old code to move
    *  away from, and nothing could have been authored against one. */
-  codeChanges: { registryId: string; from: string; to: string; mappingsMigrated: number }[];
+  codeChanges: {
+    registryId: string;
+    from: string;
+    to: string;
+    mappingsMigrated: number;
+    /** TRUE when the carry-over was deliberately SKIPPED because `from` is still linked by a
+     *  facility outside this batch (see the `linkedElsewhere` guard below). Without this flag the
+     *  skip is indistinguishable from the ordinary "there were no mappings on the old code" case —
+     *  both report `mappingsMigrated: 0` — and the guard can suppress the exact repair this function
+     *  exists to perform, silently. An operator reading a Publish summary needs to be able to tell
+     *  "nothing to carry" from "we refused to carry it". A `console.warn` fires alongside, matching
+     *  `deleteSupersededIdConcepts`' precedent for a strictly less alarming case. */
+    carryOverSkipped: boolean;
+  }[];
 }
 
 /**
@@ -1004,7 +1034,42 @@ export interface ReprojectResult {
  * write the new concepts FIRST, rewrite the mappings SECOND, delete the old concept LAST. A
  * mid-failure must leave a stale concept behind for the next projection to retry, never a facility
  * with ZERO concepts. Deleting the old concept before the mapping rewrite would strand every mapping
- * still pointing at it if the rewrite then failed.
+ * still pointing at it if the rewrite then failed. Pinned by the test "leaves the old concept in
+ * place when the mapping rewrite fails" — reordering the delete ahead of the rewrite fails it.
+ *
+ * ⛔ AND THE ORDER IS ALL THE SAFETY THERE IS: these three steps are NOT one transaction, and cannot
+ * cheaply be made one. `admin.termMappings.update` opens its OWN transaction internally
+ * (`db.transaction().execute(...)` in `terminology-admin-store.ts`) over the `Kysely` instance it
+ * was constructed with, and it takes no `Transaction` parameter to join an outer one. Wrapping this
+ * sequence in `internalDb.transaction()` would therefore not nest a savepoint; on the same
+ * connection it would issue a second `BEGIN` (a no-op PostgreSQL warns about) whose eventual inner
+ * `COMMIT` commits the OUTER transaction — so a later failure would roll back nothing while LOOKING
+ * atomic. That is strictly worse than not wrapping at all: it would trade an honest, converging
+ * partial state for a silent one. Making it genuinely atomic means threading a `Transaction` through
+ * the admin store's whole `termMappings` surface, which is a store change, not a change here.
+ *
+ * What each mid-failure actually leaves behind, and why the next run repairs it:
+ *  - Failure in STEP 1 (`importRows`): nothing else has run. The link table still names the old
+ *    code, the old concept is intact, mappings are untouched. A re-run recomputes the identical
+ *    `moved` set and starts over. Fully self-healing.
+ *  - Failure DURING STEP 2 (some mappings rewritten, some not): both concepts exist — the new one
+ *    was written in step 1 and the old one is not deleted until step 3 — so EVERY mapping, migrated
+ *    or not, still points at a live concept and still resolves. The link table is not advanced
+ *    either (it is written after the loop), so a re-run computes the SAME `from` -> `to` and the
+ *    already-migrated rows are simply not in its `to_code in (fromCodes)` snapshot any more. Fully
+ *    self-healing.
+ *  - Failure BETWEEN steps 2 and 3, or during the link write: mappings are correct, but the old
+ *    concept lingers in the picker as a ghost and the link still names the old code. A re-run
+ *    recomputes the same move, finds zero stale mappings, and deletes the ghost. Self-healing.
+ *
+ * ⚠ The ONE residual that does NOT self-heal, stated rather than glossed: a crash mid-loop (or
+ * before the link write) followed by the registry changing that row's code AGAIN before the next
+ * run. The re-run's `from` is read from the link, which still names the FIRST code — so the second
+ * hop's mappings are computed against a code that has already been vacated, and any mapping the
+ * crashed run had already migrated now sits on the intermediate code, which no link record names and
+ * no future run will look at. It resolves as `targetMissing` on the Observed tab (visible, not
+ * silent) and needs an operator to re-point it. Closing it needs real atomicity, i.e. the store
+ * change described above — not more ordering.
  *
  * ⛔ Mappings are rewritten through `admin.termMappings.update`, NEVER with a direct
  * `UPDATE term_mappings`. `term_mappings` is authoritative and `concept_map_elements` is its mirror;
@@ -1112,7 +1177,23 @@ export async function reprojectRegistryRows(
 
     for (const m of moved) {
       let mappingsMigrated = 0;
-      if (!linkedElsewhere.has(m.from)) {
+      const carryOverSkipped = linkedElsewhere.has(m.from);
+      if (carryOverSkipped) {
+        // ⛔ Say so out loud. Skipping is the RIGHT call (see the guard above), but it suppresses
+        // the exact repair this function exists to perform, and `mappingsMigrated: 0` alone reads
+        // identically to "there was nothing on the old code to carry". A skip that cannot be told
+        // apart from a no-op is a skip nobody will ever investigate. Same containment reasoning as
+        // `deleteSupersededIdConcepts`' warn, for a strictly more alarming case.
+        // eslint-disable-next-line no-console -- deliberate: this module takes no logger dependency
+        // (see the `err` catches elsewhere in this file); diagnostic-only, and mirrored on the
+        // result as `carryOverSkipped` for callers that render a summary.
+        console.warn(
+          `[facility-reconcile] facility ${m.registryId} now projects as '${m.to}', but its previous code '${m.from}'` +
+            ' is still linked by a facility outside this batch — its term_mappings were NOT migrated and the stale' +
+            ' concept was NOT removed. Re-publish the WHOLE registry so both facilities are in one batch, or repair' +
+            ' the mapping by hand.',
+        );
+      } else {
         // STEP 2: repoint the mappings, through the admin store so `concept_map_elements` and
         // `reference_change_log` follow. The full `TermMappingInput` is required (it is a replace,
         // not a patch), so every other field is carried across verbatim — including `to_display`,
@@ -1142,7 +1223,7 @@ export async function reprojectRegistryRows(
             .execute();
         }
       }
-      codeChanges.push({ registryId: m.registryId, from: m.from, to: m.to, mappingsMigrated });
+      codeChanges.push({ registryId: m.registryId, from: m.from, to: m.to, mappingsMigrated, carryOverSkipped });
     }
   }
 
