@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { interpolate, paramMap, tableChunkCount, pageChunkCount, rowsFor, totalPhysicalPages, pageFooterLabel, cellTextOptions, columnWidths, isNumericColumn, CELL_TEXT_H, ROW_H, asCellStatus, cellStatusesFor, isRightAligned, keyValuePairs, pairRects, elementValue, interpolatedPairValues } from './draw';
+import { interpolate, paramMap, tableChunkCount, pageChunkCount, rowsFor, totalPhysicalPages, pageFooterLabel, cellTextOptions, columnWidths, isNumericColumn, CELL_TEXT_H, ROW_H, asCellStatus, cellStatusesFor, isRightAligned, keyValuePairs, pairRects, elementValue, interpolatedPairValues, transposeResolved, tableHeaders } from './draw';
 import type { ReportDesign, DesignElement, DesignPage } from '../schema';
 import type { ResolvedTable } from './index';
 
@@ -491,5 +491,95 @@ describe('lab identity tokens', () => {
   it('leaves an unknown lab sub-key alone rather than emitting a stray empty string mid-sentence', () => {
     // `{{lab.motto}}` is not a declared field; it resolves empty like any other unset key.
     expect(interpolate('A{{lab.motto}}B', tokens({ name: 'M' }))).toBe('AB');
+  });
+});
+
+describe('transposeResolved', () => {
+  // The cumulative antibiogram is 29 drug columns wide against a handful of organism rows. Thirty
+  // columns of "100% (12)" need ~840pt and landscape Letter has 696pt, so the natural orientation
+  // cannot fit at ANY font — the cells set the floor, not the headers. Flipping it gives 29 rows
+  // against however many organisms cleared the isolate threshold.
+  const resolved = {
+    columns: [
+      { key: 'pathogen', label: 'Pathogen' },
+      { key: 'Ampicillin', label: 'Ampicillin' },
+      { key: 'Ciprofloxacin', label: 'Ciprofloxacin' },
+    ],
+    rows: [
+      { pathogen: 'Shigella flexneri', Ampicillin: '100% (1)', Ciprofloxacin: '0% (1)' },
+      { pathogen: 'Pseudomonas aeruginosa', Ampicillin: '', Ciprofloxacin: '0% (1)' },
+    ],
+  };
+
+  it('turns the query columns into rows and the first column values into headers', () => {
+    const t = transposeResolved(resolved, 'Antibiotic');
+    expect(t.columns.map((c) => c.label)).toEqual(['Antibiotic', 'Shigella flexneri', 'Pseudomonas aeruginosa']);
+    expect(t.rows).toHaveLength(2);
+    expect(Object.values(t.rows[0])).toEqual(['Ampicillin', '100% (1)', '']);
+    expect(Object.values(t.rows[1])).toEqual(['Ciprofloxacin', '0% (1)', '0% (1)']);
+  });
+
+  it('drops the original first column from the body — it became the headers', () => {
+    // Leaving it in would print an organism-named row of organism names.
+    const t = transposeResolved(resolved, 'Antibiotic');
+    expect(t.rows.some((r) => Object.values(r).includes('Pathogen'))).toBe(false);
+  });
+
+  it('survives an empty result without inventing a column', () => {
+    const t = transposeResolved({ columns: resolved.columns, rows: [] }, 'Antibiotic');
+    expect(t.columns.map((c) => c.label)).toEqual(['Antibiotic']);
+    expect(t.rows).toHaveLength(2);
+  });
+
+  it('keys every header uniquely even when two rows share a first-column value', () => {
+    // Duplicate keys would silently collapse two organisms into one column.
+    const dup = {
+      columns: resolved.columns,
+      rows: [
+        { pathogen: 'E. coli', Ampicillin: 'a', Ciprofloxacin: 'b' },
+        { pathogen: 'E. coli', Ampicillin: 'c', Ciprofloxacin: 'd' },
+      ],
+    };
+    const t = transposeResolved(dup, 'Antibiotic');
+    expect(new Set(t.columns.map((c) => c.key)).size).toBe(t.columns.length);
+    expect(Object.values(t.rows[0])).toEqual(['Ampicillin', 'a', 'c']);
+  });
+});
+
+describe('a transposed table element flows through headers, rows and pagination', () => {
+  const el = {
+    id: 't', kind: 'table', name: 'T', rect: { x: 0, y: 0, w: 700, h: 400 },
+    dataSource: { kind: 'custom-query', queryId: 'q' }, transpose: true, transposeLabel: 'Antibiotic',
+  } as unknown as DesignElement;
+  const resolved = {
+    columns: [
+      { key: 'pathogen', label: 'Pathogen' },
+      { key: 'Ampicillin', label: 'Ampicillin' },
+      { key: 'Ciprofloxacin', label: 'Ciprofloxacin' },
+    ],
+    rows: [{ pathogen: 'Shigella flexneri', Ampicillin: '100% (1)', Ciprofloxacin: '0% (1)' }],
+  };
+
+  it('derives headers from the flipped table', () => {
+    expect(tableHeaders(el, resolved)).toEqual(['Antibiotic', 'Shigella flexneri']);
+  });
+
+  it('derives body rows from the flipped table', () => {
+    expect(rowsFor(el, resolved)).toEqual([['Ampicillin', '100% (1)'], ['Ciprofloxacin', '0% (1)']]);
+  });
+
+  it('paginates on the flipped ROW count, not the original one', () => {
+    // The real antibiogram is ONE organism row across 30 drug columns; flipped that is 29 rows.
+    // If chunking read the unflipped table it would see a single row, decide one page was enough,
+    // and the drugs past the fold would silently never print.
+    const wide = {
+      columns: [{ key: 'pathogen', label: 'Pathogen' },
+        ...Array.from({ length: 29 }, (_, i) => ({ key: `d${i}`, label: `Drug ${i}` }))],
+      rows: [Object.fromEntries([['pathogen', 'E. coli'], ...Array.from({ length: 29 }, (_, i) => [`d${i}`, '0% (1)'])])],
+    };
+    const short = { ...el, rect: { x: 0, y: 0, w: 700, h: 160 } } as unknown as DesignElement;
+    const flat = { ...short, transpose: false } as unknown as DesignElement;
+    expect(rowsFor(short, wide)).toHaveLength(29);
+    expect(tableChunkCount(short, wide)).toBeGreaterThan(tableChunkCount(flat, wide));
   });
 });
