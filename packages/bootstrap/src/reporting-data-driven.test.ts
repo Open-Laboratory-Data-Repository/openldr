@@ -16,6 +16,12 @@ const defWithFacility = { id: 'r-with-facility', name: 'AMR', description: '', c
 const defWithSingleColumnOptions = { id: 'r-with-single-column-options', name: 'AMR', description: '', category: 'amr', designId: 'd1',
   primaryQueryId: 'q1', summaryMetrics: null, chart: { type: 'bar', x: 'a', y: 'b' },
   paramOptions: { facility: 'q-single' }, status: 'published' } as any;
+// A report whose select param has NO configured options query — the display-label substitution
+// (item 2) must be a no-op here, so `values` still forwards exactly what the caller/defaults
+// produced.
+const defNoOptions = { id: 'r-no-options', name: 'AMR', description: '', category: 'amr', designId: 'd1',
+  primaryQueryId: 'q1', summaryMetrics: null, chart: { type: 'bar', x: 'a', y: 'b' },
+  paramOptions: null, status: 'published' } as any;
 
 let lastRunStoredQueryValues: Record<string, unknown> | undefined;
 // Captures the third argument `renderReportDesignPdf` was actually called with, so the bootstrap
@@ -23,6 +29,10 @@ let lastRunStoredQueryValues: Record<string, unknown> | undefined;
 // — an opaque mock that ignores its arguments would keep passing if that line reverted to dropping
 // `values` (or `identity`) entirely.
 let lastRenderOptions: { identity?: unknown; values?: Record<string, unknown> } | undefined;
+// Captures the `values` argument resolveDesignTables was actually called with — the trap in item
+// 2 is that the scope panel's display substitution ("Name (CODE)") must NEVER leak into the value
+// the design's bound queries filter on, or the report silently renders empty.
+let lastResolveDesignTablesValues: Record<string, unknown> | undefined;
 const deps = {
   reportDefs: {
     list: async () => [def],
@@ -30,6 +40,7 @@ const deps = {
       if (id === 'r1') return def;
       if (id === 'r-with-facility') return defWithFacility;
       if (id === 'r-with-single-column-options') return defWithSingleColumnOptions;
+      if (id === 'r-no-options') return defNoOptions;
       return undefined;
     },
   },
@@ -51,7 +62,10 @@ const deps = {
     if (queryId === 'q-single') return { columns: [{ key: 'v', label: 'v' }], rows: [{ v: 'Only' }] };
     return { columns: [{ key: 'a', label: 'a' }], rows: [{ a: 1 }, { a: 2 }] };
   },
-  resolveDesignTables: async () => new Map([['t', { columns: [{ key: 'a', label: 'a' }], rows: [{ a: 1 }] }]]),
+  resolveDesignTables: async (_design: unknown, values: Record<string, unknown>) => {
+    lastResolveDesignTablesValues = values;
+    return new Map([['t', { columns: [{ key: 'a', label: 'a' }], rows: [{ a: 1 }] }]]);
+  },
   renderReportDesignPdf: async (_design: unknown, _resolved: unknown, opts: { identity?: unknown; values?: Record<string, unknown> }) => {
     lastRenderOptions = opts;
     return Buffer.from('%PDF-1.4 fake');
@@ -81,11 +95,40 @@ describe('reporting data-driven branch', () => {
     expect((await reporting.renderPdf('r1', { facility: 'Ndola' })).toString()).toContain('%PDF');
   });
   it('renderPdf forwards the resolved run parameters through to renderReportDesignPdf as `values`', async () => {
-    // Pins packages/bootstrap/src/index.ts:242 — `deps.renderReportDesignPdf(design, resolved,
+    // Pins packages/bootstrap/src/index.ts's `deps.renderReportDesignPdf(design, resolved,
     // { identity, values })`. `values` is the design defaults merged with the caller's params, so
-    // an override must survive the merge, not just equal what was passed in.
-    await reporting.renderPdf('r1', { facility: 'Ndola' });
+    // an override must survive the merge, not just equal what was passed in. Uses a report whose
+    // select param has NO configured options query, so the item-2 display substitution below is a
+    // no-op and this keeps testing exactly the merge behavior it always tested.
+    await reporting.renderPdf('r-no-options', { facility: 'Ndola' });
     expect(lastRenderOptions?.values).toEqual({ facility: 'Ndola' });
+  });
+  it('renderPdf shows "Name (CODE)" in the scope panel but keeps resolveDesignTables on the RAW code', async () => {
+    // ⛔ THE TRAP: resolveDesignTables must see the RAW code — the design's bound queries filter
+    // on it (e.g. `dr.performer = {{param.facility}}`). If the resolved display label ever
+    // reached that call instead, the filter would match nothing and the report would silently
+    // render empty. The scope panel's `values` gets a SEPARATE display copy, built only after
+    // resolveDesignTables has already run on the raw values.
+    await reporting.renderPdf('r-with-facility', { facility: 'BAGAE' });
+    expect(lastResolveDesignTablesValues).toEqual({ facility: 'BAGAE' });
+    expect(lastRenderOptions?.values).toEqual({ facility: 'National Public Health Laboratory (BAGAE)' });
+  });
+  it('falls back to printing the raw code when it has no matching option (a facility that has since disappeared)', async () => {
+    await reporting.renderPdf('r-with-facility', { facility: 'GONE-CODE' });
+    expect(lastRenderOptions?.values).toEqual({ facility: 'GONE-CODE' });
+  });
+  it('does not query options for an untouched (empty) select parameter', async () => {
+    let optionsQueried = false;
+    const spyDeps = {
+      ...deps,
+      runStoredQuery: async (queryId: string, values: Record<string, unknown>) => {
+        if (queryId === 'q-fac-2col') optionsQueried = true;
+        return deps.runStoredQuery(queryId, values);
+      },
+    };
+    const spyReporting = buildReportingForTest(spyDeps as any);
+    await spyReporting.renderPdf('r-with-facility', { facility: '' });
+    expect(optionsQueried).toBe(false);
   });
   it('options resolves select dropdowns from paramOptions queries', async () => {
     expect(await reporting.options('r1')).toEqual({

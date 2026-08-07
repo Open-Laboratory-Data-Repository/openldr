@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { FEATURE_FLAGS } from '@openldr/config';
+import { FEATURE_FLAGS, validateLabIdentityValue } from '@openldr/config';
 import { seedDatabase, seedDefaultConnector, seedEssentials, type FormSeedTarget } from './seed';
 import type { DbContext } from './db-context';
 import { LAB_IDENTITY_DEFAULTS } from './lab-identity-defaults';
@@ -533,6 +533,17 @@ describe('seedDatabase — feature-flag defaults', () => {
     const second = await seedDatabase(fakeDb, app);
     expect(second.settingsSeeded).toBe(0);
     expect((await app.appSettings.get('lab.name'))?.value).toBe('Muhimbili National Hospital');
+  });
+
+  it('every seeded identity default is itself valid per validateLabIdentityValue', () => {
+    // The seed writes LAB_IDENTITY_DEFAULTS straight through appSettings.set, never running them
+    // through validateLabIdentityValue — only the operator-facing Settings ▸ Laboratory path does
+    // that. The values are valid today, but nothing catches a future careless edit (e.g. an
+    // https:// logo URL, which pdfkit silently renders as a blank placeholder rather than
+    // rejecting) until someone actually prints a report. Pin the invariant here instead.
+    for (const d of LAB_IDENTITY_DEFAULTS) {
+      expect(validateLabIdentityValue(d.id, d.value), `${d.id} fails its own validator`).toBeNull();
+    }
   });
 });
 

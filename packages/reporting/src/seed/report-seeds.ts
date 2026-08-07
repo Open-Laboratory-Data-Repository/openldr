@@ -211,24 +211,35 @@ export const SEED_QUERIES: SeedQuery[] = [
     // five DISA facility codes (BAMAA, BBFAF, CDABE, EAFAE, NDFAM) all display "Aga Khan", so
     // filtering/grouping by the label would silently merge five laboratories. No postgres-isms at
     // all — all three dialects are byte-identical.
+    // ⛔ GROUP BY dr.performer, not SELECT DISTINCT: `dr.performer_display` is free text off the
+    // wire (fm.name is null for 87 of 88 live codes, so the label almost always falls through to
+    // it), and `select distinct value, label` dedupes the PAIR, not the code — two reports at one
+    // facility whose display text differs by casing/whitespace produced two options sharing one
+    // `value`, a duplicate React key and an ambiguous select. Same defect as q-amr-facility-summary
+    // (fixed in db932117), fixed the same way here: group by the code, `min()` the label. Legal
+    // under MySQL's default ONLY_FULL_GROUP_BY because the only non-aggregate in the SELECT list
+    // (`dr.performer`) IS the GROUP BY item itself — verified against a live MySQL 8.4 container.
     sql: {
-      postgres: `select distinct dr.performer as value,
-  coalesce(fm.name, dr.performer_display, dr.performer) as label
+      postgres: `select dr.performer as value,
+  min(coalesce(fm.name, dr.performer_display, dr.performer)) as label
 from diagnostic_reports dr
 left join facility_map fm on fm.source_system = coalesce(dr.source_system, '') and fm.source_code = dr.performer
 where dr.performer is not null and dr.performer <> ''
+group by dr.performer
 order by 2`,
-      mssql: `select distinct dr.performer as value,
-  coalesce(fm.name, dr.performer_display, dr.performer) as label
+      mssql: `select dr.performer as value,
+  min(coalesce(fm.name, dr.performer_display, dr.performer)) as label
 from diagnostic_reports dr
 left join facility_map fm on fm.source_system = coalesce(dr.source_system, '') and fm.source_code = dr.performer
 where dr.performer is not null and dr.performer <> ''
+group by dr.performer
 order by 2`,
-      mysql: `select distinct dr.performer as value,
-  coalesce(fm.name, dr.performer_display, dr.performer) as label
+      mysql: `select dr.performer as value,
+  min(coalesce(fm.name, dr.performer_display, dr.performer)) as label
 from diagnostic_reports dr
 left join facility_map fm on fm.source_system = coalesce(dr.source_system, '') and fm.source_code = dr.performer
 where dr.performer is not null and dr.performer <> ''
+group by dr.performer
 order by 2`,
     },
   },
@@ -2014,8 +2025,10 @@ export const SEED_DESIGNS: ReportDesign[] = [
     ],
     parameters: [
       { key: 'dateRange', label: 'Date range', type: 'daterange', required: true },
-      // Unused by the query itself (see q-test-volume's comment) — kept only so the filter bar
-      // matches the catalog, which also declares (but never applies) a facility select.
+      // Applied by the query (see q-test-volume's comment): filters through the request's own
+      // specimens (lab_results -> diagnostic_reports.performer). The catalog's own `run()` never
+      // applied this control — this seeded query closes that gap, so unlike the catalog, choosing
+      // a facility here actually changes the result.
       { key: 'facility', label: 'Facility', type: 'select', required: false, value: '' },
     ],
   }),

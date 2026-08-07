@@ -444,7 +444,7 @@ describe('SEED_QUERIES — the facility picker offers real facilities', () => {
     for (const [dialect, sql] of Object.entries(q().sql)) {
       expect(sql, `${dialect} lost the value column`).toMatch(/dr\.performer as value/);
       expect(sql, `${dialect} lost the label column`)
-        .toContain('coalesce(fm.name, dr.performer_display, dr.performer) as label');
+        .toContain('min(coalesce(fm.name, dr.performer_display, dr.performer)) as label');
     }
   });
 
@@ -452,6 +452,22 @@ describe('SEED_QUERIES — the facility picker offers real facilities', () => {
     for (const [dialect, sql] of Object.entries(q().sql)) {
       expect(sql, `${dialect}`).toMatch(/fm\.source_system\s*=\s*coalesce\(dr\.source_system, ''\)/);
       expect(sql, `${dialect}`).toMatch(/fm\.source_code\s*=\s*dr\.performer\b/);
+    }
+  });
+
+  it('GROUPS by the code instead of SELECT DISTINCT on the (code, label) pair', () => {
+    // `dr.performer_display` is free text off the wire (fm.name is null for 87 of 88 live
+    // codes), so the label almost always falls through to it. `select distinct value, label`
+    // dedupes the PAIR, not the code — two reports at one facility whose display text differs
+    // by casing/whitespace produced two options sharing one `value`: a duplicate React key and
+    // a duplicated, ambiguous dropdown entry. Same defect as q-amr-facility-summary, fixed the
+    // same way: group by the code, aggregate (min()) the label.
+    for (const [dialect, sql] of Object.entries(q().sql)) {
+      expect(sql, `${dialect} still SELECT DISTINCTs the pair instead of grouping the code`)
+        .not.toMatch(/select distinct/i);
+      expect(sql, `${dialect} lost the code grouping`).toMatch(/group by dr\.performer\b/);
+      expect(sql, `${dialect} label is not aggregated and can fork per code`)
+        .toMatch(/min\(coalesce\(fm\.name, dr\.performer_display, dr\.performer\)\) as label/);
     }
   });
 });
@@ -1033,6 +1049,34 @@ describe('SEED_QUERIES — the facility filter filters on the report performer',
     for (const [dialect, sql] of Object.entries(q.sql)) {
       expect(sql, `${dialect} attributes by patient`).not.toMatch(/sr\.patient_id in \(select patient_id from diagnostic_reports/);
       expect(sql, `${dialect}`).toContain('select l.request_id from lab_results l join diagnostic_reports d on d.specimen_id = l.specimen_id');
+    }
+  });
+
+  // The tests above only assert the ABSENCE of managing_organization and the presence of the ''
+  // escape — they'd pass just as happily if a predicate were quietly swapped to
+  // performer_display or facility_map.source_code, silently re-breaking the filter this whole
+  // slice exists to protect. Pin each predicate to the actual column, via the actual route.
+  it('q-amr-resistance filters through its specimen against diagnostic_reports.performer', () => {
+    const q = SEED_QUERIES.find((x) => x.id === 'q-amr-resistance')!;
+    for (const [dialect, sql] of Object.entries(q.sql)) {
+      expect(sql, `${dialect} does not filter its specimen subquery on performer`)
+        .toContain('select specimen_id from diagnostic_reports where performer = {{param.facility}}');
+    }
+  });
+
+  it('q-turnaround-time filters directly on diagnostic_reports.performer', () => {
+    const q = SEED_QUERIES.find((x) => x.id === 'q-turnaround-time')!;
+    for (const [dialect, sql] of Object.entries(q.sql)) {
+      expect(sql, `${dialect} does not filter dr.performer directly`)
+        .toContain("({{param.facility}} = '' or dr.performer = {{param.facility}})");
+    }
+  });
+
+  it('q-patient-demographics filters through the patient’s reports against diagnostic_reports.performer', () => {
+    const q = SEED_QUERIES.find((x) => x.id === 'q-patient-demographics')!;
+    for (const [dialect, sql] of Object.entries(q.sql)) {
+      expect(sql, `${dialect} does not filter its patient subquery on performer`)
+        .toContain('select patient_id from diagnostic_reports where performer = {{param.facility}}');
     }
   });
 });

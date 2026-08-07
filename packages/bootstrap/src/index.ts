@@ -237,9 +237,40 @@ function createDataDrivenReporting(deps: ReportingDataDrivenDeps) {
     const design = await deps.reportDesigns.get(def.designId);
     if (!design) throw new ReportNotFoundError(def.designId);
     const values = { ...designDefaults(design), ...valuesOf(rawParams) };
+    // ⛔ resolveDesignTables MUST see the RAW (coded) values — the design's bound queries filter
+    // on the code (e.g. `dr.performer = {{param.facility}}`). If a resolved display label ever
+    // reached this call instead, the filter would match nothing and the report would silently
+    // render empty. Any "Name (CODE)" substitution for the scope panel happens strictly AFTER
+    // this call returns, on a SEPARATE copy — see `withDisplayLabels` — and that copy must never
+    // be fed back into resolveDesignTables.
     const resolved = await deps.resolveDesignTables(design, values, deps.runStoredQuery);
     const identity = await deps.labIdentity?.tokens();
-    return deps.renderReportDesignPdf(design, resolved, { identity, values });
+    const displayValues = await withDisplayLabels(id, def, design, values);
+    return deps.renderReportDesignPdf(design, resolved, { identity, values: displayValues });
+  }
+
+  /** Scope-panel display copy of `values`: each `paramOptions`-backed select parameter's raw code
+   *  is replaced with "Name (CODE)" — both parts, because e.g. five DISA facility codes all share
+   *  the display "Aga Khan" and a bare name would be ambiguous (see `ReportParamOption`'s doc
+   *  comment). Falls back to printing the raw value when the code has no matching option (a
+   *  facility that has since disappeared from the picker), rather than going blank. Only looks up
+   *  options for a select parameter that actually has a non-empty value, so an untouched filter
+   *  never triggers the options query for nothing.
+   *  ⛔ The result must NEVER be passed to resolveDesignTables — see the caller. */
+  async function withDisplayLabels(
+    id: string, def: ReportRecord, design: ReportDesign, values: Record<string, unknown>,
+  ): Promise<Record<string, unknown>> {
+    const targets = design.parameters.filter((p) =>
+      p.type === 'select' && def.paramOptions?.[p.key] && typeof values[p.key] === 'string' && values[p.key] !== '');
+    if (targets.length === 0) return values;
+    const options = await optionsDataDriven(id);
+    const out = { ...values };
+    for (const p of targets) {
+      const raw = values[p.key] as string;
+      const match = options[p.key]?.find((o) => o.value === raw);
+      out[p.key] = match ? `${match.label} (${match.value})` : raw;
+    }
+    return out;
   }
 
   async function optionsDataDriven(id: string): Promise<Record<string, ReportParamOption[]>> {
