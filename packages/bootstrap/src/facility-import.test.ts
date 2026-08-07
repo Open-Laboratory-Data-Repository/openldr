@@ -29,7 +29,10 @@ describe('importFacilities', () => {
     const deps = await buildDeps();
     const body = csv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,', ',No Code,,,,,,,,,,,,,,']); // second row missing required national_code
     const result = await importFacilities(deps, body, { nationalSystem: SYSTEM });
-    expect(result).toEqual({ parsed: 1, skipped: 1, unknownColumns: [], created: 0, updated: 0, duplicates: 0 });
+    expect(result).toEqual({
+      parsed: 1, skipped: 1, unknownColumns: [], duplicateColumns: [], quarantined: [],
+      created: 0, updated: 0, duplicates: 0,
+    });
     expect(await deps.db.selectFrom('facility_registry').selectAll().execute()).toHaveLength(0);
   });
 
@@ -79,7 +82,10 @@ describe('importFacilities', () => {
     const withExtra = ['national_code,name,beds', '100,Dodoma Regional Referral,250'].join('\n') + '\n';
 
     const blocked = await importFacilities(deps, withExtra, { nationalSystem: SYSTEM, apply: true });
-    expect(blocked).toEqual({ parsed: 0, skipped: 0, unknownColumns: ['beds'], created: 0, updated: 0, duplicates: 0 });
+    expect(blocked).toEqual({
+      parsed: 0, skipped: 0, unknownColumns: ['beds'], duplicateColumns: [], quarantined: [],
+      created: 0, updated: 0, duplicates: 0,
+    });
     expect(await deps.db.selectFrom('facility_registry').selectAll().execute()).toHaveLength(0);
 
     const allowed = await importFacilities(deps, withExtra, { nationalSystem: SYSTEM, allowUnknownColumns: true, apply: true });
@@ -256,6 +262,56 @@ describe('importFacilities', () => {
 
     const after = await store.get(id);
     expect(after?.extras).toMatchObject({ beds: '300', ward_contact: 'Ada' });
+  });
+
+  // Task 4 (facilities-phase-0): a structurally malformed row (field count != header's — see
+  // facility-csv.ts's `quarantined`) must not be silently skipped into an otherwise-successful apply.
+  // These tests use raw CSV bodies rather than the `csv()` helper above, since that helper always
+  // pads to the fixed 16-column HEADER and can't produce a row whose field count actually disagrees.
+  it('refuses to apply while any row is quarantined, and writes nothing', async () => {
+    const deps = await buildDeps();
+    const body = 'national_code,name\n1,Good\n2,Bad,Extra\n';
+
+    const result = await importFacilities(deps, body, { nationalSystem: SYSTEM, apply: true });
+
+    expect(result.created).toBe(0);
+    expect(result.updated).toBe(0);
+    expect(result.quarantined).toHaveLength(1);
+    expect(await deps.db.selectFrom('facility_registry').selectAll().execute()).toHaveLength(0);
+  });
+
+  it('applies the good rows when allowMalformedRows is set, and still reports the bad one', async () => {
+    const deps = await buildDeps();
+    const body = 'national_code,name\n1,Good\n2,Bad,Extra\n3,AlsoGood\n';
+
+    const result = await importFacilities(deps, body, {
+      nationalSystem: SYSTEM, apply: true, allowMalformedRows: true,
+    });
+
+    expect(result.created).toBe(2);
+    expect(result.quarantined).toHaveLength(1);
+    expect(await deps.db.selectFrom('facility_registry').selectAll().execute()).toHaveLength(2);
+  });
+
+  it('reports quarantined rows on a dry run without needing the override', async () => {
+    const deps = await buildDeps();
+    const body = 'national_code,name\n1,Good\n2,Bad,Extra\n';
+
+    const result = await importFacilities(deps, body, { nationalSystem: SYSTEM });
+
+    expect(result.quarantined).toHaveLength(1);
+    expect(result.parsed).toBe(1);
+  });
+
+  it('refuses to apply a file with duplicate headers', async () => {
+    const deps = await buildDeps();
+
+    const result = await importFacilities(deps, 'national_code,name,name\n1,A,B\n', {
+      nationalSystem: SYSTEM, apply: true, allowMalformedRows: true,
+    });
+
+    expect(result.created).toBe(0);
+    expect(result.duplicateColumns).toEqual(['name']);
   });
 });
 

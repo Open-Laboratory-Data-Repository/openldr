@@ -1,5 +1,5 @@
 import { type Kysely, sql } from 'kysely';
-import { parseFacilityCsv } from '@openldr/terminology';
+import { parseFacilityCsv, type QuarantinedRow } from '@openldr/terminology';
 import {
   type FacilityRecord,
   type InternalSchema,
@@ -33,6 +33,11 @@ export interface FacilityImportOptions {
   nationalSystem: string;
   /** Import despite unrecognised columns, carrying them into each record's `extras`. */
   allowUnknownColumns?: boolean;
+  /** Apply despite structurally malformed rows (see `FacilityImportResult.quarantined`) — the
+   *  explicit "I have seen the line numbers, import the rest" override, mirroring
+   *  `allowUnknownColumns` above so a problem file has exactly one idiom for proceeding anyway.
+   *  There is no equivalent override for duplicate headers: see `duplicateColumns` below. */
+  allowMalformedRows?: boolean;
   /** The caller opts IN to writing. Omitted/false ⇒ dry run: parse and report, write NOTHING. A
    *  14 000-row register is exactly the kind of file nobody should be able to silently rewrite by
    *  forgetting a flag. */
@@ -50,6 +55,15 @@ export interface FacilityImportResult {
    *  `parsed`/`skipped` are both 0 — the parser blocks the whole file rather than importing it
    *  missing data (see facility-csv.ts's docblock). */
   unknownColumns: string[];
+  /** Headers appearing more than once (see facility-csv.ts's `duplicateColumns`). Non-empty ⇒
+   *  `apply` is always blocked — there is no override, unlike `quarantined` below: which of two
+   *  identically-named columns wins is arbitrary, so applying either is a guess about master data. */
+  duplicateColumns: string[];
+  /** Rows whose field count did not match the header's — never mapped to columns (see
+   *  facility-csv.ts's `QuarantinedRow`). Non-empty ⇒ `apply` is blocked unless the caller sets
+   *  `allowMalformedRows`. Present on a dry run too, same as every sibling counter here, so an
+   *  operator can see the damage before ever applying. */
+  quarantined: QuarantinedRow[];
   /** Rows written that did not previously exist. Always 0 on a dry run. */
   created: number;
   /** Rows written that already existed (same nationalSystem+nationalCode ⇒ same hashed id, so this
@@ -99,6 +113,17 @@ function dedupeById(records: FacilityRecord[]): { records: FacilityRecord[]; dup
 
 /**
  * Parse a national facility CSV and, if `apply` is set, write it into `facility_registry`.
+ *
+ * ## Structural damage blocks apply (facilities-phase-0 Task 4)
+ *
+ * A row whose field count disagrees with the header's is QUARANTINED by `parseFacilityCsv`, not
+ * mapped into a record at all (see facility-csv.ts). `apply` refuses to run while any such row
+ * exists, unless the caller sets `allowMalformedRows` — the same explicit-override shape as
+ * `allowUnknownColumns`, so a problem file has exactly one idiom for proceeding anyway. Duplicate
+ * headers get NO override, ever: which of two identically-named columns wins is arbitrary, so
+ * applying either is a guess about master data rather than a documented trade. A dry run always
+ * reports both `quarantined` and `duplicateColumns` regardless of the override, since a dry run
+ * writes nothing to begin with.
  *
  * ## Batching decision (14 000-row workload)
  *
@@ -168,16 +193,28 @@ export async function importFacilities(
   csv: string,
   opts: FacilityImportOptions,
 ): Promise<FacilityImportResult> {
-  const { records: parsedRecords, unknownColumns, skipped } = parseFacilityCsv(csv, {
-    nationalSystem: opts.nationalSystem,
-    allowUnknownColumns: opts.allowUnknownColumns,
-  });
+  const { records: parsedRecords, unknownColumns, duplicateColumns, quarantined, skipped } =
+    parseFacilityCsv(csv, {
+      nationalSystem: opts.nationalSystem,
+      allowUnknownColumns: opts.allowUnknownColumns,
+    });
   // Collapse same-id rows (a repeated national_code within one file) BEFORE anything downstream
   // ever sees them — see dedupeById's docblock for why this can't wait until insertBatchPg.
   const { records, duplicates } = dedupeById(parsedRecords);
 
-  if (!opts.apply || records.length === 0) {
-    return { parsed: parsedRecords.length, skipped, unknownColumns, created: 0, updated: 0, duplicates };
+  // Structural damage BLOCKS apply. `allowMalformedRows` is the explicit "I have seen the line
+  // numbers, import the rest" override — the same shape as `allowUnknownColumns` above, so a file
+  // with something wrong with it has exactly one idiom for proceeding anyway. Duplicate headers have
+  // NO override: which of two identically-named columns wins is arbitrary, so applying either is a
+  // guess about master data rather than a documented trade.
+  const blocked =
+    duplicateColumns.length > 0 || (quarantined.length > 0 && !opts.allowMalformedRows);
+
+  if (!opts.apply || blocked || records.length === 0) {
+    return {
+      parsed: parsedRecords.length, skipped, unknownColumns, duplicateColumns, quarantined,
+      created: 0, updated: 0, duplicates,
+    };
   }
 
   const ids = records.map((r) => r.id);
@@ -243,5 +280,8 @@ export async function importFacilities(
   // own failures (see that function's doc comment) so this call cannot throw.
   if (deps.admin) await projectRegistryRows({ internalDb: deps.db, admin: deps.admin }, mergedRecords);
 
-  return { parsed: parsedRecords.length, skipped, unknownColumns, created, updated, duplicates };
+  return {
+    parsed: parsedRecords.length, skipped, unknownColumns, duplicateColumns, quarantined,
+    created, updated, duplicates,
+  };
 }
