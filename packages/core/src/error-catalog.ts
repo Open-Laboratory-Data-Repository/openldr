@@ -29,6 +29,7 @@ export const DOMAINS: Readonly<Record<string, string>> = {
   DB: 'dashboards',
   SY: 'system',
   VA: 'validation',
+  FAC: 'facilities',
 };
 
 // Per-domain tables. Kept as flat literals so the whole vocabulary is greppable in one file.
@@ -49,6 +50,11 @@ const ENTRIES: readonly CatalogEntry[] = [
   { code: 'FM0003', domain: 'forms', httpStatus: 400, message: 'a required field is missing' },
   // Validation (VA)
   { code: 'VA0002', domain: 'validation', httpStatus: 422, message: 'clinical validation failed' },
+  // Facilities (FAC). The only three-letter prefix in the catalog — `FA` was avoided because it
+  // reads as an abbreviation of nothing in particular next to `FM` (forms); the code regex allows
+  // 2–4 letters (see error-catalog.test.ts) and `catalogFor`/`domainForPrefix` derive the prefix by
+  // stripping the trailing digits, so the length is not load-bearing anywhere.
+  { code: 'FAC0010', domain: 'facilities', httpStatus: 400, message: 'unsupported facility mapping semantic' },
   // Auth (AU)
   { code: 'AU0001', domain: 'auth', httpStatus: 401, message: 'your session has expired' },
   { code: 'AU0002', domain: 'auth', httpStatus: 401, message: 'authentication required' },

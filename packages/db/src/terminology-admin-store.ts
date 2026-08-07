@@ -158,6 +158,36 @@ export interface TerminologyAdminStore {
     create(input: TermMappingInput): Promise<{ mapping: TermMapping; draftCreated: boolean }>;
     update(id: string, input: TermMappingInput): Promise<TermMapping>;
     delete(id: string): Promise<void>;
+    /**
+     * Write `input` as the ONE active mapping for its `(fromSystem, fromCode)` within the
+     * `(toSystem, mapType)` scope, deactivating every other row already active in that exact scope
+     * — supersede and write together, in a SINGLE transaction.
+     *
+     * Scope predicate, stated exactly because the partial unique index added in facilities-phase-0
+     * Task 12 has to agree with it: `is_active = true AND to_system = input.toSystem AND
+     * map_type = input.mapType`, keyed on `(from_system, from_code)`. Rows outside that scope — a
+     * different target system, a different map type, or an already-inactive row — are never touched.
+     *
+     * Which row `input` lands in, in order:
+     *   1. `opts.id`, when given (the caller is editing a specific mapping; throws `not-found` if
+     *      it does not exist).
+     *   2. An in-scope ACTIVE row that already names `input.toCode` — a re-save of the same target
+     *      rewrites that row rather than superseding it into a second one. `term_mappings` would
+     *      happily hold both and they would resolve identically, but the uniqueness above is keyed
+     *      on `(from_system, from_code)` alone, so a duplicate is still a violation.
+     *   3. Otherwise a new row.
+     *
+     * `input.isActive: false` supersedes NOTHING: the scope is active-only, so a row written
+     * inactive cannot displace the one active row that satisfies it.
+     *
+     * `superseded` lists the ids that were deactivated, for the caller's audit entry.
+     *
+     * ⚠ NOT facility-specific. The method is generic over `(toSystem, mapType)`; today its only
+     * caller is the terminology mapping routes, and only for `toSystem = FACILITY_REGISTRY_SYSTEM`
+     * (apps/server/src/terminology-admin-routes.ts). `create`/`update` remain the writers for every
+     * other coding system, where multiple active mappings are legitimate.
+     */
+    saveExclusive(input: TermMappingInput, opts?: { id?: string }): Promise<{ mapping: TermMapping; draftCreated: boolean; superseded: string[] }>;
   };
   valueSets: {
     list(publisherId?: string): Promise<ValueSetSummary[]>;
@@ -630,6 +660,101 @@ export function createTerminologyAdminStore(db: Kysely<InternalSchema>, projecti
           await trx.deleteFrom('term_mappings').where('id', '=', id).execute();
           if (capture) await capture.record(trx, 'term_mapping', id, 'delete', null);
         });
+      },
+      // See the doc comment on TerminologyAdminStore.termMappings.saveExclusive for the contract.
+      async saveExclusive(input, opts) {
+        const superseded: string[] = [];
+        let draftCreated = false;
+        let id = opts?.id ?? '';
+        await db.transaction().execute(async (trx) => {
+          // The row `input` is being written INTO, resolved before anything is superseded so it can
+          // be excluded from the supersede set (a row must never deactivate itself).
+          let previous: { from_system: string; from_code: string; to_system: string; to_code: string } | undefined;
+          if (id) {
+            previous = await trx.selectFrom('term_mappings').selectAll().where('id', '=', id).executeTakeFirst();
+            if (!previous) throw new TerminologyAdminError(`mapping not found: ${id}`, 'not-found');
+          }
+
+          // The scope, matching Task 12's partial unique index exactly: active rows for this
+          // (from_system, from_code) whose target system AND map type are the ones being written.
+          // `is_active` is part of the predicate, so an already-inactive row is invisible here and
+          // is neither re-deactivated nor captured a second time.
+          const inScope = await trx.selectFrom('term_mappings').selectAll()
+            .where('from_system', '=', input.fromSystem).where('from_code', '=', input.fromCode)
+            .where('to_system', '=', input.toSystem).where('map_type', '=', input.mapType)
+            .where('is_active', '=', true).execute();
+
+          // Step 2 of the resolution order: reuse an in-scope active row that already names this
+          // exact target, so a re-save of the SAME target rewrites one row instead of leaving a
+          // duplicate behind it.
+          if (!id) {
+            const sameTarget = inScope.find((r) => r.to_code === input.toCode);
+            if (sameTarget) { id = sameTarget.id; previous = sameTarget; }
+          }
+          if (!id) id = newId('tm');
+
+          // ⛔ Only an ACTIVE write claims the scope. Writing `isActive: false` cannot displace the
+          // one active row, because the invariant is about active rows only.
+          if (input.isActive) {
+            for (const row of inScope) {
+              if (row.id === id) continue;
+              // `is_active` alone changes — `to_system`/`to_code` are untouched, so the
+              // `concept_map_elements` mirror still sits at this row's own coordinates and needs no
+              // rewrite. This is precisely the state `update()` would leave for an isActive-only
+              // edit, and it is why this is not a raw UPDATE bypassing the store: the capture below
+              // still fires, so the deactivation reaches `reference_change_log` like any other edit.
+              await trx.updateTable('term_mappings').set({ is_active: false, updated_at: sql`now()` })
+                .where('id', '=', row.id).execute();
+              if (capture) {
+                const persisted = await trx.selectFrom('term_mappings').selectAll().where('id', '=', row.id).executeTakeFirstOrThrow();
+                await capture.record(trx, 'term_mapping', row.id, 'upsert', tmContentHash(persisted));
+              }
+              superseded.push(row.id);
+            }
+          }
+
+          // The mirror row for whatever this mapping USED to point at, cleared before the new one
+          // is inserted (same delete-then-insert shape as create/update above).
+          if (previous) {
+            await trx.deleteFrom('concept_map_elements').where('map_url', '=', LOCAL_MAP_URL)
+              .where('source_system', '=', previous.from_system).where('source_code', '=', previous.from_code)
+              .where('target_system', '=', previous.to_system).where('target_code', '=', previous.to_code).execute();
+            await trx.updateTable('term_mappings').set({
+              from_system: input.fromSystem, from_code: input.fromCode,
+              to_system: input.toSystem, to_code: input.toCode, to_display: input.toDisplay, map_type: input.mapType,
+              relationship: input.relationship ?? null, owner: input.owner ?? null, is_active: input.isActive,
+              updated_at: sql`now()`,
+            }).where('id', '=', id).execute();
+          } else {
+            await trx.insertInto('term_mappings').values({
+              id, from_system: input.fromSystem, from_code: input.fromCode, to_system: input.toSystem, to_code: input.toCode,
+              to_display: input.toDisplay, map_type: input.mapType, relationship: input.relationship ?? null,
+              owner: input.owner ?? null, is_active: input.isActive,
+            }).execute();
+          }
+          await trx.deleteFrom('concept_map_elements')
+            .where('map_url', '=', LOCAL_MAP_URL).where('source_system', '=', input.fromSystem).where('source_code', '=', input.fromCode)
+            .where('target_system', '=', input.toSystem).where('target_code', '=', input.toCode).execute();
+          await trx.insertInto('concept_map_elements').values({
+            map_url: LOCAL_MAP_URL, source_system: input.fromSystem, source_code: input.fromCode,
+            target_system: input.toSystem, target_code: input.toCode, equivalence: input.mapType,
+          }).execute();
+
+          // Same auto-DRAFT as `create`: a target concept that does not exist yet is stubbed so the
+          // mapping never points at nothing. (A facility-registry target always already exists —
+          // `projectRegistryRows` writes it — so this is a no-op for today's only caller.)
+          const existingConcept = await trx.selectFrom('terminology_concepts').select(['code'])
+            .where('system', '=', input.toSystem).where('code', '=', input.toCode).executeTakeFirst();
+          if (!existingConcept) {
+            await trx.insertInto('terminology_concepts').values({ system: input.toSystem, code: input.toCode, display: input.toDisplay, status: 'DRAFT', properties: null }).execute();
+            draftCreated = true;
+          }
+
+          const persisted = await trx.selectFrom('term_mappings').selectAll().where('id', '=', id).executeTakeFirstOrThrow();
+          if (capture) await capture.record(trx, 'term_mapping', id, 'upsert', tmContentHash(persisted));
+        });
+        const row = await db.selectFrom('term_mappings').selectAll().where('id', '=', id).executeTakeFirstOrThrow();
+        return { mapping: tmRow(row), draftCreated, superseded };
       },
     },
     valueSets: {

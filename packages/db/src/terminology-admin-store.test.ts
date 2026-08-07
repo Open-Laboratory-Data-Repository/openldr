@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { Kysely } from 'kysely';
 import { newDb } from 'pg-mem';
 import { internalMigrations } from './migrations/internal/index';
-import { createTerminologyAdminStore, TerminologyAdminError } from './terminology-admin-store';
+import { createTerminologyAdminStore, TerminologyAdminError, type TermMappingInput } from './terminology-admin-store';
 import { referenceCapture } from './reference-capture';
 import type { InternalSchema } from './schema/internal';
 
@@ -205,6 +205,104 @@ describe('terminology admin store', () => {
       await expect(
         s.termMappings.update('no-such', { fromSystem: 'http://x', fromCode: 'A', toSystem: 'http://y', toCode: 'B', toDisplay: null, mapType: 'SAME-AS', relationship: null, owner: null, isActive: true }),
       ).rejects.toMatchObject({ kind: 'not-found' });
+    });
+
+    // ── facilities-phase-0 Task 11: `saveExclusive` ───────────────────────────────────────────
+    //
+    // The single-active-mapping writer. Its scope predicate — active AND `to_system` = the input's
+    // AND `map_type` = the input's, keyed on `(from_system, from_code)` — is deliberately the same
+    // predicate the partial unique index in the NEXT task enforces in the database, so the two
+    // agree on what the invariant is rather than each inventing one.
+    //
+    // ⚠ These tests exercise the store generically (`obs`/`reg` are stand-in system urls). Only
+    // ONE caller uses this method today: the terminology mapping routes, and only when the target
+    // system is FACILITY_REGISTRY_SYSTEM (apps/server/src/terminology-admin-routes.ts). Nothing
+    // here claims the method is facility-specific — the facility scoping lives at that call site.
+    const exclusiveInput = (toCode: string, over: Partial<TermMappingInput> = {}): TermMappingInput => ({
+      fromSystem: 'obs', fromCode: 'BALAB', toSystem: 'reg', toCode,
+      toDisplay: null, mapType: 'SAME-AS', relationship: null, owner: null, isActive: true, ...over,
+    });
+
+    it('saveExclusive supersedes the previously active mapping in the same scope', async () => {
+      const { db, s } = await store();
+      const first = await s.termMappings.saveExclusive(exclusiveInput('L-1'));
+      const second = await s.termMappings.saveExclusive(exclusiveInput('L-2'));
+
+      expect(second.superseded).toEqual([first.mapping.id]);
+      expect(await db.selectFrom('term_mappings').select(['id', 'to_code', 'is_active']).orderBy('to_code').execute())
+        .toEqual([
+          { id: first.mapping.id, to_code: 'L-1', is_active: false },
+          { id: second.mapping.id, to_code: 'L-2', is_active: true },
+        ]);
+    });
+
+    // ⛔ A re-save of the SAME target is NOT a conflict and must not be superseded into a second
+    // row: two rows naming the same facility resolve identically (see facility-reconcile.ts —
+    // ambiguity counts DISTINCT TARGETS, not rows), but they still violate the
+    // `(from_system, from_code)` uniqueness the next task's index imposes. So the existing row is
+    // reused and rewritten in place: one row, still active, nothing left deactivated behind it.
+    it('saveExclusive re-saving the SAME target reuses the row rather than leaving a duplicate', async () => {
+      const { db, s } = await store();
+      const first = await s.termMappings.saveExclusive(exclusiveInput('L-1'));
+      const again = await s.termMappings.saveExclusive(exclusiveInput('L-1', { toDisplay: 'Lab One' }));
+
+      expect(again.mapping.id).toBe(first.mapping.id);
+      expect(again.superseded).toEqual([]);
+      const rows = await db.selectFrom('term_mappings').select(['id', 'to_code', 'to_display', 'is_active']).execute();
+      expect(rows).toEqual([{ id: first.mapping.id, to_code: 'L-1', to_display: 'Lab One', is_active: true }]);
+      // The mirror follows too — one element, not one per save.
+      expect(await db.selectFrom('concept_map_elements').selectAll().where('source_code', '=', 'BALAB').execute())
+        .toHaveLength(1);
+    });
+
+    it('saveExclusive supersedes only its OWN (toSystem, mapType) scope', async () => {
+      const { db, s } = await store();
+      // A different map_type onto the same target system, and a SAME-AS onto a different target
+      // system: both are outside the scope this write claims, and neither may be deactivated.
+      const otherType = await s.termMappings.create(exclusiveInput('L-9', { mapType: 'RELATED-TO' }));
+      const otherSystem = await s.termMappings.create(exclusiveInput('N-9', { toSystem: 'national' }));
+
+      const saved = await s.termMappings.saveExclusive(exclusiveInput('L-1'));
+
+      expect(saved.superseded).toEqual([]);
+      // All three stay active: the two out-of-scope rows plus the one this write just created.
+      const stillActive = await db.selectFrom('term_mappings').select(['id']).where('is_active', '=', true).execute();
+      expect(stillActive.map((r) => r.id).sort())
+        .toEqual([otherType.mapping.id, otherSystem.mapping.id, saved.mapping.id].sort());
+    });
+
+    // The route's PUT path: the operator edits an EXISTING mapping row. Two competing actives are
+    // seeded through the plain `create` writer because that is exactly what a pre-index install can
+    // already be holding (and what `reference-apply.ts` can still deliver from central sync).
+    it('saveExclusive with an id retargets that row and supersedes the competing active one', async () => {
+      const { db, s } = await store();
+      const a = await s.termMappings.create(exclusiveInput('L-1'));
+      const b = await s.termMappings.create(exclusiveInput('L-2'));
+
+      const saved = await s.termMappings.saveExclusive(exclusiveInput('L-3'), { id: b.mapping.id });
+
+      expect(saved.mapping.id).toBe(b.mapping.id);
+      expect(saved.superseded).toEqual([a.mapping.id]);
+      expect(await db.selectFrom('term_mappings').select(['id', 'to_code']).where('is_active', '=', true).execute())
+        .toEqual([{ id: b.mapping.id, to_code: 'L-3' }]);
+    });
+
+    it('saveExclusive throws not-found for an id that does not exist', async () => {
+      const { s } = await store();
+      await expect(s.termMappings.saveExclusive(exclusiveInput('L-1'), { id: 'no-such' }))
+        .rejects.toMatchObject({ kind: 'not-found' });
+    });
+
+    // ⛔ An INACTIVE write supersedes nothing: the index the next task adds is scoped to active rows
+    // only, so a row being written inactive cannot displace the one active row that satisfies it.
+    it('saveExclusive writing an INACTIVE mapping supersedes nothing', async () => {
+      const { db, s } = await store();
+      const first = await s.termMappings.saveExclusive(exclusiveInput('L-1'));
+      const second = await s.termMappings.saveExclusive(exclusiveInput('L-2', { isActive: false }));
+
+      expect(second.superseded).toEqual([]);
+      expect(await db.selectFrom('term_mappings').select(['id']).where('is_active', '=', true).execute())
+        .toEqual([{ id: first.mapping.id }]);
     });
   });
 
@@ -441,6 +539,27 @@ describe('terminology admin store', () => {
       rows = await logRows(db, 'term_mapping');
       expect(rows).toHaveLength(3);
       expect(rows[2]).toMatchObject({ entity_id: res.mapping.id, op: 'delete', content_hash: null });
+    });
+
+    // facilities-phase-0 Task 11: the supersede is a real edit to a real row, so it has to reach
+    // `reference_change_log` like any other — a deactivation that syncs nowhere would leave a
+    // central node still resolving through the mapping this node just retired.
+    it('captures BOTH the superseded row and the new one on saveExclusive', async () => {
+      const { db, s } = await capturingStore();
+      const base: TermMappingInput = {
+        fromSystem: 'obs', fromCode: 'BALAB', toSystem: 'reg', toCode: 'L-1',
+        toDisplay: null, mapType: 'SAME-AS', relationship: null, owner: null, isActive: true,
+      };
+      const first = await s.termMappings.saveExclusive(base);
+      const second = await s.termMappings.saveExclusive({ ...base, toCode: 'L-2' });
+
+      const rows = await logRows(db, 'term_mapping');
+      // create(L-1) … then the supersede of L-1 AND the insert of L-2 — three entries, and the
+      // superseded row's own id must be among the last two.
+      expect(rows).toHaveLength(3);
+      expect(rows.slice(1).map((r) => r.entity_id).sort())
+        .toEqual([first.mapping.id, second.mapping.id].sort());
+      expect(rows.every((r) => r.op === 'upsert')).toBe(true);
     });
 
     it('captures term-mapping regardless of owner (not gated on ownership)', async () => {

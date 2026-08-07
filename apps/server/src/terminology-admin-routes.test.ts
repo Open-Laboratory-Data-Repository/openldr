@@ -1,7 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import Fastify from 'fastify';
 import type { AppContext } from '@openldr/bootstrap';
+import { makeMigratedDb } from '@openldr/db/testing';
+import { createTerminologyAdminStore, DEFAULT_OBSERVED_FACILITY_SYSTEM, FACILITY_REGISTRY_SYSTEM } from '@openldr/db';
 import { registerTerminologyAdminRoutes } from './terminology-admin-routes';
+import { registerErrorHandler } from './error-handler';
 import './auth-plugin';
 
 function fakeCtx() {
@@ -233,5 +236,133 @@ describe('terminology distribution upload/status/purge (publisher-scoped)', () =
     const { ctx } = fakeCtx();
     const res = await appWith(ctx, ['lab_technician'], []).inject({ method: 'POST', url: '/api/terminology/publishers/pub-loinc/distribution?systemType=loinc&acceptLicense=true', headers: { 'content-type': 'application/octet-stream' }, payload: Buffer.from('x') });
     expect(res.statusCode).toBe(403);
+  });
+});
+
+// ── facilities-phase-0 Task 11: facility mapping semantics at the API boundary ──────────────────
+//
+// The facilities Observed tab maps an observed string onto a registry facility by opening the
+// SHIPPED `TermMappingDialog` (apps/studio/src/facilities/ObservedTab.tsx), which writes through
+// THESE routes — there is no separate facility-mapping endpoint. So these routes are the domain
+// boundary for the two rules the resolver already depends on, and the dialog defaulting `mapType`
+// to `SAME-AS` / listing one mapping per row cannot be the only place either is enforced.
+//
+// A REAL migrated db + a REAL `createTerminologyAdminStore` is used here rather than `fakeCtx`
+// above: both rules are about what ends up in `term_mappings`, which a hand-written store double
+// would simply report back to itself.
+describe('facility mapping semantics (terminology mapping routes)', () => {
+  const OBSERVED = DEFAULT_OBSERVED_FACILITY_SYSTEM;
+  const mappingBody = (over: Record<string, unknown> = {}) => ({
+    toSystem: FACILITY_REGISTRY_SYSTEM, toCode: 'L-1', toDisplay: null,
+    mapType: 'SAME-AS', relationship: null, owner: null, isActive: true, ...over,
+  });
+
+  async function realApp() {
+    const internalDb = await makeMigratedDb();
+    const auditEvents: any[] = [];
+    const ctx = {
+      terminology: { admin: createTerminologyAdminStore(internalDb) },
+      audit: { record: async (e: any) => { auditEvents.push(e); return e; } },
+      logger: { error() {}, warn() {}, info() {} },
+    } as unknown as AppContext;
+    const app = Fastify();
+    // The coded 400 below is an AppError raised out of the handler, so the CENTRAL error handler
+    // is what turns it into `{ error, code, correlationId }` — without it Fastify's default
+    // 500 would swallow the code and this suite would be asserting on the wrong thing.
+    registerErrorHandler(app);
+    app.addHook('onRequest', async (req) => {
+      req.user = { id: 'admin1', username: 'admin', displayName: null, roles: ['lab_admin'], capabilities: ['terminology.manage'] };
+    });
+    registerTerminologyAdminRoutes(app, ctx);
+    return { app, internalDb, auditEvents };
+  }
+
+  const saveMapping = (app: any, body: Record<string, unknown>) => app.inject({
+    method: 'POST',
+    url: `/api/terminology/terms/${encodeURIComponent(OBSERVED)}/${encodeURIComponent('BALAB')}/mappings`,
+    payload: body,
+  });
+
+  const activeTargets = (db: any) => db.selectFrom('term_mappings').select(['to_code'])
+    .where('from_code', '=', 'BALAB').where('is_active', '=', true).orderBy('to_code').execute();
+
+  it('rejects a non-SAME-AS facility mapping at the API boundary, not just in the UI', async () => {
+    const { app, internalDb } = await realApp();
+    const res = await saveMapping(app, mappingBody({ mapType: 'RELATED-TO' }));
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('FAC0010');
+    // …and nothing was written: the refusal is BEFORE the write, not a rollback after it.
+    expect(await internalDb.selectFrom('term_mappings').selectAll().execute()).toEqual([]);
+  });
+
+  it('rejects a non-SAME-AS facility mapping on the update route too', async () => {
+    const { app, internalDb } = await realApp();
+    const id = (await saveMapping(app, mappingBody())).json().mapping.id;
+    const res = await app.inject({
+      method: 'PUT', url: `/api/terminology/mappings/${id}`,
+      payload: { ...mappingBody({ mapType: 'BROADER-THAN' }), fromSystem: OBSERVED, fromCode: 'BALAB' },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('FAC0010');
+    expect((await internalDb.selectFrom('term_mappings').select(['map_type']).execute())).toEqual([{ map_type: 'SAME-AS' }]);
+  });
+
+  // ⛔ Scoped to the facility registry. Every OTHER coding system keeps the full five-value
+  // `MapType` vocabulary — a NARROWER-THAN onto LOINC is ordinary curation, and this guard must
+  // not have quietly become a global one.
+  it('leaves a non-SAME-AS mapping onto a NON-facility system alone', async () => {
+    const { app } = await realApp();
+    const res = await saveMapping(app, mappingBody({ toSystem: 'http://loinc.org', toCode: '101477-8', mapType: 'NARROWER-THAN' }));
+    expect(res.statusCode).toBe(201);
+  });
+
+  it('supersedes the previous active mapping when a second facility is chosen', async () => {
+    const { app, internalDb } = await realApp();
+    expect((await saveMapping(app, mappingBody({ toCode: 'L-1' }))).statusCode).toBe(201);
+    expect((await saveMapping(app, mappingBody({ toCode: 'L-2' }))).statusCode).toBe(201);
+
+    expect(await activeTargets(internalDb)).toEqual([{ to_code: 'L-2' }]);
+    // The superseded row is retained (deactivated), not deleted — the audit trail of what an
+    // observed string used to resolve through has to survive the re-map.
+    expect(await internalDb.selectFrom('term_mappings').select(['to_code', 'is_active']).orderBy('to_code').execute())
+      .toEqual([{ to_code: 'L-1', is_active: false }, { to_code: 'L-2', is_active: true }]);
+  });
+
+  // ⛔ Re-saving the SAME facility is not a conflict (two rows naming one facility resolve
+  // identically) — but it must not leave a duplicate behind either, because the uniqueness this
+  // route now upholds is keyed on `(from_system, from_code)` alone.
+  it('re-saving the SAME facility leaves exactly one row, still active', async () => {
+    const { app, internalDb } = await realApp();
+    const first = (await saveMapping(app, mappingBody({ toCode: 'L-1' }))).json().mapping.id;
+    expect((await saveMapping(app, mappingBody({ toCode: 'L-1', toDisplay: 'Lab One' }))).statusCode).toBe(201);
+
+    expect(await internalDb.selectFrom('term_mappings').select(['id', 'to_code', 'is_active']).execute())
+      .toEqual([{ id: first, to_code: 'L-1', is_active: true }]);
+  });
+
+  // ⛔ The PUT hole. A PUT retargets one row, so it cannot ADD a competing mapping — but it CAN
+  // re-activate a row an earlier save superseded, while another is still active, which is the same
+  // violation reached a different way. Not reachable from the shipped dialog (it only ever edits
+  // the mapping it listed) — which is precisely why the route, not the dialog, has to close it.
+  it('re-activating a superseded mapping via PUT supersedes the current one instead of competing', async () => {
+    const { app, internalDb } = await realApp();
+    const first = (await saveMapping(app, mappingBody({ toCode: 'L-1' }))).json().mapping.id;
+    await saveMapping(app, mappingBody({ toCode: 'L-2' }));
+
+    const res = await app.inject({
+      method: 'PUT', url: `/api/terminology/mappings/${first}`,
+      payload: { ...mappingBody({ toCode: 'L-1' }), fromSystem: OBSERVED, fromCode: 'BALAB' },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(await activeTargets(internalDb)).toEqual([{ to_code: 'L-1' }]);
+  });
+
+  it('records the superseded mapping ids on the audit entry', async () => {
+    const { app, auditEvents } = await realApp();
+    const first = (await saveMapping(app, mappingBody({ toCode: 'L-1' }))).json().mapping.id;
+    await saveMapping(app, mappingBody({ toCode: 'L-2' }));
+
+    expect(auditEvents.at(-1)).toMatchObject({ action: 'term_mapping.create', metadata: { superseded: [first] } });
   });
 });
