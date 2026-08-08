@@ -585,16 +585,38 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
   // a 200. Read straight off `ctx.internalDb` — `facility_jobs` is not exposed through any store
   // method beyond `retry`/`latest`/`listUnresolved`, and this file already reads other tables
   // (`term_mappings`, in the `impact` route above) directly off `ctx.internalDb` for the same reason.
+  // `selectAll()`, not just `id` — the same read also becomes the audit entry's `before` image below,
+  // so it needs the row's actual pre-retry state (status/attempts/lastError), not just its existence.
+  //
+  // Audited like every other real write in this file (create/update/delete/scan/publish/import): a
+  // retry is an actor-attributable state change — it resets the attempt budget and re-queues work
+  // against the external warehouse. `entityType: 'facility_job'` (not `'facility'`) because what
+  // changed is the job row, not a facility_registry row; `before`/`after` are the job's own
+  // before/after state, mirroring `workflow.reset`'s before/after shape in workflows-routes.ts, rather
+  // than `null`/`null` the way `facility.scan`/`facility.publish` use it for a whole-dimension rebuild
+  // with no single before/after row to name. Placed AFTER the write and BEFORE the response, same as
+  // every sibling mutation — `recordAudit` is itself deliberately contained (record-audit.ts's
+  // `safeRecord`) so this can never turn an already-applied retry into a failed response.
   app.post('/api/facilities/jobs/:id/retry', MANAGE, async (req, reply) => {
     const { id } = req.params as { id: string };
     const existing = await ctx.internalDb
       .selectFrom('facility_jobs')
-      .select('id')
+      .selectAll()
       .where('id', '=', id)
       .executeTakeFirst();
     if (!existing) { reply.code(404); return { error: 'not found' }; }
 
     await ctx.facilityJobs.retry(id);
+
+    const after = await ctx.internalDb
+      .selectFrom('facility_jobs')
+      .selectAll()
+      .where('id', '=', id)
+      .executeTakeFirst();
+
+    await recordAudit(ctx, req, {
+      action: 'facility.job.retry', entityType: 'facility_job', entityId: id, before: existing, after: after ?? null,
+    });
     return { ok: true };
   });
 

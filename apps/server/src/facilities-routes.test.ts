@@ -2511,6 +2511,7 @@ describe('Task 10: POST /api/facilities/jobs/:id/retry', () => {
     expect(res.statusCode).toBe(403);
     // Nothing changed — a rejected request must not have re-queued the job anyway.
     expect((await ctx.facilityJobs.latest('facility-map-rebuild'))?.status).toBe('failed');
+    expect(ctx.__audit).toHaveLength(0); // a rejected request must not audit either
   });
 
   // Deliberate: `FacilityJobStore.retry` is itself a silent no-op on an unknown id (see
@@ -2519,10 +2520,62 @@ describe('Task 10: POST /api/facilities/jobs/:id/retry', () => {
   // typo'd or already-purged job id gets a real 404 instead of a misleading 200.
   it('a retry of an unknown job id is a 404, not a false-positive 200', async () => {
     const internalDb = await makeMigratedDb();
-    const app = await appWith(jobsCtx(internalDb));
+    const ctx = jobsCtx(internalDb);
+    const app = await appWith(ctx);
 
     const res = await app.inject({ method: 'POST', url: '/api/facilities/jobs/fj_does-not-exist/retry' });
 
     expect(res.statusCode).toBe(404);
+    expect(ctx.__audit).toHaveLength(0); // nothing was retried — must not be audited
+  });
+
+  // Pins the operator-vs-worker distinction documented on `ctx.facilityJobs.retry` (facility-job-
+  // store.ts): the route must call `retry`, which resets a spent `attempts` budget to 0, NEVER
+  // `retryPreservingAttempts` (the worker's own automatic retry, which deliberately leaves `attempts`
+  // alone so ITS loop stays bounded). Swap the two in the route and every other test in this describe
+  // block still passes — none of them drive `attempts` high enough to tell the difference — because a
+  // fresh/lightly-failed job's `attempts` is already low, so "preserved" and "reset to 0" look the
+  // same. This test exhausts the budget first so the two methods diverge: an operator who fixed the
+  // underlying cause and clicked Retry on a job that failed 5 times must not stay locked out.
+  it('an operator retry resets a spent attempt budget to 0, re-queuing a job at its retry limit', async () => {
+    const internalDb = await makeMigratedDb();
+    const ctx = jobsCtx(internalDb);
+    const app = await appWith(ctx);
+
+    await ctx.facilityJobs.enqueue({ kind: 'facility-map-rebuild' });
+    const claimed = await ctx.facilityJobs.claimNext();
+    await ctx.facilityJobs.finish(claimed!.id, 'failed', { error: 'boom' });
+    // Simulate the worker having spent the job's whole retry budget — a real run gets here through
+    // repeated claimNext/finish('failed') cycles (see facility-job-worker.ts); set `attempts` directly
+    // rather than looping, since the exhausted STATE is what this test needs, not how it was reached.
+    await internalDb.updateTable('facility_jobs').set({ attempts: 5 }).where('id', '=', claimed!.id).execute();
+
+    const res = await app.inject({ method: 'POST', url: `/api/facilities/jobs/${claimed!.id}/retry` });
+
+    expect(res.statusCode).toBe(200);
+    const after = await ctx.facilityJobs.latest('facility-map-rebuild');
+    expect(after?.status).toBe('queued');
+    expect(after?.attempts).toBe(0);
+  });
+
+  it('audits the retry as facility.job.retry, with the job\'s before/after state', async () => {
+    const internalDb = await makeMigratedDb();
+    const ctx = jobsCtx(internalDb);
+    const app = await appWith(ctx);
+
+    await ctx.facilityJobs.enqueue({ kind: 'facility-map-rebuild' });
+    const claimed = await ctx.facilityJobs.claimNext();
+    await ctx.facilityJobs.finish(claimed!.id, 'failed', { error: 'boom' });
+
+    const res = await app.inject({ method: 'POST', url: `/api/facilities/jobs/${claimed!.id}/retry` });
+
+    expect(res.statusCode).toBe(200);
+    expect(ctx.__audit.map((a: any) => a.action)).toEqual(['facility.job.retry']);
+    expect(ctx.__audit[0]).toMatchObject({
+      entityType: 'facility_job',
+      entityId: claimed!.id,
+      before: { status: 'failed' },
+      after: { status: 'queued', attempts: 0 },
+    });
   });
 });
