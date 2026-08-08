@@ -12,17 +12,30 @@ export interface FacilityJob {
   startedAt: string | null; finishedAt: string | null;
 }
 
+/** What a retry request actually did.
+ *
+ *  - `requeued` — the row is back in the queue and will run.
+ *  - `not-found` — no such job id.
+ *  - `running` — the job is mid-flight, so it was NOT re-queued. Re-queueing a running row would
+ *    re-arm its `active_key` while the in-flight run is still going; that run's own `finish()` then
+ *    clears the key and marks the row terminal, discarding the retry. Callers must surface this
+ *    (the HTTP route answers 409, the CLI exits non-zero) rather than report success. */
+export type FacilityJobRetryOutcome = 'requeued' | 'not-found' | 'running';
+
 export interface FacilityJobStore {
   /** `coalesced: true` means a request of the same identity was ALREADY queued and this one was
    *  absorbed — not that it failed. `job` is null in that case. */
   enqueue(input: { kind: FacilityJobKind; registryId?: string | null; requestedBy?: string | null }): Promise<{ job: FacilityJob | null; coalesced: boolean }>;
   claimNext(): Promise<FacilityJob | null>;
   finish(id: string, status: 'done' | 'failed', opts: { error?: string | null; resultCount?: number | null }): Promise<void>;
-  retry(id: string): Promise<void>;
+  retry(id: string): Promise<FacilityJobRetryOutcome>;
   retryPreservingAttempts(id: string): Promise<void>;
   failStaleRunning(error: string): Promise<number>;
   latest(kind: FacilityJobKind): Promise<FacilityJob | null>;
   listUnresolved(): Promise<FacilityJob[]>;
+  /** Failed jobs of this kind that NOTHING has superseded — see the implementation's doc comment for
+   *  exactly what "superseded" means and what it deliberately cannot see. */
+  listFailed(kind: FacilityJobKind): Promise<FacilityJob[]>;
   countFailed(kind: FacilityJobKind): Promise<number>;
 }
 
@@ -178,6 +191,16 @@ export function createFacilityJobStore(db: Kysely<InternalSchema>): FacilityJobS
           status, last_error: opts.error ?? null,
           result_count: opts.resultCount ?? null,
           finished_at: sql<Date>`now()`,
+          // ⛔ `active_key = null` here as well as in `claimNext`, and the two are NOT redundant.
+          // claimNext's clear is what creates the asymmetry (a request arriving mid-RUN is not
+          // absorbed); this one is what stops a TERMINAL row from holding its identity for good.
+          // A row can reach `finish` still holding the key: `retry` re-arms it, and if the in-flight
+          // run then completes, the row goes done/failed with the key still set. `enqueue`'s
+          // pre-check only asks whether the key exists, so every later request of that identity
+          // would coalesce onto a job that will never run again — every facility mutation reporting
+          // success while the dimension is never rebuilt. Clearing here is also what
+          // `terminology-ingest-job-store.ts` does, for the same reason.
+          active_key: null,
         })
         .where('id', '=', id)
         .execute();
@@ -185,18 +208,29 @@ export function createFacilityJobStore(db: Kysely<InternalSchema>): FacilityJobS
 
     async retry(id) {
       const job = await db.selectFrom('facility_jobs').selectAll().where('id', '=', id).executeTakeFirst();
-      if (!job) return;
+      if (!job) return 'not-found';
+      // ⛔ A RUNNING job is not re-queued, and the caller is TOLD rather than left to assume it was.
+      // Re-queueing here re-arms `active_key` under a live run whose own `finish()` then clears it
+      // and writes a terminal status — silently throwing the retry away. Refusing is also the honest
+      // answer: the work the operator is asking for is already in flight.
+      if (job.status === 'running') return 'running';
       // attempts reset to 0 deliberately: this is the OPERATOR's explicit action, and someone who
       // has fixed the underlying cause must not be locked out by a previously exhausted budget.
       await requeue(job, (activeKey) => db.updateTable('facility_jobs')
         .set({ status: 'queued', attempts: 0, last_error: null, started_at: null, finished_at: null, active_key: activeKey })
         .where('id', '=', id)
         .execute());
+      return 'requeued';
     },
 
     async retryPreservingAttempts(id) {
       const job = await db.selectFrom('facility_jobs').selectAll().where('id', '=', id).executeTakeFirst();
       if (!job) return;
+      // Same refusal as `retry` above, for the same reason. The worker itself cannot reach this with
+      // a running row — `processJob` always `finish`es a job before re-queueing it — so this guard is
+      // not covering a live worker path; it keeps the two retry entry points' contract identical so
+      // that a future caller cannot re-arm the key under a live run through this one instead.
+      if (job.status === 'running') return;
       // The WORKER's automatic retry. Deliberately does NOT touch `attempts` — that counter is what
       // bounds the retry loop, so resetting it here would spin forever on a permanently failing job.
       // The distinction from `retry` above is the whole reason both exist.
@@ -215,8 +249,13 @@ export function createFacilityJobStore(db: Kysely<InternalSchema>): FacilityJobS
     },
 
     async latest(kind) {
+      // `id` tiebreaker for the same reason `claimNext` has one: `requested_at` defaults to
+      // TRANSACTION time, so rows enqueued in one transaction tie and the winner would otherwise be
+      // engine-dependent. DESC here (claimNext takes the oldest, this takes the newest), so the two
+      // agree on which end of a tie they are naming.
       const row = await db.selectFrom('facility_jobs').selectAll()
-        .where('kind', '=', kind).orderBy('requested_at', 'desc').limit(1).executeTakeFirst();
+        .where('kind', '=', kind).orderBy('requested_at', 'desc').orderBy('id', 'desc')
+        .limit(1).executeTakeFirst();
       return row ? toJob(row) : null;
     },
 
@@ -230,6 +269,61 @@ export function createFacilityJobStore(db: Kysely<InternalSchema>): FacilityJobS
       const rows = await db.selectFrom('facility_jobs').selectAll()
         .where('status', 'in', ['queued', 'running']).orderBy('requested_at', 'asc').execute();
       return rows.map((r) => toJob(r));
+    },
+
+    /**
+     * Failed jobs of this kind that are still the LAST WORD on their identity — i.e. no job sharing
+     * their `activeKeyFor` identity was requested after them.
+     *
+     * This replaces a bare `count(*) where status = 'failed'`, which counted every failed row that
+     * had ever existed: a facility whose projection failed once stayed on the Facilities page's
+     * warning forever, even after a LATER projection job for that same facility succeeded.
+     * Suppressing a failed row that a strictly newer job of the same identity has overtaken makes the
+     * surface self-clearing — a later `done` job clears it, and a repair that is merely queued or
+     * running does not nag while it is in flight. It is the same rule the report dimension already
+     * uses (`latest(kind)?.status === 'failed'`), applied per identity instead of per kind.
+     *
+     * ⚠ Supersession is decided on `requested_at` STRICTLY GREATER, with no `id` tiebreak — unlike
+     * `claimNext`/`latest`, which do tiebreak. `id` is a random UUID, so on a `requested_at` tie
+     * (rows enqueued in one transaction share it) an id comparison would pick a winner at random and
+     * could hide a genuine failure. A tie therefore leaves the failed row REPORTED: showing a warning
+     * a moment longer than strictly necessary is the safe direction, hiding one is not.
+     *
+     * ⚠ What it deliberately CANNOT see: an INLINE projection success. Inline projections
+     * (`projectRegistryRows` on POST/PUT `/api/facilities/:id`) write no `facility_jobs` row at all
+     * when they succeed, so nothing here observes them and a facility repaired that way keeps its
+     * failed row until someone retries it explicitly. The operator's clearing path is the Retry
+     * action on that job.
+     *
+     * The scan is bounded by the identities that have actually failed, not by the whole table: the
+     * second query only reads rows sharing a `registry_id` with a failed one.
+     */
+    async listFailed(kind) {
+      const failedRows = await db.selectFrom('facility_jobs').selectAll()
+        .where('kind', '=', kind).where('status', '=', 'failed').execute();
+      if (failedRows.length === 0) return [];
+
+      const registryIds = [...new Set(failedRows.map((r) => r.registry_id))];
+      const named = registryIds.filter((v): v is string => v !== null);
+      const hasUnnamed = registryIds.includes(null);
+      const siblings = await db.selectFrom('facility_jobs').select(['registry_id', 'requested_at'])
+        .where('kind', '=', kind)
+        .where((eb) => eb.or([
+          ...(named.length > 0 ? [eb('registry_id', 'in', named)] : []),
+          ...(hasUnnamed ? [eb('registry_id', 'is', null)] : []),
+        ]))
+        .execute();
+
+      const newestAt = new Map<string, number>();
+      for (const row of siblings) {
+        const key = activeKeyFor(kind, row.registry_id);
+        const t = new Date(row.requested_at).getTime();
+        if (t > (newestAt.get(key) ?? -Infinity)) newestAt.set(key, t);
+      }
+
+      return failedRows
+        .filter((r) => new Date(r.requested_at).getTime() >= (newestAt.get(activeKeyFor(kind, r.registry_id)) ?? -Infinity))
+        .map((r) => toJob(r));
     },
 
     async countFailed(kind) {

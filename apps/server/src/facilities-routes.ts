@@ -58,8 +58,12 @@ const IMPORT = { ...MANAGE, bodyLimit: MAX_IMPORT_REQUEST_BYTES };
 // connection while a large enough apply keeps running server-side.
 //
 // Decision: bound APPLY to a row-count cap and point the operator at the CLI
-// (`openldr facilities import --apply`, packages/cli/src/facilities.ts) above it — the CLI runs
-// the identical `importFacilities` call with no request deadline. 2000 stays a generous bound for
+// (`openldr facilities import --apply`, packages/cli/src/facilities.ts) above it — the CLI calls the
+// same `importFacilities` with the same deps (`db`/`capture`/`admin`/`facilityJobs`/`logger`, so an
+// applied CLI import projects and enqueues its rebuild exactly as this route's does) and no request
+// deadline. ⚠ Keep those two dep objects in step: this cap means the CLI is the ONLY path a
+// register above it can be applied through, so anything this route passes and the CLI does not is
+// missing precisely where the workload is largest. 2000 stays a generous bound for
 // the common case (a district- or council-scoped partial register, the routine incremental update)
 // without ever touching the CLI, while keeping the worst case — a full re-import's CSV parse,
 // batched write, and registry projection, all synchronous in one request — well clear of a client
@@ -606,7 +610,19 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       .executeTakeFirst();
     if (!existing) { reply.code(404); return { error: 'not found' }; }
 
-    await ctx.facilityJobs.retry(id);
+    // ⛔ 409, not a 200 that did nothing. `retry` REFUSES a job that is currently `running` (see
+    // facility-job-store.ts): re-queueing one re-arms its `active_key` under a live run, and that
+    // run's own `finish()` then writes a terminal status — silently discarding the operator's retry
+    // and, before `finish` learned to release the key, leaving the identity held by a dead row so
+    // every later enqueue coalesced onto it forever. The outcome is read from the store rather than
+    // re-derived from `existing` above so the answer cannot be wrong by a race: the worker can claim
+    // the job between that read and this call, and only the store's own guarded read sees it.
+    // Nothing is audited on this path — nothing changed.
+    const outcome = await ctx.facilityJobs.retry(id);
+    if (outcome === 'running') {
+      reply.code(409);
+      return { error: 'this job is already running; wait for it to finish before retrying it' };
+    }
 
     const after = await ctx.internalDb
       .selectFrom('facility_jobs')
@@ -990,7 +1006,7 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     // Task 5: `facilityJobs` lets an applied import enqueue the same `facility-map-rebuild` job a
     // single create/update/delete does (see importFacilities' own matching comment for why that is
     // a single call per import already, not per row).
-    const deps = { db: ctx.internalDb, capture: referenceCapture, admin: ctx.terminology.admin, facilityJobs: ctx.facilityJobs };
+    const deps = { db: ctx.internalDb, capture: referenceCapture, admin: ctx.terminology.admin, facilityJobs: ctx.facilityJobs, logger: ctx.logger };
     const importOpts = {
       nationalSystem: p.data.nationalSystem,
       allowUnknownColumns: p.data.allowUnknownColumns,

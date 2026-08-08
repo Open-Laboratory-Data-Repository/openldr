@@ -2558,6 +2558,34 @@ describe('Task 10: POST /api/facilities/jobs/:id/retry', () => {
     expect(after?.attempts).toBe(0);
   });
 
+  // ⛔ The Retry button's own worst case, and the one that used to wedge the whole mechanism.
+  // Re-queueing a RUNNING job re-arms its `active_key` while the run is still in flight; that run's
+  // `finish()` then writes a terminal status, so the operator's retry evaporates — and, before
+  // `finish` learned to release the key, the identity stayed held by a row that could never run
+  // again, so EVERY later facility mutation coalesced onto it and reported success while the
+  // dimension was never rebuilt. Answering 409 is what makes the refusal visible instead of a 200
+  // that did nothing.
+  it('⛔ refuses to retry a RUNNING job with a 409 rather than silently discarding the request', async () => {
+    const internalDb = await makeMigratedDb();
+    const ctx = jobsCtx(internalDb);
+    const app = await appWith(ctx);
+
+    await ctx.facilityJobs.enqueue({ kind: 'facility-map-rebuild' });
+    const claimed = await ctx.facilityJobs.claimNext();
+    expect(claimed!.status).toBe('running');
+
+    const res = await app.inject({ method: 'POST', url: `/api/facilities/jobs/${claimed!.id}/retry` });
+
+    expect(res.statusCode).toBe(409);
+    // Untouched, and NOT audited — nothing changed, so there is nothing to attribute.
+    expect(await ctx.facilityJobs.latest('facility-map-rebuild')).toMatchObject({ status: 'running', attempts: 1 });
+    expect(ctx.__audit).toHaveLength(0);
+
+    // And the mechanism is still live: the running job's identity was never re-armed, so the very
+    // next facility mutation gets a job of its own instead of coalescing onto a dead row.
+    expect((await ctx.facilityJobs.enqueue({ kind: 'facility-map-rebuild' })).coalesced).toBe(false);
+  });
+
   it('audits the retry as facility.job.retry, with the job\'s before/after state', async () => {
     const internalDb = await makeMigratedDb();
     const ctx = jobsCtx(internalDb);

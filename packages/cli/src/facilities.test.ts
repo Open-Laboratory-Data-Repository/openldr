@@ -9,7 +9,8 @@ const mocks = vi.hoisted(() => ({
     logger: { marker: 'logger' },
     // Task 10: `openldr facilities jobs --retry <id>` calls `ctx.facilityJobs.retry` directly
     // (the OPERATOR's action, never `retryPreservingAttempts` — see facility-job-store.ts).
-    facilityJobs: { retry: vi.fn() },
+    // `enqueue` is here for the import command, which must hand this store to `importFacilities`.
+    facilityJobs: { retry: vi.fn(), enqueue: vi.fn() },
     close: vi.fn(),
   },
   createAppContext: vi.fn(),
@@ -76,7 +77,7 @@ describe('facilities import CLI', () => {
 
     expect(code).toBe(0);
     expect(mocks.importFacilities).toHaveBeenCalledWith(
-      { db: mocks.ctx.internalDb, capture: mocks.referenceCapture, admin: mocks.ctx.terminology.admin },
+      { db: mocks.ctx.internalDb, capture: mocks.referenceCapture, admin: mocks.ctx.terminology.admin, facilityJobs: mocks.ctx.facilityJobs, logger: mocks.ctx.logger },
       'national_code,name\n100,Dodoma\n',
       { nationalSystem: 'urn:tz:hfr', allowUnknownColumns: undefined, allowMalformedRows: undefined, apply: undefined },
     );
@@ -96,7 +97,7 @@ describe('facilities import CLI', () => {
 
     expect(code).toBe(0);
     expect(mocks.importFacilities).toHaveBeenCalledWith(
-      { db: mocks.ctx.internalDb, capture: mocks.referenceCapture, admin: mocks.ctx.terminology.admin },
+      { db: mocks.ctx.internalDb, capture: mocks.referenceCapture, admin: mocks.ctx.terminology.admin, facilityJobs: mocks.ctx.facilityJobs, logger: mocks.ctx.logger },
       expect.any(String),
       { nationalSystem: 'urn:tz:hfr', allowUnknownColumns: undefined, allowMalformedRows: undefined, apply: true },
     );
@@ -274,6 +275,41 @@ describe('facilities import CLI', () => {
 
     expect(code).toBe(1);
     expect(stdoutSpy).toHaveBeenCalledWith(JSON.stringify(result, null, 2) + '\n');
+  });
+
+  // ⛔ The HTTP import route REFUSES any apply over MAX_INLINE_APPLY_ROWS (2000) and points the
+  // operator at THIS command (apps/server/src/facilities-routes.ts), so this is the only path a
+  // register of the stated workload size — a 14 000-row national register — is ever applied through.
+  // The CLI shipped without `facilityJobs` in its deps, and `importFacilities` gates its enqueue
+  // behind `if (deps.facilityJobs)` (packages/bootstrap/src/facility-import.ts), so every import big
+  // enough to be the workload wrote the register and queued NO rebuild at all.
+  //
+  // The mock reproduces exactly that gate rather than asserting on the shape of the deps object: an
+  // absent store then shows up here as "no rebuild was queued", which is the actual defect, instead
+  // of as a missing key. That the REAL `importFacilities` enqueues once per applied import (and not
+  // once per row) is pinned separately, against the real store, in
+  // packages/bootstrap/src/facility-import.test.ts.
+  it('an applied import hands the job store through, so the rebuild is actually queued', async () => {
+    mocks.importFacilities.mockImplementation(async (deps: any, _csv: string, opts: any) => {
+      if (opts.apply && deps.facilityJobs) await deps.facilityJobs.enqueue({ kind: 'facility-map-rebuild' });
+      return CLEAN_RESULT;
+    });
+
+    const code = await runFacilitiesImport('/some/file.csv', { nationalSystem: 'urn:tz:hfr', apply: true, json: false });
+
+    expect(code).toBe(0);
+    expect(mocks.ctx.facilityJobs.enqueue).toHaveBeenCalledWith({ kind: 'facility-map-rebuild' });
+  });
+
+  it('a dry run queues no rebuild — nothing was written for the dimension to catch up to', async () => {
+    mocks.importFacilities.mockImplementation(async (deps: any, _csv: string, opts: any) => {
+      if (opts.apply && deps.facilityJobs) await deps.facilityJobs.enqueue({ kind: 'facility-map-rebuild' });
+      return CLEAN_RESULT;
+    });
+
+    await runFacilitiesImport('/some/file.csv', { nationalSystem: 'urn:tz:hfr', json: false });
+
+    expect(mocks.ctx.facilityJobs.enqueue).not.toHaveBeenCalled();
   });
 
   it('closes the app context even when importFacilities throws', async () => {
@@ -574,7 +610,7 @@ describe('facilities jobs CLI', () => {
     stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true) as unknown as ReturnType<typeof vi.fn>;
     mocks.createAppContext.mockResolvedValue(mocks.ctx);
     mocks.ctx.close.mockResolvedValue(undefined);
-    mocks.ctx.facilityJobs.retry.mockResolvedValue(undefined);
+    mocks.ctx.facilityJobs.retry.mockResolvedValue('requeued');
   });
 
   afterEach(() => {
@@ -654,6 +690,33 @@ describe('facilities jobs CLI', () => {
     expect(mocks.ctx.close).toHaveBeenCalledTimes(1);
     const err = stderrSpy.mock.calls.map((c) => String(c[0])).join('');
     expect(err).toMatch(/db exploded/);
+  });
+
+  // ⛔ `retry` does not throw for these two — it REPORTS them (see facility-job-store.ts's
+  // `FacilityJobRetryOutcome`). Before the outcome was read, both printed the health payload and
+  // exited 0, telling an operator their retry had been accepted when nothing was re-queued. These
+  // are the exit-code equivalents of the HTTP route's 409 and 404.
+  it('--retry on a RUNNING job refuses with a non-zero exit instead of reporting success', async () => {
+    mocks.ctx.facilityJobs.retry.mockResolvedValue('running');
+    mocks.facilityHealth.mockResolvedValue(HEALTH_CURRENT);
+
+    const code = await runFacilitiesJobs({ retry: 'fj_running', json: false });
+
+    expect(code).toBe(1);
+    const err = stderrSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(err).toMatch(/already running/);
+    expect(mocks.ctx.close).toHaveBeenCalledTimes(1);
+  });
+
+  it('--retry on an unknown job id refuses with a non-zero exit', async () => {
+    mocks.ctx.facilityJobs.retry.mockResolvedValue('not-found');
+    mocks.facilityHealth.mockResolvedValue(HEALTH_CURRENT);
+
+    const code = await runFacilitiesJobs({ retry: 'fj_nope', json: false });
+
+    expect(code).toBe(1);
+    const err = stderrSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(err).toMatch(/no such job: fj_nope/);
   });
 
   it('closes the app context even when retry throws, and reports a redacted message', async () => {

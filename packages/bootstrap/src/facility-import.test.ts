@@ -439,4 +439,34 @@ describe('importFacilities enqueues a facility-map-rebuild', () => {
     expect(result).toMatchObject({ created: 1 });
     expect(await rowFor(db, '100')).toBeDefined();
   });
+
+  // ⛔ This enqueue sits AFTER the import transaction has committed, so an uncontained throw here
+  // fails a write that already happened: the HTTP route rethrows whatever this raises (500 for a
+  // successful import) and, because its `facility.import` audit is written after the call returns,
+  // the audit record of that write is skipped too. Every other enqueue call site on this slice —
+  // three in facilities-routes.ts, three in terminology-admin-routes.ts — is wrapped for exactly
+  // this reason; this one was the only bare one.
+  it('a throwing enqueue does not fail an import that already committed, and is reported', async () => {
+    const db = (await makeMigratedDb()) as Kysely<InternalSchema>;
+    const errors: unknown[] = [];
+    const deps: FacilityImportDeps = {
+      db, capture: referenceCapture,
+      facilityJobs: {
+        ...createFacilityJobStore(db),
+        enqueue: async () => { throw new Error('job store unreachable'); },
+      },
+      logger: { error: (obj) => { errors.push(obj); } },
+    };
+    const body = csv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,']);
+
+    const result = await importFacilities(deps, body, { nationalSystem: SYSTEM, apply: true });
+
+    expect(result).toMatchObject({ created: 1 });
+    // The row really is written — the failure must not be mistaken for a rolled-back import.
+    expect(await rowFor(db, '100')).toBeDefined();
+    // Contained, but NOT swallowed: a lost enqueue leaves the dimension stale, and this log line is
+    // the only thing that records it.
+    expect(errors).toHaveLength(1);
+    expect(String((errors[0] as { err: Error }).err.message)).toMatch(/job store unreachable/);
+  });
 });

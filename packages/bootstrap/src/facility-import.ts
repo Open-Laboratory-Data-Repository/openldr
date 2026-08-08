@@ -32,6 +32,11 @@ export interface FacilityImportDeps {
    *  mirroring `admin`/`capture` above, so the CLI and any existing caller that omits it keeps
    *  working unchanged. */
   facilityJobs?: FacilityJobStore;
+  /** Where a lost `facilityJobs.enqueue` is reported. Optional and structurally minimal so a caller
+   *  can hand in the `AppContext`'s pino logger without this module taking a dependency on it; when
+   *  omitted the same message goes to `console.error`, matching `projectRegistryRows`' precedent in
+   *  facility-reconcile.ts. Never a reason to fail an import — see the enqueue call below. */
+  logger?: { error(obj: unknown, msg?: string): void };
 }
 
 export interface FacilityImportOptions {
@@ -328,7 +333,23 @@ export async function importFacilities(
   // register enqueues one job on its own merits — but it is still the store's coalescing
   // (facility-job-store.ts's `activeKeyFor`) that keeps this call from piling up a second queued
   // job on top of one an operator's own create/update/delete already left queued.
-  if (deps.facilityJobs) await deps.facilityJobs.enqueue({ kind: 'facility-map-rebuild' });
+  //
+  // Wrapped, exactly like the six enqueue sites in facilities-routes.ts/terminology-admin-routes.ts
+  // and for the same reason: the import transaction has ALREADY COMMITTED by this line. An
+  // uncontained throw here would turn a written import into a 500 at the HTTP route (which rethrows
+  // whatever this raises) and, because the route's `facility.import` audit is written after the
+  // call, skip the audit record of a write that really happened. Logged rather than swallowed
+  // silently — a lost enqueue leaves the dimension stale with nothing else recording it.
+  if (deps.facilityJobs) {
+    try {
+      await deps.facilityJobs.enqueue({ kind: 'facility-map-rebuild' });
+    } catch (err) {
+      const msg = 'failed to enqueue a facility-map-rebuild job after an applied facility import';
+      if (deps.logger) deps.logger.error({ err }, msg);
+      // eslint-disable-next-line no-console -- no logger supplied; this is the only record left.
+      else console.error(`[facility-import] ${msg}`, err);
+    }
+  }
 
   // `blocked` is necessarily false here — the early return above is the only path a blocked file
   // takes — but it is spelled out rather than hardcoded so the two returns cannot drift.

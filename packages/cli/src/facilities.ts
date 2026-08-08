@@ -51,7 +51,15 @@ export async function runFacilitiesImport(path: string, opts: FacilitiesImportOp
       // Fix 1 (mapping-ux report): `admin` lets importFacilities project every written row into
       // FACILITY_REGISTRY_SYSTEM as part of the import — the CLI gets the same immediate-mapping
       // behaviour as the HTTP route, per the repo's CLI-parity rule.
-      { db: ctx.internalDb, capture: referenceCapture, admin: ctx.terminology.admin },
+      //
+      // ⛔ `facilityJobs` is NOT optional in practice on this path, despite the deps type allowing
+      // its omission. The HTTP import route REFUSES any apply over MAX_INLINE_APPLY_ROWS (2000) and
+      // directs the operator here, so this command is the ONLY way a register of the stated size —
+      // a 14 000-row national register — is ever applied. Without the store, `importFacilities`
+      // skips its enqueue (`if (deps.facilityJobs)`) and the largest import in the product would be
+      // the one write that leaves `facility_map` stale with nothing queued to rebuild it, sending
+      // the operator back to the manual `facilities publish --apply` this slice exists to abolish.
+      { db: ctx.internalDb, capture: referenceCapture, admin: ctx.terminology.admin, facilityJobs: ctx.facilityJobs, logger: ctx.logger },
       csv,
       {
         nationalSystem: opts.nationalSystem, allowUnknownColumns: opts.allowUnknownColumns,
@@ -386,7 +394,20 @@ export async function runFacilitiesJobs(opts: FacilitiesJobsOpts): Promise<numbe
     // return, so it surfaces as the redacted error message below instead) is reported the same way
     // every other run* function in this file reports a thrown error.
     if (opts.retry) {
-      await ctx.facilityJobs.retry(opts.retry);
+      // ⛔ The outcome is READ, not assumed. `retry` is a no-op for an unknown id and REFUSES a job
+      // that is currently running (see facility-job-store.ts) — both of which used to leave this
+      // command printing health and exiting 0, telling an operator their retry was accepted when
+      // nothing was re-queued. The HTTP route answers 404/409 for these two; this is their exit-code
+      // equivalent, since a CLI has no status line to carry them.
+      const outcome = await ctx.facilityJobs.retry(opts.retry);
+      if (outcome !== 'requeued') {
+        const why = outcome === 'running'
+          ? `job ${opts.retry} is already running; wait for it to finish before retrying it`
+          : `no such job: ${opts.retry}`;
+        if (opts.json) process.stdout.write(JSON.stringify({ error: why }) + '\n');
+        else process.stderr.write(`facilities jobs --retry refused: ${why}\n`);
+        return 1;
+      }
     }
 
     const health: FacilityHealth = await facilityHealth({ internalDb: ctx.internalDb, jobs: ctx.facilityJobs });
