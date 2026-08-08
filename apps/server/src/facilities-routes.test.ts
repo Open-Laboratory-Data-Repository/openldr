@@ -79,6 +79,35 @@ function fakeFacilityJobStore() {
   };
 }
 
+/** A `ctx.internalDb` double for `fakeCtx()`. Task 7's create/update handlers now query
+ *  `ctx.internalDb` directly (`facility_concept_projection`, to check whether a projection landed),
+ *  and `projectRegistryRows` itself (packages/bootstrap/src/facility-reconcile.ts) reads/writes several
+ *  more tables (`facility_registry`, `terminology_concepts`, `term_mappings`) on the way — this needs
+ *  to answer the ENTIRE Kysely surface those touch (`selectFrom`/`deleteFrom`/`updateTable`, chained
+ *  `.select`/`.where`/`.orderBy`/etc, terminal `.execute`/`.executeTakeFirst`) without crashing.
+ *
+ *  Every terminal read resolves EMPTY regardless of which table was queried. That is not a shortcut —
+ *  it is the TRUTH for this fixture: there is no real `facility_registry`/`facility_concept_projection`
+ *  behind it (`fakeCtx()`'s own `facilityRegistry` above is a separate in-memory `rows` array, not a
+ *  Kysely table this double can see), so `projectRegistryRows` genuinely cannot find or write anything
+ *  through it, and the create/update routes' Task 7 detection genuinely finds no link and reports
+ *  'queued-for-retry'. Before Task 7, `projectRegistryRows`'s own try/catch silently absorbed the
+ *  `TypeError` this file's routes got from calling `.selectFrom` on the previously-ABSENT
+ *  `ctx.internalDb` — so real projection already never happened here, it just wasn't OBSERVABLE. Real
+ *  projection is exercised against a REAL migrated db by `fakeCreateCtx` in the dedicated describe
+ *  blocks below. */
+function emptyInternalDb(): any {
+  const chain: any = new Proxy({}, {
+    get(_t, prop) {
+      if (prop === 'execute') return async () => [];
+      if (prop === 'executeTakeFirst') return async () => undefined;
+      if (prop === 'executeTakeFirstOrThrow') return async () => { throw new Error('emptyInternalDb: not found'); };
+      return (..._args: any[]) => chain;
+    },
+  });
+  return chain;
+}
+
 function fakeCtx() {
   const rows: any[] = [];
   const audit: any[] = [];
@@ -113,6 +142,7 @@ function fakeCtx() {
   // AND withheld a bad one, rather than merely reading the HTTP response.
   let lastAdminValuesCall: any;
   return {
+    internalDb: emptyInternalDb(),
     audit: { record: async (e: any) => { audit.push(e); return e; } },
     logger: { error() {}, warn() {}, info() {} },
     forms: { get: async (formId: string) => forms[formId] },
@@ -932,6 +962,125 @@ describe('Fix 1: POST/PUT /api/facilities project the row into FACILITY_REGISTRY
     const res = await app.inject({ method: 'POST', url: '/api/facilities', payload: body });
     expect(res.statusCode).toBe(201);
     expect(await internalDb.selectFrom('facility_registry').selectAll().execute()).toHaveLength(1);
+  });
+});
+
+// --- Task 7: durable projection failure and truthful partial success ------------------------------
+// `projectRegistryRows` never throws (see its doc comment) — a failure was previously invisible: the
+// route reported plain success while the facility was silently missing from the mapping picker, with
+// nothing recording why. The route now asks `facility_concept_projection` (migration 077, the durable
+// record `reprojectRegistryRows` writes on every successful projection) whether the concept actually
+// landed, enqueues a `registry-projection` retry job when it did not, and reports
+// `projection: 'ok' | 'queued-for-retry'` in the response instead of a truthful-sounding 201/200 that
+// hides the gap.
+
+describe('Task 7: durable projection failure and truthful partial success', () => {
+  it('reports projection ok on the happy path (POST)', async () => {
+    const internalDb = await makeMigratedDb();
+    const ctx = fakeCreateCtx(internalDb);
+    const app = await appWith(ctx);
+
+    const res = await app.inject({ method: 'POST', url: '/api/facilities', payload: body });
+    expect(res.statusCode).toBe(201);
+    expect(res.json().projection).toBe('ok');
+  });
+
+  // Breaks the TERMINOLOGY STORE the projection depends on, not `projectRegistryRows` itself —
+  // stubbing the function under test would prove nothing (see the task brief). `reprojectRegistryRows`
+  // calls `admin.terms.importRows` as its first write, before the `facility_concept_projection` link
+  // is ever touched (packages/bootstrap/src/facility-reconcile.ts), so breaking it here genuinely
+  // reproduces "the inline attempt did not land" rather than simulating the outcome.
+  it('enqueues a registry-projection retry and reports queued-for-retry when the inline projection fails (POST)', async () => {
+    const internalDb = await makeMigratedDb();
+    const ctx = fakeCreateCtx(internalDb);
+    ctx.terminology.admin.terms.importRows = async () => { throw new Error('simulated terminology store failure'); };
+    const app = await appWith(ctx);
+
+    const res = await app.inject({ method: 'POST', url: '/api/facilities', payload: body });
+    expect(res.statusCode).toBe(201);
+    expect(res.json().projection).toBe('queued-for-retry');
+
+    const jobs = await ctx.facilityJobs.listUnresolved();
+    const retries = jobs.filter((j: any) => j.kind === 'registry-projection');
+    expect(retries).toHaveLength(1);
+    expect(retries[0].registryId).toBe(res.json().id);
+  });
+
+  it('⛔ a failed projection still does not fail the facility write (POST)', async () => {
+    const internalDb = await makeMigratedDb();
+    const ctx = fakeCreateCtx(internalDb);
+    ctx.terminology.admin.terms.importRows = async () => { throw new Error('simulated terminology store failure'); };
+    const app = await appWith(ctx);
+
+    const res = await app.inject({ method: 'POST', url: '/api/facilities', payload: body });
+    expect(res.statusCode).toBe(201);
+    const rows = await internalDb.selectFrom('facility_registry').selectAll().execute();
+    expect(rows).toHaveLength(1);
+  });
+
+  it('reports projection ok on the happy path (PUT)', async () => {
+    const internalDb = await makeMigratedDb();
+    const ctx = fakeCreateCtx(internalDb);
+    const app = await appWith(ctx);
+    const id = (await app.inject({ method: 'POST', url: '/api/facilities', payload: body })).json().id;
+
+    const res = await app.inject({ method: 'PUT', url: `/api/facilities/${id}`, payload: body });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().projection).toBe('ok');
+  });
+
+  // The terminology store is broken from BEFORE the create, not just before the update: the link
+  // table records whether a facility has EVER been successfully projected, not whether the most
+  // recent call succeeded, so a PUT following an already-successful POST would still find the old
+  // link and (correctly, per that table's contract) report 'ok'. Keeping the store broken across
+  // both calls is what makes this test genuinely exercise the update handler's own detection.
+  it('enqueues a registry-projection retry and reports queued-for-retry when the inline projection fails (PUT)', async () => {
+    const internalDb = await makeMigratedDb();
+    const ctx = fakeCreateCtx(internalDb);
+    ctx.terminology.admin.terms.importRows = async () => { throw new Error('simulated terminology store failure'); };
+    const app = await appWith(ctx);
+    const created = (await app.inject({ method: 'POST', url: '/api/facilities', payload: body })).json();
+    expect(created.projection).toBe('queued-for-retry'); // sanity: the create above also failed to project
+
+    // Drain every job the create left behind (its own registry-projection retry, coalesced onto the
+    // SAME identity — `registry-projection:<id>`, facility-job-store.ts's `activeKeyFor` — that PUT's
+    // own enqueue would target; plus its facility-map-rebuild) through the real store's claim/finish
+    // lifecycle. Without this, the PUT assertion below would pass even with PUT's OWN enqueue call
+    // deleted entirely: the create's still-queued job already satisfies "one registry-projection job
+    // for this id", which proves nothing about the update handler (measured: this test was written
+    // without the drain first, and deleting PUT's enqueue call did not fail it — see the report's
+    // mutation-testing section). `createFacilityJobStore` (the real store `fakeCreateCtx` wires up
+    // here) has no `__resolveAll` escape hatch like the in-memory `fakeFacilityJobStore` double used
+    // elsewhere in this file — draining it for real is the only way to isolate PUT's own call.
+    for (;;) {
+      const job = await ctx.facilityJobs.claimNext();
+      if (!job) break;
+      await ctx.facilityJobs.finish(job.id, 'done', {});
+    }
+
+    const res = await app.inject({ method: 'PUT', url: `/api/facilities/${created.id}`, payload: body });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().projection).toBe('queued-for-retry');
+
+    // A FRESH job, not the drained one — proves PUT's own enqueue call, not a leftover from POST.
+    // `activeKeyFor`) as the create's own retry enqueue, not a second job for the same facility.
+    const jobs = await ctx.facilityJobs.listUnresolved();
+    const retries = jobs.filter((j: any) => j.kind === 'registry-projection' && j.registryId === created.id);
+    expect(retries).toHaveLength(1);
+  });
+
+  it('⛔ a failed projection still does not fail the facility write (PUT)', async () => {
+    const internalDb = await makeMigratedDb();
+    const ctx = fakeCreateCtx(internalDb);
+    ctx.terminology.admin.terms.importRows = async () => { throw new Error('simulated terminology store failure'); };
+    const app = await appWith(ctx);
+    const id = (await app.inject({ method: 'POST', url: '/api/facilities', payload: body })).json().id;
+
+    const renamed = { ...body, answers: { ...body.answers, f2: 'Renamed While Broken' } };
+    const res = await app.inject({ method: 'PUT', url: `/api/facilities/${id}`, payload: renamed });
+    expect(res.statusCode).toBe(200);
+    const row = await internalDb.selectFrom('facility_registry').selectAll().where('id', '=', id).executeTakeFirstOrThrow();
+    expect(row.name).toBe('Renamed While Broken');
   });
 });
 

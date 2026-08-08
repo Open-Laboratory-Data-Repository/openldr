@@ -678,6 +678,39 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     // comment), so this cannot turn a successful create into a failed response.
     await projectRegistryRows({ internalDb: ctx.internalDb, admin: ctx.terminology.admin }, [{ id: created.id, name: created.name }]);
 
+    // Task 7: `projectRegistryRows` never throws (that contract is deliberate and unchanged, see its
+    // doc comment above), so a failure is invisible from here as an exception — the route has to ask
+    // whether the concept actually landed instead of catching one. `facility_concept_projection`
+    // (migration 077) is the durable record of what code a facility currently projects as, written by
+    // `reprojectRegistryRows` (packages/bootstrap/src/facility-reconcile.ts) on every successful
+    // projection; no row for this id means the inline attempt above did not land, and the facility
+    // would otherwise sit in the registry, silently missing from the mapping picker, with nothing
+    // recording why.
+    const projectedLink = await ctx.internalDb
+      .selectFrom('facility_concept_projection')
+      .select('registry_id')
+      .where('registry_id', '=', created.id)
+      .executeTakeFirst();
+    let projection: 'ok' | 'queued-for-retry' = 'ok';
+    if (!projectedLink) {
+      projection = 'queued-for-retry';
+      // Same containment as the facility-map-rebuild enqueue below: a lost enqueue must not turn an
+      // already-committed create into a 500, but is worth a log line — it is the only remaining
+      // record that this facility needs a manual repair. Coalesces per facility (facility-job-
+      // store.ts's `activeKeyFor`), so a facility that keeps failing to project does not pile up
+      // duplicate retry jobs.
+      try {
+        await ctx.facilityJobs.enqueue({
+          kind: 'registry-projection', registryId: created.id, requestedBy: actorFromRequest(req).actorId,
+        });
+      } catch (err) {
+        ctx.logger.error(
+          { err, facilityId: created.id },
+          'failed to enqueue a registry-projection retry after a failed facility projection',
+        );
+      }
+    }
+
     // Task 5: the report-facing dimension is now stale. Enqueue rather than rebuild inline: a
     // rebuild talks to the EXTERNAL warehouse, and an operator's facility save must not fail because
     // that warehouse hiccuped. Coalescing (facility-job-store.ts's `activeKeyFor`) means a bulk
@@ -696,7 +729,7 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
 
     await recordAudit(ctx, req, { action: 'facility.create', entityType: 'facility', entityId: created.id, before: null, after: created });
     reply.code(201);
-    return created;
+    return { ...created, projection };
   });
 
   app.put('/api/facilities/:id', MANAGE, async (req, reply) => {
@@ -768,6 +801,33 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     // must track the new name, not just a create-time snapshot.
     await projectRegistryRows({ internalDb: ctx.internalDb, admin: ctx.terminology.admin }, [{ id: after.id, name: after.name }]);
 
+    // Task 7: same detection as POST above — `facility_concept_projection` records whether this
+    // facility has EVER been successfully projected, not whether this specific call was, so a row
+    // that already had a link before this update correctly reports 'ok' even if this particular
+    // rename's projection failed (the facility is still a usable, if now stale, mapping target). What
+    // this DOES catch: a facility that has never successfully projected at all — e.g. it was created
+    // while the terminology store was broken — still reports 'queued-for-retry' on every update until
+    // a projection actually lands.
+    const projectedLink = await ctx.internalDb
+      .selectFrom('facility_concept_projection')
+      .select('registry_id')
+      .where('registry_id', '=', after.id)
+      .executeTakeFirst();
+    let projection: 'ok' | 'queued-for-retry' = 'ok';
+    if (!projectedLink) {
+      projection = 'queued-for-retry';
+      try {
+        await ctx.facilityJobs.enqueue({
+          kind: 'registry-projection', registryId: after.id, requestedBy: actorFromRequest(req).actorId,
+        });
+      } catch (err) {
+        ctx.logger.error(
+          { err, facilityId: after.id },
+          'failed to enqueue a registry-projection retry after a failed facility projection',
+        );
+      }
+    }
+
     // Task 5: same reasoning as POST above — enqueue, never rebuild inline. Wrapped for the same
     // reason as POST's call too: it sits before `recordAudit` (deliberately contained, see
     // record-audit.ts), so an unwrapped throw here would both 500 an already-committed update and
@@ -779,7 +839,7 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     }
 
     await recordAudit(ctx, req, { action: 'facility.update', entityType: 'facility', entityId: id, before, after });
-    return after;
+    return { ...after, projection };
   });
 
   app.delete('/api/facilities/:id', MANAGE, async (req, reply) => {
