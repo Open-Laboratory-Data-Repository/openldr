@@ -1060,8 +1060,8 @@ describe('POST/PUT report whether this call\'s projection landed', () => {
 
   // The NEVER-projected facility: the terminology store is broken from before the create, so this
   // row has no projected concept at all — a strictly worse state than the stale-name case in the
-  // rename test below (missing from the picker entirely, not merely showing the old name). Both must
-  // report 'queued-for-retry'; they are different enough to pin separately.
+  // rename test that follows (missing from the picker entirely, not merely showing the old name).
+  // Both must report 'queued-for-retry'; they are different enough to pin separately.
   it('enqueues a registry-projection retry and reports queued-for-retry when the inline projection fails (PUT)', async () => {
     const internalDb = await makeMigratedDb();
     const ctx = fakeCreateCtx(internalDb);
@@ -1103,7 +1103,7 @@ describe('POST/PUT report whether this call\'s projection landed', () => {
   // no retry job to repair it. The route now reports what `projectRegistryRows` itself returned about
   // THIS call, so the stale name is both admitted and queued.
   //
-  // No job drain needed here, unlike the never-projected test below: the create SUCCEEDS, so it
+  // No job drain needed here, unlike the never-projected test ABOVE: the create SUCCEEDS, so it
   // enqueues no `registry-projection` job at all, and the single job asserted on can only be PUT's.
   it('reports queued-for-retry and enqueues a retry when a rename\'s projection fails after a healthy create', async () => {
     const internalDb = await makeMigratedDb();

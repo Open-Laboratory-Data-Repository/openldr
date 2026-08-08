@@ -19,8 +19,8 @@ import { publishFacilityMap, projectRegistryRows, type ReconcileDeps } from './f
  * `q-facilities` is the "Facilities (options)" query. Its `postgres` variant is the one exercised
  * here because the fixture's warehouse is pg-mem; the `mssql`/`mysql` variants of this query are
  * byte-identical to it (see the seed's own comment: "No postgres-isms at all — all three dialects
- * are byte-identical"), which `assertsFacilityMapJoinIsTheShippedOne` below re-checks rather than
- * assumes. Its shape is exactly the join named in the audit:
+ * are byte-identical") — which the test "the seeded query it asserts through is the facility_map
+ * join the audit named" at the end of this file re-checks rather than assumes. Its shape is exactly the join named in the audit:
  *   left join facility_map fm
  *     on fm.source_system = coalesce(dr.source_system, '') and fm.source_code = dr.performer
  * selecting `coalesce(fm.name, dr.performer_display, dr.performer)` as the label.
@@ -115,7 +115,9 @@ describe('facility durable updates — a saved mapping reaches a report with no 
 
     // Stands in for the enqueue the CREATE-facility route performs (`apps/server/src/
     // facilities-routes.ts`, Task 5) — that route is not callable from this package, and Task 5's
-    // own tests pin that it enqueues. Enqueuing it here means the tick below performs a REAL
+    // own tests pin that it enqueues. ⚠ Not byte-for-byte the route's call: the route also passes
+    // `requestedBy` (the actor id), which nothing downstream of the queue reads, so its absence
+    // changes neither the job's identity nor what the worker does with it. Enqueuing it here means the tick below performs a REAL
     // rebuild, so the "raw string" assertion that follows is a statement about a dimension that was
     // genuinely built, not about one that was never built at all.
     await jobs.enqueue({ kind: 'facility-map-rebuild' });
@@ -148,9 +150,10 @@ describe('facility durable updates — a saved mapping reaches a report with no 
       mapType: 'SAME-AS',
       isActive: true,
     });
-    // The enqueue that same route performs immediately after the save. Written explicitly here for
-    // the same reason as the arrange-phase enqueue above: the route is not callable from this
-    // package, and Task 6 pins that the route does enqueue. What this test is about is the rest of
+    // The enqueue the MAPPING route performs immediately after the save (Task 6's, in
+    // `apps/server/src/terminology-admin-routes.ts` — a different file from the create route above).
+    // Written explicitly here for the same reason, and with the same `requestedBy` caveat: the route
+    // is not callable from this package, and Task 6 pins that the route does enqueue. What this test is about is the rest of
     // the chain — WORKER → REBUILD → REPORT.
     await jobs.enqueue({ kind: 'facility-map-rebuild' });
     await tickAndExpectDone(h);

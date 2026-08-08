@@ -136,18 +136,48 @@ inline behaviour; this job is what makes the failure durable instead of a `conso
 interrupted by a crash is marked failed and becomes visible and retryable, rather than sitting
 `running` forever.
 
-Retries are bounded at **5 attempts** with backoff. A job that exhausts them stays `failed` with its
-`last_error` — it does not silently disappear, and Retry from the page resets the count so an
-operator who has fixed the underlying cause is not locked out.
+Retries are bounded at **5 attempts, one per worker tick** — there is **no backoff**. The tick is a
+fixed 3s and `retryPreservingAttempts` does not defer the re-queued row, so a job spends its whole
+budget in roughly 15 seconds and an outage longer than that lands a permanent `failed`.
+
+This line previously promised backoff, which the shipped worker does not implement. Backoff was
+weighed and **deliberately deferred** rather than built, because a permanent `failed` here is
+recoverable by two independent paths that both exist:
+
+- it is **visible** — the Facilities chip renders `Failed` with the error and a Retry that resets the
+  budget, which is the outcome this slice actually exists to guarantee (visible, not silent); and
+- the mechanism **self-heals on the next write** — `finish` releases the job's `active_key`, so the
+  very next facility or mapping mutation enqueues a fresh rebuild that runs normally. A permanently
+  failed job does not wedge anything.
+
+Implementing it properly needs a `next_attempt_at` column (migration 080) plus a `claimNext` filter —
+new schema surface, which is not something to add during a fix wave. Deferred to its own slice; until
+then this paragraph describes what the code does.
+
+A job that exhausts its budget stays `failed` with its `last_error` — it does not silently disappear,
+and Retry from the page resets the count so an operator who has fixed the underlying cause is not
+locked out. Retry is **refused (409) while the job is `running`**: re-queueing a live run re-arms its
+`active_key`, and that run's own `finish` then writes a terminal status, discarding the retry.
 
 ### Health surface
 
 `GET /api/facilities/health`, gated on `facilities.view`:
 
 ```
-{ reportDimension: { state, lastSuccessAt, rows, error },
-  projection:      { failedCount } }
+{ reportDimension: { state, lastSuccessAt, rows, error, jobId },
+  projection:      { failedCount, failed: [{ id, registryId, lastError }] } }
 ```
+
+Both halves carry a job **id**, because `POST /jobs/:id/retry` needs one and this is the only
+endpoint that exposes `facility_jobs` ids at all. `reportDimension.jobId` is non-null exactly when
+`error` is (the latest rebuild failed). `projection.failed` is one entry per facility whose
+projection is broken — one entry, and one Retry action, PER FACILITY, since projection jobs coalesce
+per facility and a single grouped action could only ever repair one of them. `failedCount` is
+derived as `failed.length` so the two cannot disagree.
+
+A failed projection self-clears when a strictly newer job for that same facility supersedes it. It
+does **not** clear on a successful INLINE projection — those write no job row for anything to
+observe — so that case clears only via an explicit Retry.
 
 `state` resolves as:
 
