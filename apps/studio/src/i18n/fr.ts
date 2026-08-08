@@ -816,6 +816,7 @@ export const fr: EnShape = {
       neverBuilt: 'Jamais reconstruite',
       retry: 'Réessayer',
       retrying: 'Nouvelle tentative…',
+      retryProjection: 'Réessayer {{facility}}',
       failedProjections_one: '{{count}} association d’établissement nécessite une intervention',
       failedProjections_other: '{{count}} associations d’établissement nécessitent une intervention',
     },

@@ -12,7 +12,22 @@ export interface FacilityHealth {
      *  request. Null whenever `error` is null, for the same reason. */
     jobId: string | null;
   };
-  projection: { failedCount: number };
+  projection: {
+    /** Always `failed.length` — derived, never counted separately, so the number on the chip and the
+     *  rows behind it can never disagree. */
+    failedCount: number;
+    /** The failed `registry-projection` jobs themselves, not just a tally. A bare count named no job
+     *  id, and `POST /api/facilities/jobs/:id/retry` needs one — so a failed PROJECTION was
+     *  retryable by nobody: not from the page, not from the CLI, not over HTTP. `registryId` is the
+     *  facility that needs repairing (a projection job repairs exactly one); `lastError` is why it
+     *  could not be.
+     *
+     *  ⚠ These are `listFailed`'s rows, so they self-clear when a LATER job for the same facility
+     *  supersedes them — but NOT when a later inline projection succeeds, because a successful
+     *  inline projection writes no job row for anything to observe. See `listFailed`'s doc comment
+     *  in packages/db/src/facility-job-store.ts. */
+    failed: { id: string; registryId: string | null; lastError: string | null }[];
+  };
 }
 
 /**
@@ -25,7 +40,7 @@ export interface FacilityHealth {
 export async function facilityHealth(deps: { internalDb: Kysely<InternalSchema>; jobs: FacilityJobStore }): Promise<FacilityHealth> {
   const pending = await deps.jobs.listUnresolved();
   const latest = await deps.jobs.latest('facility-map-rebuild');
-  const failedProjections = await deps.jobs.countFailed('registry-projection');
+  const failedProjections = await deps.jobs.listFailed('registry-projection');
 
   const lastRegistry = await deps.internalDb.selectFrom('facility_registry')
     .select((eb) => eb.fn.max('updated_at').as('t')).executeTakeFirst();
@@ -60,6 +75,9 @@ export async function facilityHealth(deps: { internalDb: Kysely<InternalSchema>;
       error: latest?.status === 'failed' ? latest.lastError : null,
       jobId: latest?.status === 'failed' ? latest.id : null,
     },
-    projection: { failedCount: failedProjections },
+    projection: {
+      failedCount: failedProjections.length,
+      failed: failedProjections.map((j) => ({ id: j.id, registryId: j.registryId, lastError: j.lastError })),
+    },
   };
 }

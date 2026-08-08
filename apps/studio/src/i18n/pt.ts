@@ -816,6 +816,7 @@ export const pt: EnShape = {
       neverBuilt: 'Nunca reconstruída',
       retry: 'Tentar novamente',
       retrying: 'A tentar novamente…',
+      retryProjection: 'Tentar novamente {{facility}}',
       failedProjections_one: '{{count}} associação de unidade precisa de atenção',
       failedProjections_other: '{{count}} associações de unidade precisam de atenção',
     },

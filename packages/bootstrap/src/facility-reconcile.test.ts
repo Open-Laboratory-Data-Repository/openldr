@@ -2363,6 +2363,43 @@ describe('reprojectAfterRegistryDelete', () => {
     expect(await currentConceptCode(deps, 'fac-A')).toBeNull();
   });
 
+  // ⛔ This was the FOURTH production `projectRegistryRows` call site, and the only one still
+  // discarding the boolean — so a survivor left on a stale concept by an ordinary DELETE was
+  // recorded nowhere but a `console.error`, contradicting the slice's own acceptance claim. Naming
+  // the survivor is what lets the route make the failure durable and retryable.
+  it('names the survivors whose reprojection FAILED, so the caller can make it durable', async () => {
+    const deps = await makeReconcileDeps();
+    await seedRegistry(deps, { id: 'fac-A', name: 'Alpha', localCode: 'X' });
+    await seedRegistry(deps, { id: 'fac-B', name: 'Beta', nationalSystem: 'urn:tz:hfr', nationalCode: 'X' });
+    await publishRegistryConcepts(deps, { apply: true });
+    await deps.internalDb.deleteFrom('facility_registry').where('id', '=', 'fac-A').execute();
+
+    // Break the write the reprojection has to make. `projectRegistryRows` contains this (it never
+    // throws — pinned elsewhere), so without a return value the failure is invisible from here.
+    const broken = {
+      ...deps,
+      admin: { ...deps.admin, terms: { ...deps.admin.terms, importRows: async () => { throw new Error('terminology store unreachable'); } } },
+    } as typeof deps;
+
+    const result = await reprojectAfterRegistryDelete(broken, { id: 'fac-A', localCode: 'X', nationalCode: null });
+
+    expect(result.failedRegistryIds).toEqual(['fac-B']);
+  });
+
+  it('names nobody when the reprojection succeeded', async () => {
+    const deps = await makeReconcileDeps();
+    await seedRegistry(deps, { id: 'fac-A', name: 'Alpha', localCode: 'X' });
+    await seedRegistry(deps, { id: 'fac-B', name: 'Beta', nationalSystem: 'urn:tz:hfr', nationalCode: 'X' });
+    await publishRegistryConcepts(deps, { apply: true });
+    await deps.internalDb.deleteFrom('facility_registry').where('id', '=', 'fac-A').execute();
+
+    const result = await reprojectAfterRegistryDelete(deps, { id: 'fac-A', localCode: 'X', nationalCode: null });
+
+    // Not vacuous: fac-B really did move up to the freed code, so there WAS a projection to report on.
+    expect(await currentConceptCode(deps, 'fac-B')).toBe('X');
+    expect(result.failedRegistryIds).toEqual([]);
+  });
+
 });
 
 describe('captureObservedFacility', () => {

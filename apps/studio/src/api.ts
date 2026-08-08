@@ -983,7 +983,15 @@ export interface FacilityHealth {
      *  endpoint that exposes `facility_jobs` ids. */
     jobId: string | null;
   };
-  projection: { failedCount: number };
+  projection: {
+    /** Always `failed.length` — the server derives it from the rows below rather than counting
+     *  separately, so the badge and the list behind it cannot disagree. */
+    failedCount: number;
+    /** One entry per facility whose concept projection is broken, each carrying the job id needed to
+     *  retry it. A count alone named no job, so a failed projection could be SEEN but not repaired
+     *  from anywhere. */
+    failed: { id: string; registryId: string | null; lastError: string | null }[];
+  };
 }
 export const getFacilityHealth = (): Promise<FacilityHealth> =>
   apiGet('/api/facilities/health', 'get facility health');

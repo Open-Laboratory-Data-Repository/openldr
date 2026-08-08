@@ -280,6 +280,13 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
     try {
       const id = (req.params as IdParam).id;
       const input = { ...parsed.data, toDisplay: parsed.data.toDisplay ?? null };
+      // ⛔ Read the row's CURRENT target BEFORE the write, the same way DELETE below does and for the
+      // same reason: after the update it is gone. Scoping the enqueue on the NEW body alone gets the
+      // retarget-AWAY case exactly backwards — pointing a facility mapping at a LOINC code REMOVES a
+      // facility resolution, so the dimension is stale, yet `isFacilityTarget(parsed.data)` is false
+      // and nothing would be queued. The UI would say the row is no longer a facility mapping while
+      // reports kept resolving that observed string to the old facility, indefinitely.
+      const previous = await ctx.internalDb.selectFrom('term_mappings').select(['to_system']).where('id', '=', id).executeTakeFirst();
       // A PUT retargets one existing row, so it cannot ADD a competing active mapping — but it can
       // re-activate a superseded one while another is active, which is the same violation by a
       // different route. `saveExclusive` with this row's id covers both.
@@ -288,7 +295,9 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
         : { mapping: await admin.termMappings.update(id, input), superseded: [] as string[] };
       // Task 6: same reasoning as the POST above — a facility mapping retarget makes the
       // report-facing dimension stale, so enqueue a rebuild, scoped and contained the same way.
-      if (isFacilityTarget(parsed.data)) {
+      // EITHER end being a facility target is enough: retargeting one AWAY changes resolution just
+      // as much as retargeting one TOWARDS.
+      if (isFacilityTarget(parsed.data) || (previous && isFacilityTarget({ toSystem: previous.to_system }))) {
         try {
           await ctx.facilityJobs.enqueue({ kind: 'facility-map-rebuild', requestedBy: actorFromRequest(req).actorId });
         } catch (err) {

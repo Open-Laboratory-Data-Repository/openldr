@@ -30,6 +30,13 @@ const HEALTH_ICON: Record<FacilityDimensionState, typeof CheckCircle2> = {
   stale: AlertTriangle,
 };
 
+/** How often the health chip re-checks while a rebuild is in flight. Only ever armed while the state
+ *  is `updating` (see the effect below), so this is not a background poll the page pays for at rest —
+ *  it runs for the seconds a rebuild takes and then stops. Comfortably longer than the worker's own
+ *  3s tick (packages/bootstrap/src/facility-job-worker.ts), so a typical rebuild resolves within one
+ *  or two polls. */
+const HEALTH_POLL_MS = 5000;
+
 /** Same formatting convention as Sites.tsx's own `formatDate` — locale-formatted, falling back to
  *  the raw ISO string if `Date` can't parse it rather than showing nothing. */
 function formatBuildTime(iso: string): string {
@@ -43,12 +50,15 @@ function formatBuildTime(iso: string): string {
  *  per-facility projection must never make the WHOLE dimension read as failed (see
  *  packages/bootstrap/src/facility-health.ts). */
 function FacilityHealthChip({
-  health, canManage, retrying, onRetry,
+  health, canManage, retryingJobId, onRetry,
 }: {
   health: FacilityHealth;
   canManage: boolean;
-  retrying: boolean;
-  onRetry: () => void;
+  /** The job id currently being retried, or null. Compared against a SPECIFIC id at every use — a
+   *  bare `retrying` boolean read as true whenever both sides were null, which was harmless only
+   *  because the one button that consumed it was already gated on a non-null `jobId`. */
+  retryingJobId: string | null;
+  onRetry: (jobId: string) => void;
 }) {
   const { t } = useTranslation();
   const { reportDimension: dim, projection } = health;
@@ -66,16 +76,39 @@ function FacilityHealthChip({
           : t('facilities.health.neverBuilt')}
       </span>
       {dim.state === 'failed' && canManage && dim.jobId && (
-        <Button variant="outline" size="sm" className="h-6 px-2 text-xs" disabled={retrying} onClick={onRetry}>
-          {retrying ? t('facilities.health.retrying') : t('facilities.health.retry')}
+        <Button
+          variant="outline" size="sm" className="h-6 px-2 text-xs"
+          disabled={retryingJobId === dim.jobId}
+          onClick={() => onRetry(dim.jobId!)}
+        >
+          {retryingJobId === dim.jobId ? t('facilities.health.retrying') : t('facilities.health.retry')}
         </Button>
       )}
+      {/* ⛔ One Retry PER FAILED PROJECTION, not one for the group. Projection jobs coalesce per
+          facility, so N broken facilities are N separate jobs with N separate ids — a single action
+          could only ever repair one of them and would leave the rest permanently unfixable from
+          here. The count keeps its own element (never folded into the state chip: a failed
+          per-facility projection must not make the WHOLE dimension read as failed — see
+          packages/bootstrap/src/facility-health.ts), and each row names the facility it is about so
+          the operator can tell which lab is missing from the picker. */}
       {projection.failedCount > 0 && (
         <span className="flex items-center gap-1 text-amber-700">
           <AlertTriangle className="h-3 w-3" />
           {t('facilities.health.failedProjections', { count: projection.failedCount })}
         </span>
       )}
+      {canManage && projection.failed.map((job) => (
+        <Button
+          key={job.id}
+          variant="outline" size="sm" className="h-6 px-2 text-xs"
+          disabled={retryingJobId === job.id}
+          onClick={() => onRetry(job.id)}
+        >
+          {retryingJobId === job.id
+            ? t('facilities.health.retrying')
+            : t('facilities.health.retryProjection', { facility: job.registryId ?? '—' })}
+        </Button>
+      ))}
     </div>
   );
 }
@@ -127,11 +160,27 @@ export function Facilities() {
     }
   }, []);
 
-  useEffect(() => { void reloadHealth(); }, [reloadHealth]);
+  // No dedicated mount effect for the chip: `reload()` below refreshes health and runs on mount, so
+  // a second one here would only make every first paint issue two identical health requests.
 
-  const retryHealthJob = useCallback(async () => {
-    const jobId = health?.reportDimension.jobId;
-    if (!jobId) return;
+  // ⛔ `Updating` is a TRANSIENT state, so a chip that only refreshes on mount and after a Retry can
+  // never actually show it resolving: an operator who saves a facility, applies an import or edits a
+  // mapping watches a frozen chip until they reload the page. The whole justification for
+  // enqueue-plus-worker over an inline rebuild is that the stale window becomes visible and bounded
+  // instead of silent — that only holds if this polls while the window is open.
+  //
+  // Bounded deliberately: the interval only exists while the state IS `updating`, and the cleanup
+  // clears it both when the state leaves `updating` (the effect re-runs on the new state) and on
+  // unmount. `cancelled` guards the in-flight fetch separately — clearInterval cannot recall a
+  // request already in the air, and resolving it after unmount would set state on a dead component.
+  useEffect(() => {
+    if (health?.reportDimension.state !== 'updating') return;
+    let cancelled = false;
+    const timer = setInterval(() => { if (!cancelled) void reloadHealth(); }, HEALTH_POLL_MS);
+    return () => { cancelled = true; clearInterval(timer); };
+  }, [health?.reportDimension.state, reloadHealth]);
+
+  const retryHealthJob = useCallback(async (jobId: string) => {
     setRetryingJobId(jobId);
     try {
       await retryFacilityJob(jobId);
@@ -141,7 +190,7 @@ export function Facilities() {
     } finally {
       setRetryingJobId(null);
     }
-  }, [health, reloadHealth]);
+  }, [reloadHealth]);
 
   // F1 fix: a plain `reload()` flips `loading` to true, which the render below turns into a
   // full-page `LoadingState` that UNMOUNTS everything else on the page — including a currently-open
@@ -154,6 +203,13 @@ export function Facilities() {
   // else already on screen — stays mounted through the refresh.
   const reload = useCallback(async (opts?: { background?: boolean }) => {
     if (!opts?.background) setLoading(true);
+    // Every caller of `reload()` follows a mutation that makes the report dimension stale — a
+    // create, an edit, a delete, or the import sheet's onImported — and each of those enqueues a
+    // rebuild server-side. Refreshing the chip here is what lets the operator SEE that happen; it
+    // used to run on mount and after a Retry only, so the chip sat frozen through every mutation on
+    // the page. Deliberately not awaited into the same try: a health-endpoint outage must not be
+    // reported as a failure to list facilities (`reloadHealth` contains its own errors).
+    void reloadHealth();
     try {
       const data = await listFacilities();
       setRows(data);
@@ -169,7 +225,7 @@ export function Facilities() {
     } finally {
       if (!opts?.background) setLoading(false);
     }
-  }, []);
+  }, [reloadHealth]);
 
   useEffect(() => { void reload(); }, [reload]);
 
@@ -200,10 +256,14 @@ export function Facilities() {
       await deleteFacility(f.id);
       setRows((prev) => prev.filter((r) => r.id !== f.id));
       setError(null);
+      // A delete enqueues a rebuild server-side, so the dimension is now `updating`. This path
+      // deliberately does NOT call `reload()` (it drops the row locally instead of refetching the
+      // whole list), so it has to refresh the chip itself or the mutation stays invisible.
+      void reloadHealth();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
-  }, [confirming]);
+  }, [confirming, reloadHealth]);
 
   // Registry-only loading gate: `hasForm === null` means the listPublishedForms() effect hasn't
   // settled yet. This used to gate the WHOLE page (return before Tabs even rendered), which meant a
@@ -238,8 +298,8 @@ export function Facilities() {
               <FacilityHealthChip
                 health={health}
                 canManage={canManage}
-                retrying={retryingJobId === health.reportDimension.jobId}
-                onRetry={() => void retryHealthJob()}
+                retryingJobId={retryingJobId}
+                onRetry={(jobId) => void retryHealthJob(jobId)}
               />
             )}
             {/* Portal target for whichever tab's `⋯` menu is currently mounted — see `actionsEl`'s
@@ -387,7 +447,10 @@ export function Facilities() {
             open
             facility={editing}
             onOpenChange={(o) => { if (!o) setEditing(undefined); }}
-            onSaved={(f) => { upsert(f); setEditing(undefined); }}
+            // Same reasoning as `doDelete` above: a create/edit enqueues a rebuild server-side, and
+            // this path merges the saved row in locally rather than going through `reload()`, so the
+            // chip has to be refreshed here or a save leaves it frozen.
+            onSaved={(f) => { upsert(f); setEditing(undefined); void reloadHealth(); }}
           />
         )}
 

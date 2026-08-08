@@ -428,11 +428,21 @@ export async function runFacilitiesJobs(opts: FacilitiesJobsOpts): Promise<numbe
   }
 }
 
+/** ⛔ Every retryable job id this payload carries is PRINTED, because `--retry <id>` is useless
+ *  without one. Both halves used to be unreachable from a plain shell: the dimension's `jobId` was
+ *  in the payload but never rendered (an operator had to re-run with `--json` to find it), and the
+ *  projection side reported only a count, so the failed projections had no id ANYWHERE — not here,
+ *  not in `--json`, not on the Facilities page. */
 function formatJobsHuman(health: FacilityHealth): string {
   const { reportDimension: dim, projection } = health;
   const lines = [`report dimension: ${dim.state}`];
   lines.push(`last successful rebuild: ${dim.lastSuccessAt ?? 'never'}${dim.rows != null ? ` (${dim.rows} rows)` : ''}`);
   if (dim.error) lines.push(`last error: ${dim.error}`);
+  if (dim.jobId) lines.push(`retry with: openldr facilities jobs --retry ${dim.jobId}`);
   lines.push(`failed projection retries: ${projection.failedCount}`);
+  for (const job of projection.failed) {
+    lines.push(`  facility ${job.registryId ?? '(unnamed)'}: ${job.lastError ?? 'no error recorded'}`);
+    lines.push(`    retry with: openldr facilities jobs --retry ${job.id}`);
+  }
   return lines.join('\n');
 }

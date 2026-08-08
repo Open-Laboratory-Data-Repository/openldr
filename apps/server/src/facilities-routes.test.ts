@@ -1233,6 +1233,37 @@ describe('Task 9: DELETE /api/facilities/:id and the projection', () => {
       .map((r: any) => r.code)).toEqual(['X']);
   });
 
+  // ⛔ The FOURTH projection call site, and the last one whose failure was recorded nowhere durable.
+  // Same collision as the test above, but the reprojection FAILS: Beta is left on its old parked
+  // concept while `resolveObservedFacilities` has already started resolving the freed code, and the
+  // DELETE still returns 200. `projectRegistryRows` never throws, so before
+  // `reprojectAfterRegistryDelete` reported its outcome the only trace was a `console.error` —
+  // directly contradicting this slice's "never only a console.error" acceptance claim.
+  it('⛔ enqueues a projection retry for a survivor the delete left stale', async () => {
+    const internalDb = await makeMigratedDb();
+    const ctx = fakeCreateCtx(internalDb);
+    const app = await appWith(ctx);
+    const deps = { internalDb, admin: ctx.terminology.admin };
+
+    await ctx.facilityRegistry.upsert({ id: 'fac-A', name: 'Alpha', localCode: 'X', source: 'manual' } as any);
+    await ctx.facilityRegistry.upsert({ id: 'fac-B', name: 'Beta', nationalSystem: 'urn:tz:hfr', nationalCode: 'X', source: 'manual' } as any);
+    await projectRegistryRows(deps, [{ id: 'fac-A', name: 'Alpha' }, { id: 'fac-B', name: 'Beta' }]);
+    // `ctx.facilityJobs` here is the REAL store (see `fakeCreateCtx`), and the setup above writes
+    // through the store/reconcile functions directly rather than through a route — so nothing is
+    // queued yet and every job below belongs to the DELETE itself.
+
+    // Break the write the reprojection needs, AFTER the setup above has used it.
+    ctx.terminology.admin.terms.importRows = async () => { throw new Error('terminology store unreachable'); };
+
+    const res = await app.inject({ method: 'DELETE', url: '/api/facilities/fac-A' });
+
+    // The deletion still succeeds — a best-effort catch-up must never fail it.
+    expect(res.statusCode).toBe(200);
+    // …and the survivor's repair is durable and retryable, named per facility.
+    const queued = await ctx.facilityJobs.listUnresolved();
+    expect(queued.filter((j: any) => j.kind === 'registry-projection').map((j: any) => j.registryId)).toEqual(['fac-B']);
+  });
+
   // Same containment contract as POST/PUT above. `retireRegistryConcepts` THROWS by design (its
   // containment belongs to the caller), so the route has to hold it — and the retirement runs BEFORE
   // the removal, which makes an uncontained throw worse than a 500: it would abort the request before

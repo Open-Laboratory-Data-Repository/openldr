@@ -106,6 +106,40 @@ describe('facilityHealth', () => {
     expect(health.reportDimension.state).toBe('current');
   });
 
+  // ⛔ A failed PROJECTION used to be retryable by NOBODY. `POST /api/facilities/jobs/:id/retry`
+  // needs a job id, and this payload carried an id for the rebuild only — the projection side was a
+  // bare count, so the page, the CLI and any HTTP client alike could see that N facilities were
+  // broken and had no way to name, let alone repair, a single one of them.
+  it('names each failed projection job, so every one of them can actually be retried', async () => {
+    const deps = await withCompletedRebuild();
+    await deps.jobs.enqueue({ kind: 'registry-projection', registryId: 'fac-A' });
+    const a = await deps.jobs.claimNext();
+    await deps.jobs.finish(a!.id, 'failed', { error: 'terminology store unreachable' });
+    await deps.jobs.enqueue({ kind: 'registry-projection', registryId: 'fac-B' });
+    const b = await deps.jobs.claimNext();
+    await deps.jobs.finish(b!.id, 'failed', { error: 'code collision' });
+
+    const { projection } = await facilityHealth(deps);
+
+    // ⛔ Both, not one. Projection jobs coalesce PER FACILITY, so two failures are two rows and a
+    // surface that reported only the first would leave the second permanently unrepairable.
+    expect(projection.failedCount).toBe(2);
+    expect(projection.failed).toEqual(expect.arrayContaining([
+      { id: a!.id, registryId: 'fac-A', lastError: 'terminology store unreachable' },
+      { id: b!.id, registryId: 'fac-B', lastError: 'code collision' },
+    ]));
+  });
+
+  it('the count is derived from the rows, so the two can never disagree', async () => {
+    const deps = await withCompletedRebuild();
+    await deps.jobs.enqueue({ kind: 'registry-projection', registryId: 'fac-A' });
+    const claimed = await deps.jobs.claimNext();
+    await deps.jobs.finish(claimed!.id, 'failed', { error: 'boom' });
+
+    const { projection } = await facilityHealth(deps);
+    expect(projection.failedCount).toBe(projection.failed.length);
+  });
+
   it('⛔ a pending projection must not make the dimension read updating', async () => {
     // Pins the same separation as the test above, on the OTHER side: `withCompletedRebuild` leaves
     // no `facility-map-rebuild` pending, so the only job in flight is a `registry-projection`. If the

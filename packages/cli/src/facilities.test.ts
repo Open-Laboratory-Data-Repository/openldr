@@ -591,13 +591,16 @@ describe('facilities conflicts CLI', () => {
 // resetting `attempts`), mocked here for the same reason every other run* function's collaborator
 // is: this file is about what the CLI wrapper does with the result, not about the query itself.
 const HEALTH_CURRENT = {
-  reportDimension: { state: 'current', lastSuccessAt: '2026-08-07T00:00:00.000Z', rows: 88, error: null },
-  projection: { failedCount: 0 },
+  reportDimension: { state: 'current', lastSuccessAt: '2026-08-07T00:00:00.000Z', rows: 88, error: null, jobId: null },
+  projection: { failedCount: 0, failed: [] },
 };
 
 const HEALTH_FAILED = {
-  reportDimension: { state: 'failed', lastSuccessAt: '2026-08-06T00:00:00.000Z', rows: 42, error: 'warehouse unreachable' },
-  projection: { failedCount: 1 },
+  reportDimension: { state: 'failed', lastSuccessAt: '2026-08-06T00:00:00.000Z', rows: 42, error: 'warehouse unreachable', jobId: 'fj_rebuild1' },
+  projection: {
+    failedCount: 1,
+    failed: [{ id: 'fj_proj1', registryId: 'fac-A', lastError: 'terminology store unreachable' }],
+  },
 };
 
 describe('facilities jobs CLI', () => {
@@ -640,6 +643,23 @@ describe('facilities jobs CLI', () => {
     expect(human).toMatch(/failed/);
     expect(human).toMatch(/warehouse unreachable/);
     expect(human).toMatch(/1/); // failedCount
+  });
+
+  // ⛔ `--retry <id>` needs an id, and a shell-only operator had no way to obtain one: the
+  // dimension's `jobId` was in the payload but never printed, and the failed PROJECTIONS had no id
+  // in the payload at all — so the "N facility mappings need attention" signal named nothing that
+  // could be acted on. Both ids, and the command to use them, are printed now.
+  it('prints every retryable job id, so --retry has something to be given', async () => {
+    mocks.facilityHealth.mockResolvedValue(HEALTH_FAILED);
+
+    await runFacilitiesJobs({ json: false });
+
+    const human = stdoutSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(human).toMatch(/--retry fj_rebuild1/);
+    expect(human).toMatch(/--retry fj_proj1/);
+    // And the failed projection names the facility it is about, not just an opaque job id.
+    expect(human).toMatch(/fac-A/);
+    expect(human).toMatch(/terminology store unreachable/);
   });
 
   it('does not retry anything when --retry is not passed', async () => {

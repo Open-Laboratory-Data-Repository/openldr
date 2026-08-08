@@ -822,6 +822,9 @@ export const en = {
       neverBuilt: 'Never built',
       retry: 'Retry',
       retrying: 'Retrying…',
+      // One per failed per-facility projection: each is its own job with its own id, so the
+      // label names the facility it would repair rather than reading as a second global Retry.
+      retryProjection: 'Retry {{facility}}',
       failedProjections_one: '{{count}} facility mapping needs attention',
       failedProjections_other: '{{count}} facility mappings need attention',
     },

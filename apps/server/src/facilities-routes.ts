@@ -960,11 +960,32 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
 
     await ctx.facilityRegistry.remove(id);
 
-    await reprojectAfterRegistryDelete(deps, {
+    const { failedRegistryIds } = await reprojectAfterRegistryDelete(deps, {
       id,
       localCode: before.localCode ?? null,
       nationalCode: before.nationalCode ?? null,
     });
+
+    // Task 7's contract — "a failed projection is never only a console.error" — applied to this
+    // fourth call site. Deleting one side of a code collision frees the other to move back up to the
+    // human code; if that reprojection fails, the SURVIVING facility is left on a stale concept
+    // while the operator's `term_mappings` row still names its old code, and the deletion returns a
+    // cheerful 200. One job per survivor: they carry distinct registry ids, so the store coalesces
+    // them per facility (facility-job-store.ts's `activeKeyFor`) rather than letting the first
+    // absorb the rest. Wrapped and placed before `recordAudit` for the same reason as every sibling
+    // enqueue in this file.
+    for (const registryId of failedRegistryIds) {
+      try {
+        await ctx.facilityJobs.enqueue({
+          kind: 'registry-projection', registryId, requestedBy: actorFromRequest(req).actorId,
+        });
+      } catch (err) {
+        ctx.logger.error(
+          { err, facilityId: id, survivorId: registryId },
+          'failed to enqueue a registry-projection retry for a facility left stale by a delete',
+        );
+      }
+    }
 
     // Task 5: removing a facility changes what the dimension should contain, same reasoning as
     // POST/PUT above — enqueue, never rebuild inline. Wrapped for the same reason as those two:

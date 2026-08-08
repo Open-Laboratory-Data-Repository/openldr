@@ -36,7 +36,6 @@ export interface FacilityJobStore {
   /** Failed jobs of this kind that NOTHING has superseded — see the implementation's doc comment for
    *  exactly what "superseded" means and what it deliberately cannot see. */
   listFailed(kind: FacilityJobKind): Promise<FacilityJob[]>;
-  countFailed(kind: FacilityJobKind): Promise<number>;
 }
 
 type Row = {
@@ -324,12 +323,6 @@ export function createFacilityJobStore(db: Kysely<InternalSchema>): FacilityJobS
       return failedRows
         .filter((r) => new Date(r.requested_at).getTime() >= (newestAt.get(activeKeyFor(kind, r.registry_id)) ?? -Infinity))
         .map((r) => toJob(r));
-    },
-
-    async countFailed(kind) {
-      const rows = await db.selectFrom('facility_jobs').select('id')
-        .where('kind', '=', kind).where('status', '=', 'failed').execute();
-      return rows.length;
     },
   };
 }
