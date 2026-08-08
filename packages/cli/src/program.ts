@@ -23,7 +23,7 @@ import { runRolesList, runRolesShow, runRolesCreate, runRolesEdit, runRolesDelet
 import { runDataExposureList, runDataExposureHide, runDataExposureShow } from './data-exposure';
 import { runSyncStatus, runSyncNow, runSyncEnroll, runSyncList, runSyncRotate, runSyncRevoke, runSyncAmend, runSyncMergePatient, runSyncExport, runSyncImport, runSyncQuarantineList, runSyncQuarantineRetry, runSyncDivergenceList, runSyncDivergenceShow, runSyncDivergenceClear } from './sync';
 import { runErrorsList } from './errors';
-import { runFacilitiesImport, runFacilitiesScanObserved, runFacilitiesPublish, runFacilitiesConflicts } from './facilities';
+import { runFacilitiesImport, runFacilitiesScanObserved, runFacilitiesPublish, runFacilitiesConflicts, runFacilitiesJobs } from './facilities';
 import { setActorOverride } from './cli-actor';
 
 // Builds a fresh, unstarted `openldr` Command tree. Extracted out of index.ts so that:
@@ -279,6 +279,17 @@ export function buildProgram(): Command {
     .option('--json', 'emit machine-readable JSON', false)
     .action(async (opts: { json: boolean }) => {
       process.exitCode = await runFacilitiesConflicts(opts);
+    });
+  // Task 10 (facility durable-updates): CLI parity for `GET /api/facilities/health` and
+  // `POST /api/facilities/jobs/:id/retry`. `--retry` is the one write this command can perform —
+  // there is no separate --apply split (see runFacilitiesJobs's doc comment).
+  facilities
+    .command('jobs')
+    .description('Show whether the report-facing facility dimension is current, and optionally retry a failed rebuild.')
+    .option('--retry <id>', 'retry a failed facility job (re-queues it; resets its retry budget)')
+    .option('--json', 'emit machine-readable JSON', false)
+    .action(async (opts: { retry?: string; json: boolean }) => {
+      process.exitCode = await runFacilitiesJobs(opts);
     });
 
   const syncGroup = program.command('sync').description('lab⇄central sync status + control');

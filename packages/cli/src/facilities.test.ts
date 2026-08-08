@@ -7,6 +7,9 @@ const mocks = vi.hoisted(() => ({
     terminology: { admin: { marker: 'admin' } },
     audit: { marker: 'audit' },
     logger: { marker: 'logger' },
+    // Task 10: `openldr facilities jobs --retry <id>` calls `ctx.facilityJobs.retry` directly
+    // (the OPERATOR's action, never `retryPreservingAttempts` — see facility-job-store.ts).
+    facilityJobs: { retry: vi.fn() },
     close: vi.fn(),
   },
   createAppContext: vi.fn(),
@@ -14,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   scanObservedFacilities: vi.fn(),
   publishFacilityMap: vi.fn(),
   listFacilityMappingConflicts: vi.fn(),
+  facilityHealth: vi.fn(),
   recordAuditEvent: vi.fn(),
   referenceCapture: { marker: 'referenceCapture' },
   readFileSync: vi.fn(),
@@ -29,6 +33,7 @@ vi.mock('@openldr/bootstrap', () => ({
   scanObservedFacilities: mocks.scanObservedFacilities,
   publishFacilityMap: mocks.publishFacilityMap,
   listFacilityMappingConflicts: mocks.listFacilityMappingConflicts,
+  facilityHealth: mocks.facilityHealth,
   recordAuditEvent: mocks.recordAuditEvent,
 }));
 
@@ -40,7 +45,7 @@ vi.mock('node:fs', () => ({
   readFileSync: mocks.readFileSync,
 }));
 
-import { runFacilitiesImport, runFacilitiesScanObserved, runFacilitiesPublish, runFacilitiesConflicts } from './facilities';
+import { runFacilitiesImport, runFacilitiesScanObserved, runFacilitiesPublish, runFacilitiesConflicts, runFacilitiesJobs } from './facilities';
 
 const CLEAN_RESULT = {
   parsed: 10, skipped: 0, unknownColumns: [], duplicateColumns: [], quarantined: [],
@@ -539,5 +544,126 @@ describe('facilities conflicts CLI', () => {
     expect(mocks.ctx.close).toHaveBeenCalledTimes(1);
     const err = stderrSpy.mock.calls.map((c) => String(c[0])).join('');
     expect(err).toMatch(/db exploded/);
+  });
+});
+
+// ── Task 10: `openldr facilities jobs [--retry <id>]` ──────────────────────────────────────────
+//
+// CLI parity for `GET /api/facilities/health` and `POST /api/facilities/jobs/:id/retry`
+// (apps/server/src/facilities-routes.ts) — both surface Task 9's `facilityHealth`
+// (@openldr/bootstrap), and both re-queue through `ctx.facilityJobs.retry` (the OPERATOR's action,
+// resetting `attempts`), mocked here for the same reason every other run* function's collaborator
+// is: this file is about what the CLI wrapper does with the result, not about the query itself.
+const HEALTH_CURRENT = {
+  reportDimension: { state: 'current', lastSuccessAt: '2026-08-07T00:00:00.000Z', rows: 88, error: null },
+  projection: { failedCount: 0 },
+};
+
+const HEALTH_FAILED = {
+  reportDimension: { state: 'failed', lastSuccessAt: '2026-08-06T00:00:00.000Z', rows: 42, error: 'warehouse unreachable' },
+  projection: { failedCount: 1 },
+};
+
+describe('facilities jobs CLI', () => {
+  let stdoutSpy: ReturnType<typeof vi.fn>;
+  let stderrSpy: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true) as unknown as ReturnType<typeof vi.fn>;
+    stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true) as unknown as ReturnType<typeof vi.fn>;
+    mocks.createAppContext.mockResolvedValue(mocks.ctx);
+    mocks.ctx.close.mockResolvedValue(undefined);
+    mocks.ctx.facilityJobs.retry.mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('prints the report-dimension state', async () => {
+    mocks.facilityHealth.mockResolvedValue(HEALTH_CURRENT);
+
+    const code = await runFacilitiesJobs({ json: false });
+
+    expect(code).toBe(0);
+    expect(mocks.facilityHealth).toHaveBeenCalledWith({ internalDb: mocks.ctx.internalDb, jobs: mocks.ctx.facilityJobs });
+    const human = stdoutSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(human).toMatch(/current/);
+    expect(human).toMatch(/88/);
+    expect(mocks.ctx.close).toHaveBeenCalledTimes(1);
+  });
+
+  it('prints a failed state with its error and the separate projection-failure count', async () => {
+    mocks.facilityHealth.mockResolvedValue(HEALTH_FAILED);
+
+    const code = await runFacilitiesJobs({ json: false });
+
+    expect(code).toBe(0);
+    const human = stdoutSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(human).toMatch(/failed/);
+    expect(human).toMatch(/warehouse unreachable/);
+    expect(human).toMatch(/1/); // failedCount
+  });
+
+  it('does not retry anything when --retry is not passed', async () => {
+    mocks.facilityHealth.mockResolvedValue(HEALTH_CURRENT);
+
+    await runFacilitiesJobs({ json: false });
+
+    expect(mocks.ctx.facilityJobs.retry).not.toHaveBeenCalled();
+  });
+
+  it('--retry <id> re-queues the job before reporting the (now updated) state', async () => {
+    mocks.facilityHealth.mockResolvedValue(HEALTH_CURRENT);
+
+    const code = await runFacilitiesJobs({ retry: 'fj_abc123', json: false });
+
+    expect(code).toBe(0);
+    expect(mocks.ctx.facilityJobs.retry).toHaveBeenCalledWith('fj_abc123');
+    // Re-queue happens before the state is read, not after — otherwise the printed state would
+    // still show the pre-retry (failed) job.
+    const retryOrder = mocks.ctx.facilityJobs.retry.mock.invocationCallOrder[0];
+    const healthOrder = mocks.facilityHealth.mock.invocationCallOrder[0];
+    expect(retryOrder).toBeLessThan(healthOrder);
+  });
+
+  it('--json emits the whole machine-readable health payload', async () => {
+    mocks.facilityHealth.mockResolvedValue(HEALTH_CURRENT);
+
+    const code = await runFacilitiesJobs({ json: true });
+
+    expect(code).toBe(0);
+    expect(stdoutSpy).toHaveBeenCalledWith(JSON.stringify(HEALTH_CURRENT, null, 2) + '\n');
+  });
+
+  it('never audits — it is a read (or a re-queue), not a mutation of the register itself', async () => {
+    mocks.facilityHealth.mockResolvedValue(HEALTH_CURRENT);
+
+    await runFacilitiesJobs({ retry: 'fj_abc123', json: false });
+
+    expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it('closes the app context even when facilityHealth throws, and reports a redacted message', async () => {
+    mocks.facilityHealth.mockRejectedValue(new Error('db exploded'));
+
+    const code = await runFacilitiesJobs({ json: false });
+
+    expect(code).toBe(1);
+    expect(mocks.ctx.close).toHaveBeenCalledTimes(1);
+    const err = stderrSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(err).toMatch(/db exploded/);
+  });
+
+  it('closes the app context even when retry throws, and reports a redacted message', async () => {
+    mocks.ctx.facilityJobs.retry.mockRejectedValue(new Error('job not found'));
+
+    const code = await runFacilitiesJobs({ retry: 'fj_nope', json: false });
+
+    expect(code).toBe(1);
+    expect(mocks.ctx.close).toHaveBeenCalledTimes(1);
+    const err = stderrSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(err).toMatch(/job not found/);
   });
 });

@@ -1544,6 +1544,12 @@ export { importFacilities } from './facility-import';
 export type { FacilityImportDeps, FacilityImportOptions, FacilityImportResult } from './facility-import';
 export { scanObservedFacilities, resolveObservedFacilities, publishFacilityMap, projectRegistryRows, retireRegistryConcepts, reprojectAfterRegistryDelete, listFacilityMappingConflicts } from './facility-reconcile';
 export type { ReconcileDeps, ScanResult, ScanOptions, ResolvedFacility, ResolvedVia, PublishResult, FacilityMappingConflict } from './facility-reconcile';
+// Task 10 (facility durable-updates): surfaces Task 9's dimension-state resolver to the HTTP route
+// and the CLI (apps/server/src/facilities-routes.ts's `GET /api/facilities/health`, packages/cli/
+// src/facilities.ts's `openldr facilities jobs`) — previously only reachable from inside this
+// package's own tests.
+export { facilityHealth } from './facility-health';
+export type { FacilityHealth, FacilityDimensionState } from './facility-health';
 export {
   enrollSite,
   listSites,

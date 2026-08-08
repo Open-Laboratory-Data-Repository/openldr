@@ -4,7 +4,7 @@ import type { Kysely } from 'kysely';
 import { z } from 'zod';
 import {
   importFacilities, scanObservedFacilities, resolveObservedFacilities, publishFacilityMap, projectRegistryRows,
-  retireRegistryConcepts, reprojectAfterRegistryDelete, listFacilityMappingConflicts,
+  retireRegistryConcepts, reprojectAfterRegistryDelete, listFacilityMappingConflicts, facilityHealth,
   type AppContext, type FacilityImportResult, type ScanResult, type PublishResult,
 } from '@openldr/bootstrap';
 import {
@@ -548,6 +548,54 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
   // always a generated UUID or a sha256-derived digest.
   app.get('/api/facilities/mapping-conflicts', MANAGE, async () => {
     return listFacilityMappingConflicts({ internalDb: ctx.internalDb });
+  });
+
+  // Task 10 (facility durable-updates): what the Facilities chip shows — whether the report-facing
+  // `facility_map` dimension has caught up with the current registry/mapping state (Task 9's
+  // `facilityHealth`). Until this route existed, a failed or stuck rebuild sat in `facility_jobs`
+  // with nothing under `apps/` able to read it: an operator could publish/edit a mapping and have no
+  // way to tell whether reports had actually picked it up.
+  //
+  // Gated VIEW, not MANAGE — it is read-only, and an operator who can merely READ reports still
+  // needs to know whether the dimension backing them is current.
+  //
+  // Static segment, same non-issue as `mapping-conflicts` above: find-my-way prefers a static
+  // segment over `/api/facilities/:id` regardless of registration order (measured there), so this
+  // route's position here is for legibility, not correctness.
+  app.get('/api/facilities/health', VIEW, async () => {
+    return facilityHealth({ internalDb: ctx.internalDb, jobs: ctx.facilityJobs });
+  });
+
+  // Task 10: the operator's manual retry for a failed facility job — `facility-map-rebuild` (the
+  // whole dimension) or `registry-projection` (one facility's mapping-picker entry). RE-QUEUES only:
+  // it enqueues the retry through `ctx.facilityJobs.retry`, which the polling worker
+  // (`createFacilityJobWorker`, packages/bootstrap/src/facility-job-worker.ts) then drains — it does
+  // NOT run the rebuild inline in this request, for the same reason POST/PUT/DELETE above never do:
+  // a rebuild talks to the EXTERNAL warehouse, and an HTTP request must not be held open for it (or
+  // fail because it hiccups).
+  //
+  // `ctx.facilityJobs.retry` — deliberately not `retryPreservingAttempts` — is the OPERATOR's action:
+  // it resets `attempts` to 0 so someone who has fixed the underlying cause is not locked out by a
+  // previously exhausted retry budget (see facility-job-store.ts's doc comment on the two methods).
+  //
+  // `retry(id)` on the store is a silent no-op for an unknown id (it SELECTs first and returns early
+  // — see facility-job-store.ts), so this handler has to look the row up itself to tell "retried" from
+  // "there was nothing to retry" and answer 404 for the latter, the same way `GET`/`PUT`
+  // `/api/facilities/:id` already 404 on an unknown facility id rather than silently no-op-ing behind
+  // a 200. Read straight off `ctx.internalDb` — `facility_jobs` is not exposed through any store
+  // method beyond `retry`/`latest`/`listUnresolved`, and this file already reads other tables
+  // (`term_mappings`, in the `impact` route above) directly off `ctx.internalDb` for the same reason.
+  app.post('/api/facilities/jobs/:id/retry', MANAGE, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const existing = await ctx.internalDb
+      .selectFrom('facility_jobs')
+      .select('id')
+      .where('id', '=', id)
+      .executeTakeFirst();
+    if (!existing) { reply.code(404); return { error: 'not found' }; }
+
+    await ctx.facilityJobs.retry(id);
+    return { ok: true };
   });
 
   app.get('/api/facilities/:id', VIEW, async (req, reply) => {

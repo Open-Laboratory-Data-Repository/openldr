@@ -2435,3 +2435,94 @@ describe('Task 13: GET /api/facilities/mapping-conflicts', () => {
     expect(res.json()).toMatchObject([{ fromCode: 'BALAB', kind: 'duplicate' }]);
   });
 });
+
+// ── Task 10: GET /api/facilities/health and POST /api/facilities/jobs/:id/retry ────────────────
+//
+// Exposes Task 9's `facilityHealth` (packages/bootstrap/src/facility-health.ts) and a manual retry
+// for a failed facility job — until now `ctx.facilityJobs` had no HTTP surface at all, so an
+// operator could not see whether the report-facing dimension had caught up with a mapping change,
+// nor retry a failed rebuild without shell access to the database.
+//
+// `jobsCtx` reuses `fakeReconcileCtx` (same as `conflictsCtx` above) so `ctx.facilityJobs` is a REAL
+// `createFacilityJobStore(internalDb)` against a real migrated db — a hand-rolled in-memory double
+// would make enqueue/claim/finish/retry silent no-ops and prove nothing (see this file's other
+// describe blocks for the same reasoning).
+function jobsCtx(internalDb: any) {
+  return fakeReconcileCtx(internalDb, null);
+}
+
+describe('Task 10: GET /api/facilities/health', () => {
+  it('returns the dimension state', async () => {
+    const internalDb = await makeMigratedDb();
+    const app = await appWith(jobsCtx(internalDb));
+
+    const res = await app.inject({ method: 'GET', url: '/api/facilities/health' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().reportDimension).toMatchObject({ state: expect.any(String) });
+  });
+
+  it('is gated on facilities.view', async () => {
+    const internalDb = await makeMigratedDb();
+    const app = await appWith(jobsCtx(internalDb), []);
+
+    const res = await app.inject({ method: 'GET', url: '/api/facilities/health' });
+
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('a user with only facilities.view (no facilities.manage) CAN read health', async () => {
+    const internalDb = await makeMigratedDb();
+    const app = await appWith(jobsCtx(internalDb), ['facilities.view']);
+
+    const res = await app.inject({ method: 'GET', url: '/api/facilities/health' });
+
+    expect(res.statusCode).toBe(200);
+  });
+});
+
+describe('Task 10: POST /api/facilities/jobs/:id/retry', () => {
+  it('re-queues a failed job', async () => {
+    const internalDb = await makeMigratedDb();
+    const ctx = jobsCtx(internalDb);
+    const app = await appWith(ctx);
+
+    await ctx.facilityJobs.enqueue({ kind: 'facility-map-rebuild' });
+    const claimed = await ctx.facilityJobs.claimNext();
+    await ctx.facilityJobs.finish(claimed!.id, 'failed', { error: 'boom' });
+
+    const res = await app.inject({ method: 'POST', url: `/api/facilities/jobs/${claimed!.id}/retry` });
+
+    expect(res.statusCode).toBe(200);
+    expect((await ctx.facilityJobs.latest('facility-map-rebuild'))?.status).toBe('queued');
+  });
+
+  it('is gated on facilities.manage', async () => {
+    const internalDb = await makeMigratedDb();
+    const ctx = jobsCtx(internalDb);
+    const viewOnly = await appWith(ctx, ['facilities.view']);
+
+    await ctx.facilityJobs.enqueue({ kind: 'facility-map-rebuild' });
+    const claimed = await ctx.facilityJobs.claimNext();
+    await ctx.facilityJobs.finish(claimed!.id, 'failed', { error: 'boom' });
+
+    const res = await viewOnly.inject({ method: 'POST', url: `/api/facilities/jobs/${claimed!.id}/retry` });
+
+    expect(res.statusCode).toBe(403);
+    // Nothing changed — a rejected request must not have re-queued the job anyway.
+    expect((await ctx.facilityJobs.latest('facility-map-rebuild'))?.status).toBe('failed');
+  });
+
+  // Deliberate: `FacilityJobStore.retry` is itself a silent no-op on an unknown id (see
+  // facility-job-store.ts) — it has to look up the row to decide, exactly as `GET
+  // /api/facilities/:id` and `PUT /api/facilities/:id` already do for an unknown facility id, so a
+  // typo'd or already-purged job id gets a real 404 instead of a misleading 200.
+  it('a retry of an unknown job id is a 404, not a false-positive 200', async () => {
+    const internalDb = await makeMigratedDb();
+    const app = await appWith(jobsCtx(internalDb));
+
+    const res = await app.inject({ method: 'POST', url: '/api/facilities/jobs/fj_does-not-exist/retry' });
+
+    expect(res.statusCode).toBe(404);
+  });
+});
