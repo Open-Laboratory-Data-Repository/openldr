@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { MoreHorizontal, Building2 } from 'lucide-react';
+import { MoreHorizontal, Building2, CheckCircle2, Loader2, XCircle, AlertTriangle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { AppShell } from '@/shell/AppShell';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -12,10 +13,72 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/spinner';
 import { useAuth } from '@/auth/AuthProvider';
-import { listFacilities, deleteFacility, listPublishedForms, FACILITIES_LIST_LIMIT, type Facility } from '@/api';
+import {
+  listFacilities, deleteFacility, listPublishedForms, getFacilityHealth, retryFacilityJob,
+  FACILITIES_LIST_LIMIT, type Facility, type FacilityHealth, type FacilityDimensionState,
+} from '@/api';
 import { FacilityDialog } from '@/facilities/FacilityDialog';
 import { ImportFacilitiesSheet } from '@/facilities/ImportFacilitiesSheet';
 import { ObservedTab } from '@/facilities/ObservedTab';
+
+/** Task 11: icon for each `FacilityDimensionState` — status is never conveyed by colour alone, so
+ *  every state pairs this icon with its own text label (see `FacilityHealthChip` below). */
+const HEALTH_ICON: Record<FacilityDimensionState, typeof CheckCircle2> = {
+  current: CheckCircle2,
+  updating: Loader2,
+  failed: XCircle,
+  stale: AlertTriangle,
+};
+
+/** Same formatting convention as Sites.tsx's own `formatDate` — locale-formatted, falling back to
+ *  the raw ISO string if `Date` can't parse it rather than showing nothing. */
+function formatBuildTime(iso: string): string {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleString();
+}
+
+/** Task 11: what makes FAC-P0-08 observable — the report-facing `facility_map` dimension's own
+ *  freshness, previously visible nowhere an operator could see it. `projection.failedCount` is
+ *  rendered as its own element, deliberately never folded into the state chip: a failed
+ *  per-facility projection must never make the WHOLE dimension read as failed (see
+ *  packages/bootstrap/src/facility-health.ts). */
+function FacilityHealthChip({
+  health, canManage, retrying, onRetry,
+}: {
+  health: FacilityHealth;
+  canManage: boolean;
+  retrying: boolean;
+  onRetry: () => void;
+}) {
+  const { t } = useTranslation();
+  const { reportDimension: dim, projection } = health;
+  const Icon = HEALTH_ICON[dim.state];
+
+  return (
+    <div className="flex items-center gap-2 text-xs">
+      <Badge variant="outline" className="gap-1.5 font-medium">
+        <Icon className={dim.state === 'updating' ? 'h-3 w-3 animate-spin' : 'h-3 w-3'} />
+        {t('facilities.health.chipLabel', { state: t(`facilities.health.states.${dim.state}`) })}
+      </Badge>
+      <span className="text-muted-foreground">
+        {dim.lastSuccessAt
+          ? t('facilities.health.lastBuilt', { time: formatBuildTime(dim.lastSuccessAt) })
+          : t('facilities.health.neverBuilt')}
+      </span>
+      {dim.state === 'failed' && canManage && dim.jobId && (
+        <Button variant="outline" size="sm" className="h-6 px-2 text-xs" disabled={retrying} onClick={onRetry}>
+          {retrying ? t('facilities.health.retrying') : t('facilities.health.retry')}
+        </Button>
+      )}
+      {projection.failedCount > 0 && (
+        <span className="flex items-center gap-1 text-amber-700">
+          <AlertTriangle className="h-3 w-3" />
+          {t('facilities.health.failedProjections', { count: projection.failedCount })}
+        </span>
+      )}
+    </div>
+  );
+}
 
 export function Facilities() {
   const { t } = useTranslation();
@@ -47,6 +110,38 @@ export function Facilities() {
   // setter re-renders the children that are waiting on it — a plain `useRef` would leave them
   // permanently rendering against `null`.
   const [actionsEl, setActionsEl] = useState<HTMLDivElement | null>(null);
+
+  // Task 11: the report-dimension health chip's own data. Fetched independently of `reload()`
+  // above — the chip describes the WAREHOUSE-side `facility_map` dimension, not the registry rows
+  // `reload()` fetches, so the two are never coupled. `null` while unloaded/on a failed fetch: the
+  // chip simply doesn't render rather than showing stale or fabricated state (this is a secondary
+  // signal on the page, not something worth its own error banner).
+  const [health, setHealth] = useState<FacilityHealth | null>(null);
+  const [retryingJobId, setRetryingJobId] = useState<string | null>(null);
+
+  const reloadHealth = useCallback(async () => {
+    try {
+      setHealth(await getFacilityHealth());
+    } catch {
+      setHealth(null);
+    }
+  }, []);
+
+  useEffect(() => { void reloadHealth(); }, [reloadHealth]);
+
+  const retryHealthJob = useCallback(async () => {
+    const jobId = health?.reportDimension.jobId;
+    if (!jobId) return;
+    setRetryingJobId(jobId);
+    try {
+      await retryFacilityJob(jobId);
+      await reloadHealth();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setRetryingJobId(null);
+    }
+  }, [health, reloadHealth]);
 
   // F1 fix: a plain `reload()` flips `loading` to true, which the render below turns into a
   // full-page `LoadingState` that UNMOUNTS everything else on the page — including a currently-open
@@ -138,9 +233,19 @@ export function Facilities() {
             <TabsTrigger value="registry">{t('facilities.tabs.registry')}</TabsTrigger>
             <TabsTrigger value="observed">{t('facilities.tabs.observed')}</TabsTrigger>
           </TabsList>
-          {/* Portal target for whichever tab's `⋯` menu is currently mounted — see `actionsEl`'s
-              doc comment above. */}
-          <div ref={setActionsEl} className="flex items-center" />
+          <div className="flex items-center gap-3">
+            {health && (
+              <FacilityHealthChip
+                health={health}
+                canManage={canManage}
+                retrying={retryingJobId === health.reportDimension.jobId}
+                onRetry={() => void retryHealthJob()}
+              />
+            )}
+            {/* Portal target for whichever tab's `⋯` menu is currently mounted — see `actionsEl`'s
+                doc comment above. */}
+            <div ref={setActionsEl} className="flex items-center" />
+          </div>
         </div>
 
         {/* The `TabsContent` primitive (components/ui/tabs.tsx) now defends against the

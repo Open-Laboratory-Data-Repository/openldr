@@ -25,6 +25,9 @@ vi.mock('@/api', async (orig) => {
     // real network; Radix Tabs unmounts the inactive TabsContent, so these are untouched by every
     // test above that never clicks the Observed trigger.
     listObservedFacilities: vi.fn(),
+    // Task 11: the health chip's own data source, plus its Retry action.
+    getFacilityHealth: vi.fn(),
+    retryFacilityJob: vi.fn(),
   };
 });
 
@@ -34,7 +37,7 @@ vi.mock('@/api', async (orig) => {
 const { useAuthMock } = vi.hoisted(() => ({ useAuthMock: vi.fn() }));
 vi.mock('@/auth/AuthProvider', () => ({ useAuth: useAuthMock }));
 
-import { listFacilities, listPublishedForms, getForm, importFacilitiesCsv, listObservedFacilities, FACILITIES_LIST_LIMIT, type Facility } from '@/api';
+import { listFacilities, listPublishedForms, getForm, importFacilitiesCsv, listObservedFacilities, getFacilityHealth, retryFacilityJob, FACILITIES_LIST_LIMIT, type Facility, type FacilityHealth } from '@/api';
 import { Facilities } from './Facilities';
 
 const publishedFacilityForm = {
@@ -78,6 +81,13 @@ const sampleFacility: Facility = {
 
 const show = () => render(<MemoryRouter><Facilities /></MemoryRouter>);
 
+// Task 11: a benign default so the 30-odd tests above this point (none of which care about the
+// health chip) don't each have to stub it themselves.
+const currentHealth: FacilityHealth = {
+  reportDimension: { state: 'current', lastSuccessAt: '2026-08-01T10:00:00Z', rows: 42, error: null, jobId: null },
+  projection: { failedCount: 0 },
+};
+
 /** Open the ⋯ menu named `triggerName` and click the item matching `itemName`. Radix opens
  *  DropdownMenuContent on pointerdown; jsdom sometimes needs a follow-up Enter keydown. */
 function clickMenuItem(triggerName: string, itemName: string | RegExp) {
@@ -108,6 +118,8 @@ describe('Facilities page', () => {
     (listFacilities as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     (listPublishedForms as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     (listObservedFacilities as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (getFacilityHealth as ReturnType<typeof vi.fn>).mockResolvedValue(currentHealth);
+    (retryFacilityJob as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
     // Default: a lab_admin-shaped actor who can both view and manage the registry. Individual
     // tests (I4) override this to a view-only actor.
     useAuthMock.mockReturnValue({
@@ -430,6 +442,92 @@ describe('Facilities page', () => {
       expect(screen.getByRole('menuitem', { name: /rebuild reports dimension/i })).toBeInTheDocument();
       expect(screen.queryByRole('menuitem', { name: /add facility/i })).not.toBeInTheDocument();
       expect(screen.queryByRole('menuitem', { name: /import facilities/i })).not.toBeInTheDocument();
+    });
+  });
+
+  // Task 11: the report-dimension health chip. FAC-P0-08's complaint was that this page shows a
+  // mapping as successful while published reports keep the old/raw facility — this chip is what
+  // makes the report-facing `facility_map` dimension's own freshness visible instead of assumed.
+  describe('Task 11: report-dimension health chip', () => {
+    it('shows Current with the last successful build time', async () => {
+      (getFacilityHealth as ReturnType<typeof vi.fn>).mockResolvedValue({
+        reportDimension: { state: 'current', lastSuccessAt: '2026-08-01T10:00:00Z', rows: 88, error: null, jobId: null },
+        projection: { failedCount: 0 },
+      });
+      show();
+      expect(await screen.findByText(/current/i)).toBeInTheDocument();
+      // The last successful build time must actually be driven by `lastSuccessAt`, not just
+      // present as static copy — assert the year the fixture supplies renders somewhere.
+      expect(screen.getByText(/2026/)).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /retry/i })).not.toBeInTheDocument();
+    });
+
+    it('shows Updating while a rebuild is queued, with no Retry action', async () => {
+      (getFacilityHealth as ReturnType<typeof vi.fn>).mockResolvedValue({
+        reportDimension: { state: 'updating', lastSuccessAt: null, rows: null, error: null, jobId: null },
+        projection: { failedCount: 0 },
+      });
+      show();
+      expect(await screen.findByText(/updating/i)).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /retry/i })).not.toBeInTheDocument();
+    });
+
+    it('shows Stale — a state that should never occur in practice, but must be renderable when it does', async () => {
+      (getFacilityHealth as ReturnType<typeof vi.fn>).mockResolvedValue({
+        reportDimension: { state: 'stale', lastSuccessAt: '2026-07-01T10:00:00Z', rows: 10, error: null, jobId: null },
+        projection: { failedCount: 0 },
+      });
+      show();
+      expect(await screen.findByText(/stale/i)).toBeInTheDocument();
+    });
+
+    it('shows Failed with a Retry action for a manage-capable actor, which re-queues the job and refreshes the chip', async () => {
+      (getFacilityHealth as ReturnType<typeof vi.fn>)
+        .mockResolvedValueOnce({
+          reportDimension: { state: 'failed', lastSuccessAt: null, rows: null, error: 'warehouse unreachable', jobId: 'fj-1' },
+          projection: { failedCount: 0 },
+        })
+        .mockResolvedValueOnce({
+          reportDimension: { state: 'updating', lastSuccessAt: null, rows: null, error: null, jobId: null },
+          projection: { failedCount: 0 },
+        });
+      show();
+      const retryBtn = await screen.findByRole('button', { name: /retry/i });
+      expect(screen.getByText(/failed/i)).toBeInTheDocument();
+
+      fireEvent.click(retryBtn);
+
+      // Driven by the health payload's own jobId, not a hardcoded/guessed id.
+      await waitFor(() => expect(retryFacilityJob).toHaveBeenCalledWith('fj-1'));
+      await waitFor(() => expect(getFacilityHealth).toHaveBeenCalledTimes(2));
+      expect(await screen.findByText(/updating/i)).toBeInTheDocument();
+    });
+
+    it('hides the Retry action for a view-only actor even when the dimension has failed', async () => {
+      useAuthMock.mockReturnValue({
+        user: { id: 'analyst', username: 'analyst', displayName: null, roles: ['data_analyst'] },
+        loading: false,
+        hasCapability: (cap: string) => cap === 'facilities.view',
+      });
+      (getFacilityHealth as ReturnType<typeof vi.fn>).mockResolvedValue({
+        reportDimension: { state: 'failed', lastSuccessAt: null, rows: null, error: 'warehouse unreachable', jobId: 'fj-1' },
+        projection: { failedCount: 0 },
+      });
+      show();
+      expect(await screen.findByText(/failed/i)).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /retry/i })).not.toBeInTheDocument();
+    });
+
+    it('surfaces a failed projection count as a signal separate from the dimension state', async () => {
+      (getFacilityHealth as ReturnType<typeof vi.fn>).mockResolvedValue({
+        reportDimension: { state: 'current', lastSuccessAt: '2026-08-01T10:00:00Z', rows: 88, error: null, jobId: null },
+        projection: { failedCount: 2 },
+      });
+      show();
+      // A failed projection must not make the dimension itself read as failed.
+      expect(await screen.findByText(/current/i)).toBeInTheDocument();
+      expect(screen.getByText(/2 facility mappings? .*attention/i)).toBeInTheDocument();
+      expect(screen.queryByText(/failed/i)).not.toBeInTheDocument();
     });
   });
 });

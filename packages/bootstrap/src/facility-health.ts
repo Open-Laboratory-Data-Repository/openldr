@@ -4,7 +4,14 @@ import type { InternalSchema, FacilityJobStore } from '@openldr/db';
 export type FacilityDimensionState = 'current' | 'updating' | 'failed' | 'stale';
 
 export interface FacilityHealth {
-  reportDimension: { state: FacilityDimensionState; lastSuccessAt: string | null; rows: number | null; error: string | null };
+  reportDimension: {
+    state: FacilityDimensionState; lastSuccessAt: string | null; rows: number | null; error: string | null;
+    /** Task 11: the id of the failed `facility-map-rebuild` job — populated under the same condition
+     *  as `error` (only when the LATEST attempt is the one that failed), so a client (the Facilities
+     *  chip, the CLI) has something to pass to `POST /api/facilities/jobs/:id/retry` without a second
+     *  request. Null whenever `error` is null, for the same reason. */
+    jobId: string | null;
+  };
   projection: { failedCount: number };
 }
 
@@ -51,6 +58,7 @@ export async function facilityHealth(deps: { internalDb: Kysely<InternalSchema>;
       lastSuccessAt: lastSuccess?.finishedAt ?? null,
       rows: lastSuccess?.resultCount == null ? null : Number(lastSuccess.resultCount),
       error: latest?.status === 'failed' ? latest.lastError : null,
+      jobId: latest?.status === 'failed' ? latest.id : null,
     },
     projection: { failedCount: failedProjections },
   };

@@ -804,6 +804,21 @@ export const pt: EnShape = {
       doneTitle: 'Importação concluída',
       doneSummary: '{{created}} criada(s), {{updated}} atualizada(s), {{skipped}} ignorada(s).',
     },
+    health: {
+      states: {
+        current: 'Atual',
+        updating: 'A atualizar',
+        failed: 'Falhou',
+        stale: 'Desatualizado',
+      },
+      chipLabel: 'Dados de unidades nos relatórios: {{state}}',
+      lastBuilt: 'Última reconstrução {{time}}',
+      neverBuilt: 'Nunca reconstruída',
+      retry: 'Tentar novamente',
+      retrying: 'A tentar novamente…',
+      failedProjections_one: '{{count}} associação de unidade precisa de atenção',
+      failedProjections_other: '{{count}} associações de unidade precisam de atenção',
+    },
     tabs: {
       registry: 'Registo',
       observed: 'Observadas',

@@ -48,6 +48,25 @@ describe('facilityHealth', () => {
     });
   });
 
+  // Task 11: the Facilities chip's Retry action calls `POST /api/facilities/jobs/:id/retry`, which
+  // needs the failed job's id — and until this, nothing under `apps/` could read one off `latest`
+  // (facility-health.ts held it, but never returned it). Populated the same way `error` already is:
+  // only when the LATEST attempt is the one that failed, mirroring that field exactly so the two
+  // never disagree about which job they describe.
+  it('carries the failed job\'s id so a client can retry it', async () => {
+    const deps = await withCompletedRebuild();
+    await deps.jobs.enqueue({ kind: REBUILD });
+    const claimed = await deps.jobs.claimNext();
+    await deps.jobs.finish(claimed!.id, 'failed', { error: 'warehouse unreachable' });
+
+    expect((await facilityHealth(deps)).reportDimension.jobId).toBe(claimed!.id);
+  });
+
+  it('leaves jobId null when the dimension is not failed', async () => {
+    const deps = await withCompletedRebuild();
+    expect((await facilityHealth(deps)).reportDimension.jobId).toBeNull();
+  });
+
   it('⛔ keeps the last known good build time and row count while showing Failed', async () => {
     // A Failed chip that also blanks "last current at" tells the operator nothing about how stale
     // their reports actually are. Deriving lastSuccess from the LATEST job would do exactly that.
