@@ -311,6 +311,14 @@ export async function importFacilities(
   // transaction above and after it has committed — a projection failure must not roll back (or even
   // slow down) the facility_registry write itself, and `projectRegistryRows` already swallows its
   // own failures (see that function's doc comment) so this call cannot throw.
+  //
+  // ⚠ Its `boolean` ("did this projection land") is DELIBERATELY ignored here, and that is a known
+  // gap, not an oversight: unlike the create/update routes there is no per-facility retry channel on
+  // this path — a failure covers the whole imported batch at once, `ImportResult` has no field to
+  // report it on, and the `registry-projection` job kind carries exactly one `registryId`. So an
+  // import whose projection fails still reports plain success, exactly as before this return value
+  // existed; the operator's repair remains pressing Publish (`publishRegistryConcepts`), and the only
+  // record of the failure is `projectRegistryRows`' own `console.error`.
   if (deps.admin) await projectRegistryRows({ internalDb: deps.db, admin: deps.admin }, mergedRecords);
 
   // Task 5: the write above just committed, so the report-facing `facility_map` dimension is now

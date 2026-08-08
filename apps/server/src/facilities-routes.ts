@@ -676,23 +676,20 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     // Fix 1 (mapping-ux report): the facility must be a usable mapping target the MOMENT it is
     // created — no separate operator publish step. `projectRegistryRows` never throws (see its doc
     // comment), so this cannot turn a successful create into a failed response.
-    await projectRegistryRows({ internalDb: ctx.internalDb, admin: ctx.terminology.admin }, [{ id: created.id, name: created.name }]);
+    //
+    // Task 7: it never throws, so a failure cannot be caught here — it is REPORTED instead, as the
+    // boolean this call returns (`true` = the projection completed, `false` = its internal catch
+    // fired). That boolean answers "did THIS call's projection land", which is the only question the
+    // response field below is entitled to answer. See the matching comment in PUT for why the
+    // durable `facility_concept_projection` link cannot answer it.
+    const projected = await projectRegistryRows(
+      { internalDb: ctx.internalDb, admin: ctx.terminology.admin }, [{ id: created.id, name: created.name }],
+    );
 
-    // Task 7: `projectRegistryRows` never throws (that contract is deliberate and unchanged, see its
-    // doc comment above), so a failure is invisible from here as an exception — the route has to ask
-    // whether the concept actually landed instead of catching one. `facility_concept_projection`
-    // (migration 077) is the durable record of what code a facility currently projects as, written by
-    // `reprojectRegistryRows` (packages/bootstrap/src/facility-reconcile.ts) on every successful
-    // projection; no row for this id means the inline attempt above did not land, and the facility
-    // would otherwise sit in the registry, silently missing from the mapping picker, with nothing
-    // recording why.
-    const projectedLink = await ctx.internalDb
-      .selectFrom('facility_concept_projection')
-      .select('registry_id')
-      .where('registry_id', '=', created.id)
-      .executeTakeFirst();
+    // A failed projection leaves the facility in the registry but silently missing from the mapping
+    // picker, with nothing recording why. Make it durable and say so in the response.
     let projection: 'ok' | 'queued-for-retry' = 'ok';
-    if (!projectedLink) {
+    if (!projected) {
       projection = 'queued-for-retry';
       // Same containment as the facility-map-rebuild enqueue below: a lost enqueue must not turn an
       // already-committed create into a 500, but is worth a log line — it is the only remaining
@@ -799,22 +796,20 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
 
     // Same immediate-mapping requirement as POST above — a renamed facility's projected concept
     // must track the new name, not just a create-time snapshot.
-    await projectRegistryRows({ internalDb: ctx.internalDb, admin: ctx.terminology.admin }, [{ id: after.id, name: after.name }]);
+    //
+    // Task 7: the returned boolean, and NOT a lookup of `facility_concept_projection`, is what the
+    // response field below is derived from. The link table records whether this facility has EVER
+    // projected, not whether this call did — so on the commonest PUT there is (renaming a facility
+    // that already projected at create time) a failed rename still finds the create's link and would
+    // be reported as 'ok', with the concept left on its old display name and no retry job to repair
+    // it. `concept_code` does not discriminate either: a rename never moves the derived code. Both
+    // measured. The boolean is the only signal scoped to this call.
+    const projected = await projectRegistryRows(
+      { internalDb: ctx.internalDb, admin: ctx.terminology.admin }, [{ id: after.id, name: after.name }],
+    );
 
-    // Task 7: same detection as POST above — `facility_concept_projection` records whether this
-    // facility has EVER been successfully projected, not whether this specific call was, so a row
-    // that already had a link before this update correctly reports 'ok' even if this particular
-    // rename's projection failed (the facility is still a usable, if now stale, mapping target). What
-    // this DOES catch: a facility that has never successfully projected at all — e.g. it was created
-    // while the terminology store was broken — still reports 'queued-for-retry' on every update until
-    // a projection actually lands.
-    const projectedLink = await ctx.internalDb
-      .selectFrom('facility_concept_projection')
-      .select('registry_id')
-      .where('registry_id', '=', after.id)
-      .executeTakeFirst();
     let projection: 'ok' | 'queued-for-retry' = 'ok';
-    if (!projectedLink) {
+    if (!projected) {
       projection = 'queued-for-retry';
       try {
         await ctx.facilityJobs.enqueue({

@@ -1725,8 +1725,12 @@ describe('projectRegistryRows', () => {
   });
 
   // ⛔ Must NEVER throw: a facility save (or a CSV import) must succeed even when the projection
-  // fails, mirroring `registerObservedSystem`'s containment on the ingest hot path.
-  it('swallows a projection failure instead of throwing', async () => {
+  // fails, mirroring `registerObservedSystem`'s containment on the ingest hot path. It must also
+  // REPORT the failure — `false`, not a swallowed-and-forgotten `true` — because that boolean is the
+  // only signal a caller has that this call did not land (the create/update routes turn it into
+  // `projection: 'queued-for-retry'` plus a durable retry job; `facility_concept_projection` cannot
+  // answer it, since it records whether a row has EVER projected).
+  it('reports false, and does not throw, when the projection fails', async () => {
     const deps = await makeReconcileDeps();
     const failingAdmin = {
       ...deps.admin,
@@ -1738,7 +1742,21 @@ describe('projectRegistryRows', () => {
 
     await expect(
       projectRegistryRows({ ...deps, admin: failingAdmin }, [{ id: 'fac-1', name: 'National Public Health Laboratory' }]),
-    ).resolves.toBeUndefined();
+    ).resolves.toBe(false);
+  });
+
+  it('reports true when the projection lands', async () => {
+    const deps = await makeReconcileDeps();
+    await seedRegistry(deps, { id: 'fac-1', name: 'National Public Health Laboratory', localCode: 'NPHL' });
+
+    expect(await projectRegistryRows(deps, [{ id: 'fac-1', name: 'National Public Health Laboratory' }])).toBe(true);
+  });
+
+  // An empty batch does no work, so nothing can have failed — the early return must not be mistaken
+  // for a failure by a caller that queues a retry on `false`.
+  it('reports true for an empty batch', async () => {
+    const deps = await makeReconcileDeps();
+    expect(await projectRegistryRows(deps, [])).toBe(true);
   });
 });
 

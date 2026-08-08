@@ -42,7 +42,17 @@ export function createFacilityJobRunners(deps: FacilityJobRunnerDeps): FacilityJ
       // budget and surface a benign race as a permanent red chip.
       const row = await deps.internalDb.selectFrom('facility_registry')
         .select(['id', 'name']).where('id', '=', registryId).executeTakeFirst();
-      if (row) await deps.projectRegistryRows(reconcileDeps, [row]);
+      if (!row) return;
+      // ⛔ `projectRegistryRows` never throws — it reports. This job EXISTS because an inline
+      // projection failed, so finishing it `done` on a retry that failed the same way would destroy
+      // the durable record of the failure the create/update route just made: the queue would empty,
+      // the health chip would go green, and the concept would still be missing or stale. Throwing
+      // instead is what hands the worker its normal failure path (`finish(..., 'failed')` +
+      // `retryPreservingAttempts` until the attempt budget is spent, then a `failed` row an operator
+      // can see and Retry — see facility-job-worker.ts).
+      if (!await deps.projectRegistryRows(reconcileDeps, [row])) {
+        throw new Error(`failed to project facility_registry row ${registryId} into FACILITY_REGISTRY_SYSTEM`);
+      }
     },
   };
 }
