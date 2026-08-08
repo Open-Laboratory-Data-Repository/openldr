@@ -1,7 +1,9 @@
 # Facility projection and report-dimension updates — durable and observable
 
 Date: 2026-08-08
-Status: agreed, not implemented
+Status: implemented on `slice/facility-durable-updates` (not yet merged to `main`). One paragraph of
+the original agreed design — the worker's retry backoff, under "Worker" below — was amended during
+implementation rather than built as written; the amendment is recorded in place at that paragraph.
 Source: `docs/audit/2026-08-07-facilities-page-audit.md` (external audit by Codex) — FAC-P0-08 and
 FAC-P0-01, i.e. Phase 0 item 6.
 Predecessor: `docs/superpowers/specs/2026-08-07-facilities-phase-0-design.md` (Phase 0 items 1–4,
@@ -146,9 +148,14 @@ recoverable by two independent paths that both exist:
 
 - it is **visible** — the Facilities chip renders `Failed` with the error and a Retry that resets the
   budget, which is the outcome this slice actually exists to guarantee (visible, not silent); and
-- the mechanism **self-heals on the next write** — `finish` releases the job's `active_key`, so the
-  very next facility or mapping mutation enqueues a fresh rebuild that runs normally. A permanently
-  failed job does not wedge anything.
+- the mechanism **self-heals on the next write** — but not because `finish` releases the identity.
+  `claimNext` clears a job's `active_key` the moment it starts running, in the same statement that
+  sets `status = 'running'` (`facility-job-store.ts:177`); `finish` runs strictly after that, on every
+  path, so by the time a job exhausts its budget and lands permanently `failed`, its key was already
+  free. The very next facility or mapping mutation enqueues a fresh rebuild that runs normally, and
+  this held true even before `finish` was changed to also clear `active_key`. That later change (C1)
+  is real, but it closes a different hazard — an operator's Retry re-arming the key underneath a job
+  the worker was still actively running — not this exhaustion path.
 
 Implementing it properly needs a `next_attempt_at` column (migration 080) plus a `claimNext` filter —
 new schema surface, which is not something to add during a fix wave. Deferred to its own slice; until
@@ -222,8 +229,11 @@ flowchart LR
 
 ## Error handling
 
-- **Inline projection fails** → `registry-projection` job enqueued; the mutation response reports
-  partial success; the chip's `projection.failedCount` is non-zero.
+- **Inline projection fails** → a `registry-projection` job is enqueued `queued`, not `failed`, and
+  the mutation response reports partial success. `listFailed` only reports rows with
+  `status = 'failed'` (`facility-job-store.ts:301-302`), so the chip's `projection.failedCount` stays
+  **zero** at this point — it only goes non-zero once the worker's own retries are ALSO exhausted (5
+  attempts, ~15s) and the job itself lands `failed`.
 - **Rebuild fails** → job `failed` with `last_error`; chip shows `Failed` plus Retry; attempts bounded.
 - **Process crashes mid-run** → `failStaleRunning` on boot marks it `failed`, so it surfaces rather
   than wedging as a permanently `running` row.

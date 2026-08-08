@@ -653,5 +653,42 @@ describe('Facilities page', () => {
         vi.useRealTimers();
       }
     });
+
+    // ⛔ Distinct from the two tests above: those pin the OBSERVABLE behaviour (no further requests),
+    // which the `cancelled` flag alone already satisfies — a leaked `setInterval` with a no-op body
+    // produces identical request counts (see the ⚠ in the fix report). This one pins the CLEANUP
+    // itself: the SPECIFIC timer the poll effect registers (identified by its HEALTH_POLL_MS delay,
+    // not by aggregate timer count — the page mounts other Radix primitives that own timers of their
+    // own, so counting ALL pending timers would be noisy) must actually be torn down via
+    // `clearInterval` on unmount, so an operator who navigates away mid-rebuild does not strand a 5s
+    // timer holding the component's closure alive.
+    it('clears the poll interval on unmount', async () => {
+      vi.useFakeTimers();
+      const setIntervalSpy = vi.spyOn(globalThis, 'setInterval');
+      const clearIntervalSpy = vi.spyOn(globalThis, 'clearInterval');
+      try {
+        (getFacilityHealth as ReturnType<typeof vi.fn>).mockResolvedValue({
+          reportDimension: { state: 'updating', lastSuccessAt: null, rows: null, error: null, jobId: null },
+          projection: { failedCount: 0, failed: [] },
+        });
+        const { unmount } = show();
+
+        await vi.waitFor(() => expect(screen.getByText(/updating/i)).toBeInTheDocument());
+        // 5000 mirrors Facilities.tsx's un-exported `HEALTH_POLL_MS` — this is how the poll interval
+        // is told apart from any other timer Radix primitives on the page may register.
+        const pollCall = setIntervalSpy.mock.calls.find((call) => call[1] === 5000);
+        expect(pollCall).toBeDefined();
+        const pollTimerId = setIntervalSpy.mock.results[setIntervalSpy.mock.calls.indexOf(pollCall!)]?.value;
+        expect(pollTimerId).toBeDefined();
+
+        unmount();
+
+        expect(clearIntervalSpy.mock.calls.map((c) => c[0])).toContainEqual(pollTimerId);
+      } finally {
+        setIntervalSpy.mockRestore();
+        clearIntervalSpy.mockRestore();
+        vi.useRealTimers();
+      }
+    });
   });
 });

@@ -582,15 +582,15 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
   // it resets `attempts` to 0 so someone who has fixed the underlying cause is not locked out by a
   // previously exhausted retry budget (see facility-job-store.ts's doc comment on the two methods).
   //
-  // `retry(id)` on the store is a silent no-op for an unknown id (it SELECTs first and returns early
-  // — see facility-job-store.ts), so this handler has to look the row up itself to tell "retried" from
-  // "there was nothing to retry" and answer 404 for the latter, the same way `GET`/`PUT`
-  // `/api/facilities/:id` already 404 on an unknown facility id rather than silently no-op-ing behind
-  // a 200. Read straight off `ctx.internalDb` — `facility_jobs` is not exposed through any store
-  // method beyond `retry`/`latest`/`listUnresolved`, and this file already reads other tables
-  // (`term_mappings`, in the `impact` route above) directly off `ctx.internalDb` for the same reason.
-  // `selectAll()`, not just `id` — the same read also becomes the audit entry's `before` image below,
-  // so it needs the row's actual pre-retry state (status/attempts/lastError), not just its existence.
+  // This handler still looks the row up itself before calling `ctx.facilityJobs.retry` — not to tell
+  // "retried" from "there was nothing to retry" (the store's own return value does that now: `retry`
+  // resolves `not-found`/`running`/`requeued`, see facility-job-store.ts), but because the audit entry
+  // below needs the row's PRE-retry state as its `before` image, and only a read taken before the
+  // write can supply that. Read straight off `ctx.internalDb` — `facility_jobs` is not exposed through
+  // any store method beyond `retry`/`latest`/`listUnresolved`, and this file already reads other
+  // tables (`term_mappings`, in the `impact` route above) directly off `ctx.internalDb` for the same
+  // reason. `selectAll()`, not just `id` — the before image needs the row's actual pre-retry state
+  // (status/attempts/lastError), not just its existence.
   //
   // Audited like every other real write in this file (create/update/delete/scan/publish/import): a
   // retry is an actor-attributable state change — it resets the attempt budget and re-queues work
