@@ -804,6 +804,22 @@ export const fr: EnShape = {
       doneTitle: 'Importation terminée',
       doneSummary: '{{created}} créé(s), {{updated}} mis à jour, {{skipped}} ignoré(s).',
     },
+    health: {
+      states: {
+        current: 'À jour',
+        updating: 'Mise à jour en cours',
+        failed: 'Échec',
+        stale: 'Obsolète',
+      },
+      chipLabel: 'Données d’établissement dans les rapports : {{state}}',
+      lastBuilt: 'Dernière reconstruction {{time}}',
+      neverBuilt: 'Jamais reconstruite',
+      retry: 'Réessayer',
+      retrying: 'Nouvelle tentative…',
+      retryProjection: 'Réessayer {{facility}}',
+      failedProjections_one: '{{count}} association d’établissement nécessite une intervention',
+      failedProjections_other: '{{count}} associations d’établissement nécessitent une intervention',
+    },
     tabs: {
       registry: 'Registre',
       observed: 'Observés',

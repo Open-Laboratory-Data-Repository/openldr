@@ -901,12 +901,13 @@ export async function publishRegistryConcepts(
     // ⚠ `carryOverSkipped` is 0 BY CONSTRUCTION from this path (see the batch note above) and, unlike
     // `codeChanges`, reaches NOBODY — no caller of this function reads it. Said plainly rather than
     // dressed up as future-proofing: the only producer that can make it non-zero is
-    // `projectRegistryRows`, whose signature is `Promise<void>`, so today the sole operator-visible
-    // signal for a refused carry-over remains `reprojectRegistryRows`' `console.warn`. It is reported
-    // here because it costs nothing and because narrowing this path's batch (the thing that would
-    // make it reachable) should not also have to re-add the field — but if a later change wants an
-    // operator to SEE a refused carry-over, this field is not yet that, and the honest fix is a
-    // return value on `projectRegistryRows`.
+    // `projectRegistryRows`, whose `Promise<boolean>` says only whether the projection completed and
+    // carries no `ReprojectResult`, so today the sole operator-visible signal for a refused carry-over
+    // remains `reprojectRegistryRows`' `console.warn`. It is reported here because it costs nothing
+    // and because narrowing this path's batch (the thing that would make it reachable) should not
+    // also have to re-add the field — but if a later change wants an operator to SEE a refused
+    // carry-over, this field is not yet that, and the honest fix is for `projectRegistryRows` to
+    // return the `ReprojectResult` rather than a bare boolean.
     codeChanges: result.codeChanges.length,
     carryOverSkipped: result.codeChanges.filter((c) => c.carryOverSkipped).length,
   };
@@ -1255,22 +1256,34 @@ async function widenToCollidingRows(
  * `registerObservedSystem`'s containment on the ingest hot path (see that function's doc comment).
  * The caller (a facility create/update, a CSV import) has already committed its own write by the
  * time this runs; this is a best-effort catch-up, not a step the write depends on.
+ *
+ * ⚠ RETURNS whether THIS call's projection completed: `true` when `reprojectRegistryRows` returned
+ * normally, `false` when the catch below fired. Containment is unchanged — this only surfaces what
+ * the catch already knew, so a caller that wants to react to a failure no longer has to infer one
+ * from the outside. Inferring it from `facility_concept_projection` specifically does NOT work: that
+ * table records whether a row has EVER projected, not whether this call did, so a rename that fails
+ * on an already-projected facility still finds the create's link there (and a rename never moves
+ * `concept_code`, so the code cannot discriminate either — both measured).
+ *
+ * An empty batch returns `true`: there was nothing to project and nothing failed.
  */
 export async function projectRegistryRows(
   deps: Pick<ReconcileDeps, 'admin' | 'internalDb'>,
   rows: { id: string; name: string }[],
-): Promise<void> {
-  if (rows.length === 0) return;
+): Promise<boolean> {
+  if (rows.length === 0) return true;
   try {
     // Everything — widening the batch until it is closed under collision, registering the coding
     // system, writing the concepts, migrating the mappings whose target code moved, deleting the
     // superseded id-keyed leftover — lives in ONE place, shared with `publishRegistryConcepts`. This
     // function's own remaining job is the containment below.
     await reprojectRegistryRows(deps, rows);
+    return true;
   } catch (err) {
     // eslint-disable-next-line no-console -- deliberate: see doc comment above for why this must
     // never propagate, and this module takes no logger dependency to report through otherwise.
     console.error('[facility-reconcile] failed to project facility_registry row(s) into FACILITY_REGISTRY_SYSTEM', err);
+    return false;
   }
 }
 
@@ -1736,16 +1749,28 @@ export async function retireRegistryConcepts(
  * ⛔ Never throws, for the same reason as `projectRegistryRows` (which it delegates the projection
  * to, inheriting that containment): the deletion has already committed, and a best-effort catch-up
  * must not turn a successful DELETE into a 500.
+ *
+ * ⛔ But it REPORTS. It used to discard `projectRegistryRows`' boolean, which made this the fourth
+ * production projection call site whose failure left nothing behind but a `console.error` — a
+ * surviving facility silently stuck on a stale concept, reached from the ordinary DELETE route. The
+ * returned `failedRegistryIds` name the survivors whose projection did not land, so the caller can
+ * make that durable (the route enqueues one `registry-projection` per id; they have distinct
+ * registry ids, so they coalesce per facility rather than absorbing one another). Empty means every
+ * survivor projected — or that there was nothing to project, which is the same thing for a caller.
  */
 export async function reprojectAfterRegistryDelete(
   deps: Pick<ReconcileDeps, 'admin' | 'internalDb'>,
   deleted: { id: string; localCode: string | null; nationalCode: string | null },
-): Promise<void> {
+): Promise<{ failedRegistryIds: string[] }> {
+  // Declared out here so the catch below can still name the survivors when the throw happens AFTER
+  // they were identified. A throw before that point leaves this empty, which is the honest answer:
+  // there is no facility this call can name for the caller to repair.
+  let survivorIds: string[] = [];
   try {
     const freed = registryPreferredCode({ localCode: deleted.localCode, nationalCode: deleted.nationalCode });
     // `facility_registry_has_a_code` makes this unreachable for a real row, but the caller hands in a
     // snapshot, not the row — a codeless snapshot frees nothing and must not become a bare query.
-    if (freed === null) return;
+    if (freed === null) return { failedRegistryIds: [] };
 
     // `deleted.id` is excluded defensively: the row should already be gone, and if a caller got the
     // ordering wrong this refuses to reproject a facility it was told was deleted rather than
@@ -1753,17 +1778,24 @@ export async function reprojectAfterRegistryDelete(
     const survivors = (await claimantsOf(deps, [freed], new Set([deleted.id])))
       .map((r) => ({ id: r.id, name: r.name }));
 
-    if (survivors.length === 0) return;
+    if (survivors.length === 0) return { failedRegistryIds: [] };
+    survivorIds = survivors.map((s) => s.id);
 
     // Through `projectRegistryRows`, not `reprojectRegistryRows` directly: the widening, the mapping
     // carry-over and the containment are all things this path needs and none of them are this
     // function's to re-implement. A single surviving claimant is enough to hand over — the widening
     // pulls in the rest of the collision set from there.
-    await projectRegistryRows(deps, survivors);
+    //
+    // ⚠ ONE call covers every survivor, so its boolean is all-or-nothing: a false means none of them
+    // projected, not that some subset did. Reporting all of them is therefore accurate, and the
+    // repair jobs are idempotent anyway.
+    if (!await projectRegistryRows(deps, survivors)) return { failedRegistryIds: survivorIds };
+    return { failedRegistryIds: [] };
   } catch (err) {
     // eslint-disable-next-line no-console -- deliberate: see doc comment above for why this must
     // never propagate, and this module takes no logger dependency to report through otherwise.
     console.error('[facility-reconcile] failed to reproject after deleting facility_registry row', deleted.id, err);
+    return { failedRegistryIds: survivorIds };
   }
 }
 

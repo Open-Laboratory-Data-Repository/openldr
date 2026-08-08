@@ -481,6 +481,14 @@ export function ctxWith(status: 'up' | 'down'): AppContext {
     // configured a letterhead, which is what most route tests should be exercising anyway.
     labIdentity: { all: async () => ({}), tokens: async () => ({}), set: async () => [] },
     facilityRegistry: {} as never,
+    // Same shape as `facilityRegistry` above: a bare `{}` has no `enqueue`, so any route this fake
+    // context reaches that calls `ctx.facilityJobs.enqueue(...)` fails with a bare
+    // `TypeError: enqueue is not a function` rather than a helpful message. `facilityRegistry`'s
+    // established fix is to override it per-test with the real store (see `impactCtx` in
+    // `facilities-routes.test.ts:1752`, `ctx.facilityRegistry = createFacilityRegistryStore(internalDb)`)
+    // or a purpose-built fake — do the same for `facilityJobs` rather than rediscovering this from
+    // the runtime error.
+    facilityJobs: {} as never,
     featureFlags: { get: async () => false } as never,
     numberSettings: { get: async () => 0, all: async () => [], set: async () => 0, invalidate: () => {} } as never,
     validationStrictness: { get: async () => 'high', set: async () => {} } as never,

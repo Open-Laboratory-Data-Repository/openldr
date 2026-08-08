@@ -4,7 +4,7 @@ import { resolveCodingSystemId, type AppContext } from '@openldr/bootstrap';
 import { appError, redact } from '@openldr/core';
 import { FACILITY_REGISTRY_SYSTEM } from '@openldr/db';
 import { z } from 'zod';
-import { recordAudit } from './audit-helper';
+import { actorFromRequest, recordAudit } from './audit-helper';
 import { requireCapability } from './rbac';
 import { canonicalSystemUrl, isFhirValueSetCatalog, parseTerminologyTerms, parseTerminologyTermsStream, terminologyImportTemplate } from '@openldr/terminology';
 
@@ -249,6 +249,22 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
       const created = isFacilityTarget(parsed.data)
         ? await admin.termMappings.saveExclusive(input)
         : { ...await admin.termMappings.create(input), superseded: [] as string[] };
+      // Task 6: a facility mapping just changed what an observed string resolves to, so the
+      // report-facing dimension is now stale. Enqueue rather than rebuild inline — same reasoning
+      // as facilities-routes.ts's Task 5 calls: a rebuild talks to the EXTERNAL warehouse, and this
+      // mutation must not fail because that warehouse hiccuped. Scoped with `isFacilityTarget`: this
+      // route is shared with generic terminology curation, and a LOINC/ICD-10 mapping has no bearing
+      // on the facility dimension. Wrapped and placed before `recordAudit` for the same reason as
+      // facilities-routes.ts — `recordAudit` is itself deliberately contained, so an unwrapped throw
+      // here would both 500 an already-committed create and skip the audit write below it. Logged
+      // rather than swallowed silently: a lost enqueue means a permanently stale dimension.
+      if (isFacilityTarget(parsed.data)) {
+        try {
+          await ctx.facilityJobs.enqueue({ kind: 'facility-map-rebuild', requestedBy: actorFromRequest(req).actorId });
+        } catch (err) {
+          ctx.logger.error({ err, mappingId: created.mapping.id }, 'failed to enqueue a facility-map-rebuild job after saving a facility mapping');
+        }
+      }
       await recordAudit(ctx, req, { action: 'term_mapping.create', entityType: 'term_mapping', entityId: created.mapping.id, before: null, after: created.mapping, metadata: { draftCreated: created.draftCreated, superseded: created.superseded } });
       reply.code(201);
       // The response shape is unchanged (`{ mapping, draftCreated }`, what studio's
@@ -264,12 +280,30 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
     try {
       const id = (req.params as IdParam).id;
       const input = { ...parsed.data, toDisplay: parsed.data.toDisplay ?? null };
+      // ⛔ Read the row's CURRENT target BEFORE the write, the same way DELETE below does and for the
+      // same reason: after the update it is gone. Scoping the enqueue on the NEW body alone gets the
+      // retarget-AWAY case exactly backwards — pointing a facility mapping at a LOINC code REMOVES a
+      // facility resolution, so the dimension is stale, yet `isFacilityTarget(parsed.data)` is false
+      // and nothing would be queued. The UI would say the row is no longer a facility mapping while
+      // reports kept resolving that observed string to the old facility, indefinitely.
+      const previous = await ctx.internalDb.selectFrom('term_mappings').select(['to_system']).where('id', '=', id).executeTakeFirst();
       // A PUT retargets one existing row, so it cannot ADD a competing active mapping — but it can
       // re-activate a superseded one while another is active, which is the same violation by a
       // different route. `saveExclusive` with this row's id covers both.
       const saved = isFacilityTarget(parsed.data)
         ? await admin.termMappings.saveExclusive(input, { id })
         : { mapping: await admin.termMappings.update(id, input), superseded: [] as string[] };
+      // Task 6: same reasoning as the POST above — a facility mapping retarget makes the
+      // report-facing dimension stale, so enqueue a rebuild, scoped and contained the same way.
+      // EITHER end being a facility target is enough: retargeting one AWAY changes resolution just
+      // as much as retargeting one TOWARDS.
+      if (isFacilityTarget(parsed.data) || (previous && isFacilityTarget({ toSystem: previous.to_system }))) {
+        try {
+          await ctx.facilityJobs.enqueue({ kind: 'facility-map-rebuild', requestedBy: actorFromRequest(req).actorId });
+        } catch (err) {
+          ctx.logger.error({ err, mappingId: id }, 'failed to enqueue a facility-map-rebuild job after updating a facility mapping');
+        }
+      }
       // A PUT supersedes too, so it owes the same accountability record the POST above writes —
       // otherwise a deactivation reached through PUT is invisible in the audit log while the
       // identical one reached through POST is not. The response shape is unchanged.
@@ -279,9 +313,22 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
     catch (e) { return mapErr(e, reply); }
   });
   app.delete('/api/terminology/mappings/:id', MANAGE, async (req, reply) => {
+    const id = (req.params as IdParam).id;
     try {
-      await admin.termMappings.delete((req.params as IdParam).id);
-      await recordAudit(ctx, req, { action: 'term_mapping.delete', entityType: 'term_mapping', entityId: (req.params as IdParam).id, before: null, after: null });
+      // Task 6: the target system decides whether this delete is a facility-dimension event, and it
+      // only lives on the row being removed — read it BEFORE the delete, since it is gone after.
+      const row = await ctx.internalDb.selectFrom('term_mappings').select(['to_system']).where('id', '=', id).executeTakeFirst();
+      await admin.termMappings.delete(id);
+      // Same reasoning as POST/PUT above: removing a facility mapping makes the report-facing
+      // dimension stale too, so it gets the same scoped, contained enqueue.
+      if (row && isFacilityTarget({ toSystem: row.to_system })) {
+        try {
+          await ctx.facilityJobs.enqueue({ kind: 'facility-map-rebuild', requestedBy: actorFromRequest(req).actorId });
+        } catch (err) {
+          ctx.logger.error({ err, mappingId: id }, 'failed to enqueue a facility-map-rebuild job after deleting a facility mapping');
+        }
+      }
+      await recordAudit(ctx, req, { action: 'term_mapping.delete', entityType: 'term_mapping', entityId: id, before: null, after: null });
       reply.code(204); return null;
     }
     catch (e) { return mapErr(e, reply); }

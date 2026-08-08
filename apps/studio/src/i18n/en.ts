@@ -808,6 +808,26 @@ export const en = {
       doneTitle: 'Import complete',
       doneSummary: 'Created {{created}}, updated {{updated}}, skipped {{skipped}}.',
     },
+    // Task 11: the report-dimension health chip — whether the report-facing `facility_map`
+    // dimension has caught up with the current registry/mapping state (GET /api/facilities/health).
+    health: {
+      states: {
+        current: 'Current',
+        updating: 'Updating',
+        failed: 'Failed',
+        stale: 'Stale',
+      },
+      chipLabel: 'Facility data in reports: {{state}}',
+      lastBuilt: 'Last built {{time}}',
+      neverBuilt: 'Never built',
+      retry: 'Retry',
+      retrying: 'Retrying…',
+      // One per failed per-facility projection: each is its own job with its own id, so the
+      // label names the facility it would repair rather than reading as a second global Retry.
+      retryProjection: 'Retry {{facility}}',
+      failedProjections_one: '{{count}} facility mapping needs attention',
+      failedProjections_other: '{{count}} facility mappings need attention',
+    },
     tabs: {
       registry: 'Registry',
       observed: 'Observed',

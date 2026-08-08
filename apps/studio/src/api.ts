@@ -969,6 +969,36 @@ export interface PublishFacilitiesResult {
 export const publishFacilities = (body: PublishFacilitiesRequest = {}): Promise<PublishFacilitiesResult> =>
   authFetch('/api/facilities/publish', jbody(body, 'POST')).then((r) => okJson<PublishFacilitiesResult>(r, 'publish facilities'));
 
+// Task 11: what the Facilities chip reads. Mirrors the server's FacilityHealth
+// (packages/bootstrap/src/facility-health.ts) 1:1, as returned verbatim by GET /api/facilities/health.
+export type FacilityDimensionState = 'current' | 'updating' | 'failed' | 'stale';
+export interface FacilityHealth {
+  reportDimension: {
+    state: FacilityDimensionState;
+    lastSuccessAt: string | null;
+    rows: number | null;
+    error: string | null;
+    /** The failed `facility-map-rebuild` job's id — present only when `state === 'failed'`. This is
+     *  the ONLY place the chip can get an id to retry: the route this hits has no other listing
+     *  endpoint that exposes `facility_jobs` ids. */
+    jobId: string | null;
+  };
+  projection: {
+    /** Always `failed.length` — the server derives it from the rows below rather than counting
+     *  separately, so the badge and the list behind it cannot disagree. */
+    failedCount: number;
+    /** One entry per facility whose concept projection is broken, each carrying the job id needed to
+     *  retry it. A count alone named no job, so a failed projection could be SEEN but not repaired
+     *  from anywhere. */
+    failed: { id: string; registryId: string | null; lastError: string | null }[];
+  };
+}
+export const getFacilityHealth = (): Promise<FacilityHealth> =>
+  apiGet('/api/facilities/health', 'get facility health');
+export const retryFacilityJob = (jobId: string): Promise<void> =>
+  authFetch(`/api/facilities/jobs/${encodeURIComponent(jobId)}/retry`, { method: 'POST' })
+    .then((r) => okJson<{ ok: boolean }>(r, 'retry facility job')).then(() => undefined);
+
 // Roles / capabilities (capability-based RBAC)
 export interface RoleRecord {
   id: string;

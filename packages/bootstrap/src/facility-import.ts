@@ -5,6 +5,7 @@ import {
   type InternalSchema,
   type ReferenceCapture,
   type TerminologyAdminStore,
+  type FacilityJobStore,
   insertBatchPg,
   facilityRecordToRow,
 } from '@openldr/db';
@@ -25,6 +26,17 @@ export interface FacilityImportDeps {
    *  register is a usable mapping target immediately — no separate operator publish step. Omit to
    *  import without projecting (e.g. a throwaway/local import, mirroring `capture` above). */
   admin?: TerminologyAdminStore;
+  /** Task 5 (facility-durable-updates): when supplied, an applied import enqueues ONE
+   *  `facility-map-rebuild` job — the report-facing `facility_map` dimension is stale the moment
+   *  this write commits, same as a single create/update/delete through the Facilities page. Optional,
+   *  mirroring `admin`/`capture` above, so the CLI and any existing caller that omits it keeps
+   *  working unchanged. */
+  facilityJobs?: FacilityJobStore;
+  /** Where a lost `facilityJobs.enqueue` is reported. Optional and structurally minimal so a caller
+   *  can hand in the `AppContext`'s pino logger without this module taking a dependency on it; when
+   *  omitted the same message goes to `console.error`, matching `projectRegistryRows`' precedent in
+   *  facility-reconcile.ts. Never a reason to fail an import — see the enqueue call below. */
+  logger?: { error(obj: unknown, msg?: string): void };
 }
 
 export interface FacilityImportOptions {
@@ -304,7 +316,40 @@ export async function importFacilities(
   // transaction above and after it has committed — a projection failure must not roll back (or even
   // slow down) the facility_registry write itself, and `projectRegistryRows` already swallows its
   // own failures (see that function's doc comment) so this call cannot throw.
+  //
+  // ⚠ Its `boolean` ("did this projection land") is DELIBERATELY ignored here, and that is a known
+  // gap, not an oversight: unlike the create/update routes there is no per-facility retry channel on
+  // this path — a failure covers the whole imported batch at once, `ImportResult` has no field to
+  // report it on, and the `registry-projection` job kind carries exactly one `registryId`. So an
+  // import whose projection fails still reports plain success, exactly as before this return value
+  // existed; the operator's repair remains pressing Publish (`publishRegistryConcepts`), and the only
+  // record of the failure is `projectRegistryRows`' own `console.error`.
   if (deps.admin) await projectRegistryRows({ internalDb: deps.db, admin: deps.admin }, mergedRecords);
+
+  // Task 5: the write above just committed, so the report-facing `facility_map` dimension is now
+  // stale — enqueue a rebuild rather than running one inline here (see facilities-routes.ts's
+  // matching comment: a rebuild talks to the EXTERNAL warehouse, and this import must not fail
+  // because that warehouse hiccuped). Called once per import here, not per row, so a 14 000-row
+  // register enqueues one job on its own merits — but it is still the store's coalescing
+  // (facility-job-store.ts's `activeKeyFor`) that keeps this call from piling up a second queued
+  // job on top of one an operator's own create/update/delete already left queued.
+  //
+  // Wrapped, exactly like the six enqueue sites in facilities-routes.ts/terminology-admin-routes.ts
+  // and for the same reason: the import transaction has ALREADY COMMITTED by this line. An
+  // uncontained throw here would turn a written import into a 500 at the HTTP route (which rethrows
+  // whatever this raises) and, because the route's `facility.import` audit is written after the
+  // call, skip the audit record of a write that really happened. Logged rather than swallowed
+  // silently — a lost enqueue leaves the dimension stale with nothing else recording it.
+  if (deps.facilityJobs) {
+    try {
+      await deps.facilityJobs.enqueue({ kind: 'facility-map-rebuild' });
+    } catch (err) {
+      const msg = 'failed to enqueue a facility-map-rebuild job after an applied facility import';
+      if (deps.logger) deps.logger.error({ err }, msg);
+      // eslint-disable-next-line no-console -- no logger supplied; this is the only record left.
+      else console.error(`[facility-import] ${msg}`, err);
+    }
+  }
 
   // `blocked` is necessarily false here — the early return above is the only path a blocked file
   // takes — but it is spelled out rather than hardcoded so the two returns cannot drift.

@@ -4,7 +4,7 @@ import type { Kysely } from 'kysely';
 import { z } from 'zod';
 import {
   importFacilities, scanObservedFacilities, resolveObservedFacilities, publishFacilityMap, projectRegistryRows,
-  retireRegistryConcepts, reprojectAfterRegistryDelete, listFacilityMappingConflicts,
+  retireRegistryConcepts, reprojectAfterRegistryDelete, listFacilityMappingConflicts, facilityHealth,
   type AppContext, type FacilityImportResult, type ScanResult, type PublishResult,
 } from '@openldr/bootstrap';
 import {
@@ -13,7 +13,7 @@ import {
 } from '@openldr/db';
 import type { FacilityAdminLevel, ExternalSchema } from '@openldr/db';
 import { requireCapability } from './rbac';
-import { recordAudit } from './audit-helper';
+import { recordAudit, actorFromRequest } from './audit-helper';
 
 const VIEW = { preHandler: requireCapability('facilities.view') };
 const MANAGE = { preHandler: requireCapability('facilities.manage') };
@@ -58,8 +58,12 @@ const IMPORT = { ...MANAGE, bodyLimit: MAX_IMPORT_REQUEST_BYTES };
 // connection while a large enough apply keeps running server-side.
 //
 // Decision: bound APPLY to a row-count cap and point the operator at the CLI
-// (`openldr facilities import --apply`, packages/cli/src/facilities.ts) above it — the CLI runs
-// the identical `importFacilities` call with no request deadline. 2000 stays a generous bound for
+// (`openldr facilities import --apply`, packages/cli/src/facilities.ts) above it — the CLI calls the
+// same `importFacilities` with the same deps (`db`/`capture`/`admin`/`facilityJobs`/`logger`, so an
+// applied CLI import projects and enqueues its rebuild exactly as this route's does) and no request
+// deadline. ⚠ Keep those two dep objects in step: this cap means the CLI is the ONLY path a
+// register above it can be applied through, so anything this route passes and the CLI does not is
+// missing precisely where the workload is largest. 2000 stays a generous bound for
 // the common case (a district- or council-scoped partial register, the routine incremental update)
 // without ever touching the CLI, while keeping the worst case — a full re-import's CSV parse,
 // batched write, and registry projection, all synchronous in one request — well clear of a client
@@ -550,6 +554,88 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     return listFacilityMappingConflicts({ internalDb: ctx.internalDb });
   });
 
+  // Task 10 (facility durable-updates): what the Facilities chip shows — whether the report-facing
+  // `facility_map` dimension has caught up with the current registry/mapping state (Task 9's
+  // `facilityHealth`). Until this route existed, a failed or stuck rebuild sat in `facility_jobs`
+  // with nothing under `apps/` able to read it: an operator could publish/edit a mapping and have no
+  // way to tell whether reports had actually picked it up.
+  //
+  // Gated VIEW, not MANAGE — it is read-only, and an operator who can merely READ reports still
+  // needs to know whether the dimension backing them is current.
+  //
+  // Static segment, same non-issue as `mapping-conflicts` above: find-my-way prefers a static
+  // segment over `/api/facilities/:id` regardless of registration order (measured there), so this
+  // route's position here is for legibility, not correctness.
+  app.get('/api/facilities/health', VIEW, async () => {
+    return facilityHealth({ internalDb: ctx.internalDb, jobs: ctx.facilityJobs });
+  });
+
+  // Task 10: the operator's manual retry for a failed facility job — `facility-map-rebuild` (the
+  // whole dimension) or `registry-projection` (one facility's mapping-picker entry). RE-QUEUES only:
+  // it enqueues the retry through `ctx.facilityJobs.retry`, which the polling worker
+  // (`createFacilityJobWorker`, packages/bootstrap/src/facility-job-worker.ts) then drains — it does
+  // NOT run the rebuild inline in this request, for the same reason POST/PUT/DELETE above never do:
+  // a rebuild talks to the EXTERNAL warehouse, and an HTTP request must not be held open for it (or
+  // fail because it hiccups).
+  //
+  // `ctx.facilityJobs.retry` — deliberately not `retryPreservingAttempts` — is the OPERATOR's action:
+  // it resets `attempts` to 0 so someone who has fixed the underlying cause is not locked out by a
+  // previously exhausted retry budget (see facility-job-store.ts's doc comment on the two methods).
+  //
+  // This handler still looks the row up itself before calling `ctx.facilityJobs.retry` — not to tell
+  // "retried" from "there was nothing to retry" (the store's own return value does that now: `retry`
+  // resolves `not-found`/`running`/`requeued`, see facility-job-store.ts), but because the audit entry
+  // below needs the row's PRE-retry state as its `before` image, and only a read taken before the
+  // write can supply that. Read straight off `ctx.internalDb` — `facility_jobs` is not exposed through
+  // any store method beyond `retry`/`latest`/`listUnresolved`, and this file already reads other
+  // tables (`term_mappings`, in the `impact` route above) directly off `ctx.internalDb` for the same
+  // reason. `selectAll()`, not just `id` — the before image needs the row's actual pre-retry state
+  // (status/attempts/lastError), not just its existence.
+  //
+  // Audited like every other real write in this file (create/update/delete/scan/publish/import): a
+  // retry is an actor-attributable state change — it resets the attempt budget and re-queues work
+  // against the external warehouse. `entityType: 'facility_job'` (not `'facility'`) because what
+  // changed is the job row, not a facility_registry row; `before`/`after` are the job's own
+  // before/after state, mirroring `workflow.reset`'s before/after shape in workflows-routes.ts, rather
+  // than `null`/`null` the way `facility.scan`/`facility.publish` use it for a whole-dimension rebuild
+  // with no single before/after row to name. Placed AFTER the write and BEFORE the response, same as
+  // every sibling mutation — `recordAudit` is itself deliberately contained (record-audit.ts's
+  // `safeRecord`) so this can never turn an already-applied retry into a failed response.
+  app.post('/api/facilities/jobs/:id/retry', MANAGE, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const existing = await ctx.internalDb
+      .selectFrom('facility_jobs')
+      .selectAll()
+      .where('id', '=', id)
+      .executeTakeFirst();
+    if (!existing) { reply.code(404); return { error: 'not found' }; }
+
+    // ⛔ 409, not a 200 that did nothing. `retry` REFUSES a job that is currently `running` (see
+    // facility-job-store.ts): re-queueing one re-arms its `active_key` under a live run, and that
+    // run's own `finish()` then writes a terminal status — silently discarding the operator's retry
+    // and, before `finish` learned to release the key, leaving the identity held by a dead row so
+    // every later enqueue coalesced onto it forever. The outcome is read from the store rather than
+    // re-derived from `existing` above so the answer cannot be wrong by a race: the worker can claim
+    // the job between that read and this call, and only the store's own guarded read sees it.
+    // Nothing is audited on this path — nothing changed.
+    const outcome = await ctx.facilityJobs.retry(id);
+    if (outcome === 'running') {
+      reply.code(409);
+      return { error: 'this job is already running; wait for it to finish before retrying it' };
+    }
+
+    const after = await ctx.internalDb
+      .selectFrom('facility_jobs')
+      .selectAll()
+      .where('id', '=', id)
+      .executeTakeFirst();
+
+    await recordAudit(ctx, req, {
+      action: 'facility.job.retry', entityType: 'facility_job', entityId: id, before: existing, after: after ?? null,
+    });
+    return { ok: true };
+  });
+
   app.get('/api/facilities/:id', VIEW, async (req, reply) => {
     const { id } = req.params as { id: string };
     const rec = await ctx.facilityRegistry.get(id);
@@ -676,11 +762,57 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     // Fix 1 (mapping-ux report): the facility must be a usable mapping target the MOMENT it is
     // created — no separate operator publish step. `projectRegistryRows` never throws (see its doc
     // comment), so this cannot turn a successful create into a failed response.
-    await projectRegistryRows({ internalDb: ctx.internalDb, admin: ctx.terminology.admin }, [{ id: created.id, name: created.name }]);
+    //
+    // Task 7: it never throws, so a failure cannot be caught here — it is REPORTED instead, as the
+    // boolean this call returns (`true` = the projection completed, `false` = its internal catch
+    // fired). That boolean answers "did THIS call's projection land", which is the only question the
+    // response field below is entitled to answer. See the matching comment in PUT for why the
+    // durable `facility_concept_projection` link cannot answer it.
+    const projected = await projectRegistryRows(
+      { internalDb: ctx.internalDb, admin: ctx.terminology.admin }, [{ id: created.id, name: created.name }],
+    );
+
+    // A failed projection leaves the facility in the registry but silently missing from the mapping
+    // picker, with nothing recording why. Make it durable and say so in the response.
+    let projection: 'ok' | 'queued-for-retry' = 'ok';
+    if (!projected) {
+      projection = 'queued-for-retry';
+      // Same containment as the facility-map-rebuild enqueue below: a lost enqueue must not turn an
+      // already-committed create into a 500, but is worth a log line — it is the only remaining
+      // record that this facility needs a manual repair. Coalesces per facility (facility-job-
+      // store.ts's `activeKeyFor`), so a facility that keeps failing to project does not pile up
+      // duplicate retry jobs.
+      try {
+        await ctx.facilityJobs.enqueue({
+          kind: 'registry-projection', registryId: created.id, requestedBy: actorFromRequest(req).actorId,
+        });
+      } catch (err) {
+        ctx.logger.error(
+          { err, facilityId: created.id },
+          'failed to enqueue a registry-projection retry after a failed facility projection',
+        );
+      }
+    }
+
+    // Task 5: the report-facing dimension is now stale. Enqueue rather than rebuild inline: a
+    // rebuild talks to the EXTERNAL warehouse, and an operator's facility save must not fail because
+    // that warehouse hiccuped. Coalescing (facility-job-store.ts's `activeKeyFor`) means a bulk
+    // import enqueues one job, not one per row — this route never needs to de-duplicate on its own.
+    //
+    // Wrapped, and this sits before `recordAudit` — `recordAudit` is itself deliberately contained
+    // (see record-audit.ts's `safeRecord`) so auditing can never fail a mutation, and leaving this
+    // call unwrapped would defeat that: an enqueue throw would both 500 an already-committed create
+    // and skip the audit write below it. Logged rather than swallowed silently, since a lost enqueue
+    // means a permanently stale dimension until something else notices.
+    try {
+      await ctx.facilityJobs.enqueue({ kind: 'facility-map-rebuild', requestedBy: actorFromRequest(req).actorId });
+    } catch (err) {
+      ctx.logger.error({ err, facilityId: created.id }, 'failed to enqueue a facility-map-rebuild job after creating a facility');
+    }
 
     await recordAudit(ctx, req, { action: 'facility.create', entityType: 'facility', entityId: created.id, before: null, after: created });
     reply.code(201);
-    return created;
+    return { ...created, projection };
   });
 
   app.put('/api/facilities/:id', MANAGE, async (req, reply) => {
@@ -750,10 +882,45 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
 
     // Same immediate-mapping requirement as POST above — a renamed facility's projected concept
     // must track the new name, not just a create-time snapshot.
-    await projectRegistryRows({ internalDb: ctx.internalDb, admin: ctx.terminology.admin }, [{ id: after.id, name: after.name }]);
+    //
+    // Task 7: the returned boolean, and NOT a lookup of `facility_concept_projection`, is what the
+    // response field below is derived from. The link table records whether this facility has EVER
+    // projected, not whether this call did — so on the commonest PUT there is (renaming a facility
+    // that already projected at create time) a failed rename still finds the create's link and would
+    // be reported as 'ok', with the concept left on its old display name and no retry job to repair
+    // it. `concept_code` does not discriminate either: a rename never moves the derived code. Both
+    // measured. The boolean is the only signal scoped to this call.
+    const projected = await projectRegistryRows(
+      { internalDb: ctx.internalDb, admin: ctx.terminology.admin }, [{ id: after.id, name: after.name }],
+    );
+
+    let projection: 'ok' | 'queued-for-retry' = 'ok';
+    if (!projected) {
+      projection = 'queued-for-retry';
+      try {
+        await ctx.facilityJobs.enqueue({
+          kind: 'registry-projection', registryId: after.id, requestedBy: actorFromRequest(req).actorId,
+        });
+      } catch (err) {
+        ctx.logger.error(
+          { err, facilityId: after.id },
+          'failed to enqueue a registry-projection retry after a failed facility projection',
+        );
+      }
+    }
+
+    // Task 5: same reasoning as POST above — enqueue, never rebuild inline. Wrapped for the same
+    // reason as POST's call too: it sits before `recordAudit` (deliberately contained, see
+    // record-audit.ts), so an unwrapped throw here would both 500 an already-committed update and
+    // skip the audit write. Logged, not swallowed — a lost enqueue leaves the dimension stale.
+    try {
+      await ctx.facilityJobs.enqueue({ kind: 'facility-map-rebuild', requestedBy: actorFromRequest(req).actorId });
+    } catch (err) {
+      ctx.logger.error({ err, facilityId: id }, 'failed to enqueue a facility-map-rebuild job after updating a facility');
+    }
 
     await recordAudit(ctx, req, { action: 'facility.update', entityType: 'facility', entityId: id, before, after });
-    return after;
+    return { ...after, projection };
   });
 
   app.delete('/api/facilities/:id', MANAGE, async (req, reply) => {
@@ -793,11 +960,43 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
 
     await ctx.facilityRegistry.remove(id);
 
-    await reprojectAfterRegistryDelete(deps, {
+    const { failedRegistryIds } = await reprojectAfterRegistryDelete(deps, {
       id,
       localCode: before.localCode ?? null,
       nationalCode: before.nationalCode ?? null,
     });
+
+    // Task 7's contract — "a failed projection is never only a console.error" — applied to this
+    // fourth call site. Deleting one side of a code collision frees the other to move back up to the
+    // human code; if that reprojection fails, the SURVIVING facility is left on a stale concept
+    // while the operator's `term_mappings` row still names its old code, and the deletion returns a
+    // cheerful 200. One job per survivor: they carry distinct registry ids, so the store coalesces
+    // them per facility (facility-job-store.ts's `activeKeyFor`) rather than letting the first
+    // absorb the rest. Wrapped and placed before `recordAudit` for the same reason as every sibling
+    // enqueue in this file.
+    for (const registryId of failedRegistryIds) {
+      try {
+        await ctx.facilityJobs.enqueue({
+          kind: 'registry-projection', registryId, requestedBy: actorFromRequest(req).actorId,
+        });
+      } catch (err) {
+        ctx.logger.error(
+          { err, facilityId: id, survivorId: registryId },
+          'failed to enqueue a registry-projection retry for a facility left stale by a delete',
+        );
+      }
+    }
+
+    // Task 5: removing a facility changes what the dimension should contain, same reasoning as
+    // POST/PUT above — enqueue, never rebuild inline. Wrapped for the same reason as those two:
+    // it sits before `recordAudit` (deliberately contained, see record-audit.ts), so an unwrapped
+    // throw here would both 500 an already-committed delete and skip the audit write. Logged, not
+    // swallowed — a lost enqueue leaves the dimension stale.
+    try {
+      await ctx.facilityJobs.enqueue({ kind: 'facility-map-rebuild', requestedBy: actorFromRequest(req).actorId });
+    } catch (err) {
+      ctx.logger.error({ err, facilityId: id }, 'failed to enqueue a facility-map-rebuild job after deleting a facility');
+    }
 
     await recordAudit(ctx, req, { action: 'facility.delete', entityType: 'facility', entityId: id, before, after: null });
     return { ok: true };
@@ -825,7 +1024,10 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     // Fix 1 (mapping-ux report): `admin` lets `importFacilities` project every written row into
     // FACILITY_REGISTRY_SYSTEM — the Facilities-page upload gets the same immediate-mapping
     // behaviour as a single facility create/update (POST/PUT above) and the CLI.
-    const deps = { db: ctx.internalDb, capture: referenceCapture, admin: ctx.terminology.admin };
+    // Task 5: `facilityJobs` lets an applied import enqueue the same `facility-map-rebuild` job a
+    // single create/update/delete does (see importFacilities' own matching comment for why that is
+    // a single call per import already, not per row).
+    const deps = { db: ctx.internalDb, capture: referenceCapture, admin: ctx.terminology.admin, facilityJobs: ctx.facilityJobs, logger: ctx.logger };
     const importOpts = {
       nationalSystem: p.data.nationalSystem,
       allowUnknownColumns: p.data.allowUnknownColumns,

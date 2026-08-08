@@ -36,7 +36,7 @@ import { createReportScheduler, type ReportScheduler } from './report-scheduler'
 import { createPluginScheduleApi, createPluginScheduleRunner, type PluginScheduleRunner } from './plugin-schedule';
 import { createFormArtifactInstaller, type FormArtifactInstaller } from './form-artifact-install';
 import { type PluginRuntime } from '@openldr/plugins';
-import { createConnectorStore, createPluginDataStore, type PluginDataStore, type ConnectorStore, createReportStore, type ReportStore, type ReportRecord, createCustomQueryStore, createSyncSiteStore, type SyncSiteStore, createWorkflowSecretStore, type WorkflowSecretStore, createSyncQuarantineStore, createSyncDivergenceStore, createSyncSiteCursorStore, type SyncSiteCursorStore, createSyncActivityStore, createTerminologyIngestJobStore, type TerminologyIngestJobStore } from '@openldr/db';
+import { createConnectorStore, createPluginDataStore, type PluginDataStore, type ConnectorStore, createReportStore, type ReportStore, type ReportRecord, createCustomQueryStore, createSyncSiteStore, type SyncSiteStore, createWorkflowSecretStore, type WorkflowSecretStore, createSyncQuarantineStore, createSyncDivergenceStore, createSyncSiteCursorStore, type SyncSiteCursorStore, createSyncActivityStore, createTerminologyIngestJobStore, type TerminologyIngestJobStore, createFacilityJobStore, type FacilityJobStore } from '@openldr/db';
 import type { ReportDesign } from '@openldr/report-designer/pure';
 import { createBatchStore } from '@openldr/ingest';
 import { createSyncPushRunner, createSyncPullRunner, createAmendmentPullRunner, createSyncTokenProvider, createTerminologyBulkSync, readSyncConfig, combineCycleResults, type PushBatch, type PushResponse, type SyncConfig } from '@openldr/sync';
@@ -58,7 +58,9 @@ import { createValidationStrictness, type ValidationStrictness } from './validat
 import { createLabIdentity, type LabIdentityService } from './lab-identity';
 export { createValidationStrictness, VALIDATION_STRICTNESS_KEY, type ValidationStrictness } from './validation-settings';
 import { createReportCategoriesService, type ReportCategoriesService } from './report-categories';
-import { captureObservedFacilityFromProjection } from './facility-reconcile';
+import { captureObservedFacilityFromProjection, publishFacilityMap, projectRegistryRows } from './facility-reconcile';
+import { createFacilityJobWorker } from './facility-job-worker';
+import { createFacilityJobRunners } from './facility-job-runners';
 import { createPluginBroker, type PluginBroker } from './plugin-broker';
 import { policyFromConfig } from './policy';
 import { createPluginTarget } from './connector-target';
@@ -458,6 +460,11 @@ export interface AppContext {
    *  retain-latest). The worker built alongside it (see `terminologyIngestWorker` in
    *  `createAppContext`) polls this store; Task 7's routes read/enqueue against it. */
   terminologyJobs: TerminologyIngestJobStore;
+  /** Facility durable-updates (Task 4): queue/claim/progress store for facility-map rebuilds and
+   *  per-registry-row projections. The polling worker that drains it (`facilityJobWorker`, built
+   *  alongside it in `createAppContext`) is not exposed here — only the store is, since routes and
+   *  the CLI (Tasks 5-11) only ever enqueue against it and read its state, never drive it directly. */
+  facilityJobs: FacilityJobStore;
   /** The re-runnable sync worker lifecycle. reconcile() re-reads config and rebuilds the workers,
    *  which is how a Settings toggle takes effect without a restart (Task 4 calls it). */
   syncRuntime: SyncRuntime;
@@ -858,6 +865,21 @@ const reporting: ReportingApi = {
     workDirBase: terminologyWorkDirBase,
     logger,
     runIngest: createRunIngest({ blob, terminology, workDirBase: terminologyWorkDirBase }),
+  });
+
+  // Task 4 (facility durable updates): job store (queue/claim/progress) + the polling worker that
+  // drains it, wired to the SAME ReconcileDeps shape the facilities routes/CLI already build (see
+  // `reconcileDeps(ctx)` in apps/server/src/facilities-routes.ts) rather than a second one. The two
+  // runner closures themselves live in `createFacilityJobRunners` (facility-job-runners.ts), not
+  // inline here, so they are unit-testable independent of standing up this whole app context.
+  const facilityJobs = createFacilityJobStore(internal.db);
+  const facilityJobWorker = createFacilityJobWorker({
+    jobs: facilityJobs,
+    ...createFacilityJobRunners({
+      internalDb: internal.db, externalDb, admin: termAdmin,
+      publishFacilityMap, projectRegistryRows,
+    }),
+    logger,
   });
 
   const connectorStore = createConnectorStore(internal.db);
@@ -1461,6 +1483,7 @@ const reporting: ReportingApi = {
     appSettings,
     labIdentity,
     facilityRegistry,
+    facilityJobs,
     featureFlags,
     numberSettings,
     validationStrictness,
@@ -1478,6 +1501,7 @@ const reporting: ReportingApi = {
       await syncRuntime.stop();
       await projectionWorker.stop();
       await terminologyIngestWorker.stop();
+      await facilityJobWorker.stop();
       if (projectionListenConnected) await projectionListenClient.end().catch(() => undefined);
       await Promise.allSettled([eventing.close(), store.close(), internal.close()]);
     },
@@ -1520,6 +1544,12 @@ export { importFacilities } from './facility-import';
 export type { FacilityImportDeps, FacilityImportOptions, FacilityImportResult } from './facility-import';
 export { scanObservedFacilities, resolveObservedFacilities, publishFacilityMap, projectRegistryRows, retireRegistryConcepts, reprojectAfterRegistryDelete, listFacilityMappingConflicts } from './facility-reconcile';
 export type { ReconcileDeps, ScanResult, ScanOptions, ResolvedFacility, ResolvedVia, PublishResult, FacilityMappingConflict } from './facility-reconcile';
+// Task 10 (facility durable-updates): surfaces Task 9's dimension-state resolver to the HTTP route
+// and the CLI (apps/server/src/facilities-routes.ts's `GET /api/facilities/health`, packages/cli/
+// src/facilities.ts's `openldr facilities jobs`) — previously only reachable from inside this
+// package's own tests.
+export { facilityHealth } from './facility-health';
+export type { FacilityHealth, FacilityDimensionState } from './facility-health';
 export {
   enrollSite,
   listSites,

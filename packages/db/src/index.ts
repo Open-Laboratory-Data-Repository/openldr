@@ -53,6 +53,8 @@ export {
 } from './report-schedule-store';
 export * from './projection';
 export * from './terminology-ingest-job-store';
+export { createFacilityJobStore } from './facility-job-store';
+export type { FacilityJob, FacilityJobKind, FacilityJobStatus, FacilityJobStore } from './facility-job-store';
 export { createRoleStore } from './role-store';
 export type { RoleStore, RoleRecord, CreateRoleInput, UpdateRoleInput, CapabilityReconciliation, CapabilityDiagnosis } from './role-store';
 export * from './reference-search';

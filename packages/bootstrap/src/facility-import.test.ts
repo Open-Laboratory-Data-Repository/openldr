@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 import type { Kysely } from 'kysely';
 import { makeMigratedDb } from '@openldr/db/testing';
 import {
-  createFacilityRegistryStore, createTerminologyAdminStore, referenceCapture,
-  FACILITY_REGISTRY_SYSTEM, type InternalSchema, type TerminologyAdminStore,
+  createFacilityRegistryStore, createTerminologyAdminStore, createFacilityJobStore, referenceCapture,
+  FACILITY_REGISTRY_SYSTEM, type InternalSchema, type TerminologyAdminStore, type FacilityJobStore,
 } from '@openldr/db';
 import { importFacilities, type FacilityImportDeps } from './facility-import';
 
@@ -391,5 +391,82 @@ describe('importFacilities projects into FACILITY_REGISTRY_SYSTEM', () => {
 
     expect(result).toMatchObject({ created: 1 });
     expect(await rowFor(deps.db, '100')).toBeDefined();
+  });
+});
+
+// Task 5: an applied import leaves the report-facing `facility_map` dimension stale, same as a
+// single create/update/delete through the Facilities page (apps/server/src/facilities-routes.ts).
+// `facilityJobs` is an OPTIONAL dep on `FacilityImportDeps`, mirroring `admin`/`capture` above, so the
+// CLI and any existing caller that omits it keeps working unchanged.
+describe('importFacilities enqueues a facility-map-rebuild', () => {
+  async function buildDepsWithJobs(): Promise<FacilityImportDeps & { db: Kysely<InternalSchema>; facilityJobs: FacilityJobStore }> {
+    const db = (await makeMigratedDb()) as Kysely<InternalSchema>;
+    return { db, capture: referenceCapture, facilityJobs: createFacilityJobStore(db) };
+  }
+
+  // ⛔ The load-bearing assertion of this whole task. `importFacilities` calls `enqueue` once per
+  // import (after the whole batch write commits), not once per row — proven at implementation
+  // time by temporarily making it call `enqueue` once per row instead: with the real store's
+  // coalescing (facility-job-store.ts's `activeKeyFor`) intact this assertion still held (only the
+  // first of 50 calls finds the identity free), and disabling that coalescing made it fail with 50
+  // jobs. So this assertion holds for TWO independent reasons — the call site's own shape AND the
+  // store's coalescing underneath it — and would catch a regression in either one.
+  it('a CSV import of many facilities enqueues exactly ONE rebuild', async () => {
+    const deps = await buildDepsWithJobs();
+    const rows = Array.from({ length: 50 }, (_, i) => `${100 + i},Facility ${i},,,,,,,,,,,,,,`);
+
+    await importFacilities(deps, csv(rows), { nationalSystem: SYSTEM, apply: true });
+
+    const rebuilds = (await deps.facilityJobs.listUnresolved()).filter((j) => j.kind === 'facility-map-rebuild');
+    expect(rebuilds).toHaveLength(1);
+  });
+
+  it('a dry run does not enqueue a rebuild — nothing changed for the dimension to catch up to', async () => {
+    const deps = await buildDepsWithJobs();
+    const body = csv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,']);
+
+    await importFacilities(deps, body, { nationalSystem: SYSTEM }); // apply omitted
+
+    expect(await deps.facilityJobs.listUnresolved()).toEqual([]);
+  });
+
+  it('omitting facilityJobs does not fail the import', async () => {
+    const db = (await makeMigratedDb()) as Kysely<InternalSchema>;
+    const body = csv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,']);
+
+    const result = await importFacilities({ db }, body, { nationalSystem: SYSTEM, apply: true }); // no facilityJobs in deps
+
+    expect(result).toMatchObject({ created: 1 });
+    expect(await rowFor(db, '100')).toBeDefined();
+  });
+
+  // ⛔ This enqueue sits AFTER the import transaction has committed, so an uncontained throw here
+  // fails a write that already happened: the HTTP route rethrows whatever this raises (500 for a
+  // successful import) and, because its `facility.import` audit is written after the call returns,
+  // the audit record of that write is skipped too. Every other enqueue call site on this slice —
+  // three in facilities-routes.ts, three in terminology-admin-routes.ts — is wrapped for exactly
+  // this reason; this one was the only bare one.
+  it('a throwing enqueue does not fail an import that already committed, and is reported', async () => {
+    const db = (await makeMigratedDb()) as Kysely<InternalSchema>;
+    const errors: unknown[] = [];
+    const deps: FacilityImportDeps = {
+      db, capture: referenceCapture,
+      facilityJobs: {
+        ...createFacilityJobStore(db),
+        enqueue: async () => { throw new Error('job store unreachable'); },
+      },
+      logger: { error: (obj) => { errors.push(obj); } },
+    };
+    const body = csv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,']);
+
+    const result = await importFacilities(deps, body, { nationalSystem: SYSTEM, apply: true });
+
+    expect(result).toMatchObject({ created: 1 });
+    // The row really is written — the failure must not be mistaken for a rolled-back import.
+    expect(await rowFor(db, '100')).toBeDefined();
+    // Contained, but NOT swallowed: a lost enqueue leaves the dimension stale, and this log line is
+    // the only thing that records it.
+    expect(errors).toHaveLength(1);
+    expect(String((errors[0] as { err: Error }).err.message)).toMatch(/job store unreachable/);
   });
 });

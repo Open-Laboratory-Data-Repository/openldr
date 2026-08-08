@@ -83,6 +83,16 @@ describe('createAppContext', () => {
     expect(typeof ctx.dashboards.columnPolicy.replaceTable).toBe('function');
     expect(typeof ctx.dashboards.reloadColumnPolicy).toBe('function');
   }, 20000);
+
+  // Task 4 (facility durable updates): the facility job store must be reachable from the context
+  // (routes/CLI enqueue through it in later tasks) and the worker polling it must be stopped
+  // cleanly on shutdown, alongside the other pollers (terminologyIngestWorker, projectionWorker).
+  it('exposes a facility job store on the context and stops its worker on shutdown', async () => {
+    ctx = await createAppContext(cfg);
+    expect(ctx.facilityJobs).toBeDefined();
+    expect(typeof ctx.facilityJobs.enqueue).toBe('function');
+    await expect(ctx.close()).resolves.toBeUndefined();
+  }, 20000);
 });
 
 /**

@@ -277,6 +277,27 @@ export interface FacilityConceptProjectionTable {
   updated_at: Generated<Date>;
 }
 
+/** Durable work items for the facility subsystem: rebuilding the report-facing `facility_map`
+ *  (`kind: 'facility-map-rebuild'`) and retrying a concept projection that failed inline
+ *  (`kind: 'registry-projection'`). See migration 079 for why `active_key` is a plain (not
+ *  partial) unique index and its asymmetric queued-coalesces/running-doesn't-swallow contract. */
+export interface FacilityJobsTable {
+  id: string;
+  kind: string;
+  status: string;
+  attempts: number;
+  last_error: string | null;
+  /** Which facility a 'registry-projection' retry is for. NULL for a whole-dimension rebuild. */
+  registry_id: string | null;
+  /** Rows written by the last successful rebuild. NULL for a projection-kind job. */
+  result_count: number | null;
+  requested_by: string | null;
+  requested_at: Generated<Date>;
+  started_at: Date | null;
+  finished_at: Date | null;
+  active_key: string | null;
+}
+
 /** Pre-existing violations of "one active SAME-AS resolution per observed facility key", recorded by
  *  migration 078 when it closed that invariant at the database, for an operator to settle.
  *
@@ -818,6 +839,7 @@ export interface InternalSchema {
   facility_registry: FacilityRegistryTable;
   facility_concept_projection: FacilityConceptProjectionTable;
   facility_mapping_conflicts: FacilityMappingConflictsTable;
+  facility_jobs: FacilityJobsTable;
   form_definitions: FormDefinitionsTable;
   form_versions: FormVersionsTable;
   user_profiles: UserProfilesTable;

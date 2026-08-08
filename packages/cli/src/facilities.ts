@@ -3,8 +3,8 @@ import type { Kysely } from 'kysely';
 import { loadConfig } from '@openldr/config';
 import {
   createAppContext, importFacilities, recordAuditEvent, scanObservedFacilities, publishFacilityMap,
-  listFacilityMappingConflicts,
-  type AppContext, type ScanResult, type PublishResult, type FacilityMappingConflict,
+  listFacilityMappingConflicts, facilityHealth,
+  type AppContext, type ScanResult, type PublishResult, type FacilityMappingConflict, type FacilityHealth,
 } from '@openldr/bootstrap';
 import { referenceCapture, type ExternalSchema } from '@openldr/db';
 import { cliActor } from './cli-actor';
@@ -51,7 +51,15 @@ export async function runFacilitiesImport(path: string, opts: FacilitiesImportOp
       // Fix 1 (mapping-ux report): `admin` lets importFacilities project every written row into
       // FACILITY_REGISTRY_SYSTEM as part of the import — the CLI gets the same immediate-mapping
       // behaviour as the HTTP route, per the repo's CLI-parity rule.
-      { db: ctx.internalDb, capture: referenceCapture, admin: ctx.terminology.admin },
+      //
+      // ⛔ `facilityJobs` is NOT optional in practice on this path, despite the deps type allowing
+      // its omission. The HTTP import route REFUSES any apply over MAX_INLINE_APPLY_ROWS (2000) and
+      // directs the operator here, so this command is the ONLY way a register of the stated size —
+      // a 14 000-row national register — is ever applied. Without the store, `importFacilities`
+      // skips its enqueue (`if (deps.facilityJobs)`) and the largest import in the product would be
+      // the one write that leaves `facility_map` stale with nothing queued to rebuild it, sending
+      // the operator back to the manual `facilities publish --apply` this slice exists to abolish.
+      { db: ctx.internalDb, capture: referenceCapture, admin: ctx.terminology.admin, facilityJobs: ctx.facilityJobs, logger: ctx.logger },
       csv,
       {
         nationalSystem: opts.nationalSystem, allowUnknownColumns: opts.allowUnknownColumns,
@@ -348,4 +356,93 @@ function formatConflictsHuman(conflicts: FacilityMappingConflict[]): string {
   const line = (cells: string[]) => cells.map((c, i) => (i === cells.length - 1 ? c : c.padEnd(widths[i]))).join('  ');
 
   return [line(header), ...rows.map(line)].join('\n');
+}
+
+// ── Task 10: report-dimension health + job retry CLI parity ───────────────────────────────────
+//
+// `openldr facilities jobs [--retry <id>]` — CLI parity for `GET /api/facilities/health` and
+// `POST /api/facilities/jobs/:id/retry` (apps/server/src/facilities-routes.ts): both surface Task
+// 9's `facilityHealth`, and both re-queue through `ctx.facilityJobs.retry` — the OPERATOR's action
+// (resets `attempts`, so someone who fixed the underlying cause is not locked out by a previously
+// exhausted retry budget), never `retryPreservingAttempts` (the WORKER's own automatic retry).
+//
+// An operator with shell access but no browser session (a lab technician SSH'd into the appliance,
+// say) previously had no way to see whether `facility_map` had caught up with a mapping change, nor
+// retry a failed rebuild, without querying `facility_jobs` by hand.
+
+export interface FacilitiesJobsOpts {
+  /** Re-queue this job id before reporting the (now-updated) health, mirroring the HTTP route's
+   *  `POST /api/facilities/jobs/:id/retry`. Omitted ⇒ read-only: report health, retry nothing. */
+  retry?: string;
+  json: boolean;
+}
+
+/**
+ * `openldr facilities jobs [--retry <id>] [--json]`
+ *
+ * Prints the report-dimension health (Task 9's `facilityHealth`) and, with `--retry <id>`, re-queues
+ * a failed facility job first. Unlike `import`/`scan-observed`/`publish` above, there is no
+ * `--apply`/dry-run split here: reading health never writes, and `--retry` is itself the single
+ * explicit write this command can perform — there is no "preview a retry" to gate behind a flag.
+ */
+export async function runFacilitiesJobs(opts: FacilitiesJobsOpts): Promise<number> {
+  const ctx = await createAppContext(loadConfig());
+  try {
+    // Re-queue FIRST, so the health this call prints already reflects the retry (a re-queued job
+    // reads back as 'updating', not the stale 'failed' it was a moment ago). Any failure here
+    // (including "no such job" — the HTTP route's own 404 case; this CLI has no HTTP status to
+    // return, so it surfaces as the redacted error message below instead) is reported the same way
+    // every other run* function in this file reports a thrown error.
+    if (opts.retry) {
+      // ⛔ The outcome is READ, not assumed. `retry` is a no-op for an unknown id and REFUSES a job
+      // that is currently running (see facility-job-store.ts) — both of which used to leave this
+      // command printing health and exiting 0, telling an operator their retry was accepted when
+      // nothing was re-queued. The HTTP route answers 404/409 for these two; this is their exit-code
+      // equivalent, since a CLI has no status line to carry them.
+      const outcome = await ctx.facilityJobs.retry(opts.retry);
+      if (outcome !== 'requeued') {
+        const why = outcome === 'running'
+          ? `job ${opts.retry} is already running; wait for it to finish before retrying it`
+          : `no such job: ${opts.retry}`;
+        if (opts.json) process.stdout.write(JSON.stringify({ error: why }) + '\n');
+        else process.stderr.write(`facilities jobs --retry refused: ${why}\n`);
+        return 1;
+      }
+    }
+
+    const health: FacilityHealth = await facilityHealth({ internalDb: ctx.internalDb, jobs: ctx.facilityJobs });
+
+    if (opts.json) {
+      process.stdout.write(JSON.stringify(health, null, 2) + '\n');
+    } else {
+      process.stdout.write(formatJobsHuman(health) + '\n');
+    }
+    return 0;
+  } catch (err) {
+    const msg = redactError(err);
+    if (opts.json) process.stdout.write(JSON.stringify({ error: msg }) + '\n');
+    else process.stderr.write(`facilities jobs failed: ${msg}\n`);
+    return 1;
+  } finally {
+    await ctx.close();
+  }
+}
+
+/** ⛔ Every retryable job id this payload carries is PRINTED, because `--retry <id>` is useless
+ *  without one. Both halves used to be unreachable from a plain shell: the dimension's `jobId` was
+ *  in the payload but never rendered (an operator had to re-run with `--json` to find it), and the
+ *  projection side reported only a count, so the failed projections had no id ANYWHERE — not here,
+ *  not in `--json`, not on the Facilities page. */
+function formatJobsHuman(health: FacilityHealth): string {
+  const { reportDimension: dim, projection } = health;
+  const lines = [`report dimension: ${dim.state}`];
+  lines.push(`last successful rebuild: ${dim.lastSuccessAt ?? 'never'}${dim.rows != null ? ` (${dim.rows} rows)` : ''}`);
+  if (dim.error) lines.push(`last error: ${dim.error}`);
+  if (dim.jobId) lines.push(`retry with: openldr facilities jobs --retry ${dim.jobId}`);
+  lines.push(`failed projection retries: ${projection.failedCount}`);
+  for (const job of projection.failed) {
+    lines.push(`  facility ${job.registryId ?? '(unnamed)'}: ${job.lastError ?? 'no error recorded'}`);
+    lines.push(`    retry with: openldr facilities jobs --retry ${job.id}`);
+  }
+  return lines.join('\n');
 }

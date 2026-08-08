@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import Fastify from 'fastify';
 import type { AppContext } from '@openldr/bootstrap';
 import { makeMigratedDb } from '@openldr/db/testing';
-import { createTerminologyAdminStore, DEFAULT_OBSERVED_FACILITY_SYSTEM, FACILITY_REGISTRY_SYSTEM } from '@openldr/db';
+import { createTerminologyAdminStore, createFacilityJobStore, DEFAULT_OBSERVED_FACILITY_SYSTEM, FACILITY_REGISTRY_SYSTEM } from '@openldr/db';
 import { registerTerminologyAdminRoutes } from './terminology-admin-routes';
 import { registerErrorHandler } from './error-handler';
 import './auth-plugin';
@@ -260,10 +260,18 @@ describe('facility mapping semantics (terminology mapping routes)', () => {
   async function realApp() {
     const internalDb = await makeMigratedDb();
     const auditEvents: any[] = [];
+    const facilityJobs = createFacilityJobStore(internalDb);
     const ctx = {
       terminology: { admin: createTerminologyAdminStore(internalDb) },
       audit: { record: async (e: any) => { auditEvents.push(e); return e; } },
       logger: { error() {}, warn() {}, info() {} },
+      facilityJobs,
+      // ⛔ REQUIRED, and the same real db the admin store is built on. Both the PUT and the DELETE
+      // handlers read `term_mappings.to_system` straight off `ctx.internalDb` to decide whether the
+      // mutation is a facility-dimension event (a retarget AWAY from a facility is invisible in the
+      // request body). Omitting it does not fail loudly — the read throws inside the route's own
+      // try/catch and comes back as a bare 500 on an otherwise valid request.
+      internalDb,
     } as unknown as AppContext;
     const app = Fastify();
     // The coded 400 below is an AppError raised out of the handler, so the CENTRAL error handler
@@ -274,7 +282,7 @@ describe('facility mapping semantics (terminology mapping routes)', () => {
       req.user = { id: 'admin1', username: 'admin', displayName: null, roles: ['lab_admin'], capabilities: ['terminology.manage'] };
     });
     registerTerminologyAdminRoutes(app, ctx);
-    return { app, internalDb, auditEvents };
+    return { app, internalDb, auditEvents, facilityJobs };
   }
 
   const saveMapping = (app: any, body: Record<string, unknown>) => app.inject({
@@ -380,5 +388,138 @@ describe('facility mapping semantics (terminology mapping routes)', () => {
     });
 
     expect(auditEvents.at(-1)).toMatchObject({ action: 'term_mapping.update', metadata: { superseded: [second] } });
+  });
+});
+
+// ── Task 6: enqueue a facility-map-rebuild after a MAPPING mutation ──────────────────────────────
+//
+// The Observed tab's "mapped" state is only true for report-facing purposes once the warehouse
+// dimension is rebuilt from `term_mappings`, and these routes are the ONLY UI-reachable write path
+// for that table (see the describe block above). Scoped with `isFacilityTarget` because this file
+// is shared with generic terminology curation — a LOINC or ICD-10 mapping has no bearing on the
+// facility dimension.
+describe('facility mapping mutations enqueue a facility-map-rebuild (Task 6)', () => {
+  const OBSERVED = DEFAULT_OBSERVED_FACILITY_SYSTEM;
+  const mappingBody = (over: Record<string, unknown> = {}) => ({
+    toSystem: FACILITY_REGISTRY_SYSTEM, toCode: 'L-1', toDisplay: null,
+    mapType: 'SAME-AS', relationship: null, owner: null, isActive: true, ...over,
+  });
+
+  async function realApp() {
+    const internalDb = await makeMigratedDb();
+    const facilityJobs = createFacilityJobStore(internalDb);
+    const ctx = {
+      terminology: { admin: createTerminologyAdminStore(internalDb) },
+      audit: { record: async () => {} },
+      logger: { error() {}, warn() {}, info() {} },
+      internalDb,
+      facilityJobs,
+    } as unknown as AppContext;
+    const app = Fastify();
+    registerErrorHandler(app);
+    app.addHook('onRequest', async (req) => {
+      req.user = { id: 'admin1', username: 'admin', displayName: null, roles: ['lab_admin'], capabilities: ['terminology.manage'] };
+    });
+    registerTerminologyAdminRoutes(app, ctx);
+    return { app, internalDb, facilityJobs };
+  }
+
+  async function drainFacilityJobs(store: ReturnType<typeof createFacilityJobStore>): Promise<void> {
+    for (;;) {
+      const job = await store.claimNext();
+      if (!job) return;
+      await store.finish(job.id, 'done', {});
+    }
+  }
+
+  const saveMapping = (app: any, body: Record<string, unknown>) => app.inject({
+    method: 'POST',
+    url: `/api/terminology/terms/${encodeURIComponent(OBSERVED)}/${encodeURIComponent('BALAB')}/mappings`,
+    payload: body,
+  });
+
+  const rebuildKinds = async (store: ReturnType<typeof createFacilityJobStore>) =>
+    (await store.listUnresolved()).map((j) => j.kind);
+
+  it('enqueues a rebuild when a FACILITY mapping is saved (POST)', async () => {
+    const { app, facilityJobs } = await realApp();
+    const res = await saveMapping(app, mappingBody());
+    expect(res.statusCode).toBe(201);
+    expect(await rebuildKinds(facilityJobs)).toContain('facility-map-rebuild');
+  });
+
+  it('⛔ does NOT enqueue for a non-facility terminology mapping (POST)', async () => {
+    // This route is shared with generic terminology curation; a LOINC mapping has no bearing on
+    // the facility dimension and must not trigger a warehouse rebuild.
+    const { app, facilityJobs } = await realApp();
+    const res = await saveMapping(app, mappingBody({ toSystem: 'http://loinc.org', toCode: '1234-5', mapType: 'NARROWER-THAN' }));
+    expect(res.statusCode).toBe(201);
+    expect(await facilityJobs.listUnresolved()).toEqual([]);
+  });
+
+  it('enqueues a rebuild when a facility mapping is updated (PUT)', async () => {
+    const { app, facilityJobs } = await realApp();
+    const id = (await saveMapping(app, mappingBody({ toCode: 'L-1' }))).json().mapping.id;
+    await drainFacilityJobs(facilityJobs); // clear the POST's own enqueue so the PUT's is isolated
+
+    const res = await app.inject({
+      method: 'PUT', url: `/api/terminology/mappings/${id}`,
+      payload: { ...mappingBody({ toCode: 'L-2' }), fromSystem: OBSERVED, fromCode: 'BALAB' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(await rebuildKinds(facilityJobs)).toContain('facility-map-rebuild');
+  });
+
+  // ⛔ The retarget-AWAY case, which scoping the enqueue on the request BODY alone gets exactly
+  // backwards. Pointing a facility mapping at a LOINC code REMOVES a facility resolution, so the
+  // dimension is every bit as stale as when one is added — but the new body is not a facility
+  // target, so a body-only check queues nothing. The UI then reports the row is no longer a facility
+  // mapping while every report keeps resolving that observed string to the old facility, forever.
+  // DELETE below already reads the row's own `to_system` first for precisely this reason; PUT did
+  // not. The non-facility POST test above is what keeps this from being "just enqueue always".
+  it('⛔ enqueues a rebuild when a facility mapping is retargeted AWAY from a facility (PUT)', async () => {
+    const { app, facilityJobs } = await realApp();
+    const id = (await saveMapping(app, mappingBody({ toCode: 'L-1' }))).json().mapping.id;
+    await drainFacilityJobs(facilityJobs); // clear the POST's own enqueue so the PUT's is isolated
+
+    const res = await app.inject({
+      method: 'PUT', url: `/api/terminology/mappings/${id}`,
+      payload: {
+        ...mappingBody({ toSystem: 'http://loinc.org', toCode: '1234-5', mapType: 'NARROWER-THAN' }),
+        fromSystem: OBSERVED, fromCode: 'BALAB',
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(await rebuildKinds(facilityJobs)).toContain('facility-map-rebuild');
+  });
+
+  it('⛔ still does NOT enqueue when a non-facility mapping is retargeted to another non-facility system (PUT)', async () => {
+    // The other side of the rule above: "either end is a facility target" must not decay into
+    // "enqueue on every PUT". A LOINC mapping moved to another LOINC code touches nothing facility.
+    const { app, facilityJobs } = await realApp();
+    const id = (await saveMapping(app, mappingBody({ toSystem: 'http://loinc.org', toCode: '1234-5', mapType: 'NARROWER-THAN' }))).json().mapping.id;
+    await drainFacilityJobs(facilityJobs);
+
+    const res = await app.inject({
+      method: 'PUT', url: `/api/terminology/mappings/${id}`,
+      payload: {
+        ...mappingBody({ toSystem: 'http://loinc.org', toCode: '9999-9', mapType: 'NARROWER-THAN' }),
+        fromSystem: OBSERVED, fromCode: 'BALAB',
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(await facilityJobs.listUnresolved()).toEqual([]);
+  });
+
+  it('enqueues a rebuild when a facility mapping is removed (DELETE)', async () => {
+    const { app, facilityJobs } = await realApp();
+    const id = (await saveMapping(app, mappingBody())).json().mapping.id;
+    await drainFacilityJobs(facilityJobs); // clear the POST's own enqueue so the DELETE's is isolated
+
+    const res = await app.inject({ method: 'DELETE', url: `/api/terminology/mappings/${id}` });
+    expect(res.statusCode).toBe(204);
+    expect(await rebuildKinds(facilityJobs)).toContain('facility-map-rebuild');
   });
 });
