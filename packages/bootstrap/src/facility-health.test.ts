@@ -86,4 +86,15 @@ describe('facilityHealth', () => {
     // and conflating them would tell an operator their reports are stale when they are not.
     expect(health.reportDimension.state).toBe('current');
   });
+
+  it('⛔ a pending projection must not make the dimension read updating', async () => {
+    // Pins the same separation as the test above, on the OTHER side: `withCompletedRebuild` leaves
+    // no `facility-map-rebuild` pending, so the only job in flight is a `registry-projection`. If the
+    // state check were kind-blind (any pending job ⇒ 'updating'), this would wrongly tell an operator
+    // their report DIMENSION is mid-rebuild when only one facility's projection is running.
+    const deps = await withCompletedRebuild();
+    await deps.jobs.enqueue({ kind: 'registry-projection', registryId: 'fac-A' });
+
+    expect((await facilityHealth(deps)).reportDimension.state).toBe('current');
+  });
 });
