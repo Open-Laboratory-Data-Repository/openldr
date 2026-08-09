@@ -26,7 +26,11 @@ export interface QuarantinedRow {
   line: number;
   /** The row exactly as it appeared, so an operator can find and fix it in their source file. */
   raw: string;
-  reason: 'too_few_fields' | 'too_many_fields';
+  /** `too_few_fields`/`too_many_fields` are CSV-specific (a row's column count didn't match the
+   *  header's). `malformed_json` is the JSONL-release equivalent — `facility-release.ts` reuses this
+   *  same type rather than defining a parallel one, since both describe "a line that could not be
+   *  mapped to a record, set aside with its line number" — just for different source formats. */
+  reason: 'too_few_fields' | 'too_many_fields' | 'malformed_json';
 }
 
 export interface RowError {
@@ -56,12 +60,14 @@ export interface FacilityCsvResult {
 }
 
 /** Stable id from the register + code, so re-importing a newer release UPDATES in place and any
- *  aliases attached to the row survive a rename. */
-function idFor(nationalSystem: string, nationalCode: string): string {
+ *  aliases attached to the row survive a rename. Exported so `facility-release.ts` derives the SAME
+ *  id for the SAME register+code — a JSONL release and a CSV of the same register must produce
+ *  identical ids, so this hash must never be reimplemented a second time. */
+export function idFor(nationalSystem: string, nationalCode: string): string {
   return `fac-${createHash('sha256').update(`${nationalSystem}|${nationalCode}`).digest('hex').slice(0, 16)}`;
 }
 
-const text = (v: string | undefined): string | null => {
+export const text = (v: string | undefined): string | null => {
   const t = (v ?? '').trim();
   return t === '' ? null : t;
 };
@@ -79,7 +85,7 @@ const LON_MAX = 180;
  * every coordinate it had while reporting a clean import (FAC-P1-05). Blank still means absent;
  * everything else must parse and be in range.
  */
-function coordinate(
+export function coordinate(
   raw: string | undefined, field: 'latitude' | 'longitude', line: number, errors: RowError[],
 ): number | null {
   const t = (raw ?? '').trim();
@@ -89,6 +95,25 @@ function coordinate(
   const max = field === 'latitude' ? LAT_MAX : LON_MAX;
   if (n < -max || n > max) { errors.push({ line, field, reason: 'out_of_range', raw: t }); return null; }
   return n;
+}
+
+/** Validate a lat/lon pair TOGETHER — a coordinate is a pair, and half of one is not a location (see
+ *  `coordinate`'s docblock, FAC-P1-05). Exported so `facility-release.ts` reuses this exact pairing
+ *  rule instead of reimplementing the "reported only when the other half parsed cleanly" logic. */
+export function coordinatePair(
+  latRaw: string | undefined, lonRaw: string | undefined, line: number,
+): { latitude: number | null; longitude: number | null; errors: RowError[] } {
+  const errors: RowError[] = [];
+  const latitude = coordinate(latRaw, 'latitude', line, errors);
+  const longitude = coordinate(lonRaw, 'longitude', line, errors);
+  if (errors.length === 0) {
+    if (latitude !== null && longitude === null) {
+      errors.push({ line, field: 'longitude', reason: 'incomplete_pair', raw: (lonRaw ?? '').trim() });
+    } else if (longitude !== null && latitude === null) {
+      errors.push({ line, field: 'latitude', reason: 'incomplete_pair', raw: (latRaw ?? '').trim() });
+    }
+  }
+  return { latitude, longitude, errors };
 }
 
 /**
@@ -166,20 +191,7 @@ export function parseFacilityCsv(csv: string, opts: FacilityCsvOptions): Facilit
     const name = text(r.name);
     if (!nationalCode || !name) { skipped += 1; continue; }
 
-    const rowErrors: RowError[] = [];
-    const latitude = coordinate(r.latitude, 'latitude', info.lines, rowErrors);
-    const longitude = coordinate(r.longitude, 'longitude', info.lines, rowErrors);
-    // A coordinate is a PAIR. Half of one is not a location, and writing it would put the facility
-    // on the equator or the prime meridian — a plausible-looking wrong answer, which is worse than
-    // no answer. Only reported when the other half parsed cleanly, so a row already rejected above
-    // does not collect a second, confusing error.
-    if (rowErrors.length === 0) {
-      if (latitude !== null && longitude === null) {
-        rowErrors.push({ line: info.lines, field: 'longitude', reason: 'incomplete_pair', raw: (r.longitude ?? '').trim() });
-      } else if (longitude !== null && latitude === null) {
-        rowErrors.push({ line: info.lines, field: 'latitude', reason: 'incomplete_pair', raw: (r.latitude ?? '').trim() });
-      }
-    }
+    const { latitude, longitude, errors: rowErrors } = coordinatePair(r.latitude, r.longitude, info.lines);
     if (rowErrors.length > 0) { invalid.push(...rowErrors); continue; }
 
     const extras: Record<string, unknown> = {};
