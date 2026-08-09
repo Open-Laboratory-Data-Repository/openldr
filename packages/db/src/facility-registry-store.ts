@@ -1,7 +1,8 @@
-import { type Kysely, sql } from 'kysely';
+import { type Kysely, type SelectQueryBuilder, sql } from 'kysely';
 import type { InternalSchema } from './schema/internal';
 import type { ReferenceCapture } from './reference-capture';
 import { FACILITY_ADMIN_LEVELS, type FacilityAdminLevel } from './facility-answers';
+import { FACILITY_REGISTRY_SYSTEM } from './facility-observed';
 
 // `FacilityAdminLevel`/`FACILITY_ADMIN_LEVELS` live in `./facility-answers` (the browser-safe
 // subpath) rather than here — that is the one dependency-free seam `apps/studio` already imports
@@ -43,15 +44,73 @@ export interface FacilityRecord {
   source: 'manual' | 'import';
 }
 
+/** Derived per row by `list()`, never stored. */
+export type FacilityHealth = 'mapped' | 'unmapped' | 'unprojected';
+
+/**
+ * Single source of truth for the three `FacilityHealth` values, following the same bidirectional
+ * pattern as `FACILITY_ADMIN_LEVEL_SET`/`FACILITY_ADMIN_LEVELS` in `facility-answers.ts` — see that
+ * file's doc comment for the full reasoning. A plain `readonly FacilityHealth[]` array literal (what
+ * `apps/server/src/facilities-routes.ts`'s `HEALTH_VALUES` used to be, defined independently there)
+ * only checks that every array ELEMENT is a valid `FacilityHealth`; it does nothing to stop a member
+ * being dropped from the array while the union keeps it, or a NEW member being added to the union
+ * (say `'retired'`) without the array ever being told. `Record<FacilityHealth, true>` enforces
+ * completeness in both directions: remove a key below and `tsc` reports it missing against the type;
+ * add a member to the union above and this object literal is missing that key and fails to compile.
+ * `FACILITY_HEALTH_VALUES` is derived FROM this object (`Object.keys`), not hand-typed alongside it,
+ * so there is exactly one place the three values are spelled — and the route's `isFacilityHealth`
+ * whitelist check can no longer silently drift out of step with what `FacilityHealth` actually is.
+ */
+const FACILITY_HEALTH_SET: Record<FacilityHealth, true> = {
+  mapped: true,
+  unmapped: true,
+  unprojected: true,
+};
+export const FACILITY_HEALTH_VALUES: readonly FacilityHealth[] = Object.keys(
+  FACILITY_HEALTH_SET,
+) as FacilityHealth[];
+
 export interface FacilityListOptions {
+  /** Case-insensitive substring across name, local code, national code, and admin area.
+   *  ⚠ NOT aliases — `facility_registry` has no alias column and `extras` is an untyped jsonb bag.
+   *  The audit (FAC-P1-01) asks for alias search; it belongs with sub-project B's identity
+   *  modelling, and is deliberately unmet here rather than faked. */
+  q?: string;
+  country?: string;
+  zone?: string;
   region?: string;
   district?: string;
   council?: string;
+  /** Operational status. Distinct from `source` and `managedOrigin` below — see their comments. */
   status?: string;
+  level?: string;
+  /** Facility ownership (public/private/…), not provenance. */
+  ownership?: string;
+  /** WHICH national register the row's `nationalCode` belongs to — the audit's "registry source". */
+  nationalSystem?: string;
+  /** HOW the row entered this registry (manual, import, …). */
+  source?: string;
+  /** WHO owns the row's content — central sync vs local. */
+  managedOrigin?: string;
   /** Defaults to 200 when omitted — a national register runs 10-15k rows and an unbounded scan is
    *  never what a caller wants. Pass an explicit value (including a large one) to override. */
   limit?: number;
+  /** Rows to skip. Offset paging, not cursor: the audit requires an authoritative total and
+   *  page-jumping, which a cursor composes badly with. Drift under concurrent writes is accepted —
+   *  see the spec's Known limits. */
+  offset?: number;
+  /** Mapping/projection health (FAC-P1-01). `unprojected` means the facility has no
+   *  `facility_concept_projection` row and therefore CANNOT be selected as a mapping target at all
+   *  — the FAC-P0-08 failure state, visible in a list instead of only as a failed background job. */
+  health?: FacilityHealth;
 }
+
+/** A `FacilityRecord` as `list()` returns it — with the two fields it derives, per row, via the
+ *  `facility_concept_projection`/`term_mappings` join. Not what `get()`/`upsert()` traffic in. */
+export type FacilityListRow = FacilityRecord & {
+  health: FacilityHealth;
+  mappingCount: number;
+};
 
 export interface FacilityAdminValueCount {
   /** The observed value, verbatim (never normalised/cased). */
@@ -62,8 +121,9 @@ export interface FacilityAdminValueCount {
 
 export interface FacilityRegistryStore {
   get(id: string): Promise<FacilityRecord | undefined>;
-  /** Capped at 200 rows by default — see `FacilityListOptions.limit`. */
-  list(opts?: FacilityListOptions): Promise<FacilityRecord[]>;
+  /** Page of facilities plus the EXACT total matching the same search/filters (before limit/offset).
+   *  Capped at 200 rows by default — see `FacilityListOptions.limit`. */
+  list(opts?: FacilityListOptions): Promise<{ rows: FacilityListRow[]; total: number }>;
   /**
    * Distinct, non-blank values already present in `facility_registry.<level>`, ranked by
    * frequency (commonest first) with their counts — so an operator can see a real value
@@ -95,8 +155,11 @@ export interface FacilityRegistryStore {
   remove(id: string): Promise<void>;
 }
 
-/** A national register runs 10-15k rows; `list()` with no options must not return all of them. */
-const DEFAULT_LIST_LIMIT = 200;
+/** A national register runs 10-15k rows; `list()` with no options must not return all of them.
+ *  Exported (Task 3) so `GET /api/facilities` can echo the limit it actually applied when the
+ *  client sent none, instead of a caller re-deriving it from `rows.length` — which is wrong on a
+ *  short last page (a 12-row result with no limit would echo `limit: 12`). */
+export const DEFAULT_LIST_LIMIT = 200;
 
 // A real country's admin geography (zones/regions/districts/councils) tops out in the low
 // hundreds even for a large country; this is not a row cap (list()'s DEFAULT_LIST_LIMIT), it caps
@@ -232,14 +295,123 @@ export function createFacilityRegistryStore(
     },
 
     async list(opts = {}) {
-      let q = db.selectFrom('facility_registry').selectAll();
-      if (opts.region) q = q.where('region', '=', opts.region);
-      if (opts.district) q = q.where('district', '=', opts.district);
-      if (opts.council) q = q.where('council', '=', opts.council);
-      if (opts.status) q = q.where('status', '=', opts.status);
-      q = q.orderBy('name', 'asc');
-      q = q.limit(opts.limit ?? DEFAULT_LIST_LIMIT);
-      return (await q.execute()).map((r) => toRecord(r as Row));
+      // ⛔ ONE predicate builder shared by the rows query and the count query. Two copies would
+      // drift, and a `total` that disagrees with the page it describes is worse than no total.
+      // Generic over the select list (`O`) so the same closure types against both the
+      // `selectAll()` rows query and the `count(*)` aggregate query below — `.where()` never
+      // changes `O`, so this is ordinary Kysely generic inference, not a cast.
+      const applyFilters = <O>(
+        qb: SelectQueryBuilder<InternalSchema, 'facility_registry', O>,
+      ): SelectQueryBuilder<InternalSchema, 'facility_registry', O> => {
+        let q = qb;
+        if (opts.country) q = q.where('country', '=', opts.country);
+        if (opts.zone) q = q.where('zone', '=', opts.zone);
+        if (opts.region) q = q.where('region', '=', opts.region);
+        if (opts.district) q = q.where('district', '=', opts.district);
+        if (opts.council) q = q.where('council', '=', opts.council);
+        if (opts.status) q = q.where('status', '=', opts.status);
+        if (opts.level) q = q.where('level', '=', opts.level);
+        if (opts.ownership) q = q.where('ownership', '=', opts.ownership);
+        if (opts.nationalSystem) q = q.where('national_system', '=', opts.nationalSystem);
+        if (opts.source) q = q.where('source', '=', opts.source);
+        if (opts.managedOrigin) q = q.where('managed_origin', '=', opts.managedOrigin);
+        if (opts.q) {
+          // `ilike` with a wrapped `%` — a leading wildcard means no plain btree index can serve
+          // this; it is an unindexed sequential scan on every call. Not benchmarked at
+          // national-register scale (10-15k rows) as part of this task — if that turns out to be
+          // too slow in practice, a trigram/full-text index is the fix, deliberately left to when
+          // it is actually measured rather than pre-emptively added. `facility_registry` lives in
+          // the INTERNAL database, which is always Postgres, so `ilike` needs none of the dialect
+          // branching the EXTERNAL-DB reference-search resolver avoids it for (see that file's
+          // portability test, which pins lower()/LIKE specifically for multi-engine support).
+          const like = `%${opts.q}%`;
+          q = q.where((eb) => eb.or([
+            eb('name', 'ilike', like),
+            eb('local_code', 'ilike', like),
+            eb('national_code', 'ilike', like),
+            eb('region', 'ilike', like),
+            eb('district', 'ilike', like),
+            eb('council', 'ilike', like),
+          ]));
+        }
+        return q;
+      };
+
+      // ⛔ An UNCORRELATED derived-table aggregate, and both halves of that matter.
+      //
+      // NOT a plain join to `term_mappings`: one facility is legitimately the target of MANY
+      // observed codes (migration 078's partial unique index constrains one active resolution per
+      // OBSERVED code, not per target), so a plain join would multiply the facility row by its
+      // mapping count and inflate both the page and the total — the same fan-out class the
+      // `facility_of` CTE exists to prevent in the seeded reports.
+      //
+      // NOT an EXISTS/correlated subquery either: pg-mem, which this suite runs against, has zero
+      // correlated-subquery support (measured on a predecessor slice: five variants all failed with
+      // `column "t1.k" does not exist`), so a correlated form would be untestable here.
+      //
+      // Applied AFTER `applyFilters` (not before, unlike the brief's snippet) so `applyFilters`
+      // keeps running against a builder whose only table is `facility_registry` — its column
+      // references (`'country'`, `'region'`, ...) stay unqualified and unambiguous, and its type
+      // stays exactly `SelectQueryBuilder<InternalSchema, 'facility_registry', O>` with no widening
+      // needed. SQL clause order doesn't depend on JS call order (Kysely always renders
+      // FROM/JOIN before WHERE), so filtering first and joining after is equivalent to the brief's
+      // join-first ordering.
+      //
+      // Health is applied here as explicit predicates rather than filtering on a computed alias —
+      // the same three conditions serve both the rows query and the count query below without
+      // wrapping either in a subquery.
+      const joinHealth = <O>(qb: SelectQueryBuilder<InternalSchema, 'facility_registry', O>) => {
+        const joined = qb
+          .leftJoin('facility_concept_projection as fcp', 'fcp.registry_id', 'facility_registry.id')
+          .leftJoin(
+            (eb) => eb
+              .selectFrom('term_mappings')
+              .select((e) => ['to_code', e.fn.countAll<number>().as('n')])
+              .where('to_system', '=', FACILITY_REGISTRY_SYSTEM)
+              .where('is_active', '=', true)
+              .where('map_type', '=', 'SAME-AS')
+              .groupBy('to_code')
+              .as('m'),
+            (join) => join.onRef('m.to_code', '=', 'fcp.concept_code'),
+          );
+        if (opts.health === 'unprojected') return joined.where('fcp.registry_id', 'is', null);
+        if (opts.health === 'mapped') return joined.where(sql`coalesce(m.n, 0)`, '>', 0);
+        if (opts.health === 'unmapped') {
+          return joined.where('fcp.registry_id', 'is not', null).where(sql`coalesce(m.n, 0)`, '=', 0);
+        }
+        return joined;
+      };
+
+      const rowsQ = joinHealth(applyFilters(
+        db.selectFrom('facility_registry')
+          .selectAll('facility_registry')
+          .select(sql<string>`case when fcp.registry_id is null then 'unprojected'
+                                   when coalesce(m.n, 0) > 0 then 'mapped'
+                                   else 'unmapped' end`.as('health'))
+          .select(sql<number>`coalesce(m.n, 0)`.as('mapping_count')),
+      ))
+        .orderBy('facility_registry.name', 'asc')
+        // Tiebreaker only — keeps the result order deterministic when two facilities share a name
+        // (the norm, not the exception, in a national master facility list). Without this, offset
+        // paging over a non-unique sort column can show the same facility on two pages and never
+        // reach another — see the matching tiebreaker on `buildDistinctAdminValuesQuery` above for
+        // the same pattern.
+        .orderBy('facility_registry.id', 'asc')
+        .limit(opts.limit ?? DEFAULT_LIST_LIMIT)
+        .offset(opts.offset ?? 0);
+      const countQ = joinHealth(applyFilters(
+        db.selectFrom('facility_registry').select((eb) => eb.fn.countAll<number>().as('n')),
+      ));
+
+      const [rows, counted] = await Promise.all([rowsQ.execute(), countQ.executeTakeFirst()]);
+      return {
+        rows: rows.map((r) => ({
+          ...toRecord(r as Row),
+          health: r.health as FacilityHealth,
+          mappingCount: Number(r.mapping_count ?? 0),
+        })),
+        total: Number(counted?.n ?? 0),
+      };
     },
 
     async distinctAdminValues(level, scope = {}) {

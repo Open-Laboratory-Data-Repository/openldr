@@ -58,13 +58,19 @@ export type { FacilityJob, FacilityJobKind, FacilityJobStatus, FacilityJobStore 
 export { createRoleStore } from './role-store';
 export type { RoleStore, RoleRecord, CreateRoleInput, UpdateRoleInput, CapabilityReconciliation, CapabilityDiagnosis } from './role-store';
 export * from './reference-search';
-export { createFacilityRegistryStore, FACILITY_ADMIN_LEVELS, toRow as facilityRecordToRow, toRecord as facilityRowToRecord } from './facility-registry-store';
+export { createFacilityRegistryStore, FACILITY_ADMIN_LEVELS, DEFAULT_LIST_LIMIT, FACILITY_HEALTH_VALUES, toRow as facilityRecordToRow, toRecord as facilityRowToRecord } from './facility-registry-store';
 export type {
   FacilityRecord,
   FacilityListOptions,
   FacilityRegistryStore,
   FacilityAdminLevel,
   FacilityAdminValueCount,
+  // Task 3: reachable from `@openldr/db` so `GET /api/facilities`'s health whitelist (and any
+  // future caller) can type against the store's own union instead of restating the three literals.
+  // `FacilityListRow` is deliberately NOT re-exported here — nothing in this task's route handler
+  // names it (the handler destructures `{ rows, total }` and lets it infer), so exporting it now
+  // would be speculative; add it when an actual caller (e.g. the studio client) needs it.
+  FacilityHealth,
 } from './facility-registry-store';
 export { splitFacilityAnswers, CORE_FACILITY_KEYS } from './facility-answers';
 export type { AnswerField, FacilityAnswerSplit } from './facility-answers';

@@ -5,6 +5,16 @@ import type { ReportDesign } from '@openldr/report-designer/pure';
 // CORE_FACILITY_KEYS through; see the re-export comment further down for why the level list
 // itself now comes from here too instead of being hand-duplicated.
 import type { FacilityAdminLevel } from '@openldr/db/facility-answers';
+// Task 4 (scale): the per-row mapping/projection health union `list()` now derives
+// (facility-registry-store.ts). `import type` only — TS elides a type-only import entirely, so
+// this never actually pulls @openldr/db's root module (kysely/pg and friends) into the browser
+// bundle, the same guarantee the facility-answers subpath above exists to give at the value level.
+// Aliased on import: this file already has its own unrelated `FacilityHealth` interface further
+// down (Task 11's report-dimension chip shape, from GET /api/facilities/health) — same name,
+// completely different concept, and that one is already widely imported by name elsewhere in the
+// app, so the newcomer is the one that takes the alias rather than forcing a rename through every
+// existing caller.
+import type { FacilityHealth as FacilityRowHealth } from '@openldr/db';
 
 /** Routes the server answers WITHOUT a bearer token. Mirrors the public-path checks at the top of
  *  the `onRequest` hook in `apps/server/src/auth-plugin.ts` — keep the two in step.
@@ -758,6 +768,17 @@ export interface Facility {
   /** NULL = lab-local, 'central' = central-managed and replaceable by down-sync. */
   managedOrigin: string | null;
   source: 'manual' | 'import';
+  /** Task 4 (scale): mapping/projection health, derived per row — see `FacilityHealth`
+   *  (`@openldr/db`, aliased above as `FacilityRowHealth`) and `FacilityListRow.health`
+   *  (facility-registry-store.ts). Optional, not just theoretically: `list()` computes it via a
+   *  join, but `get`/`create`/`update` (facility-registry-store.ts's `get`/`upsert`) resolve a
+   *  plain `FacilityRecord`, which carries neither field — so a `Facility` this app just created or
+   *  edited (see `Facilities.tsx`'s `upsert()`) genuinely does not have one until the next list page
+   *  reload. Required fields here would be a promise this type cannot keep for every caller. */
+  health?: FacilityRowHealth;
+  /** How many active mappings currently resolve to this facility. Same list()-only availability as
+   *  `health` above, and for the same reason. */
+  mappingCount?: number;
 }
 
 export interface FacilitySubmit {
@@ -768,21 +789,35 @@ export interface FacilitySubmit {
   formVersion: number | null;
 }
 
-// Client-requested cap for GET /api/facilities. The store's own default (200 rows — see
-// DEFAULT_LIST_LIMIT in packages/db/src/facility-registry-store.ts) is far below what a
-// CSV-imported national register can hold (10-15k rows, per Slice 1), and a silent 200-row cut is
-// its own defect (see Facilities.tsx's `truncated` banner, which compares the returned row count
-// against this same constant). But this page renders every row into the DOM — one `TableRow` with
-// its own Radix `DropdownMenu` trigger each — with no pagination or virtualization (both explicitly
-// out of scope for this slice); requesting the server's own MAX_LIST_LIMIT (20000,
-// facilities-routes.ts) would turn a 10-15k-row register into a ~100k-node synchronous render, i.e.
-// a page that's honest about being capped but too sluggish to use. 2000 is the deliberate middle
-// ground: comfortably above the row count of most labs (so the truncation banner stays rare in
-// practice), while keeping the render small enough to stay responsive without either of those
-// bigger features.
-export const FACILITIES_LIST_LIMIT = 2000;
-export const listFacilities = (): Promise<Facility[]> =>
-  apiGet(`/api/facilities?limit=${FACILITIES_LIST_LIMIT}`, 'list facilities');
+// Task 4 (scale): GET /api/facilities is now a real paged endpoint (Task 3) — `list()`
+// (facility-registry-store.ts) returns an EXACT `total` alongside one page of rows, so the client
+// requests a bounded page instead of a client-side cap on how many rows to fetch at once (the
+// previous `FACILITIES_LIST_LIMIT = 2000` approach this replaced, and the `truncated` banner that
+// went with it — see Facilities.tsx's PAGE_SIZE for why paging, not virtualization, is what makes a
+// 10-15k-row register usable here).
+export interface FacilityListQuery {
+  q?: string;
+  country?: string; zone?: string; region?: string; district?: string; council?: string;
+  status?: string; level?: string; ownership?: string;
+  nationalSystem?: string; source?: string; managedOrigin?: string;
+  health?: FacilityRowHealth;
+  limit?: number; offset?: number;
+}
+/** Mirrors the route's own return shape (facilities-routes.ts's `GET /api/facilities`): `limit`
+ *  echoes the store's own default (`DEFAULT_LIST_LIMIT`) when the caller sent none, never the
+ *  possibly-shorter `rows.length` — see that route's comment on why. `number`, not `number | null`
+ *  (M4, whole-branch review): the route always returns `limit: limit ?? DEFAULT_LIST_LIMIT`, which
+ *  is never null — a `number | null` type here claimed a possibility the wire shape doesn't have. */
+export interface FacilityPage { rows: Facility[]; total: number; limit: number; offset: number }
+
+export const listFacilities = (query: FacilityListQuery = {}): Promise<FacilityPage> => {
+  const p = new URLSearchParams();
+  for (const [k, v] of Object.entries(query)) {
+    if (v !== undefined && v !== null && v !== '') p.set(k, String(v));
+  }
+  const qs = p.toString();
+  return apiGet(`/api/facilities${qs ? `?${qs}` : ''}`, 'list facilities');
+};
 export const createFacility = (body: FacilitySubmit): Promise<Facility> =>
   authFetch('/api/facilities', jbody(body, 'POST')).then((r) => okJson<Facility>(r, 'create facility'));
 export const updateFacility = (id: string, body: FacilitySubmit): Promise<Facility> =>

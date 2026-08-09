@@ -1,18 +1,16 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import '@/i18n';
 
 // Mirrors Users.test.tsx's mocking pattern: spread the real module so AppShell's own API calls
 // (listPluginUis, etc.) keep working, and only stub the facilities/forms surface this page uses.
-// FACILITIES_LIST_LIMIT is overridden to a small number so the I1 (truncation) test below doesn't
-// have to render tens of thousands of table rows to hit the cap.
 vi.mock('@/api', async (orig) => {
   const actual = await orig<typeof import('@/api')>();
   return {
     ...actual,
-    FACILITIES_LIST_LIMIT: 5,
     listFacilities: vi.fn(),
     createFacility: vi.fn(),
     updateFacility: vi.fn(),
@@ -28,6 +26,10 @@ vi.mock('@/api', async (orig) => {
     // Task 11: the health chip's own data source, plus its Retry action.
     getFacilityHealth: vi.fn(),
     retryFacilityJob: vi.fn(),
+    // Fix wave 1 / Finding 1: backs the zone/region/district/council Selects behind the "More
+    // filters" disclosure. Stubbed here so opening that panel in a test never reaches the real
+    // network; most tests never open it, so most never touch this mock at all.
+    listFacilityAdminValues: vi.fn(),
   };
 });
 
@@ -37,8 +39,10 @@ vi.mock('@/api', async (orig) => {
 const { useAuthMock } = vi.hoisted(() => ({ useAuthMock: vi.fn() }));
 vi.mock('@/auth/AuthProvider', () => ({ useAuth: useAuthMock }));
 
-import { listFacilities, listPublishedForms, getForm, importFacilitiesCsv, listObservedFacilities, getFacilityHealth, retryFacilityJob, deleteFacility, FACILITIES_LIST_LIMIT, type Facility, type FacilityHealth } from '@/api';
+import { listFacilities, listPublishedForms, getForm, importFacilitiesCsv, listObservedFacilities, getFacilityHealth, retryFacilityJob, deleteFacility, listFacilityAdminValues, type Facility, type FacilityHealth, type FacilityPage } from '@/api';
 import { Facilities } from './Facilities';
+
+const listFacilitiesMock = listFacilities as ReturnType<typeof vi.fn>;
 
 const publishedFacilityForm = {
   id: 'form-sample-facility',
@@ -79,6 +83,20 @@ const sampleFacility: Facility = {
   latitude: null, longitude: null, extras: {}, managedOrigin: null, source: 'manual',
 };
 
+// Task 4 (scale): GET /api/facilities returns a page, not a bare array (Task 3) — `makeRows`
+// produces `n` plausible rows off `sampleFacility`, and `makePage` wraps them in the
+// `{ rows, total, limit, offset }` shape `listFacilities` now resolves. `total` defaults to
+// `rows.length` (the common "one page, no more") rather than requiring every caller to repeat it.
+function makeRows(n: number): Facility[] {
+  return Array.from({ length: n }, (_, i) => ({
+    ...sampleFacility, id: `f${i}`, localCode: `LAB0${i}`, name: `Facility ${i}`,
+    health: 'mapped', mappingCount: 1,
+  }));
+}
+function makePage(rows: Facility[], overrides: Partial<FacilityPage> = {}): FacilityPage {
+  return { rows, total: rows.length, limit: 50, offset: 0, ...overrides };
+}
+
 const show = () => render(<MemoryRouter><Facilities /></MemoryRouter>);
 
 // Task 11: a benign default so the 30-odd tests above this point (none of which care about the
@@ -115,11 +133,12 @@ async function clickImportMenuItem(itemName: string | RegExp) {
 describe('Facilities page', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    (listFacilities as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    listFacilitiesMock.mockResolvedValue(makePage([]));
     (listPublishedForms as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     (listObservedFacilities as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     (getFacilityHealth as ReturnType<typeof vi.fn>).mockResolvedValue(currentHealth);
     (retryFacilityJob as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+    (listFacilityAdminValues as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     // Default: a lab_admin-shaped actor who can both view and manage the registry. Individual
     // tests (I4) override this to a view-only actor.
     useAuthMock.mockReturnValue({
@@ -189,7 +208,7 @@ describe('Facilities page', () => {
 
   it('lists facilities with their code, name and region', async () => {
     (listPublishedForms as ReturnType<typeof vi.fn>).mockResolvedValue([publishedFacilityForm]);
-    (listFacilities as ReturnType<typeof vi.fn>).mockResolvedValue([sampleFacility]);
+    listFacilitiesMock.mockResolvedValue(makePage([sampleFacility]));
     show();
     await waitFor(() => expect(screen.getByText('Dodoma Regional Referral')).toBeInTheDocument());
     expect(screen.getByText('LAB01')).toBeInTheDocument();
@@ -201,35 +220,10 @@ describe('Facilities page', () => {
     // lose visibility of rows it already has — !hasForm used to replace the whole body, table
     // included, leaving zero ability to view, count, or delete existing facilities.
     (listPublishedForms as ReturnType<typeof vi.fn>).mockResolvedValue([]);
-    (listFacilities as ReturnType<typeof vi.fn>).mockResolvedValue([sampleFacility]);
+    listFacilitiesMock.mockResolvedValue(makePage([sampleFacility]));
     show();
     await waitFor(() => expect(screen.getByText('Dodoma Regional Referral')).toBeInTheDocument());
     expect(screen.queryByText(/no facility form/i)).not.toBeInTheDocument();
-  });
-
-  it('I1: warns plainly when the list hits the client-requested cap', async () => {
-    (listPublishedForms as ReturnType<typeof vi.fn>).mockResolvedValue([publishedFacilityForm]);
-    const capped: Facility[] = Array.from({ length: FACILITIES_LIST_LIMIT }, (_, i) => ({
-      ...sampleFacility, id: `f${i}`, localCode: `LAB0${i}`, name: `Facility ${i}`,
-    }));
-    (listFacilities as ReturnType<typeof vi.fn>).mockResolvedValue(capped);
-    show();
-    await waitFor(() => expect(screen.getByText('Facility 0')).toBeInTheDocument());
-    // A silent cap is the defect (see I1) — hitting FACILITIES_LIST_LIMIT must say so plainly,
-    // not just render exactly as many rows as fit and leave the operator to guess.
-    expect(screen.getByText(/showing the first/i)).toBeInTheDocument();
-    // Minor 6: the loose /showing the first/i match above would still pass if `{{limit}}` rendered
-    // literally instead of interpolating — assert on the actual number so a broken interpolation
-    // fails this test.
-    expect(screen.getByText(new RegExp(`showing the first ${FACILITIES_LIST_LIMIT} facilities`, 'i'))).toBeInTheDocument();
-  });
-
-  it('I1: does not warn when the list is comfortably under the cap', async () => {
-    (listPublishedForms as ReturnType<typeof vi.fn>).mockResolvedValue([publishedFacilityForm]);
-    (listFacilities as ReturnType<typeof vi.fn>).mockResolvedValue([sampleFacility]);
-    show();
-    await waitFor(() => expect(screen.getByText('Dodoma Regional Referral')).toBeInTheDocument());
-    expect(screen.queryByText(/showing the first/i)).not.toBeInTheDocument();
   });
 
   describe('I4: facilities.manage gating (a view-only actor, e.g. data_analyst)', () => {
@@ -245,7 +239,7 @@ describe('Facilities page', () => {
 
     it('hides the header ⋯ Add action entirely', async () => {
       (listPublishedForms as ReturnType<typeof vi.fn>).mockResolvedValue([publishedFacilityForm]);
-      (listFacilities as ReturnType<typeof vi.fn>).mockResolvedValue([sampleFacility]);
+      listFacilitiesMock.mockResolvedValue(makePage([sampleFacility]));
       show();
       await waitFor(() => expect(screen.getByText('Dodoma Regional Referral')).toBeInTheDocument());
       expect(screen.queryByRole('button', { name: 'Facility actions' })).not.toBeInTheDocument();
@@ -253,7 +247,7 @@ describe('Facilities page', () => {
 
     it('hides Import facilities along with the rest of the header ⋯ menu', async () => {
       (listPublishedForms as ReturnType<typeof vi.fn>).mockResolvedValue([publishedFacilityForm]);
-      (listFacilities as ReturnType<typeof vi.fn>).mockResolvedValue([sampleFacility]);
+      listFacilitiesMock.mockResolvedValue(makePage([sampleFacility]));
       show();
       await waitFor(() => expect(screen.getByText('Dodoma Regional Referral')).toBeInTheDocument());
       // The whole trigger is gone (asserted above), so there is no menu to open at all — this
@@ -264,7 +258,7 @@ describe('Facilities page', () => {
 
     it('hides the per-row Edit/Delete ⋯ menu', async () => {
       (listPublishedForms as ReturnType<typeof vi.fn>).mockResolvedValue([publishedFacilityForm]);
-      (listFacilities as ReturnType<typeof vi.fn>).mockResolvedValue([sampleFacility]);
+      listFacilitiesMock.mockResolvedValue(makePage([sampleFacility]));
       show();
       await waitFor(() => expect(screen.getByText('Dodoma Regional Referral')).toBeInTheDocument());
       expect(screen.queryByRole('button', { name: /facility actions dodoma regional referral/i })).not.toBeInTheDocument();
@@ -272,7 +266,7 @@ describe('Facilities page', () => {
 
     it('does not open the edit dialog by clicking the row', async () => {
       (listPublishedForms as ReturnType<typeof vi.fn>).mockResolvedValue([publishedFacilityForm]);
-      (listFacilities as ReturnType<typeof vi.fn>).mockResolvedValue([sampleFacility]);
+      listFacilitiesMock.mockResolvedValue(makePage([sampleFacility]));
       show();
       const cell = await screen.findByText('Dodoma Regional Referral');
       fireEvent.click(cell.closest('tr')!);
@@ -285,7 +279,7 @@ describe('Facilities page', () => {
     // sees Add and the row Edit item both greyed out with nothing else on the page explaining why —
     // this banner is that explanation.
     (listPublishedForms as ReturnType<typeof vi.fn>).mockResolvedValue([]);
-    (listFacilities as ReturnType<typeof vi.fn>).mockResolvedValue([sampleFacility]);
+    listFacilitiesMock.mockResolvedValue(makePage([sampleFacility]));
     show();
     await waitFor(() => expect(screen.getByText('Dodoma Regional Referral')).toBeInTheDocument());
     // Reuses the noFormHelp body text, NOT the noForm title — the title ("No facility form is
@@ -297,33 +291,10 @@ describe('Facilities page', () => {
 
   it('Minor 4: does not show the banner once a form is published, even with rows present', async () => {
     (listPublishedForms as ReturnType<typeof vi.fn>).mockResolvedValue([publishedFacilityForm]);
-    (listFacilities as ReturnType<typeof vi.fn>).mockResolvedValue([sampleFacility]);
+    listFacilitiesMock.mockResolvedValue(makePage([sampleFacility]));
     show();
     await waitFor(() => expect(screen.getByText('Dodoma Regional Referral')).toBeInTheDocument());
     expect(screen.queryByText(/entered through a published form targeting the Facilities page/i)).not.toBeInTheDocument();
-  });
-
-  it('Minor 7: does not let the truncation banner outlive a later failed reload', async () => {
-    (listPublishedForms as ReturnType<typeof vi.fn>).mockResolvedValue([publishedFacilityForm]);
-    const capped: Facility[] = Array.from({ length: FACILITIES_LIST_LIMIT }, (_, i) => ({
-      ...sampleFacility, id: `f${i}`, localCode: `LAB0${i}`, name: `Facility ${i}`,
-    }));
-    // React 18 StrictMode double-invokes mount effects (no cleanup is returned from the reload
-    // effect, so nothing undoes the first call — it just fires twice against the same mounted
-    // state). That's the realistic way a SECOND reload lands on this page without adding a retry
-    // affordance that's out of scope for this round: the first of the two calls succeeds and hits
-    // the cap, the second fails.
-    (listFacilities as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce(capped)
-      .mockRejectedValueOnce(new Error('network blip'));
-
-    render(<React.StrictMode><MemoryRouter><Facilities /></MemoryRouter></React.StrictMode>);
-
-    await waitFor(() => expect(screen.getByText(/network blip/i)).toBeInTheDocument());
-    // The failed reload never got to re-measure the row count it's claiming — a stale `true` left
-    // over from the earlier successful call would keep the banner up describing data this attempt
-    // never saw.
-    expect(screen.queryByText(/showing the first/i)).not.toBeInTheDocument();
   });
 
   it('F1: a successful apply keeps the Import sheet mounted so its own success confirmation survives the list refresh', async () => {
@@ -332,9 +303,9 @@ describe('Facilities page', () => {
     // reload — not anything inside the sheet — that used to flip `loading` to true, which the page's
     // own render swaps in a full-page LoadingState that unmounts everything below it, sheet included.
     (listPublishedForms as ReturnType<typeof vi.fn>).mockResolvedValue([publishedFacilityForm]);
-    (listFacilities as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce([]) // initial load
-      .mockResolvedValueOnce([sampleFacility]); // background reload triggered by onImported
+    listFacilitiesMock
+      .mockResolvedValueOnce(makePage([])) // initial load
+      .mockResolvedValueOnce(makePage([sampleFacility])); // background reload triggered by onImported
     (importFacilitiesCsv as ReturnType<typeof vi.fn>)
       .mockResolvedValueOnce({
         parsed: 3, skipped: 0, unknownColumns: [], duplicateColumns: [], quarantined: [], created: 0, updated: 0, duplicates: 0,
@@ -374,7 +345,7 @@ describe('Facilities page', () => {
   describe('Task 9: Registry | Observed tabs', () => {
     it('shows the Registry table by default, and switching to Observed mounts the Observed tab instead', async () => {
       (listPublishedForms as ReturnType<typeof vi.fn>).mockResolvedValue([publishedFacilityForm]);
-      (listFacilities as ReturnType<typeof vi.fn>).mockResolvedValue([sampleFacility]);
+      listFacilitiesMock.mockResolvedValue(makePage([sampleFacility]));
       (listObservedFacilities as ReturnType<typeof vi.fn>).mockResolvedValue([
         { sourceSystem: 'webhook-ingest', sourceCode: 'Dodoma', reportCount: 247, registryId: null, localCode: null, name: null, level: null, status: null, region: null, district: null, council: null, nationalSystem: null, nationalCode: null, resolvedVia: null, targetMissing: false },
       ]);
@@ -417,7 +388,7 @@ describe('Facilities page', () => {
 
     it('hosts a single ⋯ on the tab strip that swaps content with the active tab, instead of a second header row per tab', async () => {
       (listPublishedForms as ReturnType<typeof vi.fn>).mockResolvedValue([publishedFacilityForm]);
-      (listFacilities as ReturnType<typeof vi.fn>).mockResolvedValue([sampleFacility]);
+      listFacilitiesMock.mockResolvedValue(makePage([sampleFacility]));
       (listObservedFacilities as ReturnType<typeof vi.fn>).mockResolvedValue([]);
       show();
       await waitFor(() => expect(screen.getByText('Dodoma Regional Referral')).toBeInTheDocument());
@@ -586,7 +557,7 @@ describe('Facilities page', () => {
     // and takes the local-row-removal path (no `reload()`), which is exactly where the refresh was
     // missing — a `reload()`-only fix would leave this case still frozen.
     it('refreshes the chip after a facility is deleted', async () => {
-      (listFacilities as ReturnType<typeof vi.fn>).mockResolvedValue([sampleFacility]);
+      listFacilitiesMock.mockResolvedValue(makePage([sampleFacility]));
       (listPublishedForms as ReturnType<typeof vi.fn>).mockResolvedValue([publishedFacilityForm]);
       (getFacilityHealth as ReturnType<typeof vi.fn>).mockResolvedValue(currentHealth);
       (deleteFacility as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
@@ -689,6 +660,173 @@ describe('Facilities page', () => {
         clearIntervalSpy.mockRestore();
         vi.useRealTimers();
       }
+    });
+  });
+
+  // Task 4 (scale): the paged registry table — replaces the fetch-up-to-2000-and-render-them-all
+  // approach (I1's tests, and the `truncated` banner they pinned, are gone along with it: with an
+  // exact `total` from the server there is nothing left for a truncation warning to say). Kept LAST
+  // in this file deliberately — these are the only tests that touch `window.location` directly
+  // (Facilities.tsx reads/writes it via `window.history`, not react-router's in-memory history,
+  // since MemoryRouter has no bearing on the real URL bar), and nothing here resets it between
+  // tests. Running last means that mutation can never leak into an earlier, unrelated test.
+  describe('Task 4: paging, search and URL state', () => {
+    it('requests a page and shows the total, not a truncation warning', async () => {
+      listFacilitiesMock.mockResolvedValue(makePage(makeRows(50), { total: 13000 }));
+      show();
+      expect(await screen.findByText(/13000|13,000/)).toBeInTheDocument();
+      expect(screen.queryByText(/showing the first/i)).not.toBeInTheDocument();
+    });
+
+    it('puts search, filter and page state in the URL', async () => {
+      listFacilitiesMock.mockResolvedValue(makePage(makeRows(50), { total: 13000 }));
+      show();
+      await userEvent.type(await screen.findByRole('searchbox'), 'dodoma');
+      // Fix wave 1 / Finding 3: search now debounces (250ms) before committing into the URL, so
+      // this can no longer assert the URL updates on the very next microtask — awaiting the
+      // SETTLED state (via `waitFor`'s own retry loop) is what the fix instructions ask for here,
+      // not weakening what's asserted: the URL must still end up exactly `q=dodoma`, just not
+      // necessarily synchronously with the last keystroke.
+      await waitFor(() => expect(window.location.search).toContain('q=dodoma'));
+    });
+
+    // Fix wave 1 / Finding 1: the ten open-vocabulary filters added behind the "More filters"
+    // disclosure — pins that the toggle reveals them, that a Select among them (zone, backed by
+    // `listFacilityAdminValues`) round-trips through the URL exactly like `health`/`source`
+    // already did, and that a free-text one among them (nationalSystem — deliberately the audit's
+    // actual "registry source", see the design's provenance table) goes through the same debounce
+    // as search rather than firing on every keystroke.
+    it('Fix wave 1 / Finding 1: reveals the open-vocabulary filters behind "More filters" and round-trips them through the URL', async () => {
+      listFacilitiesMock.mockResolvedValue(makePage(makeRows(1), { total: 1 }));
+      (listFacilityAdminValues as ReturnType<typeof vi.fn>).mockImplementation((level: string) =>
+        level === 'zone' ? Promise.resolve([{ value: 'Central', count: 3 }]) : Promise.resolve([]));
+      show();
+      await screen.findByText('Facility 0');
+
+      // Collapsed by default — none of the ten extra filters are visible yet.
+      expect(screen.queryByLabelText('National system')).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: /more filters/i }));
+      expect(await screen.findByLabelText('National system')).toBeInTheDocument();
+
+      // The zone Select is populated from `listFacilityAdminValues('zone', {})` — the same
+      // mechanism `useFacilityAdminSuggestions` uses, called directly rather than through that
+      // hook (which requires a FormSchema this toolbar doesn't have).
+      await waitFor(() => expect(listFacilityAdminValues).toHaveBeenCalledWith('zone'));
+      fireEvent.click(screen.getByRole('combobox', { name: 'Zone' }));
+      fireEvent.click(await screen.findByRole('option', { name: 'Central' }));
+      await waitFor(() => expect(window.location.search).toContain('zone=Central'));
+      await waitFor(() => expect(listFacilitiesMock).toHaveBeenCalledWith(
+        expect.objectContaining({ zone: 'Central' }),
+      ));
+
+      // A free-text filter from the same panel debounces into the URL exactly like search does.
+      fireEvent.change(screen.getByLabelText('National system'), { target: { value: 'HFR' } });
+      await waitFor(() => expect(window.location.search).toContain('nationalSystem=HFR'));
+      await waitFor(() => expect(listFacilitiesMock).toHaveBeenCalledWith(
+        expect.objectContaining({ nationalSystem: 'HFR' }),
+      ));
+    });
+
+    // Fix wave 1 / Finding 2: `reload()` had no request-sequencing guard — every keystroke fired an
+    // unguarded fetch, and an out-of-order response (entirely plausible against a 13,000-row table
+    // under load) could silently overwrite fresher `rows`/`total` with stale ones. This drives two
+    // DISTINCT committed searches (each clears its own 250ms debounce, so both are real in-flight
+    // requests, not one debounced commit) and resolves the LATER one FIRST — the exact out-of-order
+    // arrival the finding describes — then asserts the page still reflects the later result once
+    // the stale one finally resolves too.
+    it('Fix wave 1 / Finding 2: an in-flight response that resolves AFTER a later one must not overwrite the later result', async () => {
+      vi.useFakeTimers();
+      try {
+        listFacilitiesMock.mockResolvedValueOnce(makePage([])); // the initial mount load
+
+        let resolveFirst!: (page: FacilityPage) => void;
+        let resolveSecond!: (page: FacilityPage) => void;
+        const firstResponse = new Promise<FacilityPage>((resolve) => { resolveFirst = resolve; });
+        const secondResponse = new Promise<FacilityPage>((resolve) => { resolveSecond = resolve; });
+        listFacilitiesMock.mockImplementationOnce(() => firstResponse);
+        listFacilitiesMock.mockImplementationOnce(() => secondResponse);
+
+        show();
+        // Wait for the search box itself (not just the mock call count) — the mount `reload()`
+        // call is registered on the mock synchronously, but the box only appears once its
+        // resolution has actually been rendered (`loading`/`hasForm` settling).
+        await vi.waitFor(() => expect(screen.getByRole('searchbox')).toBeInTheDocument());
+        expect(listFacilitiesMock).toHaveBeenCalledTimes(1);
+
+        const search = screen.getByRole('searchbox');
+        fireEvent.change(search, { target: { value: 'a' } });
+        await vi.advanceTimersByTimeAsync(300); // past the 250ms debounce — commits 'a', fires request #2
+        fireEvent.change(search, { target: { value: 'ab' } });
+        await vi.advanceTimersByTimeAsync(300); // commits 'ab', fires request #3
+
+        await vi.waitFor(() => expect(listFacilitiesMock).toHaveBeenCalledTimes(3));
+
+        // Resolve the LATER request ('ab') first, then the earlier one ('a') — out of order.
+        resolveSecond(makePage([{ ...sampleFacility, id: 'later', name: 'Later Result' }]));
+        await vi.waitFor(() => expect(screen.getByText('Later Result')).toBeInTheDocument());
+
+        resolveFirst(makePage([{ ...sampleFacility, id: 'stale', name: 'Stale Result' }]));
+        await vi.advanceTimersByTimeAsync(0); // let the now-resolved stale promise's .then() run
+
+        // The later (fresher) response must still be what's on screen — the stale response that
+        // arrived after it must never have overwritten it.
+        expect(screen.getByText('Later Result')).toBeInTheDocument();
+        expect(screen.queryByText('Stale Result')).not.toBeInTheDocument();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('restores search and page from the URL on mount', async () => {
+      window.history.replaceState({}, '', '/facilities?q=dodoma&offset=100');
+      listFacilitiesMock.mockResolvedValue(makePage(makeRows(50), { total: 13000, offset: 100 }));
+      show();
+      await waitFor(() => expect(listFacilitiesMock).toHaveBeenCalledWith(
+        expect.objectContaining({ q: 'dodoma', offset: 100 }),
+      ));
+    });
+
+    // M11 (whole-branch review): neither pager button had a test — a broken `onClick` (wrong
+    // direction, wrong step size, or a stale `offset` closed over) would have shipped green.
+    it('M11: clicking Next requests the next page at the page size, and it round-trips through the URL', async () => {
+      window.history.replaceState({}, '', '/facilities');
+      // 130 rows total, 50 per page (PAGE_SIZE, un-exported from Facilities.tsx — mirrored here the
+      // same way HEALTH_POLL_MS is elsewhere in this file) — a middle page exists (offset 50, not
+      // yet the last), so clicking Next from page 1 has somewhere unambiguous to go.
+      listFacilitiesMock.mockResolvedValue(makePage(makeRows(50), { total: 130, offset: 0 }));
+      show();
+      await waitFor(() => expect(listFacilitiesMock).toHaveBeenCalledTimes(1));
+
+      fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+
+      await waitFor(() => expect(listFacilitiesMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({ offset: 50, limit: 50 }),
+      ));
+      await waitFor(() => expect(window.location.search).toContain('offset=50'));
+    });
+
+    it('M11: disables Previous on the first page and Next on the last page, and enables the other one', async () => {
+      // Reset the URL state left behind by an earlier test in this describe block — these tests
+      // deliberately run last and share `window.location` (see this describe block's own doc
+      // comment above), and `readUrlState()` reads `offset` straight off it on mount.
+      window.history.replaceState({}, '', '/facilities');
+      // First page: offset 0, total (130) comfortably larger than one page — Previous has nowhere
+      // to go, Next does.
+      listFacilitiesMock.mockResolvedValue(makePage(makeRows(50), { total: 130, offset: 0 }));
+      show();
+      await waitFor(() => expect(listFacilitiesMock).toHaveBeenCalledTimes(1));
+      expect(screen.getByRole('button', { name: 'Previous' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'Next' })).not.toBeDisabled();
+
+      // Last page: offset 100 with the same total 130 — 100 + 50 (PAGE_SIZE) >= 130, so Next has
+      // nowhere left to go; Previous does.
+      listFacilitiesMock.mockResolvedValue(makePage(makeRows(30), { total: 130, offset: 100 }));
+      fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+      await waitFor(() => expect(window.location.search).toContain('offset=100'));
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled());
+      expect(screen.getByRole('button', { name: 'Previous' })).not.toBeDisabled();
     });
   });
 });

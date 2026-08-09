@@ -6,7 +6,7 @@ import { makeMigratedDb } from '@openldr/db/testing';
 import { makeMigratedExternalDb } from '@openldr/db/testing-external';
 import {
   createTerminologyAdminStore, createFacilityRegistryStore, createFacilityJobStore,
-  DEFAULT_OBSERVED_FACILITY_SYSTEM, FACILITY_REGISTRY_SYSTEM,
+  DEFAULT_OBSERVED_FACILITY_SYSTEM, FACILITY_REGISTRY_SYSTEM, DEFAULT_LIST_LIMIT,
 } from '@openldr/db';
 import { projectRegistryRows } from '@openldr/bootstrap';
 import { registerFacilitiesRoutes } from './facilities-routes';
@@ -175,7 +175,15 @@ function fakeCtx() {
     forms: { get: async (formId: string) => forms[formId] },
     facilityJobs: fakeFacilityJobStore(),
     facilityRegistry: {
-      list: async (opts?: any) => { lastListOptions = opts; return rows; },
+      // Task 3: `list()`'s real contract (Task 1) is `{ rows, total }`, not a bare array — this
+      // fake must match it or the route's `const { rows, total } = await ...list(...)` destructures
+      // `undefined` for both. Filters/health are NOT applied here (this fake exists to prove the
+      // ROUTE forwards/sanitises the right options, captured in `lastListOptions` below — the
+      // store's OWN filtering/paging SQL is exercised for real in
+      // facility-registry-store.test.ts and in the "Task 3: GET /api/facilities paging, search
+      // and filters" describe block further down, which uses the real store against a real
+      // migrated db).
+      list: async (opts?: any) => { lastListOptions = opts; return { rows, total: rows.length }; },
       distinctAdminValues: async (level: any, scope?: any) => {
         lastAdminValuesCall = { level, scope };
         // A small canned, already-ranked/counted response — the STORE's actual ranking/counting/
@@ -285,7 +293,8 @@ describe('facilities routes', () => {
     const app = await appWith(ctx);
     await app.inject({ method: 'POST', url: '/api/facilities', payload: body });
     const res = await app.inject({ method: 'GET', url: '/api/facilities' });
-    expect(res.json()).toHaveLength(1);
+    // Task 3: the response is now `{ rows, total, limit, offset }`, not a bare array.
+    expect(res.json().rows).toHaveLength(1);
   });
 
   // --- C1: PUT must be able to clear a previously-filled core text field ---------------------
@@ -708,11 +717,12 @@ describe('facilities routes', () => {
   // --- Positive direction: a GOOD param must actually reach the store, not just a bad one being
   // dropped. Every test above only proves parseLimit/firstString reject junk; none of them prove a
   // valid value survives the trip — a `parseLimit`/`firstString` stubbed to `() => undefined` would
-  // leave the whole suite above green while the studio's `?limit=2000` (FACILITIES_LIST_LIMIT in
-  // apps/studio/src/api.ts) silently falls back to the store's own 200-row default and the
-  // truncation banner (which compares the returned row count against that same constant) never
-  // fires — the exact defect the banner exists to make visible. See the report for the deliberate
-  // stub experiment that proves these two tests actually catch that regression.
+  // leave the whole suite above green while every request silently fell back to the store's own
+  // 200-row default and every filter silently became a no-op behind a 200. That regression is live
+  // stakes now, not hypothetical: the studio registry page (Facilities.tsx) pages a 10-15k-row
+  // register by sending an explicit `limit` (`PAGE_SIZE`, currently 50) plus whatever filters are
+  // active on EVERY load, filter change and page turn — a dropped `limit` or filter would silently
+  // widen or narrow what the operator sees with no error and no visual sign anything was wrong.
 
   it('a valid ?limit reaches the store as the number, not a string', async () => {
     const ctx = fakeCtx();
@@ -728,6 +738,156 @@ describe('facilities routes', () => {
     const res = await app.inject({ method: 'GET', url: '/api/facilities?region=Dodoma' });
     expect(res.statusCode).toBe(200);
     expect(ctx.__lastListOptions.region).toBe('Dodoma');
+  });
+
+  // --- Task 3: GET /api/facilities returns { rows, total, limit, offset } and forwards paging/
+  // search/filters (incl. the new `health` whitelist) to the store --------------------------
+
+  describe('Task 3: GET /api/facilities paging, search and filters', () => {
+    it('treats a negative, NaN or repeated offset as absent rather than passing it through', async () => {
+      const ctx = fakeCtx();
+      const app = await appWith(ctx);
+      for (const bad of ['offset=-1', 'offset=abc', 'offset=1&offset=2']) {
+        const res = await app.inject({ method: 'GET', url: `/api/facilities?${bad}` });
+        expect(res.statusCode, bad).toBe(200);
+        expect(res.json().offset, bad).toBe(0);
+      }
+    });
+
+    it('accepts offset=0 explicitly', async () => {
+      const ctx = fakeCtx();
+      const app = await appWith(ctx);
+      const res = await app.inject({ method: 'GET', url: '/api/facilities?offset=0' });
+      expect(res.json().offset).toBe(0);
+    });
+
+    it('passes search and the new filters through to the store', async () => {
+      const ctx = fakeCtx();
+      const app = await appWith(ctx);
+      const res = await app.inject({ method: 'GET', url: '/api/facilities?q=alpha&health=unmapped&level=dispensary' });
+      const body2 = res.json();
+      expect(body2.total).toBeTypeOf('number');
+      expect(Array.isArray(body2.rows)).toBe(true);
+      // Stronger than the response shape alone (this file's established pattern, e.g. "a valid
+      // ?region reaches the store" above): prove the route actually FORWARDED the sanitised values,
+      // not merely that it didn't crash.
+      expect(ctx.__lastListOptions).toMatchObject({ q: 'alpha', health: 'unmapped', level: 'dispensary' });
+    });
+
+    // Regression net for the full forwarding contract: the handler reads FIFTEEN keys off `q` and
+    // hands them to `ctx.facilityRegistry.list(...)` (q, country, zone, region, district, council,
+    // status, level, ownership, nationalSystem, source, managedOrigin, health, limit, offset). The
+    // test above only ever exercised three of them (q/health/level) via `toMatchObject`, which
+    // ignores any key not named in the expectation — so `country`, `zone`, `ownership`,
+    // `nationalSystem`, `source` and `managedOrigin` had NO regression net: deleting or mistyping any
+    // one of their `ownFirstString(q, '…')` lines in the route left every test in this file green.
+    // There is also no compile-time guard here (the handler has no return-type annotation), so this
+    // test is the ONLY thing pinning the forwarding contract.
+    //
+    // Every param below is set to a distinct, recognisable value, and the assertion is `toEqual`
+    // against a COMPLETE expected object — not `toMatchObject` — specifically so it fails both when a
+    // key stops being forwarded (a route line deleted/mistyped) AND when a new key is read off `q`
+    // and forwarded without a matching addition here (an extra key makes the actual object no longer
+    // deep-equal the expected one). That is the property `toMatchObject` cannot give: it only checks
+    // that the listed keys match, so it would stay green even if the route silently stopped
+    // forwarding an unlisted key.
+    it('passes every filter param the route reads through to the store, not just q/health/level', async () => {
+      const ctx = fakeCtx();
+      const app = await appWith(ctx);
+      const qs = [
+        'q=alpha', 'country=country-val', 'zone=zone-val', 'region=region-val', 'district=district-val',
+        'council=council-val', 'status=status-val', 'level=level-val', 'ownership=ownership-val',
+        'nationalSystem=nationalSystem-val', 'source=source-val', 'managedOrigin=managedOrigin-val',
+        'health=unmapped', 'limit=7', 'offset=3',
+      ].join('&');
+      const res = await app.inject({ method: 'GET', url: `/api/facilities?${qs}` });
+      expect(res.statusCode).toBe(200);
+      expect(ctx.__lastListOptions).toEqual({
+        q: 'alpha',
+        country: 'country-val',
+        zone: 'zone-val',
+        region: 'region-val',
+        district: 'district-val',
+        council: 'council-val',
+        status: 'status-val',
+        level: 'level-val',
+        ownership: 'ownership-val',
+        nationalSystem: 'nationalSystem-val',
+        source: 'source-val',
+        managedOrigin: 'managedOrigin-val',
+        health: 'unmapped',
+        limit: 7,
+        offset: 3,
+      });
+    });
+
+    it('ignores an unknown health value rather than passing it to the store', async () => {
+      const ctx = fakeCtx();
+      const app = await appWith(ctx);
+      // 12 seeded rows, directly on the fake's backing array (same pattern the extras tests above
+      // use to manipulate `ctx.__rows` directly) — this test only needs a fixed count to check
+      // against, not real facility_registry rows.
+      for (let i = 0; i < 12; i++) {
+        ctx.__rows.push({ id: `seed-${i}`, localCode: `SEED${i}`, name: `Seed Facility ${i}`, source: 'manual', extras: {} });
+      }
+      const res = await app.inject({ method: 'GET', url: '/api/facilities?health=banana' });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().total).toBe(12);
+      // The real teeth: an unrecognised health string must never reach the store at all — it must
+      // be sanitised to `undefined` here, exactly as a bad `limit`/repeated filter param is above.
+      expect(ctx.__lastListOptions.health).toBeUndefined();
+    });
+
+    it('a valid ?health reaches the store as the sanitised value', async () => {
+      const ctx = fakeCtx();
+      const app = await appWith(ctx);
+      const res = await app.inject({ method: 'GET', url: '/api/facilities?health=mapped' });
+      expect(res.statusCode).toBe(200);
+      expect(ctx.__lastListOptions.health).toBe('mapped');
+    });
+
+    it('echoes DEFAULT_LIST_LIMIT (not rows.length) as `limit` when the client sent none', async () => {
+      // A short last page (fewer rows than any real page size) must not be mistaken for the page
+      // size — see the report's limit-echo decision.
+      const ctx = fakeCtx();
+      const app = await appWith(ctx);
+      ctx.__rows.push({ id: 'only-row', localCode: 'ONLY1', name: 'Only Facility', source: 'manual', extras: {} });
+      const res = await app.inject({ method: 'GET', url: '/api/facilities' });
+      const body2 = res.json();
+      expect(body2.rows).toHaveLength(1);
+      expect(body2.limit).toBe(DEFAULT_LIST_LIMIT);
+      expect(body2.limit).not.toBe(1);
+    });
+
+    it('echoes the client-supplied limit unchanged when one was sent', async () => {
+      const ctx = fakeCtx();
+      const app = await appWith(ctx);
+      const res = await app.inject({ method: 'GET', url: '/api/facilities?limit=5' });
+      expect(res.json().limit).toBe(5);
+    });
+
+    // --- Against a REAL store (facility_registry_store's own list()) — the plain `fakeCtx()`
+    // above never actually pages/filters, so only a real db proves `rows`/`total` really reflect
+    // limit/offset instead of the fake's rows.length shortcut. ---------------------------------
+
+    it('returns rows, total, limit and offset — a real page cut from a real 12-row register', async () => {
+      const internalDb = await makeMigratedDb();
+      const ctx = fakeCreateCtx(internalDb);
+      const app = await appWith(ctx);
+      for (let i = 0; i < 12; i++) {
+        await ctx.facilityRegistry.upsert({
+          id: randomUUID(), localCode: `LC${String(i).padStart(3, '0')}`, name: `Facility ${String(i).padStart(2, '0')}`,
+          source: 'manual',
+        });
+      }
+      const res = await app.inject({ method: 'GET', url: '/api/facilities?limit=5&offset=5' });
+      expect(res.statusCode).toBe(200);
+      const body2 = res.json();
+      expect(body2.rows).toHaveLength(5);
+      expect(body2.total).toBe(12);
+      expect(body2.limit).toBe(5);
+      expect(body2.offset).toBe(5);
+    });
   });
 
   // --- Task 3: GET /api/facilities/admin-values -----------------------------------------------
