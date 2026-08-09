@@ -773,6 +773,53 @@ describe('facilities routes', () => {
       expect(ctx.__lastListOptions).toMatchObject({ q: 'alpha', health: 'unmapped', level: 'dispensary' });
     });
 
+    // Regression net for the full forwarding contract: the handler reads FIFTEEN keys off `q` and
+    // hands them to `ctx.facilityRegistry.list(...)` (q, country, zone, region, district, council,
+    // status, level, ownership, nationalSystem, source, managedOrigin, health, limit, offset). The
+    // test above only ever exercised three of them (q/health/level) via `toMatchObject`, which
+    // ignores any key not named in the expectation — so `country`, `zone`, `ownership`,
+    // `nationalSystem`, `source` and `managedOrigin` had NO regression net: deleting or mistyping any
+    // one of their `ownFirstString(q, '…')` lines in the route left every test in this file green.
+    // There is also no compile-time guard here (the handler has no return-type annotation), so this
+    // test is the ONLY thing pinning the forwarding contract.
+    //
+    // Every param below is set to a distinct, recognisable value, and the assertion is `toEqual`
+    // against a COMPLETE expected object — not `toMatchObject` — specifically so it fails both when a
+    // key stops being forwarded (a route line deleted/mistyped) AND when a new key is read off `q`
+    // and forwarded without a matching addition here (an extra key makes the actual object no longer
+    // deep-equal the expected one). That is the property `toMatchObject` cannot give: it only checks
+    // that the listed keys match, so it would stay green even if the route silently stopped
+    // forwarding an unlisted key.
+    it('passes every filter param the route reads through to the store, not just q/health/level', async () => {
+      const ctx = fakeCtx();
+      const app = await appWith(ctx);
+      const qs = [
+        'q=alpha', 'country=country-val', 'zone=zone-val', 'region=region-val', 'district=district-val',
+        'council=council-val', 'status=status-val', 'level=level-val', 'ownership=ownership-val',
+        'nationalSystem=nationalSystem-val', 'source=source-val', 'managedOrigin=managedOrigin-val',
+        'health=unmapped', 'limit=7', 'offset=3',
+      ].join('&');
+      const res = await app.inject({ method: 'GET', url: `/api/facilities?${qs}` });
+      expect(res.statusCode).toBe(200);
+      expect(ctx.__lastListOptions).toEqual({
+        q: 'alpha',
+        country: 'country-val',
+        zone: 'zone-val',
+        region: 'region-val',
+        district: 'district-val',
+        council: 'council-val',
+        status: 'status-val',
+        level: 'level-val',
+        ownership: 'ownership-val',
+        nationalSystem: 'nationalSystem-val',
+        source: 'source-val',
+        managedOrigin: 'managedOrigin-val',
+        health: 'unmapped',
+        limit: 7,
+        offset: 3,
+      });
+    });
+
     it('ignores an unknown health value rather than passing it to the store', async () => {
       const ctx = fakeCtx();
       const app = await appWith(ctx);
