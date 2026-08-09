@@ -23,6 +23,12 @@
 - **This slice adds NO action controls** — only inputs (search box, filter selects, pager). Do not add buttons to headers or footers; the app's standing convention is that every *action* lives in a `⋯` `DropdownMenu`, and FAC-P1-20 is deliberately deferred to a separate app-wide decision.
 - **i18n has a parity test** (`apps/studio/src/i18n/parity.test.ts`). Every key added or removed must be applied to **all three** of `en.ts`, `fr.ts`, `pt.ts`.
 - **No new database indexes** unless Task 5's measurement justifies one.
+- ⚠ **The Kysely snippets in this plan use `any` to stay readable. Do not copy that.** Kysely's
+  builder types are genuinely awkward across joins and shared predicate helpers, but `any` erases the
+  type safety that makes this store maintainable. Reach for the real Kysely types first
+  (`SelectQueryBuilder`, `ExpressionBuilder`); if a cast is genuinely unavoidable, make it as narrow
+  as possible and put a one-line comment saying which types would not line up and why. A diff that
+  adds several bare `any`s without that justification should be sent back.
 
 ---
 
