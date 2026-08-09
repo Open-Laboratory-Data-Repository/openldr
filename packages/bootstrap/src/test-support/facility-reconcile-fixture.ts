@@ -39,12 +39,20 @@ async function makeMigratedExternalDb(): Promise<Kysely<ExternalSchema>> {
       // Same pg-mem gap, same rescue, as `packages/db/src/test-helpers-external.ts`'s
       // `makeMigratedExternalDb` (this function's un-refactored duplicate): pg-mem cannot execute a
       // correlated subquery referencing the UPDATE target's own table at all — verified in isolation,
-      // independent of migration 015's CAST. By the time this throws, 015's addColumn() DDL has
-      // already run, so `facility_map.performer_system` exists with its '' default; only the
-      // backfill's data population is skipped here. See migrations/external/
+      // independent of migration 015's CAST. 015's up() runs its addColumn() DDL before the backfill
+      // that trips this gap — but the try wraps the whole up(), so a matching error message alone
+      // doesn't prove the DDL ran; it could equally be the addColumn() itself failing on some
+      // unrelated "does not exist". Verified below, not assumed: query information_schema.columns
+      // (confirmed to work against pg-mem) for facility_map.performer_system before swallowing, so a
+      // DDL failure can't silently hand back a db missing the column. See migrations/external/
       // 015_facility_map_performer_system.test.ts's header comment for the measured detail and the
       // live-Postgres proof that the real statement is correct.
-      if (name === '015_facility_map_performer_system' && err instanceof Error && /does not exist/.test(err.message)) continue;
+      if (name === '015_facility_map_performer_system' && err instanceof Error && /does not exist/.test(err.message)) {
+        const cols = await sql<{ column_name: string }>`
+          select column_name from information_schema.columns
+           where table_name = 'facility_map' and column_name = 'performer_system'`.execute(db as never);
+        if (cols.rows.length > 0) continue;
+      }
       throw err;
     }
   }
