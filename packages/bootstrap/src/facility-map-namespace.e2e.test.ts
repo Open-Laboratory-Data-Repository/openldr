@@ -18,6 +18,33 @@ const FACILITY_OPTIONS_SQL = SEED_QUERIES.find((q) => q.id === 'q-facilities')!.
 const CLINICAL_HEADER_SQL = SEED_QUERIES.find((q) => q.id === 'q-clinical-micro-header')!.sql.postgres;
 
 /**
+ * Coverage boundary for the two queries' `performer_system` clause (FAC-P0-07), stated honestly:
+ *
+ * - `q-clinical-micro-header` (via `FACILITY_CTES_SQL`/`performingLabForSpecimen`) IS covered live,
+ *   by direction A below: it has no aggregation after the `facility_map` join, so two rows sharing a
+ *   code but resolving through different namespaces produce two different observable results.
+ *
+ * - `q-facilities` (via `FACILITY_OPTIONS_SQL`/`labelFor`) is NOT covered live by any test in this
+ *   file. Its only coverage is a text assertion over the query's own SQL string, in
+ *   `packages/reporting/src/seed/report-seeds.test.ts` (`'matches the observed coding namespace too,
+ *   not the feed alone (FAC-P0-07)'`, ~line 465).
+ *
+ * That's not an oversight — it's structural, and measured, not assumed: deleting the
+ * `performer_system` clause from `q-facilities`' postgres SQL and running this file's three tests
+ * unmodified leaves all three green (verified directly while writing this comment, then the clause
+ * was restored). The reason is `q-facilities`' own shape: it does `group by dr.performer` and
+ * selects `min(coalesce(fm.name, dr.performer_display, dr.performer)) as label`. When two
+ * `facility_map` rows share a `(source_system, source_code)` pair and differ only in
+ * `performer_system`, a `diagnostic_reports` row joins BOTH dimension rows regardless of whether the
+ * namespace clause is present — the clause changes which row(s) match, but `group by` + `min()`
+ * folds whatever set of labels results down to the same single value either way, and there is one
+ * output row per distinct `dr.performer` regardless. The query's own aggregation makes the
+ * difference unobservable through its result set, so no live test against this query's actual output
+ * can distinguish "namespace clause present" from "namespace clause absent" for that fan-out case.
+ * A live test here would therefore assert nothing beyond what the text assertion already pins.
+ */
+
+/**
  * What the Facilities dropdown (`q-facilities`) shows for one observed performer code.
  *
  * ⚠ Only good for telling apart codes that DIFFER — `q-facilities` does `group by dr.performer`,
@@ -50,11 +77,14 @@ async function labelFor(deps: ReconcileDeps, code: string): Promise<string | nul
  *
  * The slice point is found at runtime via regex over the real `SEED_QUERIES` string — never retyped
  * — so the join text under test is still read verbatim from the one shipped copy; only the boundary
- * BETWEEN "the CTEs" and "the correlated outer select" is located programmatically. `\r?\n` in the
- * pattern because the source file (and therefore this template literal) uses CRLF line endings.
+ * BETWEEN "the CTEs" and "the correlated outer select" is located programmatically. Plain `\n` in the
+ * pattern: `report-seeds.ts` is CRLF on disk, but per ECMA-262 a template literal normalises CR and
+ * CRLF line terminators to LF in its cooked value, so `CLINICAL_HEADER_SQL` contains no `\r` at
+ * runtime (confirmed directly: a multi-line template literal evaluated in Node has no CR in its
+ * value regardless of the source file's line endings).
  */
 const FACILITY_CTES_SQL = (() => {
-  const boundary = /\r?\nselect\r?\n\s*p\.surname as patient_surname,/.exec(CLINICAL_HEADER_SQL);
+  const boundary = /\nselect\n\s*p\.surname as patient_surname,/.exec(CLINICAL_HEADER_SQL);
   if (!boundary) {
     throw new Error(
       'q-clinical-micro-header no longer matches the expected CTE / outer-select boundary — update ' +
