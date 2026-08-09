@@ -32,8 +32,21 @@ async function makeMigratedInternalDb(): Promise<Kysely<InternalSchema>> {
 async function makeMigratedExternalDb(): Promise<Kysely<ExternalSchema>> {
   const mem = newDb();
   const db = mem.adapters.createKysely() as Kysely<ExternalSchema>;
-  for (const migration of Object.values(externalMigrations('postgres'))) {
-    await migration.up(db as never);
+  for (const [name, migration] of Object.entries(externalMigrations('postgres'))) {
+    try {
+      await migration.up(db as never);
+    } catch (err) {
+      // Same pg-mem gap, same rescue, as `packages/db/src/test-helpers-external.ts`'s
+      // `makeMigratedExternalDb` (this function's un-refactored duplicate): pg-mem cannot execute a
+      // correlated subquery referencing the UPDATE target's own table at all — verified in isolation,
+      // independent of migration 015's CAST. By the time this throws, 015's addColumn() DDL has
+      // already run, so `facility_map.performer_system` exists with its '' default; only the
+      // backfill's data population is skipped here. See migrations/external/
+      // 015_facility_map_performer_system.test.ts's header comment for the measured detail and the
+      // live-Postgres proof that the real statement is correct.
+      if (name === '015_facility_map_performer_system' && err instanceof Error && /does not exist/.test(err.message)) continue;
+      throw err;
+    }
   }
   return db;
 }

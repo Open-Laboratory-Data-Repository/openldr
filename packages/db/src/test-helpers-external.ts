@@ -8,8 +8,23 @@ import { externalMigrations } from './migrations/external/index';
 export async function makeMigratedExternalDb(): Promise<Kysely<any>> {
   const mem = newDb();
   const db = mem.adapters.createKysely() as Kysely<any>;
-  for (const migration of Object.values(externalMigrations('postgres'))) {
-    await migration.up(db);
+  for (const [name, migration] of Object.entries(externalMigrations('postgres'))) {
+    try {
+      await migration.up(db);
+    } catch (err) {
+      // ⛔ MEASURED: pg-mem has no support at all for a correlated subquery referencing the
+      // UPDATE target's own table (verified in isolation, independent of this migration's CAST —
+      // see migrations/external/015_facility_map_performer_system.test.ts's header comment). This
+      // migration's up() runs its addColumn() DDL first and only THEN calls the backfill that
+      // trips this gap, so by the time this catches, the column already exists with its ''
+      // default — every other external-migration test only needs the column to exist, not
+      // backfilled, so this keeps them running against the fake rather than propagating a fake
+      // limitation as if it were a real defect. Scoped to this one migration by name on purpose:
+      // a future migration hitting the same gap needs this rediscovered and named explicitly, not
+      // silently inherited.
+      if (name === '015_facility_map_performer_system' && err instanceof Error && /does not exist/.test(err.message)) continue;
+      throw err;
+    }
   }
   return db;
 }
