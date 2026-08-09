@@ -803,10 +803,12 @@ export interface FacilityListQuery {
   health?: FacilityRowHealth;
   limit?: number; offset?: number;
 }
-/** Mirrors the route's own return shape verbatim (facilities-routes.ts's `GET /api/facilities`):
- *  `limit` echoes the store's own default when the caller sent none, never the possibly-shorter
- *  `rows.length` — see that route's comment on why. */
-export interface FacilityPage { rows: Facility[]; total: number; limit: number | null; offset: number }
+/** Mirrors the route's own return shape (facilities-routes.ts's `GET /api/facilities`): `limit`
+ *  echoes the store's own default (`DEFAULT_LIST_LIMIT`) when the caller sent none, never the
+ *  possibly-shorter `rows.length` — see that route's comment on why. `number`, not `number | null`
+ *  (M4, whole-branch review): the route always returns `limit: limit ?? DEFAULT_LIST_LIMIT`, which
+ *  is never null — a `number | null` type here claimed a possibility the wire shape doesn't have. */
+export interface FacilityPage { rows: Facility[]; total: number; limit: number; offset: number }
 
 export const listFacilities = (query: FacilityListQuery = {}): Promise<FacilityPage> => {
   const p = new URLSearchParams();

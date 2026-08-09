@@ -786,5 +786,47 @@ describe('Facilities page', () => {
         expect.objectContaining({ q: 'dodoma', offset: 100 }),
       ));
     });
+
+    // M11 (whole-branch review): neither pager button had a test — a broken `onClick` (wrong
+    // direction, wrong step size, or a stale `offset` closed over) would have shipped green.
+    it('M11: clicking Next requests the next page at the page size, and it round-trips through the URL', async () => {
+      window.history.replaceState({}, '', '/facilities');
+      // 130 rows total, 50 per page (PAGE_SIZE, un-exported from Facilities.tsx — mirrored here the
+      // same way HEALTH_POLL_MS is elsewhere in this file) — a middle page exists (offset 50, not
+      // yet the last), so clicking Next from page 1 has somewhere unambiguous to go.
+      listFacilitiesMock.mockResolvedValue(makePage(makeRows(50), { total: 130, offset: 0 }));
+      show();
+      await waitFor(() => expect(listFacilitiesMock).toHaveBeenCalledTimes(1));
+
+      fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+
+      await waitFor(() => expect(listFacilitiesMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({ offset: 50, limit: 50 }),
+      ));
+      await waitFor(() => expect(window.location.search).toContain('offset=50'));
+    });
+
+    it('M11: disables Previous on the first page and Next on the last page, and enables the other one', async () => {
+      // Reset the URL state left behind by an earlier test in this describe block — these tests
+      // deliberately run last and share `window.location` (see this describe block's own doc
+      // comment above), and `readUrlState()` reads `offset` straight off it on mount.
+      window.history.replaceState({}, '', '/facilities');
+      // First page: offset 0, total (130) comfortably larger than one page — Previous has nowhere
+      // to go, Next does.
+      listFacilitiesMock.mockResolvedValue(makePage(makeRows(50), { total: 130, offset: 0 }));
+      show();
+      await waitFor(() => expect(listFacilitiesMock).toHaveBeenCalledTimes(1));
+      expect(screen.getByRole('button', { name: 'Previous' })).toBeDisabled();
+      expect(screen.getByRole('button', { name: 'Next' })).not.toBeDisabled();
+
+      // Last page: offset 100 with the same total 130 — 100 + 50 (PAGE_SIZE) >= 130, so Next has
+      // nowhere left to go; Previous does.
+      listFacilitiesMock.mockResolvedValue(makePage(makeRows(30), { total: 130, offset: 100 }));
+      fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+      await waitFor(() => expect(window.location.search).toContain('offset=100'));
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled());
+      expect(screen.getByRole('button', { name: 'Previous' })).not.toBeDisabled();
+    });
   });
 });

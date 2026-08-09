@@ -170,7 +170,7 @@ const HEALTH_POLL_MS = 5000;
 /** Task 4 (scale): rows requested per page. A national register runs 10-15k rows (Slice 1), so the
  *  registry table is server-paged rather than fetched-and-rendered whole (the previous
  *  `FACILITIES_LIST_LIMIT`/`truncated`-banner approach this replaced). Deliberately NOT paired with
- *  virtualization: the audit that raised this (FAC-P1-scale) permits virtualization only as a
+ *  virtualization: the audit that raised this (FAC-P1-01) permits virtualization only as a
  *  rendering optimization on top of real server paging, never as a substitute for it — and at 50
  *  rows on screen at once, virtualizing the `<table>` buys nothing a browser can't already do
  *  natively; it would only add a dependency and a second thing to keep in sync with `rows`.
@@ -277,8 +277,8 @@ export function Facilities() {
   // (country/zone/region/district/council/status/level/ownership/nationalSystem/managedOrigin) is
   // expanded. Initialised open when a restored URL already carries one of them — a shared link with
   // `?zone=Dodoma` should show the filter that produced it, not hide it behind a closed toggle the
-  // operator has to know to open. Otherwise collapsed by default: eleven always-visible selects
-  // (the two closed-vocabulary ones plus these ten) would be its own usability defect.
+  // operator has to know to open. Otherwise collapsed by default: twelve always-visible controls
+  // (the two closed-vocabulary selects plus these ten) would be its own usability defect.
   const [showMoreFilters, setShowMoreFilters] = useState(
     () => OPEN_VOCAB_FILTER_KEYS.some((key) => !!readUrlState()[key]),
   );
@@ -669,9 +669,9 @@ export function Facilities() {
             they are the two most-used filters and the only ones with a real TypeScript union to
             drive a `Select` with zero extra fetch. Every other spec-named dimension
             (nationalSystem/managedOrigin/ownership/status/level/country/zone/region/district/
-            council) now lives behind the disclosure toggle below rather than nowhere: eleven
-            always-visible selects would be its own usability defect (per review), but zero of the
-            other nine was worse — every one of them is reachable and round-trips through the URL
+            council) now lives behind the disclosure toggle below rather than nowhere: twelve
+            always-visible controls would be its own usability defect (per review), but zero of the
+            other ten was worse — every one of them is reachable and round-trips through the URL
             exactly like these two already did. Every input resets `offset` to 0 on commit —
             changing what's being searched for invalidates whatever page of the OLD result set the
             operator was on. */}
@@ -742,10 +742,10 @@ export function Facilities() {
             free-text control on the primary row would read as a second search box. `zone`/`region`/
             `district`/`council` get a `Select` because they DO have a source of real values —
             `listFacilityAdminValues`, fetched above once this panel is open. The rest
-            (`status`/`level`/`ownership`/`country`) have no vocabulary at all (same reasoning the
-            store's own `FacilityListOptions.q` doc comment gives for the admin columns) and stay
-            free text — a `Select` for any of them would mean hardcoding an option list this
-            registry cannot promise is complete. */}
+            (`status`/`level`/`ownership`/`country`/`managedOrigin`) have no vocabulary at all (same
+            reasoning the store's own `FacilityListOptions.q` doc comment gives for the admin
+            columns) and stay free text — a `Select` for any of them would mean hardcoding an option
+            list this registry cannot promise is complete. */}
         {showMoreFilters && (
           <div className="flex flex-wrap items-center gap-2 border-b border-border bg-muted/20 px-4 py-2">
             <Input
@@ -941,7 +941,12 @@ export function Facilities() {
             <span className="text-muted-foreground">
               {t('facilities.pager.summary', {
                 from: urlState.offset + 1,
-                to: Math.min(urlState.offset + PAGE_SIZE, total),
+                // M5 (whole-branch review): computed off `rows.length` (what THIS page actually
+                // got back), not the requested `PAGE_SIZE`. A bookmarked `?offset=100` whose rows
+                // were since deleted can leave `total` smaller than `offset` — with `PAGE_SIZE` here
+                // that reads "101–50 of 50" above an empty table; `rows.length` (0 in that case)
+                // keeps `to` from ever exceeding what was actually returned.
+                to: Math.min(urlState.offset + rows.length, total),
                 total,
               })}
             </span>

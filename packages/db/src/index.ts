@@ -58,7 +58,7 @@ export type { FacilityJob, FacilityJobKind, FacilityJobStatus, FacilityJobStore 
 export { createRoleStore } from './role-store';
 export type { RoleStore, RoleRecord, CreateRoleInput, UpdateRoleInput, CapabilityReconciliation, CapabilityDiagnosis } from './role-store';
 export * from './reference-search';
-export { createFacilityRegistryStore, FACILITY_ADMIN_LEVELS, DEFAULT_LIST_LIMIT, toRow as facilityRecordToRow, toRecord as facilityRowToRecord } from './facility-registry-store';
+export { createFacilityRegistryStore, FACILITY_ADMIN_LEVELS, DEFAULT_LIST_LIMIT, FACILITY_HEALTH_VALUES, toRow as facilityRecordToRow, toRecord as facilityRowToRecord } from './facility-registry-store';
 export type {
   FacilityRecord,
   FacilityListOptions,

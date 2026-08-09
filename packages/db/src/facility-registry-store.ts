@@ -47,6 +47,29 @@ export interface FacilityRecord {
 /** Derived per row by `list()`, never stored. */
 export type FacilityHealth = 'mapped' | 'unmapped' | 'unprojected';
 
+/**
+ * Single source of truth for the three `FacilityHealth` values, following the same bidirectional
+ * pattern as `FACILITY_ADMIN_LEVEL_SET`/`FACILITY_ADMIN_LEVELS` in `facility-answers.ts` — see that
+ * file's doc comment for the full reasoning. A plain `readonly FacilityHealth[]` array literal (what
+ * `apps/server/src/facilities-routes.ts`'s `HEALTH_VALUES` used to be, defined independently there)
+ * only checks that every array ELEMENT is a valid `FacilityHealth`; it does nothing to stop a member
+ * being dropped from the array while the union keeps it, or a NEW member being added to the union
+ * (say `'retired'`) without the array ever being told. `Record<FacilityHealth, true>` enforces
+ * completeness in both directions: remove a key below and `tsc` reports it missing against the type;
+ * add a member to the union above and this object literal is missing that key and fails to compile.
+ * `FACILITY_HEALTH_VALUES` is derived FROM this object (`Object.keys`), not hand-typed alongside it,
+ * so there is exactly one place the three values are spelled — and the route's `isFacilityHealth`
+ * whitelist check can no longer silently drift out of step with what `FacilityHealth` actually is.
+ */
+const FACILITY_HEALTH_SET: Record<FacilityHealth, true> = {
+  mapped: true,
+  unmapped: true,
+  unprojected: true,
+};
+export const FACILITY_HEALTH_VALUES: readonly FacilityHealth[] = Object.keys(
+  FACILITY_HEALTH_SET,
+) as FacilityHealth[];
+
 export interface FacilityListOptions {
   /** Case-insensitive substring across name, local code, national code, and admin area.
    *  ⚠ NOT aliases — `facility_registry` has no alias column and `extras` is an untyped jsonb bag.
@@ -368,6 +391,12 @@ export function createFacilityRegistryStore(
           .select(sql<number>`coalesce(m.n, 0)`.as('mapping_count')),
       ))
         .orderBy('facility_registry.name', 'asc')
+        // Tiebreaker only — keeps the result order deterministic when two facilities share a name
+        // (the norm, not the exception, in a national master facility list). Without this, offset
+        // paging over a non-unique sort column can show the same facility on two pages and never
+        // reach another — see the matching tiebreaker on `buildDistinctAdminValuesQuery` above for
+        // the same pattern.
+        .orderBy('facility_registry.id', 'asc')
         .limit(opts.limit ?? DEFAULT_LIST_LIMIT)
         .offset(opts.offset ?? 0);
       const countQ = joinHealth(applyFilters(

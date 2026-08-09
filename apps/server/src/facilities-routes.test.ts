@@ -717,11 +717,12 @@ describe('facilities routes', () => {
   // --- Positive direction: a GOOD param must actually reach the store, not just a bad one being
   // dropped. Every test above only proves parseLimit/firstString reject junk; none of them prove a
   // valid value survives the trip — a `parseLimit`/`firstString` stubbed to `() => undefined` would
-  // leave the whole suite above green while the studio's `?limit=2000` (FACILITIES_LIST_LIMIT in
-  // apps/studio/src/api.ts) silently falls back to the store's own 200-row default and the
-  // truncation banner (which compares the returned row count against that same constant) never
-  // fires — the exact defect the banner exists to make visible. See the report for the deliberate
-  // stub experiment that proves these two tests actually catch that regression.
+  // leave the whole suite above green while every request silently fell back to the store's own
+  // 200-row default and every filter silently became a no-op behind a 200. That regression is live
+  // stakes now, not hypothetical: the studio registry page (Facilities.tsx) pages a 10-15k-row
+  // register by sending an explicit `limit` (`PAGE_SIZE`, currently 50) plus whatever filters are
+  // active on EVERY load, filter change and page turn — a dropped `limit` or filter would silently
+  // widen or narrow what the operator sees with no error and no visual sign anything was wrong.
 
   it('a valid ?limit reaches the store as the number, not a string', async () => {
     const ctx = fakeCtx();

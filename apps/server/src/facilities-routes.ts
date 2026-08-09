@@ -9,7 +9,7 @@ import {
 } from '@openldr/bootstrap';
 import {
   splitFacilityAnswers, CORE_FACILITY_KEYS, FACILITY_ADMIN_LEVELS, referenceCapture,
-  FACILITY_REGISTRY_SYSTEM, DEFAULT_LIST_LIMIT,
+  FACILITY_REGISTRY_SYSTEM, DEFAULT_LIST_LIMIT, FACILITY_HEALTH_VALUES,
 } from '@openldr/db';
 import type { FacilityAdminLevel, ExternalSchema, FacilityHealth } from '@openldr/db';
 import { requireCapability } from './rbac';
@@ -393,18 +393,23 @@ function parseOffset(raw: unknown): number | undefined {
   return Math.floor(n);
 }
 
-/** The three health values the store understands (`FacilityHealth`, `@openldr/db`). A closed
- *  whitelist, not a cast: an arbitrary query string must never reach the store's health branch as
- *  an unhandled value. Typed against `FacilityHealth` itself (not restated as a fresh literal
- *  union) so the two cannot drift apart. */
-const HEALTH_VALUES: readonly FacilityHealth[] = ['mapped', 'unmapped', 'unprojected'];
-
 /** Same pattern as `isFacilityAdminLevel` above: the `as readonly string[]` widening cast is safe
  *  (narrowing a wider type back down via a type predicate, not asserting an unrelated one) and lets
  *  `.includes` accept an arbitrary string to test — TS does not narrow `Array<T>.includes` on its
- *  own, so the predicate function is what avoids an `as FacilityHealth` cast at the call site. */
+ *  own, so the predicate function is what avoids an `as FacilityHealth` cast at the call site.
+ *
+ *  M3 (whole-branch review): this used to whitelist against a LOCAL `HEALTH_VALUES` array literal
+ *  hand-typed alongside `FacilityHealth` — a comment there claimed the two "cannot drift apart",
+ *  which was one-directional at best: the array elements were checked against the type, but nothing
+ *  stopped the type growing a new member (e.g. `'retired'`) the array never learned about, and
+ *  `parseHealth('retired')` would then silently return `undefined` — the route would ignore the
+ *  filter and return unfiltered rows behind a 200 rather than reject the request. `FACILITY_HEALTH_
+ *  VALUES` (`@openldr/db`, `facility-registry-store.ts`) is derived from a `Record<FacilityHealth,
+ *  true>` completeness check instead — the same bidirectional pattern `FACILITY_ADMIN_LEVELS`
+ *  already uses — so a union member added there without a matching key fails to compile, instead of
+ *  silently degrading into an ignored filter here. */
 function isFacilityHealth(v: string): v is FacilityHealth {
-  return (HEALTH_VALUES as readonly string[]).includes(v);
+  return (FACILITY_HEALTH_VALUES as readonly string[]).includes(v);
 }
 
 function parseHealth(raw: unknown): FacilityHealth | undefined {
