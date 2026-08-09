@@ -22,7 +22,8 @@ import { publishFacilityMap, projectRegistryRows, type ReconcileDeps } from './f
  * are byte-identical") — which the test "the seeded query it asserts through is the facility_map
  * join the audit named" at the end of this file re-checks rather than assumes. Its shape is exactly the join named in the audit:
  *   left join facility_map fm
- *     on fm.source_system = coalesce(dr.source_system, '') and fm.source_code = dr.performer
+ *     on fm.source_system = coalesce(dr.source_system, '') and fm.performer_system = coalesce(dr.performer_system, '')
+ *    and fm.source_code = dr.performer
  * selecting `coalesce(fm.name, dr.performer_display, dr.performer)` as the label.
  */
 const FACILITY_OPTIONS_QUERY = SEED_QUERIES.find((q) => q.id === 'q-facilities')!;
@@ -171,7 +172,7 @@ describe('facility durable updates — a saved mapping reaches a report with no 
   // something else.
   it('the seeded query it asserts through is the facility_map join the audit named', () => {
     expect(FACILITY_OPTIONS_SQL).toContain(
-      "left join facility_map fm on fm.source_system = coalesce(dr.source_system, '') and fm.source_code = dr.performer",
+      "left join facility_map fm on fm.source_system = coalesce(dr.source_system, '') and fm.performer_system = coalesce(dr.performer_system, '') and fm.source_code = dr.performer",
     );
     expect(FACILITY_OPTIONS_SQL).toContain('coalesce(fm.name, dr.performer_display, dr.performer)');
     // The other two dialects carry the same join, so the pg-mem run above speaks for all three.
