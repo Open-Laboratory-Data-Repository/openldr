@@ -27,10 +27,19 @@ export interface QuarantinedRow {
   /** The row exactly as it appeared, so an operator can find and fix it in their source file. */
   raw: string;
   /** `too_few_fields`/`too_many_fields` are CSV-specific (a row's column count didn't match the
-   *  header's). `malformed_json` is the JSONL-release equivalent — `facility-release.ts` reuses this
-   *  same type rather than defining a parallel one, since both describe "a line that could not be
-   *  mapped to a record, set aside with its line number" — just for different source formats. */
-  reason: 'too_few_fields' | 'too_many_fields' | 'malformed_json';
+   *  header's). The other three are the JSONL-release equivalents — `facility-release.ts` reuses this
+   *  same type rather than defining a parallel one, since all five describe "a line that could not be
+   *  mapped to a record, set aside with its line number" — just for different source formats and
+   *  failure modes.
+   *  - `malformed_json`: a SYNTAX failure — the line is not parseable JSON, or parses to something
+   *    other than an object.
+   *  - `unknown_record_type`: a SCHEMA failure — the line is a well-formed JSON object, but its `type`
+   *    is missing or not one of `meta`/`row`/`deletion`. Kept distinct from `malformed_json` so an
+   *    operator chasing it doesn't go looking for a syntax error that isn't there.
+   *  - `duplicate_meta`: the line's `type` IS `meta` — recognised, not malformed — but a `meta` line
+   *    already won (the corpus carries exactly one). Distinct from `unknown_record_type` because the
+   *    type here is not unrecognised at all; the problem is only that it is a second one. */
+  reason: 'too_few_fields' | 'too_many_fields' | 'malformed_json' | 'unknown_record_type' | 'duplicate_meta';
 }
 
 export interface RowError {

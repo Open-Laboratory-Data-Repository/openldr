@@ -110,6 +110,41 @@ describe('parseFacilityRelease', () => {
     expect(r.records).toEqual([]);
     expect(r.skipped).toBe(1);
   });
+
+  it('quarantines a well-formed object whose type is missing/unrecognised as unknown_record_type, not malformed_json', () => {
+    const jsonl = [metaLine(), rowLine(), JSON.stringify({ type: 'bogus', foo: 'bar' })].join('\n');
+    const r = parseFacilityRelease(jsonl, opts);
+    expect(r.quarantined).toEqual([
+      { line: 3, raw: JSON.stringify({ type: 'bogus', foo: 'bar' }), reason: 'unknown_record_type' },
+    ]);
+  });
+
+  it('has no meta at all when the file carries none — meta stays null, nothing quarantined for it', () => {
+    const jsonl = rowLine();
+    const r = parseFacilityRelease(jsonl, opts);
+    expect(r.meta).toBeNull();
+    expect(r.records).toHaveLength(1);
+    expect(r.quarantined).toEqual([]);
+  });
+
+  it('quarantines a second meta line as duplicate_meta, keeping the first meta and never dropping the second silently', () => {
+    const secondMeta = metaLine({ version: '2026-Q2' });
+    const jsonl = [metaLine(), rowLine(), secondMeta].join('\n');
+    const r = parseFacilityRelease(jsonl, opts);
+    expect(r.meta?.version).toBe('2026-Q1');
+    expect(r.quarantined).toEqual([{ line: 3, raw: secondMeta, reason: 'duplicate_meta' }]);
+  });
+
+  it('folds a deletion record missing mflId into the same skipped counter as a malformed row — ' +
+    'FacilityReleaseResult has no field that tells the two apart, so this pins the accepted behaviour', () => {
+    const jsonl = [
+      metaLine({ rowCount: 0, deletionCount: 1 }),
+      JSON.stringify({ type: 'deletion' }),
+    ].join('\n');
+    const r = parseFacilityRelease(jsonl, opts);
+    expect(r.deletions).toEqual([]);
+    expect(r.skipped).toBe(1);
+  });
 });
 
 describe('parseFacilityRelease — real corpus fixture', () => {

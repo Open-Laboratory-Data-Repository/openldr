@@ -54,11 +54,21 @@ function numeric(v: unknown): string | undefined {
  * and therefore a declared count to check the parse against (`countMismatch`). Task 9's retirement
  * policy is what actually consumes `deletions` — this parser only collects them.
  *
- * Every line is independent NDJSON. A line that is not valid JSON, or whose `type` is not one of
- * `meta`/`row`/`deletion`, is QUARANTINED with its line number — never thrown — reusing the same
- * `QuarantinedRow` shape `parseFacilityCsv` uses for a CSV row whose field count didn't match the
- * header's (see that type's docblock for why `malformed_json` lives on the same union rather than a
- * parallel one).
+ * Every line is independent NDJSON, and no line is ever silently dropped. A line that is not valid
+ * JSON, or that parses to something other than an object, is QUARANTINED as `malformed_json`; a
+ * well-formed object whose `type` is missing or not one of `meta`/`row`/`deletion` is QUARANTINED as
+ * `unknown_record_type`; a second (or later) `meta` line is QUARANTINED as `duplicate_meta` — the
+ * first `meta` line still wins, this just makes the later one visible instead of discarding it — see
+ * `QuarantinedRow`'s docblock in `facility-csv.ts` for why those three are kept distinct. All reuse
+ * that same `QuarantinedRow` shape `parseFacilityCsv` uses for a CSV row whose field count didn't
+ * match the header's, rather than a parallel type.
+ *
+ * `opts.allowUnknownColumns` is a NO-OP here. For `parseFacilityCsv` an unrecognised header can shift
+ * every subsequent column silently, so the whole file is blocked unless the caller opts in. That risk
+ * does not exist in JSONL: each line is a self-describing object, an unrecognised key on one line
+ * cannot corrupt any other field, and it is already captured into `extras` and surfaced via
+ * `unknownColumns` (see `KNOWN_ROW_KEYS`'s docblock) regardless of this flag. The asymmetry with CSV
+ * — CSV blocks, JSONL never does — is deliberate, not an oversight.
  *
  * Records come out in the exact `FacilityRecord` shape `parseFacilityCsv` produces, including the
  * SAME deterministic `id` (`idFor`, imported from `facility-csv.ts` — never reimplemented), so a
@@ -94,8 +104,10 @@ export function parseFacilityRelease(jsonl: string, opts: FacilityCsvOptions): F
     const o = parsed as Record<string, unknown>;
 
     if (o.type === 'meta') {
-      // First meta line wins — the corpus carries exactly one, at line 1. A later duplicate is
-      // ignored rather than silently overwriting the declared counts an operator already saw.
+      // First meta line wins — the corpus carries exactly one, at line 1. A later duplicate does NOT
+      // overwrite the declared counts an operator already saw, but it is still QUARANTINED with its
+      // line number rather than dropped — this codebase's parsers exist precisely to avoid silent
+      // drops (see `parseFacilityCsv`'s docblock on `parseTermsCsv`'s data loss).
       if (meta === null) {
         meta = {
           country: text(str(o.country)),
@@ -104,12 +116,18 @@ export function parseFacilityRelease(jsonl: string, opts: FacilityCsvOptions): F
           rowCount: typeof o.rowCount === 'number' ? o.rowCount : null,
           deletionCount: typeof o.deletionCount === 'number' ? o.deletionCount : null,
         };
+      } else {
+        quarantined.push({ line: lineNumber, raw: line, reason: 'duplicate_meta' });
       }
       continue;
     }
 
     if (o.type === 'deletion') {
       const mflId = text(str(o.mflId));
+      // Folds into the same `skipped` counter a `row` missing a required field uses.
+      // `FacilityReleaseResult` has no field that distinguishes "a deletion with no mflId" from
+      // "a row with no mflId/name" — both are simply a well-formed record this parser could not
+      // act on. That is an accepted limitation, not an oversight: see the pinning test below.
       if (!mflId) { skipped += 1; continue; }
       deletions.push(mflId);
       continue;
@@ -158,8 +176,10 @@ export function parseFacilityRelease(jsonl: string, opts: FacilityCsvOptions): F
       continue;
     }
 
-    // `type` missing, or not one of the three recognised values.
-    quarantined.push({ line: lineNumber, raw: line, reason: 'malformed_json' });
+    // `type` missing, or not one of the three recognised values. The line itself parsed fine —
+    // this is a schema problem, not a syntax one, so it gets its own reason rather than
+    // `malformed_json`.
+    quarantined.push({ line: lineNumber, raw: line, reason: 'unknown_record_type' });
   }
 
   // `parsed` is `records.length`/`deletions.length` — rows that made it all the way into the
