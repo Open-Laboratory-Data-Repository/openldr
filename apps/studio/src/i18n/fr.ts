@@ -762,7 +762,21 @@ export const fr: EnShape = {
     newDesc: 'Saisir un nouvel établissement dans le registre.',
     deleteTitle: 'Supprimer {{name}} ?',
     deleteBody: 'Cette action supprime définitivement {{name}} du registre des établissements. Cette action est irréversible.',
-    truncated: 'Affichage des {{limit}} premiers établissements. Le registre peut en contenir davantage que ce qui est affiché ici.',
+    searchPlaceholder: 'Rechercher des établissements…',
+    filters: {
+      healthLabel: 'État du mappage',
+      healthAll: 'Tous les établissements',
+      healthMapped: 'Mappé',
+      healthUnmapped: 'Non mappé',
+      healthUnprojected: 'Non projeté',
+      sourceLabel: 'Source',
+      sourceAll: 'Toutes les sources',
+      sourceManual: 'Saisie manuelle',
+      sourceImport: 'Importé',
+    },
+    pager: {
+      summary: '{{from}}–{{to}} sur {{total}}',
+    },
     suggest: {
       placeholder: 'Saisir ou choisir une suggestion…',
       loading: 'Chargement des suggestions…',

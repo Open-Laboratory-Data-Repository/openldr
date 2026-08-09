@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { MoreHorizontal, Building2, CheckCircle2, Loader2, XCircle, AlertTriangle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -8,6 +8,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -15,11 +17,64 @@ import { LoadingState } from '@/components/ui/spinner';
 import { useAuth } from '@/auth/AuthProvider';
 import {
   listFacilities, deleteFacility, listPublishedForms, getFacilityHealth, retryFacilityJob,
-  FACILITIES_LIST_LIMIT, type Facility, type FacilityHealth, type FacilityDimensionState,
+  type Facility, type FacilityHealth, type FacilityDimensionState, type FacilityListQuery,
 } from '@/api';
 import { FacilityDialog } from '@/facilities/FacilityDialog';
 import { ImportFacilitiesSheet } from '@/facilities/ImportFacilitiesSheet';
 import { ObservedTab } from '@/facilities/ObservedTab';
+
+/** Task 4 (scale): every filter GET /api/facilities accepts (Task 3), minus paging — held as page
+ *  state (below) and read from/written to the URL so a filtered view is linkable and survives
+ *  reload. Only `q`, `health` and `source` are exposed as controls on this page (see the comment on
+ *  the toolbar JSX for why the rest of `FacilityListQuery` — country/zone/region/district/council/
+ *  status/level/ownership/nationalSystem/managedOrigin — are not): the type stays the full query so
+ *  a later task can wire more of it in without another shape change here. */
+type FacilitiesUrlState = Pick<FacilityListQuery, 'q' | 'health' | 'source'> & { offset: number };
+
+/** The three values `health` accepts on the wire — used to validate whatever `?health=` a restored
+ *  URL carries, the same closed-whitelist reasoning as the server's own `isFacilityHealth`
+ *  (facilities-routes.ts): an arbitrary query string must never reach `listFacilities` as a `health`
+ *  value the store doesn't understand. */
+const HEALTH_VALUES: readonly NonNullable<FacilityListQuery['health']>[] = ['mapped', 'unmapped', 'unprojected'];
+function isHealthValue(v: string): v is NonNullable<FacilityListQuery['health']> {
+  return (HEALTH_VALUES as readonly string[]).includes(v);
+}
+const SOURCE_VALUES: readonly NonNullable<Facility['source']>[] = ['manual', 'import'];
+function isSourceValue(v: string): v is NonNullable<Facility['source']> {
+  return (SOURCE_VALUES as readonly string[]).includes(v);
+}
+
+/** Read `q`/`health`/`source`/`offset` back out of the current URL — the mirror of
+ *  `writeUrlState` below. Used once, on mount, so a linked/reloaded filtered view restores exactly
+ *  what it showed when it was shared. An invalid/absent `offset` (non-numeric, negative) falls back
+ *  to 0 rather than throwing or passing NaN through to `listFacilities`. */
+function readUrlState(): FacilitiesUrlState {
+  const params = new URLSearchParams(window.location.search);
+  const q = params.get('q');
+  const health = params.get('health');
+  const source = params.get('source');
+  const offsetRaw = Number(params.get('offset'));
+  return {
+    q: q ?? '',
+    health: health != null && isHealthValue(health) ? health : undefined,
+    source: source != null && isSourceValue(source) ? source : undefined,
+    offset: Number.isFinite(offsetRaw) && offsetRaw > 0 ? Math.floor(offsetRaw) : 0,
+  };
+}
+
+/** Write `state` back to the URL via `history.replaceState` — a REPLACE, not a push, so paging
+ *  through the registry does not fill the browser's back-button history with one entry per page. No
+ *  key is ever written for an empty/default value (blank search, "All", offset 0), so the URL for
+ *  the default view stays plain `/facilities` rather than `/facilities?q=&health=&offset=0`. */
+function writeUrlState(state: FacilitiesUrlState): void {
+  const params = new URLSearchParams();
+  if (state.q) params.set('q', state.q);
+  if (state.health) params.set('health', state.health);
+  if (state.source) params.set('source', state.source);
+  if (state.offset > 0) params.set('offset', String(state.offset));
+  const qs = params.toString();
+  window.history.replaceState({}, '', `${window.location.pathname}${qs ? `?${qs}` : ''}`);
+}
 
 /** Task 11: icon for each `FacilityDimensionState` — status is never conveyed by colour alone, so
  *  every state pairs this icon with its own text label (see `FacilityHealthChip` below). */
@@ -36,6 +91,17 @@ const HEALTH_ICON: Record<FacilityDimensionState, typeof CheckCircle2> = {
  *  3s tick (packages/bootstrap/src/facility-job-worker.ts), so a typical rebuild resolves within one
  *  or two polls. */
 const HEALTH_POLL_MS = 5000;
+
+/** Task 4 (scale): rows requested per page. A national register runs 10-15k rows (Slice 1), so the
+ *  registry table is server-paged rather than fetched-and-rendered whole (the previous
+ *  `FACILITIES_LIST_LIMIT`/`truncated`-banner approach this replaced). Deliberately NOT paired with
+ *  virtualization: the audit that raised this (FAC-P1-scale) permits virtualization only as a
+ *  rendering optimization on top of real server paging, never as a substitute for it — and at 50
+ *  rows on screen at once, virtualizing the `<table>` buys nothing a browser can't already do
+ *  natively; it would only add a dependency and a second thing to keep in sync with `rows`.
+ *  50 itself is an unremarkable default, not derived from a measurement — comfortably small for a
+ *  render, comfortably large that flipping pages to scan a register doesn't feel tedious. */
+const PAGE_SIZE = 50;
 
 /** Same formatting convention as Sites.tsx's own `formatDate` — locale-formatted, falling back to
  *  the raw ISO string if `Date` can't parse it rather than showing nothing. */
@@ -123,16 +189,21 @@ export function Facilities() {
   const canManage = hasCapability('facilities.manage');
 
   const [rows, setRows] = useState<Facility[]>([]);
+  // Exact count matching the current search/filters (Task 3's `total`), independent of how many
+  // rows this page actually got back — the pager's Next control and the "N of TOTAL" summary both
+  // read this, not `rows.length`, so a short last page never misreports how much is left.
+  const [total, setTotal] = useState(0);
+  // Task 4 (scale): search/filter/page state — initialised from the URL ONCE on mount (a function
+  // initialiser, not a plain default, so `readUrlState()` runs exactly once rather than on every
+  // render) and written back to it whenever it changes (see the effect below `reload`). This is what
+  // makes a filtered, paged view linkable and reload-safe.
+  const [urlState, setUrlState] = useState<FacilitiesUrlState>(() => readUrlState());
   const [loading, setLoading] = useState(true);
   const [hasForm, setHasForm] = useState<boolean | null>(null);
   const [editing, setEditing] = useState<Facility | null | undefined>(undefined); // undefined = closed
   const [confirming, setConfirming] = useState<Facility | null>(null);
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Whether the last list() hit the client-requested cap (FACILITIES_LIST_LIMIT) — a CSV-imported
-  // national register can run 10-15k rows, and presenting a capped page with no indication anything
-  // was cut is its own defect distinct from "no rows at all". See listFacilities in api.ts.
-  const [truncated, setTruncated] = useState(false);
   // Task: one `⋯` on the TAB STRIP itself, right-aligned, instead of each tab wasting a second
   // header row purely to host its own. The strip owns ONE portal target; whichever tab is actually
   // mounted (Radix unmounts the inactive `TabsContent`'s whole subtree — see the comment on
@@ -211,23 +282,45 @@ export function Facilities() {
     // reported as a failure to list facilities (`reloadHealth` contains its own errors).
     void reloadHealth();
     try {
-      const data = await listFacilities();
-      setRows(data);
-      setTruncated(data.length >= FACILITIES_LIST_LIMIT);
+      const page = await listFacilities({
+        q: urlState.q || undefined,
+        health: urlState.health,
+        source: urlState.source,
+        limit: PAGE_SIZE,
+        offset: urlState.offset,
+      });
+      setRows(page.rows);
+      setTotal(page.total);
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
-      // Rows already on screen (if any) are left as-is — they're from the last successful load, not
-      // this failed one — but the truncated flag describes a specific fetched row count, and this
-      // fetch produced none. Leaving a stale `true` here would keep claiming "showing the first N"
-      // for data this attempt never actually saw, outliving the row set it was measured against.
-      setTruncated(false);
+      // Rows/total already on screen (if any) are left as-is — they're from the last successful
+      // load, not this failed one.
     } finally {
       if (!opts?.background) setLoading(false);
     }
-  }, [reloadHealth]);
+  }, [reloadHealth, urlState]);
 
-  useEffect(() => { void reload(); }, [reload]);
+  // `reload` changes identity on every `urlState` change (search keystroke, filter pick, page
+  // click), and this effect re-fires accordingly — but only the VERY FIRST call (the initial page
+  // load) should be a blocking `loading` reload. Every later one is triggered while the operator is
+  // actively using the search box or pager, and a blocking reload flips `registryLoading`, which
+  // swaps the ENTIRE panel for a `LoadingState` — the search input included. That unmounted the box
+  // the operator was mid-keystroke in, dropping every character typed after the first (measured:
+  // this is exactly what made the "puts search state in the URL" test below flake on anything past
+  // one character). `background: true` for every reload after the first keeps the table/toolbar
+  // mounted and lets the new page's rows replace the old ones once they arrive, instead.
+  const isFirstLoad = useRef(true);
+  useEffect(() => {
+    void reload({ background: !isFirstLoad.current });
+    isFirstLoad.current = false;
+  }, [reload]);
+
+  // Task 4 (scale): mirror `urlState` into the URL on every change (search, filter, page) — see
+  // `writeUrlState`'s own doc comment for why this is a `replaceState`, not a `pushState`. Separate
+  // from the `reload()` effect above (which ALSO depends on `urlState` and re-fetches) so the two
+  // stay independently readable: this one owns the URL, that one owns the network call.
+  useEffect(() => { writeUrlState(urlState); }, [urlState]);
 
   // Whether a published facilities form exists is a DIFFERENT empty state from having no
   // facilities. Three independent gates can each leave a lab with no usable form (page target
@@ -348,15 +441,67 @@ export function Facilities() {
           actionsEl,
         )}
 
+        {/* Task 4 (scale): search + the two closed-vocabulary filters GET /api/facilities supports
+            with no extra fetch to populate their options — `health` ('mapped'/'unmapped'/
+            'unprojected', a fixed union owned by facility-registry-store.ts) and `source`
+            ('manual'/'import', `Facility.source`). `FacilityListQuery` also accepts country/zone/
+            region/district/council/status/level/ownership/nationalSystem/managedOrigin, but none of
+            those has a bounded vocabulary this page can read off a TypeScript union the way health
+            and source do (region/district etc. are per-country free text — see
+            `FacilityListOptions.q`'s own doc comment on why there's no fixed admin-geography
+            vocabulary — and status/level/ownership are per-lab free text with none at all): a Select
+            for any of them would mean hardcoding option lists this registry cannot promise are
+            complete, which is exactly what this app's terminology-over-hardcoding convention rules
+            out. Left for a later task to wire against real suggested values (the same
+            `listFacilityAdminValues`-backed pattern the Facility form's own admin fields already
+            use), not invented here. Every input resets `offset` to 0 — changing what's being
+            searched for invalidates whatever page of the OLD result set the operator was on. */}
+        <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-2">
+          <Input
+            type="search"
+            value={urlState.q ?? ''}
+            onChange={(e) => setUrlState((s) => ({ ...s, q: e.target.value, offset: 0 }))}
+            placeholder={t('facilities.searchPlaceholder')}
+            aria-label={t('facilities.searchPlaceholder')}
+            className="h-8 w-60 text-xs"
+          />
+          <Select
+            value={urlState.health ?? 'all'}
+            // `isHealthValue` (not a cast): Radix types `onValueChange` as `(value: string) => void`
+            // regardless of what the mounted `SelectItem`s actually offer, so TS cannot narrow `v` on
+            // its own — the same closed-whitelist predicate `readUrlState` uses above narrows it for
+            // real instead of asserting it.
+            onValueChange={(v) => setUrlState((s) => ({ ...s, health: v !== 'all' && isHealthValue(v) ? v : undefined, offset: 0 }))}
+          >
+            <SelectTrigger aria-label={t('facilities.filters.healthLabel')} className="h-8 w-40 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t('facilities.filters.healthAll')}</SelectItem>
+              <SelectItem value="mapped">{t('facilities.filters.healthMapped')}</SelectItem>
+              <SelectItem value="unmapped">{t('facilities.filters.healthUnmapped')}</SelectItem>
+              <SelectItem value="unprojected">{t('facilities.filters.healthUnprojected')}</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select
+            value={urlState.source ?? 'all'}
+            // Same reasoning as the health Select's `onValueChange` above.
+            onValueChange={(v) => setUrlState((s) => ({ ...s, source: v !== 'all' && isSourceValue(v) ? v : undefined, offset: 0 }))}
+          >
+            <SelectTrigger aria-label={t('facilities.filters.sourceLabel')} className="h-8 w-40 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t('facilities.filters.sourceAll')}</SelectItem>
+              <SelectItem value="manual">{t('facilities.filters.sourceManual')}</SelectItem>
+              <SelectItem value="import">{t('facilities.filters.sourceImport')}</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
         {error && (
           <div className="mx-4 mt-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
             {error}
-          </div>
-        )}
-
-        {truncated && (
-          <div className="mx-4 mt-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700">
-            {t('facilities.truncated', { limit: FACILITIES_LIST_LIMIT })}
           </div>
         )}
 
@@ -441,6 +586,41 @@ export function Facilities() {
             />
           )}
         </div>
+
+        {/* Task 4 (scale): the pager. Gated on `total > 0`, not `rows.length > 0` — a filter whose
+            OFFSET has drifted past a now-smaller result set (e.g. the operator deleted rows on this
+            page, or narrowed a filter) can leave `rows` empty with `total` still positive; the pager
+            stays put in that case instead of vanishing along with the table, so Previous is still
+            reachable to get back to real data. Steps by PAGE_SIZE, not by `page.limit` from the last
+            response — this page always REQUESTS PAGE_SIZE, so the two never disagree, and stepping
+            off the constant keeps this independent of the server's echo. */}
+        {total > 0 && (
+          <div className="flex items-center justify-between border-t border-border px-4 py-2 text-xs">
+            <span className="text-muted-foreground">
+              {t('facilities.pager.summary', {
+                from: urlState.offset + 1,
+                to: Math.min(urlState.offset + PAGE_SIZE, total),
+                total,
+              })}
+            </span>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="outline" size="sm" className="h-7 text-xs"
+                onClick={() => setUrlState((s) => ({ ...s, offset: Math.max(0, s.offset - PAGE_SIZE) }))}
+                disabled={urlState.offset === 0}
+              >
+                {t('common.previous')}
+              </Button>
+              <Button
+                variant="outline" size="sm" className="h-7 text-xs"
+                onClick={() => setUrlState((s) => ({ ...s, offset: s.offset + PAGE_SIZE }))}
+                disabled={urlState.offset + PAGE_SIZE >= total}
+              >
+                {t('common.next')}
+              </Button>
+            </div>
+          </div>
+        )}
 
         {editing !== undefined && (
           <FacilityDialog

@@ -762,7 +762,21 @@ export const pt: EnShape = {
     newDesc: 'Inserir uma nova unidade no registo.',
     deleteTitle: 'Eliminar {{name}}?',
     deleteBody: 'Esta ação remove permanentemente {{name}} do registo de unidades. Esta ação não pode ser anulada.',
-    truncated: 'A mostrar as primeiras {{limit}} unidades. O registo pode conter mais unidades do que as apresentadas aqui.',
+    searchPlaceholder: 'Pesquisar unidades…',
+    filters: {
+      healthLabel: 'Estado do mapeamento',
+      healthAll: 'Todas as unidades',
+      healthMapped: 'Mapeada',
+      healthUnmapped: 'Não mapeada',
+      healthUnprojected: 'Não projetada',
+      sourceLabel: 'Origem',
+      sourceAll: 'Todas as origens',
+      sourceManual: 'Entrada manual',
+      sourceImport: 'Importada',
+    },
+    pager: {
+      summary: '{{from}}–{{to}} de {{total}}',
+    },
     suggest: {
       placeholder: 'Escreva ou escolha uma sugestão…',
       loading: 'A carregar sugestões…',
