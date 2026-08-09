@@ -71,7 +71,13 @@ Create `packages/db/src/migrations/external/015_facility_map_performer_system.te
 import { describe, it, expect } from 'vitest';
 import { sql } from 'kysely';
 import { makeMigratedExternalDb } from '../../test-helpers-external';
+import { backfillPerformerSystem } from './015_facility_map_performer_system';
 
+// `makeMigratedExternalDb` has already run the whole external migration set, so the column exists
+// and its backfill has already run over an EMPTY warehouse. Each test seeds the state it cares
+// about and then re-runs the backfill alone — `up()` cannot be re-invoked wholesale because
+// `addColumn` would fail. Calling the exported statement keeps the tested SQL and the shipped SQL
+// as one copy.
 describe('015_facility_map_performer_system', () => {
   it('backfills the namespace observed for a (feed, code) pair', async () => {
     const db = await makeMigratedExternalDb();
@@ -80,12 +86,7 @@ describe('015_facility_map_performer_system', () => {
     await sql`insert into facility_map (id, source_system, source_code)
       values ('webhook-ingest|BAMAA', 'webhook-ingest', 'BAMAA')`.execute(db);
 
-    // The migration set already ran inside makeMigratedExternalDb, so re-running the backfill
-    // statement is not what is under test here — the row above was inserted AFTER it. Re-run 015's
-    // up() explicitly against the seeded state.
-    const { up } = await import('./015_facility_map_performer_system');
-    await sql`update facility_map set performer_system = ''`.execute(db);
-    await backfillOnly(db, up);
+    await backfillPerformerSystem(db as never, 'postgres');
 
     const rows = await sql<{ performer_system: string }>`
       select performer_system from facility_map`.execute(db);
@@ -96,8 +97,9 @@ describe('015_facility_map_performer_system', () => {
     const db = await makeMigratedExternalDb();
     await sql`insert into facility_map (id, source_system, source_code)
       values ('webhook-ingest|ORPHAN', 'webhook-ingest', 'ORPHAN')`.execute(db);
-    const { up } = await import('./015_facility_map_performer_system');
-    await backfillOnly(db, up);
+
+    await backfillPerformerSystem(db as never, 'postgres');
+
     const rows = await sql<{ performer_system: string }>`
       select performer_system from facility_map`.execute(db);
     expect(rows.rows).toEqual([{ performer_system: '' }]);
@@ -109,8 +111,9 @@ describe('015_facility_map_performer_system', () => {
       values ('dr-2', 'NOFEED', 'urn:x:ns', null)`.execute(db);
     await sql`insert into facility_map (id, source_system, source_code)
       values ('|NOFEED', '', 'NOFEED')`.execute(db);
-    const { up } = await import('./015_facility_map_performer_system');
-    await backfillOnly(db, up);
+
+    await backfillPerformerSystem(db as never, 'postgres');
+
     const rows = await sql<{ performer_system: string }>`
       select performer_system from facility_map`.execute(db);
     expect(rows.rows).toEqual([{ performer_system: 'urn:x:ns' }]);
@@ -118,19 +121,7 @@ describe('015_facility_map_performer_system', () => {
 });
 ```
 
-Add this helper at the top of the file, below the imports. The column already exists (the full migration set ran), so calling `up()` again would fail on `addColumn`; the helper runs only the backfill half:
-
-```ts
-/** Runs 015's backfill against an already-migrated db. `up()` cannot be re-invoked wholesale
- *  because `makeMigratedExternalDb` has already added the column. Kept in step with `up()` by
- *  importing the exported statement builder rather than transcribing the SQL. */
-async function backfillOnly(db: unknown, _up: unknown): Promise<void> {
-  const { backfillPerformerSystem } = await import('./015_facility_map_performer_system');
-  await backfillPerformerSystem(db as never, 'postgres');
-}
-```
-
-⚠ This forces the migration to export the backfill as a named function. That is deliberate — it is the only way for a test to exercise the backfill against seeded state without re-running `addColumn`, and it keeps the tested SQL and the shipped SQL as one copy.
+⚠ This requires the migration to export the backfill as a named function, which the implementation in Step 3 does. That is deliberate: it is the only way to exercise the backfill against seeded state without re-running `addColumn`.
 
 - [ ] **Step 2: Run the test to verify it fails**
 
