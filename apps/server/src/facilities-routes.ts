@@ -1086,8 +1086,9 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       allowMalformedRows: p.data.allowMalformedRows,
     };
 
-    // Always preview first (parse-only — importFacilities never opens a transaction when
-    // `apply` is falsy, see its own early-return). This gives an AUTHORITATIVE `parsed` count —
+    // Always preview first (importFacilities reads the registry — a chunked `WHERE id IN (...)`
+    // against `deps.db` via `loadExisting` — but never opens a transaction when `apply` is falsy, see
+    // its own early-return). This gives an AUTHORITATIVE `parsed` count —
     // not a cheap line-count approximation — to check the inline-apply cap against, before ever
     // considering the write transaction below. Unknown columns (parser-blocked, per
     // facility-csv.ts) and an empty/all-skipped file both surface here as `parsed: 0` and are

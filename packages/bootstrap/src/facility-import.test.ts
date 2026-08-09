@@ -339,6 +339,32 @@ describe('importFacilities', () => {
     expect(result.parsed).toBe(1);
   });
 
+  // Minor 4. Pins the deliberate deviation from the brief's `blocked || records.length === 0` guard
+  // (see the docblock's "One deliberate deviation" section): `importFacilities` loads existing rows
+  // whenever `records.length > 0`, blocked or not, precisely so a BLOCKED-but-non-empty preview still
+  // compares against the registry instead of reporting a false `create`. This is the studio's most
+  // common preview shape — `ImportFacilitiesSheet.tsx` pins `allowMalformedRows: false` on every
+  // preview request, so a file with even one ragged row is blocked (`'quarantined-rows'`) on every
+  // studio preview by construction, yet the good rows in that same file are routinely already applied
+  // from a previous run. Restoring `blocked ||` would silently regress this to `existing = new Map()`
+  // and every already-applied row would misreport `create` instead of `unchanged`.
+  it('a preview of a quarantined-but-non-empty file reports an already-applied row as unchanged, not create', async () => {
+    const deps = await buildDeps();
+    const body = 'national_code,name\n1,Good\n2,Bad,Extra\n';
+    const applied = await importFacilities(
+      deps, body, { nationalSystem: SYSTEM, apply: true, allowMalformedRows: true },
+    );
+    expect(applied.written).toEqual({ created: 1, updated: 0 });
+
+    // Same file, previewed (no `apply`) WITHOUT the override this time — blocked, but non-empty:
+    // `records` still has the one good row, since only row 2 is quarantined.
+    const preview = await importFacilities(deps, body, { nationalSystem: SYSTEM });
+
+    expect(preview.blocked).toBe(true);
+    expect(preview.blockedReason).toBe('quarantined-rows');
+    expect(preview).toMatchObject({ create: 0, unchanged: 1 });
+  });
+
   it('refuses to apply a file with duplicate headers', async () => {
     const deps = await buildDeps();
 
@@ -414,11 +440,39 @@ describe('preview reports real database impact (FAC-P1-03)', () => {
 
   it('an APPLY of a byte-identical re-import reports unchanged and updates nothing', async () => {
     const deps = await buildDeps();
-    const body = csv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,']);
+    // Two rows, deliberately: "100" is the row under test and stays byte-identical across both
+    // applies; "200" is renamed on the second apply so that call's `toWrite` is non-empty. A
+    // single-row byte-identical body cannot exercise this: with only an unchanged row, `toWrite` is
+    // ALWAYS empty, so `if (toWrite.length > 0)` at the write site (facility-import.ts) skips the
+    // whole insert statement regardless of whether its `.map` reads off `toWrite` or off
+    // `classified` — the exact mutation this test exists to catch would never even run. With "200"
+    // present and changed, the guard opens, and a write that (wrongly) mapped over `classified`
+    // instead of `toWrite` would carry the untouched "100" row along in the SAME statement.
+    const body = csv([
+      '100,Dodoma Regional Referral,,,,,,,,,,,,,,',
+      '200,Muhimbili,,,,,,,,,,,,,,',
+    ]);
     await importFacilities(deps, body, { nationalSystem: SYSTEM, apply: true });
+    // The counted `written` object alone cannot distinguish "not written" from "written and
+    // miscounted": both `toWrite` (correct) and `classified` (a regression) drive `written` off the
+    // SAME filtered subset, so a bug that widens what actually gets written without widening what
+    // gets counted would sail through a `written`-only assertion. `updated_at` is the one observable
+    // outside `written` that a write touches regardless of how it gets counted — read it BEFORE the
+    // second apply and assert it is byte-identical afterwards.
+    const before = await rowFor(deps.db, '100');
+    const updatedAtBefore = new Date(before!.updated_at).getTime();
 
-    const again = await importFacilities(deps, body, { nationalSystem: SYSTEM, apply: true });
-    expect(again).toMatchObject({ unchanged: 1, changed: 0, written: { created: 0, updated: 0 } });
+    const renamed = csv([
+      '100,Dodoma Regional Referral,,,,,,,,,,,,,,', // byte-identical
+      '200,Muhimbili Renamed,,,,,,,,,,,,,,', // changed, so toWrite is non-empty this call
+    ]);
+    const again = await importFacilities(deps, renamed, { nationalSystem: SYSTEM, apply: true });
+    expect(again).toMatchObject({ unchanged: 1, changed: 1, written: { created: 0, updated: 1 } });
+
+    // ⚠ Compared as `.getTime()`, never as strings: `updated_at` is `timestamptz`, so the driver
+    // returns a `Date` here even though `FacilityRegistryTable` declares the column `string`.
+    const after = await rowFor(deps.db, '100');
+    expect(new Date(after!.updated_at).getTime()).toBe(updatedAtBefore);
   });
 
   it('reports a rename as changed with its field diff', async () => {
@@ -433,6 +487,37 @@ describe('preview reports real database impact (FAC-P1-03)', () => {
     const deps = await buildDeps();
     const r = await importFacilities(deps, csv(['100,Alpha,,,,,,,,,,,,,,']), { nationalSystem: SYSTEM });
     expect(r.conflict).toBeNull();
+  });
+
+  // 🟠 Important 2. `previewedAt` is a public option and `opts.previewedAt` reaches
+  // `classifyFacilityRows` on the APPLY path exactly the same as the preview path — so an apply CAN
+  // classify a row `conflict`, and nothing pinned any of the three decisions `facility-import.ts`
+  // makes about that row: it is excluded from `toWrite` (not written), excluded from `mergedRecords`
+  // (not projected), and `conflict` is reported as a count on the result. Reachable by supplying a
+  // `previewedAt` OLDER than the row's real `updated_at` — exactly what happens when an operator
+  // previews, someone else's write lands, and the operator applies against the stale preview.
+  it('an APPLY with a stale previewedAt reports the row as conflict, writes nothing, and leaves it untouched', async () => {
+    const deps = await buildDeps();
+    const body = csv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,']);
+    await importFacilities(deps, body, { nationalSystem: SYSTEM, apply: true });
+    const before = await rowFor(deps.db, '100');
+    const updatedAtBefore = new Date(before!.updated_at).getTime();
+    // A watermark strictly BEFORE the row's own `updated_at` — i.e. "the preview this apply claims
+    // to follow was taken before this row was last touched" — is exactly what
+    // `classifyFacilityRows` treats as `conflict` (facility-classify.ts: `existing.updatedAt >
+    // watermark`).
+    const stalePreviewedAt = new Date(updatedAtBefore - 1000);
+
+    const renamed = csv(['100,Dodoma Regional Referral Hospital,,,,,,,,,,,,,,']);
+    const result = await importFacilities(
+      deps, renamed, { nationalSystem: SYSTEM, apply: true, previewedAt: stalePreviewedAt },
+    );
+
+    expect(result).toMatchObject({ conflict: 1, written: { created: 0, updated: 0 } });
+
+    const after = await rowFor(deps.db, '100');
+    expect(after?.name).toBe('Dodoma Regional Referral'); // NOT renamed — the conflicting write was skipped.
+    expect(new Date(after!.updated_at).getTime()).toBe(updatedAtBefore); // untouched, not just unrenamed.
   });
 
   it('reports absent as null — NOT 0 — when the release is not declared complete', async () => {

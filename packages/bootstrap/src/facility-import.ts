@@ -106,11 +106,14 @@ export interface FacilityImportResult {
    *  `allowMalformedRows`. Present on a dry run too, same as every sibling counter here, so an
    *  operator can see the damage before ever applying. */
   quarantined: QuarantinedRow[];
-  /** Rows the parser REJECTED for an unparseable, out-of-range or half-supplied coordinate (see
-   *  facility-csv.ts's `RowError`). Distinct from `skipped` (a missing REQUIRED value) and from
-   *  `quarantined` (a field count disagreeing with the header's): a row here was otherwise
-   *  well-formed. Excluded from `records` by the parser, so it is counted in NO bucket below —
-   *  this array is the only place it is visible at all. */
+  /** Errors the parser found for an unparseable, out-of-range or half-supplied coordinate (see
+   *  facility-csv.ts's `RowError`). One entry PER FIELD, not per row: `facility-csv.ts` pushes a
+   *  separate `RowError` for latitude and for longitude, so a row with both coordinates rejected
+   *  contributes TWO entries here — `invalid.length` is an error count, not a row count. Distinct
+   *  from `skipped` (a missing REQUIRED value) and from `quarantined` (a field count disagreeing
+   *  with the header's): a row here was otherwise well-formed. Excluded from `records` by the
+   *  parser, so it is counted in NO bucket below — this array is the only place it is visible at
+   *  all. */
   invalid: RowError[];
   /** How many accepted rows shared a `national_code` (and therefore a generated `id`) with another
    *  row later in the same file — last row wins, matching what a per-row `store.upsert` loop would
@@ -202,10 +205,15 @@ export interface FacilityImportResult {
   knownNationalSystem: boolean;
 }
 
-// Bounds every chunked query below (existing-id lookup, reference_change_log batch insert) well
-// under any driver's parameter/IN-list ceiling. `insertBatchPg` does its own, tighter, column-count-
-// aware chunking for the facility_registry write itself (see batch-upsert.ts) — this constant is for
-// the narrower, single/few-column queries this module issues directly.
+// Bounds `loadExisting`'s chunked `WHERE id IN (...)` lookup — the only chunked query this module
+// issues directly — well under the driver's parameter/IN-list ceiling. `loadExisting` runs
+// `selectAll()`, not an id-only projection, so each chunk carries the FULL row width (22 of
+// `facility_registry`'s 24 columns), which is exactly why this bound matters more than an id-only
+// lookup would need. (An earlier version of this comment also cited a `reference_change_log` batch
+// insert this module used to chunk; that capture is SUSPENDED — see the "SUSPENDED" section of
+// `importFacilities`' docblock — so this constant bounds `loadExisting` alone today.) `insertBatchPg`
+// does its own, tighter, column-count-aware chunking for the facility_registry write itself (see
+// batch-upsert.ts).
 const CHUNK = 5000;
 
 /** How many rows each `samples` bucket carries. Bounded because a national release can classify
@@ -487,6 +495,22 @@ export async function importFacilities(
     const toWrite = classified.filter((c) => c.kind === 'create' || c.kind === 'changed');
     written.created = toWrite.filter((c) => c.kind === 'create').length;
     written.updated = toWrite.length - written.created;
+
+    // ⚠ `managed_origin` asymmetry, undocumented until now. `managedOrigin` is deliberately excluded
+    // from `COMPARED` (facility-classify.ts) so it never drives `create`/`changed`/`unchanged`, but
+    // `facilityRecordToRow` (packages/db's `toRow`) DOES write it — `rec.managedOrigin ?? null` — and
+    // a CSV-parsed `FacilityRecord` never carries one, so every row THIS statement writes lands with
+    // `managed_origin: null`. Before FAC-P1-03 (this task) EVERY parsed row was written unconditionally
+    // — `create` and every pre-existing row alike, per the old code's own docblock note — so a
+    // byte-identical re-import of a row the sync applier had stamped `managed_origin='central'` cleared
+    // that stamp to NULL on every single re-import. Now that `unchanged` rows are excluded from
+    // `toWrite` (immediately above), that byte-identical re-import no longer touches the row at all, so
+    // the stamp survives. A `changed` row is NOT protected the same way: it stays in `toWrite`, so
+    // renaming a centrally-managed facility and re-importing it still clears `managed_origin` to NULL —
+    // exactly as it did before this task; only the `unchanged` case's behaviour moved. This is
+    // DELIBERATELY left as-is: the new behaviour is the safer one (a no-op re-import can no longer
+    // strip the stamp `reference-apply.ts`'s delete guard relies on), so this comment records the
+    // asymmetry rather than "fixing" it into a change.
 
     // Projected below: every row whose merged form the registry now actually holds — the rows just
     // written, plus `unchanged` rows (identical by definition). `conflict` rows are excluded because
