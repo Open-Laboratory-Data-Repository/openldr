@@ -107,9 +107,9 @@ export interface DiagnosticReportsTable extends ProvenanceColumns {
    *  `FacilityMapTable.performer_system`'s doc comment). Migration 013's own header still calls it
    *  "never a join predicate", which was true when that migration shipped and is not true now; this
    *  comment is the current statement, not that one. It remains `textType` (`nvarchar(max)` on
-   *  MSSQL) regardless — that column type is exactly what the cast in migration 015's
-   *  `backfillPerformerSystem` is defending against; see that function's comment for what is and
-   *  isn't verified about MSSQL's `MIN()` behaviour over it. */
+   *  MSSQL, `longtext` on MySQL) regardless, and that is fine: `MIN()` over both was measured
+   *  working on SQL Server 2022 and MySQL 8.4, so neither migration 015's backfill nor the seeded
+   *  reports' `min(performer_system)` needs a narrowing cast. See `backfillPerformerSystem`. */
   performer_system: string | null;
   /** `DiagnosticReport.specimen[0]` — the key that ties a report to the AST results on the same
    *  specimen, without the patient-level fan-out. */
