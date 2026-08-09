@@ -29,6 +29,14 @@ export interface QuarantinedRow {
   reason: 'too_few_fields' | 'too_many_fields';
 }
 
+export interface RowError {
+  line: number;
+  field: 'latitude' | 'longitude';
+  reason: 'not_a_number' | 'out_of_range' | 'incomplete_pair';
+  /** The offending value exactly as it appeared, so an operator can find it in their file. */
+  raw: string;
+}
+
 export interface FacilityCsvResult {
   records: FacilityRecord[];
   /** Columns the contract does not define. Non-empty ⇒ nothing imported unless explicitly allowed. */
@@ -42,6 +50,9 @@ export interface FacilityCsvResult {
   quarantined: QuarantinedRow[];
   /** Rows dropped for missing a required field. */
   skipped: number;
+  /** Rows dropped for an unparseable, out-of-range, or half-supplied coordinate. Distinct from
+   *  `skipped` (a missing REQUIRED value) — a row here was otherwise well-formed. */
+  invalid: RowError[];
 }
 
 /** Stable id from the register + code, so re-importing a newer release UPDATES in place and any
@@ -55,12 +66,30 @@ const text = (v: string | undefined): string | null => {
   return t === '' ? null : t;
 };
 
-const num = (v: string | undefined): number | null => {
-  const t = (v ?? '').trim();
+/** Coordinate bounds. Not configuration: these are the definition of the WGS84 coordinate space,
+ *  not a policy an operator could reasonably want to change. */
+const LAT_MAX = 90;
+const LON_MAX = 180;
+
+/**
+ * Parse one coordinate.
+ *
+ * ⛔ This used to be `num()`, which returned `null` for ANY unparseable value with no error at all —
+ * so `latitude: "N/A"` and `latitude: ""` were indistinguishable and a national register could lose
+ * every coordinate it had while reporting a clean import (FAC-P1-05). Blank still means absent;
+ * everything else must parse and be in range.
+ */
+function coordinate(
+  raw: string | undefined, field: 'latitude' | 'longitude', line: number, errors: RowError[],
+): number | null {
+  const t = (raw ?? '').trim();
   if (t === '') return null;
   const n = Number(t);
-  return Number.isFinite(n) ? n : null;
-};
+  if (!Number.isFinite(n)) { errors.push({ line, field, reason: 'not_a_number', raw: t }); return null; }
+  const max = field === 'latitude' ? LAT_MAX : LON_MAX;
+  if (n < -max || n > max) { errors.push({ line, field, reason: 'out_of_range', raw: t }); return null; }
+  return n;
+}
 
 /**
  * Parse a national facility CSV.
@@ -101,7 +130,7 @@ export function parseFacilityCsv(csv: string, opts: FacilityCsvOptions): Facilit
   }) as { record: string[]; info: { lines: number }; raw: string }[];
 
   if (rows.length === 0) {
-    return { records: [], unknownColumns: [], duplicateColumns: [], quarantined: [], skipped: 0 };
+    return { records: [], unknownColumns: [], duplicateColumns: [], quarantined: [], skipped: 0, invalid: [] };
   }
 
   const headers = rows[0].record.map((h) => h.trim().toLowerCase());
@@ -109,15 +138,16 @@ export function parseFacilityCsv(csv: string, opts: FacilityCsvOptions): Facilit
   const unknownColumns = headers.filter((h, i) => h !== '' && headers.indexOf(h) === i && !KNOWN.has(h));
 
   if (duplicateColumns.length > 0) {
-    return { records: [], unknownColumns, duplicateColumns: [...new Set(duplicateColumns)], quarantined: [], skipped: 0 };
+    return { records: [], unknownColumns, duplicateColumns: [...new Set(duplicateColumns)], quarantined: [], skipped: 0, invalid: [] };
   }
   if (unknownColumns.length > 0 && !opts.allowUnknownColumns) {
-    return { records: [], unknownColumns, duplicateColumns: [], quarantined: [], skipped: 0 };
+    return { records: [], unknownColumns, duplicateColumns: [], quarantined: [], skipped: 0, invalid: [] };
   }
 
   const quarantined: QuarantinedRow[] = [];
   let skipped = 0;
   const records: FacilityRecord[] = [];
+  const invalid: RowError[] = [];
 
   for (const { record, info, raw } of rows.slice(1)) {
     if (record.length !== headers.length) {
@@ -135,6 +165,22 @@ export function parseFacilityCsv(csv: string, opts: FacilityCsvOptions): Facilit
     const nationalCode = text(r.national_code);
     const name = text(r.name);
     if (!nationalCode || !name) { skipped += 1; continue; }
+
+    const rowErrors: RowError[] = [];
+    const latitude = coordinate(r.latitude, 'latitude', info.lines, rowErrors);
+    const longitude = coordinate(r.longitude, 'longitude', info.lines, rowErrors);
+    // A coordinate is a PAIR. Half of one is not a location, and writing it would put the facility
+    // on the equator or the prime meridian — a plausible-looking wrong answer, which is worse than
+    // no answer. Only reported when the other half parsed cleanly, so a row already rejected above
+    // does not collect a second, confusing error.
+    if (rowErrors.length === 0) {
+      if (latitude !== null && longitude === null) {
+        rowErrors.push({ line: info.lines, field: 'longitude', reason: 'incomplete_pair', raw: (r.longitude ?? '').trim() });
+      } else if (longitude !== null && latitude === null) {
+        rowErrors.push({ line: info.lines, field: 'latitude', reason: 'incomplete_pair', raw: (r.latitude ?? '').trim() });
+      }
+    }
+    if (rowErrors.length > 0) { invalid.push(...rowErrors); continue; }
 
     const extras: Record<string, unknown> = {};
     for (const col of unknownColumns) {
@@ -159,13 +205,13 @@ export function parseFacilityCsv(csv: string, opts: FacilityCsvOptions): Facilit
       village: text(r.village),
       addressText: text(r.address),
       phone: text(r.phone),
-      latitude: num(r.latitude),
-      longitude: num(r.longitude),
+      latitude,
+      longitude,
       extras: Object.keys(extras).length > 0 ? extras : undefined,
       // No managedOrigin stamp — see the docblock above. The sync applier stamps 'central' on arrival.
       source: 'import',
     });
   }
 
-  return { records, unknownColumns, duplicateColumns: [], quarantined, skipped };
+  return { records, unknownColumns, duplicateColumns: [], quarantined, skipped, invalid };
 }

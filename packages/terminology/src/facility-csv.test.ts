@@ -163,3 +163,36 @@ describe('parseFacilityCsv', () => {
     expect(r.duplicateColumns).toEqual(['name']);
   });
 });
+
+describe('coordinate validation', () => {
+  const H = 'national_code,name,latitude,longitude';
+  const parse = (rows: string[]) => parseFacilityCsv([H, ...rows].join('\n') + '\n', { nationalSystem: 'S' });
+
+  it('rejects a non-numeric coordinate with a row error instead of silently nulling it', () => {
+    const r = parse(['1,Alpha,N/A,35.0']);
+    expect(r.records).toHaveLength(0);
+    expect(r.invalid).toEqual([{ line: 2, field: 'latitude', reason: 'not_a_number', raw: 'N/A' }]);
+  });
+
+  it('rejects an out-of-range latitude', () => {
+    const r = parse(['1,Alpha,91,35.0']);
+    expect(r.invalid).toEqual([{ line: 2, field: 'latitude', reason: 'out_of_range', raw: '91' }]);
+  });
+
+  it('rejects an out-of-range longitude', () => {
+    const r = parse(['1,Alpha,-2.4,181']);
+    expect(r.invalid).toEqual([{ line: 2, field: 'longitude', reason: 'out_of_range', raw: '181' }]);
+  });
+
+  it('rejects half a coordinate pair', () => {
+    const r = parse(['1,Alpha,-2.4,']);
+    expect(r.invalid).toEqual([{ line: 2, field: 'longitude', reason: 'incomplete_pair', raw: '' }]);
+  });
+
+  it('accepts both coordinates absent, and accepts the boundary values', () => {
+    expect(parse(['1,Alpha,,']).invalid).toEqual([]);
+    expect(parse(['1,Alpha,,']).records).toHaveLength(1);
+    expect(parse(['2,Beta,-90,-180']).invalid).toEqual([]);
+    expect(parse(['3,Gamma,90,180']).invalid).toEqual([]);
+  });
+});
