@@ -44,6 +44,9 @@ export interface FacilityRecord {
   source: 'manual' | 'import';
 }
 
+/** Derived per row by `list()`, never stored. */
+export type FacilityHealth = 'mapped' | 'unmapped' | 'unprojected';
+
 export interface FacilityListOptions {
   /** Case-insensitive substring across name, local code, national code, and admin area.
    *  ⚠ NOT aliases — `facility_registry` has no alias column and `extras` is an untyped jsonb bag.
@@ -76,11 +79,8 @@ export interface FacilityListOptions {
   /** Mapping/projection health (FAC-P1-01). `unprojected` means the facility has no
    *  `facility_concept_projection` row and therefore CANNOT be selected as a mapping target at all
    *  — the FAC-P0-08 failure state, visible in a list instead of only as a failed background job. */
-  health?: 'mapped' | 'unmapped' | 'unprojected';
+  health?: FacilityHealth;
 }
-
-/** Derived per row by `list()`, never stored. */
-export type FacilityHealth = 'mapped' | 'unmapped' | 'unprojected';
 
 /** A `FacilityRecord` as `list()` returns it — with the two fields it derives, per row, via the
  *  `facility_concept_projection`/`term_mappings` join. Not what `get()`/`upsert()` traffic in. */
