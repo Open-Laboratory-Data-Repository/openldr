@@ -45,9 +45,18 @@ export async function up(db: Kysely<unknown>, engine: TargetEngine): Promise<voi
  * Exported so the tests exercise the shipped statement rather than a transcription of it.
  */
 export async function backfillPerformerSystem(db: Kysely<unknown>, engine: TargetEngine): Promise<void> {
-  // ⛔ The cast is not decoration. `diagnostic_reports.performer_system` is `textType`, i.e.
-  // `nvarchar(max)` on MSSQL — and SQL Server REFUSES `MIN()` over `nvarchar(max)`. MySQL's CAST
-  // spells the target `char(n)`, not `varchar(n)`. Namespace urls are far shorter than either bound.
+  // The cast is defensive, not proven necessary: this comment used to assert flatly that SQL Server
+  // "REFUSES `MIN()` over `nvarchar(max)`", but that claim is contradicted by this branch's own SQL —
+  // Task 3 added uncast `min(performer_system)` to the MSSQL variants of `q-amr-facility-summary` and
+  // `q-clinical-micro-header` (packages/reporting/src/seed/report-seeds.ts) over that same
+  // `nvarchar(max)` column, alongside PRE-EXISTING uncast `min(performer)`, `min(performer_display)`
+  // and `min(source_system)` there. MSSQL is not exercised by this repo's gate (no live SQL Server in
+  // CI), so neither claim has been checked against a real server from here. The cast stays either way
+  // — it is correct and harmless on Postgres/MySQL/MSSQL alike, and if the restriction genuinely does
+  // hold on MSSQL, those seeded CTEs' pre-existing uncast `min()` calls over the same column type are
+  // ALREADY broken there — a pre-existing condition this migration neither introduces nor fixes.
+  // MySQL's CAST spells the target `char(n)`, not `varchar(n)`. Namespace urls are far shorter than
+  // either bound.
   const narrowed = sql.raw(castKeyType(engine));
   await sql`
     update facility_map

@@ -2751,4 +2751,26 @@ describe('facility_map is keyed on the raw observed wire tuple (FAC-P0-07)', () 
     const rows = await deps.externalDb.selectFrom('facility_map').select(['id']).execute();
     expect(rows).toHaveLength(1);
   });
+
+  // Whole-branch review, Finding 1: `facility_map.id` coalesces a raw `performer_system` of `NULL`
+  // and of `''` down to the SAME `''` (see `FacilityMapTable.performer_system`'s doc comment), but
+  // `resolvedObservedSystem` used to fold ONLY `null`/`undefined` into the `observedSystemForFeed`
+  // fallback via `??` — a blank string survived as its own resolved system. Two rows differing ONLY
+  // by `performer_system` being `NULL` vs `''` therefore resolved through two DIFFERENT fold keys
+  // (one via the fallback, one via `''` itself) yet computed the SAME `facility_map.id`, so
+  // `publishFacilityMap` threw `facility_map id collision` on data this table's own coalescing
+  // already treats as one row. The fix makes `resolvedObservedSystem` treat blank the same as
+  // absent, matching `observedSystemForFeed`'s own blank handling, so both rows fold into ONE
+  // `ResolvedFacility` and publish exactly one dimension row.
+  it('folds performer_system NULL and \'\' into ONE facility_map row (no id collision)', async () => {
+    const deps = await makeReconcileDeps();
+    await seedPerformers(deps, [['NHL-01', 1]], { sourceSystem: 'webhook-ingest', performerSystem: null });
+    await seedPerformers(deps, [['NHL-01', 1]], { sourceSystem: 'webhook-ingest', performerSystem: '' });
+
+    await expect(publishFacilityMap(deps, { apply: true })).resolves.toMatchObject({ written: 1 });
+
+    const rows = await deps.externalDb.selectFrom('facility_map')
+      .select(['source_system', 'performer_system', 'source_code']).execute();
+    expect(rows).toEqual([{ source_system: 'webhook-ingest', performer_system: '', source_code: 'NHL-01' }]);
+  });
 });

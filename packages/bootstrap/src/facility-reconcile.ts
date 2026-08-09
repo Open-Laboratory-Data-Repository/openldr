@@ -103,6 +103,18 @@ function djb2Hex(s: string): string {
  * fallback for a sender that supplies no identifier system at all (display-only, or no identifier
  * whatsoever).
  *
+ * ⛔ Blank (`''`, or whitespace-only) is treated the SAME as `null`/`undefined` — trimmed and, if
+ * empty, discarded in favour of the `observedSystemForFeed` fallback, exactly as `observedSystemForFeed`
+ * itself already treats a blank `sourceSystem`. This is load-bearing, not merely tidy: `facility_map`'s
+ * natural key coalesces a raw `performer_system` of NULL and of `''` down to the SAME `''` (see
+ * `FacilityMapTable.performer_system`'s doc comment and `facilityMapId`), so if THIS function let `''`
+ * survive as its own resolved system, two rows that differ only by `performer_system` being `NULL` vs
+ * `''` would fold into two DIFFERENT `ResolvedFacility` values yet compute the SAME `facility_map.id` —
+ * a real collision, reproduced against this branch by seeding exactly that pair and observing
+ * `publishFacilityMap({apply:true})` throw `facility_map id collision`. Folding blank into the fallback
+ * here closes that hole by making both rows resolve to ONE fold key, matching the ONE dimension row
+ * their coalesced ids already share.
+ *
  * Extracted so `scanObservedFacilities`, `resolveObservedFacilities`, and
  * `captureObservedFacilityFromProjection` share ONE definition of this preference instead of three
  * independently-typed copies of `performer_system ?? observedSystemForFeed(source_system)` that
@@ -112,7 +124,8 @@ function resolvedObservedSystem(
   performerSystem: string | null | undefined,
   sourceSystem: string | null | undefined,
 ): string {
-  return performerSystem ?? observedSystemForFeed(sourceSystem ?? null);
+  const trimmed = (performerSystem ?? '').trim();
+  return trimmed !== '' ? trimmed : observedSystemForFeed(sourceSystem ?? null);
 }
 
 /**
@@ -835,11 +848,22 @@ export async function publishFacilityMap(
   // distinct facility — the audit's FAC-P0-07 — and "never resolve a collision by first-row-wins
   // deduplication" is its stated requirement.
   //
-  // Duplicates are now impossible by construction, and that is a property worth asserting rather
-  // than trusting: `resolvedObservedSystem` is a PURE FUNCTION of (performer_system, source_system),
-  // so a raw tuple maps to exactly one fold key. Two `ResolvedFacility` values therefore cannot
-  // share a tuple, and `observations` is deduped within one. If that ever stops being true, the
-  // publish must fail loudly rather than lose a facility from every official report.
+  // Duplicates are impossible by construction, but the proof is about COALESCED tuples, not raw
+  // ones — an earlier version of this comment claimed the latter and was wrong. `id` is
+  // `facilityMapId(o.sourceSystem, o.performerSystem, r.sourceCode)`, and `o.performerSystem` here is
+  // already `performer_system ?? ''` (see the `observationKey`/`performerSystem` construction in
+  // `resolveObservedFacilities`, above) — i.e. the id is a function of the COALESCED tuple, not the
+  // raw one. `resolvedObservedSystem` is a pure function of (performer_system, source_system) and,
+  // since the fix for the whole-branch review's Finding 1, treats a BLANK `performer_system` (`''`,
+  // or whitespace-only) exactly like `null`/`undefined` — matching the SAME coalescing the id
+  // computation already applies. That equivalence is what makes the invariant hold: two raw tuples
+  // that coalesce to the same id-triple now always resolve through the same fold key too, so they
+  // land in the SAME `ResolvedFacility` and dedupe via `observations`' Map before `allRows` is even
+  // built. Before that fix, a `performer_system` of `NULL` vs `''` on an otherwise-identical tuple
+  // resolved to two DIFFERENT fold keys (one via the `observedSystemForFeed` fallback, one taking
+  // `''` as its own system) yet coalesced to the SAME id — a real, reproduced collision, not a
+  // hypothetical one. If this equivalence is ever broken again, the throw below is what turns that
+  // back into a loud failure instead of a silently dropped facility.
   const seenIds = new Set<string>();
   for (const r of allRows) {
     if (seenIds.has(r.id)) {

@@ -177,7 +177,15 @@ describe('facility_map keyed on the observed namespace — end to end (FAC-P0-07
       { source_system: 'feed-a', name: 'Shared Lab' },
       { source_system: 'feed-b', name: 'Shared Lab' },
     ]);
-    // And the shipped query resolves the code rather than falling back to either raw display.
+    // Sanity check only — NOT the discriminating assertion. `labelFor` runs `q-facilities`, which
+    // does `group by dr.performer` then `min(coalesce(fm.name, dr.performer_display, dr.performer))`
+    // (packages/reporting/src/seed/report-seeds.ts, id 'q-facilities'). If the fan-out fix above were
+    // reverted, feed-b's `facility_map` row would not exist and its reports would fall back to
+    // `dr.performer_display = 'raw b'` — but `min()` over `{'Shared Lab', 'raw b'}` STILL returns
+    // `'Shared Lab'`, because `'S'` (0x53) sorts before `'r'` (0x72) in ASCII/byte ordering, which is
+    // what SQL `min()` over text uses here. So this line would pass even under the bug this test
+    // exists to catch; the `rows` assertion above — which reads `facility_map` directly and is
+    // unaffected by ASCII ordering — is the one that actually discriminates.
     expect(await labelFor(deps, 'NHL-01')).toBe('Shared Lab');
   });
 

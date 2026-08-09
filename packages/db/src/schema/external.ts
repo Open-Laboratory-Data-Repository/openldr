@@ -100,7 +100,16 @@ export interface DiagnosticReportsTable extends ProvenanceColumns {
    *  used for matching. */
   performer_display: string | null;
   /** `DiagnosticReport.performer[0].identifier.system` — the code's namespace, when the wire
-   *  supplies one. Null when the source has no system id for the facility code. */
+   *  supplies one. Null when the source has no system id for the facility code.
+   *
+   *  ⛔ As of migration 015, this IS a join predicate — part of `facility_map`'s natural key
+   *  alongside `source_system`/`performer` (coalesced to `''` on both sides; see
+   *  `FacilityMapTable.performer_system`'s doc comment). Migration 013's own header still calls it
+   *  "never a join predicate", which was true when that migration shipped and is not true now; this
+   *  comment is the current statement, not that one. It remains `textType` (`nvarchar(max)` on
+   *  MSSQL) regardless — that column type is exactly what the cast in migration 015's
+   *  `backfillPerformerSystem` is defending against; see that function's comment for what is and
+   *  isn't verified about MSSQL's `MIN()` behaviour over it. */
   performer_system: string | null;
   /** `DiagnosticReport.specimen[0]` — the key that ties a report to the AST results on the same
    *  specimen, without the patient-level fan-out. */
@@ -127,6 +136,15 @@ export interface TerminologyCodesTable extends ProvenanceColumns {
   display: string | null;
 }
 
+/**
+ * Current grain, as of migration 015: one row per `(source_system, performer_system, source_code)`
+ * — the raw observed wire tuple, coalescing NULL to `''` on both `source_system` and
+ * `performer_system` (see `performer_system`'s own doc comment below for why). Migration 012's
+ * header still describes the ORIGINAL two-part grain, `(source_system, source_code)`; that migration
+ * is a frozen snapshot of what shipped at 012 (see the note on `FACILITY_REGISTRY_SYSTEM_CODE` in
+ * `packages/db/src/facility-observed.ts` for why migrations are not edited after the fact to match
+ * later reality) and is no longer an accurate description of the table's grain — this comment is.
+ */
 export interface FacilityMapTable {
   id: string;
   source_system: string;
