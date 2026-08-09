@@ -412,7 +412,25 @@ export function Facilities() {
       // Rows/total already on screen (if any) are left as-is — they're from the last successful
       // load, not this failed one.
     } finally {
-      if (reloadGenerationRef.current === myGeneration && !opts?.background) setLoading(false);
+      // ⛔ Deliberately NOT `&& !opts?.background`. Only a non-background call ever SETS `loading`,
+      // but any call may be the one that CLEARS it — the two are not symmetric, and pairing them
+      // stranded the spinner permanently whenever a blocking reload was superseded by a background
+      // one. The blocking call's guard fails here (a later generation exists), the background
+      // successor declines to touch `loading` by design, and nothing else ever clears it: the panel
+      // renders `LoadingState` forever while the rows sit fetched and discarded.
+      //
+      // That is not a rare race. `<StrictMode>` (apps/studio/src/main.tsx) runs every mount effect
+      // TWICE and preserves refs across the simulated remount, so the second run reads
+      // `isFirstLoad.current === false` and issues exactly that background successor — making this
+      // reproduce on EVERY dev page load, not just under a filter-vs-first-load overlap (typing in
+      // the search box before the first page lands hits it in production too).
+      //
+      // Clearing on whichever generation is still current is correct in both directions: if
+      // `loading` was true, the newest response has just landed and been applied, which is precisely
+      // when the spinner should go; if it was already false (a pure background refresh), this is a
+      // no-op. Superseded calls still return early above, so a stale response can never clear a
+      // spinner a fresher blocking call is legitimately still showing.
+      if (reloadGenerationRef.current === myGeneration) setLoading(false);
     }
   }, [reloadHealth, urlState]);
 
