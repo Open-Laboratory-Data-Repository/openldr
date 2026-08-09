@@ -26,6 +26,10 @@ vi.mock('@/api', async (orig) => {
     // Task 11: the health chip's own data source, plus its Retry action.
     getFacilityHealth: vi.fn(),
     retryFacilityJob: vi.fn(),
+    // Fix wave 1 / Finding 1: backs the zone/region/district/council Selects behind the "More
+    // filters" disclosure. Stubbed here so opening that panel in a test never reaches the real
+    // network; most tests never open it, so most never touch this mock at all.
+    listFacilityAdminValues: vi.fn(),
   };
 });
 
@@ -35,7 +39,7 @@ vi.mock('@/api', async (orig) => {
 const { useAuthMock } = vi.hoisted(() => ({ useAuthMock: vi.fn() }));
 vi.mock('@/auth/AuthProvider', () => ({ useAuth: useAuthMock }));
 
-import { listFacilities, listPublishedForms, getForm, importFacilitiesCsv, listObservedFacilities, getFacilityHealth, retryFacilityJob, deleteFacility, type Facility, type FacilityHealth, type FacilityPage } from '@/api';
+import { listFacilities, listPublishedForms, getForm, importFacilitiesCsv, listObservedFacilities, getFacilityHealth, retryFacilityJob, deleteFacility, listFacilityAdminValues, type Facility, type FacilityHealth, type FacilityPage } from '@/api';
 import { Facilities } from './Facilities';
 
 const listFacilitiesMock = listFacilities as ReturnType<typeof vi.fn>;
@@ -134,6 +138,7 @@ describe('Facilities page', () => {
     (listObservedFacilities as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     (getFacilityHealth as ReturnType<typeof vi.fn>).mockResolvedValue(currentHealth);
     (retryFacilityJob as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+    (listFacilityAdminValues as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     // Default: a lab_admin-shaped actor who can both view and manage the registry. Individual
     // tests (I4) override this to a view-only actor.
     useAuthMock.mockReturnValue({
@@ -677,7 +682,100 @@ describe('Facilities page', () => {
       listFacilitiesMock.mockResolvedValue(makePage(makeRows(50), { total: 13000 }));
       show();
       await userEvent.type(await screen.findByRole('searchbox'), 'dodoma');
+      // Fix wave 1 / Finding 3: search now debounces (250ms) before committing into the URL, so
+      // this can no longer assert the URL updates on the very next microtask — awaiting the
+      // SETTLED state (via `waitFor`'s own retry loop) is what the fix instructions ask for here,
+      // not weakening what's asserted: the URL must still end up exactly `q=dodoma`, just not
+      // necessarily synchronously with the last keystroke.
       await waitFor(() => expect(window.location.search).toContain('q=dodoma'));
+    });
+
+    // Fix wave 1 / Finding 1: the ten open-vocabulary filters added behind the "More filters"
+    // disclosure — pins that the toggle reveals them, that a Select among them (zone, backed by
+    // `listFacilityAdminValues`) round-trips through the URL exactly like `health`/`source`
+    // already did, and that a free-text one among them (nationalSystem — deliberately the audit's
+    // actual "registry source", see the design's provenance table) goes through the same debounce
+    // as search rather than firing on every keystroke.
+    it('Fix wave 1 / Finding 1: reveals the open-vocabulary filters behind "More filters" and round-trips them through the URL', async () => {
+      listFacilitiesMock.mockResolvedValue(makePage(makeRows(1), { total: 1 }));
+      (listFacilityAdminValues as ReturnType<typeof vi.fn>).mockImplementation((level: string) =>
+        level === 'zone' ? Promise.resolve([{ value: 'Central', count: 3 }]) : Promise.resolve([]));
+      show();
+      await screen.findByText('Facility 0');
+
+      // Collapsed by default — none of the ten extra filters are visible yet.
+      expect(screen.queryByLabelText('National system')).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: /more filters/i }));
+      expect(await screen.findByLabelText('National system')).toBeInTheDocument();
+
+      // The zone Select is populated from `listFacilityAdminValues('zone', {})` — the same
+      // mechanism `useFacilityAdminSuggestions` uses, called directly rather than through that
+      // hook (which requires a FormSchema this toolbar doesn't have).
+      await waitFor(() => expect(listFacilityAdminValues).toHaveBeenCalledWith('zone'));
+      fireEvent.click(screen.getByRole('combobox', { name: 'Zone' }));
+      fireEvent.click(await screen.findByRole('option', { name: 'Central' }));
+      await waitFor(() => expect(window.location.search).toContain('zone=Central'));
+      await waitFor(() => expect(listFacilitiesMock).toHaveBeenCalledWith(
+        expect.objectContaining({ zone: 'Central' }),
+      ));
+
+      // A free-text filter from the same panel debounces into the URL exactly like search does.
+      fireEvent.change(screen.getByLabelText('National system'), { target: { value: 'HFR' } });
+      await waitFor(() => expect(window.location.search).toContain('nationalSystem=HFR'));
+      await waitFor(() => expect(listFacilitiesMock).toHaveBeenCalledWith(
+        expect.objectContaining({ nationalSystem: 'HFR' }),
+      ));
+    });
+
+    // Fix wave 1 / Finding 2: `reload()` had no request-sequencing guard — every keystroke fired an
+    // unguarded fetch, and an out-of-order response (entirely plausible against a 13,000-row table
+    // under load) could silently overwrite fresher `rows`/`total` with stale ones. This drives two
+    // DISTINCT committed searches (each clears its own 250ms debounce, so both are real in-flight
+    // requests, not one debounced commit) and resolves the LATER one FIRST — the exact out-of-order
+    // arrival the finding describes — then asserts the page still reflects the later result once
+    // the stale one finally resolves too.
+    it('Fix wave 1 / Finding 2: an in-flight response that resolves AFTER a later one must not overwrite the later result', async () => {
+      vi.useFakeTimers();
+      try {
+        listFacilitiesMock.mockResolvedValueOnce(makePage([])); // the initial mount load
+
+        let resolveFirst!: (page: FacilityPage) => void;
+        let resolveSecond!: (page: FacilityPage) => void;
+        const firstResponse = new Promise<FacilityPage>((resolve) => { resolveFirst = resolve; });
+        const secondResponse = new Promise<FacilityPage>((resolve) => { resolveSecond = resolve; });
+        listFacilitiesMock.mockImplementationOnce(() => firstResponse);
+        listFacilitiesMock.mockImplementationOnce(() => secondResponse);
+
+        show();
+        // Wait for the search box itself (not just the mock call count) — the mount `reload()`
+        // call is registered on the mock synchronously, but the box only appears once its
+        // resolution has actually been rendered (`loading`/`hasForm` settling).
+        await vi.waitFor(() => expect(screen.getByRole('searchbox')).toBeInTheDocument());
+        expect(listFacilitiesMock).toHaveBeenCalledTimes(1);
+
+        const search = screen.getByRole('searchbox');
+        fireEvent.change(search, { target: { value: 'a' } });
+        await vi.advanceTimersByTimeAsync(300); // past the 250ms debounce — commits 'a', fires request #2
+        fireEvent.change(search, { target: { value: 'ab' } });
+        await vi.advanceTimersByTimeAsync(300); // commits 'ab', fires request #3
+
+        await vi.waitFor(() => expect(listFacilitiesMock).toHaveBeenCalledTimes(3));
+
+        // Resolve the LATER request ('ab') first, then the earlier one ('a') — out of order.
+        resolveSecond(makePage([{ ...sampleFacility, id: 'later', name: 'Later Result' }]));
+        await vi.waitFor(() => expect(screen.getByText('Later Result')).toBeInTheDocument());
+
+        resolveFirst(makePage([{ ...sampleFacility, id: 'stale', name: 'Stale Result' }]));
+        await vi.advanceTimersByTimeAsync(0); // let the now-resolved stale promise's .then() run
+
+        // The later (fresher) response must still be what's on screen — the stale response that
+        // arrived after it must never have overwritten it.
+        expect(screen.getByText('Later Result')).toBeInTheDocument();
+        expect(screen.queryByText('Stale Result')).not.toBeInTheDocument();
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it('restores search and page from the URL on mount', async () => {

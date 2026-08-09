@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { MoreHorizontal, Building2, CheckCircle2, Loader2, XCircle, AlertTriangle } from 'lucide-react';
+import { MoreHorizontal, Building2, CheckCircle2, Loader2, XCircle, AlertTriangle, SlidersHorizontal } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { AppShell } from '@/shell/AppShell';
@@ -17,19 +17,34 @@ import { LoadingState } from '@/components/ui/spinner';
 import { useAuth } from '@/auth/AuthProvider';
 import {
   listFacilities, deleteFacility, listPublishedForms, getFacilityHealth, retryFacilityJob,
+  listFacilityAdminValues,
   type Facility, type FacilityHealth, type FacilityDimensionState, type FacilityListQuery,
+  type FacilityAdminLevel,
 } from '@/api';
 import { FacilityDialog } from '@/facilities/FacilityDialog';
 import { ImportFacilitiesSheet } from '@/facilities/ImportFacilitiesSheet';
 import { ObservedTab } from '@/facilities/ObservedTab';
 
-/** Task 4 (scale): every filter GET /api/facilities accepts (Task 3), minus paging — held as page
- *  state (below) and read from/written to the URL so a filtered view is linkable and survives
- *  reload. Only `q`, `health` and `source` are exposed as controls on this page (see the comment on
- *  the toolbar JSX for why the rest of `FacilityListQuery` — country/zone/region/district/council/
- *  status/level/ownership/nationalSystem/managedOrigin — are not): the type stays the full query so
- *  a later task can wire more of it in without another shape change here. */
-type FacilitiesUrlState = Pick<FacilityListQuery, 'q' | 'health' | 'source'> & { offset: number };
+/** Fix wave 1 / Finding 1: every filter dimension `GET /api/facilities` accepts (Task 3), minus
+ *  paging — held as page state (below) and read from/written to the URL so a filtered view is
+ *  linkable and survives reload. Previously only `q`/`health`/`source` were represented here; the
+ *  rest of `FacilityListQuery` (country/zone/region/district/council/status/level/ownership/
+ *  nationalSystem/managedOrigin) is now included too — see the toolbar JSX below for how each is
+ *  presented and why. */
+type FacilitiesUrlState = Pick<FacilityListQuery,
+  | 'q' | 'health' | 'source' | 'country' | 'zone' | 'region' | 'district' | 'council'
+  | 'status' | 'level' | 'ownership' | 'nationalSystem' | 'managedOrigin'
+> & { offset: number };
+
+/** Fix wave 1: the open-vocabulary filter keys — everything on `FacilitiesUrlState` besides `q`,
+ *  the two closed-union fields (`health`/`source`, which keep their own dedicated
+ *  `isHealthValue`/`isSourceValue` predicates), and `offset`. Declared once so `readUrlState`,
+ *  `writeUrlState` and the "how many extra filters are active" badge count all iterate the exact
+ *  same list instead of three hand-kept ones that could drift out of sync. */
+const OPEN_VOCAB_FILTER_KEYS = [
+  'country', 'zone', 'region', 'district', 'council', 'status', 'level', 'ownership',
+  'nationalSystem', 'managedOrigin',
+] as const satisfies readonly (keyof FacilitiesUrlState)[];
 
 /** The three values `health` accepts on the wire — used to validate whatever `?health=` a restored
  *  URL carries, the same closed-whitelist reasoning as the server's own `isFacilityHealth`
@@ -44,22 +59,32 @@ function isSourceValue(v: string): v is NonNullable<Facility['source']> {
   return (SOURCE_VALUES as readonly string[]).includes(v);
 }
 
-/** Read `q`/`health`/`source`/`offset` back out of the current URL — the mirror of
- *  `writeUrlState` below. Used once, on mount, so a linked/reloaded filtered view restores exactly
- *  what it showed when it was shared. An invalid/absent `offset` (non-numeric, negative) falls back
- *  to 0 rather than throwing or passing NaN through to `listFacilities`. */
+/** Read `q`/`health`/`source`/the open-vocabulary filters/`offset` back out of the current URL —
+ *  the mirror of `writeUrlState` below. Used once, on mount, so a linked/reloaded filtered view
+ *  restores exactly what it showed when it was shared. An invalid/absent `offset` (non-numeric,
+ *  negative) falls back to 0 rather than throwing or passing NaN through to `listFacilities`. The
+ *  open-vocabulary keys (country/zone/.../managedOrigin) have no compile-time union to validate
+ *  against the way `health`/`source` do — unlike those two, an arbitrary `?zone=` value is not a
+ *  security or correctness concern here: it is passed straight through as an exact-match `where`
+ *  filter server-side (facility-registry-store.ts), so a value the registry has never seen simply
+ *  matches zero rows rather than doing anything unsafe. */
 function readUrlState(): FacilitiesUrlState {
   const params = new URLSearchParams(window.location.search);
   const q = params.get('q');
   const health = params.get('health');
   const source = params.get('source');
   const offsetRaw = Number(params.get('offset'));
-  return {
+  const state: FacilitiesUrlState = {
     q: q ?? '',
     health: health != null && isHealthValue(health) ? health : undefined,
     source: source != null && isSourceValue(source) ? source : undefined,
     offset: Number.isFinite(offsetRaw) && offsetRaw > 0 ? Math.floor(offsetRaw) : 0,
   };
+  for (const key of OPEN_VOCAB_FILTER_KEYS) {
+    const raw = params.get(key);
+    if (raw) state[key] = raw;
+  }
+  return state;
 }
 
 /** Write `state` back to the URL via `history.replaceState` — a REPLACE, not a push, so paging
@@ -71,9 +96,59 @@ function writeUrlState(state: FacilitiesUrlState): void {
   if (state.q) params.set('q', state.q);
   if (state.health) params.set('health', state.health);
   if (state.source) params.set('source', state.source);
+  for (const key of OPEN_VOCAB_FILTER_KEYS) {
+    const v = state[key];
+    if (v) params.set(key, v);
+  }
   if (state.offset > 0) params.set('offset', String(state.offset));
   const qs = params.toString();
   window.history.replaceState({}, '', `${window.location.pathname}${qs ? `?${qs}` : ''}`);
+}
+
+/** Fix wave 1 / Finding 3: debounce window for every free-text filter input — search plus the
+ *  open-vocabulary filters added for Finding 1 (nationalSystem/managedOrigin/ownership/status/
+ *  level/country). 250ms is the low end of the conventional 250-300ms range: long enough to
+ *  collapse a typing burst into one request against a 13k-row table, short enough that results
+ *  still feel live. Applied uniformly, not just to `q` — every one of these fields hits the same
+ *  endpoint on every keystroke, so the rationale that motivated debouncing search applies equally
+ *  to the rest; leaving them un-debounced would just move Finding 3's problem to six other inputs. */
+const FILTER_DEBOUNCE_MS = 250;
+
+/** Fix wave 1 / Finding 3: keeps a text filter input responsive to every keystroke while only
+ *  committing into `urlState` (and therefore only firing `reload()`, via the effect below) after
+ *  `FILTER_DEBOUNCE_MS` of inactivity. `committedValue` is `urlState`'s own field — the draft
+ *  re-syncs to it whenever it changes from OUTSIDE this input (URL restore on mount is the only
+ *  such case today), but never while a debounce is in flight, so that re-sync can never stomp a
+ *  keystroke the operator is mid-typing.
+ *
+ *  ⚠ Debouncing narrows the WINDOW for two requests to race; it does not make an out-of-order
+ *  response safe by itself — `reload()`'s own generation guard (Finding 2, below) is what actually
+ *  protects `rows`/`total` from being overwritten by a stale response. The two are complementary,
+ *  not substitutes for each other. */
+function useDebouncedFilterField(
+  committedValue: string,
+  commit: (value: string) => void,
+): [string, (value: string) => void] {
+  const [draft, setDraft] = useState(committedValue);
+  const timerRef = useRef<ReturnType<typeof setTimeout>>();
+
+  useEffect(() => {
+    if (timerRef.current) return;
+    setDraft(committedValue);
+  }, [committedValue]);
+
+  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current); }, []);
+
+  const onChange = (value: string) => {
+    setDraft(value);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => {
+      timerRef.current = undefined;
+      commit(value);
+    }, FILTER_DEBOUNCE_MS);
+  };
+
+  return [draft, onChange];
 }
 
 /** Task 11: icon for each `FacilityDimensionState` — status is never conveyed by colour alone, so
@@ -198,6 +273,15 @@ export function Facilities() {
   // render) and written back to it whenever it changes (see the effect below `reload`). This is what
   // makes a filtered, paged view linkable and reload-safe.
   const [urlState, setUrlState] = useState<FacilitiesUrlState>(() => readUrlState());
+  // Fix wave 1 / Finding 1: whether the disclosure panel holding the ten open-vocabulary filters
+  // (country/zone/region/district/council/status/level/ownership/nationalSystem/managedOrigin) is
+  // expanded. Initialised open when a restored URL already carries one of them — a shared link with
+  // `?zone=Dodoma` should show the filter that produced it, not hide it behind a closed toggle the
+  // operator has to know to open. Otherwise collapsed by default: eleven always-visible selects
+  // (the two closed-vocabulary ones plus these ten) would be its own usability defect.
+  const [showMoreFilters, setShowMoreFilters] = useState(
+    () => OPEN_VOCAB_FILTER_KEYS.some((key) => !!readUrlState()[key]),
+  );
   const [loading, setLoading] = useState(true);
   const [hasForm, setHasForm] = useState<boolean | null>(null);
   const [editing, setEditing] = useState<Facility | null | undefined>(undefined); // undefined = closed
@@ -272,7 +356,22 @@ export function Facilities() {
   // the sheet then remounts fresh (no applyResult) once loading flips back to false. `background:
   // true` fetches the same data without touching `loading` at all, so the sheet — and everything
   // else already on screen — stays mounted through the refresh.
+  //
+  // Fix wave 1 / Finding 2: `reloadGenerationRef` is a per-call sequencing guard, not an
+  // `AbortController` — `apiGet`/`authFetch` (api.ts) have no `signal` plumbing today, and adding
+  // one would mean threading it through every caller of that shared helper, not just this one call
+  // site. Every invocation of `reload()` — the mount effect, every `urlState` change (a keystroke
+  // that survived its debounce, a filter pick, a page click), and the Import sheet's own
+  // `onImported` background reload — bumps this ref and captures its own value in `myGeneration`. A
+  // response is only applied to `rows`/`total`/`error` if the ref STILL holds that exact value when
+  // it resolves; a later call bumps it first, so an out-of-order response (issued earlier, resolved
+  // later — entirely plausible against a 13k-row table under load) is silently dropped instead of
+  // overwriting fresher data the operator is already looking at. Debouncing the filter inputs
+  // (`useDebouncedFilterField`, above) only narrows how often two requests are in flight at once —
+  // it is this guard, not the debounce, that makes an actual race safe.
+  const reloadGenerationRef = useRef(0);
   const reload = useCallback(async (opts?: { background?: boolean }) => {
+    const myGeneration = ++reloadGenerationRef.current;
     if (!opts?.background) setLoading(true);
     // Every caller of `reload()` follows a mutation that makes the report dimension stale — a
     // create, an edit, a delete, or the import sheet's onImported — and each of those enqueues a
@@ -286,18 +385,34 @@ export function Facilities() {
         q: urlState.q || undefined,
         health: urlState.health,
         source: urlState.source,
+        country: urlState.country,
+        zone: urlState.zone,
+        region: urlState.region,
+        district: urlState.district,
+        council: urlState.council,
+        status: urlState.status,
+        level: urlState.level,
+        ownership: urlState.ownership,
+        nationalSystem: urlState.nationalSystem,
+        managedOrigin: urlState.managedOrigin,
         limit: PAGE_SIZE,
         offset: urlState.offset,
       });
+      // A later `reload()` call already superseded this one — e.g. this request was issued for an
+      // earlier keystroke/filter and resolved after a subsequent one. Applying it now would
+      // silently overwrite the subsequent (fresher) rows/total with stale ones while the URL and
+      // the search box already show the newer query — exactly the mismatch Finding 2 named.
+      if (reloadGenerationRef.current !== myGeneration) return;
       setRows(page.rows);
       setTotal(page.total);
       setError(null);
     } catch (e) {
+      if (reloadGenerationRef.current !== myGeneration) return;
       setError(e instanceof Error ? e.message : String(e));
       // Rows/total already on screen (if any) are left as-is — they're from the last successful
       // load, not this failed one.
     } finally {
-      if (!opts?.background) setLoading(false);
+      if (reloadGenerationRef.current === myGeneration && !opts?.background) setLoading(false);
     }
   }, [reloadHealth, urlState]);
 
@@ -321,6 +436,113 @@ export function Facilities() {
   // from the `reload()` effect above (which ALSO depends on `urlState` and re-fetches) so the two
   // stay independently readable: this one owns the URL, that one owns the network call.
   useEffect(() => { writeUrlState(urlState); }, [urlState]);
+
+  // Fix wave 1 / Finding 3: one `useDebouncedFilterField` per free-text filter — `q` plus the six
+  // open-vocabulary fields that have no fixed vocabulary to back a Select (see the toolbar JSX
+  // below for `zone`/`region`/`district`/`council`, which DO get one, populated from
+  // `listFacilityAdminValues`). Each commit resets `offset` to 0: changing what's being searched
+  // for invalidates whatever page of the OLD result set the operator was on, same as every other
+  // filter on this page already does.
+  const [searchDraft, onSearchDraftChange] = useDebouncedFilterField(
+    urlState.q ?? '',
+    (v) => setUrlState((s) => ({ ...s, q: v, offset: 0 })),
+  );
+  const [nationalSystemDraft, onNationalSystemDraftChange] = useDebouncedFilterField(
+    urlState.nationalSystem ?? '',
+    (v) => setUrlState((s) => ({ ...s, nationalSystem: v || undefined, offset: 0 })),
+  );
+  const [managedOriginDraft, onManagedOriginDraftChange] = useDebouncedFilterField(
+    urlState.managedOrigin ?? '',
+    (v) => setUrlState((s) => ({ ...s, managedOrigin: v || undefined, offset: 0 })),
+  );
+  const [ownershipDraft, onOwnershipDraftChange] = useDebouncedFilterField(
+    urlState.ownership ?? '',
+    (v) => setUrlState((s) => ({ ...s, ownership: v || undefined, offset: 0 })),
+  );
+  const [statusDraft, onStatusDraftChange] = useDebouncedFilterField(
+    urlState.status ?? '',
+    (v) => setUrlState((s) => ({ ...s, status: v || undefined, offset: 0 })),
+  );
+  const [levelDraft, onLevelDraftChange] = useDebouncedFilterField(
+    urlState.level ?? '',
+    (v) => setUrlState((s) => ({ ...s, level: v || undefined, offset: 0 })),
+  );
+  const [countryDraft, onCountryDraftChange] = useDebouncedFilterField(
+    urlState.country ?? '',
+    (v) => setUrlState((s) => ({ ...s, country: v || undefined, offset: 0 })),
+  );
+
+  // Fix wave 1 / Finding 1: option values for the four administrative-area filters come from the
+  // existing `distinctAdminValues` store helper (via `listFacilityAdminValues`, already used by
+  // `FacilityDialog` through `useFacilityAdminSuggestions`) — the mechanism §5 of the design names
+  // explicitly, reused here rather than a second one. Not the hook itself: that hook cascades
+  // options against a `FormSchema`'s `suggest` fields and an `onAnswersChange` callback, neither of
+  // which exists on this page — reusing `listFacilityAdminValues` (the primitive the hook itself
+  // calls) is what "reuse the mechanism" means here, without forcing a filter toolbar to pretend to
+  // be a form. Cascading follows the same fixed hierarchy (zone < region < district < council) as
+  // the form's own suggestions: a level's scope is every level ABOVE it, never itself or below —
+  // Region is scoped by Zone alone, District by Zone+Region, Council by Zone+Region+District.
+  //
+  // Gated on `showMoreFilters`: these four fetches only run once the disclosure panel that shows
+  // them has actually been opened, so the common case (panel collapsed, no admin-area filter in
+  // play) never issues four requests a national-scale register would rather not pay for on every
+  // page load. Re-opening the panel re-fetches (this does not cache "already open once") — a small,
+  // accepted redundancy in exchange for not having to invent separate fetched-once bookkeeping for
+  // four short, cheap lists.
+  const [zoneOptions, setZoneOptions] = useState<string[]>([]);
+  const [regionOptions, setRegionOptions] = useState<string[]>([]);
+  const [districtOptions, setDistrictOptions] = useState<string[]>([]);
+  const [councilOptions, setCouncilOptions] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!showMoreFilters) return;
+    let cancelled = false;
+    listFacilityAdminValues('zone')
+      .then((rows) => { if (!cancelled) setZoneOptions(rows.map((r) => r.value)); })
+      .catch(() => { if (!cancelled) setZoneOptions([]); });
+    return () => { cancelled = true; };
+  }, [showMoreFilters]);
+
+  useEffect(() => {
+    if (!showMoreFilters) return;
+    let cancelled = false;
+    const scope: Partial<Record<FacilityAdminLevel, string>> = {};
+    if (urlState.zone) scope.zone = urlState.zone;
+    listFacilityAdminValues('region', scope)
+      .then((rows) => { if (!cancelled) setRegionOptions(rows.map((r) => r.value)); })
+      .catch(() => { if (!cancelled) setRegionOptions([]); });
+    return () => { cancelled = true; };
+  }, [showMoreFilters, urlState.zone]);
+
+  useEffect(() => {
+    if (!showMoreFilters) return;
+    let cancelled = false;
+    const scope: Partial<Record<FacilityAdminLevel, string>> = {};
+    if (urlState.zone) scope.zone = urlState.zone;
+    if (urlState.region) scope.region = urlState.region;
+    listFacilityAdminValues('district', scope)
+      .then((rows) => { if (!cancelled) setDistrictOptions(rows.map((r) => r.value)); })
+      .catch(() => { if (!cancelled) setDistrictOptions([]); });
+    return () => { cancelled = true; };
+  }, [showMoreFilters, urlState.zone, urlState.region]);
+
+  useEffect(() => {
+    if (!showMoreFilters) return;
+    let cancelled = false;
+    const scope: Partial<Record<FacilityAdminLevel, string>> = {};
+    if (urlState.zone) scope.zone = urlState.zone;
+    if (urlState.region) scope.region = urlState.region;
+    if (urlState.district) scope.district = urlState.district;
+    listFacilityAdminValues('council', scope)
+      .then((rows) => { if (!cancelled) setCouncilOptions(rows.map((r) => r.value)); })
+      .catch(() => { if (!cancelled) setCouncilOptions([]); });
+    return () => { cancelled = true; };
+  }, [showMoreFilters, urlState.zone, urlState.region, urlState.district]);
+
+  // How many of the ten open-vocabulary filters are currently active — shown as a badge on the
+  // disclosure toggle so an operator who collapses the panel doesn't lose visibility that a filter
+  // from it is still in effect.
+  const extraFilterCount = OPEN_VOCAB_FILTER_KEYS.filter((key) => !!urlState[key]).length;
 
   // Whether a published facilities form exists is a DIFFERENT empty state from having no
   // facilities. Three independent gates can each leave a lab with no usable form (page target
@@ -441,26 +663,23 @@ export function Facilities() {
           actionsEl,
         )}
 
-        {/* Task 4 (scale): search + the two closed-vocabulary filters GET /api/facilities supports
-            with no extra fetch to populate their options — `health` ('mapped'/'unmapped'/
-            'unprojected', a fixed union owned by facility-registry-store.ts) and `source`
-            ('manual'/'import', `Facility.source`). `FacilityListQuery` also accepts country/zone/
-            region/district/council/status/level/ownership/nationalSystem/managedOrigin, but none of
-            those has a bounded vocabulary this page can read off a TypeScript union the way health
-            and source do (region/district etc. are per-country free text — see
-            `FacilityListOptions.q`'s own doc comment on why there's no fixed admin-geography
-            vocabulary — and status/level/ownership are per-lab free text with none at all): a Select
-            for any of them would mean hardcoding option lists this registry cannot promise are
-            complete, which is exactly what this app's terminology-over-hardcoding convention rules
-            out. Left for a later task to wire against real suggested values (the same
-            `listFacilityAdminValues`-backed pattern the Facility form's own admin fields already
-            use), not invented here. Every input resets `offset` to 0 — changing what's being
-            searched for invalidates whatever page of the OLD result set the operator was on. */}
+        {/* Fix wave 1 / Finding 1: search plus the two closed-vocabulary filters (`health`
+            'mapped'/'unmapped'/'unprojected', a fixed union owned by facility-registry-store.ts,
+            and `source` 'manual'/'import', `Facility.source`) stay on this always-visible row —
+            they are the two most-used filters and the only ones with a real TypeScript union to
+            drive a `Select` with zero extra fetch. Every other spec-named dimension
+            (nationalSystem/managedOrigin/ownership/status/level/country/zone/region/district/
+            council) now lives behind the disclosure toggle below rather than nowhere: eleven
+            always-visible selects would be its own usability defect (per review), but zero of the
+            other nine was worse — every one of them is reachable and round-trips through the URL
+            exactly like these two already did. Every input resets `offset` to 0 on commit —
+            changing what's being searched for invalidates whatever page of the OLD result set the
+            operator was on. */}
         <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-2">
           <Input
             type="search"
-            value={urlState.q ?? ''}
-            onChange={(e) => setUrlState((s) => ({ ...s, q: e.target.value, offset: 0 }))}
+            value={searchDraft}
+            onChange={(e) => onSearchDraftChange(e.target.value)}
             placeholder={t('facilities.searchPlaceholder')}
             aria-label={t('facilities.searchPlaceholder')}
             className="h-8 w-60 text-xs"
@@ -497,7 +716,130 @@ export function Facilities() {
               <SelectItem value="import">{t('facilities.filters.sourceImport')}</SelectItem>
             </SelectContent>
           </Select>
+          {/* A disclosure toggle, not an action — it changes nothing about the data, only what's
+              visible, the same category as the pager buttons beside it further down. Badge count
+              (Finding 1) is what keeps an active filter from that panel visible even while the
+              panel itself is collapsed. */}
+          <Button
+            type="button" variant="outline" size="sm" className="h-8 gap-1.5 text-xs"
+            onClick={() => setShowMoreFilters((v) => !v)}
+            aria-expanded={showMoreFilters}
+          >
+            <SlidersHorizontal className="h-3.5 w-3.5" />
+            {t('facilities.filters.moreFiltersToggle')}
+            {extraFilterCount > 0 && (
+              <Badge variant="secondary" className="ml-0.5 px-1.5 py-0 text-[10px]">{extraFilterCount}</Badge>
+            )}
+          </Button>
         </div>
+
+        {/* Fix wave 1 / Finding 1: the ten open-vocabulary filters, behind the disclosure toggle
+            above. `nationalSystem` — the audit's actual "registry source" per the design's own
+            provenance table, distinct from `source` above ("how did this row get into OUR
+            registry") — is deliberately NOT promoted to the always-visible row alongside it: it has
+            no closed vocabulary (see ImportFacilitiesSheet's own National system field, which is
+            free text for the same reason), so it gets an `Input` here rather than a `Select`, and a
+            free-text control on the primary row would read as a second search box. `zone`/`region`/
+            `district`/`council` get a `Select` because they DO have a source of real values —
+            `listFacilityAdminValues`, fetched above once this panel is open. The rest
+            (`status`/`level`/`ownership`/`country`) have no vocabulary at all (same reasoning the
+            store's own `FacilityListOptions.q` doc comment gives for the admin columns) and stay
+            free text — a `Select` for any of them would mean hardcoding an option list this
+            registry cannot promise is complete. */}
+        {showMoreFilters && (
+          <div className="flex flex-wrap items-center gap-2 border-b border-border bg-muted/20 px-4 py-2">
+            <Input
+              value={nationalSystemDraft}
+              onChange={(e) => onNationalSystemDraftChange(e.target.value)}
+              placeholder={t('facilities.filters.nationalSystemPlaceholder')}
+              aria-label={t('facilities.filters.nationalSystemLabel')}
+              className="h-8 w-36 text-xs"
+            />
+            <Input
+              value={managedOriginDraft}
+              onChange={(e) => onManagedOriginDraftChange(e.target.value)}
+              placeholder={t('facilities.filters.managedOriginPlaceholder')}
+              aria-label={t('facilities.filters.managedOriginLabel')}
+              className="h-8 w-36 text-xs"
+            />
+            <Input
+              value={ownershipDraft}
+              onChange={(e) => onOwnershipDraftChange(e.target.value)}
+              placeholder={t('facilities.filters.ownershipPlaceholder')}
+              aria-label={t('facilities.filters.ownershipLabel')}
+              className="h-8 w-32 text-xs"
+            />
+            <Input
+              value={statusDraft}
+              onChange={(e) => onStatusDraftChange(e.target.value)}
+              placeholder={t('facilities.filters.statusPlaceholder')}
+              aria-label={t('facilities.filters.statusLabel')}
+              className="h-8 w-32 text-xs"
+            />
+            <Input
+              value={levelDraft}
+              onChange={(e) => onLevelDraftChange(e.target.value)}
+              placeholder={t('facilities.filters.levelPlaceholder')}
+              aria-label={t('facilities.filters.levelLabel')}
+              className="h-8 w-32 text-xs"
+            />
+            <Input
+              value={countryDraft}
+              onChange={(e) => onCountryDraftChange(e.target.value)}
+              placeholder={t('facilities.filters.countryPlaceholder')}
+              aria-label={t('facilities.filters.countryLabel')}
+              className="h-8 w-24 text-xs"
+            />
+            <Select
+              value={urlState.zone ?? 'all'}
+              onValueChange={(v) => setUrlState((s) => ({ ...s, zone: v !== 'all' ? v : undefined, offset: 0 }))}
+            >
+              <SelectTrigger aria-label={t('facilities.filters.zoneLabel')} className="h-8 w-32 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{t('facilities.filters.zoneAll')}</SelectItem>
+                {zoneOptions.map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Select
+              value={urlState.region ?? 'all'}
+              onValueChange={(v) => setUrlState((s) => ({ ...s, region: v !== 'all' ? v : undefined, offset: 0 }))}
+            >
+              <SelectTrigger aria-label={t('facilities.filters.regionLabel')} className="h-8 w-32 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{t('facilities.filters.regionAll')}</SelectItem>
+                {regionOptions.map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Select
+              value={urlState.district ?? 'all'}
+              onValueChange={(v) => setUrlState((s) => ({ ...s, district: v !== 'all' ? v : undefined, offset: 0 }))}
+            >
+              <SelectTrigger aria-label={t('facilities.filters.districtLabel')} className="h-8 w-32 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{t('facilities.filters.districtAll')}</SelectItem>
+                {districtOptions.map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Select
+              value={urlState.council ?? 'all'}
+              onValueChange={(v) => setUrlState((s) => ({ ...s, council: v !== 'all' ? v : undefined, offset: 0 }))}
+            >
+              <SelectTrigger aria-label={t('facilities.filters.councilLabel')} className="h-8 w-32 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{t('facilities.filters.councilAll')}</SelectItem>
+                {councilOptions.map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
 
         {error && (
           <div className="mx-4 mt-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
