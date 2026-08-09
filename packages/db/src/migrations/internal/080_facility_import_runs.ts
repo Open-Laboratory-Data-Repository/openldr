@@ -1,7 +1,7 @@
 import { type Kysely, sql } from 'kysely';
 
-// One durable record per facility import — FAC-P1-03's "record file hash, source release, row count,
-// actor and result", and (in A2b) the job row a background import is claimed from. Modelled on
+// One durable record per facility import — FAC-P1-03's "record file hash, source release/version, row count,
+// schema mapping, actor, and result", and (in A2b) the job row a background import is claimed from. Modelled on
 // `terminology_ingest_jobs` (061), NOT on `facility_jobs` (079): 079 coalesces on the job KIND, which
 // is right for an interchangeable whole-dimension rebuild and catastrophically wrong here — two
 // uploaded registers would collapse into one row and one operator's file would vanish.
@@ -22,7 +22,7 @@ export async function up(db: Kysely<unknown>): Promise<void> {
     // Populated by A2b's upload. NULL for an A2a preview/apply, which holds the CSV in the request.
     .addColumn('blob_key', 'text')
     .addColumn('file_hash', 'text', (c) => c.notNull())
-    .addColumn('byte_size', 'bigint', (c) => c.notNull())
+    .addColumn('byte_size', 'integer', (c) => c.notNull()) // integer (not bigint): 2 GB ceiling is far above the 8 MB upload cap; round-trips as JS number
     // From a JSONL release header, or typed by the operator for a CSV. NULL when neither supplied one.
     .addColumn('release_version', 'text')
     .addColumn('release_published_at', 'timestamptz')
