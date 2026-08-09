@@ -48,7 +48,7 @@ Live dev internal database and current code, 2026-08-09:
 | Client-requested cap (`FACILITIES_LIST_LIMIT`, `apps/studio/src/api.ts`) | **2 000** |
 | Store default (`DEFAULT_LIST_LIMIT`, `packages/db/src/facility-registry-store.ts`) | 200 |
 | Server cap (`MAX_LIST_LIMIT`, `apps/server/src/facilities-routes.ts`) | 20 000 |
-| `facility_registry` indexes | PK on `id`, one btree on `council` |
+| `facility_registry` indexes | **7** — PK, unique `local_code`, partial unique `(national_system, national_code)`, btrees on `region`/`district`/`council`/`status` |
 | Audit filter dimensions already backed by a column | **9 of 10** |
 
 Four consequences, all load-bearing:
@@ -220,10 +220,18 @@ limits). Every test mutation-proven: break the behaviour, watch it fail, restore
   rows, each with a release header (`version`, `publishedAt`, `rowCount`, `deletionCount`) and
   explicit `deletion` records. Nothing in this repository references it. It is the natural corpus for
   **A2**, whose preview and retirement requirements need exactly release-over-release data.
-- **No new indexes, pending measurement.** The table carries only a PK and a `council` index. 13 k
-  rows of a few hundred bytes is a few megabytes, which Postgres should scan in single-digit
-  milliseconds. An index will be added only if a measurement during implementation calls for one —
-  not on principle, and not claimed to be necessary without evidence.
+- **No new indexes — MEASURED, not assumed.** ⛔ An earlier revision of this spec claimed the table
+  "carries only a PK and a `council` index". That was **wrong**: it has **seven** — the PK, a unique
+  `local_code`, a partial unique `(national_system, national_code)`, and btrees on `region`,
+  `district`, `council` and `status`. The error came from reading `\d facility_registry` through
+  `head`, which truncated the index list; the truncated view was then asserted as fact. Corrected
+  after the implementation measurement caught it.
+  The conclusion is unchanged, and is now evidence rather than expectation: at **13 000 seeded rows**
+  every one of eleven measured query shapes ran **under 50 ms** over five repeated runs, the slowest
+  being the real `list()` rows query *with* its health join at a deep page (`offset 12000`) at a
+  median of **38 ms**. None of the existing indexes serves a leading-wildcard `ilike`, and none needs
+  to at this size. Unmeasured and named as such: live HTTP round-trip latency, behaviour above 13 k
+  rows, and contention under concurrent load.
 - **Aliases are not searchable** (see §3).
 - **Offset pagination drifts under concurrent writes.** Two administrators editing the register while
   a third pages through it can see a row twice or skip one. Accepted for this workload; cursor

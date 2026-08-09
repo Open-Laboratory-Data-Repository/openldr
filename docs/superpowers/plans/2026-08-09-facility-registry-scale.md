@@ -885,7 +885,9 @@ decision."
 
 **Context you need:**
 
-`facility_registry` carries only a PK on `id` and one btree on `council`. The spec commits to adding an index **only if a measurement calls for one**, rather than on principle. The store's search uses `ilike '%q%'`, which no btree can serve; the question is whether that matters at national scale.
+⛔ **This paragraph originally said `facility_registry` "carries only a PK on `id` and one btree on `council`". That was wrong** — the claim came from a `\d facility_registry` read through `head`, which truncated the index list. It actually has **seven**: the PK, a unique `local_code`, a partial unique `(national_system, national_code)`, and btrees on `region`, `district`, `council` and `status`. Verify with `select indexname, indexdef from pg_indexes where tablename='facility_registry'` rather than trusting either version.
+
+The spec commits to adding an index **only if a measurement calls for one**, rather than on principle. None of the seven serves the store's `ilike '%q%'` search — a leading wildcard defeats a btree — so the question stands: does that matter at national scale, or is it single-digit milliseconds and an index would be ceremony?
 
 The dev registry holds **1 row**, so you must seed. Reach the internal database with:
 
