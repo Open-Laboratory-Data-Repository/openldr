@@ -15,10 +15,12 @@ import { keyType } from './dialect';
 // same convention rather than inventing a second one.
 //
 // ⛔ The index is deliberately NOT widened. `facility_map_source_idx` stays (source_system,
-// source_code): the pair already narrows to about one row, and a third `keyType` column would put
-// MySQL at roughly 3066 of its 3072-byte utf8mb4 index limit — a bound established by arithmetic,
-// not measurement. The synthetic PK is untouched, so 012's 900-byte clustered-key reasoning still
-// holds unchanged.
+// source_code): the pair narrows to one row PER NAMESPACE observed for that code — one row on all
+// measured data, and a handful in the case this column exists to represent — while a third
+// `keyType` column would put MySQL at roughly 3066 of its 3072-byte utf8mb4 index limit, a bound
+// established by arithmetic and not by measurement. Selectivity, not uniqueness: the pair stopped
+// being unique the moment the dimension gained this column, which is the whole point of it. The
+// synthetic PK is untouched, so 012's 900-byte clustered-key reasoning still holds unchanged.
 export async function up(db: Kysely<unknown>, engine: TargetEngine): Promise<void> {
   await db.schema.alterTable('facility_map')
     .addColumn('performer_system', sql.raw(keyType(engine)), (c) => c.notNull().defaultTo(''))
