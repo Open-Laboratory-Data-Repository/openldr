@@ -884,8 +884,10 @@ const reporting: ReportingApi = {
 
   // FAC-P0-07: `facility_map` is keyed on the raw observed wire tuple
   // (source_system, performer_system, source_code) as of migration 015. That migration relabels the
-  // rows it finds but CANNOT create the ones a namespace split needs — `facility_map.id` is a djb2
-  // hash with no SQL equivalent — so the fan-out has to come from a real rebuild.
+  // rows it finds but CANNOT create the ones a namespace split needs — `facilityMapId` returns the
+  // readable `feed|namespace|code` string while it fits `MAX_ID_LENGTH` and a djb2 hash once it does
+  // not, and neither that length branch nor the hash is expressible in portable SQL — so the fan-out
+  // has to come from a real rebuild.
   //
   // Unconditional and best-effort on every boot, mirroring `seedColumnExposurePolicy` above rather
   // than `seedEssentials`, which is a forms/workflows surface with no db handle and is gated behind
