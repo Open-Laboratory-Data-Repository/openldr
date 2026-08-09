@@ -55,7 +55,7 @@ live('015_facility_map_performer_system (live Postgres)', () => {
     await sql`insert into facility_map (id, source_system, source_code)
       values ('webhook-ingest|BAMAA', 'webhook-ingest', 'BAMAA')`.execute(db);
 
-    await backfillPerformerSystem(db as never, 'postgres');
+    await backfillPerformerSystem(db as never);
 
     const rows = await sql<{ performer_system: string }>`
       select performer_system from facility_map where id = 'webhook-ingest|BAMAA'`.execute(db);
@@ -66,7 +66,7 @@ live('015_facility_map_performer_system (live Postgres)', () => {
     await sql`insert into facility_map (id, source_system, source_code)
       values ('webhook-ingest|ORPHAN', 'webhook-ingest', 'ORPHAN')`.execute(db);
 
-    await backfillPerformerSystem(db as never, 'postgres');
+    await backfillPerformerSystem(db as never);
 
     const rows = await sql<{ performer_system: string }>`
       select performer_system from facility_map where id = 'webhook-ingest|ORPHAN'`.execute(db);
@@ -79,7 +79,7 @@ live('015_facility_map_performer_system (live Postgres)', () => {
     await sql`insert into facility_map (id, source_system, source_code)
       values ('|NOFEED', '', 'NOFEED')`.execute(db);
 
-    await backfillPerformerSystem(db as never, 'postgres');
+    await backfillPerformerSystem(db as never);
 
     const rows = await sql<{ performer_system: string }>`
       select performer_system from facility_map where id = '|NOFEED'`.execute(db);

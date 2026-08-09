@@ -25,7 +25,7 @@ export async function up(db: Kysely<unknown>, engine: TargetEngine): Promise<voi
   await db.schema.alterTable('facility_map')
     .addColumn('performer_system', sql.raw(keyType(engine)), (c) => c.notNull().defaultTo(''))
     .execute();
-  await backfillPerformerSystem(db, engine);
+  await backfillPerformerSystem(db);
 }
 
 /**
@@ -44,37 +44,41 @@ export async function up(db: Kysely<unknown>, engine: TargetEngine): Promise<voi
  *
  * Exported so the tests exercise the shipped statement rather than a transcription of it.
  */
-export async function backfillPerformerSystem(db: Kysely<unknown>, engine: TargetEngine): Promise<void> {
-  // The cast is defensive, not proven necessary: this comment used to assert flatly that SQL Server
-  // "REFUSES `MIN()` over `nvarchar(max)`", but that claim is contradicted by this branch's own SQL —
-  // Task 3 added uncast `min(performer_system)` to the MSSQL variants of `q-amr-facility-summary` and
-  // `q-clinical-micro-header` (packages/reporting/src/seed/report-seeds.ts) over that same
-  // `nvarchar(max)` column, alongside PRE-EXISTING uncast `min(performer)`, `min(performer_display)`
-  // and `min(source_system)` there. MSSQL is not exercised by this repo's gate (no live SQL Server in
-  // CI), so neither claim has been checked against a real server from here. The cast stays either way
-  // — it is correct and harmless on Postgres/MySQL/MSSQL alike, and if the restriction genuinely does
-  // hold on MSSQL, those seeded CTEs' pre-existing uncast `min()` calls over the same column type are
-  // ALREADY broken there — a pre-existing condition this migration neither introduces nor fixes.
-  // MySQL's CAST spells the target `char(n)`, not `varchar(n)`. Namespace urls are far shorter than
-  // either bound.
-  const narrowed = sql.raw(castKeyType(engine));
+export async function backfillPerformerSystem(db: Kysely<unknown>): Promise<void> {
+  // ⛔ NO CAST around `min(...)`, and that is a MEASURED decision — an earlier revision of this file
+  // wrapped it in a per-dialect narrowing cast on the belief that "SQL Server REFUSES `MIN()` over
+  // `nvarchar(max)`". That belief was WRONG, and the cast it justified was actively harmful.
+  //
+  // Measured 2026-08-09 against real servers, not inferred:
+  //  - SQL Server 2022 (RTM-CU25, 16.0.4255.1): `min(v)` and `select g, min(v) ... group by g` over
+  //    an `nvarchar(max)` column both succeed. The legacy "invalid operand for min" restriction
+  //    applies to `text`/`ntext`, NOT to `nvarchar(max)` — and `textType('mssql')` is `nvarchar(max)`.
+  //  - MySQL 8.4.10: `min(v)` over `longtext` succeeds, bare and grouped.
+  //  - This exact statement was run on both, plus Postgres, over the three fixture cases the test
+  //    file pins, and produced identical results on all three.
+  //
+  // ⛔ Why the cast had to GO rather than merely being redundant: on MSSQL, casting to
+  // `varchar(450)` SILENTLY TRUNCATES a namespace longer than that, and the truncated value is then
+  // one the report join (`fm.performer_system = coalesce(dr.performer_system, '')`) can never match —
+  // so the facility's curated name would quietly fall back to the raw code, which is the exact
+  // failure class this whole column exists to remove. Uncast, MSSQL instead raises
+  // `Msg 2628 — String or binary data would be truncated` and terminates the statement. MySQL errors
+  // loudly either way (`ERROR 1406` uncast, `ERROR 1292` cast) under its default STRICT_TRANS_TABLES.
+  // A loud failure on absurd input beats a silent one.
+  //
+  // Consequently the seeded reports' PRE-EXISTING uncast `min(performer)` / `min(performer_display)` /
+  // `min(source_system)` in `q-amr-facility-summary` and `q-clinical-micro-header`
+  // (packages/reporting/src/seed/report-seeds.ts) are fine on MSSQL too — there is no pre-existing
+  // breakage there, contrary to what the superseded comment implied.
   await sql`
     update facility_map
        set performer_system = coalesce((
-             select min(cast(dr.performer_system as ${narrowed}))
+             select min(dr.performer_system)
                from diagnostic_reports dr
               where coalesce(dr.source_system, '') = facility_map.source_system
                 and dr.performer = facility_map.source_code
            ), '')
   `.execute(db);
-}
-
-/** `keyType` narrowed for use inside CAST. Kept separate because MySQL's CAST accepts `char(n)`
- *  where its DDL accepts `varchar(n)` — the two are not interchangeable. */
-function castKeyType(engine: TargetEngine): string {
-  if (engine === 'mssql') return 'varchar(450)';
-  if (engine === 'mysql') return 'char(255)';
-  return 'text';
 }
 
 export async function down(db: Kysely<unknown>): Promise<void> {
