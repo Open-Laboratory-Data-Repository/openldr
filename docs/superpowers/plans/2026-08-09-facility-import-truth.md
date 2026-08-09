@@ -988,11 +988,19 @@ export interface FacilityImportResult {
     conflict: FacilitySample[]; absent: FacilitySample[]; deleted: FacilitySample[];
   };
 
-  /** Retained for wire compatibility with existing consumers. `created`/`updated` are what was
-   *  actually WRITTEN: created === create, updated === changed + (overwritten conflicts). Both 0 on
-   *  a preview — but now because nothing was written, not because nothing was computed. */
-  created: number; updated: number;
+  /** What was actually WRITTEN, as opposed to what was classified above.
+   *
+   *  ⛔ NESTED, deliberately. A flat `created`/`updated` beside `create`/`changed` differs from it
+   *  only by TENSE, and `result.create` vs `result.created` is a typo that type-checks and silently
+   *  reads the wrong number. Nesting makes the two vocabularies impossible to confuse at a call
+   *  site. Every consumer (route, studio, CLI) reads `written.created`, never `created`.
+   *
+   *  Both 0 on a preview — now because nothing was WRITTEN, not because nothing was computed. */
+  written: { created: number; updated: number };
   runId: string | null;
+  /** False when this `nationalSystem` matches no existing registry row — i.e. this import creates a
+   *  NEW register identity. Reported, never blocking. See Task 10. */
+  knownNationalSystem: boolean;
 }
 
 export interface FacilitySample { id: string; nationalCode: string | null; name: string }
@@ -1011,7 +1019,7 @@ describe('preview reports real database impact (FAC-P1-03)', () => {
     const deps = await buildDeps();
     const body = csv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,']);
     const r = await importFacilities(deps, body, { nationalSystem: SYSTEM });
-    expect(r).toMatchObject({ create: 1, changed: 0, unchanged: 0, created: 0, updated: 0 });
+    expect(r).toMatchObject({ create: 1, changed: 0, unchanged: 0, written: { created: 0, updated: 0 } });
     expect(r.samples.create).toEqual([{ id: expect.any(String), nationalCode: '100', name: 'Dodoma Regional Referral' }]);
   });
 
@@ -1030,7 +1038,7 @@ describe('preview reports real database impact (FAC-P1-03)', () => {
     await importFacilities(deps, body, { nationalSystem: SYSTEM, apply: true });
 
     const again = await importFacilities(deps, body, { nationalSystem: SYSTEM, apply: true });
-    expect(again).toMatchObject({ unchanged: 1, changed: 0, updated: 0 });
+    expect(again).toMatchObject({ unchanged: 1, changed: 0, written: { created: 0, updated: 0 } });
   });
 
   it('reports a rename as changed with its field diff', async () => {
@@ -1127,7 +1135,7 @@ Then, after `dedupeById` and the `blocked` computation, classify unconditionally
 
 Build the counts and samples from `classified`, and return them from **both** the
 nothing-to-write path and the applied path. On the apply path, re-classify inside the transaction
-against the transaction's own `loadExisting` — that is what keeps `created`/`updated` describing
+against the transaction's own `loadExisting` — that is what keeps `written` describing
 what the statement actually wrote.
 
 - [ ] **Step 4: Run — expect PASS**
