@@ -202,10 +202,18 @@ for **all 88 dimension rows**. Every report would lose its resolved facility nam
 the raw code, immediately on upgrade. The backfill is what prevents the fix from shipping a
 regression.
 
-**The safety net:** `seedEssentials` (`packages/bootstrap/src/seed.ts`) enqueues one
-`facility-map-rebuild`. It already documents itself as safe on every boot and runs even when
-`SEED_ON_START=false`. Unconditional and one line; concurrent boots collapse through the existing
-queued-coalescing, so it is at most one job per boot.
+**The safety net:** `bootstrap()` in `packages/bootstrap/src/index.ts` enqueues one
+`facility-map-rebuild` immediately after `facilityJobs` is constructed (`index.ts:875`).
+Unconditional and best-effort — a `.catch()` that logs and never aborts boot — mirroring the
+`seedColumnExposurePolicy` call ~340 lines above it, which is the established precedent for
+"unconditional on every boot, best-effort, needs a db handle". At most one job per boot; a queued
+rebuild absorbs a repeat through the existing coalescing.
+
+⛔ **Not `seedEssentials`.** An earlier draft of this spec put it there and was wrong:
+`EssentialSeedTarget` is a forms/workflows surface with **no db handle**, and `index.ts` already
+carries a comment explaining that this exact class of boot-time seed is deliberately *not* routed
+through `seedEssentials`/`seedDatabase` — those are gated behind `SEED_ON_START` for optional demo
+data. Corrected by reading the code rather than the spec.
 
 This also fixes a chip that would otherwise lie, **with no change to `facilityHealth`'s rule**.
 `stale` is defined purely as *last successful rebuild older than the last `facility_registry` /
