@@ -292,10 +292,14 @@ export function observedSystemForFeed(sourceSystem: string | null): string {
  * Deterministic id for a `facility_map` row. Deterministic because a re-publish recomputes it —
  * a non-deterministic id would duplicate every row on rebuild instead of replacing it.
  *
+ * ⛔ All THREE parts of the dimension's natural key, namespace included. Keyed on
+ * `(sourceSystem, sourceCode)` alone, two facilities sharing a code under different coding systems
+ * collided here and `publishFacilityMap` silently dropped one (audit FAC-P0-07).
+ *
  * Readable while it fits, hashed when it does not, mirroring `terminology_codes`' synthetic key.
  */
-export function facilityMapId(sourceSystem: string, sourceCode: string): string {
-  const readable = `${sourceSystem}|${sourceCode}`;
+export function facilityMapId(sourceSystem: string, performerSystem: string, sourceCode: string): string {
+  const readable = `${sourceSystem}|${performerSystem}|${sourceCode}`;
   if (readable.length <= MAX_ID_LENGTH) return readable;
   return `fm-${djb2Hex(readable)}`;
 }

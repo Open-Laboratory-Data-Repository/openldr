@@ -215,11 +215,19 @@ describe('facility-observed', () => {
     });
   });
 
-  it('derives a deterministic, bounded facility_map id', () => {
-    expect(facilityMapId('webhook-ingest', 'Dodoma')).toBe('webhook-ingest|Dodoma');
-    expect(facilityMapId('webhook-ingest', 'Dodoma')).toBe(facilityMapId('webhook-ingest', 'Dodoma'));
-    const long = facilityMapId('webhook-ingest', 'x'.repeat(400));
+  it('derives a deterministic, bounded facility_map id from all three key parts', () => {
+    expect(facilityMapId('webhook-ingest', 'urn:x:ns', 'Dodoma')).toBe('webhook-ingest|urn:x:ns|Dodoma');
+    expect(facilityMapId('webhook-ingest', '', 'Dodoma')).toBe('webhook-ingest||Dodoma');
+    expect(facilityMapId('webhook-ingest', 'urn:x:ns', 'Dodoma'))
+      .toBe(facilityMapId('webhook-ingest', 'urn:x:ns', 'Dodoma'));
+    const long = facilityMapId('webhook-ingest', 'urn:x:ns', 'x'.repeat(400));
     expect(long.length).toBeLessThanOrEqual(200);
+  });
+
+  it('gives two namespaces sharing a feed and code two DIFFERENT ids', () => {
+    // The whole point of FAC-P0-07: these two collided on one id, and publish dropped one.
+    expect(facilityMapId('webhook-ingest', 'urn:a', 'NHL-01'))
+      .not.toBe(facilityMapId('webhook-ingest', 'urn:b', 'NHL-01'));
   });
 });
 
