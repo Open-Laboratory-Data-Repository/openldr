@@ -24,6 +24,14 @@ function csv(rows: string[]): string {
   return [HEADER, ...rows].join('\n') + '\n';
 }
 
+function jsonl(lines: Record<string, unknown>[]): string {
+  return lines.map((l) => JSON.stringify(l)).join('\n') + '\n';
+}
+
+const rowLine = (mflId: string, name: string, over: Record<string, unknown> = {}) =>
+  ({ type: 'row', mflId, name, ...over });
+const deletionLine = (mflId: string) => ({ type: 'deletion', mflId });
+
 describe('importFacilities', () => {
   it('dry-run reports parsed/skipped/unknownColumns and writes nothing', async () => {
     const deps = await buildDeps();
@@ -650,5 +658,117 @@ describe('importFacilities enqueues a facility-map-rebuild', () => {
     // the only thing that records it.
     expect(errors).toHaveLength(1);
     expect(String((errors[0] as { err: Error }).err.message)).toMatch(/job store unreachable/);
+  });
+});
+
+describe('absent and deleted rows', () => {
+  it('reports absent as null when the release is not declared complete', async () => {
+    const deps = await buildDeps();
+    await importFacilities(deps, csv(['100,Alpha,,,,,,,,,,,,,,', '200,Beta,,,,,,,,,,,,,,']), { nationalSystem: SYSTEM, apply: true });
+    const r = await importFacilities(deps, csv(['100,Alpha,,,,,,,,,,,,,,']), { nationalSystem: SYSTEM });
+    expect(r.absent).toBeNull();
+  });
+
+  it('counts absent rows when the release IS declared complete', async () => {
+    const deps = await buildDeps();
+    await importFacilities(deps, csv(['100,Alpha,,,,,,,,,,,,,,', '200,Beta,,,,,,,,,,,,,,']), { nationalSystem: SYSTEM, apply: true });
+    const r = await importFacilities(deps, csv(['100,Alpha,,,,,,,,,,,,,,']), { nationalSystem: SYSTEM, completeRelease: true });
+    expect(r.absent).toBe(1);
+    expect(r.samples.absent).toEqual([{ id: expect.any(String), nationalCode: '200', name: 'Beta' }]);
+  });
+
+  it('does NOT retire an absent row by default, even on apply', async () => {
+    const deps = await buildDeps();
+    await importFacilities(deps, csv(['100,Alpha,,,,,,,,,,,,,,', '200,Beta,,,,,,,,,,,,,,']), { nationalSystem: SYSTEM, apply: true });
+    await importFacilities(deps, csv(['100,Alpha,,,,,,,,,,,,,,']), { nationalSystem: SYSTEM, apply: true, completeRelease: true });
+    const beta = await rowFor(deps.db, '200');
+    expect(beta?.status).toBeNull();
+  });
+
+  it('retires an absent row to `inactive` when the operator asks', async () => {
+    const deps = await buildDeps();
+    await importFacilities(deps, csv(['100,Alpha,,,,,,,,,,,,,,', '200,Beta,,,,,,,,,,,,,,']), { nationalSystem: SYSTEM, apply: true });
+    await importFacilities(deps, csv(['100,Alpha,,,,,,,,,,,,,,']), {
+      nationalSystem: SYSTEM, apply: true, completeRelease: true, onAbsent: 'retire',
+    });
+    const beta = await rowFor(deps.db, '200');
+    expect(beta?.status).toBe('inactive');
+  });
+
+  it('never deletes a row, whatever the policy', async () => {
+    const deps = await buildDeps();
+    await importFacilities(deps, csv(['100,Alpha,,,,,,,,,,,,,,', '200,Beta,,,,,,,,,,,,,,']), { nationalSystem: SYSTEM, apply: true });
+    await importFacilities(deps, csv(['100,Alpha,,,,,,,,,,,,,,']), {
+      nationalSystem: SYSTEM, apply: true, completeRelease: true, onAbsent: 'retire',
+    });
+    expect(await deps.db.selectFrom('facility_registry').selectAll().execute()).toHaveLength(2);
+  });
+
+  it('scopes absence to this national_system only', async () => {
+    const deps = await buildDeps();
+    await importFacilities(deps, csv(['100,Alpha,,,,,,,,,,,,,,']), { nationalSystem: SYSTEM, apply: true });
+    await importFacilities(deps, csv(['999,Other Register,,,,,,,,,,,,,,']), { nationalSystem: 'urn:other', apply: true });
+    const r = await importFacilities(deps, csv(['100,Alpha,,,,,,,,,,,,,,']), { nationalSystem: SYSTEM, completeRelease: true });
+    expect(r.absent).toBe(0);
+  });
+});
+
+// Task 9's wiring gap (not in the original plan, see the brief): `format: 'jsonl'` dispatches to
+// `parseFacilityRelease` instead of `parseFacilityCsv`, and its `deletions` — national codes the
+// publisher explicitly declared removed — is what `result.deleted` and `onDeleted` actually consume.
+// None of this has coverage from the brief's own test list (which is CSV-only throughout), so it is
+// covered here instead.
+describe('format: "jsonl" and declared deletions', () => {
+  it('imports a JSONL release when format is "jsonl"', async () => {
+    const deps = await buildDeps();
+    const body = jsonl([rowLine('100', 'Alpha')]);
+    const result = await importFacilities(deps, body, { nationalSystem: SYSTEM, format: 'jsonl', apply: true });
+    expect(result.written).toEqual({ created: 1, updated: 0 });
+    expect(await rowFor(deps.db, '100')).toBeDefined();
+  });
+
+  it('retires a row the publisher declared deleted, by default — even from a deletions-only release with no ordinary rows at all', async () => {
+    const deps = await buildDeps();
+    await importFacilities(deps, csv(['100,Alpha,,,,,,,,,,,,,,']), { nationalSystem: SYSTEM, apply: true });
+    const body = jsonl([deletionLine('100')]); // no `type:"row"` line in this file
+    const result = await importFacilities(deps, body, { nationalSystem: SYSTEM, format: 'jsonl', apply: true });
+    expect(result.deleted).toBe(1);
+    expect(result.samples.deleted).toEqual([{ id: expect.any(String), nationalCode: '100', name: 'Alpha' }]);
+    const alpha = await rowFor(deps.db, '100');
+    expect(alpha?.status).toBe('inactive');
+  });
+
+  it('does not count a declared deletion for a facility this registry never had', async () => {
+    const deps = await buildDeps();
+    const body = jsonl([deletionLine('999')]);
+    const result = await importFacilities(deps, body, { nationalSystem: SYSTEM, format: 'jsonl', apply: true });
+    expect(result.deleted).toBe(0);
+    expect(result.samples.deleted).toEqual([]);
+  });
+
+  it('reports a declared deletion without retiring when onDeleted is "report"', async () => {
+    const deps = await buildDeps();
+    await importFacilities(deps, csv(['100,Alpha,,,,,,,,,,,,,,']), { nationalSystem: SYSTEM, apply: true });
+    const body = jsonl([deletionLine('100')]);
+    const result = await importFacilities(deps, body, {
+      nationalSystem: SYSTEM, format: 'jsonl', apply: true, onDeleted: 'report',
+    });
+    expect(result.deleted).toBe(1);
+    const alpha = await rowFor(deps.db, '100');
+    expect(alpha?.status).toBeNull();
+  });
+
+  it('never counts a declared deletion as an inferred absence too — the two buckets stay disjoint', async () => {
+    const deps = await buildDeps();
+    await importFacilities(
+      deps, csv(['100,Alpha,,,,,,,,,,,,,,', '200,Beta,,,,,,,,,,,,,,']), { nationalSystem: SYSTEM, apply: true },
+    );
+    const body = jsonl([rowLine('100', 'Alpha'), deletionLine('200')]);
+    const result = await importFacilities(deps, body, { nationalSystem: SYSTEM, format: 'jsonl', completeRelease: true });
+    expect(result.deleted).toBe(1);
+    // Without the exclusion in importFacilities' absent computation, Beta (declared deleted, and
+    // therefore absent from this file's ordinary rows) would ALSO satisfy "not in ids" and double-
+    // report as an INFERRED absence — contradicting the fact the publisher already stated outright.
+    expect(result.absent).toBe(0);
   });
 });
