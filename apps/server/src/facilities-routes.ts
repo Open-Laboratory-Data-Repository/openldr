@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import type { Kysely } from 'kysely';
 import { z } from 'zod';
@@ -9,9 +9,9 @@ import {
 } from '@openldr/bootstrap';
 import {
   splitFacilityAnswers, CORE_FACILITY_KEYS, FACILITY_ADMIN_LEVELS, referenceCapture,
-  FACILITY_REGISTRY_SYSTEM, DEFAULT_LIST_LIMIT, FACILITY_HEALTH_VALUES,
+  FACILITY_REGISTRY_SYSTEM, DEFAULT_LIST_LIMIT, FACILITY_HEALTH_VALUES, createFacilityImportRunStore,
 } from '@openldr/db';
-import type { FacilityAdminLevel, ExternalSchema, FacilityHealth } from '@openldr/db';
+import type { FacilityAdminLevel, ExternalSchema, FacilityHealth, FacilityImportRun } from '@openldr/db';
 import { requireCapability } from './rbac';
 import { recordAudit, actorFromRequest } from './audit-helper';
 
@@ -53,9 +53,13 @@ const IMPORT = { ...MANAGE, bodyLimit: MAX_IMPORT_REQUEST_BYTES };
 // builds one terminology concept per imported row, runs collision-detection queries whose IN-lists
 // scale with the row count, and writes the result through `admin.terms.importRows` (itself
 // internally batched, 1000 rows/statement). None of this holds facility_registry row locks the way
-// the deleted per-row capture path did, but it is still real, row-count-proportional work sitting
-// inside one HTTP request — a client timeout or a proxy's own request deadline can still abort the
-// connection while a large enough apply keeps running server-side.
+// the deleted per-row capture path did.
+//
+// ⚠ MEASURED 2026-08-09 on real Postgres: a cold end-to-end 13 000-row import — parse, batched
+// write and 13 375 projected concepts — takes 2 689 ms. This cap is NOT protecting against a real
+// request-deadline risk. It survives A2a deliberately: removing it belongs with A2b's upload,
+// progress and cancel surface, and dropping it here would ship an unbounded synchronous apply that
+// reports nothing while it runs. See the A2 spec's "Measured before designing".
 //
 // Decision: bound APPLY to a row-count cap and point the operator at the CLI
 // (`openldr facilities import --apply`, packages/cli/src/facilities.ts) above it — the CLI calls the
@@ -63,13 +67,15 @@ const IMPORT = { ...MANAGE, bodyLimit: MAX_IMPORT_REQUEST_BYTES };
 // applied CLI import projects and enqueues its rebuild exactly as this route's does) and no request
 // deadline. ⚠ Keep those two dep objects in step: this cap means the CLI is the ONLY path a
 // register above it can be applied through, so anything this route passes and the CLI does not is
-// missing precisely where the workload is largest. 2000 stays a generous bound for
-// the common case (a district- or council-scoped partial register, the routine incremental update)
-// without ever touching the CLI, while keeping the worst case — a full re-import's CSV parse,
-// batched write, and registry projection, all synchronous in one request — well clear of a client
-// or proxy timeout. This is NOT a background-job system — a request over the cap is simply
-// refused, nothing is queued. A dry run (no `apply`) is exempt: it never opens a transaction (or
-// projects), so a 14 000-row register can always be PREVIEWED inline regardless of this cap.
+// missing precisely where the workload is largest. 2000 stays a generous bound for the common case
+// (a district- or council-scoped partial register, the routine incremental update) without ever
+// touching the CLI; the worst case — a full national re-import's CSV parse, batched write, and
+// registry projection, all synchronous in one request — is now MEASURED comfortably fast rather
+// than assumed risky, but A2b's upload/progress/cancel surface is still the right home for removing
+// this cap outright, not a quiet loosening here. This is NOT a background-job system — a request
+// over the cap is simply refused, nothing is queued. A dry run (no `apply`) is exempt: it never
+// opens a transaction (or projects), so a 14 000-row register can always be PREVIEWED inline
+// regardless of this cap.
 const MAX_INLINE_APPLY_ROWS = 2000;
 
 const ImportSchema = z.object({
@@ -94,6 +100,25 @@ const ImportSchema = z.object({
   // and report, write NOTHING — the default, so a 14 000-row register can never be silently
   // rewritten by a client that forgot to set this.
   apply: z.boolean().optional(),
+  // Task 10: links this call to a run a PRIOR standalone preview created (see the handler's own
+  // comment on why only an explicit round-trip earns conflict detection). Absent on the preview
+  // call itself — the route mints the run then, never the caller.
+  runId: z.string().min(1).optional(),
+  // Which parser reads `csv` (still the field name — a JSONL release is text too). Mirrors
+  // `FacilityImportOptions.format`.
+  format: z.enum(['csv', 'jsonl']).optional(),
+  // The file is a COMPLETE release of this register — see `FacilityImportOptions.completeRelease`.
+  completeRelease: z.boolean().optional(),
+  onDeleted: z.enum(['retire', 'report']).optional(),
+  onAbsent: z.enum(['retire', 'report']).optional(),
+  // ⛔ Accepted, but NOT YET WIRED: `importFacilities` has no overwrite path today — a `conflict`
+  // row is unconditionally excluded from the write (facility-import.ts's `toWrite` filter), which
+  // IS the 'skip' default the design calls for. Declaring the field now keeps this request's
+  // contract stable for when the overwrite override lands, rather than a later breaking addition.
+  onConflict: z.enum(['skip', 'overwrite']).optional(),
+  // Recorded on the run for FAC-P1-03's "who imported which release and when"; never read by
+  // `importFacilities` itself (which has no `releaseVersion` option).
+  releaseVersion: z.string().optional(),
 });
 
 // The client submits ANSWERS, never a pre-split record: deciding which answers become indexed
@@ -417,6 +442,12 @@ function parseHealth(raw: unknown): FacilityHealth | undefined {
 }
 
 export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext): void {
+  // Task 10: the durable record a preview persists so a later, independent apply request can be
+  // linked back to the registry state that preview actually read (the conflict watermark — see the
+  // import route below). Constructed once per registration, not per request: it is a thin closure
+  // over `ctx.internalDb`, the same db this file already reads directly in several routes.
+  const importRuns = createFacilityImportRunStore(ctx.internalDb);
+
   app.get('/api/facilities', VIEW, async (req) => {
     const q = req.query as Record<string, unknown>;
     const limit = parseLimit(q.limit);
@@ -1084,6 +1115,10 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       nationalSystem: p.data.nationalSystem,
       allowUnknownColumns: p.data.allowUnknownColumns,
       allowMalformedRows: p.data.allowMalformedRows,
+      format: p.data.format,
+      completeRelease: p.data.completeRelease,
+      onDeleted: p.data.onDeleted,
+      onAbsent: p.data.onAbsent,
     };
 
     // Always preview first (importFacilities reads the registry — a chunked `WHERE id IN (...)`
@@ -1102,6 +1137,11 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     // QUARANTINED and reported with line numbers, which is a normal 200 result carrying
     // `quarantined`/`blocked`, not an error. Only a RECOGNISED parse failure becomes a 400; anything
     // else is rethrown unchanged and reaches the central error handler as the 500 it is.
+    //
+    // ⛔ No `facility_import_runs` row is created before this call — a run is only ever worth
+    // persisting once the input has been shown to actually parse. Creating one first and rolling it
+    // back on a parse failure would need a cancel path this store does not have (A2b's job), and
+    // would otherwise leave `active_key` held by a file that was never even valid.
     let preview: FacilityImportResult;
     try {
       preview = await importFacilities(deps, p.data.csv, { ...importOpts, apply: false });
@@ -1110,7 +1150,47 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       reply.code(400);
       return { error: err.message };
     }
-    if (!p.data.apply || preview.parsed === 0) return preview;
+
+    // Task 10 / the FAC-P1-04 boundary, and the whole of it. `nationalSystem` is free text feeding a
+    // deterministic id, so `HFR` and `hfr` are two registers that will never merge. Modelling sources
+    // properly is sub-project B's; what belongs here is refusing to let an operator create a second
+    // identity for the same register WITHOUT NOTICING. Reported, never blocked — a genuinely new
+    // register is a normal thing to import, and this cannot tell the two cases apart. Computed
+    // unconditionally (both the standalone-preview and the apply-flow read this same `preview`), so
+    // an operator applying straight through (no separate preview round-trip) still gets the warning
+    // on the final response — see where `result.knownNationalSystem` is set below.
+    const known = await ctx.internalDb.selectFrom('facility_registry').select('id')
+      .where('national_system', '=', p.data.nationalSystem).limit(1).executeTakeFirst();
+    preview.knownNationalSystem = !!known;
+
+    if (!p.data.apply) {
+      // A standalone preview (no `apply`) is the ONLY call that mints a run — see the module-level
+      // comment on `importRuns` and the apply branch below for why an apply carrying no `runId` must
+      // stay unlinked rather than have this route invent one on its behalf.
+      let run: FacilityImportRun;
+      try {
+        run = await importRuns.startPreview({
+          nationalSystem: p.data.nationalSystem,
+          sourceFormat: p.data.format ?? 'csv',
+          fileHash: createHash('sha256').update(p.data.csv, 'utf8').digest('hex'),
+          byteSize: csvBytes,
+          releaseVersion: p.data.releaseVersion ?? null,
+          options: importOpts,
+          requestedBy: actorFromRequest(req).actorId,
+        });
+      } catch (err) {
+        // Same shape as the terminology distribution upload route's "already in progress" 409
+        // (terminology-admin-routes.ts) — the unique `active_key` index is the race-safe backstop,
+        // this is just where the message becomes readable.
+        reply.code(409);
+        return { error: err instanceof Error ? err.message : String(err) };
+      }
+      await importRuns.completePreview(run.id, preview);
+      preview.runId = run.id;
+      return preview;
+    }
+
+    if (preview.parsed === 0) return preview;
 
     // Task 5: mirrors the `preview.parsed === 0` short-circuit above, but needs its own check —
     // unlike unknown columns (which zero out `parsed` for the whole file), a quarantined row does
@@ -1134,6 +1214,17 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       };
     }
 
+    // Task 10: resolve the run a PRIOR standalone preview minted, if the caller supplied one.
+    // ⛔ An apply arriving WITHOUT a `runId` is NOT silently linked to whatever run this route may
+    // have created on an earlier, unrelated call — `run` stays `null`, `previewedAt` stays `null`,
+    // and `importFacilities` reports `conflict: null` (NOT EVALUATED), never `0` (evaluated as
+    // clean). Reporting `0` here would be exactly the lie FAC-P1-03 removed one layer up.
+    let run: FacilityImportRun | null = null;
+    if (p.data.runId) {
+      run = await importRuns.get(p.data.runId);
+      if (!run) { reply.code(404); return { error: `import run not found: ${p.data.runId}` }; }
+    }
+
     // ⛔ Wrapped for the same reason as the preview call above. In practice the preview call
     // above already parsed this exact `p.data.csv` successfully (a malformed file would have been
     // caught and returned as a 400 before this line is ever reached), so `parseFacilityCsv`
@@ -1142,14 +1233,44 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     // that lets the two calls see different input), not because it is expected to fire today. A
     // non-parse error (a DB failure from the write transaction this call opens) is rethrown
     // unchanged, exactly as before this fix — it must still surface as a 500, never a 400.
+    //
+    // ⛔ Either way out of this try — a recognised parse error or an unrelated rethrown failure — a
+    // `run` this apply was given must be finished as `'failed'` before the response leaves. Skipping
+    // that would leave the run (and the whole national_system, via `active_key`) active forever: a
+    // permanent lock with no cancel path in this slice. `finishApply` itself is wrapped and merely
+    // logged on failure, mirroring every other best-effort side-write in this file (the enqueue
+    // calls) — a lost status update must not turn an already-decided error response into a second,
+    // different one, and must not swallow the ORIGINAL error either.
     let result: FacilityImportResult;
     try {
-      result = await importFacilities(deps, p.data.csv, { ...importOpts, apply: true });
+      result = await importFacilities(deps, p.data.csv, {
+        ...importOpts, apply: true, runId: run?.id ?? null,
+        previewedAt: run?.previewedAt ? new Date(run.previewedAt) : null,
+      });
     } catch (err) {
+      if (run) {
+        try {
+          await importRuns.finishApply(run.id, 'failed', { error: err instanceof Error ? err.message : String(err) });
+        } catch (finishErr) {
+          ctx.logger.error({ err: finishErr, runId: run.id }, 'failed to mark a facility import run failed after a thrown apply');
+        }
+      }
       if (!isCsvParseError(err)) throw err;
       reply.code(400);
       return { error: err.message };
     }
+    if (run) {
+      try {
+        await importRuns.finishApply(run.id, 'applied', { summary: result });
+      } catch (finishErr) {
+        ctx.logger.error({ err: finishErr, runId: run.id }, 'failed to mark a facility import run applied after a successful apply');
+      }
+    }
+    // Echo the SAME answer the preceding preview computed — an operator applying straight through in
+    // one request deserves the new-register warning on the response that actually wrote, not only on
+    // an intermediate object this route never returned.
+    result.knownNationalSystem = preview.knownNationalSystem;
+
     // A dry run (handled above) writes nothing and must not audit. This point is only reached
     // once a real write happened (preview.parsed > 0 and under the inline cap).
     await recordAudit(ctx, req, {
@@ -1164,5 +1285,26 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       },
     });
     return result;
+  });
+
+  // Task 10: the run-history list — FAC-P1-03's "who imported which release and when", scoped to one
+  // register or every register this instance has ever seen. Gated `facilities.view`, not `.manage`:
+  // it is read-only, and an operator who can merely see the registry still benefits from knowing
+  // whether/when it was last refreshed and by what.
+  app.get('/api/facilities/import/runs', VIEW, async (req) => {
+    const q = req.query as Record<string, unknown>;
+    const runs = await importRuns.list(ownFirstString(q, 'nationalSystem'), parseLimit(q.limit));
+    return { runs };
+  });
+
+  // One run's full detail — the preview summary an operator reviews before confirming an apply, or
+  // the record of one that already happened. Same static-vs-parametric non-issue as the other
+  // `/api/facilities/*` routes above: `import/runs/:id` carries a different segment count than
+  // `/api/facilities/:id`, so the two can never collide regardless of registration order.
+  app.get('/api/facilities/import/runs/:id', VIEW, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const run = await importRuns.get(id);
+    if (!run) { reply.code(404); return { error: 'not found' }; }
+    return run;
   });
 }

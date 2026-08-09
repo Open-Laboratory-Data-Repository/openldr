@@ -1536,7 +1536,10 @@ describe('POST /api/facilities/import', () => {
         changed: [], conflict: [], absent: [], deleted: [],
       },
       written: { created: 0, updated: 0 },
-      runId: null, knownNationalSystem: true,
+      // Task 10: a standalone preview (no `apply`) now persists a `facility_import_runs` row and
+      // echoes its id, and the registry is empty here — no existing row carries `SYSTEM`, so this
+      // import creates a genuinely new register identity.
+      runId: expect.any(String), knownNationalSystem: false,
     });
     expect(await db.selectFrom('facility_registry').selectAll().execute()).toHaveLength(0);
     expect(ctx.__audit).toHaveLength(0); // a dry run writes nothing, so it must not audit
@@ -1831,6 +1834,196 @@ describe('POST /api/facilities/import', () => {
     });
     expect(res.statusCode).toBe(400);
     expect(await db.selectFrom('facility_registry').selectAll().execute()).toHaveLength(0);
+  });
+
+  // --- Task 10: linking a preview to an apply through facility_import_runs -----------------------
+
+  describe('Task 10: preview↔apply linkage and the run store', () => {
+    it('a standalone preview persists a run, retrievable via GET .../runs/:id', async () => {
+      const db = await makeMigratedDb();
+      const app = await appWith(fakeImportCtx(db));
+      const csv = facilityCsv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,']);
+      const res = await app.inject({ method: 'POST', url: '/api/facilities/import', payload: { csv, nationalSystem: SYSTEM } });
+      expect(res.statusCode).toBe(200);
+      const runId = res.json().runId;
+      expect(typeof runId).toBe('string');
+
+      const runRes = await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${runId}` });
+      expect(runRes.statusCode).toBe(200);
+      const run = runRes.json();
+      expect(run.id).toBe(runId);
+      expect(run.nationalSystem).toBe(SYSTEM);
+      expect(run.sourceFormat).toBe('csv');
+      expect(run.status).toBe('previewed');
+      expect(run.previewedAt).not.toBeNull();
+    });
+
+    // Self-review question this task's brief asks explicitly: a blocked file still parses (a
+    // quarantined row is not a PARSE failure — see the route's own comment above the parse-error
+    // try/catch), so the run-creation step runs unconditionally after that try/catch — a preview
+    // that turns out blocked persists a run exactly like a clean one does.
+    it('a preview persists a run even when the file turns out blocked (quarantined rows)', async () => {
+      const db = await makeMigratedDb();
+      const app = await appWith(fakeImportCtx(db));
+      const res = await app.inject({
+        method: 'POST', url: '/api/facilities/import',
+        payload: { csv: 'national_code,name\n1,Good\n2,Bad,Extra\n', nationalSystem: SYSTEM },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toMatchObject({ blocked: true, blockedReason: 'quarantined-rows' });
+      const runId = res.json().runId;
+      expect(typeof runId).toBe('string');
+      const runRes = await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${runId}` });
+      expect(runRes.statusCode).toBe(200);
+      expect(runRes.json().status).toBe('previewed');
+    });
+
+    it('reports knownNationalSystem: true once the register exists, false for one never seen', async () => {
+      const db = await makeMigratedDb();
+      const app = await appWith(fakeImportCtx(db));
+      // Seeds SYSTEM via an applied import — an apply carrying no `runId` mints no run of its own
+      // (see the route's own reasoning), so this cannot collide with the preview below.
+      await app.inject({
+        method: 'POST', url: '/api/facilities/import',
+        payload: { csv: facilityCsv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,']), nationalSystem: SYSTEM, apply: true },
+      });
+
+      const known = await app.inject({
+        method: 'POST', url: '/api/facilities/import',
+        payload: { csv: facilityCsv(['101,Kongwa DDH,,,,,,,,,,,,,,']), nationalSystem: SYSTEM },
+      });
+      expect(known.json().knownNationalSystem).toBe(true);
+
+      const unknown = await app.inject({
+        method: 'POST', url: '/api/facilities/import',
+        payload: { csv: facilityCsv(['200,Somewhere Else,,,,,,,,,,,,,,']), nationalSystem: 'urn:other:register' },
+      });
+      expect(unknown.json().knownNationalSystem).toBe(false);
+    });
+
+    it('an apply carrying its preview\'s runId evaluates conflicts and detects one', async () => {
+      const db = await makeMigratedDb();
+      const app = await appWith(fakeImportCtx(db));
+      const csv = facilityCsv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,']);
+      await app.inject({ method: 'POST', url: '/api/facilities/import', payload: { csv, nationalSystem: SYSTEM, apply: true } });
+
+      // A fresh preview establishes the watermark…
+      const preview = await app.inject({ method: 'POST', url: '/api/facilities/import', payload: { csv, nationalSystem: SYSTEM } });
+      expect(preview.statusCode).toBe(200);
+      const runId = preview.json().runId;
+
+      // …then the row is touched by something else before the apply carrying that runId arrives.
+      await db.updateTable('facility_registry').set({ updated_at: sql`now()` }).where('national_code', '=', '100').execute();
+
+      const res = await app.inject({
+        method: 'POST', url: '/api/facilities/import',
+        payload: { csv, nationalSystem: SYSTEM, apply: true, runId },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().conflict).toBe(1);
+      // The default policy is skip, not overwrite — the touched row is left alone.
+      expect(res.json().written).toEqual({ created: 0, updated: 0 });
+    });
+
+    it('⛔ an apply without a runId reports conflict: null — NOT 0 — because nothing was evaluated', async () => {
+      const db = await makeMigratedDb();
+      const app = await appWith(fakeImportCtx(db));
+      const csv = facilityCsv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,']);
+      await app.inject({ method: 'POST', url: '/api/facilities/import', payload: { csv, nationalSystem: SYSTEM, apply: true } });
+
+      const res = await app.inject({ method: 'POST', url: '/api/facilities/import', payload: { csv, nationalSystem: SYSTEM, apply: true } });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().conflict).toBeNull();
+      expect(res.json().runId).toBeNull();
+    });
+
+    it('applying against an unknown runId is a 404, not a silent fall-through to unlinked', async () => {
+      const db = await makeMigratedDb();
+      const app = await appWith(fakeImportCtx(db));
+      const csv = facilityCsv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,']);
+      const res = await app.inject({
+        method: 'POST', url: '/api/facilities/import',
+        payload: { csv, nationalSystem: SYSTEM, apply: true, runId: 'fir_does-not-exist' },
+      });
+      expect(res.statusCode).toBe(404);
+      expect(await db.selectFrom('facility_registry').selectAll().execute()).toHaveLength(0);
+    });
+
+    it('a second preview for the same national system, while the first is still active, is a 409', async () => {
+      const db = await makeMigratedDb();
+      const app = await appWith(fakeImportCtx(db));
+      const csv = facilityCsv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,']);
+      const first = await app.inject({ method: 'POST', url: '/api/facilities/import', payload: { csv, nationalSystem: SYSTEM } });
+      expect(first.statusCode).toBe(200);
+
+      const second = await app.inject({ method: 'POST', url: '/api/facilities/import', payload: { csv, nationalSystem: SYSTEM } });
+      expect(second.statusCode).toBe(409);
+      expect(second.json().error).toMatch(/already/i);
+    });
+
+    it('a failed apply marks its run failed rather than leaving the register locked forever', async () => {
+      const db = await makeMigratedDb();
+      const app = await appWith(fakeImportCtx(db));
+      const csv = facilityCsv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,']);
+      const preview = await app.inject({ method: 'POST', url: '/api/facilities/import', payload: { csv, nationalSystem: SYSTEM } });
+      const runId = preview.json().runId;
+
+      (db as unknown as { transaction: () => never }).transaction = () => { throw new Error('simulated connection loss'); };
+
+      const res = await app.inject({
+        method: 'POST', url: '/api/facilities/import',
+        payload: { csv, nationalSystem: SYSTEM, apply: true, runId },
+      });
+      expect(res.statusCode).toBe(500);
+
+      const runRes = await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${runId}` });
+      expect(runRes.json().status).toBe('failed');
+
+      // The proof that matters: `active_key` was released, so the SAME national system can be
+      // previewed again rather than being locked out by a run nothing will ever finish.
+      const again = await app.inject({ method: 'POST', url: '/api/facilities/import', payload: { csv, nationalSystem: SYSTEM } });
+      expect(again.statusCode).toBe(200);
+    });
+  });
+
+  describe('GET /api/facilities/import/runs', () => {
+    it('gated on facilities.view — no capability at all is a 403', async () => {
+      const db = await makeMigratedDb();
+      const app = await appWith(fakeImportCtx(db), []);
+      const res = await app.inject({ method: 'GET', url: '/api/facilities/import/runs' });
+      expect(res.statusCode).toBe(403);
+    });
+
+    it('scopes by nationalSystem and orders newest first', async () => {
+      const db = await makeMigratedDb();
+      const app = await appWith(fakeImportCtx(db));
+      const csvA = facilityCsv(['100,Alpha,,,,,,,,,,,,,,']);
+      const csvB = facilityCsv(['200,Beta,,,,,,,,,,,,,,']);
+
+      const a1 = (await app.inject({ method: 'POST', url: '/api/facilities/import', payload: { csv: csvA, nationalSystem: SYSTEM } })).json();
+      // Finish the first run so a second preview for the SAME system is allowed (see the 409 test
+      // above — an unfinished run holds `active_key` for good in this slice).
+      await app.inject({
+        method: 'POST', url: '/api/facilities/import',
+        payload: { csv: csvA, nationalSystem: SYSTEM, apply: true, runId: a1.runId },
+      });
+      const a2 = (await app.inject({ method: 'POST', url: '/api/facilities/import', payload: { csv: csvA, nationalSystem: SYSTEM } })).json();
+      // A run for a DIFFERENT national system — must never appear in a SYSTEM-scoped list below.
+      await app.inject({ method: 'POST', url: '/api/facilities/import', payload: { csv: csvB, nationalSystem: 'urn:other:register' } });
+
+      const res = await app.inject({ method: 'GET', url: `/api/facilities/import/runs?nationalSystem=${encodeURIComponent(SYSTEM)}` });
+      expect(res.statusCode).toBe(200);
+      const { runs } = res.json();
+      expect(runs.map((r: any) => r.id)).toEqual([a2.runId, a1.runId]);
+      expect(runs.every((r: any) => r.nationalSystem === SYSTEM)).toBe(true);
+    });
+
+    it('GET .../runs/:id 404s on an unknown id', async () => {
+      const db = await makeMigratedDb();
+      const app = await appWith(fakeImportCtx(db));
+      const res = await app.inject({ method: 'GET', url: '/api/facilities/import/runs/nope' });
+      expect(res.statusCode).toBe(404);
+    });
   });
 });
 
