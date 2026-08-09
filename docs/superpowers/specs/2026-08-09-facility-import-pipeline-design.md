@@ -28,14 +28,19 @@ Three defects, all verified against current code (see *Measured before designing
 In scope: **FAC-P1-02, FAC-P1-03, FAC-P1-05**, delivered as **two branches under one spec** (see
 *Delivery*).
 
-Deliberately **in scope despite A1's decomposition assigning it elsewhere**: canonical vocabularies
-for `status` and `level`, and source→canonical mapping for controlled fields. A1's spec listed
-"canonical status/level vocabularies" under sub-project **B**. The operator has moved it here,
-because FAC-P1-05's own text requires controlled fields to be "validated using source-to-canonical
-mappings, not display strings", and because the retirement policy below has to write a canonical
-`status` value into the registry. **This is a deliberate boundary change from A1's spec, not an
-oversight.** B retains retire/merge lifecycle, duplicate detection, source badges and change history,
-and general optimistic concurrency (P1-18).
+Deliberately **in scope despite A1's decomposition assigning it elsewhere**: **source→canonical
+mapping** for controlled fields, so the importer resolves a release's values against the vocabularies
+the facility form is already bound to. FAC-P1-05's own text requires controlled fields to be
+"validated using source-to-canonical mappings, not display strings", which cannot be done from the
+read path A1 built.
+
+⛔ **The vocabularies themselves are NOT in scope, because they already exist** (migrations 072 and
+073 — see *What already exists*). A1's spec listed "canonical status/level vocabularies" under
+sub-project **B**; that entry is stale in both directions — the vocabularies were seeded before
+either sub-project was written, and only the mapping layer was ever outstanding. **A2 therefore
+takes far less of B's scope than an earlier draft of this spec claimed.** B retains retire/merge
+lifecycle, duplicate detection, source badges and change history, and general optimistic
+concurrency (P1-18).
 
 Explicitly **out of scope**:
 
@@ -66,7 +71,7 @@ Windows), 2026-08-09.
 | Apply counts unchanged rows as `updated` | **True** | `packages/bootstrap/src/facility-import.ts:281` — presence-only, no field is compared |
 | Non-numeric coordinate → `null`, no row error | **True** | `packages/terminology/src/facility-csv.ts:58-63` |
 | No latitude/longitude range check | **True** | no range check exists anywhere in `packages/` or `apps/` |
-| `status`/`level`/`country` not tied to canonical codes | **True for `level`/`status`** | no facility level or status vocabulary exists anywhere. ⚠ **`country` is the exception — see below** |
+| `status`/`level`/`country` not tied to canonical codes | **True — but NOT for the reason assumed** | ⛔ **All three vocabularies already exist**, and the facility *form* is already bound to all three (migrations **072** and **073**). The defect is that the CSV **importer ignores them** and writes free text into columns the form treats as coded. An earlier draft of this spec asserted no level/status vocabulary existed; that was false — see *What already exists* |
 | Rows absent from a later release are never retired or reported | **True** | stated in the docblock, `packages/bootstrap/src/facility-import.ts:188` |
 | An import racing an operator edit can overwrite it | **True, and already documented honestly** | `packages/bootstrap/src/facility-import.ts:202-220` |
 | Duplicate national codes are last-row-wins | **True but NOT silent** | `dedupeById`, `:139-143`; counted into `duplicates`, warned in the sheet (`:356`) and the CLI. The gap is the audit's ask — *quarantine for review* — not visibility |
@@ -133,9 +138,24 @@ need *mapping*, not merely checking.
 - **`blocked`/`blockedReason`** are computed once in `importFacilities` and *reported*, after three
   consumers were each caught re-deriving a narrower predicate that agreed only by accident.
 - An applied import **already enqueues one `facility-map-rebuild`** (`facility-import.ts:345`).
-- **`urn:openldr:valueset:country`** over ISO 3166-1 **alpha-3**, seeded by migration 073
-  (`COUNTRY_SYSTEM = 'urn:iso:std:iso:3166'`), with the facility form already bound to it, and
-  `ISO3166_COUNTRIES` in `packages/db/src/iso3166.ts` as the frozen generated snapshot.
+- ⛔ **All three controlled vocabularies, already seeded, already bound to the facility form.**
+  **A2 builds no vocabulary at all.**
+
+  | Field | ValueSet | CodeSystem | Codes | Seeded by |
+  |---|---|---|---|---|
+  | `status` | `urn:openldr:valueset:location-status` | `http://hl7.org/fhir/location-status` (HL7's) | **3** — `active`, `suspended`, `inactive` | 072 |
+  | `level` | `urn:openldr:valueset:facility-type` | `urn:openldr:cs:facility-type` | **63** — the Tanzanian **HFR facility-type list** (`dispensary`, `health-center`, `district-hospital`, …) | 072 |
+  | `country` | `urn:openldr:valueset:country` | `urn:iso:std:iso:3166` | 249 ISO 3166-1 **alpha-3** | 073 |
+
+  `ISO3166_COUNTRIES` (`packages/db/src/iso3166.ts`) is the frozen generated snapshot behind the
+  third. ⚠ Two traps 072 records and this work inherits: seeded concept `status` is written
+  **UPPERCASE `'ACTIVE'`** because `filterConcepts`/`listSystemConcepts` compare case-**sensitively**
+  and a lowercase value silently vanishes from every `activeOnly` query; and neither `compose` uses a
+  FHIR `filter` clause, because `value-set-expander.ts` ignores the filter `op` entirely.
+
+  ⚠ **The seeded `status` vocabulary has no `retired` code**, which decides the retirement design
+  below. And the seeded level codes are **hyphenated** (`health-center`) while the MFL corpus is
+  **underscored** (`health_center`) — so even the corpus's closest match needs a mapping.
 - **`term_mappings`** is authoritative (`concept_map_elements` is its mirror), with
   `listOutgoing`/`saveExclusive` on the admin store and a **shipped** `TermMappingDialog` at
   `/terminology` for authoring.
@@ -243,11 +263,12 @@ diffs do not belong in a `jsonb` column.
 
 ### 4. Controlled fields — canonical vocabulary and source→canonical mapping
 
-| Field | Canonical system | Rationale |
-|---|---|---|
-| `country` | `urn:iso:std:iso:3166` / `urn:openldr:valueset:country` — **already seeded (073)** | Nothing to build. Alpha-3. |
-| `status` | **new, OpenLDR-owned, seeded** — minimally `active`, `inactive`, `retired` | These are *our* lifecycle semantics; the retirement policy writes `retired` into this column, so the value must be ours to define. |
-| `level` | **new, seeded EMPTY**, operator-populated | ⛔ Facility tiers are country-specific. CE cannot know Tanzania's, and inventing a global set is precisely the hardcoding [dont-hardcode-use-terminology] forbids. |
+⛔ **A2 seeds no vocabulary and writes no vocabulary migration.** All three canonical systems already
+exist and the facility form is already bound to them (see *What already exists*). The defect is
+purely that the importer does not use them. **This is a correction to an earlier draft of this spec,
+which proposed seeding `status` and `level` — that work is already done in migration 072.**
+
+What A2 adds is only the layer between a source's values and those existing systems:
 
 **Mapping is additive and never blocking.** For each field, the source's observed values are captured
 byte-for-byte as concepts in a per-source coding system (mirroring `observedSystemForFeed`'s
@@ -276,7 +297,13 @@ Preview reports two populations **separately**, with samples:
 - **`absent`** — we inferred it from the row's absence in a release declared complete. Defaults to
   *report only*.
 
-Apply acts only on what the operator selected. Retiring sets the canonical `status = retired` **and**
+⛔ **Retirement writes `inactive`, not `retired`.** The seeded status vocabulary is **HL7's own**
+`http://hl7.org/fhir/location-status`, whose three codes are `active`/`suspended`/`inactive`. There
+is no `retired` code, and adding one to a CodeSystem HL7 owns would be inventing a non-conformant
+FHIR value. `inactive` is the canonical code for this state; the *retired* semantics are carried by
+the concept retirement below, which is what actually removes the facility from the picker.
+
+Apply acts only on what the operator selected. Retiring sets the canonical `status = inactive` **and**
 calls the existing `retireRegistryConcepts`, which excludes the facility from the mapping picker
 while leaving every historical report resolving. **Nothing is ever deleted**, and absence is never
 acted on without an explicit choice.
@@ -384,8 +411,10 @@ first throwing assertion does not leave later ones unproven.
 - **The MFL corpus becomes a real fixture.** Q1→Q2→Q3 as successive releases exercises create,
   change, absent and publisher-declared deletion in one sequence; Q3 is the 13 000-row scale case;
   its alpha-2 country codes are the mapping case.
-- **Seeding vocabulary in a migration has an invisible blast radius** — follow migration 073's
-  precedent exactly for `fhir.change_log`/`seq`/`pendingPush` rather than inventing one
+- **No vocabulary is seeded, so the `fhir.change_log` blast radius does not apply.** Recorded
+  explicitly because an earlier draft did propose seeding, and because the single new migration
+  (`facility_import_runs`) creates a table only — it writes no terminology resource and therefore
+  needs none of 072/073's `seedHistoryAndChangeLog` machinery
   ([migration-seeded-changelog-blast-radius]).
 
 Gate: `pnpm turbo run typecheck test --force`, never piped through `tail`, `--testTimeout=30000` for
@@ -405,9 +434,14 @@ whole-package runs.
   one.
 - **Unmapped controlled values do not block an import.** They are counted and listed; the raw value
   is written. A deployment that never authors mappings gets exactly today's behaviour plus a warning.
-- **`level`'s canonical vocabulary ships empty.** Until an operator populates it, every level value
-  is unmapped by construction. This is correct — CE cannot know a country's facility tiers — but it
-  means the first import's summary is noisy.
+- **The seeded `level` vocabulary is Tanzania's HFR list (63 codes).** That is what migration 072
+  shipped; it is not a universal facility-tier vocabulary. A deployment in another country maps its
+  source values onto it, or extends the CodeSystem — A2 neither assumes nor enforces a fit, and the
+  `unmapped` count is what makes a poor fit visible instead of silent.
+- **Retirement writes `inactive`, which is weaker than "retired".** HL7's location-status vocabulary
+  has no retired code; the retired semantics live in the concept retirement (picker exclusion), not
+  in the registry column. Anyone reading `status` alone cannot distinguish "the ministry closed it"
+  from "it fell out of the last release".
 - **`nationalSystem` remains free text.** A2 warns when a value creates a new register identity but
   cannot prevent `HFR` and `hfr` diverging. That is FAC-P1-04, sub-project B's.
 - **No rollback/revert operation.** The audit asks for revert as a new audited operation; A2 records
