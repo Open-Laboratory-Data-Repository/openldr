@@ -310,6 +310,22 @@ describe('createFacilityRegistryStore', () => {
     expect(r.rows[0].mappingCount).toBe(2);
   });
 
+  // Split deliberately from the test above, not merged into it: `expect(r.rows).toHaveLength(1)`
+  // throws immediately under the plain-join mutation, so a combined assertion never reaches
+  // `total` at all — the row-duplication half of the guard would fail loudly, but the
+  // total-inflation half (the more dangerous one, because it corrupts a number the rendered page
+  // shows with no visible duplicate row to tip anyone off) would go unexercised by that failure.
+  // This test asserts ONLY `total`, against the identical fixture, so that half is independently
+  // observable and cannot hide behind the other assertion's throw.
+  it('⭐ a facility targeted by TWO mappings does not inflate the total', async () => {
+    const { db, s } = await store();
+    await s.upsert({ id: 'a', name: 'Alpha', localCode: 'L-A', source: 'manual' as const });
+    await project(db, 'a', 'L-A', 2);
+
+    const r = await s.list({});
+    expect(r.total).toBe(1);
+  });
+
   it('an inactive or non-SAME-AS mapping does not make a facility read as mapped', async () => {
     const { db, s } = await store();
     await s.upsert({ id: 'a', name: 'Alpha', localCode: 'L-A', source: 'manual' as const });
