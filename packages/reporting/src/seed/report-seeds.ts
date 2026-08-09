@@ -204,8 +204,9 @@ export const SEED_QUERIES: SeedQuery[] = [
     // patients.managing_organization is set on 1 of 3714 rows (the seed) — the dropdown offered
     // exactly one fake option. The real facility dimension is diagnostic_reports.performer,
     // resolved through facility_map the same way q-clinical-micro-header resolves its
-    // performing_lab: fm.source_system = coalesce(dr.source_system, '') (the resolver normalises a
-    // NULL source_system to '' when building the dimension, and NULL = NULL is false) and
+    // performing_lab: fm.source_system = coalesce(dr.source_system, '') and fm.performer_system =
+    // coalesce(dr.performer_system, '') (the resolver normalises a NULL source_system/
+    // performer_system to '' when building the dimension, and NULL = NULL is false) and
     // fm.source_code = dr.performer. Column ORDER is the contract optionsDataDriven reads
     // (column 0 = value, column 1 = label) — the value stays the CODE, never the resolved name:
     // five DISA facility codes (BAMAA, BBFAF, CDABE, EAFAE, NDFAM) all display "Aga Khan", so
@@ -223,21 +224,21 @@ export const SEED_QUERIES: SeedQuery[] = [
       postgres: `select dr.performer as value,
   min(coalesce(fm.name, dr.performer_display, dr.performer)) as label
 from diagnostic_reports dr
-left join facility_map fm on fm.source_system = coalesce(dr.source_system, '') and fm.source_code = dr.performer
+left join facility_map fm on fm.source_system = coalesce(dr.source_system, '') and fm.performer_system = coalesce(dr.performer_system, '') and fm.source_code = dr.performer
 where dr.performer is not null and dr.performer <> ''
 group by dr.performer
 order by 2`,
       mssql: `select dr.performer as value,
   min(coalesce(fm.name, dr.performer_display, dr.performer)) as label
 from diagnostic_reports dr
-left join facility_map fm on fm.source_system = coalesce(dr.source_system, '') and fm.source_code = dr.performer
+left join facility_map fm on fm.source_system = coalesce(dr.source_system, '') and fm.performer_system = coalesce(dr.performer_system, '') and fm.source_code = dr.performer
 where dr.performer is not null and dr.performer <> ''
 group by dr.performer
 order by 2`,
       mysql: `select dr.performer as value,
   min(coalesce(fm.name, dr.performer_display, dr.performer)) as label
 from diagnostic_reports dr
-left join facility_map fm on fm.source_system = coalesce(dr.source_system, '') and fm.source_code = dr.performer
+left join facility_map fm on fm.source_system = coalesce(dr.source_system, '') and fm.performer_system = coalesce(dr.performer_system, '') and fm.source_code = dr.performer
 where dr.performer is not null and dr.performer <> ''
 group by dr.performer
 order by 2`,
@@ -803,7 +804,7 @@ order by case band when '0-4' then 1 when '5-14' then 2 when '15-24' then 3 when
     sql: {
       postgres: `with facility_of as (
   select specimen_id, min(performer) as performer, min(performer_display) as performer_display,
-    min(source_system) as source_system
+    min(source_system) as source_system, min(performer_system) as performer_system
   from diagnostic_reports
   where specimen_id is not null and specimen_id <> '' and performer is not null
   group by specimen_id
@@ -816,7 +817,7 @@ from lab_results o
 left join patients p on o.patient_id = p.id
 left join specimens s on o.specimen_id = s.id
 left join facility_of f on f.specimen_id = o.specimen_id
-left join facility_map fm on fm.source_system = coalesce(f.source_system, '') and fm.source_code = f.performer
+left join facility_map fm on fm.source_system = coalesce(f.source_system, '') and fm.performer_system = coalesce(f.performer_system, '') and fm.source_code = f.performer
 where o.abnormal_flag in ('S', 'I', 'R')
   and o.specimen_id is not null and o.specimen_id <> ''
   and exists (select 1 from lab_results g where g.observation_code = '634-6' and g.specimen_id = o.specimen_id)
@@ -830,7 +831,7 @@ order by 1`,
       // concat).
       mssql: `with facility_of as (
   select specimen_id, min(performer) as performer, min(performer_display) as performer_display,
-    min(source_system) as source_system
+    min(source_system) as source_system, min(performer_system) as performer_system
   from diagnostic_reports
   where specimen_id is not null and specimen_id <> '' and performer is not null
   group by specimen_id
@@ -843,7 +844,7 @@ from lab_results o
 left join patients p on o.patient_id = p.id
 left join specimens s on o.specimen_id = s.id
 left join facility_of f on f.specimen_id = o.specimen_id
-left join facility_map fm on fm.source_system = coalesce(f.source_system, '') and fm.source_code = f.performer
+left join facility_map fm on fm.source_system = coalesce(f.source_system, '') and fm.performer_system = coalesce(f.performer_system, '') and fm.source_code = f.performer
 where o.abnormal_flag in ('S', 'I', 'R')
   and o.specimen_id is not null and o.specimen_id <> ''
   and exists (select 1 from lab_results g where g.observation_code = '634-6' and g.specimen_id = o.specimen_id)
@@ -857,7 +858,7 @@ order by 1`,
       // Otherwise identical structure.
       mysql: `with facility_of as (
   select specimen_id, min(performer) as performer, min(performer_display) as performer_display,
-    min(source_system) as source_system
+    min(source_system) as source_system, min(performer_system) as performer_system
   from diagnostic_reports
   where specimen_id is not null and specimen_id <> '' and performer is not null
   group by specimen_id
@@ -870,7 +871,7 @@ from lab_results o
 left join patients p on o.patient_id = p.id
 left join specimens s on o.specimen_id = s.id
 left join facility_of f on f.specimen_id = o.specimen_id
-left join facility_map fm on fm.source_system = coalesce(f.source_system, '') and fm.source_code = f.performer
+left join facility_map fm on fm.source_system = coalesce(f.source_system, '') and fm.performer_system = coalesce(f.performer_system, '') and fm.source_code = f.performer
 where o.abnormal_flag in ('S', 'I', 'R')
   and o.specimen_id is not null and o.specimen_id <> ''
   and exists (select 1 from lab_results g where g.observation_code = '634-6' and g.specimen_id = o.specimen_id)
@@ -1837,6 +1838,13 @@ order by 1`,
   //  - ⛔ `coalesce(fo.source_system, '')` on the facility_map side only: the resolver normalises a
   //    NULL source_system to '' when building the dimension, and `NULL = NULL` is false, so a plain
   //    equality join drops exactly the rows `relational-writer.ts` says exist.
+  //  - ⛔ `performer_system` is the THIRD part of facility_map's key, not decoration. The dimension
+  //    holds one row per (feed, namespace, code); joining on feed+code alone would let one
+  //    namespace's curated name answer for another namespace's identical code (audit FAC-P0-07).
+  //  - ⚠ `min(performer_system)` is folded INDEPENDENTLY of `min(performer)`, so on a specimen whose
+  //    reports disagree it can pair one row's code with another row's namespace. That hazard is
+  //    pre-existing — `performer`, `performer_display` and `source_system` are already folded the
+  //    same way — and is inherited here, not introduced. Not fixed in this change.
   //  - the `facility_of` CTE is the same per-specimen fold, for the same reason, as
   //    `q-amr-facility-summary`: reports are per-ORDER, so joining `diagnostic_reports` directly
   //    would fan this one-row header out. Measured: 0 of 3713 specimens disagree on `performer` and
@@ -1860,7 +1868,8 @@ order by 1`,
   select specimen_id,
     min(performer) as performer,
     min(performer_display) as performer_display,
-    min(source_system) as source_system
+    min(source_system) as source_system,
+    min(performer_system) as performer_system
   from diagnostic_reports
   where specimen_id is not null and specimen_id <> '' and performer is not null
   group by specimen_id
@@ -1879,7 +1888,7 @@ facility as (
     coalesce(fm.district, fa.district) as district,
     coalesce(fm.region, fa.region) as region
   from facility_of fo
-  left join facility_map fm on fm.source_system = coalesce(fo.source_system, '') and fm.source_code = fo.performer
+  left join facility_map fm on fm.source_system = coalesce(fo.source_system, '') and fm.performer_system = coalesce(fo.performer_system, '') and fm.source_code = fo.performer
   left join facility_loc fa on fa.source_system = fo.source_system and fa.facility_code = fo.performer
 )
 select
@@ -1905,7 +1914,8 @@ where q.id = {{param.request}}`, mssql: `with facility_of as (
   select specimen_id,
     min(performer) as performer,
     min(performer_display) as performer_display,
-    min(source_system) as source_system
+    min(source_system) as source_system,
+    min(performer_system) as performer_system
   from diagnostic_reports
   where specimen_id is not null and specimen_id <> '' and performer is not null
   group by specimen_id
@@ -1924,7 +1934,7 @@ facility as (
     coalesce(fm.district, fa.district) as district,
     coalesce(fm.region, fa.region) as region
   from facility_of fo
-  left join facility_map fm on fm.source_system = coalesce(fo.source_system, '') and fm.source_code = fo.performer
+  left join facility_map fm on fm.source_system = coalesce(fo.source_system, '') and fm.performer_system = coalesce(fo.performer_system, '') and fm.source_code = fo.performer
   left join facility_loc fa on fa.source_system = fo.source_system and fa.facility_code = fo.performer
 )
 select
@@ -1950,7 +1960,8 @@ where q.id = {{param.request}}`, mysql: `with facility_of as (
   select specimen_id,
     min(performer) as performer,
     min(performer_display) as performer_display,
-    min(source_system) as source_system
+    min(source_system) as source_system,
+    min(performer_system) as performer_system
   from diagnostic_reports
   where specimen_id is not null and specimen_id <> '' and performer is not null
   group by specimen_id
@@ -1969,7 +1980,7 @@ facility as (
     coalesce(fm.district, fa.district) as district,
     coalesce(fm.region, fa.region) as region
   from facility_of fo
-  left join facility_map fm on fm.source_system = coalesce(fo.source_system, '') and fm.source_code = fo.performer
+  left join facility_map fm on fm.source_system = coalesce(fo.source_system, '') and fm.performer_system = coalesce(fo.performer_system, '') and fm.source_code = fo.performer
   left join facility_loc fa on fa.source_system = fo.source_system and fa.facility_code = fo.performer
 )
 select

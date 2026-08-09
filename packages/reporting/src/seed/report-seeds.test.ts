@@ -424,6 +424,13 @@ describe('SEED_QUERIES — q-amr-facility-summary takes its facility from the re
       expect(sql, `${dialect}`).toContain('left join patients p on o.patient_id = p.id');
     }
   });
+
+  it('matches the observed coding namespace too, not the feed alone (FAC-P0-07)', () => {
+    for (const [dialect, sql] of Object.entries(q().sql)) {
+      expect(sql, `${dialect}`).toMatch(/fm\.performer_system\s*=\s*coalesce\(f\.performer_system, ''\)/);
+      expect(sql, `${dialect}`).toMatch(/min\(performer_system\) as performer_system/);
+    }
+  });
 });
 
 describe('SEED_QUERIES — the facility picker offers real facilities', () => {
@@ -452,6 +459,14 @@ describe('SEED_QUERIES — the facility picker offers real facilities', () => {
     for (const [dialect, sql] of Object.entries(q().sql)) {
       expect(sql, `${dialect}`).toMatch(/fm\.source_system\s*=\s*coalesce\(dr\.source_system, ''\)/);
       expect(sql, `${dialect}`).toMatch(/fm\.source_code\s*=\s*dr\.performer\b/);
+    }
+  });
+
+  it('matches the observed coding namespace too, not the feed alone (FAC-P0-07)', () => {
+    // The dimension is keyed on (feed, namespace, code). Joining on feed+code alone lets one
+    // namespace's curated name answer for a different namespace's identical code.
+    for (const [dialect, sql] of Object.entries(q().sql)) {
+      expect(sql, `${dialect}`).toMatch(/fm\.performer_system\s*=\s*coalesce\(dr\.performer_system, ''\)/);
     }
   });
 
@@ -941,6 +956,13 @@ describe('SEED_QUERIES — q-clinical-micro-header names the performing laborato
     for (const [dialect, sql] of Object.entries(q().sql)) {
       expect(sql, `${dialect} lost the NULL source_system guard`)
         .toMatch(/fm\.source_system\s*=\s*coalesce\(fo\.source_system, ''\)/);
+    }
+  });
+
+  it('matches the observed coding namespace too, not the feed alone (FAC-P0-07)', () => {
+    for (const [dialect, sql] of Object.entries(q().sql)) {
+      expect(sql, `${dialect}`).toMatch(/fm\.performer_system\s*=\s*coalesce\(fo\.performer_system, ''\)/);
+      expect(sql, `${dialect}`).toMatch(/min\(performer_system\) as performer_system/);
     }
   });
 
