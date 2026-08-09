@@ -882,6 +882,23 @@ const reporting: ReportingApi = {
     logger,
   });
 
+  // FAC-P0-07: `facility_map` is keyed on the raw observed wire tuple
+  // (source_system, performer_system, source_code) as of migration 015. That migration relabels the
+  // rows it finds but CANNOT create the ones a namespace split needs — `facility_map.id` is a djb2
+  // hash with no SQL equivalent — so the fan-out has to come from a real rebuild.
+  //
+  // Unconditional and best-effort on every boot, mirroring `seedColumnExposurePolicy` above rather
+  // than `seedEssentials`, which is a forms/workflows surface with no db handle and is gated behind
+  // SEED_ON_START. Costs at most one job per boot: a rebuild that is still queued absorbs this one.
+  //
+  // It also keeps the Facilities chip honest across an upgrade. `facilityHealth` derives `stale`
+  // from `facility_registry`/`term_mappings` mutation times, and a schema change touches neither —
+  // so without this an upgraded install would read "Current" over a dimension of obsolete grain.
+  // A pending rebuild makes it read "Updating", which is true.
+  await facilityJobs.enqueue({ kind: 'facility-map-rebuild', requestedBy: 'boot' }).catch((err) => {
+    logger.warn({ err }, 'boot facility-map-rebuild enqueue failed');
+  });
+
   const connectorStore = createConnectorStore(internal.db);
   const appSettings = createAppSettingsStore(internal.db, referenceCapture);
   const featureFlags = createFeatureFlags(appSettings);
