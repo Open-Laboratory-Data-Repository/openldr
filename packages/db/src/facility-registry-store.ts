@@ -132,8 +132,11 @@ export interface FacilityRegistryStore {
   remove(id: string): Promise<void>;
 }
 
-/** A national register runs 10-15k rows; `list()` with no options must not return all of them. */
-const DEFAULT_LIST_LIMIT = 200;
+/** A national register runs 10-15k rows; `list()` with no options must not return all of them.
+ *  Exported (Task 3) so `GET /api/facilities` can echo the limit it actually applied when the
+ *  client sent none, instead of a caller re-deriving it from `rows.length` — which is wrong on a
+ *  short last page (a 12-row result with no limit would echo `limit: 12`). */
+export const DEFAULT_LIST_LIMIT = 200;
 
 // A real country's admin geography (zones/regions/districts/councils) tops out in the low
 // hundreds even for a large country; this is not a row cap (list()'s DEFAULT_LIST_LIMIT), it caps

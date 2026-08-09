@@ -9,9 +9,9 @@ import {
 } from '@openldr/bootstrap';
 import {
   splitFacilityAnswers, CORE_FACILITY_KEYS, FACILITY_ADMIN_LEVELS, referenceCapture,
-  FACILITY_REGISTRY_SYSTEM,
+  FACILITY_REGISTRY_SYSTEM, DEFAULT_LIST_LIMIT,
 } from '@openldr/db';
-import type { FacilityAdminLevel, ExternalSchema } from '@openldr/db';
+import type { FacilityAdminLevel, ExternalSchema, FacilityHealth } from '@openldr/db';
 import { requireCapability } from './rbac';
 import { recordAudit, actorFromRequest } from './audit-helper';
 
@@ -382,20 +382,67 @@ function parseLimit(raw: unknown): number | undefined {
   return Math.min(Math.floor(n), MAX_LIST_LIMIT);
 }
 
+/** Like `parseLimit`, but 0 is a legitimate value (the first page) — so this rejects only negative,
+ *  non-finite, and non-string inputs. A repeated param arrives as an array and is not a string, so
+ *  it is treated as absent, exactly as `parseLimit` treats it. Not clamped to MAX_LIST_LIMIT: an
+ *  offset past the end is a legitimate empty page, not an error. */
+function parseOffset(raw: unknown): number | undefined {
+  if (typeof raw !== 'string') return undefined;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 0) return undefined;
+  return Math.floor(n);
+}
+
+/** The three health values the store understands (`FacilityHealth`, `@openldr/db`). A closed
+ *  whitelist, not a cast: an arbitrary query string must never reach the store's health branch as
+ *  an unhandled value. Typed against `FacilityHealth` itself (not restated as a fresh literal
+ *  union) so the two cannot drift apart. */
+const HEALTH_VALUES: readonly FacilityHealth[] = ['mapped', 'unmapped', 'unprojected'];
+
+/** Same pattern as `isFacilityAdminLevel` above: the `as readonly string[]` widening cast is safe
+ *  (narrowing a wider type back down via a type predicate, not asserting an unrelated one) and lets
+ *  `.includes` accept an arbitrary string to test — TS does not narrow `Array<T>.includes` on its
+ *  own, so the predicate function is what avoids an `as FacilityHealth` cast at the call site. */
+function isFacilityHealth(v: string): v is FacilityHealth {
+  return (HEALTH_VALUES as readonly string[]).includes(v);
+}
+
+function parseHealth(raw: unknown): FacilityHealth | undefined {
+  return typeof raw === 'string' && isFacilityHealth(raw) ? raw : undefined;
+}
+
 export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any>, ctx: AppContext): void {
   app.get('/api/facilities', VIEW, async (req) => {
     const q = req.query as Record<string, unknown>;
-    return ctx.facilityRegistry.list({
-      // A repeated query param (`?region=A&region=B`) arrives as an array; only a plain string is a
-      // valid filter value, so anything else is treated as "not specified" rather than reaching
-      // Kysely as `where(col, '=', [...])`. `ownFirstString` (not `firstString(q.region)` directly)
-      // additionally keeps this reading only `q`'s OWN properties — see its doc comment.
+    const limit = parseLimit(q.limit);
+    const offset = parseOffset(q.offset) ?? 0;
+    // A repeated query param (`?region=A&region=B`) arrives as an array; only a plain string is a
+    // valid filter value, so anything else is treated as "not specified" rather than reaching
+    // Kysely as `where(col, '=', [...])`. `ownFirstString` (not `firstString(q.region)` directly)
+    // additionally keeps this reading only `q`'s OWN properties — see its doc comment.
+    const { rows, total } = await ctx.facilityRegistry.list({
+      q: ownFirstString(q, 'q'),
+      country: ownFirstString(q, 'country'),
+      zone: ownFirstString(q, 'zone'),
       region: ownFirstString(q, 'region'),
       district: ownFirstString(q, 'district'),
       council: ownFirstString(q, 'council'),
       status: ownFirstString(q, 'status'),
-      limit: parseLimit(q.limit),
+      level: ownFirstString(q, 'level'),
+      ownership: ownFirstString(q, 'ownership'),
+      nationalSystem: ownFirstString(q, 'nationalSystem'),
+      source: ownFirstString(q, 'source'),
+      managedOrigin: ownFirstString(q, 'managedOrigin'),
+      health: parseHealth(ownFirstString(q, 'health')),
+      limit,
+      offset,
     });
+    // `limit` echoed as `DEFAULT_LIST_LIMIT` (the store's own default, @openldr/db) when the client
+    // sent none — NOT `rows.length`, which is wrong on a short last page (a 12-row result with no
+    // limit would echo `limit: 12`, indistinguishable from "the page size is 12"). Echoing the
+    // store's actual default means a client never has to re-derive it, and it stays correct even
+    // when a page happens to come back shorter than the limit that produced it.
+    return { rows, total, limit: limit ?? DEFAULT_LIST_LIMIT, offset };
   });
 
   // Distinct, already-seen values for one of the four admin-area columns (zone/region/district/
