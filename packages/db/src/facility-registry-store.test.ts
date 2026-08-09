@@ -264,4 +264,83 @@ describe('createFacilityRegistryStore', () => {
       expect(sql).toContain(`coalesce("zone", '') != ''`);
     });
   });
+
+  // --- Task 2: mapping/projection health --------------------------------------------------------
+
+  /** Projects a facility (making it selectable as a mapping target) and optionally points `n`
+   *  active SAME-AS mappings at it — the many-observed-codes-to-one-facility case. */
+  async function project(db: any, registryId: string, conceptCode: string, mappings = 0) {
+    await db.insertInto('facility_concept_projection')
+      .values({ registry_id: registryId, concept_code: conceptCode }).execute();
+    for (let i = 0; i < mappings; i += 1) {
+      await db.insertInto('term_mappings').values({
+        id: `${registryId}-m${i}`, from_system: 'urn:openldr:default_fac', from_code: `OBS-${registryId}-${i}`,
+        to_system: 'urn:openldr:cs:facility-registry', to_code: conceptCode, to_display: null,
+        map_type: 'SAME-AS', relationship: null, owner: null, is_active: true,
+      }).execute();
+    }
+  }
+
+  it('reports unprojected, unmapped and mapped health', async () => {
+    const { db, s } = await store();
+    await s.upsert({ id: 'a', name: 'Alpha', localCode: 'L-A', source: 'manual' as const });
+    await s.upsert({ id: 'b', name: 'Beta', localCode: 'L-B', source: 'manual' as const });
+    await s.upsert({ id: 'c', name: 'Gamma', localCode: 'L-C', source: 'manual' as const });
+    await project(db, 'a', 'L-A', 1);
+    await project(db, 'b', 'L-B', 0);
+    // 'c' is never projected — it cannot be picked as a mapping target at all.
+
+    const { rows } = await s.list({});
+    const byId = Object.fromEntries(rows.map((r) => [r.id, r]));
+    expect(byId.a.health).toBe('mapped');
+    expect(byId.b.health).toBe('unmapped');
+    expect(byId.c.health).toBe('unprojected');
+  });
+
+  it('⭐ a facility targeted by TWO mappings appears ONCE and does not inflate the total', async () => {
+    // The fan-out guard. term_mappings permits many observed codes to resolve to one facility, so a
+    // plain left join would return this facility twice and report total 2.
+    const { db, s } = await store();
+    await s.upsert({ id: 'a', name: 'Alpha', localCode: 'L-A', source: 'manual' as const });
+    await project(db, 'a', 'L-A', 2);
+
+    const r = await s.list({});
+    expect(r.rows).toHaveLength(1);
+    expect(r.total).toBe(1);
+    expect(r.rows[0].mappingCount).toBe(2);
+  });
+
+  it('an inactive or non-SAME-AS mapping does not make a facility read as mapped', async () => {
+    const { db, s } = await store();
+    await s.upsert({ id: 'a', name: 'Alpha', localCode: 'L-A', source: 'manual' as const });
+    await db.insertInto('facility_concept_projection')
+      .values({ registry_id: 'a', concept_code: 'L-A' }).execute();
+    await db.insertInto('term_mappings').values([
+      { id: 'm-inactive', from_system: 'urn:openldr:default_fac', from_code: 'O1',
+        to_system: 'urn:openldr:cs:facility-registry', to_code: 'L-A', to_display: null,
+        map_type: 'SAME-AS', relationship: null, owner: null, is_active: false },
+      { id: 'm-narrower', from_system: 'urn:openldr:default_fac', from_code: 'O2',
+        to_system: 'urn:openldr:cs:facility-registry', to_code: 'L-A', to_display: null,
+        map_type: 'NARROWER-THAN', relationship: null, owner: null, is_active: true },
+    ]).execute();
+
+    const { rows } = await s.list({});
+    expect(rows[0].health).toBe('unmapped');
+    expect(rows[0].mappingCount).toBe(0);
+  });
+
+  it('filters by health, with a total that matches', async () => {
+    const { db, s } = await store();
+    await s.upsert({ id: 'a', name: 'Alpha', localCode: 'L-A', source: 'manual' as const });
+    await s.upsert({ id: 'b', name: 'Beta', localCode: 'L-B', source: 'manual' as const });
+    await s.upsert({ id: 'c', name: 'Gamma', localCode: 'L-C', source: 'manual' as const });
+    await project(db, 'a', 'L-A', 1);
+    await project(db, 'b', 'L-B', 0);
+
+    const mapped = await s.list({ health: 'mapped' });
+    expect(mapped.total).toBe(1);
+    expect(mapped.rows.map((r) => r.id)).toEqual(['a']);
+    expect((await s.list({ health: 'unmapped' })).total).toBe(1);
+    expect((await s.list({ health: 'unprojected' })).total).toBe(1);
+  });
 });

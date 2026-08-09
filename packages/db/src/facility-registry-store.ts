@@ -2,6 +2,7 @@ import { type Kysely, type SelectQueryBuilder, sql } from 'kysely';
 import type { InternalSchema } from './schema/internal';
 import type { ReferenceCapture } from './reference-capture';
 import { FACILITY_ADMIN_LEVELS, type FacilityAdminLevel } from './facility-answers';
+import { FACILITY_REGISTRY_SYSTEM } from './facility-observed';
 
 // `FacilityAdminLevel`/`FACILITY_ADMIN_LEVELS` live in `./facility-answers` (the browser-safe
 // subpath) rather than here — that is the one dependency-free seam `apps/studio` already imports
@@ -72,7 +73,21 @@ export interface FacilityListOptions {
    *  page-jumping, which a cursor composes badly with. Drift under concurrent writes is accepted —
    *  see the spec's Known limits. */
   offset?: number;
+  /** Mapping/projection health (FAC-P1-01). `unprojected` means the facility has no
+   *  `facility_concept_projection` row and therefore CANNOT be selected as a mapping target at all
+   *  — the FAC-P0-08 failure state, visible in a list instead of only as a failed background job. */
+  health?: 'mapped' | 'unmapped' | 'unprojected';
 }
+
+/** Derived per row by `list()`, never stored. */
+export type FacilityHealth = 'mapped' | 'unmapped' | 'unprojected';
+
+/** A `FacilityRecord` as `list()` returns it — with the two fields it derives, per row, via the
+ *  `facility_concept_projection`/`term_mappings` join. Not what `get()`/`upsert()` traffic in. */
+export type FacilityListRow = FacilityRecord & {
+  health: FacilityHealth;
+  mappingCount: number;
+};
 
 export interface FacilityAdminValueCount {
   /** The observed value, verbatim (never normalised/cased). */
@@ -85,7 +100,7 @@ export interface FacilityRegistryStore {
   get(id: string): Promise<FacilityRecord | undefined>;
   /** Page of facilities plus the EXACT total matching the same search/filters (before limit/offset).
    *  Capped at 200 rows by default — see `FacilityListOptions.limit`. */
-  list(opts?: FacilityListOptions): Promise<{ rows: FacilityRecord[]; total: number }>;
+  list(opts?: FacilityListOptions): Promise<{ rows: FacilityListRow[]; total: number }>;
   /**
    * Distinct, non-blank values already present in `facility_registry.<level>`, ranked by
    * frequency (commonest first) with their counts — so an operator can see a real value
@@ -296,17 +311,73 @@ export function createFacilityRegistryStore(
         return q;
       };
 
-      const rowsQ = applyFilters(db.selectFrom('facility_registry').selectAll())
-        .orderBy('name', 'asc')
+      // ⛔ An UNCORRELATED derived-table aggregate, and both halves of that matter.
+      //
+      // NOT a plain join to `term_mappings`: one facility is legitimately the target of MANY
+      // observed codes (migration 078's partial unique index constrains one active resolution per
+      // OBSERVED code, not per target), so a plain join would multiply the facility row by its
+      // mapping count and inflate both the page and the total — the same fan-out class the
+      // `facility_of` CTE exists to prevent in the seeded reports.
+      //
+      // NOT an EXISTS/correlated subquery either: pg-mem, which this suite runs against, has zero
+      // correlated-subquery support (measured on a predecessor slice: five variants all failed with
+      // `column "t1.k" does not exist`), so a correlated form would be untestable here.
+      //
+      // Applied AFTER `applyFilters` (not before, unlike the brief's snippet) so `applyFilters`
+      // keeps running against a builder whose only table is `facility_registry` — its column
+      // references (`'country'`, `'region'`, ...) stay unqualified and unambiguous, and its type
+      // stays exactly `SelectQueryBuilder<InternalSchema, 'facility_registry', O>` with no widening
+      // needed. SQL clause order doesn't depend on JS call order (Kysely always renders
+      // FROM/JOIN before WHERE), so filtering first and joining after is equivalent to the brief's
+      // join-first ordering.
+      //
+      // Health is applied here as explicit predicates rather than filtering on a computed alias —
+      // the same three conditions serve both the rows query and the count query below without
+      // wrapping either in a subquery.
+      const joinHealth = <O>(qb: SelectQueryBuilder<InternalSchema, 'facility_registry', O>) => {
+        const joined = qb
+          .leftJoin('facility_concept_projection as fcp', 'fcp.registry_id', 'facility_registry.id')
+          .leftJoin(
+            (eb) => eb
+              .selectFrom('term_mappings')
+              .select((e) => ['to_code', e.fn.countAll<number>().as('n')])
+              .where('to_system', '=', FACILITY_REGISTRY_SYSTEM)
+              .where('is_active', '=', true)
+              .where('map_type', '=', 'SAME-AS')
+              .groupBy('to_code')
+              .as('m'),
+            (join) => join.onRef('m.to_code', '=', 'fcp.concept_code'),
+          );
+        if (opts.health === 'unprojected') return joined.where('fcp.registry_id', 'is', null);
+        if (opts.health === 'mapped') return joined.where(sql`coalesce(m.n, 0)`, '>', 0);
+        if (opts.health === 'unmapped') {
+          return joined.where('fcp.registry_id', 'is not', null).where(sql`coalesce(m.n, 0)`, '=', 0);
+        }
+        return joined;
+      };
+
+      const rowsQ = joinHealth(applyFilters(
+        db.selectFrom('facility_registry')
+          .selectAll('facility_registry')
+          .select(sql<string>`case when fcp.registry_id is null then 'unprojected'
+                                   when coalesce(m.n, 0) > 0 then 'mapped'
+                                   else 'unmapped' end`.as('health'))
+          .select(sql<number>`coalesce(m.n, 0)`.as('mapping_count')),
+      ))
+        .orderBy('facility_registry.name', 'asc')
         .limit(opts.limit ?? DEFAULT_LIST_LIMIT)
         .offset(opts.offset ?? 0);
-      const countQ = applyFilters(
+      const countQ = joinHealth(applyFilters(
         db.selectFrom('facility_registry').select((eb) => eb.fn.countAll<number>().as('n')),
-      );
+      ));
 
       const [rows, counted] = await Promise.all([rowsQ.execute(), countQ.executeTakeFirst()]);
       return {
-        rows: rows.map((r) => toRecord(r as Row)),
+        rows: rows.map((r) => ({
+          ...toRecord(r as Row),
+          health: r.health as FacilityHealth,
+          mappingCount: Number(r.mapping_count ?? 0),
+        })),
         total: Number(counted?.n ?? 0),
       };
     },
