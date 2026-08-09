@@ -174,7 +174,10 @@ export async function up(db: Kysely<unknown>): Promise<void> {
     // Populated by A2b's upload. NULL for an A2a preview/apply, which holds the CSV in the request.
     .addColumn('blob_key', 'text')
     .addColumn('file_hash', 'text', (c) => c.notNull())
-    .addColumn('byte_size', 'bigint', (c) => c.notNull())
+    // integer (not bigint): the Postgres driver returns bigint as a STRING, so `byte_size: number`
+    // would be a type lie — see TerminologyIngestJobsTable's `processed: Generated<string>`. A 2 GB
+    // ceiling is far above any register; the endpoint already caps uploads at 8 MB.
+    .addColumn('byte_size', 'integer', (c) => c.notNull())
     // From a JSONL release header, or typed by the operator for a CSV. NULL when neither supplied one.
     .addColumn('release_version', 'text')
     .addColumn('release_published_at', 'timestamptz')
