@@ -29,4 +29,12 @@ describe('EXTERNAL_TABLE_COLUMNS', () => {
       expect(cols).toContain('batch_id');
     }
   });
+  it('carries all three parts of facility_map\'s natural key', () => {
+    // The dimension is keyed on the raw observed wire tuple (feed, namespace, code). Dropping any
+    // part from this list would hide it from the Data Exposure policy and any consumer that reads
+    // the column set rather than the table.
+    for (const col of ['source_system', 'performer_system', 'source_code']) {
+      expect(EXTERNAL_TABLE_COLUMNS.facility_map).toContain(col);
+    }
+  });
 });

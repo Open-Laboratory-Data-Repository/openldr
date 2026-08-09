@@ -2691,3 +2691,86 @@ describe('captureObservedFacilityFromProjection', () => {
     expect(defaultTotal).toBe(0);
   });
 });
+
+describe('facility_map is keyed on the raw observed wire tuple (FAC-P0-07)', () => {
+  it('emits one row per namespace when one feed sends a code under two namespaces', async () => {
+    const deps = await makeReconcileDeps();
+    await seedPerformers(deps, [['NHL-01', 2]], { sourceSystem: 'feed-a', performerSystem: 'urn:a' });
+    await seedPerformers(deps, [['NHL-01', 3]], { sourceSystem: 'feed-a', performerSystem: 'urn:b' });
+
+    await publishFacilityMap(deps, { apply: true });
+
+    const rows = await deps.externalDb.selectFrom('facility_map')
+      .select(['source_system', 'performer_system', 'source_code'])
+      .orderBy('performer_system').execute();
+    expect(rows).toEqual([
+      { source_system: 'feed-a', performer_system: 'urn:a', source_code: 'NHL-01' },
+      { source_system: 'feed-a', performer_system: 'urn:b', source_code: 'NHL-01' },
+    ]);
+  });
+
+  it('emits one row per FEED when two feeds share a namespace and a code', async () => {
+    // The second failure direction, absent from the audit: these fold into ONE ResolvedFacility
+    // whose sourceSystem is only the tiebreak winner, so feed-b used to get no dimension row at all
+    // and its reports silently fell back to the raw performer string.
+    const deps = await makeReconcileDeps();
+    await seedPerformers(deps, [['NHL-01', 2]], { sourceSystem: 'feed-a', performerSystem: 'urn:shared' });
+    await seedPerformers(deps, [['NHL-01', 3]], { sourceSystem: 'feed-b', performerSystem: 'urn:shared' });
+
+    await publishFacilityMap(deps, { apply: true });
+
+    const rows = await deps.externalDb.selectFrom('facility_map')
+      .select(['source_system', 'performer_system', 'source_code'])
+      .orderBy('source_system').execute();
+    expect(rows).toEqual([
+      { source_system: 'feed-a', performer_system: 'urn:shared', source_code: 'NHL-01' },
+      { source_system: 'feed-b', performer_system: 'urn:shared', source_code: 'NHL-01' },
+    ]);
+  });
+
+  it("stores '' for a report whose wire supplied no namespace", async () => {
+    const deps = await makeReconcileDeps();
+    await seedPerformers(deps, [['NHL-01', 1]], { sourceSystem: 'webhook-ingest', performerSystem: null });
+
+    await publishFacilityMap(deps, { apply: true });
+
+    const rows = await deps.externalDb.selectFrom('facility_map')
+      .select(['performer_system']).execute();
+    expect(rows).toEqual([{ performer_system: '' }]);
+  });
+
+  it('does not duplicate an observation when only performer_display differs', async () => {
+    // The source query groups by performer_display too, so one wire tuple can arrive as two raw
+    // groups. `observations` must dedupe them or publish emits two identical-id rows.
+    const deps = await makeReconcileDeps();
+    await seedPerformers(deps, [['NHL-01', 1]], { sourceSystem: 'feed-a', performerSystem: 'urn:a', performerDisplay: 'Alpha' });
+    await seedPerformers(deps, [['NHL-01', 1]], { sourceSystem: 'feed-a', performerSystem: 'urn:a', performerDisplay: 'Alpha Clinic' });
+
+    await publishFacilityMap(deps, { apply: true });
+
+    const rows = await deps.externalDb.selectFrom('facility_map').select(['id']).execute();
+    expect(rows).toHaveLength(1);
+  });
+
+  // Whole-branch review, Finding 1: `facility_map.id` coalesces a raw `performer_system` of `NULL`
+  // and of `''` down to the SAME `''` (see `FacilityMapTable.performer_system`'s doc comment), but
+  // `resolvedObservedSystem` used to fold ONLY `null`/`undefined` into the `observedSystemForFeed`
+  // fallback via `??` — a blank string survived as its own resolved system. Two rows differing ONLY
+  // by `performer_system` being `NULL` vs `''` therefore resolved through two DIFFERENT fold keys
+  // (one via the fallback, one via `''` itself) yet computed the SAME `facility_map.id`, so
+  // `publishFacilityMap` threw `facility_map id collision` on data this table's own coalescing
+  // already treats as one row. The fix makes `resolvedObservedSystem` treat blank the same as
+  // absent, matching `observedSystemForFeed`'s own blank handling, so both rows fold into ONE
+  // `ResolvedFacility` and publish exactly one dimension row.
+  it('folds performer_system NULL and \'\' into ONE facility_map row (no id collision)', async () => {
+    const deps = await makeReconcileDeps();
+    await seedPerformers(deps, [['NHL-01', 1]], { sourceSystem: 'webhook-ingest', performerSystem: null });
+    await seedPerformers(deps, [['NHL-01', 1]], { sourceSystem: 'webhook-ingest', performerSystem: '' });
+
+    await expect(publishFacilityMap(deps, { apply: true })).resolves.toMatchObject({ written: 1 });
+
+    const rows = await deps.externalDb.selectFrom('facility_map')
+      .select(['source_system', 'performer_system', 'source_code']).execute();
+    expect(rows).toEqual([{ source_system: 'webhook-ingest', performer_system: '', source_code: 'NHL-01' }]);
+  });
+});

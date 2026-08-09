@@ -103,6 +103,18 @@ function djb2Hex(s: string): string {
  * fallback for a sender that supplies no identifier system at all (display-only, or no identifier
  * whatsoever).
  *
+ * ⛔ Blank (`''`, or whitespace-only) is treated the SAME as `null`/`undefined` — trimmed and, if
+ * empty, discarded in favour of the `observedSystemForFeed` fallback, exactly as `observedSystemForFeed`
+ * itself already treats a blank `sourceSystem`. This is load-bearing, not merely tidy: `facility_map`'s
+ * natural key coalesces a raw `performer_system` of NULL and of `''` down to the SAME `''` (see
+ * `FacilityMapTable.performer_system`'s doc comment and `facilityMapId`), so if THIS function let `''`
+ * survive as its own resolved system, two rows that differ only by `performer_system` being `NULL` vs
+ * `''` would fold into two DIFFERENT `ResolvedFacility` values yet compute the SAME `facility_map.id` —
+ * a real collision, reproduced against this branch by seeding exactly that pair and observing
+ * `publishFacilityMap({apply:true})` throw `facility_map id collision`. Folding blank into the fallback
+ * here closes that hole by making both rows resolve to ONE fold key, matching the ONE dimension row
+ * their coalesced ids already share.
+ *
  * Extracted so `scanObservedFacilities`, `resolveObservedFacilities`, and
  * `captureObservedFacilityFromProjection` share ONE definition of this preference instead of three
  * independently-typed copies of `performer_system ?? observedSystemForFeed(source_system)` that
@@ -112,7 +124,8 @@ function resolvedObservedSystem(
   performerSystem: string | null | undefined,
   sourceSystem: string | null | undefined,
 ): string {
-  return performerSystem ?? observedSystemForFeed(sourceSystem ?? null);
+  const trimmed = (performerSystem ?? '').trim();
+  return trimmed !== '' ? trimmed : observedSystemForFeed(sourceSystem ?? null);
 }
 
 /**
@@ -291,6 +304,20 @@ export interface ResolvedFacility {
    *  Lets the Observed tab show "BAMAA — Aga Khan" instead of a bare opaque code, without using the
    *  display for matching. Null when the source never supplied one. */
   sourceDisplay: string | null;
+  /** Every raw wire tuple — `(source_system, performer_system)` — that folded into this resolved
+   *  facility, deduped. `publishFacilityMap` emits one `facility_map` row per entry, all carrying
+   *  this row's resolution.
+   *
+   *  ⛔ This exists because the fold key is `(resolvedSystem, code)` while the report join can only
+   *  match RAW wire columns — `observedSystemForFeed` is TypeScript with no SQL equivalent. Two
+   *  feeds sharing a wire namespace fold into ONE row here whose `sourceSystem` is merely the
+   *  display tiebreak winner, so publishing that single feed left the other feed's reports matching
+   *  nothing at all.
+   *
+   *  ⛔ Accumulated during the fold, never re-queried in `publishFacilityMap`. A consumer that
+   *  re-derives its own grouping is exactly what let a route's join key drift out of sync with this
+   *  function's fold key and drop a feed's contribution (Task 11, whole-branch review round 2). */
+  observations: { sourceSystem: string; performerSystem: string }[];
   /** `facilities.region`/`facilities.district` (`Organization.address[0].state`/`.district`,
    *  migration 014) for `sourceCode`, joined WITHIN `sourceSystem` above — i.e.
    *  `facilities.facility_code = sourceCode AND facilities.source_system = sourceSystem`. This is
@@ -506,6 +533,10 @@ export async function resolveObservedFacilities(deps: ReconcileDeps): Promise<Re
     sourceDisplay: string | null;
     n: number; // reports backing the CURRENT representative display; used only to break ties
     reportCount: number; // SUM of every raw group's `n` folded into this key so far
+    /** Deduped raw wire tuples, keyed `${sourceSystem}\n${performerSystem}`. A Map, not an array:
+     *  the source query groups by `performer_display` too, so ONE wire tuple can arrive as several
+     *  raw groups and an array would emit duplicate `facility_map` ids for it. */
+    observations: Map<string, { sourceSystem: string; performerSystem: string }>;
   }
   const folded = new Map<string, FoldedGroup>();
   for (const o of observed) {
@@ -514,7 +545,9 @@ export async function resolveObservedFacilities(deps: ReconcileDeps): Promise<Re
     const code = o.performer;
     const key = `${system}\n${code}`;
     const n = Number(o.n);
-    const candidate: Omit<FoldedGroup, 'reportCount'> = {
+    const performerSystem = o.performer_system ?? '';
+    const observationKey = `${o.source_system ?? ''}\n${performerSystem}`;
+    const candidate: Omit<FoldedGroup, 'reportCount' | 'observations'> = {
       system,
       code,
       sourceSystem: o.source_system ?? '',
@@ -523,7 +556,11 @@ export async function resolveObservedFacilities(deps: ReconcileDeps): Promise<Re
     };
     const current = folded.get(key);
     if (!current) {
-      folded.set(key, { ...candidate, reportCount: n });
+      folded.set(key, {
+        ...candidate,
+        reportCount: n,
+        observations: new Map([[observationKey, { sourceSystem: candidate.sourceSystem, performerSystem }]]),
+      });
       continue;
     }
     const currentHasDisplay = current.sourceDisplay !== null;
@@ -537,7 +574,14 @@ export async function resolveObservedFacilities(deps: ReconcileDeps): Promise<Re
       replace = candidate.sourceSystem < current.sourceSystem; // final deterministic tiebreak
     }
     const reportCount = current.reportCount + n; // summed regardless of which side wins the display
-    folded.set(key, replace ? { ...candidate, reportCount } : { ...current, reportCount });
+    // ⛔ Accumulate onto the INCUMBENT map whichever side wins the display tiebreak. `candidate` has
+    // seen exactly one tuple; taking its map on a `replace` would discard every tuple folded in
+    // before it, which is the same silent-feed-loss this field exists to prevent.
+    const observations = current.observations;
+    observations.set(observationKey, { sourceSystem: candidate.sourceSystem, performerSystem });
+    folded.set(key, replace
+      ? { ...candidate, reportCount, observations }
+      : { ...current, reportCount, observations });
   }
   const foldedRows = [...folded.values()];
 
@@ -709,6 +753,7 @@ export async function resolveObservedFacilities(deps: ReconcileDeps): Promise<Re
       sourceSystem: r.sourceSystem,
       sourceCode: r.code,
       sourceDisplay: r.sourceDisplay,
+      observations: [...r.observations.values()],
       sourceRegion: location.region,
       sourceDistrict: location.district,
       reportCount: r.reportCount,
@@ -778,9 +823,13 @@ export async function publishFacilityMap(
   };
   if (!opts.apply) return result;
 
-  const allRows = resolved.map((r) => ({
-    id: facilityMapId(r.sourceSystem, r.sourceCode),
-    source_system: r.sourceSystem,
+  // One row per RAW observed wire tuple, not per resolved facility. The report join can only match
+  // raw wire columns (`observedSystemForFeed` is TypeScript, unrepresentable in SQL), so this is the
+  // grain the dimension has to hold. Each of a facility's tuples carries the SAME resolution.
+  const allRows = resolved.flatMap((r) => r.observations.map((o) => ({
+    id: facilityMapId(o.sourceSystem, o.performerSystem, r.sourceCode),
+    source_system: o.sourceSystem,
+    performer_system: o.performerSystem,
     source_code: r.sourceCode,
     registry_id: r.registryId,
     local_code: r.localCode,
@@ -793,33 +842,42 @@ export async function publishFacilityMap(
     national_system: r.nationalSystem,
     national_code: r.nationalCode,
     resolved_via: r.resolvedVia,
-  }));
+  })));
 
-  // Dedupe by `id` before the delete-then-insert below, or a duplicate primary key aborts the whole
-  // transaction.
+  // ⛔ A THROW, not a filter. The previous `seenIds` dedupe silently discarded a legitimately
+  // distinct facility — the audit's FAC-P0-07 — and "never resolve a collision by first-row-wins
+  // deduplication" is its stated requirement.
   //
-  // ⚠ This is NOT redundant with `resolveObservedFacilities`' own fold, and the two guard DIFFERENT
-  // collisions. That fold keys on `(resolved system, code)`, so it deliberately keeps two rows apart
-  // when they share a code but resolve to different coding systems — that separation is the entire
-  // point of the per-feed system work. But `facilityMapId` is derived from `(sourceSystem, sourceCode)`
-  // and knows nothing about the resolved system, so those two legitimately-distinct rows still collide
-  // on one `facility_map.id`. This dedupe is the only thing standing between that and a failed publish.
-  //
-  // (Originally added for a narrower case — a warehouse holding both NULL and empty-string
-  // `source_system` for one performer. `resolveObservedFacilities` now folds that case away upstream,
-  // but the different-resolved-system case above remains live.)
+  // Duplicates are impossible by construction, but the proof is about COALESCED tuples, not raw
+  // ones — an earlier version of this comment claimed the latter and was wrong. `id` is
+  // `facilityMapId(o.sourceSystem, o.performerSystem, r.sourceCode)`, and `o.performerSystem` here is
+  // already `performer_system ?? ''` (see the `observationKey`/`performerSystem` construction in
+  // `resolveObservedFacilities`, above) — i.e. the id is a function of the COALESCED tuple, not the
+  // raw one. `resolvedObservedSystem` is a pure function of (performer_system, source_system) and,
+  // since the fix for the whole-branch review's Finding 1, treats a BLANK `performer_system` (`''`,
+  // or whitespace-only) exactly like `null`/`undefined` — matching the SAME coalescing the id
+  // computation already applies. That equivalence is what makes the invariant hold: two raw tuples
+  // that coalesce to the same id-triple now always resolve through the same fold key too, so they
+  // land in the SAME `ResolvedFacility` and dedupe via `observations`' Map before `allRows` is even
+  // built. Before that fix, a `performer_system` of `NULL` vs `''` on an otherwise-identical tuple
+  // resolved to two DIFFERENT fold keys (one via the `observedSystemForFeed` fallback, one taking
+  // `''` as its own system) yet coalesced to the SAME id — a real, reproduced collision, not a
+  // hypothetical one. If this equivalence is ever broken again, the throw below is what turns that
+  // back into a loud failure instead of a silently dropped facility.
   const seenIds = new Set<string>();
-  const rows = allRows.filter((r) => {
-    if (seenIds.has(r.id)) return false;
+  for (const r of allRows) {
+    if (seenIds.has(r.id)) {
+      throw new Error(`facility_map id collision on ${JSON.stringify(r.id)} — two observed facilities resolved to one dimension row`);
+    }
     seenIds.add(r.id);
-    return true;
-  });
+  }
+  const rows = allRows;
 
   await deps.externalDb.transaction().execute(async (trx) => {
     await trx.deleteFrom('facility_map').execute();
-    // Chunked: MSSQL's parameter budget is ~2000 and each row binds 14 values (150 * 14 = 2100
-    // would exceed it, hence 140 not 150).
-    const chunk = 140;
+    // Chunked: MSSQL's parameter budget is ~2000 and each row binds 15 values (140 * 15 = 2100
+    // would exceed it, hence 130 not 140).
+    const chunk = 130;
     for (let i = 0; i < rows.length; i += chunk) {
       await trx.insertInto('facility_map').values(rows.slice(i, i + chunk) as never).execute();
     }
