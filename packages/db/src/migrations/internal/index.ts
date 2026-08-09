@@ -78,6 +78,7 @@ import * as m076 from './076_suspend_facility_registry_sync';
 import * as m077 from './077_facility_concept_projection';
 import * as m078 from './078_one_active_facility_resolution';
 import * as m079 from './079_facility_jobs';
+import * as m080 from './080_facility_import_runs';
 
 export const internalMigrations: Record<string, Migration> = {
   '001_fhir_resources': { up: m001.up, down: m001.down },
@@ -159,4 +160,5 @@ export const internalMigrations: Record<string, Migration> = {
   '077_facility_concept_projection': { up: m077.up, down: m077.down },
   '078_one_active_facility_resolution': { up: m078.up, down: m078.down },
   '079_facility_jobs': { up: m079.up, down: m079.down },
+  '080_facility_import_runs': { up: m080.up, down: m080.down },
 };
