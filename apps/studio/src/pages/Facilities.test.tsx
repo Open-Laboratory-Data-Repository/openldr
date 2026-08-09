@@ -829,4 +829,24 @@ describe('Facilities page', () => {
       expect(screen.getByRole('button', { name: 'Previous' })).not.toBeDisabled();
     });
   });
+
+  /** ⛔ Every other test on this page renders `<Facilities />` bare (`show()`), so the mount effect
+   *  runs ONCE. The real app renders under `<StrictMode>` (apps/studio/src/main.tsx), where React
+   *  deliberately runs every mount effect TWICE — and refs survive that simulated remount. So the
+   *  second run sees `isFirstLoad.current === false`, issues a `background: true` reload, and bumps
+   *  the generation ref past the first call's captured value. Neither call can then clear `loading`:
+   *  the blocking one is superseded (guard fails in `finally`), the background one never touches
+   *  `loading` by design — and the Registry panel shows its spinner forever, on every dev page load,
+   *  with the data sitting fetched and discarded. This is the ONLY test that mounts the page the way
+   *  production actually does. */
+  it('renders rows under StrictMode, whose doubled mount effect must not strand the spinner', async () => {
+    (listPublishedForms as ReturnType<typeof vi.fn>).mockResolvedValue([publishedFacilityForm]);
+    listFacilitiesMock.mockResolvedValue(makePage(makeRows(3)));
+    window.history.replaceState({}, '', '/facilities');
+
+    render(<React.StrictMode><MemoryRouter><Facilities /></MemoryRouter></React.StrictMode>);
+
+    expect(await screen.findByText('Facility 0')).toBeInTheDocument();
+    expect(screen.queryByText(/loading/i)).not.toBeInTheDocument();
+  });
 });
