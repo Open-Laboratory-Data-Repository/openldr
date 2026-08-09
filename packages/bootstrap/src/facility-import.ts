@@ -1,5 +1,5 @@
 import { type Kysely, sql } from 'kysely';
-import { parseFacilityCsv, type QuarantinedRow } from '@openldr/terminology';
+import { parseFacilityCsv, type QuarantinedRow, type RowError } from '@openldr/terminology';
 import {
   type FacilityRecord,
   type InternalSchema,
@@ -9,6 +9,7 @@ import {
   insertBatchPg,
   facilityRecordToRow,
 } from '@openldr/db';
+import { classifyFacilityRows, type ClassifiedRow, type ExistingFacility } from './facility-classify';
 import { projectRegistryRows } from './facility-reconcile';
 
 // Task 2 of the facility-import slice: `parseFacilityCsv` (packages/terminology) exists, is tested,
@@ -54,7 +55,36 @@ export interface FacilityImportOptions {
    *  14 000-row register is exactly the kind of file nobody should be able to silently rewrite by
    *  forgetting a flag. */
   apply?: boolean;
+  /** The `facility_import_runs` row this call belongs to, echoed back on `result.runId`.
+   *
+   *  ⛔ This function does NOT load the run, and deliberately takes no dependency on
+   *  `FacilityImportRunStore`: the CALLER resolves the run and hands in both this id and the
+   *  `previewedAt` watermark below. Keeping the run store out of `deps` is what lets the CLI, the
+   *  tests and the HTTP route call this with exactly the deps they already had. */
+  runId?: string | null;
+  /** The `previewed_at` of the run named by `runId` — the conflict watermark. An existing row whose
+   *  `updated_at` is NEWER than this was touched between the preview the operator read and this
+   *  call, so it is classified `conflict` rather than compared field-by-field.
+   *
+   *  ⛔ Omitted/null means conflicts were NOT EVALUATED, and `result.conflict` is `null` to say so —
+   *  never `0`, which would assert a measurement that was never taken (see `FacilityImportResult`). */
+  previewedAt?: Date | null;
 }
+
+/** One row of a per-bucket sample, identifying the facility without shipping the whole record. */
+export interface FacilitySample {
+  id: string;
+  nationalCode: string | null;
+  name: string;
+}
+
+export interface FacilityChangeSample extends FacilitySample {
+  /** Only the fields that actually differ, `before` from the registry and `after` from the merge
+   *  this import would write (see `classifyFacilityRows`). */
+  diff: { field: string; before: unknown; after: unknown }[];
+}
+
+export type FacilityImportBlockedReason = 'duplicate-columns' | 'quarantined-rows' | null;
 
 export interface FacilityImportResult {
   /** Rows the parser accepted (present regardless of `apply`, even on a dry run). Counts every
@@ -76,12 +106,12 @@ export interface FacilityImportResult {
    *  `allowMalformedRows`. Present on a dry run too, same as every sibling counter here, so an
    *  operator can see the damage before ever applying. */
   quarantined: QuarantinedRow[];
-  /** Rows written that did not previously exist. Always 0 on a dry run. */
-  created: number;
-  /** Rows written that already existed (same nationalSystem+nationalCode ⇒ same hashed id, so this
-   *  is an in-place update — the row's `id` is untouched).
-   *  Always 0 on a dry run. */
-  updated: number;
+  /** Rows the parser REJECTED for an unparseable, out-of-range or half-supplied coordinate (see
+   *  facility-csv.ts's `RowError`). Distinct from `skipped` (a missing REQUIRED value) and from
+   *  `quarantined` (a field count disagreeing with the header's): a row here was otherwise
+   *  well-formed. Excluded from `records` by the parser, so it is counted in NO bucket below —
+   *  this array is the only place it is visible at all. */
+  invalid: RowError[];
   /** How many accepted rows shared a `national_code` (and therefore a generated `id`) with another
    *  row later in the same file — last row wins, matching what a per-row `store.upsert` loop would
    *  have done. Always present, 0 on a clean file, like every sibling counter here. Present on a
@@ -110,7 +140,66 @@ export interface FacilityImportResult {
    *
    *  `'duplicate-columns'` wins when both hold: it has NO override, so reporting the overridable
    *  reason would offer an operator a switch that cannot unblock the file. */
-  blockedReason: 'duplicate-columns' | 'quarantined-rows' | null;
+  blockedReason: FacilityImportBlockedReason;
+
+  // ── What this file would DO to the registry ───────────────────────────────────────────────────
+  //
+  // Computed on EVERY call, preview and apply alike, by comparing each parsed row against the row
+  // already in `facility_registry` (see `classifyFacilityRows`). Before FAC-P1-03 a preview
+  // returned before this comparison ever happened and reported `created: 0, updated: 0` — numbers
+  // that meant "not computed" while reading as "nothing to do".
+
+  /** Rows with no existing registry row for their id. */
+  create: number;
+  /** Existing rows at least one compared field of which differs from what this import would write. */
+  changed: number;
+  /** Existing rows this import would write nothing new to. Measured: re-importing a byte-identical
+   *  13 000-row national release reported `updated: 13000` before this bucket existed. */
+  unchanged: number;
+  /** Existing rows touched since the preview watermark (`FacilityImportOptions.previewedAt`).
+   *
+   *  ⛔ `null` means NOT EVALUATED, never "none": null on any call with no `previewedAt` linking it
+   *  to a preview, because there is then no watermark to compare `updated_at` against. */
+  conflict: number | null;
+  /** Registry rows for this `nationalSystem` that the file does not mention.
+   *
+   *  ⛔ `null` means NOT EVALUATED, never "none". Always null today — computing it requires the
+   *  caller to declare the file a COMPLETE release, which is Task 9 of this slice and not
+   *  implemented here. For a partial district register, absence means nothing at all. */
+  absent: number | null;
+  /** Rows the PUBLISHER explicitly declared removed. Always 0 for CSV, which has no way to express
+   *  a removal — a row is either in the file or it is not (which is `absent`, an inference). */
+  deleted: number;
+
+  /** Bounded per-bucket samples (at most `SAMPLE_LIMIT` each) so an operator can see WHICH rows a
+   *  count refers to without the result carrying 13 000 row diffs. */
+  samples: {
+    create: FacilitySample[];
+    changed: FacilityChangeSample[];
+    conflict: FacilitySample[];
+    absent: FacilitySample[];
+    deleted: FacilitySample[];
+  };
+
+  /** What was actually WRITTEN, as opposed to what was classified above.
+   *
+   *  ⛔ NESTED, deliberately. A flat `created`/`updated` beside `create`/`changed` differs from it
+   *  only by TENSE, and `result.create` vs `result.created` is a typo that type-checks and silently
+   *  reads the wrong number. Nesting makes the two vocabularies impossible to confuse at a call
+   *  site. Every consumer (route, studio, CLI) reads `written.created`, never `created`.
+   *
+   *  Both 0 on a preview — now because nothing was WRITTEN, not because nothing was computed. */
+  written: { created: number; updated: number };
+  /** Whatever `FacilityImportOptions.runId` carried in, echoed back so a caller that resolved a run
+   *  can attach this result to it without threading the id through itself. Null when none was
+   *  supplied — this function never invents or looks one up. */
+  runId: string | null;
+  /** False when this `nationalSystem` matches no existing registry row — i.e. this import creates a
+   *  NEW register identity, which is worth telling an operator who mistyped one.
+   *
+   *  ⛔ Owned by the ROUTE (Task 10), which is what actually asks that question; `importFacilities`
+   *  has no basis for it and reports the neutral `true`. */
+  knownNationalSystem: boolean;
 }
 
 // Bounds every chunked query below (existing-id lookup, reference_change_log batch insert) well
@@ -119,10 +208,76 @@ export interface FacilityImportResult {
 // the narrower, single/few-column queries this module issues directly.
 const CHUNK = 5000;
 
+/** How many rows each `samples` bucket carries. Bounded because a national release can classify
+ *  13 000 rows into one bucket and this result is returned over HTTP and stored in an audit
+ *  event's `metadata` — the complete classified set belongs in a downloadable artefact, not here. */
+const SAMPLE_LIMIT = 50;
+
 function chunk<T>(items: T[], size: number): T[][] {
   const out: T[][] = [];
   for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
   return out;
+}
+
+/**
+ * Load every registry row this import might touch, in the shape `classifyFacilityRows` needs.
+ *
+ * ⛔ Takes an executor rather than reaching for `deps.db` itself, because WHICH executor it runs on
+ * is load-bearing and differs between the two paths: on the APPLY path it must run inside the same
+ * transaction as the write (see the docblock below for the race that keeps it there), while on the
+ * PREVIEW path there is no transaction to be inside — a preview writes nothing.
+ *
+ * `selectAll()` rather than a column list, because a column MISSED here fails silently rather than
+ * loudly: every field on `FacilityRecord` bar `id`/`name`/`source` is optional, so an omitted column
+ * reaches `classifyFacilityRows` as `undefined`, and its `same()` treats `undefined` and `null`
+ * alike as "no value" — the row would classify `unchanged` against a write that changes it. It also
+ * buys nothing: of `facility_registry`'s 24 columns this uses 22, all but `source` and `created_at`.
+ */
+async function loadExisting(
+  exec: Kysely<InternalSchema>, ids: string[],
+): Promise<Map<string, ExistingFacility>> {
+  const out = new Map<string, ExistingFacility>();
+  for (const idChunk of chunk(ids, CHUNK)) {
+    const rows = await exec.selectFrom('facility_registry').selectAll().where('id', 'in', idChunk).execute();
+    for (const r of rows) {
+      out.set(r.id, {
+        id: r.id,
+        localCode: r.local_code,
+        extras: (r.extras as Record<string, unknown> | null) ?? null,
+        fields: {
+          nationalSystem: r.national_system, nationalCode: r.national_code, name: r.name,
+          level: r.level, ownership: r.ownership, status: r.status, country: r.country,
+          zone: r.zone, region: r.region, district: r.district, council: r.council,
+          ward: r.ward, village: r.village, addressText: r.address_text, phone: r.phone,
+          latitude: r.latitude, longitude: r.longitude, managedOrigin: r.managed_origin,
+        },
+        updatedAt: r.updated_at,
+      });
+    }
+  }
+  return out;
+}
+
+const sampleOf = (r: FacilityRecord): FacilitySample =>
+  ({ id: r.id, nationalCode: r.nationalCode ?? null, name: r.name });
+
+/** Fold the classified rows into the counts and bounded samples the result reports. Shared by both
+ *  return paths below, so the preview's numbers and the apply's are produced by the same code —
+ *  which is the whole point of FAC-P1-03: they cannot drift, because there is nothing to drift. */
+function summarise(classified: ClassifiedRow[]) {
+  const counts = { create: 0, changed: 0, unchanged: 0, conflict: 0 };
+  const samples: { create: FacilitySample[]; changed: FacilityChangeSample[]; conflict: FacilitySample[] } =
+    { create: [], changed: [], conflict: [] };
+  for (const row of classified) {
+    counts[row.kind] += 1;
+    if (row.kind === 'unchanged') continue; // no sample bucket: there is nothing to show.
+    if (row.kind === 'changed') {
+      if (samples.changed.length < SAMPLE_LIMIT) samples.changed.push({ ...sampleOf(row.merged), diff: row.diff });
+    } else if (samples[row.kind].length < SAMPLE_LIMIT) {
+      samples[row.kind].push(sampleOf(row.merged));
+    }
+  }
+  return { counts, samples };
 }
 
 /** Collapse rows that share an `id` (i.e. the same `nationalSystem`+`nationalCode`, since
@@ -199,8 +354,8 @@ function dedupeById(records: FacilityRecord[]): { records: FacilityRecord[]; dup
  * direction in `apps/server/facilities-routes.ts`, which protects extras through a hand-edit the
  * same way this protects local_code and extras through a re-import.
  *
- * The existing-row lookup that this merge (and the created/updated split above) depends on runs
- * INSIDE the same transaction as the write, not before it — a lookup on `deps.db` ahead of
+ * On the APPLY path, the existing-row lookup that this merge (and the classification below) depends
+ * on runs INSIDE the same transaction as the write, not before it — a lookup on `deps.db` ahead of
  * `deps.db.transaction()` would make the window below strictly wider (the lookup and the write
  * would no longer even be part of the same transaction). Moving it inside does NOT close the
  * window, though: this database runs at the default `read committed` isolation (nothing in
@@ -210,21 +365,32 @@ function dedupeById(records: FacilityRecord[]): { records: FacilityRecord[]; dup
  *     SELECT reads the pre-edit row but before the upsert below writes its JS-computed merge —
  *     the operator's edit is silently overwritten by this import's stale in-memory merge.
  *   - **Misclassification**: a concurrent INSERT of the same id commits after this SELECT finds
- *     it absent — the row is counted `created` and takes the batched change_log fast path (see
- *     below) even though the upsert itself takes the DO UPDATE branch.
+ *     it absent — the row is classified `create` even though the upsert itself takes the DO UPDATE
+ *     branch.
  * Actually closing either window would need `.forUpdate()` on the lookup, `REPEATABLE READ` (or
  * stricter) for the whole transaction, or a SQL-side merge (e.g.
  * `extras = facility_registry.extras || excluded.extras`) instead of a JS-side one — the last of
  * which would change `insertBatchPg` itself. None of those are done here: the exposure is a
  * hand-edit racing a register import, narrow enough that this function only reports it honestly
- * rather than closing it.
+ * rather than closing it. `FacilityImportOptions.previewedAt` narrows a DIFFERENT window — an
+ * operator's edit landing between the preview they read and the apply they then confirmed — and
+ * does nothing about this one.
+ *
+ * ## Preview and apply are the same computation (FAC-P1-03)
+ *
+ * A dry run used to return before ever touching the registry, reporting `created: 0, updated: 0`.
+ * Both paths now run `classifyFacilityRows` against the real rows and report the same
+ * `create`/`changed`/`unchanged`/`conflict` buckets; they differ only in whether the write below
+ * runs, which is what `written` (and only `written`) reports. Classification happens exactly ONCE
+ * per call — on the apply path that one call is the one inside the transaction, so `written`
+ * describes the same rows the statement actually wrote.
  */
 export async function importFacilities(
   deps: FacilityImportDeps,
   csv: string,
   opts: FacilityImportOptions,
 ): Promise<FacilityImportResult> {
-  const { records: parsedRecords, unknownColumns, duplicateColumns, quarantined, skipped } =
+  const { records: parsedRecords, unknownColumns, duplicateColumns, quarantined, skipped, invalid } =
     parseFacilityCsv(csv, {
       nationalSystem: opts.nationalSystem,
       allowUnknownColumns: opts.allowUnknownColumns,
@@ -248,17 +414,49 @@ export async function importFacilities(
       : (quarantined.length > 0 && !opts.allowMalformedRows ? 'quarantined-rows' : null);
   const blocked = blockedReason !== null;
 
-  if (!opts.apply || blocked || records.length === 0) {
+  const ids = records.map((r) => r.id);
+  // ⛔ Only `previewedAt` decides whether conflicts were EVALUATED, and it is threaded through to
+  // both `classifyFacilityRows` and the reported `conflict` from this one place — so a run that
+  // reports a number is exactly a run that computed one.
+  const previewedAt = opts.previewedAt ?? null;
+  const conflictsEvaluated = previewedAt !== null;
+
+  /** Shape a classification into the reported result. `written` is the caller's to supply: it is the
+   *  ONE thing the two paths genuinely disagree about. */
+  const resultOf = (
+    classified: ClassifiedRow[], written: { created: number; updated: number },
+  ): FacilityImportResult => {
+    const { counts, samples } = summarise(classified);
     return {
-      parsed: parsedRecords.length, skipped, unknownColumns, duplicateColumns, quarantined,
-      created: 0, updated: 0, duplicates, blocked, blockedReason,
+      parsed: parsedRecords.length, skipped, unknownColumns, duplicateColumns, quarantined, invalid,
+      duplicates, blocked, blockedReason,
+      create: counts.create, changed: counts.changed, unchanged: counts.unchanged,
+      conflict: conflictsEvaluated ? counts.conflict : null,
+      // Task 9 of this slice owns `absent` (it needs `completeRelease` to mean anything) and the
+      // `deleted` bucket a JSONL release can declare. Until then: not evaluated, and 0 removals,
+      // which for CSV is not a placeholder but the truth — CSV cannot express a removal.
+      absent: null,
+      deleted: 0,
+      samples: { ...samples, absent: [], deleted: [] },
+      written,
+      runId: opts.runId ?? null,
+      // Owned by the route (Task 10) — see the field's doc comment. Nothing here can answer it.
+      knownNationalSystem: true,
     };
+  };
+
+  if (!opts.apply || blocked || records.length === 0) {
+    // ⛔ The lookup runs on the PREVIEW path too, and that is the entire fix for FAC-P1-03: this
+    // branch used to return `created: 0, updated: 0` without ever asking the registry anything.
+    // It also runs for a BLOCKED file (which, when the reason is `'quarantined-rows'`, still has
+    // rows): the operator's next move is to tick the override and apply, so the counts they are
+    // reading now must describe the registry rather than assume an empty one.
+    const existing = records.length === 0 ? new Map<string, ExistingFacility>() : await loadExisting(deps.db, ids);
+    return resultOf(classifyFacilityRows(records, existing, { previewedAt }), { created: 0, updated: 0 });
   }
 
-  const ids = records.map((r) => r.id);
-
-  let created = 0;
-  let updated = 0;
+  let classified: ClassifiedRow[] = [];
+  const written = { created: 0, updated: 0 };
   // Populated inside the transaction below, read afterwards to drive the registry projection —
   // see the projectRegistryRows call after the transaction commits for why that has to happen
   // outside it.
@@ -266,43 +464,43 @@ export async function importFacilities(
 
   await deps.db.transaction().execute(async (trx) => {
     // Existing-row lookup runs on `trx`, inside this transaction, not on `deps.db` before it opens
-    // (see the docblock above) — and it fetches local_code/extras, not just id, because both need
-    // to be preserved across a re-import rather than overwritten with the importer's blanks.
-    const existingById = new Map<string, { local_code: string | null; extras: unknown }>();
-    for (const idChunk of chunk(ids, CHUNK)) {
-      const rows = await trx
-        .selectFrom('facility_registry')
-        .select(['id', 'local_code', 'extras'])
-        .where('id', 'in', idChunk)
-        .execute();
-      for (const r of rows) existingById.set(r.id, { local_code: r.local_code, extras: r.extras });
-    }
+    // (see the docblock above) — and it fetches whole rows, not just id, because `classifyFacilityRows`
+    // both COMPARES the parser's columns against them and MERGES local_code/extras forward off them,
+    // rather than overwriting those with the importer's blanks.
+    const existingById = await loadExisting(trx, ids);
 
-    for (const id of ids) if (existingById.has(id)) updated += 1; else created += 1;
+    // The merge for what the importer is NOT authoritative for (see the docblock above) lives inside
+    // `classifyFacilityRows` now, and each row's `.merged` is exactly what the statement below
+    // writes — so the row the comparison called `changed` and the row written cannot differ. (This
+    // step used to also feed a content_hash logged into reference_change_log via
+    // `contentHashOf`/`hashOf`; both were removed as dead code once facilities-phase-0 Task 1
+    // suspended that capture — see the "SUSPENDED" docblock section above.)
+    classified = classifyFacilityRows(records, existingById, { previewedAt });
 
-    // Merge forward what the importer is NOT authoritative for (see the docblock above) before
-    // deriving the row to write — it needs to reflect what actually lands in facility_registry, not
-    // the raw parsed record, for exactly the rows this merge touches. (This step used to also feed a
-    // content_hash logged into reference_change_log via `contentHashOf`/`hashOf`; both were removed
-    // as dead code once facilities-phase-0 Task 1 suspended that capture — see the "SUSPENDED"
-    // docblock section above.)
-    const merged: FacilityRecord[] = records.map((r) => {
-      const existing = existingById.get(r.id);
-      if (!existing) return r;
-      return {
-        ...r,
-        localCode: r.localCode ?? existing.local_code ?? null,
-        extras: { ...((existing.extras as Record<string, unknown>) ?? {}), ...(r.extras ?? {}) },
-      };
-    });
+    // ⛔ `unchanged` rows are NOT written — which is what lets `written.updated` be believed. The old
+    // code wrote every parsed row and counted every pre-existing one as `updated`, so a byte-identical
+    // re-import of a 13 000-row release reported `updated: 13000` (measured) and bumped 13 000
+    // `updated_at` values for no content change. `conflict` rows are not written either: a conflict
+    // means the row moved under the operator between the preview they approved and this apply, and
+    // the spec's default is to skip it (an explicit overwrite option is a later task of this slice,
+    // never a default anyone gets by accident).
+    const toWrite = classified.filter((c) => c.kind === 'create' || c.kind === 'changed');
+    written.created = toWrite.filter((c) => c.kind === 'create').length;
+    written.updated = toWrite.length - written.created;
 
-    mergedRecords = merged;
+    // Projected below: every row whose merged form the registry now actually holds — the rows just
+    // written, plus `unchanged` rows (identical by definition). `conflict` rows are excluded because
+    // their merge was NOT written, so projecting it would publish a display name the registry does
+    // not have.
+    mergedRecords = classified.filter((c) => c.kind !== 'conflict').map((c) => c.merged);
 
     // sql`now()` on updated_at mirrors upsert()'s explicit bump on conflict — insertBatchPg's chunked
     // ON CONFLICT DO UPDATE otherwise leaves updated_at untouched on an update (it only ever writes
     // the columns present in the row).
-    const rows = merged.map((r) => ({ ...facilityRecordToRow(r), updated_at: sql`now()` }));
-    await insertBatchPg(trx as unknown as Kysely<any>, 'facility_registry', rows as unknown as Record<string, unknown>[]);
+    if (toWrite.length > 0) {
+      const rows = toWrite.map((c) => ({ ...facilityRecordToRow(c.merged), updated_at: sql`now()` }));
+      await insertBatchPg(trx as unknown as Kysely<any>, 'facility_registry', rows as unknown as Record<string, unknown>[]);
+    }
 
     // Capture SUSPENDED (Task 1 of the facilities-phase-0 slice) — see SUSPENDED_REFERENCE_ENTITY_TYPES
     // in reference-change-log.ts. This batch import path used to write reference_change_log rows
@@ -312,10 +510,15 @@ export async function importFacilities(
     // block, not re-wiring the deps shape.
   });
 
-  // Fix 1 (mapping-ux report): project every written row into FACILITY_REGISTRY_SYSTEM, outside the
+  // Fix 1 (mapping-ux report): project the imported rows into FACILITY_REGISTRY_SYSTEM, outside the
   // transaction above and after it has committed — a projection failure must not roll back (or even
   // slow down) the facility_registry write itself, and `projectRegistryRows` already swallows its
   // own failures (see that function's doc comment) so this call cannot throw.
+  //
+  // ⚠ `mergedRecords` is deliberately WIDER than what was written: it includes `unchanged` rows,
+  // whose merged form the registry already holds identically. Projecting them is idempotent and
+  // keeps a re-import able to repair a projection that failed the first time. Only `conflict` rows
+  // are excluded — see where `mergedRecords` is built.
   //
   // ⚠ Its `boolean` ("did this projection land") is DELIBERATELY ignored here, and that is a known
   // gap, not an oversight: unlike the create/update routes there is no per-facility retry channel on
@@ -351,10 +554,7 @@ export async function importFacilities(
     }
   }
 
-  // `blocked` is necessarily false here — the early return above is the only path a blocked file
-  // takes — but it is spelled out rather than hardcoded so the two returns cannot drift.
-  return {
-    parsed: parsedRecords.length, skipped, unknownColumns, duplicateColumns, quarantined,
-    created, updated, duplicates, blocked, blockedReason,
-  };
+  // `blocked` is necessarily false here — the return above is the only path a blocked file takes —
+  // but `resultOf` spells it out rather than hardcoding it so the two returns cannot drift.
+  return resultOf(classified, written);
 }

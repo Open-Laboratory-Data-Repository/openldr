@@ -1523,9 +1523,20 @@ describe('POST /api/facilities/import', () => {
     // Every counter always present, even the zero ones — a client must never confuse "0 found"
     // with "not reported". Task 5: `quarantined`/`duplicateColumns` (Task 4's additions to
     // FacilityImportResult) now reach the response body too.
+    // A2a Task 5: the dry run now REPORTS what it would do (`create: 1`) instead of the
+    // `created: 0, updated: 0` it used to return before ever consulting the registry (FAC-P1-03);
+    // `written` is what a statement actually wrote, and is the only pair that stays zero here.
     expect(res.json()).toEqual({
-      parsed: 1, skipped: 1, unknownColumns: [], duplicateColumns: [], quarantined: [],
-      created: 0, updated: 0, duplicates: 0, blocked: false, blockedReason: null,
+      parsed: 1, skipped: 1, unknownColumns: [], duplicateColumns: [], quarantined: [], invalid: [],
+      duplicates: 0, blocked: false, blockedReason: null,
+      create: 1, changed: 0, unchanged: 0,
+      conflict: null, absent: null, deleted: 0,
+      samples: {
+        create: [{ id: expect.any(String), nationalCode: '100', name: 'Dodoma Regional Referral' }],
+        changed: [], conflict: [], absent: [], deleted: [],
+      },
+      written: { created: 0, updated: 0 },
+      runId: null, knownNationalSystem: true,
     });
     expect(await db.selectFrom('facility_registry').selectAll().execute()).toHaveLength(0);
     expect(ctx.__audit).toHaveLength(0); // a dry run writes nothing, so it must not audit
@@ -1546,7 +1557,7 @@ describe('POST /api/facilities/import', () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({
-      created: 0,
+      written: { created: 0, updated: 0 },
       quarantined: [{ line: 3, reason: 'too_many_fields', raw: '2,Bad,Extra' }],
       // The importer's own verdict, reaching the client. This route's pre-transaction guard reads
       // THIS field rather than rebuilding the predicate, and the Studio sheet reads it off the
@@ -1575,7 +1586,7 @@ describe('POST /api/facilities/import', () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({
-      created: 0, duplicateColumns: ['name'], blocked: true, blockedReason: 'duplicate-columns',
+      written: { created: 0, updated: 0 }, duplicateColumns: ['name'], blocked: true, blockedReason: 'duplicate-columns',
     });
     expect(await db.selectFrom('facility_registry').selectAll().execute()).toHaveLength(0);
     expect(ctx.__audit).toHaveLength(0);
@@ -1595,7 +1606,7 @@ describe('POST /api/facilities/import', () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({
-      created: 1,
+      written: { created: 1, updated: 0 },
       quarantined: [{ line: 3, reason: 'too_many_fields' }],
     });
     const rows = await db.selectFrom('facility_registry').selectAll().execute();
@@ -1610,7 +1621,7 @@ describe('POST /api/facilities/import', () => {
     const csv = facilityCsv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,', '101,Kongwa DDH,,,,,,,,,,,,,,']);
     const res = await app.inject({ method: 'POST', url: '/api/facilities/import', payload: { csv, nationalSystem: SYSTEM, apply: true } });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toMatchObject({ parsed: 2, created: 2, updated: 0, duplicates: 0 });
+    expect(res.json()).toMatchObject({ parsed: 2, create: 2, written: { created: 2, updated: 0 }, duplicates: 0 });
     const rows = await db.selectFrom('facility_registry').selectAll().execute();
     expect(rows).toHaveLength(2);
   });
@@ -1667,7 +1678,7 @@ describe('POST /api/facilities/import', () => {
       payload: { csv, nationalSystem: SYSTEM, apply: true, allowUnknownColumns: true },
     });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toMatchObject({ unknownColumns: ['made_up_column'], parsed: 1, created: 1 });
+    expect(res.json()).toMatchObject({ unknownColumns: ['made_up_column'], parsed: 1, written: { created: 1, updated: 0 } });
     const row = await db.selectFrom('facility_registry').selectAll().executeTakeFirst();
     expect(row?.extras).toEqual({ made_up_column: 'xyz' });
   });

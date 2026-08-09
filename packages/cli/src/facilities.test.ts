@@ -50,7 +50,7 @@ import { runFacilitiesImport, runFacilitiesScanObserved, runFacilitiesPublish, r
 
 const CLEAN_RESULT = {
   parsed: 10, skipped: 0, unknownColumns: [], duplicateColumns: [], quarantined: [],
-  created: 0, updated: 0, duplicates: 0, blocked: false, blockedReason: null,
+  written: { created: 0, updated: 0 }, duplicates: 0, blocked: false, blockedReason: null,
 };
 
 describe('facilities import CLI', () => {
@@ -90,7 +90,7 @@ describe('facilities import CLI', () => {
 
   it('--apply writes and reports created/updated, and audits the import', async () => {
     mocks.importFacilities.mockResolvedValue({
-      parsed: 3, skipped: 0, unknownColumns: [], duplicateColumns: [], quarantined: [], created: 2, updated: 1, duplicates: 0,
+      parsed: 3, skipped: 0, unknownColumns: [], duplicateColumns: [], quarantined: [], written: { created: 2, updated: 1 }, duplicates: 0,
     });
 
     const code = await runFacilitiesImport('/some/file.csv', { nationalSystem: 'urn:tz:hfr', apply: true, json: false });
@@ -117,7 +117,7 @@ describe('facilities import CLI', () => {
 
   it('surfaces duplicates as a warning, not just a count', async () => {
     mocks.importFacilities.mockResolvedValue({
-      parsed: 2, skipped: 0, unknownColumns: [], duplicateColumns: [], quarantined: [], created: 1, updated: 0, duplicates: 1,
+      parsed: 2, skipped: 0, unknownColumns: [], duplicateColumns: [], quarantined: [], written: { created: 1, updated: 0 }, duplicates: 1,
     });
 
     await runFacilitiesImport('/some/file.csv', { nationalSystem: 'urn:tz:hfr', apply: true, json: false });
@@ -138,7 +138,7 @@ describe('facilities import CLI', () => {
 
   it('unknown columns without --allow-unknown-columns refuse and name the columns; no audit', async () => {
     mocks.importFacilities.mockResolvedValue({
-      parsed: 0, skipped: 0, unknownColumns: ['beds', 'foo'], duplicateColumns: [], quarantined: [], created: 0, updated: 0, duplicates: 0,
+      parsed: 0, skipped: 0, unknownColumns: ['beds', 'foo'], duplicateColumns: [], quarantined: [], written: { created: 0, updated: 0 }, duplicates: 0,
     });
 
     const code = await runFacilitiesImport('/some/file.csv', { nationalSystem: 'urn:tz:hfr', apply: true, json: false });
@@ -153,7 +153,7 @@ describe('facilities import CLI', () => {
 
   it('--allow-unknown-columns lets an import with unknown columns proceed', async () => {
     mocks.importFacilities.mockResolvedValue({
-      parsed: 1, skipped: 0, unknownColumns: ['beds'], duplicateColumns: [], quarantined: [], created: 1, updated: 0, duplicates: 0,
+      parsed: 1, skipped: 0, unknownColumns: ['beds'], duplicateColumns: [], quarantined: [], written: { created: 1, updated: 0 }, duplicates: 0,
     });
 
     const code = await runFacilitiesImport('/some/file.csv', { nationalSystem: 'urn:tz:hfr', apply: true, allowUnknownColumns: true, json: false });
@@ -172,7 +172,7 @@ describe('facilities import CLI', () => {
     mocks.importFacilities.mockResolvedValue({
       parsed: 1, skipped: 0, unknownColumns: [], duplicateColumns: [],
       quarantined: [{ line: 3, reason: 'too_many_fields', raw: '2,Bad,Extra' }],
-      created: 0, updated: 0, duplicates: 0, blocked: true, blockedReason: 'quarantined-rows',
+      written: { created: 0, updated: 0 }, duplicates: 0, blocked: true, blockedReason: 'quarantined-rows',
     });
 
     const code = await runFacilitiesImport('/some/file.csv', { nationalSystem: 'urn:tz:hfr', apply: true, json: false });
@@ -188,7 +188,7 @@ describe('facilities import CLI', () => {
     mocks.importFacilities.mockResolvedValue({
       parsed: 1, skipped: 0, unknownColumns: [], duplicateColumns: [],
       quarantined: [{ line: 3, reason: 'too_many_fields', raw: '2,Bad,Extra' }],
-      created: 1, updated: 0, duplicates: 0, blocked: false, blockedReason: null,
+      written: { created: 1, updated: 0 }, duplicates: 0, blocked: false, blockedReason: null,
     });
 
     const code = await runFacilitiesImport(
@@ -210,7 +210,7 @@ describe('facilities import CLI', () => {
     const result = {
       parsed: 1, skipped: 0, unknownColumns: [], duplicateColumns: [],
       quarantined: [{ line: 3, reason: 'too_many_fields', raw: '2,Bad,Extra' }],
-      created: 0, updated: 0, duplicates: 0, blocked: true, blockedReason: 'quarantined-rows',
+      written: { created: 0, updated: 0 }, duplicates: 0, blocked: true, blockedReason: 'quarantined-rows',
     };
     mocks.importFacilities.mockResolvedValue(result);
 
@@ -229,7 +229,7 @@ describe('facilities import CLI', () => {
   it('duplicate headers refuse with the columns named and no override suggested', async () => {
     mocks.importFacilities.mockResolvedValue({
       parsed: 0, skipped: 0, unknownColumns: [], duplicateColumns: ['name'], quarantined: [],
-      created: 0, updated: 0, duplicates: 0, blocked: true, blockedReason: 'duplicate-columns',
+      written: { created: 0, updated: 0 }, duplicates: 0, blocked: true, blockedReason: 'duplicate-columns',
     });
 
     const code = await runFacilitiesImport('/some/file.csv', { nationalSystem: 'urn:tz:hfr', apply: true, json: false });
@@ -267,7 +267,7 @@ describe('facilities import CLI', () => {
 
   it('--json still refuses on unknown columns, with unknownColumns present in the JSON payload', async () => {
     const result = {
-      parsed: 0, skipped: 0, unknownColumns: ['beds'], duplicateColumns: [], quarantined: [], created: 0, updated: 0, duplicates: 0,
+      parsed: 0, skipped: 0, unknownColumns: ['beds'], duplicateColumns: [], quarantined: [], written: { created: 0, updated: 0 }, duplicates: 0,
     };
     mocks.importFacilities.mockResolvedValue(result);
 

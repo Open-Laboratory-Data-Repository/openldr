@@ -1560,7 +1560,12 @@ export { sealDefinitionSecrets } from './workflow-secret-seal';
 export { migrateWorkflowSecrets } from './workflow-secret-migrate';
 export { mergePatients } from './patient-merge';
 export { importFacilities } from './facility-import';
-export type { FacilityImportDeps, FacilityImportOptions, FacilityImportResult } from './facility-import';
+export type {
+  FacilityImportDeps, FacilityImportOptions, FacilityImportResult,
+  // Reachable through `FacilityImportResult` — exported so a consumer can name the type of a
+  // `samples` bucket (the route and the CLI both render them) instead of re-declaring its shape.
+  FacilitySample, FacilityChangeSample, FacilityImportBlockedReason,
+} from './facility-import';
 export { scanObservedFacilities, resolveObservedFacilities, publishFacilityMap, projectRegistryRows, retireRegistryConcepts, reprojectAfterRegistryDelete, listFacilityMappingConflicts } from './facility-reconcile';
 export type { ReconcileDeps, ScanResult, ScanOptions, ResolvedFacility, ResolvedVia, PublishResult, FacilityMappingConflict } from './facility-reconcile';
 // Task 10 (facility durable-updates): surfaces Task 9's dimension-state resolver to the HTTP route

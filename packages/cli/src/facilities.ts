@@ -143,14 +143,22 @@ export async function runFacilitiesImport(path: string, opts: FacilitiesImportOp
   }
 }
 
+// ⚠ Reads `written.created`/`written.updated` — what the import actually WROTE — never the
+// `create`/`changed`/`unchanged` classification beside them, which describes what the file WOULD do
+// and is now reported on a dry run too (FAC-P1-03). Surfacing those buckets, so a `--apply`-less run
+// prints something better than "nothing written", is Task 12 of that slice; this is the mechanical
+// rename that keeps today's output byte-identical.
 function formatHuman(
-  result: { parsed: number; skipped: number; unknownColumns: string[]; created: number; updated: number; duplicates: number },
+  result: {
+    parsed: number; skipped: number; unknownColumns: string[]; duplicates: number;
+    written: { created: number; updated: number };
+  },
   opts: FacilitiesImportOpts,
 ): string {
   const lines: string[] = [];
   lines.push(
     opts.apply
-      ? `applied: created ${result.created}, updated ${result.updated}`
+      ? `applied: created ${result.written.created}, updated ${result.written.updated}`
       : `DRY RUN — nothing written. Rerun with --apply to write.`,
   );
   lines.push(`parsed ${result.parsed} row(s), skipped ${result.skipped}`);
