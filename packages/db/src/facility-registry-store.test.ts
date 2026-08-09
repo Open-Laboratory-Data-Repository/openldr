@@ -51,8 +51,8 @@ describe('createFacilityRegistryStore', () => {
     const { s } = await store();
     await s.upsert({ ...manual, region: 'Dodoma Region', status: 'Operating' });
     await s.upsert({ id: 'f2', localCode: 'LAB02', name: 'Closed One', source: 'manual', region: 'Dodoma Region', status: 'Closed' });
-    expect(await s.list({ region: 'Dodoma Region' })).toHaveLength(2);
-    expect(await s.list({ region: 'Dodoma Region', status: 'Operating' })).toHaveLength(1);
+    expect((await s.list({ region: 'Dodoma Region' })).rows).toHaveLength(2);
+    expect((await s.list({ region: 'Dodoma Region', status: 'Operating' })).rows).toHaveLength(1);
   });
 
   it('caps list() at a default of 200 rows when no limit is given — a national register runs 10-15k', async () => {
@@ -61,8 +61,91 @@ describe('createFacilityRegistryStore', () => {
       id: `f${i}`, local_code: `LAB${i}`, name: `Facility ${i}`, source: 'manual',
     }));
     await db.insertInto('facility_registry' as never).values(rows as never).execute();
-    expect(await s.list()).toHaveLength(200);
-    expect(await s.list({ limit: 5 })).toHaveLength(5);
+    expect((await s.list()).rows).toHaveLength(200);
+    expect((await s.list({ limit: 5 })).rows).toHaveLength(5);
+  });
+
+  /** Seeds `n` facilities named "Facility 001".."Facility n", alternating region/status so filter
+   *  and search tests have something to discriminate. Returns the store. */
+  async function seedMany(n: number) {
+    const { s } = await store();
+    for (let i = 1; i <= n; i += 1) {
+      const p = String(i).padStart(3, '0');
+      await s.upsert({
+        id: `f${p}`,
+        name: `Facility ${p}`,
+        localCode: `LC-${p}`,
+        nationalSystem: i % 2 === 0 ? 'urn:hfr' : 'urn:mfl',
+        nationalCode: `NC-${p}`,
+        region: i % 2 === 0 ? 'Dodoma' : 'Mwanza',
+        status: i % 3 === 0 ? 'Closed' : 'Active',
+        level: 'dispensary',
+        source: 'manual' as const,
+      });
+    }
+    return s;
+  }
+
+  it('pages with an exact total that is independent of the page size', async () => {
+    const s = await seedMany(25);
+    const first = await s.list({ limit: 10, offset: 0 });
+    expect(first.rows).toHaveLength(10);
+    expect(first.total).toBe(25);
+    expect(first.rows[0].name).toBe('Facility 001');
+
+    const last = await s.list({ limit: 10, offset: 20 });
+    expect(last.rows).toHaveLength(5);
+    expect(last.total).toBe(25);
+    expect(last.rows[0].name).toBe('Facility 021');
+  });
+
+  it('returns an empty page rather than erroring when offset runs past the end', async () => {
+    const s = await seedMany(5);
+    const past = await s.list({ limit: 10, offset: 500 });
+    expect(past.rows).toEqual([]);
+    expect(past.total).toBe(5);
+  });
+
+  it('total reflects the filters, not the page size', async () => {
+    const s = await seedMany(25);
+    const dodoma = await s.list({ region: 'Dodoma', limit: 5 });
+    expect(dodoma.total).toBe(12);
+    expect(dodoma.rows).toHaveLength(5);
+    expect(dodoma.rows.every((r) => r.region === 'Dodoma')).toBe(true);
+  });
+
+  it('searches name, local code, national code and admin area, case-insensitively', async () => {
+    const s = await seedMany(25);
+    expect((await s.list({ q: 'facility 007' })).total).toBe(1);
+    expect((await s.list({ q: 'LC-008' })).total).toBe(1);
+    expect((await s.list({ q: 'nc-009' })).total).toBe(1);
+    expect((await s.list({ q: 'dodoma' })).total).toBe(12);
+    expect((await s.list({ q: 'no such facility' })).total).toBe(0);
+  });
+
+  it('filters on every column-backed dimension', async () => {
+    const s = await seedMany(25);
+    expect((await s.list({ nationalSystem: 'urn:hfr' })).total).toBe(12);
+    expect((await s.list({ status: 'Closed' })).total).toBe(8);
+    expect((await s.list({ level: 'dispensary' })).total).toBe(25);
+    expect((await s.list({ source: 'manual' })).total).toBe(25);
+    expect((await s.list({ level: 'hospital' })).total).toBe(0);
+  });
+
+  it('combines search and filters conjunctively', async () => {
+    const s = await seedMany(25);
+    const r = await s.list({ q: 'dodoma', status: 'Closed' });
+    expect(r.total).toBe(4);
+    expect(r.rows.every((x) => x.region === 'Dodoma' && x.status === 'Closed')).toBe(true);
+  });
+
+  it('handles a realistically long facility name without truncating or erroring', async () => {
+    const { s } = await store();
+    const long = `Mwananyamala Regional Referral Hospital ${'and Community Outreach Annexe '.repeat(6)}`.trim();
+    await s.upsert({ id: 'long', name: long, localCode: 'L', source: 'manual' as const });
+    const r = await s.list({ q: 'Outreach' });
+    expect(r.total).toBe(1);
+    expect(r.rows[0].name).toBe(long);
   });
 
   // --- Task 3: distinctAdminValues ------------------------------------------------------------

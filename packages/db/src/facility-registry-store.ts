@@ -1,4 +1,4 @@
-import { type Kysely, sql } from 'kysely';
+import { type Kysely, type SelectQueryBuilder, sql } from 'kysely';
 import type { InternalSchema } from './schema/internal';
 import type { ReferenceCapture } from './reference-capture';
 import { FACILITY_ADMIN_LEVELS, type FacilityAdminLevel } from './facility-answers';
@@ -44,13 +44,34 @@ export interface FacilityRecord {
 }
 
 export interface FacilityListOptions {
+  /** Case-insensitive substring across name, local code, national code, and admin area.
+   *  ⚠ NOT aliases — `facility_registry` has no alias column and `extras` is an untyped jsonb bag.
+   *  The audit (FAC-P1-01) asks for alias search; it belongs with sub-project B's identity
+   *  modelling, and is deliberately unmet here rather than faked. */
+  q?: string;
+  country?: string;
+  zone?: string;
   region?: string;
   district?: string;
   council?: string;
+  /** Operational status. Distinct from `source` and `managedOrigin` below — see their comments. */
   status?: string;
+  level?: string;
+  /** Facility ownership (public/private/…), not provenance. */
+  ownership?: string;
+  /** WHICH national register the row's `nationalCode` belongs to — the audit's "registry source". */
+  nationalSystem?: string;
+  /** HOW the row entered this registry (manual, import, …). */
+  source?: string;
+  /** WHO owns the row's content — central sync vs local. */
+  managedOrigin?: string;
   /** Defaults to 200 when omitted — a national register runs 10-15k rows and an unbounded scan is
    *  never what a caller wants. Pass an explicit value (including a large one) to override. */
   limit?: number;
+  /** Rows to skip. Offset paging, not cursor: the audit requires an authoritative total and
+   *  page-jumping, which a cursor composes badly with. Drift under concurrent writes is accepted —
+   *  see the spec's Known limits. */
+  offset?: number;
 }
 
 export interface FacilityAdminValueCount {
@@ -62,8 +83,9 @@ export interface FacilityAdminValueCount {
 
 export interface FacilityRegistryStore {
   get(id: string): Promise<FacilityRecord | undefined>;
-  /** Capped at 200 rows by default — see `FacilityListOptions.limit`. */
-  list(opts?: FacilityListOptions): Promise<FacilityRecord[]>;
+  /** Page of facilities plus the EXACT total matching the same search/filters (before limit/offset).
+   *  Capped at 200 rows by default — see `FacilityListOptions.limit`. */
+  list(opts?: FacilityListOptions): Promise<{ rows: FacilityRecord[]; total: number }>;
   /**
    * Distinct, non-blank values already present in `facility_registry.<level>`, ranked by
    * frequency (commonest first) with their counts — so an operator can see a real value
@@ -232,14 +254,61 @@ export function createFacilityRegistryStore(
     },
 
     async list(opts = {}) {
-      let q = db.selectFrom('facility_registry').selectAll();
-      if (opts.region) q = q.where('region', '=', opts.region);
-      if (opts.district) q = q.where('district', '=', opts.district);
-      if (opts.council) q = q.where('council', '=', opts.council);
-      if (opts.status) q = q.where('status', '=', opts.status);
-      q = q.orderBy('name', 'asc');
-      q = q.limit(opts.limit ?? DEFAULT_LIST_LIMIT);
-      return (await q.execute()).map((r) => toRecord(r as Row));
+      // ⛔ ONE predicate builder shared by the rows query and the count query. Two copies would
+      // drift, and a `total` that disagrees with the page it describes is worse than no total.
+      // Generic over the select list (`O`) so the same closure types against both the
+      // `selectAll()` rows query and the `count(*)` aggregate query below — `.where()` never
+      // changes `O`, so this is ordinary Kysely generic inference, not a cast.
+      const applyFilters = <O>(
+        qb: SelectQueryBuilder<InternalSchema, 'facility_registry', O>,
+      ): SelectQueryBuilder<InternalSchema, 'facility_registry', O> => {
+        let q = qb;
+        if (opts.country) q = q.where('country', '=', opts.country);
+        if (opts.zone) q = q.where('zone', '=', opts.zone);
+        if (opts.region) q = q.where('region', '=', opts.region);
+        if (opts.district) q = q.where('district', '=', opts.district);
+        if (opts.council) q = q.where('council', '=', opts.council);
+        if (opts.status) q = q.where('status', '=', opts.status);
+        if (opts.level) q = q.where('level', '=', opts.level);
+        if (opts.ownership) q = q.where('ownership', '=', opts.ownership);
+        if (opts.nationalSystem) q = q.where('national_system', '=', opts.nationalSystem);
+        if (opts.source) q = q.where('source', '=', opts.source);
+        if (opts.managedOrigin) q = q.where('managed_origin', '=', opts.managedOrigin);
+        if (opts.q) {
+          // `ilike` with a wrapped `%` — a leading wildcard means no plain btree index can serve
+          // this; it is an unindexed sequential scan on every call. Not benchmarked at
+          // national-register scale (10-15k rows) as part of this task — if that turns out to be
+          // too slow in practice, a trigram/full-text index is the fix, deliberately left to when
+          // it is actually measured rather than pre-emptively added. `facility_registry` lives in
+          // the INTERNAL database, which is always Postgres, so `ilike` needs none of the dialect
+          // branching the EXTERNAL-DB reference-search resolver avoids it for (see that file's
+          // portability test, which pins lower()/LIKE specifically for multi-engine support).
+          const like = `%${opts.q}%`;
+          q = q.where((eb) => eb.or([
+            eb('name', 'ilike', like),
+            eb('local_code', 'ilike', like),
+            eb('national_code', 'ilike', like),
+            eb('region', 'ilike', like),
+            eb('district', 'ilike', like),
+            eb('council', 'ilike', like),
+          ]));
+        }
+        return q;
+      };
+
+      const rowsQ = applyFilters(db.selectFrom('facility_registry').selectAll())
+        .orderBy('name', 'asc')
+        .limit(opts.limit ?? DEFAULT_LIST_LIMIT)
+        .offset(opts.offset ?? 0);
+      const countQ = applyFilters(
+        db.selectFrom('facility_registry').select((eb) => eb.fn.countAll<number>().as('n')),
+      );
+
+      const [rows, counted] = await Promise.all([rowsQ.execute(), countQ.executeTakeFirst()]);
+      return {
+        rows: rows.map((r) => toRecord(r as Row)),
+        total: Number(counted?.n ?? 0),
+      };
     },
 
     async distinctAdminValues(level, scope = {}) {
