@@ -359,21 +359,57 @@ publisher-declared retirement. Prior art: `parseJsonlTerms`/`parseJsonlLine`.
 
 ### 9. A2b — the job flow
 
-1. `POST /api/facilities/import/upload?nationalSystem&format` — streams `req.body` to blob via
-   `putStream`, through a hashing `PassThrough` so `file_hash` is computed without buffering.
-   Inserts the run; **409 when one is already active for that `national_system`**. Returns `runId`.
-2. Worker claims → `validating` → `getStream` → parse, validate, classify → writes `summary` and the
-   full result blob, stamps `previewed_at` → `awaiting_confirmation`.
-3. `GET /api/facilities/import/runs/:id` — polled for phase/processed/total, then renders the
-   reconciliation summary; the complete result is downloadable.
-4. `POST …/confirm` carrying the operator's choices → `applying`.
-5. Worker applies in **one transaction**, then projects and enqueues `facility-map-rebuild` exactly
-   as `importFacilities` does today, and writes the same `facility.import` audit record.
-6. `POST …/cancel` sets `cancel_requested`, checked at phase boundaries and between insert chunks.
-7. Restart recovery reuses the `failStaleRunning` pattern.
+⚠ **This section was rewritten after A2a shipped.** Its first draft was written before any of A2a
+existed and was stale in four ways; what follows is checked against the merged code (`b4b1d389`).
+
+**The flow.** Upload streams to blob and mints the run → a worker validates and classifies →
+the operator confirms → the worker applies. `POST /api/facilities/import/upload` streams `req.body`
+through a hashing `PassThrough` (so `file_hash` costs no buffering) into `putStream`, exactly as
+`terminology-admin-routes.ts`'s distribution upload already does. `GET …/runs/:id` is polled;
+`POST …/confirm` carries the operator's choices; `POST …/cancel` requests a stop.
+
+**Both entry paths survive.** The inline `POST /api/facilities/import` (JSON body carrying the file)
+stays for the CLI and integrators; the studio sheet moves to upload+job so the browser stops reading
+whole files into memory as strings. They cannot drift on semantics because both call the same
+`importFacilities` — the inline path is also the one carrying the route tests that pin the wire shape.
+`MAX_INLINE_APPLY_ROWS` is removed **from the job path only**; it still bounds the inline path, which
+is still synchronous.
+
+⛔ **The status enum widens, and two existing guards widen with it.** A2a shipped
+`FacilityImportRunStatus = 'previewed' | 'applied' | 'failed'`. A2b adds `queued`, `validating`,
+`awaiting_confirmation`, `applying` and `cancelled`. **`facilities-routes.ts` compares
+`status !== 'previewed'` in two places — the supersede gate and the apply guard — and both silently
+become wrong the moment a wider enum exists.** This is the same shape as the Critical defect the
+whole-branch review caught in A2a (a guard written against a narrow condition meeting a wider one
+later), so it is named here rather than left to be rediscovered. Every state predicate must be
+expressed against an explicit set (terminal / supersedable / active), never against one literal.
+
+⛔ **Supersede, not 409.** The first draft said "409 when one is already active". A2a replaced that
+because a 409 made a register permanently unimportable after a single abandoned preview. A2b carries
+that forward and must decide it per state: a run merely `queued` or `awaiting_confirmation` is
+abandonable and supersedable; one actively `validating` or `applying` is not, and must answer 409.
+
+**Progress is phase-first, and any per-row reporting must be justified by measurement.** A full
+13 000-row import completes in 2 689 ms (see *Measured before designing*), so `processed`/`total`
+would flash past faster than a human could read them. The worker reports `phase` always. Per-row
+reporting switches on only above a row-count threshold — and **that threshold is to be measured, not
+guessed**: find the row count at which the apply's own duration exceeds roughly a second of
+observable work, and record the measurement beside the constant.
+
+**Cancel is honest about what it cannot do.** `cancel_requested` is checked at phase boundaries and
+between insert chunks. It **cannot interrupt the running transaction**; the UI shows *cancelling*
+until the worker confirms rather than claiming a cancellation that has not happened. Cancelling
+mid-apply aborts the transaction, which preserves all-or-nothing rather than leaving a partial write.
+
+**Recovery is re-run, not resume.** A job left `validating`/`applying` by a killed process is failed
+at startup (the `failStaleRunning` pattern) and re-run from the beginning. The import is idempotent by
+construction — deterministic ids plus upsert — so there is no cursor, deliberately: a half-applied
+national release is worse than a repeated one, and the measurement does not justify the complexity.
 
 The worker follows `createFacilityJobWorker`'s shape (tick, claim, process, bounded attempts) and
-`terminology-ingest-shared.ts`'s progress reporting.
+`terminology-ingest-shared.ts`'s progress reporting. ⚠ The run store as A2a left it has
+`startPreview`/`completePreview`/`finishApply`/`get`/`list` and **no** claim, progress, cancel or
+stale-recovery surface — all of that is new.
 
 ### 10. UI and CLI
 
