@@ -10,6 +10,9 @@ import {
 } from '@openldr/db';
 import { projectRegistryRows } from '@openldr/bootstrap';
 import { registerFacilitiesRoutes } from './facilities-routes';
+// The over-cap upload test registers the REAL central error handler, as production does, so its 413
+// carries the app-wide {error, code, correlationId} contract rather than a bespoke body.
+import { registerErrorHandler } from './error-handler';
 
 const FORM_FIELDS = [
   { id: 'f1', apiProperty: 'localCode' },
@@ -1516,6 +1519,11 @@ function fakeImportCtx(db: any) {
     // A2b Task 3: the upload route streams the request body into `ctx.blob.putStream`. Every other
     // route in this file leaves it untouched, so adding it here costs the existing tests nothing.
     blob: fakeBlobStore(),
+    // The upload route's real byte ceiling is read off `ctx.cfg` per request (`bodyLimit` is inert
+    // for a passthrough parser — see facilities-routes.ts). The value here is the schema's own
+    // default; the over-cap test lowers it, exactly as workflows-routes.test.ts does with
+    // `WORKFLOW_FILE_MAX_BYTES`.
+    cfg: { FACILITY_IMPORT_MAX_UPLOAD_BYTES: 1_073_741_824 },
     __audit: audit,
   } as any;
 }
@@ -2414,6 +2422,12 @@ describe('POST /api/facilities/import', () => {
 
       const second = await app.inject({ method: 'POST', url: '/api/facilities/import', payload: { csv, nationalSystem: SYSTEM } });
       expect(second.statusCode).toBe(409);
+      // A2b Task 3 review fix (M3). The shared `takeOverRegister` changed this WIRE-VISIBLE message
+      // from the store's `an import is already in progress for "X"` to one that names the run and its
+      // state, because the two 409s have very different remedies (clear a stuck decided run vs wait
+      // for a live worker). The status code alone pinned neither direction of that change.
+      expect(second.json().error).toContain(`import run ${firstRunId} is already applied but still holds`);
+      expect(second.json().error).toContain(SYSTEM);
 
       // The decided run is left exactly as it was — not re-finished as 'failed', not given a
       // supersede reason, and still holding the key it was (wrongly) holding.
@@ -2442,6 +2456,11 @@ describe('POST /api/facilities/import', () => {
 
       const second = await app.inject({ method: 'POST', url: '/api/facilities/import', payload: { csv, nationalSystem: SYSTEM } });
       expect(second.statusCode).toBe(409);
+      // A2b Task 3 review fix (M3), as on the TERMINAL test above: the shared gate's message now
+      // names the holder and its live state. This is the "wait for the worker" half of the pair, and
+      // it must stay distinguishable from the "clear the stuck run" half.
+      expect(second.json().error).toContain(`an import is already in progress for "${SYSTEM}"`);
+      expect(second.json().error).toContain(`run ${firstRunId} is validating`);
 
       // The live run is untouched: still `validating`, still holding its key. A superseding gate
       // would have marked it 'failed' out from under the worker.
@@ -2841,6 +2860,235 @@ describe('POST /api/facilities/import/upload', () => {
 
     expect(ctx.blob.__objects.size).toBe(0);
     expect(await db.selectFrom('facility_import_runs').selectAll().execute()).toHaveLength(0);
+  });
+
+  // --- A2b Task 3 review fix (I1): a sink that fails WITHOUT draining ---------------------------
+  //
+  // ⚠ `fakeBlobStore` deliberately DRAINS (as the real S3 multipart `Upload` does on the happy
+  // path). This double is the FAILURE shape that one cannot express: `Upload.done()` rejecting on a
+  // bad bucket or bad credentials while its chunk generator stops consuming. Nothing then reads the
+  // hashing transform, so `pipeline(req.body, hashing)` is parked on backpressure with a source that
+  // will never drain.
+  //
+  // TWO distinct regressions are pinned here, because the fix has two halves — and each was
+  // demonstrated by mutating the route and watching THIS test go red:
+  //
+  //  1. THE ANSWER. Awaiting BOTH sides (`Promise.allSettled`, which this route used to do) instead
+  //     of `Promise.all` fails this test — the sink's rejection escapes the handler instead of
+  //     becoming a 500. (The over-cap test below is the one where a reintroduced `allSettled` HANGS
+  //     outright; see its own note.) The 5s budget is a guard for this family of failures generally,
+  //     since a stream that never settles stalls the suite rather than failing it.
+  //  2. THE TEARDOWN, asserted directly on the transform the route handed the store (`handed`
+  //     below). `Promise.all` answers without waiting, so a leaked pipeline is INVISIBLE in the
+  //     response — the transform being `destroyed` is the only observable trace of
+  //     `stored.catch(e => hashing.destroy(e))`. Replacing that line with a no-op leaves this
+  //     request answering 500 exactly as before while the request stream and the transform are held
+  //     for the life of the process (Fastify sets no `requestTimeout` — see app.ts).
+  it('⛔ fails fast (500) when the blob store rejects WITHOUT draining, and tears the transfer down', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const deleted: string[] = [];
+    // The hashing transform the route pipes into — captured, then abandoned unread.
+    let handed: { destroyed: boolean } | null = null;
+    ctx.blob = {
+      // Rejects promptly and never touches `body` — the stream is left with nobody reading it.
+      async putStream(_key: string, body: { destroyed: boolean }) {
+        handed = body;
+        throw new Error('simulated blob store failure: no such bucket');
+      },
+      async delete(key: string) { deleted.push(key); },
+      __objects: new Map<string, Buffer>(),
+    };
+    const app = await appWith(ctx);
+
+    // ⛔ Comfortably above the transform's 16 KiB default highWaterMark, so the pipeline is genuinely
+    // under backpressure when the sink gives up. A payload that fits in one buffer would complete on
+    // its own and prove nothing.
+    const csv = facilityCsv(Array.from({ length: 20_000 }, (_, i) => `${1000 + i},Facility ${i},,,,,,,,,,,,,,`));
+    expect(Buffer.byteLength(csv, 'utf8')).toBeGreaterThan(512 * 1024);
+
+    const res = await app.inject({
+      method: 'POST', url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv' }),
+      headers: UPLOAD_HEADERS, payload: Buffer.from(csv, 'utf8'),
+    });
+
+    expect(res.statusCode).toBe(500);
+    // ⛔ Regression 2: the abandoned transform was torn down rather than left parked forever.
+    expect(handed).not.toBeNull();
+    expect(handed!.destroyed).toBe(true);
+    // The transfer failed, so nothing is queued and the (possibly partial) object is discarded —
+    // `discardBlob` ran, which is the cleanup path an unresolved await never reaches at all.
+    expect(await db.selectFrom('facility_import_runs').selectAll().execute()).toHaveLength(0);
+    expect(deleted).toEqual([expect.stringMatching(/^facility-import\//)]);
+    // And the register is not left locked by the failure: the next upload succeeds.
+    ctx.blob = fakeBlobStore();
+    const after = await app.inject({
+      method: 'POST', url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv' }),
+      headers: UPLOAD_HEADERS, payload: Buffer.from(facilityCsv(['100,Alpha,,,,,,,,,,,,,,']), 'utf8'),
+    });
+    expect(after.statusCode).toBe(202);
+  }, 5000);
+
+  // --- A2b Task 3 review fix (I2): the upload's real byte ceiling ------------------------------
+  //
+  // `bodyLimit` is INERT for this route (measured against fastify@5.8.5: `rawBody`, the only place
+  // the limit is consulted, runs solely for `asString`/`asBuffer` parsers — a passthrough parser
+  // bypasses it entirely). The ceiling that actually binds is the running byte count inside the
+  // hashing transform, against `ctx.cfg.FACILITY_IMPORT_MAX_UPLOAD_BYTES`. Lowered here rather than
+  // pushed past 1 GiB, exactly as `workflows-routes.test.ts` does with `WORKFLOW_FILE_MAX_BYTES`.
+  //
+  // Registers the REAL central error handler, as production does, so the over-cap answer is the
+  // app-wide `{error, code, correlationId}` contract rather than a body only this route emits.
+  //
+  // ⛔ EXPLICIT 8s BUDGET, because the regression here is a HANG rather than a wrong answer. MEASURED
+  // by mutating the route back to `Promise.allSettled`: `pipeline`'s promise never settles once the
+  // transform errors against a Fastify request stream (`req.body.destroyed` is still false a second
+  // later), so the handler never returns and this test times out instead of failing on an assertion.
+  // Without a budget it would stall the suite at whatever global timeout is in force.
+  it('⛔ 413s an upload over `FACILITY_IMPORT_MAX_UPLOAD_BYTES` and stores no run', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    ctx.cfg.FACILITY_IMPORT_MAX_UPLOAD_BYTES = 2;
+    // ⚠ A store that REPLACES the stream's error with its own, as the real adapter does: it wraps
+    // `@aws-sdk/lib-storage`'s `Upload`, whose `done()` rejects with an SDK abort error rather than
+    // the transform's. Both sides of the transfer therefore fail with DIFFERENT errors, and the one
+    // that wins the race would otherwise decide the status code — 413 or 500 at random. This is what
+    // pins the route's `throw overCap ?? err`; with `throw err` this test sees a 500.
+    const objects = ctx.blob.__objects as Map<string, Buffer>;
+    ctx.blob = {
+      async putStream(key: string, body: AsyncIterable<Buffer | string>) {
+        const chunks: Buffer[] = [];
+        try {
+          for await (const chunk of body) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+        } catch {
+          throw new Error('simulated S3 multipart upload aborted');
+        }
+        objects.set(key, Buffer.concat(chunks));
+      },
+      async delete(key: string) { objects.delete(key); },
+      __objects: objects,
+    };
+    const app = Fastify({ logger: false });
+    registerErrorHandler(app as any);
+    app.addHook('onRequest', async (req: any) => { req.user = { id: 'u1', capabilities: ['facilities.view', 'facilities.manage'] }; });
+    registerFacilitiesRoutes(app as any, ctx);
+    await app.ready();
+
+    const res = await app.inject({
+      method: 'POST', url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv' }),
+      headers: UPLOAD_HEADERS, payload: Buffer.from(facilityCsv(['100,Alpha,,,,,,,,,,,,,,']), 'utf8'),
+    });
+
+    expect(res.statusCode).toBe(413);
+    expect(res.json()).toMatchObject({ code: 'SY0413' });
+    expect(res.json().error).toContain('2-byte upload limit');
+    expect(res.json().correlationId).toBeTruthy();
+    // Nothing queued, and the partial object is discarded — an over-cap upload must not leave the
+    // register holding `active_key` or an orphan in the bucket.
+    expect(await db.selectFrom('facility_import_runs').selectAll().execute()).toHaveLength(0);
+    expect(ctx.blob.__objects.size).toBe(0);
+
+    // ⛔ And the ceiling is a CEILING, not a blanket refusal: raise it and the same file goes
+    // through. Without this, `return reply.code(413)` unconditionally would pass the assertions above.
+    ctx.cfg.FACILITY_IMPORT_MAX_UPLOAD_BYTES = 1_073_741_824;
+    const after = await app.inject({
+      method: 'POST', url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv' }),
+      headers: UPLOAD_HEADERS, payload: Buffer.from(facilityCsv(['100,Alpha,,,,,,,,,,,,,,']), 'utf8'),
+    });
+    expect(after.statusCode).toBe(202);
+  }, 8000);
+
+  // --- A2b Task 3 review fix (M4): the gate's `!superseded` re-read branch ----------------------
+  //
+  // The store's CAS is pinned in packages/db, but the ROUTE-level consequence of losing it is new
+  // behaviour on the shared `takeOverRegister` path: "the CAS lost AND the holder has since moved
+  // TERMINAL (so it released `active_key` on its way) ⇒ the register really is free, proceed" — as
+  // opposed to the unconditional 409 this branch used to answer.
+  //
+  // ⚠ The race is forced, not waited for. `ctx.internalDb` is swapped for a proxy that, immediately
+  // after the gate's own `active_key` lookup resolves, applies exactly what a terminal writer applies
+  // (status → `applied`, `active_key` → NULL). The route's `importRuns` store was built from the RAW
+  // db at registration, so only the gate's SELECT is intercepted — `supersede`'s CAS then runs
+  // against the real, already-moved row and matches nothing, which is the branch under test.
+  it('⛔ proceeds when the supersede CAS loses to a holder that moved TERMINAL — the register is free', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const csv = facilityCsv(['100,Alpha,,,,,,,,,,,,,,']);
+
+    const first = await app.inject({
+      method: 'POST', url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv' }),
+      headers: UPLOAD_HEADERS, payload: Buffer.from(csv, 'utf8'),
+    });
+    expect(first.statusCode).toBe(202);
+    const firstRunId = first.json().runId;
+
+    // A SUPERSEDABLE holder — otherwise the gate refuses before it ever reaches the CAS.
+    await db.updateTable('facility_import_runs').set({ status: 'awaiting_confirmation' })
+      .where('id', '=', firstRunId).execute();
+    expect((await db.selectFrom('facility_import_runs').select(['status', 'active_key'])
+      .where('id', '=', firstRunId).executeTakeFirstOrThrow()))
+      .toEqual({ status: 'awaiting_confirmation', active_key: SYSTEM });
+
+    const rawDb = db;
+    let raced = false;
+    const wrapBuilder = (qb: any): any => new Proxy(qb, {
+      get(target, prop) {
+        const value = target[prop];
+        if (typeof value !== 'function') return value;
+        if (prop === 'executeTakeFirst') {
+          return async (...args: any[]) => {
+            const out = await value.apply(target, args);
+            if (!raced) {
+              raced = true;
+              // Precisely what `finishApply`/`finish`/`supersede`/`failStaleRunning` all do on their
+              // way out: a terminal status AND the key released. Nothing holds the register now.
+              await rawDb.updateTable('facility_import_runs')
+                .set({ status: 'applied', active_key: null } as never)
+                .where('id', '=', firstRunId).execute();
+            }
+            return out;
+          };
+        }
+        return (...args: any[]) => {
+          const next = value.apply(target, args);
+          return next && typeof next === 'object' && typeof next.executeTakeFirst === 'function' ? wrapBuilder(next) : next;
+        };
+      },
+    });
+    ctx.internalDb = new Proxy(rawDb, {
+      get(target, prop, receiver) {
+        if (prop !== 'selectFrom') {
+          const v = Reflect.get(target, prop, receiver);
+          return typeof v === 'function' ? v.bind(target) : v;
+        }
+        return (table: string) => {
+          const qb = target.selectFrom(table);
+          return table === 'facility_import_runs' && !raced ? wrapBuilder(qb) : qb;
+        };
+      },
+    });
+
+    const second = await app.inject({
+      method: 'POST', url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv' }),
+      headers: UPLOAD_HEADERS, payload: Buffer.from(csv, 'utf8'),
+    });
+
+    // The setup fired — without this the test could pass for the ordinary "register was free" reason.
+    expect(raced).toBe(true);
+    // ⛔ 202, not 409: the holder released the key on its way terminal, so refusing would lock an
+    // operator out of a register nobody holds.
+    expect(second.statusCode).toBe(202);
+    expect(second.json().runId).not.toBe(firstRunId);
+
+    // ⛔ And the CAS genuinely LOST: the decided run was NOT re-finished as 'failed' and carries no
+    // supersede reason. If `supersede` had won, `error` would read 'superseded by a newer upload'.
+    expect((await db.selectFrom('facility_import_runs').select(['status', 'error', 'active_key'])
+      .where('id', '=', firstRunId).executeTakeFirstOrThrow()))
+      .toEqual({ status: 'applied', error: null, active_key: null });
+    const secondRun = (await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${second.json().runId}` })).json();
+    expect(secondRun.status).toBe('queued');
+    expect(secondRun.nationalSystem).toBe(SYSTEM);
   });
 });
 

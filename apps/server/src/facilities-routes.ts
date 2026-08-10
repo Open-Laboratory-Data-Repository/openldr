@@ -4,6 +4,7 @@ import { pipeline } from 'node:stream/promises';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import type { Kysely } from 'kysely';
 import { z } from 'zod';
+import { appError } from '@openldr/core';
 import {
   importFacilities, scanObservedFacilities, resolveObservedFacilities, publishFacilityMap, projectRegistryRows,
   retireRegistryConcepts, reprojectAfterRegistryDelete, listFacilityMappingConflicts, facilityHealth,
@@ -112,6 +113,15 @@ const MAX_INLINE_APPLY_ROWS = 2000;
 // bounded by the `facilities.manage` gate in front of it and by the blob store behind it, not by
 // this. Kept, not deleted, because it is correct-by-construction for that future change and costs
 // nothing — but do NOT cite it as the reason a huge upload is safe.
+//
+// ⛔ THE REAL ENFORCEMENT IS THE RUNNING BYTE COUNT in the upload route's hashing transform, against
+// `ctx.cfg.FACILITY_IMPORT_MAX_UPLOAD_BYTES` (413 + SY0413, blob discarded). Do not delete either of
+// these believing the other one covers it: this constant binds nothing today, and the counter is not
+// visible from the route's options object. This constant is the config key's DEFAULT value repeated
+// (`packages/config/src/schema.ts`), so on a default install the inert backstop and the live ceiling
+// are the same number; an install that overrides the env var moves only the ceiling, which is
+// harmless precisely because this one binds nothing. If a future change makes this route buffer its
+// body, make `bodyLimit` read the config key too rather than leaving it a stale literal.
 const MAX_UPLOAD_BYTES = 1_073_741_824;
 // Same capability gate as every other write in this file (`facilities.manage`).
 const UPLOAD = { ...MANAGE, bodyLimit: MAX_UPLOAD_BYTES };
@@ -1567,32 +1577,72 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     // blob store — the file is never buffered, at any size. Reading the object back to hash it (or
     // collecting it into a Buffer first) would put a national register in memory twice and defeat
     // the whole point of streaming it.
+    // ⛔ THE UPLOAD'S ONLY REAL BYTE CEILING. `bodyLimit` is inert for this route's passthrough
+    // parser (measured — see `MAX_UPLOAD_BYTES`), so without this counter an authenticated client
+    // could stream without end. Enforced HERE, in the transform that already counts the bytes,
+    // rather than after the transfer: crossing the limit errors the transform, which tears the
+    // pipeline (and the blob write behind it) down mid-flight instead of paying for the whole file
+    // first. `SY0413` → 413 through the central error handler, the same contract as
+    // `workflows-routes.ts`'s upload. Read off `ctx.cfg` per request (not captured at registration)
+    // for the same reason that route does: it is the value a test can lower and an operator can tune.
+    const maxUploadBytes = ctx.cfg.FACILITY_IMPORT_MAX_UPLOAD_BYTES;
     const digest = createHash('sha256');
     let byteSize = 0;
+    // Set the moment the ceiling is crossed, and PREFERRED over whatever rejection wins the race
+    // below. Both sides of the transfer fail when the transform errors — `pipeline` with this error
+    // and the blob store with whatever it wraps that error in — so without this the answer would be
+    // 413 or 500 depending on which promise settled first.
+    let overCap: Error | null = null;
     const hashing = new Transform({
       transform(chunk: Buffer, _enc, done) {
-        digest.update(chunk);
         byteSize += chunk.length;
+        if (byteSize > maxUploadBytes) {
+          overCap = appError('SY0413', { message: `the register file exceeds the ${maxUploadBytes}-byte upload limit` });
+          done(overCap);
+          return;
+        }
+        digest.update(chunk);
         done(null, chunk);
       },
     });
 
     try {
       const stored = ctx.blob.putStream(key, hashing, format === 'csv' ? 'text/csv' : 'application/x-ndjson');
-      // ⚠ `allSettled`, not `Promise.all`: BOTH sides can fail (the request stream dying, the blob
-      // store rejecting), and `Promise.all` rejects on the first while leaving the second's eventual
-      // rejection unobserved — an unhandled rejection that can take the process down. On a source
-      // failure `pipeline` destroys `hashing` with that error, so whatever is consuming it sees the
-      // failure too rather than waiting for bytes that will never come.
-      const outcomes = await Promise.allSettled([pipeline(req.body as NodeJS.ReadableStream, hashing), stored]);
-      const failed = outcomes.find((o) => o.status === 'rejected');
-      if (failed) throw (failed as PromiseRejectedResult).reason;
+      // ⛔ Wire the SINK's failure back into the transform, or the transfer never tears down. A blob
+      // store that rejects WITHOUT draining `hashing` — the realistic S3 case, `Upload.done()`
+      // rejecting on a bad bucket or credentials while its chunk generator stops consuming — leaves
+      // `pipeline` parked on backpressure forever, because nothing is reading the bytes it is trying
+      // to push. MEASURED standalone (a 5 MB `Readable` source, a sink rejecting after 50 ms without
+      // reading a byte): without this line the pipeline never settles; with it, it settles in ~60 ms.
+      // Fastify sets no `requestTimeout` (app.ts), so "never" really is never — the request stream
+      // and the transform would be held for the life of the process. `Promise.all` below answers the
+      // client either way, so that leak is INVISIBLE in the response; the route test asserts on this
+      // transform's `destroyed` flag instead.
+      stored.catch((e) => hashing.destroy(e instanceof Error ? e : new Error(String(e))));
+      // ⛔ `Promise.all`, and NEVER `allSettled` — the opposite of what an earlier version of this
+      // code did, on a reason that was measured FALSE. That version claimed `Promise.all` "leaves the
+      // loser's rejection unobserved — an unhandled rejection". It does not: `Promise.all` subscribes
+      // to every element, so a later rejection is always observed (probed with a two-element `all`
+      // where the second rejects 50 ms after the first — no `unhandledRejection` event fires).
+      //
+      // What `allSettled` DOES do is wait for `pipeline` to settle — and against a Fastify request
+      // stream it never settles once the transform errors, which is exactly what the byte ceiling
+      // above does. MEASURED under `app.inject`: the drain side rejects with the transform's error,
+      // `pipeline`'s promise stays pending and `req.body.destroyed` is still false a second later, so
+      // the handler never returns and the reply is never sent. `Promise.all` rejects on the first
+      // failure and answers (413/500) while that unwinding happens behind it.
+      //
+      // ⚠ Accepted cost, stated rather than hidden: because this returns before the blob write has
+      // necessarily finished, `discardBlob` below can race a sink that is still flushing. That is
+      // tolerable precisely because that cleanup is best-effort by construction (see its doc
+      // comment) — a leaked object is a leak, whereas a reply that is never sent is a hung request.
+      await Promise.all([pipeline(req.body as NodeJS.ReadableStream, hashing), stored]);
     } catch (err) {
       // The register was freed by the gate above and no run row exists, so the only thing left over
       // is a possibly-partial object. Best-effort delete, logged — a lost cleanup must not change
       // the answer the operator gets, which is the transfer failure itself.
       await discardBlob(key, 'a failed facility import upload');
-      throw err;
+      throw overCap ?? err;
     }
 
     // An empty upload is refused rather than queued, the same call `ImportSchema.csv`'s

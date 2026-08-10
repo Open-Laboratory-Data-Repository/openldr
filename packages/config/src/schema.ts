@@ -120,6 +120,14 @@ export const ConfigSchema = z
     WORKFLOW_FILE_MAX_BYTES: z.coerce.number().int().positive().default(52_428_800),
     // Max accumulated output items a single loop node may emit on its done handle.
     WORKFLOW_LOOP_MAX_ITEMS: z.coerce.number().int().positive().default(100_000),
+    // Max byte size of a national facility register streamed to POST /api/facilities/import/upload.
+    // ⛔ This is the ONLY ceiling on that route: its body is read through a passthrough content-type
+    // parser, and Fastify's `bodyLimit` is not consulted for one (measured — see the comment on
+    // MAX_UPLOAD_BYTES in apps/server/src/facilities-routes.ts). Enforced by a running byte count
+    // inside the route's hashing transform, so the transfer is torn down at the moment the limit is
+    // crossed rather than after the whole file has arrived. 1 GiB comfortably clears a national
+    // register (a 13 000-row CSV is ~1 MB) while bounding an authenticated client.
+    FACILITY_IMPORT_MAX_UPLOAD_BYTES: z.coerce.number().int().positive().default(1_073_741_824),
     // (`workflow.listeners_enabled` — master switch for external listener triggers
     // (postgres LISTEN / IMAP poll) — is now a Settings → General feature flag.)
     // Master switch for the read-write-file node's host filesystem access (privilege risk → off by default).
