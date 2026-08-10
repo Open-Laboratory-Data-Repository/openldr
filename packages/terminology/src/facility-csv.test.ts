@@ -163,3 +163,70 @@ describe('parseFacilityCsv', () => {
     expect(r.duplicateColumns).toEqual(['name']);
   });
 });
+
+describe('coordinate validation', () => {
+  const H = 'national_code,name,latitude,longitude';
+  const parse = (rows: string[]) => parseFacilityCsv([H, ...rows].join('\n') + '\n', { nationalSystem: 'S' });
+
+  it('rejects a non-numeric coordinate with a row error instead of silently nulling it', () => {
+    const r = parse(['1,Alpha,N/A,35.0']);
+    expect(r.records).toHaveLength(0);
+    expect(r.invalid).toEqual([{ line: 2, field: 'latitude', reason: 'not_a_number', raw: 'N/A' }]);
+  });
+
+  it('rejects an out-of-range latitude', () => {
+    const r = parse(['1,Alpha,91,35.0']);
+    expect(r.invalid).toEqual([{ line: 2, field: 'latitude', reason: 'out_of_range', raw: '91' }]);
+  });
+
+  it('rejects an out-of-range longitude', () => {
+    const r = parse(['1,Alpha,-2.4,181']);
+    expect(r.invalid).toEqual([{ line: 2, field: 'longitude', reason: 'out_of_range', raw: '181' }]);
+  });
+
+  it('rejects half a coordinate pair', () => {
+    const r = parse(['1,Alpha,-2.4,']);
+    expect(r.invalid).toEqual([{ line: 2, field: 'longitude', reason: 'incomplete_pair', raw: '' }]);
+  });
+
+  it('accepts both coordinates absent, and accepts the boundary values', () => {
+    expect(parse(['1,Alpha,,']).invalid).toEqual([]);
+    expect(parse(['1,Alpha,,']).records).toHaveLength(1);
+    expect(parse(['2,Beta,-90,-180']).invalid).toEqual([]);
+    expect(parse(['3,Gamma,90,180']).invalid).toEqual([]);
+  });
+
+  // 🟠 Important 2: the escape hatch the design spec mandates ("an explicit override in the same
+  // idiom as allowUnknownColumns/allowMalformedRows"). Without it a national register carrying
+  // `latitude: "N/A"` loses the FACILITY, not just its coordinate.
+  describe('allowInvalidCoordinates', () => {
+    const parseAllowing = (rows: string[]) =>
+      parseFacilityCsv([H, ...rows].join('\n') + '\n', { nationalSystem: 'S', allowInvalidCoordinates: true });
+
+    it('imports the row with both coordinates null and still reports the error', () => {
+      const r = parseAllowing(['1,Alpha,N/A,35.0']);
+      expect(r.records).toHaveLength(1);
+      expect(r.records[0].latitude).toBeNull();
+      // ⛔ The parseable half goes to null TOO — half a coordinate is not a location, so keeping
+      // 35.0 would write a position the file never expressed.
+      expect(r.records[0].longitude).toBeNull();
+      // Reporting is unconditional: the flag decides whether the row is DROPPED, not whether its
+      // errors are surfaced.
+      expect(r.invalid).toEqual([{ line: 2, field: 'latitude', reason: 'not_a_number', raw: 'N/A' }]);
+    });
+
+    it('applies to an out-of-range value and to half a pair alike', () => {
+      expect(parseAllowing(['1,Alpha,91,35']).records).toHaveLength(1);
+      const half = parseAllowing(['1,Alpha,-2.4,']);
+      expect(half.records).toHaveLength(1);
+      expect(half.records[0].latitude).toBeNull();
+      expect(half.invalid).toHaveLength(1);
+    });
+
+    it('changes nothing about a row whose coordinates are valid or absent', () => {
+      expect(parseAllowing(['1,Alpha,-2.4,35']).records[0].latitude).toBe(-2.4);
+      expect(parseAllowing(['2,Beta,,']).records[0].latitude).toBeNull();
+      expect(parseAllowing(['3,Gamma,-2.4,35']).invalid).toEqual([]);
+    });
+  });
+});

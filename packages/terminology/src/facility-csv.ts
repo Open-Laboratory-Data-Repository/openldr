@@ -20,13 +20,43 @@ export interface FacilityCsvOptions {
   nationalSystem: string;
   /** Import despite unrecognised columns, carrying them into `extras`. */
   allowUnknownColumns?: boolean;
+  /** Import a row whose coordinate failed validation anyway, with BOTH `latitude` and `longitude`
+   *  set to `null`. The escape hatch in the same idiom as `allowUnknownColumns`, without which a
+   *  row carrying `latitude: "N/A"` is dropped entirely and the facility is simply lost.
+   *
+   *  ⛔ BOTH halves go to null, never just the offending one: `coordinatePair` exists because half a
+   *  coordinate is not a location, so keeping the good half would write a position the file never
+   *  expressed. The row's `RowError`s are pushed into `invalid` either way — this flag decides
+   *  whether the row is DROPPED, never whether it is REPORTED. */
+  allowInvalidCoordinates?: boolean;
 }
 
 export interface QuarantinedRow {
   line: number;
   /** The row exactly as it appeared, so an operator can find and fix it in their source file. */
   raw: string;
-  reason: 'too_few_fields' | 'too_many_fields';
+  /** `too_few_fields`/`too_many_fields` are CSV-specific (a row's column count didn't match the
+   *  header's). The other three are the JSONL-release equivalents — `facility-release.ts` reuses this
+   *  same type rather than defining a parallel one, since all five describe "a line that could not be
+   *  mapped to a record, set aside with its line number" — just for different source formats and
+   *  failure modes.
+   *  - `malformed_json`: a SYNTAX failure — the line is not parseable JSON, or parses to something
+   *    other than an object.
+   *  - `unknown_record_type`: a SCHEMA failure — the line is a well-formed JSON object, but its `type`
+   *    is missing or not one of `meta`/`row`/`deletion`. Kept distinct from `malformed_json` so an
+   *    operator chasing it doesn't go looking for a syntax error that isn't there.
+   *  - `duplicate_meta`: the line's `type` IS `meta` — recognised, not malformed — but a `meta` line
+   *    already won (the corpus carries exactly one). Distinct from `unknown_record_type` because the
+   *    type here is not unrecognised at all; the problem is only that it is a second one. */
+  reason: 'too_few_fields' | 'too_many_fields' | 'malformed_json' | 'unknown_record_type' | 'duplicate_meta';
+}
+
+export interface RowError {
+  line: number;
+  field: 'latitude' | 'longitude';
+  reason: 'not_a_number' | 'out_of_range' | 'incomplete_pair';
+  /** The offending value exactly as it appeared, so an operator can find it in their file. */
+  raw: string;
 }
 
 export interface FacilityCsvResult {
@@ -42,25 +72,67 @@ export interface FacilityCsvResult {
   quarantined: QuarantinedRow[];
   /** Rows dropped for missing a required field. */
   skipped: number;
+  /** Rows dropped for an unparseable, out-of-range, or half-supplied coordinate. Distinct from
+   *  `skipped` (a missing REQUIRED value) — a row here was otherwise well-formed. */
+  invalid: RowError[];
 }
 
 /** Stable id from the register + code, so re-importing a newer release UPDATES in place and any
- *  aliases attached to the row survive a rename. */
-function idFor(nationalSystem: string, nationalCode: string): string {
+ *  aliases attached to the row survive a rename. Exported so `facility-release.ts` derives the SAME
+ *  id for the SAME register+code — a JSONL release and a CSV of the same register must produce
+ *  identical ids, so this hash must never be reimplemented a second time. */
+export function idFor(nationalSystem: string, nationalCode: string): string {
   return `fac-${createHash('sha256').update(`${nationalSystem}|${nationalCode}`).digest('hex').slice(0, 16)}`;
 }
 
-const text = (v: string | undefined): string | null => {
+export const text = (v: string | undefined): string | null => {
   const t = (v ?? '').trim();
   return t === '' ? null : t;
 };
 
-const num = (v: string | undefined): number | null => {
-  const t = (v ?? '').trim();
+/** Coordinate bounds. Not configuration: these are the definition of the WGS84 coordinate space,
+ *  not a policy an operator could reasonably want to change. */
+const LAT_MAX = 90;
+const LON_MAX = 180;
+
+/**
+ * Parse one coordinate.
+ *
+ * ⛔ This used to be `num()`, which returned `null` for ANY unparseable value with no error at all —
+ * so `latitude: "N/A"` and `latitude: ""` were indistinguishable and a national register could lose
+ * every coordinate it had while reporting a clean import (FAC-P1-05). Blank still means absent;
+ * everything else must parse and be in range.
+ */
+export function coordinate(
+  raw: string | undefined, field: 'latitude' | 'longitude', line: number, errors: RowError[],
+): number | null {
+  const t = (raw ?? '').trim();
   if (t === '') return null;
   const n = Number(t);
-  return Number.isFinite(n) ? n : null;
-};
+  if (!Number.isFinite(n)) { errors.push({ line, field, reason: 'not_a_number', raw: t }); return null; }
+  const max = field === 'latitude' ? LAT_MAX : LON_MAX;
+  if (n < -max || n > max) { errors.push({ line, field, reason: 'out_of_range', raw: t }); return null; }
+  return n;
+}
+
+/** Validate a lat/lon pair TOGETHER — a coordinate is a pair, and half of one is not a location (see
+ *  `coordinate`'s docblock, FAC-P1-05). Exported so `facility-release.ts` reuses this exact pairing
+ *  rule instead of reimplementing the "reported only when the other half parsed cleanly" logic. */
+export function coordinatePair(
+  latRaw: string | undefined, lonRaw: string | undefined, line: number,
+): { latitude: number | null; longitude: number | null; errors: RowError[] } {
+  const errors: RowError[] = [];
+  const latitude = coordinate(latRaw, 'latitude', line, errors);
+  const longitude = coordinate(lonRaw, 'longitude', line, errors);
+  if (errors.length === 0) {
+    if (latitude !== null && longitude === null) {
+      errors.push({ line, field: 'longitude', reason: 'incomplete_pair', raw: (lonRaw ?? '').trim() });
+    } else if (longitude !== null && latitude === null) {
+      errors.push({ line, field: 'latitude', reason: 'incomplete_pair', raw: (latRaw ?? '').trim() });
+    }
+  }
+  return { latitude, longitude, errors };
+}
 
 /**
  * Parse a national facility CSV.
@@ -101,7 +173,7 @@ export function parseFacilityCsv(csv: string, opts: FacilityCsvOptions): Facilit
   }) as { record: string[]; info: { lines: number }; raw: string }[];
 
   if (rows.length === 0) {
-    return { records: [], unknownColumns: [], duplicateColumns: [], quarantined: [], skipped: 0 };
+    return { records: [], unknownColumns: [], duplicateColumns: [], quarantined: [], skipped: 0, invalid: [] };
   }
 
   const headers = rows[0].record.map((h) => h.trim().toLowerCase());
@@ -109,15 +181,16 @@ export function parseFacilityCsv(csv: string, opts: FacilityCsvOptions): Facilit
   const unknownColumns = headers.filter((h, i) => h !== '' && headers.indexOf(h) === i && !KNOWN.has(h));
 
   if (duplicateColumns.length > 0) {
-    return { records: [], unknownColumns, duplicateColumns: [...new Set(duplicateColumns)], quarantined: [], skipped: 0 };
+    return { records: [], unknownColumns, duplicateColumns: [...new Set(duplicateColumns)], quarantined: [], skipped: 0, invalid: [] };
   }
   if (unknownColumns.length > 0 && !opts.allowUnknownColumns) {
-    return { records: [], unknownColumns, duplicateColumns: [], quarantined: [], skipped: 0 };
+    return { records: [], unknownColumns, duplicateColumns: [], quarantined: [], skipped: 0, invalid: [] };
   }
 
   const quarantined: QuarantinedRow[] = [];
   let skipped = 0;
   const records: FacilityRecord[] = [];
+  const invalid: RowError[] = [];
 
   for (const { record, info, raw } of rows.slice(1)) {
     if (record.length !== headers.length) {
@@ -135,6 +208,13 @@ export function parseFacilityCsv(csv: string, opts: FacilityCsvOptions): Facilit
     const nationalCode = text(r.national_code);
     const name = text(r.name);
     if (!nationalCode || !name) { skipped += 1; continue; }
+
+    const coords = coordinatePair(r.latitude, r.longitude, info.lines);
+    const badCoords = coords.errors.length > 0;
+    // Reported unconditionally; DROPPED only without the override (see `allowInvalidCoordinates`).
+    if (badCoords) { invalid.push(...coords.errors); if (!opts.allowInvalidCoordinates) continue; }
+    const latitude = badCoords ? null : coords.latitude;
+    const longitude = badCoords ? null : coords.longitude;
 
     const extras: Record<string, unknown> = {};
     for (const col of unknownColumns) {
@@ -159,13 +239,13 @@ export function parseFacilityCsv(csv: string, opts: FacilityCsvOptions): Facilit
       village: text(r.village),
       addressText: text(r.address),
       phone: text(r.phone),
-      latitude: num(r.latitude),
-      longitude: num(r.longitude),
+      latitude,
+      longitude,
       extras: Object.keys(extras).length > 0 ? extras : undefined,
       // No managedOrigin stamp — see the docblock above. The sync applier stamps 'central' on arrival.
       source: 'import',
     });
   }
 
-  return { records, unknownColumns, duplicateColumns: [], quarantined, skipped };
+  return { records, unknownColumns, duplicateColumns: [], quarantined, skipped, invalid };
 }

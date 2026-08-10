@@ -867,10 +867,10 @@ export const listFacilityAdminValues = (
   return apiGet(`/api/facilities/admin-values?${params.toString()}`, 'list facility admin values');
 };
 
-// Task 4: CSV import (Settings/Facilities page upload — wired by a later task). Mirrors the
-// server's FacilityImportResult (packages/bootstrap/src/facility-import.ts) verbatim: every counter
-// is always present, `duplicates: 0` on a clean import rather than absent, so a caller can never
-// confuse "0 found" with "not reported".
+// Task 4: CSV import (Settings/Facilities page upload). Mirrors the server's FacilityImportResult
+// (packages/bootstrap/src/facility-import.ts) verbatim: every counter is always present,
+// `duplicates: 0` on a clean import rather than absent, so a caller can never confuse "0 found"
+// with "not reported".
 // Task 5: a row whose field count did not match the header's — never mapped to columns (see the
 // server's facility-csv.ts `QuarantinedRow`). Defined locally, not imported from
 // `@openldr/terminology`: this app has no dependency on that package (see `FacilityImportResult`'s
@@ -879,9 +879,60 @@ export interface FacilityImportQuarantinedRow {
   line: number;
   /** The row exactly as it appeared in the operator's file, so they can find and fix it there. */
   raw: string;
-  reason: 'too_few_fields' | 'too_many_fields';
+  /** Widened to the full `QuarantinedRow['reason']` union (facility-csv.ts) — the CSV-only reasons
+   *  (`too_few_fields`/`too_many_fields`) plus the JSONL-release ones a `format: 'jsonl'` request can
+   *  also produce (`FacilityImportRequest.format` below). This sheet only ever renders the line/raw
+   *  text, never branches on which reason it is, so accepting the wider union costs nothing here. */
+  reason: 'too_few_fields' | 'too_many_fields' | 'malformed_json' | 'unknown_record_type' | 'duplicate_meta';
 }
 
+/** Mirrors the server's `RowError` (packages/terminology/src/facility-csv.ts): a coordinate the
+ *  parser could not accept. One entry PER FIELD, not per row — see `FacilityImportResult.invalid`. */
+export interface FacilityImportRowError {
+  line: number;
+  field: 'latitude' | 'longitude';
+  reason: 'not_a_number' | 'out_of_range' | 'incomplete_pair';
+  raw: string;
+}
+
+/** One row of a per-bucket reconciliation sample, identifying the facility without shipping the
+ *  whole record — mirrors the server's `FacilitySample` (facility-import.ts). */
+export interface FacilitySample {
+  id: string;
+  nationalCode: string | null;
+  name: string;
+}
+
+/** A `changed` sample additionally carries which fields differ — mirrors the server's
+ *  `FacilityChangeSample`. Only fields that actually differ appear here. */
+export interface FacilityChangeSample extends FacilitySample {
+  diff: { field: string; before: unknown; after: unknown }[];
+}
+
+export type FacilityImportBlockedReason = 'duplicate-columns' | 'quarantined-rows' | null;
+
+/** Mirrors the server's `FacilityReleaseMeta` (packages/terminology/src/facility-release.ts) — a
+ *  JSONL release's own header line, verbatim. Always `null` on `FacilityImportResult.meta` for a
+ *  plain CSV import, which has no release header at all. */
+export interface FacilityReleaseMeta {
+  country: string | null;
+  version: string | null;
+  publishedAt: string | null;
+  rowCount: number | null;
+  deletionCount: number | null;
+}
+
+/** Mirrors the server's `ControlledField` (packages/bootstrap/src/facility-controlled-fields.ts) —
+ *  the three facility columns rewritten to a canonical code via `term_mappings` on import. */
+export type ControlledField = 'level' | 'status' | 'country';
+
+// A2a (FAC-P1-03/05, whole-branch review): this interface used to stop at `created`/`updated` —
+// flat counts a dry-run preview reported as `0` before this task, which read as "nothing to do"
+// rather than "not computed". It now mirrors the server's FacilityImportResult FIELD FOR FIELD
+// (facility-import.ts) — see that file's own docblock on each field for the reasoning; this comment
+// only records the ONE thing worth restating here: `conflict`/`absent` are `number | null`, and
+// `null` means NOT EVALUATED. Rendering `null` as `0` anywhere in this app is exactly the defect
+// this task exists to remove — see ImportFacilitiesSheet.tsx's rendering of these two fields.
 export interface FacilityImportResult {
   parsed: number;
   skipped: number;
@@ -892,8 +943,10 @@ export interface FacilityImportResult {
   /** Structurally malformed rows, never mapped to columns — see `FacilityImportQuarantinedRow`.
    *  Non-empty ⇒ apply is blocked unless the caller sets `allowMalformedRows`. */
   quarantined: FacilityImportQuarantinedRow[];
-  created: number;
-  updated: number;
+  /** Per-field coordinate errors (facility-csv.ts's `RowError`). CT-3: rendered by
+   *  ImportFacilitiesSheet.tsx with line numbers, alongside the `allowInvalidCoordinates` override —
+   *  the same idiom as `unknownColumns`/`quarantined` above. */
+  invalid: FacilityImportRowError[];
   duplicates: number;
   /** Whether the server refused to apply this file — the server's OWN answer, mirrored from
    *  `@openldr/bootstrap`'s `FacilityImportResult.blocked`. Read it; do not rebuild the predicate
@@ -901,7 +954,70 @@ export interface FacilityImportResult {
   blocked: boolean;
   /** Which of the two block reasons applied, or null when `blocked` is false. `'duplicate-columns'`
    *  has NO override; `'quarantined-rows'` is released by `allowMalformedRows`. */
-  blockedReason: 'duplicate-columns' | 'quarantined-rows' | null;
+  blockedReason: FacilityImportBlockedReason;
+
+  // ── What this file would DO to the registry — computed on every call, preview and apply alike
+  //    (facility-import.ts's `classifyFacilityRows`). See that file's docblock for the full story. ──
+  /** Rows with no existing registry row for their id. */
+  create: number;
+  /** Existing rows at least one compared field of which differs from what this import would write. */
+  changed: number;
+  /** Existing rows this import would write nothing new to. */
+  unchanged: number;
+  /** Existing rows touched since the preview watermark. `null` means NOT EVALUATED — no `runId`
+   *  linked this call to a prior preview — never "none". */
+  conflict: number | null;
+  /** Registry rows for this `nationalSystem` the file does not mention. `null` means NOT
+   *  EVALUATED — the caller never declared `completeRelease` — never "none". */
+  absent: number | null;
+  /** Rows the publisher explicitly declared removed (JSONL only) AND that matched a row this
+   *  registry actually holds. Always 0 for a plain CSV import. */
+  deleted: number;
+
+  /** Bounded per-bucket samples so an operator can see WHICH rows a count refers to. */
+  samples: {
+    create: FacilitySample[];
+    changed: FacilityChangeSample[];
+    conflict: FacilitySample[];
+    absent: FacilitySample[];
+    deleted: FacilitySample[];
+  };
+
+  /** What was actually WRITTEN, as opposed to what was classified above — all three 0 on a preview.
+   *  ⛔ NESTED deliberately: `result.create` (classified) vs `result.written.created` (written) are
+   *  easy to confuse if they sit at the same level — see facility-import.ts's docblock. Always read
+   *  `written.created`/`written.updated`, never a flat `created`/`updated` (removed from this
+   *  interface — the server no longer sends them at the top level).
+   *
+   *  `retired` is how many registry rows this apply actually flipped to `'inactive'` — the MUTATION,
+   *  as distinct from `deleted`/`absent` above, which are what the file DESCRIBES. The two differ
+   *  whenever policy says so: `onAbsent: 'report'` (the default) reports a non-zero `absent` and
+   *  retires none of it. */
+  written: { created: number; updated: number; retired: number };
+  /** Echoes `FacilityImportRequest.runId` — null when the request carried none. An APPLY that wants
+   *  `conflict` evaluated must send back the `runId` a prior PREVIEW returned here. */
+  runId: string | null;
+  /** False when this `nationalSystem` matches no existing registry row — i.e. this import creates a
+   *  NEW register identity. Informational only; never blocks anything. */
+  knownNationalSystem: boolean;
+
+  // ── The release header, and what it declares (FAC-P1-03) — mirrors facility-import.ts. ──────────
+  /** A JSONL release's `meta` line, verbatim. Always `null` for CSV, which has no release header. */
+  meta: FacilityReleaseMeta | null;
+  /** Where `meta`'s declared counts disagree with what was actually parsed — e.g. "the release
+   *  declares 13 000 rows, we parsed 12 998". Reported, never fatal. Always `[]` for CSV. */
+  countMismatch: { field: 'rowCount' | 'deletionCount'; declared: number; parsed: number }[];
+  /** `FacilityImportRequest.releaseVersion` when the caller supplied one, otherwise the release's
+   *  own `meta.version`, otherwise null. Provenance only. */
+  releaseVersion: string | null;
+
+  // ── Controlled fields (FAC-P1-05) — mirrors facility-import.ts. ──────────────────────────────────
+  /** Per controlled field (`level`/`status`/`country`), the distinct raw source values that resolved
+   *  to no canonical code. A warning, never a block — the raw value is still written as-is. */
+  unmapped: Record<ControlledField, string[]>;
+  /** Controlled fields whose canonical value set is not seeded on this install (or `deps.admin` was
+   *  omitted server-side), so no value of theirs could be classified mapped/unmapped at all. */
+  notValidated: ControlledField[];
 }
 
 export interface FacilityImportRequest {
@@ -917,6 +1033,48 @@ export interface FacilityImportRequest {
   allowMalformedRows?: boolean;
   /** The caller opts IN to writing. Omitted/false ⇒ dry run: parse and report, write NOTHING. */
   apply?: boolean;
+  /** A2a: links this call to the run a PRIOR standalone preview created (`FacilityImportResult.runId`
+   *  echoed back on that preview's response). Omit on the preview call itself — the server mints the
+   *  run then. An APPLY sent WITHOUT the linked `runId` reports `conflict: null` (not evaluated) —
+   *  see the server route's own comment on why it never invents one on the caller's behalf. */
+  runId?: string;
+  /** Which shape `csv` is. Default `'csv'`. CT-3 (whole-branch review): the sheet now offers a
+   *  CSV/JSONL format Select (ImportFacilitiesSheet.tsx) and sends this on every preview AND apply —
+   *  it used to be mirrored-for-completeness only, never actually set by this app, which is exactly
+   *  what made `completeRelease`/`onAbsent` below structurally unreachable from the browser. */
+  format?: 'csv' | 'jsonl';
+  /** Declares `csv` a COMPLETE release of this register — only then can a row's absence from it mean
+   *  anything (`FacilityImportResult.absent`). CT-3: the sheet now offers a "this file is a complete
+   *  release" checkbox and sends this on every preview AND apply, so `absent` is populated whenever
+   *  the operator actually declares one. */
+  completeRelease?: boolean;
+  /** What to do with rows this file explicitly declared removed (JSONL only). */
+  onDeleted?: 'retire' | 'report';
+  /** What to do with rows merely absent from a complete release. */
+  onAbsent?: 'retire' | 'report';
+  /** What to do with a row the server classified `conflict` — touched by someone else between the
+   *  preview this apply's `runId` points at and this apply itself. Default `'skip'`.
+   *
+   *  ⛔ A fresh PREVIEW's own `conflict` is ALWAYS `null` — `previewedAt` is only ever set from a
+   *  PRIOR preview's watermark (see `runId` above), and a standalone preview has none to compare
+   *  against. Gating this control on "`conflict` is a non-zero number" (the shape this comment used
+   *  to describe) could therefore never actually show it: that number never arrives until AFTER an
+   *  apply has already run. The sheet instead offers the `onConflict` select whenever a preview has
+   *  minted a `runId` at all — the operator picks skip/overwrite BEFORE applying, since only the
+   *  apply itself (carrying that `runId`) can discover whether a conflict exists (see
+   *  ImportFacilitiesSheet.tsx's `onConflict` select, shown beside the `onDeleted`/`onAbsent` ones,
+   *  and the apply-result rendering of `FacilityImportResult.conflict`/`samples.conflict`). */
+  onConflict?: 'skip' | 'overwrite';
+  /** Recorded on the run for its own history; never read by `importFacilities` itself. The sheet's
+   *  optional "release version" input (ImportFacilitiesSheet.tsx) feeds this. */
+  releaseVersion?: string;
+  /** CT-3 (whole-branch review): the third member of the `allowUnknownColumns`/`allowMalformedRows`
+   *  override family — see `@openldr/bootstrap`'s `FacilityImportOptions.allowInvalidCoordinates` for
+   *  why a row failing coordinate validation is otherwise dropped from the parse entirely. Unlike
+   *  `allowMalformedRows`, toggling this DOES re-run the preview (mirroring `allowUnknownColumns`):
+   *  it changes which rows land in `records` and therefore `create`/`changed`/`unchanged`, not merely
+   *  whether Apply is allowed to proceed. */
+  allowInvalidCoordinates?: boolean;
 }
 
 export const importFacilitiesCsv = (body: FacilityImportRequest): Promise<FacilityImportResult> =>

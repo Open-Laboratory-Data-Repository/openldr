@@ -3,6 +3,7 @@ export * from './operations';
 export * from './loaders/index';
 export * from './terms-csv';
 export * from './facility-csv';
+export * from './facility-release';
 export * from './expander';
 export * from './fhirValueSet';
 export * from './ontology/index';

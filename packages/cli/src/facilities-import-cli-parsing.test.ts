@@ -27,12 +27,18 @@ import { buildProgram } from './program';
  */
 const mocks = vi.hoisted(() => ({
   runFacilitiesImport: vi.fn().mockResolvedValue(0),
+  // Task 12: `import-runs`/`import-run <id>` get the same commander-parsing coverage as `import`
+  // above, for the same reason — see the describe block at the bottom of this file.
+  runFacilitiesImportRuns: vi.fn().mockResolvedValue(0),
+  runFacilitiesImportRun: vi.fn().mockResolvedValue(0),
 }));
 
 // The function itself is already unit-tested in facilities.test.ts (including the pass-through
 // of opts.apply). Mocking it here isolates what THIS test is about: what commander hands it.
 vi.mock('./facilities', () => ({
   runFacilitiesImport: mocks.runFacilitiesImport,
+  runFacilitiesImportRuns: mocks.runFacilitiesImportRuns,
+  runFacilitiesImportRun: mocks.runFacilitiesImportRun,
 }));
 
 describe('facilities import — commander parsing path (program.ts, not the function directly)', () => {
@@ -108,6 +114,28 @@ describe('facilities import — commander parsing path (program.ts, not the func
     expect(opts.allowMalformedRows).toBe(true);
   });
 
+  // 🟠 Important 2: same seam again, for the coordinate override the design spec mandates. Without
+  // this flag registered on the command there is no way to reach `allowInvalidCoordinates` from a
+  // shell at all, and a row carrying `latitude: "N/A"` is simply lost.
+  it('parses --allow-invalid-coordinates and resolves allowInvalidCoordinates true', async () => {
+    const program = buildProgram().exitOverride();
+
+    await program.parseAsync([
+      'node',
+      'openldr',
+      'facilities',
+      'import',
+      '/some/national-register.csv',
+      '--national-system',
+      'urn:tz:hfr',
+      '--allow-invalid-coordinates',
+    ]);
+
+    expect(mocks.runFacilitiesImport).toHaveBeenCalledTimes(1);
+    const [, opts] = mocks.runFacilitiesImport.mock.calls[0] as [string, { allowInvalidCoordinates?: boolean }];
+    expect(opts.allowInvalidCoordinates).toBe(true);
+  });
+
   it('no --allow-malformed-rows resolves allowMalformedRows falsy', async () => {
     const program = buildProgram().exitOverride();
 
@@ -124,5 +152,82 @@ describe('facilities import — commander parsing path (program.ts, not the func
     expect(mocks.runFacilitiesImport).toHaveBeenCalledTimes(1);
     const [, opts] = mocks.runFacilitiesImport.mock.calls[0] as [string, { allowMalformedRows?: boolean }];
     expect(opts.allowMalformedRows).toBeFalsy();
+  });
+
+  // Task 12: same seam, same reasoning, for the six flags added to mirror `FacilityImportOptions`
+  // exactly (`--format`, `--release-version`, `--complete-release`, `--on-deleted`, `--on-absent`,
+  // `--on-conflict`) — `facilities.test.ts` calls `runFacilitiesImport()` directly and so never
+  // exercises commander's own parsing of these; this is the seam an operator's real invocation
+  // touches, and a typo'd `.option()` flag name here would pass that direct-call suite unnoticed.
+  it('parses every Task 12 flag on the command line and resolves them onto opts', async () => {
+    const program = buildProgram().exitOverride();
+
+    await program.parseAsync([
+      'node', 'openldr', 'facilities', 'import', '/some/release.jsonl',
+      '--national-system', 'urn:tz:hfr', '--apply',
+      '--format', 'jsonl',
+      '--release-version', 'r7',
+      '--complete-release',
+      '--on-deleted', 'report',
+      '--on-absent', 'retire',
+      '--on-conflict', 'overwrite',
+    ]);
+
+    expect(mocks.runFacilitiesImport).toHaveBeenCalledTimes(1);
+    const [, opts] = mocks.runFacilitiesImport.mock.calls[0] as [string, Record<string, unknown>];
+    expect(opts).toMatchObject({
+      format: 'jsonl', releaseVersion: 'r7', completeRelease: true,
+      onDeleted: 'report', onAbsent: 'retire', onConflict: 'overwrite',
+    });
+  });
+
+  it('omitting the Task 12 flags resolves format/releaseVersion/onDeleted/onAbsent/onConflict undefined and completeRelease falsy', async () => {
+    const program = buildProgram().exitOverride();
+
+    await program.parseAsync([
+      'node', 'openldr', 'facilities', 'import', '/some/register.csv',
+      '--national-system', 'urn:tz:hfr',
+    ]);
+
+    expect(mocks.runFacilitiesImport).toHaveBeenCalledTimes(1);
+    const [, opts] = mocks.runFacilitiesImport.mock.calls[0] as [string, Record<string, unknown>];
+    expect(opts.format).toBeUndefined();
+    expect(opts.releaseVersion).toBeUndefined();
+    expect(opts.onDeleted).toBeUndefined();
+    expect(opts.onAbsent).toBeUndefined();
+    expect(opts.onConflict).toBeUndefined();
+    expect(opts.completeRelease).toBeFalsy();
+  });
+});
+
+// ── Task 12: `facilities import-runs` / `import-run <id>` — real commander parsing ────────────
+describe('facilities import-runs / import-run — commander parsing path', () => {
+  beforeEach(() => {
+    mocks.runFacilitiesImportRuns.mockClear();
+    mocks.runFacilitiesImportRun.mockClear();
+  });
+
+  it('import-runs parses --national-system and --limit as a string and a number', async () => {
+    const program = buildProgram().exitOverride();
+
+    await program.parseAsync([
+      'node', 'openldr', 'facilities', 'import-runs',
+      '--national-system', 'urn:tz:hfr', '--limit', '5',
+    ]);
+
+    expect(mocks.runFacilitiesImportRuns).toHaveBeenCalledTimes(1);
+    const [opts] = mocks.runFacilitiesImportRuns.mock.calls[0] as [{ nationalSystem?: string; limit?: number }];
+    expect(opts.nationalSystem).toBe('urn:tz:hfr');
+    expect(opts.limit).toBe(5); // a NUMBER, not the string "5" — proves the parse function ran.
+  });
+
+  it('import-run <id> resolves the positional id', async () => {
+    const program = buildProgram().exitOverride();
+
+    await program.parseAsync(['node', 'openldr', 'facilities', 'import-run', 'fir_abc123']);
+
+    expect(mocks.runFacilitiesImportRun).toHaveBeenCalledTimes(1);
+    const [id] = mocks.runFacilitiesImportRun.mock.calls[0] as [string];
+    expect(id).toBe('fir_abc123');
   });
 });

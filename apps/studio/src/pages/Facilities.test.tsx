@@ -306,12 +306,31 @@ describe('Facilities page', () => {
     listFacilitiesMock
       .mockResolvedValueOnce(makePage([])) // initial load
       .mockResolvedValueOnce(makePage([sampleFacility])); // background reload triggered by onImported
+    // A2a (FAC-P1-03/05): the sheet now reads the server's full reconciliation shape (`create`/
+    // `changed`/`unchanged`/`conflict`/`absent`/`deleted`/`samples`/`written`/`runId`/
+    // `knownNationalSystem`), not just the old flat `created`/`updated` — see
+    // ImportFacilitiesSheet.test.tsx's own `baseResult` helper, mirrored here since this test drives
+    // the sheet through the real Facilities page rather than standalone.
+    // CT-3 (whole-branch review): Wave A's new fields (facility-import.ts's `FacilityImportResult`)
+    // — release provenance and controlled-field warnings, both empty for this plain CSV fixture.
     (importFacilitiesCsv as ReturnType<typeof vi.fn>)
       .mockResolvedValueOnce({
-        parsed: 3, skipped: 0, unknownColumns: [], duplicateColumns: [], quarantined: [], created: 0, updated: 0, duplicates: 0,
+        parsed: 3, skipped: 0, unknownColumns: [], duplicateColumns: [], quarantined: [], invalid: [], duplicates: 0,
+        blocked: false, blockedReason: null,
+        create: 3, changed: 0, unchanged: 0, conflict: null, absent: null, deleted: 0,
+        samples: { create: [], changed: [], conflict: [], absent: [], deleted: [] },
+        written: { created: 0, updated: 0, retired: 0 }, runId: 'run-1', knownNationalSystem: true,
+        meta: null, countMismatch: [], releaseVersion: null,
+        unmapped: { level: [], status: [], country: [] }, notValidated: [],
       })
       .mockResolvedValueOnce({
-        parsed: 3, skipped: 0, unknownColumns: [], duplicateColumns: [], quarantined: [], created: 2, updated: 1, duplicates: 0,
+        parsed: 3, skipped: 0, unknownColumns: [], duplicateColumns: [], quarantined: [], invalid: [], duplicates: 0,
+        blocked: false, blockedReason: null,
+        create: 2, changed: 1, unchanged: 0, conflict: null, absent: null, deleted: 0,
+        samples: { create: [], changed: [], conflict: [], absent: [], deleted: [] },
+        written: { created: 2, updated: 1, retired: 0 }, runId: 'run-1', knownNationalSystem: true,
+        meta: null, countMismatch: [], releaseVersion: null,
+        unmapped: { level: [], status: [], country: [] }, notValidated: [],
       });
     show();
     await waitFor(() => expect(screen.getByText(/no facilities yet/i)).toBeInTheDocument());

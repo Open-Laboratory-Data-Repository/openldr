@@ -298,6 +298,40 @@ export interface FacilityJobsTable {
   active_key: string | null;
 }
 
+/** One durable record per facility import (FAC-P1-03). Also the job row a background import is
+ *  claimed from in A2b. ⛔ `active_key` holds `national_system` while a run is active and is NULL
+ *  once terminal — see migration 080 for why it is a plain, not partial, unique index, and why this
+ *  deliberately does NOT copy `facility_jobs`' coalesce-on-kind identity. */
+export interface FacilityImportRunsTable {
+  id: string;
+  national_system: string;
+  source_format: string;
+  blob_key: string | null;
+  file_hash: string;
+  byte_size: number;
+  release_version: string | null;
+  release_published_at: Date | null;
+  declared_row_count: number | null;
+  declared_deletion_count: number | null;
+  status: string;
+  phase: string | null;
+  processed: Generated<number>;
+  total: number | null;
+  /** ⛔ The conflict watermark. `timestamptz` — the driver returns a `Date`. Never compare as a
+   *  string; see `facility-job-store.ts`, which normalises every read through `new Date(...)`. */
+  previewed_at: Date | null;
+  summary: unknown;
+  result_blob_key: string | null;
+  options: unknown;
+  error: string | null;
+  cancel_requested: Generated<boolean>;
+  requested_by: string | null;
+  created_at: Generated<Date>;
+  started_at: Date | null;
+  finished_at: Date | null;
+  active_key: string | null;
+}
+
 /** Pre-existing violations of "one active SAME-AS resolution per observed facility key", recorded by
  *  migration 078 when it closed that invariant at the database, for an operator to settle.
  *
@@ -840,6 +874,7 @@ export interface InternalSchema {
   facility_concept_projection: FacilityConceptProjectionTable;
   facility_mapping_conflicts: FacilityMappingConflictsTable;
   facility_jobs: FacilityJobsTable;
+  facility_import_runs: FacilityImportRunsTable;
   form_definitions: FormDefinitionsTable;
   form_versions: FormVersionsTable;
   user_profiles: UserProfilesTable;

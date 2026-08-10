@@ -23,7 +23,10 @@ import { runRolesList, runRolesShow, runRolesCreate, runRolesEdit, runRolesDelet
 import { runDataExposureList, runDataExposureHide, runDataExposureShow } from './data-exposure';
 import { runSyncStatus, runSyncNow, runSyncEnroll, runSyncList, runSyncRotate, runSyncRevoke, runSyncAmend, runSyncMergePatient, runSyncExport, runSyncImport, runSyncQuarantineList, runSyncQuarantineRetry, runSyncDivergenceList, runSyncDivergenceShow, runSyncDivergenceClear } from './sync';
 import { runErrorsList } from './errors';
-import { runFacilitiesImport, runFacilitiesScanObserved, runFacilitiesPublish, runFacilitiesConflicts, runFacilitiesJobs } from './facilities';
+import {
+  runFacilitiesImport, runFacilitiesScanObserved, runFacilitiesPublish, runFacilitiesConflicts, runFacilitiesJobs,
+  runFacilitiesImportRuns, runFacilitiesImportRun,
+} from './facilities';
 import { setActorOverride } from './cli-actor';
 
 // Builds a fresh, unstarted `openldr` Command tree. Extracted out of index.ts so that:
@@ -247,14 +250,46 @@ export function buildProgram(): Command {
   const facilities = program.command('facilities').description('Facility registry (facility_registry)');
   facilities
     .command('import <path>')
-    .description('Import a national facility register CSV. DRY RUN BY DEFAULT — pass --apply to write.')
+    .description('Import a national facility register CSV/JSONL. DRY RUN BY DEFAULT — pass --apply to write.')
     .requiredOption('--national-system <sys>', 'canonical URI of the national facility register the codes belong to (e.g. urn:tz:hfr)')
     .option('--apply', 'write the import (default: dry run — parse and report, write nothing)', false)
     .option('--allow-unknown-columns', 'import despite unrecognised CSV columns (carried into each row\'s extras)', false)
     .option('--allow-malformed-rows', 'import despite structurally malformed rows (quarantined rows are printed with their line number and skipped either way)', false)
+    .option('--allow-invalid-coordinates', 'import a row whose latitude/longitude failed validation anyway, with BOTH coordinates written as null (the error is reported either way)', false)
+    .option('--format <csv|jsonl>', 'input file shape (default: csv)')
+    .option('--release-version <v>', 'publisher-supplied release version, recorded on the facility_import_runs row')
+    .option('--complete-release', 'the file is a COMPLETE release of this register — only then can a row\'s absence from it mean anything (default: false, absent stays "not evaluated")', false)
+    .option('--on-deleted <retire|report>', 'what to do with rows the publisher explicitly declared removed (JSONL only; default: retire)')
+    .option('--on-absent <retire|report>', 'what to do with rows merely absent from a --complete-release file (default: report)')
+    .option('--on-conflict <skip|overwrite>', 'what to do with a row touched since the preview watermark this apply is linked to (default: skip); currently has no effect on the CLI path because this command lacks a two-step preview/apply to establish a watermark')
     .option('--json', 'emit machine-readable JSON', false)
-    .action(async (path: string, opts: { nationalSystem: string; apply: boolean; allowUnknownColumns: boolean; allowMalformedRows: boolean; json: boolean }) => {
+    .action(async (path: string, opts: {
+      nationalSystem: string; apply: boolean; allowUnknownColumns: boolean; allowMalformedRows: boolean;
+      allowInvalidCoordinates: boolean;
+      format?: 'csv' | 'jsonl'; releaseVersion?: string; completeRelease: boolean;
+      onDeleted?: 'retire' | 'report'; onAbsent?: 'retire' | 'report'; onConflict?: 'skip' | 'overwrite';
+      json: boolean;
+    }) => {
       process.exitCode = await runFacilitiesImport(path, opts);
+    });
+  // Task 12: CLI parity for Task 10's `GET /api/facilities/import/runs` and
+  // `GET /api/facilities/import/runs/:id` — both read the same `facility_import_runs` table an
+  // `--apply`'d `facilities import` above now writes to. Read-only, so no --apply here.
+  facilities
+    .command('import-runs')
+    .description('List facility_import_runs rows — who imported which release and when, across the CLI and the browser.')
+    .option('--national-system <sys>', 'scope to one national register')
+    .option('--limit <n>', 'maximum rows to return (default: 50)', (v: string) => parseInt(v, 10))
+    .option('--json', 'emit machine-readable JSON', false)
+    .action(async (opts: { nationalSystem?: string; limit?: number; json: boolean }) => {
+      process.exitCode = await runFacilitiesImportRuns(opts);
+    });
+  facilities
+    .command('import-run <id>')
+    .description('Show one facility_import_runs row in full, including its stored result summary.')
+    .option('--json', 'emit machine-readable JSON', false)
+    .action(async (id: string, opts: { json: boolean }) => {
+      process.exitCode = await runFacilitiesImportRun(id, opts);
     });
   facilities
     .command('scan-observed')
