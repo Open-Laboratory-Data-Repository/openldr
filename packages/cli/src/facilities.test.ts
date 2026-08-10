@@ -910,9 +910,15 @@ describe('facilities import-run CLI', () => {
 // which answers FOUR different things and takes care never to overstate any of them: 200 `cancelled`
 // (carried out — the run is terminal and its register free), 202 `requested` (a worker holds it; the
 // flag is read at a phase boundary and cannot interrupt a running transaction, so the run may still
-// finish `applied`), 404 and 409. A CLI has no status line, so exit codes carry that distinction —
-// and collapsing any two of them is exactly the overstatement the route's two success codes exist to
-// prevent.
+// finish `applied`), 404 and 409.
+//
+// ⛔ The EXIT CODE mirrors that route's 2xx/4xx split and nothing finer: both live answers exit 0,
+// both refusals exit 1 (and 0/1 is the only exit vocabulary this CLI has — measured across
+// packages/cli/src excluding tests: 101 `return 0;`, 92 `return 1;`, no other numeric literal
+// returned or assigned to `process.exitCode`). The distinction between "stopped" and
+// "asked to stop" is carried by the MESSAGE and by `--json`'s `outcome`, so those are what the
+// tests below pin. Collapsing any two of the four messages is the overstatement this surface exists
+// to prevent, and the four-way test is what makes that collapse impossible to ship.
 describe('facilities import-run-cancel CLI', () => {
   let stdoutSpy: ReturnType<typeof vi.fn>;
   let stderrSpy: ReturnType<typeof vi.fn>;
@@ -956,8 +962,16 @@ describe('facilities import-run-cancel CLI', () => {
     expect(human).toMatch(/requested/i);
     expect(human).toMatch(/may still|still finish/i);
     expect(human).not.toMatch(/\bcancelled\b/);
-    // And its own exit code — a script asking "is this run stopped?" must not read 0 here.
-    expect(code).not.toBe(0);
+    // ⚠ The exit code is 0 and DELIBERATELY so — the route answers 202, a 2xx, and `requested` is
+    // the common case, so a non-zero here would make `import-run-cancel $ID || echo failed` report
+    // failure on the normal accepted path. The honesty property moved channel, it did not vanish:
+    // the prose above and the `--json` payload below are what keep "asked to stop" from reading as
+    // "stopped", and they are asserted here so this test can never become the weaker one.
+    expect(code).toBe(0);
+    stdoutSpy.mockClear();
+    expect(await runFacilitiesImportRunCancel('fir_a', { json: true })).toBe(0);
+    expect(JSON.parse(stdoutSpy.mock.calls.map((c) => String(c[0])).join('')))
+      .toEqual({ runId: 'fir_a', outcome: 'requested' });
   });
 
   it('an unknown id is reported as such, on stderr, without a stack trace', async () => {
@@ -965,7 +979,9 @@ describe('facilities import-run-cancel CLI', () => {
 
     const code = await runFacilitiesImportRunCancel('fir_nope', { json: false });
 
-    expect(code).not.toBe(0);
+    // 1, the same code AND the same string `runFacilitiesImportRun` answers for a missing run — one
+    // command group must not answer one condition two different ways.
+    expect(code).toBe(1);
     const err = stderrSpy.mock.calls.map((c) => String(c[0])).join('');
     expect(err).toMatch(/no such facility import run: fir_nope/);
     expect(err).not.toMatch(/at Object|\.ts:\d+/);
@@ -978,20 +994,30 @@ describe('facilities import-run-cancel CLI', () => {
 
     const code = await runFacilitiesImportRunCancel('fir_done', { json: false });
 
-    expect(code).not.toBe(0);
+    expect(code).toBe(1);
     const err = stderrSpy.mock.calls.map((c) => String(c[0])).join('');
     expect(err).toMatch(/already finished/i);
+    // ...and NOT the not-found wording, which shares this exit code: the message is the only thing
+    // that tells these two refusals apart.
+    expect(err).not.toMatch(/no such facility import run/);
   });
 
   // ⛔ THE mutation guard. Each of the four outcomes means something different to a script and to a
-  // person, so each gets its own exit code and its own sentence. Collapsing any two — most
+  // person, so each gets its own sentence and its own `--json` payload. Collapsing any two — most
   // temptingly `cancelled` and `requested`, which are both "the cancel was accepted" — is the defect
   // this whole surface exists to prevent, and it is invisible to any test that checks one outcome at
   // a time.
-  it('maps the four store outcomes onto four DISTINCT exit codes and four distinct messages', async () => {
+  //
+  // ⛔ Distinctness is asserted on the MESSAGE and the PAYLOAD, never on the exit code, and that is
+  // load-bearing now that `cancelled`/`requested` share 0 and the two refusals share 1: an exit-code
+  // set of size 4 is no longer available to assert, so an assertion phrased that way would have had
+  // to be deleted rather than moved, and the collapse would have gone unguarded. The codes are
+  // pinned separately, in order, as the route's 2xx/4xx split.
+  it('gives the four store outcomes four distinct messages, four distinct --json payloads, and the route\'s 2xx/4xx exit split', async () => {
     const outcomes = ['cancelled', 'requested', 'not-found', 'already-terminal'] as const;
     const codes: number[] = [];
     const messages: string[] = [];
+    const payloads: string[] = [];
 
     for (const outcome of outcomes) {
       stdoutSpy.mockClear();
@@ -1002,13 +1028,16 @@ describe('facilities import-run-cancel CLI', () => {
         stdoutSpy.mock.calls.map((c) => String(c[0])).join('')
           + stderrSpy.mock.calls.map((c) => String(c[0])).join(''),
       );
+
+      stdoutSpy.mockClear();
+      await runFacilitiesImportRunCancel('fir_a', { json: true });
+      payloads.push(stdoutSpy.mock.calls.map((c) => String(c[0])).join(''));
     }
 
-    expect(new Set(codes).size).toBe(4);
     expect(new Set(messages).size).toBe(4);
-    // ...and the exit code that means "an unexpected failure" everywhere else in this CLI is not
-    // reused for any of them, so `1` keeps meaning what the catch block below makes it mean.
-    expect(codes).not.toContain(1);
+    expect(new Set(payloads).size).toBe(4);
+    // Both live answers are accepted requests (the route's 200/202), both refusals are not (404/409).
+    expect(codes).toEqual([0, 0, 1, 1]);
   });
 
   // The machine-readable surface has to carry the same distinction the prose does — a script reading
@@ -1032,7 +1061,7 @@ describe('facilities import-run-cancel CLI', () => {
 
       const code = await runFacilitiesImportRunCancel('fir_a', { json: true });
 
-      expect(code).not.toBe(0);
+      expect(code).toBe(1);
       const payload = JSON.parse(stdoutSpy.mock.calls.map((c) => String(c[0])).join(''));
       expect(payload.error).toEqual(expect.any(String));
       expect(payload.outcome).toBeUndefined();

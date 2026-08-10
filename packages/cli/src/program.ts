@@ -299,7 +299,7 @@ export function buildProgram(): Command {
   // handler `json: false`. See `runFacilitiesImportRunCancel`'s doc comment.
   facilities
     .command('import-run-cancel <id>')
-    .description('Ask a facility import run to stop. Reports what ACTUALLY happened — a cancelled run (exit 0) vs a cancellation merely requested of a running worker, which may still finish applied (exit 2); 3 = no such run, 4 = already finished.')
+    .description('Ask a facility import run to stop. Reports what ACTUALLY happened — a run cancelled outright vs a cancellation merely requested of a running worker, which may still finish applied. Read which one from the message, or from --json\'s "outcome"; exit 0 = the request was accepted (either way), 1 = refused (no such run, or it had already finished).')
     .option('--json', 'emit machine-readable JSON', false)
     .action(async (id: string, opts: { json: boolean }) => {
       process.exitCode = await runFacilitiesImportRunCancel(id, opts);

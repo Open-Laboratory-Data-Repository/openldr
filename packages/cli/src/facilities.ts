@@ -527,9 +527,9 @@ type CancelOutcome = Awaited<ReturnType<FacilityImportRunStore['requestCancel']>
 /**
  * What this command reports, and with what exit code, for each of the store's four answers.
  *
- * ⛔ NO TWO ENTRIES MAY SHARE AN EXIT CODE OR A MESSAGE, and that is the entire reason this command
- * exists rather than a `--cancel` flag that prints "ok". `requestCancel` answers a genuinely
- * DIFFERENT question depending on whether anything is listening (see its doc comment in
+ * ⛔ NO TWO ENTRIES MAY SHARE A MESSAGE — nor a `--json` payload — and that is the entire reason
+ * this command exists rather than a `--cancel` flag that prints "ok". `requestCancel` answers a
+ * genuinely DIFFERENT question depending on whether anything is listening (see its doc comment in
  * facility-import-run-store.ts):
  *
  *   `cancelled` — the run was in a state NO worker claims, so the cancel was CARRIED OUT by the
@@ -539,9 +539,26 @@ type CancelOutcome = Awaited<ReturnType<FacilityImportRunStore['requestCancel']>
  *     will finish and the run will end `applied`. Reporting this as "cancelled" would tell an
  *     operator a national register had not been rewritten when it had.
  *
- * The HTTP route (apps/server/src/facilities-routes.ts) keeps them apart with 200 vs 202; a CLI has
- * no status line, so the exit code carries it. `1` is deliberately NOT used by any of the four: it
- * stays what it is in every other command in this file — an unexpected failure, from the catch.
+ * ⛔ The EXIT CODE does not carry that distinction — the message and the `--json` `outcome` do.
+ * These codes mirror the HTTP route's (apps/server/src/facilities-routes.ts) status split exactly,
+ * which is what "CLI parity" means here: 200 `cancelled` and 202 `requested` are both 2xx
+ * SUCCESSES, so both exit 0; 404 and 409 are both refusals, so both exit 1. A non-zero `requested`
+ * broke that parity in the direction that hurts most, because `requested` is the COMMON case — you
+ * cancel things that are running — so `openldr facilities import-run-cancel $ID || echo failed`
+ * reported failure on the normal accepted path, `set -e` scripts aborted on it, and 2 additionally
+ * collides with the widespread GNU/bash "usage error" convention.
+ *
+ * ⚠ 0/1 is also the ONLY exit vocabulary this CLI speaks, measured across packages/cli/src excluding
+ * tests: 193 literal numeric returns, 101 `return 0;` and 92 `return 1;`, with no other numeric
+ * literal returned or assigned to `process.exitCode` anywhere. And `1` there is NOT exclusively
+ * "an unexpected failure from a catch" — of the 14 `return 1;` sites in THIS file, 9 report an
+ * unexpected error out of a catch and 5 report a NAMED business refusal: `runFacilitiesImport`'s
+ * unknown-columns and `blocked` branches, its `startPreview` branch (lexically a catch, but it
+ * translates one known condition — the register is already claimed — into `facilities import
+ * refused: …`), `runFacilitiesImportRun`'s missing-run branch, and `runFacilitiesJobs`'s `--retry`
+ * refusal. `not-found` answering 1 below is what makes this command AGREE with
+ * `runFacilitiesImportRun`, which returns 1 for the identical `no such facility import run: <id>`
+ * string, and with `facilities jobs --retry`'s `no such job`.
  */
 const CANCEL_OUTCOMES: Record<CancelOutcome, {
   exitCode: number;
@@ -557,21 +574,27 @@ const CANCEL_OUTCOMES: Record<CancelOutcome, {
       `import run ${id} cancelled: no worker was holding it, so the cancellation was carried out — the run is finished and its national register is free.`,
   },
   requested: {
-    // ⛔ NOT 0. A script asking "is this run stopped?" must not read success here: the run may still
-    // finish `applied`, and 0 would be the machine-readable form of the exact overstatement the
-    // message below is worded to avoid.
-    exitCode: 2,
+    // ⛔ 0, matching the route's 202 — the request WAS accepted, and that is what an exit code
+    // reports. The honesty property does not live here: the run may still finish `applied`, and the
+    // message below plus the `--json` `outcome` are what say so. A script that needs to know whether
+    // the run actually stopped reads `outcome`, or follows up with `import-run <id>`; it must never
+    // infer it from a non-zero exit, which in this CLI means "the command did not do its job".
+    exitCode: 0,
     live: true,
     message: (id) =>
       `cancellation requested for import run ${id}: a worker is holding it, so the request is only observed at the next phase boundary — a write already in progress will finish, and the run may still end applied. Check with: openldr facilities import-run ${id}`,
   },
   'not-found': {
-    exitCode: 3,
+    // The route's 404. Same code AND same string as `runFacilitiesImportRun`'s own missing-run
+    // branch above — one command group must not answer one condition two different ways.
+    exitCode: 1,
     live: false,
     message: (id) => `no such facility import run: ${id}`,
   },
   'already-terminal': {
-    exitCode: 4,
+    // The route's 409. Distinguished from `not-found` by its message and its `--json` error, not by
+    // its code — same as the route, where both are 4xx refusals.
+    exitCode: 1,
     live: false,
     message: (id) => `import run ${id} has already finished and cannot be cancelled`,
   },
