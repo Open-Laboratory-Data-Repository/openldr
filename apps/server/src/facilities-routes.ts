@@ -10,6 +10,7 @@ import {
 import {
   splitFacilityAnswers, CORE_FACILITY_KEYS, FACILITY_ADMIN_LEVELS, referenceCapture,
   FACILITY_REGISTRY_SYSTEM, DEFAULT_LIST_LIMIT, FACILITY_HEALTH_VALUES, createFacilityImportRunStore,
+  SUPERSEDABLE_RUN_STATES, isApplicable,
 } from '@openldr/db';
 import type { FacilityAdminLevel, ExternalSchema, FacilityHealth, FacilityImportRun } from '@openldr/db';
 import { requireCapability } from './rbac';
@@ -1213,13 +1214,20 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
         // currently holding the lock, and it is impossible for a NEWER row to exist here (creating
         // one requires going through this same `startPreview`, which is exactly what just failed).
         //
-        // ⛔ Only a run still `previewed` is superseded. A run already `applied` or `failed` has
-        // already released `active_key` on its own — if this branch somehow observed one anyway
-        // (a race this reasoning says cannot happen, but the check costs nothing), touching it would
-        // be finishing an already-finished run for no reason, so the original 409 is surfaced
-        // unchanged instead. Exactly ONE retry: a second failure is surfaced as-is, never looped.
+        // ⛔ Only a SUPERSEDABLE run is taken over — the states where the operator walked away and
+        // nothing is mid-flight (`facility-import-run-states.ts`). This was `status !== 'previewed'`
+        // in A2a, when `previewed` was the only such state; asking the set is what stops A2b's wider
+        // enum from silently re-locking a register through a state this line has never heard of.
+        // Everything else 409s, and that single predicate covers both remaining cases:
+        //  - TERMINAL (`applied`/`failed`/`cancelled`) — already released `active_key` on its own, so
+        //    this branch should never observe one. If it somehow did (a race this reasoning says
+        //    cannot happen, but the check costs nothing), touching it would be finishing an
+        //    already-finished run for no reason.
+        //  - RUNNING (`validating`/`applying`) — a worker is mid-flight; taking the run over would
+        //    race it. A2b introduces these; today nothing mints them.
+        // Exactly ONE retry: a second failure is surfaced as-is, never looped.
         const existing = (await importRuns.list(p.data.nationalSystem, 1))[0];
-        if (!existing || existing.status !== 'previewed') {
+        if (!existing || !SUPERSEDABLE_RUN_STATES.has(existing.status)) {
           // Same shape as the terminology distribution upload route's "already in progress" 409
           // (terminology-admin-routes.ts) — the unique `active_key` index is the race-safe backstop,
           // this is just where the message becomes readable.
@@ -1278,8 +1286,9 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     //    answer to a question this run was never asked. 400 because the request itself is
     //    self-contradictory (this exact `nationalSystem` paired with a `runId` that names another),
     //    the same category of client-input error `ImportSchema.safeParse` above already 400s.
-    //  - FRESHNESS (409, "this run is no longer applicable"): a run not still `previewed` has
-    //    already been decided — `applied` or `failed` — and resubmitting it (a retry replaying the
+    //  - FRESHNESS (409, "this run is no longer applicable"): a run that is not `isApplicable` has
+    //    either already been decided — `applied`, `failed`, `cancelled` — or has no completed
+    //    preview behind it to supply a watermark. Resubmitting a decided one (a retry replaying the
     //    same `runId`) must not perform a SECOND real write reusing the first apply's watermark, nor
     //    overwrite that first apply's terminal `summary`/`error` with a second one. 409 because the
     //    run itself is the reason the request cannot proceed as asked, independent of whether the
@@ -1296,9 +1305,14 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
             + `not "${p.data.nationalSystem}"`,
         };
       }
-      if (run.status !== 'previewed') {
+      // ⛔ `isApplicable`, not `!== 'previewed'`: an apply may start from any state with a COMPLETED
+      // preview behind it, because that is what makes the run's `previewed_at` a trustworthy
+      // conflict baseline for the write below. A2a had exactly one such state; A2b's
+      // `awaiting_confirmation` is the same situation reached by the background path, and hard-coding
+      // the literal here would 409 it forever. See `facility-import-run-states.ts`.
+      if (!isApplicable(run.status)) {
         reply.code(409);
-        return { error: `import run ${p.data.runId} is no longer applicable: status is "${run.status}", expected "previewed"` };
+        return { error: `import run ${p.data.runId} is no longer applicable: status is "${run.status}"` };
       }
     }
 

@@ -1,8 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import { type Kysely, sql } from 'kysely';
 import type { InternalSchema } from './schema/internal';
+import type { FacilityImportRunStatus } from './facility-import-run-states';
 
-export type FacilityImportRunStatus = 'previewed' | 'applied' | 'failed';
+// ⛔ ONE definition of the lifecycle, in `facility-import-run-states.ts`. This used to declare its
+// own three-value union, which is what let two route guards be written as `status !== 'previewed'`
+// — see that module's header for why widening the union without widening those guards locks a
+// register out of every future import.
+export type { FacilityImportRunStatus };
 
 export interface FacilityImportRun {
   id: string; nationalSystem: string; sourceFormat: 'csv' | 'jsonl';

@@ -55,7 +55,14 @@ export * from './projection';
 export * from './terminology-ingest-job-store';
 export { createFacilityJobStore } from './facility-job-store';
 export type { FacilityJob, FacilityJobKind, FacilityJobStatus, FacilityJobStore } from './facility-job-store';
-export { createFacilityImportRunStore, type FacilityImportRun, type FacilityImportRunStore, type FacilityImportRunStatus } from './facility-import-run-store';
+export { createFacilityImportRunStore, type FacilityImportRun, type FacilityImportRunStore } from './facility-import-run-store';
+// `FacilityImportRunStatus` comes from HERE, not from the store — the store re-exports this same
+// type. Exporting it from both places would be a duplicate export, which is the compiler telling
+// the truth: there is one definition of the lifecycle and this module owns it.
+export {
+  ALL_RUN_STATES, TERMINAL_RUN_STATES, SUPERSEDABLE_RUN_STATES, RUNNING_RUN_STATES, isApplicable,
+  type FacilityImportRunStatus,
+} from './facility-import-run-states';
 export { createRoleStore } from './role-store';
 export type { RoleStore, RoleRecord, CreateRoleInput, UpdateRoleInput, CapabilityReconciliation, CapabilityDiagnosis } from './role-store';
 export * from './reference-search';

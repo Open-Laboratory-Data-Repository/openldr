@@ -2238,6 +2238,69 @@ describe('POST /api/facilities/import', () => {
       expect(secondRunRes.json().status).toBe('previewed');
     });
 
+    // A2b Task 1. The supersede gate used to read `existing.status !== 'previewed'`, which was
+    // correct while `previewed` was the only supersedable state and silently wrong the moment the
+    // enum widened: an `awaiting_confirmation` run still holds `active_key`, so the literal
+    // comparison would 409 every future preview of that register — the same permanent lock the
+    // fix-wave-1 test above closed, reintroduced through a state the line had never heard of.
+    //
+    // ⚠ The status is set by a DIRECT UPDATE on purpose: no store method mints
+    // `awaiting_confirmation` yet (the upload route that will arrives in Task 3), and `active_key`
+    // is deliberately left set — that is what makes the second preview's `startPreview` throw and
+    // drives execution into the retry branch this test is aiming at.
+    it('⛔ supersedes an awaiting_confirmation run — a widened enum must not re-lock the register', async () => {
+      const db = await makeMigratedDb();
+      const app = await appWith(fakeImportCtx(db));
+      const csv = facilityCsv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,']);
+      const first = await app.inject({ method: 'POST', url: '/api/facilities/import', payload: { csv, nationalSystem: SYSTEM } });
+      expect(first.statusCode).toBe(200);
+      const firstRunId = first.json().runId;
+
+      await db.updateTable('facility_import_runs')
+        .set({ status: 'awaiting_confirmation' })
+        .where('id', '=', firstRunId).execute();
+      // The setup itself is asserted: if this ever stopped taking, the test below would pass for the
+      // A2a reason (`previewed` is supersedable) and prove nothing about the widened enum.
+      const seeded = await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${firstRunId}` });
+      expect(seeded.json().status).toBe('awaiting_confirmation');
+      expect((await db.selectFrom('facility_import_runs').select('active_key')
+        .where('id', '=', firstRunId).executeTakeFirstOrThrow()).active_key).toBe(SYSTEM);
+
+      const second = await app.inject({ method: 'POST', url: '/api/facilities/import', payload: { csv, nationalSystem: SYSTEM } });
+      expect(second.statusCode).toBe(200);
+      expect(second.json().runId).not.toBe(firstRunId);
+
+      const firstRunRes = await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${firstRunId}` });
+      expect(firstRunRes.json().status).toBe('failed');
+      expect(firstRunRes.json().error).toBe('superseded by a newer preview');
+    });
+
+    // A2b Task 1, the apply guard's half of the same defect. `run.status !== 'previewed'` would 409
+    // an `awaiting_confirmation` run — a run WITH a completed preview and therefore a trustworthy
+    // `previewed_at` watermark — leaving the background path with no way to ever apply.
+    it('⛔ applies an awaiting_confirmation run rather than 409ing it as "no longer applicable"', async () => {
+      const db = await makeMigratedDb();
+      const app = await appWith(fakeImportCtx(db));
+      const csv = facilityCsv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,']);
+      const preview = await app.inject({ method: 'POST', url: '/api/facilities/import', payload: { csv, nationalSystem: SYSTEM } });
+      const runId = preview.json().runId;
+      await db.updateTable('facility_import_runs')
+        .set({ status: 'awaiting_confirmation' })
+        .where('id', '=', runId).execute();
+      expect((await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${runId}` })).json().status)
+        .toBe('awaiting_confirmation');
+
+      const applied = await app.inject({
+        method: 'POST', url: '/api/facilities/import',
+        payload: { csv, nationalSystem: SYSTEM, apply: true, runId },
+      });
+      expect(applied.statusCode).toBe(200);
+      expect(applied.json().written).toEqual({ created: 1, updated: 0, retired: 0 });
+      expect(await db.selectFrom('facility_registry').selectAll().execute()).toHaveLength(1);
+      const runRes = await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${runId}` });
+      expect(runRes.json().status).toBe('applied');
+    });
+
     it('never supersedes a run that already reached a terminal state (only "previewed" is fair game)', async () => {
       const db = await makeMigratedDb();
       const app = await appWith(fakeImportCtx(db));

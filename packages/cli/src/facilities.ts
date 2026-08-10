@@ -87,8 +87,9 @@ export interface FacilitiesImportOpts {
  * ⛔ `startPreview`/`finishApply` (packages/db/facility-import-run-store.ts), not an `insertRunning`-
  * style pre-claimed row: unlike `terminology_ingest_jobs` (whose `insertRunning` exists so a live
  * SERVER WORKER polling for `'queued'` rows never claims one an inline CLI ingest already owns),
- * nothing ever asynchronously claims a `facility_import_runs` row — there is no worker, no `'queued'`
- * status, nothing but `'previewed'`/`'applied'`/`'failed'`. `startPreview`'s own pre-check plus the
+ * nothing ever asynchronously claims a `facility_import_runs` row on THIS path — the `'queued'`/
+ * `'applying'` states A2b names (facility-import-run-states.ts) belong to the background upload
+ * flow, and no worker exists yet to claim one. `startPreview`'s own pre-check plus the
  * unique `active_key` index already give this call exclusive claim to `opts.nationalSystem` for as
  * long as it runs, which is the entire concurrency guarantee an inline CLI import needs.
  */
