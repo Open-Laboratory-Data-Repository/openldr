@@ -1,4 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+// ⛔ NOT mocked by the `vi.mock('@openldr/db', ...)` below — that mock only replaces the base
+// `@openldr/db` specifier; `@openldr/db/testing` is a distinct export path (package.json's
+// `exports['./testing']`), so this stays the REAL `makeMigratedDb`. Used by exactly one test (the
+// "failed --apply releases the register" proof) that needs a real pg-mem-migrated db, not the fake
+// `mocks.runStore` the rest of this file uses.
+import { makeMigratedDb } from '@openldr/db/testing';
 
 const mocks = vi.hoisted(() => ({
   ctx: {
@@ -22,6 +28,20 @@ const mocks = vi.hoisted(() => ({
   recordAuditEvent: vi.fn(),
   referenceCapture: { marker: 'referenceCapture' },
   readFileSync: vi.fn(),
+  // Task 12: `createFacilityImportRunStore` is a factory (`(db) => store`) — `createFacilityImportRunStore`
+  // itself is the vi.fn(), and `runStore` is the fixed object every test's `beforeEach` points it at,
+  // matching the shape of `mocks.ctx.facilityJobs` above (a fake collaborator with vi.fn() methods, not
+  // a real @openldr/db store). The one test that needs the REAL store (proving `finishApply` actually
+  // frees `active_key` — see "a failed --apply leaves no held active_key" below) reaches for the real
+  // export via `vi.importActual` instead of this mock, for exactly that call.
+  createFacilityImportRunStore: vi.fn(),
+  runStore: {
+    startPreview: vi.fn(),
+    completePreview: vi.fn(),
+    finishApply: vi.fn(),
+    get: vi.fn(),
+    list: vi.fn(),
+  },
 }));
 
 vi.mock('@openldr/config', () => ({
@@ -40,17 +60,40 @@ vi.mock('@openldr/bootstrap', () => ({
 
 vi.mock('@openldr/db', () => ({
   referenceCapture: mocks.referenceCapture,
+  createFacilityImportRunStore: mocks.createFacilityImportRunStore,
 }));
 
 vi.mock('node:fs', () => ({
   readFileSync: mocks.readFileSync,
 }));
 
-import { runFacilitiesImport, runFacilitiesScanObserved, runFacilitiesPublish, runFacilitiesConflicts, runFacilitiesJobs } from './facilities';
+import {
+  runFacilitiesImport, runFacilitiesScanObserved, runFacilitiesPublish, runFacilitiesConflicts, runFacilitiesJobs,
+  runFacilitiesImportRuns, runFacilitiesImportRun,
+} from './facilities';
 
+// The full `FacilityImportResult` shape (packages/bootstrap/src/facility-import.ts), not just the
+// subset the pre-Task-12 CLI printed: `formatHuman` now reads `create`/`changed`/`unchanged`/
+// `conflict`/`absent`/`deleted` too, and a mock missing them would print the literal string
+// "undefined" into the human-readable output instead of failing loudly — exactly the kind of drift
+// a COMPLETE fixture here is meant to catch. `conflict`/`absent` are `null` (not evaluated), matching
+// a run with no linked preview watermark and a file that is not `--complete-release`.
 const CLEAN_RESULT = {
-  parsed: 10, skipped: 0, unknownColumns: [], duplicateColumns: [], quarantined: [],
+  parsed: 10, skipped: 0, unknownColumns: [], duplicateColumns: [], quarantined: [], invalid: [],
   written: { created: 0, updated: 0 }, duplicates: 0, blocked: false, blockedReason: null,
+  create: 0, changed: 0, unchanged: 10, conflict: null, absent: null, deleted: 0,
+  samples: { create: [], changed: [], conflict: [], absent: [], deleted: [] },
+  runId: null, knownNationalSystem: true,
+};
+
+// Task 12's default run row, returned by the fake `mocks.runStore.startPreview` unless a test
+// overrides it. Only fields `runFacilitiesImport` actually reads (`id`) are load-bearing; the rest
+// exist so a test printing the whole object doesn't stumble over missing keys.
+const DEFAULT_RUN = {
+  id: 'fir_test1', nationalSystem: 'urn:tz:hfr', sourceFormat: 'csv' as const, fileHash: 'h',
+  byteSize: 42, releaseVersion: null, releasePublishedAt: null, declaredRowCount: null,
+  declaredDeletionCount: null, status: 'previewed' as const, previewedAt: null, summary: null,
+  options: {}, error: null, requestedBy: 'cli', createdAt: '2026-08-01T00:00:00.000Z', finishedAt: null,
 };
 
 describe('facilities import CLI', () => {
@@ -64,13 +107,21 @@ describe('facilities import CLI', () => {
     mocks.createAppContext.mockResolvedValue(mocks.ctx);
     mocks.ctx.close.mockResolvedValue(undefined);
     mocks.readFileSync.mockReturnValue('national_code,name\n100,Dodoma\n');
+    // Task 12: every test gets the fake run store by default — `runFacilitiesImport` calls
+    // `createFacilityImportRunStore(ctx.internalDb)` unconditionally (dry run or apply), so any test
+    // that reaches that line without this would crash on `createFacilityImportRunStore is not a
+    // function`. Only `--apply` tests ever have `startPreview`/`finishApply` actually EXERCISED — see
+    // the docblock on `runFacilitiesImport` for why a dry run never calls either.
+    mocks.createFacilityImportRunStore.mockReturnValue(mocks.runStore);
+    mocks.runStore.startPreview.mockResolvedValue(DEFAULT_RUN);
+    mocks.runStore.finishApply.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  it('defaults to a dry run: does not set apply, writes nothing, prints the summary, does not audit', async () => {
+  it('defaults to a dry run: does not set apply, writes nothing, prints the summary, does not audit, mints no run', async () => {
     mocks.importFacilities.mockResolvedValue(CLEAN_RESULT);
 
     const code = await runFacilitiesImport('/some/file.csv', { nationalSystem: 'urn:tz:hfr', json: false });
@@ -79,18 +130,71 @@ describe('facilities import CLI', () => {
     expect(mocks.importFacilities).toHaveBeenCalledWith(
       { db: mocks.ctx.internalDb, capture: mocks.referenceCapture, admin: mocks.ctx.terminology.admin, facilityJobs: mocks.ctx.facilityJobs, logger: mocks.ctx.logger },
       'national_code,name\n100,Dodoma\n',
-      { nationalSystem: 'urn:tz:hfr', allowUnknownColumns: undefined, allowMalformedRows: undefined, apply: undefined },
+      {
+        nationalSystem: 'urn:tz:hfr', allowUnknownColumns: undefined, allowMalformedRows: undefined, apply: undefined,
+        format: undefined, completeRelease: undefined, onDeleted: undefined, onAbsent: undefined, onConflict: undefined,
+        runId: null,
+      },
     );
     expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
+    // Task 12: a dry run mints NO `facility_import_runs` row — see `runFacilitiesImport`'s own
+    // docblock for why (no preview→apply gap to link across two invocations, and minting one anyway
+    // would only hold `active_key` for a run this single-shot command can never itself supersede).
+    expect(mocks.runStore.startPreview).not.toHaveBeenCalled();
+    expect(mocks.runStore.finishApply).not.toHaveBeenCalled();
     const human = stdoutSpy.mock.calls.map((c) => String(c[0])).join('');
     expect(human).toMatch(/dry run/i);
     expect(human).toMatch(/nothing written|--apply/i);
     expect(mocks.ctx.close).toHaveBeenCalledTimes(1);
   });
 
+  // Step 1 (brief): "a dry run prints the create/changed/unchanged summary".
+  it('a dry run prints the create/changed/unchanged classification, not just parsed/skipped', async () => {
+    mocks.importFacilities.mockResolvedValue({
+      ...CLEAN_RESULT, parsed: 10, create: 3, changed: 1, unchanged: 6,
+    });
+
+    await runFacilitiesImport('/some/file.csv', { nationalSystem: 'urn:tz:hfr', json: false });
+
+    const human = stdoutSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(human).toMatch(/create 3/);
+    expect(human).toMatch(/changed 1/);
+    expect(human).toMatch(/unchanged 6/);
+  });
+
+  // Step 1 (brief), and the ⛔ output constraint: `conflict: null`/`absent: null` must print as "not
+  // evaluated", NEVER as `0` — a `0` meaning "not computed" is the exact defect this slice removes.
+  it('conflict and absent print as "not evaluated" — never 0 — when the result reports them null', async () => {
+    mocks.importFacilities.mockResolvedValue({ ...CLEAN_RESULT, conflict: null, absent: null });
+
+    await runFacilitiesImport('/some/file.csv', { nationalSystem: 'urn:tz:hfr', json: false });
+
+    const human = stdoutSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(human).toMatch(/conflict not evaluated/);
+    expect(human).toMatch(/absent not evaluated/);
+    expect(human).not.toMatch(/conflict 0\b/);
+    expect(human).not.toMatch(/absent 0\b/);
+  });
+
+  // Step 1 (brief): "a --complete-release dry run prints the absent count".
+  it('--complete-release makes absent a real count once the result reports one', async () => {
+    mocks.importFacilities.mockResolvedValue({ ...CLEAN_RESULT, absent: 5 });
+
+    await runFacilitiesImport('/some/file.csv', { nationalSystem: 'urn:tz:hfr', completeRelease: true, json: false });
+
+    expect(mocks.importFacilities).toHaveBeenCalledWith(
+      expect.anything(), expect.any(String), expect.objectContaining({ completeRelease: true }),
+    );
+    const human = stdoutSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(human).toMatch(/absent 5/);
+    // Only `absent` moved off "not evaluated" — `conflict` stays null on this call (no linked
+    // preview watermark), so the phrase legitimately still appears for THAT field.
+    expect(human).not.toMatch(/absent not evaluated/);
+  });
+
   it('--apply writes and reports created/updated, and audits the import', async () => {
     mocks.importFacilities.mockResolvedValue({
-      parsed: 3, skipped: 0, unknownColumns: [], duplicateColumns: [], quarantined: [], written: { created: 2, updated: 1 }, duplicates: 0,
+      ...CLEAN_RESULT, parsed: 3, create: 2, changed: 1, unchanged: 0, written: { created: 2, updated: 1 },
     });
 
     const code = await runFacilitiesImport('/some/file.csv', { nationalSystem: 'urn:tz:hfr', apply: true, json: false });
@@ -99,7 +203,11 @@ describe('facilities import CLI', () => {
     expect(mocks.importFacilities).toHaveBeenCalledWith(
       { db: mocks.ctx.internalDb, capture: mocks.referenceCapture, admin: mocks.ctx.terminology.admin, facilityJobs: mocks.ctx.facilityJobs, logger: mocks.ctx.logger },
       expect.any(String),
-      { nationalSystem: 'urn:tz:hfr', allowUnknownColumns: undefined, allowMalformedRows: undefined, apply: true },
+      {
+        nationalSystem: 'urn:tz:hfr', allowUnknownColumns: undefined, allowMalformedRows: undefined, apply: true,
+        format: undefined, completeRelease: undefined, onDeleted: undefined, onAbsent: undefined, onConflict: undefined,
+        runId: DEFAULT_RUN.id,
+      },
     );
     expect(mocks.recordAuditEvent).toHaveBeenCalledWith(
       mocks.ctx,
@@ -115,9 +223,34 @@ describe('facilities import CLI', () => {
     expect(human).toMatch(/updated 1/);
   });
 
+  // Task 12: "record a facility_import_runs row" — an --apply mints one BEFORE the write (reserving
+  // `active_key` for `opts.nationalSystem`) and finishes it 'applied' with the result as its summary
+  // once the write succeeds, mirroring the HTTP route's own `startPreview`/`finishApply` pair.
+  it('--apply mints a facility_import_runs row and finishes it applied with the result as summary', async () => {
+    mocks.importFacilities.mockResolvedValue(CLEAN_RESULT);
+
+    await runFacilitiesImport(
+      '/some/file.csv',
+      { nationalSystem: 'urn:tz:hfr', apply: true, format: 'jsonl', releaseVersion: 'r7', json: false },
+    );
+
+    expect(mocks.createFacilityImportRunStore).toHaveBeenCalledWith(mocks.ctx.internalDb);
+    expect(mocks.runStore.startPreview).toHaveBeenCalledWith(expect.objectContaining({
+      nationalSystem: 'urn:tz:hfr', sourceFormat: 'jsonl', releaseVersion: 'r7',
+      byteSize: Buffer.byteLength('national_code,name\n100,Dodoma\n', 'utf8'),
+    }));
+    // `startPreview` runs BEFORE `importFacilities`, so this apply's `runId` reaches the importer.
+    const startOrder = mocks.runStore.startPreview.mock.invocationCallOrder[0];
+    const importOrder = mocks.importFacilities.mock.invocationCallOrder[0];
+    expect(startOrder).toBeLessThan(importOrder);
+    expect(mocks.runStore.finishApply).toHaveBeenCalledWith(
+      DEFAULT_RUN.id, 'applied', { error: null, summary: CLEAN_RESULT },
+    );
+  });
+
   it('surfaces duplicates as a warning, not just a count', async () => {
     mocks.importFacilities.mockResolvedValue({
-      parsed: 2, skipped: 0, unknownColumns: [], duplicateColumns: [], quarantined: [], written: { created: 1, updated: 0 }, duplicates: 1,
+      ...CLEAN_RESULT, parsed: 2, create: 1, changed: 0, unchanged: 1, written: { created: 1, updated: 0 }, duplicates: 1,
     });
 
     await runFacilitiesImport('/some/file.csv', { nationalSystem: 'urn:tz:hfr', apply: true, json: false });
@@ -136,9 +269,9 @@ describe('facilities import CLI', () => {
     expect(human).not.toMatch(/WARNING/);
   });
 
-  it('unknown columns without --allow-unknown-columns refuse and name the columns; no audit', async () => {
+  it('unknown columns without --allow-unknown-columns refuse and name the columns; no audit; run marked failed', async () => {
     mocks.importFacilities.mockResolvedValue({
-      parsed: 0, skipped: 0, unknownColumns: ['beds', 'foo'], duplicateColumns: [], quarantined: [], written: { created: 0, updated: 0 }, duplicates: 0,
+      ...CLEAN_RESULT, parsed: 0, unknownColumns: ['beds', 'foo'], written: { created: 0, updated: 0 },
     });
 
     const code = await runFacilitiesImport('/some/file.csv', { nationalSystem: 'urn:tz:hfr', apply: true, json: false });
@@ -149,11 +282,17 @@ describe('facilities import CLI', () => {
     expect(err).toMatch(/foo/);
     expect(err).toMatch(/allow-unknown-columns/);
     expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
+    // ⛔ The run this apply minted is finished 'failed', not left dangling `previewed` (which would
+    // hold `active_key` for `urn:tz:hfr` forever — see the "failed apply releases active_key"
+    // integration test below for the DB-level proof of the same invariant).
+    expect(mocks.runStore.finishApply).toHaveBeenCalledWith(
+      DEFAULT_RUN.id, 'failed', expect.objectContaining({ error: expect.stringMatching(/beds/) }),
+    );
   });
 
   it('--allow-unknown-columns lets an import with unknown columns proceed', async () => {
     mocks.importFacilities.mockResolvedValue({
-      parsed: 1, skipped: 0, unknownColumns: ['beds'], duplicateColumns: [], quarantined: [], written: { created: 1, updated: 0 }, duplicates: 0,
+      ...CLEAN_RESULT, parsed: 1, unknownColumns: ['beds'], create: 1, written: { created: 1, updated: 0 },
     });
 
     const code = await runFacilitiesImport('/some/file.csv', { nationalSystem: 'urn:tz:hfr', apply: true, allowUnknownColumns: true, json: false });
@@ -168,11 +307,11 @@ describe('facilities import CLI', () => {
 
   // Task 5: surface Task 4's `quarantined`/`allowMalformedRows` (facility-import.ts) through the CLI,
   // per the repo's CLI-parity rule — mirrors the unknown-columns refusal above.
-  it('quarantined rows without --allow-malformed-rows refuse and print each line/reason; no audit', async () => {
+  it('quarantined rows without --allow-malformed-rows refuse and print each line/reason; no audit; run marked failed', async () => {
     mocks.importFacilities.mockResolvedValue({
-      parsed: 1, skipped: 0, unknownColumns: [], duplicateColumns: [],
+      ...CLEAN_RESULT, parsed: 1,
       quarantined: [{ line: 3, reason: 'too_many_fields', raw: '2,Bad,Extra' }],
-      written: { created: 0, updated: 0 }, duplicates: 0, blocked: true, blockedReason: 'quarantined-rows',
+      written: { created: 0, updated: 0 }, blocked: true, blockedReason: 'quarantined-rows',
     });
 
     const code = await runFacilitiesImport('/some/file.csv', { nationalSystem: 'urn:tz:hfr', apply: true, json: false });
@@ -182,13 +321,14 @@ describe('facilities import CLI', () => {
     expect(err).toMatch(/line 3: too_many_fields — 2,Bad,Extra/);
     expect(err).toMatch(/1 row\(s\) quarantined; re-run with --allow-malformed-rows to import the rest/);
     expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
+    expect(mocks.runStore.finishApply).toHaveBeenCalledWith(DEFAULT_RUN.id, 'failed', expect.objectContaining({ error: expect.any(String) }));
   });
 
   it('--allow-malformed-rows lets an import with quarantined rows proceed', async () => {
     mocks.importFacilities.mockResolvedValue({
-      parsed: 1, skipped: 0, unknownColumns: [], duplicateColumns: [],
+      ...CLEAN_RESULT, parsed: 1,
       quarantined: [{ line: 3, reason: 'too_many_fields', raw: '2,Bad,Extra' }],
-      written: { created: 1, updated: 0 }, duplicates: 0, blocked: false, blockedReason: null,
+      create: 1, written: { created: 1, updated: 0 }, blocked: false, blockedReason: null,
     });
 
     const code = await runFacilitiesImport(
@@ -208,9 +348,9 @@ describe('facilities import CLI', () => {
 
   it('--json still refuses on quarantined rows, with quarantined present in the JSON payload', async () => {
     const result = {
-      parsed: 1, skipped: 0, unknownColumns: [], duplicateColumns: [],
+      ...CLEAN_RESULT, parsed: 1,
       quarantined: [{ line: 3, reason: 'too_many_fields', raw: '2,Bad,Extra' }],
-      written: { created: 0, updated: 0 }, duplicates: 0, blocked: true, blockedReason: 'quarantined-rows',
+      written: { created: 0, updated: 0 }, blocked: true, blockedReason: 'quarantined-rows',
     };
     mocks.importFacilities.mockResolvedValue(result);
 
@@ -228,8 +368,8 @@ describe('facilities import CLI', () => {
   // --allow-malformed-rows, which cannot help them here.
   it('duplicate headers refuse with the columns named and no override suggested', async () => {
     mocks.importFacilities.mockResolvedValue({
-      parsed: 0, skipped: 0, unknownColumns: [], duplicateColumns: ['name'], quarantined: [],
-      written: { created: 0, updated: 0 }, duplicates: 0, blocked: true, blockedReason: 'duplicate-columns',
+      ...CLEAN_RESULT, parsed: 0, duplicateColumns: ['name'],
+      written: { created: 0, updated: 0 }, blocked: true, blockedReason: 'duplicate-columns',
     });
 
     const code = await runFacilitiesImport('/some/file.csv', { nationalSystem: 'urn:tz:hfr', apply: true, json: false });
@@ -266,9 +406,7 @@ describe('facilities import CLI', () => {
   });
 
   it('--json still refuses on unknown columns, with unknownColumns present in the JSON payload', async () => {
-    const result = {
-      parsed: 0, skipped: 0, unknownColumns: ['beds'], duplicateColumns: [], quarantined: [], written: { created: 0, updated: 0 }, duplicates: 0,
-    };
+    const result = { ...CLEAN_RESULT, parsed: 0, unknownColumns: ['beds'], written: { created: 0, updated: 0 } };
     mocks.importFacilities.mockResolvedValue(result);
 
     const code = await runFacilitiesImport('/some/file.csv', { nationalSystem: 'urn:tz:hfr', json: true });
@@ -312,10 +450,222 @@ describe('facilities import CLI', () => {
     expect(mocks.ctx.facilityJobs.enqueue).not.toHaveBeenCalled();
   });
 
-  it('closes the app context even when importFacilities throws', async () => {
+  it('closes the app context even when importFacilities throws, and marks the minted run failed', async () => {
+    mocks.importFacilities.mockRejectedValue(new Error('db exploded'));
+
+    const code = await runFacilitiesImport('/some/file.csv', { nationalSystem: 'urn:tz:hfr', apply: true, json: false });
+
+    expect(code).toBe(1);
+    expect(mocks.ctx.close).toHaveBeenCalledTimes(1);
+    const err = stderrSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(err).toMatch(/db exploded/);
+    expect(mocks.runStore.finishApply).toHaveBeenCalledWith(
+      DEFAULT_RUN.id, 'failed', expect.objectContaining({ error: expect.stringMatching(/db exploded/) }),
+    );
+  });
+
+  it('closes the app context even when importFacilities throws on a dry run (no run to finish)', async () => {
     mocks.importFacilities.mockRejectedValue(new Error('db exploded'));
 
     const code = await runFacilitiesImport('/some/file.csv', { nationalSystem: 'urn:tz:hfr', json: false });
+
+    expect(code).toBe(1);
+    expect(mocks.ctx.close).toHaveBeenCalledTimes(1);
+    expect(mocks.runStore.finishApply).not.toHaveBeenCalled();
+  });
+
+  it('refuses to start a second concurrent apply for the same register, without crashing', async () => {
+    mocks.runStore.startPreview.mockRejectedValue(new Error('an import is already in progress for "urn:tz:hfr"'));
+
+    const code = await runFacilitiesImport('/some/file.csv', { nationalSystem: 'urn:tz:hfr', apply: true, json: false });
+
+    expect(code).toBe(1);
+    expect(mocks.importFacilities).not.toHaveBeenCalled();
+    const err = stderrSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(err).toMatch(/already in progress/);
+    expect(mocks.ctx.close).toHaveBeenCalledTimes(1);
+  });
+
+  // ⛔ The proof the brief demands: a failed --apply must not leave `active_key` held, or every LATER
+  // import of the same register — CLI or browser — 409s against a run nothing will ever finish. This
+  // uses the REAL `createFacilityImportRunStore`/db (via `vi.importActual` + a pg-mem-migrated db),
+  // not the fake `mocks.runStore` the rest of this file uses — a mock could assert `finishApply` was
+  // CALLED (see the two tests above) without proving the call actually released the row at the
+  // database. Only a real store closes that gap.
+  it('a failed --apply releases the register: active_key is not held afterward', async () => {
+    const real = await vi.importActual<typeof import('@openldr/db')>('@openldr/db');
+    const db = (await makeMigratedDb()) as unknown as Record<string, unknown>;
+
+    mocks.createAppContext.mockResolvedValueOnce({ ...mocks.ctx, internalDb: db, close: vi.fn().mockResolvedValue(undefined) });
+    mocks.createFacilityImportRunStore.mockImplementationOnce((d: never) => real.createFacilityImportRunStore(d));
+    mocks.importFacilities.mockRejectedValueOnce(new Error('exploded mid-apply'));
+
+    const code = await runFacilitiesImport('/some/file.csv', { nationalSystem: 'urn:tz:hfr', apply: true, json: false });
+
+    expect(code).toBe(1);
+
+    const store = real.createFacilityImportRunStore(db as never);
+    const runs = await store.list('urn:tz:hfr');
+    expect(runs).toHaveLength(1);
+    expect(runs[0].status).toBe('failed');
+    expect(runs[0].error).toMatch(/exploded mid-apply/);
+
+    // The invariant itself: `active_key` was released, so a second import of the SAME register can
+    // proceed instead of refusing forever.
+    await expect(store.startPreview({
+      nationalSystem: 'urn:tz:hfr', sourceFormat: 'csv', fileHash: 'h2', byteSize: 1, options: {},
+    })).resolves.toMatchObject({ nationalSystem: 'urn:tz:hfr', status: 'previewed' });
+  });
+});
+
+// ── Task 12: `openldr facilities import-runs` / `import-run <id>` ─────────────────────────────
+describe('facilities import-runs CLI', () => {
+  let stdoutSpy: ReturnType<typeof vi.fn>;
+  let stderrSpy: ReturnType<typeof vi.fn>;
+
+  const RUN_OLDER = { ...DEFAULT_RUN, id: 'fir_a', status: 'applied' as const, createdAt: '2026-08-01T00:00:00.000Z', finishedAt: '2026-08-01T00:00:05.000Z' };
+  const RUN_NEWER = { ...DEFAULT_RUN, id: 'fir_b', status: 'applied' as const, createdAt: '2026-08-02T00:00:00.000Z', finishedAt: '2026-08-02T00:00:05.000Z' };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true) as unknown as ReturnType<typeof vi.fn>;
+    stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true) as unknown as ReturnType<typeof vi.fn>;
+    mocks.createAppContext.mockResolvedValue(mocks.ctx);
+    mocks.ctx.close.mockResolvedValue(undefined);
+    mocks.createFacilityImportRunStore.mockReturnValue(mocks.runStore);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  // Step 1 (brief): "import-runs lists newest first". Ordering itself is the STORE's contract,
+  // already proven against a real db in packages/db/facility-import-run-store.test.ts ("list orders
+  // newest first with a unique tiebreaker"); what this test proves is that the CLI prints the rows in
+  // the exact order the store handed back, rather than re-sorting or reversing them.
+  it('prints runs in the order the store returns them (newest first)', async () => {
+    mocks.runStore.list.mockResolvedValue([RUN_NEWER, RUN_OLDER]);
+
+    const code = await runFacilitiesImportRuns({ json: false });
+
+    expect(code).toBe(0);
+    const human = stdoutSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(human.indexOf('fir_b')).toBeGreaterThanOrEqual(0);
+    expect(human.indexOf('fir_b')).toBeLessThan(human.indexOf('fir_a'));
+  });
+
+  it('passes --national-system and --limit through to the store', async () => {
+    mocks.runStore.list.mockResolvedValue([]);
+
+    await runFacilitiesImportRuns({ nationalSystem: 'urn:tz:hfr', limit: 5, json: false });
+
+    expect(mocks.createFacilityImportRunStore).toHaveBeenCalledWith(mocks.ctx.internalDb);
+    expect(mocks.runStore.list).toHaveBeenCalledWith('urn:tz:hfr', 5);
+  });
+
+  it('says so plainly when there is nothing to show, rather than an empty table', async () => {
+    mocks.runStore.list.mockResolvedValue([]);
+
+    const code = await runFacilitiesImportRuns({ json: false });
+
+    expect(code).toBe(0);
+    const human = stdoutSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(human).toMatch(/no facility import runs/i);
+  });
+
+  it('--json emits the whole machine-readable list, not prose', async () => {
+    mocks.runStore.list.mockResolvedValue([RUN_NEWER]);
+
+    const code = await runFacilitiesImportRuns({ json: true });
+
+    expect(code).toBe(0);
+    expect(stdoutSpy).toHaveBeenCalledWith(JSON.stringify([RUN_NEWER], null, 2) + '\n');
+  });
+
+  it('never audits — it is read-only', async () => {
+    mocks.runStore.list.mockResolvedValue([RUN_NEWER]);
+
+    await runFacilitiesImportRuns({ json: false });
+
+    expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it('closes the app context even when the store throws, and reports a redacted message', async () => {
+    mocks.runStore.list.mockRejectedValue(new Error('db exploded'));
+
+    const code = await runFacilitiesImportRuns({ json: false });
+
+    expect(code).toBe(1);
+    expect(mocks.ctx.close).toHaveBeenCalledTimes(1);
+    const err = stderrSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(err).toMatch(/db exploded/);
+  });
+});
+
+describe('facilities import-run CLI', () => {
+  let stdoutSpy: ReturnType<typeof vi.fn>;
+  let stderrSpy: ReturnType<typeof vi.fn>;
+
+  const RUN_DETAIL = { ...DEFAULT_RUN, id: 'fir_a', status: 'applied' as const, summary: { create: 3, changed: 1 } };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true) as unknown as ReturnType<typeof vi.fn>;
+    stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true) as unknown as ReturnType<typeof vi.fn>;
+    mocks.createAppContext.mockResolvedValue(mocks.ctx);
+    mocks.ctx.close.mockResolvedValue(undefined);
+    mocks.createFacilityImportRunStore.mockReturnValue(mocks.runStore);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('prints one run\'s detail, including its stored summary', async () => {
+    mocks.runStore.get.mockResolvedValue(RUN_DETAIL);
+
+    const code = await runFacilitiesImportRun('fir_a', { json: false });
+
+    expect(code).toBe(0);
+    expect(mocks.runStore.get).toHaveBeenCalledWith('fir_a');
+    const human = stdoutSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(human).toMatch(/fir_a/);
+    expect(human).toMatch(/applied/);
+    expect(human).toMatch(/"create":3/);
+  });
+
+  it('exits non-zero for an unknown run id, without a stack trace', async () => {
+    mocks.runStore.get.mockResolvedValue(null);
+
+    const code = await runFacilitiesImportRun('fir_nope', { json: false });
+
+    expect(code).toBe(1);
+    const err = stderrSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(err).toMatch(/no such facility import run: fir_nope/);
+  });
+
+  it('--json emits the whole machine-readable run', async () => {
+    mocks.runStore.get.mockResolvedValue(RUN_DETAIL);
+
+    const code = await runFacilitiesImportRun('fir_a', { json: true });
+
+    expect(code).toBe(0);
+    expect(stdoutSpy).toHaveBeenCalledWith(JSON.stringify(RUN_DETAIL, null, 2) + '\n');
+  });
+
+  it('--json still reports an unknown id as an error payload with a non-zero exit', async () => {
+    mocks.runStore.get.mockResolvedValue(null);
+
+    const code = await runFacilitiesImportRun('fir_nope', { json: true });
+
+    expect(code).toBe(1);
+    expect(stdoutSpy).toHaveBeenCalledWith(JSON.stringify({ error: 'no such facility import run: fir_nope' }) + '\n');
+  });
+
+  it('closes the app context even when the store throws, and reports a redacted message', async () => {
+    mocks.runStore.get.mockRejectedValue(new Error('db exploded'));
+
+    const code = await runFacilitiesImportRun('fir_a', { json: false });
 
     expect(code).toBe(1);
     expect(mocks.ctx.close).toHaveBeenCalledTimes(1);

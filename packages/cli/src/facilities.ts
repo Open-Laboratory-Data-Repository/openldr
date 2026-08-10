@@ -1,12 +1,17 @@
 import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import type { Kysely } from 'kysely';
 import { loadConfig } from '@openldr/config';
 import {
   createAppContext, importFacilities, recordAuditEvent, scanObservedFacilities, publishFacilityMap,
   listFacilityMappingConflicts, facilityHealth,
   type AppContext, type ScanResult, type PublishResult, type FacilityMappingConflict, type FacilityHealth,
+  type FacilityImportResult,
 } from '@openldr/bootstrap';
-import { referenceCapture, type ExternalSchema } from '@openldr/db';
+import {
+  referenceCapture, createFacilityImportRunStore, type ExternalSchema,
+  type FacilityImportRun, type FacilityImportRunStore,
+} from '@openldr/db';
 import { cliActor } from './cli-actor';
 import { redactError } from './redact-error';
 
@@ -21,18 +26,65 @@ export interface FacilitiesImportOpts {
    *  `FacilityImportOptions.allowMalformedRows`) — the explicit "I have seen the line numbers,
    *  import the rest" override, mirroring `allowUnknownColumns` above. */
   allowMalformedRows?: boolean;
+  /** Task 12: mirrors `FacilityImportOptions.format` exactly — which shape `path` is: a national
+   *  register CSV or a JSONL release. Default `'csv'`, same as `importFacilities` itself. */
+  format?: 'csv' | 'jsonl';
+  /** A publisher-supplied release version, recorded on the `facility_import_runs` row an `--apply`
+   *  mints (see below) — pure provenance; `importFacilities` has no `releaseVersion` option of its
+   *  own to pass this to. */
+  releaseVersion?: string;
+  /** Mirrors `FacilityImportOptions.completeRelease` — see its doc comment. The ONLY thing that
+   *  flips `result.absent` from `null` ("not evaluated") to a real count. */
+  completeRelease?: boolean;
+  /** Mirrors `FacilityImportOptions.onDeleted`. */
+  onDeleted?: 'retire' | 'report';
+  /** Mirrors `FacilityImportOptions.onAbsent`. */
+  onAbsent?: 'retire' | 'report';
+  /** Mirrors `FacilityImportOptions.onConflict`. */
+  onConflict?: 'skip' | 'overwrite';
   json: boolean;
 }
 
 /**
- * `openldr facilities import <path> --national-system <sys> [--apply] [--allow-unknown-columns] [--json]`
+ * `openldr facilities import <path> --national-system <sys> [--apply] [--allow-unknown-columns]
+ * [--allow-malformed-rows] [--format csv|jsonl] [--release-version <v>] [--complete-release]
+ * [--on-deleted retire|report] [--on-absent retire|report] [--on-conflict skip|overwrite] [--json]`
  *
  * Thin CLI wrapper over `@openldr/bootstrap`'s `importFacilities` (Task 2) — the same function
  * Task 4's HTTP route calls, per the repo's CLI-parity rule. This file owns only: reading the file
  * with a redacted error instead of a stack trace, wiring `deps` (internalDb + referenceCapture) off
- * `createAppContext`, the unknown-columns refusal message, the duplicates warning, and auditing an
- * applied import (`facility.import`, matching `facility.create`/`facility.update`/`facility.delete`
- * in apps/server/src/facilities-routes.ts).
+ * `createAppContext`, the unknown-columns/blocked refusal messages, the duplicates warning, minting
+ * and finishing this apply's `facility_import_runs` row (Task 12, below), and auditing an applied
+ * import (`facility.import`, matching `facility.create`/`facility.update`/`facility.delete` in
+ * apps/server/src/facilities-routes.ts).
+ *
+ * ## Task 12: run recording, and why only `--apply` mints one
+ *
+ * Task 10's HTTP route mints a `facility_import_runs` row on EVERY standalone preview (not only an
+ * apply), because the route drives a two-step interactive flow: preview, let the operator read it,
+ * then a LATER apply request carries the previewed `runId` back so `previewedAt` can gate conflict
+ * detection. A preview that is never followed by that later apply is the ordinary "the operator
+ * changed their mind and closed the sheet" case, and `active_key` (migration 080, one non-terminal
+ * row per `nationalSystem`) would otherwise be held by it forever — which is exactly why the route
+ * carries its own "supersede a still-`previewed` row on the next preview" retry logic.
+ *
+ * This CLI has no equivalent two-step shape: preview and apply are the SAME synchronous call (there
+ * is no `--run-id` flag to thread a run across two separate invocations), so there is no gap for a
+ * `previewed` row to usefully occupy, and reproducing the route's supersede dance here would only
+ * exist to undo a lock this command need not take in the first place. So a DRY RUN mints nothing —
+ * matching that the audit event below is *also* apply-only — and only `--apply` starts a run, which
+ * is finished (`'applied'` or `'failed'`) before this function returns by EVERY exit path below,
+ * including a thrown `importFacilities` and the two refusal branches (unknown columns, blocked):
+ * `active_key` must never survive this function still pointing at `opts.nationalSystem`, or every
+ * later import of that register — CLI or browser — 409s against a run nothing will ever finish.
+ *
+ * ⛔ `startPreview`/`finishApply` (packages/db/facility-import-run-store.ts), not an `insertRunning`-
+ * style pre-claimed row: unlike `terminology_ingest_jobs` (whose `insertRunning` exists so a live
+ * SERVER WORKER polling for `'queued'` rows never claims one an inline CLI ingest already owns),
+ * nothing ever asynchronously claims a `facility_import_runs` row — there is no worker, no `'queued'`
+ * status, nothing but `'previewed'`/`'applied'`/`'failed'`. `startPreview`'s own pre-check plus the
+ * unique `active_key` index already give this call exclusive claim to `opts.nationalSystem` for as
+ * long as it runs, which is the entire concurrency guarantee an inline CLI import needs.
  */
 export async function runFacilitiesImport(path: string, opts: FacilitiesImportOpts): Promise<number> {
   let csv: string;
@@ -46,8 +98,39 @@ export async function runFacilitiesImport(path: string, opts: FacilitiesImportOp
   }
 
   const ctx = await createAppContext(loadConfig());
+  const importRuns = createFacilityImportRunStore(ctx.internalDb);
+  // Populated only for `--apply` — see the docblock above for why a dry run mints nothing. Every
+  // path out of this function below that ran with `run` non-null MUST finish it before returning.
+  let run: FacilityImportRun | null = null;
   try {
-    const result = await importFacilities(
+    if (opts.apply) {
+      try {
+        run = await importRuns.startPreview({
+          nationalSystem: opts.nationalSystem,
+          sourceFormat: opts.format ?? 'csv',
+          fileHash: createHash('sha256').update(csv, 'utf8').digest('hex'),
+          byteSize: Buffer.byteLength(csv, 'utf8'),
+          releaseVersion: opts.releaseVersion ?? null,
+          options: {
+            nationalSystem: opts.nationalSystem, allowUnknownColumns: !!opts.allowUnknownColumns,
+            allowMalformedRows: !!opts.allowMalformedRows, format: opts.format,
+            completeRelease: opts.completeRelease, onDeleted: opts.onDeleted, onAbsent: opts.onAbsent,
+            onConflict: opts.onConflict,
+          },
+          requestedBy: cliActor().actorName,
+        });
+      } catch (err) {
+        // `startPreview` throws when `active_key` is already held for this `nationalSystem` — by a
+        // concurrent import, or by a browser `previewed` row nobody ever applied or cancelled. No
+        // run was minted for THIS call, so there is nothing here for this catch to release.
+        const msg = redactError(err);
+        if (opts.json) process.stdout.write(JSON.stringify({ error: msg }) + '\n');
+        else process.stderr.write(`facilities import refused: ${msg}\n`);
+        return 1;
+      }
+    }
+
+    const result: FacilityImportResult = await importFacilities(
       // Fix 1 (mapping-ux report): `admin` lets importFacilities project every written row into
       // FACILITY_REGISTRY_SYSTEM as part of the import — the CLI gets the same immediate-mapping
       // behaviour as the HTTP route, per the repo's CLI-parity rule.
@@ -64,6 +147,15 @@ export async function runFacilitiesImport(path: string, opts: FacilitiesImportOp
       {
         nationalSystem: opts.nationalSystem, allowUnknownColumns: opts.allowUnknownColumns,
         allowMalformedRows: opts.allowMalformedRows, apply: opts.apply,
+        format: opts.format, completeRelease: opts.completeRelease,
+        onDeleted: opts.onDeleted, onAbsent: opts.onAbsent, onConflict: opts.onConflict,
+        // ⛔ `previewedAt` is deliberately NOT threaded from `run` here — see the docblock above:
+        // this run's `previewed_at` (were we to complete it) would be set microseconds before this
+        // same call, evaluating a conflict window that cannot contain a real conflict, only ever
+        // reporting `conflict: 0` and asserting a check that means nothing. `runId` still links the
+        // write to its run row for provenance; `conflict` stays `null` — not evaluated — same as
+        // any run-id-less apply through the HTTP route.
+        runId: run?.id ?? null,
       },
     );
 
@@ -71,6 +163,9 @@ export async function runFacilitiesImport(path: string, opts: FacilitiesImportOp
     // summary and wonder why nothing happened — see facility-csv.ts: unknownColumns non-empty
     // without allowUnknownColumns means the parser already blocked the whole file (parsed: 0).
     if (result.unknownColumns.length > 0 && !opts.allowUnknownColumns) {
+      if (run) {
+        await finishRun(importRuns, run.id, 'failed', `refused: unrecognised column(s): ${result.unknownColumns.join(', ')}`);
+      }
       if (opts.json) {
         process.stdout.write(JSON.stringify(result, null, 2) + '\n');
       } else {
@@ -95,6 +190,12 @@ export async function runFacilitiesImport(path: string, opts: FacilitiesImportOp
     // — duplicate headers have no override, so telling an operator to pass --allow-malformed-rows
     // would be pointing at a switch that cannot help them.
     if (result.blocked) {
+      if (run) {
+        const reason = result.blockedReason === 'duplicate-columns'
+          ? `refused: duplicate column header(s): ${result.duplicateColumns.join(', ')}`
+          : `refused: ${result.quarantined.length} row(s) quarantined`;
+        await finishRun(importRuns, run.id, 'failed', reason);
+      }
       if (opts.json) {
         process.stdout.write(JSON.stringify(result, null, 2) + '\n');
       } else if (result.blockedReason === 'duplicate-columns') {
@@ -125,6 +226,7 @@ export async function runFacilitiesImport(path: string, opts: FacilitiesImportOp
           allowMalformedRows: !!opts.allowMalformedRows, result,
         },
       });
+      if (run) await finishRun(importRuns, run.id, 'applied', null, result);
     }
 
     if (opts.json) {
@@ -134,6 +236,7 @@ export async function runFacilitiesImport(path: string, opts: FacilitiesImportOp
     }
     return 0;
   } catch (err) {
+    if (run) await finishRun(importRuns, run.id, 'failed', redactError(err));
     const msg = redactError(err);
     if (opts.json) process.stdout.write(JSON.stringify({ error: msg }) + '\n');
     else process.stderr.write(`facilities import failed: ${msg}\n`);
@@ -143,18 +246,29 @@ export async function runFacilitiesImport(path: string, opts: FacilitiesImportOp
   }
 }
 
-// ⚠ Reads `written.created`/`written.updated` — what the import actually WROTE — never the
-// `create`/`changed`/`unchanged` classification beside them, which describes what the file WOULD do
-// and is now reported on a dry run too (FAC-P1-03). Surfacing those buckets, so a `--apply`-less run
-// prints something better than "nothing written", is Task 12 of that slice; this is the mechanical
-// rename that keeps today's output byte-identical.
-function formatHuman(
-  result: {
-    parsed: number; skipped: number; unknownColumns: string[]; duplicates: number;
-    written: { created: number; updated: number };
-  },
-  opts: FacilitiesImportOpts,
-): string {
+/** Best-effort `finishApply`, matching the HTTP route's own wrapped `finishApply` calls
+ *  (facilities-routes.ts): a SECOND failure here (the DB write that clears `active_key` itself
+ *  failing) must not mask the original error/result this call is trying to record, and there is no
+ *  logger to hand it to from a plain function — a warning goes to stderr, which never corrupts a
+ *  `--json` response since that is written to stdout separately. */
+async function finishRun(
+  importRuns: FacilityImportRunStore, id: string, status: 'applied' | 'failed',
+  error: string | null, summary?: unknown,
+): Promise<void> {
+  try {
+    await importRuns.finishApply(id, status, { error, ...(summary === undefined ? {} : { summary }) });
+  } catch {
+    process.stderr.write(`warning: failed to record facility import run ${id} as ${status}\n`);
+  }
+}
+
+// ⚠ Reads `written.created`/`written.updated` — what the import actually WROTE — AND
+// `create`/`changed`/`unchanged`/`conflict`/`absent` — what the file WOULD do / what was compared
+// against the registry, computed on EVERY call per FAC-P1-03. `conflict`/`absent` print as "not
+// evaluated" whenever they are `null`, never `0` — that distinction (a measurement never taken vs. a
+// measurement of zero) is the entire point of Task 12; collapsing it back to `0` here would silently
+// reintroduce into the CLI's own output the exact defect this slice exists to remove.
+function formatHuman(result: FacilityImportResult, opts: FacilitiesImportOpts): string {
   const lines: string[] = [];
   lines.push(
     opts.apply
@@ -162,6 +276,13 @@ function formatHuman(
       : `DRY RUN — nothing written. Rerun with --apply to write.`,
   );
   lines.push(`parsed ${result.parsed} row(s), skipped ${result.skipped}`);
+  const conflictText = result.conflict === null ? 'not evaluated' : String(result.conflict);
+  const absentText = result.absent === null ? 'not evaluated' : String(result.absent);
+  lines.push(
+    `classified: create ${result.create}, changed ${result.changed}, unchanged ${result.unchanged}, `
+      + `conflict ${conflictText}, absent ${absentText}`,
+  );
+  if (result.deleted > 0) lines.push(`deleted ${result.deleted}`);
   if (result.unknownColumns.length > 0) {
     lines.push(`unknown columns allowed through --allow-unknown-columns (carried into extras): ${result.unknownColumns.join(', ')}`);
   }
@@ -170,6 +291,105 @@ function formatHuman(
       `WARNING: ${result.duplicates} row(s) shared a national_code with another row in this file — duplicates were collapsed, last row wins`,
     );
   }
+  return lines.join('\n');
+}
+
+// ── Task 12: `openldr facilities import-runs` / `import-run <id>` ─────────────────────────────
+//
+// CLI parity for Task 10's `GET /api/facilities/import/runs` and `GET
+// /api/facilities/import/runs/:id` (apps/server/src/facilities-routes.ts) — both read the same
+// `facility_import_runs` table this file's `runFacilitiesImport` now writes to. Read-only: no
+// --apply, nothing audited, same shape as `runFacilitiesConflicts` above.
+
+export interface FacilitiesImportRunsOpts {
+  /** Scope to one national register. Omitted ⇒ every register this instance has ever imported. */
+  nationalSystem?: string;
+  /** Maximum rows to return. Omitted ⇒ the store's own default (50, see
+   *  facility-import-run-store.ts's `list`). */
+  limit?: number;
+  json: boolean;
+}
+
+/** `openldr facilities import-runs [--national-system <sys>] [--limit <n>] [--json]` */
+export async function runFacilitiesImportRuns(opts: FacilitiesImportRunsOpts): Promise<number> {
+  const ctx = await createAppContext(loadConfig());
+  try {
+    const importRuns = createFacilityImportRunStore(ctx.internalDb);
+    const runs = await importRuns.list(opts.nationalSystem, opts.limit);
+    if (opts.json) {
+      process.stdout.write(JSON.stringify(runs, null, 2) + '\n');
+    } else {
+      process.stdout.write(formatImportRunsHuman(runs) + '\n');
+    }
+    return 0;
+  } catch (err) {
+    const msg = redactError(err);
+    if (opts.json) process.stdout.write(JSON.stringify({ error: msg }) + '\n');
+    else process.stderr.write(`facilities import-runs failed: ${msg}\n`);
+    return 1;
+  } finally {
+    await ctx.close();
+  }
+}
+
+function formatImportRunsHuman(runs: FacilityImportRun[]): string {
+  if (runs.length === 0) return 'no facility import runs recorded';
+  const rows = runs.map((r) => [r.id, r.nationalSystem, r.status, r.sourceFormat, r.createdAt, r.finishedAt ?? '—']);
+  const header = ['id', 'national_system', 'status', 'format', 'created_at', 'finished_at'];
+  const widths = header.map((h, i) => Math.max(h.length, ...rows.map((r) => r[i].length)));
+  const line = (cells: string[]) => cells.map((c, i) => (i === cells.length - 1 ? c : c.padEnd(widths[i]))).join('  ');
+  return [line(header), ...rows.map(line)].join('\n');
+}
+
+export interface FacilitiesImportRunOpts {
+  json: boolean;
+}
+
+/** `openldr facilities import-run <id> [--json]`
+ *
+ * One run's full detail, including its stored `summary` — the same `FacilityImportResult` the
+ * preview or apply reported at the time — so an operator can see exactly what a past import did
+ * without re-running it. */
+export async function runFacilitiesImportRun(id: string, opts: FacilitiesImportRunOpts): Promise<number> {
+  const ctx = await createAppContext(loadConfig());
+  try {
+    const importRuns = createFacilityImportRunStore(ctx.internalDb);
+    const run = await importRuns.get(id);
+    if (!run) {
+      const msg = `no such facility import run: ${id}`;
+      if (opts.json) process.stdout.write(JSON.stringify({ error: msg }) + '\n');
+      else process.stderr.write(`facilities import-run failed: ${msg}\n`);
+      return 1;
+    }
+    if (opts.json) {
+      process.stdout.write(JSON.stringify(run, null, 2) + '\n');
+    } else {
+      process.stdout.write(formatImportRunHuman(run) + '\n');
+    }
+    return 0;
+  } catch (err) {
+    const msg = redactError(err);
+    if (opts.json) process.stdout.write(JSON.stringify({ error: msg }) + '\n');
+    else process.stderr.write(`facilities import-run failed: ${msg}\n`);
+    return 1;
+  } finally {
+    await ctx.close();
+  }
+}
+
+function formatImportRunHuman(run: FacilityImportRun): string {
+  const lines = [
+    `id: ${run.id}`,
+    `national system: ${run.nationalSystem}`,
+    `status: ${run.status}`,
+    `format: ${run.sourceFormat}`,
+    `release version: ${run.releaseVersion ?? '(none)'}`,
+    `requested by: ${run.requestedBy ?? '(unknown)'}`,
+    `created: ${run.createdAt}`,
+    `finished: ${run.finishedAt ?? '(not finished)'}`,
+  ];
+  if (run.error) lines.push(`error: ${run.error}`);
+  if (run.summary) lines.push(`summary: ${JSON.stringify(run.summary)}`);
   return lines.join('\n');
 }
 

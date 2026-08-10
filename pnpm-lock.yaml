@@ -814,6 +814,9 @@ importers:
       kysely:
         specifier: ^0.28.17
         version: 0.28.17
+      pg-mem:
+        specifier: ^3.0.14
+        version: 3.0.14(kysely@0.28.17)
       tsup:
         specifier: ^8.3.5
         version: 8.5.1(jiti@2.7.0)(postcss@8.5.15)(tsx@4.22.4)(typescript@5.9.3)
