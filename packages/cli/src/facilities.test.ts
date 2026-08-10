@@ -80,10 +80,15 @@ import {
 // a run with no linked preview watermark and a file that is not `--complete-release`.
 const CLEAN_RESULT = {
   parsed: 10, skipped: 0, unknownColumns: [], duplicateColumns: [], quarantined: [], invalid: [],
-  written: { created: 0, updated: 0 }, duplicates: 0, blocked: false, blockedReason: null,
+  written: { created: 0, updated: 0, retired: 0 }, duplicates: 0, blocked: false, blockedReason: null,
   create: 0, changed: 0, unchanged: 10, conflict: null, absent: null, deleted: 0,
   samples: { create: [], changed: [], conflict: [], absent: [], deleted: [] },
   runId: null, knownNationalSystem: true,
+  // A2a fix wave: release provenance and the controlled-field warnings are part of the result
+  // `formatHuman` reads, so a complete fixture has to carry them for the same reason the counters
+  // above are here — a missing key would print "undefined" rather than fail.
+  meta: null, countMismatch: [], releaseVersion: null,
+  unmapped: { level: [], status: [], country: [] }, notValidated: [],
 };
 
 // Task 12's default run row, returned by the fake `mocks.runStore.startPreview` unless a test
@@ -515,6 +520,141 @@ describe('facilities import CLI', () => {
     await expect(store.startPreview({
       nationalSystem: 'urn:tz:hfr', sourceFormat: 'csv', fileHash: 'h2', byteSize: 1, options: {},
     })).resolves.toMatchObject({ nationalSystem: 'urn:tz:hfr', status: 'previewed' });
+  });
+
+  // ⛔ Critical 1, the CLI half. This command used to call `importFacilities` with `apply: true`
+  // FIRST and only then decide whether to refuse — so a refused file had already been written by the
+  // time "refused" reached the operator's terminal. Combined with the importer's old absence
+  // inference (a zero-record file made every registry row look absent), a `--complete-release
+  // --on-absent retire` run over a file with one unrecognised column retired an entire national
+  // register, printed a refusal, marked the run failed and skipped the audit.
+  it('refuses BEFORE applying: no importFacilities call ever carries apply: true', async () => {
+    mocks.importFacilities.mockResolvedValue({
+      ...CLEAN_RESULT, parsed: 0, unknownColumns: ['extra_col'],
+    });
+
+    const code = await runFacilitiesImport('/some/file.csv', {
+      nationalSystem: 'urn:tz:hfr', apply: true, completeRelease: true, onAbsent: 'retire', json: false,
+    });
+
+    expect(code).toBe(1);
+    expect(mocks.importFacilities).toHaveBeenCalledTimes(1);
+    expect(mocks.importFacilities).not.toHaveBeenCalledWith(
+      expect.anything(), expect.any(String), expect.objectContaining({ apply: true }),
+    );
+    expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
+  });
+
+  // 🟠 Important 7: the CSV/JSONL unknown-key contract. `parseFacilityRelease` never blocks on an
+  // unrecognised key (each line is self-describing; the key goes to `extras`) and the HTTP route
+  // accepts such a file — but this CLI refused it regardless of format, and it is the only path a
+  // register above the route's inline-apply cap can be applied through. Now format-aware.
+  it('does NOT refuse a JSONL release that grew an unrecognised key', async () => {
+    mocks.importFacilities.mockResolvedValue({
+      ...CLEAN_RESULT, parsed: 2, create: 2, unchanged: 0, unknownColumns: ['newField'],
+      written: { created: 2, updated: 0, retired: 0 },
+    });
+
+    const code = await runFacilitiesImport('/some/file.jsonl', {
+      nationalSystem: 'urn:tz:hfr', apply: true, format: 'jsonl', json: false,
+    });
+
+    expect(code).toBe(0);
+    expect(mocks.importFacilities).toHaveBeenCalledWith(
+      expect.anything(), expect.any(String), expect.objectContaining({ apply: true }),
+    );
+    const human = stdoutSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(human).toMatch(/unrecognised key\(s\) carried into extras: newField/);
+    // The CSV-only override must not be suggested for a format it does not affect.
+    expect(human).not.toMatch(/--allow-unknown-columns/);
+  });
+
+  it('still refuses a CSV with an unrecognised column, and names the override', async () => {
+    mocks.importFacilities.mockResolvedValue({ ...CLEAN_RESULT, parsed: 0, unknownColumns: ['beds'] });
+
+    const code = await runFacilitiesImport('/some/file.csv', { nationalSystem: 'urn:tz:hfr', json: false });
+
+    expect(code).toBe(1);
+    expect(stderrSpy.mock.calls.map((c) => String(c[0])).join('')).toMatch(/--allow-unknown-columns/);
+  });
+
+  // 🟠 Important 3: `invalid` reached no human-facing consumer at all — a row rejected for a bad
+  // coordinate simply vanished from this output and was visible only under --json.
+  it('prints the coordinate errors with their line numbers, and names the override', async () => {
+    mocks.importFacilities.mockResolvedValue({
+      ...CLEAN_RESULT,
+      invalid: [
+        { line: 4, field: 'latitude', reason: 'not_a_number', raw: 'N/A' },
+        { line: 9, field: 'longitude', reason: 'out_of_range', raw: '999' },
+      ],
+    });
+
+    await runFacilitiesImport('/some/file.csv', { nationalSystem: 'urn:tz:hfr', json: false });
+
+    const human = stdoutSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(human).toMatch(/2 coordinate error\(s\) on line\(s\) 4, 9/);
+    expect(human).toMatch(/--allow-invalid-coordinates/);
+  });
+
+  it('threads --allow-invalid-coordinates through to importFacilities and says the rows were kept', async () => {
+    mocks.importFacilities.mockResolvedValue({
+      ...CLEAN_RESULT, invalid: [{ line: 4, field: 'latitude', reason: 'not_a_number', raw: 'N/A' }],
+    });
+
+    await runFacilitiesImport('/some/file.csv', {
+      nationalSystem: 'urn:tz:hfr', allowInvalidCoordinates: true, json: false,
+    });
+
+    expect(mocks.importFacilities).toHaveBeenCalledWith(
+      expect.anything(), expect.any(String), expect.objectContaining({ allowInvalidCoordinates: true }),
+    );
+    expect(stdoutSpy.mock.calls.map((c) => String(c[0])).join('')).toMatch(/imported anyway with no coordinate/);
+  });
+
+  // Minor: an operator running `--on-absent retire` saw an `absent` count and no confirmation at all
+  // of the mutation the command actually performed.
+  it('reports how many rows were retired, not just how many were absent', async () => {
+    mocks.importFacilities.mockResolvedValue({
+      ...CLEAN_RESULT, absent: 3, written: { created: 0, updated: 0, retired: 3 },
+    });
+
+    await runFacilitiesImport('/some/file.csv', {
+      nationalSystem: 'urn:tz:hfr', apply: true, completeRelease: true, onAbsent: 'retire', json: false,
+    });
+
+    const human = stdoutSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(human).toMatch(/retired 3/);
+    expect(human).toMatch(/absent 3/);
+  });
+
+  // FAC-P1-05: the controlled-field warnings. Unmapped NEVER blocks and NEVER blanks — this output
+  // is the only thing that tells an operator a value went in raw.
+  it('reports unmapped controlled values and notValidated fields without failing the import', async () => {
+    mocks.importFacilities.mockResolvedValue({
+      ...CLEAN_RESULT,
+      unmapped: { level: ['health_center', 'disp.'], status: [], country: [] },
+      notValidated: ['country'],
+      written: { created: 2, updated: 0, retired: 0 },
+    });
+
+    const code = await runFacilitiesImport('/some/file.csv', { nationalSystem: 'urn:tz:hfr', apply: true, json: false });
+
+    expect(code).toBe(0);
+    const human = stdoutSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(human).toMatch(/2 unmapped level value\(s\) written as-is: health_center, disp\./);
+    expect(human).toMatch(/not validated \(no canonical value set on this install\): country/);
+  });
+
+  // 🟠 Important 5: the release's declared counts reached nobody.
+  it('warns when the release declares more rows than parsed', async () => {
+    mocks.importFacilities.mockResolvedValue({
+      ...CLEAN_RESULT, parsed: 12998, countMismatch: [{ field: 'rowCount', declared: 13000, parsed: 12998 }],
+    });
+
+    await runFacilitiesImport('/some/file.jsonl', { nationalSystem: 'urn:tz:hfr', format: 'jsonl', json: false });
+
+    expect(stdoutSpy.mock.calls.map((c) => String(c[0])).join(''))
+      .toMatch(/the release declares 13000 row\(s\), 12998 parsed/);
   });
 });
 

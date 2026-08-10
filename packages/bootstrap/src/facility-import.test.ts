@@ -6,6 +6,7 @@ import {
   FACILITY_REGISTRY_SYSTEM, type InternalSchema, type TerminologyAdminStore, type FacilityJobStore,
 } from '@openldr/db';
 import { importFacilities, type FacilityImportDeps } from './facility-import';
+import { CONTROLLED_VALUE_SETS, observedFieldSystem } from './facility-controlled-fields';
 
 const SYSTEM = 'urn:tz:hfr';
 
@@ -56,8 +57,15 @@ describe('importFacilities', () => {
         create: [{ id: 'fac-0eea98ab9108599d', nationalCode: '100', name: 'Dodoma Regional Referral' }],
         changed: [], conflict: [], absent: [], deleted: [],
       },
-      written: { created: 0, updated: 0 },
+      written: { created: 0, updated: 0, retired: 0 },
       runId: null, knownNationalSystem: true,
+      // CSV has no release header, so all three release-provenance fields are empty/null here.
+      meta: null, countMismatch: [], releaseVersion: null,
+      // `buildDeps()` supplies no `admin`, so no controlled-field resolution ran at all — every
+      // field is reported NOT VALIDATED and nothing is classified unmapped. (The `admin`-supplied
+      // path is covered by the controlled-field tests further down.)
+      unmapped: { level: [], status: [], country: [] },
+      notValidated: ['level', 'status', 'country'],
     });
     expect(await deps.db.selectFrom('facility_registry').selectAll().execute()).toHaveLength(0);
   });
@@ -120,8 +128,13 @@ describe('importFacilities', () => {
       duplicates: 0, blocked: false, blockedReason: null,
       create: 0, changed: 0, unchanged: 0, conflict: null, absent: null, deleted: 0,
       samples: { create: [], changed: [], conflict: [], absent: [], deleted: [] },
-      written: { created: 0, updated: 0 },
+      written: { created: 0, updated: 0, retired: 0 },
       runId: null, knownNationalSystem: true,
+      meta: null, countMismatch: [], releaseVersion: null,
+      // No records reached the controlled-field layer at all here (the parser refused the file), and
+      // `buildDeps()` supplies no `admin` either — so nothing was resolved and nothing could be.
+      unmapped: { level: [], status: [], country: [] },
+      notValidated: ['level', 'status', 'country'],
     });
     expect(await deps.db.selectFrom('facility_registry').selectAll().execute()).toHaveLength(0);
 
@@ -319,7 +332,7 @@ describe('importFacilities', () => {
 
     const result = await importFacilities(deps, body, { nationalSystem: SYSTEM, apply: true });
 
-    expect(result.written).toEqual({ created: 0, updated: 0 });
+    expect(result.written).toEqual({ created: 0, updated: 0, retired: 0 });
     expect(result.quarantined).toHaveLength(1);
     expect(await deps.db.selectFrom('facility_registry').selectAll().execute()).toHaveLength(0);
   });
@@ -362,7 +375,7 @@ describe('importFacilities', () => {
     const applied = await importFacilities(
       deps, body, { nationalSystem: SYSTEM, apply: true, allowMalformedRows: true },
     );
-    expect(applied.written).toEqual({ created: 1, updated: 0 });
+    expect(applied.written).toEqual({ created: 1, updated: 0, retired: 0 });
 
     // Same file, previewed (no `apply`) WITHOUT the override this time — blocked, but non-empty:
     // `records` still has the one good row, since only row 2 is quarantined.
@@ -541,6 +554,12 @@ describe('preview reports real database impact (FAC-P1-03)', () => {
     const updatedAtBefore = new Date(before!.updated_at).getTime();
     const stalePreviewedAt = new Date(updatedAtBefore - 1000);
 
+    // ⚠ Forced gap, same defence as the "a re-import of an existing row bumps updated_at" test
+    // above and for the same reason: `updated_at` is written by `sql\`now()\``, and under pg-mem
+    // `now()` is real millisecond wall-clock, so two consecutive writes collide often enough to
+    // make the strict `toBeGreaterThan` below flaky without it.
+    await new Promise((resolve) => setTimeout(resolve, 5));
+
     const renamed = csv(['100,Dodoma Regional Referral Hospital,,,,,,,,,,,,,,']);
     const result = await importFacilities(
       deps, renamed,
@@ -567,6 +586,98 @@ describe('preview reports real database impact (FAC-P1-03)', () => {
     expect(r.invalid).toHaveLength(1);
     expect(r.create).toBe(0);
     expect(await deps.db.selectFrom('facility_registry').selectAll().execute()).toHaveLength(0);
+  });
+
+  // ── ⛔ Critical 1: absence is an inference that a file producing NO records cannot support ─────
+  //
+  // Measured before this fix: `parseFacilityCsv` returns `records: []` for a file with an
+  // unrecognised column, `blockedReason` covered only duplicateColumns/quarantined so `blocked` was
+  // false, `excludedFromAbsence` was empty so the absence query fell back to `not in ['']` — which
+  // matches EVERY registry row for the system — and the `records.length === 0 && retiredIds.length
+  // === 0` shortcut did not fire because `retiredIds` now held the whole register. The transaction
+  // then set `status: 'inactive'` on all of it. The three tests below each pin one file shape that
+  // reaches `records: []`.
+
+  it('an unknown-columns file retires NOTHING, even with --complete-release and onAbsent: retire', async () => {
+    const deps = await buildDeps();
+    await importFacilities(deps, csv(['100,Alpha,,,,,,,,,,,,,,', '200,Beta,,,,,,,,,,,,,,']),
+      { nationalSystem: SYSTEM, apply: true });
+
+    // Same register, one extra column the contract does not define, and no --allow-unknown-columns:
+    // the parser blocks the whole file (records: []).
+    const withExtraColumn = `${HEADER},extra_col\n`;
+    const r = await importFacilities(deps, withExtraColumn, {
+      nationalSystem: SYSTEM, apply: true, completeRelease: true, onAbsent: 'retire',
+    });
+
+    // The register itself, asserted FIRST: this is the damage, and it must be what a regression
+    // reports. (Measured before the fix: `["inactive", "inactive"]`.)
+    const rows = await deps.db.selectFrom('facility_registry').select(['national_code', 'status']).execute();
+    expect(rows.map((x) => x.status)).toEqual([null, null]);
+    expect(r.unknownColumns).toEqual(['extra_col']);
+    // ⛔ NOT EVALUATED, never 0 and never 2: a file that produced no records is not evidence that
+    // every facility is absent, it is evidence the file did not parse.
+    expect(r.absent).toBeNull();
+    expect(r.written).toEqual({ created: 0, updated: 0, retired: 0 });
+  });
+
+  it('a headers-only (zero-row) file retires NOTHING, even with --complete-release and onAbsent: retire', async () => {
+    const deps = await buildDeps();
+    await importFacilities(deps, csv(['100,Alpha,,,,,,,,,,,,,,', '200,Beta,,,,,,,,,,,,,,']),
+      { nationalSystem: SYSTEM, apply: true });
+
+    // A truncated download: the header line survived, every data row did not.
+    const r = await importFacilities(deps, `${HEADER}\n`, {
+      nationalSystem: SYSTEM, apply: true, completeRelease: true, onAbsent: 'retire',
+    });
+
+    // Asserted FIRST, same reasoning as the test above. (Measured before the fix:
+    // `["inactive", "inactive"]`.)
+    const rows = await deps.db.selectFrom('facility_registry').select(['status']).execute();
+    expect(rows.map((x) => x.status)).toEqual([null, null]);
+    expect(r.parsed).toBe(0);
+    expect(r.absent).toBeNull();
+    expect(r.written).toEqual({ created: 0, updated: 0, retired: 0 });
+  });
+
+  // The other half of the same guard: a DECLARED deletion is a publisher fact, not an inference off
+  // an empty parse, so a deletions-only release must still retire exactly what it names — and only
+  // what it names.
+  it('a deletions-only JSONL release still retires its declared deletions', async () => {
+    const deps = await buildDeps();
+    await importFacilities(deps, csv(['100,Alpha,,,,,,,,,,,,,,', '200,Beta,,,,,,,,,,,,,,']),
+      { nationalSystem: SYSTEM, apply: true });
+
+    const r = await importFacilities(deps, jsonl([deletionLine('100')]), {
+      nationalSystem: SYSTEM, format: 'jsonl', apply: true, onDeleted: 'retire',
+    });
+
+    expect(r.parsed).toBe(0);
+    expect(r.deleted).toBe(1);
+    expect(r.written.retired).toBe(1);
+    expect((await rowFor(deps.db, '100'))?.status).toBe('inactive');
+    expect((await rowFor(deps.db, '200'))?.status).toBeNull();
+  });
+
+  // ⛔ The dry-run invariant, previously pinned by no test at all. A preview that has computed
+  // retirable ids must still write nothing — `apply` is the only thing that authorises a write, and
+  // the retirement path (which runs off `retiredIds`, never off `records`) must be no exception.
+  it('a DRY RUN carrying retirable ids writes and retires nothing', async () => {
+    const deps = await buildDeps();
+    await importFacilities(deps, csv(['100,Alpha,,,,,,,,,,,,,,', '200,Beta,,,,,,,,,,,,,,']),
+      { nationalSystem: SYSTEM, apply: true });
+
+    const r = await importFacilities(deps, jsonl([rowLine('100', 'Alpha'), deletionLine('200')]), {
+      nationalSystem: SYSTEM, format: 'jsonl', completeRelease: true, onAbsent: 'retire', onDeleted: 'retire',
+    });
+
+    // The preview REPORTS the retirable populations…
+    expect(r.deleted).toBe(1);
+    expect(r.absent).toBe(0);
+    // …and performs none of it.
+    expect(r.written).toEqual({ created: 0, updated: 0, retired: 0 });
+    const rows = await deps.db.selectFrom('facility_registry').select(['status']).execute();
+    expect(rows.map((x) => x.status)).toEqual([null, null]);
   });
 });
 
@@ -749,7 +860,7 @@ describe('format: "jsonl" and declared deletions', () => {
     const deps = await buildDeps();
     const body = jsonl([rowLine('100', 'Alpha')]);
     const result = await importFacilities(deps, body, { nationalSystem: SYSTEM, format: 'jsonl', apply: true });
-    expect(result.written).toEqual({ created: 1, updated: 0 });
+    expect(result.written).toEqual({ created: 1, updated: 0, retired: 0 });
     expect(await rowFor(deps.db, '100')).toBeDefined();
   });
 
@@ -796,5 +907,180 @@ describe('format: "jsonl" and declared deletions', () => {
     // therefore absent from this file's ordinary rows) would ALSO satisfy "not in ids" and double-
     // report as an INFERRED absence — contradicting the fact the publisher already stated outright.
     expect(result.absent).toBe(0);
+  });
+});
+
+// ── 🟠 Important 2: the coordinate escape hatch (FAC-P1-05) ────────────────────────────────────
+//
+// Before this override existed, a row failing coordinate validation was dropped from `records`
+// outright — losing the facility with no way to proceed, and (worse) making it look ABSENT from a
+// `completeRelease` file, so `onAbsent: 'retire'` retired a live facility over a malformed string.
+describe('allowInvalidCoordinates', () => {
+  it('imports the facility with BOTH coordinates null, and still reports the error', async () => {
+    const deps = await buildDeps();
+    const r = await importFacilities(
+      deps, csv(['100,Alpha,,,,,,,,,,,,,N/A,35']),
+      { nationalSystem: SYSTEM, apply: true, allowInvalidCoordinates: true },
+    );
+
+    expect(r.create).toBe(1);
+    expect(r.written).toEqual({ created: 1, updated: 0, retired: 0 });
+    // Reporting is UNCONDITIONAL — the override changes whether the row is dropped, never whether
+    // its errors are surfaced.
+    expect(r.invalid).toEqual([{ line: 2, field: 'latitude', reason: 'not_a_number', raw: 'N/A' }]);
+    const row = await rowFor(deps.db, '100');
+    // ⛔ The GOOD half goes to null too: half a coordinate is not a location.
+    expect(row?.latitude).toBeNull();
+    expect(row?.longitude).toBeNull();
+  });
+
+  it('keeps a bad-coordinate row out of the ABSENT population, so onAbsent: retire cannot retire it', async () => {
+    const deps = await buildDeps();
+    await importFacilities(deps, csv(['100,Alpha,,,,,,,,,,,,,,']), { nationalSystem: SYSTEM, apply: true });
+
+    const r = await importFacilities(
+      deps, csv(['100,Alpha,,,,,,,,,,,,,N/A,35']),
+      {
+        nationalSystem: SYSTEM, apply: true, allowInvalidCoordinates: true,
+        completeRelease: true, onAbsent: 'retire',
+      },
+    );
+
+    expect(r.absent).toBe(0);
+    expect(r.written.retired).toBe(0);
+    expect((await rowFor(deps.db, '100'))?.status).toBeNull();
+  });
+
+  it('honours the same override for a JSONL release', async () => {
+    const deps = await buildDeps();
+    const r = await importFacilities(
+      deps, jsonl([rowLine('100', 'Alpha', { latitude: 'N/A', longitude: 35 })]),
+      { nationalSystem: SYSTEM, format: 'jsonl', apply: true, allowInvalidCoordinates: true },
+    );
+
+    expect(r.create).toBe(1);
+    expect(r.invalid).toHaveLength(1);
+    const row = await rowFor(deps.db, '100');
+    expect(row?.latitude).toBeNull();
+    expect(row?.longitude).toBeNull();
+  });
+});
+
+// ── 🟠 Important 5: the release header reaches a consumer ──────────────────────────────────────
+//
+// `parseFacilityRelease` computed `meta`/`countMismatch` and `importFacilities` destructured
+// neither, so migration 080's `declared_row_count`/`declared_deletion_count`/`release_published_at`
+// columns were provisioned and could never be written by anything.
+describe('release provenance on the result', () => {
+  it('carries meta, countMismatch and a meta-defaulted releaseVersion', async () => {
+    const deps = await buildDeps();
+    const body = jsonl([
+      { type: 'meta', country: 'TZ', version: 'r7', publishedAt: '2026-07-01', rowCount: 3, deletionCount: 1 },
+      rowLine('100', 'Alpha'),
+      rowLine('200', 'Beta'),
+      deletionLine('900'),
+    ]);
+
+    const r = await importFacilities(deps, body, { nationalSystem: SYSTEM, format: 'jsonl' });
+
+    expect(r.meta).toEqual({
+      country: 'TZ', version: 'r7', publishedAt: '2026-07-01', rowCount: 3, deletionCount: 1,
+    });
+    // The declared 3 against the 2 that actually parsed — exactly the fact FAC-P1-03 wants recorded.
+    expect(r.countMismatch).toEqual([{ field: 'rowCount', declared: 3, parsed: 2 }]);
+    // The caller supplied none, so the release's own version stands in.
+    expect(r.releaseVersion).toBe('r7');
+  });
+
+  it('lets an explicit releaseVersion win over the release header, and reports null for CSV', async () => {
+    const deps = await buildDeps();
+    const body = jsonl([{ type: 'meta', version: 'r7' }, rowLine('100', 'Alpha')]);
+
+    const fromCaller = await importFacilities(
+      deps, body, { nationalSystem: SYSTEM, format: 'jsonl', releaseVersion: 'operator-typed' });
+    expect(fromCaller.releaseVersion).toBe('operator-typed');
+
+    const fromCsv = await importFacilities(deps, csv(['100,Alpha,,,,,,,,,,,,,,']), { nationalSystem: SYSTEM });
+    expect(fromCsv.meta).toBeNull();
+    expect(fromCsv.countMismatch).toEqual([]);
+    expect(fromCsv.releaseVersion).toBeNull();
+  });
+});
+
+// ── Controlled fields wired into the import (FAC-P1-05) ────────────────────────────────────────
+//
+// `facility-controlled-fields.ts` was built and tested with ZERO production callers. These tests
+// pin the wiring itself: that resolution runs over the parsed records, that its warnings reach the
+// result, and — the property that must never regress — that an unmapped value still writes RAW.
+describe('controlled-field resolution during an import', () => {
+  async function buildDepsWithAdmin(): Promise<FacilityImportDeps & { db: Kysely<InternalSchema>; admin: TerminologyAdminStore }> {
+    const db = (await makeMigratedDb()) as Kysely<InternalSchema>;
+    return { db, capture: referenceCapture, admin: createTerminologyAdminStore(db) };
+  }
+
+  it('reports an unmapped source value AND still writes it raw — never blanked, never blocked', async () => {
+    const deps = await buildDepsWithAdmin();
+    // `health_center` (underscore) is not one of migration 072's seeded facility-type codes
+    // (`health-center`, hyphen) and has no mapping, so it is unmapped.
+    const r = await importFacilities(
+      deps, csv(['100,Alpha,health_center,,,,,,,,,,,,,']), { nationalSystem: SYSTEM, apply: true });
+
+    expect(r.unmapped.level).toEqual(['health_center']);
+    expect(r.written.created).toBe(1);
+    // ⛔ The invariant this layer must never break: the column holds the raw value, exactly as it
+    // did before controlled fields existed.
+    expect((await rowFor(deps.db, '100'))?.level).toBe('health_center');
+  });
+
+  it('rewrites a MAPPED value to its canonical code and preserves the raw value under extras.__source', async () => {
+    const deps = await buildDepsWithAdmin();
+    await deps.admin.termMappings.create({
+      fromSystem: observedFieldSystem('level', SYSTEM), fromCode: 'health_center',
+      toSystem: CONTROLLED_VALUE_SETS.level, toCode: 'health-center', toDisplay: 'Health Center',
+      mapType: 'SAME-AS', isActive: true,
+    });
+
+    const r = await importFacilities(
+      deps, csv(['100,Alpha,health_center,,,,,,,,,,,,,']), { nationalSystem: SYSTEM, apply: true });
+
+    expect(r.unmapped.level).toEqual([]);
+    const row = await rowFor(deps.db, '100');
+    expect(row?.level).toBe('health-center');
+    expect(row?.extras).toMatchObject({ __source: { level: 'health_center' } });
+  });
+
+  it('reports every field notValidated — without throwing — when the caller omits deps.admin', async () => {
+    const deps = await buildDeps(); // no `admin`
+    const r = await importFacilities(
+      deps, csv(['100,Alpha,health_center,,,,,,,,,,,,,']), { nationalSystem: SYSTEM, apply: true });
+
+    expect(r.notValidated).toEqual(['level', 'status', 'country']);
+    expect(r.unmapped).toEqual({ level: [], status: [], country: [] });
+    expect((await rowFor(deps.db, '100'))?.level).toBe('health_center');
+  });
+});
+
+// ── Minor: projection resurrection ─────────────────────────────────────────────────────────────
+//
+// `projectRegistryRows` runs AFTER the transaction commits, so a release carrying BOTH a `row` and
+// a `deletion` for the same code would re-publish the concept `retireRegistryConcepts` had just
+// retired inside it — leaving `facility_registry.status = 'inactive'` while the facility stayed
+// pickable as a mapping target.
+describe('a retired facility is not re-published by the post-commit projection', () => {
+  it('leaves its concept RETIRED when one release both carries and deletes the same row', async () => {
+    const db = (await makeMigratedDb()) as Kysely<InternalSchema>;
+    const deps = { db, capture: referenceCapture, admin: createTerminologyAdminStore(db) };
+
+    await importFacilities(deps, csv(['100,Alpha,,,,,,,,,,,,,,']), { nationalSystem: SYSTEM, apply: true });
+
+    const r = await importFacilities(
+      deps, jsonl([rowLine('100', 'Alpha'), deletionLine('100')]),
+      { nationalSystem: SYSTEM, format: 'jsonl', apply: true, onDeleted: 'retire' },
+    );
+    expect(r.written.retired).toBe(1);
+
+    const concepts = await db.selectFrom('terminology_concepts')
+      .select(['code', 'status']).where('system', '=', FACILITY_REGISTRY_SYSTEM).execute();
+    expect(concepts.map((c) => c.status)).toEqual(['RETIRED']);
   });
 });

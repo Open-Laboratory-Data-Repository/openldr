@@ -1476,6 +1476,15 @@ function fakeImportCtx(db: any) {
           getByUrl: async () => ({ id: 'cs-facility-registry', active: true } as any),
         },
         terms: { importRows: async () => ({ imported: 0 }) },
+        // A2a fix wave A: `importFacilities` now also runs `resolveControlledFields` over the parsed
+        // records, which reaches for `valueSets`/`termMappings` — but ONLY for a field some record
+        // actually carries a value for, and every CSV in this file leaves level/status/country
+        // blank. These stubs exist so that stays a fixture detail rather than a landmine: a future
+        // test adding a `level` value gets "no value set seeded on this install" (reported as
+        // `notValidated`) instead of a TypeError. Real resolution runs against the real store in
+        // packages/bootstrap's facility-import.test.ts.
+        valueSets: { getByUrl: async () => null, expand: async () => ({ codes: [], total: 0 }) },
+        termMappings: { listOutgoing: async () => [] },
       },
     },
     audit: { record: async (e: any) => { audit.push(e); return e; } },
@@ -1535,11 +1544,19 @@ describe('POST /api/facilities/import', () => {
         create: [{ id: expect.any(String), nationalCode: '100', name: 'Dodoma Regional Referral' }],
         changed: [], conflict: [], absent: [], deleted: [],
       },
-      written: { created: 0, updated: 0 },
+      written: { created: 0, updated: 0, retired: 0 },
       // Task 10: a standalone preview (no `apply`) now persists a `facility_import_runs` row and
       // echoes its id, and the registry is empty here — no existing row carries `SYSTEM`, so this
       // import creates a genuinely new register identity.
       runId: expect.any(String), knownNationalSystem: false,
+      // A2a fix wave A: release provenance (CSV has no release header, so all three are empty/null)
+      // and the controlled-field warnings. Both are EMPTY here rather than populated: this CSV's
+      // `level`/`status`/`country` cells are all blank, and `resolveControlledFields` looks up a
+      // field's value set only when some record actually carries a value for it — so nothing was
+      // classified unmapped and nothing needed validating.
+      meta: null, countMismatch: [], releaseVersion: null,
+      unmapped: { level: [], status: [], country: [] },
+      notValidated: [],
     });
     expect(await db.selectFrom('facility_registry').selectAll().execute()).toHaveLength(0);
     expect(ctx.__audit).toHaveLength(0); // a dry run writes nothing, so it must not audit
@@ -1905,8 +1922,13 @@ describe('POST /api/facilities/import', () => {
           create: [{ id: expect.any(String), nationalCode: '1', name: 'Good' }],
           changed: [], conflict: [], absent: [], deleted: [],
         },
-        written: { created: 0, updated: 0 },
+        written: { created: 0, updated: 0, retired: 0 },
         runId: expect.any(String), knownNationalSystem: false,
+        // A2a fix wave A, same as the dry-run complete-object assertion above: release provenance
+        // (none — this is a CSV) and the controlled-field warnings (none — this CSV has only
+        // national_code/name columns, so no controlled field carries a value to resolve).
+        meta: null, countMismatch: [], releaseVersion: null,
+        unmapped: { level: [], status: [], country: [] }, notValidated: [],
       });
       const runId = body.runId;
 
@@ -1977,7 +1999,7 @@ describe('POST /api/facilities/import', () => {
       expect(res.statusCode).toBe(200);
       expect(res.json().conflict).toBe(1);
       // The default policy is skip, not overwrite — the touched row is left alone.
-      expect(res.json().written).toEqual({ created: 0, updated: 0 });
+      expect(res.json().written).toEqual({ created: 0, updated: 0, retired: 0 });
     });
 
     it('⛔ an apply without a runId reports conflict: null — NOT 0 — because nothing was evaluated', async () => {
@@ -2019,7 +2041,7 @@ describe('POST /api/facilities/import', () => {
       });
       expect(res.statusCode).toBe(200);
       expect(res.json().conflict).toBe(1);
-      expect(res.json().written).toEqual({ created: 0, updated: 1 });
+      expect(res.json().written).toEqual({ created: 0, updated: 1, retired: 0 });
 
       const row = await db.selectFrom('facility_registry').selectAll().where('national_code', '=', '100').executeTakeFirst();
       expect(row?.name).toBe('Dodoma Regional Referral Hospital');
@@ -2078,7 +2100,7 @@ describe('POST /api/facilities/import', () => {
         payload: { csv, nationalSystem: SYSTEM, apply: true, runId },
       });
       expect(first.statusCode).toBe(200);
-      expect(first.json().written).toEqual({ created: 1, updated: 0 });
+      expect(first.json().written).toEqual({ created: 1, updated: 0, retired: 0 });
 
       const replay = await app.inject({
         method: 'POST', url: '/api/facilities/import',

@@ -26,12 +26,16 @@ export interface FacilitiesImportOpts {
    *  `FacilityImportOptions.allowMalformedRows`) — the explicit "I have seen the line numbers,
    *  import the rest" override, mirroring `allowUnknownColumns` above. */
   allowMalformedRows?: boolean;
+  /** Mirrors `FacilityImportOptions.allowInvalidCoordinates` — import a row whose coordinate failed
+   *  validation anyway, with both `latitude`/`longitude` written as null. Third member of the same
+   *  explicit-override family as the two above. */
+  allowInvalidCoordinates?: boolean;
   /** Task 12: mirrors `FacilityImportOptions.format` exactly — which shape `path` is: a national
    *  register CSV or a JSONL release. Default `'csv'`, same as `importFacilities` itself. */
   format?: 'csv' | 'jsonl';
   /** A publisher-supplied release version, recorded on the `facility_import_runs` row an `--apply`
-   *  mints (see below) — pure provenance; `importFacilities` has no `releaseVersion` option of its
-   *  own to pass this to. */
+   *  mints (see below) and passed through to `FacilityImportOptions.releaseVersion`, which defaults
+   *  it from a JSONL release's own `meta.version` when this is omitted. Pure provenance. */
   releaseVersion?: string;
   /** Mirrors `FacilityImportOptions.completeRelease` — see its doc comment. The ONLY thing that
    *  flips `result.absent` from `null` ("not evaluated") to a real count. */
@@ -48,8 +52,9 @@ export interface FacilitiesImportOpts {
 
 /**
  * `openldr facilities import <path> --national-system <sys> [--apply] [--allow-unknown-columns]
- * [--allow-malformed-rows] [--format csv|jsonl] [--release-version <v>] [--complete-release]
- * [--on-deleted retire|report] [--on-absent retire|report] [--on-conflict skip|overwrite] [--json]`
+ * [--allow-malformed-rows] [--allow-invalid-coordinates] [--format csv|jsonl] [--release-version <v>]
+ * [--complete-release] [--on-deleted retire|report] [--on-absent retire|report]
+ * [--on-conflict skip|overwrite] [--json]`
  *
  * Thin CLI wrapper over `@openldr/bootstrap`'s `importFacilities` (Task 2) — the same function
  * Task 4's HTTP route calls, per the repo's CLI-parity rule. This file owns only: reading the file
@@ -114,7 +119,8 @@ export async function runFacilitiesImport(path: string, opts: FacilitiesImportOp
           releaseVersion: opts.releaseVersion ?? null,
           options: {
             nationalSystem: opts.nationalSystem, allowUnknownColumns: !!opts.allowUnknownColumns,
-            allowMalformedRows: !!opts.allowMalformedRows, format: opts.format,
+            allowMalformedRows: !!opts.allowMalformedRows,
+            allowInvalidCoordinates: !!opts.allowInvalidCoordinates, format: opts.format,
             completeRelease: opts.completeRelease, onDeleted: opts.onDeleted, onAbsent: opts.onAbsent,
             onConflict: opts.onConflict,
           },
@@ -131,47 +137,80 @@ export async function runFacilitiesImport(path: string, opts: FacilitiesImportOp
       }
     }
 
-    const result: FacilityImportResult = await importFacilities(
-      // Fix 1 (mapping-ux report): `admin` lets importFacilities project every written row into
-      // FACILITY_REGISTRY_SYSTEM as part of the import — the CLI gets the same immediate-mapping
-      // behaviour as the HTTP route, per the repo's CLI-parity rule.
-      //
-      // ⛔ `facilityJobs` is NOT optional in practice on this path, despite the deps type allowing
-      // its omission. The HTTP import route REFUSES any apply over MAX_INLINE_APPLY_ROWS (2000) and
-      // directs the operator here, so this command is the ONLY way a register of the stated size —
-      // a 14 000-row national register — is ever applied. Without the store, `importFacilities`
-      // skips its enqueue (`if (deps.facilityJobs)`) and the largest import in the product would be
-      // the one write that leaves `facility_map` stale with nothing queued to rebuild it, sending
-      // the operator back to the manual `facilities publish --apply` this slice exists to abolish.
-      { db: ctx.internalDb, capture: referenceCapture, admin: ctx.terminology.admin, facilityJobs: ctx.facilityJobs, logger: ctx.logger },
-      csv,
-      {
-        nationalSystem: opts.nationalSystem, allowUnknownColumns: opts.allowUnknownColumns,
-        allowMalformedRows: opts.allowMalformedRows, apply: opts.apply,
-        format: opts.format, completeRelease: opts.completeRelease,
-        onDeleted: opts.onDeleted, onAbsent: opts.onAbsent, onConflict: opts.onConflict,
-        // ⛔ `previewedAt` is deliberately NOT threaded from `run` here — see the docblock above:
-        // this run's `previewed_at` (were we to complete it) would be set microseconds before this
-        // same call, evaluating a conflict window that cannot contain a real conflict, only ever
-        // reporting `conflict: 0` and asserting a check that means nothing. `runId` still links the
-        // write to its run row for provenance; `conflict` stays `null` — not evaluated — same as
-        // any run-id-less apply through the HTTP route.
-        runId: run?.id ?? null,
-      },
+    // ⛔ Preview FIRST, ALWAYS, and decide the refusals off THAT — never off a call that already
+    // wrote. This function used to call `importFacilities` once with `apply: true` and only then
+    // check whether it should have refused, so a refused file had already been applied by the time
+    // the refusal was printed. That is not merely untidy: a file with an unrecognised column parses
+    // to ZERO records, and an apply carrying zero records used to infer that every registry row for
+    // this register was absent — so `--complete-release --on-absent retire` mass-retired the whole
+    // national register, printed "refused", marked the run failed and skipped the audit. The
+    // importer's own absence guard (packages/bootstrap/src/facility-import.ts) closes that hole at
+    // the source; this ordering closes it here, and mirrors the HTTP route, which likewise decides
+    // its refusals off a preview before ever opening a write.
+    //
+    // Cost: an `--apply` parses and classifies the file TWICE. That is the same shape the route
+    // already pays for its two-step flow, and it is the price of never writing before deciding. A
+    // DRY RUN still makes exactly ONE call — `apply` is undefined there, so this preview IS the run
+    // being reported.
+    // Fix 1 (mapping-ux report): `admin` lets importFacilities project every written row into
+    // FACILITY_REGISTRY_SYSTEM as part of the import — the CLI gets the same immediate-mapping
+    // behaviour as the HTTP route, per the repo's CLI-parity rule.
+    //
+    // ⛔ `facilityJobs` is NOT optional in practice on this path, despite the deps type allowing
+    // its omission. The HTTP import route REFUSES any apply over MAX_INLINE_APPLY_ROWS (2000) and
+    // directs the operator here, so this command is the ONLY way a register of the stated size —
+    // a 14 000-row national register — is ever applied. Without the store, `importFacilities`
+    // skips its enqueue (`if (deps.facilityJobs)`) and the largest import in the product would be
+    // the one write that leaves `facility_map` stale with nothing queued to rebuild it, sending
+    // the operator back to the manual `facilities publish --apply` this slice exists to abolish.
+    const deps = { db: ctx.internalDb, capture: referenceCapture, admin: ctx.terminology.admin, facilityJobs: ctx.facilityJobs, logger: ctx.logger };
+    const importOptions = {
+      nationalSystem: opts.nationalSystem, allowUnknownColumns: opts.allowUnknownColumns,
+      allowMalformedRows: opts.allowMalformedRows,
+      allowInvalidCoordinates: opts.allowInvalidCoordinates,
+      format: opts.format, completeRelease: opts.completeRelease, releaseVersion: opts.releaseVersion,
+      onDeleted: opts.onDeleted, onAbsent: opts.onAbsent, onConflict: opts.onConflict,
+      // ⛔ `previewedAt` is deliberately NOT threaded from `run` here — see the docblock above:
+      // this run's `previewed_at` (were we to complete it) would be set microseconds before this
+      // same call, evaluating a conflict window that cannot contain a real conflict, only ever
+      // reporting `conflict: 0` and asserting a check that means nothing. `runId` still links the
+      // write to its run row for provenance; `conflict` stays `null` — not evaluated — same as
+      // any run-id-less apply through the HTTP route.
+      runId: run?.id ?? null,
+    };
+
+    // `apply: opts.apply` on this first call, NOT a hardcoded `false`: on a dry run `opts.apply` is
+    // falsy, so this IS the single call the command makes and the result it reports; on an
+    // `--apply` it is deliberately overridden to a preview below, and the real write only happens
+    // once every refusal check has passed.
+    const preview: FacilityImportResult = await importFacilities(
+      deps, csv, opts.apply ? { ...importOptions, apply: undefined } : importOptions,
     );
 
+    // ⚠ FORMAT-AWARE, and that is the fix for the CLI/JSONL contradiction. `parseFacilityRelease`
+    // never blocks on an unrecognised key — each JSONL line is a self-describing object, the key is
+    // captured into `extras`, and `allowUnknownColumns` is a documented no-op for that format — yet
+    // this refusal fired regardless of format, so a JSONL release that grew a field was rejected
+    // HERE while the HTTP route accepted the identical file. Since the route caps an inline apply at
+    // MAX_INLINE_APPLY_ROWS and points larger registers at this command, that made a national-scale
+    // release with one new key unapplicable by any path at all. For CSV the refusal stands exactly
+    // as before: there, `records` really is empty (`parsed: 0`) and an unrecognised header can shift
+    // every subsequent column.
+    const refusedForUnknownColumns =
+      opts.format !== 'jsonl' && preview.unknownColumns.length > 0 && !opts.allowUnknownColumns;
+
     // Refuse loudly and name the columns rather than let the caller read a generic all-zero
-    // summary and wonder why nothing happened — see facility-csv.ts: unknownColumns non-empty
-    // without allowUnknownColumns means the parser already blocked the whole file (parsed: 0).
-    if (result.unknownColumns.length > 0 && !opts.allowUnknownColumns) {
+    // summary and wonder why nothing happened. For CSV — the only format this can fire for, see
+    // `refusedForUnknownColumns` above — `parseFacilityCsv` returned `records: []`, so `parsed` is 0.
+    if (refusedForUnknownColumns) {
       if (run) {
-        await finishRun(importRuns, run.id, 'failed', `refused: unrecognised column(s): ${result.unknownColumns.join(', ')}`);
+        await finishRun(importRuns, run.id, 'failed', `refused: unrecognised column(s): ${preview.unknownColumns.join(', ')}`);
       }
       if (opts.json) {
-        process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+        process.stdout.write(JSON.stringify(preview, null, 2) + '\n');
       } else {
         process.stderr.write(
-          `facilities import refused: unrecognised column(s) in ${path}: ${result.unknownColumns.join(', ')}\n` +
+          `facilities import refused: unrecognised column(s) in ${path}: ${preview.unknownColumns.join(', ')}\n` +
             `rerun with --allow-unknown-columns to import anyway (they will be carried into each row's extras)\n`,
         );
       }
@@ -190,31 +229,38 @@ export async function runFacilitiesImport(path: string, opts: FacilitiesImportOp
     // with whether the file was actually written. `blockedReason` picks which explanation to print
     // — duplicate headers have no override, so telling an operator to pass --allow-malformed-rows
     // would be pointing at a switch that cannot help them.
-    if (result.blocked) {
+    if (preview.blocked) {
       if (run) {
-        const reason = result.blockedReason === 'duplicate-columns'
-          ? `refused: duplicate column header(s): ${result.duplicateColumns.join(', ')}`
-          : `refused: ${result.quarantined.length} row(s) quarantined`;
+        const reason = preview.blockedReason === 'duplicate-columns'
+          ? `refused: duplicate column header(s): ${preview.duplicateColumns.join(', ')}`
+          : `refused: ${preview.quarantined.length} row(s) quarantined`;
         await finishRun(importRuns, run.id, 'failed', reason);
       }
       if (opts.json) {
-        process.stdout.write(JSON.stringify(result, null, 2) + '\n');
-      } else if (result.blockedReason === 'duplicate-columns') {
+        process.stdout.write(JSON.stringify(preview, null, 2) + '\n');
+      } else if (preview.blockedReason === 'duplicate-columns') {
         process.stderr.write(
-          `facilities import refused: duplicate column header(s) in ${path}: ${result.duplicateColumns.join(', ')}\n` +
+          `facilities import refused: duplicate column header(s) in ${path}: ${preview.duplicateColumns.join(', ')}\n` +
             'which of two identically-named columns wins is arbitrary, so there is no override — ' +
             'remove or rename the duplicate(s) and re-run\n',
         );
       } else {
-        for (const row of result.quarantined) {
+        for (const row of preview.quarantined) {
           process.stderr.write(`line ${row.line}: ${row.reason} — ${row.raw}\n`);
         }
         process.stderr.write(
-          `${result.quarantined.length} row(s) quarantined; re-run with --allow-malformed-rows to import the rest\n`,
+          `${preview.quarantined.length} row(s) quarantined; re-run with --allow-malformed-rows to import the rest\n`,
         );
       }
       return 1;
     }
+
+    // Every refusal has now passed, so — and only so — does the write run. A dry run reuses the
+    // preview above verbatim: `apply` was already falsy on that call, so there is nothing left for a
+    // second one to do.
+    const result: FacilityImportResult = opts.apply
+      ? await importFacilities(deps, csv, { ...importOptions, apply: true })
+      : preview;
 
     // A dry run writes nothing, so it has nothing to audit — only an applied import is recorded.
     if (opts.apply) {
@@ -224,7 +270,8 @@ export async function runFacilitiesImport(path: string, opts: FacilitiesImportOp
         entityId: opts.nationalSystem,
         metadata: {
           path, nationalSystem: opts.nationalSystem, allowUnknownColumns: !!opts.allowUnknownColumns,
-          allowMalformedRows: !!opts.allowMalformedRows, result,
+          allowMalformedRows: !!opts.allowMalformedRows,
+          allowInvalidCoordinates: !!opts.allowInvalidCoordinates, result,
         },
       });
       if (run) await finishRun(importRuns, run.id, 'applied', null, result);
@@ -263,7 +310,7 @@ async function finishRun(
   }
 }
 
-// ⚠ Reads `written.created`/`written.updated` — what the import actually WROTE — AND
+// ⚠ Reads `written.created`/`written.updated`/`written.retired` — what the import actually WROTE — AND
 // `create`/`changed`/`unchanged`/`conflict`/`absent` — what the file WOULD do / what was compared
 // against the registry, computed on EVERY call per FAC-P1-03. `conflict`/`absent` print as "not
 // evaluated" whenever they are `null`, never `0` — that distinction (a measurement never taken vs. a
@@ -273,7 +320,10 @@ function formatHuman(result: FacilityImportResult, opts: FacilitiesImportOpts): 
   const lines: string[] = [];
   lines.push(
     opts.apply
-      ? `applied: created ${result.written.created}, updated ${result.written.updated}`
+      // ⛔ `retired` is printed alongside created/updated because it is a MUTATION this command
+      // performed, and `--on-absent retire`/`--on-deleted retire` previously left an operator with
+      // an `absent` count and no confirmation of what was actually done about it.
+      ? `applied: created ${result.written.created}, updated ${result.written.updated}, retired ${result.written.retired}`
       : `DRY RUN — nothing written. Rerun with --apply to write.`,
   );
   lines.push(`parsed ${result.parsed} row(s), skipped ${result.skipped}`);
@@ -284,8 +334,46 @@ function formatHuman(result: FacilityImportResult, opts: FacilitiesImportOpts): 
       + `conflict ${conflictText}, absent ${absentText}`,
   );
   if (result.deleted > 0) lines.push(`deleted ${result.deleted}`);
+  // 🟠 Important 3: `invalid` reached NO human-facing consumer — a row rejected for a bad coordinate
+  // vanished from this output entirely and was visible only under --json. Line numbers are bounded
+  // the same way the quarantine listing above is bounded by the file's own row count: this prints
+  // at most the first few and says how many there are in total.
+  if (result.invalid.length > 0) {
+    const lineNumbers = [...new Set(result.invalid.map((e) => e.line))];
+    const shown = lineNumbers.slice(0, INVALID_LINES_SHOWN).join(', ');
+    const more = lineNumbers.length > INVALID_LINES_SHOWN ? `, … (+${lineNumbers.length - INVALID_LINES_SHOWN} more)` : '';
+    lines.push(
+      // "error(s)" not "row(s)": facility-csv.ts pushes one RowError PER FIELD, so a row with both
+      // coordinates rejected contributes two entries (see `FacilityImportResult.invalid`).
+      `${result.invalid.length} coordinate error(s) on line(s) ${shown}${more}`
+        + (opts.allowInvalidCoordinates
+          ? ' — imported anyway with no coordinate (--allow-invalid-coordinates)'
+          : ' — those rows were NOT imported; re-run with --allow-invalid-coordinates to import them without a coordinate'),
+    );
+  }
   if (result.unknownColumns.length > 0) {
-    lines.push(`unknown columns allowed through --allow-unknown-columns (carried into extras): ${result.unknownColumns.join(', ')}`);
+    // Format-aware, matching the refusal above: for JSONL these keys were never a refusal at all —
+    // they are captured into `extras` regardless — so naming an override that has no effect on that
+    // format would be pointing the operator at a switch that does nothing.
+    lines.push(opts.format === 'jsonl'
+      ? `unrecognised key(s) carried into extras: ${result.unknownColumns.join(', ')}`
+      : `unknown columns allowed through --allow-unknown-columns (carried into extras): ${result.unknownColumns.join(', ')}`);
+  }
+  for (const m of result.countMismatch) {
+    lines.push(`WARNING: the release declares ${m.declared} ${m.field === 'rowCount' ? 'row(s)' : 'deletion(s)'}, ${m.parsed} parsed`);
+  }
+  // FAC-P1-05: a source value with no mapping is NEVER blocked and NEVER blanked — it is written
+  // raw, exactly as before this layer existed. This is the warning that says so.
+  for (const field of Object.keys(result.unmapped) as (keyof typeof result.unmapped)[]) {
+    const values = result.unmapped[field];
+    if (values.length === 0) continue;
+    lines.push(
+      `${values.length} unmapped ${field} value(s) written as-is: ${values.slice(0, UNMAPPED_VALUES_SHOWN).join(', ')}`
+        + (values.length > UNMAPPED_VALUES_SHOWN ? `, … (+${values.length - UNMAPPED_VALUES_SHOWN} more)` : ''),
+    );
+  }
+  if (result.notValidated.length > 0) {
+    lines.push(`not validated (no canonical value set on this install): ${result.notValidated.join(', ')}`);
   }
   if (result.duplicates > 0) {
     lines.push(
@@ -294,6 +382,12 @@ function formatHuman(result: FacilityImportResult, opts: FacilitiesImportOpts): 
   }
   return lines.join('\n');
 }
+
+/** How many distinct line numbers / raw values the two listings above print before summarising the
+ *  rest as a count. A 14 000-row national register can carry thousands of either, and a terminal is
+ *  not where that list belongs — `--json` carries every entry. */
+const INVALID_LINES_SHOWN = 10;
+const UNMAPPED_VALUES_SHOWN = 10;
 
 // ── Task 12: `openldr facilities import-runs` / `import-run <id>` ─────────────────────────────
 //

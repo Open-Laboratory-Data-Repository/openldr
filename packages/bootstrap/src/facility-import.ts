@@ -1,7 +1,7 @@
 import { type Kysely, sql } from 'kysely';
 import {
   parseFacilityCsv, parseFacilityRelease,
-  type FacilityReleaseResult, type QuarantinedRow, type RowError,
+  type FacilityReleaseResult, type FacilityReleaseMeta, type QuarantinedRow, type RowError,
 } from '@openldr/terminology';
 import {
   type FacilityRecord,
@@ -14,6 +14,10 @@ import {
 } from '@openldr/db';
 import { classifyFacilityRows, type ClassifiedRow, type ExistingFacility } from './facility-classify';
 import { projectRegistryRows, retireRegistryConcepts } from './facility-reconcile';
+import {
+  CONTROLLED_FIELDS, applyControlledFields, resolveControlledFields,
+  type ControlledField, type ControlledResolution,
+} from './facility-controlled-fields';
 
 // Task 2 of the facility-import slice: `parseFacilityCsv` (packages/terminology) exists, is tested,
 // and has ZERO callers — this is the one shared function that actually writes a parsed register into
@@ -50,12 +54,14 @@ export interface FacilityImportOptions {
   /** Which shape `input` is: a national register CSV (`parseFacilityCsv`, packages/terminology) or a
    *  JSONL release (`parseFacilityRelease`, facility-release.ts). Default `'csv'`. Both parsers return
    *  the same `records`/`invalid`/`quarantined`/`skipped` shape, so everything downstream of parsing
-   *  — classification, the write, the samples — is unaffected by which one ran; JSONL additionally
-   *  yields `meta`/`deletions`/`countMismatch`, of which only `deletions` (national codes the
-   *  publisher explicitly declared removed) feeds into this function, via `result.deleted` below. */
+   *  — classification, the write, the samples — is unaffected by which one ran. JSONL additionally
+   *  yields `meta`/`deletions`/`countMismatch`: only `deletions` (national codes the publisher
+   *  explicitly declared removed) is ACTED on, via `result.deleted` and the retirement policy below;
+   *  `meta`/`countMismatch` are reported straight through onto the result as provenance. */
   format?: 'csv' | 'jsonl';
-  /** The file is a COMPLETE release of this register. Only then can a row's absence mean anything;
-   *  otherwise `absent` is reported as `null`. */
+  /** The file is a COMPLETE release of this register. NECESSARY, but not sufficient, for a row's
+   *  absence to mean anything: absence is also only evaluated when the file actually produced
+   *  records (see the absence query below). `absent` is `null` — NOT EVALUATED — otherwise. */
   completeRelease?: boolean;
   /** What to do with rows the publisher explicitly declared removed (a JSONL `{"type":"deletion"}`
    *  record — see `format` above; always `[]` for CSV, which has no way to express a removal). Default
@@ -73,6 +79,21 @@ export interface FacilityImportOptions {
    *  `allowUnknownColumns` above so a problem file has exactly one idiom for proceeding anyway.
    *  There is no equivalent override for duplicate headers: see `duplicateColumns` below. */
   allowMalformedRows?: boolean;
+  /** Import a row whose coordinate failed validation anyway, with BOTH `latitude` and `longitude`
+   *  written as `null` — the third member of the `allowUnknownColumns`/`allowMalformedRows` family,
+   *  and the escape hatch the design spec's validation section calls for. Without it a row carrying
+   *  `latitude: "N/A"` is dropped from `records` entirely, which loses the facility AND (on a
+   *  `completeRelease` import with `onAbsent: 'retire'`) makes a live facility look absent.
+   *
+   *  ⛔ Both halves go to `null`, never just the offending one: a lone latitude is not a location
+   *  (see `coordinatePair` in facility-csv.ts), so keeping half a pair would write a coordinate the
+   *  file never expressed. The row's errors are still reported in `FacilityImportResult.invalid`
+   *  either way — the override changes whether the row is DROPPED, never whether it is REPORTED. */
+  allowInvalidCoordinates?: boolean;
+  /** A publisher-supplied release version, echoed back on `FacilityImportResult.releaseVersion`.
+   *  Omitted ⇒ defaulted from a JSONL release's own `meta.version` when it declares one (pure
+   *  provenance: nothing in this function branches on it). */
+  releaseVersion?: string | null;
   /** The caller opts IN to writing. Omitted/false ⇒ dry run: parse and report, write NOTHING. A
    *  14 000-row register is exactly the kind of file nobody should be able to silently rewrite by
    *  forgetting a flag. */
@@ -125,9 +146,15 @@ export interface FacilityImportResult {
   parsed: number;
   /** Rows dropped for missing a required field. */
   skipped: number;
-  /** Columns the contract does not define. Non-empty AND `allowUnknownColumns` was not set ⇒
-   *  `parsed`/`skipped` are both 0 — the parser blocks the whole file rather than importing it
-   *  missing data (see facility-csv.ts's docblock). */
+  /** Keys/columns the contract does not define.
+   *
+   *  ⚠ FORMAT-DEPENDENT, and an earlier version of this comment asserted only the CSV half. For
+   *  `format: 'csv'`, non-empty AND `allowUnknownColumns` unset ⇒ `parsed`/`skipped` are both 0:
+   *  an unrecognised header can shift every subsequent column, so `parseFacilityCsv` blocks the
+   *  whole file. For `format: 'jsonl'` this is INFORMATIONAL ONLY — `parseFacilityRelease` never
+   *  blocks on it and `allowUnknownColumns` is a no-op there, because each line is a self-describing
+   *  object whose unrecognised keys are captured into `extras` and cannot corrupt another field
+   *  (see `parseFacilityRelease`'s docblock). */
   unknownColumns: string[];
   /** Headers appearing more than once (see facility-csv.ts's `duplicateColumns`). Non-empty ⇒
    *  `apply` is always blocked — there is no override, unlike `quarantined` below: which of two
@@ -143,9 +170,11 @@ export interface FacilityImportResult {
    *  separate `RowError` for latitude and for longitude, so a row with both coordinates rejected
    *  contributes TWO entries here — `invalid.length` is an error count, not a row count. Distinct
    *  from `skipped` (a missing REQUIRED value) and from `quarantined` (a field count disagreeing
-   *  with the header's): a row here was otherwise well-formed. Excluded from `records` by the
-   *  parser, so it is counted in NO bucket below — this array is the only place it is visible at
-   *  all. */
+   *  with the header's): a row here was otherwise well-formed. Without
+   *  `FacilityImportOptions.allowInvalidCoordinates` the row is excluded from `records` by the
+   *  parser, so it is counted in NO bucket below and this array is the only place it is visible at
+   *  all; WITH the override the row is imported (both coordinates `null`) and therefore also lands
+   *  in `create`/`changed`/`unchanged` — reporting here is unconditional either way. */
   invalid: RowError[];
   /** How many accepted rows shared a `national_code` (and therefore a generated `id`) with another
    *  row later in the same file — last row wins, matching what a per-row `store.upsert` loop would
@@ -200,10 +229,13 @@ export interface FacilityImportResult {
    *  declared removed (see `deleted` below); those two buckets are disjoint, so `absent` never
    *  double-reports what `deleted` already accounts for.
    *
-   *  ⛔ `null` means NOT EVALUATED, never "none". `null` unless `opts.completeRelease` — for a
-   *  partial district register, a row's absence means nothing at all, so counting it as `0` would
-   *  assert a measurement (every registry row for this system was checked against the file) that a
-   *  partial file cannot support. */
+   *  ⛔ `null` means NOT EVALUATED, never "none", and there are TWO ways to get it. Without
+   *  `opts.completeRelease`: for a partial district register, a row's absence means nothing at all,
+   *  so counting it as `0` would assert a measurement (every registry row for this system was
+   *  checked against the file) that a partial file cannot support. And when the file produced NO
+   *  records: an empty parse is evidence the file did not parse, never evidence that every facility
+   *  is gone — see the absence query for the register-wide retirement that reading it the other way
+   *  caused. */
   absent: number | null;
   /** Rows the PUBLISHER explicitly declared removed (a JSONL `deletion` record — see
    *  `FacilityImportOptions.format`) AND that matched a row this registry actually holds for this
@@ -230,8 +262,14 @@ export interface FacilityImportResult {
    *  reads the wrong number. Nesting makes the two vocabularies impossible to confuse at a call
    *  site. Every consumer (route, studio, CLI) reads `written.created`, never `created`.
    *
-   *  Both 0 on a preview — now because nothing was WRITTEN, not because nothing was computed. */
-  written: { created: number; updated: number };
+   *  All 0 on a preview — now because nothing was WRITTEN, not because nothing was computed.
+   *
+   *  `retired` is how many registry rows this apply actually flipped to `'inactive'` (and removed
+   *  from the mapping picker via `retireRegistryConcepts`) — the MUTATION, as distinct from the
+   *  `deleted`/`absent` populations above, which are what the file DESCRIBES. The two differ
+   *  whenever policy says so: `onAbsent: 'report'` (the default) reports a non-zero `absent` and
+   *  retires none of it. */
+  written: { created: number; updated: number; retired: number };
   /** Whatever `FacilityImportOptions.runId` carried in, echoed back so a caller that resolved a run
    *  can attach this result to it without threading the id through itself. Null when none was
    *  supplied — this function never invents or looks one up. */
@@ -242,6 +280,39 @@ export interface FacilityImportResult {
    *  ⛔ Owned by the ROUTE (Task 10), which is what actually asks that question; `importFacilities`
    *  has no basis for it and reports the neutral `true`. */
   knownNationalSystem: boolean;
+
+  // ── The release header, and what it declares (FAC-P1-03) ──────────────────────────────────────
+  //
+  // `parseFacilityRelease` computed all three of these and nothing read them, so migration 080's
+  // `declared_row_count`/`declared_deletion_count`/`release_published_at` columns were provisioned
+  // and never written. Threaded here so a caller — the CLI's output, the route's run row — can
+  // report them. `importFacilities` itself branches on NONE of them.
+
+  /** A JSONL release's `meta` line, verbatim. Always `null` for CSV, which has no release header. */
+  meta: FacilityReleaseMeta | null;
+  /** Where `meta`'s declared counts disagree with what was actually parsed — e.g. "the release
+   *  declares 13 000 rows, we parsed 12 998". Reported, NEVER fatal (see
+   *  `FacilityReleaseResult.countMismatch`). Always `[]` for CSV. */
+  countMismatch: FacilityReleaseResult['countMismatch'];
+  /** `FacilityImportOptions.releaseVersion` when the caller supplied one, otherwise the release's
+   *  own `meta.version`, otherwise null. Provenance only. */
+  releaseVersion: string | null;
+
+  // ── Controlled fields (FAC-P1-05) ─────────────────────────────────────────────────────────────
+
+  /** Per controlled field (`level`/`status`/`country`), the DISTINCT raw source values that resolved
+   *  to no canonical code — no `term_mappings` mapping, or only a deactivated one, and not already a
+   *  member of the field's value set.
+   *
+   *  ⛔ A WARNING, never a block. The raw value is still written to the column exactly as it was
+   *  before this layer existed (see `applyControlledFields`) — this whole path is a strict superset
+   *  of the previous behaviour plus these counts. */
+  unmapped: Record<ControlledField, string[]>;
+  /** Controlled fields whose canonical value set is not seeded on this install, so no value of
+   *  theirs could be classified mapped/unmapped at all. Also ALL THREE fields when the caller
+   *  omitted `deps.admin`, since there is then no terminology store to resolve against — reported
+   *  rather than thrown, matching how every other optional dep on `FacilityImportDeps` degrades. */
+  notValidated: ControlledField[];
 }
 
 // Bounds `loadExisting`'s chunked `WHERE id IN (...)` lookup — the only chunked query this module
@@ -259,6 +330,15 @@ const CHUNK = 5000;
  *  13 000 rows into one bucket and this result is returned over HTTP and stored in an audit
  *  event's `metadata` — the complete classified set belongs in a downloadable artefact, not here. */
 const SAMPLE_LIMIT = 50;
+
+/** `{ level: [], status: [], country: [] }` — the shape `FacilityImportResult.unmapped` always
+ *  carries, so a consumer can index any controlled field without a presence check even on the path
+ *  where no resolution ran at all (`deps.admin` omitted). */
+function emptyUnmapped(): Record<ControlledField, string[]> {
+  const out = {} as Record<ControlledField, string[]>;
+  for (const field of CONTROLLED_FIELDS) out[field] = [];
+  return out;
+}
 
 function chunk<T>(items: T[], size: number): T[][] {
   const out: T[][] = [];
@@ -386,8 +466,11 @@ function dedupeById(records: FacilityRecord[]): { records: FacilityRecord[]; dup
  *
  * `managed_origin` is never set here — it stays NULL on every imported row (see facility-csv.ts's
  * docblock: the sync APPLIER stamps `'central'` on arrival, not an authoring path like this one).
- * Rows absent from the CSV are never touched, let alone deleted — an incomplete export must not orphan
- * a facility's aliases.
+ * Rows absent from the file are never DELETED — nothing in this function issues a DELETE against
+ * `facility_registry`. They are not touched at all unless the caller both declares the file a
+ * `completeRelease` and asks for `onAbsent: 'retire'`, in which case they are flipped to
+ * `'inactive'` (never deleted, so a facility's aliases and history survive). ⛔ And not even then if
+ * the file produced no records — see the absence query below.
  *
  * ## What a re-import is, and is not, authoritative for
  *
@@ -443,7 +526,11 @@ export async function importFacilities(
   // everything below (dedupe, blocking, classification, the write) runs identically regardless of
   // which parser produced it. The one thing only a JSONL release carries is `deletions`, read below.
   const isRelease = opts.format === 'jsonl';
-  const parseOpts = { nationalSystem: opts.nationalSystem, allowUnknownColumns: opts.allowUnknownColumns };
+  const parseOpts = {
+    nationalSystem: opts.nationalSystem,
+    allowUnknownColumns: opts.allowUnknownColumns,
+    allowInvalidCoordinates: opts.allowInvalidCoordinates,
+  };
   const parsed = isRelease ? parseFacilityRelease(input, parseOpts) : parseFacilityCsv(input, parseOpts);
   const { records: parsedRecords, unknownColumns, duplicateColumns, quarantined, skipped, invalid } = parsed;
   // Publisher-declared removals. `[]` for CSV — `FacilityCsvResult` has no `deletions` field, a CSV
@@ -457,9 +544,38 @@ export async function importFacilities(
   // `isRelease` condition that decided which parser actually ran immediately above, so it cannot
   // disagree with reality.
   const deletions: string[] = isRelease ? (parsed as FacilityReleaseResult).deletions : [];
+  // Guarded by the same `isRelease` condition as `deletions` above, and for the same reason (see
+  // that cast's comment). Neither is read by anything in this function — both are pure provenance,
+  // threaded onto the result so the CLI's output and the route's run row can report what the
+  // publisher declared versus what actually parsed.
+  const meta: FacilityReleaseMeta | null = isRelease ? (parsed as FacilityReleaseResult).meta : null;
+  const countMismatch: FacilityReleaseResult['countMismatch'] =
+    isRelease ? (parsed as FacilityReleaseResult).countMismatch : [];
+  const releaseVersion = opts.releaseVersion ?? meta?.version ?? null;
   // Collapse same-id rows (a repeated national_code within one file) BEFORE anything downstream
   // ever sees them — see dedupeById's docblock for why this can't wait until insertBatchPg.
-  const { records, duplicates } = dedupeById(parsedRecords);
+  const { records: dedupedRecords, duplicates } = dedupeById(parsedRecords);
+
+  // FAC-P1-05: rewrite each record's controlled fields (`level`/`status`/`country`) to the canonical
+  // codes the facility FORM is already bound to, preserving every raw source value under the
+  // reserved `extras.__source` key — see facility-controlled-fields.ts.
+  //
+  // ⛔ Runs on the PREVIEW path too, and BEFORE classification, for two reasons: the operator must
+  // see the `unmapped` warning before deciding to apply, and the merged row a preview classifies has
+  // to be the row an apply would actually write — classifying the raw string against a registry
+  // holding the canonical code would report a spurious `changed`.
+  //
+  // ⚠ `deps.admin` is optional (see `FacilityImportDeps`), so a caller that omitted it gets no
+  // resolution at all rather than a throw: every field is reported `notValidated` and every record
+  // passes through untouched, exactly as it did before this layer existed.
+  const controlled: ControlledResolution | null = deps.admin
+    ? await resolveControlledFields(deps.admin, opts.nationalSystem, dedupedRecords)
+    : null;
+  const records = controlled === null
+    ? dedupedRecords
+    : dedupedRecords.map((r) => applyControlledFields(r, controlled));
+  const unmapped = controlled?.unmapped ?? emptyUnmapped();
+  const notValidated = controlled?.notValidated ?? [...CONTROLLED_FIELDS];
 
   // Structural damage BLOCKS apply. `allowMalformedRows` is the explicit "I have seen the line
   // numbers, import the rest" override — the same shape as `allowUnknownColumns` above, so a file
@@ -510,12 +626,29 @@ export async function importFacilities(
   // ALSO satisfy "not in `ids`" below and get double-reported as an INFERRED absence, contradicting
   // the fact the publisher already stated outright. `deleted` and `absent` must stay disjoint
   // populations — that distinction is the entire point of this task.
+  //
+  // ⛔ ALSO guarded on `records.length > 0`, and that guard is the whole of Critical 1. Absence is
+  // an inference drawn from a file MENTIONING some rows and not others; a file that produced NO
+  // records at all is not evidence that every facility is absent, it is evidence the file did not
+  // parse. Three routine shapes reach `records: []` — an unrecognised column without
+  // `allowUnknownColumns`, duplicate headers, and a truncated download that kept only its header
+  // line — and without this guard every one of them made `excludedFromAbsence` empty, so the query
+  // below matched the ENTIRE register for this `nationalSystem` and (with `onAbsent: 'retire'`)
+  // flipped all of it to `'inactive'`. Measured: two of two rows retired by a headers-only file.
+  // `null` here is the honest answer — NOT EVALUATED, per this field's contract — not `0`.
+  //
+  // ⚠ A publisher's DECLARED deletions are unaffected: `deletedIds` is computed from `deletions`
+  // above, entirely independently of this query, so a deletions-only JSONL release still retires
+  // exactly what it names.
   const excludedFromAbsence = [...ids, ...deletedIds];
-  const absentRows = !opts.completeRelease ? null : await deps.db
+  const absentRows = (!opts.completeRelease || records.length === 0) ? null : await deps.db
     .selectFrom('facility_registry')
     .select(['id', 'national_code', 'name'])
     .where('national_system', '=', opts.nationalSystem)
-    .where('id', 'not in', excludedFromAbsence.length > 0 ? excludedFromAbsence : [''])
+    // Never empty on this branch: `records.length > 0` ⇒ `ids.length > 0` ⇒ this is non-empty. (The
+    // `['']` placeholder that used to guard an empty list here is gone with the guard that made it
+    // reachable — keeping it would only preserve the shape of the bug.)
+    .where('id', 'not in', excludedFromAbsence)
     .execute();
 
   // Defaults are asymmetric on purpose (see `FacilityImportOptions`' doc comments): a publisher's
@@ -526,15 +659,20 @@ export async function importFacilities(
   // Disjoint by construction (`deletedIds` is excluded from the `absentRows` query above), so this
   // never needs deduplicating — a `Set` would only be defending against a bug the query already rules
   // out.
+  //
+  // ⚠ No `opts.completeRelease` conjunct on the second line: `absentRows` is already `null` without
+  // it (see the query above), so re-checking it was a dead conjunct asserting a condition the value
+  // it guards already encodes — and, worse, a second place the "when may absence be acted on?" rule
+  // would have to be kept in step.
   const retiredIds = [
     ...(onDeleted === 'retire' ? deletedIds : []),
-    ...(opts.completeRelease && onAbsent === 'retire' && absentRows ? absentRows.map((r) => r.id) : []),
+    ...(onAbsent === 'retire' && absentRows ? absentRows.map((r) => r.id) : []),
   ];
 
   /** Shape a classification into the reported result. `written` is the caller's to supply: it is the
    *  ONE thing the two paths genuinely disagree about. */
   const resultOf = (
-    classified: ClassifiedRow[], written: { created: number; updated: number },
+    classified: ClassifiedRow[], written: FacilityImportResult['written'],
   ): FacilityImportResult => {
     const { counts, samples } = summarise(classified);
     return {
@@ -553,6 +691,8 @@ export async function importFacilities(
       runId: opts.runId ?? null,
       // Owned by the route (Task 10) — see the field's doc comment. Nothing here can answer it.
       knownNationalSystem: true,
+      meta, countMismatch, releaseVersion,
+      unmapped, notValidated,
     };
   };
 
@@ -570,11 +710,17 @@ export async function importFacilities(
     // condition such a file would take this read-only shortcut on every `apply: true` call and never
     // retire anything.
     const existing = records.length === 0 ? new Map<string, ExistingFacility>() : await loadExisting(deps.db, ids);
-    return resultOf(classifyFacilityRows(records, existing, { previewedAt }), { created: 0, updated: 0 });
+    return resultOf(
+      classifyFacilityRows(records, existing, { previewedAt }),
+      // ⛔ `retired: 0` on a DRY RUN even when `retiredIds` is non-empty. A preview REPORTS the
+      // retirable populations (`deleted`/`absent`) and performs none of it — `written` describes
+      // mutations that happened, and on this branch none did.
+      { created: 0, updated: 0, retired: 0 },
+    );
   }
 
   let classified: ClassifiedRow[] = [];
-  const written = { created: 0, updated: 0 };
+  const written: FacilityImportResult['written'] = { created: 0, updated: 0, retired: 0 };
   // Populated inside the transaction below, read afterwards to drive the registry projection —
   // see the projectRegistryRows call after the transaction commits for why that has to happen
   // outside it.
@@ -665,6 +811,7 @@ export async function importFacilities(
         .where('id', 'in', retiredIds)
         .execute();
       await retireRegistryConcepts({ internalDb: trx }, retiredIds);
+      written.retired = retiredIds.length;
     }
   });
 
@@ -678,6 +825,14 @@ export async function importFacilities(
   // keeps a re-import able to repair a projection that failed the first time. Only `conflict` rows
   // are excluded — see where `mergedRecords` is built.
   //
+  // ⛔ Rows this apply just RETIRED are excluded. A JSONL release may carry both a `row` and a
+  // `deletion` for the same national code, which puts that id in `mergedRecords` AND in
+  // `retiredIds`; since this projection runs AFTER the transaction committed, it would re-publish
+  // the very concept `retireRegistryConcepts` retired inside it, undoing the retirement in the
+  // mapping picker while `facility_registry.status` stayed `'inactive'`. Filtering here (rather
+  // than where `mergedRecords` is built) keeps the WRITE set and the PROJECTION set independent:
+  // a retired id may still legitimately have been written as a row above.
+  //
   // ⚠ Its `boolean` ("did this projection land") is DELIBERATELY ignored here, and that is a known
   // gap, not an oversight: unlike the create/update routes there is no per-facility retry channel on
   // this path — a failure covers the whole imported batch at once, `ImportResult` has no field to
@@ -685,7 +840,13 @@ export async function importFacilities(
   // import whose projection fails still reports plain success, exactly as before this return value
   // existed; the operator's repair remains pressing Publish (`publishRegistryConcepts`), and the only
   // record of the failure is `projectRegistryRows`' own `console.error`.
-  if (deps.admin) await projectRegistryRows({ internalDb: deps.db, admin: deps.admin }, mergedRecords);
+  if (deps.admin) {
+    const retiredSet = new Set(retiredIds);
+    const toProject = retiredSet.size === 0
+      ? mergedRecords
+      : mergedRecords.filter((r) => !retiredSet.has(r.id));
+    await projectRegistryRows({ internalDb: deps.db, admin: deps.admin }, toProject);
+  }
 
   // Task 5: the write above just committed, so the report-facing `facility_map` dimension is now
   // stale — enqueue a rebuild rather than running one inline here (see facilities-routes.ts's
