@@ -432,6 +432,14 @@ whole-package runs.
   cancellation that has not happened.
 - **`conflict` over-reports.** Any concurrent touch flags the row, not only a materially conflicting
   one.
+- ⛔ **An abandoned preview would have locked its register permanently, and this document did not say
+  so.** `active_key` is set by `startPreview` and cleared only by `finishApply`; nothing expires it.
+  So "preview, then decide not to proceed" — the most ordinary abandon path in any preview UI — would
+  have 409'd that register forever, short of a database reset. This was an **unnoticed gap, not an
+  accepted limit**: it is recorded here because a reviewer correctly observed that the limits below
+  named cancel-during-apply but never this. Closed in the route during implementation: a new preview
+  **supersedes** a run still in `previewed` state (one retry, never any other state). A full
+  cancel/expire surface remains A2b's.
 - **Unmapped controlled values do not block an import.** They are counted and listed; the raw value
   is written. A deployment that never authors mappings gets exactly today's behaviour plus a warning.
 - **The seeded `level` vocabulary is Tanzania's HFR list (63 codes).** That is what migration 072
