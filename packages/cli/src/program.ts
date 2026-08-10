@@ -25,7 +25,7 @@ import { runSyncStatus, runSyncNow, runSyncEnroll, runSyncList, runSyncRotate, r
 import { runErrorsList } from './errors';
 import {
   runFacilitiesImport, runFacilitiesScanObserved, runFacilitiesPublish, runFacilitiesConflicts, runFacilitiesJobs,
-  runFacilitiesImportRuns, runFacilitiesImportRun,
+  runFacilitiesImportRuns, runFacilitiesImportRun, runFacilitiesImportRunCancel,
 } from './facilities';
 import { setActorOverride } from './cli-actor';
 
@@ -290,6 +290,19 @@ export function buildProgram(): Command {
     .option('--json', 'emit machine-readable JSON', false)
     .action(async (id: string, opts: { json: boolean }) => {
       process.exitCode = await runFacilitiesImportRun(id, opts);
+    });
+  // A2b Task 9: CLI parity for `POST /api/facilities/import/runs/:id/cancel`.
+  //
+  // ⛔ A SIBLING of `import-run <id>`, not a `import-run cancel <id>` subcommand. MEASURED: commander
+  // parses a parent's declared options before dispatching to a subcommand, and `import-run` declares
+  // `--json`, so nesting this under it would have the parent swallow `--json` and hand the cancel
+  // handler `json: false`. See `runFacilitiesImportRunCancel`'s doc comment.
+  facilities
+    .command('import-run-cancel <id>')
+    .description('Ask a facility import run to stop. Reports what ACTUALLY happened — a cancelled run (exit 0) vs a cancellation merely requested of a running worker, which may still finish applied (exit 2); 3 = no such run, 4 = already finished.')
+    .option('--json', 'emit machine-readable JSON', false)
+    .action(async (id: string, opts: { json: boolean }) => {
+      process.exitCode = await runFacilitiesImportRunCancel(id, opts);
     });
   facilities
     .command('scan-observed')

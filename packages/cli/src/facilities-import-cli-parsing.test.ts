@@ -31,6 +31,15 @@ const mocks = vi.hoisted(() => ({
   // above, for the same reason — see the describe block at the bottom of this file.
   runFacilitiesImportRuns: vi.fn().mockResolvedValue(0),
   runFacilitiesImportRun: vi.fn().mockResolvedValue(0),
+  // A2b Task 9. `import-run-cancel` is registered as a SIBLING of `import-run <id>`, not as a
+  // `import-run cancel <id>` subcommand, and that is a measured constraint rather than a taste:
+  // commander parses a parent's declared options BEFORE dispatching to a subcommand, so with the
+  // nested spelling `facilities import-run cancel <id> --json` has its `--json` consumed by
+  // `import-run` (which declares one) and the cancel handler receives `json: false`. The nested
+  // form only works with `.enablePositionalOptions()` on the whole program, which would change how
+  // every other `openldr` command group parses its options. The test below is what holds the
+  // working spelling in place.
+  runFacilitiesImportRunCancel: vi.fn().mockResolvedValue(0),
 }));
 
 // The function itself is already unit-tested in facilities.test.ts (including the pass-through
@@ -39,6 +48,7 @@ vi.mock('./facilities', () => ({
   runFacilitiesImport: mocks.runFacilitiesImport,
   runFacilitiesImportRuns: mocks.runFacilitiesImportRuns,
   runFacilitiesImportRun: mocks.runFacilitiesImportRun,
+  runFacilitiesImportRunCancel: mocks.runFacilitiesImportRunCancel,
 }));
 
 describe('facilities import — commander parsing path (program.ts, not the function directly)', () => {
@@ -205,6 +215,7 @@ describe('facilities import-runs / import-run — commander parsing path', () =>
   beforeEach(() => {
     mocks.runFacilitiesImportRuns.mockClear();
     mocks.runFacilitiesImportRun.mockClear();
+    mocks.runFacilitiesImportRunCancel.mockClear();
   });
 
   it('import-runs parses --national-system and --limit as a string and a number', async () => {
@@ -229,5 +240,40 @@ describe('facilities import-runs / import-run — commander parsing path', () =>
     expect(mocks.runFacilitiesImportRun).toHaveBeenCalledTimes(1);
     const [id] = mocks.runFacilitiesImportRun.mock.calls[0] as [string];
     expect(id).toBe('fir_abc123');
+  });
+
+  // A2b Task 9, and the reason the command is spelled `import-run-cancel` rather than
+  // `import-run cancel` — see the note on the mock at the top of this file. `--json` reaching the
+  // handler is the whole point of the assertion: under the nested spelling it MEASURABLY does not.
+  it('import-run-cancel <id> resolves the positional id and its own --json', async () => {
+    const program = buildProgram().exitOverride();
+
+    await program.parseAsync(['node', 'openldr', 'facilities', 'import-run-cancel', 'fir_abc123', '--json']);
+
+    expect(mocks.runFacilitiesImportRunCancel).toHaveBeenCalledTimes(1);
+    const [id, opts] = mocks.runFacilitiesImportRunCancel.mock.calls[0] as [string, { json: boolean }];
+    expect(id).toBe('fir_abc123');
+    expect(opts.json).toBe(true);
+  });
+
+  it('import-run-cancel without --json resolves json false (proves the above is not vacuous)', async () => {
+    const program = buildProgram().exitOverride();
+
+    await program.parseAsync(['node', 'openldr', 'facilities', 'import-run-cancel', 'fir_abc123']);
+
+    const [, opts] = mocks.runFacilitiesImportRunCancel.mock.calls[0] as [string, { json: boolean }];
+    expect(opts.json).toBe(false);
+  });
+
+  // The sibling spelling must not have broken the command it sits next to: `import-run <id>` still
+  // resolves an id that merely LOOKS like a subcommand word.
+  it('import-run <id> is unaffected: an id is still an id', async () => {
+    const program = buildProgram().exitOverride();
+
+    await program.parseAsync(['node', 'openldr', 'facilities', 'import-run', 'cancel']);
+
+    expect(mocks.runFacilitiesImportRunCancel).not.toHaveBeenCalled();
+    const [id] = mocks.runFacilitiesImportRun.mock.calls[0] as [string];
+    expect(id).toBe('cancel');
   });
 });

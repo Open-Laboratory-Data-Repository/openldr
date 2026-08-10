@@ -434,8 +434,14 @@ export async function runFacilitiesImportRuns(opts: FacilitiesImportRunsOpts): P
 
 function formatImportRunsHuman(runs: FacilityImportRun[]): string {
   if (runs.length === 0) return 'no facility import runs recorded';
-  const rows = runs.map((r) => [r.id, r.nationalSystem, r.status, r.sourceFormat, r.createdAt, r.finishedAt ?? '—']);
-  const header = ['id', 'national_system', 'status', 'format', 'created_at', 'finished_at'];
+  // ⛔ A2b Task 9: `phase` is a COLUMN here, not a detail-view-only field. `status` alone cannot show
+  // a background run: `validating` and `applying` each cover a whole pass over the file, and the
+  // only thing that says where inside that pass the worker is, is the free-text phase it publishes
+  // through `updateProgress` (facility-import-run-store.ts). Without it this list answers "is
+  // something happening" and never "what". `'—'` for the inline A2a path, which no worker ever
+  // claims and which therefore never has one.
+  const rows = runs.map((r) => [r.id, r.nationalSystem, r.status, r.phase ?? '—', r.sourceFormat, r.createdAt, r.finishedAt ?? '—']);
+  const header = ['id', 'national_system', 'status', 'phase', 'format', 'created_at', 'finished_at'];
   const widths = header.map((h, i) => Math.max(h.length, ...rows.map((r) => r[i].length)));
   const line = (cells: string[]) => cells.map((c, i) => (i === cells.length - 1 ? c : c.padEnd(widths[i]))).join('  ');
   return [line(header), ...rows.map(line)].join('\n');
@@ -482,15 +488,161 @@ function formatImportRunHuman(run: FacilityImportRun): string {
     `id: ${run.id}`,
     `national system: ${run.nationalSystem}`,
     `status: ${run.status}`,
+    // A2b Task 9: the worker's own columns (`phase`/`processed`/`total`, written by
+    // `updateProgress`). This detail view is where a shell-only operator watches a background run,
+    // and until now every one of these was reachable ONLY under `--json`.
+    `phase: ${run.phase ?? '(none)'}`,
+    // ⚠ `total` is null until the worker KNOWS one, and that is printed as such rather than as a
+    // denominator of 0 or a bare percentage — the same "not evaluated is not zero" rule the
+    // import summary above follows for `conflict`/`absent`.
+    `progress: ${run.processed} row(s) processed${run.total == null ? ' (total not yet known)' : ` of ${run.total}`}`,
     `format: ${run.sourceFormat}`,
     `release version: ${run.releaseVersion ?? '(none)'}`,
     `requested by: ${run.requestedBy ?? '(unknown)'}`,
     `created: ${run.createdAt}`,
+    // Distinct from `created`: a queued run is created long before any worker claims it, and the
+    // gap between the two is the only way to see a job waiting for a worker that never came.
+    `started: ${run.startedAt ?? '(not started)'}`,
     `finished: ${run.finishedAt ?? '(not finished)'}`,
   ];
+  // ⛔ Printed only when the flag is actually set, and phrased as a REQUEST rather than a stop. The
+  // flag is observed at phase boundaries and cannot interrupt a running transaction, so a run
+  // carrying it may still finish `applied` — the same distinction `runFacilitiesImportRunCancel`
+  // below exists to keep. A permanently-present "cancel requested: no" line would also bury it.
+  if (run.cancelRequested) {
+    lines.push('cancel requested: yes — a worker observes this at its next phase boundary; a write already in progress will finish');
+  }
   if (run.error) lines.push(`error: ${run.error}`);
   if (run.summary) lines.push(`summary: ${JSON.stringify(run.summary)}`);
   return lines.join('\n');
+}
+
+// ── A2b Task 9: `openldr facilities import-run-cancel <id>` ───────────────────────────────────
+
+/** The four answers `requestCancel` can give, DERIVED from the store rather than re-spelled — a
+ *  fifth outcome added there becomes a `tsc` error in `CANCEL_OUTCOMES` below instead of a silent
+ *  fall-through to whatever branch happens to be last. */
+type CancelOutcome = Awaited<ReturnType<FacilityImportRunStore['requestCancel']>>;
+
+/**
+ * What this command reports, and with what exit code, for each of the store's four answers.
+ *
+ * ⛔ NO TWO ENTRIES MAY SHARE AN EXIT CODE OR A MESSAGE, and that is the entire reason this command
+ * exists rather than a `--cancel` flag that prints "ok". `requestCancel` answers a genuinely
+ * DIFFERENT question depending on whether anything is listening (see its doc comment in
+ * facility-import-run-store.ts):
+ *
+ *   `cancelled` — the run was in a state NO worker claims, so the cancel was CARRIED OUT by the
+ *     store itself: the run is terminal and its register is free. Saying "cancelled" is a fact.
+ *   `requested` — a worker holds the run (`validating`/`applying`). The flag is read at phase
+ *     boundaries and CANNOT interrupt the running transaction, so an apply already inside its write
+ *     will finish and the run will end `applied`. Reporting this as "cancelled" would tell an
+ *     operator a national register had not been rewritten when it had.
+ *
+ * The HTTP route (apps/server/src/facilities-routes.ts) keeps them apart with 200 vs 202; a CLI has
+ * no status line, so the exit code carries it. `1` is deliberately NOT used by any of the four: it
+ * stays what it is in every other command in this file — an unexpected failure, from the catch.
+ */
+const CANCEL_OUTCOMES: Record<CancelOutcome, {
+  exitCode: number;
+  /** Did the cancel reach a run at all? Drives BOTH the audit and stdout-vs-stderr — the two false
+   *  entries are refusals, and a refusal has nothing to record and does not belong on stdout. */
+  live: boolean;
+  message: (id: string) => string;
+}> = {
+  cancelled: {
+    exitCode: 0,
+    live: true,
+    message: (id) =>
+      `import run ${id} cancelled: no worker was holding it, so the cancellation was carried out — the run is finished and its national register is free.`,
+  },
+  requested: {
+    // ⛔ NOT 0. A script asking "is this run stopped?" must not read success here: the run may still
+    // finish `applied`, and 0 would be the machine-readable form of the exact overstatement the
+    // message below is worded to avoid.
+    exitCode: 2,
+    live: true,
+    message: (id) =>
+      `cancellation requested for import run ${id}: a worker is holding it, so the request is only observed at the next phase boundary — a write already in progress will finish, and the run may still end applied. Check with: openldr facilities import-run ${id}`,
+  },
+  'not-found': {
+    exitCode: 3,
+    live: false,
+    message: (id) => `no such facility import run: ${id}`,
+  },
+  'already-terminal': {
+    exitCode: 4,
+    live: false,
+    message: (id) => `import run ${id} has already finished and cannot be cancelled`,
+  },
+};
+
+export interface FacilitiesImportRunCancelOpts {
+  json: boolean;
+}
+
+/**
+ * `openldr facilities import-run-cancel <id> [--json]`
+ *
+ * CLI parity for `POST /api/facilities/import/runs/:id/cancel`. See `CANCEL_OUTCOMES` above for the
+ * four answers and why none of them may be folded into another.
+ *
+ * ⛔ SPELLED AS A SIBLING of `import-run <id>`, not as an `import-run cancel <id>` subcommand, and
+ * that is a MEASURED constraint rather than a preference: commander parses a parent command's
+ * declared options before dispatching to a subcommand, and `import-run` declares `--json`, so under
+ * the nested spelling `facilities import-run cancel <id> --json` has its `--json` swallowed by the
+ * parent and this function is handed `json: false`. The nested form works only with
+ * `.enablePositionalOptions()` applied to the whole program, which would change how every other
+ * `openldr` command group parses its options — far outside what a cancel command should cost.
+ * `facilities-import-cli-parsing.test.ts` pins the working spelling.
+ *
+ * ⛔ This does NOT touch `facilities import`, which stays synchronous and direct: it is automation,
+ * and routing it through the worker queue would cost it the exit code that is the whole point of
+ * running an import from a script.
+ */
+export async function runFacilitiesImportRunCancel(
+  id: string, opts: FacilitiesImportRunCancelOpts,
+): Promise<number> {
+  const ctx = await createAppContext(loadConfig());
+  try {
+    const importRuns = createFacilityImportRunStore(ctx.internalDb);
+    const outcome = await importRuns.requestCancel(id);
+    const reported = CANCEL_OUTCOMES[outcome];
+
+    // Audited on both LIVE outcomes and recording which one, matching the route: an operator asking
+    // a national register's import to stop is a decision worth an actor even when the import goes on
+    // to finish anyway. The two refusals changed nothing, so there is nothing to record.
+    if (reported.live) {
+      await recordAuditEvent(ctx, cliActor(), {
+        action: 'facility.import.cancelled',
+        entityType: 'facility',
+        entityId: id,
+        before: null,
+        after: null,
+        metadata: { runId: id, outcome },
+      });
+    }
+
+    if (opts.json) {
+      // The outcome itself is on the wire verbatim, so a script never has to parse the English
+      // above to tell "stopped" from "asked to stop".
+      process.stdout.write(JSON.stringify(
+        reported.live ? { runId: id, outcome } : { error: reported.message(id) },
+      ) + '\n');
+    } else if (reported.live) {
+      process.stdout.write(reported.message(id) + '\n');
+    } else {
+      process.stderr.write(`facilities import-run-cancel refused: ${reported.message(id)}\n`);
+    }
+    return reported.exitCode;
+  } catch (err) {
+    const msg = redactError(err);
+    if (opts.json) process.stdout.write(JSON.stringify({ error: msg }) + '\n');
+    else process.stderr.write(`facilities import-run-cancel failed: ${msg}\n`);
+    return 1;
+  } finally {
+    await ctx.close();
+  }
 }
 
 // ── Task 8: observed-facility reconciliation CLI parity ────────────────────────────────────────
