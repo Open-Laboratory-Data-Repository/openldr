@@ -260,7 +260,7 @@ export function buildProgram(): Command {
     .option('--complete-release', 'the file is a COMPLETE release of this register — only then can a row\'s absence from it mean anything (default: false, absent stays "not evaluated")', false)
     .option('--on-deleted <retire|report>', 'what to do with rows the publisher explicitly declared removed (JSONL only; default: retire)')
     .option('--on-absent <retire|report>', 'what to do with rows merely absent from a --complete-release file (default: report)')
-    .option('--on-conflict <skip|overwrite>', 'what to do with a row touched since the preview watermark this apply is linked to (default: skip)')
+    .option('--on-conflict <skip|overwrite>', 'what to do with a row touched since the preview watermark this apply is linked to (default: skip); currently has no effect on the CLI path because this command lacks a two-step preview/apply to establish a watermark')
     .option('--json', 'emit machine-readable JSON', false)
     .action(async (path: string, opts: {
       nationalSystem: string; apply: boolean; allowUnknownColumns: boolean; allowMalformedRows: boolean;

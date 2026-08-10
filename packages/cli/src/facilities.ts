@@ -40,7 +40,8 @@ export interface FacilitiesImportOpts {
   onDeleted?: 'retire' | 'report';
   /** Mirrors `FacilityImportOptions.onAbsent`. */
   onAbsent?: 'retire' | 'report';
-  /** Mirrors `FacilityImportOptions.onConflict`. */
+  /** Mirrors `FacilityImportOptions.onConflict`. Currently has no effect on this CLI path because
+   *  the single-step apply lacks a preview watermark to detect conflicts against. */
   onConflict?: 'skip' | 'overwrite';
   json: boolean;
 }
