@@ -60,7 +60,7 @@ export { createValidationStrictness, VALIDATION_STRICTNESS_KEY, type ValidationS
 import { createReportCategoriesService, type ReportCategoriesService } from './report-categories';
 import { captureObservedFacilityFromProjection, publishFacilityMap, projectRegistryRows } from './facility-reconcile';
 import { createFacilityJobWorker } from './facility-job-worker';
-import { createFacilityImportWorker } from './facility-import-worker';
+import { createFacilityImportWorkerIfEnabled } from './facility-import-worker';
 import { createFacilityJobRunners } from './facility-job-runners';
 import { createPluginBroker, type PluginBroker } from './plugin-broker';
 import { policyFromConfig } from './policy';
@@ -493,7 +493,20 @@ export function capabilityBackfillEvents(
   }));
 }
 
-export async function createAppContext(cfg: Config): Promise<AppContext> {
+/** Everything about an `AppContext` that depends on WHICH PROCESS is building it, rather than on
+ *  configuration. Optional in full, so every existing call site keeps its meaning. */
+export interface AppContextOptions {
+  /** Does this process drain the facility-import queue?
+   *
+   *  ⛔ Only the API server (`apps/server/src/index.ts`) sets it. Every `openldr` CLI command builds
+   *  an `AppContext` too, and the import worker is not a passive object — constructing it sweeps
+   *  stale runs and arms a poll timer against the SHARED database, which is how a CLI invocation
+   *  could release a live server-side apply's `active_key` mid-write. See
+   *  `createFacilityImportWorkerIfEnabled` for the full failure it closes. */
+  runFacilityImportWorker?: boolean;
+}
+
+export async function createAppContext(cfg: Config, opts: AppContextOptions = {}): Promise<AppContext> {
   const logger = createLogger({ level: cfg.LOG_LEVEL });
 
   const auth = createAuth({
@@ -892,8 +905,14 @@ const reporting: ReportingApi = {
   // ⚠ The run store is built here rather than taken from `AppContext`: the routes and the CLI each
   // construct their own over the same `internal.db` (a stateless wrapper), and the worker is the only
   // consumer inside this package.
+  //
+  // ⛔ AND IT IS BUILT ONLY IN A PROCESS THAT DRAINS THE QUEUE. Constructing this worker sweeps
+  // stale runs and arms a poll timer; every `openldr` CLI command builds an `AppContext`, so an
+  // unconditional construction here put that sweep in every CLI process — against the same database
+  // a live server is mid-apply on. See `createFacilityImportWorkerIfEnabled`. The two workers built
+  // above are deliberately NOT gated: what a CLI process takes over there is a re-queueable job.
   const facilityImportRuns: FacilityImportRunStore = createFacilityImportRunStore(internal.db);
-  const facilityImportWorker = createFacilityImportWorker({
+  const facilityImportWorker = createFacilityImportWorkerIfEnabled(opts.runFacilityImportWorker === true, {
     runs: facilityImportRuns,
     blob,
     importDeps: { db: internal.db, capture: referenceCapture, admin: termAdmin, facilityJobs, logger },
@@ -1547,7 +1566,9 @@ const reporting: ReportingApi = {
       await projectionWorker.stop();
       await terminologyIngestWorker.stop();
       await facilityJobWorker.stop();
-      await facilityImportWorker.stop();
+      // `null` in any process that did not opt in to draining the import queue — see
+      // `AppContextOptions.runFacilityImportWorker`.
+      await facilityImportWorker?.stop();
       if (projectionListenConnected) await projectionListenClient.end().catch(() => undefined);
       await Promise.allSettled([eventing.close(), store.close(), internal.close()]);
     },
@@ -1586,7 +1607,7 @@ export { migrateLegacySyncConfig } from './sync-settings-migrate';
 export { sealDefinitionSecrets } from './workflow-secret-seal';
 export { migrateWorkflowSecrets } from './workflow-secret-migrate';
 export { mergePatients } from './patient-merge';
-export { importFacilities } from './facility-import';
+export { importFacilities, resolveKnownNationalSystem } from './facility-import';
 export type {
   FacilityImportDeps, FacilityImportOptions, FacilityImportResult,
   // Reachable through `FacilityImportResult` — exported so a consumer can name the type of a
@@ -1634,7 +1655,9 @@ export * from './terminology-context';
 export * from './s3-config';
 export * from './terminology-ingest-shared';
 export * from './terminology-ingest-worker';
-export { createFacilityImportWorker } from './facility-import-worker';
+export {
+  createFacilityImportWorker, createFacilityImportWorkerIfEnabled, FACILITY_IMPORT_STALE_LEASE_MS,
+} from './facility-import-worker';
 export type { FacilityImportWorker, FacilityImportWorkerDeps } from './facility-import-worker';
 export * from './seed';
 export * from './plugin-broker';

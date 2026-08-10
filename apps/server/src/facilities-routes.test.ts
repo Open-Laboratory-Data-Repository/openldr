@@ -3253,6 +3253,145 @@ describe('POST /api/facilities/import/runs/:id/confirm', () => {
     expect(run.options).toEqual({ nationalSystem: SYSTEM, onConflict: 'skip' });
   });
 
+  // ── Whole-branch review I2: an override that changes how the file PARSES ──────────────────────
+  //
+  // `allowUnknownColumns`/`allowInvalidCoordinates` reach `parseFacilityCsv` directly, so they decide
+  // which rows become records. The summary the operator is confirming was computed by a validate that
+  // ran WITHOUT them, and nothing between this route and the apply re-validates or re-shows anything
+  // — so accepting one here authorises a write over a record set nobody reviewed.
+
+  it('⛔ refuses a confirm carrying allowUnknownColumns when the validated summary was computed without it', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    // The validate FOUND an unrecognised column — so the override has something to act on, and
+    // ticking it now would make the apply parse a file that produced no records at all.
+    const runId = await uploadAndPark(app, db, {
+      blocked: false, blockedReason: null, unknownColumns: ['mystery_col'], invalid: [],
+      parsed: 0, absent: null,
+    });
+
+    const res = await app.inject({
+      method: 'POST', url: confirmUrl(runId), payload: { allowUnknownColumns: true },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toMatch(/allowUnknownColumns/);
+    // ⛔ And NOTHING was written: a refused confirm must leave the run confirmable, not consume it.
+    const row = await db.selectFrom('facility_import_runs').select(['status', 'options', 'active_key'])
+      .where('id', '=', runId).executeTakeFirstOrThrow();
+    expect(row.status).toBe('awaiting_confirmation');
+    expect(row.options).toEqual({ nationalSystem: SYSTEM });
+    expect(row.active_key).toBe(SYSTEM);
+  });
+
+  it('⛔ THE RETIREMENT CASE: allowUnknownColumns + onAbsent:retire cannot be authorised against a summary that measured absent: null', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    // Exactly what a `completeRelease=true` upload of a file with one unrecognised column validates
+    // to: no rows parsed, absence NOT EVALUATED — and it still PARKS, because unknown columns set no
+    // `blockedReason`, so the blocked gate lets it through.
+    const runId = await uploadAndPark(app, db, {
+      blocked: false, blockedReason: null, unknownColumns: ['mystery_col'], invalid: [],
+      parsed: 0, absent: null,
+    });
+
+    const res = await app.inject({
+      method: 'POST', url: confirmUrl(runId),
+      payload: { allowUnknownColumns: true, onAbsent: 'retire' },
+    });
+
+    expect(res.statusCode).toBe(409);
+    // The apply never reaches the queue, so the retirement it would have computed never happens.
+    expect((await db.selectFrom('facility_import_runs').select('status')
+      .where('id', '=', runId).executeTakeFirstOrThrow()).status).toBe('awaiting_confirmation');
+  });
+
+  it('⛔ …and the same refusal for allowInvalidCoordinates when the file had invalid rows', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const runId = await uploadAndPark(app, db, {
+      blocked: false, blockedReason: null, unknownColumns: [],
+      invalid: [{ line: 2, message: 'latitude out of range' }],
+    });
+
+    const res = await app.inject({
+      method: 'POST', url: confirmUrl(runId), payload: { allowInvalidCoordinates: true },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toMatch(/allowInvalidCoordinates/);
+  });
+
+  it('accepts the same override when the UPLOAD already declared it — the validate ran with it', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    // The upload takes the parse-changing overrides, because it is the request that precedes the
+    // classification. This is the path the refusal above points the operator at.
+    const up = await app.inject({
+      method: 'POST',
+      url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv', allowUnknownColumns: 'true' }),
+      headers: UPLOAD_HEADERS, payload: Buffer.from(facilityCsv(['100,Alpha,,,,,,,,,,,,,,']), 'utf8'),
+    });
+    expect(up.statusCode).toBe(202);
+    const runId = up.json().runId as string;
+    // ⛔ Recorded on the RUN, which is what makes the worker's validate run with it — a flag the
+    // upload accepted and did not store would change nothing at all.
+    expect((await db.selectFrom('facility_import_runs').select('options')
+      .where('id', '=', runId).executeTakeFirstOrThrow()).options)
+      .toEqual({ nationalSystem: SYSTEM, allowUnknownColumns: true });
+
+    await parkForConfirmation(db, runId, {
+      blocked: false, blockedReason: null, unknownColumns: ['mystery_col'], invalid: [],
+    });
+    const res = await app.inject({
+      method: 'POST', url: confirmUrl(runId), payload: { allowUnknownColumns: true },
+    });
+
+    // The summary under review was computed WITH the override, so confirming with it changes nothing.
+    expect(res.statusCode).toBe(202);
+    expect((await db.selectFrom('facility_import_runs').select('status')
+      .where('id', '=', runId).executeTakeFirstOrThrow()).status).toBe(APPLY_PHASE.from);
+  });
+
+  it('⛔ …and refuses DROPPING an override the validate ran with — narrowing the parse is a change too', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const up = await app.inject({
+      method: 'POST',
+      url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv', allowUnknownColumns: 'true' }),
+      headers: UPLOAD_HEADERS, payload: Buffer.from(facilityCsv(['100,Alpha,,,,,,,,,,,,,,']), 'utf8'),
+    });
+    const runId = up.json().runId as string;
+    await parkForConfirmation(db, runId, {
+      blocked: false, blockedReason: null, unknownColumns: ['mystery_col'], invalid: [],
+    });
+
+    const res = await app.inject({
+      method: 'POST', url: confirmUrl(runId), payload: { allowUnknownColumns: false },
+    });
+
+    expect(res.statusCode).toBe(409);
+  });
+
+  it('rejects a non-boolean parse override on the upload rather than silently ignoring it', async () => {
+    const db = await makeMigratedDb();
+    const app = await appWith(fakeImportCtx(db));
+    const res = await app.inject({
+      method: 'POST',
+      url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv', allowInvalidCoordinates: 'yes' }),
+      headers: UPLOAD_HEADERS, payload: Buffer.from(facilityCsv(['100,Alpha,,,,,,,,,,,,,,']), 'utf8'),
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toMatch(/allowInvalidCoordinates/);
+    // Refused before the transfer, so no run was minted and the register is untouched.
+    expect(await db.selectFrom('facility_import_runs').select('id').execute()).toEqual([]);
+  });
+
   it('audits the confirm with the operator who made it', async () => {
     const db = await makeMigratedDb();
     const ctx = fakeImportCtx(db);

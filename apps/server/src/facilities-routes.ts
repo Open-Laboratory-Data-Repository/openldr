@@ -6,7 +6,8 @@ import type { Kysely } from 'kysely';
 import { z } from 'zod';
 import { appError } from '@openldr/core';
 import {
-  importFacilities, scanObservedFacilities, resolveObservedFacilities, publishFacilityMap, projectRegistryRows,
+  importFacilities, resolveKnownNationalSystem,
+  scanObservedFacilities, resolveObservedFacilities, publishFacilityMap, projectRegistryRows,
   retireRegistryConcepts, reprojectAfterRegistryDelete, listFacilityMappingConflicts, facilityHealth,
   type AppContext, type FacilityImportResult, type ScanResult, type PublishResult,
 } from '@openldr/bootstrap';
@@ -1360,9 +1361,11 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     // unconditionally (both the standalone-preview and the apply-flow read this same `preview`), so
     // an operator applying straight through (no separate preview round-trip) still gets the warning
     // on the final response — see where `result.knownNationalSystem` is set below.
-    const known = await ctx.internalDb.selectFrom('facility_registry').select('id')
-      .where('national_system', '=', p.data.nationalSystem).limit(1).executeTakeFirst();
-    preview.knownNationalSystem = !!known;
+    //
+    // ⛔ The SHARED resolver, not a query spelled here. The background import worker has to answer
+    // the same question about the same register (it persists this field as the run's durable
+    // summary), and two hand-written lookups are free to disagree about what "already known" means.
+    preview.knownNationalSystem = await resolveKnownNationalSystem(ctx.internalDb, p.data.nationalSystem);
 
     if (!p.data.apply) {
       // A standalone preview (no `apply`) is the ONLY call that mints a run — see the module-level
@@ -1391,13 +1394,15 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
         run = await importRuns.startPreview(startPreviewInput);
       } catch {
         // Fix wave 1 (Important 4): `active_key` is set here and released only by a write that takes
-        // the run out of play — every terminal write (`finishApply`/`finish`), `supersede`, and
-        // `failStaleRunning`, each of which nulls it in the same update (see
-        // `facility-import-run-store.ts`). Nothing expires or cancels a run that stays `previewed`
-        // forever, so an operator who previews and then simply never applies (closes the sheet,
-        // navigates away — the ordinary "changed my mind" path, not a failure of any kind) would
-        // otherwise lock this `nationalSystem` out of every future preview or runId-less apply
-        // permanently, short of a database reset.
+        // the run out of play — every terminal write (`finishApply`/`finish`), `supersede`,
+        // `failStaleRunning`, and `requestCancel`'s direct cancel, each of which nulls it in the same
+        // update (see `facility-import-run-store.ts`). NOTHING EXPIRES a run that stays `previewed`
+        // forever — A2b Task 6 added a cancel route an operator can drive by hand, but no timer, no
+        // sweep and no boot path retires an idle `previewed` run — so an operator who previews and
+        // then simply never applies (closes the sheet, navigates away — the ordinary "changed my
+        // mind" path, not a failure of any kind) would otherwise lock this `nationalSystem` out of
+        // every future preview or runId-less apply permanently, short of a database reset or that
+        // manual cancel.
         //
         // ⛔ The DECISION lives in `takeOverRegister` (top of this function), SHARED with the upload
         // route's gate rather than copied — see its doc comment for why the holder is found by
@@ -1622,6 +1627,23 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       return { error: 'completeRelease must be "true" or "false"' };
     }
 
+    // ⛔ THE TWO OVERRIDES THAT CHANGE HOW THE FILE PARSES, and they belong to the UPLOAD for exactly
+    // the reason `completeRelease` above does: both are fed to `parseFacilityCsv`/`parseFacilityRelease`
+    // (see `parseOpts` in facility-import.ts), so they decide which rows become records — and the
+    // VALIDATE is what turns records into the summary an operator reads. Arriving at confirm time
+    // instead, they would make the apply classify a DIFFERENT record set than the one that was
+    // approved, which the confirm route now refuses outright. `allowMalformedRows` is deliberately
+    // NOT here: it changes only the `blocked` verdict, never the parse, so it stays the confirm's.
+    const parseOverrides: Record<string, boolean> = {};
+    for (const key of ['allowUnknownColumns', 'allowInvalidCoordinates'] as const) {
+      const value = ownBoolean(q, key);
+      if (value === 'invalid') {
+        reply.code(400);
+        return { error: `${key} must be "true" or "false"` };
+      }
+      if (value !== undefined) parseOverrides[key] = value;
+    }
+
     // A JSON body (the INLINE route's shape, sent here by mistake) arrives as a parsed object and
     // must be refused before anything else happens — piping it would throw somewhere far less
     // legible.
@@ -1748,7 +1770,16 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
         // the confirm could not carry it even if it wanted to. Spread conditionally for the reason
         // the line above states: an unsent parameter leaves the key OUT of `options` entirely rather
         // than writing a `false` nobody sent.
-        options: { nationalSystem, ...(completeRelease === undefined ? {} : { completeRelease }) },
+        //
+        // ⚠ …and so are the two PARSE-CHANGING overrides above, for the same reason and with the
+        // same conditional spread: they select which rows the VALIDATE turns into records, so they
+        // have to be in place before the summary the operator reviews is computed. See
+        // `parseOverrides` and the confirm route's parse-override gate.
+        options: {
+          nationalSystem,
+          ...(completeRelease === undefined ? {} : { completeRelease }),
+          ...parseOverrides,
+        },
         requestedBy: actorFromRequest(req).actorId,
       });
     } catch (err) {
@@ -1836,6 +1867,62 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       };
     }
 
+    // The validate's own verdict, read ONCE and asked two different questions below. Both gates read
+    // what `importFacilities` REPORTED rather than re-deriving it from the file — the file is not
+    // even in this request.
+    const summary = (run.summary ?? null) as {
+      blocked?: unknown; blockedReason?: unknown; unknownColumns?: unknown; invalid?: unknown;
+    } | null;
+
+    // ⛔ THE PARSE-OVERRIDE GATE (whole-branch review I2). `allowUnknownColumns` and
+    // `allowInvalidCoordinates` are fed straight to the PARSER (`parseOpts` in facility-import.ts),
+    // so they decide which rows become records at all — and the summary this operator is confirming
+    // was computed by a validate that ran with whatever the RUN already carried. Accepting a
+    // different value here would make the apply classify a different record set than the one that was
+    // approved, with nothing re-validating it and nothing re-showing it.
+    //
+    // ⛔ THIS IS NOT A TIDINESS RULE. Worst case, reachable through the API alone: a
+    // `completeRelease=true` upload carrying one unrecognised column validates to `parsed: 0` and
+    // `absent: null` — NOT EVALUATED — and still PARKS, because unknown columns set no
+    // `blockedReason` and the gate below therefore passes it. A confirm carrying
+    // `{ allowUnknownColumns: true, onAbsent: 'retire' }` would then parse the whole file, measure
+    // absence across the WHOLE register, and retire everything the file omits — authorised against a
+    // summary that measured none of it.
+    //
+    // ⛔ REFUSED ONLY WHERE THE OVERRIDE HAS SOMETHING TO ACT ON, which is what makes this exact
+    // rather than merely strict. Both parser flags are inert unless the file actually contains the
+    // thing they wave through, and `parseFacilityCsv` reports both populations UNCONDITIONALLY —
+    // `unknownColumns` off the header row, `invalid` pushed before the drop ("Reported unconditionally;
+    // DROPPED only without the override", facility-csv.ts) — so the stored summary answers "would
+    // this flag have changed the parse?" for the file that was actually validated, in either
+    // direction. An empty (or absent) population means the answer is no, and refusing then would
+    // reject a confirm that could not have changed anything.
+    //
+    // ⚠ `allowMalformedRows` is deliberately NOT in this list and must stay out: it is read only by
+    // the `blockedReason` decision, never by the parser, so it changes the VERDICT on a record set
+    // and not the record set itself. It is the documented override for a `quarantined-rows` block,
+    // which the gate immediately below relies on.
+    //
+    // The overrides that DO change the parse belong to the upload, which is the request that runs
+    // before the classification — see its `parseOverrides`.
+    const storedOptions = (run.options as Record<string, unknown> | null) ?? {};
+    const nonEmptyList = (v: unknown): boolean => Array.isArray(v) && v.length > 0;
+    const inPlay: Record<'allowUnknownColumns' | 'allowInvalidCoordinates', boolean> = {
+      allowUnknownColumns: nonEmptyList(summary?.unknownColumns),
+      allowInvalidCoordinates: nonEmptyList(summary?.invalid),
+    };
+    const parseChanging = (['allowUnknownColumns', 'allowInvalidCoordinates'] as const)
+      .filter((k) => inPlay[k] && k in p.data && !!p.data[k] !== !!storedOptions[k]);
+    if (parseChanging.length > 0) {
+      reply.code(409);
+      return {
+        error: `import run ${id} cannot be confirmed with ${parseChanging.join(', ')}: `
+          + 'that changes how the file parses, and the summary being confirmed was computed without '
+          + 'it — re-upload the file with that option on the upload request, so the validation you '
+          + 'review is the one that gets applied',
+      };
+    }
+
     // ⛔ THE BLOCKED GATE, and it READS the importer's own verdict rather than re-deriving it.
     // `importFacilities` reports `blocked`/`blockedReason` precisely so its consumers stop rebuilding
     // the predicate (see `FacilityImportResult.blocked`); the worker stored that verdict on the run,
@@ -1846,7 +1933,6 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     // `allowMalformedRows` belongs to, and the reason `blockedReason` is a machine token at all.
     // Fail-closed: a reason this does not recognise is refused, so a blocked reason added later
     // cannot be waved through by omission.
-    const summary = (run.summary ?? null) as { blocked?: unknown; blockedReason?: unknown } | null;
     if (summary?.blocked === true) {
       const overridden = summary.blockedReason === 'quarantined-rows' && p.data.allowMalformedRows === true;
       if (!overridden) {
@@ -1875,7 +1961,7 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     // Stored first, choices after: the upload recorded `{ nationalSystem }`, the register identity
     // `active_key` locks on, and a client cannot be allowed to overwrite it — `ConfirmSchema` has no
     // such key, so nothing in `chosen` can. The worker additionally re-imposes it off the run row.
-    const options = { ...(run.options as Record<string, unknown> | null ?? {}), ...chosen };
+    const options = { ...storedOptions, ...chosen };
 
     // Compare-and-swap on the status just read — see the store's own note. `false` means the run
     // moved between the read above and this write (a newer upload superseded it, releasing its

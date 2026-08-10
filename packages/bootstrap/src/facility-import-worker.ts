@@ -6,7 +6,7 @@ import {
   VALIDATE_PHASE, APPLY_PHASE, type FacilityImportRun, type FacilityImportRunStore,
 } from '@openldr/db';
 import {
-  importFacilities,
+  importFacilities, resolveKnownNationalSystem,
   type FacilityImportDeps, type FacilityImportOptions, type FacilityImportResult,
 } from './facility-import';
 
@@ -27,6 +27,11 @@ export interface FacilityImportWorkerDeps {
   audit?: Pick<AuditStore, 'record'>;
   /** Poll interval, mirroring `createFacilityJobWorker`/`createTerminologyIngestWorker`. */
   intervalMs?: number;
+  /** Overrides `FACILITY_IMPORT_STALE_LEASE_MS` — how long a run may sit in a RUNNING state before
+   *  this worker's sweep treats it as orphaned. Injectable for the same reason `intervalMs` is: a
+   *  test that wants to drive the boundary otherwise has to wait out the real lease. No production
+   *  caller sets it. */
+  staleLeaseMs?: number;
   /** Ceiling on the file this worker will hold in memory — see `readBlob`. Wire it to
    *  `FACILITY_IMPORT_MAX_UPLOAD_BYTES` so the transfer ceiling and the buffer ceiling are the SAME
    *  number and an accepted upload is always one this worker can actually read. */
@@ -47,6 +52,25 @@ export interface FacilityImportWorker {
 
 /** What a cancelled run records as its `error` — the reason it ended, not a failure. */
 const CANCELLED_BY_OPERATOR = 'cancelled by the operator';
+
+/** How long a run may sit in a RUNNING state (`validating`/`applying`) before this worker's sweep
+ *  treats it as orphaned and fails it, releasing its national register.
+ *
+ *  ⛔ THIS IS A LEASE, NOT A TIMEOUT, and the number has to clear the longest run this worker can
+ *  legitimately produce by a wide margin — a sweep that fires early does not merely mislabel a run,
+ *  it nulls the `active_key` of an apply that is still WRITING and lets a second import start over
+ *  the same national register. Grounded on the measurement in `PER_ROW_PROGRESS_MIN_ROWS` below: the
+ *  real 13 000-row Tanzanian MFL release applies in ~2.3 s. `readBlob`'s ceiling admits a file ~20×
+ *  that size (64 MiB against ~3.1 MB of JSONL), which at the same measured ~0.176 ms/row is ~46 s.
+ *  15 minutes is ~20× THAT again, so a legitimate run reaching this lease is not a slow import — it
+ *  is a process that is gone.
+ *
+ *  ⚠ It is a lease and not a boot-only check because the two halves are one mechanism: age-scoping
+ *  the sweep is what stops it stealing a live run (see `failStaleRunning`'s contract), and sweeping
+ *  again on the poll interval is what keeps age-scoping from STRANDING one — a process killed ten
+ *  seconds before the next boot would otherwise be spared by the lease at startup and then never
+ *  looked at again, holding its register until some later restart. */
+export const FACILITY_IMPORT_STALE_LEASE_MS = 15 * 60 * 1000;
 
 /**
  * A2b Tasks 4 and 5: the background half of the facility import — validate, then apply.
@@ -149,12 +173,30 @@ export function createFacilityImportWorker(deps: FacilityImportWorkerDeps): Faci
   // decode. A byte count is a sound proxy for the character count that limit is expressed in: UTF-8
   // never decodes N bytes into more than N characters.
   const perRowProgressMinRows = deps.perRowProgressMinRows ?? PER_ROW_PROGRESS_MIN_ROWS;
+  const staleLeaseMs = deps.staleLeaseMs ?? FACILITY_IMPORT_STALE_LEASE_MS;
   const maxBufferBytes = Math.min(
     deps.maxBufferBytes ?? DEFAULT_MAX_BUFFER_BYTES,
     bufferConstants.MAX_STRING_LENGTH,
   );
   let stopped = false;
   let running = false;
+
+  /** Release every run whose RUNNING status has outlived the lease, recording `error` as the reason.
+   *
+   *  ⛔ Best-effort and self-contained: a sweep that fails must never stop the worker starting or
+   *  abort the tick it runs at the head of. Both call sites hand it the message the runs it fails
+   *  will CARRY, so an operator reading a swept run is told which of the two observed it.
+   *
+   *  ⛔ It passes `staleLeaseMs` explicitly. `failStaleRunning`'s own default is 0 — sweep every
+   *  RUNNING run — which is precisely the unscoped statement this argument exists to stop being. */
+  async function sweepStale(error: string): Promise<void> {
+    try {
+      const n = await deps.runs.failStaleRunning(error, staleLeaseMs);
+      if (n > 0) deps.logger.info({ count: n, leaseMs: staleLeaseMs, error }, 'failed orphaned facility import runs');
+    } catch (err) {
+      deps.logger.error({ err }, 'facility import crash-recovery failed');
+    }
+  }
 
   /** Read the uploaded register back as a string, refusing one this process cannot hold.
    *
@@ -340,7 +382,17 @@ export function createFacilityImportWorker(deps: FacilityImportWorkerDeps): Faci
       const body = await readBlob(run.blobKey, 'validated');
 
       await deps.runs.updateProgress(run.id, { phase: 'validating' });
+      // ⛔ ASKED BEFORE the import, and asked at all because `importFacilities` reports a NEUTRAL
+      // `true` for this field that no caller may pass on — see `resolveKnownNationalSystem`. This
+      // summary is the run's DURABLE record: it is what `GET /api/facilities/import/runs/:id` returns
+      // and what the studio's run door renders its new-register notice from, so leaving the neutral
+      // value in place published a measurement nobody took, on the ONE path built for a first-time
+      // national register. A validate writes nothing, so before/after would agree here — it is asked
+      // first anyway, so this line and the apply's read the registry at the same point in their
+      // phase and cannot answer differently for structural reasons.
+      const knownNationalSystem = await resolveKnownNationalSystem(deps.importDeps.db, run.nationalSystem);
       const summary = await importFacilities(deps.importDeps, body, validateOptions(run));
+      summary.knownNationalSystem = knownNationalSystem;
 
       // Cancel boundary 2 — before the summary is written. The flag cannot interrupt the call above,
       // so this is the first moment after it that a cancel can be honoured; observing it here is what
@@ -408,11 +460,21 @@ export function createFacilityImportWorker(deps: FacilityImportWorkerDeps): Faci
         phase: 'applying',
         ...(reportedTotal(run, perRowProgressMinRows) ? { processed: 0, total: validatedRowCount(run) } : {}),
       });
+      // ⛔ BEFORE the write, and that order is the whole of it: this apply CREATES rows under
+      // `run.nationalSystem`, so asked afterwards the registry would answer `true` for the very
+      // register the operator may have just invented by mistyping one. The inline route takes the
+      // same reading at the same point — off its preview, computed before its apply — and echoes it
+      // onto the applied result (`result.knownNationalSystem = preview.knownNationalSystem`).
+      const knownNationalSystem = await resolveKnownNationalSystem(deps.importDeps.db, run.nationalSystem);
       // ⛔ THE SAME `importFacilities` the validate phase, the inline route and the CLI all call.
       // The write, the projection through `deps.admin`, and the ONE `facility-map-rebuild` enqueue
       // all happen INSIDE it — none of them is repeated here, or an applied upload would rebuild the
       // dimension twice and could disagree with a pasted register about what the same file means.
       summary = await importFacilities(deps.importDeps, body, applyOptions(run));
+      // ⛔ ATTACHED BEFORE `finish` persists `summary`, for the reason the inline route's own note
+      // spells out: the store `JSON.stringify`s the summary synchronously on the way in, so a field
+      // set after that call reaches nothing.
+      summary.knownNationalSystem = knownNationalSystem;
       // The commit point. Terminal, so it releases `active_key` in the same update — the register is
       // free the moment the import that owned it is done with it.
       await deps.runs.finish(run.id, 'applied', { summary });
@@ -441,6 +503,12 @@ export function createFacilityImportWorker(deps: FacilityImportWorkerDeps): Faci
     if (running) return;
     running = true;
     try {
+      // ⛔ BEFORE either claim, and that ordering is what makes the lease a recovery mechanism rather
+      // than a boot formality: a run whose owning process died is released as soon as it ages past
+      // the lease, not only at the next restart. It cannot reach THIS worker's own run — `running`
+      // is held for the whole tick, including the `importFacilities` call, so no tick can start while
+      // one is in flight.
+      await sweepStale('the import stopped making progress and its lease expired');
       // ⛔ THE APPLY IS TRIED FIRST, and the order is a choice rather than an accident: an operator
       // is already waiting on a confirmed apply, and finishing one RELEASES its national register,
       // whereas a validate takes one and holds it for a decision. Starvation is not a risk — a
@@ -469,15 +537,13 @@ export function createFacilityImportWorker(deps: FacilityImportWorkerDeps): Faci
     }
   }
 
-  // Crash recovery: a run still in a RUNNING state at startup was orphaned by a killed process, and
-  // it is still holding its national register — `failStaleRunning` fails it and releases the key.
-  // Best-effort and non-blocking, exactly like `createFacilityJobWorker`'s: a failure here must never
-  // stop the worker starting. The handle is retained so stop() can await it, preventing a stray
-  // recovery log after shutdown.
-  const crashRecovery = deps.runs
-    .failStaleRunning('interrupted — the server restarted before the import finished')
-    .then((n) => { if (n > 0) deps.logger.info({ count: n }, 'failed orphaned facility import runs at startup'); })
-    .catch((err) => deps.logger.error({ err }, 'facility import crash-recovery failed'));
+  // Crash recovery: a run still in a RUNNING state was orphaned by a killed process, and it is still
+  // holding its national register — `failStaleRunning` fails it and releases the key.
+  //
+  // ⛔ AGE-SCOPED, and the lease is the whole of it: this statement is not scoped to a process, so an
+  // unbounded sweep releases the register of an apply ANOTHER process is mid-write on. See
+  // `FACILITY_IMPORT_STALE_LEASE_MS` and `failStaleRunning`'s contract.
+  const crashRecovery = sweepStale('interrupted — the server restarted before the import finished');
 
   const timer = setInterval(() => { if (!stopped) void tickOnce(); }, intervalMs);
 
@@ -485,4 +551,30 @@ export function createFacilityImportWorker(deps: FacilityImportWorkerDeps): Faci
     tickOnce,
     async stop() { stopped = true; clearInterval(timer); await crashRecovery; },
   };
+}
+
+/**
+ * Build the import worker ONLY in a process that is responsible for draining the queue.
+ *
+ * ⛔ WHY CONSTRUCTION ITSELF HAS TO BE GATED, rather than merely "not starting" the worker.
+ * `createFacilityImportWorker` is not inert: its constructor body fires the stale-run sweep and arms
+ * the poll timer. `createAppContext` builds it at top level, and EVERY `openldr` CLI command builds
+ * an `AppContext` — so before this gate existed, `openldr facilities import-run-cancel <id>` (and
+ * `audit`, `db`, `data-exposure`, …) ran that sweep against the shared database of a live server.
+ * Two things followed. A CLI invocation landing while the server was mid-apply released that run's
+ * `active_key` from under it, so a second upload could mint a run and start a second apply over the
+ * same national register. And the cancel command destroyed the very run it was asked about: the
+ * sweep failed it, `requestCancel` then read a terminal row, and the operator was told their import
+ * "has already finished and cannot be cancelled".
+ *
+ * ⚠ SCOPED TO THIS WORKER ALONE. `createFacilityJobWorker` and `createTerminologyIngestWorker` are
+ * constructed the same way and sweep the same way, so the PATTERN is shared — but what a CLI process
+ * takes over there is a re-queueable rebuild/ingest job, not a national register's exclusive lock,
+ * and silently stopping CLI processes from draining those two queues would be a behaviour change
+ * nothing in this repo asked for. They are deliberately left constructed unconditionally.
+ */
+export function createFacilityImportWorkerIfEnabled(
+  enabled: boolean, deps: FacilityImportWorkerDeps,
+): FacilityImportWorker | null {
+  return enabled ? createFacilityImportWorker(deps) : null;
 }

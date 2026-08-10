@@ -8,7 +8,9 @@ import {
   type InternalSchema, type FacilityImportRunStore,
 } from '@openldr/db';
 import { importFacilities } from './facility-import';
-import { createFacilityImportWorker, PER_ROW_PROGRESS_MIN_ROWS } from './facility-import-worker';
+import {
+  createFacilityImportWorker, createFacilityImportWorkerIfEnabled, PER_ROW_PROGRESS_MIN_ROWS,
+} from './facility-import-worker';
 
 const SYSTEM = 'urn:tz:hfr';
 const KEY = 'facility-import/tz-hfr/one.csv';
@@ -62,6 +64,12 @@ async function harness(
   });
   return { db, runs, blob, logger, worker, audit, audited };
 }
+
+/** Backdate a run's `started_at` an hour, the only writer of which is `claimNext`. Whole-branch
+ *  review C1: the stale sweep is age-scoped, so this is how a test produces a genuinely ORPHANED run
+ *  as opposed to one that merely looks orphaned because it was claimed a moment ago. */
+const ageRun = (db: Kysely<InternalSchema>, id: string) =>
+  sql`update facility_import_runs set started_at = now() - interval '3600 seconds' where id = ${id}`.execute(db);
 
 const rowFor = (db: Kysely<InternalSchema>, id: string) =>
   db.selectFrom('facility_import_runs').selectAll().where('id', '=', id).executeTakeFirstOrThrow();
@@ -314,6 +322,10 @@ describe('createFacilityImportWorker — validate phase', () => {
     const runs = createFacilityImportRunStore(db);
     const run = await runs.startUpload(upload());
     await runs.claimNext('queued', 'validating'); // a process killed mid-validate
+    // …long enough ago to have outlived the lease. Whole-branch review C1 half 2 made the sweep
+    // age-scoped, so a run claimed microseconds ago is SPARED on purpose: it is indistinguishable
+    // from one a live worker in another process is inside. See `ageRun`.
+    await ageRun(db, run.id);
 
     const worker = createFacilityImportWorker({
       runs, blob: fakeBlob(CSV), importDeps: { db, capture: referenceCapture },
@@ -348,6 +360,44 @@ describe('createFacilityImportWorker — validate phase', () => {
     expect((await rowFor(db, run.id)).active_key).toBe(SYSTEM);
   });
 
+  // ⛔ WHOLE-BRANCH REVIEW I1. `importFacilities` hard-codes `knownNationalSystem: true` and says so
+  // ("Owned by the route… Nothing here can answer it"), so a worker that passes its result straight
+  // through PERSISTS a fabricated `true` as the run's durable summary — the exact "a value nobody
+  // measured, reported as one that was" defect this workstream exists to remove, on the one path
+  // built for a first-time national register. `GET /api/facilities/import/runs/:id` returns this
+  // summary and the studio's run door renders `{!result.knownNationalSystem && <new register>}` from
+  // it, which could never fire on the upload path while the value was fabricated.
+  it('⛔ the validate summary reports knownNationalSystem: false for a register never seen before', async () => {
+    const h = await harness(CSV);
+    const run = await h.runs.startUpload(upload());
+
+    await h.worker.tickOnce();
+    await h.worker.stop();
+
+    expect((await h.runs.get(run.id))?.status).toBe('awaiting_confirmation');
+    // The registry is empty, so this upload MINTS the register identity — `false` is the measurement.
+    expect((await h.runs.get(run.id))?.summary).toMatchObject({ knownNationalSystem: false });
+  });
+
+  it('⛔ …and true once the register exists, so the field tracks the registry rather than a constant', async () => {
+    const h = await harness(CSV);
+    // First upload: validate → confirm → apply, which really writes a row under SYSTEM.
+    const first = await h.runs.startUpload(upload());
+    await h.worker.tickOnce();
+    expect(await h.runs.confirm(first.id, 'awaiting_confirmation', { nationalSystem: SYSTEM })).toBe(true);
+    await h.worker.tickOnce();
+    expect((await h.runs.get(first.id))?.status).toBe('applied');
+    // ⛔ The APPLY that created the register still reports `false`: it is read BEFORE the write, so it
+    // describes the register as it was when the operator confirmed, not as this import left it.
+    expect((await h.runs.get(first.id))?.summary).toMatchObject({ knownNationalSystem: false });
+
+    // A second upload of the same register — now genuinely known.
+    const second = await h.runs.startUpload(upload());
+    await h.worker.tickOnce();
+    await h.worker.stop();
+    expect((await h.runs.get(second.id))?.summary).toMatchObject({ knownNationalSystem: true });
+  });
+
   it('stop() genuinely AWAITS the crash-recovery handle rather than merely firing it', async () => {
     // Same construction as facility-job-worker.test.ts's: without a real timer-backed delay the
     // plain recovery test above passes whether or not stop() awaits, because enough microtask turns
@@ -356,6 +406,11 @@ describe('createFacilityImportWorker — validate phase', () => {
     const runs = createFacilityImportRunStore(db);
     const run = await runs.startUpload(upload());
     await runs.claimNext('queued', 'validating');
+    // Whole-branch review C1, half 2: the sweep is age-scoped now, so a run claimed microseconds ago
+    // is deliberately SPARED (it looks exactly like one a live worker is inside). Backdating
+    // `started_at` past the lease is what makes it an orphan — the state this test is about — and it
+    // leaves the assertion below measuring exactly what it always did: whether stop() waited.
+    await ageRun(db, run.id);
 
     const delayedRuns: FacilityImportRunStore = {
       ...runs,
@@ -677,6 +732,9 @@ describe('createFacilityImportWorker — apply phase', () => {
     await runs.completeValidation(run.id, { create: 1 });
     await runs.confirm(run.id, 'awaiting_confirmation', { nationalSystem: SYSTEM });
     await runs.claimNext(APPLY_PHASE.from, APPLY_PHASE.to); // a process killed mid-apply
+    // …and killed long enough ago to have outlived the lease. See `ageRun`: a freshly-claimed run is
+    // spared on purpose now, because it is indistinguishable from one a live worker is inside.
+    await ageRun(db, run.id);
 
     const worker = createFacilityImportWorker({
       runs, blob: fakeBlob(CSV), importDeps: { db, capture: referenceCapture },
@@ -688,5 +746,99 @@ describe('createFacilityImportWorker — apply phase', () => {
     expect(after?.status).toBe('failed');
     expect(after?.error).toMatch(/restart/i);
     expect((await rowFor(db, run.id)).active_key).toBeNull();
+  });
+});
+
+// ── Whole-branch review C1: who may sweep, and what a sweep may reach ──────────────────────────
+//
+// The two halves of one defect. Constructing this worker fires a sweep that is scoped to NO process
+// and (before this) to no age, and `createAppContext` built it at the top level — so every `openldr`
+// CLI command ran it against the database of a live server, releasing the `active_key` of an apply
+// that was still writing. Half 1 stops a non-draining process building the worker at all; half 2
+// stops the sweep reaching a run that was claimed moments ago, whoever runs it.
+describe('createFacilityImportWorker — the stale sweep', () => {
+  /** Everything the worker needs, over one db — built once so the two constructions below are
+   *  identical in every respect EXCEPT the opt-in. */
+  const depsFor = (db: Kysely<InternalSchema>, runs: FacilityImportRunStore) => ({
+    runs, blob: fakeBlob(CSV), importDeps: { db, capture: referenceCapture },
+    intervalMs: 10_000, logger: fakeLogger(),
+  });
+
+  it('⛔ a CLI-shaped construction (opt-in withheld) builds no worker and cannot fail a live run', async () => {
+    const db = (await makeMigratedDb()) as Kysely<InternalSchema>;
+    const runs = createFacilityImportRunStore(db);
+    const run = await runs.startUpload(upload());
+    await runs.claimNext('queued', 'validating');
+    // ⛔ AGED PAST THE LEASE ON PURPOSE, so half 2 cannot be what spares this run and the ONLY thing
+    // under test is the opt-in. Without this the test would pass even with the gate deleted.
+    await ageRun(db, run.id);
+    const deps = depsFor(db, runs);
+
+    // The CLI's shape: `createAppContext` without `runFacilityImportWorker`.
+    const notServing = createFacilityImportWorkerIfEnabled(false, deps);
+    expect(notServing).toBeNull();
+    // Let any sweep a construction might have fired settle before reading the row.
+    await new Promise((r) => setTimeout(r, 20));
+
+    const live = await rowFor(db, run.id);
+    expect(live.status).toBe('validating');
+    expect(live.error).toBeNull();
+    // The register is still HELD, which is the harm: releasing it lets a second upload start a
+    // second apply over the same national register while this one is mid-write.
+    expect(live.active_key).toBe(SYSTEM);
+
+    // ⛔ And the server's shape, over the SAME deps and the SAME row, DOES fail it — so the three
+    // assertions above are not vacuously true of a sweep that never reaches this run at all.
+    const serving = createFacilityImportWorkerIfEnabled(true, deps);
+    expect(serving).not.toBeNull();
+    await serving!.stop();
+    expect((await runs.get(run.id))?.status).toBe('failed');
+    expect((await rowFor(db, run.id)).active_key).toBeNull();
+  });
+
+  it('⛔ the sweep spares a run claimed seconds ago and still fails one that outlived the lease', async () => {
+    const db = (await makeMigratedDb()) as Kysely<InternalSchema>;
+    const runs = createFacilityImportRunStore(db);
+    // Distinct national systems: the unique `active_key` index refuses two live runs on one register.
+    const fresh = await runs.startUpload(upload());
+    const orphan = await runs.startUpload({ ...upload(), nationalSystem: 'urn:tz:old', fileHash: 'h2' });
+    await runs.claimNext('queued', 'validating');
+    await runs.claimNext('queued', 'validating');
+    await ageRun(db, orphan.id);
+
+    const worker = createFacilityImportWorker(depsFor(db, runs));
+    await worker.stop();
+
+    // What a live worker in another process looks like from here — untouched, still holding its key.
+    const freshRow = await rowFor(db, fresh.id);
+    expect(freshRow.status).toBe('validating');
+    expect(freshRow.active_key).toBe(SYSTEM);
+    // …and crash recovery still happens for the one that really is orphaned.
+    const orphanRow = await rowFor(db, orphan.id);
+    expect(orphanRow.status).toBe('failed');
+    expect(orphanRow.active_key).toBeNull();
+  });
+
+  it('⛔ a run orphaned AFTER boot is swept by a later tick, not stranded until the next restart', async () => {
+    // The cost of age-scoping, paid for: a process killed ten seconds before this one started would
+    // be spared by the lease at construction. The sweep therefore runs at the head of every tick too,
+    // so the run is released once it ages past the lease rather than at some later restart.
+    const db = (await makeMigratedDb()) as Kysely<InternalSchema>;
+    const runs = createFacilityImportRunStore(db);
+    const run = await runs.startUpload(upload());
+    await runs.claimNext('queued', 'validating');
+
+    const worker = createFacilityImportWorker(depsFor(db, runs));
+    await worker.tickOnce();
+    expect((await runs.get(run.id))?.status).toBe('validating'); // still inside the lease
+
+    await ageRun(db, run.id);
+    await worker.tickOnce();
+    await worker.stop();
+
+    const after = await rowFor(db, run.id);
+    expect(after.status).toBe('failed');
+    expect(after.error).toMatch(/lease/i);
+    expect(after.active_key).toBeNull();
   });
 });

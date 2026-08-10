@@ -24,6 +24,34 @@ import {
 // `facility_registry`, so Task 3 (CLI) and Task 4 (HTTP route) can both wrap it instead of duplicating
 // write logic (the repo's CLI-parity rule).
 
+/**
+ * Does this instance already hold at least one facility filed under `nationalSystem`?
+ *
+ * ⛔ THE ANSWER `importFacilities` CANNOT GIVE, and the reason `FacilityImportResult`'s field of the
+ * same name is documented as the CALLER's to fill in. `nationalSystem` is free text feeding a
+ * deterministic id, so `HFR` and `hfr` are two registers that will never merge; reporting `false`
+ * is how an operator finds out they have just minted a second permanent identity for a register
+ * they already had. `importFacilities` has no basis for the question — it never asks the registry
+ * anything outside the ids its own file names — so it reports the neutral `true` and every entry
+ * path overwrites that before the value is shown or stored.
+ *
+ * ⛔ AND IT MUST BE ASKED BEFORE THE WRITE. An apply CREATES rows under this `nationalSystem`, so the
+ * same query afterwards answers `true` for the very register it just invented — the warning would
+ * be true exactly until it mattered. Both callers ask first and attach the answer to the result they
+ * return/persist.
+ *
+ * Shared by the inline route (apps/server/src/facilities-routes.ts) and the background import worker
+ * (facility-import-worker.ts) rather than spelled twice: the two entry paths reporting different
+ * answers for the same register is the drift this whole slice is built to make unexpressible.
+ */
+export async function resolveKnownNationalSystem(
+  db: Kysely<InternalSchema>, nationalSystem: string,
+): Promise<boolean> {
+  const known = await db.selectFrom('facility_registry').select('id')
+    .where('national_system', '=', nationalSystem).limit(1).executeTakeFirst();
+  return !!known;
+}
+
 export interface FacilityImportDeps {
   db: Kysely<InternalSchema>;
   /** Reference-sync capture binding (see @openldr/db's ReferenceCapture). Omit to import without

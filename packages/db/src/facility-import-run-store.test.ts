@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import type { Kysely } from 'kysely';
+import { sql, type Kysely } from 'kysely';
 import { makeMigratedDb, makeMigratedDbWithMem } from './migrations/internal/test-helpers';
 import { createFacilityImportRunStore } from './facility-import-run-store';
 import { ALL_RUN_STATES, RUNNING_RUN_STATES, APPLY_PHASE, type FacilityImportRunStatus } from './facility-import-run-states';
@@ -373,6 +373,53 @@ describe('createFacilityImportRunStore', () => {
         expect(stored.active_key).toBe(`urn:sys:fir_${status}`);
       }
     }
+  });
+
+  // ⛔ WHOLE-BRANCH REVIEW C1, half 2. `failStaleRunning` is not scoped to a process — any process
+  // holding this database can run it — so without an age bound it releases the `active_key` of an
+  // apply another process is INSIDE, and a second upload can then start a second apply over the same
+  // national register. `minAgeMs` is the bound; `started_at` (stamped by `claimNext`, in the same
+  // UPDATE that writes the RUNNING status) is what it measures.
+  it('⛔ failStaleRunning spares a freshly-claimed run and still fails one that outlived the lease', async () => {
+    const db = (await makeMigratedDb()) as Kysely<InternalSchema>;
+    const store = createFacilityImportRunStore(db);
+
+    // Two runs, DISTINCT national systems so the unique `active_key` index permits both.
+    const fresh = await store.startUpload(upload);
+    const old = await store.startUpload({ ...upload, nationalSystem: 'urn:tz:old', fileHash: 'h2' });
+    await store.claimNext('queued', 'validating');
+    await store.claimNext('queued', 'validating');
+    expect((await store.get(fresh.id))?.status).toBe('validating');
+    expect((await store.get(old.id))?.status).toBe('validating');
+    // Only `claimNext` writes `started_at`, so backdating it is the only way to age a run — and it is
+    // exactly the state a process killed an hour ago leaves behind.
+    await sql`update facility_import_runs set started_at = now() - interval '3600 seconds' where id = ${old.id}`.execute(db);
+
+    const failed = await store.failStaleRunning('lease expired', 15 * 60 * 1000);
+
+    expect(failed).toBe(1);
+    // The live one is untouched AND still owns its register — releasing the key is the actual harm.
+    const liveRow = await row(db, fresh.id);
+    expect(liveRow.status).toBe('validating');
+    expect(liveRow.error).toBeNull();
+    expect(liveRow.active_key).toBe('urn:tz:hfr');
+    const sweptRow = await row(db, old.id);
+    expect(sweptRow.status).toBe('failed');
+    expect(sweptRow.error).toBe('lease expired');
+    expect(sweptRow.active_key).toBeNull();
+  });
+
+  // The `started_at IS NULL` half of the same predicate. `claimNext` always stamps it, so a RUNNING
+  // row without one cannot have its age established — and a run whose age is unknown is exactly the
+  // one no lease will ever release. Also what keeps the `ALL_RUN_STATES` sweep above (whose rows are
+  // hand-inserted with no `started_at`) meaningful under a non-zero lease.
+  it('failStaleRunning sweeps a RUNNING run with no started_at however long the lease is', async () => {
+    const db = (await makeMigratedDb()) as Kysely<InternalSchema>;
+    const store = createFacilityImportRunStore(db);
+    await insertRun(db, 'fir_nostart', 'applying');
+
+    expect(await store.failStaleRunning('lease expired', 24 * 60 * 60 * 1000)).toBe(1);
+    expect((await row(db, 'fir_nostart')).status).toBe('failed');
   });
 
   it('supersede releases a run only while it is still in the status the caller observed', async () => {

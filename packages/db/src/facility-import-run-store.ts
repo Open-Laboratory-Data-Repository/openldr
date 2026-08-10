@@ -59,11 +59,7 @@ export interface FacilityImportRunStore {
   }): Promise<FacilityImportRun>;
   /** Guarded UPDATE claim, exactly like facility-job-store's: a second claimer updates 0 rows.
    *
-   *  ⚠ The `status` union is the reason `isWorkerObserved` answers `true` for
-   *  `awaiting_confirmation` — a TYPE, not a worker. No worker claims that state: the validate
-   *  claims `VALIDATE_PHASE.from` and the apply claims `APPLY_PHASE.from`. See
-   *  `CLAIMABLE_RUN_STATES`' carry-forward note. */
-  /** ⛔ The source type is exactly the two phase heads — `awaiting_confirmation` is deliberately NOT
+   *  ⛔ The source type is exactly the two phase heads — `awaiting_confirmation` is deliberately NOT
    *  assignable. A worker claiming the state a run PARKS in would apply a register the operator has
    *  not decided about, so the restriction is a compile error rather than a convention. */
   claimNext(status: typeof VALIDATE_PHASE.from | typeof APPLY_PHASE.from, to: 'validating' | 'applying'): Promise<FacilityImportRun | null>;
@@ -119,8 +115,28 @@ export interface FacilityImportRunStore {
    *  reported: `finish` returns `void`, and widening its return type would silently change the
    *  contract for the inline route and the CLI, which the brief forbids. */
   supersede(id: string, expectedStatus: FacilityImportRunStatus, error: string): Promise<boolean>;
-  /** Crash recovery: fail every run left in a RUNNING state at boot. Returns how many. */
-  failStaleRunning(error: string): Promise<number>;
+  /** Crash recovery: fail every run left in a RUNNING state, releasing its `active_key`. Returns how
+   *  many.
+   *
+   *  ⛔ `minAgeMs` IS WHAT STOPS THIS SWEEPING A LIVE RUN OUT FROM UNDER ANOTHER PROCESS. A run is
+   *  RUNNING for exactly as long as some worker is inside `importFacilities` for it, and this
+   *  statement is not scoped to any one process — so without an age bound, ANY process that runs this
+   *  nulls the `active_key` of an apply another process is mid-write on, and a second upload can then
+   *  mint a run and start a second apply over the same national register. The bound is expressed
+   *  against `started_at`, which `claimNext` stamps in the same UPDATE that writes the RUNNING status
+   *  (nothing else in this module writes either), so "how long has this run been RUNNING" is exactly
+   *  what it measures.
+   *
+   *  ⚠ `started_at IS NULL` is swept regardless of `minAgeMs`. `claimNext` is the only writer of a
+   *  RUNNING status and it always stamps the timestamp, so a RUNNING row without one did not come
+   *  from this store and its age cannot be established — and a run whose age is unknown is exactly
+   *  the one nothing else will ever release.
+   *
+   *  ⚠ DEFAULTS TO 0 — "sweep every RUNNING run" — because the lease is a POLICY the sweeping worker
+   *  owns (see `FACILITY_IMPORT_STALE_LEASE_MS` in @openldr/bootstrap's facility-import-worker.ts),
+   *  not a property of this statement. The default preserves the behaviour of a caller that names no
+   *  lease; it is not a safe value for a caller that shares this table with a live worker. */
+  failStaleRunning(error: string, minAgeMs?: number): Promise<number>;
 
   get(id: string): Promise<FacilityImportRun | null>;
   list(nationalSystem?: string, limit?: number): Promise<FacilityImportRun[]>;
@@ -427,13 +443,26 @@ export function createFacilityImportRunStore(db: Kysely<InternalSchema>): Facili
       return Number(res?.numUpdatedRows ?? 0) > 0;
     },
 
-    async failStaleRunning(error) {
+    async failStaleRunning(error, minAgeMs = 0) {
+      // ⛔ `sql.raw` and NOT a bound parameter, because `interval` takes a typed LITERAL in Postgres
+      // (`interval $1` does not parse). The value interpolated is the result of `Math.floor` over a
+      // number, so it is a run of digits and nothing else can reach the statement.
+      const ms = Math.max(0, Math.floor(minAgeMs));
+      const olderThanLease = sql.raw(`interval '${ms} milliseconds'`);
       // ⛔ Expressed against `RUNNING_RUN_STATES`, never a hand-written list of literals: a state
       // added to the RUNNING half of the partition must be recovered by this sweep automatically, or
       // a crash leaves runs in it holding their registers with nothing to release them.
+      //
+      // ⛔ AND age-scoped — see this method's contract. `now()` is the DATABASE clock on both sides
+      // of the comparison (`started_at` is written by `claimNext`'s `now()`), so the lease does not
+      // depend on the host clock of whichever process happens to run the sweep.
       const res = await db.updateTable('facility_import_runs')
         .set({ status: 'failed', error, finished_at: sql`now()` as never, active_key: null } as never)
         .where('status', 'in', [...RUNNING_RUN_STATES])
+        .where((eb) => eb.or([
+          eb('started_at', 'is', null),
+          eb('started_at', '<=', sql`now() - ${olderThanLease}` as never),
+        ]))
         .executeTakeFirst();
       return Number(res?.numUpdatedRows ?? 0);
     },

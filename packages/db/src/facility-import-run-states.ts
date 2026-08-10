@@ -19,13 +19,15 @@
  *  ⚠ THREE of the five sets below partition the enum; `CLAIMABLE_RUN_STATES` and
  *  `APPLICABLE_RUN_STATES` do NOT. TERMINAL / SUPERSEDABLE / RUNNING are exhaustive and mutually
  *  exclusive, and the exhaustiveness test (`facility-import-run-states.test.ts`) forces a state added
- *  to `ALL_RUN_STATES` into exactly one of them. The other two cut ACROSS that partition — each is a
- *  separate positive list, and nothing forces a new state into either, so a state added later
- *  silently gets `isApplicable === false` and `isWorkerObserved === false` until someone lists it.
- *  Both defaults are fail-closed and correct (an unclassified state has not earned an apply's trust
- *  in its `previewed_at` watermark, and a cancel on a state no worker claims must be carried out by
- *  the writer rather than left as a flag), but they are defaults, not checks: the exhaustiveness test
- *  covers three of the five sets, never the other two. */
+ *  to `ALL_RUN_STATES` into exactly one of them. The other two cut ACROSS that partition and the
+ *  exhaustiveness test reaches neither — but they fail differently, and Task 6 changed which:
+ *   - `CLAIMABLE_RUN_STATES` is DERIVED from the two phase constants, so a phase added later brings
+ *     its own queue head with it and a phase that stops existing takes its head away. Nothing has to
+ *     remember to list anything, and `isWorkerObserved` follows it.
+ *   - `APPLICABLE_RUN_STATES` is still a hand-written positive list, so a state added later silently
+ *     gets `isApplicable === false` until someone lists it. That default is fail-closed and correct
+ *     (an unclassified state has not earned an apply's trust in its `previewed_at` watermark), but it
+ *     is a default, not a check. */
 
 /** Every state, in lifecycle order. The single place a state is introduced: the union below is
  *  derived from this array, so a new entry cannot be omitted from the exhaustiveness test. */
@@ -54,9 +56,11 @@ export type FacilityImportRunStatus = (typeof ALL_RUN_STATES)[number];
  *  `finishApply` (`'applied' | 'failed'`, the inline path) and `finish` (`'applied' | 'failed' |
  *  'cancelled'`, the worker's) both delegate to ONE private `finishRun` in
  *  `facility-import-run-store.ts`, so the clear cannot be present in one and missing from the other.
- *  `supersede` and `failStaleRunning` write `failed` by their own guarded UPDATEs and clear the key
- *  there too. Any FUTURE writer of a terminal status must do the same, or that run holds its national
- *  system for good and locks the register out of every import. */
+ *  THREE further writers reach a terminal status without going through `finishRun`, each by its own
+ *  guarded UPDATE, and each clears the key there too: `supersede` and `failStaleRunning` write
+ *  `failed`, and `requestCancel` writes `cancelled` directly for a run no worker will ever observe.
+ *  Any FUTURE writer of a terminal status must do the same, or that run holds its national system
+ *  for good and locks the register out of every import. */
 export const TERMINAL_RUN_STATES: ReadonlySet<FacilityImportRunStatus> =
   new Set<FacilityImportRunStatus>(['applied', 'failed', 'cancelled']);
 
