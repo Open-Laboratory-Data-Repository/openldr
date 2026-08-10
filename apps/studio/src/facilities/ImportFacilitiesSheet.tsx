@@ -14,7 +14,15 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { importFacilitiesCsv, type FacilityImportResult } from '@/api';
+import { importFacilitiesCsv, type FacilityImportResult, type ControlledField } from '@/api';
+
+// CT-3 (whole-branch review): `FacilityImportResult.unmapped`/`notValidated` are keyed by this
+// fixed triple — mirrors `@openldr/bootstrap`'s `CONTROLLED_FIELDS`, not imported from it (this app
+// has no dependency on that package, same "mirrored, not shared" reasoning as the rest of api.ts's
+// FacilityImportResult). Each field already has a translated label under `facilities.filters.*Label`
+// (the Facilities page's own filter row) — reused here rather than adding a second, driftable set of
+// field-name translations.
+const CONTROLLED_FIELDS: ControlledField[] = ['level', 'status', 'country'];
 
 /** A diff cell's `before`/`after` value, formatted for display. `null`/`undefined` (the field was
  *  never set) reads as an em-dash rather than the literal string "null"/"undefined". */
@@ -53,6 +61,20 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   // toggling it does NOT need a new preview: `quarantined` is a property of the file itself (see
   // facility-csv.ts), not of this flag, so nothing about the preview's own content can change.
   const [allowMalformedRows, setAllowMalformedRows] = useState(false);
+  // CT-3: the third member of the override family — see `FacilityImportRequest.allowInvalidCoordinates`
+  // (api.ts) for why a row failing coordinate validation is otherwise dropped from the parse rather
+  // than imported with both coordinates null. Unlike `allowMalformedRows`, toggling this DOES
+  // re-preview (see `toggleAllowInvalidCoordinates` below) — it changes which rows land in `records`,
+  // not merely whether Apply may proceed.
+  const [allowInvalidCoordinates, setAllowInvalidCoordinates] = useState(false);
+  // CT-3: which shape the file is, and whether it declares itself a complete release — both feed
+  // `FacilityImportRequest.format`/`completeRelease` (api.ts) on every preview AND apply. Without
+  // these, `absent`/`deleted` (and their retirement Selects below) could never be anything but
+  // `null`/`0` from this sheet — see the CT-3 finding this task fixes.
+  const [format, setFormat] = useState<'csv' | 'jsonl'>('csv');
+  const [completeRelease, setCompleteRelease] = useState(false);
+  // Optional provenance only — never read by `importFacilities` itself (see api.ts's doc comment).
+  const [releaseVersion, setReleaseVersion] = useState('');
   // A2a: what to do with rows this file's reconciliation classified as `deleted` (the publisher
   // explicitly declared them removed) or `absent` (this registry holds them, the file is simply
   // silent about them). Defaults mirror the server's own (`FacilityImportOptions.onDeleted`/
@@ -89,6 +111,10 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
     setFile(f);
     setAllowUnknownColumns(false);
     setAllowMalformedRows(false);
+    setAllowInvalidCoordinates(false);
+    setFormat('csv');
+    setCompleteRelease(false);
+    setReleaseVersion('');
     setOnDeleted('retire');
     setOnAbsent('report');
     setOnConflict('skip');
@@ -118,7 +144,14 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
     return raw;
   };
 
-  const runPreview = async (allowOverride?: boolean): Promise<void> => {
+  // CT-3: `overrides` replaces the old single `allowOverride?: boolean` — TWO checkboxes now need to
+  // send their just-clicked value ahead of the state update that triggered this call (React state
+  // setters are async), `allowUnknownColumns` and `allowInvalidCoordinates` alike (see
+  // `toggleAllowUnknownColumns`/`toggleAllowInvalidCoordinates` below). `allowMalformedRows` is
+  // deliberately NOT one of these fields — see the pinned-`false` comment below.
+  const runPreview = async (
+    overrides?: { allowUnknownColumns?: boolean; allowInvalidCoordinates?: boolean },
+  ): Promise<void> => {
     if (!csv || !nationalSystem.trim()) return;
     setPreviewing(true);
     setError(null);
@@ -127,7 +160,12 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
       const result = await importFacilitiesCsv({
         csv,
         nationalSystem: nationalSystem.trim(),
-        allowUnknownColumns: allowOverride ?? allowUnknownColumns,
+        allowUnknownColumns: overrides?.allowUnknownColumns ?? allowUnknownColumns,
+        // CT-3: unlike `allowMalformedRows` below, this DOES need to reach the preview request — it
+        // changes which rows land in `records` (and therefore `create`/`changed`/`unchanged`), not
+        // merely whether Apply may proceed, so a preview computed without it would misreport what
+        // Apply would actually do. See `toggleAllowInvalidCoordinates`.
+        allowInvalidCoordinates: overrides?.allowInvalidCoordinates ?? allowInvalidCoordinates,
         // ⛔ ALWAYS `false`, deliberately, and never the live checkbox: this request is what makes
         // `blocked`/`blockedReason` a STABLE BASELINE the checkbox can be toggled against in both
         // directions. Sending the override would make the server answer for the override too, and
@@ -141,6 +179,13 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
         // same `parsed`/`skipped`/`duplicates` either way. Apply still sends the operator's real
         // answer (see handleApplyConfirm), which is the only request the flag actually gates.
         allowMalformedRows: false,
+        // CT-3: the whole point of this fix. Without these, every preview reported `conflict: null`,
+        // `absent: null`, `deleted: 0` no matter what the file actually was — making the
+        // `onConflict`/`onAbsent`/`onDeleted` Selects below structurally unreachable (see the finding
+        // this task closes).
+        format,
+        completeRelease,
+        releaseVersion: releaseVersion.trim() || undefined,
         apply: false,
       });
       setPreviewResult(result);
@@ -155,7 +200,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
 
   const toggleAllowUnknownColumns = (checked: boolean) => {
     setAllowUnknownColumns(checked);
-    void runPreview(checked);
+    void runPreview({ allowUnknownColumns: checked });
   };
 
   // Deliberately does NOT re-run the preview — see `allowMalformedRows`'s doc comment above: the
@@ -164,6 +209,31 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   // to proceed.
   const toggleAllowMalformedRows = (checked: boolean) => {
     setAllowMalformedRows(checked);
+  };
+
+  // CT-3: DOES re-run the preview, same reasoning as `toggleAllowUnknownColumns` above and unlike
+  // `toggleAllowMalformedRows` — a row with an invalid coordinate is excluded from `records`
+  // entirely without this override, so ticking it changes `create`/`changed`/`unchanged`, not just
+  // whether Apply may proceed.
+  const toggleAllowInvalidCoordinates = (checked: boolean) => {
+    setAllowInvalidCoordinates(checked);
+    void runPreview({ allowInvalidCoordinates: checked });
+  };
+
+  // CT-3: any change to the file's declared SHAPE invalidates the preview the same way
+  // `handleNationalSystemChange` already does — a preview computed for `format: 'csv'` describes a
+  // different parse entirely once the operator switches to `'jsonl'`.
+  const handleFormatChange = (value: 'csv' | 'jsonl') => {
+    setFormat(value);
+    invalidatePreview();
+  };
+  const handleCompleteReleaseChange = (checked: boolean) => {
+    setCompleteRelease(checked);
+    invalidatePreview();
+  };
+  const handleReleaseVersionChange = (value: string) => {
+    setReleaseVersion(value);
+    invalidatePreview();
   };
 
   const handleApplyConfirm = async (): Promise<void> => {
@@ -177,6 +247,14 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
         nationalSystem: nationalSystem.trim(),
         allowUnknownColumns,
         allowMalformedRows,
+        allowInvalidCoordinates,
+        // CT-3: the apply must describe the SAME file shape/release declaration the preview it is
+        // linked to (via `runId` below) already classified against — sending the CSV default here
+        // while the linked preview parsed a JSONL release would have the apply parse the file
+        // differently from what the operator reviewed.
+        format,
+        completeRelease,
+        releaseVersion: releaseVersion.trim() || undefined,
         apply: true,
         // A2a: without this, the apply is not linked to the preview the operator just read, and
         // `conflict` reports `null` (not evaluated) even though a preview DID run — see api.ts's
@@ -265,10 +343,13 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   // Task 5: same reasoning as the unknownColumns exception above — a file that quarantined every
   // row already has its own explanation (the quarantine block below) and must not also show the
   // generic "no rows found" message.
+  // CT-3: same reasoning again for `invalid` — a file whose every row failed coordinate validation
+  // (without the override) already has its own explanation (the invalid-coordinates block below).
   const noOutcomeStated = !!previewResult
     && previewResult.parsed === 0
     && (previewResult.unknownColumns.length === 0 || allowUnknownColumns)
-    && previewResult.quarantined.length === 0;
+    && previewResult.quarantined.length === 0
+    && previewResult.invalid.length === 0;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -315,7 +396,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
               <input
                 id="facility-import-file"
                 type="file"
-                accept=".csv,text/csv"
+                accept=".csv,text/csv,.jsonl,application/x-ndjson"
                 disabled={applying}
                 onChange={handleFileChange}
                 className="text-sm text-foreground file:mr-3 file:cursor-pointer file:rounded-md file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-xs file:font-medium disabled:cursor-not-allowed disabled:opacity-50"
@@ -336,6 +417,53 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
               />
               <p className="mt-1 text-xs text-muted-foreground">{t('facilities.import.nationalSystemHint')}</p>
             </div>
+
+            {/* CT-3: which shape the file is — feeds `FacilityImportRequest.format` on every preview
+                AND apply (see runPreview/handleApplyConfirm). Without this control the sheet could
+                never import a JSONL release at all, and `absent`/`deleted` (declaration-only fields
+                a plain CSV can never carry) stayed permanently unreachable. */}
+            <Label htmlFor="facility-import-format" className="whitespace-nowrap">{t('facilities.import.formatLabel')}</Label>
+            <Select value={format} onValueChange={(v) => handleFormatChange(v as 'csv' | 'jsonl')} disabled={applying}>
+              <SelectTrigger id="facility-import-format">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="csv">{t('facilities.import.formatCsv')}</SelectItem>
+                <SelectItem value="jsonl">{t('facilities.import.formatJsonl')}</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {/* CT-3: feeds `FacilityImportRequest.completeRelease` — NECESSARY, but not sufficient,
+                for a row's absence to mean anything (see that field's own doc comment, api.ts).
+                ⛔ NOT wrapped in a second `<label>` around the Checkbox+hint (unlike the amber-box
+                override checkboxes below) — that would give the checkbox TWO associated labels (this
+                `Label` via `htmlFor`, plus the wrapper), and a double association is exactly the kind
+                of accessible-name ambiguity `use-shadcn-components`/label-left-input-right exists to
+                avoid. Mirrors the plain `Input` rows above: `Label` owns the name, the hint is a
+                sibling `<p>`, not a second label. */}
+            <Label htmlFor="facility-import-complete-release" className="whitespace-nowrap">
+              {t('facilities.import.completeReleaseLabel')}
+            </Label>
+            <div>
+              <Checkbox
+                id="facility-import-complete-release"
+                checked={completeRelease}
+                disabled={applying}
+                onCheckedChange={(c) => handleCompleteReleaseChange(c === true)}
+              />
+              <p className="mt-1 text-xs text-muted-foreground">{t('facilities.import.completeReleaseHint')}</p>
+            </div>
+
+            <Label htmlFor="facility-import-release-version" className="whitespace-nowrap">
+              {t('facilities.import.releaseVersionLabel')}
+            </Label>
+            <Input
+              id="facility-import-release-version"
+              value={releaseVersion}
+              onChange={(e) => handleReleaseVersionChange(e.target.value)}
+              placeholder={t('facilities.import.releaseVersionPlaceholder')}
+              disabled={applying}
+            />
           </div>
 
           {previewResult && !applyResult && (
@@ -347,6 +475,26 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
               {!previewResult.knownNationalSystem && (
                 <div className="rounded-md border border-sky-500/40 bg-sky-500/10 px-3 py-2 text-xs text-sky-700">
                   {t('facilities.import.newRegisterNotice')}
+                </div>
+              )}
+
+              {/* CT-3: a JSONL release's own declared counts (`meta.rowCount`/`deletionCount`)
+                  disagreeing with what actually parsed — "the release declares 13 000 rows, we
+                  parsed 12 998" (see facility-import.ts's `FacilityImportResult.countMismatch`).
+                  Reported, never blocking — always `[]` for CSV, which has no release header. */}
+              {previewResult.countMismatch.length > 0 && (
+                <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700">
+                  <p className="font-medium">{t('facilities.import.countMismatchTitle')}</p>
+                  {previewResult.countMismatch.map((m) => (
+                    <p key={m.field}>
+                      {t(
+                        m.field === 'rowCount'
+                          ? 'facilities.import.countMismatchRowCount'
+                          : 'facilities.import.countMismatchDeletionCount',
+                        { declared: m.declared, parsed: m.parsed },
+                      )}
+                    </p>
+                  ))}
                 </div>
               )}
 
@@ -389,6 +537,34 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
                       onCheckedChange={(c) => toggleAllowMalformedRows(c === true)}
                     />
                     <span>{t('facilities.import.allowMalformedRows')}</span>
+                  </label>
+                </div>
+              )}
+
+              {/* CT-3: `invalid` (facility-import.ts's per-FIELD coordinate errors) — a row here was
+                  otherwise well-formed but had its latitude/longitude rejected, and is DROPPED from
+                  `records` entirely (never counted in `create`/`changed`/`unchanged`, unlike
+                  `quarantined` above) unless `allowInvalidCoordinates` is set. Same idiom as
+                  `allowUnknownColumns`/`allowMalformedRows`, but toggling it DOES re-preview — see
+                  `toggleAllowInvalidCoordinates`. */}
+              {previewResult.invalid.length > 0 && (
+                <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700">
+                  <p className="font-medium">{t('facilities.import.invalidTitle')}</p>
+                  <p>{t('facilities.import.invalidCount', { count: previewResult.invalid.length })}</p>
+                  <ul className="mt-2 max-h-32 space-y-0.5 overflow-y-auto">
+                    {previewResult.invalid.map((row, i) => (
+                      <li key={`${row.line}-${row.field}-${i}`}>
+                        {t('facilities.import.invalidLine', { line: row.line, field: row.field, raw: row.raw })}
+                      </li>
+                    ))}
+                  </ul>
+                  <label className="mt-2 flex items-center gap-2">
+                    <Checkbox
+                      checked={allowInvalidCoordinates}
+                      disabled={previewing}
+                      onCheckedChange={(c) => toggleAllowInvalidCoordinates(c === true)}
+                    />
+                    <span>{t('facilities.import.allowInvalidCoordinates')}</span>
                   </label>
                 </div>
               )}
@@ -444,6 +620,34 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
                     </div>
                   )}
 
+                  {/* CT-3: the controlled-field layer (FAC-P1-05) — a raw source value for
+                      level/status/country that resolved to no canonical `term_mappings` code. A
+                      WARNING, never a block: the raw value is still written exactly as before this
+                      layer existed (see facility-import.ts's `unmapped` doc comment). */}
+                  {CONTROLLED_FIELDS.some((f) => previewResult.unmapped[f].length > 0) && (
+                    <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700">
+                      <p className="font-medium">{t('facilities.import.unmappedTitle')}</p>
+                      {CONTROLLED_FIELDS.filter((f) => previewResult.unmapped[f].length > 0).map((field) => (
+                        <p key={field}>
+                          {t('facilities.import.unmappedMessage', {
+                            count: previewResult.unmapped[field].length,
+                            field: t(`facilities.filters.${field}Label`),
+                            values: previewResult.unmapped[field].join(', '),
+                          })}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                  {/* Informational, not a warning box: these fields simply have no seeded value set
+                      to check against on this install, so mapped/unmapped could not be determined. */}
+                  {previewResult.notValidated.length > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      {t('facilities.import.notValidatedMessage', {
+                        fields: previewResult.notValidated.map((f) => t(`facilities.filters.${f}Label`)).join(', '),
+                      })}
+                    </p>
+                  )}
+
                   {/* A2a: the retirement choices are INPUTS (label-left/input-right, exempt from the
                       ⋯-menu rule — see ui-actions-in-dots-menu), not actions. Shown only when there
                       is something meaningful to decide: a `deleted`/`absent` of `0` (or `absent`
@@ -481,10 +685,15 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
                       </Select>
                     </div>
                   )}
-                  {/* A2a: same "only when there's something to decide" rule as onDeleted/onAbsent
-                      above — a `conflict` of `0` or still `null` (not evaluated) has nothing to
-                      overwrite, so a control here would offer a choice with no effect. */}
-                  {previewResult.conflict !== null && previewResult.conflict > 0 && (
+                  {/* CT-3: gated on `runId`, NOT on `conflict > 0` like onDeleted/onAbsent above —
+                      and deliberately so. A fresh standalone preview's OWN `conflict` is ALWAYS
+                      `null`: `conflictsEvaluated` needs a `previewedAt` watermark from a PRIOR
+                      preview, which this request (being the one that just minted the run) can never
+                      supply for itself (facility-import.ts's `previewedAt`/`conflictsEvaluated`). A
+                      conflict can only ever be discovered by the APPLY this `runId` will later link
+                      to — so the operator must set their skip/overwrite preference NOW, before that
+                      apply runs, not after a count that will never arrive on this screen. */}
+                  {!!previewResult.runId && (
                     <div className="grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-1 rounded-md border border-border px-3 py-2">
                       <Label htmlFor="facility-import-on-conflict" className="whitespace-nowrap">
                         {t('facilities.import.onConflictLabel')}
@@ -518,11 +727,39 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
           )}
 
           {applyResult && (
-            <div className="mx-6 mt-4 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700">
-              <p className="font-medium">{t('facilities.import.doneTitle')}</p>
-              <p>{t('facilities.import.doneSummary', { created: applyResult.written.created, updated: applyResult.written.updated, skipped: applyResult.skipped })}</p>
-              {applyResult.duplicates > 0 && (
-                <p>{t('facilities.import.duplicatesWarning', { count: applyResult.duplicates })}</p>
+            <div className="mx-6 mt-4 space-y-2 text-sm">
+              <div className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-emerald-700">
+                <p className="font-medium">{t('facilities.import.doneTitle')}</p>
+                <p>{t('facilities.import.doneSummary', { created: applyResult.written.created, updated: applyResult.written.updated, skipped: applyResult.skipped })}</p>
+                {applyResult.duplicates > 0 && (
+                  <p>{t('facilities.import.duplicatesWarning', { count: applyResult.duplicates })}</p>
+                )}
+              </div>
+
+              {/* CT-3: THE FIX FOR THE DEFECT THIS TASK CLOSES. Before this, a row edited between
+                  preview and apply was classified `conflict`, skipped by default (or overwritten),
+                  and the apply result rendered only `written.created`/`written.updated`/`skipped` —
+                  the conflict never appeared anywhere on screen: no count, no sample, no sign it had
+                  even happened. `onConflict` (still held in state after Apply) decides which of the
+                  two honest outcomes actually occurred. */}
+              {applyResult.conflict !== null && applyResult.conflict > 0 && (
+                <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700">
+                  <p>
+                    {t(
+                      onConflict === 'overwrite'
+                        ? 'facilities.import.applyConflictOverwritten'
+                        : 'facilities.import.applyConflictSkipped',
+                      { count: applyResult.conflict },
+                    )}
+                  </p>
+                  {applyResult.samples.conflict.length > 0 && (
+                    <ul className="mt-1 max-h-32 space-y-0.5 overflow-y-auto">
+                      {applyResult.samples.conflict.map((row) => (
+                        <li key={row.id}>{row.nationalCode ? `${row.name} (${row.nationalCode})` : row.name}</li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
               )}
             </div>
           )}

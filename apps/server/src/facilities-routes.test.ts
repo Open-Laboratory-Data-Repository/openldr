@@ -1461,6 +1461,16 @@ function facilityCsv(rows: string[]): string {
   return [CSV_HEADER, ...rows].join('\n') + '\n';
 }
 
+// Important 5: a JSONL release fixture, mirroring `packages/bootstrap/src/facility-import.test.ts`'s
+// own `jsonl`/`rowLine`/`deletionLine` helpers — this file needs its own copy since it exercises the
+// ROUTE, not `importFacilities` directly, and has no dependency on that test file.
+function jsonl(lines: Record<string, unknown>[]): string {
+  return lines.map((l) => JSON.stringify(l)).join('\n') + '\n';
+}
+const rowLine = (mflId: string, name: string, over: Record<string, unknown> = {}) =>
+  ({ type: 'row', mflId, name, ...over });
+const deletionLine = (mflId: string) => ({ type: 'deletion', mflId });
+
 function fakeImportCtx(db: any) {
   const audit: any[] = [];
   return {
@@ -1955,6 +1965,54 @@ describe('POST /api/facilities/import', () => {
       });
     });
 
+    // Important 5 (whole-branch review): migration 080 provisioned `declared_row_count`,
+    // `declared_deletion_count` and `release_published_at`, but nothing ever wrote them — a JSONL
+    // release's own header (`preview.meta`, from `parseFacilityRelease`) reached `FacilityImportResult`
+    // and was reported back to the CALLER, but `startPreview`'s call in the route never threaded it
+    // onto the RUN, so "the release declares 3 rows, we parsed 2" never reached the durable record.
+    it('persists a JSONL release\'s declared row/deletion counts and publish date onto the run', async () => {
+      const db = await makeMigratedDb();
+      const app = await appWith(fakeImportCtx(db));
+      const body = jsonl([
+        { type: 'meta', country: 'TZ', version: 'r7', publishedAt: '2026-07-01', rowCount: 3, deletionCount: 1 },
+        rowLine('100', 'Alpha'),
+        rowLine('200', 'Beta'),
+        deletionLine('900'),
+      ]);
+      const res = await app.inject({
+        method: 'POST', url: '/api/facilities/import',
+        payload: { csv: body, nationalSystem: SYSTEM, format: 'jsonl' },
+      });
+      expect(res.statusCode).toBe(200);
+      // Declared 3 rows, only 2 parsed — exactly the fact FAC-P1-03 wants recorded.
+      expect(res.json().countMismatch).toEqual([{ field: 'rowCount', declared: 3, parsed: 2 }]);
+      const runId = res.json().runId;
+
+      const runRes = await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${runId}` });
+      expect(runRes.statusCode).toBe(200);
+      const run = runRes.json();
+      expect(run.declaredRowCount).toBe(3);
+      expect(run.declaredDeletionCount).toBe(1);
+      expect(run.releasePublishedAt).toBe(new Date('2026-07-01').toISOString());
+    });
+
+    // A CSV import has no release header at all — `preview.meta` is null (see
+    // `importFacilities`' docblock), so all three columns must stay null rather than the route
+    // inventing zeros for "not declared".
+    it('leaves declared row/deletion counts null for a plain CSV import (no release header)', async () => {
+      const db = await makeMigratedDb();
+      const app = await appWith(fakeImportCtx(db));
+      const res = await app.inject({
+        method: 'POST', url: '/api/facilities/import',
+        payload: { csv: facilityCsv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,']), nationalSystem: SYSTEM },
+      });
+      expect(res.statusCode).toBe(200);
+      const runRes = await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${res.json().runId}` });
+      expect(runRes.json().declaredRowCount).toBeNull();
+      expect(runRes.json().declaredDeletionCount).toBeNull();
+      expect(runRes.json().releasePublishedAt).toBeNull();
+    });
+
     it('reports knownNationalSystem: true once the register exists, false for one never seen', async () => {
       const db = await makeMigratedDb();
       const app = await appWith(fakeImportCtx(db));
@@ -1990,7 +2048,15 @@ describe('POST /api/facilities/import', () => {
       const runId = preview.json().runId;
 
       // …then the row is touched by something else before the apply carrying that runId arrives.
-      await db.updateTable('facility_registry').set({ updated_at: sql`now()` }).where('national_code', '=', '100').execute();
+      //
+      // ⛔ `now() + interval`, not plain `now()`: pg-mem's `now()` resolves to real
+      // millisecond-precision wall-clock time (measured — two back-to-back `now()` calls land in the
+      // SAME millisecond roughly half the time), so a plain `sql\`now()\`` here races the preview's
+      // own `completePreview` watermark and intermittently fails to register as a conflict at all
+      // under load. A fixed future offset makes "touched after the preview" true unconditionally —
+      // see the identical fix (and this same comment) a few tests below.
+      await db.updateTable('facility_registry')
+        .set({ updated_at: sql`now() + interval '1 second'` }).where('national_code', '=', '100').execute();
 
       const res = await app.inject({
         method: 'POST', url: '/api/facilities/import',

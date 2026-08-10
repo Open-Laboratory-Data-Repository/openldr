@@ -96,6 +96,11 @@ const ImportSchema = z.object({
   // opt-in shape as `allowUnknownColumns` above. Without this key in the schema, zod's default
   // "strip unknown keys" behaviour would silently discard anything the client sent under this name.
   allowMalformedRows: z.boolean().optional(),
+  // CT-3 (whole-branch review): the third member of the `allowUnknownColumns`/`allowMalformedRows`
+  // override family — see `FacilityImportOptions.allowInvalidCoordinates` (facility-import.ts) for
+  // why a row failing coordinate validation is otherwise dropped from `records` entirely rather than
+  // imported with both coordinates null.
+  allowInvalidCoordinates: z.boolean().optional(),
   // The caller opts IN to writing (mirrors the CLI's `--apply`). Omitted/false ⇒ dry run: parse
   // and report, write NOTHING — the default, so a 14 000-row register can never be silently
   // rewritten by a client that forgot to set this.
@@ -1115,6 +1120,7 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       nationalSystem: p.data.nationalSystem,
       allowUnknownColumns: p.data.allowUnknownColumns,
       allowMalformedRows: p.data.allowMalformedRows,
+      allowInvalidCoordinates: p.data.allowInvalidCoordinates,
       format: p.data.format,
       completeRelease: p.data.completeRelease,
       onDeleted: p.data.onDeleted,
@@ -1174,6 +1180,15 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
         fileHash: createHash('sha256').update(p.data.csv, 'utf8').digest('hex'),
         byteSize: csvBytes,
         releaseVersion: p.data.releaseVersion ?? null,
+        // Important 5 (whole-branch review): migration 080 provisioned these three columns and
+        // nothing ever wrote them — `preview.meta` (populated by `importFacilities` for a JSONL
+        // release, always `null` for CSV — see that function's docblock) is the ONLY source for
+        // them, and it is already computed by the time this object is built. Read straight off
+        // `preview.meta`, never off `p.data`: the client cannot supply a trustworthy row/deletion
+        // count itself, only the release header the file actually declared can.
+        releasePublishedAt: preview.meta?.publishedAt ?? null,
+        declaredRowCount: preview.meta?.rowCount ?? null,
+        declaredDeletionCount: preview.meta?.deletionCount ?? null,
         options: importOpts,
         requestedBy: actorFromRequest(req).actorId,
       };
