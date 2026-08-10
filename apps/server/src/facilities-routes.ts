@@ -1167,23 +1167,56 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       // A standalone preview (no `apply`) is the ONLY call that mints a run — see the module-level
       // comment on `importRuns` and the apply branch below for why an apply carrying no `runId` must
       // stay unlinked rather than have this route invent one on its behalf.
+      const startPreviewInput = {
+        nationalSystem: p.data.nationalSystem,
+        sourceFormat: p.data.format ?? 'csv',
+        fileHash: createHash('sha256').update(p.data.csv, 'utf8').digest('hex'),
+        byteSize: csvBytes,
+        releaseVersion: p.data.releaseVersion ?? null,
+        options: importOpts,
+        requestedBy: actorFromRequest(req).actorId,
+      };
       let run: FacilityImportRun;
       try {
-        run = await importRuns.startPreview({
-          nationalSystem: p.data.nationalSystem,
-          sourceFormat: p.data.format ?? 'csv',
-          fileHash: createHash('sha256').update(p.data.csv, 'utf8').digest('hex'),
-          byteSize: csvBytes,
-          releaseVersion: p.data.releaseVersion ?? null,
-          options: importOpts,
-          requestedBy: actorFromRequest(req).actorId,
-        });
+        run = await importRuns.startPreview(startPreviewInput);
       } catch (err) {
-        // Same shape as the terminology distribution upload route's "already in progress" 409
-        // (terminology-admin-routes.ts) — the unique `active_key` index is the race-safe backstop,
-        // this is just where the message becomes readable.
-        reply.code(409);
-        return { error: err instanceof Error ? err.message : String(err) };
+        // Fix wave 1 (Important 4): `active_key` is set here and cleared ONLY by `finishApply` — see
+        // that method's own comment ("clearing the key is what stops a terminal row holding its
+        // national system for good"). Nothing expires or cancels a run that stays `previewed`
+        // forever, so an operator who previews and then simply never applies (closes the sheet,
+        // navigates away — the ordinary "changed my mind" path, not a failure of any kind) would
+        // otherwise lock this `nationalSystem` out of every future preview or runId-less apply
+        // permanently, short of a database reset.
+        //
+        // ⛔ Kept entirely inside this route, not added to `FacilityImportRunStore`'s public contract
+        // — the brief for this fix is explicit that the store's shape does not change. The unique
+        // `active_key` index (migration 080) guarantees AT MOST ONE `previewed` row per
+        // `nationalSystem` at a time, and `finishApply` always nulls `active_key` in the same update
+        // that moves a run off `previewed` — so whenever `startPreview` throws this "already in
+        // progress" error, the newest row `importRuns.list` returns for this system IS the one
+        // currently holding the lock, and it is impossible for a NEWER row to exist here (creating
+        // one requires going through this same `startPreview`, which is exactly what just failed).
+        //
+        // ⛔ Only a run still `previewed` is superseded. A run already `applied` or `failed` has
+        // already released `active_key` on its own — if this branch somehow observed one anyway
+        // (a race this reasoning says cannot happen, but the check costs nothing), touching it would
+        // be finishing an already-finished run for no reason, so the original 409 is surfaced
+        // unchanged instead. Exactly ONE retry: a second failure is surfaced as-is, never looped.
+        const existing = (await importRuns.list(p.data.nationalSystem, 1))[0];
+        if (!existing || existing.status !== 'previewed') {
+          // Same shape as the terminology distribution upload route's "already in progress" 409
+          // (terminology-admin-routes.ts) — the unique `active_key` index is the race-safe backstop,
+          // this is just where the message becomes readable.
+          reply.code(409);
+          return { error: err instanceof Error ? err.message : String(err) };
+        }
+        try {
+          await importRuns.finishApply(existing.id, 'failed', { error: 'superseded by a newer preview' });
+          run = await importRuns.startPreview(startPreviewInput);
+        } catch (retryErr) {
+          reply.code(409);
+          return { error: retryErr instanceof Error ? retryErr.message : String(retryErr) };
+        }
       }
       await importRuns.completePreview(run.id, preview);
       preview.runId = run.id;
@@ -1219,10 +1252,38 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     // have created on an earlier, unrelated call — `run` stays `null`, `previewedAt` stays `null`,
     // and `importFacilities` reports `conflict: null` (NOT EVALUATED), never `0` (evaluated as
     // clean). Reporting `0` here would be exactly the lie FAC-P1-03 removed one layer up.
+    //
+    // A `runId` the caller DID supply is validated on two axes before it is trusted, not merely
+    // checked for existence — an ordinary HTTP retry or a stale client tab is enough to violate
+    // either one:
+    //  - OWNERSHIP (400, "you sent the wrong run for this register"): a run minted for one
+    //    `nationalSystem` must never be allowed to lend its `previewedAt` watermark to an apply
+    //    naming a DIFFERENT one — that is not a conflict-detection question at all, it is the wrong
+    //    answer to a question this run was never asked. 400 because the request itself is
+    //    self-contradictory (this exact `nationalSystem` paired with a `runId` that names another),
+    //    the same category of client-input error `ImportSchema.safeParse` above already 400s.
+    //  - FRESHNESS (409, "this run is no longer applicable"): a run not still `previewed` has
+    //    already been decided — `applied` or `failed` — and resubmitting it (a retry replaying the
+    //    same `runId`) must not perform a SECOND real write reusing the first apply's watermark, nor
+    //    overwrite that first apply's terminal `summary`/`error` with a second one. 409 because the
+    //    run itself is the reason the request cannot proceed as asked, independent of whether the
+    //    request is otherwise well-formed — the same "this thing exists but is not in a state that
+    //    accepts this action" shape as the `startPreview` 409 above.
     let run: FacilityImportRun | null = null;
     if (p.data.runId) {
       run = await importRuns.get(p.data.runId);
       if (!run) { reply.code(404); return { error: `import run not found: ${p.data.runId}` }; }
+      if (run.nationalSystem !== p.data.nationalSystem) {
+        reply.code(400);
+        return {
+          error: `import run ${p.data.runId} belongs to national system "${run.nationalSystem}", `
+            + `not "${p.data.nationalSystem}"`,
+        };
+      }
+      if (run.status !== 'previewed') {
+        reply.code(409);
+        return { error: `import run ${p.data.runId} is no longer applicable: status is "${run.status}", expected "previewed"` };
+      }
     }
 
     // ⛔ Wrapped for the same reason as the preview call above. In practice the preview call
@@ -1259,6 +1320,18 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       reply.code(400);
       return { error: err.message };
     }
+    // Echo the SAME answer the preceding preview computed — an operator applying straight through in
+    // one request deserves the new-register warning on the response that actually wrote, not only on
+    // an intermediate object this route never returned.
+    //
+    // ⛔ ORDER IS LOAD-BEARING: this MUST run before `finishApply` below persists `result` as the
+    // run's durable `summary`. `finishApply`'s store `JSON.stringify`s `summary` SYNCHRONOUSLY on the
+    // way in — it does not hold a live reference that later mutations of `result` would still reach.
+    // Setting this field after that call (as it once was) left the HTTP response carrying
+    // `knownNationalSystem` while the same field was silently absent from `GET
+    // /api/facilities/import/runs/:id`'s persisted record of the very same apply.
+    result.knownNationalSystem = preview.knownNationalSystem;
+
     if (run) {
       try {
         await importRuns.finishApply(run.id, 'applied', { summary: result });
@@ -1266,10 +1339,6 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
         ctx.logger.error({ err: finishErr, runId: run.id }, 'failed to mark a facility import run applied after a successful apply');
       }
     }
-    // Echo the SAME answer the preceding preview computed — an operator applying straight through in
-    // one request deserves the new-register warning on the response that actually wrote, not only on
-    // an intermediate object this route never returned.
-    result.knownNationalSystem = preview.knownNationalSystem;
 
     // A dry run (handled above) writes nothing and must not audit. This point is only reached
     // once a real write happened (preview.parsed > 0 and under the inline cap).
