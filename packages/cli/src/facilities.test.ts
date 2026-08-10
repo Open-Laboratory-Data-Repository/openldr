@@ -520,7 +520,13 @@ describe('facilities import CLI', () => {
     await expect(store.startPreview({
       nationalSystem: 'urn:tz:hfr', sourceFormat: 'csv', fileHash: 'h2', byteSize: 1, options: {},
     })).resolves.toMatchObject({ nationalSystem: 'urn:tz:hfr', status: 'previewed' });
-  });
+    // ⚠ 60s, not the package's 30s default. MEASURED: this test runs in ~3.0s alone but took 31.3s
+    // under `turbo run test --force` and timed out, because it is the only test in this package that
+    // migrates a real pg-mem database (every internal migration) and that work is starved when 67
+    // turbo tasks compete. The slowness is inherent to what it proves — a mock could assert
+    // `finishApply` was CALLED without proving the row was released at the database — so the budget
+    // is raised rather than the coverage weakened.
+  }, 60_000);
 
   // ⛔ Critical 1, the CLI half. This command used to call `importFacilities` with `apply: true`
   // FIRST and only then decide whether to refuse — so a refused file had already been written by the
