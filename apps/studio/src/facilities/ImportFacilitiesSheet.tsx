@@ -21,6 +21,7 @@ import {
   importFacilitiesCsv,
   uploadFacilityImport,
   type ControlledField,
+  type FacilityImportConfirmOptions,
   type FacilityImportResult,
   type FacilityImportRunStatus,
   type FacilityImportRunView,
@@ -77,6 +78,41 @@ const RUN_POLLED_STATUSES: FacilityImportRunStatus[] = ['queued', 'validating', 
 /** Matches the import worker's own default poll interval (`createFacilityImportWorker`'s
  *  `intervalMs ?? 3000`), so the sheet asks at roughly the rate the run can actually change. */
 const RUN_POLL_MS = 3000;
+
+/** The confirm request's body: EXACTLY the choices whose control the operator was actually shown,
+ *  and no others.
+ *
+ *  ⛔ EVERY FIELD OF `FacilityImportConfirmOptions` IS OPTIONAL AND MUST STAY OPTIONAL ON THE WIRE.
+ *  The server records only the keys a request actually carried (see `ConfirmSchema` and that route's
+ *  own note) and merges them into durable `facility_import_runs.options` AND into the
+ *  `facility.import.confirmed` audit metadata. Sending the whole set unconditionally writes the
+ *  sheet's own defaults into both records as though an operator had chosen them — inert today,
+ *  because those defaults equal `importFacilities`' own, but it is the same defect class as
+ *  reporting `0` for a count nobody measured, which is what this whole workstream exists to remove.
+ *
+ *  ⛔ THE CONDITIONS BELOW MIRROR `ReconciliationSummary`'s OWN RENDER GATES, term for term:
+ *  `result.parsed > 0` wraps the entire block that holds these controls, then `deleted > 0`,
+ *  `absent !== null && absent > 0`, and `unknownColumns`/`quarantined`/`invalid` being non-empty for
+ *  the three override checkboxes. The two have to move together — a key sent for a control that
+ *  never rendered is a decision nobody made, and a control that rendered whose value is not sent is
+ *  a decision quietly dropped.
+ *
+ *  `onConflict` carries no count gate because its own control has none: a conflict can only be
+ *  discovered by the apply this confirm authorises, so the choice is always made in advance (see
+ *  `showConflictChoice`). It is sent whenever the summary block itself rendered. */
+function confirmOptionsFor(
+  result: FacilityImportResult, chosen: Required<FacilityImportConfirmOptions>,
+): FacilityImportConfirmOptions {
+  if (result.parsed === 0) return {};
+  return {
+    ...(result.deleted > 0 ? { onDeleted: chosen.onDeleted } : {}),
+    ...(result.absent !== null && result.absent > 0 ? { onAbsent: chosen.onAbsent } : {}),
+    onConflict: chosen.onConflict,
+    ...(result.unknownColumns.length > 0 ? { allowUnknownColumns: chosen.allowUnknownColumns } : {}),
+    ...(result.quarantined.length > 0 ? { allowMalformedRows: chosen.allowMalformedRows } : {}),
+    ...(result.invalid.length > 0 ? { allowInvalidCoordinates: chosen.allowInvalidCoordinates } : {}),
+  };
+}
 
 interface ImportFacilitiesSheetProps {
   open: boolean;
@@ -478,7 +514,11 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   const [runId, setRunId] = useState<string | null>(null);
   const [run, setRun] = useState<FacilityImportRunView | null>(null);
   const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
+  /** How much of the file has gone, as a fraction — or `null` for "in flight, but the browser will
+   *  not say how far". ⛔ `null` is NOT `0`: `ProgressEvent.lengthComputable` can be false for the
+   *  whole transfer, and rendering that as `0%` would show a frozen number for a minute of a 64 MiB
+   *  upload. The indeterminate case gets its own copy (`facilities.import.uploading`). */
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   /** What the cancel route actually answered. ⛔ `'requested'` is NOT `'cancelled'` — see the two
@@ -563,7 +603,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
     setRunId(null);
     setRun(null);
     setCancelOutcome(null);
-    setUploadProgress(0);
+    setUploadProgress(null);
     invalidatePreview();
     // ⚠ Read for the INLINE path only — `importFacilitiesCsv` carries the register in a JSON body,
     // so that door genuinely needs the text. The A2b Upload path never touches `csv`: the File is
@@ -738,7 +778,9 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   const handleUpload = async (): Promise<void> => {
     if (!file || !nationalSystem.trim()) return;
     setUploading(true);
-    setUploadProgress(0);
+    // `null`, not `0` — nothing has been measured yet. The first progress event decides which of the
+    // two labels the sheet shows.
+    setUploadProgress(null);
     setError(null);
     try {
       // ⛔ The `File` itself, never `csv`. See `uploadFacilityImport`.
@@ -748,6 +790,11 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
           nationalSystem: nationalSystem.trim(),
           format,
           releaseVersion: releaseVersion.trim() || null,
+          // Reaches the run's stored `options`, which the worker's validate spreads into
+          // `importFacilities` — so a complete release uploaded here has its `absent` count actually
+          // MEASURED instead of reported `null`. The checkbox is the same one the inline path uses;
+          // both doors now honour it.
+          completeRelease,
         },
         setUploadProgress,
       );
@@ -765,18 +812,14 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   };
 
   const handleConfirmRun = async (): Promise<void> => {
-    if (!runId) return;
+    if (!runId || !awaitingSummary) return;
     setConfirming(true);
     setError(null);
     try {
-      await confirmFacilityImportRun(runId, {
-        onDeleted,
-        onAbsent,
-        onConflict,
-        allowUnknownColumns,
-        allowMalformedRows,
-        allowInvalidCoordinates,
-      });
+      await confirmFacilityImportRun(runId, confirmOptionsFor(awaitingSummary, {
+        onDeleted, onAbsent, onConflict,
+        allowUnknownColumns, allowMalformedRows, allowInvalidCoordinates,
+      }));
       // 202: the register has NOT been written yet. Go and watch what the worker actually does with
       // it — including the case where a newer upload supersedes the run before any worker claims it,
       // which ends `failed` and would otherwise be invisible.
@@ -860,7 +903,9 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   // computed WITHOUT the override. On the inline path that is `runPreview` pinning
   // `allowMalformedRows: false` on every preview request (see its comment); on the background path
   // it is the worker's `validateOptions`, which runs the validate with the UPLOAD's stored options —
-  // `{ nationalSystem }` alone, because the operator's choices only reach the run at confirm time.
+  // the register identity and, when the operator declared one, `completeRelease`. Neither is an
+  // OVERRIDE: none of the three `allow*` flags can be among them, because those are the CONFIRM
+  // step's and reach the run only after this decision has been made.
   // `blockedReason` therefore always reports the UN-OVERRIDDEN reason, so ticking the box releases
   // the block and un-ticking re-imposes it — pinned by "re-imposes the quarantine block when the
   // operator un-ticks the override". Nothing here re-derives the server's predicate from
@@ -881,6 +926,14 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   // While a run holds the register, the inputs it was uploaded with must not drift out from under
   // it — the run is for THAT file under THAT national system, and nothing here can retract it.
   const inputsDisabled = applying || uploading || runActive;
+  /** What an upload in flight is doing, in the two shapes the browser allows it to be known. Read in
+   *  TWO places, and the sheet BODY is the one that matters: Radix unmounts the menu the moment its
+   *  item is selected, so an operator who clicks Upload sees the menu-item copy only if they go and
+   *  reopen the menu — which is no use at all during a 64 MiB transfer, the case the XHR-instead-of-
+   *  fetch client exists for. */
+  const uploadLabel = uploadProgress === null
+    ? t('facilities.import.uploading')
+    : t('facilities.import.uploadProgress', { percent: Math.round(uploadProgress * 100) });
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -898,14 +951,22 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              {/* A2b: the background door. Offered only while no run is in play — a second upload
-                  while one is watched would supersede it server-side and leave this sheet describing
-                  a run it no longer owns. */}
-              {!applyResult && !run && (
+              {/* A2b: the background door. Offered only while no run is in play, and gated on
+                  `runId` rather than `run` deliberately: `runId` is set the instant the upload
+                  resolves, whereas `run` stays null until the FIRST POLL answers — a window in which
+                  the item would still be on the menu and a second upload still clickable. (`run` can
+                  never be set without `runId`: only the poll writes it, and only picking a new file
+                  clears either, so this is strictly the wider guard, not a different one.)
+                  What a second upload would actually do depends on the run's state, and neither
+                  outcome is one this sheet can show: the upload route's register gate SUPERSEDES a
+                  run sitting in `queued`/`awaiting_confirmation`/`confirmed`
+                  (`SUPERSEDABLE_RUN_STATES`, packages/db) — leaving the sheet watching a run it no
+                  longer owns — and answers 409 for one a worker is holding (`validating`/`applying`,
+                  `RUNNING_RUN_STATES`), which would surface as a bare error over a file the operator
+                  just picked. */}
+              {!applyResult && !runId && (
                 <DropdownMenuItem disabled={uploadDisabled} onClick={() => void handleUpload()}>
-                  {uploading
-                    ? t('facilities.import.uploadProgress', { percent: Math.round(uploadProgress * 100) })
-                    : t('facilities.import.uploadAction')}
+                  {uploading ? uploadLabel : t('facilities.import.uploadAction')}
                 </DropdownMenuItem>
               )}
               {!applyResult && !run && (
@@ -995,13 +1056,12 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
                 of accessible-name ambiguity `use-shadcn-components`/label-left-input-right exists to
                 avoid. Mirrors the plain `Input` rows above: `Label` owns the name, the hint is a
                 sibling `<p>`, not a second label.
-                ⚠ MEASURED GAP, stated rather than hidden: this reaches the INLINE path only. The A2b
-                upload route takes `nationalSystem`/`format`/`releaseVersion` on its query string and
-                stores `options: { nationalSystem }` alone, so a background validate never sees a
-                complete-release declaration and reports `absent: null` (NOT EVALUATED) for it. The
-                confirm route cannot make up for that either — `absent` is classified at VALIDATE
-                time, before any confirm exists. Closing it means widening the upload route, which is
-                server work this task does not own. */}
+                ⛔ IT REACHES BOTH DOORS. The inline path sends it in the request body; the Upload
+                path sends it as the `completeRelease` query parameter, which the route stores in the
+                run's `options` and the worker's validate spreads into `importFacilities`. The gap
+                this comment used to record (a background validate always reporting `absent: null`,
+                so the summary told the operator to declare a complete release they had just
+                declared) is closed — see the upload route's own `completeRelease` block. */}
             <Label htmlFor="facility-import-complete-release" className="whitespace-nowrap">
               {t('facilities.import.completeReleaseLabel')}
             </Label>
@@ -1032,7 +1092,17 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
               `PER_ROW_PROGRESS_MIN_ROWS`), so for most runs there is no denominator at all and a
               progress readout built around one would look broken far more often than it looked
               informative. `phase` is what is always there. */}
-          {runId && !run && (
+          {/* ⛔ IN THE SHEET BODY, not only on the ⋯ menu item. The menu is unmounted by Radix the
+              moment Upload is selected, so a percentage rendered there alone is invisible for the
+              whole of the transfer — which is precisely the thing `uploadFacilityImport` gives up
+              `fetch` for. This is where the operator actually watches a 64 MiB file go. */}
+          {uploading && (
+            <p className="mx-6 mt-4 text-sm text-muted-foreground">{uploadLabel}</p>
+          )}
+          {/* ⚠ `!error` matters: the poll's catch STOPS the chain and leaves `run` null, so without
+              it this line went on claiming an activity that had already given up — underneath the
+              error box explaining that it had. */}
+          {runId && !run && !error && (
             <p className="mx-6 mt-4 text-sm text-muted-foreground">{t('facilities.import.runLoading')}</p>
           )}
           {run && RUN_ACTIVE_STATUSES.includes(run.status) && (

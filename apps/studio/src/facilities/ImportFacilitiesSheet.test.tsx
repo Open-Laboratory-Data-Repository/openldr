@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { StrictMode } from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import i18n from '@/i18n';
 
 vi.mock('@/api', async (orig) => {
@@ -1075,9 +1075,11 @@ describe('ImportFacilitiesSheet', () => {
 
   it('A2b: a blocked run withholds Confirm until the operator opts past the quarantined rows', async () => {
     mocked(api.uploadFacilityImport).mockResolvedValue({ runId: 'run-b1' });
-    // The validate runs with the UPLOAD's options (`{ nationalSystem }` only — see the worker's
-    // `validateOptions`), so the stored verdict is always the UN-overridden baseline the checkbox
-    // toggles against, exactly like the inline path's pinned `allowMalformedRows: false` preview.
+    // The validate runs with the UPLOAD's options (the register identity, plus `completeRelease`
+    // when the operator declared one — see the worker's `validateOptions`). None of the three
+    // `allow*` overrides can be among them: those are the CONFIRM step's. So the stored verdict is
+    // always the UN-overridden baseline the checkbox toggles against, exactly like the inline path's
+    // pinned `allowMalformedRows: false` preview.
     mocked(api.getFacilityImportRun).mockResolvedValue(runView({
       status: 'awaiting_confirmation',
       summary: baseResult({
@@ -1159,7 +1161,13 @@ describe('ImportFacilitiesSheet', () => {
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
     // No run at all yet — nothing to cancel.
+    // ⚠ The POSITIVE control on each of the two open menus below. Two `queryByRole` absences on a
+    // menu that never actually opened would pass for the wrong reason and prove nothing; asserting
+    // an item that IS there in the same open menu is what makes the absence beside it mean
+    // something. (`Upload and validate` here, `Close` after the run finished — the close item's own
+    // label switches to Close once `runFinished`.)
     openMenu();
+    expect(screen.getByRole('menuitem', { name: 'Upload and validate' })).toBeInTheDocument();
     expect(screen.queryByRole('menuitem', { name: 'Cancel this import' })).not.toBeInTheDocument();
     fireEvent.keyDown(document.body, { key: 'Escape' });
 
@@ -1169,6 +1177,7 @@ describe('ImportFacilitiesSheet', () => {
 
     // …and a finished run cannot be cancelled either (the route 409s), so it is not offered.
     openMenu();
+    expect(screen.getByRole('menuitem', { name: 'Close' })).toBeInTheDocument();
     expect(screen.queryByRole('menuitem', { name: 'Cancel this import' })).not.toBeInTheDocument();
   });
 
@@ -1308,5 +1317,148 @@ describe('ImportFacilitiesSheet', () => {
 
     expect(await screen.findByText(/5 facility row\(s\) will be created/i)).toBeInTheDocument();
     expect(screen.queryByText(/checking the import run/i)).not.toBeInTheDocument();
+  });
+
+  // ── A2b Task 8, review fixes ──────────────────────────────────────────────────────────────────
+
+  // ⛔ THE COMPLETE-RELEASE DECLARATION MUST REACH THE BACKGROUND DOOR. Absence is classified during
+  // the VALIDATE phase, off the run's stored `options`, so this parameter is the only thing that can
+  // ever make a background run report an `absent` count instead of `null`. Without it the sheet told
+  // an operator who had just ticked this box to "mark this file as a complete release" — and the
+  // register too large for the inline route is exactly the national complete release this matters
+  // for.
+  it('A2b: a complete-release declaration reaches the upload — and is absent from the request when nobody made it', async () => {
+    mocked(api.uploadFacilityImport).mockResolvedValue({ runId: 'run-b1' });
+    mocked(api.getFacilityImportRun).mockResolvedValue(runView({ status: 'validating', phase: 'validating' }));
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    pickFileAndSystem();
+    fireEvent.click(screen.getByRole('checkbox', { name: /this file is a complete release/i }));
+    await uploadNow();
+
+    await waitFor(() => expect(api.uploadFacilityImport).toHaveBeenCalledTimes(1));
+    expect(api.uploadFacilityImport).toHaveBeenCalledWith(
+      expect.objectContaining({ nationalSystem: 'HFR', completeRelease: true }),
+      expect.any(Function),
+    );
+    // The counter-assertion, and the reason `completeRelease: true` above cannot pass by accident:
+    // an untouched checkbox sends `false`, never `true` — the client then leaves the query parameter
+    // off entirely (see `uploadFacilityImport`), so the run records no declaration at all.
+    expect(api.uploadFacilityImport).not.toHaveBeenCalledWith(
+      expect.objectContaining({ completeRelease: false }), expect.any(Function),
+    );
+  });
+
+  it('A2b: …and an undeclared upload sends completeRelease false, so nothing is recorded for it', async () => {
+    mocked(api.uploadFacilityImport).mockResolvedValue({ runId: 'run-b1' });
+    mocked(api.getFacilityImportRun).mockResolvedValue(runView({ status: 'validating', phase: 'validating' }));
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    pickFileAndSystem();
+    await uploadNow();
+
+    await waitFor(() => expect(api.uploadFacilityImport).toHaveBeenCalledTimes(1));
+    expect(api.uploadFacilityImport).toHaveBeenCalledWith(
+      expect.objectContaining({ completeRelease: false }), expect.any(Function),
+    );
+  });
+
+  // ⛔ THE CONFIRM CARRIES ONLY CHOICES SOMEBODY COULD HAVE MADE. Every field of the confirm body is
+  // optional precisely so the server records nothing an operator did not send (see `ConfirmSchema`
+  // and `FacilityImportConfirmOptions`); those keys land in durable `facility_import_runs.options`
+  // AND in the `facility.import.confirmed` audit metadata. This run's summary has nothing deleted,
+  // `absent` NOT EVALUATED and no unknown columns / quarantined rows / invalid coordinates, so none
+  // of those five controls rendered — only the conflict policy did.
+  it('A2b: Confirm sends only the choices whose control the operator was actually shown', async () => {
+    mocked(api.uploadFacilityImport).mockResolvedValue({ runId: 'run-b1' });
+    mocked(api.getFacilityImportRun).mockResolvedValue(runView({
+      status: 'awaiting_confirmation',
+      summary: baseResult({ parsed: 3, create: 3, deleted: 0, absent: null }),
+    }));
+    mocked(api.confirmFacilityImportRun).mockResolvedValue({ runId: 'run-b1', status: 'confirmed' });
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    pickFileAndSystem();
+    await uploadNow();
+    await screen.findByText(/3 facility row\(s\) will be created/i);
+    // The five controls really are off screen — otherwise the exact-body assertion below would be
+    // asserting the absence of keys for controls that simply happened not to be looked for.
+    expect(screen.queryByRole('combobox', { name: /rows this file says were removed/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: /rows missing from this file/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: /import anyway/i })).not.toBeInTheDocument();
+
+    clickMenuItem('Confirm import');
+
+    await waitFor(() => expect(api.confirmFacilityImportRun).toHaveBeenCalledTimes(1));
+    // ⛔ EXACT object, not `objectContaining`: the whole point is which keys are ABSENT.
+    expect(api.confirmFacilityImportRun).toHaveBeenCalledWith('run-b1', { onConflict: 'skip' });
+  });
+
+  // ⛔ IN THE SHEET BODY. Radix unmounts the ⋯ menu when its item is selected, so a percentage shown
+  // only on the menu item is invisible for the entire transfer — which is the one thing the XHR
+  // client gives up `fetch` for.
+  it('A2b: the upload percentage is rendered where the operator can see it, not only on the menu item', async () => {
+    let report: ((f: number | null) => void) | undefined;
+    mocked(api.uploadFacilityImport).mockImplementation((_p: unknown, onProgress: unknown) => {
+      report = onProgress as (f: number | null) => void;
+      return new Promise<never>(() => { /* never settles: the upload stays in flight */ });
+    });
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    pickFileAndSystem();
+    await uploadNow();
+
+    // Indeterminate until the first progress event — `null`, never a frozen "0%".
+    expect(await screen.findByText('Uploading…')).toBeInTheDocument();
+    expect(screen.queryByText(/uploading… 0%/i)).not.toBeInTheDocument();
+
+    await waitFor(() => expect(report).toBeDefined());
+    act(() => { report?.(0.42); });
+    expect(await screen.findByText('Uploading… 42%')).toBeInTheDocument();
+
+    // …and a transfer the browser will not measure (`lengthComputable` false) falls back to the
+    // indeterminate copy rather than sticking on whatever number came last.
+    act(() => { report?.(null); });
+    expect(await screen.findByText('Uploading…')).toBeInTheDocument();
+  });
+
+  // A poll that gives up STOPS the chain: `run` stays null forever, so a "checking…" line gated on
+  // `runId && !run` alone went on claiming an activity that had already stopped — directly under the
+  // error box saying so.
+  it('A2b: a poll that fails replaces "checking the import run" with the failure, rather than both', async () => {
+    mocked(api.uploadFacilityImport).mockResolvedValue({ runId: 'run-b1' });
+    mocked(api.getFacilityImportRun).mockRejectedValue(new Error('import run not found: run-b1'));
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    pickFileAndSystem();
+    await uploadNow();
+
+    expect(await screen.findByText(/import run not found: run-b1/i)).toBeInTheDocument();
+    expect(screen.queryByText(/checking the import run/i)).not.toBeInTheDocument();
+  });
+
+  // ⛔ The status label is a DYNAMIC lookup (`runStatus.${status}`), so a missing or misspelled key
+  // renders the raw key path to the operator and nothing else catches it. These two states had no
+  // test at all; the other three do (validating/awaiting_confirmation/applying, above).
+  it('A2b: a queued run says so in words, not as a raw i18n key path', async () => {
+    mocked(api.uploadFacilityImport).mockResolvedValue({ runId: 'run-b1' });
+    mocked(api.getFacilityImportRun).mockResolvedValue(runView({ status: 'queued' }));
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    pickFileAndSystem();
+    await uploadNow();
+
+    expect(await screen.findByText('Queued — waiting for an import worker.')).toBeInTheDocument();
+  });
+
+  it('A2b: …and so does a confirmed one still waiting for a worker', async () => {
+    mocked(api.uploadFacilityImport).mockResolvedValue({ runId: 'run-b1' });
+    mocked(api.getFacilityImportRun).mockResolvedValue(runView({ status: 'confirmed' }));
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    pickFileAndSystem();
+    await uploadNow();
+
+    expect(await screen.findByText('Confirmed — waiting for an import worker to write it.')).toBeInTheDocument();
   });
 });

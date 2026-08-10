@@ -198,8 +198,8 @@ const ImportSchema = z.object({
 });
 
 /** A2b Task 5: the operator's choices at the confirm step — the decisions the UPLOAD deliberately
- *  did not record (see the upload route's `options: { nationalSystem }` comment: putting a made-up
- *  set there would have been a decision no operator made).
+ *  did not record (see the `options:` comment on the upload route's `startUpload` call: putting a
+ *  made-up set there would have been a decision no operator made).
  *
  *  ⛔ Every key here is drawn from `FacilityImportOptions` and spelled the same way, because these
  *  land verbatim in `facility_import_runs.options` and the worker spreads that straight into
@@ -211,10 +211,14 @@ const ImportSchema = z.object({
  *  this run does not hold), and `apply` is the phase, which the worker decides. The worker re-imposes
  *  all three off the run row regardless — this is the first of the two defences, not the only one.
  *
- *  ⚠ No `completeRelease`: it is a claim about the FILE ("this is the whole register"), which nothing
- *  at confirm time can newly establish, and it gates the absence inference that could mass-retire a
- *  national register. Whoever adds it here owes that path a hard look first — see
- *  `importFacilities`' absence guard. */
+ *  ⚠ No `completeRelease`, and it must stay out: it is a claim about the FILE ("this is the whole
+ *  register"), which nothing at confirm time can newly establish — `absent` is classified during the
+ *  VALIDATE phase, long before this route is called, so a `completeRelease` arriving here would
+ *  change nothing about the summary the operator just reviewed while silently rewriting the run's
+ *  stored declaration. The UPLOAD route takes it instead (see its `completeRelease` query
+ *  parameter), which is the request that actually precedes the classification. What the operator
+ *  decides HERE is `onAbsent` — whether a measured absence is acted on — and that split is the
+ *  two-tier retirement design, not an omission. */
 const ConfirmSchema = z.object({
   onDeleted: z.enum(['retire', 'report']).optional(),
   onAbsent: z.enum(['retire', 'report']).optional(),
@@ -389,6 +393,26 @@ function firstString(v: unknown): string | undefined {
  */
 function ownFirstString(q: Record<string, unknown>, key: string): string | undefined {
   return Object.hasOwn(q, key) ? firstString(q[key]) : undefined;
+}
+
+/** A boolean query parameter, read THREE-VALUED on purpose.
+ *
+ *  - `undefined` — the caller did not send the key at all. That is NOT the same as sending `false`,
+ *    and callers must keep the two apart: an unsent key is never recorded on a run, so a decision
+ *    nobody made is never stored as though they had.
+ *  - `true`/`false` — the caller sent exactly `'true'` or `'false'`.
+ *  - `'invalid'` — anything else, which the caller answers 400 for rather than guessing.
+ *
+ *  ⛔ NEVER `!!ownFirstString(q, key)`. A query string carries text only, so `completeRelease=false`
+ *  would be the non-empty string `'false'` and therefore truthy — a caller explicitly declining a
+ *  declaration would be recorded as making it. Built on `ownFirstString` so it inherits that
+ *  function's own-property guarantee. */
+function ownBoolean(q: Record<string, unknown>, key: string): boolean | undefined | 'invalid' {
+  const raw = ownFirstString(q, key);
+  if (raw === undefined) return undefined;
+  if (raw === 'true') return true;
+  if (raw === 'false') return false;
+  return 'invalid';
 }
 
 /** Whether a sanitised (already-array-stripped) string is one of the four admin-area columns.
@@ -1576,6 +1600,28 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     }
     const releaseVersion = ownFirstString(q, 'releaseVersion') ?? null;
 
+    // The file DECLARES ITSELF the whole of this register — the one claim that lets a row's absence
+    // from it mean anything at all (`FacilityImportResult.absent`). It rides the query string like
+    // every other upload parameter and is stored on the run below, where the worker's
+    // `validateOptions` spreads it into `importFacilities` (and `applyOptions` does the same for the
+    // write). Without it a background validate could only ever report `absent: null` (NOT
+    // EVALUATED), so a national complete release — the file this whole path exists for, far above
+    // the inline route's 2 000-row apply cap — could get absence-retirement through the CLI alone.
+    //
+    // ⛔ DECLARING A COMPLETE RELEASE RETIRES NOTHING BY ITSELF, and the two-tier asymmetry is
+    // unchanged: `onAbsent` defaults to `'report'` and only the operator's CONFIRM can raise it to
+    // `'retire'`, while a publisher's declared `deletion` still defaults to `'retire'` (see the
+    // defaults in `importFacilities`). This flag only decides whether the count is MEASURED.
+    // ⛔ It also cannot make a refusable file retire anything: `importFacilities` reports
+    // `absent: null` for a file that parsed to ZERO records no matter what is declared here — an
+    // empty parse is evidence the file did not parse, not that every facility is absent. That guard
+    // is `records.length === 0` in facility-import.ts and nothing on this route may route around it.
+    const completeRelease = ownBoolean(q, 'completeRelease');
+    if (completeRelease === 'invalid') {
+      reply.code(400);
+      return { error: 'completeRelease must be "true" or "false"' };
+    }
+
     // A JSON body (the INLINE route's shape, sent here by mistake) arrives as a parsed object and
     // must be refused before anything else happens — piping it would throw somewhere far less
     // legible.
@@ -1696,7 +1742,13 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
         // Only what the request actually chose. The import options proper (allowUnknownColumns,
         // onConflict, …) are the CONFIRM step's, not the upload's — recording a made-up set here
         // would put a decision in the durable record that no operator ever made.
-        options: { nationalSystem },
+        //
+        // ⚠ `completeRelease` IS the upload's to record, unlike those: it is a claim about the FILE
+        // being stored, and `absent` is classified at VALIDATE time, before any confirm exists — so
+        // the confirm could not carry it even if it wanted to. Spread conditionally for the reason
+        // the line above states: an unsent parameter leaves the key OUT of `options` entirely rather
+        // than writing a `false` nobody sent.
+        options: { nationalSystem, ...(completeRelease === undefined ? {} : { completeRelease }) },
         requestedBy: actorFromRequest(req).actorId,
       });
     } catch (err) {

@@ -1148,14 +1148,32 @@ export interface FacilityImportRunView {
  *
  *  ⚠ Deliberately UNLIKE `uploadTerminologyDistribution`, which resolves `{ jobId: '' }` when it
  *  cannot parse a 2xx body — a caller then polls a job id that does not exist and sees nothing. A
- *  2xx with no usable run id is a failure here and is reported as one. */
+ *  2xx with no usable run id is a failure here and is reported as one.
+ *
+ *  `onProgress` is called with a fraction in [0, 1] while the browser can measure the transfer, and
+ *  with `null` when it cannot (`ProgressEvent.lengthComputable` false — no `Content-Length` the
+ *  browser will admit to). ⛔ `null` is NOT `0`: a caller that collapsed the two would sit on
+ *  "Uploading… 0%" for the whole of a 64 MiB transfer, which is a measurement nobody took rendered
+ *  as one that was. */
 export function uploadFacilityImport(
-  p: { file: File; nationalSystem: string; format: 'csv' | 'jsonl'; releaseVersion?: string | null },
-  onProgress?: (fraction: number) => void,
+  p: {
+    file: File; nationalSystem: string; format: 'csv' | 'jsonl'; releaseVersion?: string | null;
+    /** Declares the file a COMPLETE release of this register — see `FacilityImportRequest.
+     *  completeRelease`. Sent on the query string and stored in the run's `options`, where the
+     *  worker's validate spreads it into `importFacilities`; without it a background run reports
+     *  `absent: null` (NOT EVALUATED) whatever the file actually is. */
+    completeRelease?: boolean;
+  },
+  onProgress?: (fraction: number | null) => void,
 ): Promise<{ runId: string }> {
   return new Promise((resolve, reject) => {
     const params = new URLSearchParams({ nationalSystem: p.nationalSystem, format: p.format });
     if (p.releaseVersion) params.set('releaseVersion', p.releaseVersion);
+    // Sent only when the operator actually declared one. The route reads this parameter
+    // three-valued (`ownBoolean`, facilities-routes.ts) and leaves the key out of the run's stored
+    // `options` entirely when it is absent — so an undeclared release records no declaration at all
+    // rather than a `false` nobody chose.
+    if (p.completeRelease) params.set('completeRelease', 'true');
     const xhr = new XMLHttpRequest();
     xhr.open('POST', `/api/facilities/import/upload?${params.toString()}`);
     // Both are accepted by the route's passthrough parser; naming the real one keeps the stored
@@ -1163,7 +1181,9 @@ export function uploadFacilityImport(
     xhr.setRequestHeader('content-type', p.format === 'csv' ? 'text/csv' : 'application/octet-stream');
     const token = getAccessToken();
     if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-    xhr.upload.onprogress = (e) => { if (e.lengthComputable && onProgress) onProgress(e.loaded / e.total); };
+    // `null` when the browser cannot measure the transfer — see this function's doc comment. The
+    // caller renders an indeterminate "Uploading…" for that, never a frozen 0%.
+    xhr.upload.onprogress = (e) => { onProgress?.(e.lengthComputable ? e.loaded / e.total : null); };
     xhr.onload = () => {
       if (xhr.status >= 200 && xhr.status < 300) {
         try {

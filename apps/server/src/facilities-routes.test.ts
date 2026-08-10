@@ -2655,6 +2655,63 @@ describe('POST /api/facilities/import/upload', () => {
     });
   });
 
+  // ⛔ THE DECLARATION HAS TO REACH THE RUN, or the background door cannot express two-tier
+  // retirement at all. `absent` is classified during the VALIDATE phase off `run.options` (the
+  // worker's `validateOptions` spreads them into `importFacilities`), so a `completeRelease` that
+  // stopped at this route would leave every background validate reporting `absent: null` — NOT
+  // EVALUATED — no matter what the file is. The inline route is capped at `MAX_INLINE_APPLY_ROWS`,
+  // so without this a national complete release could get absence-retirement through the CLI alone.
+  it('records a declared complete release in the run\'s options, where the validate phase reads it', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const res = await app.inject({
+      method: 'POST',
+      url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv', completeRelease: 'true' }),
+      headers: UPLOAD_HEADERS, payload: Buffer.from(facilityCsv(['100,Alpha,,,,,,,,,,,,,,']), 'utf8'),
+    });
+    expect(res.statusCode).toBe(202);
+    const run = (await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${res.json().runId}` })).json();
+    // ⛔ Exact object. The sibling test above pins that an upload WITHOUT this parameter stores
+    // `{ nationalSystem }` and nothing else, so the two together say the key is present exactly when
+    // the operator declared it — and neither the operator's import options (`onAbsent`, the
+    // `allow*` family) nor anything else the confirm step owns has leaked in here.
+    expect(run.options).toEqual({ nationalSystem: SYSTEM, completeRelease: true });
+  });
+
+  // ⛔ `'false'` IS NOT `false`-y ON A QUERY STRING. A `!!ownFirstString(...)` here would read the
+  // literal text 'false' as a declaration the operator explicitly declined to make — and a
+  // declaration is the thing that lets an absence be counted at all.
+  it('an explicitly declined complete release is recorded as declined, never as declared', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const res = await app.inject({
+      method: 'POST',
+      url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv', completeRelease: 'false' }),
+      headers: UPLOAD_HEADERS, payload: Buffer.from(facilityCsv(['100,Alpha,,,,,,,,,,,,,,']), 'utf8'),
+    });
+    expect(res.statusCode).toBe(202);
+    const run = (await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${res.json().runId}` })).json();
+    expect(run.options).toEqual({ nationalSystem: SYSTEM, completeRelease: false });
+  });
+
+  it('refuses a completeRelease that is neither "true" nor "false", rather than guessing at it', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const res = await app.inject({
+      method: 'POST',
+      url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv', completeRelease: 'yes' }),
+      headers: UPLOAD_HEADERS, payload: Buffer.from(facilityCsv(['100,Alpha,,,,,,,,,,,,,,']), 'utf8'),
+    });
+    expect(res.statusCode).toBe(400);
+    // Refused BEFORE the transfer, like every other parameter check on this route: a rejected upload
+    // must not first cost a register's worth of bandwidth or leave an object behind.
+    expect(ctx.blob.__objects.size).toBe(0);
+    expect(await db.selectFrom('facility_import_runs').selectAll().execute()).toHaveLength(0);
+  });
+
   it('audits the upload with the run it minted', async () => {
     const db = await makeMigratedDb();
     const ctx = fakeImportCtx(db);

@@ -219,8 +219,9 @@ export function createFacilityImportWorker(deps: FacilityImportWorkerDeps): Faci
    *  fields that decide whether anything is written and whether conflicts mean anything.
    *
    *  ⛔ SPREAD FIRST, fixed fields after, for the reason `validateOptions` states — with one more
-   *  member below the spread than it has. `stored` here is no longer just the upload's
-   *  `{ nationalSystem }`: the confirm route merged the OPERATOR's choices into it
+   *  member below the spread than it has. `stored` here is no longer just what the UPLOAD recorded
+   *  (the register identity, and `completeRelease` when the file declared one): the confirm route
+   *  merged the OPERATOR's choices into it
    *  (`onConflict`/`onAbsent`/`allowMalformedRows`/…), which is the whole point of the round trip,
    *  and those must reach `importFacilities` unaltered. What must still win over them is the run
    *  row's own identity fields, so a hand-edited `options` JSON cannot import under a register this

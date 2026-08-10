@@ -94,6 +94,72 @@ describe('createFacilityImportWorker — validate phase', () => {
     expect((await rowFor(db, run.id)).active_key).toBe(SYSTEM);
   });
 
+  // ⛔ THE UPLOAD'S `completeRelease` DECLARATION HAS TO SURVIVE INTO THE VALIDATE. Absence is
+  // classified during THIS phase, off `run.options` (see `validateOptions`' spread), so a
+  // declaration that stopped at the route would leave every background run reporting `absent: null`
+  // — NOT EVALUATED — however complete the file actually is, and the background door could not
+  // express two-tier retirement at all. Its inline twin lives in facility-import.test.ts ("counts
+  // absent rows when the release IS declared complete"); what this pins is the WIRING between them.
+  it('⛔ counts absent rows for an upload that declared a complete release — the declaration reaches importFacilities through run.options', async () => {
+    const TWO_ROWS = 'national_code,name\n100,Dodoma Regional Referral\n200,Kongwa District\n';
+    let body = TWO_ROWS;
+    const h = await harness(() => body);
+
+    // Register both facilities, so there is something for the next file to be silent ABOUT. Absence
+    // is a claim about the registry, not about the file, and it cannot be measured against nothing.
+    const first = await h.runs.startUpload(upload());
+    await h.worker.tickOnce();
+    expect(await h.runs.confirm(first.id, 'awaiting_confirmation', { nationalSystem: SYSTEM })).toBe(true);
+    await h.worker.tickOnce();
+    expect((await h.runs.get(first.id))?.status).toBe('applied');
+    expect(await registryRows(h.db)).toHaveLength(2);
+
+    // A second upload — declared complete, and mentioning only one of the two.
+    body = CSV;
+    const run = await h.runs.startUpload({
+      ...upload(), options: { nationalSystem: SYSTEM, completeRelease: true },
+    });
+    await h.worker.tickOnce();
+    await h.worker.stop();
+
+    const after = await h.runs.get(run.id);
+    expect(after?.status).toBe('awaiting_confirmation');
+    const summary = after?.summary as {
+      absent: number | null; samples: { absent: { nationalCode: string | null }[] };
+      written: { retired: number };
+    };
+    // ⛔ 1, and NOT null. `null` is exactly what this reports when the declaration never arrives, so
+    // this assertion is the whole wiring: route → run.options → validateOptions → importFacilities.
+    expect(summary.absent).toBe(1);
+    expect(summary.samples.absent).toMatchObject([{ nationalCode: '200' }]);
+    // ⛔ Declaring a complete release RETIRES NOTHING. A validate writes nothing at all, and
+    // `onAbsent` defaults to `'report'` regardless — only the operator's confirm can raise it.
+    expect(summary.written.retired).toBe(0);
+    expect(await registryRows(h.db)).toHaveLength(2);
+  });
+
+  it('an upload that declared NOTHING still reports absence as NOT EVALUATED, never as zero', async () => {
+    // The counter-assertion for the test above: same registry, same one-row file, no declaration.
+    // `null` here is the honest answer — the question was never asked — and a `0` would be a
+    // measurement nobody took, the FAC-P1-03 defect this whole workstream exists to remove.
+    const TWO_ROWS = 'national_code,name\n100,Dodoma Regional Referral\n200,Kongwa District\n';
+    let body = TWO_ROWS;
+    const h = await harness(() => body);
+
+    const first = await h.runs.startUpload(upload());
+    await h.worker.tickOnce();
+    expect(await h.runs.confirm(first.id, 'awaiting_confirmation', { nationalSystem: SYSTEM })).toBe(true);
+    await h.worker.tickOnce();
+    expect(await registryRows(h.db)).toHaveLength(2);
+
+    body = CSV;
+    const run = await h.runs.startUpload(upload());
+    await h.worker.tickOnce();
+    await h.worker.stop();
+
+    expect((await h.runs.get(run.id))?.summary).toMatchObject({ absent: null });
+  });
+
   it('a cancel requested before the summary is written leaves the run cancelled and writes nothing', async () => {
     let runs!: FacilityImportRunStore;
     let runId = '';
