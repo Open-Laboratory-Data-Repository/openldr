@@ -30,7 +30,9 @@ export interface FacilityImportWorkerDeps {
   /** Overrides `FACILITY_IMPORT_STALE_LEASE_MS` — how long a run may sit in a RUNNING state before
    *  this worker's sweep treats it as orphaned. Injectable for the same reason `intervalMs` is: a
    *  test that wants to drive the boundary otherwise has to wait out the real lease. No production
-   *  caller sets it. */
+   *  caller sets it; the boundary is driven by "staleLeaseMs really moves the boundary, in both
+   *  directions" in the worker's own suite, which spares an hour-old run under a two-hour lease and
+   *  sweeps a fresh one under a lease of zero. */
   staleLeaseMs?: number;
   /** Ceiling on the file this worker will hold in memory — see `readBlob`. Wire it to
    *  `FACILITY_IMPORT_MAX_UPLOAD_BYTES` so the transfer ceiling and the buffer ceiling are the SAME

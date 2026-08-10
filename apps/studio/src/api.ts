@@ -1163,6 +1163,15 @@ export function uploadFacilityImport(
      *  worker's validate spreads it into `importFacilities`; without it a background run reports
      *  `absent: null` (NOT EVALUATED) whatever the file actually is. */
     completeRelease?: boolean;
+    /** The two overrides that change how the file PARSES, and they belong to the UPLOAD for the same
+     *  reason `completeRelease` does: the worker's validate is what turns records into the summary an
+     *  operator reads, so a flag arriving at CONFIRM time would make the apply classify a different
+     *  record set than the one that was approved — which the confirm route refuses outright (see its
+     *  parse-override gate). Sending them here is the only way the browser can ever apply a register
+     *  that needs one. `allowMalformedRows` is deliberately NOT here: it changes only the `blocked`
+     *  verdict, never the parse, so it stays the confirm's. */
+    allowUnknownColumns?: boolean;
+    allowInvalidCoordinates?: boolean;
   },
   onProgress?: (fraction: number | null) => void,
 ): Promise<{ runId: string }> {
@@ -1174,6 +1183,11 @@ export function uploadFacilityImport(
     // `options` entirely when it is absent — so an undeclared release records no declaration at all
     // rather than a `false` nobody chose.
     if (p.completeRelease) params.set('completeRelease', 'true');
+    // Same three-valued idiom, same reason: an override nobody asked for must leave no key in the
+    // run's stored `options` at all, because that record is what the confirm gate later compares
+    // against — a `false` written there is a decision nobody made.
+    if (p.allowUnknownColumns) params.set('allowUnknownColumns', 'true');
+    if (p.allowInvalidCoordinates) params.set('allowInvalidCoordinates', 'true');
     const xhr = new XMLHttpRequest();
     xhr.open('POST', `/api/facilities/import/upload?${params.toString()}`);
     // Both are accepted by the route's passthrough parser; naming the real one keeps the stored

@@ -1905,10 +1905,24 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     //
     // The overrides that DO change the parse belong to the upload, which is the request that runs
     // before the classification — see its `parseOverrides`.
+    // ⛔ AND THE FORMAT DECIDES HALF OF IT. `allowUnknownColumns` is a documented NO-OP for JSONL:
+    // `parseFacilityRelease` (packages/terminology/src/facility-release.ts) never reads
+    // `opts.allowUnknownColumns` at all — verified by reading that function, not by trusting its
+    // docblock — because every JSONL line is a self-describing object, so an unrecognised key cannot
+    // shift any other field the way an unrecognised CSV header can. It still REPORTS `unknownColumns`,
+    // so a JSONL run's summary populates the list without the flag ever having had anything to act
+    // on, and refusing there would reject a confirm over a flag that provably cannot change the
+    // parse — while the message told the operator to re-upload with it. `allowInvalidCoordinates` has
+    // NO such asymmetry: both parsers honour it (facility-release.ts's `row` branch and
+    // facility-csv.ts alike), so it stays in play for either format.
+    //
+    // ⚠ Written `!== 'jsonl'` rather than `=== 'csv'` so it FAILS CLOSED: a third source format added
+    // later is refused until someone has established what the flag does to it, which is the safe
+    // direction for a gate whose failure mode is authorising an unreviewed retirement.
     const storedOptions = (run.options as Record<string, unknown> | null) ?? {};
     const nonEmptyList = (v: unknown): boolean => Array.isArray(v) && v.length > 0;
     const inPlay: Record<'allowUnknownColumns' | 'allowInvalidCoordinates', boolean> = {
-      allowUnknownColumns: nonEmptyList(summary?.unknownColumns),
+      allowUnknownColumns: nonEmptyList(summary?.unknownColumns) && run.sourceFormat !== 'jsonl',
       allowInvalidCoordinates: nonEmptyList(summary?.invalid),
     };
     const parseChanging = (['allowUnknownColumns', 'allowInvalidCoordinates'] as const)

@@ -3325,6 +3325,86 @@ describe('POST /api/facilities/import/runs/:id/confirm', () => {
     expect(res.json().error).toMatch(/allowInvalidCoordinates/);
   });
 
+  // ── …and the half of that gate the FORMAT decides ────────────────────────────────────────────
+  //
+  // ⛔ `allowUnknownColumns` is a documented NO-OP for JSONL — `parseFacilityRelease` never reads
+  // `opts.allowUnknownColumns` at all (packages/terminology/src/facility-release.ts), because a
+  // self-describing line cannot shift another field the way an unrecognised CSV header can — while
+  // it still REPORTS `unknownColumns`. A blind gate therefore refused a JSONL confirm over a flag
+  // that provably cannot change the parse, and the 409 then told the operator to re-upload with it.
+  //
+  // The next two tests are a PAIR over the SAME summary, which is what makes either of them mean
+  // anything: change the gate's `run.sourceFormat` term and one of them fails.
+
+  /** Upload a JSONL release carrying an unrecognised field, and park it with `summary`. */
+  async function uploadJsonlAndPark(app: any, db: any, summary: Record<string, unknown>) {
+    const res = await app.inject({
+      method: 'POST', url: uploadUrl({ nationalSystem: SYSTEM, format: 'jsonl' }),
+      headers: UPLOAD_HEADERS,
+      payload: Buffer.from(jsonl([rowLine('100', 'Alpha', { ward_code: 'W1' })]), 'utf8'),
+    });
+    expect(res.statusCode).toBe(202);
+    const runId = res.json().runId as string;
+    // The run really did record the format the gate reads — otherwise this test would pass for the
+    // uninteresting reason that the upload stored 'csv' and the summary happened not to be in play.
+    expect((await db.selectFrom('facility_import_runs').select('source_format')
+      .where('id', '=', runId).executeTakeFirstOrThrow()).source_format).toBe('jsonl');
+    await parkForConfirmation(db, runId, summary);
+    return runId;
+  }
+
+  /** The one summary both halves of the pair are confirmed against. */
+  const UNKNOWN_COLUMN_SUMMARY = {
+    blocked: false, blockedReason: null, unknownColumns: ['ward_code'], invalid: [], parsed: 1,
+  };
+
+  it('⛔ a JSONL run IS confirmable with allowUnknownColumns — that flag cannot change a JSONL parse', async () => {
+    const db = await makeMigratedDb();
+    const app = await appWith(fakeImportCtx(db));
+    const runId = await uploadJsonlAndPark(app, db, UNKNOWN_COLUMN_SUMMARY);
+
+    const res = await app.inject({
+      method: 'POST', url: confirmUrl(runId), payload: { allowUnknownColumns: true },
+    });
+
+    expect(res.statusCode).toBe(202);
+    expect((await db.selectFrom('facility_import_runs').select('status')
+      .where('id', '=', runId).executeTakeFirstOrThrow()).status).toBe(APPLY_PHASE.from);
+  });
+
+  it('⛔ …while the CSV twin of that EXACT summary is still refused — the format is the only difference', async () => {
+    const db = await makeMigratedDb();
+    const app = await appWith(fakeImportCtx(db));
+    const runId = await uploadAndPark(app, db, UNKNOWN_COLUMN_SUMMARY);
+
+    const res = await app.inject({
+      method: 'POST', url: confirmUrl(runId), payload: { allowUnknownColumns: true },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toMatch(/allowUnknownColumns/);
+    expect((await db.selectFrom('facility_import_runs').select('status')
+      .where('id', '=', runId).executeTakeFirstOrThrow()).status).toBe('awaiting_confirmation');
+  });
+
+  it('⛔ and the exemption is `allowUnknownColumns` ALONE: a JSONL run still refuses allowInvalidCoordinates', async () => {
+    const db = await makeMigratedDb();
+    const app = await appWith(fakeImportCtx(db));
+    // Both parsers honour `allowInvalidCoordinates` — facility-release.ts's `row` branch drops a bad
+    // coordinate exactly as facility-csv.ts does — so it changes a JSONL parse and stays in play.
+    const runId = await uploadJsonlAndPark(app, db, {
+      blocked: false, blockedReason: null, unknownColumns: [],
+      invalid: [{ line: 1, field: 'latitude', raw: '999' }], parsed: 0,
+    });
+
+    const res = await app.inject({
+      method: 'POST', url: confirmUrl(runId), payload: { allowInvalidCoordinates: true },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toMatch(/allowInvalidCoordinates/);
+  });
+
   it('accepts the same override when the UPLOAD already declared it — the validate ran with it', async () => {
     const db = await makeMigratedDb();
     const ctx = fakeImportCtx(db);

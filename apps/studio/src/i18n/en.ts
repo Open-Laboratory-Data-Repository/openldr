@@ -837,6 +837,11 @@ export const en = {
       noRowsFoundSkipped: '{{skipped}} row(s) in this file were skipped for missing required fields, and none were imported. Confirm it is a compatible CSV export before trying again.',
       unknownColumnsTitle: 'Unrecognised columns',
       unknownColumnsBody: 'This file has columns the importer does not recognise: {{columns}}. Nothing is imported unless you opt in below.',
+      // ⛔ A JSONL release is NOT blocked by an unrecognised field, and the option that unblocks a CSV
+      // is a documented no-op for it (parseFacilityRelease never reads it — see facility-release.ts).
+      // Showing the CSV copy here would tell an operator nothing was imported when the whole release
+      // was, and point them at an option that changes nothing.
+      unknownColumnsBodyJsonl: 'This release has fields the importer does not recognise: {{columns}}. They do not block a JSONL release — each line is self-describing, so they were kept as extra data and the rest of the release was read as normal.',
       allowUnknownColumns: 'Import anyway, keeping unrecognised columns as extra data',
       quarantinedTitle: 'Rows that could not be read',
       quarantinedCount_one: '{{count}} row could not be read (its column count did not match the header) and will not be imported unless you opt in below.',
@@ -902,6 +907,14 @@ export const en = {
       confirming: 'Confirming…',
       cancelRunAction: 'Cancel this import',
       cancellingAction: 'Cancelling…',
+      // ⛔ THE RUN DOOR'S ANSWER TO A PARSE-CHANGING OVERRIDE. Both options are fed to the parser, so
+      // they have to be chosen before the validate that produced the summary on screen — the confirm
+      // route refuses one that arrives late. These two re-stream the same file with the option set,
+      // which is exactly what that refusal asks for.
+      reuploadUnknownColumnsAction: 'Re-upload keeping unrecognised columns',
+      reuploadInvalidCoordinatesAction: 'Re-upload keeping rows with an invalid coordinate',
+      overrideNeedsReupload: 'This option changes how the file is read, so it has to be set before validation. Use the actions menu above to upload this file again with it — the summary you review will then be the one that gets applied.',
+      overrideAppliedToRun: 'This validation already ran with that option on, so the summary below is what will be applied.',
       runLoading: 'Checking the import run…',
       // The worker's own phase string, verbatim — it is free text the worker chooses, not a token
       // this app can translate (see FacilityImportRunView.phase).

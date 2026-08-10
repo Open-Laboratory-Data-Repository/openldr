@@ -90,37 +90,46 @@ const RUN_POLL_MS = 3000;
  *  because those defaults equal `importFacilities`' own, but it is the same defect class as
  *  reporting `0` for a count nobody measured, which is what this whole workstream exists to remove.
  *
- *  ⛔ EACH TERM BELOW MIRRORS ITS OWN CONTROL'S RENDER GATE IN `ReconciliationSummary` — AND THE SIX
- *  GATES ARE NOT ALL THE SAME SHAPE, WHICH IS THE WHOLE POINT. The three `allow*` checkboxes render
- *  in their own amber blocks BEFORE and OUTSIDE the `result.parsed > 0` wrapper, each gated on its
- *  own list alone (`unknownColumns`/`quarantined`/`invalid` being non-empty), so each is sent on
- *  that list alone and `parsed` is none of their business. Only `onDeleted`/`onAbsent`/`onConflict`
- *  live INSIDE that wrapper, so those three carry `parsed > 0` as well as their own gate (`deleted
- *  > 0` and `absent !== null && absent > 0` respectively). The two sides have to move together — a
- *  key sent for a control that never rendered is a decision nobody made, and a control that rendered
- *  whose value is not sent is a decision quietly dropped.
+ *  ⛔ EACH TERM BELOW MIRRORS ITS OWN CONTROL'S RENDER GATE IN `ReconciliationSummary` — AND THE
+ *  GATES ARE NOT ALL THE SAME SHAPE, WHICH IS THE WHOLE POINT. `allowMalformedRows` renders in its
+ *  own amber block BEFORE and OUTSIDE the `result.parsed > 0` wrapper, gated on `quarantined` being
+ *  non-empty alone, so it is sent on that list alone and `parsed` is none of its business. Only
+ *  `onDeleted`/`onAbsent`/`onConflict` live INSIDE that wrapper, so those three carry `parsed > 0`
+ *  as well as their own gate (`deleted > 0` and `absent !== null && absent > 0` respectively). The
+ *  two sides have to move together — a key sent for a control that never rendered is a decision
+ *  nobody made, and a control that rendered whose value is not sent is a decision quietly dropped.
  *
- *  ⚠ AND `parsed === 0` IS A LIVE, ROUTINE STATE WITH A RENDERED OVERRIDE, NOT A DEAD END — a
- *  blanket `if (result.parsed === 0) return {}` here was a shipped regression, pinned now by the two
- *  "…at parsed 0" tests. For CSV, one unrecognised header column blocks the whole parse
- *  (`parsed`/`skipped` both 0 — see `FacilityImportResult.unknownColumns`, facility-import.ts) yet
- *  sets NO `blockedReason` (only `duplicate-columns` and `quarantined-rows` do), so `canConfirmRun`
- *  is true, Confirm IS offered, and the amber "import anyway" box IS on screen. A file whose every
- *  row was quarantined reaches `parsed: 0` with its own override the same way. Dropping those keys
- *  made the apply re-run WITHOUT the override, parse nothing, write nothing — and still report
- *  `applied`.
+ *  ⛔ AND THE TWO PARSE-CHANGING OVERRIDES ARE NOT HERE AT ALL, because on THIS door they have no
+ *  control to mirror. `allowUnknownColumns`/`allowInvalidCoordinates` are fed straight to the parser,
+ *  so the confirm route refuses either one whenever the stored summary shows the file actually
+ *  contains the thing it waves through — which is EXACTLY the condition under which the amber box
+ *  renders. Sending them from here could therefore only ever produce a 409: ticked, it differs from
+ *  what the run stored; un-ticked after a re-upload that set it, it differs the other way ("narrowing
+ *  the parse is a change too"). They belong to the UPLOAD, which is the request that runs before the
+ *  classification, and the run door offers them as a re-upload instead — see `handleUpload`'s
+ *  `overrides` and `ReuploadOverrides`. Their value reaches the apply through the run's own stored
+ *  `options`, which the worker's `applyOptions` spreads in; nothing is dropped by leaving them out.
+ *
+ *  ⚠ `parsed === 0` IS A LIVE, ROUTINE STATE WITH A RENDERED OVERRIDE, NOT A DEAD END — a blanket
+ *  `if (result.parsed === 0) return {}` here was a shipped regression, pinned now by the two "…at
+ *  parsed 0" tests. A file whose every row was quarantined reaches `parsed: 0` with its
+ *  `allowMalformedRows` box on screen, and for CSV one unrecognised header column blocks the whole
+ *  parse (`parsed`/`skipped` both 0 — see `FacilityImportResult.unknownColumns`, facility-import.ts)
+ *  yet sets NO `blockedReason` (only `duplicate-columns` and `quarantined-rows` do), so
+ *  `canConfirmRun` is true, Confirm IS offered, and the amber box IS on screen with its re-upload
+ *  affordance. Dropping `allowMalformedRows` here made the apply re-run WITHOUT the override, parse
+ *  nothing, write nothing — and still report `applied`.
  *
  *  `onConflict` carries no count gate of its own because its control has none: a conflict can only
  *  be discovered by the apply this confirm authorises, so the choice is always made in advance (see
  *  `showConflictChoice`, which is constantly true on THIS door — the summary under review here is
  *  always a run's, so `fromRun` is true). The wrapper it sits in is therefore its only gate. */
 function confirmOptionsFor(
-  result: FacilityImportResult, chosen: Required<FacilityImportConfirmOptions>,
+  result: FacilityImportResult,
+  chosen: Required<Omit<FacilityImportConfirmOptions, 'allowUnknownColumns' | 'allowInvalidCoordinates'>>,
 ): FacilityImportConfirmOptions {
   return {
-    ...(result.unknownColumns.length > 0 ? { allowUnknownColumns: chosen.allowUnknownColumns } : {}),
     ...(result.quarantined.length > 0 ? { allowMalformedRows: chosen.allowMalformedRows } : {}),
-    ...(result.invalid.length > 0 ? { allowInvalidCoordinates: chosen.allowInvalidCoordinates } : {}),
     ...(result.parsed > 0
       ? {
         ...(result.deleted > 0 ? { onDeleted: chosen.onDeleted } : {}),
@@ -158,8 +167,32 @@ interface ImportFacilitiesSheetProps {
 // from an uploaded run. Pinned by "a 14 000-row register is confirmable on the background path".
 const APPLY_ROW_CAP = 2000;
 
+/** How the two PARSE-CHANGING overrides are presented on the door being rendered — `null` on the
+ *  INLINE door, where they are live checkboxes that re-run the preview against the new parse.
+ *
+ *  ⛔ ON THE RUN DOOR THEY CANNOT BE CHECKBOXES. The validate has already run; nothing short of a
+ *  fresh upload re-runs it, and the confirm route refuses a parse-changing override whenever the
+ *  stored summary shows the file contains the thing it waves through — which is the same condition
+ *  that makes the amber box render. A tick there could therefore only ever 409. The box offers a
+ *  RE-UPLOAD instead (an ⋯ menu item, per ui-actions-in-dots-menu), which re-streams the same file
+ *  with the override on the upload request, so the validation the operator reviews is the one that
+ *  gets applied. */
+interface ReuploadOverrides {
+  /** The RUN's format, not the picker's. ⛔ `allowUnknownColumns` is a documented NO-OP for JSONL —
+   *  `parseFacilityRelease` never reads it (packages/terminology/src/facility-release.ts) because a
+   *  self-describing line cannot shift another field the way an unrecognised CSV header can — so a
+   *  JSONL release is told its extra fields were kept, and offered no re-upload that would change
+   *  nothing. The confirm route skips its own refusal on the same asymmetry. */
+  sourceFormat: 'csv' | 'jsonl';
+  /** Read off the RUN's stored `options`, never off this sheet's state: it is what the validate
+   *  actually ran with, and it survives a remount that would zero the state. */
+  allowUnknownColumns: boolean;
+  allowInvalidCoordinates: boolean;
+}
+
 interface ReconciliationSummaryProps {
   result: FacilityImportResult;
+  /** The INLINE checkbox's value. On the run door the override in force is `reupload`'s instead. */
   allowUnknownColumns: boolean;
   allowMalformedRows: boolean;
   allowInvalidCoordinates: boolean;
@@ -180,6 +213,8 @@ interface ReconciliationSummaryProps {
   /** The INLINE route's 2 000-row cap notice. Always `false` for a background run — see
    *  `APPLY_ROW_CAP`. */
   overCap: boolean;
+  /** `null` on the inline door; the run's own parse-override state on the background one. */
+  reupload: ReuploadOverrides | null;
 }
 
 /** A2a's reconciliation summary — what a file would actually DO to the registry, as the server
@@ -197,20 +232,27 @@ function ReconciliationSummary(props: ReconciliationSummaryProps) {
   const { result } = props;
 
   const willWriteCount = willWrite(result);
+  /** Is the unrecognised-columns override actually in force for THIS result? On the inline door that
+   *  is the live checkbox; on the run door it is what the upload recorded and the validate ran with,
+   *  which is the only thing the summary on screen can have been computed against. */
+  const unknownColumnsOverridden = props.reupload
+    ? props.reupload.allowUnknownColumns
+    : props.allowUnknownColumns;
   // F2 fix: `parsed === 0` must read as an unsuccessful outcome whether or not unknown columns were
   // ever involved — EXCEPT while the file is still just sitting blocked on an unopted-in unknown-
-  // columns notice (unknownColumns present, box not yet ticked): that case already has its own
-  // explanation (the amber box below) and doesn't need a second, more confusing "no rows found"
-  // message layered on top. Once the operator HAS ticked the box (`allowUnknownColumns`) and the
-  // file still parses to nothing, that's the "wrong file entirely" trap surviving one click deeper
-  // — it must say so, same as the plain no-unknown-columns case does.
+  // columns notice (unknownColumns present, the override not in force): that case already has its
+  // own explanation (the amber box below) and doesn't need a second, more confusing "no rows found"
+  // message layered on top. Once the override IS in force (`unknownColumnsOverridden` — the ticked
+  // box on the inline door, the run's stored option on the background one) and the file still parses
+  // to nothing, that's the "wrong file entirely" trap surviving one step deeper — it must say so,
+  // same as the plain no-unknown-columns case does.
   // Task 5: same reasoning as the unknownColumns exception above — a file that quarantined every
   // row already has its own explanation (the quarantine block below) and must not also show the
   // generic "no rows found" message.
   // CT-3: same reasoning again for `invalid` — a file whose every row failed coordinate validation
   // (without the override) already has its own explanation (the invalid-coordinates block below).
   const noOutcomeStated = result.parsed === 0
-    && (result.unknownColumns.length === 0 || props.allowUnknownColumns)
+    && (result.unknownColumns.length === 0 || unknownColumnsOverridden)
     && result.quarantined.length === 0
     && result.invalid.length === 0;
 
@@ -254,18 +296,38 @@ function ReconciliationSummary(props: ReconciliationSummaryProps) {
         </p>
       )}
 
+      {/* ⛔ THE CONTROL UNDER THIS NOTICE DIFFERS BY DOOR, and it has to. Inline, ticking the box
+          re-runs the preview, so the summary always describes the parse the box selects. On the run
+          door the validate has already happened — see `ReuploadOverrides` for why a tick there could
+          only 409 — so this offers the re-upload the confirm route's own refusal points at, and says
+          nothing at all for a JSONL release, where the flag provably cannot change the parse. */}
       {result.unknownColumns.length > 0 && (
         <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700">
           <p className="font-medium">{t('facilities.import.unknownColumnsTitle')}</p>
-          <p>{t('facilities.import.unknownColumnsBody', { columns: result.unknownColumns.join(', ') })}</p>
-          <label className="mt-2 flex items-center gap-2">
-            <Checkbox
-              checked={props.allowUnknownColumns}
-              disabled={props.togglesDisabled}
-              onCheckedChange={(c) => props.onAllowUnknownColumnsChange(c === true)}
-            />
-            <span>{t('facilities.import.allowUnknownColumns')}</span>
-          </label>
+          <p>
+            {t(
+              props.reupload?.sourceFormat === 'jsonl'
+                ? 'facilities.import.unknownColumnsBodyJsonl'
+                : 'facilities.import.unknownColumnsBody',
+              { columns: result.unknownColumns.join(', ') },
+            )}
+          </p>
+          {props.reupload === null ? (
+            <label className="mt-2 flex items-center gap-2">
+              <Checkbox
+                checked={props.allowUnknownColumns}
+                disabled={props.togglesDisabled}
+                onCheckedChange={(c) => props.onAllowUnknownColumnsChange(c === true)}
+              />
+              <span>{t('facilities.import.allowUnknownColumns')}</span>
+            </label>
+          ) : props.reupload.sourceFormat === 'jsonl' ? null : (
+            <p className="mt-2">
+              {t(props.reupload.allowUnknownColumns
+                ? 'facilities.import.overrideAppliedToRun'
+                : 'facilities.import.overrideNeedsReupload')}
+            </p>
+          )}
         </div>
       )}
 
@@ -306,14 +368,25 @@ function ReconciliationSummary(props: ReconciliationSummaryProps) {
               </li>
             ))}
           </ul>
-          <label className="mt-2 flex items-center gap-2">
-            <Checkbox
-              checked={props.allowInvalidCoordinates}
-              disabled={props.togglesDisabled}
-              onCheckedChange={(c) => props.onAllowInvalidCoordinatesChange(c === true)}
-            />
-            <span>{t('facilities.import.allowInvalidCoordinates')}</span>
-          </label>
+          {/* Same two-door split as the unrecognised-columns box above — but with NO format branch:
+              `allowInvalidCoordinates` is honoured by BOTH parsers (facility-csv.ts and
+              facility-release.ts's `row` branch alike), so it is live for a JSONL release too. */}
+          {props.reupload === null ? (
+            <label className="mt-2 flex items-center gap-2">
+              <Checkbox
+                checked={props.allowInvalidCoordinates}
+                disabled={props.togglesDisabled}
+                onCheckedChange={(c) => props.onAllowInvalidCoordinatesChange(c === true)}
+              />
+              <span>{t('facilities.import.allowInvalidCoordinates')}</span>
+            </label>
+          ) : (
+            <p className="mt-2">
+              {t(props.reupload.allowInvalidCoordinates
+                ? 'facilities.import.overrideAppliedToRun'
+                : 'facilities.import.overrideNeedsReupload')}
+            </p>
+          )}
         </div>
       )}
 
@@ -792,8 +865,21 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
 
   // ── A2b: the background path's three actions ────────────────────────────────────────────────────
 
-  const handleUpload = async (): Promise<void> => {
+  /** @param overrides The two PARSE-CHANGING flags, when this call is the run door's "re-upload with
+   *  this option" rather than a first upload. Passed explicitly for the reason `runPreview`'s own
+   *  `overrides` are: the ⋯ item that sets one has to send its just-chosen value ahead of the React
+   *  state update it also triggers. ⛔ `allowMalformedRows` is NOT one of them — it never reaches the
+   *  parser, so it stays the confirm's and needs no second trip through the file. */
+  const handleUpload = async (
+    overrides?: { allowUnknownColumns?: boolean; allowInvalidCoordinates?: boolean },
+  ): Promise<void> => {
     if (!file || !nationalSystem.trim()) return;
+    const allowUnknown = overrides?.allowUnknownColumns ?? allowUnknownColumns;
+    const allowInvalid = overrides?.allowInvalidCoordinates ?? allowInvalidCoordinates;
+    // Kept in state as well as sent, so the inline door and a later re-upload both read the same
+    // answer the run was actually created with.
+    setAllowUnknownColumns(allowUnknown);
+    setAllowInvalidCoordinates(allowInvalid);
     setUploading(true);
     // `null`, not `0` — nothing has been measured yet. The first progress event decides which of the
     // two labels the sheet shows.
@@ -812,6 +898,14 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
           // MEASURED instead of reported `null`. The checkbox is the same one the inline path uses;
           // both doors now honour it.
           completeRelease,
+          // ⛔ THE ONLY WAY A REGISTER THAT NEEDS ONE OF THESE CAN EVER BE IMPORTED FROM THE BROWSER.
+          // Both are fed to the parser, so they have to be decided BEFORE the validate that computes
+          // the summary the operator confirms — the confirm route refuses either one arriving late,
+          // and the studio's upload not sending them is what left a CSV register with one
+          // unrecognised column with no completable path at all (tick ⇒ guaranteed 409; don't tick ⇒
+          // an apply that parses nothing, writes nothing and still reports `applied`).
+          allowUnknownColumns: allowUnknown,
+          allowInvalidCoordinates: allowInvalid,
         },
         setUploadProgress,
       );
@@ -820,6 +914,12 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
       setPreviewResult(null);
       setApplyResult(null);
       setCancelOutcome(null);
+      // ⛔ The OLD run's view, not just its id. A re-upload supersedes the run whose summary is on
+      // screen (`awaiting_confirmation` is a supersedable state), so leaving `run` set would keep
+      // rendering that summary — and its Confirm — over a run the register no longer belongs to,
+      // until the first poll of the new one answered. Inert on a first upload, where it is already
+      // null.
+      setRun(null);
       setRunId(id);
     } catch (err) {
       setError(friendlyImportErrorMessage(err instanceof Error ? err.message : String(err)));
@@ -833,9 +933,10 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
     setConfirming(true);
     setError(null);
     try {
+      // ⛔ The two parse-changing overrides are deliberately not offered here — see
+      // `confirmOptionsFor`'s docblock. The run already carries whatever the UPLOAD declared.
       await confirmFacilityImportRun(runId, confirmOptionsFor(awaitingSummary, {
-        onDeleted, onAbsent, onConflict,
-        allowUnknownColumns, allowMalformedRows, allowInvalidCoordinates,
+        onDeleted, onAbsent, onConflict, allowMalformedRows,
       }));
       // 202: the register has NOT been written yet. Go and watch what the worker actually does with
       // it — including the case where a newer upload supersedes the run before any worker claims it,
@@ -876,6 +977,25 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
    *  upload clears any inline preview (see `handleUpload`) and picking a file clears any run. */
   const reviewResult: FacilityImportResult | null = previewResult ?? awaitingSummary;
   const fromRun = awaitingSummary !== null;
+  /** The run door's parse-override state, read off the RUN rather than this sheet's own — see
+   *  `ReuploadOverrides`. `null` while an inline preview is what is under review, which is what makes
+   *  the checkboxes stay checkboxes on that door. */
+  const reupload: ReuploadOverrides | null = fromRun && run
+    ? {
+      sourceFormat: run.sourceFormat,
+      allowUnknownColumns: run.options?.allowUnknownColumns === true,
+      allowInvalidCoordinates: run.options?.allowInvalidCoordinates === true,
+    }
+    : null;
+  /** Is a "re-upload with this option" worth offering for each flag? Only when the run's summary
+   *  shows the file actually contains the thing the flag waves through, the run did NOT already run
+   *  with it (a second identical upload would change nothing), and the flag can change this format's
+   *  parse at all — which `allowUnknownColumns` cannot for JSONL. */
+  const canReuploadForUnknownColumns = !!awaitingSummary && !!reupload
+    && reupload.sourceFormat !== 'jsonl'
+    && awaitingSummary.unknownColumns.length > 0 && !reupload.allowUnknownColumns;
+  const canReuploadForInvalidCoordinates = !!awaitingSummary && !!reupload
+    && awaitingSummary.invalid.length > 0 && !reupload.allowInvalidCoordinates;
   /** What actually got written, whichever door did it. */
   const appliedSummary: FacilityImportResult | null =
     applyResult ?? (run && run.status === 'applied' ? run.summary : null);
@@ -1004,6 +1124,29 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
               {canConfirmRun && (
                 <DropdownMenuItem disabled={confirming || cancelling} onClick={() => void handleConfirmRun()}>
                   {confirming ? t('facilities.import.confirming') : t('facilities.import.confirmAction')}
+                </DropdownMenuItem>
+              )}
+              {/* ⛔ THE RUN DOOR'S COMPLETABLE PATH FOR A PARSE-CHANGING OVERRIDE, and an ACTION, so
+                  it lives here rather than as a control in the amber box (ui-actions-in-dots-menu).
+                  It re-streams the SAME file with the override on the upload request, which
+                  supersedes this run and mints one whose validate — and therefore whose summary —
+                  ran with it. That is precisely what the confirm route's 409 tells the operator to
+                  do, and before this it named a control the studio did not have. Each is offered
+                  only where it could change something: see `canReuploadFor*`. */}
+              {canReuploadForUnknownColumns && (
+                <DropdownMenuItem
+                  disabled={uploadDisabled || confirming || cancelling}
+                  onClick={() => void handleUpload({ allowUnknownColumns: true })}
+                >
+                  {uploading ? uploadLabel : t('facilities.import.reuploadUnknownColumnsAction')}
+                </DropdownMenuItem>
+              )}
+              {canReuploadForInvalidCoordinates && (
+                <DropdownMenuItem
+                  disabled={uploadDisabled || confirming || cancelling}
+                  onClick={() => void handleUpload({ allowInvalidCoordinates: true })}
+                >
+                  {uploading ? uploadLabel : t('facilities.import.reuploadInvalidCoordinatesAction')}
                 </DropdownMenuItem>
               )}
               {/* Offered only while the run is still live: the cancel route 409s on a terminal run,
@@ -1175,11 +1318,11 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
               allowMalformedRows={allowMalformedRows}
               allowInvalidCoordinates={allowInvalidCoordinates}
               // ⛔ On the INLINE path these two re-run the preview, because they change which rows
-              // land in `records`. On the background path they cannot: the validate already ran, and
-              // nothing short of a fresh upload re-runs it — so they are recorded and sent with the
-              // confirm, which is the request that actually gates the apply.
-              onAllowUnknownColumnsChange={fromRun ? setAllowUnknownColumns : toggleAllowUnknownColumns}
-              onAllowInvalidCoordinatesChange={fromRun ? setAllowInvalidCoordinates : toggleAllowInvalidCoordinates}
+              // land in `records`. On the background path they are not offered as checkboxes at all
+              // — `reupload` below replaces them with the re-upload the confirm route's refusal
+              // points at — so these two handlers are the inline door's alone.
+              onAllowUnknownColumnsChange={toggleAllowUnknownColumns}
+              onAllowInvalidCoordinatesChange={toggleAllowInvalidCoordinates}
               onAllowMalformedRowsChange={toggleAllowMalformedRows}
               togglesDisabled={previewing || confirming || cancelling}
               onDeleted={onDeleted}
@@ -1192,6 +1335,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
               // discover a conflict. Background: the run IS the link, always.
               showConflictChoice={fromRun || !!previewResult?.runId}
               overCap={!fromRun && overCap}
+              reupload={reupload}
             />
           )}
 

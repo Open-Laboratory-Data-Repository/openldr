@@ -361,8 +361,9 @@ describe('createFacilityImportWorker — validate phase', () => {
   });
 
   // ⛔ WHOLE-BRANCH REVIEW I1. `importFacilities` hard-codes `knownNationalSystem: true` and says so
-  // ("Owned by the route… Nothing here can answer it"), so a worker that passes its result straight
-  // through PERSISTS a fabricated `true` as the run's durable summary — the exact "a value nobody
+  // ("Nothing here can answer it" — that field's doc names this worker as one of its two owners), so
+  // a worker that passed its result straight through would PERSIST a fabricated `true` as the run's
+  // durable summary — the exact "a value nobody
   // measured, reported as one that was" defect this workstream exists to remove, on the one path
   // built for a first-time national register. `GET /api/facilities/import/runs/:id` returns this
   // summary and the studio's run door renders `{!result.knownNationalSystem && <new register>}` from
@@ -840,5 +841,42 @@ describe('createFacilityImportWorker — the stale sweep', () => {
     expect(after.status).toBe('failed');
     expect(after.error).toMatch(/lease/i);
     expect(after.active_key).toBeNull();
+  });
+
+  // ⛔ `staleLeaseMs` EXISTS SO A TEST CAN DRIVE THIS BOUNDARY, and until this test nothing did —
+  // production never sets it and no test did either, so `deps.staleLeaseMs ?? …` was a line that
+  // could only ever take its right-hand side. Both halves below move the boundary in a direction the
+  // 15-minute default could not produce, so neither can pass on the default.
+  it('⛔ staleLeaseMs really moves the boundary, in both directions', async () => {
+    const db = (await makeMigratedDb()) as Kysely<InternalSchema>;
+    const runs = createFacilityImportRunStore(db);
+
+    // Half 1 — a LONGER lease spares a run the default would have swept. `ageRun` backdates one
+    // hour, four times the production lease, so this run is failed unless the injected two hours is
+    // what `sweepStale` actually passed.
+    const patient = await runs.startUpload(upload());
+    await runs.claimNext('queued', 'validating');
+    await ageRun(db, patient.id);
+    const lenient = createFacilityImportWorker({
+      ...depsFor(db, runs), staleLeaseMs: 2 * 60 * 60 * 1000,
+    });
+    await lenient.stop();
+    const patientRow = await rowFor(db, patient.id);
+    expect(patientRow.status).toBe('validating');
+    expect(patientRow.active_key).toBe(SYSTEM);
+
+    // Half 2 — and a lease of ZERO sweeps a run claimed moments ago, which the default spares (the
+    // test above proves that directly). ⚠ It also pins `??` rather than `||`: a falsy-coalescing
+    // read would silently substitute the 15 minutes here and leave this run `validating`.
+    // Its own database, because a zero lease sweeps EVERY running run — half 1's included.
+    const db2 = (await makeMigratedDb()) as Kysely<InternalSchema>;
+    const runs2 = createFacilityImportRunStore(db2);
+    const eager = await runs2.startUpload(upload());
+    await runs2.claimNext('queued', 'validating');
+    const impatient = createFacilityImportWorker({ ...depsFor(db2, runs2), staleLeaseMs: 0 });
+    await impatient.stop();
+    const eagerRow = await rowFor(db2, eager.id);
+    expect(eagerRow.status).toBe('failed');
+    expect(eagerRow.active_key).toBeNull();
   });
 });

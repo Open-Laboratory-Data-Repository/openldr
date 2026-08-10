@@ -1395,17 +1395,22 @@ describe('ImportFacilitiesSheet', () => {
   });
 
   // ⛔ THE SAME RULE FROM THE OTHER SIDE, AND THE HALF THAT ACTUALLY LOSES DATA: a control that DID
-  // render must have its value SENT. The three `allow*` checkboxes render in their own amber blocks
-  // ABOVE the summary's `result.parsed > 0` wrapper, each on its own list alone — so `parsed === 0`
-  // is no evidence whatever that they were off screen, and a body built behind a blanket
-  // `parsed === 0 ⇒ {}` dropped them. Both cases below are routine, not corners.
+  // render must have its value SENT, and one that did NOT render must not be. `allowMalformedRows`
+  // renders in its own amber block ABOVE the summary's `result.parsed > 0` wrapper, on its own list
+  // alone — so `parsed === 0` is no evidence whatever that it was off screen, and a body built behind
+  // a blanket `parsed === 0 ⇒ {}` dropped it. Both cases below are routine, not corners.
   //
   // This one is the CSV unknown-column shape: `facility-import.ts` blocks the whole parse on an
   // unrecognised header (`parsed`/`skipped` both 0) but does NOT set a `blockedReason` — only
   // `duplicate-columns` and `quarantined-rows` do — so `canConfirmRun` is true, Confirm is on the
-  // menu, and the amber override box is on screen. With the key dropped the apply re-parsed WITHOUT
-  // the override, wrote nothing, and still reported `applied` with `written {0,0,0}`.
-  it('A2b: Confirm carries the unrecognised-columns override the operator ticked, even at parsed 0', async () => {
+  // menu, and the amber box is on screen.
+  //
+  // ⚠ THIS TEST USED TO TICK A CHECKBOX AND ASSERT `{ allowUnknownColumns: true }` WAS SENT. That
+  // body was a guaranteed 409: the confirm route refuses a parse-changing override exactly when the
+  // stored summary shows the file contains the thing it waves through, which is the SAME condition
+  // that renders this box. The checkbox is gone from the run door; what replaces it is asserted here
+  // and, for the working half, in the re-upload test below.
+  it('A2b: a CSV register with an unrecognised column is completable at parsed 0 — and Confirm sends no parse-changing key', async () => {
     mocked(api.uploadFacilityImport).mockResolvedValue({ runId: 'run-b1' });
     mocked(api.getFacilityImportRun).mockResolvedValue(runView({
       status: 'awaiting_confirmation',
@@ -1417,16 +1422,137 @@ describe('ImportFacilitiesSheet', () => {
     pickFileAndSystem();
     await uploadNow();
 
-    // The premise, asserted rather than assumed: the control really IS rendered at `parsed: 0`.
-    fireEvent.click(await screen.findByRole('checkbox', { name: /keeping unrecognised columns/i }));
+    // The premise, asserted rather than assumed: the amber notice really IS rendered at `parsed: 0`.
+    expect(await screen.findByText(/ward_code/)).toBeInTheDocument();
+    // ⛔ …and the tick that could only 409 is gone, replaced by the path that actually works.
+    expect(screen.queryByRole('checkbox', { name: /keeping unrecognised columns/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/has to be set before validation/i)).toBeInTheDocument();
+    openMenu();
+    expect(screen.getByRole('menuitem', { name: 'Re-upload keeping unrecognised columns' })).toBeInTheDocument();
+    fireEvent.keyDown(document.body, { key: 'Escape' });
 
     clickMenuItem('Confirm import');
 
     await waitFor(() => expect(api.confirmFacilityImportRun).toHaveBeenCalledTimes(1));
     // ⛔ EXACT object, both directions at once: `onDeleted`/`onAbsent`/`onConflict` DO sit inside the
-    // `parsed > 0` wrapper, so none of them rendered and none may be sent — while the one override
-    // the operator actually ticked must be.
-    expect(api.confirmFacilityImportRun).toHaveBeenCalledWith('run-b1', { allowUnknownColumns: true });
+    // `parsed > 0` wrapper, so none of them rendered and none may be sent — and neither may either
+    // parse-changing override, which the run's own stored `options` already carry.
+    expect(api.confirmFacilityImportRun).toHaveBeenCalledWith('run-b1', {});
+  });
+
+  // ⛔ THE COMPLETABLE PATH ITSELF. Before this, a CSV register with one unrecognised column could be
+  // finished only from a shell — tick the box and the confirm 409s telling the operator to re-upload
+  // with an option the studio's upload did not expose; leave it and the apply parses nothing, writes
+  // nothing and still reports `applied`. This is the affordance that 409 names.
+  it('A2b: the run door re-uploads the same file with allowUnknownColumns, so the validate reviewed is the one applied', async () => {
+    mocked(api.uploadFacilityImport)
+      .mockResolvedValueOnce({ runId: 'run-b1' })
+      .mockResolvedValueOnce({ runId: 'run-b2' });
+    mocked(api.getFacilityImportRun)
+      .mockResolvedValueOnce(runView({
+        id: 'run-b1', status: 'awaiting_confirmation',
+        summary: baseResult({ parsed: 0, unknownColumns: ['ward_code'] }),
+      }))
+      // ⛔ The re-upload's own run is asked for and NEVER ANSWERS. That is what makes the assertions
+      // at the end of this test discriminating: the only thing that can clear the superseded run's
+      // summary in that window is the sheet dropping it itself (`setRun(null)` in `handleUpload`).
+      // With a mock that answers promptly, a poll would replace `run` either way and the assertion
+      // would pass whether or not the sheet dropped anything — measured, it did.
+      .mockReturnValue(new Promise<never>(() => { /* never settles */ }));
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    pickFileAndSystem();
+    await uploadNow();
+    await screen.findByText(/ward_code/);
+
+    // The FIRST upload carried no override — otherwise the second assertion below would be measuring
+    // a value that was always there.
+    expect(api.uploadFacilityImport).toHaveBeenNthCalledWith(
+      1, expect.objectContaining({ allowUnknownColumns: false }), expect.any(Function),
+    );
+
+    clickMenuItem('Re-upload keeping unrecognised columns');
+
+    await waitFor(() => expect(api.uploadFacilityImport).toHaveBeenCalledTimes(2));
+    // ⛔ The SAME file and register, with the override on the UPLOAD — the request that runs before
+    // the classification, so the summary the operator reviews next is the one that gets applied.
+    expect(api.uploadFacilityImport).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ nationalSystem: 'HFR', format: 'csv', allowUnknownColumns: true }),
+      expect.any(Function),
+    );
+    // ⛔ And the superseded run's summary — with its Confirm — leaves the screen rather than inviting
+    // a decision about a run the register no longer belongs to.
+    expect(await screen.findByText(/checking the import run/i)).toBeInTheDocument();
+    expect(screen.queryByText(/ward_code/)).not.toBeInTheDocument();
+    openMenu();
+    // Positive control on the same open menu, so the absence beside it means something.
+    expect(screen.getByRole('menuitem', { name: 'Cancel' })).toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Confirm import' })).not.toBeInTheDocument();
+  });
+
+  // ⛔ THE FORMAT-BLIND HALF OF THE SAME FINDING. `allowUnknownColumns` is a documented NO-OP for
+  // JSONL (`parseFacilityRelease` never reads it), so a release that merely GREW a field must not be
+  // offered a re-upload that would change nothing — and the confirm route's own gate skips its
+  // refusal on the same asymmetry.
+  it('A2b: a JSONL release with an unrecognised field is told it was kept, and offered no pointless re-upload', async () => {
+    mocked(api.uploadFacilityImport).mockResolvedValue({ runId: 'run-b1' });
+    mocked(api.getFacilityImportRun).mockResolvedValue(runView({
+      sourceFormat: 'jsonl',
+      status: 'awaiting_confirmation',
+      summary: baseResult({ parsed: 4, create: 4, unknownColumns: ['ward_code'] }),
+    }));
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    pickFileAndSystem();
+    await uploadNow();
+
+    expect(await screen.findByText(/do not block a JSONL release/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Nothing is imported unless you opt in/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/has to be set before validation/i)).not.toBeInTheDocument();
+    openMenu();
+    // The positive control, so the two absences below are not those of a menu that never opened.
+    expect(screen.getByRole('menuitem', { name: 'Confirm import' })).toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Re-upload keeping unrecognised columns' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: /keeping unrecognised columns/i })).not.toBeInTheDocument();
+  });
+
+  // The invalid-coordinate half: no format branch (both parsers honour it), and once the run HAS run
+  // with it there is nothing left to re-upload for — the box says so instead of offering a second
+  // identical upload.
+  it('A2b: the invalid-coordinate override is a re-upload too, and disappears once the run already ran with it', async () => {
+    mocked(api.uploadFacilityImport)
+      .mockResolvedValueOnce({ runId: 'run-b1' })
+      .mockResolvedValueOnce({ runId: 'run-b2' });
+    const summary = baseResult({
+      parsed: 2, create: 2,
+      invalid: [{ line: 3, field: 'latitude', reason: 'out_of_range', raw: '999' }],
+    });
+    mocked(api.getFacilityImportRun)
+      .mockResolvedValueOnce(runView({ id: 'run-b1', status: 'awaiting_confirmation', summary }))
+      .mockResolvedValue(runView({
+        id: 'run-b2', status: 'awaiting_confirmation', summary,
+        options: { nationalSystem: 'HFR', allowInvalidCoordinates: true },
+      }));
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    pickFileAndSystem();
+    await uploadNow();
+    expect(await screen.findByText(/has to be set before validation/i)).toBeInTheDocument();
+
+    clickMenuItem('Re-upload keeping rows with an invalid coordinate');
+
+    await waitFor(() => expect(api.uploadFacilityImport).toHaveBeenCalledTimes(2));
+    expect(api.uploadFacilityImport).toHaveBeenNthCalledWith(
+      2, expect.objectContaining({ allowInvalidCoordinates: true }), expect.any(Function),
+    );
+
+    // The second run's stored options say the validate ran with it, so the notice changes and the
+    // menu item retires — a second identical upload would change nothing.
+    expect(await screen.findByText(/already ran with that option on/i)).toBeInTheDocument();
+    openMenu();
+    expect(screen.getByRole('menuitem', { name: 'Confirm import' })).toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Re-upload keeping rows with an invalid coordinate' })).not.toBeInTheDocument();
   });
 
   // …and the second reachable shape: a file whose every row was quarantined parses 0 rows too, with
