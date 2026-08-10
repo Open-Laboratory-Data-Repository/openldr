@@ -40,14 +40,15 @@ export type FacilityImportRunStatus = (typeof ALL_RUN_STATES)[number];
 
 /** Nothing more will happen to this run, and a run here must NOT be holding `active_key`.
  *
- *  ⚠ That is a rule this module states, not one anything enforces, and it is met today by exactly
- *  ONE mechanism covering exactly TWO of these three members: `finishApply` (see
- *  `facility-import-run-store.ts`) takes `status: 'applied' | 'failed'` and nulls `active_key` in
- *  the same update — so it can move a run to `applied` or `failed`, and CANNOT move one to
- *  `cancelled`. Nothing in this repo writes `cancelled` at all right now (the state is declared here
- *  ahead of A2b's cancel path); whatever eventually does must release `active_key` in that same
- *  update too, or a cancelled run holds its national system for good and locks the register out of
- *  every future import. */
+ *  ⚠ That is a rule this module states, not one anything enforces — no constraint, no trigger, and
+ *  no test in THIS file can see it. It is met because every writer of a terminal status nulls
+ *  `active_key` in the same update, and A2b Task 2 made that structural rather than repeated:
+ *  `finishApply` (`'applied' | 'failed'`, the inline path) and `finish` (`'applied' | 'failed' |
+ *  'cancelled'`, the worker's) both delegate to ONE private `finishRun` in
+ *  `facility-import-run-store.ts`, so the clear cannot be present in one and missing from the other.
+ *  `supersede` and `failStaleRunning` write `failed` by their own guarded UPDATEs and clear the key
+ *  there too. Any FUTURE writer of a terminal status must do the same, or that run holds its national
+ *  system for good and locks the register out of every import. */
 export const TERMINAL_RUN_STATES: ReadonlySet<FacilityImportRunStatus> =
   new Set<FacilityImportRunStatus>(['applied', 'failed', 'cancelled']);
 
@@ -64,8 +65,9 @@ export const RUNNING_RUN_STATES: ReadonlySet<FacilityImportRunStatus> =
 
 /** The states an apply may start from: those a preview has RUN to completion for, so that whatever
  *  `previewed_at` the run carries is a watermark an apply may trust as its conflict baseline.
- *  Deliberately a positive list, not `!TERMINAL && !RUNNING` — `queued` and `validating` are
- *  neither, and both reach an apply with nothing classified yet.
+ *  Deliberately a positive list, not `!TERMINAL && !RUNNING` — `queued` is neither, and it reaches an
+ *  apply with nothing classified yet. (`validating` IS in `RUNNING_RUN_STATES`, so the negative
+ *  formulation would exclude it correctly; `queued` alone is what makes that formulation wrong.)
  *
  *  ⚠ Membership here does NOT promise a non-null `previewed_at`. `startPreview` inserts the row
  *  already `previewed` and `completePreview` stamps `previewed_at` in a LATER statement (see

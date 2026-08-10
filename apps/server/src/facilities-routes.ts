@@ -1197,37 +1197,36 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       try {
         run = await importRuns.startPreview(startPreviewInput);
       } catch (err) {
-        // Fix wave 1 (Important 4): `active_key` is set here and cleared ONLY by `finishApply` — see
-        // that method's own comment ("clearing the key is what stops a terminal row holding its
-        // national system for good"). Nothing expires or cancels a run that stays `previewed`
+        // Fix wave 1 (Important 4): `active_key` is set here and released only by a write that takes
+        // the run out of play — every terminal write (`finishApply`/`finish`), `supersede`, and
+        // `failStaleRunning`, each of which nulls it in the same update (see
+        // `facility-import-run-store.ts`). Nothing expires or cancels a run that stays `previewed`
         // forever, so an operator who previews and then simply never applies (closes the sheet,
         // navigates away — the ordinary "changed my mind" path, not a failure of any kind) would
         // otherwise lock this `nationalSystem` out of every future preview or runId-less apply
         // permanently, short of a database reset.
         //
-        // ⛔ Kept entirely inside this route, not added to `FacilityImportRunStore`'s public contract
-        // — the brief for this fix is explicit that the store's shape does not change. The unique
-        // `active_key` index (migration 080) guarantees AT MOST ONE `previewed` row per
-        // `nationalSystem` at a time, and `finishApply` always nulls `active_key` in the same update
-        // that moves a run off `previewed` — so whenever `startPreview` throws this "already in
-        // progress" error, the newest row `importRuns.list` returns for this system IS the one
-        // currently holding the lock, and it is impossible for a NEWER row to exist here (creating
-        // one requires going through this same `startPreview`, which is exactly what just failed).
+        // ⛔ The DECISION is kept inside this route; only the guarded write it needs lives in the
+        // store (`supersede`), because a compare-and-swap cannot be assembled from the store's other
+        // methods. The unique `active_key` index (migration 080) guarantees AT MOST ONE row holding
+        // this `nationalSystem` at a time, and the only ways to mint another (`startPreview`,
+        // `startUpload`) both refuse while the key is held — so whenever `startPreview` throws this
+        // "already in progress" error, the newest row `importRuns.list` returns for this system IS
+        // the one currently holding the lock, and it is impossible for a NEWER row to exist here.
         //
         // ⛔ Only a SUPERSEDABLE run is taken over — the states where the operator walked away and
         // nothing is mid-flight (`facility-import-run-states.ts`). This was `status !== 'previewed'`
         // in A2a, when `previewed` was the only such state; asking the set is what stops A2b's wider
         // enum from silently re-locking a register through a state this line has never heard of.
         // Everything else 409s, and that single predicate covers both remaining cases:
-        //  - TERMINAL (`applied`/`failed`/`cancelled`) — a run that reached `applied` or `failed`
-        //    went through `finishApply`, which nulls `active_key` in the same update, so it is not
-        //    the row holding the lock and this branch should never observe one. (`cancelled` has no
-        //    writer at all yet — `finishApply` takes only `'applied' | 'failed'` — and whatever adds
-        //    one must release the key too; see `facility-import-run-states.ts`.) If this branch did
-        //    somehow observe a terminal run, touching it would be finishing an already-finished run
-        //    for no reason, so it 409s.
+        //  - TERMINAL (`applied`/`failed`/`cancelled`) — every writer of a terminal status
+        //    (`finishApply` and A2b's `finish`, which is the one that can write `cancelled`) nulls
+        //    `active_key` in the same update, so a terminal run is not the row holding the lock and
+        //    this branch should never observe one. If it did somehow observe a terminal run,
+        //    touching it would be finishing an already-finished run for no reason, so it 409s.
         //  - RUNNING (`validating`/`applying`) — a worker is mid-flight; taking the run over would
-        //    race it. A2b introduces these; today nothing mints them.
+        //    race it. `claimNext` (A2b Task 2) is what mints these; the worker that calls it lands in
+        //    Task 4, so no code path reaches these states yet.
         // Exactly ONE retry: a second failure is surfaced as-is, never looped.
         const existing = (await importRuns.list(p.data.nationalSystem, 1))[0];
         if (!existing || !SUPERSEDABLE_RUN_STATES.has(existing.status)) {
@@ -1238,7 +1237,21 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
           return { error: err instanceof Error ? err.message : String(err) };
         }
         try {
-          await importRuns.finishApply(existing.id, 'failed', { error: 'superseded by a newer preview' });
+          // ⛔ COMPARE-AND-SWAP on the status this gate just observed, not an unconditional write.
+          // `existing.status` was read in the statement above, and A2b makes `queued` both
+          // SUPERSEDABLE and CLAIMABLE — so between that read and this write a worker's `claimNext`
+          // can move the run to `validating`. An unconditional `finishApply(existing.id, 'failed')`
+          // would then mark a LIVE run failed and null its `active_key` out from under the worker,
+          // letting a third request start against a register that worker is still writing. `false`
+          // means exactly that happened; the run is no longer the one this gate decided about, so it
+          // is NOT superseded and the request 409s rather than proceeding as though it had been.
+          const superseded = await importRuns.supersede(
+            existing.id, existing.status, 'superseded by a newer preview',
+          );
+          if (!superseded) {
+            reply.code(409);
+            return { error: `an import is already in progress for "${p.data.nationalSystem}"` };
+          }
           run = await importRuns.startPreview(startPreviewInput);
         } catch (retryErr) {
           reply.code(409);

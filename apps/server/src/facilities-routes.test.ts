@@ -1895,10 +1895,21 @@ describe('POST /api/facilities/import', () => {
         declaredRowCount: null,
         declaredDeletionCount: null,
         status: 'previewed',
+        // A2b Task 2 widened `FacilityImportRun` with the worker's columns. Pinned to CONCRETE
+        // values, never `expect.anything()`, so this stays the exhaustive wire-shape assertion it was
+        // written to be — and what it now also pins is true of an INLINE preview specifically: it
+        // stores no file (`blobKey: null`) and no worker has ever claimed it, so it carries no phase,
+        // no progress, no cancel request and no `startedAt`.
+        blobKey: null,
+        phase: null,
+        processed: 0,
+        total: null,
         previewedAt: expect.any(String),
         summary: expect.any(Object),
         options: { nationalSystem: SYSTEM },
         error: null,
+        cancelRequested: false,
+        startedAt: null,
         requestedBy: 'u1', // `req.user.id` from `appWith`'s fake `onRequest` hook
         createdAt: expect.any(String),
         finishedAt: null,
@@ -1955,10 +1966,21 @@ describe('POST /api/facilities/import', () => {
         declaredRowCount: null,
         declaredDeletionCount: null,
         status: 'previewed',
+        // A2b Task 2 widened `FacilityImportRun` with the worker's columns. Pinned to CONCRETE
+        // values, never `expect.anything()`, so this stays the exhaustive wire-shape assertion it was
+        // written to be — and what it now also pins is true of an INLINE preview specifically: it
+        // stores no file (`blobKey: null`) and no worker has ever claimed it, so it carries no phase,
+        // no progress, no cancel request and no `startedAt`.
+        blobKey: null,
+        phase: null,
+        processed: 0,
+        total: null,
         previewedAt: expect.any(String),
         summary: expect.any(Object),
         options: { nationalSystem: SYSTEM },
         error: null,
+        cancelRequested: false,
+        startedAt: null,
         requestedBy: 'u1',
         createdAt: expect.any(String),
         finishedAt: null,
@@ -2469,6 +2491,10 @@ describe('POST /api/facilities/import', () => {
         releaseVersion: null, releasePublishedAt: null, declaredRowCount: null, declaredDeletionCount: null,
         previewedAt: expect.any(String), summary: expect.any(Object), options: { nationalSystem: SYSTEM },
         error: null, requestedBy: 'u1', createdAt: expect.any(String),
+        // A2b Task 2's added columns, concrete for the same reason as the `GET .../runs/:id`
+        // assertions above: both of these runs came from the INLINE preview path, which stores no
+        // file and is never claimed by a worker.
+        blobKey: null, phase: null, processed: 0, total: null, cancelRequested: false, startedAt: null,
       };
       expect(runs).toEqual([
         // Newest first: a2, the still-open preview.
