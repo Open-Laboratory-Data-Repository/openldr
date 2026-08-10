@@ -14,7 +14,16 @@
  *
  *  ⚠ `facility_import_runs.status` is a plain `text notNull` column with NO check constraint
  *  (migration 080), so widening this union needs no migration. The database has never restricted
- *  the value; this module is the only thing that ever has. */
+ *  the value; this module is the only thing that ever has.
+ *
+ *  ⚠ THREE of the four sets below partition the enum; `APPLICABLE_RUN_STATES` does NOT. TERMINAL /
+ *  SUPERSEDABLE / RUNNING are exhaustive and mutually exclusive, and the exhaustiveness test
+ *  (`facility-import-run-states.test.ts`) forces a state added to `ALL_RUN_STATES` into exactly one
+ *  of them. `APPLICABLE_RUN_STATES` cuts ACROSS that partition — it is a separate positive list, and
+ *  nothing forces a new state into it, so a state added later silently gets `isApplicable === false`
+ *  until someone lists it. That default is fail-closed and correct (an unclassified state has not
+ *  earned an apply's trust in its `previewed_at` watermark), but it is a default, not a check: the
+ *  exhaustiveness test covers three of the four sets, never the fourth. */
 
 /** Every state, in lifecycle order. The single place a state is introduced: the union below is
  *  derived from this array, so a new entry cannot be omitted from the exhaustiveness test. */
@@ -29,9 +38,16 @@ export const ALL_RUN_STATES = [
 
 export type FacilityImportRunStatus = (typeof ALL_RUN_STATES)[number];
 
-/** Nothing more will happen to this run. Its `active_key` is released — `finishApply` nulls the key
- *  in the same update that moves the run here, which is what stops a finished row holding its
- *  national system for good (see `facility-import-run-store.ts`). */
+/** Nothing more will happen to this run, and a run here must NOT be holding `active_key`.
+ *
+ *  ⚠ That is a rule this module states, not one anything enforces, and it is met today by exactly
+ *  ONE mechanism covering exactly TWO of these three members: `finishApply` (see
+ *  `facility-import-run-store.ts`) takes `status: 'applied' | 'failed'` and nulls `active_key` in
+ *  the same update — so it can move a run to `applied` or `failed`, and CANNOT move one to
+ *  `cancelled`. Nothing in this repo writes `cancelled` at all right now (the state is declared here
+ *  ahead of A2b's cancel path); whatever eventually does must release `active_key` in that same
+ *  update too, or a cancelled run holds its national system for good and locks the register out of
+ *  every future import. */
 export const TERMINAL_RUN_STATES: ReadonlySet<FacilityImportRunStatus> =
   new Set<FacilityImportRunStatus>(['applied', 'failed', 'cancelled']);
 
@@ -46,10 +62,18 @@ export const SUPERSEDABLE_RUN_STATES: ReadonlySet<FacilityImportRunStatus> =
 export const RUNNING_RUN_STATES: ReadonlySet<FacilityImportRunStatus> =
   new Set<FacilityImportRunStatus>(['validating', 'applying']);
 
-/** The states an apply may start from: exactly those with a COMPLETED preview behind them, whose
- *  `previewed_at` watermark an apply can therefore trust as its conflict baseline. Deliberately a
- *  positive list, not `!TERMINAL && !RUNNING` — `queued` and `validating` are neither, and both
- *  reach an apply with nothing classified yet. */
+/** The states an apply may start from: those a preview has RUN to completion for, so that whatever
+ *  `previewed_at` the run carries is a watermark an apply may trust as its conflict baseline.
+ *  Deliberately a positive list, not `!TERMINAL && !RUNNING` — `queued` and `validating` are
+ *  neither, and both reach an apply with nothing classified yet.
+ *
+ *  ⚠ Membership here does NOT promise a non-null `previewed_at`. `startPreview` inserts the row
+ *  already `previewed` and `completePreview` stamps `previewed_at` in a LATER statement (see
+ *  `facility-import-run-store.ts`), so a run whose process died between the two is `previewed`,
+ *  `isApplicable`, and has no watermark at all. That is handled, not broken: the route passes
+ *  `previewedAt: null` through to `importFacilities`, which then reports `conflict: null` — NOT
+ *  EVALUATED, never `0`. A null watermark is the honest answer to "were conflicts checked?", so this
+ *  set gates on "may an apply start", never on "is a watermark present". */
 const APPLICABLE_RUN_STATES: ReadonlySet<FacilityImportRunStatus> =
   new Set<FacilityImportRunStatus>(['previewed', 'awaiting_confirmation']);
 

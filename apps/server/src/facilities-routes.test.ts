@@ -2301,7 +2301,18 @@ describe('POST /api/facilities/import', () => {
       expect(runRes.json().status).toBe('applied');
     });
 
-    it('never supersedes a run that already reached a terminal state (only "previewed" is fair game)', async () => {
+    // A2b Task 1 review fix (b). The old title claimed `only "previewed" is fair game`, which stopped
+    // being true when the supersede gate widened to `SUPERSEDABLE_RUN_STATES` — `queued` and
+    // `awaiting_confirmation` are fair game too (see the two `awaiting_confirmation` tests above).
+    //
+    // ⚠ This test does NOT reach the supersede gate, and never did. The apply above goes through
+    // `finishApply`, which nulls `active_key` in the same update — so the second preview's
+    // `startPreview` pre-check finds no active row, does not throw, and the retry branch holding the
+    // gate is never entered. What this pins is the OUTER guarantee (an applied run releases the lock
+    // and its terminal record is left untouched), not the gate's terminal→409 branch. That branch is
+    // covered by "⛔ 409s a TERMINAL run that is still holding `active_key`…" below, which forces the
+    // state the gate would actually have to observe.
+    it('an applied run releases the register and its terminal record survives a later preview', async () => {
       const db = await makeMigratedDb();
       const app = await appWith(fakeImportCtx(db));
       const csv = facilityCsv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,']);
@@ -2322,6 +2333,75 @@ describe('POST /api/facilities/import', () => {
       const appliedRunRes = await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${runId}` });
       expect(appliedRunRes.json().status).toBe('applied');
       expect(appliedRunRes.json().error).toBeNull();
+    });
+
+    // A2b Task 1 review fix (a). The gate's NEGATIVE half — supersede iff SUPERSEDABLE, 409 otherwise
+    // — shipped pinned by nothing. The natural route to a terminal run (preview, apply) cannot reach
+    // the gate at all: `finishApply` nulls `active_key`, so the next `startPreview` simply succeeds
+    // and the retry branch is never entered (see the comment on the test directly above). So the
+    // state is constructed directly — the same technique the `awaiting_confirmation` supersede test
+    // above uses — leaving `active_key` SET, which is the only thing that makes `startPreview` throw
+    // and drives execution into the branch under test.
+    //
+    // Both cases below are 409s for different reasons: a TERMINAL run is already decided (touching it
+    // would re-finish a finished run), a RUNNING run has a live worker (taking it over would race).
+    it('⛔ 409s a TERMINAL run that is still holding `active_key` — never supersedes a decided run', async () => {
+      const db = await makeMigratedDb();
+      const app = await appWith(fakeImportCtx(db));
+      const csv = facilityCsv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,']);
+      const first = await app.inject({ method: 'POST', url: '/api/facilities/import', payload: { csv, nationalSystem: SYSTEM } });
+      expect(first.statusCode).toBe(200);
+      const firstRunId = first.json().runId;
+
+      // Status only — `active_key` is deliberately NOT cleared, so this row still holds the lock.
+      await db.updateTable('facility_import_runs')
+        .set({ status: 'applied' })
+        .where('id', '=', firstRunId).execute();
+      // The setup is asserted: without both of these the second preview would 200 for a reason that
+      // has nothing to do with the gate.
+      expect((await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${firstRunId}` })).json().status)
+        .toBe('applied');
+      expect((await db.selectFrom('facility_import_runs').select('active_key')
+        .where('id', '=', firstRunId).executeTakeFirstOrThrow()).active_key).toBe(SYSTEM);
+
+      const second = await app.inject({ method: 'POST', url: '/api/facilities/import', payload: { csv, nationalSystem: SYSTEM } });
+      expect(second.statusCode).toBe(409);
+
+      // The decided run is left exactly as it was — not re-finished as 'failed', not given a
+      // supersede reason, and still holding the key it was (wrongly) holding.
+      const firstRunRes = await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${firstRunId}` });
+      expect(firstRunRes.json().status).toBe('applied');
+      expect(firstRunRes.json().error).toBeNull();
+    });
+
+    it('⛔ 409s a RUNNING run rather than superseding it — taking over would race a live worker', async () => {
+      const db = await makeMigratedDb();
+      const app = await appWith(fakeImportCtx(db));
+      const csv = facilityCsv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,']);
+      const first = await app.inject({ method: 'POST', url: '/api/facilities/import', payload: { csv, nationalSystem: SYSTEM } });
+      expect(first.statusCode).toBe(200);
+      const firstRunId = first.json().runId;
+
+      // `validating` is exactly what A2b's worker will hold while it is mid-flight, and it holds
+      // `active_key` for the whole of that time — so this is the real shape, not an invented one.
+      await db.updateTable('facility_import_runs')
+        .set({ status: 'validating' })
+        .where('id', '=', firstRunId).execute();
+      expect((await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${firstRunId}` })).json().status)
+        .toBe('validating');
+      expect((await db.selectFrom('facility_import_runs').select('active_key')
+        .where('id', '=', firstRunId).executeTakeFirstOrThrow()).active_key).toBe(SYSTEM);
+
+      const second = await app.inject({ method: 'POST', url: '/api/facilities/import', payload: { csv, nationalSystem: SYSTEM } });
+      expect(second.statusCode).toBe(409);
+
+      // The live run is untouched: still `validating`, still holding its key. A superseding gate
+      // would have marked it 'failed' out from under the worker.
+      const firstRunRes = await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${firstRunId}` });
+      expect(firstRunRes.json().status).toBe('validating');
+      expect(firstRunRes.json().error).toBeNull();
+      expect((await db.selectFrom('facility_import_runs').select('active_key')
+        .where('id', '=', firstRunId).executeTakeFirstOrThrow()).active_key).toBe(SYSTEM);
     });
 
     it('a failed apply marks its run failed rather than leaving the register locked forever', async () => {

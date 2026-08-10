@@ -72,11 +72,13 @@ export interface FacilitiesImportOpts {
  * detection. A preview that is never followed by that later apply is the ordinary "the operator
  * changed their mind and closed the sheet" case, and `active_key` (migration 080, one non-terminal
  * row per `nationalSystem`) would otherwise be held by it forever — which is exactly why the route
- * carries its own "supersede a still-`previewed` row on the next preview" retry logic.
+ * carries its own "supersede an abandoned run on the next preview" retry logic. That gate asks
+ * `SUPERSEDABLE_RUN_STATES` (facility-import-run-states.ts), not a `previewed` literal: `queued` and
+ * `awaiting_confirmation` are abandoned in the same way and are taken over the same way.
  *
  * This CLI has no equivalent two-step shape: preview and apply are the SAME synchronous call (there
- * is no `--run-id` flag to thread a run across two separate invocations), so there is no gap for a
- * `previewed` row to usefully occupy, and reproducing the route's supersede dance here would only
+ * is no `--run-id` flag to thread a run across two separate invocations), so there is no gap for an
+ * abandoned run to usefully occupy, and reproducing the route's supersede dance here would only
  * exist to undo a lock this command need not take in the first place. So a DRY RUN mints nothing —
  * matching that the audit event below is *also* apply-only — and only `--apply` starts a run, which
  * is finished (`'applied'` or `'failed'`) before this function returns by EVERY exit path below,
@@ -129,8 +131,10 @@ export async function runFacilitiesImport(path: string, opts: FacilitiesImportOp
         });
       } catch (err) {
         // `startPreview` throws when `active_key` is already held for this `nationalSystem` — by a
-        // concurrent import, or by a browser `previewed` row nobody ever applied or cancelled. No
-        // run was minted for THIS call, so there is nothing here for this catch to release.
+        // concurrent import, or by a browser run left in any non-terminal state (`previewed`, or
+        // A2b's `queued`/`awaiting_confirmation`) that nobody ever applied or cancelled. Unlike the
+        // HTTP route, this command does NOT supersede that row; it refuses, per the docblock above.
+        // No run was minted for THIS call, so there is nothing here for this catch to release.
         const msg = redactError(err);
         if (opts.json) process.stdout.write(JSON.stringify({ error: msg }) + '\n');
         else process.stderr.write(`facilities import refused: ${msg}\n`);

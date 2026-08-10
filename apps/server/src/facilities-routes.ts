@@ -1219,10 +1219,13 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
         // in A2a, when `previewed` was the only such state; asking the set is what stops A2b's wider
         // enum from silently re-locking a register through a state this line has never heard of.
         // Everything else 409s, and that single predicate covers both remaining cases:
-        //  - TERMINAL (`applied`/`failed`/`cancelled`) — already released `active_key` on its own, so
-        //    this branch should never observe one. If it somehow did (a race this reasoning says
-        //    cannot happen, but the check costs nothing), touching it would be finishing an
-        //    already-finished run for no reason.
+        //  - TERMINAL (`applied`/`failed`/`cancelled`) — a run that reached `applied` or `failed`
+        //    went through `finishApply`, which nulls `active_key` in the same update, so it is not
+        //    the row holding the lock and this branch should never observe one. (`cancelled` has no
+        //    writer at all yet — `finishApply` takes only `'applied' | 'failed'` — and whatever adds
+        //    one must release the key too; see `facility-import-run-states.ts`.) If this branch did
+        //    somehow observe a terminal run, touching it would be finishing an already-finished run
+        //    for no reason, so it 409s.
         //  - RUNNING (`validating`/`applying`) — a worker is mid-flight; taking the run over would
         //    race it. A2b introduces these; today nothing mints them.
         // Exactly ONE retry: a second failure is surfaced as-is, never looped.
@@ -1286,9 +1289,12 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     //    answer to a question this run was never asked. 400 because the request itself is
     //    self-contradictory (this exact `nationalSystem` paired with a `runId` that names another),
     //    the same category of client-input error `ImportSchema.safeParse` above already 400s.
-    //  - FRESHNESS (409, "this run is no longer applicable"): a run that is not `isApplicable` has
-    //    either already been decided — `applied`, `failed`, `cancelled` — or has no completed
-    //    preview behind it to supply a watermark. Resubmitting a decided one (a retry replaying the
+    //  - FRESHNESS (409, "this run is no longer applicable"): a run that is not `isApplicable` is
+    //    excluded for one of three reasons — it has already been DECIDED (`applied`, `failed`,
+    //    `cancelled`); it has no completed preview behind it to supply a watermark (`queued`,
+    //    `validating`); or it is IN FLIGHT (`applying`), which has a completed preview and is not
+    //    decided, but is already being applied by someone else and must not be applied twice.
+    //    Resubmitting a decided one (a retry replaying the
     //    same `runId`) must not perform a SECOND real write reusing the first apply's watermark, nor
     //    overwrite that first apply's terminal `summary`/`error` with a second one. 409 because the
     //    run itself is the reason the request cannot proceed as asked, independent of whether the
