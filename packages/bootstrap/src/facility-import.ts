@@ -91,6 +91,16 @@ export interface FacilityImportOptions {
    *  ⛔ Omitted/null means conflicts were NOT EVALUATED, and `result.conflict` is `null` to say so —
    *  never `0`, which would assert a measurement that was never taken (see `FacilityImportResult`). */
   previewedAt?: Date | null;
+  /** What to do with a row `classifyFacilityRows` classified `conflict` — touched by someone else
+   *  between the preview an operator read and this apply (see `previewedAt` above). Default
+   *  `'skip'`: the design spec's stated default ("the default is skip conflicts, with an explicit
+   *  overwrite option") is what an operator gets by omission, never `'overwrite'` by accident.
+   *  `'overwrite'` still WRITES the row (folded into `written.updated`, never `written.created` — a
+   *  `conflict` row only ever arises when an existing row was found, so it can never be a `create`)
+   *  and still projects its merged form (`mergedRecords`, below), while `conflict` on the result
+   *  keeps counting it regardless of which way this is set — the operator must still be told how
+   *  many rows they overwrote, not have the count vanish the moment they choose to act on it. */
+  onConflict?: 'skip' | 'overwrite';
 }
 
 /** One row of a per-bucket sample, identifying the facility without shipping the whole record. */
@@ -588,11 +598,13 @@ export async function importFacilities(
     // ⛔ `unchanged` rows are NOT written — which is what lets `written.updated` be believed. The old
     // code wrote every parsed row and counted every pre-existing one as `updated`, so a byte-identical
     // re-import of a 13 000-row release reported `updated: 13000` (measured) and bumped 13 000
-    // `updated_at` values for no content change. `conflict` rows are not written either: a conflict
-    // means the row moved under the operator between the preview they approved and this apply, and
-    // the spec's default is to skip it (an explicit overwrite option is a later task of this slice,
-    // never a default anyone gets by accident).
-    const toWrite = classified.filter((c) => c.kind === 'create' || c.kind === 'changed');
+    // `updated_at` values for no content change. `conflict` rows are written only when the caller
+    // opted in: a conflict means the row moved under the operator between the preview they approved
+    // and this apply, and `opts.onConflict` (default `'skip'`, see `FacilityImportOptions`' doc
+    // comment) decides whether that row is written anyway.
+    const overwriteConflicts = (opts.onConflict ?? 'skip') === 'overwrite';
+    const toWrite = classified.filter((c) => c.kind === 'create' || c.kind === 'changed'
+      || (overwriteConflicts && c.kind === 'conflict'));
     written.created = toWrite.filter((c) => c.kind === 'create').length;
     written.updated = toWrite.length - written.created;
 
@@ -613,10 +625,11 @@ export async function importFacilities(
     // asymmetry rather than "fixing" it into a change.
 
     // Projected below: every row whose merged form the registry now actually holds — the rows just
-    // written, plus `unchanged` rows (identical by definition). `conflict` rows are excluded because
-    // their merge was NOT written, so projecting it would publish a display name the registry does
-    // not have.
-    mergedRecords = classified.filter((c) => c.kind !== 'conflict').map((c) => c.merged);
+    // written, plus `unchanged` rows (identical by definition). A `conflict` row is excluded UNLESS
+    // `overwriteConflicts` (above) is set: on the default `'skip'` path its merge was NOT written, so
+    // projecting it would publish a display name the registry does not have; on `'overwrite'` it WAS
+    // written (it's in `toWrite` above), so the registry now genuinely holds that merged form.
+    mergedRecords = classified.filter((c) => c.kind !== 'conflict' || overwriteConflicts).map((c) => c.merged);
 
     // sql`now()` on updated_at mirrors upsert()'s explicit bump on conflict — insertBatchPg's chunked
     // ON CONFLICT DO UPDATE otherwise leaves updated_at untouched on an update (it only ever writes

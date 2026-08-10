@@ -61,6 +61,12 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   // on a new file pick, same as `allowUnknownColumns`/`allowMalformedRows` above.
   const [onDeleted, setOnDeleted] = useState<'retire' | 'report'>('retire');
   const [onAbsent, setOnAbsent] = useState<'retire' | 'report'>('report');
+  // A2a: what to do with a row the preview classified `conflict` (touched by someone else between
+  // the preview and this apply). Default mirrors the server's own (`FacilityImportOptions.onConflict`,
+  // facility-import.ts): skip by default, an explicit choice for overwrite — the design spec's stated
+  // default, never something an operator gets by accident. Reset alongside the other overrides on a
+  // new file pick, same as `onDeleted`/`onAbsent` above.
+  const [onConflict, setOnConflict] = useState<'skip' | 'overwrite'>('skip');
 
   const [previewing, setPreviewing] = useState(false);
   const [previewResult, setPreviewResult] = useState<FacilityImportResult | null>(null);
@@ -85,6 +91,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
     setAllowMalformedRows(false);
     setOnDeleted('retire');
     setOnAbsent('report');
+    setOnConflict('skip');
     invalidatePreview();
     if (!f) { setCsv(null); return; }
     void f.text().then(setCsv).catch((err: unknown) => {
@@ -178,6 +185,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
         runId: previewResult.runId ?? undefined,
         onDeleted,
         onAbsent,
+        onConflict,
       });
       setApplyResult(result);
       onImported();
@@ -469,6 +477,25 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
                         <SelectContent>
                           <SelectItem value="retire">{t('facilities.import.onAbsentRetire')}</SelectItem>
                           <SelectItem value="report">{t('facilities.import.onAbsentReport')}</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                  {/* A2a: same "only when there's something to decide" rule as onDeleted/onAbsent
+                      above — a `conflict` of `0` or still `null` (not evaluated) has nothing to
+                      overwrite, so a control here would offer a choice with no effect. */}
+                  {previewResult.conflict !== null && previewResult.conflict > 0 && (
+                    <div className="grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-1 rounded-md border border-border px-3 py-2">
+                      <Label htmlFor="facility-import-on-conflict" className="whitespace-nowrap">
+                        {t('facilities.import.onConflictLabel')}
+                      </Label>
+                      <Select value={onConflict} onValueChange={(v) => setOnConflict(v as 'skip' | 'overwrite')}>
+                        <SelectTrigger id="facility-import-on-conflict" className="h-8 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="skip">{t('facilities.import.onConflictSkip')}</SelectItem>
+                          <SelectItem value="overwrite">{t('facilities.import.onConflictOverwrite')}</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>

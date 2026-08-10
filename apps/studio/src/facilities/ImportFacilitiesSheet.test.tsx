@@ -527,7 +527,14 @@ describe('ImportFacilitiesSheet', () => {
     await previewNow();
 
     expect(await screen.findByText(/conflicts:.*not evaluated/i)).toBeInTheDocument();
-    expect(screen.queryByText(/conflicts:\s*0\b/i)).not.toBeInTheDocument();
+    // The ONLY other way this branch could render for `conflict: null` is the real "0 rows" copy
+    // (`summaryConflict`, en.ts) if the `=== null` check were weakened to `?? 0` — asserting against
+    // `/conflicts:\s*0\b/i` here would never fail on that mutation, since the rendered copy never
+    // starts with the word "conflicts" (see `summaryConflict`'s actual template below). Mutation-
+    // tested directly: with the ternary replaced by `t('summaryConflict', { count: conflict ?? 0 })`,
+    // this assertion alone (with assertion 1 disabled) failed on "found <p>0 row(s) were changed
+    // since this preview and will be skipped.</p>" — proof it participates, not dead weight.
+    expect(screen.queryByText(/0 row\(s\) were changed since this preview/i)).not.toBeInTheDocument();
   });
 
   it('renders a real conflict count once a run links this apply to a prior preview', async () => {
@@ -554,7 +561,11 @@ describe('ImportFacilitiesSheet', () => {
     await previewNow();
 
     expect(await screen.findByText(/absent from this file:.*not evaluated/i)).toBeInTheDocument();
-    expect(screen.queryByText(/absent from this file:\s*0\b/i)).not.toBeInTheDocument();
+    // Same reasoning as the conflict test above: the actual `summaryAbsent` copy (en.ts) never starts
+    // with "absent from this file", so `/absent from this file:\s*0\b/i` could never match regardless
+    // of whether `absent: null` were wrongly rendered as `0` — this asserts against the real 0-count
+    // sentence instead.
+    expect(screen.queryByText(/0 registry row\(s\) for this national system are absent from this file/i)).not.toBeInTheDocument();
   });
 
   it('a changed-row sample shows the before→after diff, not just a bare count', async () => {
@@ -591,6 +602,37 @@ describe('ImportFacilitiesSheet', () => {
 
     expect(screen.queryByRole('combobox', { name: /rows this file says were removed/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('combobox', { name: /rows missing from this file/i })).not.toBeInTheDocument();
+    // `conflict` is `null` (the baseResult default, not overridden here) — nothing was evaluated,
+    // so there is nothing to overwrite either.
+    expect(screen.queryByRole('combobox', { name: /rows changed since this preview/i })).not.toBeInTheDocument();
+  });
+
+  // A2a: the overwrite-conflicts choice follows the identical "only when there's something to
+  // decide" gating as onDeleted/onAbsent above (see the two tests bracketing this one).
+  it('offers an overwrite choice for conflicting rows once `conflict` is a non-zero number, defaulting to Skip', async () => {
+    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockResolvedValue(baseResult({
+      parsed: 3, create: 2, conflict: 1,
+    }));
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    pickFileAndSystem();
+    await previewNow();
+
+    const select = await screen.findByRole('combobox', { name: /rows changed since this preview/i });
+    expect(select).toBeInTheDocument();
+    expect(await screen.findByText(/skip them/i)).toBeInTheDocument();
+  });
+
+  it('conflict: 0 (evaluated, none found) still hides the overwrite choice — same as null', async () => {
+    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockResolvedValue(baseResult({
+      parsed: 3, create: 3, conflict: 0,
+    }));
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    pickFileAndSystem();
+    await previewNow();
+
+    expect(screen.queryByRole('combobox', { name: /rows changed since this preview/i })).not.toBeInTheDocument();
   });
 
   it('offers a retirement choice for declared-removed rows once `deleted` is non-zero, defaulting to Retire', async () => {
@@ -649,6 +691,52 @@ describe('ImportFacilitiesSheet', () => {
       expect.objectContaining({
         apply: true, runId: 'run-42', onDeleted: 'report', onAbsent: 'retire',
       }),
+    );
+  });
+
+  it('Apply carries the operator\'s overwrite-conflicts choice, distinct from the default skip', async () => {
+    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(baseResult({
+        parsed: 3, create: 2, conflict: 1, runId: 'run-43',
+      }))
+      .mockResolvedValueOnce(baseResult({
+        parsed: 3, written: { created: 2, updated: 1 }, conflict: 1, runId: 'run-43',
+      }));
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    pickFileAndSystem();
+    await previewNow();
+
+    // Flip away from the default 'skip' so the assertion below cannot pass by coincidence (sending
+    // the default value would also satisfy an assertion that forgot to check the field was even
+    // threaded through — the same discipline the retirement-choices test above already applies).
+    fireEvent.click(await screen.findByRole('combobox', { name: /rows changed since this preview/i }));
+    fireEvent.click(await screen.findByRole('option', { name: /overwrite them/i }));
+
+    clickMenuItem(/^apply$/i);
+    fireEvent.click(await screen.findByRole('button', { name: /^apply$/i }));
+
+    await waitFor(() => expect(api.importFacilitiesCsv).toHaveBeenCalledTimes(2));
+    expect(api.importFacilitiesCsv).toHaveBeenLastCalledWith(
+      expect.objectContaining({ apply: true, runId: 'run-43', onConflict: 'overwrite' }),
+    );
+  });
+
+  it('Apply sends the default onConflict: skip when the operator never touches the control', async () => {
+    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce(baseResult({ parsed: 3, create: 2, conflict: 1, runId: 'run-44' }))
+      .mockResolvedValueOnce(baseResult({ parsed: 3, written: { created: 2, updated: 0 }, conflict: 1, runId: 'run-44' }));
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    pickFileAndSystem();
+    await previewNow();
+
+    clickMenuItem(/^apply$/i);
+    fireEvent.click(await screen.findByRole('button', { name: /^apply$/i }));
+
+    await waitFor(() => expect(api.importFacilitiesCsv).toHaveBeenCalledTimes(2));
+    expect(api.importFacilitiesCsv).toHaveBeenLastCalledWith(
+      expect.objectContaining({ apply: true, onConflict: 'skip' }),
     );
   });
 

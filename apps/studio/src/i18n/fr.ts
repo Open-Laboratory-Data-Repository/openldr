@@ -854,6 +854,9 @@ export const fr: EnShape = {
       onAbsentLabel: 'Lignes absentes de ce fichier',
       onAbsentRetire: 'Les retirer',
       onAbsentReport: 'Signaler seulement, les garder actives',
+      onConflictLabel: 'Lignes modifiées depuis cet aperçu',
+      onConflictSkip: 'Les ignorer (ne pas modifier le registre)',
+      onConflictOverwrite: 'Les remplacer par ce fichier',
       newRegisterNotice: 'Aucune ligne existante n’utilise encore ce registre national — l’application créera une nouvelle identité de registre.',
     },
     health: {

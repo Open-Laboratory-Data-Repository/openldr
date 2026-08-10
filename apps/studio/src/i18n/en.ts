@@ -863,6 +863,9 @@ export const en = {
       onAbsentLabel: 'Rows missing from this file',
       onAbsentRetire: 'Retire them',
       onAbsentReport: 'Report only, keep them active',
+      onConflictLabel: 'Rows changed since this preview',
+      onConflictSkip: 'Skip them (leave the registry untouched)',
+      onConflictOverwrite: 'Overwrite them with this file',
       newRegisterNotice: 'No existing rows use this national system yet — applying will create a new register identity.',
     },
     // Task 11: the report-dimension health chip — whether the report-facing `facility_map`

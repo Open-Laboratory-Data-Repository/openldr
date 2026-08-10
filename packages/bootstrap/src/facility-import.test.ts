@@ -528,6 +528,32 @@ describe('preview reports real database impact (FAC-P1-03)', () => {
     expect(new Date(after!.updated_at).getTime()).toBe(updatedAtBefore); // untouched, not just unrenamed.
   });
 
+  // A2a: the explicit overwrite override the design spec calls for ("the default is skip conflicts,
+  // with an explicit overwrite option") — the mirror image of the skip test directly above. Same
+  // stale-`previewedAt` setup, but `onConflict: 'overwrite'` this time: the row IS renamed, and
+  // `conflict` still reports the count (the operator must be told how many rows they overwrote, not
+  // have the count vanish the moment they act on it).
+  it('an APPLY with onConflict: overwrite writes the conflicting row and still reports it as conflict', async () => {
+    const deps = await buildDeps();
+    const body = csv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,']);
+    await importFacilities(deps, body, { nationalSystem: SYSTEM, apply: true });
+    const before = await rowFor(deps.db, '100');
+    const updatedAtBefore = new Date(before!.updated_at).getTime();
+    const stalePreviewedAt = new Date(updatedAtBefore - 1000);
+
+    const renamed = csv(['100,Dodoma Regional Referral Hospital,,,,,,,,,,,,,,']);
+    const result = await importFacilities(
+      deps, renamed,
+      { nationalSystem: SYSTEM, apply: true, previewedAt: stalePreviewedAt, onConflict: 'overwrite' },
+    );
+
+    expect(result).toMatchObject({ conflict: 1, written: { created: 0, updated: 1 } });
+
+    const after = await rowFor(deps.db, '100');
+    expect(after?.name).toBe('Dodoma Regional Referral Hospital'); // renamed — the overwrite went through.
+    expect(new Date(after!.updated_at).getTime()).toBeGreaterThan(updatedAtBefore); // actually touched.
+  });
+
   it('reports absent as null — NOT 0 — when the release is not declared complete', async () => {
     const deps = await buildDeps();
     const r = await importFacilities(deps, csv(['100,Alpha,,,,,,,,,,,,,,']), { nationalSystem: SYSTEM });

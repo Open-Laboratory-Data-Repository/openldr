@@ -1992,6 +1992,39 @@ describe('POST /api/facilities/import', () => {
       expect(res.json().runId).toBeNull();
     });
 
+    // A2a: the route forwards `onConflict` through to `importFacilities` rather than dropping it —
+    // the mirror image of the default-skip test above (same stale-write setup), asserting the
+    // opposite outcome once the request carries the explicit override.
+    it('forwards onConflict: overwrite so a conflicting row IS written, still reporting it as conflict', async () => {
+      const db = await makeMigratedDb();
+      const app = await appWith(fakeImportCtx(db));
+      const csv = facilityCsv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,']);
+      await app.inject({ method: 'POST', url: '/api/facilities/import', payload: { csv, nationalSystem: SYSTEM, apply: true } });
+
+      const preview = await app.inject({ method: 'POST', url: '/api/facilities/import', payload: { csv, nationalSystem: SYSTEM } });
+      const runId = preview.json().runId;
+
+      // ⛔ `now() + interval`, not plain `now()`: pg-mem's `now()` resolves to real
+      // millisecond-precision wall-clock time (measured — two back-to-back `now()` calls land in the
+      // SAME millisecond roughly half the time), so a plain `sql\`now()\`` here races the preview's
+      // own `completePreview` watermark and intermittently fails to register as a conflict at all
+      // under load. A fixed future offset makes "touched after the preview" true unconditionally.
+      await db.updateTable('facility_registry')
+        .set({ updated_at: sql`now() + interval '1 second'` }).where('national_code', '=', '100').execute();
+
+      const renamed = facilityCsv(['100,Dodoma Regional Referral Hospital,,,,,,,,,,,,,,']);
+      const res = await app.inject({
+        method: 'POST', url: '/api/facilities/import',
+        payload: { csv: renamed, nationalSystem: SYSTEM, apply: true, runId, onConflict: 'overwrite' },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().conflict).toBe(1);
+      expect(res.json().written).toEqual({ created: 0, updated: 1 });
+
+      const row = await db.selectFrom('facility_registry').selectAll().where('national_code', '=', '100').executeTakeFirst();
+      expect(row?.name).toBe('Dodoma Regional Referral Hospital');
+    });
+
     it('applying against an unknown runId is a 404, not a silent fall-through to unlinked', async () => {
       const db = await makeMigratedDb();
       const app = await appWith(fakeImportCtx(db));

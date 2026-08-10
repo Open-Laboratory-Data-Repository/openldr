@@ -111,10 +111,10 @@ const ImportSchema = z.object({
   completeRelease: z.boolean().optional(),
   onDeleted: z.enum(['retire', 'report']).optional(),
   onAbsent: z.enum(['retire', 'report']).optional(),
-  // ⛔ Accepted, but NOT YET WIRED: `importFacilities` has no overwrite path today — a `conflict`
-  // row is unconditionally excluded from the write (facility-import.ts's `toWrite` filter), which
-  // IS the 'skip' default the design calls for. Declaring the field now keeps this request's
-  // contract stable for when the overwrite override lands, rather than a later breaking addition.
+  // What to do with a row `importFacilities` classifies `conflict` — see
+  // `FacilityImportOptions.onConflict`'s doc comment (facility-import.ts). Default `'skip'`, the
+  // design's stated default; `'overwrite'` writes the conflicting row anyway while `conflict` still
+  // reports the count.
   onConflict: z.enum(['skip', 'overwrite']).optional(),
   // Recorded on the run for FAC-P1-03's "who imported which release and when"; never read by
   // `importFacilities` itself (which has no `releaseVersion` option).
@@ -1119,6 +1119,7 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       completeRelease: p.data.completeRelease,
       onDeleted: p.data.onDeleted,
       onAbsent: p.data.onAbsent,
+      onConflict: p.data.onConflict,
     };
 
     // Always preview first (importFacilities reads the registry — a chunked `WHERE id IN (...)`

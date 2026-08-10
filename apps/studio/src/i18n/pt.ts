@@ -854,6 +854,9 @@ export const pt: EnShape = {
       onAbsentLabel: 'Linhas ausentes deste ficheiro',
       onAbsentRetire: 'Retirá-las',
       onAbsentReport: 'Apenas reportar, mantê-las ativas',
+      onConflictLabel: 'Linhas alteradas desde esta pré-visualização',
+      onConflictSkip: 'Ignorá-las (não alterar o registo)',
+      onConflictOverwrite: 'Substituí-las por este ficheiro',
       newRegisterNotice: 'Nenhuma linha existente usa ainda este registo nacional — aplicar irá criar uma nova identidade de registo.',
     },
     health: {

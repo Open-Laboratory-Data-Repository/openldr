@@ -1011,9 +1011,10 @@ export interface FacilityImportRequest {
   onDeleted?: 'retire' | 'report';
   /** What to do with rows merely absent from a complete release. */
   onAbsent?: 'retire' | 'report';
-  /** ⛔ Accepted by the server but NOT YET WIRED — a `conflict` row is unconditionally skipped
-   *  (`importFacilities`'s `toWrite` filter), regardless of what this carries. This sheet does not
-   *  offer a control for it yet; declared here only so the request shape matches the server's. */
+  /** What to do with a row the server classified `conflict` — touched by someone else between the
+   *  preview this apply's `runId` points at and this apply itself. Default `'skip'`. The sheet offers
+   *  a control for this once `conflict` is a non-zero number (see ImportFacilitiesSheet.tsx's
+   *  `onConflict` select, shown beside the `onDeleted`/`onAbsent` ones). */
   onConflict?: 'skip' | 'overwrite';
   /** Recorded on the run for its own history; never read by `importFacilities` itself. */
   releaseVersion?: string;
