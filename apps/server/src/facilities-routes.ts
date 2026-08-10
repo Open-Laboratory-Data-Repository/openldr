@@ -1,4 +1,6 @@
 import { randomUUID, createHash } from 'node:crypto';
+import { Transform } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import type { Kysely } from 'kysely';
 import { z } from 'zod';
@@ -10,9 +12,11 @@ import {
 import {
   splitFacilityAnswers, CORE_FACILITY_KEYS, FACILITY_ADMIN_LEVELS, referenceCapture,
   FACILITY_REGISTRY_SYSTEM, DEFAULT_LIST_LIMIT, FACILITY_HEALTH_VALUES, createFacilityImportRunStore,
-  SUPERSEDABLE_RUN_STATES, isApplicable,
+  SUPERSEDABLE_RUN_STATES, RUNNING_RUN_STATES, TERMINAL_RUN_STATES, isApplicable,
 } from '@openldr/db';
-import type { FacilityAdminLevel, ExternalSchema, FacilityHealth, FacilityImportRun } from '@openldr/db';
+import type {
+  FacilityAdminLevel, ExternalSchema, FacilityHealth, FacilityImportRun, FacilityImportRunStatus,
+} from '@openldr/db';
 import { requireCapability } from './rbac';
 import { recordAudit, actorFromRequest } from './audit-helper';
 
@@ -78,6 +82,62 @@ const IMPORT = { ...MANAGE, bodyLimit: MAX_IMPORT_REQUEST_BYTES };
 // opens a transaction (or projects), so a 14 000-row register can always be PREVIEWED inline
 // regardless of this cap.
 const MAX_INLINE_APPLY_ROWS = 2000;
+
+// ⛔ TWO IMPORT PATHS, ONE CAP — do not "unify" them.
+//
+//  - `POST /api/facilities/import` (INLINE, above): parses, writes and projects INSIDE the request,
+//    and is bounded by `MAX_INLINE_APPLY_ROWS`. That bound stays. It carries the CLI and every
+//    existing integrator, and its wire shape is pinned by this file's tests.
+//  - `POST /api/facilities/import/upload` (A2b, below): streams the file to blob storage, mints a
+//    `queued` run, and returns. A worker (A2b Task 4) parses and applies it later. `MAX_INLINE_APPLY
+//    _ROWS` deliberately does NOT apply here — lifting it for a full national register is the entire
+//    reason this path exists.
+//
+// ⚠ MEASURED 2026-08-09 on real Postgres (see the block above): a cold end-to-end 13 000-row import
+// takes 2 689 ms, so the inline cap was never guarding a per-row COST. What it guards is a
+// SYNCHRONOUS HTTP REQUEST — an operator watching a request that reports nothing while it runs, and
+// a client/proxy deadline that can cut it off mid-apply. This path removes the request, not the
+// work, which is why the same workload is safe here and capped there.
+//
+// A byte ceiling for the upload, carried in the same `{ ...MANAGE, bodyLimit }` shape as `IMPORT`
+// above and as the terminology distribution upload's `UPLOAD` (`terminology-admin-routes.ts`).
+//
+// ⚠ MEASURED against fastify@5.8.5, because the obvious assumption is wrong and the sibling route
+// shares it: `bodyLimit` does NOT bound a STREAMING content-type parser. `content-type-parser.js`'s
+// `ContentTypeParser.prototype.run` only calls `rawBody` — the one place `content-length` is
+// compared to the limit, and the one place a running total is compared to it — when the parser is
+// `asString` or `asBuffer`. A passthrough parser (what this route registers, so `req.body` IS the
+// stream) takes the other branch and is handed the payload directly, limit unconsulted. So this
+// number is real only if a future change makes this route buffer its body; today the transfer is
+// bounded by the `facilities.manage` gate in front of it and by the blob store behind it, not by
+// this. Kept, not deleted, because it is correct-by-construction for that future change and costs
+// nothing — but do NOT cite it as the reason a huge upload is safe.
+const MAX_UPLOAD_BYTES = 1_073_741_824;
+// Same capability gate as every other write in this file (`facilities.manage`).
+const UPLOAD = { ...MANAGE, bodyLimit: MAX_UPLOAD_BYTES };
+
+/** The request body arrived as a stream (an octet-stream/text-csv passthrough parser handed the raw
+ *  `payload` through) rather than as a parsed JSON object, a string or a Buffer.
+ *
+ *  Deliberately a second copy of `terminology-admin-routes.ts`'s identical duck-type guard rather
+ *  than an import: these are two independent route modules, and cross-importing one route file from
+ *  another to reach a two-line predicate would couple them for no gain. `instanceof Readable` is not
+ *  used for the reason that file's version does not either — what matters is that the object can be
+ *  piped, and Fastify hands over whatever the content-type parser returned. */
+function isReadableBody(body: unknown): body is NodeJS.ReadableStream {
+  return !!body && typeof body === 'object' && typeof (body as { pipe?: unknown }).pipe === 'function';
+}
+
+/** A human-legible path segment for a `nationalSystem` such as `urn:tz:hfr`.
+ *
+ *  ⚠ For LEGIBILITY ONLY — it is lossy (`urn:tz:hfr` and `urn/tz/hfr` both slug to `urn-tz-hfr`),
+ *  so nothing may key off it. Two registers whose slugs collide still get distinct objects because
+ *  the object NAME is a fresh uuid, and the authoritative link in both directions is
+ *  `facility_import_runs.blob_key`. */
+function nationalSystemSlug(nationalSystem: string): string {
+  const slug = nationalSystem.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  return slug || 'register';
+}
 
 const ImportSchema = z.object({
   // ⚠ Minor fix: blank/whitespace-only content is refused here, not left to reach
@@ -453,6 +513,78 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
   // import route below). Constructed once per registration, not per request: it is a thin closure
   // over `ctx.internalDb`, the same db this file already reads directly in several routes.
   const importRuns = createFacilityImportRunStore(ctx.internalDb);
+
+  // A2b Task 3: a file upload is a stream, not a JSON body, and Fastify has no built-in parser for
+  // either of these content types — without them it answers 415 before the handler ever runs.
+  // Passthrough (`done(null, payload)`), so `req.body` IS the raw request stream. Guarded exactly
+  // like `workflows-routes.ts`'s identical registration: another route file registered on the SAME
+  // Fastify instance (terminology-admin-routes.ts) already adds the octet-stream one, and a second
+  // `addContentTypeParser` for a type already present throws.
+  //
+  // `text/csv` is registered alongside `application/octet-stream` so a client is free to label a CSV
+  // upload either way. That is the whole of what a content type decides here: which parser Fastify
+  // reaches for. The FORMAT is read from the QUERY STRING and validated there, so a file labelled
+  // `text/csv` but declared `format=jsonl` is stored and queued as jsonl — the header is never
+  // allowed to contradict the declaration.
+  for (const contentType of ['application/octet-stream', 'text/csv']) {
+    if (!app.hasContentTypeParser(contentType)) {
+      app.addContentTypeParser(contentType, (_req: unknown, payload: unknown, done: (e: null, b: unknown) => void) => done(null, payload));
+    }
+  }
+
+  /** What a request that wants to MINT a run must know about whatever run currently holds this
+   *  register: was the register freed for it, or must the request be refused (and why)?
+   *
+   *  ⛔ Shared by both minting paths — the inline preview's `startPreview` retry and the upload
+   *  route's pre-transfer gate — because both must make the SAME decision, and A2a's version of this
+   *  decision lived only in the preview route. A second, hand-copied gate is exactly how one path
+   *  keeps a rule the other quietly loses (`status !== 'previewed'` was that bug once already; see
+   *  `facility-import-run-states.ts`).
+   *
+   *  ⛔ The holder is found by `active_key`, NOT by "the newest run for this system". The key IS the
+   *  lock (unique index, migration 080) and a terminal write releases it, so the newest run can
+   *  perfectly well be a finished one over a register nothing holds — which the upload route, unlike
+   *  the preview route, asks about BEFORE anything has thrown. Read straight off `ctx.internalDb`
+   *  because `active_key` is not on `FacilityImportRun`; this file already reads `facility_jobs` and
+   *  `term_mappings` directly for the same reason. */
+  type RegisterGate = { freed: true } | { freed: false; error: string };
+
+  const registerHeldError = (nationalSystem: string, id: string, status: FacilityImportRunStatus): string => (
+    RUNNING_RUN_STATES.has(status)
+      ? `an import is already in progress for "${nationalSystem}": run ${id} is ${status}`
+      // Not reachable through any code path today — every writer of a terminal status nulls
+      // `active_key` in the same update — but it is the honest message if one ever is, and it is a
+      // different remedy from the one above (clear the stuck row, not "wait for the worker").
+      : `import run ${id} is already ${status} but still holds "${nationalSystem}"`
+  );
+
+  async function takeOverRegister(nationalSystem: string, reason: string): Promise<RegisterGate> {
+    const holder = await ctx.internalDb.selectFrom('facility_import_runs')
+      .select(['id', 'status']).where('active_key', '=', nationalSystem).executeTakeFirst();
+    if (!holder) return { freed: true };
+
+    const status = holder.status as FacilityImportRunStatus;
+    // ⛔ Only a SUPERSEDABLE run is taken over — the states where the operator walked away and
+    // nothing is mid-flight. Everything else is refused: a RUNNING run has a live worker (taking it
+    // over would race it), a TERMINAL one is already decided.
+    if (!SUPERSEDABLE_RUN_STATES.has(status)) {
+      return { freed: false, error: registerHeldError(nationalSystem, holder.id, status) };
+    }
+
+    // ⛔ COMPARE-AND-SWAP on the status just read, never an unconditional write: `queued` is both
+    // supersedable and CLAIMABLE, so a worker's `claimNext` can move this run to `validating`
+    // between the two statements. `false` means exactly that happened.
+    if (await importRuns.supersede(holder.id, status, reason)) return { freed: true };
+
+    // The CAS lost — so answer what actually happened rather than assuming. A run that moved to a
+    // TERMINAL state released `active_key` on its way, which means the register really is free and
+    // the caller may proceed; only a run that is still live is a refusal. Saying "an import is
+    // already in progress" for the terminal case (as this branch used to, unconditionally) would
+    // refuse a request over a register nobody holds. One re-read, no loop.
+    const moved = await importRuns.get(holder.id);
+    if (!moved || TERMINAL_RUN_STATES.has(moved.status)) return { freed: true };
+    return { freed: false, error: registerHeldError(nationalSystem, moved.id, moved.status) };
+  }
 
   app.get('/api/facilities', VIEW, async (req) => {
     const q = req.query as Record<string, unknown>;
@@ -1196,7 +1328,7 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       let run: FacilityImportRun;
       try {
         run = await importRuns.startPreview(startPreviewInput);
-      } catch (err) {
+      } catch {
         // Fix wave 1 (Important 4): `active_key` is set here and released only by a write that takes
         // the run out of play — every terminal write (`finishApply`/`finish`), `supersede`, and
         // `failStaleRunning`, each of which nulls it in the same update (see
@@ -1206,54 +1338,26 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
         // otherwise lock this `nationalSystem` out of every future preview or runId-less apply
         // permanently, short of a database reset.
         //
-        // ⛔ The DECISION is kept inside this route; only the guarded write it needs lives in the
-        // store (`supersede`), because a compare-and-swap cannot be assembled from the store's other
-        // methods. The unique `active_key` index (migration 080) guarantees AT MOST ONE row holding
-        // this `nationalSystem` at a time, and the only ways to mint another (`startPreview`,
-        // `startUpload`) both refuse while the key is held — so whenever `startPreview` throws this
-        // "already in progress" error, the newest row `importRuns.list` returns for this system IS
-        // the one currently holding the lock, and it is impossible for a NEWER row to exist here.
+        // ⛔ The DECISION lives in `takeOverRegister` (top of this function), SHARED with the upload
+        // route's gate rather than copied — see its doc comment for why the holder is found by
+        // `active_key`, why only a SUPERSEDABLE run is taken over, and why the take-over is a
+        // compare-and-swap. The thrown error is deliberately not bound: it says only "already in
+        // progress" for this `nationalSystem`, which is several distinguishable situations rolled
+        // into one sentence, and the gate below names the one that actually holds. A throw for any
+        // OTHER reason (a db failure, say) finds no holder, falls through to the retry, and surfaces
+        // its own message from there.
         //
-        // ⛔ Only a SUPERSEDABLE run is taken over — the states where the operator walked away and
-        // nothing is mid-flight (`facility-import-run-states.ts`). This was `status !== 'previewed'`
-        // in A2a, when `previewed` was the only such state; asking the set is what stops A2b's wider
-        // enum from silently re-locking a register through a state this line has never heard of.
-        // Everything else 409s, and that single predicate covers both remaining cases:
-        //  - TERMINAL (`applied`/`failed`/`cancelled`) — every writer of a terminal status
-        //    (`finishApply` and A2b's `finish`, which is the one that can write `cancelled`) nulls
-        //    `active_key` in the same update, so a terminal run is not the row holding the lock and
-        //    this branch should never observe one. If it did somehow observe a terminal run,
-        //    touching it would be finishing an already-finished run for no reason, so it 409s.
-        //  - RUNNING (`validating`/`applying`) — a worker is mid-flight; taking the run over would
-        //    race it. `claimNext` (A2b Task 2) is what mints these; the worker that calls it lands in
-        //    Task 4, so no code path reaches these states yet.
         // Exactly ONE retry: a second failure is surfaced as-is, never looped.
-        const existing = (await importRuns.list(p.data.nationalSystem, 1))[0];
-        if (!existing || !SUPERSEDABLE_RUN_STATES.has(existing.status)) {
-          // Same shape as the terminology distribution upload route's "already in progress" 409
-          // (terminology-admin-routes.ts) — the unique `active_key` index is the race-safe backstop,
-          // this is just where the message becomes readable.
+        const gate = await takeOverRegister(p.data.nationalSystem, 'superseded by a newer preview');
+        if (!gate.freed) {
           reply.code(409);
-          return { error: err instanceof Error ? err.message : String(err) };
+          return { error: gate.error };
         }
         try {
-          // ⛔ COMPARE-AND-SWAP on the status this gate just observed, not an unconditional write.
-          // `existing.status` was read in the statement above, and A2b makes `queued` both
-          // SUPERSEDABLE and CLAIMABLE — so between that read and this write a worker's `claimNext`
-          // can move the run to `validating`. An unconditional `finishApply(existing.id, 'failed')`
-          // would then mark a LIVE run failed and null its `active_key` out from under the worker,
-          // letting a third request start against a register that worker is still writing. `false`
-          // means exactly that happened; the run is no longer the one this gate decided about, so it
-          // is NOT superseded and the request 409s rather than proceeding as though it had been.
-          const superseded = await importRuns.supersede(
-            existing.id, existing.status, 'superseded by a newer preview',
-          );
-          if (!superseded) {
-            reply.code(409);
-            return { error: `an import is already in progress for "${p.data.nationalSystem}"` };
-          }
           run = await importRuns.startPreview(startPreviewInput);
         } catch (retryErr) {
+          // The register was freed above and something took it again before this statement — a
+          // genuine race between two operators, not a stuck run.
           reply.code(409);
           return { error: retryErr instanceof Error ? retryErr.message : String(retryErr) };
         }
@@ -1404,6 +1508,151 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     });
     return result;
   });
+
+  // ── A2b Task 3: the upload end of the background import ───────────────────────────────────────
+  //
+  // Streams the register file straight into blob storage and mints a `queued` run for it. Nothing is
+  // parsed, validated or written here: A2b Task 4's worker claims the run, reads the file back out
+  // of the blob store, and reports what it found through the run row. So a 202 means "the file is
+  // stored and the work is queued" — never "the register was imported", which is why this is not a
+  // 200 or a 201.
+  //
+  // ⛔ NO ROW CAP ON THIS PATH. See the "TWO IMPORT PATHS, ONE CAP" block under
+  // `MAX_INLINE_APPLY_ROWS` for why that cap stays on the inline route and must not follow the file
+  // here.
+  //
+  // Parameters ride the QUERY STRING because the body is the file itself — the same shape the
+  // terminology distribution upload uses (`terminology-admin-routes.ts`), which this route otherwise
+  // follows closely (bodyLimit config object, `isReadableBody` guard, `putStream`, audit, id back).
+  app.post('/api/facilities/import/upload', UPLOAD, async (req, reply) => {
+    const q = req.query as Record<string, unknown>;
+    // `ownFirstString`, not `firstString(q.x)` — see that helper's doc comment.
+    const nationalSystem = ownFirstString(q, 'nationalSystem');
+    // ⛔ Required, never defaulted, for the reason `ImportSchema.nationalSystem` documents: a
+    // hardcoded fallback would eventually file a register under the wrong national identity.
+    if (!nationalSystem) { reply.code(400); return { error: 'nationalSystem is required' }; }
+
+    const format = ownFirstString(q, 'format') ?? 'csv';
+    if (format !== 'csv' && format !== 'jsonl') {
+      reply.code(400);
+      return { error: `format must be "csv" or "jsonl", not "${format}"` };
+    }
+    const releaseVersion = ownFirstString(q, 'releaseVersion') ?? null;
+
+    // A JSON body (the INLINE route's shape, sent here by mistake) arrives as a parsed object and
+    // must be refused before anything else happens — piping it would throw somewhere far less
+    // legible.
+    if (!isReadableBody(req.body)) {
+      reply.code(400);
+      return { error: 'expected the register file as a request-body stream (content-type: application/octet-stream or text/csv)' };
+    }
+
+    // ⛔ The register gate runs BEFORE the transfer, not after it. A refused upload must not first
+    // cost a national register's worth of bandwidth and leave an orphan object behind. Shared with
+    // the inline preview route — see `takeOverRegister`.
+    const gate = await takeOverRegister(nationalSystem, 'superseded by a newer upload');
+    if (!gate.freed) { reply.code(409); return { error: gate.error }; }
+
+    // ⚠ The object is named by a fresh uuid, NOT by the run id, which is the one place this differs
+    // from the shape A2b's plan sketched. The run row cannot exist yet: `startUpload` writes
+    // `file_hash` and `byte_size`, and neither is known until the last byte has gone past — while
+    // `putStream` needs its key before the first one does. Minting the run first would mean either
+    // storing a hash of nothing or an UPDATE the store deliberately does not have. The durable link
+    // is `facility_import_runs.blob_key`, written below — it resolves run→object directly and
+    // object→run through that column; the slug is there so a human browsing the bucket can tell the
+    // registers apart.
+    const key = `facility-import/${nationalSystemSlug(nationalSystem)}/${randomUUID()}.${format}`;
+
+    // ⛔ Hash and size are computed AS THE BYTES TRAVEL, in a transform between the request and the
+    // blob store — the file is never buffered, at any size. Reading the object back to hash it (or
+    // collecting it into a Buffer first) would put a national register in memory twice and defeat
+    // the whole point of streaming it.
+    const digest = createHash('sha256');
+    let byteSize = 0;
+    const hashing = new Transform({
+      transform(chunk: Buffer, _enc, done) {
+        digest.update(chunk);
+        byteSize += chunk.length;
+        done(null, chunk);
+      },
+    });
+
+    try {
+      const stored = ctx.blob.putStream(key, hashing, format === 'csv' ? 'text/csv' : 'application/x-ndjson');
+      // ⚠ `allSettled`, not `Promise.all`: BOTH sides can fail (the request stream dying, the blob
+      // store rejecting), and `Promise.all` rejects on the first while leaving the second's eventual
+      // rejection unobserved — an unhandled rejection that can take the process down. On a source
+      // failure `pipeline` destroys `hashing` with that error, so whatever is consuming it sees the
+      // failure too rather than waiting for bytes that will never come.
+      const outcomes = await Promise.allSettled([pipeline(req.body as NodeJS.ReadableStream, hashing), stored]);
+      const failed = outcomes.find((o) => o.status === 'rejected');
+      if (failed) throw (failed as PromiseRejectedResult).reason;
+    } catch (err) {
+      // The register was freed by the gate above and no run row exists, so the only thing left over
+      // is a possibly-partial object. Best-effort delete, logged — a lost cleanup must not change
+      // the answer the operator gets, which is the transfer failure itself.
+      await discardBlob(key, 'a failed facility import upload');
+      throw err;
+    }
+
+    // An empty upload is refused rather than queued, the same call `ImportSchema.csv`'s
+    // `must not be empty` refine makes on the inline route: a run minted for zero bytes would hold
+    // `active_key` (locking the register out of the next, real upload) until a worker got round to
+    // reporting that there was nothing in it. Checked HERE and not before the transfer because a
+    // declared `content-length` is not the same claim as "bytes actually arrived".
+    if (byteSize === 0) {
+      await discardBlob(key, 'an empty facility import upload');
+      reply.code(400);
+      return { error: 'the uploaded register file is empty' };
+    }
+
+    const fileHash = digest.digest('hex');
+    let run: FacilityImportRun;
+    try {
+      run = await importRuns.startUpload({
+        nationalSystem,
+        sourceFormat: format,
+        blobKey: key,
+        fileHash,
+        byteSize,
+        releaseVersion,
+        // Only what the request actually chose. The import options proper (allowUnknownColumns,
+        // onConflict, …) are the CONFIRM step's, not the upload's — recording a made-up set here
+        // would put a decision in the durable record that no operator ever made.
+        options: { nationalSystem },
+        requestedBy: actorFromRequest(req).actorId,
+      });
+    } catch (err) {
+      // The gate freed the register, so this is a genuine race: another request took it between the
+      // gate and here. `startUpload`'s own readable pre-check is what produces this message — the
+      // unique `active_key` index is the race-safe backstop behind it.
+      await discardBlob(key, 'a facility import upload whose run could not be minted');
+      reply.code(409);
+      return { error: err instanceof Error ? err.message : String(err) };
+    }
+
+    await recordAudit(ctx, req, {
+      action: 'facility.import.uploaded',
+      entityType: 'facility',
+      entityId: nationalSystem,
+      before: null,
+      after: null,
+      metadata: { runId: run.id, nationalSystem, sourceFormat: format, blobKey: key, fileHash, byteSize, releaseVersion },
+    });
+    reply.code(202);
+    return { runId: run.id };
+  });
+
+  /** Drop an object nothing will ever reference again. Contained and logged for the same reason
+   *  every other best-effort side-write in this file is: it runs on a path that has already decided
+   *  what to answer, and a failure here must not replace that answer with a different one. */
+  async function discardBlob(key: string, why: string): Promise<void> {
+    try {
+      await ctx.blob.delete(key);
+    } catch (err) {
+      ctx.logger.error({ err, blobKey: key }, `failed to delete the stored object left by ${why}`);
+    }
+  }
 
   // Task 10: the run-history list — FAC-P1-03's "who imported which release and when", scoped to one
   // register or every register this instance has ever seen. Gated `facilities.view`, not `.manage`:

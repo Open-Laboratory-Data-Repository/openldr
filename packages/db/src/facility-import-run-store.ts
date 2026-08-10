@@ -43,8 +43,10 @@ export interface FacilityImportRunStore {
    *  application clock — apply compares it against `facility_registry.updated_at`, also DB-set. */
   completePreview(id: string, summary: unknown): Promise<FacilityImportRun>;
   /** ⛔ The INLINE path's terminal write, kept exactly as A2a shipped it — the HTTP apply route and
-   *  the CLI both call it with this signature. `finish` below is its generalisation; this delegates
-   *  to it, so the two can never drift on what a terminal write must do. */
+   *  the CLI both call it with this signature. `finish` below is its generalisation (one more
+   *  status), and NEITHER delegates to the other: both call the one private `finishRun` in the
+   *  implementation, so the two can never drift on what a terminal write must do — in particular on
+   *  clearing `active_key`. */
   finishApply(id: string, status: 'applied' | 'failed', opts: { summary?: unknown; error?: string | null }): Promise<void>;
 
   /** Mint a run for an uploaded file. Sets blob_key and status 'queued'. Throws when another run

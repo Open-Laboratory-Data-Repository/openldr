@@ -1513,8 +1513,34 @@ function fakeImportCtx(db: any) {
     // (it sits behind `if (deps.facilityJobs)`) in every test using this context — including the
     // one below asserting an applied import actually queues a rebuild.
     facilityJobs: createFacilityJobStore(db),
+    // A2b Task 3: the upload route streams the request body into `ctx.blob.putStream`. Every other
+    // route in this file leaves it untouched, so adding it here costs the existing tests nothing.
+    blob: fakeBlobStore(),
     __audit: audit,
   } as any;
+}
+
+/** A `BlobStoragePort` double for the upload route.
+ *
+ *  ⚠ It CONSUMES the stream it is handed, exactly as the real S3 adapter's multipart `Upload` does
+ *  (`packages/adapter-s3-bucket/src/index.ts`). That is not incidental: the route pipes the request
+ *  body through its hashing transform INTO this call, so a fake that merely recorded the key and
+ *  ignored `body` would leave that pipeline unfinished forever — the test would hang to its timeout
+ *  rather than fail with a usable message.
+ *
+ *  It keeps the BYTES, not just the key: "the run's `file_hash` is the sha256 of what was stored" is
+ *  the one claim of this route that cannot be checked from the run row alone. */
+function fakeBlobStore() {
+  const objects = new Map<string, Buffer>();
+  return {
+    async putStream(key: string, body: AsyncIterable<Buffer | string>) {
+      const chunks: Buffer[] = [];
+      for await (const chunk of body) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+      objects.set(key, Buffer.concat(chunks));
+    },
+    async delete(key: string) { objects.delete(key); },
+    __objects: objects,
+  };
 }
 
 describe('POST /api/facilities/import', () => {
@@ -2510,6 +2536,311 @@ describe('POST /api/facilities/import', () => {
       const res = await app.inject({ method: 'GET', url: '/api/facilities/import/runs/nope' });
       expect(res.statusCode).toBe(404);
     });
+  });
+});
+
+// --- A2b Task 3: POST /api/facilities/import/upload -------------------------------------------
+//
+// The upload END of the background import: the file goes to blob storage and a `queued` run is
+// minted for the worker (Task 4) to claim. Everything here is about what the REQUEST leaves behind —
+// the stored object, the run row, and what happens to whatever run already held the register — since
+// nothing consumes any of it yet.
+
+const UPLOAD_HEADERS = { 'content-type': 'application/octet-stream' };
+
+function uploadUrl(params: Record<string, string>): string {
+  return `/api/facilities/import/upload?${new URLSearchParams(params).toString()}`;
+}
+
+/** The single object this request stored, key and bytes. Fails loudly rather than returning
+ *  `undefined` when the count is not 1 — several tests below assert "nothing more was stored", and a
+ *  helper that silently picked the first of two would hide exactly that. */
+function onlyStoredObject(ctx: any): { key: string; bytes: Buffer } {
+  const entries = [...ctx.blob.__objects.entries()] as [string, Buffer][];
+  expect(entries).toHaveLength(1);
+  return { key: entries[0][0], bytes: entries[0][1] };
+}
+
+describe('POST /api/facilities/import/upload', () => {
+  it('gated on facilities.manage — a facilities.view-only user gets 403 and nothing is stored', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx, ['facilities.view']);
+    const res = await app.inject({
+      method: 'POST', url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv' }),
+      headers: UPLOAD_HEADERS, payload: Buffer.from(facilityCsv(['100,Alpha,,,,,,,,,,,,,,']), 'utf8'),
+    });
+    expect(res.statusCode).toBe(403);
+    expect(ctx.blob.__objects.size).toBe(0);
+    expect(await db.selectFrom('facility_import_runs').selectAll().execute()).toHaveLength(0);
+  });
+
+  it('streams the file to the blob store and mints a `queued` run carrying its key, hash and size', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const csv = facilityCsv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,']);
+
+    const res = await app.inject({
+      method: 'POST', url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv', releaseVersion: 'r7' }),
+      headers: UPLOAD_HEADERS, payload: Buffer.from(csv, 'utf8'),
+    });
+
+    // 202, not 201: the register has NOT been imported, or even read — a worker will do that. The
+    // body is the runId and nothing else, so a client cannot mistake this for a preview result.
+    expect(res.statusCode).toBe(202);
+    expect(res.json()).toEqual({ runId: expect.any(String) });
+    const runId = res.json().runId;
+
+    // ⛔ The stored object is the file, byte for byte. Without this the hash assertion below could be
+    // satisfied by hashing something that was never uploaded.
+    const stored = onlyStoredObject(ctx);
+    expect(stored.bytes.toString('utf8')).toBe(csv);
+    expect(stored.key).toMatch(/^facility-import\/[a-z0-9-]+\/[0-9a-f-]{36}\.csv$/);
+
+    const runRes = await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${runId}` });
+    expect(runRes.statusCode).toBe(200);
+    // Complete-object `toEqual` with CONCRETE values, matching the sibling `GET .../runs/:id`
+    // assertions above: this is the only thing pinning what an UPLOADED run looks like, and every
+    // field that differs from an inline preview's row (blobKey, status, previewedAt, summary) is a
+    // field a reader will rely on.
+    expect(runRes.json()).toEqual({
+      id: runId,
+      nationalSystem: SYSTEM,
+      sourceFormat: 'csv',
+      // The link between the run and the bytes — the same key the blob store actually received.
+      blobKey: stored.key,
+      // ⛔ The hash of the STORED bytes, computed as they streamed past. Mutating the route's digest
+      // to a constant must fail here.
+      fileHash: createHash('sha256').update(csv, 'utf8').digest('hex'),
+      byteSize: Buffer.byteLength(csv, 'utf8'),
+      releaseVersion: 'r7',
+      // ⛔ NOT EVALUATED, never zero: nothing has read the file yet, so the release header's own
+      // declarations are unknown — only the worker can fill these in (see `startUpload`'s comment).
+      releasePublishedAt: null,
+      declaredRowCount: null,
+      declaredDeletionCount: null,
+      status: 'queued',
+      phase: null,
+      processed: 0,
+      total: null,
+      previewedAt: null,
+      summary: null,
+      options: { nationalSystem: SYSTEM },
+      error: null,
+      cancelRequested: false,
+      requestedBy: 'u1', // `req.user.id` from `appWith`'s fake `onRequest` hook
+      createdAt: expect.any(String),
+      startedAt: null,
+      finishedAt: null,
+    });
+  });
+
+  it('audits the upload with the run it minted', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const csv = facilityCsv(['100,Alpha,,,,,,,,,,,,,,']);
+    const res = await app.inject({
+      method: 'POST', url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv' }),
+      headers: UPLOAD_HEADERS, payload: Buffer.from(csv, 'utf8'),
+    });
+    expect(res.statusCode).toBe(202);
+    expect(ctx.__audit).toHaveLength(1);
+    expect(ctx.__audit[0]).toMatchObject({
+      action: 'facility.import.uploaded',
+      entityType: 'facility',
+      entityId: SYSTEM,
+      metadata: {
+        runId: res.json().runId,
+        nationalSystem: SYSTEM,
+        sourceFormat: 'csv',
+        blobKey: onlyStoredObject(ctx).key,
+        byteSize: Buffer.byteLength(csv, 'utf8'),
+      },
+    });
+  });
+
+  // ⛔ THE PRODUCT POINT OF A2b. `MAX_INLINE_APPLY_ROWS` (2000) bounds `POST /api/facilities/import`
+  // and must keep doing so — that route holds an HTTP request open for the whole apply. This path
+  // holds one open for nothing but the transfer, so a national register must go through it. A cap
+  // re-applied here (or the two routes "unified") fails this test.
+  it('⛔ accepts a register far ABOVE the inline apply cap — that cap bounds the inline route only', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const rows = Array.from({ length: 2500 }, (_, i) => `${1000 + i},Facility ${i},,,,,,,,,,,,,,`);
+    const csv = facilityCsv(rows);
+
+    const res = await app.inject({
+      method: 'POST', url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv' }),
+      headers: UPLOAD_HEADERS, payload: Buffer.from(csv, 'utf8'),
+    });
+
+    expect(res.statusCode).toBe(202);
+    const stored = onlyStoredObject(ctx);
+    expect(stored.bytes.toString('utf8')).toBe(csv);
+    const run = (await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${res.json().runId}` })).json();
+    expect(run.byteSize).toBe(Buffer.byteLength(csv, 'utf8'));
+    expect(run.fileHash).toBe(createHash('sha256').update(csv, 'utf8').digest('hex'));
+  });
+
+  it('a JSONL upload is stored under a .jsonl key and recorded as sourceFormat jsonl', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const body = jsonl([rowLine('100', 'Alpha'), rowLine('200', 'Beta')]);
+
+    const res = await app.inject({
+      method: 'POST', url: uploadUrl({ nationalSystem: SYSTEM, format: 'jsonl' }),
+      headers: UPLOAD_HEADERS, payload: Buffer.from(body, 'utf8'),
+    });
+
+    expect(res.statusCode).toBe(202);
+    expect(onlyStoredObject(ctx).key).toMatch(/\.jsonl$/);
+    const run = (await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${res.json().runId}` })).json();
+    expect(run.sourceFormat).toBe('jsonl');
+  });
+
+  // The same abandoned-register rule the inline preview route already follows, reached through the
+  // upload: an operator who uploads and never confirms must not lock the register for good.
+  it('supersedes an awaiting_confirmation run rather than refusing the new upload', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const csv = facilityCsv(['100,Alpha,,,,,,,,,,,,,,']);
+    const first = await app.inject({
+      method: 'POST', url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv' }),
+      headers: UPLOAD_HEADERS, payload: Buffer.from(csv, 'utf8'),
+    });
+    expect(first.statusCode).toBe(202);
+    const firstRunId = first.json().runId;
+
+    // ⚠ Set by a DIRECT UPDATE: nothing mints `awaiting_confirmation` until the worker lands in Task
+    // 4, and `active_key` is deliberately left SET — that is what makes this run the holder the gate
+    // has to decide about. Asserted, so a setup that stopped taking cannot leave the test green for
+    // the uninteresting reason that the register was free all along.
+    await db.updateTable('facility_import_runs').set({ status: 'awaiting_confirmation' })
+      .where('id', '=', firstRunId).execute();
+    expect((await db.selectFrom('facility_import_runs').select(['status', 'active_key'])
+      .where('id', '=', firstRunId).executeTakeFirstOrThrow()))
+      .toEqual({ status: 'awaiting_confirmation', active_key: SYSTEM });
+
+    const second = await app.inject({
+      method: 'POST', url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv' }),
+      headers: UPLOAD_HEADERS, payload: Buffer.from(csv, 'utf8'),
+    });
+
+    expect(second.statusCode).toBe(202);
+    expect(second.json().runId).not.toBe(firstRunId);
+    // The superseded run keeps its record and says why it ended — not silently discarded.
+    const firstRun = (await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${firstRunId}` })).json();
+    expect(firstRun.status).toBe('failed');
+    expect(firstRun.error).toBe('superseded by a newer upload');
+    const secondRun = (await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${second.json().runId}` })).json();
+    expect(secondRun.status).toBe('queued');
+  });
+
+  it('⛔ 409s while a run is `validating` — taking the register over would race a live worker', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const csv = facilityCsv(['100,Alpha,,,,,,,,,,,,,,']);
+    const first = await app.inject({
+      method: 'POST', url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv' }),
+      headers: UPLOAD_HEADERS, payload: Buffer.from(csv, 'utf8'),
+    });
+    expect(first.statusCode).toBe(202);
+    const firstRunId = first.json().runId;
+
+    await db.updateTable('facility_import_runs').set({ status: 'validating' })
+      .where('id', '=', firstRunId).execute();
+    expect((await db.selectFrom('facility_import_runs').select(['status', 'active_key'])
+      .where('id', '=', firstRunId).executeTakeFirstOrThrow()))
+      .toEqual({ status: 'validating', active_key: SYSTEM });
+
+    const second = await app.inject({
+      method: 'POST', url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv' }),
+      headers: UPLOAD_HEADERS, payload: Buffer.from(csv, 'utf8'),
+    });
+
+    expect(second.statusCode).toBe(409);
+    // The message names the live run's state, so an operator can tell "a worker is busy" from "a
+    // decided run is stuck holding the register" — two 409s with very different remedies.
+    expect(second.json().error).toContain('validating');
+    // The live run is untouched: still `validating`, still holding its key.
+    expect((await db.selectFrom('facility_import_runs').select(['status', 'active_key', 'error'])
+      .where('id', '=', firstRunId).executeTakeFirstOrThrow()))
+      .toEqual({ status: 'validating', active_key: SYSTEM, error: null });
+    // ⛔ And NOTHING was streamed for the refused request — the gate runs BEFORE the transfer, so a
+    // refused upload does not cost a national register's worth of bandwidth or leave an orphan
+    // object behind. Only the first upload's object exists.
+    expect(ctx.blob.__objects.size).toBe(1);
+    expect(await db.selectFrom('facility_import_runs').selectAll().execute()).toHaveLength(1);
+  });
+
+  it('a non-stream body is a clear 400, not a crash or a 415', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const res = await app.inject({
+      method: 'POST', url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv' }),
+      payload: { csv: 'national_code,name\n100,Alpha\n' }, // JSON body — the inline route's shape
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toMatch(/stream/i);
+    expect(ctx.blob.__objects.size).toBe(0);
+    expect(await db.selectFrom('facility_import_runs').selectAll().execute()).toHaveLength(0);
+  });
+
+  // An empty file must not mint a run: the run would hold `active_key` — locking the register out of
+  // the next, real upload — until a worker got round to reporting that there was nothing in it.
+  it('refuses an empty upload (400) and leaves neither a run nor a stored object behind', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+
+    const res = await app.inject({
+      method: 'POST', url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv' }),
+      headers: UPLOAD_HEADERS, payload: Buffer.alloc(0),
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toMatch(/empty/i);
+    expect(await db.selectFrom('facility_import_runs').selectAll().execute()).toHaveLength(0);
+    // The (zero-byte) object the transfer created is cleaned up — `delete` on the store double
+    // removes the key, so an uncleaned one would show up here.
+    expect(ctx.blob.__objects.size).toBe(0);
+
+    // …and the register is still free: a real upload right after it succeeds.
+    const after = await app.inject({
+      method: 'POST', url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv' }),
+      headers: UPLOAD_HEADERS, payload: Buffer.from(facilityCsv(['100,Alpha,,,,,,,,,,,,,,']), 'utf8'),
+    });
+    expect(after.statusCode).toBe(202);
+  });
+
+  it('refuses a missing nationalSystem and an unknown format (400) before storing anything', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const payload = Buffer.from(facilityCsv(['100,Alpha,,,,,,,,,,,,,,']), 'utf8');
+
+    const noSystem = await app.inject({
+      method: 'POST', url: uploadUrl({ format: 'csv' }), headers: UPLOAD_HEADERS, payload,
+    });
+    expect(noSystem.statusCode).toBe(400);
+    expect(noSystem.json().error).toMatch(/nationalSystem/);
+
+    const badFormat = await app.inject({
+      method: 'POST', url: uploadUrl({ nationalSystem: SYSTEM, format: 'xlsx' }),
+      headers: UPLOAD_HEADERS, payload,
+    });
+    expect(badFormat.statusCode).toBe(400);
+    expect(badFormat.json().error).toMatch(/format/);
+
+    expect(ctx.blob.__objects.size).toBe(0);
+    expect(await db.selectFrom('facility_import_runs').selectAll().execute()).toHaveLength(0);
   });
 });
 
