@@ -34,13 +34,18 @@ function fakeBlob(body: string, onGet?: (key: string) => Promise<void> | void) {
   };
 }
 
-async function harness(body: string, onGet?: (key: string) => Promise<void> | void) {
+async function harness(
+  body: string,
+  onGet?: (key: string) => Promise<void> | void,
+  opts?: { maxBufferBytes?: number },
+) {
   const db = (await makeMigratedDb()) as Kysely<InternalSchema>;
   const runs: FacilityImportRunStore = createFacilityImportRunStore(db);
   const blob = fakeBlob(body, onGet);
   const logger = fakeLogger();
   const worker = createFacilityImportWorker({
     runs, blob, importDeps: { db, capture: referenceCapture }, intervalMs: 10_000, logger,
+    ...(opts?.maxBufferBytes === undefined ? {} : { maxBufferBytes: opts.maxBufferBytes }),
   });
   return { db, runs, blob, logger, worker };
 }
@@ -136,6 +141,64 @@ describe('createFacilityImportWorker — validate phase', () => {
     // Retained, unlike a cancel: the operator asked for this file to be imported and the object is
     // the only evidence of what was actually uploaded.
     expect(blob.delete).not.toHaveBeenCalled();
+  });
+
+  it('refuses a register larger than it will buffer, failing the run instead of holding the file', async () => {
+    // ⛔ `importFacilities` takes a STRING, so the worker reads the whole file onto the heap of the
+    // API process it runs inside. Without a ceiling one authenticated `facilities.manage` client
+    // could OOM the server, and anything over Node's maximum string length would die in the decode
+    // with a message no operator can act on. The limit is injected low here for the same reason the
+    // upload route's 413 test lowers its config value — nothing in a unit test can push past 64 MiB.
+    const big = `national_code,name\n${'100,Dodoma Regional Referral\n'.repeat(40)}`;
+    const { db, runs, blob, worker } = await harness(big, undefined, { maxBufferBytes: 64 });
+    const run = await runs.startUpload(upload());
+
+    await expect(worker.tickOnce()).resolves.toBeUndefined();
+    await worker.stop();
+
+    const after = await runs.get(run.id);
+    expect(after?.status).toBe('failed');
+    // The number in the message is the ceiling actually in force, not a hardcoded constant that
+    // could drift from it.
+    expect(after?.error).toContain('64-byte ceiling');
+    expect(after?.error).toMatch(/not validated/i);
+    // Nothing was parsed and nothing was written — the refusal happens before `importFacilities`.
+    expect(await registryRows(db)).toHaveLength(0);
+    // The register is released, so the operator can upload a smaller file without a supersede.
+    expect((await rowFor(db, run.id)).active_key).toBeNull();
+    // Retained like any other failure: the object is the evidence of what was actually sent.
+    expect(blob.delete).not.toHaveBeenCalled();
+  });
+
+  it('accepts a register exactly AT the ceiling — the limit is a maximum, not a margin', async () => {
+    // Guards the boundary in the other direction: an off-by-one here would refuse files the config
+    // says are allowed, which is the same defect wearing the opposite sign.
+    const { db, runs, worker } = await harness(CSV, undefined, { maxBufferBytes: Buffer.byteLength(CSV, 'utf8') });
+    const run = await runs.startUpload(upload());
+
+    await worker.tickOnce();
+    await worker.stop();
+
+    expect((await runs.get(run.id))?.status).toBe('awaiting_confirmation');
+    expect(await registryRows(db)).toHaveLength(0);
+  });
+
+  it('parks a BLOCKED file at awaiting_confirmation rather than failing it', async () => {
+    // ⛔ Pinned so the apply phase cannot quietly change it: a blocked file is a real, reportable
+    // reconciliation result the operator is entitled to SEE, not a validation crash. The confirm
+    // path (Task 5) is what must refuse to apply it — and must do so by reading `summary.blocked`,
+    // which `importFacilities` reports, rather than re-deriving the question a fourth time.
+    const duplicateColumns = 'national_code,name,name\n100,Dodoma,Dodoma\n';
+    const { db, runs, worker } = await harness(duplicateColumns);
+    const run = await runs.startUpload(upload());
+
+    await worker.tickOnce();
+    await worker.stop();
+
+    const after = await runs.get(run.id);
+    expect(after?.status).toBe('awaiting_confirmation');
+    expect(after?.summary).toMatchObject({ blocked: true, blockedReason: 'duplicate-columns' });
+    expect(await registryRows(db)).toHaveLength(0);
   });
 
   it('fails a queued run that carries no blob key rather than throwing out of the tick', async () => {

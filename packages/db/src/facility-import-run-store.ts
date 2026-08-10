@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { type Kysely, sql } from 'kysely';
 import type { InternalSchema } from './schema/internal';
 import {
-  ALL_RUN_STATES, RUNNING_RUN_STATES, TERMINAL_RUN_STATES, isWorkerObserved,
+  ALL_RUN_STATES, RUNNING_RUN_STATES, TERMINAL_RUN_STATES, VALIDATE_PHASE, isWorkerObserved,
   type FacilityImportRunStatus,
 } from './facility-import-run-states';
 
@@ -228,6 +228,12 @@ export function createFacilityImportRunStore(db: Kysely<InternalSchema>): Facili
       // the run it claimed, but another process's boot sweep (`failStaleRunning`) can fail it — and
       // release its `active_key` — while this one is mid-validate. Parking it anyway would produce a
       // confirmable run that owns no register.
+      //
+      // ⛔ `VALIDATE_PHASE.to`, NEVER the literal. The worker in `@openldr/bootstrap` claims with
+      // `claimNext(VALIDATE_PHASE.from, VALIDATE_PHASE.to)`, and the state this guard names is the
+      // state that claim moved the run INTO. Spelled separately in the two packages they can drift,
+      // and the drift is silent: this matches 0 rows, returns `false`, and the worker reports a
+      // take-over that never happened. See `VALIDATE_PHASE`'s note in `facility-import-run-states.ts`.
       const res = await db.updateTable('facility_import_runs')
         .set({
           status: 'awaiting_confirmation',
@@ -235,7 +241,7 @@ export function createFacilityImportRunStore(db: Kysely<InternalSchema>): Facili
           summary: JSON.stringify(summary) as never,
         } as never)
         .where('id', '=', id)
-        .where('status', '=', 'validating')
+        .where('status', '=', VALIDATE_PHASE.to)
         .executeTakeFirst();
       return Number(res?.numUpdatedRows ?? 0) > 0;
     },

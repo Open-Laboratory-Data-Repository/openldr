@@ -897,6 +897,10 @@ const reporting: ReportingApi = {
     runs: facilityImportRuns,
     blob,
     importDeps: { db: internal.db, capture: referenceCapture, admin: termAdmin, facilityJobs, logger },
+    // The SAME value the upload route enforces on the transfer, so a file this server accepted is
+    // always one the worker can read back. Wired rather than left to the worker's own default
+    // precisely so an operator who tunes the cap moves both ceilings at once.
+    maxBufferBytes: cfg.FACILITY_IMPORT_MAX_UPLOAD_BYTES,
     logger,
   });
 

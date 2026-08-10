@@ -77,6 +77,24 @@ export const RUNNING_RUN_STATES: ReadonlySet<FacilityImportRunStatus> =
 export const CLAIMABLE_RUN_STATES: ReadonlySet<FacilityImportRunStatus> =
   new Set<FacilityImportRunStatus>(['queued', 'awaiting_confirmation']);
 
+/** The validate phase's transition as ONE value: the state it claims a run FROM and the state it
+ *  moves that run TO.
+ *
+ *  ⛔ WHY IT IS A SHARED CONSTANT AND NOT TWO LITERALS. Both halves are spelled in two different
+ *  packages — `claimNext(from, to)` in `@openldr/bootstrap`'s import worker, and
+ *  `completeValidation`'s `where status = <to>` compare-and-swap in `facility-import-run-store.ts`
+ *  — and they must agree. Change one and every validation silently DROPS: the CAS matches 0 rows,
+ *  `completeValidation` returns `false`, and the worker logs "was taken over" for a run nothing took
+ *  over, while the register stays locked until a sweep or a supersede frees it. No test can catch
+ *  that drift, because each side on its own stays internally consistent — the two spellings simply
+ *  stop being the same string. Naming the pair here makes them the same VALUE, so they cannot
+ *  disagree.
+ *
+ *  ⚠ The literal types are declared rather than inferred so `claimNext`'s narrowed parameter types
+ *  (`'queued' | 'awaiting_confirmation'`, `'validating' | 'applying'`) still accept them. */
+export const VALIDATE_PHASE: { readonly from: 'queued'; readonly to: 'validating' } =
+  { from: 'queued', to: 'validating' };
+
 /** Will a worker ever look at this run again — and therefore ever READ its `cancel_requested` flag?
  *
  *  ⛔ WHY THIS EXISTS (A2b Task 4's carry-forward from Task 2's review). `requestCancel` guarded only
