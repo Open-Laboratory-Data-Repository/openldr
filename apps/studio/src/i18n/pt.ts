@@ -878,6 +878,30 @@ export const pt: EnShape = {
       onConflictSkip: 'Ignorá-las (não alterar o registo)',
       onConflictOverwrite: 'Substituí-las por este ficheiro',
       newRegisterNotice: 'Nenhuma linha existente usa ainda este registo nacional — aplicar irá criar uma nova identidade de registo.',
+      // A2b Tarefa 8: a importação em segundo plano (carregar → validar → confirmar → escrever).
+      uploadAction: 'Carregar e validar',
+      uploading: 'A carregar…',
+      uploadProgress: 'A carregar… {{percent}}%',
+      confirmAction: 'Confirmar importação',
+      confirming: 'A confirmar…',
+      cancelRunAction: 'Cancelar esta importação',
+      cancellingAction: 'A cancelar…',
+      runLoading: 'A verificar a execução da importação…',
+      runPhase: 'Fase: {{phase}}',
+      runProgress: '{{processed}} de {{total}} linha(s) processadas.',
+      runStatus: {
+        queued: 'Em fila — à espera de um worker de importação.',
+        validating: 'A validar o ficheiro carregado.',
+        awaiting_confirmation: 'Validado. Reveja o resumo abaixo e confirme para o escrever.',
+        confirmed: 'Confirmado — à espera de um worker de importação para o escrever.',
+        applying: 'A escrever o registo.',
+      },
+      // ⛔ Estas duas mensagens não são intermutáveis: «pedido» não significa «cancelado».
+      cancelRequestedNotice: 'Cancelamento pedido. Esta importação já está a decorrer, pelo que ainda pode terminar antes de parar.',
+      cancelledNotice: 'Esta importação foi cancelada antes de algo ser escrito.',
+      runFailedTitle: 'Esta importação não terminou',
+      tooLargeUploadError: 'Este ficheiro é maior do que o limite de carregamento de uma importação em segundo plano. Importe um registo deste tamanho com a CLI: openldr facilities import.',
+      tooLargeUseUpload: 'Ou importe-o aqui em segundo plano: escolha «Carregar e validar» no menu de ações acima.',
     },
     health: {
       states: {

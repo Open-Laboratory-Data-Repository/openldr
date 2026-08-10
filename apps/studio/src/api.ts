@@ -1080,6 +1080,152 @@ export interface FacilityImportRequest {
 export const importFacilitiesCsv = (body: FacilityImportRequest): Promise<FacilityImportResult> =>
   authFetch('/api/facilities/import', jbody(body, 'POST')).then((r) => okJson<FacilityImportResult>(r, 'import facilities'));
 
+// ── A2b: the BACKGROUND import (upload → validate → confirm → apply) ──────────────────────────────
+//
+// The second door into the same importer. `importFacilitiesCsv` above carries the register in a JSON
+// body and does the whole job inside one HTTP request, which is why the server bounds it (8 MB, and
+// 2 000 rows for an apply). This path streams the file to blob storage, mints a run row, and lets a
+// worker do the work — so a national register is not bounded by a request deadline at all.
+
+/** Mirrors `@openldr/db`'s `FacilityImportRunStatus` (packages/db/src/facility-import-run-states.ts)
+ *  — the whole lifecycle, `previewed` included. `previewed` is the INLINE path's own state and an
+ *  uploaded run never enters it; it is listed because `GET /api/facilities/import/runs/:id` answers
+ *  for both kinds of run. */
+export type FacilityImportRunStatus =
+  | 'queued' | 'validating' | 'awaiting_confirmation' | 'confirmed' | 'applying'
+  | 'previewed' | 'applied' | 'failed' | 'cancelled';
+
+/** One `facility_import_runs` row as `GET /api/facilities/import/runs/:id` returns it — mirrors the
+ *  server's `FacilityImportRun` field for field, the same "mirrored, not shared" reasoning as
+ *  `FacilityImportResult` above (this app has no dependency on `@openldr/db`).
+ *
+ *  ⚠ `summary` is typed `unknown` server-side, and both writers put a `FacilityImportResult` there:
+ *  the validate phase stores `importFacilities`' dry-run result, the apply phase stores its applied
+ *  one (see packages/bootstrap/src/facility-import-worker.ts's `completeValidation`/`finish` calls).
+ *  It is `null` on a run that has not reached either point, and on a `failed`/`cancelled` run.
+ *
+ *  ⚠ `total` stays null until a worker knows one, and the apply worker publishes counts ONLY for a
+ *  register of at least 5 000 rows (its measured `PER_ROW_PROGRESS_MIN_ROWS`). For most runs there
+ *  is no denominator at all — `phase` is the field that is always there. */
+export interface FacilityImportRunView {
+  id: string;
+  nationalSystem: string;
+  sourceFormat: 'csv' | 'jsonl';
+  /** Where the uploaded file lives; null for an inline preview, which stores nothing. */
+  blobKey: string | null;
+  fileHash: string;
+  byteSize: number;
+  releaseVersion: string | null;
+  releasePublishedAt: string | null;
+  declaredRowCount: number | null;
+  declaredDeletionCount: number | null;
+  status: FacilityImportRunStatus;
+  /** Free text the worker chooses ('validating', 'applying', …) — not a translated token. */
+  phase: string | null;
+  processed: number;
+  total: number | null;
+  previewedAt: string | null;
+  summary: FacilityImportResult | null;
+  options: Record<string, unknown> | null;
+  error: string | null;
+  /** The operator asked for a cancel. By itself this stops NOTHING — a worker observes it at its
+   *  next phase boundary and cannot interrupt a running transaction. */
+  cancelRequested: boolean;
+  requestedBy: string | null;
+  createdAt: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+}
+
+/** Stream a register file to `POST /api/facilities/import/upload` and get back the run it minted.
+ *
+ *  ⛔ THE FILE IS THE REQUEST BODY — never `await file.text()` and never a JSON envelope. A national
+ *  register is tens of megabytes; reading it into a string to POST it puts the whole thing in the
+ *  tab's memory, which is exactly what this path exists to avoid. The parameters ride the query
+ *  string for that reason (the same shape `uploadTerminologyDistribution` above uses).
+ *
+ *  XHR rather than `fetch` for the one thing fetch cannot do: upload progress.
+ *
+ *  ⚠ Deliberately UNLIKE `uploadTerminologyDistribution`, which resolves `{ jobId: '' }` when it
+ *  cannot parse a 2xx body — a caller then polls a job id that does not exist and sees nothing. A
+ *  2xx with no usable run id is a failure here and is reported as one. */
+export function uploadFacilityImport(
+  p: { file: File; nationalSystem: string; format: 'csv' | 'jsonl'; releaseVersion?: string | null },
+  onProgress?: (fraction: number) => void,
+): Promise<{ runId: string }> {
+  return new Promise((resolve, reject) => {
+    const params = new URLSearchParams({ nationalSystem: p.nationalSystem, format: p.format });
+    if (p.releaseVersion) params.set('releaseVersion', p.releaseVersion);
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `/api/facilities/import/upload?${params.toString()}`);
+    // Both are accepted by the route's passthrough parser; naming the real one keeps the stored
+    // object's content type honest for anyone who later reads it out of the bucket.
+    xhr.setRequestHeader('content-type', p.format === 'csv' ? 'text/csv' : 'application/octet-stream');
+    const token = getAccessToken();
+    if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    xhr.upload.onprogress = (e) => { if (e.lengthComputable && onProgress) onProgress(e.loaded / e.total); };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          const body = JSON.parse(xhr.responseText) as { runId?: unknown };
+          if (typeof body.runId === 'string' && body.runId !== '') { resolve({ runId: body.runId }); return; }
+        } catch { /* fall through to the rejection below */ }
+        reject(new Error('the upload was accepted but no import run id came back'));
+        return;
+      }
+      // The server's own message where there is one — the 413 body ("…exceeds the N-byte upload
+      // limit") is what the sheet turns into plain language.
+      let msg = `upload failed (${xhr.status})`;
+      try {
+        const j = JSON.parse(xhr.responseText) as { error?: unknown };
+        if (typeof j?.error === 'string' && j.error !== '') msg = j.error;
+      } catch { /* keep the status-code fallback */ }
+      reject(new Error(msg));
+    };
+    xhr.onerror = () => reject(new Error('network error during upload'));
+    xhr.send(p.file);
+  });
+}
+
+export const getFacilityImportRun = (id: string): Promise<FacilityImportRunView> =>
+  apiGet(`/api/facilities/import/runs/${encodeURIComponent(id)}`, 'get facility import run');
+
+/** The operator's decision, as `POST /api/facilities/import/runs/:id/confirm` takes it.
+ *
+ *  ⛔ EVERY FIELD IS OPTIONAL AND STAYS OPTIONAL. The server records only the keys the request
+ *  actually carried, precisely so a choice nobody made is never stored as though they had — see that
+ *  route's own note. `importFacilities` defaults each of them anyway. */
+export interface FacilityImportConfirmOptions {
+  onDeleted?: 'retire' | 'report';
+  onAbsent?: 'retire' | 'report';
+  onConflict?: 'skip' | 'overwrite';
+  allowUnknownColumns?: boolean;
+  allowMalformedRows?: boolean;
+  allowInvalidCoordinates?: boolean;
+}
+
+/** 202 — the register has NOT been imported when this resolves; a worker will do that. */
+export const confirmFacilityImportRun = (
+  id: string, options: FacilityImportConfirmOptions,
+): Promise<{ runId: string; status: FacilityImportRunStatus }> =>
+  authFetch(`/api/facilities/import/runs/${encodeURIComponent(id)}/confirm`, jbody(options, 'POST'))
+    .then((r) => okJson<{ runId: string; status: FacilityImportRunStatus }>(r, 'confirm facility import'));
+
+/** Ask a run to stop. ⛔ THE TWO OUTCOMES ARE NOT THE SAME ANSWER and a caller must not blur them:
+ *
+ *  - `'cancelled'` (HTTP 200) — the run was in a state no worker claims, so the server carried the
+ *    cancellation out itself. It really is cancelled and its register is released.
+ *  - `'requested'` (HTTP 202) — a worker holds the run. The flag is observed only at phase boundaries
+ *    and CANNOT interrupt the running transaction, so the import may still finish `applied`.
+ *
+ *  The outcome is read off the body rather than the status code because both are 2xx and `okJson`
+ *  does not expose which one arrived. */
+export const cancelFacilityImportRun = (
+  id: string,
+): Promise<{ runId: string; outcome: 'cancelled' | 'requested' }> =>
+  authFetch(`/api/facilities/import/runs/${encodeURIComponent(id)}/cancel`, { method: 'POST' })
+    .then((r) => okJson<{ runId: string; outcome: 'cancelled' | 'requested' }>(r, 'cancel facility import'));
+
 // Task 9: observed-facility reconciliation (the Observed tab). Mirrors the server's
 // `ResolvedFacility` (packages/bootstrap/src/facility-reconcile.ts) 1:1 — `reportCount` is a field
 // on `ResolvedFacility` itself (Task 11, whole-branch review round 2: `resolveObservedFacilities`

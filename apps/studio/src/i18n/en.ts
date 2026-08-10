@@ -892,6 +892,44 @@ export const en = {
       onConflictSkip: 'Skip them (leave the registry untouched)',
       onConflictOverwrite: 'Overwrite them with this file',
       newRegisterNotice: 'No existing rows use this national system yet — applying will create a new register identity.',
+      // A2b Task 8: the background import — upload the file, a worker validates it, the operator
+      // confirms, a worker writes it. The inline Preview/Apply copy above is untouched: that path is
+      // still the small-register door and still bounded by the server's 2 000-row inline cap.
+      uploadAction: 'Upload and validate',
+      uploading: 'Uploading…',
+      uploadProgress: 'Uploading… {{percent}}%',
+      confirmAction: 'Confirm import',
+      confirming: 'Confirming…',
+      cancelRunAction: 'Cancel this import',
+      cancellingAction: 'Cancelling…',
+      runLoading: 'Checking the import run…',
+      // The worker's own phase string, verbatim — it is free text the worker chooses, not a token
+      // this app can translate (see FacilityImportRunView.phase).
+      runPhase: 'Phase: {{phase}}',
+      runProgress: '{{processed}} of {{total}} row(s) processed.',
+      // ⛔ Exactly the five NON-TERMINAL states, and no more: `runStatus.<status>` is looked up with a
+      // dynamic key, and the block that renders it is gated on the same five (RUN_ACTIVE_STATUSES in
+      // ImportFacilitiesSheet.tsx). A terminal run is described by its own block below instead, so
+      // adding `applied`/`failed`/`cancelled` labels here would be dead copy.
+      runStatus: {
+        queued: 'Queued — waiting for an import worker.',
+        validating: 'Validating the uploaded file.',
+        awaiting_confirmation: 'Validated. Review the summary below, then confirm to write it.',
+        confirmed: 'Confirmed — waiting for an import worker to write it.',
+        applying: 'Writing the register.',
+      },
+      // ⛔ THESE TWO ARE NOT INTERCHANGEABLE. The cancel route answers 200 `cancelled` only when it
+      // actually carried the cancellation out; 202 `requested` means a worker holds the run, the flag
+      // is observed at phase boundaries only, and the import may still finish. Saying "cancelled" for
+      // a `requested` outcome tells an operator a national register was not written when it may have
+      // been — see the sheet's rendering of `cancelOutcome`.
+      cancelRequestedNotice: 'Cancellation requested. This import is already running, so it may still finish before it stops.',
+      cancelledNotice: 'This import was cancelled before anything was written.',
+      runFailedTitle: 'This import did not finish',
+      tooLargeUploadError: 'This file is larger than the upload limit for a background import. Import a register this size with the CLI: openldr facilities import.',
+      // Shown beside the inline over-cap notice: the background path has no row cap, which is the
+      // whole reason it exists.
+      tooLargeUseUpload: 'Or import it here in the background: choose Upload and validate from the actions menu above.',
     },
     // Task 11: the report-dimension health chip — whether the report-facing `facility_map`
     // dimension has caught up with the current registry/mapping state (GET /api/facilities/health).

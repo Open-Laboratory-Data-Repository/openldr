@@ -878,6 +878,30 @@ export const fr: EnShape = {
       onConflictSkip: 'Les ignorer (ne pas modifier le registre)',
       onConflictOverwrite: 'Les remplacer par ce fichier',
       newRegisterNotice: 'Aucune ligne existante n’utilise encore ce registre national — l’application créera une nouvelle identité de registre.',
+      // A2b Tâche 8 : l’import en arrière-plan (téléversement → validation → confirmation → écriture).
+      uploadAction: 'Téléverser et valider',
+      uploading: 'Téléversement…',
+      uploadProgress: 'Téléversement… {{percent}} %',
+      confirmAction: 'Confirmer l’import',
+      confirming: 'Confirmation…',
+      cancelRunAction: 'Annuler cet import',
+      cancellingAction: 'Annulation…',
+      runLoading: 'Vérification de l’exécution de l’import…',
+      runPhase: 'Étape : {{phase}}',
+      runProgress: '{{processed}} ligne(s) sur {{total}} traitées.',
+      runStatus: {
+        queued: 'En file d’attente — en attente d’un worker d’import.',
+        validating: 'Validation du fichier téléversé.',
+        awaiting_confirmation: 'Validé. Vérifiez le résumé ci-dessous, puis confirmez pour l’écrire.',
+        confirmed: 'Confirmé — en attente d’un worker d’import pour l’écrire.',
+        applying: 'Écriture du registre.',
+      },
+      // ⛔ Ces deux messages ne sont pas interchangeables : « demandée » ne veut pas dire « annulé ».
+      cancelRequestedNotice: 'Annulation demandée. Cet import est déjà en cours ; il peut donc se terminer avant de s’arrêter.',
+      cancelledNotice: 'Cet import a été annulé avant toute écriture.',
+      runFailedTitle: 'Cet import ne s’est pas terminé',
+      tooLargeUploadError: 'Ce fichier dépasse la limite de téléversement d’un import en arrière-plan. Importez un registre de cette taille avec la CLI : openldr facilities import.',
+      tooLargeUseUpload: 'Ou importez-le ici en arrière-plan : choisissez « Téléverser et valider » dans le menu d’actions ci-dessus.',
     },
     health: {
       states: {

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { StrictMode } from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import i18n from '@/i18n';
 
@@ -7,11 +8,18 @@ vi.mock('@/api', async (orig) => {
   return {
     ...actual,
     importFacilitiesCsv: vi.fn(),
+    // A2b Task 8: the background upload path's four clients. Mocked alongside the inline path's
+    // `importFacilitiesCsv` rather than in a second factory — `vi.mock` is per-module, and a second
+    // call for '@/api' would replace this one.
+    uploadFacilityImport: vi.fn(),
+    getFacilityImportRun: vi.fn(),
+    confirmFacilityImportRun: vi.fn(),
+    cancelFacilityImportRun: vi.fn(),
   };
 });
 
 import * as api from '@/api';
-import type { FacilityImportResult } from '@/api';
+import type { FacilityImportResult, FacilityImportRunView } from '@/api';
 import { ImportFacilitiesSheet } from './ImportFacilitiesSheet';
 
 /** Open the sheet's own ⋯ actions menu (pointerdown; jsdom sometimes needs a follow-up Enter
@@ -73,6 +81,35 @@ function baseResult(overrides: Partial<FacilityImportResult> = {}): FacilityImpo
 }
 
 const cleanPreview = baseResult({ parsed: 3, create: 3, runId: 'run-1' });
+
+/** A2b Task 8: one `facility_import_runs` row exactly as `GET /api/facilities/import/runs/:id`
+ *  answers it, defaulted to "just uploaded, nothing has happened yet" — every test below overrides
+ *  only the fields it cares about, the same discipline `baseResult` above applies to the import
+ *  result. */
+function runView(overrides: Partial<FacilityImportRunView> = {}): FacilityImportRunView {
+  return {
+    id: 'run-b1', nationalSystem: 'HFR', sourceFormat: 'csv',
+    blobKey: 'facility-import/hfr/abc.csv', fileHash: 'deadbeef', byteSize: 42,
+    releaseVersion: null, releasePublishedAt: null,
+    declaredRowCount: null, declaredDeletionCount: null,
+    status: 'queued', phase: null, processed: 0, total: null,
+    previewedAt: null, summary: null, options: null, error: null,
+    cancelRequested: false, requestedBy: 'op-1',
+    createdAt: '2026-08-10T09:00:00.000Z', startedAt: null, finishedAt: null,
+    ...overrides,
+  };
+}
+
+const mocked = (fn: unknown): ReturnType<typeof vi.fn> => fn as ReturnType<typeof vi.fn>;
+
+/** Open the menu and click Upload, waiting for it to become enabled first — the same shape as
+ *  `previewNow` above, except Upload deliberately does NOT wait on `File.text()`: the File itself is
+ *  the request body, so nothing has to be read before the action is live. */
+async function uploadNow() {
+  openMenu();
+  await waitFor(() => expect(screen.getByRole('menuitem', { name: 'Upload and validate' })).not.toHaveAttribute('aria-disabled', 'true'));
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Upload and validate' }));
+}
 
 describe('ImportFacilitiesSheet', () => {
   beforeEach(() => {
@@ -937,5 +974,339 @@ describe('ImportFacilitiesSheet', () => {
 
     expect(await screen.findByText(/import complete/i)).toBeInTheDocument();
     expect(screen.queryByText(/changed since the preview/i)).not.toBeInTheDocument();
+  });
+
+  // ── A2b Task 8: the background path — upload → poll → review → confirm ────────────────────────
+  //
+  // The inline Preview/Apply path above is UNCHANGED and still tested by everything before this
+  // line: it is the small-register door (bounded by the server's 2 000-row inline cap) and A2a's
+  // reconciliation rendering lives on it. What follows is the second door — the one that lifts that
+  // cap by handing a streamed file to a worker.
+
+  it('A2b: Upload streams the File itself (never its text) and moves the sheet onto the run it minted', async () => {
+    mocked(api.uploadFacilityImport).mockResolvedValue({ runId: 'run-b1' });
+    mocked(api.getFacilityImportRun).mockResolvedValue(runView({ status: 'validating', phase: 'validating' }));
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    pickFileAndSystem();
+    fireEvent.click(screen.getByRole('combobox', { name: /file format/i }));
+    fireEvent.click(await screen.findByRole('option', { name: /jsonl release/i }));
+    fireEvent.change(screen.getByLabelText('Release version'), { target: { value: 'r7' } });
+
+    await uploadNow();
+
+    await waitFor(() => expect(api.uploadFacilityImport).toHaveBeenCalledTimes(1));
+    // ⛔ `expect.any(File)` is the assertion that matters: the browser hands the File over as the
+    // request body. A `csv: '<string>'` here would be the `f.text()` path this task removes.
+    expect(api.uploadFacilityImport).toHaveBeenCalledWith(
+      expect.objectContaining({
+        file: expect.any(File), nationalSystem: 'HFR', format: 'jsonl', releaseVersion: 'r7',
+      }),
+      expect.any(Function),
+    );
+    // The background door is not the inline one: nothing was POSTed to /api/facilities/import.
+    expect(api.importFacilitiesCsv).not.toHaveBeenCalled();
+
+    await waitFor(() => expect(api.getFacilityImportRun).toHaveBeenCalledWith('run-b1'));
+    expect(await screen.findByText(/validating the uploaded file/i)).toBeInTheDocument();
+    expect(screen.getByText('Phase: validating')).toBeInTheDocument();
+  });
+
+  it('A2b: a run that reaches awaiting_confirmation renders A2a\'s reconciliation summary and offers Confirm', async () => {
+    mocked(api.uploadFacilityImport).mockResolvedValue({ runId: 'run-b1' });
+    mocked(api.getFacilityImportRun).mockResolvedValue(runView({
+      status: 'awaiting_confirmation', phase: 'validated',
+      // What the validate phase actually stores: `importFacilities`' own result, run with
+      // `apply: false` and NO `previewedAt` — so `conflict` is null (NOT EVALUATED), never 0.
+      summary: baseResult({ parsed: 7, create: 2, changed: 1, unchanged: 4, conflict: null, absent: null }),
+    }));
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    pickFileAndSystem();
+    await uploadNow();
+
+    expect(await screen.findByText(/review the summary below/i)).toBeInTheDocument();
+    // The SAME summary rendering the inline preview uses — not a second, drifting copy of it.
+    expect(screen.getByText(/2 facility row\(s\) will be created/i)).toBeInTheDocument();
+    expect(screen.getByText(/1 existing facility row\(s\) will be changed/i)).toBeInTheDocument();
+    expect(screen.getByText(/4 facility row\(s\) already match the registry/i)).toBeInTheDocument();
+    expect(screen.getByText(/3 row\(s\) will be imported/i)).toBeInTheDocument();
+    // ⛔ null is NOT EVALUATED, on this path exactly as on the inline one. The counter-assertion is
+    // the real 0-count sentence (`summaryConflict`/`summaryAbsent`, en.ts), because those templates
+    // never begin with the words the positive assertions match — see the inline tests above.
+    expect(screen.getByText(/conflicts:.*not evaluated/i)).toBeInTheDocument();
+    expect(screen.queryByText(/0 row\(s\) were changed since this preview/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/absent from this file:.*not evaluated/i)).toBeInTheDocument();
+    expect(screen.queryByText(/0 registry row\(s\) for this national system are absent from this file/i)).not.toBeInTheDocument();
+
+    openMenu();
+    expect(screen.getByRole('menuitem', { name: 'Confirm import' })).toBeInTheDocument();
+  });
+
+  it('A2b: Confirm carries the operator\'s retirement and conflict choices to the run', async () => {
+    mocked(api.uploadFacilityImport).mockResolvedValue({ runId: 'run-b1' });
+    mocked(api.getFacilityImportRun).mockResolvedValue(runView({
+      status: 'awaiting_confirmation',
+      summary: baseResult({ parsed: 3, create: 1, changed: 1, unchanged: 1, deleted: 2, absent: 3 }),
+    }));
+    mocked(api.confirmFacilityImportRun).mockResolvedValue({ runId: 'run-b1', status: 'confirmed' });
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    pickFileAndSystem();
+    await uploadNow();
+
+    // Flipped away from every default, so the assertion below cannot pass on values the sheet never
+    // threaded through — the same discipline the inline retirement-choices test applies.
+    fireEvent.click(await screen.findByRole('combobox', { name: /rows this file says were removed/i }));
+    fireEvent.click(await screen.findByRole('option', { name: /report only/i }));
+    fireEvent.click(screen.getByRole('combobox', { name: /rows missing from this file/i }));
+    fireEvent.click(await screen.findByRole('option', { name: /retire them/i }));
+    fireEvent.click(screen.getByRole('combobox', { name: /rows changed since this preview/i }));
+    fireEvent.click(await screen.findByRole('option', { name: /overwrite them/i }));
+
+    clickMenuItem('Confirm import');
+
+    await waitFor(() => expect(api.confirmFacilityImportRun).toHaveBeenCalledTimes(1));
+    expect(api.confirmFacilityImportRun).toHaveBeenCalledWith(
+      'run-b1',
+      expect.objectContaining({ onDeleted: 'report', onAbsent: 'retire', onConflict: 'overwrite' }),
+    );
+  });
+
+  it('A2b: a blocked run withholds Confirm until the operator opts past the quarantined rows', async () => {
+    mocked(api.uploadFacilityImport).mockResolvedValue({ runId: 'run-b1' });
+    // The validate runs with the UPLOAD's options (`{ nationalSystem }` only — see the worker's
+    // `validateOptions`), so the stored verdict is always the UN-overridden baseline the checkbox
+    // toggles against, exactly like the inline path's pinned `allowMalformedRows: false` preview.
+    mocked(api.getFacilityImportRun).mockResolvedValue(runView({
+      status: 'awaiting_confirmation',
+      summary: baseResult({
+        parsed: 1, create: 1,
+        quarantined: [{ line: 3, raw: '2,Bad,Extra', reason: 'too_many_fields' }],
+        blocked: true, blockedReason: 'quarantined-rows',
+      }),
+    }));
+    mocked(api.confirmFacilityImportRun).mockResolvedValue({ runId: 'run-b1', status: 'confirmed' });
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    pickFileAndSystem();
+    await uploadNow();
+
+    expect(await screen.findByText(/line 3/i)).toBeInTheDocument();
+    openMenu();
+    expect(screen.queryByRole('menuitem', { name: 'Confirm import' })).not.toBeInTheDocument();
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+
+    fireEvent.click(screen.getByRole('checkbox', { name: /import anyway/i }));
+    clickMenuItem('Confirm import');
+
+    await waitFor(() => expect(api.confirmFacilityImportRun).toHaveBeenCalledTimes(1));
+    expect(api.confirmFacilityImportRun).toHaveBeenCalledWith(
+      'run-b1', expect.objectContaining({ allowMalformedRows: true }),
+    );
+  });
+
+  // ⛔ THE HONESTY RULE OF THE CANCEL ROUTE. A worker holding the run answers 202 `requested`: the
+  // flag is observed only at phase boundaries and cannot interrupt the running transaction, so the
+  // import may still finish `applied`. Saying "cancelled" here would tell an operator a national
+  // register had not been written when it may well have been.
+  it('A2b: a cancel a worker merely *requested* says cancelling, never cancelled', async () => {
+    mocked(api.uploadFacilityImport).mockResolvedValue({ runId: 'run-b1' });
+    mocked(api.getFacilityImportRun).mockResolvedValue(runView({ status: 'applying', phase: 'applying' }));
+    mocked(api.cancelFacilityImportRun).mockResolvedValue({ runId: 'run-b1', outcome: 'requested' });
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    pickFileAndSystem();
+    await uploadNow();
+    expect(await screen.findByText(/writing the register/i)).toBeInTheDocument();
+
+    clickMenuItem('Cancel this import');
+
+    await waitFor(() => expect(api.cancelFacilityImportRun).toHaveBeenCalledWith('run-b1'));
+    expect(await screen.findByText(/cancellation requested/i)).toBeInTheDocument();
+    expect(screen.queryByText(/cancelled before anything was written/i)).not.toBeInTheDocument();
+  });
+
+  it('A2b: a cancel the server actually carried out (200) does say cancelled', async () => {
+    mocked(api.uploadFacilityImport).mockResolvedValue({ runId: 'run-b1' });
+    mocked(api.getFacilityImportRun)
+      .mockResolvedValueOnce(runView({ status: 'awaiting_confirmation', summary: baseResult({ parsed: 3, create: 3 }) }))
+      .mockResolvedValue(runView({ status: 'cancelled', error: 'cancelled by the operator' }));
+    mocked(api.cancelFacilityImportRun).mockResolvedValue({ runId: 'run-b1', outcome: 'cancelled' });
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    pickFileAndSystem();
+    await uploadNow();
+    await screen.findByText(/3 facility row\(s\) will be created/i);
+
+    clickMenuItem('Cancel this import');
+
+    // ⚠ `waitFor` + `getByText`, deliberately not `findByText`. A 200 cancel on a parked run renders
+    // this copy TWICE over, in two different elements: first from the outcome banner (the run this
+    // sheet holds still says `awaiting_confirmation` for one render), then from the terminal block
+    // once the refresh poll reports `cancelled`. `findByText` resolves with the first NODE and the
+    // re-render detaches it, so `toBeInTheDocument()` then fails against a node that was correct when
+    // it was found — measured, and it is a property of the assertion, not of the sheet.
+    await waitFor(() => expect(screen.getByText(/cancelled before anything was written/i)).toBeInTheDocument());
+    expect(screen.queryByText(/cancellation requested/i)).not.toBeInTheDocument();
+  });
+
+  it('A2b: Cancel is offered only while the run is still live', async () => {
+    mocked(api.uploadFacilityImport).mockResolvedValue({ runId: 'run-b1' });
+    mocked(api.getFacilityImportRun).mockResolvedValue(runView({
+      status: 'applied', summary: baseResult({ parsed: 3, written: { created: 3, updated: 0, retired: 0 } }),
+    }));
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    // No run at all yet — nothing to cancel.
+    openMenu();
+    expect(screen.queryByRole('menuitem', { name: 'Cancel this import' })).not.toBeInTheDocument();
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+
+    pickFileAndSystem();
+    await uploadNow();
+    await screen.findByText(/created 3, updated 0, skipped 0/i);
+
+    // …and a finished run cannot be cancelled either (the route 409s), so it is not offered.
+    openMenu();
+    expect(screen.queryByRole('menuitem', { name: 'Cancel this import' })).not.toBeInTheDocument();
+  });
+
+  // ⛔ A CONFIRM IS NOT A PROMISE THE APPLY RUNS. `confirmed` is supersedable (a queue head no worker
+  // has reached yet), so a newer upload of the same register can take the run over: the operator got
+  // a 202 and the run then ends `failed`. They only ever see that if the sheet keeps polling.
+  it('A2b: a confirmed run that is superseded before a worker claims it surfaces the failure, not silence', async () => {
+    mocked(api.uploadFacilityImport).mockResolvedValue({ runId: 'run-b1' });
+    mocked(api.getFacilityImportRun)
+      .mockResolvedValueOnce(runView({ status: 'awaiting_confirmation', summary: baseResult({ parsed: 3, create: 3 }) }))
+      .mockResolvedValue(runView({ status: 'failed', error: 'superseded by a newer upload' }));
+    mocked(api.confirmFacilityImportRun).mockResolvedValue({ runId: 'run-b1', status: 'confirmed' });
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    pickFileAndSystem();
+    await uploadNow();
+    await screen.findByText(/3 facility row\(s\) will be created/i);
+
+    clickMenuItem('Confirm import');
+
+    expect(await screen.findByText(/this import did not finish/i)).toBeInTheDocument();
+    expect(screen.getByText(/superseded by a newer upload/i)).toBeInTheDocument();
+  });
+
+  // ⚠ `total`/`processed` are published ONLY for an apply of ≥5 000 rows (the worker's measured
+  // `PER_ROW_PROGRESS_MIN_ROWS`), so for most runs there is no denominator at all. The phase is what
+  // is always there, and a progress readout that renders a broken-looking bar without a total would
+  // be motion rather than information.
+  it('A2b: progress is phase-first — no row counts when the worker published no total', async () => {
+    mocked(api.uploadFacilityImport).mockResolvedValue({ runId: 'run-b1' });
+    mocked(api.getFacilityImportRun).mockResolvedValue(runView({
+      status: 'applying', phase: 'applying', processed: 0, total: null,
+    }));
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    pickFileAndSystem();
+    await uploadNow();
+
+    expect(await screen.findByText('Phase: applying')).toBeInTheDocument();
+    expect(screen.queryByText(/row\(s\) processed/i)).not.toBeInTheDocument();
+  });
+
+  it('A2b: …and the row counts appear once the worker published a total', async () => {
+    mocked(api.uploadFacilityImport).mockResolvedValue({ runId: 'run-b1' });
+    mocked(api.getFacilityImportRun).mockResolvedValue(runView({
+      status: 'applying', phase: 'applying', processed: 5000, total: 13000,
+    }));
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    pickFileAndSystem();
+    await uploadNow();
+
+    expect(await screen.findByText(/5000 of 13000 row\(s\) processed/i)).toBeInTheDocument();
+  });
+
+  // ⛔ THE ENTIRE PRODUCT POINT OF A2b. `APPLY_ROW_CAP` mirrors the INLINE route's 2 000-row cap; the
+  // background path has no row cap at all, so a national register must be confirmable here — the
+  // inline path's over-cap notice must NOT appear, and Confirm must be offered.
+  it('A2b: a 14 000-row register is confirmable on the background path — the inline row cap does not gate it', async () => {
+    mocked(api.uploadFacilityImport).mockResolvedValue({ runId: 'run-b1' });
+    mocked(api.getFacilityImportRun).mockResolvedValue(runView({
+      status: 'awaiting_confirmation',
+      summary: baseResult({ parsed: 14000, create: 14000 }),
+    }));
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    pickFileAndSystem();
+    await uploadNow();
+
+    expect(await screen.findByText(/14000 facility row\(s\) will be created/i)).toBeInTheDocument();
+    expect(screen.queryByText(/too large to apply/i)).not.toBeInTheDocument();
+    openMenu();
+    expect(screen.getByRole('menuitem', { name: 'Confirm import' })).toBeInTheDocument();
+  });
+
+  it('A2b: an applied run renders the written summary and reloads the caller\'s list exactly once', async () => {
+    mocked(api.uploadFacilityImport).mockResolvedValue({ runId: 'run-b1' });
+    mocked(api.getFacilityImportRun).mockResolvedValue(runView({
+      status: 'applied',
+      summary: baseResult({ parsed: 3, written: { created: 2, updated: 1, retired: 0 }, skipped: 0 }),
+    }));
+    const onImported = vi.fn();
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={onImported} />);
+
+    pickFileAndSystem();
+    await uploadNow();
+
+    expect(await screen.findByText(/created 2, updated 1, skipped 0/i)).toBeInTheDocument();
+    await waitFor(() => expect(onImported).toHaveBeenCalledTimes(1));
+  });
+
+  it('A2b: the upload 413 gets plain language, not the server\'s byte-count sentence', async () => {
+    mocked(api.uploadFacilityImport).mockRejectedValue(
+      new Error('the register file exceeds the 67108864-byte upload limit'),
+    );
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    pickFileAndSystem();
+    await uploadNow();
+
+    expect(await screen.findByText(/larger than the upload limit/i)).toBeInTheDocument();
+    expect(screen.queryByText(/67108864-byte/)).not.toBeInTheDocument();
+  });
+
+  // The positive half of the StrictMode test's "never sticks on checking" assertion: this copy has
+  // to be reachable at all, or asserting its ABSENCE below would prove nothing.
+  it('A2b: the sheet says it is checking the run while the first poll is still in flight', async () => {
+    mocked(api.uploadFacilityImport).mockResolvedValue({ runId: 'run-b1' });
+    mocked(api.getFacilityImportRun).mockReturnValue(new Promise<never>(() => { /* never settles */ }));
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    pickFileAndSystem();
+    await uploadNow();
+
+    expect(await screen.findByText(/checking the import run/i)).toBeInTheDocument();
+  });
+
+  // ⚠ EVERY OTHER TEST IN THIS FILE MOUNTS BARE, so a `<StrictMode>`-only defect is invisible —
+  // and polling is exactly the shape that breaks under it. StrictMode double-invokes effects while
+  // PRESERVING refs, so the "mounted ref set false in the cleanup" idiom used elsewhere in this app
+  // would leave the first cleanup permanently disarming every later poll: the sheet would sit on
+  // "checking the import run" for good. This mounts under StrictMode and asserts it does not.
+  it('A2b: polling survives StrictMode\'s double-invoked effects — the sheet never sticks on "checking"', async () => {
+    mocked(api.uploadFacilityImport).mockResolvedValue({ runId: 'run-b1' });
+    mocked(api.getFacilityImportRun).mockResolvedValue(runView({
+      status: 'awaiting_confirmation',
+      summary: baseResult({ parsed: 5, create: 5 }),
+    }));
+    render(
+      <StrictMode>
+        <ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />
+      </StrictMode>,
+    );
+
+    pickFileAndSystem();
+    await uploadNow();
+
+    expect(await screen.findByText(/5 facility row\(s\) will be created/i)).toBeInTheDocument();
+    expect(screen.queryByText(/checking the import run/i)).not.toBeInTheDocument();
   });
 });
