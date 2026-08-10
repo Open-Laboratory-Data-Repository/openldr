@@ -39,6 +39,9 @@ const mocks = vi.hoisted(() => ({
     startPreview: vi.fn(),
     completePreview: vi.fn(),
     finishApply: vi.fn(),
+    // A2b Task 9: the four-valued cancel. The CLI's whole job here is to report WHICH of the four
+    // came back, so this is mocked per-test rather than given a default.
+    requestCancel: vi.fn(),
     get: vi.fn(),
     list: vi.fn(),
   },
@@ -69,8 +72,12 @@ vi.mock('node:fs', () => ({
 
 import {
   runFacilitiesImport, runFacilitiesScanObserved, runFacilitiesPublish, runFacilitiesConflicts, runFacilitiesJobs,
-  runFacilitiesImportRuns, runFacilitiesImportRun,
+  runFacilitiesImportRuns, runFacilitiesImportRun, runFacilitiesImportRunCancel,
 } from './facilities';
+// ⛔ TYPE-only, so the `vi.mock('@openldr/db', ...)` above does not apply to it (type imports are
+// erased before the module graph is built). It is what makes `DEFAULT_RUN` below an EXHAUSTIVE
+// fixture: see the note there.
+import type { FacilityImportRun } from '@openldr/db';
 
 // The full `FacilityImportResult` shape (packages/bootstrap/src/facility-import.ts), not just the
 // subset the pre-Task-12 CLI printed: `formatHuman` now reads `create`/`changed`/`unchanged`/
@@ -94,11 +101,23 @@ const CLEAN_RESULT = {
 // Task 12's default run row, returned by the fake `mocks.runStore.startPreview` unless a test
 // overrides it. Only fields `runFacilitiesImport` actually reads (`id`) are load-bearing; the rest
 // exist so a test printing the whole object doesn't stumble over missing keys.
-const DEFAULT_RUN = {
+//
+// ⛔ A2b Task 9: ANNOTATED `: FacilityImportRun`, and that annotation is the only thing pinning this
+// CLI's `--json` wire shape. The `--json` tests below assert `JSON.stringify(<this fixture>)`, so a
+// hand-built fixture makes them TAUTOLOGIES — they agree with whatever the fixture happens to carry.
+// A2b Task 2 widened `FacilityImportRun` with six columns (`blobKey`, `phase`, `processed`, `total`,
+// `cancelRequested`, `startedAt`) and every one of them slipped silently past this file, while the
+// HTTP route's equivalent assertions (apps/server/src/facilities-routes.test.ts) are exhaustive
+// `toEqual`s and had to be widened by hand. The annotation makes the compiler do that job here:
+// a column added to the type and not to this object is a `tsc --noEmit` error.
+const DEFAULT_RUN: FacilityImportRun = {
   id: 'fir_test1', nationalSystem: 'urn:tz:hfr', sourceFormat: 'csv' as const, fileHash: 'h',
   byteSize: 42, releaseVersion: null, releasePublishedAt: null, declaredRowCount: null,
   declaredDeletionCount: null, status: 'previewed' as const, previewedAt: null, summary: null,
   options: {}, error: null, requestedBy: 'cli', createdAt: '2026-08-01T00:00:00.000Z', finishedAt: null,
+  // A2b Task 2's worker columns. Concrete values, matching an INLINE A2a preview: it stores no file,
+  // and no worker ever claims one, so there is no phase, no progress, no cancel and no start.
+  blobKey: null, phase: null, processed: 0, total: null, cancelRequested: false, startedAt: null,
 };
 
 describe('facilities import CLI', () => {
@@ -700,6 +719,25 @@ describe('facilities import-runs CLI', () => {
     expect(human.indexOf('fir_b')).toBeLessThan(human.indexOf('fir_a'));
   });
 
+  // A2b Task 9: the list is where an operator LOOKS for a background run, and before this it could
+  // not show one — a `validating` run rendered as a status with no indication of what the worker was
+  // doing, and the `phase` column the worker publishes (`updateProgress`, facility-import-run-store.ts)
+  // reached no human-facing surface at all.
+  it('renders a job-path run: its new status AND the phase the worker published', async () => {
+    mocks.runStore.list.mockResolvedValue([
+      { ...DEFAULT_RUN, id: 'fir_live', status: 'validating' as const, phase: 'parsing', processed: 4200, total: 13000, finishedAt: null },
+    ]);
+
+    const code = await runFacilitiesImportRuns({ json: false });
+
+    expect(code).toBe(0);
+    const human = stdoutSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(human).toMatch(/validating/);
+    expect(human).toMatch(/parsing/);
+    // And the column is labelled, so the value is not an unexplained extra token on the row.
+    expect(human).toMatch(/phase/);
+  });
+
   it('passes --national-system and --limit through to the store', async () => {
     mocks.runStore.list.mockResolvedValue([]);
 
@@ -780,6 +818,36 @@ describe('facilities import-run CLI', () => {
     expect(human).toMatch(/"create":3/);
   });
 
+  // A2b Task 9: the detail view is the only place a shell-only operator can watch a background run,
+  // and A2b Task 2's worker columns reached none of it — `phase`/`processed`/`total`/`startedAt`
+  // were readable under `--json` and nowhere else.
+  it('prints a job-path run\'s phase, progress, start and pending cancel', async () => {
+    mocks.runStore.get.mockResolvedValue({
+      ...DEFAULT_RUN, id: 'fir_live', status: 'applying' as const, phase: 'writing',
+      processed: 4200, total: 13000, cancelRequested: true, startedAt: '2026-08-01T00:00:03.000Z',
+    });
+
+    const code = await runFacilitiesImportRun('fir_live', { json: false });
+
+    expect(code).toBe(0);
+    const human = stdoutSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(human).toMatch(/phase: writing/);
+    expect(human).toMatch(/4200/);
+    expect(human).toMatch(/13000/);
+    expect(human).toMatch(/2026-08-01T00:00:03\.000Z/);
+    expect(human).toMatch(/cancel requested/i);
+  });
+
+  // The other half of the line above: a run with no pending cancel must NOT say one is pending.
+  it('does not claim a cancel is pending when none was requested', async () => {
+    mocks.runStore.get.mockResolvedValue(RUN_DETAIL);
+
+    await runFacilitiesImportRun('fir_a', { json: false });
+
+    const human = stdoutSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(human).not.toMatch(/cancel requested/i);
+  });
+
   it('exits non-zero for an unknown run id, without a stack trace', async () => {
     mocks.runStore.get.mockResolvedValue(null);
 
@@ -797,6 +865,22 @@ describe('facilities import-run CLI', () => {
 
     expect(code).toBe(0);
     expect(stdoutSpy).toHaveBeenCalledWith(JSON.stringify(RUN_DETAIL, null, 2) + '\n');
+  });
+
+  // ⛔ The `--json` assertion above compares against `JSON.stringify(<the fixture>)`, so it agrees
+  // with whatever the fixture carries — it cannot notice a column that never reached the fixture.
+  // `DEFAULT_RUN`'s `: FacilityImportRun` annotation is what stops the fixture drifting from the
+  // type; this names the six A2b Task 2 columns explicitly so the wire shape is pinned by an
+  // assertion too, not only by the compiler.
+  it('--json carries the worker columns, not just the A2a ones', async () => {
+    mocks.runStore.get.mockResolvedValue(RUN_DETAIL);
+
+    await runFacilitiesImportRun('fir_a', { json: true });
+
+    const payload = JSON.parse(stdoutSpy.mock.calls.map((c) => String(c[0])).join(''));
+    for (const key of ['blobKey', 'phase', 'processed', 'total', 'cancelRequested', 'startedAt']) {
+      expect(Object.keys(payload)).toContain(key);
+    }
   });
 
   it('--json still reports an unknown id as an error payload with a non-zero exit', async () => {
@@ -817,6 +901,217 @@ describe('facilities import-run CLI', () => {
     expect(mocks.ctx.close).toHaveBeenCalledTimes(1);
     const err = stderrSpy.mock.calls.map((c) => String(c[0])).join('');
     expect(err).toMatch(/db exploded/);
+  });
+});
+
+// ── A2b Task 9: `openldr facilities import-run-cancel <id>` ───────────────────────────────────
+//
+// CLI parity for `POST /api/facilities/import/runs/:id/cancel` (apps/server/src/facilities-routes.ts),
+// which answers FOUR different things and takes care never to overstate any of them: 200 `cancelled`
+// (carried out — the run is terminal and its register free), 202 `requested` (a worker holds it; the
+// flag is read at a phase boundary and cannot interrupt a running transaction, so the run may still
+// finish `applied`), 404 and 409.
+//
+// ⛔ The EXIT CODE mirrors that route's 2xx/4xx split and nothing finer: both live answers exit 0,
+// both refusals exit 1 (and 0/1 is the only exit vocabulary this CLI has — measured across
+// packages/cli/src excluding tests: 101 `return 0;`, 92 `return 1;`, no other numeric literal
+// returned or assigned to `process.exitCode`). The distinction between "stopped" and
+// "asked to stop" is carried by the MESSAGE and by `--json`'s `outcome`, so those are what the
+// tests below pin. Collapsing any two of the four messages is the overstatement this surface exists
+// to prevent, and the four-way test is what makes that collapse impossible to ship.
+describe('facilities import-run-cancel CLI', () => {
+  let stdoutSpy: ReturnType<typeof vi.fn>;
+  let stderrSpy: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true) as unknown as ReturnType<typeof vi.fn>;
+    stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true) as unknown as ReturnType<typeof vi.fn>;
+    mocks.createAppContext.mockResolvedValue(mocks.ctx);
+    mocks.ctx.close.mockResolvedValue(undefined);
+    mocks.createFacilityImportRunStore.mockReturnValue(mocks.runStore);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('\'cancelled\' is reported as a FACT: the run is stopped and its register released', async () => {
+    mocks.runStore.requestCancel.mockResolvedValue('cancelled');
+
+    const code = await runFacilitiesImportRunCancel('fir_a', { json: false });
+
+    expect(mocks.createFacilityImportRunStore).toHaveBeenCalledWith(mocks.ctx.internalDb);
+    expect(mocks.runStore.requestCancel).toHaveBeenCalledWith('fir_a');
+    expect(code).toBe(0);
+    const human = stdoutSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(human).toMatch(/\bcancelled\b/);
+    expect(mocks.ctx.close).toHaveBeenCalledTimes(1);
+  });
+
+  // ⛔ THE honesty property this command exists to preserve. A worker holds the run, the flag is
+  // observed only at a phase boundary, and a write already inside its transaction will finish — so
+  // the run may still end `applied`. Telling the operator it was "cancelled" would be a forecast
+  // dressed as a fact, about a national register that may have just been rewritten.
+  it('\'requested\' never claims the run was cancelled, and says it may still finish', async () => {
+    mocks.runStore.requestCancel.mockResolvedValue('requested');
+
+    const code = await runFacilitiesImportRunCancel('fir_a', { json: false });
+
+    const human = stdoutSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(human).toMatch(/requested/i);
+    expect(human).toMatch(/may still|still finish/i);
+    expect(human).not.toMatch(/\bcancelled\b/);
+    // ⚠ The exit code is 0 and DELIBERATELY so — the route answers 202, a 2xx, and `requested` is
+    // the common case, so a non-zero here would make `import-run-cancel $ID || echo failed` report
+    // failure on the normal accepted path. The honesty property moved channel, it did not vanish:
+    // the prose above and the `--json` payload below are what keep "asked to stop" from reading as
+    // "stopped", and they are asserted here so this test can never become the weaker one.
+    expect(code).toBe(0);
+    stdoutSpy.mockClear();
+    expect(await runFacilitiesImportRunCancel('fir_a', { json: true })).toBe(0);
+    expect(JSON.parse(stdoutSpy.mock.calls.map((c) => String(c[0])).join('')))
+      .toEqual({ runId: 'fir_a', outcome: 'requested' });
+  });
+
+  it('an unknown id is reported as such, on stderr, without a stack trace', async () => {
+    mocks.runStore.requestCancel.mockResolvedValue('not-found');
+
+    const code = await runFacilitiesImportRunCancel('fir_nope', { json: false });
+
+    // 1, the same code AND the same string `runFacilitiesImportRun` answers for a missing run — one
+    // command group must not answer one condition two different ways.
+    expect(code).toBe(1);
+    const err = stderrSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(err).toMatch(/no such facility import run: fir_nope/);
+    expect(err).not.toMatch(/at Object|\.ts:\d+/);
+  });
+
+  // A cancel arriving after the write CANNOT be honoured, and an applied run stays applied. The
+  // route answers 409 rather than a cheerful no-op for exactly this reason.
+  it('a run that already finished is refused, not reported as cancelled', async () => {
+    mocks.runStore.requestCancel.mockResolvedValue('already-terminal');
+
+    const code = await runFacilitiesImportRunCancel('fir_done', { json: false });
+
+    expect(code).toBe(1);
+    const err = stderrSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(err).toMatch(/already finished/i);
+    // ...and NOT the not-found wording, which shares this exit code: the message is the only thing
+    // that tells these two refusals apart.
+    expect(err).not.toMatch(/no such facility import run/);
+  });
+
+  // ⛔ THE mutation guard. Each of the four outcomes means something different to a script and to a
+  // person, so each gets its own sentence and its own `--json` payload. Collapsing any two — most
+  // temptingly `cancelled` and `requested`, which are both "the cancel was accepted" — is the defect
+  // this whole surface exists to prevent, and it is invisible to any test that checks one outcome at
+  // a time.
+  //
+  // ⛔ Distinctness is asserted on the MESSAGE and the PAYLOAD, never on the exit code, and that is
+  // load-bearing now that `cancelled`/`requested` share 0 and the two refusals share 1: an exit-code
+  // set of size 4 is no longer available to assert, so an assertion phrased that way would have had
+  // to be deleted rather than moved, and the collapse would have gone unguarded. The codes are
+  // pinned separately, in order, as the route's 2xx/4xx split.
+  it('gives the four store outcomes four distinct messages, four distinct --json payloads, and the route\'s 2xx/4xx exit split', async () => {
+    const outcomes = ['cancelled', 'requested', 'not-found', 'already-terminal'] as const;
+    const codes: number[] = [];
+    const messages: string[] = [];
+    const payloads: string[] = [];
+
+    for (const outcome of outcomes) {
+      stdoutSpy.mockClear();
+      stderrSpy.mockClear();
+      mocks.runStore.requestCancel.mockResolvedValue(outcome);
+      codes.push(await runFacilitiesImportRunCancel('fir_a', { json: false }));
+      messages.push(
+        stdoutSpy.mock.calls.map((c) => String(c[0])).join('')
+          + stderrSpy.mock.calls.map((c) => String(c[0])).join(''),
+      );
+
+      stdoutSpy.mockClear();
+      await runFacilitiesImportRunCancel('fir_a', { json: true });
+      payloads.push(stdoutSpy.mock.calls.map((c) => String(c[0])).join(''));
+    }
+
+    expect(new Set(messages).size).toBe(4);
+    expect(new Set(payloads).size).toBe(4);
+    // Both live answers are accepted requests (the route's 200/202), both refusals are not (404/409).
+    expect(codes).toEqual([0, 0, 1, 1]);
+  });
+
+  // The machine-readable surface has to carry the same distinction the prose does — a script reading
+  // `--json` must be able to tell "stopped" from "asked to stop" without parsing English.
+  it('--json emits the outcome verbatim for both live answers', async () => {
+    for (const outcome of ['cancelled', 'requested'] as const) {
+      stdoutSpy.mockClear();
+      mocks.runStore.requestCancel.mockResolvedValue(outcome);
+
+      await runFacilitiesImportRunCancel('fir_a', { json: true });
+
+      const payload = JSON.parse(stdoutSpy.mock.calls.map((c) => String(c[0])).join(''));
+      expect(payload).toEqual({ runId: 'fir_a', outcome });
+    }
+  });
+
+  it('--json reports the two refusals as an error payload', async () => {
+    for (const outcome of ['not-found', 'already-terminal'] as const) {
+      stdoutSpy.mockClear();
+      mocks.runStore.requestCancel.mockResolvedValue(outcome);
+
+      const code = await runFacilitiesImportRunCancel('fir_a', { json: true });
+
+      expect(code).toBe(1);
+      const payload = JSON.parse(stdoutSpy.mock.calls.map((c) => String(c[0])).join(''));
+      expect(payload.error).toEqual(expect.any(String));
+      expect(payload.outcome).toBeUndefined();
+    }
+  });
+
+  // Matches the route, which audits both live outcomes and records WHICH one: an operator asking a
+  // national register's import to stop is a decision worth an actor even when the import goes on to
+  // finish anyway.
+  it('audits facility.import.cancelled with the outcome, on both live answers', async () => {
+    for (const outcome of ['cancelled', 'requested'] as const) {
+      mocks.recordAuditEvent.mockClear();
+      mocks.runStore.requestCancel.mockResolvedValue(outcome);
+
+      await runFacilitiesImportRunCancel('fir_a', { json: false });
+
+      expect(mocks.recordAuditEvent).toHaveBeenCalledWith(
+        mocks.ctx,
+        expect.objectContaining({ actorType: 'cli' }),
+        expect.objectContaining({
+          action: 'facility.import.cancelled',
+          entityType: 'facility',
+          entityId: 'fir_a',
+          metadata: expect.objectContaining({ outcome }),
+        }),
+      );
+    }
+  });
+
+  it('audits nothing when there was no live run to cancel', async () => {
+    for (const outcome of ['not-found', 'already-terminal'] as const) {
+      mocks.recordAuditEvent.mockClear();
+      mocks.runStore.requestCancel.mockResolvedValue(outcome);
+
+      await runFacilitiesImportRunCancel('fir_a', { json: false });
+
+      expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
+    }
+  });
+
+  it('closes the app context even when the store throws, and reports a redacted message', async () => {
+    mocks.runStore.requestCancel.mockRejectedValue(new Error('db exploded'));
+
+    const code = await runFacilitiesImportRunCancel('fir_a', { json: false });
+
+    expect(code).toBe(1);
+    expect(mocks.ctx.close).toHaveBeenCalledTimes(1);
+    const err = stderrSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(err).toMatch(/db exploded/);
+    expect(err).not.toMatch(/at Object|\.ts:\d+/);
   });
 });
 

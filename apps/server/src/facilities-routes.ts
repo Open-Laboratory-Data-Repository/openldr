@@ -1,17 +1,24 @@
 import { randomUUID, createHash } from 'node:crypto';
+import { Transform } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import type { Kysely } from 'kysely';
 import { z } from 'zod';
+import { appError } from '@openldr/core';
 import {
-  importFacilities, scanObservedFacilities, resolveObservedFacilities, publishFacilityMap, projectRegistryRows,
+  importFacilities, resolveKnownNationalSystem,
+  scanObservedFacilities, resolveObservedFacilities, publishFacilityMap, projectRegistryRows,
   retireRegistryConcepts, reprojectAfterRegistryDelete, listFacilityMappingConflicts, facilityHealth,
   type AppContext, type FacilityImportResult, type ScanResult, type PublishResult,
 } from '@openldr/bootstrap';
 import {
   splitFacilityAnswers, CORE_FACILITY_KEYS, FACILITY_ADMIN_LEVELS, referenceCapture,
   FACILITY_REGISTRY_SYSTEM, DEFAULT_LIST_LIMIT, FACILITY_HEALTH_VALUES, createFacilityImportRunStore,
+  SUPERSEDABLE_RUN_STATES, RUNNING_RUN_STATES, TERMINAL_RUN_STATES, isApplicable, APPLY_PHASE,
 } from '@openldr/db';
-import type { FacilityAdminLevel, ExternalSchema, FacilityHealth, FacilityImportRun } from '@openldr/db';
+import type {
+  FacilityAdminLevel, ExternalSchema, FacilityHealth, FacilityImportRun, FacilityImportRunStatus,
+} from '@openldr/db';
 import { requireCapability } from './rbac';
 import { recordAudit, actorFromRequest } from './audit-helper';
 
@@ -78,6 +85,71 @@ const IMPORT = { ...MANAGE, bodyLimit: MAX_IMPORT_REQUEST_BYTES };
 // regardless of this cap.
 const MAX_INLINE_APPLY_ROWS = 2000;
 
+// ⛔ TWO IMPORT PATHS, ONE CAP — do not "unify" them.
+//
+//  - `POST /api/facilities/import` (INLINE, above): parses, writes and projects INSIDE the request,
+//    and is bounded by `MAX_INLINE_APPLY_ROWS`. That bound stays. It carries the CLI and every
+//    existing integrator, and its wire shape is pinned by this file's tests.
+//  - `POST /api/facilities/import/upload` (A2b, below): streams the file to blob storage, mints a
+//    `queued` run, and returns. A worker (A2b Task 4) parses and applies it later. `MAX_INLINE_APPLY
+//    _ROWS` deliberately does NOT apply here — lifting it for a full national register is the entire
+//    reason this path exists.
+//
+// ⚠ MEASURED 2026-08-09 on real Postgres (see the block above): a cold end-to-end 13 000-row import
+// takes 2 689 ms, so the inline cap was never guarding a per-row COST. What it guards is a
+// SYNCHRONOUS HTTP REQUEST — an operator watching a request that reports nothing while it runs, and
+// a client/proxy deadline that can cut it off mid-apply. This path removes the request, not the
+// work, which is why the same workload is safe here and capped there.
+//
+// A byte ceiling for the upload, carried in the same `{ ...MANAGE, bodyLimit }` shape as `IMPORT`
+// above and as the terminology distribution upload's `UPLOAD` (`terminology-admin-routes.ts`).
+//
+// ⚠ MEASURED against fastify@5.8.5, because the obvious assumption is wrong and the sibling route
+// shares it: `bodyLimit` does NOT bound a STREAMING content-type parser. `content-type-parser.js`'s
+// `ContentTypeParser.prototype.run` only calls `rawBody` — the one place `content-length` is
+// compared to the limit, and the one place a running total is compared to it — when the parser is
+// `asString` or `asBuffer`. A passthrough parser (what this route registers, so `req.body` IS the
+// stream) takes the other branch and is handed the payload directly, limit unconsulted. So this
+// number is real only if a future change makes this route buffer its body; today the transfer is
+// bounded by the `facilities.manage` gate in front of it and by the blob store behind it, not by
+// this. Kept, not deleted, because it is correct-by-construction for that future change and costs
+// nothing — but do NOT cite it as the reason a huge upload is safe.
+//
+// ⛔ THE REAL ENFORCEMENT IS THE RUNNING BYTE COUNT in the upload route's hashing transform, against
+// `ctx.cfg.FACILITY_IMPORT_MAX_UPLOAD_BYTES` (413 + SY0413, blob discarded). Do not delete either of
+// these believing the other one covers it: this constant binds nothing today, and the counter is not
+// visible from the route's options object. This constant is the config key's DEFAULT value repeated
+// (`packages/config/src/schema.ts`), so on a default install the inert backstop and the live ceiling
+// are the same number; an install that overrides the env var moves only the ceiling, which is
+// harmless precisely because this one binds nothing. If a future change makes this route buffer its
+// body, make `bodyLimit` read the config key too rather than leaving it a stale literal.
+const MAX_UPLOAD_BYTES = 1_073_741_824;
+// Same capability gate as every other write in this file (`facilities.manage`).
+const UPLOAD = { ...MANAGE, bodyLimit: MAX_UPLOAD_BYTES };
+
+/** The request body arrived as a stream (an octet-stream/text-csv passthrough parser handed the raw
+ *  `payload` through) rather than as a parsed JSON object, a string or a Buffer.
+ *
+ *  Deliberately a second copy of `terminology-admin-routes.ts`'s identical duck-type guard rather
+ *  than an import: these are two independent route modules, and cross-importing one route file from
+ *  another to reach a two-line predicate would couple them for no gain. `instanceof Readable` is not
+ *  used for the reason that file's version does not either — what matters is that the object can be
+ *  piped, and Fastify hands over whatever the content-type parser returned. */
+function isReadableBody(body: unknown): body is NodeJS.ReadableStream {
+  return !!body && typeof body === 'object' && typeof (body as { pipe?: unknown }).pipe === 'function';
+}
+
+/** A human-legible path segment for a `nationalSystem` such as `urn:tz:hfr`.
+ *
+ *  ⚠ For LEGIBILITY ONLY — it is lossy (`urn:tz:hfr` and `urn/tz/hfr` both slug to `urn-tz-hfr`),
+ *  so nothing may key off it. Two registers whose slugs collide still get distinct objects because
+ *  the object NAME is a fresh uuid, and the authoritative link in both directions is
+ *  `facility_import_runs.blob_key`. */
+function nationalSystemSlug(nationalSystem: string): string {
+  const slug = nationalSystem.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  return slug || 'register';
+}
+
 const ImportSchema = z.object({
   // ⚠ Minor fix: blank/whitespace-only content is refused here, not left to reach
   // `parseFacilityCsv` and come back as an all-zero `{ parsed: 0, ... }` 200 — a UI that only
@@ -124,6 +196,37 @@ const ImportSchema = z.object({
   // Recorded on the run for FAC-P1-03's "who imported which release and when"; never read by
   // `importFacilities` itself (which has no `releaseVersion` option).
   releaseVersion: z.string().optional(),
+});
+
+/** A2b Task 5: the operator's choices at the confirm step — the decisions the UPLOAD deliberately
+ *  did not record (see the `options:` comment on the upload route's `startUpload` call: putting a
+ *  made-up set there would have been a decision no operator made).
+ *
+ *  ⛔ Every key here is drawn from `FacilityImportOptions` and spelled the same way, because these
+ *  land verbatim in `facility_import_runs.options` and the worker spreads that straight into
+ *  `importFacilities`. A key renamed on one side is silently DROPPED — zod strips what it does not
+ *  know — so the operator's choice would simply not take effect.
+ *
+ *  ⛔ `nationalSystem`, `format` and `apply` are deliberately ABSENT and must stay absent. The first
+ *  two are the run's identity (a client-supplied `nationalSystem` here would import under a register
+ *  this run does not hold), and `apply` is the phase, which the worker decides. The worker re-imposes
+ *  all three off the run row regardless — this is the first of the two defences, not the only one.
+ *
+ *  ⚠ No `completeRelease`, and it must stay out: it is a claim about the FILE ("this is the whole
+ *  register"), which nothing at confirm time can newly establish — `absent` is classified during the
+ *  VALIDATE phase, long before this route is called, so a `completeRelease` arriving here would
+ *  change nothing about the summary the operator just reviewed while silently rewriting the run's
+ *  stored declaration. The UPLOAD route takes it instead (see its `completeRelease` query
+ *  parameter), which is the request that actually precedes the classification. What the operator
+ *  decides HERE is `onAbsent` — whether a measured absence is acted on — and that split is the
+ *  two-tier retirement design, not an omission. */
+const ConfirmSchema = z.object({
+  onDeleted: z.enum(['retire', 'report']).optional(),
+  onAbsent: z.enum(['retire', 'report']).optional(),
+  onConflict: z.enum(['skip', 'overwrite']).optional(),
+  allowUnknownColumns: z.boolean().optional(),
+  allowMalformedRows: z.boolean().optional(),
+  allowInvalidCoordinates: z.boolean().optional(),
 });
 
 // The client submits ANSWERS, never a pre-split record: deciding which answers become indexed
@@ -293,6 +396,26 @@ function ownFirstString(q: Record<string, unknown>, key: string): string | undef
   return Object.hasOwn(q, key) ? firstString(q[key]) : undefined;
 }
 
+/** A boolean query parameter, read THREE-VALUED on purpose.
+ *
+ *  - `undefined` — the caller did not send the key at all. That is NOT the same as sending `false`,
+ *    and callers must keep the two apart: an unsent key is never recorded on a run, so a decision
+ *    nobody made is never stored as though they had.
+ *  - `true`/`false` — the caller sent exactly `'true'` or `'false'`.
+ *  - `'invalid'` — anything else, which the caller answers 400 for rather than guessing.
+ *
+ *  ⛔ NEVER `!!ownFirstString(q, key)`. A query string carries text only, so `completeRelease=false`
+ *  would be the non-empty string `'false'` and therefore truthy — a caller explicitly declining a
+ *  declaration would be recorded as making it. Built on `ownFirstString` so it inherits that
+ *  function's own-property guarantee. */
+function ownBoolean(q: Record<string, unknown>, key: string): boolean | undefined | 'invalid' {
+  const raw = ownFirstString(q, key);
+  if (raw === undefined) return undefined;
+  if (raw === 'true') return true;
+  if (raw === 'false') return false;
+  return 'invalid';
+}
+
 /** Whether a sanitised (already-array-stripped) string is one of the four admin-area columns.
  *  This closed whitelist — not a free string — IS the column-injection guard: `level` selects a
  *  raw column name inside `ctx.facilityRegistry.distinctAdminValues`'s query, and this is the one
@@ -452,6 +575,78 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
   // import route below). Constructed once per registration, not per request: it is a thin closure
   // over `ctx.internalDb`, the same db this file already reads directly in several routes.
   const importRuns = createFacilityImportRunStore(ctx.internalDb);
+
+  // A2b Task 3: a file upload is a stream, not a JSON body, and Fastify has no built-in parser for
+  // either of these content types — without them it answers 415 before the handler ever runs.
+  // Passthrough (`done(null, payload)`), so `req.body` IS the raw request stream. Guarded exactly
+  // like `workflows-routes.ts`'s identical registration: another route file registered on the SAME
+  // Fastify instance (terminology-admin-routes.ts) already adds the octet-stream one, and a second
+  // `addContentTypeParser` for a type already present throws.
+  //
+  // `text/csv` is registered alongside `application/octet-stream` so a client is free to label a CSV
+  // upload either way. That is the whole of what a content type decides here: which parser Fastify
+  // reaches for. The FORMAT is read from the QUERY STRING and validated there, so a file labelled
+  // `text/csv` but declared `format=jsonl` is stored and queued as jsonl — the header is never
+  // allowed to contradict the declaration.
+  for (const contentType of ['application/octet-stream', 'text/csv']) {
+    if (!app.hasContentTypeParser(contentType)) {
+      app.addContentTypeParser(contentType, (_req: unknown, payload: unknown, done: (e: null, b: unknown) => void) => done(null, payload));
+    }
+  }
+
+  /** What a request that wants to MINT a run must know about whatever run currently holds this
+   *  register: was the register freed for it, or must the request be refused (and why)?
+   *
+   *  ⛔ Shared by both minting paths — the inline preview's `startPreview` retry and the upload
+   *  route's pre-transfer gate — because both must make the SAME decision, and A2a's version of this
+   *  decision lived only in the preview route. A second, hand-copied gate is exactly how one path
+   *  keeps a rule the other quietly loses (`status !== 'previewed'` was that bug once already; see
+   *  `facility-import-run-states.ts`).
+   *
+   *  ⛔ The holder is found by `active_key`, NOT by "the newest run for this system". The key IS the
+   *  lock (unique index, migration 080) and a terminal write releases it, so the newest run can
+   *  perfectly well be a finished one over a register nothing holds — which the upload route, unlike
+   *  the preview route, asks about BEFORE anything has thrown. Read straight off `ctx.internalDb`
+   *  because `active_key` is not on `FacilityImportRun`; this file already reads `facility_jobs` and
+   *  `term_mappings` directly for the same reason. */
+  type RegisterGate = { freed: true } | { freed: false; error: string };
+
+  const registerHeldError = (nationalSystem: string, id: string, status: FacilityImportRunStatus): string => (
+    RUNNING_RUN_STATES.has(status)
+      ? `an import is already in progress for "${nationalSystem}": run ${id} is ${status}`
+      // Not reachable through any code path today — every writer of a terminal status nulls
+      // `active_key` in the same update — but it is the honest message if one ever is, and it is a
+      // different remedy from the one above (clear the stuck row, not "wait for the worker").
+      : `import run ${id} is already ${status} but still holds "${nationalSystem}"`
+  );
+
+  async function takeOverRegister(nationalSystem: string, reason: string): Promise<RegisterGate> {
+    const holder = await ctx.internalDb.selectFrom('facility_import_runs')
+      .select(['id', 'status']).where('active_key', '=', nationalSystem).executeTakeFirst();
+    if (!holder) return { freed: true };
+
+    const status = holder.status as FacilityImportRunStatus;
+    // ⛔ Only a SUPERSEDABLE run is taken over — the states where the operator walked away and
+    // nothing is mid-flight. Everything else is refused: a RUNNING run has a live worker (taking it
+    // over would race it), a TERMINAL one is already decided.
+    if (!SUPERSEDABLE_RUN_STATES.has(status)) {
+      return { freed: false, error: registerHeldError(nationalSystem, holder.id, status) };
+    }
+
+    // ⛔ COMPARE-AND-SWAP on the status just read, never an unconditional write: `queued` is both
+    // supersedable and CLAIMABLE, so a worker's `claimNext` can move this run to `validating`
+    // between the two statements. `false` means exactly that happened.
+    if (await importRuns.supersede(holder.id, status, reason)) return { freed: true };
+
+    // The CAS lost — so answer what actually happened rather than assuming. A run that moved to a
+    // TERMINAL state released `active_key` on its way, which means the register really is free and
+    // the caller may proceed; only a run that is still live is a refusal. Saying "an import is
+    // already in progress" for the terminal case (as this branch used to, unconditionally) would
+    // refuse a request over a register nobody holds. One re-read, no loop.
+    const moved = await importRuns.get(holder.id);
+    if (!moved || TERMINAL_RUN_STATES.has(moved.status)) return { freed: true };
+    return { freed: false, error: registerHeldError(nationalSystem, moved.id, moved.status) };
+  }
 
   app.get('/api/facilities', VIEW, async (req) => {
     const q = req.query as Record<string, unknown>;
@@ -1166,9 +1361,11 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     // unconditionally (both the standalone-preview and the apply-flow read this same `preview`), so
     // an operator applying straight through (no separate preview round-trip) still gets the warning
     // on the final response — see where `result.knownNationalSystem` is set below.
-    const known = await ctx.internalDb.selectFrom('facility_registry').select('id')
-      .where('national_system', '=', p.data.nationalSystem).limit(1).executeTakeFirst();
-    preview.knownNationalSystem = !!known;
+    //
+    // ⛔ The SHARED resolver, not a query spelled here. The background import worker has to answer
+    // the same question about the same register (it persists this field as the run's durable
+    // summary), and two hand-written lookups are free to disagree about what "already known" means.
+    preview.knownNationalSystem = await resolveKnownNationalSystem(ctx.internalDb, p.data.nationalSystem);
 
     if (!p.data.apply) {
       // A standalone preview (no `apply`) is the ONLY call that mints a run — see the module-level
@@ -1195,41 +1392,38 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       let run: FacilityImportRun;
       try {
         run = await importRuns.startPreview(startPreviewInput);
-      } catch (err) {
-        // Fix wave 1 (Important 4): `active_key` is set here and cleared ONLY by `finishApply` — see
-        // that method's own comment ("clearing the key is what stops a terminal row holding its
-        // national system for good"). Nothing expires or cancels a run that stays `previewed`
-        // forever, so an operator who previews and then simply never applies (closes the sheet,
-        // navigates away — the ordinary "changed my mind" path, not a failure of any kind) would
-        // otherwise lock this `nationalSystem` out of every future preview or runId-less apply
-        // permanently, short of a database reset.
+      } catch {
+        // Fix wave 1 (Important 4): `active_key` is set here and released only by a write that takes
+        // the run out of play — every terminal write (`finishApply`/`finish`), `supersede`,
+        // `failStaleRunning`, and `requestCancel`'s direct cancel, each of which nulls it in the same
+        // update (see `facility-import-run-store.ts`). NOTHING EXPIRES a run that stays `previewed`
+        // forever — A2b Task 6 added a cancel route an operator can drive by hand, but no timer, no
+        // sweep and no boot path retires an idle `previewed` run — so an operator who previews and
+        // then simply never applies (closes the sheet, navigates away — the ordinary "changed my
+        // mind" path, not a failure of any kind) would otherwise lock this `nationalSystem` out of
+        // every future preview or runId-less apply permanently, short of a database reset or that
+        // manual cancel.
         //
-        // ⛔ Kept entirely inside this route, not added to `FacilityImportRunStore`'s public contract
-        // — the brief for this fix is explicit that the store's shape does not change. The unique
-        // `active_key` index (migration 080) guarantees AT MOST ONE `previewed` row per
-        // `nationalSystem` at a time, and `finishApply` always nulls `active_key` in the same update
-        // that moves a run off `previewed` — so whenever `startPreview` throws this "already in
-        // progress" error, the newest row `importRuns.list` returns for this system IS the one
-        // currently holding the lock, and it is impossible for a NEWER row to exist here (creating
-        // one requires going through this same `startPreview`, which is exactly what just failed).
+        // ⛔ The DECISION lives in `takeOverRegister` (top of this function), SHARED with the upload
+        // route's gate rather than copied — see its doc comment for why the holder is found by
+        // `active_key`, why only a SUPERSEDABLE run is taken over, and why the take-over is a
+        // compare-and-swap. The thrown error is deliberately not bound: it says only "already in
+        // progress" for this `nationalSystem`, which is several distinguishable situations rolled
+        // into one sentence, and the gate below names the one that actually holds. A throw for any
+        // OTHER reason (a db failure, say) finds no holder, falls through to the retry, and surfaces
+        // its own message from there.
         //
-        // ⛔ Only a run still `previewed` is superseded. A run already `applied` or `failed` has
-        // already released `active_key` on its own — if this branch somehow observed one anyway
-        // (a race this reasoning says cannot happen, but the check costs nothing), touching it would
-        // be finishing an already-finished run for no reason, so the original 409 is surfaced
-        // unchanged instead. Exactly ONE retry: a second failure is surfaced as-is, never looped.
-        const existing = (await importRuns.list(p.data.nationalSystem, 1))[0];
-        if (!existing || existing.status !== 'previewed') {
-          // Same shape as the terminology distribution upload route's "already in progress" 409
-          // (terminology-admin-routes.ts) — the unique `active_key` index is the race-safe backstop,
-          // this is just where the message becomes readable.
+        // Exactly ONE retry: a second failure is surfaced as-is, never looped.
+        const gate = await takeOverRegister(p.data.nationalSystem, 'superseded by a newer preview');
+        if (!gate.freed) {
           reply.code(409);
-          return { error: err instanceof Error ? err.message : String(err) };
+          return { error: gate.error };
         }
         try {
-          await importRuns.finishApply(existing.id, 'failed', { error: 'superseded by a newer preview' });
           run = await importRuns.startPreview(startPreviewInput);
         } catch (retryErr) {
+          // The register was freed above and something took it again before this statement — a
+          // genuine race between two operators, not a stuck run.
           reply.code(409);
           return { error: retryErr instanceof Error ? retryErr.message : String(retryErr) };
         }
@@ -1278,8 +1472,12 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     //    answer to a question this run was never asked. 400 because the request itself is
     //    self-contradictory (this exact `nationalSystem` paired with a `runId` that names another),
     //    the same category of client-input error `ImportSchema.safeParse` above already 400s.
-    //  - FRESHNESS (409, "this run is no longer applicable"): a run not still `previewed` has
-    //    already been decided — `applied` or `failed` — and resubmitting it (a retry replaying the
+    //  - FRESHNESS (409, "this run is no longer applicable"): a run that is not `isApplicable` is
+    //    excluded for one of three reasons — it has already been DECIDED (`applied`, `failed`,
+    //    `cancelled`); it has no completed preview behind it to supply a watermark (`queued`,
+    //    `validating`); or it is IN FLIGHT (`applying`), which has a completed preview and is not
+    //    decided, but is already being applied by someone else and must not be applied twice.
+    //    Resubmitting a decided one (a retry replaying the
     //    same `runId`) must not perform a SECOND real write reusing the first apply's watermark, nor
     //    overwrite that first apply's terminal `summary`/`error` with a second one. 409 because the
     //    run itself is the reason the request cannot proceed as asked, independent of whether the
@@ -1296,9 +1494,14 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
             + `not "${p.data.nationalSystem}"`,
         };
       }
-      if (run.status !== 'previewed') {
+      // ⛔ `isApplicable`, not `!== 'previewed'`: an apply may start from any state with a COMPLETED
+      // preview behind it, because that is what makes the run's `previewed_at` a trustworthy
+      // conflict baseline for the write below. A2a had exactly one such state; A2b's
+      // `awaiting_confirmation` is the same situation reached by the background path, and hard-coding
+      // the literal here would 409 it forever. See `facility-import-run-states.ts`.
+      if (!isApplicable(run.status)) {
         reply.code(409);
-        return { error: `import run ${p.data.runId} is no longer applicable: status is "${run.status}", expected "previewed"` };
+        return { error: `import run ${p.data.runId} is no longer applicable: status is "${run.status}"` };
       }
     }
 
@@ -1372,6 +1575,245 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     return result;
   });
 
+  // ── A2b Task 3: the upload end of the background import ───────────────────────────────────────
+  //
+  // Streams the register file straight into blob storage and mints a `queued` run for it. Nothing is
+  // parsed, validated or written here: A2b Task 4's worker claims the run, reads the file back out
+  // of the blob store, and reports what it found through the run row. So a 202 means "the file is
+  // stored and the work is queued" — never "the register was imported", which is why this is not a
+  // 200 or a 201.
+  //
+  // ⛔ NO ROW CAP ON THIS PATH. See the "TWO IMPORT PATHS, ONE CAP" block under
+  // `MAX_INLINE_APPLY_ROWS` for why that cap stays on the inline route and must not follow the file
+  // here.
+  //
+  // Parameters ride the QUERY STRING because the body is the file itself — the same shape the
+  // terminology distribution upload uses (`terminology-admin-routes.ts`), which this route otherwise
+  // follows closely (bodyLimit config object, `isReadableBody` guard, `putStream`, audit, id back).
+  app.post('/api/facilities/import/upload', UPLOAD, async (req, reply) => {
+    const q = req.query as Record<string, unknown>;
+    // `ownFirstString`, not `firstString(q.x)` — see that helper's doc comment.
+    const nationalSystem = ownFirstString(q, 'nationalSystem');
+    // ⛔ Required, never defaulted, for the reason `ImportSchema.nationalSystem` documents: a
+    // hardcoded fallback would eventually file a register under the wrong national identity.
+    if (!nationalSystem) { reply.code(400); return { error: 'nationalSystem is required' }; }
+
+    const format = ownFirstString(q, 'format') ?? 'csv';
+    if (format !== 'csv' && format !== 'jsonl') {
+      reply.code(400);
+      return { error: `format must be "csv" or "jsonl", not "${format}"` };
+    }
+    const releaseVersion = ownFirstString(q, 'releaseVersion') ?? null;
+
+    // The file DECLARES ITSELF the whole of this register — the one claim that lets a row's absence
+    // from it mean anything at all (`FacilityImportResult.absent`). It rides the query string like
+    // every other upload parameter and is stored on the run below, where the worker's
+    // `validateOptions` spreads it into `importFacilities` (and `applyOptions` does the same for the
+    // write). Without it a background validate could only ever report `absent: null` (NOT
+    // EVALUATED), so a national complete release — the file this whole path exists for, far above
+    // the inline route's 2 000-row apply cap — could get absence-retirement through the CLI alone.
+    //
+    // ⛔ DECLARING A COMPLETE RELEASE RETIRES NOTHING BY ITSELF, and the two-tier asymmetry is
+    // unchanged: `onAbsent` defaults to `'report'` and only the operator's CONFIRM can raise it to
+    // `'retire'`, while a publisher's declared `deletion` still defaults to `'retire'` (see the
+    // defaults in `importFacilities`). This flag only decides whether the count is MEASURED.
+    // ⛔ It also cannot make a refusable file retire anything: `importFacilities` reports
+    // `absent: null` for a file that parsed to ZERO records no matter what is declared here — an
+    // empty parse is evidence the file did not parse, not that every facility is absent. That guard
+    // is `records.length === 0` in facility-import.ts and nothing on this route may route around it.
+    const completeRelease = ownBoolean(q, 'completeRelease');
+    if (completeRelease === 'invalid') {
+      reply.code(400);
+      return { error: 'completeRelease must be "true" or "false"' };
+    }
+
+    // ⛔ THE TWO OVERRIDES THAT CHANGE HOW THE FILE PARSES, and they belong to the UPLOAD for exactly
+    // the reason `completeRelease` above does: both are fed to `parseFacilityCsv`/`parseFacilityRelease`
+    // (see `parseOpts` in facility-import.ts), so they decide which rows become records — and the
+    // VALIDATE is what turns records into the summary an operator reads. Arriving at confirm time
+    // instead, they would make the apply classify a DIFFERENT record set than the one that was
+    // approved, which the confirm route now refuses outright. `allowMalformedRows` is deliberately
+    // NOT here: it changes only the `blocked` verdict, never the parse, so it stays the confirm's.
+    const parseOverrides: Record<string, boolean> = {};
+    for (const key of ['allowUnknownColumns', 'allowInvalidCoordinates'] as const) {
+      const value = ownBoolean(q, key);
+      if (value === 'invalid') {
+        reply.code(400);
+        return { error: `${key} must be "true" or "false"` };
+      }
+      if (value !== undefined) parseOverrides[key] = value;
+    }
+
+    // A JSON body (the INLINE route's shape, sent here by mistake) arrives as a parsed object and
+    // must be refused before anything else happens — piping it would throw somewhere far less
+    // legible.
+    if (!isReadableBody(req.body)) {
+      reply.code(400);
+      return { error: 'expected the register file as a request-body stream (content-type: application/octet-stream or text/csv)' };
+    }
+
+    // ⛔ The register gate runs BEFORE the transfer, not after it. A refused upload must not first
+    // cost a national register's worth of bandwidth and leave an orphan object behind. Shared with
+    // the inline preview route — see `takeOverRegister`.
+    const gate = await takeOverRegister(nationalSystem, 'superseded by a newer upload');
+    if (!gate.freed) { reply.code(409); return { error: gate.error }; }
+
+    // ⚠ The object is named by a fresh uuid, NOT by the run id, which is the one place this differs
+    // from the shape A2b's plan sketched. The run row cannot exist yet: `startUpload` writes
+    // `file_hash` and `byte_size`, and neither is known until the last byte has gone past — while
+    // `putStream` needs its key before the first one does. Minting the run first would mean either
+    // storing a hash of nothing or an UPDATE the store deliberately does not have. The durable link
+    // is `facility_import_runs.blob_key`, written below — it resolves run→object directly and
+    // object→run through that column; the slug is there so a human browsing the bucket can tell the
+    // registers apart.
+    const key = `facility-import/${nationalSystemSlug(nationalSystem)}/${randomUUID()}.${format}`;
+
+    // ⛔ Hash and size are computed AS THE BYTES TRAVEL, in a transform between the request and the
+    // blob store — the file is never buffered, at any size. Reading the object back to hash it (or
+    // collecting it into a Buffer first) would put a national register in memory twice and defeat
+    // the whole point of streaming it.
+    // ⛔ THE UPLOAD'S ONLY REAL BYTE CEILING. `bodyLimit` is inert for this route's passthrough
+    // parser (measured — see `MAX_UPLOAD_BYTES`), so without this counter an authenticated client
+    // could stream without end. Enforced HERE, in the transform that already counts the bytes,
+    // rather than after the transfer: crossing the limit errors the transform, which tears the
+    // pipeline (and the blob write behind it) down mid-flight instead of paying for the whole file
+    // first. `SY0413` → 413 through the central error handler, the same contract as
+    // `workflows-routes.ts`'s upload. Read off `ctx.cfg` per request (not captured at registration)
+    // for the same reason that route does: it is the value a test can lower and an operator can tune.
+    const maxUploadBytes = ctx.cfg.FACILITY_IMPORT_MAX_UPLOAD_BYTES;
+    const digest = createHash('sha256');
+    let byteSize = 0;
+    // Set the moment the ceiling is crossed, and PREFERRED over whatever rejection wins the race
+    // below. Both sides of the transfer fail when the transform errors — `pipeline` with this error
+    // and the blob store with whatever it wraps that error in — so without this the answer would be
+    // 413 or 500 depending on which promise settled first.
+    let overCap: Error | null = null;
+    const hashing = new Transform({
+      transform(chunk: Buffer, _enc, done) {
+        byteSize += chunk.length;
+        if (byteSize > maxUploadBytes) {
+          overCap = appError('SY0413', { message: `the register file exceeds the ${maxUploadBytes}-byte upload limit` });
+          done(overCap);
+          return;
+        }
+        digest.update(chunk);
+        done(null, chunk);
+      },
+    });
+
+    try {
+      const stored = ctx.blob.putStream(key, hashing, format === 'csv' ? 'text/csv' : 'application/x-ndjson');
+      // ⛔ Wire the SINK's failure back into the transform, or the transfer never tears down. A blob
+      // store that rejects WITHOUT draining `hashing` — the realistic S3 case, `Upload.done()`
+      // rejecting on a bad bucket or credentials while its chunk generator stops consuming — leaves
+      // `pipeline` parked on backpressure forever, because nothing is reading the bytes it is trying
+      // to push. MEASURED standalone (a 5 MB `Readable` source, a sink rejecting after 50 ms without
+      // reading a byte): without this line the pipeline never settles; with it, it settles in ~60 ms.
+      // Fastify sets no `requestTimeout` (app.ts), so "never" really is never — the request stream
+      // and the transform would be held for the life of the process. `Promise.all` below answers the
+      // client either way, so that leak is INVISIBLE in the response; the route test asserts on this
+      // transform's `destroyed` flag instead.
+      stored.catch((e) => hashing.destroy(e instanceof Error ? e : new Error(String(e))));
+      // ⛔ `Promise.all`, and NEVER `allSettled` — the opposite of what an earlier version of this
+      // code did, on a reason that was measured FALSE. That version claimed `Promise.all` "leaves the
+      // loser's rejection unobserved — an unhandled rejection". It does not: `Promise.all` subscribes
+      // to every element, so a later rejection is always observed (probed with a two-element `all`
+      // where the second rejects 50 ms after the first — no `unhandledRejection` event fires).
+      //
+      // What `allSettled` DOES do is wait for `pipeline` to settle — and against a Fastify request
+      // stream it never settles once the transform errors, which is exactly what the byte ceiling
+      // above does. MEASURED under `app.inject`: the drain side rejects with the transform's error,
+      // `pipeline`'s promise stays pending and `req.body.destroyed` is still false a second later, so
+      // the handler never returns and the reply is never sent. `Promise.all` rejects on the first
+      // failure and answers (413/500) while that unwinding happens behind it.
+      //
+      // ⚠ Accepted cost, stated rather than hidden: because this returns before the blob write has
+      // necessarily finished, `discardBlob` below can race a sink that is still flushing. That is
+      // tolerable precisely because that cleanup is best-effort by construction (see its doc
+      // comment) — a leaked object is a leak, whereas a reply that is never sent is a hung request.
+      await Promise.all([pipeline(req.body as NodeJS.ReadableStream, hashing), stored]);
+    } catch (err) {
+      // The register was freed by the gate above and no run row exists, so the only thing left over
+      // is a possibly-partial object. Best-effort delete, logged — a lost cleanup must not change
+      // the answer the operator gets, which is the transfer failure itself.
+      await discardBlob(key, 'a failed facility import upload');
+      throw overCap ?? err;
+    }
+
+    // An empty upload is refused rather than queued, the same call `ImportSchema.csv`'s
+    // `must not be empty` refine makes on the inline route: a run minted for zero bytes would hold
+    // `active_key` (locking the register out of the next, real upload) until a worker got round to
+    // reporting that there was nothing in it. Checked HERE and not before the transfer because a
+    // declared `content-length` is not the same claim as "bytes actually arrived".
+    if (byteSize === 0) {
+      await discardBlob(key, 'an empty facility import upload');
+      reply.code(400);
+      return { error: 'the uploaded register file is empty' };
+    }
+
+    const fileHash = digest.digest('hex');
+    let run: FacilityImportRun;
+    try {
+      run = await importRuns.startUpload({
+        nationalSystem,
+        sourceFormat: format,
+        blobKey: key,
+        fileHash,
+        byteSize,
+        releaseVersion,
+        // Only what the request actually chose. The import options proper (allowUnknownColumns,
+        // onConflict, …) are the CONFIRM step's, not the upload's — recording a made-up set here
+        // would put a decision in the durable record that no operator ever made.
+        //
+        // ⚠ `completeRelease` IS the upload's to record, unlike those: it is a claim about the FILE
+        // being stored, and `absent` is classified at VALIDATE time, before any confirm exists — so
+        // the confirm could not carry it even if it wanted to. Spread conditionally for the reason
+        // the line above states: an unsent parameter leaves the key OUT of `options` entirely rather
+        // than writing a `false` nobody sent.
+        //
+        // ⚠ …and so are the two PARSE-CHANGING overrides above, for the same reason and with the
+        // same conditional spread: they select which rows the VALIDATE turns into records, so they
+        // have to be in place before the summary the operator reviews is computed. See
+        // `parseOverrides` and the confirm route's parse-override gate.
+        options: {
+          nationalSystem,
+          ...(completeRelease === undefined ? {} : { completeRelease }),
+          ...parseOverrides,
+        },
+        requestedBy: actorFromRequest(req).actorId,
+      });
+    } catch (err) {
+      // The gate freed the register, so this is a genuine race: another request took it between the
+      // gate and here. `startUpload`'s own readable pre-check is what produces this message — the
+      // unique `active_key` index is the race-safe backstop behind it.
+      await discardBlob(key, 'a facility import upload whose run could not be minted');
+      reply.code(409);
+      return { error: err instanceof Error ? err.message : String(err) };
+    }
+
+    await recordAudit(ctx, req, {
+      action: 'facility.import.uploaded',
+      entityType: 'facility',
+      entityId: nationalSystem,
+      before: null,
+      after: null,
+      metadata: { runId: run.id, nationalSystem, sourceFormat: format, blobKey: key, fileHash, byteSize, releaseVersion },
+    });
+    reply.code(202);
+    return { runId: run.id };
+  });
+
+  /** Drop an object nothing will ever reference again. Contained and logged for the same reason
+   *  every other best-effort side-write in this file is: it runs on a path that has already decided
+   *  what to answer, and a failure here must not replace that answer with a different one. */
+  async function discardBlob(key: string, why: string): Promise<void> {
+    try {
+      await ctx.blob.delete(key);
+    } catch (err) {
+      ctx.logger.error({ err, blobKey: key }, `failed to delete the stored object left by ${why}`);
+    }
+  }
+
   // Task 10: the run-history list — FAC-P1-03's "who imported which release and when", scoped to one
   // register or every register this instance has ever seen. Gated `facilities.view`, not `.manage`:
   // it is read-only, and an operator who can merely see the registry still benefits from knowing
@@ -1380,6 +1822,228 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     const q = req.query as Record<string, unknown>;
     const runs = await importRuns.list(ownFirstString(q, 'nationalSystem'), parseLimit(q.limit));
     return { runs };
+  });
+
+  // ── A2b Task 5: the operator's confirm ────────────────────────────────────────────────────────
+  //
+  // The decision half of the background import. The worker validated an uploaded register and parked
+  // the run at `awaiting_confirmation` with a summary; this route takes the operator's choices,
+  // records them on the run, and hands it to the APPLY queue.
+  //
+  // ⛔ THIS ROUTE IS THE AUTHORISATION. `claimNext` selects on `status` alone, so the ONLY thing
+  // standing between a validated file and a national register being rewritten is that the apply
+  // worker claims `APPLY_PHASE.from` — a state nothing but the `confirm` call below ever writes. It
+  // is not a flag on the row and not a field in `options` for exactly that reason: either could be
+  // set by something that never asked an operator.
+  //
+  // 202, not 200: the register has NOT been imported when this returns — a worker will do that.
+  app.post('/api/facilities/import/runs/:id/confirm', MANAGE, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const p = ConfirmSchema.safeParse(req.body ?? {});
+    if (!p.success) { reply.code(400); return { error: p.error.message }; }
+
+    const run = await importRuns.get(id);
+    if (!run) { reply.code(404); return { error: `import run not found: ${id}` }; }
+
+    // ⛔ `isApplicable`, the SAME predicate the inline route's `runId` guard asks — not a second
+    // hand-written one, and not a `!== 'awaiting_confirmation'` literal. A confirm and an inline
+    // apply are the same question ("may an apply start from this run?"), and A2a's Critical finding
+    // was two guards answering it differently. It excludes an already-`confirmed` run too, so a
+    // double-click cannot queue two applies.
+    if (!isApplicable(run.status)) {
+      reply.code(409);
+      return { error: `import run ${id} is no longer applicable: status is "${run.status}"` };
+    }
+
+    // A DIFFERENT question from the status guard above, deliberately asked separately rather than
+    // folded into it: `isApplicable` admits `previewed`, the state the INLINE A2a preview mints —
+    // and that run carried its CSV in the request body and stored nothing. Confirming one would hand
+    // the worker a run it can only fail, while taking it out of the state its own apply route needs.
+    if (!run.blobKey) {
+      reply.code(409);
+      return {
+        error: `import run ${id} has no stored file — it was previewed inline; `
+          + 'apply it through POST /api/facilities/import carrying its runId',
+      };
+    }
+
+    // The validate's own verdict, read ONCE and asked two different questions below. Both gates read
+    // what `importFacilities` REPORTED rather than re-deriving it from the file — the file is not
+    // even in this request.
+    const summary = (run.summary ?? null) as {
+      blocked?: unknown; blockedReason?: unknown; unknownColumns?: unknown; invalid?: unknown;
+    } | null;
+
+    // ⛔ THE PARSE-OVERRIDE GATE (whole-branch review I2). `allowUnknownColumns` and
+    // `allowInvalidCoordinates` are fed straight to the PARSER (`parseOpts` in facility-import.ts),
+    // so they decide which rows become records at all — and the summary this operator is confirming
+    // was computed by a validate that ran with whatever the RUN already carried. Accepting a
+    // different value here would make the apply classify a different record set than the one that was
+    // approved, with nothing re-validating it and nothing re-showing it.
+    //
+    // ⛔ THIS IS NOT A TIDINESS RULE. Worst case, reachable through the API alone: a
+    // `completeRelease=true` upload carrying one unrecognised column validates to `parsed: 0` and
+    // `absent: null` — NOT EVALUATED — and still PARKS, because unknown columns set no
+    // `blockedReason` and the gate below therefore passes it. A confirm carrying
+    // `{ allowUnknownColumns: true, onAbsent: 'retire' }` would then parse the whole file, measure
+    // absence across the WHOLE register, and retire everything the file omits — authorised against a
+    // summary that measured none of it.
+    //
+    // ⛔ REFUSED ONLY WHERE THE OVERRIDE HAS SOMETHING TO ACT ON, which is what makes this exact
+    // rather than merely strict. Both parser flags are inert unless the file actually contains the
+    // thing they wave through, and `parseFacilityCsv` reports both populations UNCONDITIONALLY —
+    // `unknownColumns` off the header row, `invalid` pushed before the drop ("Reported unconditionally;
+    // DROPPED only without the override", facility-csv.ts) — so the stored summary answers "would
+    // this flag have changed the parse?" for the file that was actually validated, in either
+    // direction. An empty (or absent) population means the answer is no, and refusing then would
+    // reject a confirm that could not have changed anything.
+    //
+    // ⚠ `allowMalformedRows` is deliberately NOT in this list and must stay out: it is read only by
+    // the `blockedReason` decision, never by the parser, so it changes the VERDICT on a record set
+    // and not the record set itself. It is the documented override for a `quarantined-rows` block,
+    // which the gate immediately below relies on.
+    //
+    // The overrides that DO change the parse belong to the upload, which is the request that runs
+    // before the classification — see its `parseOverrides`.
+    // ⛔ AND THE FORMAT DECIDES HALF OF IT. `allowUnknownColumns` is a documented NO-OP for JSONL:
+    // `parseFacilityRelease` (packages/terminology/src/facility-release.ts) never reads
+    // `opts.allowUnknownColumns` at all — verified by reading that function, not by trusting its
+    // docblock — because every JSONL line is a self-describing object, so an unrecognised key cannot
+    // shift any other field the way an unrecognised CSV header can. It still REPORTS `unknownColumns`,
+    // so a JSONL run's summary populates the list without the flag ever having had anything to act
+    // on, and refusing there would reject a confirm over a flag that provably cannot change the
+    // parse — while the message told the operator to re-upload with it. `allowInvalidCoordinates` has
+    // NO such asymmetry: both parsers honour it (facility-release.ts's `row` branch and
+    // facility-csv.ts alike), so it stays in play for either format.
+    //
+    // ⚠ Written `!== 'jsonl'` rather than `=== 'csv'` so it FAILS CLOSED: a third source format added
+    // later is refused until someone has established what the flag does to it, which is the safe
+    // direction for a gate whose failure mode is authorising an unreviewed retirement.
+    const storedOptions = (run.options as Record<string, unknown> | null) ?? {};
+    const nonEmptyList = (v: unknown): boolean => Array.isArray(v) && v.length > 0;
+    const inPlay: Record<'allowUnknownColumns' | 'allowInvalidCoordinates', boolean> = {
+      allowUnknownColumns: nonEmptyList(summary?.unknownColumns) && run.sourceFormat !== 'jsonl',
+      allowInvalidCoordinates: nonEmptyList(summary?.invalid),
+    };
+    const parseChanging = (['allowUnknownColumns', 'allowInvalidCoordinates'] as const)
+      .filter((k) => inPlay[k] && k in p.data && !!p.data[k] !== !!storedOptions[k]);
+    if (parseChanging.length > 0) {
+      reply.code(409);
+      return {
+        error: `import run ${id} cannot be confirmed with ${parseChanging.join(', ')}: `
+          + 'that changes how the file parses, and the summary being confirmed was computed without '
+          + 'it — re-upload the file with that option on the upload request, so the validation you '
+          + 'review is the one that gets applied',
+      };
+    }
+
+    // ⛔ THE BLOCKED GATE, and it READS the importer's own verdict rather than re-deriving it.
+    // `importFacilities` reports `blocked`/`blockedReason` precisely so its consumers stop rebuilding
+    // the predicate (see `FacilityImportResult.blocked`); the worker stored that verdict on the run,
+    // and A2b Task 4 pinned that a blocked file still PARKS — the operator is entitled to see the
+    // reconciliation result. Refusing it is THIS route's job.
+    //
+    // ⚠ `'quarantined-rows'` is overridable and `'duplicate-columns'` is not — the override family
+    // `allowMalformedRows` belongs to, and the reason `blockedReason` is a machine token at all.
+    // Fail-closed: a reason this does not recognise is refused, so a blocked reason added later
+    // cannot be waved through by omission.
+    if (summary?.blocked === true) {
+      const overridden = summary.blockedReason === 'quarantined-rows' && p.data.allowMalformedRows === true;
+      if (!overridden) {
+        reply.code(409);
+        return {
+          error: `import run ${id} cannot be applied: the file is blocked (${String(summary.blockedReason)})`
+            + (summary.blockedReason === 'quarantined-rows'
+              ? ' — confirm with allowMalformedRows to import the rest of the file anyway'
+              : ''),
+        };
+      }
+    }
+
+    // ⛔ Only the keys the operator actually sent reach the durable record. A decision nobody made,
+    // stored as though they had, is the shape of defect FAC-P1-03 names one layer up — and every one
+    // of these options is defaulted by `importFacilities` itself, so recording an unsent one buys
+    // nothing and asserts something false.
+    //
+    // ⚠ MEASURED, because the obvious belief is wrong and this line was written twice on it: zod does
+    // NOT put an omitted `.optional()` key into its output as `undefined` — it omits the key. A
+    // `{ onConflict: 'skip' }` body parses to an object whose own keys are exactly `['onConflict']`
+    // (printed from this line). So the `Object.entries(...).filter(v !== undefined)` this used to be
+    // was dead code that could never remove anything, and the property is really held by the SCHEMA:
+    // keep these `.optional()`, never `.default(...)`, or an unsent choice starts being recorded.
+    const chosen = { ...p.data };
+    // Stored first, choices after: the upload recorded `{ nationalSystem }`, the register identity
+    // `active_key` locks on, and a client cannot be allowed to overwrite it — `ConfirmSchema` has no
+    // such key, so nothing in `chosen` can. The worker additionally re-imposes it off the run row.
+    const options = { ...storedOptions, ...chosen };
+
+    // Compare-and-swap on the status just read — see the store's own note. `false` means the run
+    // moved between the read above and this write (a newer upload superseded it, releasing its
+    // register), so reporting 202 would promise an apply that will never run.
+    if (!(await importRuns.confirm(id, run.status, options))) {
+      reply.code(409);
+      return { error: `import run ${id} was taken over before it could be confirmed` };
+    }
+
+    // ⛔ The only place the CONFIRMING operator is recorded. `facility_import_runs.requested_by` is
+    // whoever UPLOADED, and there is no column for whoever confirmed — while the actual write is
+    // performed later by a worker with no request behind it, which audits `facility.import` as the
+    // system. Without this entry the decision that authorised a national register's rewrite would
+    // have no actor anywhere.
+    await recordAudit(ctx, req, {
+      action: 'facility.import.confirmed',
+      entityType: 'facility',
+      entityId: run.nationalSystem,
+      before: null,
+      after: null,
+      metadata: { runId: id, nationalSystem: run.nationalSystem, options },
+    });
+
+    reply.code(202);
+    return { runId: id, status: APPLY_PHASE.from };
+  });
+
+  // A2b Task 6: ask an import run to stop.
+  //
+  // ⛔ THIS ROUTE'S ONLY HARD RULE IS THAT IT DOES NOT OVERSTATE WHAT HAPPENED, and the two success
+  // codes exist to keep that honest — the store answers a DIFFERENT question depending on whether
+  // anything is actually listening:
+  //
+  //   200 `cancelled` — the run was in a state NO worker claims (`awaiting_confirmation`, the state
+  //     every background run parks in; or `previewed`, the inline path's). Nothing would ever have
+  //     read a flag set on it, so `requestCancel` carries the cancellation out itself: the run is
+  //     terminal and its register released. Saying "cancelled" here is a fact, not a forecast.
+  //   202 `requested` — a worker holds the run (`validating`/`applying`). The flag is observed at
+  //     phase boundaries and CANNOT interrupt the running transaction, so an apply already inside
+  //     its write will finish and the run will end `applied`. That is the truthful outcome and the
+  //     operator must not be told otherwise, which is why this is not 200 and not `cancelled`.
+  //
+  // ⛔ 409 for a terminal run rather than a cheerful no-op: a cancel arriving after the write is a
+  // request that CANNOT be honoured, and an applied run stays applied. Reporting success would tell
+  // an operator a national register had not been imported when it had.
+  app.post('/api/facilities/import/runs/:id/cancel', MANAGE, async (req, reply) => {
+    const { id } = req.params as { id: string };
+
+    const outcome = await importRuns.requestCancel(id);
+    if (outcome === 'not-found') { reply.code(404); return { error: `import run not found: ${id}` }; }
+    if (outcome === 'already-terminal') {
+      reply.code(409);
+      return { error: `import run ${id} has already finished and cannot be cancelled` };
+    }
+
+    // Audited on both live outcomes, and the action records which one — an operator asking a running
+    // import to stop is a decision worth an actor even when the import goes on to finish anyway.
+    await recordAudit(ctx, req, {
+      action: 'facility.import.cancelled',
+      entityType: 'facility',
+      entityId: id,
+      before: null,
+      after: null,
+      metadata: { runId: id, outcome },
+    });
+
+    reply.code(outcome === 'cancelled' ? 200 : 202);
+    return { runId: id, outcome };
   });
 
   // One run's full detail — the preview summary an operator reviews before confirming an apply, or

@@ -6,10 +6,13 @@ import { makeMigratedDb } from '@openldr/db/testing';
 import { makeMigratedExternalDb } from '@openldr/db/testing-external';
 import {
   createTerminologyAdminStore, createFacilityRegistryStore, createFacilityJobStore,
-  DEFAULT_OBSERVED_FACILITY_SYSTEM, FACILITY_REGISTRY_SYSTEM, DEFAULT_LIST_LIMIT,
+  DEFAULT_OBSERVED_FACILITY_SYSTEM, FACILITY_REGISTRY_SYSTEM, DEFAULT_LIST_LIMIT, APPLY_PHASE,
 } from '@openldr/db';
 import { projectRegistryRows } from '@openldr/bootstrap';
 import { registerFacilitiesRoutes } from './facilities-routes';
+// The over-cap upload test registers the REAL central error handler, as production does, so its 413
+// carries the app-wide {error, code, correlationId} contract rather than a bespoke body.
+import { registerErrorHandler } from './error-handler';
 
 const FORM_FIELDS = [
   { id: 'f1', apiProperty: 'localCode' },
@@ -1513,8 +1516,39 @@ function fakeImportCtx(db: any) {
     // (it sits behind `if (deps.facilityJobs)`) in every test using this context — including the
     // one below asserting an applied import actually queues a rebuild.
     facilityJobs: createFacilityJobStore(db),
+    // A2b Task 3: the upload route streams the request body into `ctx.blob.putStream`. Every other
+    // route in this file leaves it untouched, so adding it here costs the existing tests nothing.
+    blob: fakeBlobStore(),
+    // The upload route's real byte ceiling is read off `ctx.cfg` per request (`bodyLimit` is inert
+    // for a passthrough parser — see facilities-routes.ts). The value here is the schema's own
+    // default; the over-cap test lowers it, exactly as workflows-routes.test.ts does with
+    // `WORKFLOW_FILE_MAX_BYTES`.
+    cfg: { FACILITY_IMPORT_MAX_UPLOAD_BYTES: 1_073_741_824 },
     __audit: audit,
   } as any;
+}
+
+/** A `BlobStoragePort` double for the upload route.
+ *
+ *  ⚠ It CONSUMES the stream it is handed, exactly as the real S3 adapter's multipart `Upload` does
+ *  (`packages/adapter-s3-bucket/src/index.ts`). That is not incidental: the route pipes the request
+ *  body through its hashing transform INTO this call, so a fake that merely recorded the key and
+ *  ignored `body` would leave that pipeline unfinished forever — the test would hang to its timeout
+ *  rather than fail with a usable message.
+ *
+ *  It keeps the BYTES, not just the key: "the run's `file_hash` is the sha256 of what was stored" is
+ *  the one claim of this route that cannot be checked from the run row alone. */
+function fakeBlobStore() {
+  const objects = new Map<string, Buffer>();
+  return {
+    async putStream(key: string, body: AsyncIterable<Buffer | string>) {
+      const chunks: Buffer[] = [];
+      for await (const chunk of body) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+      objects.set(key, Buffer.concat(chunks));
+    },
+    async delete(key: string) { objects.delete(key); },
+    __objects: objects,
+  };
 }
 
 describe('POST /api/facilities/import', () => {
@@ -1895,10 +1929,21 @@ describe('POST /api/facilities/import', () => {
         declaredRowCount: null,
         declaredDeletionCount: null,
         status: 'previewed',
+        // A2b Task 2 widened `FacilityImportRun` with the worker's columns. Pinned to CONCRETE
+        // values, never `expect.anything()`, so this stays the exhaustive wire-shape assertion it was
+        // written to be — and what it now also pins is true of an INLINE preview specifically: it
+        // stores no file (`blobKey: null`) and no worker has ever claimed it, so it carries no phase,
+        // no progress, no cancel request and no `startedAt`.
+        blobKey: null,
+        phase: null,
+        processed: 0,
+        total: null,
         previewedAt: expect.any(String),
         summary: expect.any(Object),
         options: { nationalSystem: SYSTEM },
         error: null,
+        cancelRequested: false,
+        startedAt: null,
         requestedBy: 'u1', // `req.user.id` from `appWith`'s fake `onRequest` hook
         createdAt: expect.any(String),
         finishedAt: null,
@@ -1955,10 +2000,21 @@ describe('POST /api/facilities/import', () => {
         declaredRowCount: null,
         declaredDeletionCount: null,
         status: 'previewed',
+        // A2b Task 2 widened `FacilityImportRun` with the worker's columns. Pinned to CONCRETE
+        // values, never `expect.anything()`, so this stays the exhaustive wire-shape assertion it was
+        // written to be — and what it now also pins is true of an INLINE preview specifically: it
+        // stores no file (`blobKey: null`) and no worker has ever claimed it, so it carries no phase,
+        // no progress, no cancel request and no `startedAt`.
+        blobKey: null,
+        phase: null,
+        processed: 0,
+        total: null,
         previewedAt: expect.any(String),
         summary: expect.any(Object),
         options: { nationalSystem: SYSTEM },
         error: null,
+        cancelRequested: false,
+        startedAt: null,
         requestedBy: 'u1',
         createdAt: expect.any(String),
         finishedAt: null,
@@ -2238,7 +2294,81 @@ describe('POST /api/facilities/import', () => {
       expect(secondRunRes.json().status).toBe('previewed');
     });
 
-    it('never supersedes a run that already reached a terminal state (only "previewed" is fair game)', async () => {
+    // A2b Task 1. The supersede gate used to read `existing.status !== 'previewed'`, which was
+    // correct while `previewed` was the only supersedable state and silently wrong the moment the
+    // enum widened: an `awaiting_confirmation` run still holds `active_key`, so the literal
+    // comparison would 409 every future preview of that register — the same permanent lock the
+    // fix-wave-1 test above closed, reintroduced through a state the line had never heard of.
+    //
+    // ⚠ The status is set by a DIRECT UPDATE on purpose: no store method mints
+    // `awaiting_confirmation` yet (the upload route that will arrives in Task 3), and `active_key`
+    // is deliberately left set — that is what makes the second preview's `startPreview` throw and
+    // drives execution into the retry branch this test is aiming at.
+    it('⛔ supersedes an awaiting_confirmation run — a widened enum must not re-lock the register', async () => {
+      const db = await makeMigratedDb();
+      const app = await appWith(fakeImportCtx(db));
+      const csv = facilityCsv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,']);
+      const first = await app.inject({ method: 'POST', url: '/api/facilities/import', payload: { csv, nationalSystem: SYSTEM } });
+      expect(first.statusCode).toBe(200);
+      const firstRunId = first.json().runId;
+
+      await db.updateTable('facility_import_runs')
+        .set({ status: 'awaiting_confirmation' })
+        .where('id', '=', firstRunId).execute();
+      // The setup itself is asserted: if this ever stopped taking, the test below would pass for the
+      // A2a reason (`previewed` is supersedable) and prove nothing about the widened enum.
+      const seeded = await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${firstRunId}` });
+      expect(seeded.json().status).toBe('awaiting_confirmation');
+      expect((await db.selectFrom('facility_import_runs').select('active_key')
+        .where('id', '=', firstRunId).executeTakeFirstOrThrow()).active_key).toBe(SYSTEM);
+
+      const second = await app.inject({ method: 'POST', url: '/api/facilities/import', payload: { csv, nationalSystem: SYSTEM } });
+      expect(second.statusCode).toBe(200);
+      expect(second.json().runId).not.toBe(firstRunId);
+
+      const firstRunRes = await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${firstRunId}` });
+      expect(firstRunRes.json().status).toBe('failed');
+      expect(firstRunRes.json().error).toBe('superseded by a newer preview');
+    });
+
+    // A2b Task 1, the apply guard's half of the same defect. `run.status !== 'previewed'` would 409
+    // an `awaiting_confirmation` run — a run WITH a completed preview and therefore a trustworthy
+    // `previewed_at` watermark — leaving the background path with no way to ever apply.
+    it('⛔ applies an awaiting_confirmation run rather than 409ing it as "no longer applicable"', async () => {
+      const db = await makeMigratedDb();
+      const app = await appWith(fakeImportCtx(db));
+      const csv = facilityCsv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,']);
+      const preview = await app.inject({ method: 'POST', url: '/api/facilities/import', payload: { csv, nationalSystem: SYSTEM } });
+      const runId = preview.json().runId;
+      await db.updateTable('facility_import_runs')
+        .set({ status: 'awaiting_confirmation' })
+        .where('id', '=', runId).execute();
+      expect((await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${runId}` })).json().status)
+        .toBe('awaiting_confirmation');
+
+      const applied = await app.inject({
+        method: 'POST', url: '/api/facilities/import',
+        payload: { csv, nationalSystem: SYSTEM, apply: true, runId },
+      });
+      expect(applied.statusCode).toBe(200);
+      expect(applied.json().written).toEqual({ created: 1, updated: 0, retired: 0 });
+      expect(await db.selectFrom('facility_registry').selectAll().execute()).toHaveLength(1);
+      const runRes = await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${runId}` });
+      expect(runRes.json().status).toBe('applied');
+    });
+
+    // A2b Task 1 review fix (b). The old title claimed `only "previewed" is fair game`, which stopped
+    // being true when the supersede gate widened to `SUPERSEDABLE_RUN_STATES` — `queued` and
+    // `awaiting_confirmation` are fair game too (see the two `awaiting_confirmation` tests above).
+    //
+    // ⚠ This test does NOT reach the supersede gate, and never did. The apply above goes through
+    // `finishApply`, which nulls `active_key` in the same update — so the second preview's
+    // `startPreview` pre-check finds no active row, does not throw, and the retry branch holding the
+    // gate is never entered. What this pins is the OUTER guarantee (an applied run releases the lock
+    // and its terminal record is left untouched), not the gate's terminal→409 branch. That branch is
+    // covered by "⛔ 409s a TERMINAL run that is still holding `active_key`…" below, which forces the
+    // state the gate would actually have to observe.
+    it('an applied run releases the register and its terminal record survives a later preview', async () => {
       const db = await makeMigratedDb();
       const app = await appWith(fakeImportCtx(db));
       const csv = facilityCsv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,']);
@@ -2259,6 +2389,86 @@ describe('POST /api/facilities/import', () => {
       const appliedRunRes = await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${runId}` });
       expect(appliedRunRes.json().status).toBe('applied');
       expect(appliedRunRes.json().error).toBeNull();
+    });
+
+    // A2b Task 1 review fix (a). The gate's NEGATIVE half — supersede iff SUPERSEDABLE, 409 otherwise
+    // — shipped pinned by nothing. The natural route to a terminal run (preview, apply) cannot reach
+    // the gate at all: `finishApply` nulls `active_key`, so the next `startPreview` simply succeeds
+    // and the retry branch is never entered (see the comment on the test directly above). So the
+    // state is constructed directly — the same technique the `awaiting_confirmation` supersede test
+    // above uses — leaving `active_key` SET, which is the only thing that makes `startPreview` throw
+    // and drives execution into the branch under test.
+    //
+    // Both cases below are 409s for different reasons: a TERMINAL run is already decided (touching it
+    // would re-finish a finished run), a RUNNING run has a live worker (taking it over would race).
+    it('⛔ 409s a TERMINAL run that is still holding `active_key` — never supersedes a decided run', async () => {
+      const db = await makeMigratedDb();
+      const app = await appWith(fakeImportCtx(db));
+      const csv = facilityCsv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,']);
+      const first = await app.inject({ method: 'POST', url: '/api/facilities/import', payload: { csv, nationalSystem: SYSTEM } });
+      expect(first.statusCode).toBe(200);
+      const firstRunId = first.json().runId;
+
+      // Status only — `active_key` is deliberately NOT cleared, so this row still holds the lock.
+      await db.updateTable('facility_import_runs')
+        .set({ status: 'applied' })
+        .where('id', '=', firstRunId).execute();
+      // The setup is asserted: without both of these the second preview would 200 for a reason that
+      // has nothing to do with the gate.
+      expect((await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${firstRunId}` })).json().status)
+        .toBe('applied');
+      expect((await db.selectFrom('facility_import_runs').select('active_key')
+        .where('id', '=', firstRunId).executeTakeFirstOrThrow()).active_key).toBe(SYSTEM);
+
+      const second = await app.inject({ method: 'POST', url: '/api/facilities/import', payload: { csv, nationalSystem: SYSTEM } });
+      expect(second.statusCode).toBe(409);
+      // A2b Task 3 review fix (M3). The shared `takeOverRegister` changed this WIRE-VISIBLE message
+      // from the store's `an import is already in progress for "X"` to one that names the run and its
+      // state, because the two 409s have very different remedies (clear a stuck decided run vs wait
+      // for a live worker). The status code alone pinned neither direction of that change.
+      expect(second.json().error).toContain(`import run ${firstRunId} is already applied but still holds`);
+      expect(second.json().error).toContain(SYSTEM);
+
+      // The decided run is left exactly as it was — not re-finished as 'failed', not given a
+      // supersede reason, and still holding the key it was (wrongly) holding.
+      const firstRunRes = await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${firstRunId}` });
+      expect(firstRunRes.json().status).toBe('applied');
+      expect(firstRunRes.json().error).toBeNull();
+    });
+
+    it('⛔ 409s a RUNNING run rather than superseding it — taking over would race a live worker', async () => {
+      const db = await makeMigratedDb();
+      const app = await appWith(fakeImportCtx(db));
+      const csv = facilityCsv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,']);
+      const first = await app.inject({ method: 'POST', url: '/api/facilities/import', payload: { csv, nationalSystem: SYSTEM } });
+      expect(first.statusCode).toBe(200);
+      const firstRunId = first.json().runId;
+
+      // `validating` is exactly what A2b's worker will hold while it is mid-flight, and it holds
+      // `active_key` for the whole of that time — so this is the real shape, not an invented one.
+      await db.updateTable('facility_import_runs')
+        .set({ status: 'validating' })
+        .where('id', '=', firstRunId).execute();
+      expect((await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${firstRunId}` })).json().status)
+        .toBe('validating');
+      expect((await db.selectFrom('facility_import_runs').select('active_key')
+        .where('id', '=', firstRunId).executeTakeFirstOrThrow()).active_key).toBe(SYSTEM);
+
+      const second = await app.inject({ method: 'POST', url: '/api/facilities/import', payload: { csv, nationalSystem: SYSTEM } });
+      expect(second.statusCode).toBe(409);
+      // A2b Task 3 review fix (M3), as on the TERMINAL test above: the shared gate's message now
+      // names the holder and its live state. This is the "wait for the worker" half of the pair, and
+      // it must stay distinguishable from the "clear the stuck run" half.
+      expect(second.json().error).toContain(`an import is already in progress for "${SYSTEM}"`);
+      expect(second.json().error).toContain(`run ${firstRunId} is validating`);
+
+      // The live run is untouched: still `validating`, still holding its key. A superseding gate
+      // would have marked it 'failed' out from under the worker.
+      const firstRunRes = await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${firstRunId}` });
+      expect(firstRunRes.json().status).toBe('validating');
+      expect(firstRunRes.json().error).toBeNull();
+      expect((await db.selectFrom('facility_import_runs').select('active_key')
+        .where('id', '=', firstRunId).executeTakeFirstOrThrow()).active_key).toBe(SYSTEM);
     });
 
     it('a failed apply marks its run failed rather than leaving the register locked forever', async () => {
@@ -2326,6 +2536,10 @@ describe('POST /api/facilities/import', () => {
         releaseVersion: null, releasePublishedAt: null, declaredRowCount: null, declaredDeletionCount: null,
         previewedAt: expect.any(String), summary: expect.any(Object), options: { nationalSystem: SYSTEM },
         error: null, requestedBy: 'u1', createdAt: expect.any(String),
+        // A2b Task 2's added columns, concrete for the same reason as the `GET .../runs/:id`
+        // assertions above: both of these runs came from the INLINE preview path, which stores no
+        // file and is never claimed by a worker.
+        blobKey: null, phase: null, processed: 0, total: null, cancelRequested: false, startedAt: null,
       };
       expect(runs).toEqual([
         // Newest first: a2, the still-open preview.
@@ -2341,6 +2555,1144 @@ describe('POST /api/facilities/import', () => {
       const res = await app.inject({ method: 'GET', url: '/api/facilities/import/runs/nope' });
       expect(res.statusCode).toBe(404);
     });
+  });
+});
+
+// --- A2b Task 3: POST /api/facilities/import/upload -------------------------------------------
+//
+// The upload END of the background import: the file goes to blob storage and a `queued` run is
+// minted for the worker (Task 4) to claim. Everything here is about what the REQUEST leaves behind —
+// the stored object, the run row, and what happens to whatever run already held the register — since
+// nothing consumes any of it yet.
+
+const UPLOAD_HEADERS = { 'content-type': 'application/octet-stream' };
+
+function uploadUrl(params: Record<string, string>): string {
+  return `/api/facilities/import/upload?${new URLSearchParams(params).toString()}`;
+}
+
+/** The single object this request stored, key and bytes. Fails loudly rather than returning
+ *  `undefined` when the count is not 1 — several tests below assert "nothing more was stored", and a
+ *  helper that silently picked the first of two would hide exactly that. */
+function onlyStoredObject(ctx: any): { key: string; bytes: Buffer } {
+  const entries = [...ctx.blob.__objects.entries()] as [string, Buffer][];
+  expect(entries).toHaveLength(1);
+  return { key: entries[0][0], bytes: entries[0][1] };
+}
+
+describe('POST /api/facilities/import/upload', () => {
+  it('gated on facilities.manage — a facilities.view-only user gets 403 and nothing is stored', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx, ['facilities.view']);
+    const res = await app.inject({
+      method: 'POST', url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv' }),
+      headers: UPLOAD_HEADERS, payload: Buffer.from(facilityCsv(['100,Alpha,,,,,,,,,,,,,,']), 'utf8'),
+    });
+    expect(res.statusCode).toBe(403);
+    expect(ctx.blob.__objects.size).toBe(0);
+    expect(await db.selectFrom('facility_import_runs').selectAll().execute()).toHaveLength(0);
+  });
+
+  it('streams the file to the blob store and mints a `queued` run carrying its key, hash and size', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const csv = facilityCsv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,']);
+
+    const res = await app.inject({
+      method: 'POST', url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv', releaseVersion: 'r7' }),
+      headers: UPLOAD_HEADERS, payload: Buffer.from(csv, 'utf8'),
+    });
+
+    // 202, not 201: the register has NOT been imported, or even read — a worker will do that. The
+    // body is the runId and nothing else, so a client cannot mistake this for a preview result.
+    expect(res.statusCode).toBe(202);
+    expect(res.json()).toEqual({ runId: expect.any(String) });
+    const runId = res.json().runId;
+
+    // ⛔ The stored object is the file, byte for byte. Without this the hash assertion below could be
+    // satisfied by hashing something that was never uploaded.
+    const stored = onlyStoredObject(ctx);
+    expect(stored.bytes.toString('utf8')).toBe(csv);
+    expect(stored.key).toMatch(/^facility-import\/[a-z0-9-]+\/[0-9a-f-]{36}\.csv$/);
+
+    const runRes = await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${runId}` });
+    expect(runRes.statusCode).toBe(200);
+    // Complete-object `toEqual` with CONCRETE values, matching the sibling `GET .../runs/:id`
+    // assertions above: this is the only thing pinning what an UPLOADED run looks like, and every
+    // field that differs from an inline preview's row (blobKey, status, previewedAt, summary) is a
+    // field a reader will rely on.
+    expect(runRes.json()).toEqual({
+      id: runId,
+      nationalSystem: SYSTEM,
+      sourceFormat: 'csv',
+      // The link between the run and the bytes — the same key the blob store actually received.
+      blobKey: stored.key,
+      // ⛔ The hash of the STORED bytes, computed as they streamed past. Mutating the route's digest
+      // to a constant must fail here.
+      fileHash: createHash('sha256').update(csv, 'utf8').digest('hex'),
+      byteSize: Buffer.byteLength(csv, 'utf8'),
+      releaseVersion: 'r7',
+      // ⛔ NOT EVALUATED, never zero: nothing has read the file yet, so the release header's own
+      // declarations are unknown — only the worker can fill these in (see `startUpload`'s comment).
+      releasePublishedAt: null,
+      declaredRowCount: null,
+      declaredDeletionCount: null,
+      status: 'queued',
+      phase: null,
+      processed: 0,
+      total: null,
+      previewedAt: null,
+      summary: null,
+      options: { nationalSystem: SYSTEM },
+      error: null,
+      cancelRequested: false,
+      requestedBy: 'u1', // `req.user.id` from `appWith`'s fake `onRequest` hook
+      createdAt: expect.any(String),
+      startedAt: null,
+      finishedAt: null,
+    });
+  });
+
+  // ⛔ THE DECLARATION HAS TO REACH THE RUN, or the background door cannot express two-tier
+  // retirement at all. `absent` is classified during the VALIDATE phase off `run.options` (the
+  // worker's `validateOptions` spreads them into `importFacilities`), so a `completeRelease` that
+  // stopped at this route would leave every background validate reporting `absent: null` — NOT
+  // EVALUATED — no matter what the file is. The inline route is capped at `MAX_INLINE_APPLY_ROWS`,
+  // so without this a national complete release could get absence-retirement through the CLI alone.
+  it('records a declared complete release in the run\'s options, where the validate phase reads it', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const res = await app.inject({
+      method: 'POST',
+      url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv', completeRelease: 'true' }),
+      headers: UPLOAD_HEADERS, payload: Buffer.from(facilityCsv(['100,Alpha,,,,,,,,,,,,,,']), 'utf8'),
+    });
+    expect(res.statusCode).toBe(202);
+    const run = (await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${res.json().runId}` })).json();
+    // ⛔ Exact object. The sibling test above pins that an upload WITHOUT this parameter stores
+    // `{ nationalSystem }` and nothing else, so the two together say the key is present exactly when
+    // the operator declared it — and neither the operator's import options (`onAbsent`, the
+    // `allow*` family) nor anything else the confirm step owns has leaked in here.
+    expect(run.options).toEqual({ nationalSystem: SYSTEM, completeRelease: true });
+  });
+
+  // ⛔ `'false'` IS NOT `false`-y ON A QUERY STRING. A `!!ownFirstString(...)` here would read the
+  // literal text 'false' as a declaration the operator explicitly declined to make — and a
+  // declaration is the thing that lets an absence be counted at all.
+  it('an explicitly declined complete release is recorded as declined, never as declared', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const res = await app.inject({
+      method: 'POST',
+      url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv', completeRelease: 'false' }),
+      headers: UPLOAD_HEADERS, payload: Buffer.from(facilityCsv(['100,Alpha,,,,,,,,,,,,,,']), 'utf8'),
+    });
+    expect(res.statusCode).toBe(202);
+    const run = (await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${res.json().runId}` })).json();
+    expect(run.options).toEqual({ nationalSystem: SYSTEM, completeRelease: false });
+  });
+
+  it('refuses a completeRelease that is neither "true" nor "false", rather than guessing at it', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const res = await app.inject({
+      method: 'POST',
+      url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv', completeRelease: 'yes' }),
+      headers: UPLOAD_HEADERS, payload: Buffer.from(facilityCsv(['100,Alpha,,,,,,,,,,,,,,']), 'utf8'),
+    });
+    expect(res.statusCode).toBe(400);
+    // Refused BEFORE the transfer, like every other parameter check on this route: a rejected upload
+    // must not first cost a register's worth of bandwidth or leave an object behind.
+    expect(ctx.blob.__objects.size).toBe(0);
+    expect(await db.selectFrom('facility_import_runs').selectAll().execute()).toHaveLength(0);
+  });
+
+  it('audits the upload with the run it minted', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const csv = facilityCsv(['100,Alpha,,,,,,,,,,,,,,']);
+    const res = await app.inject({
+      method: 'POST', url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv' }),
+      headers: UPLOAD_HEADERS, payload: Buffer.from(csv, 'utf8'),
+    });
+    expect(res.statusCode).toBe(202);
+    expect(ctx.__audit).toHaveLength(1);
+    expect(ctx.__audit[0]).toMatchObject({
+      action: 'facility.import.uploaded',
+      entityType: 'facility',
+      entityId: SYSTEM,
+      metadata: {
+        runId: res.json().runId,
+        nationalSystem: SYSTEM,
+        sourceFormat: 'csv',
+        blobKey: onlyStoredObject(ctx).key,
+        byteSize: Buffer.byteLength(csv, 'utf8'),
+      },
+    });
+  });
+
+  // ⛔ THE PRODUCT POINT OF A2b. `MAX_INLINE_APPLY_ROWS` (2000) bounds `POST /api/facilities/import`
+  // and must keep doing so — that route holds an HTTP request open for the whole apply. This path
+  // holds one open for nothing but the transfer, so a national register must go through it. A cap
+  // re-applied here (or the two routes "unified") fails this test.
+  it('⛔ accepts a register far ABOVE the inline apply cap — that cap bounds the inline route only', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const rows = Array.from({ length: 2500 }, (_, i) => `${1000 + i},Facility ${i},,,,,,,,,,,,,,`);
+    const csv = facilityCsv(rows);
+
+    const res = await app.inject({
+      method: 'POST', url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv' }),
+      headers: UPLOAD_HEADERS, payload: Buffer.from(csv, 'utf8'),
+    });
+
+    expect(res.statusCode).toBe(202);
+    const stored = onlyStoredObject(ctx);
+    expect(stored.bytes.toString('utf8')).toBe(csv);
+    const run = (await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${res.json().runId}` })).json();
+    expect(run.byteSize).toBe(Buffer.byteLength(csv, 'utf8'));
+    expect(run.fileHash).toBe(createHash('sha256').update(csv, 'utf8').digest('hex'));
+  });
+
+  it('a JSONL upload is stored under a .jsonl key and recorded as sourceFormat jsonl', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const body = jsonl([rowLine('100', 'Alpha'), rowLine('200', 'Beta')]);
+
+    const res = await app.inject({
+      method: 'POST', url: uploadUrl({ nationalSystem: SYSTEM, format: 'jsonl' }),
+      headers: UPLOAD_HEADERS, payload: Buffer.from(body, 'utf8'),
+    });
+
+    expect(res.statusCode).toBe(202);
+    expect(onlyStoredObject(ctx).key).toMatch(/\.jsonl$/);
+    const run = (await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${res.json().runId}` })).json();
+    expect(run.sourceFormat).toBe('jsonl');
+  });
+
+  // The same abandoned-register rule the inline preview route already follows, reached through the
+  // upload: an operator who uploads and never confirms must not lock the register for good.
+  it('supersedes an awaiting_confirmation run rather than refusing the new upload', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const csv = facilityCsv(['100,Alpha,,,,,,,,,,,,,,']);
+    const first = await app.inject({
+      method: 'POST', url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv' }),
+      headers: UPLOAD_HEADERS, payload: Buffer.from(csv, 'utf8'),
+    });
+    expect(first.statusCode).toBe(202);
+    const firstRunId = first.json().runId;
+
+    // ⚠ Set by a DIRECT UPDATE: nothing mints `awaiting_confirmation` until the worker lands in Task
+    // 4, and `active_key` is deliberately left SET — that is what makes this run the holder the gate
+    // has to decide about. Asserted, so a setup that stopped taking cannot leave the test green for
+    // the uninteresting reason that the register was free all along.
+    await db.updateTable('facility_import_runs').set({ status: 'awaiting_confirmation' })
+      .where('id', '=', firstRunId).execute();
+    expect((await db.selectFrom('facility_import_runs').select(['status', 'active_key'])
+      .where('id', '=', firstRunId).executeTakeFirstOrThrow()))
+      .toEqual({ status: 'awaiting_confirmation', active_key: SYSTEM });
+
+    const second = await app.inject({
+      method: 'POST', url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv' }),
+      headers: UPLOAD_HEADERS, payload: Buffer.from(csv, 'utf8'),
+    });
+
+    expect(second.statusCode).toBe(202);
+    expect(second.json().runId).not.toBe(firstRunId);
+    // The superseded run keeps its record and says why it ended — not silently discarded.
+    const firstRun = (await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${firstRunId}` })).json();
+    expect(firstRun.status).toBe('failed');
+    expect(firstRun.error).toBe('superseded by a newer upload');
+    const secondRun = (await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${second.json().runId}` })).json();
+    expect(secondRun.status).toBe('queued');
+  });
+
+  it('⛔ 409s while a run is `validating` — taking the register over would race a live worker', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const csv = facilityCsv(['100,Alpha,,,,,,,,,,,,,,']);
+    const first = await app.inject({
+      method: 'POST', url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv' }),
+      headers: UPLOAD_HEADERS, payload: Buffer.from(csv, 'utf8'),
+    });
+    expect(first.statusCode).toBe(202);
+    const firstRunId = first.json().runId;
+
+    await db.updateTable('facility_import_runs').set({ status: 'validating' })
+      .where('id', '=', firstRunId).execute();
+    expect((await db.selectFrom('facility_import_runs').select(['status', 'active_key'])
+      .where('id', '=', firstRunId).executeTakeFirstOrThrow()))
+      .toEqual({ status: 'validating', active_key: SYSTEM });
+
+    const second = await app.inject({
+      method: 'POST', url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv' }),
+      headers: UPLOAD_HEADERS, payload: Buffer.from(csv, 'utf8'),
+    });
+
+    expect(second.statusCode).toBe(409);
+    // The message names the live run's state, so an operator can tell "a worker is busy" from "a
+    // decided run is stuck holding the register" — two 409s with very different remedies.
+    expect(second.json().error).toContain('validating');
+    // The live run is untouched: still `validating`, still holding its key.
+    expect((await db.selectFrom('facility_import_runs').select(['status', 'active_key', 'error'])
+      .where('id', '=', firstRunId).executeTakeFirstOrThrow()))
+      .toEqual({ status: 'validating', active_key: SYSTEM, error: null });
+    // ⛔ And NOTHING was streamed for the refused request — the gate runs BEFORE the transfer, so a
+    // refused upload does not cost a national register's worth of bandwidth or leave an orphan
+    // object behind. Only the first upload's object exists.
+    expect(ctx.blob.__objects.size).toBe(1);
+    expect(await db.selectFrom('facility_import_runs').selectAll().execute()).toHaveLength(1);
+  });
+
+  it('a non-stream body is a clear 400, not a crash or a 415', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const res = await app.inject({
+      method: 'POST', url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv' }),
+      payload: { csv: 'national_code,name\n100,Alpha\n' }, // JSON body — the inline route's shape
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toMatch(/stream/i);
+    expect(ctx.blob.__objects.size).toBe(0);
+    expect(await db.selectFrom('facility_import_runs').selectAll().execute()).toHaveLength(0);
+  });
+
+  // An empty file must not mint a run: the run would hold `active_key` — locking the register out of
+  // the next, real upload — until a worker got round to reporting that there was nothing in it.
+  it('refuses an empty upload (400) and leaves neither a run nor a stored object behind', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+
+    const res = await app.inject({
+      method: 'POST', url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv' }),
+      headers: UPLOAD_HEADERS, payload: Buffer.alloc(0),
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toMatch(/empty/i);
+    expect(await db.selectFrom('facility_import_runs').selectAll().execute()).toHaveLength(0);
+    // The (zero-byte) object the transfer created is cleaned up — `delete` on the store double
+    // removes the key, so an uncleaned one would show up here.
+    expect(ctx.blob.__objects.size).toBe(0);
+
+    // …and the register is still free: a real upload right after it succeeds.
+    const after = await app.inject({
+      method: 'POST', url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv' }),
+      headers: UPLOAD_HEADERS, payload: Buffer.from(facilityCsv(['100,Alpha,,,,,,,,,,,,,,']), 'utf8'),
+    });
+    expect(after.statusCode).toBe(202);
+  });
+
+  it('refuses a missing nationalSystem and an unknown format (400) before storing anything', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const payload = Buffer.from(facilityCsv(['100,Alpha,,,,,,,,,,,,,,']), 'utf8');
+
+    const noSystem = await app.inject({
+      method: 'POST', url: uploadUrl({ format: 'csv' }), headers: UPLOAD_HEADERS, payload,
+    });
+    expect(noSystem.statusCode).toBe(400);
+    expect(noSystem.json().error).toMatch(/nationalSystem/);
+
+    const badFormat = await app.inject({
+      method: 'POST', url: uploadUrl({ nationalSystem: SYSTEM, format: 'xlsx' }),
+      headers: UPLOAD_HEADERS, payload,
+    });
+    expect(badFormat.statusCode).toBe(400);
+    expect(badFormat.json().error).toMatch(/format/);
+
+    expect(ctx.blob.__objects.size).toBe(0);
+    expect(await db.selectFrom('facility_import_runs').selectAll().execute()).toHaveLength(0);
+  });
+
+  // --- A2b Task 3 review fix (I1): a sink that fails WITHOUT draining ---------------------------
+  //
+  // ⚠ `fakeBlobStore` deliberately DRAINS (as the real S3 multipart `Upload` does on the happy
+  // path). This double is the FAILURE shape that one cannot express: `Upload.done()` rejecting on a
+  // bad bucket or bad credentials while its chunk generator stops consuming. Nothing then reads the
+  // hashing transform, so `pipeline(req.body, hashing)` is parked on backpressure with a source that
+  // will never drain.
+  //
+  // TWO distinct regressions are pinned here, because the fix has two halves — and each was
+  // demonstrated by mutating the route and watching THIS test go red:
+  //
+  //  1. THE ANSWER. Awaiting BOTH sides (`Promise.allSettled`, which this route used to do) instead
+  //     of `Promise.all` fails this test — the sink's rejection escapes the handler instead of
+  //     becoming a 500. (The over-cap test below is the one where a reintroduced `allSettled` HANGS
+  //     outright; see its own note.) The 5s budget is a guard for this family of failures generally,
+  //     since a stream that never settles stalls the suite rather than failing it.
+  //  2. THE TEARDOWN, asserted directly on the transform the route handed the store (`handed`
+  //     below). `Promise.all` answers without waiting, so a leaked pipeline is INVISIBLE in the
+  //     response — the transform being `destroyed` is the only observable trace of
+  //     `stored.catch(e => hashing.destroy(e))`. Replacing that line with a no-op leaves this
+  //     request answering 500 exactly as before while the request stream and the transform are held
+  //     for the life of the process (Fastify sets no `requestTimeout` — see app.ts).
+  it('⛔ fails fast (500) when the blob store rejects WITHOUT draining, and tears the transfer down', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const deleted: string[] = [];
+    // The hashing transform the route pipes into — captured, then abandoned unread.
+    let handed: { destroyed: boolean } | null = null;
+    ctx.blob = {
+      // Rejects promptly and never touches `body` — the stream is left with nobody reading it.
+      async putStream(_key: string, body: { destroyed: boolean }) {
+        handed = body;
+        throw new Error('simulated blob store failure: no such bucket');
+      },
+      async delete(key: string) { deleted.push(key); },
+      __objects: new Map<string, Buffer>(),
+    };
+    const app = await appWith(ctx);
+
+    // ⛔ Comfortably above the transform's 16 KiB default highWaterMark, so the pipeline is genuinely
+    // under backpressure when the sink gives up. A payload that fits in one buffer would complete on
+    // its own and prove nothing.
+    const csv = facilityCsv(Array.from({ length: 20_000 }, (_, i) => `${1000 + i},Facility ${i},,,,,,,,,,,,,,`));
+    expect(Buffer.byteLength(csv, 'utf8')).toBeGreaterThan(512 * 1024);
+
+    const res = await app.inject({
+      method: 'POST', url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv' }),
+      headers: UPLOAD_HEADERS, payload: Buffer.from(csv, 'utf8'),
+    });
+
+    expect(res.statusCode).toBe(500);
+    // ⛔ Regression 2: the abandoned transform was torn down rather than left parked forever.
+    expect(handed).not.toBeNull();
+    expect(handed!.destroyed).toBe(true);
+    // The transfer failed, so nothing is queued and the (possibly partial) object is discarded —
+    // `discardBlob` ran, which is the cleanup path an unresolved await never reaches at all.
+    expect(await db.selectFrom('facility_import_runs').selectAll().execute()).toHaveLength(0);
+    expect(deleted).toEqual([expect.stringMatching(/^facility-import\//)]);
+    // And the register is not left locked by the failure: the next upload succeeds.
+    ctx.blob = fakeBlobStore();
+    const after = await app.inject({
+      method: 'POST', url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv' }),
+      headers: UPLOAD_HEADERS, payload: Buffer.from(facilityCsv(['100,Alpha,,,,,,,,,,,,,,']), 'utf8'),
+    });
+    expect(after.statusCode).toBe(202);
+  }, 5000);
+
+  // --- A2b Task 3 review fix (I2): the upload's real byte ceiling ------------------------------
+  //
+  // `bodyLimit` is INERT for this route (measured against fastify@5.8.5: `rawBody`, the only place
+  // the limit is consulted, runs solely for `asString`/`asBuffer` parsers — a passthrough parser
+  // bypasses it entirely). The ceiling that actually binds is the running byte count inside the
+  // hashing transform, against `ctx.cfg.FACILITY_IMPORT_MAX_UPLOAD_BYTES`. Lowered here rather than
+  // pushed past 1 GiB, exactly as `workflows-routes.test.ts` does with `WORKFLOW_FILE_MAX_BYTES`.
+  //
+  // Registers the REAL central error handler, as production does, so the over-cap answer is the
+  // app-wide `{error, code, correlationId}` contract rather than a body only this route emits.
+  //
+  // ⛔ EXPLICIT 8s BUDGET, because the regression here is a HANG rather than a wrong answer. MEASURED
+  // by mutating the route back to `Promise.allSettled`: `pipeline`'s promise never settles once the
+  // transform errors against a Fastify request stream (`req.body.destroyed` is still false a second
+  // later), so the handler never returns and this test times out instead of failing on an assertion.
+  // Without a budget it would stall the suite at whatever global timeout is in force.
+  it('⛔ 413s an upload over `FACILITY_IMPORT_MAX_UPLOAD_BYTES` and stores no run', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    ctx.cfg.FACILITY_IMPORT_MAX_UPLOAD_BYTES = 2;
+    // ⚠ A store that REPLACES the stream's error with its own, as the real adapter does: it wraps
+    // `@aws-sdk/lib-storage`'s `Upload`, whose `done()` rejects with an SDK abort error rather than
+    // the transform's. Both sides of the transfer therefore fail with DIFFERENT errors, and the one
+    // that wins the race would otherwise decide the status code — 413 or 500 at random. This is what
+    // pins the route's `throw overCap ?? err`; with `throw err` this test sees a 500.
+    const objects = ctx.blob.__objects as Map<string, Buffer>;
+    ctx.blob = {
+      async putStream(key: string, body: AsyncIterable<Buffer | string>) {
+        const chunks: Buffer[] = [];
+        try {
+          for await (const chunk of body) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+        } catch {
+          throw new Error('simulated S3 multipart upload aborted');
+        }
+        objects.set(key, Buffer.concat(chunks));
+      },
+      async delete(key: string) { objects.delete(key); },
+      __objects: objects,
+    };
+    const app = Fastify({ logger: false });
+    registerErrorHandler(app as any);
+    app.addHook('onRequest', async (req: any) => { req.user = { id: 'u1', capabilities: ['facilities.view', 'facilities.manage'] }; });
+    registerFacilitiesRoutes(app as any, ctx);
+    await app.ready();
+
+    const res = await app.inject({
+      method: 'POST', url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv' }),
+      headers: UPLOAD_HEADERS, payload: Buffer.from(facilityCsv(['100,Alpha,,,,,,,,,,,,,,']), 'utf8'),
+    });
+
+    expect(res.statusCode).toBe(413);
+    expect(res.json()).toMatchObject({ code: 'SY0413' });
+    expect(res.json().error).toContain('2-byte upload limit');
+    expect(res.json().correlationId).toBeTruthy();
+    // Nothing queued, and the partial object is discarded — an over-cap upload must not leave the
+    // register holding `active_key` or an orphan in the bucket.
+    expect(await db.selectFrom('facility_import_runs').selectAll().execute()).toHaveLength(0);
+    expect(ctx.blob.__objects.size).toBe(0);
+
+    // ⛔ And the ceiling is a CEILING, not a blanket refusal: raise it and the same file goes
+    // through. Without this, `return reply.code(413)` unconditionally would pass the assertions above.
+    ctx.cfg.FACILITY_IMPORT_MAX_UPLOAD_BYTES = 1_073_741_824;
+    const after = await app.inject({
+      method: 'POST', url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv' }),
+      headers: UPLOAD_HEADERS, payload: Buffer.from(facilityCsv(['100,Alpha,,,,,,,,,,,,,,']), 'utf8'),
+    });
+    expect(after.statusCode).toBe(202);
+  }, 8000);
+
+  // --- A2b Task 3 review fix (M4): the gate's `!superseded` re-read branch ----------------------
+  //
+  // The store's CAS is pinned in packages/db, but the ROUTE-level consequence of losing it is new
+  // behaviour on the shared `takeOverRegister` path: "the CAS lost AND the holder has since moved
+  // TERMINAL (so it released `active_key` on its way) ⇒ the register really is free, proceed" — as
+  // opposed to the unconditional 409 this branch used to answer.
+  //
+  // ⚠ The race is forced, not waited for. `ctx.internalDb` is swapped for a proxy that, immediately
+  // after the gate's own `active_key` lookup resolves, applies exactly what a terminal writer applies
+  // (status → `applied`, `active_key` → NULL). The route's `importRuns` store was built from the RAW
+  // db at registration, so only the gate's SELECT is intercepted — `supersede`'s CAS then runs
+  // against the real, already-moved row and matches nothing, which is the branch under test.
+  it('⛔ proceeds when the supersede CAS loses to a holder that moved TERMINAL — the register is free', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const csv = facilityCsv(['100,Alpha,,,,,,,,,,,,,,']);
+
+    const first = await app.inject({
+      method: 'POST', url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv' }),
+      headers: UPLOAD_HEADERS, payload: Buffer.from(csv, 'utf8'),
+    });
+    expect(first.statusCode).toBe(202);
+    const firstRunId = first.json().runId;
+
+    // A SUPERSEDABLE holder — otherwise the gate refuses before it ever reaches the CAS.
+    await db.updateTable('facility_import_runs').set({ status: 'awaiting_confirmation' })
+      .where('id', '=', firstRunId).execute();
+    expect((await db.selectFrom('facility_import_runs').select(['status', 'active_key'])
+      .where('id', '=', firstRunId).executeTakeFirstOrThrow()))
+      .toEqual({ status: 'awaiting_confirmation', active_key: SYSTEM });
+
+    const rawDb = db;
+    let raced = false;
+    const wrapBuilder = (qb: any): any => new Proxy(qb, {
+      get(target, prop) {
+        const value = target[prop];
+        if (typeof value !== 'function') return value;
+        if (prop === 'executeTakeFirst') {
+          return async (...args: any[]) => {
+            const out = await value.apply(target, args);
+            if (!raced) {
+              raced = true;
+              // Precisely what `finishApply`/`finish`/`supersede`/`failStaleRunning` all do on their
+              // way out: a terminal status AND the key released. Nothing holds the register now.
+              await rawDb.updateTable('facility_import_runs')
+                .set({ status: 'applied', active_key: null } as never)
+                .where('id', '=', firstRunId).execute();
+            }
+            return out;
+          };
+        }
+        return (...args: any[]) => {
+          const next = value.apply(target, args);
+          return next && typeof next === 'object' && typeof next.executeTakeFirst === 'function' ? wrapBuilder(next) : next;
+        };
+      },
+    });
+    ctx.internalDb = new Proxy(rawDb, {
+      get(target, prop, receiver) {
+        if (prop !== 'selectFrom') {
+          const v = Reflect.get(target, prop, receiver);
+          return typeof v === 'function' ? v.bind(target) : v;
+        }
+        return (table: string) => {
+          const qb = target.selectFrom(table);
+          return table === 'facility_import_runs' && !raced ? wrapBuilder(qb) : qb;
+        };
+      },
+    });
+
+    const second = await app.inject({
+      method: 'POST', url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv' }),
+      headers: UPLOAD_HEADERS, payload: Buffer.from(csv, 'utf8'),
+    });
+
+    // The setup fired — without this the test could pass for the ordinary "register was free" reason.
+    expect(raced).toBe(true);
+    // ⛔ 202, not 409: the holder released the key on its way terminal, so refusing would lock an
+    // operator out of a register nobody holds.
+    expect(second.statusCode).toBe(202);
+    expect(second.json().runId).not.toBe(firstRunId);
+
+    // ⛔ And the CAS genuinely LOST: the decided run was NOT re-finished as 'failed' and carries no
+    // supersede reason. If `supersede` had won, `error` would read 'superseded by a newer upload'.
+    expect((await db.selectFrom('facility_import_runs').select(['status', 'error', 'active_key'])
+      .where('id', '=', firstRunId).executeTakeFirstOrThrow()))
+      .toEqual({ status: 'applied', error: null, active_key: null });
+    const secondRun = (await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${second.json().runId}` })).json();
+    expect(secondRun.status).toBe('queued');
+    expect(secondRun.nationalSystem).toBe(SYSTEM);
+  });
+});
+
+// --- A2b Task 5: POST /api/facilities/import/runs/:id/confirm ----------------------------------
+//
+// The operator's decision, and the ONLY writer of `APPLY_PHASE.from` — the state the worker's apply
+// phase claims from. Everything here is about what the REQUEST leaves on the run row, since the
+// worker that reads it lives in @openldr/bootstrap (its own suite covers the apply itself).
+
+/** Put an uploaded run where the worker's validate phase would have left it: parked for the
+ *  operator, with a watermark and a summary. A DIRECT UPDATE, mirroring `completeValidation` —
+ *  apps/server does not run the worker, and a route test that did would be testing the worker. */
+async function parkForConfirmation(db: any, runId: string, summary: Record<string, unknown>) {
+  await db.updateTable('facility_import_runs')
+    .set({ status: 'awaiting_confirmation', previewed_at: sql`now()`, summary: JSON.stringify(summary) })
+    .where('id', '=', runId).execute();
+  // Asserted, so a setup that stopped taking cannot leave a test green for the uninteresting reason
+  // that the run was never parked at all.
+  expect(await db.selectFrom('facility_import_runs').select(['status', 'active_key'])
+    .where('id', '=', runId).executeTakeFirstOrThrow())
+    .toEqual({ status: 'awaiting_confirmation', active_key: SYSTEM });
+}
+
+/** Upload a register and park its run — the state an operator confirms from. */
+async function uploadAndPark(app: any, db: any, summary: Record<string, unknown> = { blocked: false, blockedReason: null }) {
+  const res = await app.inject({
+    method: 'POST', url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv' }),
+    headers: UPLOAD_HEADERS, payload: Buffer.from(facilityCsv(['100,Alpha,,,,,,,,,,,,,,']), 'utf8'),
+  });
+  expect(res.statusCode).toBe(202);
+  const runId = res.json().runId as string;
+  await parkForConfirmation(db, runId, summary);
+  return runId;
+}
+
+const confirmUrl = (runId: string) => `/api/facilities/import/runs/${runId}/confirm`;
+
+describe('POST /api/facilities/import/runs/:id/confirm', () => {
+  it('gated on facilities.manage — a facilities.view-only user gets 403 and the run is untouched', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const manageApp = await appWith(ctx);
+    const runId = await uploadAndPark(manageApp, db);
+
+    const viewApp = await appWith(ctx, ['facilities.view']);
+    const res = await viewApp.inject({ method: 'POST', url: confirmUrl(runId), payload: {} });
+
+    expect(res.statusCode).toBe(403);
+    expect((await db.selectFrom('facility_import_runs').select('status')
+      .where('id', '=', runId).executeTakeFirstOrThrow()).status).toBe('awaiting_confirmation');
+  });
+
+  it('confirms a parked run onto the apply queue, merging the operator\'s choices into its options', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const runId = await uploadAndPark(app, db);
+
+    const res = await app.inject({
+      method: 'POST', url: confirmUrl(runId),
+      payload: {
+        onDeleted: 'report', onAbsent: 'retire', onConflict: 'overwrite',
+        allowUnknownColumns: true, allowMalformedRows: true, allowInvalidCoordinates: true,
+      },
+    });
+
+    expect(res.statusCode).toBe(202);
+    expect(res.json()).toEqual({ runId, status: APPLY_PHASE.from });
+
+    const run = (await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${runId}` })).json();
+    // ⛔ `APPLY_PHASE.from`, the state the worker claims — NOT `awaiting_confirmation`, which no
+    // worker claims. This transition IS the authorisation: nothing else writes this state.
+    expect(run.status).toBe(APPLY_PHASE.from);
+    // ⛔ The upload's own `{ nationalSystem }` survives the merge — it is the register identity
+    // `active_key` locks on, and losing it would import under a register this run does not own.
+    expect(run.options).toEqual({
+      nationalSystem: SYSTEM,
+      onDeleted: 'report', onAbsent: 'retire', onConflict: 'overwrite',
+      allowUnknownColumns: true, allowMalformedRows: true, allowInvalidCoordinates: true,
+    });
+    // The validate's watermark survives, and the register is still held: the apply has not run yet.
+    expect(run.previewedAt).toEqual(expect.any(String));
+    expect((await db.selectFrom('facility_import_runs').select('active_key')
+      .where('id', '=', runId).executeTakeFirstOrThrow()).active_key).toBe(SYSTEM);
+  });
+
+  it('records only the choices the operator actually made — an omitted option is not invented', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const runId = await uploadAndPark(app, db);
+
+    const res = await app.inject({ method: 'POST', url: confirmUrl(runId), payload: { onConflict: 'skip' } });
+
+    expect(res.statusCode).toBe(202);
+    const run = (await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${runId}` })).json();
+    // ⛔ No `allowMalformedRows: false` etc. A durable record must not carry a decision nobody made —
+    // `importFacilities` already defaults every one of these, and `onConflict` defaults to `'skip'`.
+    //
+    // ⚠ What actually holds this is `ConfirmSchema` keeping every key `.optional()` and never
+    // `.default(...)`: MEASURED, zod omits an unsent optional key from its output entirely rather
+    // than setting it `undefined` (a filter in the route on `!== undefined` was written on the
+    // opposite belief and proved to be dead code — mutating it away changed nothing). Mutating one
+    // key to `.optional().default(false)` DOES fail this test, which is the regression it guards.
+    expect(run.options).toEqual({ nationalSystem: SYSTEM, onConflict: 'skip' });
+  });
+
+  // ── Whole-branch review I2: an override that changes how the file PARSES ──────────────────────
+  //
+  // `allowUnknownColumns`/`allowInvalidCoordinates` reach `parseFacilityCsv` directly, so they decide
+  // which rows become records. The summary the operator is confirming was computed by a validate that
+  // ran WITHOUT them, and nothing between this route and the apply re-validates or re-shows anything
+  // — so accepting one here authorises a write over a record set nobody reviewed.
+
+  it('⛔ refuses a confirm carrying allowUnknownColumns when the validated summary was computed without it', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    // The validate FOUND an unrecognised column — so the override has something to act on, and
+    // ticking it now would make the apply parse a file that produced no records at all.
+    const runId = await uploadAndPark(app, db, {
+      blocked: false, blockedReason: null, unknownColumns: ['mystery_col'], invalid: [],
+      parsed: 0, absent: null,
+    });
+
+    const res = await app.inject({
+      method: 'POST', url: confirmUrl(runId), payload: { allowUnknownColumns: true },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toMatch(/allowUnknownColumns/);
+    // ⛔ And NOTHING was written: a refused confirm must leave the run confirmable, not consume it.
+    const row = await db.selectFrom('facility_import_runs').select(['status', 'options', 'active_key'])
+      .where('id', '=', runId).executeTakeFirstOrThrow();
+    expect(row.status).toBe('awaiting_confirmation');
+    expect(row.options).toEqual({ nationalSystem: SYSTEM });
+    expect(row.active_key).toBe(SYSTEM);
+  });
+
+  it('⛔ THE RETIREMENT CASE: allowUnknownColumns + onAbsent:retire cannot be authorised against a summary that measured absent: null', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    // Exactly what a `completeRelease=true` upload of a file with one unrecognised column validates
+    // to: no rows parsed, absence NOT EVALUATED — and it still PARKS, because unknown columns set no
+    // `blockedReason`, so the blocked gate lets it through.
+    const runId = await uploadAndPark(app, db, {
+      blocked: false, blockedReason: null, unknownColumns: ['mystery_col'], invalid: [],
+      parsed: 0, absent: null,
+    });
+
+    const res = await app.inject({
+      method: 'POST', url: confirmUrl(runId),
+      payload: { allowUnknownColumns: true, onAbsent: 'retire' },
+    });
+
+    expect(res.statusCode).toBe(409);
+    // The apply never reaches the queue, so the retirement it would have computed never happens.
+    expect((await db.selectFrom('facility_import_runs').select('status')
+      .where('id', '=', runId).executeTakeFirstOrThrow()).status).toBe('awaiting_confirmation');
+  });
+
+  it('⛔ …and the same refusal for allowInvalidCoordinates when the file had invalid rows', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const runId = await uploadAndPark(app, db, {
+      blocked: false, blockedReason: null, unknownColumns: [],
+      invalid: [{ line: 2, message: 'latitude out of range' }],
+    });
+
+    const res = await app.inject({
+      method: 'POST', url: confirmUrl(runId), payload: { allowInvalidCoordinates: true },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toMatch(/allowInvalidCoordinates/);
+  });
+
+  // ── …and the half of that gate the FORMAT decides ────────────────────────────────────────────
+  //
+  // ⛔ `allowUnknownColumns` is a documented NO-OP for JSONL — `parseFacilityRelease` never reads
+  // `opts.allowUnknownColumns` at all (packages/terminology/src/facility-release.ts), because a
+  // self-describing line cannot shift another field the way an unrecognised CSV header can — while
+  // it still REPORTS `unknownColumns`. A blind gate therefore refused a JSONL confirm over a flag
+  // that provably cannot change the parse, and the 409 then told the operator to re-upload with it.
+  //
+  // The next two tests are a PAIR over the SAME summary, which is what makes either of them mean
+  // anything: change the gate's `run.sourceFormat` term and one of them fails.
+
+  /** Upload a JSONL release carrying an unrecognised field, and park it with `summary`. */
+  async function uploadJsonlAndPark(app: any, db: any, summary: Record<string, unknown>) {
+    const res = await app.inject({
+      method: 'POST', url: uploadUrl({ nationalSystem: SYSTEM, format: 'jsonl' }),
+      headers: UPLOAD_HEADERS,
+      payload: Buffer.from(jsonl([rowLine('100', 'Alpha', { ward_code: 'W1' })]), 'utf8'),
+    });
+    expect(res.statusCode).toBe(202);
+    const runId = res.json().runId as string;
+    // The run really did record the format the gate reads — otherwise this test would pass for the
+    // uninteresting reason that the upload stored 'csv' and the summary happened not to be in play.
+    expect((await db.selectFrom('facility_import_runs').select('source_format')
+      .where('id', '=', runId).executeTakeFirstOrThrow()).source_format).toBe('jsonl');
+    await parkForConfirmation(db, runId, summary);
+    return runId;
+  }
+
+  /** The one summary both halves of the pair are confirmed against. */
+  const UNKNOWN_COLUMN_SUMMARY = {
+    blocked: false, blockedReason: null, unknownColumns: ['ward_code'], invalid: [], parsed: 1,
+  };
+
+  it('⛔ a JSONL run IS confirmable with allowUnknownColumns — that flag cannot change a JSONL parse', async () => {
+    const db = await makeMigratedDb();
+    const app = await appWith(fakeImportCtx(db));
+    const runId = await uploadJsonlAndPark(app, db, UNKNOWN_COLUMN_SUMMARY);
+
+    const res = await app.inject({
+      method: 'POST', url: confirmUrl(runId), payload: { allowUnknownColumns: true },
+    });
+
+    expect(res.statusCode).toBe(202);
+    expect((await db.selectFrom('facility_import_runs').select('status')
+      .where('id', '=', runId).executeTakeFirstOrThrow()).status).toBe(APPLY_PHASE.from);
+  });
+
+  it('⛔ …while the CSV twin of that EXACT summary is still refused — the format is the only difference', async () => {
+    const db = await makeMigratedDb();
+    const app = await appWith(fakeImportCtx(db));
+    const runId = await uploadAndPark(app, db, UNKNOWN_COLUMN_SUMMARY);
+
+    const res = await app.inject({
+      method: 'POST', url: confirmUrl(runId), payload: { allowUnknownColumns: true },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toMatch(/allowUnknownColumns/);
+    expect((await db.selectFrom('facility_import_runs').select('status')
+      .where('id', '=', runId).executeTakeFirstOrThrow()).status).toBe('awaiting_confirmation');
+  });
+
+  it('⛔ and the exemption is `allowUnknownColumns` ALONE: a JSONL run still refuses allowInvalidCoordinates', async () => {
+    const db = await makeMigratedDb();
+    const app = await appWith(fakeImportCtx(db));
+    // Both parsers honour `allowInvalidCoordinates` — facility-release.ts's `row` branch drops a bad
+    // coordinate exactly as facility-csv.ts does — so it changes a JSONL parse and stays in play.
+    const runId = await uploadJsonlAndPark(app, db, {
+      blocked: false, blockedReason: null, unknownColumns: [],
+      invalid: [{ line: 1, field: 'latitude', raw: '999' }], parsed: 0,
+    });
+
+    const res = await app.inject({
+      method: 'POST', url: confirmUrl(runId), payload: { allowInvalidCoordinates: true },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toMatch(/allowInvalidCoordinates/);
+  });
+
+  it('accepts the same override when the UPLOAD already declared it — the validate ran with it', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    // The upload takes the parse-changing overrides, because it is the request that precedes the
+    // classification. This is the path the refusal above points the operator at.
+    const up = await app.inject({
+      method: 'POST',
+      url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv', allowUnknownColumns: 'true' }),
+      headers: UPLOAD_HEADERS, payload: Buffer.from(facilityCsv(['100,Alpha,,,,,,,,,,,,,,']), 'utf8'),
+    });
+    expect(up.statusCode).toBe(202);
+    const runId = up.json().runId as string;
+    // ⛔ Recorded on the RUN, which is what makes the worker's validate run with it — a flag the
+    // upload accepted and did not store would change nothing at all.
+    expect((await db.selectFrom('facility_import_runs').select('options')
+      .where('id', '=', runId).executeTakeFirstOrThrow()).options)
+      .toEqual({ nationalSystem: SYSTEM, allowUnknownColumns: true });
+
+    await parkForConfirmation(db, runId, {
+      blocked: false, blockedReason: null, unknownColumns: ['mystery_col'], invalid: [],
+    });
+    const res = await app.inject({
+      method: 'POST', url: confirmUrl(runId), payload: { allowUnknownColumns: true },
+    });
+
+    // The summary under review was computed WITH the override, so confirming with it changes nothing.
+    expect(res.statusCode).toBe(202);
+    expect((await db.selectFrom('facility_import_runs').select('status')
+      .where('id', '=', runId).executeTakeFirstOrThrow()).status).toBe(APPLY_PHASE.from);
+  });
+
+  it('⛔ …and refuses DROPPING an override the validate ran with — narrowing the parse is a change too', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const up = await app.inject({
+      method: 'POST',
+      url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv', allowUnknownColumns: 'true' }),
+      headers: UPLOAD_HEADERS, payload: Buffer.from(facilityCsv(['100,Alpha,,,,,,,,,,,,,,']), 'utf8'),
+    });
+    const runId = up.json().runId as string;
+    await parkForConfirmation(db, runId, {
+      blocked: false, blockedReason: null, unknownColumns: ['mystery_col'], invalid: [],
+    });
+
+    const res = await app.inject({
+      method: 'POST', url: confirmUrl(runId), payload: { allowUnknownColumns: false },
+    });
+
+    expect(res.statusCode).toBe(409);
+  });
+
+  it('rejects a non-boolean parse override on the upload rather than silently ignoring it', async () => {
+    const db = await makeMigratedDb();
+    const app = await appWith(fakeImportCtx(db));
+    const res = await app.inject({
+      method: 'POST',
+      url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv', allowInvalidCoordinates: 'yes' }),
+      headers: UPLOAD_HEADERS, payload: Buffer.from(facilityCsv(['100,Alpha,,,,,,,,,,,,,,']), 'utf8'),
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toMatch(/allowInvalidCoordinates/);
+    // Refused before the transfer, so no run was minted and the register is untouched.
+    expect(await db.selectFrom('facility_import_runs').select('id').execute()).toEqual([]);
+  });
+
+  it('audits the confirm with the operator who made it', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const runId = await uploadAndPark(app, db);
+    ctx.__audit.length = 0; // drop the upload's own entry
+
+    await app.inject({ method: 'POST', url: confirmUrl(runId), payload: { onConflict: 'overwrite' } });
+
+    expect(ctx.__audit).toHaveLength(1);
+    expect(ctx.__audit[0]).toMatchObject({
+      action: 'facility.import.confirmed',
+      entityType: 'facility',
+      entityId: SYSTEM,
+      // ⛔ The confirming actor, recorded HERE because it is the only place it is known: the run row
+      // carries `requested_by` (whoever uploaded) and no column for whoever confirmed, and the
+      // worker's own `facility.import` entry is written by the system, not by a request.
+      actorId: 'u1',
+      metadata: { runId, nationalSystem: SYSTEM, options: { nationalSystem: SYSTEM, onConflict: 'overwrite' } },
+    });
+  });
+
+  it('404s an unknown run id', async () => {
+    const db = await makeMigratedDb();
+    const app = await appWith(fakeImportCtx(db));
+    const res = await app.inject({ method: 'POST', url: confirmUrl('fir_does-not-exist'), payload: {} });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('⛔ 409s a run that is already applied — a confirm must not re-queue a decided run', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const runId = await uploadAndPark(app, db);
+    await db.updateTable('facility_import_runs')
+      .set({ status: 'applied', active_key: null }).where('id', '=', runId).execute();
+
+    const res = await app.inject({ method: 'POST', url: confirmUrl(runId), payload: {} });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toMatch(/no longer applicable/i);
+    expect((await db.selectFrom('facility_import_runs').select('status')
+      .where('id', '=', runId).executeTakeFirstOrThrow()).status).toBe('applied');
+  });
+
+  it('⛔ 409s a SECOND confirm of the same run — one confirm, one apply', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const runId = await uploadAndPark(app, db);
+
+    expect((await app.inject({ method: 'POST', url: confirmUrl(runId), payload: {} })).statusCode).toBe(202);
+    const second = await app.inject({ method: 'POST', url: confirmUrl(runId), payload: { onConflict: 'overwrite' } });
+
+    expect(second.statusCode).toBe(409);
+    // And the first confirm's options were not overwritten by the refused one.
+    const run = (await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${runId}` })).json();
+    expect(run.options).toEqual({ nationalSystem: SYSTEM });
+  });
+
+  it('⛔ 409s a BLOCKED file — a register with duplicate headers is never applied', async () => {
+    // ⛔ READ off the stored summary (`blocked`/`blockedReason`, what `importFacilities` reported at
+    // validate), never re-derived. Task 4 pins that a blocked file still PARKS — the operator is
+    // entitled to see the reconciliation result — so this route is what must refuse to apply it.
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const runId = await uploadAndPark(app, db, { blocked: true, blockedReason: 'duplicate-columns' });
+
+    const res = await app.inject({ method: 'POST', url: confirmUrl(runId), payload: { allowMalformedRows: true } });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toMatch(/duplicate-columns/);
+    // ⛔ Still parked, NOT queued for apply — and `allowMalformedRows` does not unblock this reason
+    // (there is no override for duplicate headers: which of two identically-named columns wins is a
+    // guess about master data).
+    expect((await db.selectFrom('facility_import_runs').select('status')
+      .where('id', '=', runId).executeTakeFirstOrThrow()).status).toBe('awaiting_confirmation');
+  });
+
+  it('⛔ 409s a quarantined-rows file until the operator supplies the override, then confirms it', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const runId = await uploadAndPark(app, db, { blocked: true, blockedReason: 'quarantined-rows' });
+
+    const refused = await app.inject({ method: 'POST', url: confirmUrl(runId), payload: {} });
+    expect(refused.statusCode).toBe(409);
+    expect(refused.json().error).toMatch(/allowMalformedRows/);
+
+    // ⛔ The other half, or `return reply.code(409)` unconditionally would pass the assertion above:
+    // this reason DOES have an override, and the confirm is what carries it.
+    const accepted = await app.inject({ method: 'POST', url: confirmUrl(runId), payload: { allowMalformedRows: true } });
+    expect(accepted.statusCode).toBe(202);
+    expect((await db.selectFrom('facility_import_runs').select('status')
+      .where('id', '=', runId).executeTakeFirstOrThrow()).status).toBe(APPLY_PHASE.from);
+  });
+
+  it('⛔ 409s a run with no stored file — an inline preview cannot be applied by the worker', async () => {
+    // `isApplicable` admits `previewed`, the state the INLINE A2a preview mints — and that run has no
+    // `blob_key` (it carried its CSV in the request body and never stored it). Confirming one would
+    // hand the worker a run it can only fail, while taking the run out of the state the inline apply
+    // route needs it in. A different question from the status guard, so it is asked separately.
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const csv = facilityCsv(['100,Alpha,,,,,,,,,,,,,,']);
+    const preview = await app.inject({ method: 'POST', url: '/api/facilities/import', payload: { csv, nationalSystem: SYSTEM } });
+    const runId = preview.json().runId;
+
+    const res = await app.inject({ method: 'POST', url: confirmUrl(runId), payload: {} });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toMatch(/no stored file/i);
+    // Untouched — the inline apply route can still finish this run with its `runId`.
+    const run = (await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${runId}` })).json();
+    expect(run.status).toBe('previewed');
+  });
+
+  it('rejects an unknown option value (400) before touching the run', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const runId = await uploadAndPark(app, db);
+
+    const res = await app.inject({ method: 'POST', url: confirmUrl(runId), payload: { onConflict: 'merge' } });
+
+    expect(res.statusCode).toBe(400);
+    expect((await db.selectFrom('facility_import_runs').select('status')
+      .where('id', '=', runId).executeTakeFirstOrThrow()).status).toBe('awaiting_confirmation');
+  });
+});
+
+const cancelUrl = (runId: string) => `/api/facilities/import/runs/${runId}/cancel`;
+
+// A2b Task 6. The cancel surface, and the whole of it is about NOT overstating what happened.
+describe('POST /api/facilities/import/runs/:id/cancel', () => {
+  it('gated on facilities.manage — a facilities.view-only user gets 403 and the run is untouched', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const manageApp = await appWith(ctx);
+    const runId = await uploadAndPark(manageApp, db);
+
+    const viewApp = await appWith(ctx, ['facilities.view']);
+    const res = await viewApp.inject({ method: 'POST', url: cancelUrl(runId), payload: {} });
+
+    expect(res.statusCode).toBe(403);
+    expect((await db.selectFrom('facility_import_runs').select('status')
+      .where('id', '=', runId).executeTakeFirstOrThrow()).status).toBe('awaiting_confirmation');
+  });
+
+  it('⛔ cancels a PARKED run outright and says so — it is not merely "requested"', async () => {
+    // The Task 4/5 carry-forward, closed. No worker claims `awaiting_confirmation`, so a flag set on
+    // it would never be read: the operator would be told their import had been asked to stop while
+    // the register stayed locked forever behind a run nothing would look at again.
+    const db = await makeMigratedDb();
+    const app = await appWith(fakeImportCtx(db));
+    const runId = await uploadAndPark(app, db);
+
+    const res = await app.inject({ method: 'POST', url: cancelUrl(runId), payload: {} });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ runId, outcome: 'cancelled' });
+    const stored = await db.selectFrom('facility_import_runs')
+      .select(['status', 'active_key', 'cancel_requested'])
+      .where('id', '=', runId).executeTakeFirstOrThrow();
+    expect(stored.status).toBe('cancelled');
+    // The register is genuinely free — this is what "cancelled" has to mean to be worth saying.
+    expect(stored.active_key).toBeNull();
+    // The flag path was not taken: nothing is left waiting to be observed by nobody.
+    expect(stored.cancel_requested).toBe(false);
+  });
+
+  it('⛔ only REQUESTS a cancel on a run a worker is mid-flight on, and does not claim it stopped', async () => {
+    // 202 and `requested`, deliberately NOT 200/`cancelled`. The flag cannot interrupt the running
+    // transaction, so the run may still finish `applied` — and reporting a cancellation that has not
+    // happened is the one thing this surface must never do.
+    const db = await makeMigratedDb();
+    const app = await appWith(fakeImportCtx(db));
+    const runId = await uploadAndPark(app, db);
+    await db.updateTable('facility_import_runs').set({ status: 'validating' } as never)
+      .where('id', '=', runId).execute();
+
+    const res = await app.inject({ method: 'POST', url: cancelUrl(runId), payload: {} });
+
+    expect(res.statusCode).toBe(202);
+    expect(res.json()).toEqual({ runId, outcome: 'requested' });
+    const stored = await db.selectFrom('facility_import_runs')
+      .select(['status', 'active_key', 'cancel_requested'])
+      .where('id', '=', runId).executeTakeFirstOrThrow();
+    // Untouched apart from the flag: the worker owns this run until it observes it.
+    expect(stored.status).toBe('validating');
+    expect(stored.active_key).toBe(SYSTEM);
+    expect(stored.cancel_requested).toBe(true);
+  });
+
+  it('409s a run that already finished, rather than reporting a false success', async () => {
+    const db = await makeMigratedDb();
+    const app = await appWith(fakeImportCtx(db));
+    const runId = await uploadAndPark(app, db);
+    await db.updateTable('facility_import_runs')
+      .set({ status: 'applied', active_key: null } as never)
+      .where('id', '=', runId).execute();
+
+    const res = await app.inject({ method: 'POST', url: cancelUrl(runId), payload: {} });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toMatch(/already/i);
+    // ⛔ An applied run STAYS applied. A cancel arriving after the write must never rewrite the
+    // record of a register that really was imported.
+    expect((await db.selectFrom('facility_import_runs').select('status')
+      .where('id', '=', runId).executeTakeFirstOrThrow()).status).toBe('applied');
+  });
+
+  it('404s an unknown run', async () => {
+    const db = await makeMigratedDb();
+    const app = await appWith(fakeImportCtx(db));
+
+    const res = await app.inject({ method: 'POST', url: cancelUrl('fir_nope'), payload: {} });
+
+    expect(res.statusCode).toBe(404);
   });
 });
 

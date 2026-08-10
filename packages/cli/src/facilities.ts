@@ -72,11 +72,13 @@ export interface FacilitiesImportOpts {
  * detection. A preview that is never followed by that later apply is the ordinary "the operator
  * changed their mind and closed the sheet" case, and `active_key` (migration 080, one non-terminal
  * row per `nationalSystem`) would otherwise be held by it forever — which is exactly why the route
- * carries its own "supersede a still-`previewed` row on the next preview" retry logic.
+ * carries its own "supersede an abandoned run on the next preview" retry logic. That gate asks
+ * `SUPERSEDABLE_RUN_STATES` (facility-import-run-states.ts), not a `previewed` literal: `queued` and
+ * `awaiting_confirmation` are abandoned in the same way and are taken over the same way.
  *
  * This CLI has no equivalent two-step shape: preview and apply are the SAME synchronous call (there
- * is no `--run-id` flag to thread a run across two separate invocations), so there is no gap for a
- * `previewed` row to usefully occupy, and reproducing the route's supersede dance here would only
+ * is no `--run-id` flag to thread a run across two separate invocations), so there is no gap for an
+ * abandoned run to usefully occupy, and reproducing the route's supersede dance here would only
  * exist to undo a lock this command need not take in the first place. So a DRY RUN mints nothing —
  * matching that the audit event below is *also* apply-only — and only `--apply` starts a run, which
  * is finished (`'applied'` or `'failed'`) before this function returns by EVERY exit path below,
@@ -87,8 +89,9 @@ export interface FacilitiesImportOpts {
  * ⛔ `startPreview`/`finishApply` (packages/db/facility-import-run-store.ts), not an `insertRunning`-
  * style pre-claimed row: unlike `terminology_ingest_jobs` (whose `insertRunning` exists so a live
  * SERVER WORKER polling for `'queued'` rows never claims one an inline CLI ingest already owns),
- * nothing ever asynchronously claims a `facility_import_runs` row — there is no worker, no `'queued'`
- * status, nothing but `'previewed'`/`'applied'`/`'failed'`. `startPreview`'s own pre-check plus the
+ * nothing ever asynchronously claims a `facility_import_runs` row on THIS path — the `'queued'`/
+ * `'applying'` states A2b names (facility-import-run-states.ts) belong to the background upload
+ * flow, and no worker exists yet to claim one. `startPreview`'s own pre-check plus the
  * unique `active_key` index already give this call exclusive claim to `opts.nationalSystem` for as
  * long as it runs, which is the entire concurrency guarantee an inline CLI import needs.
  */
@@ -128,8 +131,10 @@ export async function runFacilitiesImport(path: string, opts: FacilitiesImportOp
         });
       } catch (err) {
         // `startPreview` throws when `active_key` is already held for this `nationalSystem` — by a
-        // concurrent import, or by a browser `previewed` row nobody ever applied or cancelled. No
-        // run was minted for THIS call, so there is nothing here for this catch to release.
+        // concurrent import, or by a browser run left in any non-terminal state (`previewed`, or
+        // A2b's `queued`/`awaiting_confirmation`) that nobody ever applied or cancelled. Unlike the
+        // HTTP route, this command does NOT supersede that row; it refuses, per the docblock above.
+        // No run was minted for THIS call, so there is nothing here for this catch to release.
         const msg = redactError(err);
         if (opts.json) process.stdout.write(JSON.stringify({ error: msg }) + '\n');
         else process.stderr.write(`facilities import refused: ${msg}\n`);
@@ -429,8 +434,14 @@ export async function runFacilitiesImportRuns(opts: FacilitiesImportRunsOpts): P
 
 function formatImportRunsHuman(runs: FacilityImportRun[]): string {
   if (runs.length === 0) return 'no facility import runs recorded';
-  const rows = runs.map((r) => [r.id, r.nationalSystem, r.status, r.sourceFormat, r.createdAt, r.finishedAt ?? '—']);
-  const header = ['id', 'national_system', 'status', 'format', 'created_at', 'finished_at'];
+  // ⛔ A2b Task 9: `phase` is a COLUMN here, not a detail-view-only field. `status` alone cannot show
+  // a background run: `validating` and `applying` each cover a whole pass over the file, and the
+  // only thing that says where inside that pass the worker is, is the free-text phase it publishes
+  // through `updateProgress` (facility-import-run-store.ts). Without it this list answers "is
+  // something happening" and never "what". `'—'` for the inline A2a path, which no worker ever
+  // claims and which therefore never has one.
+  const rows = runs.map((r) => [r.id, r.nationalSystem, r.status, r.phase ?? '—', r.sourceFormat, r.createdAt, r.finishedAt ?? '—']);
+  const header = ['id', 'national_system', 'status', 'phase', 'format', 'created_at', 'finished_at'];
   const widths = header.map((h, i) => Math.max(h.length, ...rows.map((r) => r[i].length)));
   const line = (cells: string[]) => cells.map((c, i) => (i === cells.length - 1 ? c : c.padEnd(widths[i]))).join('  ');
   return [line(header), ...rows.map(line)].join('\n');
@@ -477,15 +488,184 @@ function formatImportRunHuman(run: FacilityImportRun): string {
     `id: ${run.id}`,
     `national system: ${run.nationalSystem}`,
     `status: ${run.status}`,
+    // A2b Task 9: the worker's own columns (`phase`/`processed`/`total`, written by
+    // `updateProgress`). This detail view is where a shell-only operator watches a background run,
+    // and until now every one of these was reachable ONLY under `--json`.
+    `phase: ${run.phase ?? '(none)'}`,
+    // ⚠ `total` is null until the worker KNOWS one, and that is printed as such rather than as a
+    // denominator of 0 or a bare percentage — the same "not evaluated is not zero" rule the
+    // import summary above follows for `conflict`/`absent`.
+    `progress: ${run.processed} row(s) processed${run.total == null ? ' (total not yet known)' : ` of ${run.total}`}`,
     `format: ${run.sourceFormat}`,
     `release version: ${run.releaseVersion ?? '(none)'}`,
     `requested by: ${run.requestedBy ?? '(unknown)'}`,
     `created: ${run.createdAt}`,
+    // Distinct from `created`: a queued run is created long before any worker claims it, and the
+    // gap between the two is the only way to see a job waiting for a worker that never came.
+    `started: ${run.startedAt ?? '(not started)'}`,
     `finished: ${run.finishedAt ?? '(not finished)'}`,
   ];
+  // ⛔ Printed only when the flag is actually set, and phrased as a REQUEST rather than a stop. The
+  // flag is observed at phase boundaries and cannot interrupt a running transaction, so a run
+  // carrying it may still finish `applied` — the same distinction `runFacilitiesImportRunCancel`
+  // below exists to keep. A permanently-present "cancel requested: no" line would also bury it.
+  if (run.cancelRequested) {
+    lines.push('cancel requested: yes — a worker observes this at its next phase boundary; a write already in progress will finish');
+  }
   if (run.error) lines.push(`error: ${run.error}`);
   if (run.summary) lines.push(`summary: ${JSON.stringify(run.summary)}`);
   return lines.join('\n');
+}
+
+// ── A2b Task 9: `openldr facilities import-run-cancel <id>` ───────────────────────────────────
+
+/** The four answers `requestCancel` can give, DERIVED from the store rather than re-spelled — a
+ *  fifth outcome added there becomes a `tsc` error in `CANCEL_OUTCOMES` below instead of a silent
+ *  fall-through to whatever branch happens to be last. */
+type CancelOutcome = Awaited<ReturnType<FacilityImportRunStore['requestCancel']>>;
+
+/**
+ * What this command reports, and with what exit code, for each of the store's four answers.
+ *
+ * ⛔ NO TWO ENTRIES MAY SHARE A MESSAGE — nor a `--json` payload — and that is the entire reason
+ * this command exists rather than a `--cancel` flag that prints "ok". `requestCancel` answers a
+ * genuinely DIFFERENT question depending on whether anything is listening (see its doc comment in
+ * facility-import-run-store.ts):
+ *
+ *   `cancelled` — the run was in a state NO worker claims, so the cancel was CARRIED OUT by the
+ *     store itself: the run is terminal and its register is free. Saying "cancelled" is a fact.
+ *   `requested` — a worker holds the run (`validating`/`applying`). The flag is read at phase
+ *     boundaries and CANNOT interrupt the running transaction, so an apply already inside its write
+ *     will finish and the run will end `applied`. Reporting this as "cancelled" would tell an
+ *     operator a national register had not been rewritten when it had.
+ *
+ * ⛔ The EXIT CODE does not carry that distinction — the message and the `--json` `outcome` do.
+ * These codes mirror the HTTP route's (apps/server/src/facilities-routes.ts) status split exactly,
+ * which is what "CLI parity" means here: 200 `cancelled` and 202 `requested` are both 2xx
+ * SUCCESSES, so both exit 0; 404 and 409 are both refusals, so both exit 1. A non-zero `requested`
+ * broke that parity in the direction that hurts most, because `requested` is the COMMON case — you
+ * cancel things that are running — so `openldr facilities import-run-cancel $ID || echo failed`
+ * reported failure on the normal accepted path, `set -e` scripts aborted on it, and 2 additionally
+ * collides with the widespread GNU/bash "usage error" convention.
+ *
+ * ⚠ 0/1 is also the ONLY exit vocabulary this CLI speaks, measured across packages/cli/src excluding
+ * tests: 193 literal numeric returns, 101 `return 0;` and 92 `return 1;`, with no other numeric
+ * literal returned or assigned to `process.exitCode` anywhere. And `1` there is NOT exclusively
+ * "an unexpected failure from a catch" — of the 14 `return 1;` sites in THIS file, 9 report an
+ * unexpected error out of a catch and 5 report a NAMED business refusal: `runFacilitiesImport`'s
+ * unknown-columns and `blocked` branches, its `startPreview` branch (lexically a catch, but it
+ * translates one known condition — the register is already claimed — into `facilities import
+ * refused: …`), `runFacilitiesImportRun`'s missing-run branch, and `runFacilitiesJobs`'s `--retry`
+ * refusal. `not-found` answering 1 below is what makes this command AGREE with
+ * `runFacilitiesImportRun`, which returns 1 for the identical `no such facility import run: <id>`
+ * string, and with `facilities jobs --retry`'s `no such job`.
+ */
+const CANCEL_OUTCOMES: Record<CancelOutcome, {
+  exitCode: number;
+  /** Did the cancel reach a run at all? Drives BOTH the audit and stdout-vs-stderr — the two false
+   *  entries are refusals, and a refusal has nothing to record and does not belong on stdout. */
+  live: boolean;
+  message: (id: string) => string;
+}> = {
+  cancelled: {
+    exitCode: 0,
+    live: true,
+    message: (id) =>
+      `import run ${id} cancelled: no worker was holding it, so the cancellation was carried out — the run is finished and its national register is free.`,
+  },
+  requested: {
+    // ⛔ 0, matching the route's 202 — the request WAS accepted, and that is what an exit code
+    // reports. The honesty property does not live here: the run may still finish `applied`, and the
+    // message below plus the `--json` `outcome` are what say so. A script that needs to know whether
+    // the run actually stopped reads `outcome`, or follows up with `import-run <id>`; it must never
+    // infer it from a non-zero exit, which in this CLI means "the command did not do its job".
+    exitCode: 0,
+    live: true,
+    message: (id) =>
+      `cancellation requested for import run ${id}: a worker is holding it, so the request is only observed at the next phase boundary — a write already in progress will finish, and the run may still end applied. Check with: openldr facilities import-run ${id}`,
+  },
+  'not-found': {
+    // The route's 404. Same code AND same string as `runFacilitiesImportRun`'s own missing-run
+    // branch above — one command group must not answer one condition two different ways.
+    exitCode: 1,
+    live: false,
+    message: (id) => `no such facility import run: ${id}`,
+  },
+  'already-terminal': {
+    // The route's 409. Distinguished from `not-found` by its message and its `--json` error, not by
+    // its code — same as the route, where both are 4xx refusals.
+    exitCode: 1,
+    live: false,
+    message: (id) => `import run ${id} has already finished and cannot be cancelled`,
+  },
+};
+
+export interface FacilitiesImportRunCancelOpts {
+  json: boolean;
+}
+
+/**
+ * `openldr facilities import-run-cancel <id> [--json]`
+ *
+ * CLI parity for `POST /api/facilities/import/runs/:id/cancel`. See `CANCEL_OUTCOMES` above for the
+ * four answers and why none of them may be folded into another.
+ *
+ * ⛔ SPELLED AS A SIBLING of `import-run <id>`, not as an `import-run cancel <id>` subcommand, and
+ * that is a MEASURED constraint rather than a preference: commander parses a parent command's
+ * declared options before dispatching to a subcommand, and `import-run` declares `--json`, so under
+ * the nested spelling `facilities import-run cancel <id> --json` has its `--json` swallowed by the
+ * parent and this function is handed `json: false`. The nested form works only with
+ * `.enablePositionalOptions()` applied to the whole program, which would change how every other
+ * `openldr` command group parses its options — far outside what a cancel command should cost.
+ * `facilities-import-cli-parsing.test.ts` pins the working spelling.
+ *
+ * ⛔ This does NOT touch `facilities import`, which stays synchronous and direct: it is automation,
+ * and routing it through the worker queue would cost it the exit code that is the whole point of
+ * running an import from a script.
+ */
+export async function runFacilitiesImportRunCancel(
+  id: string, opts: FacilitiesImportRunCancelOpts,
+): Promise<number> {
+  const ctx = await createAppContext(loadConfig());
+  try {
+    const importRuns = createFacilityImportRunStore(ctx.internalDb);
+    const outcome = await importRuns.requestCancel(id);
+    const reported = CANCEL_OUTCOMES[outcome];
+
+    // Audited on both LIVE outcomes and recording which one, matching the route: an operator asking
+    // a national register's import to stop is a decision worth an actor even when the import goes on
+    // to finish anyway. The two refusals changed nothing, so there is nothing to record.
+    if (reported.live) {
+      await recordAuditEvent(ctx, cliActor(), {
+        action: 'facility.import.cancelled',
+        entityType: 'facility',
+        entityId: id,
+        before: null,
+        after: null,
+        metadata: { runId: id, outcome },
+      });
+    }
+
+    if (opts.json) {
+      // The outcome itself is on the wire verbatim, so a script never has to parse the English
+      // above to tell "stopped" from "asked to stop".
+      process.stdout.write(JSON.stringify(
+        reported.live ? { runId: id, outcome } : { error: reported.message(id) },
+      ) + '\n');
+    } else if (reported.live) {
+      process.stdout.write(reported.message(id) + '\n');
+    } else {
+      process.stderr.write(`facilities import-run-cancel refused: ${reported.message(id)}\n`);
+    }
+    return reported.exitCode;
+  } catch (err) {
+    const msg = redactError(err);
+    if (opts.json) process.stdout.write(JSON.stringify({ error: msg }) + '\n');
+    else process.stderr.write(`facilities import-run-cancel failed: ${msg}\n`);
+    return 1;
+  } finally {
+    await ctx.close();
+  }
 }
 
 // ── Task 8: observed-facility reconciliation CLI parity ────────────────────────────────────────

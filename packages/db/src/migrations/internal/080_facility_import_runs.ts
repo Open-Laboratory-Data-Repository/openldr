@@ -22,7 +22,7 @@ export async function up(db: Kysely<unknown>): Promise<void> {
     // Populated by A2b's upload. NULL for an A2a preview/apply, which holds the CSV in the request.
     .addColumn('blob_key', 'text')
     .addColumn('file_hash', 'text', (c) => c.notNull())
-    .addColumn('byte_size', 'integer', (c) => c.notNull()) // integer (not bigint): 2 GB ceiling is far above the 8 MB upload cap; round-trips as JS number
+    .addColumn('byte_size', 'integer', (c) => c.notNull()) // integer (not bigint): int4's ~2 GB ceiling is far above both upload caps (8 MiB inline, FACILITY_IMPORT_MAX_UPLOAD_BYTES = 64 MiB by default for the streamed path); round-trips as JS number
     // From a JSONL release header, or typed by the operator for a CSV. NULL when neither supplied one.
     .addColumn('release_version', 'text')
     .addColumn('release_published_at', 'timestamptz')

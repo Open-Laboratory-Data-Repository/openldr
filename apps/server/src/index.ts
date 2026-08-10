@@ -59,7 +59,12 @@ async function main(): Promise<void> {
     }
   }
 
-  const ctx = await createAppContext(cfg);
+  // ⛔ THE API SERVER IS THE PROCESS THAT DRAINS THE FACILITY-IMPORT QUEUE, and it is the only one:
+  // an `openldr` CLI command builds an `AppContext` too, and that worker's construction sweeps stale
+  // runs against the shared database (see `AppContextOptions.runFacilityImportWorker`). Uploading a
+  // register through `POST /api/facilities/import/upload` mints a `queued` run that nothing else
+  // will ever claim, so dropping this flag silently parks every background import forever.
+  const ctx = await createAppContext(cfg, { runFacilityImportWorker: true });
 
   // Ingest any crash markers left by a previous process-FATAL plugin crash into the audit
   // trail (action plugin.crash / system.crash). Best-effort: a drain failure must not block

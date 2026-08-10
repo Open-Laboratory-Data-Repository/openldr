@@ -120,6 +120,21 @@ export const ConfigSchema = z
     WORKFLOW_FILE_MAX_BYTES: z.coerce.number().int().positive().default(52_428_800),
     // Max accumulated output items a single loop node may emit on its done handle.
     WORKFLOW_LOOP_MAX_ITEMS: z.coerce.number().int().positive().default(100_000),
+    // Max byte size of a national facility register streamed to POST /api/facilities/import/upload.
+    // ⛔ This is the ONLY ceiling on that route: its body is read through a passthrough content-type
+    // parser, and Fastify's `bodyLimit` is not consulted for one (measured — see the comment on
+    // MAX_UPLOAD_BYTES in apps/server/src/facilities-routes.ts). Enforced by a running byte count
+    // inside the route's hashing transform, so the transfer is torn down at the moment the limit is
+    // crossed rather than after the whole file has arrived.
+    //
+    // ⛔ 64 MiB is set by what the PIPELINE can process, not by what the transfer could carry.
+    // `importFacilities` takes a string, so the background worker reads the whole file back onto the
+    // heap of the API process (`facility-import-worker.ts`'s `readBlob`) — accepting bytes that
+    // worker cannot hold would just move the failure later and make it worse. Measured against the
+    // real workload: the 13 000-row Tanzanian MFL release is ~3.1 MB as JSONL and ~1 MB as CSV, so
+    // this clears a national register by a factor of ~20. Raise it and the worker's ceiling together;
+    // above ~512 MiB no value can work, because that is Node's maximum string length.
+    FACILITY_IMPORT_MAX_UPLOAD_BYTES: z.coerce.number().int().positive().default(64 * 1024 * 1024),
     // (`workflow.listeners_enabled` — master switch for external listener triggers
     // (postgres LISTEN / IMAP poll) — is now a Settings → General feature flag.)
     // Master switch for the read-write-file node's host filesystem access (privilege risk → off by default).
