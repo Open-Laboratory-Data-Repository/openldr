@@ -36,7 +36,7 @@ import { createReportScheduler, type ReportScheduler } from './report-scheduler'
 import { createPluginScheduleApi, createPluginScheduleRunner, type PluginScheduleRunner } from './plugin-schedule';
 import { createFormArtifactInstaller, type FormArtifactInstaller } from './form-artifact-install';
 import { type PluginRuntime } from '@openldr/plugins';
-import { createConnectorStore, createPluginDataStore, type PluginDataStore, type ConnectorStore, createReportStore, type ReportStore, type ReportRecord, createCustomQueryStore, createSyncSiteStore, type SyncSiteStore, createWorkflowSecretStore, type WorkflowSecretStore, createSyncQuarantineStore, createSyncDivergenceStore, createSyncSiteCursorStore, type SyncSiteCursorStore, createSyncActivityStore, createTerminologyIngestJobStore, type TerminologyIngestJobStore, createFacilityJobStore, type FacilityJobStore } from '@openldr/db';
+import { createConnectorStore, createPluginDataStore, type PluginDataStore, type ConnectorStore, createReportStore, type ReportStore, type ReportRecord, createCustomQueryStore, createSyncSiteStore, type SyncSiteStore, createWorkflowSecretStore, type WorkflowSecretStore, createSyncQuarantineStore, createSyncDivergenceStore, createSyncSiteCursorStore, type SyncSiteCursorStore, createSyncActivityStore, createTerminologyIngestJobStore, type TerminologyIngestJobStore, createFacilityJobStore, type FacilityJobStore, createFacilityImportRunStore, type FacilityImportRunStore } from '@openldr/db';
 import type { ReportDesign } from '@openldr/report-designer/pure';
 import { createBatchStore } from '@openldr/ingest';
 import { createSyncPushRunner, createSyncPullRunner, createAmendmentPullRunner, createSyncTokenProvider, createTerminologyBulkSync, readSyncConfig, combineCycleResults, type PushBatch, type PushResponse, type SyncConfig } from '@openldr/sync';
@@ -60,6 +60,7 @@ export { createValidationStrictness, VALIDATION_STRICTNESS_KEY, type ValidationS
 import { createReportCategoriesService, type ReportCategoriesService } from './report-categories';
 import { captureObservedFacilityFromProjection, publishFacilityMap, projectRegistryRows } from './facility-reconcile';
 import { createFacilityJobWorker } from './facility-job-worker';
+import { createFacilityImportWorker } from './facility-import-worker';
 import { createFacilityJobRunners } from './facility-job-runners';
 import { createPluginBroker, type PluginBroker } from './plugin-broker';
 import { policyFromConfig } from './policy';
@@ -882,6 +883,23 @@ const reporting: ReportingApi = {
     logger,
   });
 
+  // A2b Task 4: the background facility import. The upload route streams a national register into
+  // blob storage and mints a `queued` run; this worker claims it, reads the file back, and validates
+  // it through the SAME `importFacilities` the inline route calls — `importDeps` is deliberately the
+  // shape that route builds (see `deps` in apps/server/src/facilities-routes.ts's import handler), so
+  // an uploaded register and a pasted one cannot disagree about what a file means.
+  //
+  // ⚠ The run store is built here rather than taken from `AppContext`: the routes and the CLI each
+  // construct their own over the same `internal.db` (a stateless wrapper), and the worker is the only
+  // consumer inside this package.
+  const facilityImportRuns: FacilityImportRunStore = createFacilityImportRunStore(internal.db);
+  const facilityImportWorker = createFacilityImportWorker({
+    runs: facilityImportRuns,
+    blob,
+    importDeps: { db: internal.db, capture: referenceCapture, admin: termAdmin, facilityJobs, logger },
+    logger,
+  });
+
   // FAC-P0-07: `facility_map` is keyed on the raw observed wire tuple
   // (source_system, performer_system, source_code) as of migration 015. That migration relabels the
   // rows it finds but CANNOT create the ones a namespace split needs — `facilityMapId` returns the
@@ -1521,6 +1539,7 @@ const reporting: ReportingApi = {
       await projectionWorker.stop();
       await terminologyIngestWorker.stop();
       await facilityJobWorker.stop();
+      await facilityImportWorker.stop();
       if (projectionListenConnected) await projectionListenClient.end().catch(() => undefined);
       await Promise.allSettled([eventing.close(), store.close(), internal.close()]);
     },
@@ -1607,6 +1626,8 @@ export * from './terminology-context';
 export * from './s3-config';
 export * from './terminology-ingest-shared';
 export * from './terminology-ingest-worker';
+export { createFacilityImportWorker } from './facility-import-worker';
+export type { FacilityImportWorker, FacilityImportWorkerDeps } from './facility-import-worker';
 export * from './seed';
 export * from './plugin-broker';
 export * from './crash-audit';

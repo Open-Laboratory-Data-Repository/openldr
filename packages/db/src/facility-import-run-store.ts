@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { type Kysely, sql } from 'kysely';
 import type { InternalSchema } from './schema/internal';
 import {
-  ALL_RUN_STATES, RUNNING_RUN_STATES, TERMINAL_RUN_STATES,
+  ALL_RUN_STATES, RUNNING_RUN_STATES, TERMINAL_RUN_STATES, isWorkerObserved,
   type FacilityImportRunStatus,
 } from './facility-import-run-states';
 
@@ -59,8 +59,30 @@ export interface FacilityImportRunStore {
   /** Guarded UPDATE claim, exactly like facility-job-store's: a second claimer updates 0 rows. */
   claimNext(status: 'queued' | 'awaiting_confirmation', to: 'validating' | 'applying'): Promise<FacilityImportRun | null>;
   updateProgress(id: string, p: { phase: string; processed?: number | null; total?: number | null }): Promise<void>;
-  /** Sets cancel_requested. Does NOT stop anything by itself — the worker observes it. */
-  requestCancel(id: string): Promise<'requested' | 'not-found' | 'already-terminal'>;
+  /** The validate phase's commit point: stamp the watermark and the summary AND park the run for the
+   *  operator, in ONE guarded UPDATE.
+   *
+   *  ⛔ NOT `completePreview` + a separate status write. `completePreview` is the INLINE path's, where
+   *  the run must STAY `previewed`; and splitting the two here would leave a window in which a run is
+   *  stamped but unparked. `false` means the run was no longer `validating` — another process's boot
+   *  sweep (`failStaleRunning`) had already failed it and RELEASED its `active_key`, and moving it to
+   *  `awaiting_confirmation` anyway would leave a confirmable run owning no register, which the apply
+   *  phase would then claim while a second upload holds the same one.
+   *
+   *  ⚠ `active_key` is deliberately KEPT: the operator has not decided yet, and until they do this
+   *  run still owns the register. It is released by the terminal write that ends the run. */
+  completeValidation(id: string, summary: unknown): Promise<boolean>;
+  /** Ask for a run to stop.
+   *
+   *  `'requested'` — the flag is set and a worker will observe it at its next phase boundary. This is
+   *  the only honest answer for a run a worker holds: the flag cannot interrupt a running
+   *  transaction, so the run may still finish `applied`.
+   *
+   *  `'cancelled'` — the run was in a state NO worker will ever claim (see `isWorkerObserved`), so
+   *  the cancel was CARRIED OUT here instead of recorded: the run is terminal and its register is
+   *  free. Reporting `'requested'` for that case (as this used to) promised an observer that does not
+   *  exist and left the run holding `active_key` with an inert flag. */
+  requestCancel(id: string): Promise<'requested' | 'cancelled' | 'not-found' | 'already-terminal'>;
   finish(id: string, status: 'applied' | 'failed' | 'cancelled', opts: { summary?: unknown; error?: string | null }): Promise<void>;
   /** Fail a run ONLY while it is still in the status the caller observed, releasing its `active_key`.
    *  `false` means the run moved on between the caller's read and this write — the caller must NOT
@@ -198,6 +220,26 @@ export function createFacilityImportRunStore(db: Kysely<InternalSchema>): Facili
       return toRun(await byId(id) as never);
     },
 
+    async completeValidation(id, summary) {
+      // ⛔ `now()` — the DATABASE clock, for the same reason `completePreview` above documents: this
+      // watermark is compared against `facility_registry.updated_at`, which `now()` also writes.
+      //
+      // ⛔ COMPARE-AND-SWAP on `validating`, not an unconditional write on the id. The worker owns
+      // the run it claimed, but another process's boot sweep (`failStaleRunning`) can fail it — and
+      // release its `active_key` — while this one is mid-validate. Parking it anyway would produce a
+      // confirmable run that owns no register.
+      const res = await db.updateTable('facility_import_runs')
+        .set({
+          status: 'awaiting_confirmation',
+          previewed_at: sql`now()` as never,
+          summary: JSON.stringify(summary) as never,
+        } as never)
+        .where('id', '=', id)
+        .where('status', '=', 'validating')
+        .executeTakeFirst();
+      return Number(res?.numUpdatedRows ?? 0) > 0;
+    },
+
     async finishApply(id, status, opts) {
       await finishRun(id, status, opts);
     },
@@ -281,7 +323,32 @@ export function createFacilityImportRunStore(db: Kysely<InternalSchema>): Facili
       const run = await db.selectFrom('facility_import_runs').select('status')
         .where('id', '=', id).executeTakeFirst();
       if (!run) return 'not-found';
-      if (TERMINAL_RUN_STATES.has(run.status as FacilityImportRunStatus)) return 'already-terminal';
+      const observed = run.status as FacilityImportRunStatus;
+      if (TERMINAL_RUN_STATES.has(observed)) return 'already-terminal';
+
+      // ⛔ A cancel nobody will ever READ is carried out here instead of merely recorded. See
+      // `isWorkerObserved`: `previewed` (the inline A2a path's state) is neither terminal nor one any
+      // `claimNext` names, so flagging it set a bit no worker would ever look at while the run went
+      // on holding `active_key` — and the operator was told 'requested', as though something live had
+      // been asked to stop.
+      //
+      // Its own guarded terminal write rather than `finishRun`, for the reason `supersede` below
+      // documents and is otherwise shaped exactly like: the status was read in an EARLIER statement,
+      // and an unconditional write keyed on the id alone could terminate a run that moved on in
+      // between. 0 rows means it did — fall through to the flag path, which re-answers from whatever
+      // the row says now (`already-terminal` if it finished; the flag if it somehow became live).
+      if (!isWorkerObserved(observed)) {
+        const cancelled = await db.updateTable('facility_import_runs')
+          .set({
+            status: 'cancelled', error: 'cancelled by the operator', finished_at: sql`now()` as never,
+            // Same rule as every other terminal writer here: a terminal run must not keep the key.
+            active_key: null,
+          } as never)
+          .where('id', '=', id)
+          .where('status', '=', observed)
+          .executeTakeFirst();
+        if (Number(cancelled?.numUpdatedRows ?? 0) > 0) return 'cancelled';
+      }
 
       // Guarded on the status too, not just the id: the run can finish between the read above and
       // this write, and flagging a finished run would leave `cancel_requested` set on a terminal row

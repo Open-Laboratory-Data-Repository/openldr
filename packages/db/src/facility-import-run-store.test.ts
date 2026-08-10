@@ -189,6 +189,77 @@ describe('createFacilityImportRunStore', () => {
     expect(await store.requestCancel(run.id)).toBe('already-terminal');
   });
 
+  it('⛔ requestCancel on a state NO worker will ever claim cancels outright, releasing the register', async () => {
+    // A2b Task 4's carry-forward. `previewed` is not a `claimNext` source state and is not RUNNING,
+    // so nothing will ever read `cancel_requested` on it: flagging and reporting 'requested' told the
+    // operator a live run had been asked to stop while the run sat there holding `active_key`, its
+    // flag inert forever. The cancel is therefore EFFECTED here instead of merely recorded.
+    const db = (await makeMigratedDb()) as Kysely<InternalSchema>;
+    const store = createFacilityImportRunStore(db);
+    const run = await store.startPreview(base); // the inline A2a path's state
+
+    expect(await store.requestCancel(run.id)).toBe('cancelled');
+
+    const stored = await row(db, run.id);
+    expect(stored.status).toBe('cancelled');
+    expect(stored.active_key).toBeNull();
+    // The register really is free — the next upload succeeds instead of "already in progress".
+    await expect(store.startUpload(upload)).resolves.toMatchObject({ status: 'queued' });
+  });
+
+  it('requestCancel only FLAGS a run a worker is mid-flight on — it cannot interrupt one', async () => {
+    // The other half of the branch above: `validating` IS worker-observed, so the flag is the whole
+    // mechanism and the run must keep both its status and its register until the worker acts.
+    const db = (await makeMigratedDb()) as Kysely<InternalSchema>;
+    const store = createFacilityImportRunStore(db);
+    const run = await store.startUpload(upload);
+    await store.claimNext('queued', 'validating');
+
+    expect(await store.requestCancel(run.id)).toBe('requested');
+
+    const stored = await row(db, run.id);
+    expect(stored.status).toBe('validating');
+    expect(stored.active_key).toBe('urn:tz:hfr');
+    expect((await store.get(run.id))?.cancelRequested).toBe(true);
+  });
+
+  it('completeValidation parks a validating run for the operator, with the watermark and summary', async () => {
+    const db = (await makeMigratedDb()) as Kysely<InternalSchema>;
+    const store = createFacilityImportRunStore(db);
+    const run = await store.startUpload(upload);
+    await store.claimNext('queued', 'validating');
+
+    expect(await store.completeValidation(run.id, { create: 2 })).toBe(true);
+
+    const after = await store.get(run.id);
+    expect(after?.status).toBe('awaiting_confirmation');
+    expect(after?.summary).toEqual({ create: 2 });
+    // The watermark an apply will compare `facility_registry.updated_at` against — stamped by the
+    // DATABASE clock in this same statement, exactly as `completePreview` does it.
+    expect(after?.previewedAt).not.toBeNull();
+    // Still holds the register: the operator has not decided yet, and a second upload landing now
+    // would race the confirm.
+    expect((await row(db, run.id)).active_key).toBe('urn:tz:hfr');
+  });
+
+  it('⛔ completeValidation does NOT resurrect a run that left `validating` under the worker', async () => {
+    // Another process's boot sweep (`failStaleRunning`) fails the run and RELEASES its key. An
+    // unguarded write here would move that run to `awaiting_confirmation` holding no `active_key` —
+    // a run the apply phase would happily claim while a second upload owns the same register.
+    const db = (await makeMigratedDb()) as Kysely<InternalSchema>;
+    const store = createFacilityImportRunStore(db);
+    const run = await store.startUpload(upload);
+    await store.claimNext('queued', 'validating');
+    await store.failStaleRunning('another process restarted');
+
+    expect(await store.completeValidation(run.id, { create: 2 })).toBe(false);
+
+    const stored = await row(db, run.id);
+    expect(stored.status).toBe('failed');
+    expect(stored.active_key).toBeNull();
+    expect((await store.get(run.id))?.summary).toBeNull();
+  });
+
   it("⛔ finish('cancelled') releases the register — a terminal run must not hold active_key", async () => {
     // `TERMINAL_RUN_STATES` states this as a rule and enforces none of it: `finishApply` covers only
     // applied/failed. A cancelled run that kept its key would lock the national system out of every

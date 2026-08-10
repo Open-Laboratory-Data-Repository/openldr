@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
-  TERMINAL_RUN_STATES, SUPERSEDABLE_RUN_STATES, RUNNING_RUN_STATES, isApplicable,
+  TERMINAL_RUN_STATES, SUPERSEDABLE_RUN_STATES, RUNNING_RUN_STATES, CLAIMABLE_RUN_STATES,
+  isApplicable, isWorkerObserved,
   ALL_RUN_STATES, type FacilityImportRunStatus,
 } from './facility-import-run-states';
 
@@ -40,6 +41,25 @@ describe('facility import run states', () => {
   it('refuses an apply from the two states the brief leaves unstated', () => {
     expect(isApplicable('validating')).toBe(false);
     expect(isApplicable('failed')).toBe(false);
+  });
+
+  // A2b Task 4: a cancel is only ever ACTED on by a worker, and a worker only ever touches a run it
+  // claims or is already running. Any other state's `cancel_requested` flag is inert forever, which
+  // is why `requestCancel` cancels those outright instead of flagging them.
+  it('marks exactly the states a worker claims or is already running as worker-observed', () => {
+    // Every claim source must be a state a worker can actually take FROM — `claimNext`'s two source
+    // states, and no other.
+    expect([...CLAIMABLE_RUN_STATES].sort()).toEqual(['awaiting_confirmation', 'queued']);
+    for (const s of CLAIMABLE_RUN_STATES) expect(isWorkerObserved(s)).toBe(true);
+    for (const s of RUNNING_RUN_STATES) expect(isWorkerObserved(s)).toBe(true);
+    // `previewed` is the inline A2a path's own state: no worker claims it, so a flag set on it would
+    // never be read. Terminal states are past caring.
+    expect(isWorkerObserved('previewed')).toBe(false);
+    for (const s of TERMINAL_RUN_STATES) expect(isWorkerObserved(s)).toBe(false);
+  });
+
+  it('never lets a CLAIMABLE state be one a worker is already running', () => {
+    for (const s of CLAIMABLE_RUN_STATES) expect(RUNNING_RUN_STATES.has(s)).toBe(false);
   });
 
   // A2a's Critical finding was a guard written against a narrow condition meeting a wider one

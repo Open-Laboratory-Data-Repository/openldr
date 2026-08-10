@@ -16,14 +16,16 @@
  *  (migration 080), so widening this union needs no migration. The database has never restricted
  *  the value; this module is the only thing that ever has.
  *
- *  ⚠ THREE of the four sets below partition the enum; `APPLICABLE_RUN_STATES` does NOT. TERMINAL /
- *  SUPERSEDABLE / RUNNING are exhaustive and mutually exclusive, and the exhaustiveness test
- *  (`facility-import-run-states.test.ts`) forces a state added to `ALL_RUN_STATES` into exactly one
- *  of them. `APPLICABLE_RUN_STATES` cuts ACROSS that partition — it is a separate positive list, and
- *  nothing forces a new state into it, so a state added later silently gets `isApplicable === false`
- *  until someone lists it. That default is fail-closed and correct (an unclassified state has not
- *  earned an apply's trust in its `previewed_at` watermark), but it is a default, not a check: the
- *  exhaustiveness test covers three of the four sets, never the fourth. */
+ *  ⚠ THREE of the five sets below partition the enum; `CLAIMABLE_RUN_STATES` and
+ *  `APPLICABLE_RUN_STATES` do NOT. TERMINAL / SUPERSEDABLE / RUNNING are exhaustive and mutually
+ *  exclusive, and the exhaustiveness test (`facility-import-run-states.test.ts`) forces a state added
+ *  to `ALL_RUN_STATES` into exactly one of them. The other two cut ACROSS that partition — each is a
+ *  separate positive list, and nothing forces a new state into either, so a state added later
+ *  silently gets `isApplicable === false` and `isWorkerObserved === false` until someone lists it.
+ *  Both defaults are fail-closed and correct (an unclassified state has not earned an apply's trust
+ *  in its `previewed_at` watermark, and a cancel on a state no worker claims must be carried out by
+ *  the writer rather than left as a flag), but they are defaults, not checks: the exhaustiveness test
+ *  covers three of the five sets, never the other two. */
 
 /** Every state, in lifecycle order. The single place a state is introduced: the union below is
  *  derived from this array, so a new entry cannot be omitted from the exhaustiveness test. */
@@ -62,6 +64,32 @@ export const SUPERSEDABLE_RUN_STATES: ReadonlySet<FacilityImportRunStatus> =
 /** A worker is mid-flight. A new request gets 409 — taking over would race a live run. */
 export const RUNNING_RUN_STATES: ReadonlySet<FacilityImportRunStatus> =
   new Set<FacilityImportRunStatus>(['validating', 'applying']);
+
+/** The states `claimNext` may take a run FROM — the queue heads of the two worker phases (validate
+ *  claims `queued`, apply claims `awaiting_confirmation`).
+ *
+ *  ⚠ Like `APPLICABLE_RUN_STATES` below, this cuts ACROSS the three-way partition rather than
+ *  extending it (both members are also SUPERSEDABLE — an operator who walks away from either is
+ *  taken over, which is the whole reason those two states are supersedable), so the exhaustiveness
+ *  test cannot force a new state in here. That default is fail-closed for `isWorkerObserved`: an
+ *  unclassified state counts as one NO worker will reach, and a cancel on it is therefore effected
+ *  immediately rather than left as a flag nothing reads. */
+export const CLAIMABLE_RUN_STATES: ReadonlySet<FacilityImportRunStatus> =
+  new Set<FacilityImportRunStatus>(['queued', 'awaiting_confirmation']);
+
+/** Will a worker ever look at this run again — and therefore ever READ its `cancel_requested` flag?
+ *
+ *  ⛔ WHY THIS EXISTS (A2b Task 4's carry-forward from Task 2's review). `requestCancel` guarded only
+ *  on "not terminal", so a cancel on a `previewed` run — the state the INLINE A2a preview mints, and
+ *  the one state no `claimNext` ever names — returned `'requested'`, set the flag, and was inert
+ *  forever: no worker claims `previewed`, so nothing would ever observe it, and the run kept
+ *  `active_key` while the operator had been told their import was asked to stop. The register was
+ *  then reachable only by the next upload's supersede gate. A cancel that cannot be carried out by a
+ *  worker must therefore be carried out by the WRITER — see `requestCancel` in
+ *  `facility-import-run-store.ts`. */
+export function isWorkerObserved(status: FacilityImportRunStatus): boolean {
+  return CLAIMABLE_RUN_STATES.has(status) || RUNNING_RUN_STATES.has(status);
+}
 
 /** The states an apply may start from: those a preview has RUN to completion for, so that whatever
  *  `previewed_at` the run carries is a watermark an apply may trust as its conflict baseline.
