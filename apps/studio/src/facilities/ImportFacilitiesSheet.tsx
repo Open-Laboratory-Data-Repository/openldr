@@ -90,27 +90,44 @@ const RUN_POLL_MS = 3000;
  *  because those defaults equal `importFacilities`' own, but it is the same defect class as
  *  reporting `0` for a count nobody measured, which is what this whole workstream exists to remove.
  *
- *  ⛔ THE CONDITIONS BELOW MIRROR `ReconciliationSummary`'s OWN RENDER GATES, term for term:
- *  `result.parsed > 0` wraps the entire block that holds these controls, then `deleted > 0`,
- *  `absent !== null && absent > 0`, and `unknownColumns`/`quarantined`/`invalid` being non-empty for
- *  the three override checkboxes. The two have to move together — a key sent for a control that
- *  never rendered is a decision nobody made, and a control that rendered whose value is not sent is
- *  a decision quietly dropped.
+ *  ⛔ EACH TERM BELOW MIRRORS ITS OWN CONTROL'S RENDER GATE IN `ReconciliationSummary` — AND THE SIX
+ *  GATES ARE NOT ALL THE SAME SHAPE, WHICH IS THE WHOLE POINT. The three `allow*` checkboxes render
+ *  in their own amber blocks BEFORE and OUTSIDE the `result.parsed > 0` wrapper, each gated on its
+ *  own list alone (`unknownColumns`/`quarantined`/`invalid` being non-empty), so each is sent on
+ *  that list alone and `parsed` is none of their business. Only `onDeleted`/`onAbsent`/`onConflict`
+ *  live INSIDE that wrapper, so those three carry `parsed > 0` as well as their own gate (`deleted
+ *  > 0` and `absent !== null && absent > 0` respectively). The two sides have to move together — a
+ *  key sent for a control that never rendered is a decision nobody made, and a control that rendered
+ *  whose value is not sent is a decision quietly dropped.
  *
- *  `onConflict` carries no count gate because its own control has none: a conflict can only be
- *  discovered by the apply this confirm authorises, so the choice is always made in advance (see
- *  `showConflictChoice`). It is sent whenever the summary block itself rendered. */
+ *  ⚠ AND `parsed === 0` IS A LIVE, ROUTINE STATE WITH A RENDERED OVERRIDE, NOT A DEAD END — a
+ *  blanket `if (result.parsed === 0) return {}` here was a shipped regression, pinned now by the two
+ *  "…at parsed 0" tests. For CSV, one unrecognised header column blocks the whole parse
+ *  (`parsed`/`skipped` both 0 — see `FacilityImportResult.unknownColumns`, facility-import.ts) yet
+ *  sets NO `blockedReason` (only `duplicate-columns` and `quarantined-rows` do), so `canConfirmRun`
+ *  is true, Confirm IS offered, and the amber "import anyway" box IS on screen. A file whose every
+ *  row was quarantined reaches `parsed: 0` with its own override the same way. Dropping those keys
+ *  made the apply re-run WITHOUT the override, parse nothing, write nothing — and still report
+ *  `applied`.
+ *
+ *  `onConflict` carries no count gate of its own because its control has none: a conflict can only
+ *  be discovered by the apply this confirm authorises, so the choice is always made in advance (see
+ *  `showConflictChoice`, which is constantly true on THIS door — the summary under review here is
+ *  always a run's, so `fromRun` is true). The wrapper it sits in is therefore its only gate. */
 function confirmOptionsFor(
   result: FacilityImportResult, chosen: Required<FacilityImportConfirmOptions>,
 ): FacilityImportConfirmOptions {
-  if (result.parsed === 0) return {};
   return {
-    ...(result.deleted > 0 ? { onDeleted: chosen.onDeleted } : {}),
-    ...(result.absent !== null && result.absent > 0 ? { onAbsent: chosen.onAbsent } : {}),
-    onConflict: chosen.onConflict,
     ...(result.unknownColumns.length > 0 ? { allowUnknownColumns: chosen.allowUnknownColumns } : {}),
     ...(result.quarantined.length > 0 ? { allowMalformedRows: chosen.allowMalformedRows } : {}),
     ...(result.invalid.length > 0 ? { allowInvalidCoordinates: chosen.allowInvalidCoordinates } : {}),
+    ...(result.parsed > 0
+      ? {
+        ...(result.deleted > 0 ? { onDeleted: chosen.onDeleted } : {}),
+        ...(result.absent !== null && result.absent > 0 ? { onAbsent: chosen.onAbsent } : {}),
+        onConflict: chosen.onConflict,
+      }
+      : {}),
   };
 }
 
@@ -959,11 +976,16 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
                   clears either, so this is strictly the wider guard, not a different one.)
                   What a second upload would actually do depends on the run's state, and neither
                   outcome is one this sheet can show: the upload route's register gate SUPERSEDES a
-                  run sitting in `queued`/`awaiting_confirmation`/`confirmed`
-                  (`SUPERSEDABLE_RUN_STATES`, packages/db) — leaving the sheet watching a run it no
-                  longer owns — and answers 409 for one a worker is holding (`validating`/`applying`,
-                  `RUNNING_RUN_STATES`), which would surface as a bare error over a file the operator
-                  just picked. */}
+                  run in any of `SUPERSEDABLE_RUN_STATES` (packages/db) — leaving the sheet watching
+                  a run it no longer owns — and answers 409 for one a worker is holding
+                  (`RUNNING_RUN_STATES` = `validating`/`applying`), which would surface as a bare
+                  error over a file the operator just picked. `SUPERSEDABLE_RUN_STATES` has FOUR
+                  members: `queued`, `awaiting_confirmation`, `confirmed` and `previewed`. A run this
+                  sheet's Upload minted can only ever be one of the first three — `previewed` is
+                  written by `startPreview` alone, i.e. the INLINE preview route's own state (same
+                  reason `RUN_ACTIVE_STATUSES` above omits it) — but the fourth is named here anyway,
+                  because an enumeration that silently drops a member of the constant it cites is how
+                  a later reader learns the wrong set. */}
               {!applyResult && !runId && (
                 <DropdownMenuItem disabled={uploadDisabled} onClick={() => void handleUpload()}>
                   {uploading ? uploadLabel : t('facilities.import.uploadAction')}

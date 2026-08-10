@@ -1394,6 +1394,68 @@ describe('ImportFacilitiesSheet', () => {
     expect(api.confirmFacilityImportRun).toHaveBeenCalledWith('run-b1', { onConflict: 'skip' });
   });
 
+  // ⛔ THE SAME RULE FROM THE OTHER SIDE, AND THE HALF THAT ACTUALLY LOSES DATA: a control that DID
+  // render must have its value SENT. The three `allow*` checkboxes render in their own amber blocks
+  // ABOVE the summary's `result.parsed > 0` wrapper, each on its own list alone — so `parsed === 0`
+  // is no evidence whatever that they were off screen, and a body built behind a blanket
+  // `parsed === 0 ⇒ {}` dropped them. Both cases below are routine, not corners.
+  //
+  // This one is the CSV unknown-column shape: `facility-import.ts` blocks the whole parse on an
+  // unrecognised header (`parsed`/`skipped` both 0) but does NOT set a `blockedReason` — only
+  // `duplicate-columns` and `quarantined-rows` do — so `canConfirmRun` is true, Confirm is on the
+  // menu, and the amber override box is on screen. With the key dropped the apply re-parsed WITHOUT
+  // the override, wrote nothing, and still reported `applied` with `written {0,0,0}`.
+  it('A2b: Confirm carries the unrecognised-columns override the operator ticked, even at parsed 0', async () => {
+    mocked(api.uploadFacilityImport).mockResolvedValue({ runId: 'run-b1' });
+    mocked(api.getFacilityImportRun).mockResolvedValue(runView({
+      status: 'awaiting_confirmation',
+      summary: baseResult({ parsed: 0, unknownColumns: ['ward_code'], blocked: false, blockedReason: null }),
+    }));
+    mocked(api.confirmFacilityImportRun).mockResolvedValue({ runId: 'run-b1', status: 'confirmed' });
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    pickFileAndSystem();
+    await uploadNow();
+
+    // The premise, asserted rather than assumed: the control really IS rendered at `parsed: 0`.
+    fireEvent.click(await screen.findByRole('checkbox', { name: /keeping unrecognised columns/i }));
+
+    clickMenuItem('Confirm import');
+
+    await waitFor(() => expect(api.confirmFacilityImportRun).toHaveBeenCalledTimes(1));
+    // ⛔ EXACT object, both directions at once: `onDeleted`/`onAbsent`/`onConflict` DO sit inside the
+    // `parsed > 0` wrapper, so none of them rendered and none may be sent — while the one override
+    // the operator actually ticked must be.
+    expect(api.confirmFacilityImportRun).toHaveBeenCalledWith('run-b1', { allowUnknownColumns: true });
+  });
+
+  // …and the second reachable shape: a file whose every row was quarantined parses 0 rows too, with
+  // its own override on screen (that override is what clears `blockedReason: 'quarantined-rows'` and
+  // puts Confirm on the menu at all — so it demonstrably rendered).
+  it('A2b: Confirm carries the malformed-rows override when every row was quarantined (parsed 0)', async () => {
+    mocked(api.uploadFacilityImport).mockResolvedValue({ runId: 'run-b1' });
+    mocked(api.getFacilityImportRun).mockResolvedValue(runView({
+      status: 'awaiting_confirmation',
+      summary: baseResult({
+        parsed: 0,
+        quarantined: [{ line: 2, raw: '1,Bad,Extra,Column', reason: 'too_many_fields' }],
+        blocked: true, blockedReason: 'quarantined-rows',
+      }),
+    }));
+    mocked(api.confirmFacilityImportRun).mockResolvedValue({ runId: 'run-b1', status: 'confirmed' });
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    pickFileAndSystem();
+    await uploadNow();
+
+    fireEvent.click(await screen.findByRole('checkbox', { name: /skipping the rows that could not be read/i }));
+
+    clickMenuItem('Confirm import');
+
+    await waitFor(() => expect(api.confirmFacilityImportRun).toHaveBeenCalledTimes(1));
+    expect(api.confirmFacilityImportRun).toHaveBeenCalledWith('run-b1', { allowMalformedRows: true });
+  });
+
   // ⛔ IN THE SHEET BODY. Radix unmounts the ⋯ menu when its item is selected, so a percentage shown
   // only on the menu item is invisible for the entire transfer — which is the one thing the XHR
   // client gives up `fetch` for.
