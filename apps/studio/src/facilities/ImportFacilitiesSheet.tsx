@@ -12,8 +12,13 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { importFacilitiesCsv, type FacilityImportResult } from '@/api';
+
+/** A diff cell's `before`/`after` value, formatted for display. `null`/`undefined` (the field was
+ *  never set) reads as an em-dash rather than the literal string "null"/"undefined". */
+const fmtDiffValue = (v: unknown): string => (v === null || v === undefined ? '—' : String(v));
 
 interface ImportFacilitiesSheetProps {
   open: boolean;
@@ -48,6 +53,14 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   // toggling it does NOT need a new preview: `quarantined` is a property of the file itself (see
   // facility-csv.ts), not of this flag, so nothing about the preview's own content can change.
   const [allowMalformedRows, setAllowMalformedRows] = useState(false);
+  // A2a: what to do with rows this file's reconciliation classified as `deleted` (the publisher
+  // explicitly declared them removed) or `absent` (this registry holds them, the file is simply
+  // silent about them). Defaults mirror the server's own (`FacilityImportOptions.onDeleted`/
+  // `onAbsent`, facility-import.ts): a declared deletion is a fact ⇒ retire by default; an absence
+  // is this importer's own inference ⇒ report only by default. Reset alongside the other overrides
+  // on a new file pick, same as `allowUnknownColumns`/`allowMalformedRows` above.
+  const [onDeleted, setOnDeleted] = useState<'retire' | 'report'>('retire');
+  const [onAbsent, setOnAbsent] = useState<'retire' | 'report'>('report');
 
   const [previewing, setPreviewing] = useState(false);
   const [previewResult, setPreviewResult] = useState<FacilityImportResult | null>(null);
@@ -70,6 +83,8 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
     setFile(f);
     setAllowUnknownColumns(false);
     setAllowMalformedRows(false);
+    setOnDeleted('retire');
+    setOnAbsent('report');
     invalidatePreview();
     if (!f) { setCsv(null); return; }
     void f.text().then(setCsv).catch((err: unknown) => {
@@ -156,6 +171,13 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
         allowUnknownColumns,
         allowMalformedRows,
         apply: true,
+        // A2a: without this, the apply is not linked to the preview the operator just read, and
+        // `conflict` reports `null` (not evaluated) even though a preview DID run — see api.ts's
+        // `FacilityImportRequest.runId` doc comment and the server route's matching comment on why
+        // it never invents a link the caller didn't ask for.
+        runId: previewResult.runId ?? undefined,
+        onDeleted,
+        onAbsent,
       });
       setApplyResult(result);
       onImported();
@@ -216,12 +238,15 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   const canApply = !!previewResult && previewResult.parsed > 0 && previewResult.parsed <= APPLY_ROW_CAP
     && !blockedByImport && !applyResult;
   const overCap = !!previewResult && previewResult.parsed > APPLY_ROW_CAP;
-  // F3 fix: `parsed` counts every accepted row INCLUDING rows `duplicates` later collapses down to
-  // one (see facility-import.ts's docblock on FacilityImportResult.parsed) — the headline number
-  // shown to the operator must describe what Apply will actually WRITE, not what the parser merely
-  // accepted before dedup. `duplicates` itself keeps reading off `parsed` unchanged elsewhere (the
-  // over-cap check mirrors the server's own cap, which is checked against `parsed`, not this).
-  const willWriteCount = previewResult ? previewResult.parsed - previewResult.duplicates : 0;
+  // A2a (FAC-P1-03) superseded the original F3 fix. `parsed - duplicates` only ever accounted for
+  // rows the FILE itself repeated — every other accepted row still read as something Apply would
+  // write, even a row byte-identical to what the registry already holds (`unchanged`) or one that
+  // will be skipped because it was edited since the preview (`conflict`). `create + changed` is the
+  // server's own reconciliation of what an apply would actually write (`classifyFacilityRows`,
+  // computed on every preview — see facility-import.ts's docblock), not a client-side approximation
+  // of it. `duplicates` itself keeps reading off `parsed` unchanged elsewhere (the over-cap check
+  // mirrors the server's own cap, which is checked against `parsed`, not this).
+  const willWriteCount = previewResult ? previewResult.create + previewResult.changed : 0;
   // F2 fix: `parsed === 0` must read as an unsuccessful outcome whether or not unknown columns were
   // ever involved — EXCEPT while the file is still just sitting blocked on an unopted-in unknown-
   // columns notice (unknownColumns present, box not yet ticked): that case already has its own
@@ -307,6 +332,16 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
 
           {previewResult && !applyResult && (
             <div className="mx-6 mt-4 space-y-3 text-sm">
+              {/* A2a: informational only — never blocks Apply. A `nationalSystem` no existing row
+                  uses yet is routinely just the FIRST import of a real register, not a mistake; the
+                  server (facilities-routes.ts) cannot tell the two apart, so this only names the
+                  possibility rather than refusing anything. */}
+              {!previewResult.knownNationalSystem && (
+                <div className="rounded-md border border-sky-500/40 bg-sky-500/10 px-3 py-2 text-xs text-sky-700">
+                  {t('facilities.import.newRegisterNotice')}
+                </div>
+              )}
+
               {noOutcomeStated && (
                 <p className="text-muted-foreground">
                   {previewResult.skipped > 0
@@ -353,6 +388,92 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
               {previewResult.parsed > 0 && (
                 <>
                   <p>{t('facilities.import.previewSummary', { parsed: willWriteCount, skipped: previewResult.skipped })}</p>
+
+                  {/* A2a (FAC-P1-03/05): the reconciliation summary — what this file would actually
+                      DO to the registry, computed by the server on every preview, never just on
+                      apply (see FacilityImportResult's own docblock in api.ts). `conflict`/`absent`
+                      render "not evaluated" on `null` and NEVER as `0` — a `0` here would claim a
+                      measurement the server never took (no `runId` linking this call to a prior
+                      preview / no declared complete release). */}
+                  <div className="rounded-md border border-border px-3 py-2 text-xs space-y-1">
+                    <p>{t('facilities.import.summaryCreate', { count: previewResult.create })}</p>
+                    <p>{t('facilities.import.summaryChanged', { count: previewResult.changed })}</p>
+                    <p>{t('facilities.import.summaryUnchanged', { count: previewResult.unchanged })}</p>
+                    <p>
+                      {previewResult.conflict === null
+                        ? t('facilities.import.conflictNotEvaluated')
+                        : t('facilities.import.summaryConflict', { count: previewResult.conflict })}
+                    </p>
+                    <p>
+                      {previewResult.absent === null
+                        ? t('facilities.import.absentNotEvaluated')
+                        : t('facilities.import.summaryAbsent', { count: previewResult.absent })}
+                    </p>
+                    {previewResult.deleted > 0 && (
+                      <p>{t('facilities.import.summaryDeleted', { count: previewResult.deleted })}</p>
+                    )}
+                  </div>
+
+                  {previewResult.samples.changed.length > 0 && (
+                    <div className="rounded-md border border-border px-3 py-2 text-xs">
+                      <p className="font-medium">{t('facilities.import.changedSampleTitle')}</p>
+                      <ul className="mt-1 max-h-32 space-y-1 overflow-y-auto">
+                        {previewResult.samples.changed.map((row) => (
+                          <li key={row.id}>
+                            <span className="font-medium">{row.name}</span>
+                            <ul className="ml-3">
+                              {row.diff.map((d) => (
+                                <li key={d.field}>
+                                  {t('facilities.import.changedFieldDiff', {
+                                    field: d.field, before: fmtDiffValue(d.before), after: fmtDiffValue(d.after),
+                                  })}
+                                </li>
+                              ))}
+                            </ul>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* A2a: the retirement choices are INPUTS (label-left/input-right, exempt from the
+                      ⋯-menu rule — see ui-actions-in-dots-menu), not actions. Shown only when there
+                      is something meaningful to decide: a `deleted`/`absent` of `0` (or `absent`
+                      still `null`, not evaluated) has nothing to retire, so a control here would
+                      offer a choice with no effect. */}
+                  {previewResult.deleted > 0 && (
+                    <div className="grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-1 rounded-md border border-border px-3 py-2">
+                      <Label htmlFor="facility-import-on-deleted" className="whitespace-nowrap">
+                        {t('facilities.import.onDeletedLabel')}
+                      </Label>
+                      <Select value={onDeleted} onValueChange={(v) => setOnDeleted(v as 'retire' | 'report')}>
+                        <SelectTrigger id="facility-import-on-deleted" className="h-8 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="retire">{t('facilities.import.onDeletedRetire')}</SelectItem>
+                          <SelectItem value="report">{t('facilities.import.onDeletedReport')}</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                  {previewResult.absent !== null && previewResult.absent > 0 && (
+                    <div className="grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-1 rounded-md border border-border px-3 py-2">
+                      <Label htmlFor="facility-import-on-absent" className="whitespace-nowrap">
+                        {t('facilities.import.onAbsentLabel')}
+                      </Label>
+                      <Select value={onAbsent} onValueChange={(v) => setOnAbsent(v as 'retire' | 'report')}>
+                        <SelectTrigger id="facility-import-on-absent" className="h-8 text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="retire">{t('facilities.import.onAbsentRetire')}</SelectItem>
+                          <SelectItem value="report">{t('facilities.import.onAbsentReport')}</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+
                   {previewResult.duplicates > 0 && (
                     <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700">
                       {t('facilities.import.duplicatesWarning', { count: previewResult.duplicates })}
@@ -372,7 +493,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
           {applyResult && (
             <div className="mx-6 mt-4 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700">
               <p className="font-medium">{t('facilities.import.doneTitle')}</p>
-              <p>{t('facilities.import.doneSummary', { created: applyResult.created, updated: applyResult.updated, skipped: applyResult.skipped })}</p>
+              <p>{t('facilities.import.doneSummary', { created: applyResult.written.created, updated: applyResult.written.updated, skipped: applyResult.skipped })}</p>
               {applyResult.duplicates > 0 && (
                 <p>{t('facilities.import.duplicatesWarning', { count: applyResult.duplicates })}</p>
               )}

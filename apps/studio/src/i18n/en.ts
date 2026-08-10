@@ -845,6 +845,25 @@ export const en = {
       emptyFileHint: 'This file is empty. Choose a different file before previewing.',
       doneTitle: 'Import complete',
       doneSummary: 'Created {{created}}, updated {{updated}}, skipped {{skipped}}.',
+      // A2a (FAC-P1-03/05): the reconciliation summary — what this file would actually do to the
+      // registry, reported by the server on every preview.
+      summaryCreate: '{{count}} facility row(s) will be created.',
+      summaryChanged: '{{count}} existing facility row(s) will be changed.',
+      summaryUnchanged: '{{count}} facility row(s) already match the registry.',
+      summaryConflict: '{{count}} row(s) were changed since this preview and will be skipped.',
+      conflictNotEvaluated: 'Conflicts: not evaluated for this preview.',
+      summaryAbsent: '{{count}} registry row(s) for this national system are absent from this file.',
+      absentNotEvaluated: 'Absent from this file: not evaluated (mark this file as a complete release to check).',
+      summaryDeleted: '{{count}} row(s) were declared removed by this file.',
+      changedSampleTitle: 'Examples of what would change',
+      changedFieldDiff: '{{field}}: {{before}} → {{after}}',
+      onDeletedLabel: 'Rows this file says were removed',
+      onDeletedRetire: 'Retire them',
+      onDeletedReport: 'Report only, keep them active',
+      onAbsentLabel: 'Rows missing from this file',
+      onAbsentRetire: 'Retire them',
+      onAbsentReport: 'Report only, keep them active',
+      newRegisterNotice: 'No existing rows use this national system yet — applying will create a new register identity.',
     },
     // Task 11: the report-dimension health chip — whether the report-facing `facility_map`
     // dimension has caught up with the current registry/mapping state (GET /api/facilities/health).
