@@ -3329,6 +3329,97 @@ describe('POST /api/facilities/import/runs/:id/confirm', () => {
   });
 });
 
+const cancelUrl = (runId: string) => `/api/facilities/import/runs/${runId}/cancel`;
+
+// A2b Task 6. The cancel surface, and the whole of it is about NOT overstating what happened.
+describe('POST /api/facilities/import/runs/:id/cancel', () => {
+  it('gated on facilities.manage — a facilities.view-only user gets 403 and the run is untouched', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const manageApp = await appWith(ctx);
+    const runId = await uploadAndPark(manageApp, db);
+
+    const viewApp = await appWith(ctx, ['facilities.view']);
+    const res = await viewApp.inject({ method: 'POST', url: cancelUrl(runId), payload: {} });
+
+    expect(res.statusCode).toBe(403);
+    expect((await db.selectFrom('facility_import_runs').select('status')
+      .where('id', '=', runId).executeTakeFirstOrThrow()).status).toBe('awaiting_confirmation');
+  });
+
+  it('⛔ cancels a PARKED run outright and says so — it is not merely "requested"', async () => {
+    // The Task 4/5 carry-forward, closed. No worker claims `awaiting_confirmation`, so a flag set on
+    // it would never be read: the operator would be told their import had been asked to stop while
+    // the register stayed locked forever behind a run nothing would look at again.
+    const db = await makeMigratedDb();
+    const app = await appWith(fakeImportCtx(db));
+    const runId = await uploadAndPark(app, db);
+
+    const res = await app.inject({ method: 'POST', url: cancelUrl(runId), payload: {} });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ runId, outcome: 'cancelled' });
+    const stored = await db.selectFrom('facility_import_runs')
+      .select(['status', 'active_key', 'cancel_requested'])
+      .where('id', '=', runId).executeTakeFirstOrThrow();
+    expect(stored.status).toBe('cancelled');
+    // The register is genuinely free — this is what "cancelled" has to mean to be worth saying.
+    expect(stored.active_key).toBeNull();
+    // The flag path was not taken: nothing is left waiting to be observed by nobody.
+    expect(stored.cancel_requested).toBe(false);
+  });
+
+  it('⛔ only REQUESTS a cancel on a run a worker is mid-flight on, and does not claim it stopped', async () => {
+    // 202 and `requested`, deliberately NOT 200/`cancelled`. The flag cannot interrupt the running
+    // transaction, so the run may still finish `applied` — and reporting a cancellation that has not
+    // happened is the one thing this surface must never do.
+    const db = await makeMigratedDb();
+    const app = await appWith(fakeImportCtx(db));
+    const runId = await uploadAndPark(app, db);
+    await db.updateTable('facility_import_runs').set({ status: 'validating' } as never)
+      .where('id', '=', runId).execute();
+
+    const res = await app.inject({ method: 'POST', url: cancelUrl(runId), payload: {} });
+
+    expect(res.statusCode).toBe(202);
+    expect(res.json()).toEqual({ runId, outcome: 'requested' });
+    const stored = await db.selectFrom('facility_import_runs')
+      .select(['status', 'active_key', 'cancel_requested'])
+      .where('id', '=', runId).executeTakeFirstOrThrow();
+    // Untouched apart from the flag: the worker owns this run until it observes it.
+    expect(stored.status).toBe('validating');
+    expect(stored.active_key).toBe(SYSTEM);
+    expect(stored.cancel_requested).toBe(true);
+  });
+
+  it('409s a run that already finished, rather than reporting a false success', async () => {
+    const db = await makeMigratedDb();
+    const app = await appWith(fakeImportCtx(db));
+    const runId = await uploadAndPark(app, db);
+    await db.updateTable('facility_import_runs')
+      .set({ status: 'applied', active_key: null } as never)
+      .where('id', '=', runId).execute();
+
+    const res = await app.inject({ method: 'POST', url: cancelUrl(runId), payload: {} });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toMatch(/already/i);
+    // ⛔ An applied run STAYS applied. A cancel arriving after the write must never rewrite the
+    // record of a register that really was imported.
+    expect((await db.selectFrom('facility_import_runs').select('status')
+      .where('id', '=', runId).executeTakeFirstOrThrow()).status).toBe('applied');
+  });
+
+  it('404s an unknown run', async () => {
+    const db = await makeMigratedDb();
+    const app = await appWith(fakeImportCtx(db));
+
+    const res = await app.inject({ method: 'POST', url: cancelUrl('fir_nope'), payload: {} });
+
+    expect(res.statusCode).toBe(404);
+  });
+});
+
 // --- Task 6: GET /api/facilities/observed, POST /scan-observed, POST /publish -----------------
 // Exercises the REAL scanObservedFacilities/resolveObservedFacilities/publishFacilityMap
 // (packages/bootstrap/src/facility-reconcile.ts) against REAL migrated internal AND external

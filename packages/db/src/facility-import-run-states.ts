@@ -78,26 +78,6 @@ export const SUPERSEDABLE_RUN_STATES: ReadonlySet<FacilityImportRunStatus> =
 export const RUNNING_RUN_STATES: ReadonlySet<FacilityImportRunStatus> =
   new Set<FacilityImportRunStatus>(['validating', 'applying']);
 
-/** The states `claimNext` may take a run FROM — the queue heads of the two worker phases (validate
- *  claims `VALIDATE_PHASE.from`, apply claims `APPLY_PHASE.from`).
- *
- *  ⚠ Like `APPLICABLE_RUN_STATES` below, this cuts ACROSS the three-way partition rather than
- *  extending it (every member is also SUPERSEDABLE — an operator who walks away from any of them is
- *  taken over, which is the whole reason those states are supersedable), so the exhaustiveness
- *  test cannot force a new state in here. That default is fail-closed for `isWorkerObserved`: an
- *  unclassified state counts as one NO worker will reach, and a cancel on it is therefore effected
- *  immediately rather than left as a flag nothing reads.
- *
- *  ⛔ CARRY-FORWARD, unresolved and deliberately not deepened by A2b Task 5. `awaiting_confirmation`
- *  is listed here because `claimNext`'s TYPE names it, not because any worker claims it — and after
- *  Task 5 no worker claims it still: the apply phase claims `APPLY_PHASE.from` (`confirmed`), so
- *  that a run the operator has not decided about can never be written. The consequence is that
- *  `isWorkerObserved('awaiting_confirmation')` is `true`, so `requestCancel` merely FLAGS a run
- *  parked for the operator and nothing ever reads the flag — the exact shape this module's
- *  `isWorkerObserved` comment describes for `previewed`. A2b Task 6 (cancel) owns resolving it. */
-export const CLAIMABLE_RUN_STATES: ReadonlySet<FacilityImportRunStatus> =
-  new Set<FacilityImportRunStatus>(['queued', 'awaiting_confirmation', 'confirmed']);
-
 /** The validate phase's transition as ONE value: the state it claims a run FROM and the state it
  *  moves that run TO.
  *
@@ -132,6 +112,29 @@ export const VALIDATE_PHASE: { readonly from: 'queued'; readonly to: 'validating
  *  fire without one. */
 export const APPLY_PHASE: { readonly from: 'confirmed'; readonly to: 'applying' } =
   { from: 'confirmed', to: 'applying' };
+
+/** The states `claimNext` may take a run FROM — DERIVED from the two phase constants, never listed
+ *  by hand, so it describes what the workers actually claim rather than what a signature permits.
+ *
+ *  ⛔ A2b Task 6 RESOLVES a carry-forward that Task 4 opened and Task 5 moved. This used to be a
+ *  hand-written list containing `awaiting_confirmation`, because `claimNext`'s TYPE named it — but
+ *  NO worker has ever claimed that state, and after Task 5 the apply deliberately claims `confirmed`
+ *  instead, so that a run the operator has not decided about can never be written. The cost of the
+ *  hand-written list was that `isWorkerObserved('awaiting_confirmation')` answered `true`, so
+ *  `requestCancel` merely FLAGGED a run parked for the operator: nothing would ever read the flag,
+ *  the run kept `active_key`, and the operator was told their import had been asked to stop. That is
+ *  the same defect this module's `isWorkerObserved` note describes for `previewed`, one state over.
+ *  Deriving the set is what stops it recurring — a third phase added later brings its own queue head
+ *  with it, and a phase that stops existing takes its head away.
+ *
+ *  ⚠ Like `APPLICABLE_RUN_STATES` below, this cuts ACROSS the three-way partition rather than
+ *  extending it (both members are also SUPERSEDABLE — a queue head no worker has reached yet is
+ *  exactly what an abandoned run looks like), so the exhaustiveness test cannot force a new state in
+ *  here. The default is fail-closed for `isWorkerObserved`: an unclassified state counts as one NO
+ *  worker will reach, and a cancel on it is therefore carried out immediately rather than left as a
+ *  flag nothing reads. */
+export const CLAIMABLE_RUN_STATES: ReadonlySet<FacilityImportRunStatus> =
+  new Set<FacilityImportRunStatus>([VALIDATE_PHASE.from, APPLY_PHASE.from]);
 
 /** Will a worker ever look at this run again — and therefore ever READ its `cancel_requested` flag?
  *

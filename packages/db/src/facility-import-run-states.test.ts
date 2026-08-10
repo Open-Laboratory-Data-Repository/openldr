@@ -57,14 +57,18 @@ describe('facility import run states', () => {
   // claims or is already running. Any other state's `cancel_requested` flag is inert forever, which
   // is why `requestCancel` cancels those outright instead of flagging them.
   it('marks exactly the states a worker claims or is already running as worker-observed', () => {
-    // Every claim source must be a state a worker can actually take FROM — `claimNext`'s two source
-    // states, and no other.
-    // A2b Task 5 widens this by ONE concrete member: `confirmed`, the apply phase's queue head.
-    // ⚠ `awaiting_confirmation` is still here and STILL claimed by nothing — the carry-forward Task 4
-    // moved rather than removed (a cancel on it is flagged and never read). Task 5 deliberately does
-    // not deepen it: the apply claims `confirmed`, never `awaiting_confirmation`, so no worker was
-    // added that would apply an UNCONFIRMED run. Task 6 owns resolving the flag.
-    expect([...CLAIMABLE_RUN_STATES].sort()).toEqual(['awaiting_confirmation', 'confirmed', 'queued']);
+    // A2b Task 6 RESOLVES the carry-forward Task 4 opened and Task 5 moved. This set used to be a
+    // hand-written list that included `awaiting_confirmation` because `claimNext`'s TYPE named it —
+    // but no worker ever claimed it, so `isWorkerObserved` said `true` for a state whose
+    // `cancel_requested` flag nothing would ever read: the operator was told their import had been
+    // asked to stop while the run went on holding `active_key`. It is now DERIVED from the two phase
+    // constants, so it cannot describe anything but what the workers actually claim.
+    expect([...CLAIMABLE_RUN_STATES].sort()).toEqual(['confirmed', 'queued']);
+    expect([...CLAIMABLE_RUN_STATES].sort()).toEqual([VALIDATE_PHASE.from, APPLY_PHASE.from].sort());
+    // ⛔ The state a run PARKS in is not a state any worker claims, so a cancel on it must be carried
+    // out by the writer rather than left as a flag. This is the assertion that keeps that true.
+    expect(CLAIMABLE_RUN_STATES.has('awaiting_confirmation')).toBe(false);
+    expect(isWorkerObserved('awaiting_confirmation')).toBe(false);
     for (const s of CLAIMABLE_RUN_STATES) expect(isWorkerObserved(s)).toBe(true);
     for (const s of RUNNING_RUN_STATES) expect(isWorkerObserved(s)).toBe(true);
     // `previewed` is the inline A2a path's own state: no worker claims it, so a flag set on it would

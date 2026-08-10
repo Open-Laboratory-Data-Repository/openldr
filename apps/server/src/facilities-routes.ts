@@ -1851,6 +1851,49 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     return { runId: id, status: APPLY_PHASE.from };
   });
 
+  // A2b Task 6: ask an import run to stop.
+  //
+  // ⛔ THIS ROUTE'S ONLY HARD RULE IS THAT IT DOES NOT OVERSTATE WHAT HAPPENED, and the two success
+  // codes exist to keep that honest — the store answers a DIFFERENT question depending on whether
+  // anything is actually listening:
+  //
+  //   200 `cancelled` — the run was in a state NO worker claims (`awaiting_confirmation`, the state
+  //     every background run parks in; or `previewed`, the inline path's). Nothing would ever have
+  //     read a flag set on it, so `requestCancel` carries the cancellation out itself: the run is
+  //     terminal and its register released. Saying "cancelled" here is a fact, not a forecast.
+  //   202 `requested` — a worker holds the run (`validating`/`applying`). The flag is observed at
+  //     phase boundaries and CANNOT interrupt the running transaction, so an apply already inside
+  //     its write will finish and the run will end `applied`. That is the truthful outcome and the
+  //     operator must not be told otherwise, which is why this is not 200 and not `cancelled`.
+  //
+  // ⛔ 409 for a terminal run rather than a cheerful no-op: a cancel arriving after the write is a
+  // request that CANNOT be honoured, and an applied run stays applied. Reporting success would tell
+  // an operator a national register had not been imported when it had.
+  app.post('/api/facilities/import/runs/:id/cancel', MANAGE, async (req, reply) => {
+    const { id } = req.params as { id: string };
+
+    const outcome = await importRuns.requestCancel(id);
+    if (outcome === 'not-found') { reply.code(404); return { error: `import run not found: ${id}` }; }
+    if (outcome === 'already-terminal') {
+      reply.code(409);
+      return { error: `import run ${id} has already finished and cannot be cancelled` };
+    }
+
+    // Audited on both live outcomes, and the action records which one — an operator asking a running
+    // import to stop is a decision worth an actor even when the import goes on to finish anyway.
+    await recordAudit(ctx, req, {
+      action: 'facility.import.cancelled',
+      entityType: 'facility',
+      entityId: id,
+      before: null,
+      after: null,
+      metadata: { runId: id, outcome },
+    });
+
+    reply.code(outcome === 'cancelled' ? 200 : 202);
+    return { runId: id, outcome };
+  });
+
   // One run's full detail — the preview summary an operator reviews before confirming an apply, or
   // the record of one that already happened. Same static-vs-parametric non-issue as the other
   // `/api/facilities/*` routes above: `import/runs/:id` carries a different segment count than

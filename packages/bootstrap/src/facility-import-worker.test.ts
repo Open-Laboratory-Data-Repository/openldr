@@ -478,6 +478,37 @@ describe('createFacilityImportWorker — apply phase', () => {
     expect(h.audited).toEqual([]);
   });
 
+  it('⛔ a cancel that arrives once the apply is under way reports applied, NOT cancelled', async () => {
+    // A2b Task 6's honest semantics, at the layer that decides them. `cancel_requested` is observed
+    // at PHASE BOUNDARIES and cannot interrupt the running transaction, so a cancel racing an apply
+    // that is already reading its file loses — and the truthful answer is `applied`, because the
+    // register really was written. Reporting `cancelled` here would tell an operator their national
+    // register was untouched when it had just been rewritten, which is the single worst thing this
+    // surface could say.
+    let runs!: FacilityImportRunStore;
+    let runId = '';
+    let armed = false;
+    // Fires as the APPLY opens the file — i.e. after the claim, mid-phase. The validate tick runs
+    // first and must not trip it, hence `armed`.
+    const h = await harness(CSV, async () => { if (armed) await runs.requestCancel(runId); });
+    runs = h.runs;
+    runId = await uploadValidateConfirm(h);
+    armed = true;
+
+    await h.worker.tickOnce();
+    await h.worker.stop();
+
+    const after = await h.runs.get(runId);
+    expect(after?.status).toBe('applied');
+    // The flag really was set — this is a genuine race that the apply won, not a cancel that never
+    // arrived. Without this the test would pass even if `requestCancel` had silently done nothing.
+    expect((await rowFor(h.db, runId)).cancel_requested).toBe(true);
+    // And the write is real, which is what makes `applied` the honest answer.
+    expect(await registryRows(h.db)).toHaveLength(1);
+    expect(after?.summary).toMatchObject({ written: { created: 1, updated: 0, retired: 0 } });
+    expect((await rowFor(h.db, runId)).active_key).toBeNull();
+  });
+
   it('a throwing apply leaves the run failed with its own message and releases the register', async () => {
     // The file validated (the worker read a good CSV), then the stored object changed under it. The
     // apply must answer for that rather than crash the tick — and must release the register.

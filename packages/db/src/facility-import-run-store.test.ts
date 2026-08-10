@@ -105,9 +105,13 @@ describe('createFacilityImportRunStore', () => {
   it('claimNext returns null when nothing is in the requested state', async () => {
     const db = (await makeMigratedDb()) as Kysely<InternalSchema>;
     const store = createFacilityImportRunStore(db);
-    await store.startUpload(upload); // queued, not awaiting_confirmation
+    await store.startUpload(upload); // queued, not confirmed
 
-    expect(await store.claimNext('awaiting_confirmation', 'applying')).toBeNull();
+    // A2b Task 6 narrowed `claimNext`'s source type to the two phase heads, so this asks for the
+    // APPLY head rather than the parked state it used to name. The property under test is unchanged
+    // — "a state nothing is in yields null" — and `awaiting_confirmation` was only ever standing in
+    // for "some state other than queued"; it is now, correctly, not a claimable state at all.
+    expect(await store.claimNext('confirmed', 'applying')).toBeNull();
   });
 
   it('claimNext advances to the next candidate when a concurrent claimer wins the guarded UPDATE first', async () => {
@@ -204,6 +208,31 @@ describe('createFacilityImportRunStore', () => {
     expect(stored.status).toBe('cancelled');
     expect(stored.active_key).toBeNull();
     // The register really is free — the next upload succeeds instead of "already in progress".
+    await expect(store.startUpload(upload)).resolves.toMatchObject({ status: 'queued' });
+  });
+
+  it('⛔ requestCancel on a run PARKED for the operator cancels outright — the Task 4/5 carry-forward', async () => {
+    // A2b Task 6. `awaiting_confirmation` is the state EVERY background run parks in, and the one an
+    // operator is most likely to cancel from — and until this task it was in `CLAIMABLE_RUN_STATES`
+    // purely because `claimNext`'s TYPE named it. No worker has ever claimed it (Task 5's apply
+    // claims `confirmed` precisely so an undecided run is never written), so the flag was inert: the
+    // operator was told 'requested' while the register stayed locked behind a run nothing would ever
+    // look at again. Deriving the set from the phase heads is what makes this branch reachable.
+    const db = (await makeMigratedDb()) as Kysely<InternalSchema>;
+    const store = createFacilityImportRunStore(db);
+    const run = await store.startUpload(upload);
+    await store.claimNext('queued', 'validating');
+    expect(await store.completeValidation(run.id, { parsed: 1 })).toBe(true);
+    expect((await store.get(run.id))?.status).toBe('awaiting_confirmation');
+
+    expect(await store.requestCancel(run.id)).toBe('cancelled');
+
+    const stored = await row(db, run.id);
+    expect(stored.status).toBe('cancelled');
+    expect(stored.active_key).toBeNull();
+    // Not merely marked — the flag path was NOT taken, so nothing is left waiting to be observed.
+    expect(stored.cancel_requested).toBe(false);
+    // And the register is genuinely free again, which is the whole point.
     await expect(store.startUpload(upload)).resolves.toMatchObject({ status: 'queued' });
   });
 

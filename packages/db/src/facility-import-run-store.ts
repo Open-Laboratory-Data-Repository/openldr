@@ -63,7 +63,10 @@ export interface FacilityImportRunStore {
    *  `awaiting_confirmation` — a TYPE, not a worker. No worker claims that state: the validate
    *  claims `VALIDATE_PHASE.from` and the apply claims `APPLY_PHASE.from`. See
    *  `CLAIMABLE_RUN_STATES`' carry-forward note. */
-  claimNext(status: 'queued' | 'awaiting_confirmation' | 'confirmed', to: 'validating' | 'applying'): Promise<FacilityImportRun | null>;
+  /** ⛔ The source type is exactly the two phase heads — `awaiting_confirmation` is deliberately NOT
+   *  assignable. A worker claiming the state a run PARKS in would apply a register the operator has
+   *  not decided about, so the restriction is a compile error rather than a convention. */
+  claimNext(status: typeof VALIDATE_PHASE.from | typeof APPLY_PHASE.from, to: 'validating' | 'applying'): Promise<FacilityImportRun | null>;
   updateProgress(id: string, p: { phase: string; processed?: number | null; total?: number | null }): Promise<void>;
   /** The validate phase's commit point: stamp the watermark and the summary AND park the run for the
    *  operator, in ONE guarded UPDATE.
