@@ -83,6 +83,58 @@ const CANCELLED_BY_OPERATOR = 'cancelled by the operator';
  *  the API process this worker runs inside. */
 const DEFAULT_MAX_BUFFER_BYTES = 64 * 1024 * 1024;
 
+/** Below this many rows an apply publishes its PHASE only; at or above it the run also carries a
+ *  row count an operator can watch against.
+ *
+ *  ⛔ MEASURED, NOT CHOSEN. Real Postgres 16 in Docker on the dev machine (Windows 11, loopback,
+ *  2026-08-10), the real 13 000-row Tanzanian MFL release
+ *  (`../corlix/fixtures/mfl-TZ-2026-Q3-large.jsonl`) sliced to each row count, `apply: true` against
+ *  an empty registry — the cold create, which is the expensive case — with `admin` wired so
+ *  controlled-field resolution AND the registry→concept projection both run, exactly as the worker
+ *  passes them. Three runs each, median reported:
+ *
+ *  | rows   | runs (ms)          | median |
+ *  |--------|--------------------|--------|
+ *  |  1 000 | 289, 292, 280      |  289ms |
+ *  |  2 500 | 517, 508, 513      |  513ms |
+ *  |  5 000 | 944, 892, 969      |  944ms |
+ *  | 10 000 | 1708, 1759, 1745   | 1745ms |
+ *  | 13 000 | 2188, 2287, 2404   | 2287ms |
+ *
+ *  Near-linear at ~0.176 ms/row, which puts one second of work at ≈5 300 rows — so 5 000 is the
+ *  measured point closest to the threshold the spec asks for (944 ms, within 6% of 1 s), and the
+ *  next point down is genuinely too fast to read (2 500 rows = 0.5 s). A whole national register
+ *  (13 000 rows) is ~2.3 s, which is why this is a floor and not a formality.
+ *
+ *  ⚠ CAVEATS, because a threshold measured on one machine is not a law. Loopback Postgres, no TLS,
+ *  no concurrent load, warm page cache, and a single-tenant server. A remote or busy database is
+ *  slower — so real deployments cross one second at FEWER rows than this, and the constant errs
+ *  toward silence rather than toward noise.
+ *
+ *  ⚠ WHAT THIS GATE CAN AND CANNOT DO. `importFacilities` exposes no per-row callback — it batches
+ *  the write internally (`insertBatchPg`, ~2 600-row chunks) and returns once — so the finest
+ *  granularity available here is the PHASE BOUNDARY, and this gate therefore switches on the
+ *  DENOMINATOR (`total`), not a live per-row counter. Real per-row ticks would mean adding a progress
+ *  callback to the shared importer, which both entry paths depend on; that is deliberately not done
+ *  for a 2.3-second operation. */
+const PER_ROW_PROGRESS_MIN_ROWS = 5000;
+
+/** The row count the VALIDATE phase already counted for this run, or `null` when it cannot be read.
+ *
+ *  Free: the validate stored its `importFacilities` result on the run, and `parsed` is that count.
+ *  The apply would otherwise have to parse the file twice to learn its own size before starting. */
+function validatedRowCount(run: FacilityImportRun): number | null {
+  const parsed = (run.summary as { parsed?: unknown } | null)?.parsed;
+  return typeof parsed === 'number' && Number.isFinite(parsed) ? parsed : null;
+}
+
+/** Did this run publish a `total` when its apply started? Asked in the ONE place the closing
+ *  `processed` is written, so the two halves cannot disagree about whether counts are in play. */
+function reportedTotal(run: FacilityImportRun): boolean {
+  const n = validatedRowCount(run);
+  return n !== null && n >= PER_ROW_PROGRESS_MIN_ROWS;
+}
+
 export function createFacilityImportWorker(deps: FacilityImportWorkerDeps): FacilityImportWorker {
   const intervalMs = deps.intervalMs ?? 3000;
   // ⛔ Clamped, not merely defaulted. `MAX_STRING_LENGTH` (measured 536 870 888 on node 24 — just
@@ -339,7 +391,15 @@ export function createFacilityImportWorker(deps: FacilityImportWorkerDeps): Faci
       if (!run.blobKey) throw new Error('the run has no blob key — nothing was stored to apply');
       const body = await readBlob(run.blobKey, 'applied');
 
-      await deps.runs.updateProgress(run.id, { phase: 'applying' });
+      // ⛔ The gate `PER_ROW_PROGRESS_MIN_ROWS` documents. A small register finishes faster than the
+      // numbers could be read, so publishing them would be motion rather than information; a large
+      // one gets a denominator the operator can size the wait against. `processed: 0` is published
+      // WITH the total so the pair is never half-written — a `total` beside a stale `processed` from
+      // some earlier tick would read as progress that had already happened.
+      await deps.runs.updateProgress(run.id, {
+        phase: 'applying',
+        ...(reportedTotal(run) ? { processed: 0, total: validatedRowCount(run) } : {}),
+      });
       // ⛔ THE SAME `importFacilities` the validate phase, the inline route and the CLI all call.
       // The write, the projection through `deps.admin`, and the ONE `facility-map-rebuild` enqueue
       // all happen INSIDE it — none of them is repeated here, or an applied upload would rebuild the
@@ -359,7 +419,11 @@ export function createFacilityImportWorker(deps: FacilityImportWorkerDeps): Faci
     // and the run is terminal; a failure in a progress update or an audit write must not reach the
     // catch above, which would mark an import that succeeded as `failed` and tell the operator their
     // national register was not written when it was.
-    await deps.runs.updateProgress(run.id, { phase: 'applied' })
+    // `written` counts what the statement actually wrote; `parsed` is what it was asked to write.
+    // The denominator published above was `parsed`, so the numerator that closes it must be too —
+    // an apply where some rows were `unchanged` still PROCESSED all of them.
+    const finalProcessed = reportedTotal(run) ? summary.parsed : null;
+    await deps.runs.updateProgress(run.id, { phase: 'applied', processed: finalProcessed })
       .catch((err) => deps.logger.error({ err, runId: run.id }, 'failed to record the final phase of an applied facility import'));
     await auditApplied(run, summary);
     deps.logger.info({ runId: run.id, nationalSystem: run.nationalSystem, written: summary.written }, 'facility import applied');

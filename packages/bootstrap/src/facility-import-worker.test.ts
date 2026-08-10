@@ -478,6 +478,46 @@ describe('createFacilityImportWorker — apply phase', () => {
     expect(h.audited).toEqual([]);
   });
 
+  it('publishes no row counts for a small apply — they would finish faster than they could be read', async () => {
+    // A2b Task 7. MEASURED on real Postgres: 1 000 rows apply in 289 ms and 2 500 in 513 ms, so a
+    // denominator here would flash past unread. `total` stays null and `processed` stays at its
+    // column default rather than being written with numbers nobody can use.
+    const h = await harness(CSV); // one row
+    const runId = await uploadValidateConfirm(h);
+
+    await h.worker.tickOnce();
+    await h.worker.stop();
+
+    expect((await h.runs.get(runId))?.status).toBe('applied');
+    const stored = await rowFor(h.db, runId);
+    expect(stored.total).toBeNull();
+    expect(stored.processed).toBe(0);
+    // The phase is still reported — a small apply is not silent, it is just uncounted.
+    expect((await h.runs.get(runId))?.phase).toBe('applied');
+  });
+
+  it('⛔ publishes a denominator once an apply is big enough to be worth watching', async () => {
+    // The other side of `PER_ROW_PROGRESS_MIN_ROWS` (5 000 rows ≈ 944 ms measured). Built at exactly
+    // the threshold, because that is the boundary an off-by-one would move.
+    const rows = Array.from({ length: 5000 }, (_, i) => `${1000 + i},Facility ${i}`).join('\n');
+    const big = `national_code,name\n${rows}\n`;
+    const h = await harness(big);
+    const runId = await uploadValidateConfirm(h);
+    // The gate reads the VALIDATE's own count, so pin that this run really is at the threshold —
+    // otherwise a parser change could silently make this a small-apply test that still passed.
+    expect((await h.runs.get(runId))?.summary).toMatchObject({ parsed: 5000 });
+
+    await h.worker.tickOnce();
+    await h.worker.stop();
+
+    expect((await h.runs.get(runId))?.status).toBe('applied');
+    const stored = await rowFor(h.db, runId);
+    expect(stored.total).toBe(5000);
+    // Closed by the count it was opened with: `parsed`, not `written` — an apply whose rows were
+    // `unchanged` still processed all of them.
+    expect(stored.processed).toBe(5000);
+  }, 60_000);
+
   it('⛔ a cancel that arrives once the apply is under way reports applied, NOT cancelled', async () => {
     // A2b Task 6's honest semantics, at the layer that decides them. `cancel_requested` is observed
     // at PHASE BOUNDARIES and cannot interrupt the running transaction, so a cancel racing an apply
