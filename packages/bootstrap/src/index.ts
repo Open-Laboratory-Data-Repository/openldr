@@ -1566,6 +1566,16 @@ export type {
   // `samples` bucket (the route and the CLI both render them) instead of re-declaring its shape.
   FacilitySample, FacilityChangeSample, FacilityImportBlockedReason,
 } from './facility-import';
+// FAC-P1-05: the source→canonical controlled-field layer `importFacilities` now runs over every
+// parsed record. Exported because `FacilityImportResult.unmapped`/`notValidated` are keyed/typed by
+// `ControlledField`, so the route and the CLI cannot name those types without it — and because an
+// operator-facing mapping UI needs `observedFieldSystem`/`CONTROLLED_VALUE_SETS` to know which
+// coding system a raw value was captured under.
+export {
+  CONTROLLED_FIELDS, CONTROLLED_VALUE_SETS, observedFieldSystem,
+  resolveControlledFields, applyControlledFields,
+} from './facility-controlled-fields';
+export type { ControlledField, ControlledResolution } from './facility-controlled-fields';
 export { scanObservedFacilities, resolveObservedFacilities, publishFacilityMap, projectRegistryRows, retireRegistryConcepts, reprojectAfterRegistryDelete, listFacilityMappingConflicts } from './facility-reconcile';
 export type { ReconcileDeps, ScanResult, ScanOptions, ResolvedFacility, ResolvedVia, PublishResult, FacilityMappingConflict } from './facility-reconcile';
 // Task 10 (facility durable-updates): surfaces Task 9's dimension-state resolver to the HTTP route

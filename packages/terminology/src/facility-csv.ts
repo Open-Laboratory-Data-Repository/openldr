@@ -20,6 +20,15 @@ export interface FacilityCsvOptions {
   nationalSystem: string;
   /** Import despite unrecognised columns, carrying them into `extras`. */
   allowUnknownColumns?: boolean;
+  /** Import a row whose coordinate failed validation anyway, with BOTH `latitude` and `longitude`
+   *  set to `null`. The escape hatch in the same idiom as `allowUnknownColumns`, without which a
+   *  row carrying `latitude: "N/A"` is dropped entirely and the facility is simply lost.
+   *
+   *  ⛔ BOTH halves go to null, never just the offending one: `coordinatePair` exists because half a
+   *  coordinate is not a location, so keeping the good half would write a position the file never
+   *  expressed. The row's `RowError`s are pushed into `invalid` either way — this flag decides
+   *  whether the row is DROPPED, never whether it is REPORTED. */
+  allowInvalidCoordinates?: boolean;
 }
 
 export interface QuarantinedRow {
@@ -200,8 +209,12 @@ export function parseFacilityCsv(csv: string, opts: FacilityCsvOptions): Facilit
     const name = text(r.name);
     if (!nationalCode || !name) { skipped += 1; continue; }
 
-    const { latitude, longitude, errors: rowErrors } = coordinatePair(r.latitude, r.longitude, info.lines);
-    if (rowErrors.length > 0) { invalid.push(...rowErrors); continue; }
+    const coords = coordinatePair(r.latitude, r.longitude, info.lines);
+    const badCoords = coords.errors.length > 0;
+    // Reported unconditionally; DROPPED only without the override (see `allowInvalidCoordinates`).
+    if (badCoords) { invalid.push(...coords.errors); if (!opts.allowInvalidCoordinates) continue; }
+    const latitude = badCoords ? null : coords.latitude;
+    const longitude = badCoords ? null : coords.longitude;
 
     const extras: Record<string, unknown> = {};
     for (const col of unknownColumns) {

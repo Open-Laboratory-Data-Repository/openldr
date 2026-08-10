@@ -70,6 +70,12 @@ function numeric(v: unknown): string | undefined {
  * `unknownColumns` (see `KNOWN_ROW_KEYS`'s docblock) regardless of this flag. The asymmetry with CSV
  * — CSV blocks, JSONL never does — is deliberate, not an oversight.
  *
+ * ⚠ That asymmetry only holds if every CONSUMER honours it, and one did not: `openldr facilities
+ * import` refused on `unknownColumns.length > 0` for any format, so a JSONL release that grew a
+ * field was rejected by the CLI — the only path a register above the HTTP route's inline-apply cap
+ * can be applied through — while the route accepted the same file. That refusal is now format-aware
+ * (packages/cli/src/facilities.ts).
+ *
  * Records come out in the exact `FacilityRecord` shape `parseFacilityCsv` produces, including the
  * SAME deterministic `id` (`idFor`, imported from `facility-csv.ts` — never reimplemented), so a
  * release and a CSV of the same register produce identical ids for the same facility.
@@ -142,8 +148,14 @@ export function parseFacilityRelease(jsonl: string, opts: FacilityCsvOptions): F
       const name = text(str(o.name));
       if (!nationalCode || !name) { skipped += 1; continue; }
 
-      const { latitude, longitude, errors } = coordinatePair(numeric(o.latitude), numeric(o.longitude), lineNumber);
-      if (errors.length > 0) { invalid.push(...errors); continue; }
+      // Same override, same semantics, as `parseFacilityCsv` — see `allowInvalidCoordinates` in
+      // `FacilityCsvOptions`. Applied in BOTH parsers so a national register's escape hatch does not
+      // depend on which of the two shapes the publisher happens to ship.
+      const coords = coordinatePair(numeric(o.latitude), numeric(o.longitude), lineNumber);
+      const badCoords = coords.errors.length > 0;
+      if (badCoords) { invalid.push(...coords.errors); if (!opts.allowInvalidCoordinates) continue; }
+      const latitude = badCoords ? null : coords.latitude;
+      const longitude = badCoords ? null : coords.longitude;
 
       const extras: Record<string, unknown> = {};
       const email = text(str(o.email));

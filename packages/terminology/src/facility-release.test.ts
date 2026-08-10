@@ -104,6 +104,18 @@ describe('parseFacilityRelease', () => {
     expect(r.invalid).toEqual([{ line: 2, field: 'latitude', reason: 'out_of_range', raw: '200' }]);
   });
 
+  // 🟠 Important 2: the same escape hatch `parseFacilityCsv` gained, applied HERE too — a national
+  // register's ability to proceed past a bad coordinate must not depend on which of the two shapes
+  // its publisher happens to ship.
+  it('allowInvalidCoordinates imports the row with both coordinates null, still reporting the error', () => {
+    const jsonl = [metaLine(), rowLine({ latitude: 200, longitude: 29.912 })].join('\n');
+    const r = parseFacilityRelease(jsonl, { ...opts, allowInvalidCoordinates: true });
+    expect(r.records).toHaveLength(1);
+    expect(r.records[0].latitude).toBeNull();
+    expect(r.records[0].longitude).toBeNull(); // the parseable half too — half a pair is not a location.
+    expect(r.invalid).toEqual([{ line: 2, field: 'latitude', reason: 'out_of_range', raw: '200' }]);
+  });
+
   it('drops a row missing a required field and counts it as skipped, not throwing', () => {
     const jsonl = [metaLine(), rowLine({ name: null })].join('\n');
     const r = parseFacilityRelease(jsonl, opts);

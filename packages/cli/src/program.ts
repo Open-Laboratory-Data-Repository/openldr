@@ -255,6 +255,7 @@ export function buildProgram(): Command {
     .option('--apply', 'write the import (default: dry run — parse and report, write nothing)', false)
     .option('--allow-unknown-columns', 'import despite unrecognised CSV columns (carried into each row\'s extras)', false)
     .option('--allow-malformed-rows', 'import despite structurally malformed rows (quarantined rows are printed with their line number and skipped either way)', false)
+    .option('--allow-invalid-coordinates', 'import a row whose latitude/longitude failed validation anyway, with BOTH coordinates written as null (the error is reported either way)', false)
     .option('--format <csv|jsonl>', 'input file shape (default: csv)')
     .option('--release-version <v>', 'publisher-supplied release version, recorded on the facility_import_runs row')
     .option('--complete-release', 'the file is a COMPLETE release of this register — only then can a row\'s absence from it mean anything (default: false, absent stays "not evaluated")', false)
@@ -264,6 +265,7 @@ export function buildProgram(): Command {
     .option('--json', 'emit machine-readable JSON', false)
     .action(async (path: string, opts: {
       nationalSystem: string; apply: boolean; allowUnknownColumns: boolean; allowMalformedRows: boolean;
+      allowInvalidCoordinates: boolean;
       format?: 'csv' | 'jsonl'; releaseVersion?: string; completeRelease: boolean;
       onDeleted?: 'retire' | 'report'; onAbsent?: 'retire' | 'report'; onConflict?: 'skip' | 'overwrite';
       json: boolean;

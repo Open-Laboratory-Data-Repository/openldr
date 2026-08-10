@@ -114,6 +114,28 @@ describe('facilities import — commander parsing path (program.ts, not the func
     expect(opts.allowMalformedRows).toBe(true);
   });
 
+  // 🟠 Important 2: same seam again, for the coordinate override the design spec mandates. Without
+  // this flag registered on the command there is no way to reach `allowInvalidCoordinates` from a
+  // shell at all, and a row carrying `latitude: "N/A"` is simply lost.
+  it('parses --allow-invalid-coordinates and resolves allowInvalidCoordinates true', async () => {
+    const program = buildProgram().exitOverride();
+
+    await program.parseAsync([
+      'node',
+      'openldr',
+      'facilities',
+      'import',
+      '/some/national-register.csv',
+      '--national-system',
+      'urn:tz:hfr',
+      '--allow-invalid-coordinates',
+    ]);
+
+    expect(mocks.runFacilitiesImport).toHaveBeenCalledTimes(1);
+    const [, opts] = mocks.runFacilitiesImport.mock.calls[0] as [string, { allowInvalidCoordinates?: boolean }];
+    expect(opts.allowInvalidCoordinates).toBe(true);
+  });
+
   it('no --allow-malformed-rows resolves allowMalformedRows falsy', async () => {
     const program = buildProgram().exitOverride();
 
