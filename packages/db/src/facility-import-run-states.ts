@@ -31,7 +31,13 @@
  *  derived from this array, so a new entry cannot be omitted from the exhaustiveness test. */
 export const ALL_RUN_STATES = [
   // Active — a background run (A2b) moves through these.
-  'queued', 'validating', 'awaiting_confirmation', 'applying',
+  //
+  // ⛔ `confirmed` is a state and not a boolean column, and that is the whole of A2b Task 5's
+  // authorisation model. `claimNext` selects on `status` alone, so the ONLY way an apply worker can
+  // be stopped from claiming a run the operator has not decided about is for the confirm to move it
+  // into a state of its own. `awaiting_confirmation` is where a run WAITS; `confirmed` is where the
+  // operator has put it, and nothing but the confirm route writes it. See `APPLY_PHASE`.
+  'queued', 'validating', 'awaiting_confirmation', 'confirmed', 'applying',
   // The inline preview/apply path A2a shipped mints exactly this one.
   'previewed',
   // Terminal.
@@ -57,25 +63,40 @@ export const TERMINAL_RUN_STATES: ReadonlySet<FacilityImportRunStatus> =
 /** A run a NEW request may take over: the operator walked away. Superseded, never 409'd.
  *
  *  Nothing expires a run that stays here, so without this an operator who previews (or uploads) and
- *  then simply never confirms would lock the national system permanently. */
+ *  then simply never confirms would lock the national system permanently.
+ *
+ *  ⚠ `confirmed` IS here, which reads odd next to the other three (the operator did NOT walk away —
+ *  they asked for the write). It belongs anyway, because the test is "is a worker holding this
+ *  run?", not "did the operator mean it": a `confirmed` run is sitting in a queue no worker has
+ *  reached, exactly like `queued`, and nothing expires it either. A server stopped between the
+ *  confirm and the apply would otherwise leave the register locked with no operator path back. What
+ *  a take-over costs here is one un-run apply, which the superseding upload replaces. */
 export const SUPERSEDABLE_RUN_STATES: ReadonlySet<FacilityImportRunStatus> =
-  new Set<FacilityImportRunStatus>(['queued', 'awaiting_confirmation', 'previewed']);
+  new Set<FacilityImportRunStatus>(['queued', 'awaiting_confirmation', 'confirmed', 'previewed']);
 
 /** A worker is mid-flight. A new request gets 409 — taking over would race a live run. */
 export const RUNNING_RUN_STATES: ReadonlySet<FacilityImportRunStatus> =
   new Set<FacilityImportRunStatus>(['validating', 'applying']);
 
 /** The states `claimNext` may take a run FROM — the queue heads of the two worker phases (validate
- *  claims `queued`, apply claims `awaiting_confirmation`).
+ *  claims `VALIDATE_PHASE.from`, apply claims `APPLY_PHASE.from`).
  *
  *  ⚠ Like `APPLICABLE_RUN_STATES` below, this cuts ACROSS the three-way partition rather than
- *  extending it (both members are also SUPERSEDABLE — an operator who walks away from either is
- *  taken over, which is the whole reason those two states are supersedable), so the exhaustiveness
+ *  extending it (every member is also SUPERSEDABLE — an operator who walks away from any of them is
+ *  taken over, which is the whole reason those states are supersedable), so the exhaustiveness
  *  test cannot force a new state in here. That default is fail-closed for `isWorkerObserved`: an
  *  unclassified state counts as one NO worker will reach, and a cancel on it is therefore effected
- *  immediately rather than left as a flag nothing reads. */
+ *  immediately rather than left as a flag nothing reads.
+ *
+ *  ⛔ CARRY-FORWARD, unresolved and deliberately not deepened by A2b Task 5. `awaiting_confirmation`
+ *  is listed here because `claimNext`'s TYPE names it, not because any worker claims it — and after
+ *  Task 5 no worker claims it still: the apply phase claims `APPLY_PHASE.from` (`confirmed`), so
+ *  that a run the operator has not decided about can never be written. The consequence is that
+ *  `isWorkerObserved('awaiting_confirmation')` is `true`, so `requestCancel` merely FLAGS a run
+ *  parked for the operator and nothing ever reads the flag — the exact shape this module's
+ *  `isWorkerObserved` comment describes for `previewed`. A2b Task 6 (cancel) owns resolving it. */
 export const CLAIMABLE_RUN_STATES: ReadonlySet<FacilityImportRunStatus> =
-  new Set<FacilityImportRunStatus>(['queued', 'awaiting_confirmation']);
+  new Set<FacilityImportRunStatus>(['queued', 'awaiting_confirmation', 'confirmed']);
 
 /** The validate phase's transition as ONE value: the state it claims a run FROM and the state it
  *  moves that run TO.
@@ -94,6 +115,23 @@ export const CLAIMABLE_RUN_STATES: ReadonlySet<FacilityImportRunStatus> =
  *  (`'queued' | 'awaiting_confirmation'`, `'validating' | 'applying'`) still accept them. */
 export const VALIDATE_PHASE: { readonly from: 'queued'; readonly to: 'validating' } =
   { from: 'queued', to: 'validating' };
+
+/** The apply phase's transition as ONE value, exactly as `VALIDATE_PHASE` names the validate's.
+ *
+ *  ⛔ WHY IT IS A SHARED CONSTANT. Its two halves are spelled in two different packages, and neither
+ *  is checkable from the other: `POST /api/facilities/import/runs/:id/confirm` (apps/server) writes
+ *  `from` through `confirm()`, and the worker in `@openldr/bootstrap` claims `claimNext(from, to)`.
+ *  Spelled separately they can drift, and the drift is silent in the worst possible direction — the
+ *  confirm answers 202, the operator is told their import is queued, and NO worker ever claims the
+ *  run while it goes on holding `active_key`. Naming the pair here makes them the same VALUE.
+ *
+ *  ⛔ `from` is `'confirmed'` and NOT `'awaiting_confirmation'`, which is the entire safety property
+ *  of the two-phase flow. `claimNext` selects on status alone, so an apply claiming the parked state
+ *  would write a national register the moment a validate finished — with no operator decision
+ *  anywhere in the path. The confirm route is the only writer of `'confirmed'`, so the apply cannot
+ *  fire without one. */
+export const APPLY_PHASE: { readonly from: 'confirmed'; readonly to: 'applying' } =
+  { from: 'confirmed', to: 'applying' };
 
 /** Will a worker ever look at this run again — and therefore ever READ its `cancel_requested` flag?
  *
@@ -114,6 +152,13 @@ export function isWorkerObserved(status: FacilityImportRunStatus): boolean {
  *  Deliberately a positive list, not `!TERMINAL && !RUNNING` — `queued` is neither, and it reaches an
  *  apply with nothing classified yet. (`validating` IS in `RUNNING_RUN_STATES`, so the negative
  *  formulation would exclude it correctly; `queued` alone is what makes that formulation wrong.)
+ *
+ *  ⛔ `confirmed` is deliberately ABSENT even though a preview HAS run to completion for it. The
+ *  question this set answers is "may an apply be STARTED", and a confirmed run already has one
+ *  started against it — the operator handed it to the apply queue. Admitting it would let the inline
+ *  route's `runId` apply race the worker over the same run (two writes, one watermark), and would
+ *  let the confirm route re-queue a run it had already queued. Same exclusion, same reason, as
+ *  `applying`.
  *
  *  ⚠ Membership here does NOT promise a non-null `previewed_at`. `startPreview` inserts the row
  *  already `previewed` and `completePreview` stamps `previewed_at` in a LATER statement (see

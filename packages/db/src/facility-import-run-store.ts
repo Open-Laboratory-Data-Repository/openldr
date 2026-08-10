@@ -2,7 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { type Kysely, sql } from 'kysely';
 import type { InternalSchema } from './schema/internal';
 import {
-  ALL_RUN_STATES, RUNNING_RUN_STATES, TERMINAL_RUN_STATES, VALIDATE_PHASE, isWorkerObserved,
+  ALL_RUN_STATES, RUNNING_RUN_STATES, TERMINAL_RUN_STATES, VALIDATE_PHASE, APPLY_PHASE,
+  isWorkerObserved,
   type FacilityImportRunStatus,
 } from './facility-import-run-states';
 
@@ -56,8 +57,13 @@ export interface FacilityImportRunStore {
     fileHash: string; byteSize: number; releaseVersion?: string | null;
     options: unknown; requestedBy?: string | null;
   }): Promise<FacilityImportRun>;
-  /** Guarded UPDATE claim, exactly like facility-job-store's: a second claimer updates 0 rows. */
-  claimNext(status: 'queued' | 'awaiting_confirmation', to: 'validating' | 'applying'): Promise<FacilityImportRun | null>;
+  /** Guarded UPDATE claim, exactly like facility-job-store's: a second claimer updates 0 rows.
+   *
+   *  ⚠ The `status` union is the reason `isWorkerObserved` answers `true` for
+   *  `awaiting_confirmation` — a TYPE, not a worker. No worker claims that state: the validate
+   *  claims `VALIDATE_PHASE.from` and the apply claims `APPLY_PHASE.from`. See
+   *  `CLAIMABLE_RUN_STATES`' carry-forward note. */
+  claimNext(status: 'queued' | 'awaiting_confirmation' | 'confirmed', to: 'validating' | 'applying'): Promise<FacilityImportRun | null>;
   updateProgress(id: string, p: { phase: string; processed?: number | null; total?: number | null }): Promise<void>;
   /** The validate phase's commit point: stamp the watermark and the summary AND park the run for the
    *  operator, in ONE guarded UPDATE.
@@ -72,6 +78,21 @@ export interface FacilityImportRunStore {
    *  ⚠ `active_key` is deliberately KEPT: the operator has not decided yet, and until they do this
    *  run still owns the register. It is released by the terminal write that ends the run. */
   completeValidation(id: string, summary: unknown): Promise<boolean>;
+  /** The operator's decision: record the options they chose and hand the run to the APPLY queue, in
+   *  ONE guarded UPDATE.
+   *
+   *  ⛔ It writes `APPLY_PHASE.from`, never a literal, and that state is what authorises the write —
+   *  `claimNext` selects on status alone, so this transition is the only thing standing between a
+   *  parked run and a national register being rewritten. Nothing else in the codebase writes it.
+   *
+   *  ⛔ COMPARE-AND-SWAP on the status the caller observed, for exactly the reason `supersede` below
+   *  documents: the route READ the run in an earlier statement, and between that read and this write
+   *  a newer upload's supersede can fail it and release its `active_key`. `false` means that
+   *  happened — the caller must NOT report the run as queued for apply.
+   *
+   *  ⚠ `active_key` is deliberately KEPT: the apply has not run, and until it does this run still
+   *  owns the register. The terminal write that ends the apply releases it. */
+  confirm(id: string, expectedStatus: FacilityImportRunStatus, options: unknown): Promise<boolean>;
   /** Ask for a run to stop.
    *
    *  `'requested'` — the flag is set and a worker will observe it at its next phase boundary. This is
@@ -242,6 +263,24 @@ export function createFacilityImportRunStore(db: Kysely<InternalSchema>): Facili
         } as never)
         .where('id', '=', id)
         .where('status', '=', VALIDATE_PHASE.to)
+        .executeTakeFirst();
+      return Number(res?.numUpdatedRows ?? 0) > 0;
+    },
+
+    async confirm(id, expectedStatus, options) {
+      // ⛔ `APPLY_PHASE.from`, NEVER the literal. The worker in `@openldr/bootstrap` claims with
+      // `claimNext(APPLY_PHASE.from, APPLY_PHASE.to)`; spelled separately in the two packages the
+      // two can drift, and the drift is silent — this route would answer 202 while no worker ever
+      // claimed the run, which would then hold its register until a sweep or a supersede freed it.
+      //
+      // ⛔ `previewed_at` is deliberately NOT re-stamped. It is the watermark the VALIDATE took, and
+      // the apply's conflict detection is only meaningful against the moment the operator's summary
+      // was computed — moving it forward to the confirm would silently hide every edit made while
+      // they were reading it.
+      const res = await db.updateTable('facility_import_runs')
+        .set({ status: APPLY_PHASE.from, options: JSON.stringify(options) as never } as never)
+        .where('id', '=', id)
+        .where('status', '=', expectedStatus)
         .executeTakeFirst();
       return Number(res?.numUpdatedRows ?? 0) > 0;
     },

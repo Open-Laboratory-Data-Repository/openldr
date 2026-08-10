@@ -901,6 +901,10 @@ const reporting: ReportingApi = {
     // always one the worker can read back. Wired rather than left to the worker's own default
     // precisely so an operator who tunes the cap moves both ceilings at once.
     maxBufferBytes: cfg.FACILITY_IMPORT_MAX_UPLOAD_BYTES,
+    // A2b Task 5: an APPLIED import is an actor-attributable rewrite of a national register, so it
+    // records the same `facility.import` entry the inline route and the CLI write. Without this the
+    // background path would be the one door an import can come through unaudited.
+    audit,
     logger,
   });
 

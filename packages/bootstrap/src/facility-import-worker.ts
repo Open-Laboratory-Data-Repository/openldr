@@ -1,8 +1,14 @@
 import { constants as bufferConstants } from 'node:buffer';
 import { redact } from '@openldr/core';
+import type { AuditStore } from '@openldr/audit';
 import type { BlobStoragePort } from '@openldr/ports';
-import { VALIDATE_PHASE, type FacilityImportRun, type FacilityImportRunStore } from '@openldr/db';
-import { importFacilities, type FacilityImportDeps, type FacilityImportOptions } from './facility-import';
+import {
+  VALIDATE_PHASE, APPLY_PHASE, type FacilityImportRun, type FacilityImportRunStore,
+} from '@openldr/db';
+import {
+  importFacilities,
+  type FacilityImportDeps, type FacilityImportOptions, type FacilityImportResult,
+} from './facility-import';
 
 export interface FacilityImportWorkerDeps {
   runs: FacilityImportRunStore;
@@ -11,6 +17,14 @@ export interface FacilityImportWorkerDeps {
    *  `facilityJobs`/`logger` — see apps/server/src/facilities-routes.ts). Passed straight through:
    *  this worker adds no import behaviour of its own. */
   importDeps: FacilityImportDeps;
+  /** Where an APPLIED import records its `facility.import` audit entry — the same action the inline
+   *  route and the CLI write, because it is the same event: a national register was rewritten.
+   *
+   *  Optional so a caller that has no audit store (the worker's own unit tests aside, none in this
+   *  repo) still works, mirroring `FacilityImportDeps`' optional `admin`/`facilityJobs`. When it is
+   *  omitted the apply still happens and the omission is logged — an unaudited write is a gap worth
+   *  seeing, never a reason to refuse the operator's confirmed import. */
+  audit?: Pick<AuditStore, 'record'>;
   /** Poll interval, mirroring `createFacilityJobWorker`/`createTerminologyIngestWorker`. */
   intervalMs?: number;
   /** Ceiling on the file this worker will hold in memory — see `readBlob`. Wire it to
@@ -29,12 +43,19 @@ export interface FacilityImportWorker {
 const CANCELLED_BY_OPERATOR = 'cancelled by the operator';
 
 /**
- * A2b Task 4: the background half of the facility import, validate phase.
+ * A2b Tasks 4 and 5: the background half of the facility import — validate, then apply.
  *
  * `POST /api/facilities/import/upload` streams a national register into blob storage and mints a
  * `queued` run for it (nothing is parsed there). This worker claims that run, reads the file back,
- * and reports what is in it — then parks the run at `awaiting_confirmation` for the operator. The
- * apply phase (Task 5) is a second claim, from `awaiting_confirmation`.
+ * and reports what is in it — then parks the run at `awaiting_confirmation` for the operator.
+ *
+ * ⛔ AND THERE IT STOPS. The apply is a SECOND claim, and its source state is `APPLY_PHASE.from`
+ * (`confirmed`) — a state only `POST /api/facilities/import/runs/:id/confirm` ever writes. This
+ * worker never claims `awaiting_confirmation`, which is precisely what makes an unconfirmed run
+ * unwritable: `claimNext` selects on status alone, so if the apply claimed the parked state it would
+ * rewrite a national register the instant a validate finished, with no operator decision in the
+ * path at all. The two phases are otherwise the same shape — read the blob, call `importFacilities`,
+ * write the outcome onto the run.
  *
  * ⛔ IT CALLS `importFacilities`, THE SAME FUNCTION THE INLINE ROUTE CALLS, and reimplements no part
  * of it: parsing, classification, validation, controlled-field mapping and retirement all live there
@@ -93,9 +114,13 @@ export function createFacilityImportWorker(deps: FacilityImportWorkerDeps): Faci
    *     `packages/bootstrap/src/index.ts`) so an accepted upload is always readable; the check
    *     survives anyway as defence in depth, because a blob can predate a config change.
    *
-   *  The throw lands on `validate`'s ordinary catch, so an oversized register is a `failed` run
-   *  carrying this message — the same shape as any other validation failure. */
-  async function readBlob(key: string): Promise<string> {
+   *  The throw lands on the calling phase's ordinary catch, so an oversized register is a `failed`
+   *  run carrying this message — the same shape as any other failure. `phaseVerb` is what that phase
+   *  would have done ("validated"/"applied"): the apply reads the file a SECOND time, and telling an
+   *  operator their confirmed import "was not validated" would name the wrong step. Reachable on the
+   *  apply path only when the ceiling moved between the two reads, which is exactly the case where a
+   *  precise message earns its keep. */
+  async function readBlob(key: string, phaseVerb: 'validated' | 'applied'): Promise<string> {
     const stream = await deps.blob.getStream(key);
     const chunks: Buffer[] = [];
     let total = 0;
@@ -107,7 +132,7 @@ export function createFacilityImportWorker(deps: FacilityImportWorkerDeps): Faci
       if (total > maxBufferBytes) {
         throw new Error(
           `the uploaded register exceeds the ${maxBufferBytes}-byte ceiling this worker will hold in `
-          + 'memory; it was not validated',
+          + `memory; it was not ${phaseVerb}`,
         );
       }
       chunks.push(buf);
@@ -137,7 +162,85 @@ export function createFacilityImportWorker(deps: FacilityImportWorkerDeps): Faci
     };
   }
 
-  async function cancel(run: FacilityImportRun): Promise<void> {
+  /** The options the APPLY phase runs `importFacilities` with — `validateOptions`' twin, and
+   *  deliberately its own function rather than a flag on it, because the two differ on the two
+   *  fields that decide whether anything is written and whether conflicts mean anything.
+   *
+   *  ⛔ SPREAD FIRST, fixed fields after, for the reason `validateOptions` states — with one more
+   *  member below the spread than it has. `stored` here is no longer just the upload's
+   *  `{ nationalSystem }`: the confirm route merged the OPERATOR's choices into it
+   *  (`onConflict`/`onAbsent`/`allowMalformedRows`/…), which is the whole point of the round trip,
+   *  and those must reach `importFacilities` unaltered. What must still win over them is the run
+   *  row's own identity fields, so a hand-edited `options` JSON cannot import under a register this
+   *  run does not hold.
+   *
+   *  ⛔ `previewedAt` IS THE WATERMARK, and passing it is the entire reason this flow has two phases.
+   *  `completeValidation` stamped it (the DATABASE clock) at the moment the summary the operator read
+   *  was computed; `classifyFacilityRows` compares `facility_registry.updated_at` against it and
+   *  classifies anything newer as `conflict` — a row somebody else moved while the operator was
+   *  deciding. Drop it and `importFacilities` reports `conflict: null`, NOT EVALUATED, and every such
+   *  row is silently written as an ordinary update.
+   *
+   *  ⚠ `run.previewedAt` CAN be null and is passed through as null rather than defaulted to
+   *  anything. `null` means NOT EVALUATED and `0` would be a measurement nobody took — the exact
+   *  defect FAC-P1-03 named. A `new Date(null)` would be worse still: epoch 0, against which every
+   *  row in the register is "newer", turning the whole file into conflicts. */
+  function applyOptions(run: FacilityImportRun): FacilityImportOptions {
+    const stored = (run.options ?? {}) as Partial<FacilityImportOptions>;
+    return {
+      ...stored,
+      nationalSystem: run.nationalSystem,
+      format: run.sourceFormat,
+      releaseVersion: run.releaseVersion,
+      runId: run.id,
+      apply: true,
+      previewedAt: run.previewedAt === null ? null : new Date(run.previewedAt),
+    };
+  }
+
+  /** `facility.import`, matching the record the inline route writes for the same event (see
+   *  `recordAudit` in apps/server/src/facilities-routes.ts's import handler) — same action, same
+   *  entity type, same `entityId` (the national system), same `result` under metadata, so an
+   *  operator reading the audit log cannot tell which door an import came through except by the
+   *  fields that genuinely differ.
+   *
+   *  ⛔ CONTAINED, and called only after the run is already terminal. An audit failure must never
+   *  reach the apply's catch — that catch writes `finish('failed')`, which over an import that has
+   *  already COMMITTED would tell the operator their register was not written when it was.
+   *
+   *  ⚠ `actorType: 'system'` with the run's `requestedBy` as `actorId`. The actor who authorised
+   *  this write is whoever confirmed, and the run row has no column for them (`requested_by` is set
+   *  by the UPLOAD). The confirm route audits `facility.import.confirmed` with the real operator; this
+   *  entry names the worker that carried it out, on behalf of the requester it does know. */
+  async function auditApplied(run: FacilityImportRun, result: FacilityImportResult): Promise<void> {
+    const opts = (run.options ?? {}) as Partial<FacilityImportOptions>;
+    if (!deps.audit) {
+      deps.logger.error({ runId: run.id, nationalSystem: run.nationalSystem }, 'applied a facility import with no audit store wired; the write is unaudited');
+      return;
+    }
+    try {
+      await deps.audit.record({
+        actorType: 'system',
+        actorId: run.requestedBy,
+        actorName: 'facility-import-worker',
+        action: 'facility.import',
+        entityType: 'facility',
+        entityId: run.nationalSystem,
+        before: null,
+        after: null,
+        metadata: {
+          runId: run.id, nationalSystem: run.nationalSystem,
+          allowUnknownColumns: !!opts.allowUnknownColumns, allowMalformedRows: !!opts.allowMalformedRows,
+          result,
+        },
+      });
+    } catch (err) {
+      deps.logger.error({ err, runId: run.id }, 'failed to audit an applied facility import');
+    }
+  }
+
+  /** @param when Which boundary observed the cancel, for the log line only. */
+  async function cancel(run: FacilityImportRun, when: string): Promise<void> {
     // `finish` nulls `active_key` in the same update — without that a cancelled run would hold its
     // national register for good, which is the lock-out this whole surface exists to prevent.
     //
@@ -157,14 +260,14 @@ export function createFacilityImportWorker(deps: FacilityImportWorkerDeps): Faci
       await deps.blob.delete(run.blobKey)
         .catch((err) => deps.logger.error({ err, runId: run.id, blobKey: run.blobKey }, 'failed to delete the cancelled import file'));
     }
-    deps.logger.info({ runId: run.id, nationalSystem: run.nationalSystem }, 'facility import cancelled before validation completed');
+    deps.logger.info({ runId: run.id, nationalSystem: run.nationalSystem }, `facility import cancelled ${when}`);
   }
 
   async function validate(run: FacilityImportRun): Promise<void> {
     // Cancel boundary 1 — at the claim. A run cancelled while it sat `queued` must not have its file
     // read at all.
     if (run.cancelRequested) {
-      await cancel(run);
+      await cancel(run, 'before validation completed');
       return;
     }
 
@@ -174,7 +277,7 @@ export function createFacilityImportWorker(deps: FacilityImportWorkerDeps): Faci
       // (migration 080: an inline A2a run has none), so this answers rather than dereferencing null.
       // Thrown, not returned, so it lands on the same `failed` path as any other validation failure.
       if (!run.blobKey) throw new Error('the run has no blob key — nothing was stored to validate');
-      const body = await readBlob(run.blobKey);
+      const body = await readBlob(run.blobKey, 'validated');
 
       await deps.runs.updateProgress(run.id, { phase: 'validating' });
       const summary = await importFacilities(deps.importDeps, body, validateOptions(run));
@@ -184,7 +287,7 @@ export function createFacilityImportWorker(deps: FacilityImportWorkerDeps): Faci
       // keeps a cancelled run from being parked for a confirmation the operator no longer wants.
       const current = await deps.runs.get(run.id);
       if (current?.cancelRequested) {
-        await cancel(run);
+        await cancel(run, 'before validation completed');
         return;
       }
 
@@ -209,10 +312,78 @@ export function createFacilityImportWorker(deps: FacilityImportWorkerDeps): Faci
     }
   }
 
+  /**
+   * A2b Task 5: the second phase. The operator read the validate's summary and confirmed, which is
+   * the ONLY thing that puts a run into `APPLY_PHASE.from` — see that constant and `ALL_RUN_STATES`.
+   *
+   * ⛔ ONE CANCEL BOUNDARY, at the claim, unlike `validate`'s two — and the missing second one is
+   * deliberate rather than an omission. A cancel observed after `importFacilities` returns would be
+   * observed after the write has COMMITTED: marking that run `cancelled` (with no summary, deleting
+   * the uploaded file) would tell the operator nothing happened to a register that has just been
+   * rewritten. `requestCancel`'s own contract already says exactly this — `'requested'` means a
+   * worker will observe the flag at its next phase boundary, and "the run may still finish
+   * `applied`" (facility-import-run-store.ts). The apply's only honest boundary is before it starts.
+   */
+  async function apply(run: FacilityImportRun): Promise<void> {
+    if (run.cancelRequested) {
+      await cancel(run, 'before the apply started');
+      return;
+    }
+
+    let summary: FacilityImportResult;
+    try {
+      await deps.runs.updateProgress(run.id, { phase: 'reading the uploaded file' });
+      // Same nullable column as the validate path, answered rather than dereferenced. The confirm
+      // route refuses a run with no stored file, so this is the defence behind that one, not the
+      // only one.
+      if (!run.blobKey) throw new Error('the run has no blob key — nothing was stored to apply');
+      const body = await readBlob(run.blobKey, 'applied');
+
+      await deps.runs.updateProgress(run.id, { phase: 'applying' });
+      // ⛔ THE SAME `importFacilities` the validate phase, the inline route and the CLI all call.
+      // The write, the projection through `deps.admin`, and the ONE `facility-map-rebuild` enqueue
+      // all happen INSIDE it — none of them is repeated here, or an applied upload would rebuild the
+      // dimension twice and could disagree with a pasted register about what the same file means.
+      summary = await importFacilities(deps.importDeps, body, applyOptions(run));
+      // The commit point. Terminal, so it releases `active_key` in the same update — the register is
+      // free the moment the import that owned it is done with it.
+      await deps.runs.finish(run.id, 'applied', { summary });
+    } catch (err) {
+      const message = redact(err instanceof Error ? err.message : String(err));
+      await deps.runs.finish(run.id, 'failed', { error: message });
+      deps.logger.error({ err, runId: run.id, nationalSystem: run.nationalSystem }, 'facility import apply failed');
+      return;
+    }
+
+    // ⛔ EVERYTHING BELOW IS OUTSIDE THE TRY, and contained on its own. The register has been written
+    // and the run is terminal; a failure in a progress update or an audit write must not reach the
+    // catch above, which would mark an import that succeeded as `failed` and tell the operator their
+    // national register was not written when it was.
+    await deps.runs.updateProgress(run.id, { phase: 'applied' })
+      .catch((err) => deps.logger.error({ err, runId: run.id }, 'failed to record the final phase of an applied facility import'));
+    await auditApplied(run, summary);
+    deps.logger.info({ runId: run.id, nationalSystem: run.nationalSystem, written: summary.written }, 'facility import applied');
+  }
+
   async function tickOnce(): Promise<void> {
     if (running) return;
     running = true;
     try {
+      // ⛔ THE APPLY IS TRIED FIRST, and the order is a choice rather than an accident: an operator
+      // is already waiting on a confirmed apply, and finishing one RELEASES its national register,
+      // whereas a validate takes one and holds it for a decision. Starvation is not a risk — a
+      // confirmed run exists only because someone confirmed it, and there is nothing to re-queue it.
+      //
+      // ⛔ `APPLY_PHASE.from`, never `'awaiting_confirmation'`. That is the state a run WAITS in;
+      // claiming it would apply a national register with no operator decision anywhere in the path.
+      // The confirm route is the only writer of `APPLY_PHASE.from`, so this claim cannot fire
+      // without a confirm. See `APPLY_PHASE` (packages/db/src/facility-import-run-states.ts).
+      const confirmed = await deps.runs.claimNext(APPLY_PHASE.from, APPLY_PHASE.to);
+      if (confirmed) {
+        await apply(confirmed);
+        return;
+      }
+
       // ⛔ `VALIDATE_PHASE`, never the two literals. `completeValidation`'s compare-and-swap guards
       // on `VALIDATE_PHASE.to` — the state this claim moves the run INTO — and spelled separately in
       // the two packages they can drift silently: the CAS would match 0 rows and this worker would

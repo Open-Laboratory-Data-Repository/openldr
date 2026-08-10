@@ -6,7 +6,7 @@ import { makeMigratedDb } from '@openldr/db/testing';
 import { makeMigratedExternalDb } from '@openldr/db/testing-external';
 import {
   createTerminologyAdminStore, createFacilityRegistryStore, createFacilityJobStore,
-  DEFAULT_OBSERVED_FACILITY_SYSTEM, FACILITY_REGISTRY_SYSTEM, DEFAULT_LIST_LIMIT,
+  DEFAULT_OBSERVED_FACILITY_SYSTEM, FACILITY_REGISTRY_SYSTEM, DEFAULT_LIST_LIMIT, APPLY_PHASE,
 } from '@openldr/db';
 import { projectRegistryRows } from '@openldr/bootstrap';
 import { registerFacilitiesRoutes } from './facilities-routes';
@@ -3089,6 +3089,243 @@ describe('POST /api/facilities/import/upload', () => {
     const secondRun = (await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${second.json().runId}` })).json();
     expect(secondRun.status).toBe('queued');
     expect(secondRun.nationalSystem).toBe(SYSTEM);
+  });
+});
+
+// --- A2b Task 5: POST /api/facilities/import/runs/:id/confirm ----------------------------------
+//
+// The operator's decision, and the ONLY writer of `APPLY_PHASE.from` — the state the worker's apply
+// phase claims from. Everything here is about what the REQUEST leaves on the run row, since the
+// worker that reads it lives in @openldr/bootstrap (its own suite covers the apply itself).
+
+/** Put an uploaded run where the worker's validate phase would have left it: parked for the
+ *  operator, with a watermark and a summary. A DIRECT UPDATE, mirroring `completeValidation` —
+ *  apps/server does not run the worker, and a route test that did would be testing the worker. */
+async function parkForConfirmation(db: any, runId: string, summary: Record<string, unknown>) {
+  await db.updateTable('facility_import_runs')
+    .set({ status: 'awaiting_confirmation', previewed_at: sql`now()`, summary: JSON.stringify(summary) })
+    .where('id', '=', runId).execute();
+  // Asserted, so a setup that stopped taking cannot leave a test green for the uninteresting reason
+  // that the run was never parked at all.
+  expect(await db.selectFrom('facility_import_runs').select(['status', 'active_key'])
+    .where('id', '=', runId).executeTakeFirstOrThrow())
+    .toEqual({ status: 'awaiting_confirmation', active_key: SYSTEM });
+}
+
+/** Upload a register and park its run — the state an operator confirms from. */
+async function uploadAndPark(app: any, db: any, summary: Record<string, unknown> = { blocked: false, blockedReason: null }) {
+  const res = await app.inject({
+    method: 'POST', url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv' }),
+    headers: UPLOAD_HEADERS, payload: Buffer.from(facilityCsv(['100,Alpha,,,,,,,,,,,,,,']), 'utf8'),
+  });
+  expect(res.statusCode).toBe(202);
+  const runId = res.json().runId as string;
+  await parkForConfirmation(db, runId, summary);
+  return runId;
+}
+
+const confirmUrl = (runId: string) => `/api/facilities/import/runs/${runId}/confirm`;
+
+describe('POST /api/facilities/import/runs/:id/confirm', () => {
+  it('gated on facilities.manage — a facilities.view-only user gets 403 and the run is untouched', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const manageApp = await appWith(ctx);
+    const runId = await uploadAndPark(manageApp, db);
+
+    const viewApp = await appWith(ctx, ['facilities.view']);
+    const res = await viewApp.inject({ method: 'POST', url: confirmUrl(runId), payload: {} });
+
+    expect(res.statusCode).toBe(403);
+    expect((await db.selectFrom('facility_import_runs').select('status')
+      .where('id', '=', runId).executeTakeFirstOrThrow()).status).toBe('awaiting_confirmation');
+  });
+
+  it('confirms a parked run onto the apply queue, merging the operator\'s choices into its options', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const runId = await uploadAndPark(app, db);
+
+    const res = await app.inject({
+      method: 'POST', url: confirmUrl(runId),
+      payload: {
+        onDeleted: 'report', onAbsent: 'retire', onConflict: 'overwrite',
+        allowUnknownColumns: true, allowMalformedRows: true, allowInvalidCoordinates: true,
+      },
+    });
+
+    expect(res.statusCode).toBe(202);
+    expect(res.json()).toEqual({ runId, status: APPLY_PHASE.from });
+
+    const run = (await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${runId}` })).json();
+    // ⛔ `APPLY_PHASE.from`, the state the worker claims — NOT `awaiting_confirmation`, which no
+    // worker claims. This transition IS the authorisation: nothing else writes this state.
+    expect(run.status).toBe(APPLY_PHASE.from);
+    // ⛔ The upload's own `{ nationalSystem }` survives the merge — it is the register identity
+    // `active_key` locks on, and losing it would import under a register this run does not own.
+    expect(run.options).toEqual({
+      nationalSystem: SYSTEM,
+      onDeleted: 'report', onAbsent: 'retire', onConflict: 'overwrite',
+      allowUnknownColumns: true, allowMalformedRows: true, allowInvalidCoordinates: true,
+    });
+    // The validate's watermark survives, and the register is still held: the apply has not run yet.
+    expect(run.previewedAt).toEqual(expect.any(String));
+    expect((await db.selectFrom('facility_import_runs').select('active_key')
+      .where('id', '=', runId).executeTakeFirstOrThrow()).active_key).toBe(SYSTEM);
+  });
+
+  it('records only the choices the operator actually made — an omitted option is not invented', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const runId = await uploadAndPark(app, db);
+
+    const res = await app.inject({ method: 'POST', url: confirmUrl(runId), payload: { onConflict: 'skip' } });
+
+    expect(res.statusCode).toBe(202);
+    const run = (await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${runId}` })).json();
+    // ⛔ No `allowMalformedRows: false` etc. A durable record must not carry a decision nobody made —
+    // `importFacilities` already defaults every one of these, and `onConflict` defaults to `'skip'`.
+    //
+    // ⚠ What actually holds this is `ConfirmSchema` keeping every key `.optional()` and never
+    // `.default(...)`: MEASURED, zod omits an unsent optional key from its output entirely rather
+    // than setting it `undefined` (a filter in the route on `!== undefined` was written on the
+    // opposite belief and proved to be dead code — mutating it away changed nothing). Mutating one
+    // key to `.optional().default(false)` DOES fail this test, which is the regression it guards.
+    expect(run.options).toEqual({ nationalSystem: SYSTEM, onConflict: 'skip' });
+  });
+
+  it('audits the confirm with the operator who made it', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const runId = await uploadAndPark(app, db);
+    ctx.__audit.length = 0; // drop the upload's own entry
+
+    await app.inject({ method: 'POST', url: confirmUrl(runId), payload: { onConflict: 'overwrite' } });
+
+    expect(ctx.__audit).toHaveLength(1);
+    expect(ctx.__audit[0]).toMatchObject({
+      action: 'facility.import.confirmed',
+      entityType: 'facility',
+      entityId: SYSTEM,
+      // ⛔ The confirming actor, recorded HERE because it is the only place it is known: the run row
+      // carries `requested_by` (whoever uploaded) and no column for whoever confirmed, and the
+      // worker's own `facility.import` entry is written by the system, not by a request.
+      actorId: 'u1',
+      metadata: { runId, nationalSystem: SYSTEM, options: { nationalSystem: SYSTEM, onConflict: 'overwrite' } },
+    });
+  });
+
+  it('404s an unknown run id', async () => {
+    const db = await makeMigratedDb();
+    const app = await appWith(fakeImportCtx(db));
+    const res = await app.inject({ method: 'POST', url: confirmUrl('fir_does-not-exist'), payload: {} });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('⛔ 409s a run that is already applied — a confirm must not re-queue a decided run', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const runId = await uploadAndPark(app, db);
+    await db.updateTable('facility_import_runs')
+      .set({ status: 'applied', active_key: null }).where('id', '=', runId).execute();
+
+    const res = await app.inject({ method: 'POST', url: confirmUrl(runId), payload: {} });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toMatch(/no longer applicable/i);
+    expect((await db.selectFrom('facility_import_runs').select('status')
+      .where('id', '=', runId).executeTakeFirstOrThrow()).status).toBe('applied');
+  });
+
+  it('⛔ 409s a SECOND confirm of the same run — one confirm, one apply', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const runId = await uploadAndPark(app, db);
+
+    expect((await app.inject({ method: 'POST', url: confirmUrl(runId), payload: {} })).statusCode).toBe(202);
+    const second = await app.inject({ method: 'POST', url: confirmUrl(runId), payload: { onConflict: 'overwrite' } });
+
+    expect(second.statusCode).toBe(409);
+    // And the first confirm's options were not overwritten by the refused one.
+    const run = (await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${runId}` })).json();
+    expect(run.options).toEqual({ nationalSystem: SYSTEM });
+  });
+
+  it('⛔ 409s a BLOCKED file — a register with duplicate headers is never applied', async () => {
+    // ⛔ READ off the stored summary (`blocked`/`blockedReason`, what `importFacilities` reported at
+    // validate), never re-derived. Task 4 pins that a blocked file still PARKS — the operator is
+    // entitled to see the reconciliation result — so this route is what must refuse to apply it.
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const runId = await uploadAndPark(app, db, { blocked: true, blockedReason: 'duplicate-columns' });
+
+    const res = await app.inject({ method: 'POST', url: confirmUrl(runId), payload: { allowMalformedRows: true } });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toMatch(/duplicate-columns/);
+    // ⛔ Still parked, NOT queued for apply — and `allowMalformedRows` does not unblock this reason
+    // (there is no override for duplicate headers: which of two identically-named columns wins is a
+    // guess about master data).
+    expect((await db.selectFrom('facility_import_runs').select('status')
+      .where('id', '=', runId).executeTakeFirstOrThrow()).status).toBe('awaiting_confirmation');
+  });
+
+  it('⛔ 409s a quarantined-rows file until the operator supplies the override, then confirms it', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const runId = await uploadAndPark(app, db, { blocked: true, blockedReason: 'quarantined-rows' });
+
+    const refused = await app.inject({ method: 'POST', url: confirmUrl(runId), payload: {} });
+    expect(refused.statusCode).toBe(409);
+    expect(refused.json().error).toMatch(/allowMalformedRows/);
+
+    // ⛔ The other half, or `return reply.code(409)` unconditionally would pass the assertion above:
+    // this reason DOES have an override, and the confirm is what carries it.
+    const accepted = await app.inject({ method: 'POST', url: confirmUrl(runId), payload: { allowMalformedRows: true } });
+    expect(accepted.statusCode).toBe(202);
+    expect((await db.selectFrom('facility_import_runs').select('status')
+      .where('id', '=', runId).executeTakeFirstOrThrow()).status).toBe(APPLY_PHASE.from);
+  });
+
+  it('⛔ 409s a run with no stored file — an inline preview cannot be applied by the worker', async () => {
+    // `isApplicable` admits `previewed`, the state the INLINE A2a preview mints — and that run has no
+    // `blob_key` (it carried its CSV in the request body and never stored it). Confirming one would
+    // hand the worker a run it can only fail, while taking the run out of the state the inline apply
+    // route needs it in. A different question from the status guard, so it is asked separately.
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const csv = facilityCsv(['100,Alpha,,,,,,,,,,,,,,']);
+    const preview = await app.inject({ method: 'POST', url: '/api/facilities/import', payload: { csv, nationalSystem: SYSTEM } });
+    const runId = preview.json().runId;
+
+    const res = await app.inject({ method: 'POST', url: confirmUrl(runId), payload: {} });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toMatch(/no stored file/i);
+    // Untouched — the inline apply route can still finish this run with its `runId`.
+    const run = (await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${runId}` })).json();
+    expect(run.status).toBe('previewed');
+  });
+
+  it('rejects an unknown option value (400) before touching the run', async () => {
+    const db = await makeMigratedDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const runId = await uploadAndPark(app, db);
+
+    const res = await app.inject({ method: 'POST', url: confirmUrl(runId), payload: { onConflict: 'merge' } });
+
+    expect(res.statusCode).toBe(400);
+    expect((await db.selectFrom('facility_import_runs').select('status')
+      .where('id', '=', runId).executeTakeFirstOrThrow()).status).toBe('awaiting_confirmation');
   });
 });
 

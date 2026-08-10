@@ -1,8 +1,12 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Readable } from 'node:stream';
-import type { Kysely } from 'kysely';
+import { type Kysely, sql } from 'kysely';
+import type { AuditEventInput } from '@openldr/audit';
 import { makeMigratedDb } from '@openldr/db/testing';
-import { createFacilityImportRunStore, referenceCapture, type InternalSchema, type FacilityImportRunStore } from '@openldr/db';
+import {
+  createFacilityImportRunStore, referenceCapture, APPLY_PHASE,
+  type InternalSchema, type FacilityImportRunStore,
+} from '@openldr/db';
 import { importFacilities } from './facility-import';
 import { createFacilityImportWorker } from './facility-import-worker';
 
@@ -24,18 +28,20 @@ const upload = (blobKey = KEY) => ({
 /** A blob store holding one object, with a hook that runs as the worker opens the stream — the
  *  natural seam for "the operator cancels while the file is being validated" without stubbing
  *  `importFacilities` itself. */
-function fakeBlob(body: string, onGet?: (key: string) => Promise<void> | void) {
+function fakeBlob(body: string | (() => string), onGet?: (key: string) => Promise<void> | void) {
   return {
     getStream: vi.fn(async (key: string) => {
       await onGet?.(key);
-      return Readable.from([Buffer.from(body, 'utf8')]);
+      // A2b Task 5: a THUNK is accepted so one harness can serve a different file to a second run —
+      // the apply-phase conflict tests upload a register, then upload an edited one over the same db.
+      return Readable.from([Buffer.from(typeof body === 'string' ? body : body(), 'utf8')]);
     }),
     delete: vi.fn(async () => {}),
   };
 }
 
 async function harness(
-  body: string,
+  body: string | (() => string),
   onGet?: (key: string) => Promise<void> | void,
   opts?: { maxBufferBytes?: number },
 ) {
@@ -43,11 +49,16 @@ async function harness(
   const runs: FacilityImportRunStore = createFacilityImportRunStore(db);
   const blob = fakeBlob(body, onGet);
   const logger = fakeLogger();
+  // A2b Task 5: an applied import is audited (`facility.import`, matching the inline route's record),
+  // so the worker takes an audit store. Recorded into an array here rather than stubbed away — the
+  // apply tests assert on the entry.
+  const audited: AuditEventInput[] = [];
+  const audit = { record: vi.fn(async (e: AuditEventInput) => { audited.push(e); return e as never; }) };
   const worker = createFacilityImportWorker({
-    runs, blob, importDeps: { db, capture: referenceCapture }, intervalMs: 10_000, logger,
+    runs, blob, importDeps: { db, capture: referenceCapture }, intervalMs: 10_000, logger, audit,
     ...(opts?.maxBufferBytes === undefined ? {} : { maxBufferBytes: opts.maxBufferBytes }),
   });
-  return { db, runs, blob, logger, worker };
+  return { db, runs, blob, logger, worker, audit, audited };
 }
 
 const rowFor = (db: Kysely<InternalSchema>, id: string) =>
@@ -248,6 +259,27 @@ describe('createFacilityImportWorker — validate phase', () => {
     expect((await rowFor(db, run.id)).active_key).toBeNull();
   });
 
+  it('⛔ never claims a run the operator has not confirmed — a parked run is left alone', async () => {
+    // THE core guarantee of the two-phase flow. `awaiting_confirmation` is in `CLAIMABLE_RUN_STATES`
+    // (a carry-forward Task 4 moved rather than removed), so nothing in the TYPES stops an apply
+    // being claimed from it — only this worker's choice of `APPLY_PHASE.from` does. A worker that
+    // claimed the parked state would write a national register the operator never approved.
+    const { db, runs, blob, worker } = await harness(CSV);
+    const run = await runs.startUpload(upload());
+
+    await worker.tickOnce();                       // validate → awaiting_confirmation
+    expect((await runs.get(run.id))?.status).toBe('awaiting_confirmation');
+    await worker.tickOnce();                       // …and again: there is nothing to claim
+    await worker.stop();
+
+    expect((await runs.get(run.id))?.status).toBe('awaiting_confirmation');
+    // The file was read ONCE (by the validate). A second read would mean the apply had claimed it.
+    expect(blob.getStream).toHaveBeenCalledTimes(1);
+    expect(await registryRows(db)).toHaveLength(0);
+    // Still parked, still holding its register, waiting for the operator.
+    expect((await rowFor(db, run.id)).active_key).toBe(SYSTEM);
+  });
+
   it('stop() genuinely AWAITS the crash-recovery handle rather than merely firing it', async () => {
     // Same construction as facility-job-worker.test.ts's: without a real timer-backed delay the
     // plain recovery test above passes whether or not stop() awaits, because enough microtask turns
@@ -269,5 +301,224 @@ describe('createFacilityImportWorker — validate phase', () => {
     await worker.stop();
 
     expect((await runs.get(run.id))?.status).toBe('failed');
+  });
+});
+
+// ── A2b Task 5: the apply phase ────────────────────────────────────────────────────────────────
+//
+// The second claim. `POST /api/facilities/import/runs/:id/confirm` (apps/server) merges the
+// operator's choices into the run's options and moves it `awaiting_confirmation` → `APPLY_PHASE.from`
+// through `runs.confirm` — the SAME store call these tests make, so what is exercised here is
+// exactly what the route hands the worker.
+
+describe('createFacilityImportWorker — apply phase', () => {
+  /** Upload → validate → confirm, leaving the run on the apply queue. Returns the run id. */
+  async function uploadValidateConfirm(
+    h: { runs: FacilityImportRunStore; worker: { tickOnce(): Promise<void> } },
+    options: Record<string, unknown> = { nationalSystem: SYSTEM },
+  ): Promise<string> {
+    const run = await h.runs.startUpload(upload());
+    await h.worker.tickOnce();
+    expect((await h.runs.get(run.id))?.status).toBe('awaiting_confirmation');
+    expect(await h.runs.confirm(run.id, 'awaiting_confirmation', options)).toBe(true);
+    return run.id;
+  }
+
+  it('applies a confirmed run: the register is written, the run is applied, the key released', async () => {
+    const h = await harness(CSV);
+    const runId = await uploadValidateConfirm(h);
+
+    await h.worker.tickOnce();
+    await h.worker.stop();
+
+    const after = await h.runs.get(runId);
+    expect(after?.status).toBe('applied');
+    // ⛔ `written` is what a statement actually wrote — the validate reported `written: {0,0,0}` for
+    // this same file (see the validate suite above), so this is the whole difference the confirm made.
+    expect(after?.summary).toMatchObject({
+      parsed: 1, create: 1, changed: 0, unchanged: 0,
+      written: { created: 1, updated: 0, retired: 0 },
+      blocked: false, runId,
+    });
+    // The row really is in the registry, not merely counted.
+    const rows = await registryRows(h.db);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].name).toBe('Dodoma Regional Referral');
+    // Terminal ⇒ the register is free for the next import.
+    expect((await rowFor(h.db, runId)).active_key).toBeNull();
+    expect(after?.phase).toBe('applied');
+  });
+
+  it('audits facility.import once, matching the inline route\'s record', async () => {
+    const h = await harness(CSV);
+    const runId = await uploadValidateConfirm(h, { nationalSystem: SYSTEM, allowMalformedRows: true });
+
+    await h.worker.tickOnce();
+    await h.worker.stop();
+
+    expect(h.audited).toHaveLength(1);
+    expect(h.audited[0]).toMatchObject({
+      action: 'facility.import',
+      entityType: 'facility',
+      entityId: SYSTEM,
+      metadata: {
+        runId, nationalSystem: SYSTEM,
+        allowUnknownColumns: false, allowMalformedRows: true,
+        result: { written: { created: 1, updated: 0, retired: 0 } },
+      },
+    });
+  });
+
+  it('a validate that fails is never audited as an import', async () => {
+    // The audit belongs to the WRITE. A run that only ever validated wrote nothing, so an entry here
+    // would tell an operator a register was imported when it was not.
+    const h = await harness(UNTERMINATED_QUOTE);
+    await h.runs.startUpload(upload());
+
+    await h.worker.tickOnce();
+    await h.worker.stop();
+
+    expect(h.audited).toEqual([]);
+  });
+
+  it('⛔ reports a row edited between the validate and the apply as a conflict, and skips it', async () => {
+    // THE POINT OF THE TWO-PHASE FLOW. The watermark `completeValidation` stamped is what makes this
+    // measurable at all: without it the apply reports `conflict: null` (NOT EVALUATED) and this row
+    // is written as an ordinary `unchanged`/`changed`.
+    let body = CSV;
+    const h = await harness(() => body);
+
+    // Run 1 — the register starts out holding this facility.
+    const first = await uploadValidateConfirm(h);
+    await h.worker.tickOnce();
+    expect((await h.runs.get(first))?.status).toBe('applied');
+
+    // Run 2 — uploaded and validated, so it carries a fresh watermark…
+    body = CSV;
+    const run = await h.runs.startUpload(upload());
+    await h.worker.tickOnce();
+    expect((await h.runs.get(run.id))?.status).toBe('awaiting_confirmation');
+
+    // …and then somebody else edits the row before the operator confirms.
+    //
+    // ⛔ `now() + interval '1 second'`, not a plain `now()`: pg-mem's `now()` is real
+    // millisecond-precision wall-clock time and two back-to-back calls land in the SAME millisecond
+    // roughly half the time (measured), so a plain `now()` here races the watermark
+    // `completeValidation` just stamped and would flake ~50% of the time. The same fix, for the same
+    // measured reason, as the inline route's conflict tests in apps/server.
+    await h.db.updateTable('facility_registry')
+      .set({ updated_at: sql`now() + interval '1 second'` } as never)
+      .where('national_code', '=', '100').execute();
+
+    expect(await h.runs.confirm(run.id, 'awaiting_confirmation', { nationalSystem: SYSTEM })).toBe(true);
+    await h.worker.tickOnce();
+    await h.worker.stop();
+
+    const after = await h.runs.get(run.id);
+    expect(after?.status).toBe('applied');
+    // ⛔ 1, and NOT null: the watermark reached `importFacilities`, so the question was ASKED. A null
+    // here means the worker dropped `previewedAt` — conflicts NOT EVALUATED.
+    expect((after?.summary as { conflict: number | null }).conflict).toBe(1);
+    // The default policy is skip: the row somebody else touched is left exactly as they left it.
+    expect(after?.summary).toMatchObject({ written: { created: 0, updated: 0, retired: 0 } });
+  });
+
+  it('writes the conflicting row when the operator confirms with onConflict: overwrite', async () => {
+    // The mirror image of the test above — same setup, opposite outcome once the confirm carries the
+    // explicit override. This is what makes the confirm's options load-bearing rather than recorded.
+    let body = CSV;
+    const h = await harness(() => body);
+
+    const first = await uploadValidateConfirm(h);
+    await h.worker.tickOnce();
+    expect((await h.runs.get(first))?.status).toBe('applied');
+
+    const RENAMED = 'national_code,name\n100,Dodoma Regional Referral Hospital\n';
+    body = RENAMED;
+    const run = await h.runs.startUpload(upload());
+    await h.worker.tickOnce();
+
+    await h.db.updateTable('facility_registry')
+      .set({ updated_at: sql`now() + interval '1 second'` } as never)
+      .where('national_code', '=', '100').execute();
+
+    expect(await h.runs.confirm(run.id, 'awaiting_confirmation', {
+      nationalSystem: SYSTEM, onConflict: 'overwrite',
+    })).toBe(true);
+    await h.worker.tickOnce();
+    await h.worker.stop();
+
+    const after = await h.runs.get(run.id);
+    // Still COUNTED as a conflict — the operator must be told how many rows they overwrote, not have
+    // the number vanish the moment they choose to act on it.
+    expect((after?.summary as { conflict: number | null }).conflict).toBe(1);
+    expect(after?.summary).toMatchObject({ written: { created: 0, updated: 1, retired: 0 } });
+    const rows = await registryRows(h.db);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].name).toBe('Dodoma Regional Referral Hospital');
+  });
+
+  it('a cancel requested before the apply is claimed writes nothing and releases the register', async () => {
+    const h = await harness(CSV);
+    const runId = await uploadValidateConfirm(h);
+    // Requested while the run sits on the apply queue — the boundary the claim must observe.
+    expect(await h.runs.requestCancel(runId)).toBe('requested');
+
+    await h.worker.tickOnce();
+    await h.worker.stop();
+
+    const after = await h.runs.get(runId);
+    expect(after?.status).toBe('cancelled');
+    // ⛔ Nothing was written. A cancel honoured AFTER the write would be a lie the registry contradicts.
+    expect(await registryRows(h.db)).toHaveLength(0);
+    expect((await rowFor(h.db, runId)).active_key).toBeNull();
+    // The stored file will never be applied now.
+    expect(h.blob.delete).toHaveBeenCalledWith(KEY);
+    // …and no audit: nothing was imported.
+    expect(h.audited).toEqual([]);
+  });
+
+  it('a throwing apply leaves the run failed with its own message and releases the register', async () => {
+    // The file validated (the worker read a good CSV), then the stored object changed under it. The
+    // apply must answer for that rather than crash the tick — and must release the register.
+    let body = CSV;
+    const h = await harness(() => body);
+    const runId = await uploadValidateConfirm(h);
+    body = UNTERMINATED_QUOTE;
+
+    await expect(h.worker.tickOnce()).resolves.toBeUndefined();
+    await h.worker.stop();
+
+    const after = await h.runs.get(runId);
+    expect(after?.status).toBe('failed');
+    expect(after?.error).toBeTruthy();
+    expect(await registryRows(h.db)).toHaveLength(0);
+    expect((await rowFor(h.db, runId)).active_key).toBeNull();
+    // Retained, unlike a cancel: the object is the only evidence of what was actually applied.
+    expect(h.blob.delete).not.toHaveBeenCalled();
+    expect(h.audited).toEqual([]);
+  });
+
+  it('crash recovery covers an interrupted apply, not only an interrupted validate', async () => {
+    // `applying` is in RUNNING_RUN_STATES, so `failStaleRunning`'s set-driven sweep already reaches
+    // it — pinned here because a run killed mid-apply is the one that holds a NATIONAL register.
+    const db = (await makeMigratedDb()) as Kysely<InternalSchema>;
+    const runs = createFacilityImportRunStore(db);
+    const run = await runs.startUpload(upload());
+    await runs.claimNext('queued', 'validating');
+    await runs.completeValidation(run.id, { create: 1 });
+    await runs.confirm(run.id, 'awaiting_confirmation', { nationalSystem: SYSTEM });
+    await runs.claimNext(APPLY_PHASE.from, APPLY_PHASE.to); // a process killed mid-apply
+
+    const worker = createFacilityImportWorker({
+      runs, blob: fakeBlob(CSV), importDeps: { db, capture: referenceCapture },
+      intervalMs: 10_000, logger: fakeLogger(),
+    });
+    await worker.stop();
+
+    const after = await runs.get(run.id);
+    expect(after?.status).toBe('failed');
+    expect(after?.error).toMatch(/restart/i);
+    expect((await rowFor(db, run.id)).active_key).toBeNull();
   });
 });

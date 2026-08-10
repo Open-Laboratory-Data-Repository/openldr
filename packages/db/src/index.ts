@@ -61,7 +61,7 @@ export { createFacilityImportRunStore, type FacilityImportRun, type FacilityImpo
 // the truth: there is one definition of the lifecycle and this module owns it.
 export {
   ALL_RUN_STATES, TERMINAL_RUN_STATES, SUPERSEDABLE_RUN_STATES, RUNNING_RUN_STATES, isApplicable,
-  VALIDATE_PHASE,
+  VALIDATE_PHASE, APPLY_PHASE,
   type FacilityImportRunStatus,
 } from './facility-import-run-states';
 export { createRoleStore } from './role-store';

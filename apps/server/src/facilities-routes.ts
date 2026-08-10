@@ -13,7 +13,7 @@ import {
 import {
   splitFacilityAnswers, CORE_FACILITY_KEYS, FACILITY_ADMIN_LEVELS, referenceCapture,
   FACILITY_REGISTRY_SYSTEM, DEFAULT_LIST_LIMIT, FACILITY_HEALTH_VALUES, createFacilityImportRunStore,
-  SUPERSEDABLE_RUN_STATES, RUNNING_RUN_STATES, TERMINAL_RUN_STATES, isApplicable,
+  SUPERSEDABLE_RUN_STATES, RUNNING_RUN_STATES, TERMINAL_RUN_STATES, isApplicable, APPLY_PHASE,
 } from '@openldr/db';
 import type {
   FacilityAdminLevel, ExternalSchema, FacilityHealth, FacilityImportRun, FacilityImportRunStatus,
@@ -195,6 +195,33 @@ const ImportSchema = z.object({
   // Recorded on the run for FAC-P1-03's "who imported which release and when"; never read by
   // `importFacilities` itself (which has no `releaseVersion` option).
   releaseVersion: z.string().optional(),
+});
+
+/** A2b Task 5: the operator's choices at the confirm step — the decisions the UPLOAD deliberately
+ *  did not record (see the upload route's `options: { nationalSystem }` comment: putting a made-up
+ *  set there would have been a decision no operator made).
+ *
+ *  ⛔ Every key here is drawn from `FacilityImportOptions` and spelled the same way, because these
+ *  land verbatim in `facility_import_runs.options` and the worker spreads that straight into
+ *  `importFacilities`. A key renamed on one side is silently DROPPED — zod strips what it does not
+ *  know — so the operator's choice would simply not take effect.
+ *
+ *  ⛔ `nationalSystem`, `format` and `apply` are deliberately ABSENT and must stay absent. The first
+ *  two are the run's identity (a client-supplied `nationalSystem` here would import under a register
+ *  this run does not hold), and `apply` is the phase, which the worker decides. The worker re-imposes
+ *  all three off the run row regardless — this is the first of the two defences, not the only one.
+ *
+ *  ⚠ No `completeRelease`: it is a claim about the FILE ("this is the whole register"), which nothing
+ *  at confirm time can newly establish, and it gates the absence inference that could mass-retire a
+ *  national register. Whoever adds it here owes that path a hard look first — see
+ *  `importFacilities`' absence guard. */
+const ConfirmSchema = z.object({
+  onDeleted: z.enum(['retire', 'report']).optional(),
+  onAbsent: z.enum(['retire', 'report']).optional(),
+  onConflict: z.enum(['skip', 'overwrite']).optional(),
+  allowUnknownColumns: z.boolean().optional(),
+  allowMalformedRows: z.boolean().optional(),
+  allowInvalidCoordinates: z.boolean().optional(),
 });
 
 // The client submits ANSWERS, never a pre-split record: deciding which answers become indexed
@@ -1712,6 +1739,116 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     const q = req.query as Record<string, unknown>;
     const runs = await importRuns.list(ownFirstString(q, 'nationalSystem'), parseLimit(q.limit));
     return { runs };
+  });
+
+  // ── A2b Task 5: the operator's confirm ────────────────────────────────────────────────────────
+  //
+  // The decision half of the background import. The worker validated an uploaded register and parked
+  // the run at `awaiting_confirmation` with a summary; this route takes the operator's choices,
+  // records them on the run, and hands it to the APPLY queue.
+  //
+  // ⛔ THIS ROUTE IS THE AUTHORISATION. `claimNext` selects on `status` alone, so the ONLY thing
+  // standing between a validated file and a national register being rewritten is that the apply
+  // worker claims `APPLY_PHASE.from` — a state nothing but the `confirm` call below ever writes. It
+  // is not a flag on the row and not a field in `options` for exactly that reason: either could be
+  // set by something that never asked an operator.
+  //
+  // 202, not 200: the register has NOT been imported when this returns — a worker will do that.
+  app.post('/api/facilities/import/runs/:id/confirm', MANAGE, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const p = ConfirmSchema.safeParse(req.body ?? {});
+    if (!p.success) { reply.code(400); return { error: p.error.message }; }
+
+    const run = await importRuns.get(id);
+    if (!run) { reply.code(404); return { error: `import run not found: ${id}` }; }
+
+    // ⛔ `isApplicable`, the SAME predicate the inline route's `runId` guard asks — not a second
+    // hand-written one, and not a `!== 'awaiting_confirmation'` literal. A confirm and an inline
+    // apply are the same question ("may an apply start from this run?"), and A2a's Critical finding
+    // was two guards answering it differently. It excludes an already-`confirmed` run too, so a
+    // double-click cannot queue two applies.
+    if (!isApplicable(run.status)) {
+      reply.code(409);
+      return { error: `import run ${id} is no longer applicable: status is "${run.status}"` };
+    }
+
+    // A DIFFERENT question from the status guard above, deliberately asked separately rather than
+    // folded into it: `isApplicable` admits `previewed`, the state the INLINE A2a preview mints —
+    // and that run carried its CSV in the request body and stored nothing. Confirming one would hand
+    // the worker a run it can only fail, while taking it out of the state its own apply route needs.
+    if (!run.blobKey) {
+      reply.code(409);
+      return {
+        error: `import run ${id} has no stored file — it was previewed inline; `
+          + 'apply it through POST /api/facilities/import carrying its runId',
+      };
+    }
+
+    // ⛔ THE BLOCKED GATE, and it READS the importer's own verdict rather than re-deriving it.
+    // `importFacilities` reports `blocked`/`blockedReason` precisely so its consumers stop rebuilding
+    // the predicate (see `FacilityImportResult.blocked`); the worker stored that verdict on the run,
+    // and A2b Task 4 pinned that a blocked file still PARKS — the operator is entitled to see the
+    // reconciliation result. Refusing it is THIS route's job.
+    //
+    // ⚠ `'quarantined-rows'` is overridable and `'duplicate-columns'` is not — the override family
+    // `allowMalformedRows` belongs to, and the reason `blockedReason` is a machine token at all.
+    // Fail-closed: a reason this does not recognise is refused, so a blocked reason added later
+    // cannot be waved through by omission.
+    const summary = (run.summary ?? null) as { blocked?: unknown; blockedReason?: unknown } | null;
+    if (summary?.blocked === true) {
+      const overridden = summary.blockedReason === 'quarantined-rows' && p.data.allowMalformedRows === true;
+      if (!overridden) {
+        reply.code(409);
+        return {
+          error: `import run ${id} cannot be applied: the file is blocked (${String(summary.blockedReason)})`
+            + (summary.blockedReason === 'quarantined-rows'
+              ? ' — confirm with allowMalformedRows to import the rest of the file anyway'
+              : ''),
+        };
+      }
+    }
+
+    // ⛔ Only the keys the operator actually sent reach the durable record. A decision nobody made,
+    // stored as though they had, is the shape of defect FAC-P1-03 names one layer up — and every one
+    // of these options is defaulted by `importFacilities` itself, so recording an unsent one buys
+    // nothing and asserts something false.
+    //
+    // ⚠ MEASURED, because the obvious belief is wrong and this line was written twice on it: zod does
+    // NOT put an omitted `.optional()` key into its output as `undefined` — it omits the key. A
+    // `{ onConflict: 'skip' }` body parses to an object whose own keys are exactly `['onConflict']`
+    // (printed from this line). So the `Object.entries(...).filter(v !== undefined)` this used to be
+    // was dead code that could never remove anything, and the property is really held by the SCHEMA:
+    // keep these `.optional()`, never `.default(...)`, or an unsent choice starts being recorded.
+    const chosen = { ...p.data };
+    // Stored first, choices after: the upload recorded `{ nationalSystem }`, the register identity
+    // `active_key` locks on, and a client cannot be allowed to overwrite it — `ConfirmSchema` has no
+    // such key, so nothing in `chosen` can. The worker additionally re-imposes it off the run row.
+    const options = { ...(run.options as Record<string, unknown> | null ?? {}), ...chosen };
+
+    // Compare-and-swap on the status just read — see the store's own note. `false` means the run
+    // moved between the read above and this write (a newer upload superseded it, releasing its
+    // register), so reporting 202 would promise an apply that will never run.
+    if (!(await importRuns.confirm(id, run.status, options))) {
+      reply.code(409);
+      return { error: `import run ${id} was taken over before it could be confirmed` };
+    }
+
+    // ⛔ The only place the CONFIRMING operator is recorded. `facility_import_runs.requested_by` is
+    // whoever UPLOADED, and there is no column for whoever confirmed — while the actual write is
+    // performed later by a worker with no request behind it, which audits `facility.import` as the
+    // system. Without this entry the decision that authorised a national register's rewrite would
+    // have no actor anywhere.
+    await recordAudit(ctx, req, {
+      action: 'facility.import.confirmed',
+      entityType: 'facility',
+      entityId: run.nationalSystem,
+      before: null,
+      after: null,
+      metadata: { runId: id, nationalSystem: run.nationalSystem, options },
+    });
+
+    reply.code(202);
+    return { runId: id, status: APPLY_PHASE.from };
   });
 
   // One run's full detail — the preview summary an operator reviews before confirming an apply, or

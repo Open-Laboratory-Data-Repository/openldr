@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   TERMINAL_RUN_STATES, SUPERSEDABLE_RUN_STATES, RUNNING_RUN_STATES, CLAIMABLE_RUN_STATES,
-  isApplicable, isWorkerObserved,
+  isApplicable, isWorkerObserved, VALIDATE_PHASE, APPLY_PHASE,
   ALL_RUN_STATES, type FacilityImportRunStatus,
 } from './facility-import-run-states';
 
@@ -22,6 +22,11 @@ describe('facility import run states', () => {
     expect(SUPERSEDABLE_RUN_STATES.has('queued')).toBe(true);
     expect(SUPERSEDABLE_RUN_STATES.has('awaiting_confirmation')).toBe(true);
     expect(SUPERSEDABLE_RUN_STATES.has('previewed')).toBe(true);
+    // A2b Task 5: `confirmed` is a QUEUE HEAD (the apply worker's), exactly like `queued` — no worker
+    // holds it, and nothing expires it. A confirm the apply worker never got to must therefore be
+    // takeable over by the next upload, or an operator who confirms on a server that is then stopped
+    // locks the register for good.
+    expect(SUPERSEDABLE_RUN_STATES.has('confirmed')).toBe(true);
   });
 
   it('permits an apply only from a state that has a completed preview behind it', () => {
@@ -31,6 +36,11 @@ describe('facility import run states', () => {
     expect(isApplicable('applying')).toBe(false);    // already in flight
     expect(isApplicable('applied')).toBe(false);     // replay
     expect(isApplicable('cancelled')).toBe(false);
+    // A2b Task 5. `confirmed` DOES have a completed preview behind it, and is excluded anyway — the
+    // same reason `applying` is: an apply has already been STARTED against it (the operator's confirm
+    // handed it to the worker's queue). Admitting it would let the inline route's `runId` apply race
+    // the worker over the same run, and would let a second confirm re-queue an already-confirmed one.
+    expect(isApplicable('confirmed')).toBe(false);
   });
 
   // Not in the brief's list, and the two states it leaves unstated are exactly the two an apply
@@ -49,13 +59,37 @@ describe('facility import run states', () => {
   it('marks exactly the states a worker claims or is already running as worker-observed', () => {
     // Every claim source must be a state a worker can actually take FROM — `claimNext`'s two source
     // states, and no other.
-    expect([...CLAIMABLE_RUN_STATES].sort()).toEqual(['awaiting_confirmation', 'queued']);
+    // A2b Task 5 widens this by ONE concrete member: `confirmed`, the apply phase's queue head.
+    // ⚠ `awaiting_confirmation` is still here and STILL claimed by nothing — the carry-forward Task 4
+    // moved rather than removed (a cancel on it is flagged and never read). Task 5 deliberately does
+    // not deepen it: the apply claims `confirmed`, never `awaiting_confirmation`, so no worker was
+    // added that would apply an UNCONFIRMED run. Task 6 owns resolving the flag.
+    expect([...CLAIMABLE_RUN_STATES].sort()).toEqual(['awaiting_confirmation', 'confirmed', 'queued']);
     for (const s of CLAIMABLE_RUN_STATES) expect(isWorkerObserved(s)).toBe(true);
     for (const s of RUNNING_RUN_STATES) expect(isWorkerObserved(s)).toBe(true);
     // `previewed` is the inline A2a path's own state: no worker claims it, so a flag set on it would
     // never be read. Terminal states are past caring.
     expect(isWorkerObserved('previewed')).toBe(false);
     for (const s of TERMINAL_RUN_STATES) expect(isWorkerObserved(s)).toBe(false);
+  });
+
+  // A2b Task 5. The apply phase's transition is a shared VALUE for the same reason `VALIDATE_PHASE`
+  // is: its two halves are spelled in two different packages — the confirm route (apps/server) writes
+  // `APPLY_PHASE.from`, and the worker (@openldr/bootstrap) claims from it — and if they drifted, a
+  // confirmed run would never be claimed by anything while it went on holding `active_key`.
+  it('names the apply phase as one value, from a claimable state into a running one', () => {
+    expect(APPLY_PHASE).toEqual({ from: 'confirmed', to: 'applying' });
+    // The `from` must be claimable and the `to` must be a state crash recovery sweeps, or a killed
+    // apply holds its national register with nothing to release it.
+    expect(CLAIMABLE_RUN_STATES.has(APPLY_PHASE.from)).toBe(true);
+    expect(RUNNING_RUN_STATES.has(APPLY_PHASE.to)).toBe(true);
+    // The two phases are genuinely distinct queues: sharing either half would make one worker claim
+    // the other's work.
+    expect(APPLY_PHASE.from).not.toBe(VALIDATE_PHASE.from);
+    expect(APPLY_PHASE.to).not.toBe(VALIDATE_PHASE.to);
+    // ⛔ And the apply's source is NOT the state the operator is merely parked in. This is the whole
+    // of "an apply cannot fire without a confirm": nothing but the confirm route writes `confirmed`.
+    expect(APPLY_PHASE.from).not.toBe('awaiting_confirmation');
   });
 
   it('never lets a CLAIMABLE state be one a worker is already running', () => {

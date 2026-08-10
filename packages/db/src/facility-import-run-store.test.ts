@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { Kysely } from 'kysely';
 import { makeMigratedDb, makeMigratedDbWithMem } from './migrations/internal/test-helpers';
 import { createFacilityImportRunStore } from './facility-import-run-store';
-import { ALL_RUN_STATES, RUNNING_RUN_STATES, type FacilityImportRunStatus } from './facility-import-run-states';
+import { ALL_RUN_STATES, RUNNING_RUN_STATES, APPLY_PHASE, type FacilityImportRunStatus } from './facility-import-run-states';
 import type { InternalSchema } from './schema/internal';
 
 const base = { nationalSystem: 'urn:tz:hfr', sourceFormat: 'csv' as const, fileHash: 'h1', byteSize: 42, options: {} };
@@ -258,6 +258,51 @@ describe('createFacilityImportRunStore', () => {
     expect(stored.status).toBe('failed');
     expect(stored.active_key).toBeNull();
     expect((await store.get(run.id))?.summary).toBeNull();
+  });
+
+  // ── A2b Task 5: confirm ───────────────────────────────────────────────────────────────────────
+  it('confirm hands a parked run to the apply queue, merging the operator\'s options', async () => {
+    const db = (await makeMigratedDb()) as Kysely<InternalSchema>;
+    const store = createFacilityImportRunStore(db);
+    const run = await store.startUpload({ ...upload, options: { nationalSystem: 'urn:tz:hfr' } });
+    await store.claimNext('queued', 'validating');
+    await store.completeValidation(run.id, { create: 2 });
+
+    expect(await store.confirm(run.id, 'awaiting_confirmation', {
+      nationalSystem: 'urn:tz:hfr', onConflict: 'overwrite', allowMalformedRows: true,
+    })).toBe(true);
+
+    const after = await store.get(run.id);
+    // ⛔ `APPLY_PHASE.from`, the state the worker claims — NOT `awaiting_confirmation`, which the
+    // worker deliberately never claims. This transition IS the operator's authorisation.
+    expect(after?.status).toBe(APPLY_PHASE.from);
+    expect(after?.options).toEqual({
+      nationalSystem: 'urn:tz:hfr', onConflict: 'overwrite', allowMalformedRows: true,
+    });
+    // The watermark the validate stamped survives the confirm — it is what the apply compares
+    // `facility_registry.updated_at` against.
+    expect(after?.previewedAt).not.toBeNull();
+    // Still holds the register: the apply has not run yet, and a second upload landing now would
+    // race it.
+    expect((await row(db, run.id)).active_key).toBe('urn:tz:hfr');
+  });
+
+  it('⛔ confirm does NOT move a run that left the status the caller observed', async () => {
+    // The route READ the status in an earlier statement. Between that read and this write the run can
+    // be superseded by a newer upload (which releases `active_key`), and an unconditional write keyed
+    // on the id alone would then queue an apply for a register this run no longer owns.
+    const db = (await makeMigratedDb()) as Kysely<InternalSchema>;
+    const store = createFacilityImportRunStore(db);
+    const run = await store.startUpload(upload);
+    await store.claimNext('queued', 'validating');
+    await store.completeValidation(run.id, { create: 2 });
+    await store.supersede(run.id, 'awaiting_confirmation', 'superseded by a newer upload');
+
+    expect(await store.confirm(run.id, 'awaiting_confirmation', { nationalSystem: 'urn:tz:hfr' })).toBe(false);
+
+    const stored = await row(db, run.id);
+    expect(stored.status).toBe('failed');
+    expect(stored.active_key).toBeNull();
   });
 
   it("⛔ finish('cancelled') releases the register — a terminal run must not hold active_key", async () => {
