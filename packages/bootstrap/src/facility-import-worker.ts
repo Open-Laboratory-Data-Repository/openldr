@@ -31,6 +31,12 @@ export interface FacilityImportWorkerDeps {
    *  `FACILITY_IMPORT_MAX_UPLOAD_BYTES` so the transfer ceiling and the buffer ceiling are the SAME
    *  number and an accepted upload is always one this worker can actually read. */
   maxBufferBytes?: number;
+  /** Overrides `PER_ROW_PROGRESS_MIN_ROWS` — see its measurement. Injectable for ONE reason: a test
+   *  that drives the real boundary otherwise has to push 5 000 rows through the importer twice, which
+   *  ran 7.4 s alone and **timed out at 72.5 s under 67 parallel turbo tasks**. Lowering the
+   *  threshold pins the same behaviour on a two-row file; the production VALUE is pinned separately
+   *  by asserting this default. No production caller sets it. */
+  perRowProgressMinRows?: number;
   logger: { info(o: unknown, m?: string): void; error(o: unknown, m?: string): void };
 }
 
@@ -117,7 +123,7 @@ const DEFAULT_MAX_BUFFER_BYTES = 64 * 1024 * 1024;
  *  DENOMINATOR (`total`), not a live per-row counter. Real per-row ticks would mean adding a progress
  *  callback to the shared importer, which both entry paths depend on; that is deliberately not done
  *  for a 2.3-second operation. */
-const PER_ROW_PROGRESS_MIN_ROWS = 5000;
+export const PER_ROW_PROGRESS_MIN_ROWS = 5000;
 
 /** The row count the VALIDATE phase already counted for this run, or `null` when it cannot be read.
  *
@@ -130,9 +136,9 @@ function validatedRowCount(run: FacilityImportRun): number | null {
 
 /** Did this run publish a `total` when its apply started? Asked in the ONE place the closing
  *  `processed` is written, so the two halves cannot disagree about whether counts are in play. */
-function reportedTotal(run: FacilityImportRun): boolean {
+function reportedTotal(run: FacilityImportRun, minRows: number): boolean {
   const n = validatedRowCount(run);
-  return n !== null && n >= PER_ROW_PROGRESS_MIN_ROWS;
+  return n !== null && n >= minRows;
 }
 
 export function createFacilityImportWorker(deps: FacilityImportWorkerDeps): FacilityImportWorker {
@@ -142,6 +148,7 @@ export function createFacilityImportWorker(deps: FacilityImportWorkerDeps): Faci
   // config above it would otherwise get a raw "Cannot create a string longer than…" out of the
   // decode. A byte count is a sound proxy for the character count that limit is expressed in: UTF-8
   // never decodes N bytes into more than N characters.
+  const perRowProgressMinRows = deps.perRowProgressMinRows ?? PER_ROW_PROGRESS_MIN_ROWS;
   const maxBufferBytes = Math.min(
     deps.maxBufferBytes ?? DEFAULT_MAX_BUFFER_BYTES,
     bufferConstants.MAX_STRING_LENGTH,
@@ -399,7 +406,7 @@ export function createFacilityImportWorker(deps: FacilityImportWorkerDeps): Faci
       // some earlier tick would read as progress that had already happened.
       await deps.runs.updateProgress(run.id, {
         phase: 'applying',
-        ...(reportedTotal(run) ? { processed: 0, total: validatedRowCount(run) } : {}),
+        ...(reportedTotal(run, perRowProgressMinRows) ? { processed: 0, total: validatedRowCount(run) } : {}),
       });
       // ⛔ THE SAME `importFacilities` the validate phase, the inline route and the CLI all call.
       // The write, the projection through `deps.admin`, and the ONE `facility-map-rebuild` enqueue
@@ -423,7 +430,7 @@ export function createFacilityImportWorker(deps: FacilityImportWorkerDeps): Faci
     // `written` counts what the statement actually wrote; `parsed` is what it was asked to write.
     // The denominator published above was `parsed`, so the numerator that closes it must be too —
     // an apply where some rows were `unchanged` still PROCESSED all of them.
-    const finalProcessed = reportedTotal(run) ? summary.parsed : null;
+    const finalProcessed = reportedTotal(run, perRowProgressMinRows) ? summary.parsed : null;
     await deps.runs.updateProgress(run.id, { phase: 'applied', processed: finalProcessed })
       .catch((err) => deps.logger.error({ err, runId: run.id }, 'failed to record the final phase of an applied facility import'));
     await auditApplied(run, summary);

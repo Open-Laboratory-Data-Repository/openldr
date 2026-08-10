@@ -8,7 +8,7 @@ import {
   type InternalSchema, type FacilityImportRunStore,
 } from '@openldr/db';
 import { importFacilities } from './facility-import';
-import { createFacilityImportWorker } from './facility-import-worker';
+import { createFacilityImportWorker, PER_ROW_PROGRESS_MIN_ROWS } from './facility-import-worker';
 
 const SYSTEM = 'urn:tz:hfr';
 const KEY = 'facility-import/tz-hfr/one.csv';
@@ -43,7 +43,7 @@ function fakeBlob(body: string | (() => string), onGet?: (key: string) => Promis
 async function harness(
   body: string | (() => string),
   onGet?: (key: string) => Promise<void> | void,
-  opts?: { maxBufferBytes?: number },
+  opts?: { maxBufferBytes?: number; perRowProgressMinRows?: number },
 ) {
   const db = (await makeMigratedDb()) as Kysely<InternalSchema>;
   const runs: FacilityImportRunStore = createFacilityImportRunStore(db);
@@ -57,6 +57,8 @@ async function harness(
   const worker = createFacilityImportWorker({
     runs, blob, importDeps: { db, capture: referenceCapture }, intervalMs: 10_000, logger, audit,
     ...(opts?.maxBufferBytes === undefined ? {} : { maxBufferBytes: opts.maxBufferBytes }),
+    ...(opts?.perRowProgressMinRows === undefined
+      ? {} : { perRowProgressMinRows: opts.perRowProgressMinRows }),
   });
   return { db, runs, blob, logger, worker, audit, audited };
 }
@@ -563,26 +565,55 @@ describe('createFacilityImportWorker — apply phase', () => {
   });
 
   it('⛔ publishes a denominator once an apply is big enough to be worth watching', async () => {
-    // The other side of `PER_ROW_PROGRESS_MIN_ROWS` (5 000 rows ≈ 944 ms measured). Built at exactly
-    // the threshold, because that is the boundary an off-by-one would move.
-    const rows = Array.from({ length: 5000 }, (_, i) => `${1000 + i},Facility ${i}`).join('\n');
-    const big = `national_code,name\n${rows}\n`;
-    const h = await harness(big);
+    // The other side of the gate, driven AT the threshold — the boundary an off-by-one would move.
+    //
+    // ⚠ The threshold is INJECTED rather than met with 5 000 real rows, and that is a gate-timing
+    // fix, not a convenience. Pushing 5 000 rows through the importer twice (validate + apply) ran
+    // 7.4 s alone and TIMED OUT at 72.5 s under 67 parallel turbo tasks — this branch making the
+    // whole repo's gate fail. The behaviour under test is `parsed >= threshold`, which two rows
+    // exercise exactly as well as five thousand; the production VALUE is pinned by its own test
+    // below, so nothing is lost and ~10 000 pg-mem row writes leave the gate.
+    const TWO = 'national_code,name\n100,Alpha\n200,Beta\n';
+    const h = await harness(TWO, undefined, { perRowProgressMinRows: 2 });
     const runId = await uploadValidateConfirm(h);
-    // The gate reads the VALIDATE's own count, so pin that this run really is at the threshold —
-    // otherwise a parser change could silently make this a small-apply test that still passed.
-    expect((await h.runs.get(runId))?.summary).toMatchObject({ parsed: 5000 });
+    // The gate reads the VALIDATE's own count, so pin that this run really is AT the threshold —
+    // otherwise a parser change could silently make this a below-threshold test that still passed.
+    expect((await h.runs.get(runId))?.summary).toMatchObject({ parsed: 2 });
 
     await h.worker.tickOnce();
     await h.worker.stop();
 
     expect((await h.runs.get(runId))?.status).toBe('applied');
     const stored = await rowFor(h.db, runId);
-    expect(stored.total).toBe(5000);
+    expect(stored.total).toBe(2);
     // Closed by the count it was opened with: `parsed`, not `written` — an apply whose rows were
     // `unchanged` still processed all of them.
-    expect(stored.processed).toBe(5000);
-  }, 60_000);
+    expect(stored.processed).toBe(2);
+  });
+
+  it('⛔ still publishes nothing one row BELOW the threshold — the boundary is >=, not >', async () => {
+    // The off-by-one the injected threshold makes cheap to pin: same worker, same file, threshold
+    // one above the row count.
+    const TWO = 'national_code,name\n100,Alpha\n200,Beta\n';
+    const h = await harness(TWO, undefined, { perRowProgressMinRows: 3 });
+    const runId = await uploadValidateConfirm(h);
+
+    await h.worker.tickOnce();
+    await h.worker.stop();
+
+    expect((await h.runs.get(runId))?.status).toBe('applied');
+    const stored = await rowFor(h.db, runId);
+    expect(stored.total).toBeNull();
+    expect(stored.processed).toBe(0);
+  });
+
+  it('⛔ the production threshold is the MEASURED 5 000, not whatever a test injected', async () => {
+    // The injected knob above proves the BEHAVIOUR; this pins the VALUE, so lowering the real
+    // constant (which would spam counts nobody can read) or raising it (which would silence a
+    // national register's progress) cannot pass unnoticed. 5 000 rows ≈ 944 ms measured on real
+    // Postgres — see the constant's own docblock for the full table.
+    expect(PER_ROW_PROGRESS_MIN_ROWS).toBe(5000);
+  });
 
   it('⛔ a cancel that arrives once the apply is under way reports applied, NOT cancelled', async () => {
     // A2b Task 6's honest semantics, at the layer that decides them. `cancel_requested` is observed
