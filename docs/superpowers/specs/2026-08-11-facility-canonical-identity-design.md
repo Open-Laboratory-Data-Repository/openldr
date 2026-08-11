@@ -201,17 +201,52 @@ reconciliation already computes `create`/`changed`/`unchanged` exactly, so a byt
 re-import writes **zero** audit rows while a real quarterly delta writes only what moved. The
 register-scoped `facility.import` event stays as the summary.
 
-### 4. Migration
+### 4. Migration and the id re-key
 
-A plain data migration; no collision-review UI, because there is no production data (see *Measured*).
+Backfill resolves each distinct existing `national_system` to a `coding_systems` row by URL, creating
+one where absent. Rows with a NULL `national_system` (manual creations) are untouched and become
+`register_state='not_registered'`.
 
-- Backfill resolves each distinct existing `national_system` to a `coding_systems` row by URL,
-  creating one where absent.
-- ⛔ **Refuse loudly** if two distinct existing values would resolve to one source — fail the
-  migration with both values named rather than silently merging two registers' facilities. A2b spent
-  a slice proving silent merges are how registers get corrupted.
-- Rows with a NULL `national_system` (manual creations) are untouched and become
-  `register_state='not_registered'`.
+⛔ **Refuse loudly** if two distinct existing values would resolve to one source — fail the migration
+with both values named rather than silently merging two registers' facilities. A2b spent a slice
+proving silent merges are how registers get corrupted.
+
+#### Where a facility id is written down
+
+Re-keying is not one column. Measured, a facility id is stored in nine places, and only three of them
+follow automatically:
+
+| Location | Database | Follows the re-key? |
+|---|---|---|
+| `facility_registry.id` | internal | the row itself |
+| `facility_registry_identifiers.registry_id` | internal | ✅ FK cascade |
+| `facility_concept_projection.registry_id` | internal | ✅ FK cascade |
+| **`facility_concept_projection.concept_code`** | internal | ❌ **can BE the id** — collision fallback, `facility-reconcile.ts:1118` |
+| `term_mappings` targeting that concept code | internal | ❌ matches on the code string |
+| **`facility_map.registry_id`** | **external warehouse** | ❌ different database, no FK possible |
+| DHIS2 facility→org-unit map (migration 008) | internal | ❌ |
+| `form_definitions.facility_id`, `form_versions.facility_id` (020) | internal | ❌ |
+| `facility_jobs.registry_id` (079) | internal | ❌ |
+
+#### The policy: internal is rewritten, the warehouse is REBUILT
+
+**The migration rewrites every internal reference and does not touch the warehouse.** It then marks
+the facility-map dimension stale so the existing `facility-map-rebuild` job regenerates it.
+
+⛔ **The migration must never reach into the external warehouse database.** It may be Postgres, SQL
+Server or MySQL, and it may be unreachable when migrations run — a migration that edits it either
+fails the boot or silently half-succeeds, leaving the reporting dimension pointing at ids that no
+longer exist.
+
+**Why a rebuild is sufficient, verified:** `publishFacilityMap({ apply: true })` is a **full
+regeneration, not an incremental update** — it runs `deleteFrom('facility_map')` and re-inserts every
+resolved row inside one transaction (`facility-reconcile.ts`). So the stale dimension is replaced
+wholesale, carrying the new ids, with no per-row migration and no cross-database write.
+
+**The ordering is the point.** The warehouse is the analytical end; it is downstream of internal
+state by construction. If internal identity is wrong, a warehouse rewritten to match it is wrong too
+— and if the warehouse is unavailable, reporting is already unavailable, so deferring its rebuild
+costs nothing that is not already lost. Internal correctness first, dimension regenerated after.
 
 ### 5. UI
 
@@ -237,6 +272,16 @@ same commit (`parity.test.ts` enforces it).
   `location-status` and has no membership concept.
 - Re-keying facility ids changes every imported row's id. Safe **only** because no release contains
   the import feature; this migration would need a different design after one does.
+- **The warehouse dimension is briefly stale** — between the migration and the rebuild job's next
+  run, `facility_map` holds the old ids. Reports joining it resolve nothing for affected facilities
+  in that window. Accepted deliberately: the alternative is a cross-database write inside a
+  migration, and the window closes on the next rebuild.
+- **The 5-lab aggregation payoff is not yet reachable.** Keying on the register's canonical URI means
+  independent installs derive identical ids for the same facility, so a central aggregating several
+  labs would see one facility rather than one per lab. Measured: **no facility or Location data
+  travels in the sync bundle today** (the push carries FHIR resources such as Patient), so this is a
+  property the design preserves for later, not a problem it solves now. It costs nothing extra to
+  have now and cannot be retrofitted cheaply once ids are in use.
 - Sources are `coding_systems` rows, which means terminology admin can edit them. Guardrails belong to
   D (governance), not here.
 - `managed_origin` remains unused. If facility down-sync is ever built, the precedence rules P1-08
