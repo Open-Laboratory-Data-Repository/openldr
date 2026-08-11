@@ -1,4 +1,4 @@
-import { canonicalJson } from '@openldr/core';
+import { canonicalJson } from '@openldr/core/pure';
 import type { ReportDesign } from './schema';
 
 /**
