@@ -100,4 +100,12 @@ export { NEW_FIELDS_SNAPSHOT as FACILITY_FORM_MIGRATION_NEW_FIELDS } from './mig
 // as PREV_BOUND_FIELDS_SNAPSHOT — this re-export just tracks whichever migration is CURRENT), and
 // packages/forms/src/samples/forms.test.ts pins the CURRENT sample against it from the forms side.
 export { BOUND_FIELDS_SNAPSHOT as FACILITY_FORM_MIGRATION_BOUND_FIELDS } from './migrations/internal/073_facility_country_and_admin_fields';
+// Same reasoning as the two re-exports above: `export * from './migrations/internal/index'` only
+// surfaces the aggregated migration map, not a migration's own named constants. These three are the
+// one spelling of `facility_registry.register_state`'s codes (migration 081) — a consumer outside
+// this package (packages/bootstrap's retirement write, Task 5 of the facility-canonical-identity
+// slice) reaches them from here rather than spelling the bare string `'dropped'`.
+export {
+  FACILITY_REGISTER_STATE_IN_REGISTER, FACILITY_REGISTER_STATE_DROPPED, FACILITY_REGISTER_STATE_NOT_REGISTERED,
+} from './migrations/internal/081_facility_source_and_register_state';
 export { ISO3166_COUNTRIES } from './iso3166';

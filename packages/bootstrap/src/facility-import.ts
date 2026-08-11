@@ -11,6 +11,7 @@ import {
   type FacilityJobStore,
   insertBatchPg,
   facilityRecordToRow,
+  FACILITY_REGISTER_STATE_DROPPED,
 } from '@openldr/db';
 import { classifyFacilityRows, type ClassifiedRow, type ExistingFacility } from './facility-classify';
 import { projectRegistryRows, retireRegistryConcepts } from './facility-reconcile';
@@ -292,11 +293,11 @@ export interface FacilityImportResult {
    *
    *  All 0 on a preview — now because nothing was WRITTEN, not because nothing was computed.
    *
-   *  `retired` is how many registry rows this apply actually flipped to `'inactive'` (and removed
-   *  from the mapping picker via `retireRegistryConcepts`) — the MUTATION, as distinct from the
-   *  `deleted`/`absent` populations above, which are what the file DESCRIBES. The two differ
-   *  whenever policy says so: `onAbsent: 'report'` (the default) reports a non-zero `absent` and
-   *  retires none of it. */
+   *  `retired` is how many registry rows this apply actually flipped `register_state` to `'dropped'`
+   *  on (and removed from the mapping picker via `retireRegistryConcepts`) — the MUTATION, as
+   *  distinct from the `deleted`/`absent` populations above, which are what the file DESCRIBES. The
+   *  two differ whenever policy says so: `onAbsent: 'report'` (the default) reports a non-zero
+   *  `absent` and retires none of it. */
   written: { created: number; updated: number; retired: number };
   /** Whatever `FacilityImportOptions.runId` carried in, echoed back so a caller that resolved a run
    *  can attach this result to it without threading the id through itself. Null when none was
@@ -503,9 +504,10 @@ function dedupeById(records: FacilityRecord[]): { records: FacilityRecord[]; dup
  * docblock: the sync APPLIER stamps `'central'` on arrival, not an authoring path like this one).
  * Rows absent from the file are never DELETED — nothing in this function issues a DELETE against
  * `facility_registry`. They are not touched at all unless the caller both declares the file a
- * `completeRelease` and asks for `onAbsent: 'retire'`, in which case they are flipped to
- * `'inactive'` (never deleted, so a facility's aliases and history survive). ⛔ And not even then if
- * the file produced no records — see the absence query below.
+ * `completeRelease` and asks for `onAbsent: 'retire'`, in which case their `register_state` is
+ * flipped to `'dropped'` (never deleted, so a facility's aliases and history survive; and never
+ * `status` — see the retirement write below for why). ⛔ And not even then if the file produced no
+ * records — see the absence query below.
  *
  * ## What a re-import is, and is not, authoritative for
  *
@@ -669,7 +671,9 @@ export async function importFacilities(
   // `allowUnknownColumns`, duplicate headers, and a truncated download that kept only its header
   // line — and without this guard every one of them made `excludedFromAbsence` empty, so the query
   // below matched the ENTIRE register for this `nationalSystem` and (with `onAbsent: 'retire'`)
-  // flipped all of it to `'inactive'`. Measured: two of two rows retired by a headers-only file.
+  // retired all of it. Measured: two of two rows retired by a headers-only file (at the time this
+  // was measured, retirement wrote `status: 'inactive'`; as of Task 5 it writes `register_state:
+  // 'dropped'` — the guard below is unaffected by which column retirement lands on).
   // `null` here is the honest answer — NOT EVALUATED, per this field's contract — not `0`.
   //
   // ⚠ A publisher's DECLARED deletions are unaffected: `deletedIds` is computed from `deletions`
@@ -830,20 +834,30 @@ export async function importFacilities(
 
     // Task 9: retirement, IN THE SAME TRANSACTION as the write above rather than after it commits
     // (contrast with `projectRegistryRows`/`facilityJobs.enqueue` below, both deliberately outside
-    // it) — a facility flipped to `inactive` whose mapping concept `retireRegistryConcepts` failed to
-    // retire (or the reverse) is a worse, silently half-done state than the whole apply rolling back
-    // and being retried. `retiredIds` was computed above, before this transaction opened, from
+    // it) — a facility whose `register_state` flipped to `'dropped'` but whose mapping concept
+    // `retireRegistryConcepts` failed to retire (or the reverse) is a worse, silently half-done state
+    // than the whole apply rolling back and being retried. `retiredIds` was computed above, before
+    // this transaction opened, from
     // `deletedIds`/`absentRows` and the `onDeleted`/`onAbsent` policy — never from `records`, so this
     // runs even though every id here is, by construction, ABSENT from `toWrite`.
     if (retiredIds.length > 0) {
-      // ⛔ 'inactive', NOT 'retired'. The seeded status vocabulary is HL7's own
+      // ⛔ `register_state`, NOT `status`. The seeded `status` vocabulary is HL7's own
       // `http://hl7.org/fhir/location-status` (migration 072), whose only codes are active/suspended/
-      // inactive. Adding a `retired` code to a CodeSystem HL7 owns would be inventing a non-conformant
-      // FHIR value. The *retired* semantics are carried by `retireRegistryConcepts` below, which
-      // removes the facility from the mapping picker while leaving history resolvable — nothing here,
-      // or anywhere in this function, ever issues a DELETE against `facility_registry`.
+      // inactive — HL7 has no concept of register membership, so carrying "the register stopped
+      // listing this row" there would mean inventing a non-conformant `retired` code in a CodeSystem
+      // HL7 owns. That reasoning is why this used to write `status: 'inactive'` here. But `status`
+      // answering "is this facility open" and "does the register still list it" at once was exactly
+      // the conflation this slice exists to remove: a facility the register dropped (merged,
+      // mis-registered, moved registers) is not necessarily closed, and a report filtering
+      // `status = 'active'` silently lost it either way. Task 5 (migration 081) gives register
+      // membership its own column — `facility_registry.register_state`, OpenLDR's own vocabulary, not
+      // HL7's — so this write moves there and `status` is left alone, going back to meaning
+      // operational status only. The *retired* mapping-picker semantics are still carried by
+      // `retireRegistryConcepts` below, which removes the facility from the mapping picker while
+      // leaving history resolvable — nothing here, or anywhere in this function, ever issues a DELETE
+      // against `facility_registry`.
       await trx.updateTable('facility_registry')
-        .set({ status: 'inactive', updated_at: sql`now()` })
+        .set({ register_state: FACILITY_REGISTER_STATE_DROPPED, updated_at: sql`now()` })
         .where('id', 'in', retiredIds)
         .execute();
       await retireRegistryConcepts({ internalDb: trx }, retiredIds);
@@ -865,8 +879,8 @@ export async function importFacilities(
   // `deletion` for the same national code, which puts that id in `mergedRecords` AND in
   // `retiredIds`; since this projection runs AFTER the transaction committed, it would re-publish
   // the very concept `retireRegistryConcepts` retired inside it, undoing the retirement in the
-  // mapping picker while `facility_registry.status` stayed `'inactive'`. Filtering here (rather
-  // than where `mergedRecords` is built) keeps the WRITE set and the PROJECTION set independent:
+  // mapping picker while `facility_registry.register_state` stayed `'dropped'`. Filtering here
+  // (rather than where `mergedRecords` is built) keeps the WRITE set and the PROJECTION set independent:
   // a retired id may still legitimately have been written as a row above.
   //
   // ⚠ Its `boolean` ("did this projection land") is DELIBERATELY ignored here, and that is a known

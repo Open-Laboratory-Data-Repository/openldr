@@ -3,7 +3,7 @@ import type { Kysely } from 'kysely';
 import { makeMigratedDb } from '@openldr/db/testing';
 import {
   createFacilityRegistryStore, createTerminologyAdminStore, createFacilityJobStore, referenceCapture,
-  FACILITY_REGISTRY_SYSTEM, type InternalSchema, type TerminologyAdminStore, type FacilityJobStore,
+  FACILITY_REGISTRY_SYSTEM, FACILITY_REGISTER_STATE_DROPPED, type InternalSchema, type TerminologyAdminStore, type FacilityJobStore,
 } from '@openldr/db';
 import { importFacilities, type FacilityImportDeps } from './facility-import';
 import { CONTROLLED_VALUE_SETS, observedFieldSystem } from './facility-controlled-fields';
@@ -595,8 +595,8 @@ describe('preview reports real database impact (FAC-P1-03)', () => {
   // false, `excludedFromAbsence` was empty so the absence query fell back to `not in ['']` — which
   // matches EVERY registry row for the system — and the `records.length === 0 && retiredIds.length
   // === 0` shortcut did not fire because `retiredIds` now held the whole register. The transaction
-  // then set `status: 'inactive'` on all of it. The three tests below each pin one file shape that
-  // reaches `records: []`.
+  // then retired all of it (register_state: 'dropped' as of Task 5; `status: 'inactive'` at the time
+  // this was measured). The three tests below each pin one file shape that reaches `records: []`.
 
   it('an unknown-columns file retires NOTHING, even with --complete-release and onAbsent: retire', async () => {
     const deps = await buildDeps();
@@ -655,7 +655,10 @@ describe('preview reports real database impact (FAC-P1-03)', () => {
     expect(r.parsed).toBe(0);
     expect(r.deleted).toBe(1);
     expect(r.written.retired).toBe(1);
-    expect((await rowFor(deps.db, '100'))?.status).toBe('inactive');
+    // register_state, not status: retirement is a REGISTER MEMBERSHIP fact now, not an operational
+    // one — the seeding CSV never set a status, so it stays untouched (null) through the retirement.
+    expect((await rowFor(deps.db, '100'))?.register_state).toBe(FACILITY_REGISTER_STATE_DROPPED);
+    expect((await rowFor(deps.db, '100'))?.status).toBeNull();
     expect((await rowFor(deps.db, '200'))?.status).toBeNull();
   });
 
@@ -822,14 +825,15 @@ describe('absent and deleted rows', () => {
     expect(beta?.status).toBeNull();
   });
 
-  it('retires an absent row to `inactive` when the operator asks', async () => {
+  it('retires an absent row to `register_state: dropped` when the operator asks, leaving status alone', async () => {
     const deps = await buildDeps();
     await importFacilities(deps, csv(['100,Alpha,,,,,,,,,,,,,,', '200,Beta,,,,,,,,,,,,,,']), { nationalSystem: SYSTEM, apply: true });
     await importFacilities(deps, csv(['100,Alpha,,,,,,,,,,,,,,']), {
       nationalSystem: SYSTEM, apply: true, completeRelease: true, onAbsent: 'retire',
     });
     const beta = await rowFor(deps.db, '200');
-    expect(beta?.status).toBe('inactive');
+    expect(beta?.register_state).toBe(FACILITY_REGISTER_STATE_DROPPED);
+    expect(beta?.status).toBeNull();
   });
 
   it('never deletes a row, whatever the policy', async () => {
@@ -872,7 +876,31 @@ describe('format: "jsonl" and declared deletions', () => {
     expect(result.deleted).toBe(1);
     expect(result.samples.deleted).toEqual([{ id: expect.any(String), nationalCode: '100', name: 'Alpha' }]);
     const alpha = await rowFor(deps.db, '100');
-    expect(alpha?.status).toBe('inactive');
+    // register_state, not status — see the dedicated register_state/status test below for why.
+    expect(alpha?.register_state).toBe(FACILITY_REGISTER_STATE_DROPPED);
+    expect(alpha?.status).toBeNull();
+  });
+
+  it('⛔ retirement records that the REGISTER dropped the row and leaves operational status alone', async () => {
+    // The whole point of the slice. Measured before it: a dropped row and a closed facility both
+    // became status='inactive', so a report filtering status='active' silently dropped a lab that
+    // was open and receiving specimens. `active: true` on the seeding row line maps to
+    // `status: 'active'` (facility-release.ts) — the real MFL release shape this slice is fixing for.
+    const deps = await buildDeps();
+    await importFacilities(deps, jsonl([rowLine('100', 'Alpha', { active: true })]), {
+      nationalSystem: SYSTEM, format: 'jsonl', apply: true,
+    });
+    const seeded = await rowFor(deps.db, '100');
+    expect(seeded?.status).toBe('active');
+
+    const r = await importFacilities(deps, jsonl([deletionLine('100')]), {
+      nationalSystem: SYSTEM, format: 'jsonl', apply: true, onDeleted: 'retire',
+    });
+    expect(r.written.retired).toBe(1);
+
+    const row = await rowFor(deps.db, '100');
+    expect(row?.register_state).toBe(FACILITY_REGISTER_STATE_DROPPED);
+    expect(row?.status).toBe('active'); // ⛔ UNCHANGED — the facility is still open.
   });
 
   it('does not count a declared deletion for a facility this registry never had', async () => {
@@ -1064,8 +1092,8 @@ describe('controlled-field resolution during an import', () => {
 //
 // `projectRegistryRows` runs AFTER the transaction commits, so a release carrying BOTH a `row` and
 // a `deletion` for the same code would re-publish the concept `retireRegistryConcepts` had just
-// retired inside it — leaving `facility_registry.status = 'inactive'` while the facility stayed
-// pickable as a mapping target.
+// retired inside it — leaving `facility_registry.register_state = 'dropped'` while the facility
+// stayed pickable as a mapping target.
 describe('a retired facility is not re-published by the post-commit projection', () => {
   it('leaves its concept RETIRED when one release both carries and deletes the same row', async () => {
     const db = (await makeMigratedDb()) as Kysely<InternalSchema>;
