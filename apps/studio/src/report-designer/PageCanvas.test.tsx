@@ -384,6 +384,7 @@ describe('PageCanvas bound tables', () => {
     });
     expect(screen.getByText('Antimicrobial')).toBeInTheDocument();
     expect(screen.getByText('Headers from data')).toBeInTheDocument();
+    expect(screen.getByText('Rows at render')).toBeInTheDocument();
   });
 
   it('leaves an unbound table showing its static sample columns and rows', () => {

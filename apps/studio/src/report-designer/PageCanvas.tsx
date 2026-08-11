@@ -319,6 +319,13 @@ function TablePreview({ el }: { el: DesignElement }): JSX.Element {
             <th className={cn(headerCell, 'italic text-neutral-400')}>{t('reportDesigner.headersFromData')}</th>
           </tr>
         </thead>
+        <tbody>
+          <tr>
+            <td colSpan={2} className="px-1 py-0.5 italic text-neutral-400">
+              {t('reportDesigner.rowsAtRender')}
+            </td>
+          </tr>
+        </tbody>
       </table>
     );
   }
