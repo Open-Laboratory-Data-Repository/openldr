@@ -3,6 +3,7 @@ import { Kysely } from 'kysely';
 import { newDb } from 'pg-mem';
 import { createReportDesignStore } from './store';
 import type { ReportDesign } from './schema';
+import type { ReferenceCapture } from '@openldr/db';
 
 let db: Kysely<any>;
 beforeEach(async () => {
@@ -25,7 +26,9 @@ function makeDesign(id: string, name: string): ReportDesign {
     name,
     paper: 'A4',
     orientation: 'portrait',
-    pages: [{ id: `${id}-p1`, elements: [] }],
+    // Fixed, not derived from `id` — the hash tests compare two designs that must differ ONLY in
+    // `pageNumbers`, and `hashOf` covers `pages`.
+    pages: [{ id: 'p1', elements: [] }],
     parameters: [],
   };
 }
@@ -94,5 +97,43 @@ describe('ReportDesignStore', () => {
     const updated = await store.get('pn-upd');
     expect(updated?.name).toBe('Renamed');
     expect(updated?.pageNumbers).toBe(true);
+  });
+
+  // Captures the content hash the store records for each write, which is the only observable
+  // surface of the module-private `hashOf`.
+  function spyCapture() {
+    const hashes: (string | null)[] = [];
+    const capture: ReferenceCapture = {
+      record: async (_trx, _entityType, _entityId, _op, contentHash) => { hashes.push(contentHash); },
+    };
+    return { capture, hashes };
+  }
+
+  it('hashes an unset pageNumbers identically to an explicitly undefined one', async () => {
+    // Pins canonicalJson's undefined-dropping. If that ever changed, every never-flagged design's
+    // hash would move and reference sync would re-ship the whole design set.
+    const { capture, hashes } = spyCapture();
+    const store = createReportDesignStore(db, capture);
+    await store.create(makeDesign('h-absent', 'Same'));
+    await store.create({ ...makeDesign('h-undef', 'Same'), pageNumbers: undefined });
+    expect(hashes[0]).toBe(hashes[1]);
+  });
+
+  it('hashes false differently from unset', async () => {
+    // This is the property migration 082's nullability rests on: `false` is NOT the same as unset,
+    // so a NOT NULL DEFAULT false column would have moved every existing design's hash.
+    const { capture, hashes } = spyCapture();
+    const store = createReportDesignStore(db, capture);
+    await store.create(makeDesign('h-unset', 'Same'));
+    await store.create({ ...makeDesign('h-false', 'Same'), pageNumbers: false });
+    expect(hashes[0]).not.toBe(hashes[1]);
+  });
+
+  it('hashes true differently from false, so a real toggle propagates', async () => {
+    const { capture, hashes } = spyCapture();
+    const store = createReportDesignStore(db, capture);
+    await store.create({ ...makeDesign('h-off', 'Same'), pageNumbers: false });
+    await store.create({ ...makeDesign('h-on', 'Same'), pageNumbers: true });
+    expect(hashes[0]).not.toBe(hashes[1]);
   });
 });
