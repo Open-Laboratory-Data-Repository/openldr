@@ -184,4 +184,47 @@ describe('report-design routes', () => {
     expect(res.statusCode).toBe(200);
     expect(res.rawPayload.subarray(0, 4).toString()).toBe('%PDF');
   });
+
+  const withImage = (src: string) => ({
+    ...minimal,
+    pages: [{ id: 'p1', elements: [{ id: 'logo', kind: 'image', name: 'Logo', rect: { x: 0, y: 0, w: 10, h: 10 }, src }] }],
+  });
+
+  it('rejects an https image source on create', async () => {
+    const app = appWith(fakeCtx());
+    const res = await app.inject({ method: 'POST', url: '/api/report-designs', payload: withImage('https://example.org/l.png') });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().invalidImages).toEqual([{ elementId: 'logo', reason: 'not-a-data-uri' }]);
+  });
+
+  it('rejects an https image source on update', async () => {
+    const app = appWith(fakeCtx());
+    await app.inject({ method: 'POST', url: '/api/report-designs', payload: minimal });
+    const res = await app.inject({ method: 'PUT', url: '/api/report-designs/rd1', payload: withImage('https://example.org/l.png') });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().invalidImages).toEqual([{ elementId: 'logo', reason: 'not-a-data-uri' }]);
+  });
+
+  it('accepts a seeded {{lab.logo}} token — every built-in design ships one', async () => {
+    const app = appWith(fakeCtx());
+    const res = await app.inject({ method: 'POST', url: '/api/report-designs', payload: withImage('{{lab.logo}}') });
+    expect(res.statusCode).toBe(201);
+  });
+
+  it('accepts a png data URI', async () => {
+    const app = appWith(fakeCtx());
+    const res = await app.inject({ method: 'POST', url: '/api/report-designs', payload: withImage('data:image/png;base64,iVBORw0KGgo=') });
+    expect(res.statusCode).toBe(201);
+  });
+
+  it('still SERVES a stored design whose image source is invalid', async () => {
+    // Guards the constraint that the rule never migrates into the zod schema: a row written before
+    // this rule existed must remain readable, or it could never be opened and corrected.
+    const ctx = fakeCtx();
+    const app = appWith(ctx);
+    await ctx.reportDesigns.create(withImage('https://example.org/l.png') as never);
+    const res = await app.inject({ method: 'GET', url: '/api/report-designs/rd1' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().pages[0].elements[0].src).toBe('https://example.org/l.png');
+  });
 });
