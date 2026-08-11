@@ -366,31 +366,32 @@ In `apps/server/src/report-designs-routes.ts`, extend the import on line 3:
 import { ReportDesignSchema, findInvalidImageSources } from '@openldr/report-designer/pure';
 ```
 
-Add this helper just inside `registerReportDesignRoutes`, above the route definitions:
+Call the validator directly in each handler — no local wrapper. Add a comment above the `POST` route explaining the placement, since the *absence* of this check on `/preview` is deliberate and would otherwise look like an oversight:
 
 ```ts
-  /** Write-time image gate. Returns true when it has already sent a 400.
-   *
-   *  ⛔ Deliberately NOT applied to `/preview`: an author must be able to preview a design that
-   *  already contains a bad image in order to SEE the problem. Preview is diagnostic; save is the
-   *  gate. And deliberately not a zod refinement — that would also run on read (`fromRow`) and make
-   *  such a design unopenable. */
-  const invalidImagesOf = (design: Parameters<typeof findInvalidImageSources>[0]) => findInvalidImageSources(design);
+  // Write-time image gate on POST/PUT only.
+  //
+  // ⛔ Deliberately NOT on `/preview`: an author must be able to preview a design that already
+  // contains a bad image in order to SEE the problem. Preview is diagnostic; save is the gate.
+  // ⛔ Deliberately not a zod refinement either — `fromRow` parses stored designs through the same
+  // schema, so a refinement would run on READ and make such a design permanently unopenable.
 ```
 
-Then in the `POST` handler, immediately after the `safeParse` guard:
+In the `POST` handler, immediately after the `safeParse` guard:
 
 ```ts
-    const invalidImages = invalidImagesOf(p.data);
+    const invalidImages = findInvalidImageSources(p.data);
     if (invalidImages.length > 0) { reply.code(400); return { error: 'invalid image source', invalidImages }; }
 ```
 
 And in the `PUT` handler, in the same position (after `safeParse`, before the `before` lookup):
 
 ```ts
-    const invalidImages = invalidImagesOf(p.data);
+    const invalidImages = findInvalidImageSources(p.data);
     if (invalidImages.length > 0) { reply.code(400); return { error: 'invalid image source', invalidImages }; }
 ```
+
+Two call sites of a two-line guard is the right amount of repetition here; extracting a helper that wraps a single function call would add indirection without removing anything.
 
 Leave the `/preview` handler untouched.
 
@@ -573,7 +574,10 @@ function ImageSource({ el, onPatch }: { el: DesignElement; onPatch: (patch: Part
     const reader = new FileReader();
     reader.onload = () => {
       const value = String(reader.result ?? '');
-      // The server is authoritative; this only saves the author a failed round trip.
+      // Checked twice on purpose, not by oversight: the checks above run on the File BEFORE reading
+      // it, so a 40 MB pick is refused without being loaded into memory; this one runs on the
+      // encoded result, catching a file whose declared type disagrees with its bytes. The server
+      // remains authoritative — both of these only save the author a failed round trip.
       const reason = validateImageSrc(value);
       if (reason) { setError(t(reason === 'too-large' ? 'reportDesigner.imageTooBig' : 'reportDesigner.imageType', { max: Math.round(ELEMENT_IMAGE_MAX_BYTES / 1024) })); return; }
       setError(null);
