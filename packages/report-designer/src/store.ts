@@ -12,7 +12,7 @@ function toRow(d: ReportDesign) {
     pages: JSON.stringify(d.pages),
     parameters: JSON.stringify(d.parameters),
     margins: d.margins ? JSON.stringify(d.margins) : null,
-    // `?? null` not `?? false` — see migration 082. An unset flag must persist as NULL so it reads
+    // `?? null` not `?? false` — see migration 083. An unset flag must persist as NULL so it reads
     // back `undefined` and leaves the content hash unchanged.
     page_numbers: d.pageNumbers ?? null,
   };

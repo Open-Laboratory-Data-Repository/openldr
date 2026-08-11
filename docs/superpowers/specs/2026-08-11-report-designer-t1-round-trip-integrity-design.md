@@ -98,7 +98,7 @@ permanent tests in this slice.
 
 ## Design
 
-### 1. Migration `082_report_design_page_numbers`
+### 1. Migration `083_report_design_page_numbers`
 
 Add a **nullable** `boolean` column `page_numbers` to `report_designs`. No backfill.
 
@@ -201,24 +201,29 @@ carry every field, and today it would not.
 
 ## Coordination
 
-Migration number **082**. `081` is taken by `slice/facility-canonical-identity`, which is unmerged.
-A third concurrent session claiming `082` would collide at merge — check
-`packages/db/src/migrations/internal/` against every live branch before writing the file.
+Migration number was originally **082**, chosen when `081` was taken by the unmerged
+`slice/facility-canonical-identity` branch. That branch went on to also claim `082`
+(`082_facility_canonical_identity`) before merging to `main`, so this migration collided at merge
+exactly as the warning below predicted, and was renumbered to **083** — the next free number once
+`main` carried both `081` and `082`. A fourth concurrent session claiming `083` would collide the
+same way — check `packages/db/src/migrations/internal/` against every live branch before writing a
+migration file.
 
-⛔ **The `081` gap is also a runtime hazard, which this spec originally missed.** `createMigrator`
-(`packages/db/src/migrator.ts:5-10`) builds `new Migrator({ db, provider })` with no
+⛔ **The `081`/`082` gap was also a runtime hazard, which this spec originally missed.**
+`createMigrator` (`packages/db/src/migrator.ts:5-10`) builds `new Migrator({ db, provider })` with no
 `allowUnorderedMigrations`; Kysely 0.28.17 defaults it to `false`, sorts migrations by name, and
-requires the executed set to be a strict prefix. A database that applies `082` without `081` and is
-later upgraded to a build containing `081` throws `corrupted migrations` — and since `apps/server`
-self-migrates on startup, that server will not boot. `makeMigratedDb` iterates
-`Object.values(internalMigrations)` and never invokes Kysely's `Migrator`, so no test in this
-repository can catch it.
+requires the executed set to be a strict prefix. A database that applies a later-numbered migration
+without an earlier one and is later upgraded to a build containing that earlier one throws
+`corrupted migrations` — and since `apps/server` self-migrates on startup, that server will not boot.
+`makeMigratedDb` iterates `Object.values(internalMigrations)` and never invokes Kysely's `Migrator`,
+so no test in this repository can catch it.
 
-**Resolution: merge `slice/facility-canonical-identity` first**, so `main` only ever sees `081` then
-`082` in order. Until then, do not boot a server or run migrations against a persistent database from
-this worktree. Worth a standing decision beyond this slice: the repository runs concurrent branches
-that each claim migration numbers, so this will recur — `allowUnorderedMigrations: true` is the flag
-Kysely provides for exactly that, but it changes migration semantics repo-wide.
+**What actually happened:** merge order was not guaranteed, and `082` collided as predicted. The
+resolution was renumbering this migration to `083`, so `main` now sees `081`, `082`, `083` in
+unbroken sequence and the gap this section warned about does not exist on any shipped build. Worth a
+standing decision beyond this slice: the repository runs concurrent branches that each claim
+migration numbers, so this will recur — `allowUnorderedMigrations: true` is the flag Kysely provides
+for exactly that, but it changes migration semantics repo-wide.
 
 Both this slice and the facilities work edit `apps/studio/src/i18n/{en,fr,pt}.ts` if any user-facing
 string appears. Stage named paths only; never `git add -A`.

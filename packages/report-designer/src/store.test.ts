@@ -89,7 +89,7 @@ describe('ReportDesignStore', () => {
     expect((await store.get('pn-off'))?.pageNumbers).toBe(false);
 
     // Unset must come back `undefined`. `false` would change the design's content hash and
-    // re-ship every previously-unflagged design over reference sync (see migration 082).
+    // re-ship every previously-unflagged design over reference sync (see migration 083).
     await store.create(makeDesign('pn-unset', 'Unset'));
     expect((await store.get('pn-unset'))?.pageNumbers).toBeUndefined();
   });
@@ -124,7 +124,7 @@ describe('ReportDesignStore', () => {
   });
 
   it('hashes false differently from unset', async () => {
-    // This is the property migration 082's nullability rests on: `false` is NOT the same as unset,
+    // This is the property migration 083's nullability rests on: `false` is NOT the same as unset,
     // so a NOT NULL DEFAULT false column would have moved every existing design's hash.
     const { capture, hashes } = spyCapture();
     const store = createReportDesignStore(db, capture);

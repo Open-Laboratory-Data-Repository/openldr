@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { makeMigratedDb } from './test-helpers';
 
-describe('082_report_design_page_numbers', () => {
+describe('083_report_design_page_numbers', () => {
   it('adds a nullable page_numbers column that round-trips true, false and null', async () => {
     const db = await makeMigratedDb();
 
