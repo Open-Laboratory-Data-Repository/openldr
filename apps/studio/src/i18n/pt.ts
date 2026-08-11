@@ -1117,6 +1117,8 @@ export const pt: EnShape = {
       text: 'Texto', table: 'Tabela', image: 'Imagem', line: 'Linha', rect: 'Retângulo', datetime: 'Data/hora',
       keyvalue: 'Painel chave/valor', barcode: 'Código de barras', qrcode: 'Código QR',
     },
+    headersFromData: 'Cabeçalhos dos dados',
+    rowsAtRender: 'Linhas na renderização',
   },
   a11y: {
     expandSidebar: 'Expandir barra lateral',

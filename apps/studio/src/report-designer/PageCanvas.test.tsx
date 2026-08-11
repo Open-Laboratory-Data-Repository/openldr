@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import { PageCanvas } from './PageCanvas';
 import { MOCK_TEMPLATES } from './mockTemplates';
-import type { ReportTemplate } from './types';
+import type { DesignElement, ReportTemplate } from './types';
 
 function pd(el: Element, x: number, y: number, extra: object = {}) {
   fireEvent.pointerDown(el, { clientX: x, clientY: y, button: 0, ...extra });
@@ -350,5 +350,48 @@ describe('PageCanvas letterhead tokens', () => {
   it('falls back to the image placeholder when the logo is unset', () => {
     const { container } = show({ kind: 'image', src: '{{lab.logo}}' });
     expect(container.querySelector('img')).toBeNull();
+  });
+});
+
+function tplWithTable(el: DesignElement): ReportTemplate {
+  return { id: 't', name: 't', paper: 'A4', orientation: 'portrait', parameters: [], pages: [{ id: 'p1', elements: [el] }] };
+}
+function renderTable(el: DesignElement) {
+  render(<PageCanvas template={tplWithTable(el)} zoom={1} selectedIds={[]} onSelect={vi.fn()} onCommitRects={vi.fn()} />);
+}
+
+describe('PageCanvas bound tables', () => {
+  it('renders a bound table using its boundColumns labels, not the static columns', () => {
+    renderTable({
+      id: 't1', kind: 'table', name: 'Results', rect: { x: 0, y: 0, w: 200, h: 60 },
+      columns: ['stale'],
+      dataSource: { kind: 'custom-query', queryId: 'q1' },
+      boundColumns: [{ key: 'organism', label: 'Organism' }, { key: 'n', label: 'Tested' }],
+    });
+    expect(screen.getByText('Organism')).toBeInTheDocument();
+    expect(screen.getByText('Tested')).toBeInTheDocument();
+    expect(screen.queryByText('stale')).not.toBeInTheDocument();
+  });
+
+  it('renders a transposed table with its label and a data-derived header marker', () => {
+    // A transposed table leaves boundColumns EMPTY by design — its headers are the organisms that
+    // cleared the isolate threshold. The audit's "show boundColumns" minimum is a no-op here, and
+    // this is the cumulative antibiogram, the table it most criticises.
+    renderTable({
+      id: 't2', kind: 'table', name: 'Antibiogram', rect: { x: 0, y: 0, w: 200, h: 60 },
+      dataSource: { kind: 'custom-query', queryId: 'q2' },
+      transpose: true, transposeLabel: 'Antimicrobial',
+    });
+    expect(screen.getByText('Antimicrobial')).toBeInTheDocument();
+    expect(screen.getByText('Headers from data')).toBeInTheDocument();
+  });
+
+  it('leaves an unbound table showing its static sample columns and rows', () => {
+    renderTable({
+      id: 't3', kind: 'table', name: 'Static', rect: { x: 0, y: 0, w: 200, h: 60 },
+      columns: ['A', 'B'], rows: [['1', '2']],
+    });
+    expect(screen.getByText('A')).toBeInTheDocument();
+    expect(screen.getByText('1')).toBeInTheDocument();
   });
 });

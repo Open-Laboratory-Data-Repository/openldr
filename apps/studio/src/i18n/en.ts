@@ -1177,6 +1177,8 @@ export const en = {
       text: 'Text', table: 'Table', image: 'Image', line: 'Line', rect: 'Rectangle', datetime: 'Date/time',
       keyvalue: 'Key/value panel', barcode: 'Barcode', qrcode: 'QR code',
     },
+    headersFromData: 'Headers from data',
+    rowsAtRender: 'Rows at render',
   },
   a11y: {
     expandSidebar: 'Expand sidebar',

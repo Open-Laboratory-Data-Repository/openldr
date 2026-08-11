@@ -290,21 +290,72 @@ function ElementContent({ el, zoom, identity }: { el: DesignElement; zoom: numbe
     case 'qrcode':
       return <SymbolPreview el={el} identity={identity} />;
     case 'table':
-      return (
-        <table className="h-full w-full border-collapse text-[8px] text-neutral-700">
-          <thead>
-            <tr>{(el.columns ?? []).map((c) => (
-              <th key={c} className="border border-neutral-300 bg-neutral-100 px-1 py-0.5 text-left font-medium">{c}</th>
-            ))}</tr>
-          </thead>
-          <tbody>
-            {(el.rows ?? []).map((r, ri) => (
-              <tr key={ri}>{r.map((cell, ci) => (
-                <td key={ci} className="border border-neutral-200 px-1 py-0.5">{cell}</td>
-              ))}</tr>
-            ))}
-          </tbody>
-        </table>
-      );
+      return <TablePreview el={el} />;
   }
+}
+
+/** Canvas preview of a table, in three states.
+ *
+ *  ⚠ A BOUND table's real content lives in `boundColumns` and the resolved query rows; the static
+ *  `columns`/`rows` are sample scaffolding from before it was bound. Rendering those made a bound
+ *  table look empty (or stale) in the editor while the PDF was fully populated.
+ *
+ *  ⛔ A TRANSPOSED table leaves `boundColumns` empty ON PURPOSE — its headers are data (the
+ *  organisms that cleared the isolate threshold), so they cannot be known without running the
+ *  query. The audit's minimum bar ("show its boundColumns headers") is a no-op for exactly the
+ *  table it most criticises, the cumulative antibiogram. We show the one header we do know and
+ *  mark the rest as data-derived rather than inventing plausible names. */
+function TablePreview({ el }: { el: DesignElement }): JSX.Element {
+  const { t } = useTranslation();
+  const bound = Boolean(el.dataSource);
+  const headerCell = 'border border-neutral-300 bg-neutral-100 px-1 py-0.5 text-left font-medium';
+
+  if (bound && el.transpose) {
+    return (
+      <table className="h-full w-full border-collapse text-[8px] text-neutral-700">
+        <thead>
+          <tr>
+            <th className={headerCell}>{el.transposeLabel ?? ''}</th>
+            <th className={cn(headerCell, 'italic text-neutral-400')}>{t('reportDesigner.headersFromData')}</th>
+          </tr>
+        </thead>
+      </table>
+    );
+  }
+
+  if (bound) {
+    return (
+      <table className="h-full w-full border-collapse text-[8px] text-neutral-700">
+        <thead>
+          <tr>{(el.boundColumns ?? []).map((c) => (
+            <th key={c.key} className={headerCell}>{c.label}</th>
+          ))}</tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td colSpan={Math.max(1, (el.boundColumns ?? []).length)} className="px-1 py-0.5 italic text-neutral-400">
+              {t('reportDesigner.rowsAtRender')}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    );
+  }
+
+  return (
+    <table className="h-full w-full border-collapse text-[8px] text-neutral-700">
+      <thead>
+        <tr>{(el.columns ?? []).map((c) => (
+          <th key={c} className={headerCell}>{c}</th>
+        ))}</tr>
+      </thead>
+      <tbody>
+        {(el.rows ?? []).map((r, ri) => (
+          <tr key={ri}>{r.map((cell, ci) => (
+            <td key={ci} className="border border-neutral-200 px-1 py-0.5">{cell}</td>
+          ))}</tr>
+        ))}
+      </tbody>
+    </table>
+  );
 }
