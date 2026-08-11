@@ -1,4 +1,4 @@
-import { type Kysely, type SelectQueryBuilder, sql } from 'kysely';
+import { type Kysely, type SelectQueryBuilder, type Selectable, sql } from 'kysely';
 import type { InternalSchema } from './schema/internal';
 import type { ReferenceCapture } from './reference-capture';
 import { FACILITY_ADMIN_LEVELS, type FacilityAdminLevel } from './facility-answers';
@@ -168,12 +168,17 @@ export const DEFAULT_LIST_LIMIT = 200;
 const MAX_ADMIN_VALUES = 1000;
 
 type Row = InternalSchema['facility_registry'];
+// The shape a SELECT actually returns: `Selectable<>` unwraps `register_state`'s `Generated<string>`
+// (migration 081) down to a plain `string`, same as it always implicitly did for every other column
+// here (none of which were `ColumnType`-wrapped before). `Row` itself stays the raw table type — it
+// is still the right shape for `toRow()`'s Omit-based insert construction below.
+type SelectRow = Selectable<Row>;
 
 /** Exported for the bulk import path (facility-import.ts in @openldr/bootstrap): it writes rows via
  *  a batched multi-row upsert instead of this store's one-row-per-transaction `upsert()`, but needs
  *  the exact same camelCase <-> snake_case shape so a hand-entered facility, an interactively-edited
  *  one, and a bulk-imported one all land identically. */
-export function toRecord(r: Row): FacilityRecord {
+export function toRecord(r: SelectRow): FacilityRecord {
   return {
     id: r.id,
     localCode: r.local_code,
@@ -200,7 +205,13 @@ export function toRecord(r: Row): FacilityRecord {
   };
 }
 
-export function toRow(rec: FacilityRecord): Omit<Row, 'created_at' | 'updated_at'> {
+// `register_state` (migration 081) is deliberately excluded, same as `created_at`/`updated_at`: this
+// task seeds the column and its DEFAULT ('not_registered') only — nothing consumes or writes it yet.
+// Omitting it here means a fresh INSERT gets the column default, and `upsert()`'s
+// `doUpdateSet({ ...row, ... })` below leaves an EXISTING row's register_state untouched on conflict,
+// rather than stomping it back to the default on every edit. A later task in this plan is what
+// decides register_state's value and writes it explicitly.
+export function toRow(rec: FacilityRecord): Omit<Row, 'created_at' | 'updated_at' | 'register_state'> {
   return {
     id: rec.id,
     local_code: rec.localCode ?? null,
@@ -291,7 +302,7 @@ export function createFacilityRegistryStore(
   return {
     async get(id) {
       const r = await db.selectFrom('facility_registry').selectAll().where('id', '=', id).executeTakeFirst();
-      return r ? toRecord(r as Row) : undefined;
+      return r ? toRecord(r as SelectRow) : undefined;
     },
 
     async list(opts = {}) {
@@ -406,7 +417,7 @@ export function createFacilityRegistryStore(
       const [rows, counted] = await Promise.all([rowsQ.execute(), countQ.executeTakeFirst()]);
       return {
         rows: rows.map((r) => ({
-          ...toRecord(r as Row),
+          ...toRecord(r as SelectRow),
           health: r.health as FacilityHealth,
           mappingCount: Number(r.mapping_count ?? 0),
         })),
@@ -428,7 +439,7 @@ export function createFacilityRegistryStore(
           .onConflict((oc) => oc.column('id').doUpdateSet({ ...row, updated_at: sql`now()` } as never))
           .execute();
         const stored = toRecord(
-          (await trx.selectFrom('facility_registry').selectAll().where('id', '=', rec.id).executeTakeFirstOrThrow()) as Row,
+          (await trx.selectFrom('facility_registry').selectAll().where('id', '=', rec.id).executeTakeFirstOrThrow()) as SelectRow,
         );
         // Capture SUSPENDED — see SUSPENDED_REFERENCE_ENTITY_TYPES in reference-change-log.ts. The
         // `capture` dep stays on this store's interface so re-enabling is one line, not a re-wiring.
