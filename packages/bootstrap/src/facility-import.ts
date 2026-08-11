@@ -410,7 +410,8 @@ function chunk<T>(items: T[], size: number): T[][] {
  * loudly: every field on `FacilityRecord` bar `id`/`name`/`source` is optional, so an omitted column
  * reaches `classifyFacilityRows` as `undefined`, and its `same()` treats `undefined` and `null`
  * alike as "no value" — the row would classify `unchanged` against a write that changes it. It also
- * buys nothing: of `facility_registry`'s 24 columns this uses 23, all but `created_at`. `r.source`
+ * buys nothing: of `facility_registry`'s 25 columns (`FacilityRegistryTable`, packages/db/src/
+ * schema/internal.ts) this uses 23, excluding only `created_at` and `register_state`. `r.source`
  * is read too (below) — carried on `ExistingFacility.source` for the `facility.import.row` audit's
  * `before`, never fed into `fields`/`COMPARED`; see `ExistingFacility.source`'s docblock.
  */

@@ -4651,6 +4651,115 @@ describe('GET /api/facilities/:id/impact', () => {
   });
 });
 
+// ── Task 8 (B1, facility-canonical-identity): GET /api/facilities/:id/history ───────────────────
+//
+// A read model only, over `audit_events` rows POST/PUT (facility.create/facility.update) and
+// Task 7's per-row import audit (facility.import.row) already write — no new table, no second
+// capture path, nothing seeded here that the route itself doesn't also read.
+
+/** Inserts `audit_events` rows directly (no store interface exposes writing an arbitrary
+ *  `occurred_at`/`id`, and this describe block needs both under its own control).
+ *
+ *  ⚠ Every row in one call shares the SAME literal `occurred_at` — never `new Date()` per row.
+ *  pg-mem's `now()` is real millisecond wall-clock and collides on roughly half of consecutive
+ *  calls (measured this slice), so relying on distinct auto-timestamps would make the ordering
+ *  test pass or fail by luck. Forcing an exact collision means the only way "newest first" can
+ *  come back right is the route's `id desc` tiebreaker actually running.
+ *
+ *  `id`s are ORDERED strings the caller chooses (`evt-1`, `evt-2`, ...), not `randomUUID()` — a
+ *  random id would make "which id sorts last" a coin flip, exactly the trap this slice's brief
+ *  warns about. */
+async function seedFacilityHistory(
+  internalDb: any,
+  entries: { id: string; action: string; entityId: string; before: unknown; after: unknown }[],
+): Promise<void> {
+  const occurredAt = new Date('2026-01-01T00:00:00.000Z');
+  for (const e of entries) {
+    await internalDb.insertInto('audit_events').values({
+      id: e.id,
+      occurred_at: occurredAt,
+      actor_type: 'user',
+      actor_id: 'u1',
+      actor_name: 'Alice',
+      action: e.action,
+      entity_type: 'facility',
+      entity_id: e.entityId,
+      before: (e.before ?? null) as never,
+      after: (e.after ?? null) as never,
+      metadata: null as never,
+    }).execute();
+  }
+}
+
+describe('Task 8: GET /api/facilities/:id/history', () => {
+  it('returns a facility\'s create/update events, newest first', async () => {
+    const internalDb = await makeMigratedDb();
+    const ctx = fakeReconcileCtx(internalDb, null);
+    // 'evt-2' must win the tiebreak over 'evt-1' — see seedFacilityHistory's doc comment on why
+    // both rows sharing one `occurred_at` makes that the ONLY thing `id desc` can be proven by.
+    await seedFacilityHistory(internalDb, [
+      { id: 'evt-1', action: 'facility.create', entityId: 'fac-1', before: null, after: { id: 'fac-1', name: 'Dodoma RRH' } },
+      { id: 'evt-2', action: 'facility.update', entityId: 'fac-1', before: { name: 'Dodoma RRH' }, after: { name: 'Dodoma Regional Referral' } },
+    ]);
+    const app = await appWith(ctx);
+
+    const res = await app.inject({ method: 'GET', url: '/api/facilities/fac-1/history' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      rows: [
+        {
+          occurredAt: '2026-01-01T00:00:00.000Z', actorName: 'Alice', action: 'facility.update',
+          before: { name: 'Dodoma RRH' }, after: { name: 'Dodoma Regional Referral' },
+        },
+        {
+          occurredAt: '2026-01-01T00:00:00.000Z', actorName: 'Alice', action: 'facility.create',
+          before: null, after: { id: 'fac-1', name: 'Dodoma RRH' },
+        },
+      ],
+    });
+  });
+
+  it('excludes other facilities\' events', async () => {
+    const internalDb = await makeMigratedDb();
+    const ctx = fakeReconcileCtx(internalDb, null);
+    await seedFacilityHistory(internalDb, [
+      { id: 'evt-1', action: 'facility.create', entityId: 'fac-1', before: null, after: { id: 'fac-1' } },
+      { id: 'evt-2', action: 'facility.create', entityId: 'fac-2', before: null, after: { id: 'fac-2' } },
+    ]);
+    const app = await appWith(ctx);
+
+    const res = await app.inject({ method: 'GET', url: '/api/facilities/fac-1/history' });
+
+    expect(res.statusCode).toBe(200);
+    const { rows } = res.json();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].after).toEqual({ id: 'fac-1' });
+  });
+
+  it('is gated on facilities.view — a user without it gets 403', async () => {
+    const internalDb = await makeMigratedDb();
+    const app = await appWith(fakeReconcileCtx(internalDb, null), []);
+
+    const res = await app.inject({ method: 'GET', url: '/api/facilities/fac-1/history' });
+
+    expect(res.statusCode).toBe(403);
+  });
+
+  // The reason, not just the rule: a deleted facility's history is still meaningful — it is how an
+  // operator finds out a facility once existed and what happened to it — so an id `facilityRegistry`
+  // no longer (or never did) resolve must not 404 here, unlike GET /api/facilities/:id itself.
+  it('returns an empty array, not 404, for an unknown facility id', async () => {
+    const internalDb = await makeMigratedDb();
+    const app = await appWith(fakeReconcileCtx(internalDb, null));
+
+    const res = await app.inject({ method: 'GET', url: '/api/facilities/does-not-exist/history' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ rows: [] });
+  });
+});
+
 // ── Task 13: GET /api/facilities/mapping-conflicts ──────────────────────────────────────────────
 //
 // `facility_mapping_conflicts` is written once, by migration 078, when it closed "one active

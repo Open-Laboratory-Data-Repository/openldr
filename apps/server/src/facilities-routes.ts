@@ -1081,6 +1081,48 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     return { mappingCount, reportCount };
   });
 
+  // Task 8 (B1, facility-canonical-identity): a facility's change history, read straight off
+  // `audit_events` — no new table, no second capture path. POST/PUT below already write real
+  // before/after here (`action: 'facility.create'`/`'facility.update'`, `entityType: 'facility'`,
+  // `entityId` the facility's own id), and Task 7's per-row import audit
+  // (`facility.import.row`, packages/bootstrap/src/facility-import.ts) writes the same shape for an
+  // imported change. This route only reads that back; it captures nothing itself.
+  //
+  // ⛔ No 404 for an unknown id — deliberately, unlike `GET /api/facilities/:id` above. A deleted
+  // facility's history is still meaningful (it is how an operator learns a facility once existed
+  // and what happened to it), so an id `facilityRegistry` no longer resolves — or never did — comes
+  // back `{ rows: [] }`, the same shape a real facility with no audit rows yet would get.
+  //
+  // ⛔ `.orderBy('occurred_at', 'desc').orderBy('id', 'desc')` — NOT `occurred_at` alone.
+  // `occurred_at` is `now()` at insert time (migration 005), and two rows for the same facility
+  // written within the same millisecond are routine (e.g. a create immediately followed by a
+  // projection retry, or two of Task 7's per-row import events in one batch) — pg-mem's real
+  // millisecond wall-clock `now()` collides on roughly half of consecutive calls, so an
+  // `occurred_at`-only order is not reliably "newest first". `id` (a `randomUUID()`, audit-
+  // helper.ts / facility-import.ts) carries no ordering of its own, but it IS unique, so ordering
+  // by it as a second key makes ties resolve the same way every time instead of however the scan
+  // happened to visit them.
+  app.get('/api/facilities/:id/history', VIEW, async (req) => {
+    const { id } = req.params as { id: string };
+    const rows = await ctx.internalDb
+      .selectFrom('audit_events')
+      .select(['occurred_at', 'actor_name', 'action', 'before', 'after'])
+      .where('entity_type', '=', 'facility')
+      .where('entity_id', '=', id)
+      .orderBy('occurred_at', 'desc')
+      .orderBy('id', 'desc')
+      .execute();
+    return {
+      rows: rows.map((r) => ({
+        occurredAt: r.occurred_at instanceof Date ? r.occurred_at.toISOString() : String(r.occurred_at),
+        actorName: r.actor_name,
+        action: r.action,
+        before: r.before ?? null,
+        after: r.after ?? null,
+      })),
+    };
+  });
+
   app.post('/api/facilities', MANAGE, async (req, reply) => {
     const p = SubmitSchema.safeParse(req.body);
     if (!p.success) { reply.code(400); return { error: p.error.message }; }
