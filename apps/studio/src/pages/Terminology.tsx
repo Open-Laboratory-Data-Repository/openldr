@@ -258,7 +258,20 @@ export function Terminology(): JSX.Element {
         summary: (
           <span>
             Permanently deletes &ldquo;{sys.systemCode}&rdquo; with {impact.termCount} term(s) and{' '}
-            {impact.mappingCount} mapping(s). This action cannot be undone.
+            {impact.mappingCount} mapping(s).{' '}
+            {impact.facilityCount > 0 && (
+              // Only a facility register ever reports this. Its terms and mappings are usually both
+              // 0, so without this line the dialog above reads as "nothing happens" over a delete the
+              // server refuses. Says refused, not warned: the store raises a 409 for this case.
+              <>
+                {impact.facilityCount === 1
+                  ? '1 facility is'
+                  : `${impact.facilityCount} facilities are`}{' '}
+                filed under this facility register and their permanent ids were derived from its URL,
+                so this delete will be refused.{' '}
+              </>
+            )}
+            This action cannot be undone.
           </span>
         ),
         onConfirm: async () => {

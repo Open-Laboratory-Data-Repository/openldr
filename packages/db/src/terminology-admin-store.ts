@@ -6,6 +6,7 @@ import type { ReferenceCapture } from './reference-capture';
 import { fhirValueSetCatalogToInputs, fhirValueSetToInput, valueSetToFhirResource } from './fhir-value-set';
 import { expandCompose, type ExpandedConcept, type ExpandDeps, type VsCompose } from './value-set-expander';
 import { markTerminologyChanged } from './terminology-sync';
+import { FACILITY_REGISTER_KIND } from './migrations/internal/081_facility_source_and_register_state';
 
 export type PublisherRole = 'local' | 'standard' | 'external';
 
@@ -141,7 +142,11 @@ export interface TerminologyAdminStore {
     create(input: CodingSystemInput): Promise<CodingSystem>;
     update(id: string, input: CodingSystemInput): Promise<CodingSystem>;
     delete(id: string, opts?: { cascade?: boolean }): Promise<void>;
-    deletionImpact(id: string): Promise<{ termCount: number; mappingCount: number }>;
+    /** `facilityCount` is the `facility_registry` rows filed under this system's url, and is non-zero
+     *  ONLY for a facility register. It is what makes the preview honest for one: a register normally
+     *  has no `terminology_concepts` and no `concept_map_elements` of its own, so the other two
+     *  counts read 0 immediately before a delete that would orphan thousands of facilities. */
+    deletionImpact(id: string): Promise<{ termCount: number; mappingCount: number; facilityCount: number }>;
     upsertByUrl(input: { url: string; systemCode: string; systemName: string; systemVersion?: string | null; publisherId: string | null }): Promise<void>;
     getByUrl(url: string): Promise<CodingSystem | null>;
   };
@@ -238,6 +243,32 @@ export function createTerminologyAdminStore(db: Kysely<InternalSchema>, projecti
     id: r.id, fromSystem: r.from_system, fromCode: r.from_code, toSystem: r.to_system, toCode: r.to_code,
     toDisplay: r.to_display, mapType: r.map_type as MapType, relationship: r.relationship, owner: r.owner, isActive: r.is_active,
   });
+
+  /**
+   * How many `facility_registry` rows are filed under this coding system, read as a facility register.
+   *
+   * ⛔ Returns 0 unless the row is marked `kind = FACILITY_REGISTER_KIND` (migration 081). A facility's
+   * permanent id is `fac-` + sha256(`<register url>|<national code>`) (`idFor`,
+   * packages/terminology/src/facility-csv.ts), and `resolveFacilityRegisterForImport`
+   * (facility-register-sources.ts) resolves an import's register by that url scoped to that same
+   * `kind`. So only a register's url is the string those ids were hashed from; an ordinary coding
+   * system that happens to carry the same url protects nothing and must not inflate the preview.
+   *
+   * Its own SELECT, not a correlated subquery over `coding_systems`: pg-mem — which every test of this
+   * store runs on — has no correlated-subquery support, so a correlated form would not run there at all.
+   */
+  async function facilitiesFiledUnder(row: { kind: string | null; url: string | null }): Promise<number> {
+    if (row.kind !== FACILITY_REGISTER_KIND || !row.url) return 0;
+    const r = await db.selectFrom('facility_registry').select((eb) => eb.fn.countAll<number>().as('n'))
+      .where('national_system', '=', row.url).executeTakeFirst();
+    return Number(r?.n ?? 0);
+  }
+
+  /** Noun AND verb together, so the refusal messages read "1 facility is filed" rather than
+   *  "1 facility are filed". */
+  function facilitiesAre(n: number): string {
+    return n === 1 ? '1 facility is' : `${n} facilities are`;
+  }
 
   async function mappingCountFor(system: string, code: string): Promise<number> {
     const r = await db.selectFrom('term_mappings').select((eb) => eb.fn.countAll<number>().as('n'))
@@ -454,8 +485,25 @@ export function createTerminologyAdminStore(db: Kysely<InternalSchema>, projecti
         });
       },
       async update(id, input) {
-        const existing = await db.selectFrom('coding_systems').select(['id']).where('id', '=', id).executeTakeFirst();
+        const existing = await db.selectFrom('coding_systems').select(['id', 'url', 'kind']).where('id', '=', id).executeTakeFirst();
         if (!existing) throw new TerminologyAdminError(`coding system not found: ${id}`, 'not-found');
+        // ⛔ Only a URL CHANGE is refused, and only when facilities are already filed under the old
+        // url. Name, version, description, contact, jurisdiction, publisher and active stay editable
+        // on a register that has facilities — the url is the only field their permanent ids were
+        // hashed from, so it is the only one whose edit orphans them. Checked here, before the
+        // transaction opens, because pg-mem does not roll back on a thrown error.
+        const nextUrl = input.url ?? null;
+        if (nextUrl !== existing.url) {
+          const facilityCount = await facilitiesFiledUnder(existing);
+          if (facilityCount > 0) {
+            throw new TerminologyAdminError(
+              `Cannot change this facility register's URL: ${facilitiesAre(facilityCount)} filed under `
+              + `"${existing.url}". Their permanent ids were derived from that URL, so changing it would `
+              + 'orphan every one of them and stop imports resolving against this register.',
+              'conflict',
+            );
+          }
+        }
         return db.transaction().execute(async (trx) => {
           // system_code is immutable on update (the UI disables it).
           await trx.updateTable('coding_systems').set({
@@ -468,8 +516,26 @@ export function createTerminologyAdminStore(db: Kysely<InternalSchema>, projecti
         });
       },
       async delete(id, opts) {
-        const row = await db.selectFrom('coding_systems').select(['seeded', 'url']).where('id', '=', id).executeTakeFirst();
+        const row = await db.selectFrom('coding_systems').select(['seeded', 'url', 'kind']).where('id', '=', id).executeTakeFirst();
         if (!row) throw new TerminologyAdminError(`coding system not found: ${id}`, 'not-found');
+        // ⛔ The seeded refusal below CANNOT cover a facility register: both writers that mint one
+        // (`createFacilityRegisterSourceStore.create`, facility-register-sources.ts, and migration
+        // 082's minting step) write `seeded: false`, so every register reaches this method deletable.
+        // A register with no facilities under it is still deletable — one created by mistake must
+        // stay removable — but one with facilities is not.
+        //
+        // Raised before the first write for two reasons: pg-mem does not roll back on a thrown error,
+        // and the caller in apps/server/src/terminology-admin-routes.ts deletes the ingest blobs after
+        // this returns, which nothing would undo either.
+        const facilityCount = await facilitiesFiledUnder(row);
+        if (facilityCount > 0) {
+          throw new TerminologyAdminError(
+            `Cannot delete this facility register: ${facilitiesAre(facilityCount)} filed under it. `
+            + 'Their permanent ids were derived from its URL, so deleting it would orphan every one of '
+            + 'them and refuse every future import against this register.',
+            'conflict',
+          );
+        }
         const jobCount = Number(
           (await db.selectFrom('terminology_ingest_jobs').select((eb) => eb.fn.countAll<number>().as('n'))
             .where('coding_system_id', '=', id).executeTakeFirst())?.n ?? 0,
@@ -488,15 +554,24 @@ export function createTerminologyAdminStore(db: Kysely<InternalSchema>, projecti
           if (capture) await capture.record(trx, 'coding_system', id, 'delete', null);
         });
       },
+      // ⚠ `mappingCount` deliberately counts `concept_map_elements` ONLY, not `term_mappings`.
+      // `term_mappings` has exactly two writers, both in this file (`termMappings.create` and
+      // `saveExclusive`), and each mirrors its row into `concept_map_elements` under LOCAL_MAP_URL —
+      // so a mapping naming this url is already one row here, and adding a `term_mappings` count on
+      // top would report it twice. The register's CONTROLLED-FIELD mappings are a different case: they
+      // are keyed on `observedFieldSystem`'s slugified url (`<prefix><slug(url)>`, migration 082 step
+      // 7), not on the url itself, so no predicate over this url finds them — and deriving that slug
+      // needs `@openldr/bootstrap`, which depends on this package, so it cannot be imported here.
       async deletionImpact(id) {
-        const sys = await db.selectFrom('coding_systems').select(['url']).where('id', '=', id).executeTakeFirst();
+        const sys = await db.selectFrom('coding_systems').select(['url', 'kind']).where('id', '=', id).executeTakeFirst();
         if (!sys) throw new TerminologyAdminError(`coding system not found: ${id}`, 'not-found');
         const url = sys.url;
-        if (!url) return { termCount: 0, mappingCount: 0 };
+        const facilityCount = await facilitiesFiledUnder(sys);
+        if (!url) return { termCount: 0, mappingCount: 0, facilityCount };
         const t = await db.selectFrom('terminology_concepts').select((eb) => eb.fn.countAll<number>().as('n')).where('system', '=', url).executeTakeFirst();
         const m = await db.selectFrom('concept_map_elements').select((eb) => eb.fn.countAll<number>().as('n'))
           .where((eb) => eb.or([eb('source_system', '=', url), eb('target_system', '=', url)])).executeTakeFirst();
-        return { termCount: Number(t?.n ?? 0), mappingCount: Number(m?.n ?? 0) };
+        return { termCount: Number(t?.n ?? 0), mappingCount: Number(m?.n ?? 0), facilityCount };
       },
       async upsertByUrl(input) {
         // Idempotency key is `url` (ON CONFLICT), not id: a row seeded by the migration

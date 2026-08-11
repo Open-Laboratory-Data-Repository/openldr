@@ -85,7 +85,9 @@ function buildFakeAdmin(): FakeAdmin {
         if (idx === -1) throw adminErr(`not found: ${id}`, 'not-found');
         systems.splice(idx, 1);
       },
-      async deletionImpact() { return { termCount: 0, mappingCount: 0 }; },
+      // `facilityCount` is a facility-register count the real store reads from `facility_registry`;
+      // this fake holds no facilities, so 0 is its true value here.
+      async deletionImpact() { return { termCount: 0, mappingCount: 0, facilityCount: 0 }; },
       async upsertByUrl() { /* no-op in fake */ },
       async getByUrl(url) { return systems.find((s) => s.url === url) ?? null; },
     },
