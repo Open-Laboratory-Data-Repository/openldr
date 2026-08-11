@@ -373,6 +373,19 @@ describe('PageCanvas bound tables', () => {
     expect(screen.queryByText('stale')).not.toBeInTheDocument();
   });
 
+  it('renders the data-derived header marker for a bound (non-transposed) table with no boundColumns yet', () => {
+    // Data tab's pickQuery sets `dataSource` and clears `boundColumns` in the same step, so every
+    // table passes through exactly this state right after being bound. The PDF renderer falls back
+    // to the resolved query's own columns here (`draw.ts` `tableHeaders`), so an empty header row on
+    // the canvas would misrepresent a table the PDF prints fully populated.
+    renderTable({
+      id: 't1b', kind: 'table', name: 'Results', rect: { x: 0, y: 0, w: 200, h: 60 },
+      dataSource: { kind: 'custom-query', queryId: 'q1' },
+    });
+    expect(screen.getByText('Headers from data')).toBeInTheDocument();
+    expect(screen.getByText('Rows at render')).toBeInTheDocument();
+  });
+
   it('renders a transposed table with its label and a data-derived header marker', () => {
     // A transposed table leaves boundColumns EMPTY by design — its headers are the organisms that
     // cleared the isolate threshold. The audit's "show boundColumns" minimum is a no-op here, and

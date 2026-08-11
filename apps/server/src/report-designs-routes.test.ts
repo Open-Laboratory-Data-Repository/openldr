@@ -190,19 +190,24 @@ describe('report-design routes', () => {
     pages: [{ id: 'p1', elements: [{ id: 'logo', kind: 'image', name: 'Logo', rect: { x: 0, y: 0, w: 10, h: 10 }, src }] }],
   });
 
-  it('rejects an https image source on create', async () => {
+  it('rejects an https image source on create, naming the offending element in the error string', async () => {
     const app = appWith(fakeCtx());
     const res = await app.inject({ method: 'POST', url: '/api/report-designs', payload: withImage('https://example.org/l.png') });
     expect(res.statusCode).toBe(400);
     expect(res.json().invalidImages).toEqual([{ elementId: 'logo', reason: 'not-a-data-uri' }]);
+    // The studio's error extractor reads only `body.error` — a bare 'invalid image source' string
+    // leaves the author guessing which of N images across M pages is at fault, so the element id and
+    // reason must be IN the string itself, not just in the structured `invalidImages` array.
+    expect(res.json().error).toBe('invalid image source: logo (not-a-data-uri)');
   });
 
-  it('rejects an https image source on update', async () => {
+  it('rejects an https image source on update, naming the offending element in the error string', async () => {
     const app = appWith(fakeCtx());
     await app.inject({ method: 'POST', url: '/api/report-designs', payload: minimal });
     const res = await app.inject({ method: 'PUT', url: '/api/report-designs/rd1', payload: withImage('https://example.org/l.png') });
     expect(res.statusCode).toBe(400);
     expect(res.json().invalidImages).toEqual([{ elementId: 'logo', reason: 'not-a-data-uri' }]);
+    expect(res.json().error).toBe('invalid image source: logo (not-a-data-uri)');
   });
 
   it('accepts a seeded {{lab.logo}} token — every built-in design ships one', async () => {

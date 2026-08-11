@@ -331,16 +331,39 @@ function TablePreview({ el }: { el: DesignElement }): JSX.Element {
   }
 
   if (bound) {
+    const cols = el.boundColumns ?? [];
+    // A freshly-bound table (Data tab's pickQuery sets `dataSource` and clears `boundColumns` in the
+    // same step — every table passes through this state right after being bound) must not render an
+    // empty header row: the PDF renderer (`draw.ts` `tableHeaders`) falls back to the resolved
+    // query's own columns when `boundColumns` is empty, so the canvas would show an empty box while
+    // the PDF prints a full table. Reuse the transposed branch's marker rather than inventing a
+    // second "headers unknown" affordance.
+    if (cols.length === 0) {
+      return (
+        <table className="h-full w-full border-collapse text-[8px] text-neutral-700">
+          <thead>
+            <tr><th className={cn(headerCell, 'italic text-neutral-400')}>{t('reportDesigner.headersFromData')}</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td className="px-1 py-0.5 italic text-neutral-400">
+                {t('reportDesigner.rowsAtRender')}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      );
+    }
     return (
       <table className="h-full w-full border-collapse text-[8px] text-neutral-700">
         <thead>
-          <tr>{(el.boundColumns ?? []).map((c) => (
+          <tr>{cols.map((c) => (
             <th key={c.key} className={headerCell}>{c.label}</th>
           ))}</tr>
         </thead>
         <tbody>
           <tr>
-            <td colSpan={Math.max(1, (el.boundColumns ?? []).length)} className="px-1 py-0.5 italic text-neutral-400">
+            <td colSpan={cols.length} className="px-1 py-0.5 italic text-neutral-400">
               {t('reportDesigner.rowsAtRender')}
             </td>
           </tr>

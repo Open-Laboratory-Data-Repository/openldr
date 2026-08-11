@@ -3,6 +3,7 @@ import { render, screen, fireEvent, within, waitFor } from '@testing-library/rea
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { ReportDesignerPage } from './ReportDesignerPage';
 import { createReportDesign, updateReportDesign, deleteReportDesign, listReportDesigns } from '../api';
+import { SEED_DESIGNS } from '@openldr/reporting';
 
 // Mock the API layer: the list + single-design loads resolve from the mock seed data (which the
 // existing editor tests depend on), and the mutating calls resolve so we can assert they fire.
@@ -301,6 +302,19 @@ describe('ReportDesignerPage', () => {
     // Transient: the copy is not persisted until Save, exactly like New template.
     expect(createReportDesign).not.toHaveBeenCalled();
     expect(updateReportDesign).not.toHaveBeenCalled();
+    // Duplicate is only a valid escape hatch from the boot seed's managed-overwrite loop if the copy
+    // lands OUTSIDE the ids that loop iterates (`SEED_DESIGNS`, `@openldr/reporting`). "Leaves the
+    // original alone" alone would pass even if the copy id happened to collide with a built-in id
+    // (the original's own content would still be untouched right up until the next boot silently
+    // overwrote the copy) — the whole point of Duplicate is that this can never happen. Save is the
+    // only way this test can observe the minted id, so trigger it here even though Duplicate itself
+    // stays transient until the author chooses to.
+    await openKebab();
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Save' }));
+    await waitFor(() => expect(createReportDesign).toHaveBeenCalled());
+    const created = vi.mocked(createReportDesign).mock.calls[0][0] as { id: string };
+    expect(created.id).not.toBe('rt-amr-summary');
+    expect(SEED_DESIGNS.map((d) => d.id)).not.toContain(created.id);
   });
 
   it('deletes the open design after confirmation via deleteReportDesign', async () => {

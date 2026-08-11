@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { PropertiesTab } from './PropertiesTab';
 import { MOCK_TEMPLATES } from './mockTemplates';
 import type { DesignElement, ReportTemplate } from './types';
@@ -272,6 +272,36 @@ describe('PropertiesTab image source', () => {
     expect(screen.getByDisplayValue('{{lab.logo}}')).toBeInTheDocument();
     expect(screen.getByText('Resolved at render')).toBeInTheDocument();
     expect(screen.queryByTestId('image-file')).not.toBeInTheDocument();
+  });
+
+  it('shows the file picker, not the token text field, for a token merely EMBEDDED in another string', () => {
+    // Regression guard for the unanchored /\{\{[^}]+\}\}/ test this mirrors from image-src.ts:
+    // `https://x/logo.png?v={{n}}` contains a token but is not itself one — whatever it interpolates
+    // to is still a URL, which pdfkit cannot render, so the server rejects it as `not-a-data-uri`.
+    // The panel must not tell a different story by treating it as a valid editable token.
+    setup({ template: tplWithEl(imageEl('https://x/logo.png?v={{n}}')), selectedIds: ['i1'] });
+    expect(screen.getByTestId('image-file')).toBeInTheDocument();
+    expect(screen.queryByText('Resolved at render')).not.toBeInTheDocument();
+  });
+
+  it('reads a valid PNG file into a data URI and patches the element (happy path)', async () => {
+    const props = setup({ template: tplWithEl(imageEl('')), selectedIds: ['i1'] });
+    const png = new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3, 4])], 'logo.png', { type: 'image/png' });
+    fireEvent.change(screen.getByTestId('image-file'), { target: { files: [png] } });
+    await waitFor(() => expect(props.onPatchElement).toHaveBeenCalledWith(
+      'i1', { src: expect.stringMatching(/^data:image\/png;base64,/) }, undefined,
+    ));
+  });
+
+  it('resets the file input value after handling a pick, so re-choosing the same file fires change again', () => {
+    // Without this, choosing logo.png, removing it, and choosing logo.png again is a no-op: the
+    // input's `value` never changed, so no `change` event fires and neither the image nor an error
+    // ever appears.
+    setup({ template: tplWithEl(imageEl('')), selectedIds: ['i1'] });
+    const input = screen.getByTestId('image-file') as HTMLInputElement;
+    const svg = new File(['<svg/>'], 'x.svg', { type: 'image/svg+xml' }); // rejection path too
+    fireEvent.change(input, { target: { files: [svg] } });
+    expect(input.value).toBe('');
   });
 
   it('rejects an oversize file without patching the element', () => {

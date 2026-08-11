@@ -19,10 +19,14 @@ describe('validateImageSrc', () => {
     expect(validateImageSrc('{{param.crest}}')).toBeNull();
   });
 
-  it('accepts png, jpeg and webp data URIs', () => {
+  it('accepts png and jpeg data URIs', () => {
     expect(validateImageSrc(PNG)).toBeNull();
     expect(validateImageSrc('data:image/jpeg;base64,/9j/4AAQ')).toBeNull();
-    expect(validateImageSrc('data:image/webp;base64,UklGRg==')).toBeNull();
+  });
+
+  it('rejects webp — measured: pdfkit sniffs magic bytes and draws JPEG/PNG only, throwing on ' +
+    'anything else, so a WebP would render fine on the canvas and silently vanish from the PDF', () => {
+    expect(validateImageSrc('data:image/webp;base64,UklGRg==')).toBe('unsupported-image-type');
   });
 
   it('rejects an http(s) URL — pdfkit reads it as a file path and silently draws a placeholder', () => {

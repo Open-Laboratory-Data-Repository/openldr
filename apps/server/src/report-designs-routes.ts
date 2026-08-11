@@ -32,7 +32,16 @@ export function registerReportDesignRoutes(
     const p = ReportDesignSchema.safeParse(req.body);
     if (!p.success) { reply.code(400); return { error: p.error.message }; }
     const invalidImages = findInvalidImageSources(p.data);
-    if (invalidImages.length > 0) { reply.code(400); return { error: 'invalid image source', invalidImages }; }
+    if (invalidImages.length > 0) {
+      reply.code(400);
+      // The bare 'invalid image source' string used to be the whole message the studio's error
+      // extractor (which reads only `body.error`) ever surfaces as a toast — opaque on an install
+      // with N images across M pages, and worse on autosave's 1.2s debounce with no click to
+      // correlate. Name the offending element(s) IN the string; keep `invalidImages` for programmatic
+      // callers.
+      const error = `invalid image source: ${invalidImages.map((i) => `${i.elementId} (${i.reason})`).join(', ')}`;
+      return { error, invalidImages };
+    }
     const created = await ctx.reportDesigns.create(p.data);
     await recordAudit(ctx, req, { action: 'report-design.create', entityType: 'report-design', entityId: created.id, before: null, after: created });
     reply.code(201);
@@ -44,7 +53,16 @@ export function registerReportDesignRoutes(
     const p = ReportDesignSchema.safeParse(req.body);
     if (!p.success) { reply.code(400); return { error: p.error.message }; }
     const invalidImages = findInvalidImageSources(p.data);
-    if (invalidImages.length > 0) { reply.code(400); return { error: 'invalid image source', invalidImages }; }
+    if (invalidImages.length > 0) {
+      reply.code(400);
+      // The bare 'invalid image source' string used to be the whole message the studio's error
+      // extractor (which reads only `body.error`) ever surfaces as a toast — opaque on an install
+      // with N images across M pages, and worse on autosave's 1.2s debounce with no click to
+      // correlate. Name the offending element(s) IN the string; keep `invalidImages` for programmatic
+      // callers.
+      const error = `invalid image source: ${invalidImages.map((i) => `${i.elementId} (${i.reason})`).join(', ')}`;
+      return { error, invalidImages };
+    }
     const before = await ctx.reportDesigns.get(id);
     if (!before) { reply.code(404); return { error: 'not found' }; }
     const after = await ctx.reportDesigns.update(id, p.data);

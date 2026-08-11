@@ -123,7 +123,11 @@ function ImageSource({ el, onPatch }: { el: DesignElement; onPatch: (patch: Part
   const fileRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
   const src = el.src ?? '';
-  const isToken = /\{\{[^}]+\}\}/.test(src);
+  // Anchored to match `image-src.ts`'s TOKEN regex exactly (including the trim before testing): an
+  // unanchored test called `https://x/logo.png?v={{n}}` a valid token, showing it in this editable
+  // text field captioned "Resolved at render" while the server rejects it as `not-a-data-uri` — the
+  // same defect already fixed once in `image-src.ts`, surviving here at a second site.
+  const isToken = /^\{\{[^}]+\}\}$/.test(src.trim());
 
   const onFile = (file: File | undefined) => {
     if (!file) return;
@@ -162,7 +166,15 @@ function ImageSource({ el, onPatch }: { el: DesignElement; onPatch: (patch: Part
             ? <img src={src} alt={el.name} className="h-10 w-10 border border-border object-contain" />
             : <div className="flex h-10 w-10 items-center justify-center border border-dashed border-border text-[10px] text-muted-foreground">—</div>}
           <input ref={fileRef} type="file" data-testid="image-file" aria-label={t('reportDesigner.chooseImage')}
-            className="hidden" accept={ELEMENT_IMAGE_MIME.join(',')} onChange={(e) => onFile(e.target.files?.[0])} />
+            className="hidden" accept={ELEMENT_IMAGE_MIME.join(',')}
+            onChange={(e) => {
+              onFile(e.target.files?.[0]);
+              // Reset so picking the SAME file again still fires `change` — without this, choosing
+              // logo.png, removing it, and choosing logo.png again is a no-op with no error, and so
+              // is retrying after a rejection. Cleared here (not inside onFile) so it runs on every
+              // path unconditionally, including both rejection branches.
+              e.target.value = '';
+            }} />
           <Button type="button" variant="outline" size="sm" onClick={() => fileRef.current?.click()}>
             {t('reportDesigner.chooseImage')}
           </Button>

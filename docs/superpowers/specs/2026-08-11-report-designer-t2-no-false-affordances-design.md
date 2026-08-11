@@ -113,15 +113,25 @@ The rule, per element of kind `image`:
 - `''` or absent → valid (an empty image element is a placeholder the author has not filled yet).
 - Contains `{{` … `}}` → valid, deferred to render. **This is what keeps the nine `{{lab.logo}}`
   built-ins savable.** A naive "must be a data URI" rule would reject every seeded design.
-- Otherwise must match `data:<mime>;base64,<payload>` with `<mime>` in PNG / JPEG / WebP, and at
+- Otherwise must match `data:<mime>;base64,<payload>` with `<mime>` in PNG / JPEG, and at
   most **256 KB decoded per image** — the same ceiling `LAB_LOGO_MAX_BYTES` sets for the letterhead
   mark, for the same reason: the value is embedded in the design's `pages` jsonb, which is read on
-  every render and shipped over reference sync, so an unbounded image becomes a multi-megabyte row
-  on a hot path. Per image, not per design; a design with several images is the author's choice and
-  the cap keeps any single one sane.
+  every render, so an unbounded image becomes a multi-megabyte row on a hot path — for writes that go
+  through this rule (the API). The reference-sync applier (`packages/db/src/reference-apply.ts`)
+  writes `pages` directly and is not gated by it; that is a deliberate trusted-source boundary, not
+  something this cap protects. Per image, not per design; a design with several images is the
+  author's choice and the cap keeps any single one sane.
 
 SVG stays excluded, for the reason already recorded in `lab-identity.ts:38-42`: it is a
 script-bearing document and this value is rendered into an `<img>` on the canvas.
+
+**WebP is excluded too**, unlike `lab-identity.ts`'s letterhead-logo allowlist (which still lists it
+— a pre-existing, separately-tracked defect). Measured (`node_modules/.pnpm/pdfkit@0.15.2/
+node_modules/pdfkit/js/pdfkit.js:3957-3962`): pdfkit sniffs magic bytes and draws `JPEG` for
+`0xFF 0xD8` and `PNGImage` for `0x89 'PNG'`, throwing `Unknown image format.` for anything else —
+WebP included. Accepting it would reproduce, for a third format, the exact silent-blank-in-PDF
+failure this rule exists to prevent, and the file picker's `accept` attribute would need to keep
+offering it. Do not re-add it without a corresponding change to pdfkit's image support.
 
 The constants are defined in `packages/report-designer` rather than imported from
 `@openldr/config`. `@openldr/report-designer` does not depend on `@openldr/config` today, and adding
@@ -179,7 +189,7 @@ The cases that would otherwise ship broken:
 - An `https://` image `src` is rejected at `POST` and `PUT` with a 400 naming the element.
 - A stored design containing an `https://` src still **loads** through `get`/`list` and still
   **previews**. *(Guards against the rule migrating into the zod schema.)*
-- `data:` PNG/JPEG/WebP accepted; `data:image/svg+xml` rejected; oversize rejected.
+- `data:` PNG/JPEG accepted; `data:image/svg+xml` and `data:image/webp` rejected; oversize rejected.
 - Duplicate produces a new id, leaves the source unchanged, is transient until Save, and copies
   `pageNumbers`/`margins`, not just pages.
 - Duplicating a built-in yields an id outside `SEED_DESIGNS`, so the boot seed's managed-overwrite

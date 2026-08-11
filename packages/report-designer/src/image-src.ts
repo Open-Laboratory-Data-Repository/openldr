@@ -15,8 +15,16 @@ import type { ReportDesign } from './schema';
  */
 
 /** Decoded-image ceiling, per image. Matches `LAB_LOGO_MAX_BYTES`: the value is embedded in the
- *  design's `pages` jsonb, which is read on every render and shipped over reference sync, so an
- *  unbounded image becomes a multi-megabyte row on a hot path. */
+ *  design's `pages` jsonb, which is read on every render, so an unbounded image becomes a
+ *  multi-megabyte row on a hot path — for writes that go through this rule, i.e. the API
+ *  (`POST`/`PUT /api/report-designs`).
+ *
+ *  ⚠ It does NOT cover every writer of that column. `packages/db/src/reference-apply.ts`'s
+ *  `reportDesignRow` (the reference-sync applier a LAB uses to apply a design PULLED from central)
+ *  writes `pages` straight to the table, with neither the `ReportDesignSchema` parse nor this gate —
+ *  by design: reference sync is a trusted-source boundary, central is assumed to have already
+ *  applied its own write-time rules, and re-validating on the pull side would just duplicate that
+ *  check. Do not read this cap as protecting the sync path; it does not. */
 export const ELEMENT_IMAGE_MAX_BYTES = 256 * 1024;
 
 /** base64 carries 3 bytes per 4 characters, so the encoded form is ~4/3 the decoded size. The
@@ -27,8 +35,16 @@ export const ELEMENT_IMAGE_MAX_CHARS = Math.ceil((ELEMENT_IMAGE_MAX_BYTES * 4) /
  * ⛔ SVG is deliberately absent, for the same reason it is absent from the lab logo's allowlist: an
  * SVG is a script-bearing document, and this value is rendered into an `<img>` on the designer
  * canvas.
+ *
+ * ⛔ WebP is deliberately absent too. Measured (`node_modules/.pnpm/pdfkit@0.15.2/node_modules/
+ * pdfkit/js/pdfkit.js:3957-3962`): pdfkit sniffs magic bytes and draws `JPEG` for `0xFF 0xD8` and
+ * `PNGImage` for `0x89 'PNG'`, and throws `Unknown image format.` for anything else — WebP included.
+ * Accepting it here would reproduce, for a THIRD format, the exact silent-blank-in-PDF failure this
+ * rule exists to prevent: a WebP `<img>` renders fine on the studio canvas and becomes the dashed
+ * placeholder in the printed report. `lab-identity.ts`'s `LAB_LOGO_MIME` still lists WebP — that is a
+ * pre-existing, separately-tracked defect (the letterhead logo), not a reason to repeat it here.
  */
-export const ELEMENT_IMAGE_MIME = ['image/png', 'image/jpeg', 'image/webp'] as const;
+export const ELEMENT_IMAGE_MIME = ['image/png', 'image/jpeg'] as const;
 
 export type ImageSrcReason = 'not-a-data-uri' | 'unsupported-image-type' | 'too-large';
 
