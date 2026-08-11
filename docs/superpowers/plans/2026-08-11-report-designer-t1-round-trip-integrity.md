@@ -13,6 +13,7 @@
 ## Global Constraints
 
 - **Migration number is `082`.** `081_facility_source_and_register_state.ts` is taken by the unmerged `slice/facility-canonical-identity` branch. Before creating the file, re-check `packages/db/src/migrations/internal/` on every live branch — a third concurrent session claiming `082` collides at merge.
+- **The resulting `081` gap is a runtime hazard, not just a bookkeeping one.** Kysely's migrator enforces strict prefix ordering by name (see Task 1 Step 5), so a database migrated from a 082-without-081 build cannot boot once `081` arrives. This is contained by merging `slice/facility-canonical-identity` first. **Until that merge, do not boot a server or run migrations against a persistent database from this worktree** — pg-mem tests are unaffected and safe.
 - **The column MUST be nullable with no default.** `canonicalHash` treats an absent key and `undefined` identically (`6ffddfd66fb48cc1`) but `false` as a distinct value (`73d48a5cffe2bba7`). A `NOT NULL DEFAULT false` column changes the content hash of every design that never set the flag and makes labs re-pull designs whose content did not change.
 - **`fromRow` MUST yield `undefined`, never `false`, for a NULL column.** The hash-identity property above depends on it.
 - **Never add a `Co-Authored-By: Claude` or `Co-Authored-By: Codex` trailer** to any commit.
@@ -142,7 +143,13 @@ and add the entry as the last line of the `internalMigrations` object, after `'0
   '082_report_design_page_numbers': { up: m082.up, down: m082.down },
 ```
 
-There is intentionally no `081` on this branch — it lives on the unmerged facilities branch and will slot in ahead of this one at merge. Insertion order is what `makeMigratedDb` iterates, and a numbering gap is harmless.
+There is intentionally no `081` on this branch — it lives on the unmerged facilities branch and will slot in ahead of this one at merge.
+
+⛔ **The gap is safe only because of merge order. It is not harmless in itself** — an earlier revision of this plan claimed it was, and that was wrong. `createMigrator` (`packages/db/src/migrator.ts:5-10`) constructs `new Migrator({ db, provider })` without `allowUnorderedMigrations`, and Kysely 0.28.17 defaults that to `false` (`DEFAULT_ALLOW_UNORDERED_MIGRATIONS`). It then sorts migrations by name and requires the executed set to be a strict prefix, throwing `corrupted migrations: expected previously executed migration … to be at index N but … was found in its place` otherwise. So a database that applies `082` while `081` is absent, and is later upgraded to a build containing `081`, **fails to migrate — and `apps/server` self-migrates on startup, so that server will not boot.**
+
+`makeMigratedDb` cannot detect this: it iterates `Object.values(internalMigrations)` directly and never invokes Kysely's `Migrator`. No test in this repository exercises the ordering check.
+
+**The agreed resolution is merge order:** `slice/facility-canonical-identity` merges first, so `main` only ever sees `081` then `082` in sequence and the gap never exists on a shipped build. Until that merge, do **not** boot a server or run migrations against a persistent database from this worktree. If merge order cannot be guaranteed, the alternatives are renumbering, or setting `allowUnorderedMigrations: true` in `packages/db/src/migrator.ts` — the latter is a repo-wide change to migration semantics and deserves its own decision.
 
 - [ ] **Step 6: Add the column to the TypeScript table type**
 

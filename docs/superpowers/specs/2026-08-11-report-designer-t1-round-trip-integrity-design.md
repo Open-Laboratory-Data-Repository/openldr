@@ -205,5 +205,20 @@ Migration number **082**. `081` is taken by `slice/facility-canonical-identity`,
 A third concurrent session claiming `082` would collide at merge — check
 `packages/db/src/migrations/internal/` against every live branch before writing the file.
 
+⛔ **The `081` gap is also a runtime hazard, which this spec originally missed.** `createMigrator`
+(`packages/db/src/migrator.ts:5-10`) builds `new Migrator({ db, provider })` with no
+`allowUnorderedMigrations`; Kysely 0.28.17 defaults it to `false`, sorts migrations by name, and
+requires the executed set to be a strict prefix. A database that applies `082` without `081` and is
+later upgraded to a build containing `081` throws `corrupted migrations` — and since `apps/server`
+self-migrates on startup, that server will not boot. `makeMigratedDb` iterates
+`Object.values(internalMigrations)` and never invokes Kysely's `Migrator`, so no test in this
+repository can catch it.
+
+**Resolution: merge `slice/facility-canonical-identity` first**, so `main` only ever sees `081` then
+`082` in order. Until then, do not boot a server or run migrations against a persistent database from
+this worktree. Worth a standing decision beyond this slice: the repository runs concurrent branches
+that each claim migration numbers, so this will recur — `allowUnorderedMigrations: true` is the flag
+Kysely provides for exactly that, but it changes migration semantics repo-wide.
+
 Both this slice and the facilities work edit `apps/studio/src/i18n/{en,fr,pt}.ts` if any user-facing
 string appears. Stage named paths only; never `git add -A`.
