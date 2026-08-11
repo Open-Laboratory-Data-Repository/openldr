@@ -89,7 +89,7 @@ Measured 2026-08-11 in a worktree at `slice/report-designer-trust` (`bb1d9d6d`).
 
 ## Design
 
-### 1. Migration `083_report_design_versions`
+### 1. Migration `084_report_design_versions`
 
 Mirror `019_form_versions.ts`:
 
@@ -213,10 +213,14 @@ defect wearing a different hat.
 
 ## Coordination
 
-**Migration number `083`.** `081` is facilities, `082` is T1. Because T3 branches from T1 the
-sequence is contiguous, and the merge order is facilities → T1 → T3. Re-check
-`packages/db/src/migrations/internal/` against every live branch before creating the file — see
-[[migration-numbering-kysely-strict-order]] for why a gap is a boot hazard, not bookkeeping.
+**Migration number `084`.** Written as `083` and renumbered to `084` when `main` was merged in.
+The facilities branch turned out to carry two migrations, `081` and `082`, not one — so T1's
+migration moved `082` → `083` at its own merge, and T3's had to move again. `081` is
+`facility_source_and_register_state`, `082` is `facility_canonical_identity`, `083` is T1's
+`report_design_page_numbers`, `084` is this one. Merge order was facilities → T1 → T2 → T3.
+Re-check `packages/db/src/migrations/internal/` against every live branch before creating the
+file — see [[migration-numbering-kysely-strict-order]] for why a gap is a boot hazard, not
+bookkeeping. This is the second time in this arc the number moved at merge time.
 
 T3 adds user-facing strings, so it touches `apps/studio/src/i18n/{en,fr,pt}.ts` — the same three
 files the facilities workstream and T2 edit. `parity.test.ts` asserts exact key-path equality across

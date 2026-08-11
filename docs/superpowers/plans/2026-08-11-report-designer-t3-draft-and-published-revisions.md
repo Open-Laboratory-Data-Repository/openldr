@@ -17,7 +17,7 @@
 - **Capture fires ONLY when the resulting status is `'published'`.** This single rule is the entire hazard fix. A draft `create`/`update` must emit no `reference_change_log` record.
 - **The migration MUST backfill every existing `report_designs` row to `'published'`.** `DEFAULT 'draft'` is correct for new rows and wrong for existing ones — they are live and already mirrored by labs. Backfilling draft freezes every lab's copy silently and permanently.
 - **The boot seed MUST write its designs as `'published'`.** If they land as drafts, capture never fires and labs receive **zero** designs — reproducing the exact failure `packages/db/src/migrations/internal/065_report_deps_managed_origin.ts` was written to fix (central published 8 reports; each lab got 8 `reports` rows with dangling `design_id`s and a "No reports yet" page).
-- **Migration number is `083`.** `081` is `slice/facility-canonical-identity`, `082` is T1 (this branch's parent). Re-check `packages/db/src/migrations/internal/` on every live branch before creating the file — a numbering gap is a boot-blocking hazard, not bookkeeping (Kysely enforces strict prefix ordering by name; `packages/db/src/migrator.ts` passes no `allowUnorderedMigrations`).
+- **Migration number is `084`.** It was written as `083` and renumbered when `main` was merged in: the facilities branch carried two migrations (`081` and `082`), which pushed T1's to `083` and this one to `084`. Re-check `packages/db/src/migrations/internal/` on every live branch before creating the file — a numbering gap is a boot-blocking hazard, not bookkeeping (Kysely enforces strict prefix ordering by name; `packages/db/src/migrator.ts` passes no `allowUnorderedMigrations`).
 - **`status` is deliberately NOT part of `hashOf`.** See Task 3 — it is a central-side authoring concept, and labs only ever receive published designs.
 - **Every new i18n key must exist in `en`, `fr` AND `pt` in the same commit** — `apps/studio/src/i18n/parity.test.ts` asserts exact key-path equality.
 - **Never add a `Co-Authored-By: Claude` or `Co-Authored-By: Codex` trailer** to any commit.
@@ -31,8 +31,8 @@
 
 | File | Responsibility | Task |
 |---|---|---|
-| `packages/db/src/migrations/internal/083_report_design_versions.ts` (+ `.test.ts`) | Create — versions table, `status` column, backfill | 1 |
-| `packages/db/src/migrations/internal/index.ts` | Modify — register 083 | 1 |
+| `packages/db/src/migrations/internal/084_report_design_versions.ts` (+ `.test.ts`) | Create — versions table, `status` column, backfill | 1 |
+| `packages/db/src/migrations/internal/index.ts` | Modify — register 084 | 1 |
 | `packages/db/src/schema/internal.ts` | Modify — `status` on `ReportDesignsTable`, new `ReportDesignVersionsTable` | 1 |
 | `packages/report-designer/src/lifecycle.ts` (+ `.test.ts`) | Create — `computeNextDesignVersion`, `designContentFingerprint`, `designContentChanged` | 2 |
 | `packages/report-designer/src/pure.ts` | Modify — re-export lifecycle | 2 |
@@ -46,11 +46,11 @@
 
 ---
 
-### Task 1: Migration 083 — versions table, status column, backfill
+### Task 1: Migration 084 — versions table, status column, backfill
 
 **Files:**
-- Create: `packages/db/src/migrations/internal/083_report_design_versions.ts`
-- Create: `packages/db/src/migrations/internal/083_report_design_versions.test.ts`
+- Create: `packages/db/src/migrations/internal/084_report_design_versions.ts`
+- Create: `packages/db/src/migrations/internal/084_report_design_versions.test.ts`
 - Modify: `packages/db/src/migrations/internal/index.ts`
 - Modify: `packages/db/src/schema/internal.ts`
 
@@ -58,17 +58,17 @@
 - Consumes: nothing.
 - Produces: table `report_design_versions` (`id`, `design_id`, `version`, `name`, `paper`, `orientation`, `pages`, `parameters`, `margins`, `page_numbers`, `published_at`, `published_by`); column `report_designs.status`. TypeScript: `ReportDesignVersionsTable`, and `status: Generated<string>` on `ReportDesignsTable`. Tasks 3-4 read and write both.
 
-- [ ] **Step 1: Confirm 083 is free**
+- [ ] **Step 1: Confirm 084 is free**
 
 Run:
 ```bash
 git branch -a --format='%(refname:short)' | while read b; do echo "-- $b"; git ls-tree --name-only "$b" packages/db/src/migrations/internal/ 2>/dev/null | grep -E '08[0-9]_' ; done
 ```
-Expected: `081_facility_source_and_register_state` on the facilities branch, `082_report_design_page_numbers` here, and **no** `083_` anywhere. If an `083_` exists, stop and report NEEDS_CONTEXT.
+Expected at the time of writing: `081_facility_source_and_register_state` on the facilities branch, `082_report_design_page_numbers` here, and **no** `083_` anywhere. That expectation did not hold — facilities carried `082` as well, so the file ended up as `084`. Run this check against every live branch and take the next genuinely free number.
 
 - [ ] **Step 2: Write the failing migration test**
 
-Create `packages/db/src/migrations/internal/083_report_design_versions.test.ts`:
+Create `packages/db/src/migrations/internal/084_report_design_versions.test.ts`:
 
 ```ts
 import { describe, expect, it } from 'vitest';
@@ -76,12 +76,12 @@ import { Kysely } from 'kysely';
 import { newDb } from 'pg-mem';
 import { internalMigrations } from './index';
 
-/** Runs migrations in order, pausing before 083 so a pre-existing design row can be inserted —
+/** Runs migrations in order, pausing before 084 so a pre-existing design row can be inserted —
  *  which is the only way to test the backfill. */
 async function migrateWithLegacyRow(): Promise<Kysely<any>> {
   const db = newDb().adapters.createKysely() as Kysely<any>;
   for (const [name, migration] of Object.entries(internalMigrations)) {
-    if (name === '083_report_design_versions') {
+    if (name === '084_report_design_versions') {
       await db.insertInto('report_designs').values({
         id: 'legacy', name: 'Already live',
         pages: JSON.stringify([]), parameters: JSON.stringify([]), margins: null,
@@ -92,7 +92,7 @@ async function migrateWithLegacyRow(): Promise<Kysely<any>> {
   return db;
 }
 
-describe('083_report_design_versions', () => {
+describe('084_report_design_versions', () => {
   it('backfills an existing design to published, not draft', async () => {
     // ⛔ Existing designs are live and already mirrored by labs. Left as 'draft', capture never
     // fires for them again and every lab's copy freezes silently and permanently.
@@ -130,13 +130,13 @@ describe('083_report_design_versions', () => {
 
 Run:
 ```bash
-cd packages/db && npx vitest run src/migrations/internal/083_report_design_versions.test.ts
+cd packages/db && npx vitest run src/migrations/internal/084_report_design_versions.test.ts
 ```
 Expected: FAIL — pg-mem reports that column `status` (and relation `report_design_versions`) does not exist.
 
 - [ ] **Step 4: Write the migration**
 
-Create `packages/db/src/migrations/internal/083_report_design_versions.ts`:
+Create `packages/db/src/migrations/internal/084_report_design_versions.ts`:
 
 ```ts
 import { type Kysely, sql } from 'kysely';
@@ -203,13 +203,13 @@ export async function down(db: Kysely<any>): Promise<void> {
 In `packages/db/src/migrations/internal/index.ts`, add the import after the `m082` import:
 
 ```ts
-import * as m083 from './083_report_design_versions';
+import * as m084 from './084_report_design_versions';
 ```
 
 and the entry as the last line of `internalMigrations`:
 
 ```ts
-  '083_report_design_versions': { up: m083.up, down: m083.down },
+  '084_report_design_versions': { up: m084.up, down: m084.down },
 ```
 
 - [ ] **Step 6: Add the TypeScript table types**
@@ -248,7 +248,7 @@ and register it on the `InternalSchema` interface beside `report_designs`:
 - [ ] **Step 7: Run the test and typecheck**
 
 ```bash
-cd packages/db && npx vitest run src/migrations/internal/083_report_design_versions.test.ts
+cd packages/db && npx vitest run src/migrations/internal/084_report_design_versions.test.ts
 ```
 Expected: PASS, 3 tests.
 
@@ -260,7 +260,7 @@ Expected: no output, exit 0.
 - [ ] **Step 8: Commit**
 
 ```bash
-git add packages/db/src/migrations/internal/083_report_design_versions.ts packages/db/src/migrations/internal/083_report_design_versions.test.ts packages/db/src/migrations/internal/index.ts packages/db/src/schema/internal.ts
+git add packages/db/src/migrations/internal/084_report_design_versions.ts packages/db/src/migrations/internal/084_report_design_versions.test.ts packages/db/src/migrations/internal/index.ts packages/db/src/schema/internal.ts
 git commit -m "feat(db): add report design versions and a draft/published status
 
 Mirrors form_definitions + form_versions. Existing designs are backfilled to

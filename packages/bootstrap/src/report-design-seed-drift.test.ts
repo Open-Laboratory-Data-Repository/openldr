@@ -28,7 +28,7 @@ beforeEach(async () => {
     .addColumn('status', 'text')
     .addColumn('created_at', 'text').addColumn('updated_at', 'text').execute();
 
-  // T3 added `report_design_versions` (migration 083) — upsertPublished/publish() snapshot every
+  // T3 added `report_design_versions` (migration 084) — upsertPublished/publish() snapshot every
   // write into it, so it must exist here too, matching store.test.ts's beforeEach shape.
   await db.schema.createTable('report_design_versions')
     .addColumn('id', 'text', (c) => c.primaryKey())
