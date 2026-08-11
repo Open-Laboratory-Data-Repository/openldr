@@ -10,6 +10,7 @@ function design(id: string, name: string, extra: Partial<ReportDesign> = {}): Re
     orientation: 'portrait',
     pages: [{ id: 'p1', elements: [] }],
     parameters: [],
+    status: 'draft',
     ...extra,
   };
 }
