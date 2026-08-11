@@ -1,8 +1,9 @@
+import { randomUUID } from 'node:crypto';
 import type { Kysely } from 'kysely';
 import { canonicalHash } from '@openldr/core';
 import type { InternalSchema, ReferenceCapture } from '@openldr/db';
 import { type ReportDesign, ReportDesignSchema } from './schema';
-import { designContentChanged } from './lifecycle';
+import { designContentChanged, computeNextDesignVersion } from './lifecycle';
 
 function toRow(d: ReportDesign) {
   return {
@@ -37,11 +38,20 @@ function fromRow(r: Record<string, unknown>): ReportDesign {
   });
 }
 
+export interface ReportDesignVersion {
+  version: number;
+  name: string;
+  publishedAt: string;
+  publishedBy: string | null;
+}
+
 export interface ReportDesignStore {
   list(): Promise<ReportDesign[]>;
   get(id: string): Promise<ReportDesign | undefined>;
   create(d: ReportDesign): Promise<ReportDesign>;
   update(id: string, d: ReportDesign): Promise<ReportDesign>;
+  publish(id: string, publishedBy?: string | null): Promise<ReportDesign>;
+  listVersions(id: string): Promise<ReportDesignVersion[]>;
   remove(id: string): Promise<void>;
 }
 
@@ -112,6 +122,49 @@ export function createReportDesignStore(db: Kysely<InternalSchema>, capture?: Re
         }
         return persisted;
       });
+    },
+    /** Snapshot the current design as the next immutable revision and mark it published.
+     *  Capture happens HERE and, for a draft, nowhere else — this is the deliberate act that
+     *  reaches labs. */
+    async publish(id, publishedBy = null) {
+      return db.transaction().execute(async (trx) => {
+        const row = await trx.selectFrom('report_designs').selectAll().where('id', '=', id).executeTakeFirst();
+        if (!row) throw new Error(`report design not found: ${id}`);
+        const design = fromRow(row as Record<string, unknown>);
+
+        const existing = await trx.selectFrom('report_design_versions').select(['version']).where('design_id', '=', id).execute();
+        const version = computeNextDesignVersion(existing.map((v) => Number(v.version)));
+
+        await trx.insertInto('report_design_versions').values({
+          id: `rdv-${randomUUID()}`,
+          design_id: id,
+          version,
+          name: design.name,
+          paper: design.paper,
+          orientation: design.orientation,
+          pages: JSON.stringify(design.pages),
+          parameters: JSON.stringify(design.parameters),
+          margins: design.margins ? JSON.stringify(design.margins) : null,
+          page_numbers: design.pageNumbers ?? null,
+          published_by: publishedBy,
+        } as never).execute();
+
+        await trx.updateTable('report_designs').set({ status: 'published' } as never).where('id', '=', id).execute();
+
+        const persisted = fromRow((await trx.selectFrom('report_designs').selectAll().where('id', '=', id).executeTakeFirst()) as Record<string, unknown>);
+        if (capture) await capture.record(trx, 'report_design', id, 'upsert', hashOf(persisted));
+        return persisted;
+      });
+    },
+    async listVersions(id) {
+      const rows = await db.selectFrom('report_design_versions').selectAll()
+        .where('design_id', '=', id).orderBy('version', 'desc').execute();
+      return rows.map((r) => ({
+        version: Number(r.version),
+        name: String(r.name),
+        publishedAt: String(r.published_at),
+        publishedBy: r.published_by == null ? null : String(r.published_by),
+      }));
     },
     async remove(id) {
       await db.transaction().execute(async (trx) => {

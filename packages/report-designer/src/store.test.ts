@@ -23,6 +23,14 @@ beforeEach(async () => {
     // actually present to assert on (no earlier test in this file read createdAt/updatedAt).
     .addColumn('created_at', 'timestamptz', (c) => c.notNull().defaultTo(sql`now()`))
     .addColumn('updated_at', 'timestamptz', (c) => c.notNull().defaultTo(sql`now()`)).execute();
+
+  await db.schema.createTable('report_design_versions')
+    .addColumn('id', 'text', (c) => c.primaryKey())
+    .addColumn('design_id', 'text').addColumn('version', 'integer')
+    .addColumn('name', 'text').addColumn('paper', 'text').addColumn('orientation', 'text')
+    .addColumn('pages', 'jsonb').addColumn('parameters', 'jsonb')
+    .addColumn('margins', 'jsonb').addColumn('page_numbers', 'boolean')
+    .addColumn('published_at', 'text').addColumn('published_by', 'text').execute();
 });
 
 function makeDesign(id: string, name: string): ReportDesign {
@@ -216,6 +224,44 @@ describe('ReportDesignStore', () => {
     const created = await store.create({ ...makeDesign('p3', 'Pub'), status: 'published' });
     const updated = await store.update('p3', { ...created });
     expect(updated.status).toBe('published');
+  });
+
+  it('publish mints version 1 then 2, snapshots content, and captures', async () => {
+    const { capture, hashes } = spyCapture();
+    const store = createReportDesignStore(db, capture);
+    await store.create({ ...makeDesign('v1', 'V'), pageNumbers: true });
+    expect(hashes).toEqual([]); // created as a draft
+
+    const published = await store.publish('v1', 'alice');
+    expect(published.status).toBe('published');
+    expect(hashes).toHaveLength(1);
+
+    await store.update('v1', { ...published, name: 'Second' });
+    await store.publish('v1', 'alice');
+
+    const versions = await store.listVersions('v1');
+    expect(versions.map((v) => v.version)).toEqual([2, 1]);
+    expect(versions.map((v) => v.name)).toEqual(['Second', 'V']);
+    expect(versions[0].publishedBy).toBe('alice');
+  });
+
+  it('snapshots pageNumbers and margins, not just pages', async () => {
+    const store = createReportDesignStore(db);
+    await store.create({ ...makeDesign('v2', 'V'), pageNumbers: true, margins: { top: 9, right: 8, bottom: 7, left: 6 } });
+    await store.publish('v2', null);
+    const rows = await db.selectFrom('report_design_versions').selectAll().where('design_id', '=', 'v2').execute();
+    expect(rows[0].page_numbers).toBe(true);
+    // pg-mem (and node-postgres against real Postgres) auto-parses jsonb columns back to a JS
+    // object on select, so `rows[0].margins` is not guaranteed to be a JSON string here — mirror
+    // the `typeof v === 'string' ? JSON.parse(v) : v` tolerance store.ts's own `fromRow` uses.
+    const margins = typeof rows[0].margins === 'string' ? JSON.parse(rows[0].margins) : rows[0].margins;
+    expect(margins).toMatchObject({ top: 9, left: 6 });
+  });
+
+  it('listVersions on an unpublished design is empty, not an error', async () => {
+    const store = createReportDesignStore(db);
+    await store.create(makeDesign('v3', 'V'));
+    expect(await store.listVersions('v3')).toEqual([]);
   });
 });
 
