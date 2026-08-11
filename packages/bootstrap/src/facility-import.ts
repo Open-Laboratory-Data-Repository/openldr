@@ -410,7 +410,9 @@ function chunk<T>(items: T[], size: number): T[][] {
  * loudly: every field on `FacilityRecord` bar `id`/`name`/`source` is optional, so an omitted column
  * reaches `classifyFacilityRows` as `undefined`, and its `same()` treats `undefined` and `null`
  * alike as "no value" — the row would classify `unchanged` against a write that changes it. It also
- * buys nothing: of `facility_registry`'s 24 columns this uses 22, all but `source` and `created_at`.
+ * buys nothing: of `facility_registry`'s 24 columns this uses 23, all but `created_at`. `r.source`
+ * is read too (below) — carried on `ExistingFacility.source` for the `facility.import.row` audit's
+ * `before`, never fed into `fields`/`COMPARED`; see `ExistingFacility.source`'s docblock.
  */
 async function loadExisting(
   exec: Kysely<InternalSchema>, ids: string[],
@@ -423,6 +425,7 @@ async function loadExisting(
         id: r.id,
         localCode: r.local_code,
         extras: (r.extras as Record<string, unknown> | null) ?? null,
+        source: r.source as 'manual' | 'import',
         fields: {
           nationalSystem: r.national_system, nationalCode: r.national_code, name: r.name,
           level: r.level, ownership: r.ownership, status: r.status, country: r.country,
@@ -979,8 +982,18 @@ export async function importFacilities(
           // `existing` is never undefined here: `classifyFacilityRows` only produces `kind: 'changed'`
           // when it found (and compared against) an existing row for this id — see facility-classify.ts.
           const existing = existingById.get(c.merged.id);
+          // `source` spelled out explicitly, not folded into the `...existing.fields` spread: it is
+          // deliberately NOT a member of `fields` (see `ExistingFacility.source`'s docblock in
+          // facility-classify.ts) so it can never enter `COMPARED` by accident. `after` (`c.merged`,
+          // below) always carries `source: 'import'` — every parser stamps it unconditionally — so
+          // without this, `before` read as missing `source` and a field diff reported "source was
+          // added" on every single changed row, even one where the facility was already `'import'`
+          // and provenance never moved at all.
           const before = existing
-            ? { id: existing.id, localCode: existing.localCode, extras: existing.extras, ...existing.fields }
+            ? {
+              id: existing.id, localCode: existing.localCode, extras: existing.extras,
+              source: existing.source, ...existing.fields,
+            }
             : null;
           return deps.audit!.record({
             actorType: 'system',

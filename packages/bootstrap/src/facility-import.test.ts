@@ -1162,6 +1162,43 @@ describe('per-facility audit rows for changed facilities (Task 7)', () => {
     expect((rows[0].after as { name: string }).name).toBe('Alpha Renamed');
   });
 
+  // Review fix (Task 7 finding): `after` always carries `source: 'import'` — both facility-csv.ts
+  // and facility-release.ts stamp it unconditionally — so `before` must carry the facility's REAL
+  // prior source or a field diff reads every changed row as "source was added", forever (audit rows
+  // are immutable once written, so this cannot be repaired retroactively).
+  it('review fix: an import updating a MANUALLY-created facility records the real source change', async () => {
+    const deps = await buildDepsWithAudit();
+    const store = createFacilityRegistryStore(deps.db);
+    // Same id `idFor(SYSTEM, '100')` produces (see the dry-run test above for the literal value) —
+    // pre-seeded as hand-entered so the import below UPDATES this exact row rather than creating one.
+    await store.upsert({
+      id: 'fac-0eea98ab9108599d', localCode: 'LAB01', name: 'Old Hand-Entered Name', source: 'manual',
+    });
+
+    const result = await importFacilities(deps, release, applyOpts); // renames '100' to 'Alpha'
+    expect(result.changed).toBe(1);
+
+    const rows = await auditRows(deps.db, 'facility.import.row');
+    expect(rows).toHaveLength(1);
+    expect((rows[0].before as { source: string }).source).toBe('manual');
+    expect((rows[0].after as { source: string }).source).toBe('import');
+  });
+
+  it('review fix: an import updating an ALREADY-imported facility shows source equal on both sides', async () => {
+    const deps = await buildDepsWithAudit();
+    await importFacilities(deps, release, applyOpts); // first import: both rows CREATE, source 'import'
+    const renamed = csv(['100,Alpha Renamed,,,,,,,,,,,,,,', '200,Beta,,,,,,,,,,,,,,']); // only 100 changes
+    const result = await importFacilities(deps, renamed, applyOpts);
+    expect(result.changed).toBe(1);
+
+    const rows = await auditRows(deps.db, 'facility.import.row');
+    expect(rows).toHaveLength(1);
+    const before = rows[0].before as { source: string };
+    const after = rows[0].after as { source: string };
+    expect(before.source).toBe('import');
+    expect(after.source).toBe('import');
+  });
+
   it('does not audit CREATE or UNCHANGED rows, only CHANGED ones', async () => {
     const deps = await buildDepsWithAudit();
     // First import: two CREATEs. Second: one CHANGED (100 renamed), one UNCHANGED (200 untouched).
