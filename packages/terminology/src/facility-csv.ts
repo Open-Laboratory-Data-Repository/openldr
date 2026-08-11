@@ -16,7 +16,10 @@ export const FACILITY_CSV_TEMPLATE =
   'national_code,name,level,ownership,status,country,zone,region,district,council,ward,village,address,phone,latitude,longitude\n';
 
 export interface FacilityCsvOptions {
-  /** Which national register these codes belong to. Configuration, never hardcoded. */
+  /** Which national register these codes belong to, as that register's CANONICAL URI (e.g.
+   *  `urn:tz:hfr`) — the `url` of a `coding_systems` row marked as a facility register, never a
+   *  label an operator typed. Configuration, never hardcoded. It is hashed into every row's
+   *  permanent id; see `idFor` for what two spellings of one register cost. */
   nationalSystem: string;
   /** Import despite unrecognised columns, carrying them into `extras`. */
   allowUnknownColumns?: boolean;
@@ -80,7 +83,27 @@ export interface FacilityCsvResult {
 /** Stable id from the register + code, so re-importing a newer release UPDATES in place and any
  *  aliases attached to the row survive a rename. Exported so `facility-release.ts` derives the SAME
  *  id for the SAME register+code — a JSONL release and a CSV of the same register must produce
- *  identical ids, so this hash must never be reimplemented a second time. */
+ *  identical ids, so this hash must never be reimplemented a second time.
+ *
+ *  ⛔ `nationalSystem` IS A REGISTER'S CANONICAL URI (e.g. `urn:tz:hfr`) — the `url` of a
+ *  `coding_systems` row marked as a facility register — and NEVER a label somebody typed. This hash
+ *  is a facility's PERMANENT identity, so whatever string reaches it is permanent too: MEASURED for
+ *  national code `100`, `HFR` gives `fac-d112c779ad583160` and `hfr` gives `fac-49bce368724fb81a`,
+ *  two identities for one register, while `observedFieldSystem`
+ *  (`packages/bootstrap/src/facility-controlled-fields.ts`) lowercases its slug and so hands BOTH the
+ *  one controlled-field namespace. One register, two identities, one namespace.
+ *
+ *  ⛔ The fix is NOT in here. This function is deliberately unchanged — no normalisation, no extra
+ *  parameter, no different hash — because normalising would silently re-key every id already written.
+ *  What changed is the VALUE: the import routes (`apps/server/src/facilities-routes.ts`, both the
+ *  inline and the upload door) resolve the submitted `nationalSystem` through
+ *  `FacilityRegisterSourceStore.getByUrl` and refuse a 400 when it names no register. Do not add a
+ *  normalisation rule here to "help".
+ *
+ *  ⚠ NOT YET EVERY CALLER: `openldr facilities import --national-system` (packages/cli/src/
+ *  facilities.ts) calls `importFacilities` directly and carries NO such gate today, so free text
+ *  still reaches this line through the CLI — and the CLI is the only path a register above the
+ *  route's inline row cap can be applied through. This slice's Task 11 closes that door. */
 export function idFor(nationalSystem: string, nationalCode: string): string {
   return `fac-${createHash('sha256').update(`${nationalSystem}|${nationalCode}`).digest('hex').slice(0, 16)}`;
 }
