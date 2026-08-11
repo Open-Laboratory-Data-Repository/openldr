@@ -327,6 +327,27 @@ describe('ReportDesignerPage', () => {
     expect(created.id).toMatch(/^rt-\d+$/);
   });
 
+  it('⛔ duplicating a PUBLISHED design gives a draft copy, not a second published one', async () => {
+    // `newTemplate` sets status: 'draft' explicitly; `duplicateTemplate` cloned the source wholesale
+    // and inherited 'published'. Saving that copy captured a reference-sync record, so duplicating a
+    // built-in and hitting Save pushed an unreviewed design to every enrolled lab before a single
+    // element was edited. Two clicks from the ⋯ menu.
+    await renderPage('rt-amr-summary');
+    await openKebab();
+    fireEvent.click(await screen.findByRole('menuitem', { name: /publish revision/i }));
+    await waitFor(() => expect(publishReportDesign).toHaveBeenCalledWith('rt-amr-summary'));
+
+    await openKebab();
+    fireEvent.click(await screen.findByRole('menuitem', { name: /duplicate/i }));
+    await waitFor(() => expect(screen.getByLabelText('Report name')).toHaveValue('Copy of AMR summary'));
+    await openKebab();
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Save' }));
+
+    await waitFor(() => expect(createReportDesign).toHaveBeenCalled());
+    const created = vi.mocked(createReportDesign).mock.calls[0][0] as { status: string };
+    expect(created.status).toBe('draft');
+  });
+
   it('deletes the open design after confirmation via deleteReportDesign', async () => {
     await renderPage();
     await openKebab();

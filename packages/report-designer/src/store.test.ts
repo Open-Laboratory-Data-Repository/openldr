@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { Kysely, sql } from 'kysely';
 import { newDb } from 'pg-mem';
-import { createReportDesignStore } from './store';
+import { createReportDesignStore, type ReportDesignStore } from './store';
 import { ReportDesignSchema } from './schema';
 import type { ReportDesign } from './schema';
 import type { ReferenceCapture } from '@openldr/db';
@@ -45,6 +45,15 @@ function makeDesign(id: string, name: string): ReportDesign {
     pages: [{ id: 'p1', elements: [] }],
     parameters: [],
   };
+}
+
+/** Create a design and publish it. `create()` deliberately refuses a caller-supplied 'published'
+ *  status, so this is the only way a test gets a published row through the client-facing path. Both
+ *  calls run against the real store: `publish()` is what captures, so the hashes these tests compare
+ *  are the same hashes reference sync would ship. */
+async function createPublished(store: ReportDesignStore, d: ReportDesign): Promise<ReportDesign> {
+  await store.create(d);
+  return store.publish(d.id);
 }
 
 describe('ReportDesignStore', () => {
@@ -130,8 +139,8 @@ describe('ReportDesignStore', () => {
     // would push nothing and this comparison would pass vacuously on two `undefined`s.
     const { capture, hashes } = spyCapture();
     const store = createReportDesignStore(db, capture);
-    await store.create({ ...makeDesign('h-absent', 'Same'), status: 'published' });
-    await store.create({ ...makeDesign('h-undef', 'Same'), pageNumbers: undefined, status: 'published' });
+    await createPublished(store, makeDesign('h-absent', 'Same'));
+    await createPublished(store, { ...makeDesign('h-undef', 'Same'), pageNumbers: undefined });
     expect(hashes[0]).toBe(hashes[1]);
   });
 
@@ -140,16 +149,16 @@ describe('ReportDesignStore', () => {
     // so a NOT NULL DEFAULT false column would have moved every existing design's hash.
     const { capture, hashes } = spyCapture();
     const store = createReportDesignStore(db, capture);
-    await store.create({ ...makeDesign('h-unset', 'Same'), status: 'published' });
-    await store.create({ ...makeDesign('h-false', 'Same'), pageNumbers: false, status: 'published' });
+    await createPublished(store, makeDesign('h-unset', 'Same'));
+    await createPublished(store, { ...makeDesign('h-false', 'Same'), pageNumbers: false });
     expect(hashes[0]).not.toBe(hashes[1]);
   });
 
   it('hashes true differently from false, so a real toggle propagates', async () => {
     const { capture, hashes } = spyCapture();
     const store = createReportDesignStore(db, capture);
-    await store.create({ ...makeDesign('h-off', 'Same'), pageNumbers: false, status: 'published' });
-    await store.create({ ...makeDesign('h-on', 'Same'), pageNumbers: true, status: 'published' });
+    await createPublished(store, { ...makeDesign('h-off', 'Same'), pageNumbers: false });
+    await createPublished(store, { ...makeDesign('h-on', 'Same'), pageNumbers: true });
     expect(hashes[0]).not.toBe(hashes[1]);
   });
 
@@ -173,21 +182,38 @@ describe('ReportDesignStore', () => {
       const { capture, hashes } = spyCapture();
       const store = createReportDesignStore(db, capture);
       // Published — capture is gated on status, and a draft write emits no hash to compare.
-      const baseline = { ...makeDesign(`hf-${field}-base`, 'Baseline'), status: 'published' as const };
-      const mutated = { ...mutate(makeDesign(`hf-${field}-mut`, 'Baseline')), status: 'published' as const };
-      await store.create(baseline);
-      await store.create(mutated);
+      await createPublished(store, makeDesign(`hf-${field}-base`, 'Baseline'));
+      await createPublished(store, mutate(makeDesign(`hf-${field}-mut`, 'Baseline')));
       expect(hashes[1], `hashOf did not change when '${field}' was mutated`).not.toBe(hashes[0]);
     }
   });
 
-  it('round-trips status and defaults a design with no status to draft', async () => {
+  it('round-trips status through publish, and defaults a design with no status to draft', async () => {
     const store = createReportDesignStore(db);
-    await store.create({ ...makeDesign('s1', 'S'), status: 'published' });
+    await store.create(makeDesign('s1', 'S'));
+    await store.publish('s1');
     expect((await store.get('s1'))?.status).toBe('published');
 
     await store.create(makeDesign('s2', 'S'));
     expect((await store.get('s2'))?.status).toBe('draft');
+  });
+
+  it('⛔ create() refuses a caller-supplied published status, and captures nothing', async () => {
+    // `update()` already discards a caller's `status` so a save cannot smuggle 'published' past the
+    // content gate. `create()` did not, and the studio's Duplicate action clones a published design
+    // — so duplicating a built-in and hitting Save pushed an unreviewed copy to every enrolled lab
+    // before a single element was edited. Publishing must stay a deliberate act: `publish()` for a
+    // human, `upsertPublished()` for the boot seed, and nothing else.
+    const { capture, hashes } = spyCapture();
+    const store = createReportDesignStore(db, capture);
+
+    const created = await store.create({ ...makeDesign('c-pub', 'Smuggled'), status: 'published' });
+
+    expect(created.status).toBe('draft');
+    expect((await store.get('c-pub'))?.status).toBe('draft');
+    expect(hashes).toEqual([]);
+    // And no version was minted, so the header could never read Published against an empty history.
+    expect(await store.listVersions('c-pub')).toEqual([]);
   });
 
   it('emits NO reference-sync record for a draft write', async () => {
@@ -203,14 +229,14 @@ describe('ReportDesignStore', () => {
   it('emits a record for a published write', async () => {
     const { capture, hashes } = spyCapture();
     const store = createReportDesignStore(db, capture);
-    await store.create({ ...makeDesign('p1', 'Pub'), status: 'published' });
+    await createPublished(store, makeDesign('p1', 'Pub'));
     expect(hashes).toHaveLength(1);
   });
 
   it('drops a published design to draft when its content changes, and stops capturing', async () => {
     const { capture, hashes } = spyCapture();
     const store = createReportDesignStore(db, capture);
-    const created = await store.create({ ...makeDesign('p2', 'Pub'), status: 'published' });
+    const created = await createPublished(store, makeDesign('p2', 'Pub'));
     expect(hashes).toHaveLength(1);
 
     const updated = await store.update('p2', { ...created, name: 'Renamed' });
@@ -221,7 +247,7 @@ describe('ReportDesignStore', () => {
   it('does not un-publish on a no-op save', async () => {
     // Autosave fires on any dirty state; only a real content change may un-publish.
     const store = createReportDesignStore(db);
-    const created = await store.create({ ...makeDesign('p3', 'Pub'), status: 'published' });
+    const created = await createPublished(store, makeDesign('p3', 'Pub'));
     const updated = await store.update('p3', { ...created });
     expect(updated.status).toBe('published');
   });
@@ -363,8 +389,10 @@ describe('ReportDesign round-trip completeness', () => {
     expect(Object.keys(EVERY_FIELD).sort())
       .toEqual(KNOWN_TOP_LEVEL_FIELDS.filter((f) => f !== 'createdAt' && f !== 'updatedAt').sort());
 
+    // Through create()+publish(), not create() alone: `status` is the one persisted field a client
+    // create may not set, so this is how the round-trip reaches its non-default value.
     const store = createReportDesignStore(db);
-    await store.create(EVERY_FIELD);
+    await createPublished(store, EVERY_FIELD);
     const got = await store.get('full');
     expect(got).toBeDefined();
 

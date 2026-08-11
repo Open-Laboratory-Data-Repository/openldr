@@ -109,9 +109,15 @@ export function createReportDesignStore(db: Kysely<InternalSchema>, capture?: Re
       return db.transaction().execute(async (trx) => {
         // Idempotent insert: mirrors the report-template store — a duplicate id no-ops instead of
         // raising a PK violation, and the existing row is returned.
+        //
+        // Always 'draft', discarding any caller-supplied status — the same guard `update()` applies,
+        // for the same reason. A design becomes published only through `publish()` (a human's
+        // deliberate act) or `upsertPublished()` (the boot seed's system write). Without this the
+        // studio's Duplicate action, which clones a published design wholesale, pushed an unreviewed
+        // copy to every lab on its first Save.
         const inserted = await trx
           .insertInto('report_designs')
-          .values(toRow(d) as never)
+          .values(toRow({ ...d, status: 'draft' }) as never)
           .onConflict((oc) => oc.column('id').doNothing())
           .returningAll()
           .executeTakeFirst();

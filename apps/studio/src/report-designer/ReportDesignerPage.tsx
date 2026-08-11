@@ -300,6 +300,11 @@ export function ReportDesignerPage(): JSX.Element {
       ...structuredClone(template),
       id,
       name: t('reportDesigner.copyOf', { name: template.name }),
+      // A copy starts as a draft even when the source is published — same as `newTemplate`. A design
+      // reaches labs by being published, and nobody has reviewed this copy yet. The store refuses a
+      // client-supplied 'published' on create as well, so this is belt and braces; it also keeps the
+      // header from reading Published the moment the copy opens.
+      status: 'draft',
     };
     setTransientIds((s) => new Set(s).add(id));
     loadedIdRef.current = id;
