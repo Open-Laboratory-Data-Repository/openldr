@@ -2917,9 +2917,21 @@ describe('POST /api/facilities/import/sources', () => {
 
   // ⛔ Carry-forward 2 (deferred from B1 Task 3, closed here): `coding_systems_url_uq` (migration
   // 012) is a PLAIN unique index on `url` ALONE, not scoped by `kind` — while the store's own pre-
-  // checks (exact AND case-insensitive) ARE scoped to `kind = 'facility-register'`. MEASURED: before
-  // this fix, POSTing a url already used by a non-register coding system (e.g. 'http://loinc.org')
-  // passed the pre-check and threw a raw, unmapped 23505 — a bare 500, not a 4xx.
+  // checks (exact AND case-insensitive) ARE scoped to `kind = 'facility-register'`. MEASURED, on
+  // REAL POSTGRES ONLY (node-postgres puts a violation's `DETAIL` text on `err.detail`, never on
+  // `err.message`): before the store's catch (facility-register-sources.ts) existed, a url already
+  // used by a non-register coding system passed the pre-check and threw a raw, unmapped 23505 whose
+  // `.message` carried none of the "already exists" wording — a bare 500, not a 4xx.
+  //
+  // ⛔ THAT "bare 500" claim does NOT reproduce under pg-mem, this test's own engine — MEASURED:
+  // pg-mem inlines the constraint violation's DETAIL text straight into `err.message` ("... DETAIL:
+  // Key (url)=(http://loinc.org) already exists."), so even with the store's catch disarmed, the
+  // RAW driver error's `.message` still matches this route's own `/already exists/i` translator and
+  // still comes back 409 — coincidentally right, for the wrong reason. A regex assertion on that
+  // shared substring proves nothing about which of the two catches actually fired (confirmed by
+  // disarming the store's `isUniqueViolation` branch and re-running this test: it stayed green).
+  // The signal that only the STORE's translation can produce is the exact message below — the raw
+  // pg-mem error's message is a multi-paragraph SQL dump that does not equal it.
   it('⛔ refuses (409, not 500) a URL already used by a NON-register coding system', async () => {
     const db = await makeMigratedDb();
     await db.insertInto('coding_systems').values({
@@ -2933,7 +2945,10 @@ describe('POST /api/facilities/import/sources', () => {
     });
 
     expect(res.statusCode).toBe(409);
-    expect(res.json().error).toMatch(/already exists/i);
+    // Exact match, not a `/already exists/i` regex — see the block above for why the regex alone
+    // does not discriminate "the store translated this" from "pg-mem's raw driver message happens
+    // to contain the same words" under this test's own engine.
+    expect(res.json().error).toBe('a coding system already exists for the url "http://loinc.org"');
   });
 });
 

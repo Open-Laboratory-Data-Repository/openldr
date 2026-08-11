@@ -18,6 +18,10 @@ vi.mock('@/api', async (orig) => {
     // B1 Task 9: backs the national-system `Select` — mocked here for the same reason as the four
     // above, not in a second factory.
     listFacilityImportSources: vi.fn(),
+    // Review fix (B1 Task 9): the create affordance's own client call, reached through
+    // `RegisterSourceDialog` (rendered by `ImportFacilitiesSheet` itself) — mocked here for the
+    // same "one factory, not two" reason as `listFacilityImportSources` above.
+    createFacilityImportSource: vi.fn(),
   };
 });
 
@@ -198,6 +202,69 @@ describe('ImportFacilitiesSheet', () => {
 
     expect(await screen.findByText(/no facility registers are configured/i)).toBeInTheDocument();
     expect(screen.getByRole('combobox', { name: 'National system' })).toBeDisabled();
+  });
+
+  // ⛔ Review fix (B1 Task 9, CRITICAL): the route this covers existed and was tested, but nothing in
+  // the studio ever called it — a fresh install (no `national_system` values for migration 082's
+  // back-fill to seed from) had a permanently empty picklist and facility import was unreachable
+  // from the UI. This is the affordance that closes that gap end to end: menu → dialog → refreshed
+  // picklist → SELECTABLE (here, actually selected) — not just "created and forgotten".
+  it('B1 Task 9 review fix: "Register a source" refreshes the empty picklist and the new source becomes selectable', async () => {
+    const NEW_SOURCE: FacilityRegisterSource = {
+      id: 'cs-freg-new', url: 'urn:tz:hfr', name: 'Tanzania HFR', code: 'TZ_HFR',
+      version: null, jurisdiction: null, contact: null, publisherId: null, active: true,
+    };
+    // Starts with NOTHING configured — the fresh-install case the finding describes.
+    mocked(api.listFacilityImportSources).mockResolvedValueOnce([]);
+    mocked(api.createFacilityImportSource).mockResolvedValue(NEW_SOURCE);
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    expect(await screen.findByText(/no facility registers are configured/i)).toBeInTheDocument();
+
+    // Standalone button is refused by this codebase's own rule (ui-actions-in-dots-menu) — the
+    // affordance must live in the ⋯ menu, never next to it.
+    expect(screen.queryByRole('button', { name: /register a source/i })).not.toBeInTheDocument();
+    clickMenuItem(/register a source/i);
+
+    expect(await screen.findByText('Register a facility source')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Canonical URI'), { target: { value: NEW_SOURCE.url } });
+    fireEvent.change(screen.getByLabelText('Display name'), { target: { value: NEW_SOURCE.name } });
+    fireEvent.change(screen.getByLabelText('Code'), { target: { value: NEW_SOURCE.code } });
+
+    // From here on, listFacilityImportSources answers as if the register now exists — exactly what
+    // the real GET route would do after the real POST committed it.
+    mocked(api.listFacilityImportSources).mockResolvedValue([NEW_SOURCE]);
+    // ⛔ The dialog's OWN Register/Cancel are ALSO a ⋯ menu (ui-actions-in-dots-menu), not footer
+    // buttons — a second, nested ⋯ interaction, distinct from the sheet's own menu above.
+    fireEvent.pointerDown(
+      screen.getByRole('button', { name: 'Register source actions' }),
+      { button: 0, ctrlKey: false, pointerType: 'mouse' },
+    );
+    if (!screen.queryByRole('menu')) {
+      fireEvent.keyDown(screen.getByRole('button', { name: 'Register source actions' }), { key: 'Enter' });
+    }
+    fireEvent.click(screen.getByRole('menuitem', { name: /^register$/i }));
+
+    await waitFor(() => expect(api.createFacilityImportSource).toHaveBeenCalledWith(
+      expect.objectContaining({ url: NEW_SOURCE.url, name: NEW_SOURCE.name, code: NEW_SOURCE.code }),
+    ));
+    // The dialog closes on success.
+    await waitFor(() => expect(screen.queryByText('Register a facility source')).not.toBeInTheDocument());
+
+    // The picklist refreshed (the empty-state hint is gone) AND the just-registered source is
+    // SELECTED, not merely present as an option the operator still has to go find.
+    await waitFor(() => expect(screen.queryByText(/no facility registers are configured/i)).not.toBeInTheDocument());
+    const trigger = screen.getByRole('combobox', { name: 'National system' });
+    await waitFor(() => expect(trigger).toHaveTextContent(NEW_SOURCE.name));
+
+    // ⛔ THE WHOLE POINT: Preview is now reachable — a file plus the just-registered source is enough
+    // to import against it, which is exactly what "unreachable on a fresh install" denied before.
+    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockResolvedValue(cleanPreview);
+    fireEvent.change(screen.getByLabelText('File'), { target: { files: [csvFile()] } });
+    await previewNow();
+    await waitFor(() => expect(api.importFacilitiesCsv).toHaveBeenCalledWith(
+      expect.objectContaining({ nationalSystem: NEW_SOURCE.url }),
+    ));
   });
 
   it('never applies straight from the file picker — Preview is a dry run, Apply is not offered until one succeeds', async () => {

@@ -226,16 +226,19 @@ const ImportSchema = z.object({
  *  a facility register (`registerSources.create`, `@openldr/db`). `url` is the canonical identity
  *  the import routes will accept from this point on; every other field is display/provenance only.
  *  `version`/`jurisdiction`/`contact`/`publisherId` mirror `FacilityRegisterSourceStore.create`'s
- *  own optional fields exactly, so a key renamed on one side would be silently stripped by zod
- *  rather than reaching the store. */
+ *  own optional fields exactly — both the KEY (so a rename on one side would be silently stripped
+ *  by zod rather than reaching the store) and the TYPE: the store's signature accepts `string |
+ *  null` for each of these, so `.nullable()` is required alongside `.optional()` here too — without
+ *  it, a caller sending an explicit `null` (a legitimate way to say "no value" in JSON, distinct
+ *  from omitting the key) would 400 here even though the store downstream is happy to accept it. */
 const SourceCreateSchema = z.object({
   url: z.string().min(1),
   name: z.string().min(1),
   code: z.string().min(1),
-  version: z.string().optional(),
-  jurisdiction: z.string().optional(),
-  contact: z.string().optional(),
-  publisherId: z.string().optional(),
+  version: z.string().optional().nullable(),
+  jurisdiction: z.string().optional().nullable(),
+  contact: z.string().optional().nullable(),
+  publisherId: z.string().optional().nullable(),
 });
 
 const ConfirmSchema = z.object({

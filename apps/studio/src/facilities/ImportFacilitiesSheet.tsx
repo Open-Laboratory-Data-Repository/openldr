@@ -8,6 +8,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
@@ -28,6 +29,7 @@ import {
   type FacilityImportRunView,
   type FacilityRegisterSource,
 } from '@/api';
+import { RegisterSourceDialog } from './RegisterSourceDialog';
 
 // CT-3 (whole-branch review): `FacilityImportResult.unmapped`/`notValidated` are keyed by this
 // fixed triple — mirrors `@openldr/bootstrap`'s `CONTROLLED_FIELDS`, not imported from it (this app
@@ -574,6 +576,11 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   // flash an "no registers configured" empty state for the instant before the fetch even begins.
   const [sourcesLoading, setSourcesLoading] = useState(true);
   const [sourcesError, setSourcesError] = useState(false);
+  // Review fix (B1 Task 9): the ⋯ menu's "Register a source" item opens this — the create
+  // affordance the original task shipped a tested route for but never actually wired to anything,
+  // leaving a fresh install (empty `facility_registry`, so migration 082's back-fill has nothing to
+  // seed from) with a permanently empty picklist and facility import unreachable from the UI.
+  const [registerSourceOpen, setRegisterSourceOpen] = useState(false);
   const [allowUnknownColumns, setAllowUnknownColumns] = useState(false);
   // Task 5: the explicit "I have seen the line numbers, import the rest" override for structurally
   // malformed (quarantined) rows — same shape as `allowUnknownColumns` above, but unlike that flag,
@@ -655,6 +662,39 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
       .finally(() => { if (!cancelled) setSourcesLoading(false); });
     return () => { cancelled = true; };
   }, []);
+
+  /** Review fix (B1 Task 9): re-run after `RegisterSourceDialog` mints a new source, so the Select
+   *  offers it without the operator having to close and reopen the whole sheet (which is the only
+   *  thing that would otherwise re-trigger the mount effect above). Deliberately NOT folded into
+   *  that effect, and deliberately without a `cancelled` guard of its own: the guard above exists
+   *  for StrictMode's double-invoked EFFECTS, a race between two automatic re-runs of the same
+   *  effect body — it has nothing to do with a fetch kicked off from a click handler, which fires
+   *  exactly once per real click and is never re-entered by React. */
+  const refreshSources = async (): Promise<FacilityRegisterSource[]> => {
+    setSourcesLoading(true);
+    setSourcesError(false);
+    try {
+      const rows = await listFacilityImportSources();
+      setSources(rows);
+      return rows;
+    } catch {
+      setSources([]);
+      setSourcesError(true);
+      return [];
+    } finally {
+      setSourcesLoading(false);
+    }
+  };
+
+  /** The dialog's `onCreated` — refreshes the picklist AND selects what was just registered.
+   *  ⛔ Both matter: a refresh alone leaves the new source in `sources` but still unselected (the
+   *  operator would have to open the Select and pick it themselves, easy to miss); a selection alone
+   *  without the refresh would set `nationalSystem` to a url with no matching `SelectItem`, which
+   *  renders as the placeholder — the picked value would look unchosen even though it is the exact
+   *  string an import would send. */
+  const handleSourceCreated = (source: FacilityRegisterSource): void => {
+    void refreshSources().then(() => handleNationalSystemChange(source.url));
+  };
 
   // ⛔ POLLING, AND IT MUST SURVIVE `<StrictMode>`. The scheduling state is effect-LOCAL (`stopped`,
   // `timer`), never a component-level "mounted" ref: StrictMode mounts, cleans up and re-mounts while
@@ -1119,6 +1159,17 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              {/* Review fix (B1 Task 9): the create affordance the task's own gate was missing — a
+                  fresh install has no registers at all (migration 082's back-fill only seeds from
+                  `national_system` values a pre-existing `facility_registry` already carries), so
+                  without this item the Select below stays on its empty state forever and facility
+                  import is unreachable from the UI. Disabled with the rest of the sheet's inputs
+                  while a run holds the register — see `inputsDisabled` — for the same reason the
+                  Select itself is: registering a source an operator cannot yet select is no help. */}
+              <DropdownMenuItem disabled={inputsDisabled} onClick={() => setRegisterSourceOpen(true)}>
+                {t('facilities.import.registerSourceAction')}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
               {/* A2b: the background door. Offered only while no run is in play, and gated on
                   `runId` rather than `run` deliberately: `runId` is set the instant the upload
                   resolves, whereas `run` stays null until the FIRST POLL answers — a window in which
@@ -1448,6 +1499,12 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
           confirmLabel={t('facilities.import.applyAction')}
           cancelLabel={t('common.cancel')}
           onConfirm={() => { void handleApplyConfirm(); }}
+        />
+
+        <RegisterSourceDialog
+          open={registerSourceOpen}
+          onOpenChange={setRegisterSourceOpen}
+          onCreated={handleSourceCreated}
         />
       </SheetContent>
     </Sheet>

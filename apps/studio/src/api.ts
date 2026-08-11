@@ -1041,12 +1041,35 @@ export interface FacilityRegisterSource {
 }
 
 /** `GET /api/facilities/import/sources` — active registers only (the route's own default), ordered
- *  by name. A register a `POST /api/facilities/import/sources` create just deactivated, or one that
- *  was never activated, is deliberately excluded — the picklist must never offer a spelling the
- *  import routes would then refuse. */
+ *  by name. Excludes an INACTIVE register — the picklist must never offer a spelling the import
+ *  routes would then refuse. `createFacilityImportSource` below always writes a fresh row with
+ *  `active: true` (mirroring `FacilityRegisterSourceStore.create`'s own hardcoded `active: true`),
+ *  and this slice adds no route that can flip it back to `false` — so today the only way a row is
+ *  ever excluded here is a register created before this app existed at all (a pre-existing
+ *  `coding_systems` row this slice never touches) or a direct database edit, not anything this
+ *  app's own UI can cause. */
+export interface FacilityRegisterSourceInput {
+  url: string;
+  name: string;
+  code: string;
+  version?: string | null;
+  jurisdiction?: string | null;
+  contact?: string | null;
+  publisherId?: string | null;
+}
+
 export const listFacilityImportSources = (): Promise<FacilityRegisterSource[]> =>
   apiGet<{ rows: FacilityRegisterSource[] }>('/api/facilities/import/sources', 'list facility import sources')
     .then((r) => r.rows);
+
+/** `POST /api/facilities/import/sources` — the ONLY way a fresh install ever gets a register the
+ *  import sheet's `Select` can offer (review fix, B1 Task 9: the route existed and was tested, but
+ *  nothing in the studio ever called it, so a fresh install's picklist was permanently empty and
+ *  facility import was unreachable from the UI). Backs the ⋯ menu's "Register a source" item
+ *  (`RegisterSourceDialog.tsx`), never a standalone button — see ui-actions-in-dots-menu. */
+export const createFacilityImportSource = (input: FacilityRegisterSourceInput): Promise<FacilityRegisterSource> =>
+  authFetch('/api/facilities/import/sources', jbody(input, 'POST'))
+    .then((r) => okJson<FacilityRegisterSource>(r, 'register a facility source'));
 
 export interface FacilityImportRequest {
   csv: string;
