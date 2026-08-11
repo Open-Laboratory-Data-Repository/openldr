@@ -1015,6 +1015,8 @@ export const fr: EnShape = {
     publishAsReport: 'Publier',
     check: 'Vérifier',
     duplicate: 'Dupliquer',
+    copyOf: 'Copie de {{name}}',
+    checkUnavailable: 'Contrôle préalable non disponible',
     chooseImage: 'Choisir une image…',
     removeImage: 'Supprimer l’image',
     imageType: 'Type d’image non pris en charge — utilisez PNG, JPEG ou WebP',

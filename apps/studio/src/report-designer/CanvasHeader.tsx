@@ -35,7 +35,6 @@ interface Props {
   onPublishAsReport(): void;
   /** Toggle the inspector drawer (mobile only). */
   onToggleInspector?(): void;
-  onCheck(): void;
   onDuplicate(): void;
   onDelete(): void;
 }
@@ -130,7 +129,10 @@ export function CanvasHeader(props: Props): JSX.Element {
               </DropdownMenuSubContent>
             </DropdownMenuSub>
             <DropdownMenuItem onSelect={props.onPublishAsReport}><FileText className="mr-2 h-4 w-4" /> {t('reportDesigner.publishAsReport')}</DropdownMenuItem>
-            <DropdownMenuItem onSelect={props.onCheck}><ShieldCheck className="mr-2 h-4 w-4" /> {t('reportDesigner.check')}</DropdownMenuItem>
+            <DropdownMenuItem disabled className="flex-col items-start gap-0">
+              <span className="flex items-center"><ShieldCheck className="mr-2 h-4 w-4" /> {t('reportDesigner.check')}</span>
+              <span className="pl-6 text-[10px] text-muted-foreground">{t('reportDesigner.checkUnavailable')}</span>
+            </DropdownMenuItem>
             <DropdownMenuItem onSelect={props.onDuplicate}><Copy className="mr-2 h-4 w-4" /> {t('reportDesigner.duplicate')}</DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onSelect={props.onDelete} className="text-destructive focus:text-destructive">

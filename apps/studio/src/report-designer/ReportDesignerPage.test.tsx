@@ -290,6 +290,19 @@ describe('ReportDesignerPage', () => {
     expect(await screen.findByDisplayValue('AMR summary')).toBeInTheDocument();
   });
 
+  it('Duplicate creates an independent unsaved copy and leaves the original alone', async () => {
+    // The seed's managed-overwrite comment names Duplicate as the way to customise a built-in
+    // without losing the edits on the next boot, so the copy MUST get an id the seed never iterates.
+    await renderPage('rt-amr-summary');
+    await openKebab();
+    fireEvent.click(screen.getByRole('menuitem', { name: /duplicate/i }));
+
+    await waitFor(() => expect(screen.getByLabelText('Report name')).toHaveValue('Copy of AMR summary'));
+    // Transient: the copy is not persisted until Save, exactly like New template.
+    expect(createReportDesign).not.toHaveBeenCalled();
+    expect(updateReportDesign).not.toHaveBeenCalled();
+  });
+
   it('deletes the open design after confirmation via deleteReportDesign', async () => {
     await renderPage();
     await openKebab();

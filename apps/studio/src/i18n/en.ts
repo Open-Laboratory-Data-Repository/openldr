@@ -1075,6 +1075,8 @@ export const en = {
     publishAsReport: 'Publish',
     check: 'Check',
     duplicate: 'Duplicate',
+    copyOf: 'Copy of {{name}}',
+    checkUnavailable: 'Preflight not available yet',
     chooseImage: 'Choose image…',
     removeImage: 'Remove image',
     imageType: 'Unsupported image type — use PNG, JPEG or WebP',
