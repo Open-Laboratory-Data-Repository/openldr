@@ -13,9 +13,12 @@ import { valueSetToFhirResource } from '../../fhir-value-set';
 //    existing `status` column (070) answers "is this facility open" — HL7's own `location-status`
 //    vocabulary (active/suspended/inactive, seeded by 072). HL7 has no membership concept, so carrying
 //    "the register dropped this row" there would mean inventing a non-conformant code — see
-//    facility-import.ts's retirement comment, which is correct about why it writes `inactive` for a
-//    DIFFERENT reason (the facility closed, not that the register stopped listing it). register_state
-//    is OpenLDR's own operational vocabulary, seeded below as its own ValueSet over its own CodeSystem.
+//    facility-import.ts's retirement comment, which is correct about why it writes `inactive` rather
+//    than a `retired` code. But today that write is the ONLY signal for "the register stopped listing
+//    this row" — `status` currently carries both facts at once, which is exactly the conflation this
+//    slice exists to remove. Task 5 moves that fact onto `register_state`, so `status` goes back to
+//    meaning operational status only. register_state is OpenLDR's own membership vocabulary, seeded
+//    below as its own ValueSet over its own CodeSystem.
 export const FACILITY_REGISTER_STATE_VS = 'urn:openldr:valueset:facility-register-state';
 
 /** Marks a `coding_systems` row as a facility register.
@@ -32,10 +35,18 @@ const REGISTER_STATE_VS_ID = 'vs-facility-register-state';
 const REGISTER_STATE_CS_ID = 'cs-openldr-facility-register-state';
 const PUBLISHER = 'pub-system';
 
+// The `facility_registry.register_state` column values, as named constants — not a vocabulary
+// inlined into logic (the vocabulary itself is the seeded ValueSet below, over its own CodeSystem;
+// that seeding is unchanged). This is the one spelling of each code value, so a later task writing
+// `register_state: FACILITY_REGISTER_STATE_DROPPED` in another package never re-types the literal.
+export const FACILITY_REGISTER_STATE_IN_REGISTER = 'in_register';
+export const FACILITY_REGISTER_STATE_DROPPED = 'dropped';
+export const FACILITY_REGISTER_STATE_NOT_REGISTERED = 'not_registered';
+
 const REGISTER_STATE_CONCEPTS: [string, string][] = [
-  ['in_register', 'In register'],
-  ['dropped', 'Dropped by register'],
-  ['not_registered', 'Not from a register'],
+  [FACILITY_REGISTER_STATE_IN_REGISTER, 'In register'],
+  [FACILITY_REGISTER_STATE_DROPPED, 'Dropped by register'],
+  [FACILITY_REGISTER_STATE_NOT_REGISTERED, 'Not from a register'],
 ];
 
 // Same batching rationale as 072's insertConcepts: one multi-row insert, not an awaited insert per
@@ -124,9 +135,9 @@ async function seedRegisterStateValueSet(seedDb: Kysely<any>): Promise<void> {
  *  A row that came from a register IS in one until an import says otherwise. A row with no
  *  national_system never came from one, and `not_registered` is the column default — this only
  *  ever needs to move rows the OTHER way, to `in_register`. */
-export async function backfillRegisterState(db: Kysely<any>): Promise<void> {
+export async function backfillRegisterState<DB>(db: Kysely<DB>): Promise<void> {
   await sql`
-    update facility_registry set register_state = 'in_register'
+    update facility_registry set register_state = ${FACILITY_REGISTER_STATE_IN_REGISTER}
     where national_system is not null and national_system <> ''
   `.execute(db);
 }
@@ -137,7 +148,7 @@ export async function up(db: Kysely<unknown>): Promise<void> {
   await db.schema.alterTable('coding_systems').addColumn('contact', 'text').execute();
 
   await db.schema.alterTable('facility_registry')
-    .addColumn('register_state', 'text', (c) => c.notNull().defaultTo('not_registered'))
+    .addColumn('register_state', 'text', (c) => c.notNull().defaultTo(FACILITY_REGISTER_STATE_NOT_REGISTERED))
     .execute();
 
   await backfillRegisterState(db);
