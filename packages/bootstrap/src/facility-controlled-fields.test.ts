@@ -87,3 +87,27 @@ describe('applyControlledFields', () => {
     expect(out.level).toBe('health_center');
   });
 });
+
+// --- B1 Task 3: the first argument is a REGISTER'S CANONICAL URI ---------------------------------
+//
+// ⚠ The brief proposed `expect(observedFieldSystem('level','urn:tz:hfr')).toBe(observedFieldSystem(
+// 'level','urn:tz:hfr'))` here. That assertion is INERT — identical arguments to a pure function are
+// equal no matter what the body does, so it cannot fail and pins nothing. What is actually worth
+// pinning is the two properties this function must keep now that its input is a URI: the suffix stays
+// URL-SAFE (a URI carries `:` and `/`), and two DIFFERENT registers keep two DIFFERENT namespaces.
+describe('observedFieldSystem under canonical-URI input', () => {
+  it('⛔ slugifies the URI into a URL-safe suffix rather than embedding it raw', () => {
+    expect(observedFieldSystem('level', 'urn:tz:hfr')).toBe('urn:openldr:cs:facility-level:urn_tz_hfr');
+    // The `:` separators of the URI itself must not survive into the system url — deleting the
+    // slugification (the brief's own ⛔) would leave `…:facility-level:urn:tz:hfr`.
+    expect(observedFieldSystem('level', 'urn:tz:hfr').split(':').length).toBe(5);
+  });
+
+  it('⛔ keeps two different registers in two different namespaces', () => {
+    expect(observedFieldSystem('level', 'urn:tz:mfl')).not.toBe(observedFieldSystem('level', 'urn:tz:hfr'));
+  });
+
+  it('⛔ still namespaces per FIELD, so one register\'s level and status never share mappings', () => {
+    expect(observedFieldSystem('status', 'urn:tz:hfr')).not.toBe(observedFieldSystem('level', 'urn:tz:hfr'));
+  });
+});

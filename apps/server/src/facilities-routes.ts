@@ -6,7 +6,7 @@ import type { Kysely } from 'kysely';
 import { z } from 'zod';
 import { appError } from '@openldr/core';
 import {
-  importFacilities, resolveKnownNationalSystem,
+  importFacilities, resolveKnownNationalSystem, CONTROLLED_FIELDS, resolveControlledFields,
   scanObservedFacilities, resolveObservedFacilities, publishFacilityMap, projectRegistryRows,
   retireRegistryConcepts, reprojectAfterRegistryDelete, listFacilityMappingConflicts, facilityHealth,
   type AppContext, type FacilityImportResult, type ScanResult, type PublishResult,
@@ -14,10 +14,12 @@ import {
 import {
   splitFacilityAnswers, CORE_FACILITY_KEYS, FACILITY_ADMIN_LEVELS, referenceCapture,
   FACILITY_REGISTRY_SYSTEM, DEFAULT_LIST_LIMIT, FACILITY_HEALTH_VALUES, createFacilityImportRunStore,
+  createFacilityRegisterSourceStore,
   SUPERSEDABLE_RUN_STATES, RUNNING_RUN_STATES, TERMINAL_RUN_STATES, isApplicable, APPLY_PHASE,
 } from '@openldr/db';
 import type {
   FacilityAdminLevel, ExternalSchema, FacilityHealth, FacilityImportRun, FacilityImportRunStatus,
+  FacilityRecord,
 } from '@openldr/db';
 import { requireCapability } from './rbac';
 import { recordAudit, actorFromRequest } from './audit-helper';
@@ -220,6 +222,25 @@ const ImportSchema = z.object({
  *  parameter), which is the request that actually precedes the classification. What the operator
  *  decides HERE is `onAbsent` — whether a measured absence is acted on — and that split is the
  *  two-tier retirement design, not an omission. */
+/** B1 Task 9: `POST /api/facilities/import/sources`' body — a fresh `coding_systems` row marked as
+ *  a facility register (`registerSources.create`, `@openldr/db`). `url` is the canonical identity
+ *  the import routes will accept from this point on; every other field is display/provenance only.
+ *  `version`/`jurisdiction`/`contact`/`publisherId` mirror `FacilityRegisterSourceStore.create`'s
+ *  own optional fields exactly — both the KEY (so a rename on one side would be silently stripped
+ *  by zod rather than reaching the store) and the TYPE: the store's signature accepts `string |
+ *  null` for each of these, so `.nullable()` is required alongside `.optional()` here too — without
+ *  it, a caller sending an explicit `null` (a legitimate way to say "no value" in JSON, distinct
+ *  from omitting the key) would 400 here even though the store downstream is happy to accept it. */
+const SourceCreateSchema = z.object({
+  url: z.string().min(1),
+  name: z.string().min(1),
+  code: z.string().min(1),
+  version: z.string().optional().nullable(),
+  jurisdiction: z.string().optional().nullable(),
+  contact: z.string().optional().nullable(),
+  publisherId: z.string().optional().nullable(),
+});
+
 const ConfirmSchema = z.object({
   onDeleted: z.enum(['retire', 'report']).optional(),
   onAbsent: z.enum(['retire', 'report']).optional(),
@@ -490,6 +511,51 @@ function nameTypeError(name: unknown): { error: string } | undefined {
   return undefined;
 }
 
+// ── Task 6 (B1, facility-canonical-identity): server-enforced controlled vocabulary ────────────
+//
+// `resolveControlledFields`/`applyControlledFields` (packages/bootstrap/src/facility-controlled-
+// fields.ts) already run over every CSV-imported row via `importFacilities`, rewriting a raw source
+// string to its canonical code and WARNING on anything that doesn't resolve — warning only, import
+// never refuses a row over this. Manual create/edit (this route) ran no such check at all: a
+// hand-typed `status` could be 'Operating' while an imported row is always a canonical FHIR
+// location-status code. That disagreement between the two doors is what this closes — POST/PUT
+// below reuse the SAME resolver, not a second one, but REFUSE (400) rather than warn: there is no
+// "raw source string" here to preserve under `extras.__source`, only an operator's own typed input.
+//
+// ⛔ A controlled field passes ONLY if its submitted value is ALREADY a canonical code (present in
+// the value set's own expansion) — or that field's value set is not seeded on this install at all,
+// `resolveControlledFields`'s `notValidated` case, which is NOT enforced here either: refusing would
+// leave an unseeded install unable to create a facility at all. A value that resolves through an
+// ACTIVE `term_mappings` entry (`resolveControlledFields`'s `mapped` case) is treated the SAME as
+// `unmapped` — refused, not silently rewritten. That mapping vocabulary exists to canonicalise
+// strings a REGISTER supplied under its own `nationalSystem` during reconciliation; rewriting a
+// hand-typed value behind the operator's back on this route would trade one surprise for another.
+// An operator who wants a particular canonical value picks it directly.
+//
+// Only fields the CALLER actually submitted this request are checked (`record`, from
+// `splitFacilityAnswers` — never the row's other, already-persisted columns): an edit that touches
+// an unrelated field must not be blocked by a value written before this check existed.
+async function controlledFieldsError(
+  ctx: AppContext, record: Partial<FacilityRecord>,
+): Promise<{ error: string } | undefined> {
+  const submitted = CONTROLLED_FIELDS.filter(
+    (field) => typeof record[field] === 'string' && (record[field] as string).length > 0,
+  );
+  if (submitted.length === 0) return undefined;
+
+  // `nationalSystem` only decides which `term_mappings` namespace a non-canonical value is looked
+  // up under (`observedFieldSystem`) — it never decides pass/fail here, since `mapped` and
+  // `unmapped` are refused identically below. An absent one (the common manual-entry case) is a
+  // valid, deterministic namespace of its own, not an error.
+  const nationalSystem = typeof record.nationalSystem === 'string' ? record.nationalSystem : '';
+  const res = await resolveControlledFields(ctx.terminology.admin, nationalSystem, [record as FacilityRecord]);
+
+  const badField = submitted.find((field) => res.mapped[field].size > 0 || res.unmapped[field].length > 0);
+  if (!badField) return undefined;
+
+  return { error: `${badField} '${String(record[badField])}' is not a recognised canonical ${badField} value` };
+}
+
 // ── Task 6: observed-facility reconciliation ────────────────────────────────────────────────────
 //
 // A thin HTTP wrapper over `@openldr/bootstrap`'s scan/resolve/publish trio (Tasks 3-4), following
@@ -575,6 +641,50 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
   // import route below). Constructed once per registration, not per request: it is a thin closure
   // over `ctx.internalDb`, the same db this file already reads directly in several routes.
   const importRuns = createFacilityImportRunStore(ctx.internalDb);
+
+  // B1 Task 3: the registers an import may name. Constructed once per registration for the same
+  // reason `importRuns` above is — a thin closure over `ctx.internalDb`.
+  const registerSources = createFacilityRegisterSourceStore(ctx.internalDb);
+
+  /** ⛔ THE REFUSAL THIS SLICE EXISTS FOR. `nationalSystem` used to be free text typed into the
+   *  import sheet and hashed straight into every facility's permanent id (`idFor`, facility-csv.ts:
+   *  `fac-` + sha256(`<value>|<national code>`)). MEASURED for national code `100`: `HFR` produced
+   *  `fac-d112c779ad583160` and `hfr` produced `fac-49bce368724fb81a` — two permanent identities for
+   *  one register — while `observedFieldSystem` (facility-controlled-fields.ts) LOWERCASES its slug,
+   *  so both spellings shared the one `…:facility-level:hfr` controlled-field namespace. One
+   *  register, two identities, one namespace: the data disagreed with itself.
+   *
+   *  The fix is not a normalisation rule bolted onto either function — `idFor`'s hash and
+   *  `observedFieldSystem`'s slug are both unchanged. It is that the VALUE fed to them can no longer
+   *  be typed at all: it must name a `coding_systems` row marked as a facility register
+   *  (`FACILITY_REGISTER_KIND`, migration 081), so there is exactly one spelling of a register to
+   *  feed. The import sheet still POSTs a typed string today — this slice's Task 9 is what turns that
+   *  text box into a `Select` over these same rows, and until it lands the sheet's own free text is
+   *  refused here exactly like any other unregistered value.
+   *
+   *  ⛔ An EXACT match on the register's stored url, never a case-insensitive or otherwise
+   *  normalising lookup. Normalising here would re-open the fork from the other end: two spellings
+   *  would resolve, and the two `idFor` hashes they produce would still differ. */
+  function unknownRegisterError(nationalSystem: string): string {
+    // The message names the register's OWN identity (its canonical URI) rather than pointing at a
+    // surface for creating one — this slice adds those (a source route and the sheet's Select in
+    // Task 9, `openldr facilities import-sources` in Task 11) AFTER this gate, and a message citing
+    // a route that does not exist yet would be a lie the moment an operator followed it.
+    return `"${nationalSystem}" is not a known facility register; a facility register with that `
+      + 'canonical URI must exist on this install before facilities can be imported against it';
+  }
+
+  /** ⛔ Review fix (B1 Task 3): `registerSources.list()` (the source of Task 9's import-sheet
+   *  `Select`) defaults to active-only, but `getByUrl` — deliberately, see its own store comment —
+   *  does not filter on `active` at all, so it still resolves a DEACTIVATED register. Without this
+   *  second check, an import naming that register's url would pass the gate above (the row exists)
+   *  and write facilities under an identity the picklist will never again offer, silently. Kept as
+   *  its own message rather than folded into `unknownRegisterError` so an operator who once saw this
+   *  register in the picklist is told it was retired, not that it never existed. */
+  function deactivatedRegisterError(nationalSystem: string): string {
+    return `"${nationalSystem}" names a facility register that has been deactivated; `
+      + 'facilities cannot be imported against a deactivated register';
+  }
 
   // A2b Task 3: a file upload is a stream, not a JSON body, and Fastify has no built-in parser for
   // either of these content types — without them it answers 415 before the handler ever runs.
@@ -669,6 +779,9 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       nationalSystem: ownFirstString(q, 'nationalSystem'),
       source: ownFirstString(q, 'source'),
       managedOrigin: ownFirstString(q, 'managedOrigin'),
+      // Task 10 (B1, facility-canonical-identity): registry MEMBERSHIP (`in_register`/`dropped`/
+      // `not_registered`, migration 081) — surfaces the studio's new register-state filter.
+      registerState: ownFirstString(q, 'registerState'),
       health: parseHealth(ownFirstString(q, 'health')),
       limit,
       offset,
@@ -990,6 +1103,50 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     return { mappingCount, reportCount };
   });
 
+  // Task 8 (B1, facility-canonical-identity): a facility's change history, read straight off
+  // `audit_events` — no new table, no second capture path. POST/PUT below already write real
+  // before/after here (`action: 'facility.create'`/`'facility.update'`, `entityType: 'facility'`,
+  // `entityId` the facility's own id), and Task 7's per-row import audit
+  // (`facility.import.row`, packages/bootstrap/src/facility-import.ts) writes the same shape for an
+  // imported change. This route only reads that back; it captures nothing itself.
+  //
+  // ⛔ No 404 for an unknown id — deliberately, unlike `GET /api/facilities/:id` above. A deleted
+  // facility's history is still meaningful (it is how an operator learns a facility once existed
+  // and what happened to it), so an id `facilityRegistry` no longer resolves — or never did — comes
+  // back `{ rows: [] }`, the same shape a real facility with no audit rows yet would get.
+  //
+  // ⛔ `.orderBy('occurred_at', 'desc').orderBy('id', 'desc')` — NOT `occurred_at` alone.
+  // `occurred_at` is `now()` at insert time (migration 005), and two rows for the same facility
+  // written within the same millisecond are routine (e.g. a create immediately followed by a
+  // projection retry, or two of Task 7's per-row import events in one batch) — pg-mem's real
+  // millisecond wall-clock `now()` collides on roughly half of consecutive calls, so an
+  // `occurred_at`-only order is not reliably "newest first". `id` (a `randomUUID()` — generated
+  // inside `AuditStore.record()`, packages/audit/src/store.ts, not by either of its callers here
+  // — audit-helper.ts's `recordAudit` and facility-import.ts's per-row audit both just call it)
+  // carries no ordering of its own, but it IS unique, so ordering
+  // by it as a second key makes ties resolve the same way every time instead of however the scan
+  // happened to visit them.
+  app.get('/api/facilities/:id/history', VIEW, async (req) => {
+    const { id } = req.params as { id: string };
+    const rows = await ctx.internalDb
+      .selectFrom('audit_events')
+      .select(['occurred_at', 'actor_name', 'action', 'before', 'after'])
+      .where('entity_type', '=', 'facility')
+      .where('entity_id', '=', id)
+      .orderBy('occurred_at', 'desc')
+      .orderBy('id', 'desc')
+      .execute();
+    return {
+      rows: rows.map((r) => ({
+        occurredAt: r.occurred_at instanceof Date ? r.occurred_at.toISOString() : String(r.occurred_at),
+        actorName: r.actor_name,
+        action: r.action,
+        before: r.before ?? null,
+        after: r.after ?? null,
+      })),
+    };
+  });
+
   app.post('/api/facilities', MANAGE, async (req, reply) => {
     const p = SubmitSchema.safeParse(req.body);
     if (!p.success) { reply.code(400); return { error: p.error.message }; }
@@ -1021,6 +1178,11 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       reply.code(400);
       return { error: 'a facility must have a local code or a national code' };
     }
+
+    // Task 6 (B1): reject a non-canonical level/status/country BEFORE the write — see
+    // `controlledFieldsError`'s doc comment for why this refuses rather than warns, unlike import.
+    const controlledErr = await controlledFieldsError(ctx, record);
+    if (controlledErr) { reply.code(400); return controlledErr; }
 
     // Only the write itself is guarded — an error from `recordAudit` below must never be mapped
     // as if it came from `upsert` (e.g. a 23505 from the audit table mis-reported to the client as
@@ -1150,6 +1312,13 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       reply.code(400);
       return { error: 'a facility must have a local code or a national code' };
     }
+
+    // Task 6 (B1): same rule as POST, and scoped the same way — only what THIS submission sets for
+    // level/status/country is checked, never a value inherited unchanged from `before` (see
+    // `controlledFieldsError`'s doc comment). An edit to an unrelated field on a facility whose
+    // status predates this check must not be blocked by that pre-existing value.
+    const controlledErr = await controlledFieldsError(ctx, record);
+    if (controlledErr) { reply.code(400); return controlledErr; }
 
     // Only the write itself is guarded — see the matching comment in POST.
     let after;
@@ -1285,6 +1454,44 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     return { ok: true };
   });
 
+  // B1 Task 9: the registers an operator may NAME — GET backs the import sheet's `Select` (the free-
+  // text `nationalSystem` box this task removes), POST is the only way a fresh install ever gets one
+  // to offer. Both sit on `registerSources` (constructed above), never a second query against
+  // `coding_systems`.
+  app.get('/api/facilities/import/sources', VIEW, async () => {
+    // Active-only, on purpose: `list()`'s own default is what keeps a DEACTIVATED register off this
+    // picklist (see `FacilityRegisterSourceStore.list`'s own doc comment) — a `Select` offering a
+    // spelling the import routes would then refuse (`deactivatedRegisterError` above) is worse than
+    // one that offers fewer choices.
+    const rows = await registerSources.list();
+    return { rows };
+  });
+
+  app.post('/api/facilities/import/sources', MANAGE, async (req, reply) => {
+    const p = SourceCreateSchema.safeParse(req.body);
+    if (!p.success) { reply.code(400); return { error: p.error.message }; }
+    try {
+      const created = await registerSources.create(p.data);
+      reply.code(201);
+      return created;
+    } catch (err) {
+      // `registerSources.create` throws a plain Error, never a raw Postgres exception, for BOTH ways
+      // one url can already be spoken for — a case-insensitive collision with another register (its
+      // own pre-check) and a collision with a NON-register coding system, which only ever surfaces
+      // as `coding_systems_url_uq`'s 23505 (that index is on `url` ALONE, not scoped by `kind` — see
+      // the store's own comment on its insert's catch block). Recognised by message here rather than
+      // by a `.code` the store has already stripped off, and reported as a 409 conflict — same
+      // reasoning as `mapFacilityDbError` above, just against a different table and a store that has
+      // already done its own classification. Anything else rethrows, reaching the central error
+      // handler as the 500 it actually is.
+      if (err instanceof Error && /already exists/i.test(err.message)) {
+        reply.code(409);
+        return { error: err.message };
+      }
+      throw err;
+    }
+  });
+
   // Task 4: CSV import — a thin HTTP wrapper over `@openldr/bootstrap`'s `importFacilities`, the
   // SAME function `openldr facilities import` (packages/cli/src/facilities.ts) calls, per the
   // repo's CLI-parity rule. See the MAX_IMPORT_CSV_BYTES / MAX_INLINE_APPLY_ROWS comments above for
@@ -1304,13 +1511,35 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       };
     }
 
+    // ⛔ B1 Task 3: the register gate — see `unknownRegisterError` for the two-identities-one-
+    // namespace defect it closes. It runs BEFORE `importFacilities` is called at all, so a refused
+    // import parses nothing, mints no run (which would hold this register's `active_key`) and
+    // certainly writes nothing. ⛔ BOTH import doors carry it: the upload route below has its own
+    // copy against its own query-string parsing, because two doors that disagree about what a
+    // register is would put the fork straight back.
+    const source = await registerSources.getByUrl(p.data.nationalSystem);
+    if (!source) { reply.code(400); return { error: unknownRegisterError(p.data.nationalSystem) }; }
+    // ⛔ Review fix (B1 Task 3): `getByUrl` deliberately does not filter on `active` (it stays usable
+    // for historical-source lookups), so a DEACTIVATED register still resolves here and must be
+    // refused explicitly — see `deactivatedRegisterError`.
+    if (!source.active) { reply.code(400); return { error: deactivatedRegisterError(p.data.nationalSystem) }; }
+
     // Fix 1 (mapping-ux report): `admin` lets `importFacilities` project every written row into
     // FACILITY_REGISTRY_SYSTEM — the Facilities-page upload gets the same immediate-mapping
     // behaviour as a single facility create/update (POST/PUT above) and the CLI.
     // Task 5: `facilityJobs` lets an applied import enqueue the same `facility-map-rebuild` job a
     // single create/update/delete does (see importFacilities' own matching comment for why that is
     // a single call per import already, not per row).
-    const deps = { db: ctx.internalDb, capture: referenceCapture, admin: ctx.terminology.admin, facilityJobs: ctx.facilityJobs, logger: ctx.logger };
+    // ⛔ `audit` (whole-branch Critical 2). Task 7 writes one `facility.import.row` event per CHANGED
+    // facility, and it is what makes `GET /api/facilities/:id/history` (above) show an import at all
+    // and the Studio's provenance panel say anything other than "Never imported". Without it,
+    // `importFacilities` takes its `if (!deps.audit)` branch and logs that the per-row write is
+    // unaudited — so this literal omitting it made the whole feature dead on the browser door.
+    // The SAME store `recordAudit` (audit-helper.ts) uses for this route's own register-scoped
+    // `facility.import` entry, deliberately: two audit sinks for one import could disagree about
+    // whether it happened. Safe on the PREVIEW call this same object is passed to — the per-row audit
+    // block sits after the write transaction, which a preview never reaches.
+    const deps = { db: ctx.internalDb, capture: referenceCapture, admin: ctx.terminology.admin, facilityJobs: ctx.facilityJobs, audit: ctx.audit, logger: ctx.logger };
     const importOpts = {
       nationalSystem: p.data.nationalSystem,
       allowUnknownColumns: p.data.allowUnknownColumns,
@@ -1353,11 +1582,19 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       return { error: err.message };
     }
 
-    // Task 10 / the FAC-P1-04 boundary, and the whole of it. `nationalSystem` is free text feeding a
-    // deterministic id, so `HFR` and `hfr` are two registers that will never merge. Modelling sources
-    // properly is sub-project B's; what belongs here is refusing to let an operator create a second
-    // identity for the same register WITHOUT NOTICING. Reported, never blocked — a genuinely new
-    // register is a normal thing to import, and this cannot tell the two cases apart. Computed
+    // Task 10 / the FAC-P1-04 boundary. ⚠ Its ORIGINAL reason is gone: this used to guard free-text
+    // `nationalSystem`, where `HFR` and `hfr` were two registers that would never merge, and deferred
+    // "modelling sources properly" to a later sub-project. THIS IS THAT SUB-PROJECT (B1), and the
+    // modelling landed ~60 lines above — `registerSources.getByUrl` refuses anything that is not a
+    // registered register's canonical URI, exactly and case-sensitively, so a second identity for one
+    // register can no longer be typed into existence here at all.
+    //
+    // What the flag still answers is narrower and still worth reporting: has this install ever held a
+    // facility filed under this register before (`resolveKnownNationalSystem` — a single existence
+    // probe over `facility_registry.national_system`)? `false` means this apply is the register's
+    // FIRST import here, which is the moment an operator most wants to be told they may have picked
+    // the wrong register from the picklist. Reported, never blocked — a genuinely new register is a
+    // normal thing to import, and this cannot tell the two cases apart. Computed
     // unconditionally (both the standalone-preview and the apply-flow read this same `preview`), so
     // an operator applying straight through (no separate preview round-trip) still gets the warning
     // on the final response — see where `result.knownNationalSystem` is set below.
@@ -1651,6 +1888,19 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       reply.code(400);
       return { error: 'expected the register file as a request-body stream (content-type: application/octet-stream or text/csv)' };
     }
+
+    // ⛔ B1 Task 3: the SAME register gate the inline route applies, against this route's own
+    // query-string parsing — see `unknownRegisterError`. Both doors must agree about what a register
+    // is; an ungated upload would re-open the two-identities fork at exactly the scale this path
+    // exists for (a full national register). Like the in-progress gate below it, it runs BEFORE the
+    // transfer: a refused upload must not first cost a national register's worth of bandwidth.
+    const source = await registerSources.getByUrl(nationalSystem);
+    if (!source) { reply.code(400); return { error: unknownRegisterError(nationalSystem) }; }
+    // ⛔ Review fix (B1 Task 3): the SAME deactivated-register refusal the inline route applies —
+    // see `deactivatedRegisterError`. Runs BEFORE the transfer, alongside the unknown-register check
+    // above it, for the same reason: a refused upload must not first cost a national register's
+    // worth of bandwidth.
+    if (!source.active) { reply.code(400); return { error: deactivatedRegisterError(nationalSystem) }; }
 
     // ⛔ The register gate runs BEFORE the transfer, not after it. A refused upload must not first
     // cost a national register's worth of bandwidth and leave an orphan object behind. Shared with

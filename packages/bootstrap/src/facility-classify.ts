@@ -7,6 +7,16 @@ export interface ExistingFacility {
   id: string;
   localCode: string | null;
   extras: Record<string, unknown> | null;
+  /** The row's CURRENT provenance — carried for the audit `before` only (see `importFacilities`'
+   *  `facility.import.row` write in facility-import.ts), never for comparison. A parsed row's
+   *  `source` is unconditionally `'import'` (facility-csv.ts / facility-release.ts), so an audit
+   *  `before` that omitted this read `source` as "added" on every single changed row, forever —
+   *  including the common case where the facility was ALREADY `'import'` and nothing provenance-wise
+   *  actually changed. Deliberately a sibling of `fields`, not folded into it: `fields`/`COMPARED`
+   *  below decide `changed`-vs-`unchanged`, and `source` must never be able to tip that decision (see
+   *  `COMPARED`'s docblock) — only `before`/`after` reporting, once a row is ALREADY `changed` for an
+   *  unrelated reason, should ever see it move. */
+  source: FacilityRecord['source'];
   /** Every comparable column, already in FacilityRecord's camelCase shape. */
   fields: Omit<FacilityRecord, 'id' | 'source' | 'extras' | 'localCode'>;
   /** `timestamptz` from the driver — a Date, despite FacilityRegistryTable declaring `string`. */
@@ -30,6 +40,13 @@ export interface ClassifiedRow {
  * preserves the existing one. Including it here would mark every hand-coded facility as "changed"
  * on every import, forever — the same class of false positive FAC-P1-03 is about, one layer down.
  * `managedOrigin` is absent for the same reason: the sync applier owns it, not this path.
+ *
+ * ⛔ `source` is ALSO deliberately absent, even though `ExistingFacility` now carries it (as a
+ * sibling of `fields`, not inside it — see that field's docblock). Every parsed row is unconditionally
+ * `source: 'import'`, so comparing it here would classify a manually-created facility `changed` on
+ * the FIRST import that ever touches it even when every other column already matches — a false
+ * positive on the exact same shape as `localCode` above, just triggered by provenance instead of a
+ * hand-assigned code.
  */
 const COMPARED: (keyof FacilityRecord)[] = [
   'nationalSystem', 'nationalCode', 'name', 'level', 'ownership', 'status', 'country',

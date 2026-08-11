@@ -263,6 +263,9 @@ export interface FacilityRegistryTable {
   /** NULL = lab-local, 'central' = central-managed (migration 048 convention). */
   managed_origin: string | null;
   source: string;
+  /** Registry MEMBERSHIP, distinct from `status` (operational, HL7 location-status). One of
+   *  `in_register` / `dropped` / `not_registered` — see migration 081's FACILITY_REGISTER_STATE_VS. */
+  register_state: Generated<string>;
   created_at: string;
   updated_at: string;
 }
@@ -415,6 +418,11 @@ export interface CodingSystemsTable {
   publisher_id: string | null;
   seeded: Generated<boolean>;
   managed_origin: string | null;
+  /** Marks a row as a facility register (`FACILITY_REGISTER_KIND` in migration 081) or other kind of
+   *  source. A REAL COLUMN, deliberately — never a URL-prefix convention. */
+  kind: string | null;
+  jurisdiction: string | null;
+  contact: string | null;
 }
 
 export interface TermMappingsTable {

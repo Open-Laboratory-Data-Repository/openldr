@@ -11,6 +11,10 @@ vi.mock('@/api', async (orig) => {
     listPublishedForms: vi.fn(),
     getForm: vi.fn(),
     listFacilityAdminValues: vi.fn(),
+    // Task 10: back the read-only provenance panel — authority/version resolved from the
+    // register-source list, "last import" from this facility's own history.
+    listFacilityImportSources: vi.fn(),
+    getFacilityHistory: vi.fn(),
   };
 });
 
@@ -55,6 +59,7 @@ const editFacility: Facility = {
   level: null, ownership: null, status: null, country: null, zone: null, region: null, district: null,
   council: null, ward: null, village: null, addressText: null, phone: '+255700000000',
   latitude: null, longitude: null, extras: { 'f-contact': 'Jane Doe' }, managedOrigin: null, source: 'manual',
+  registerState: 'not_registered',
 };
 
 /**
@@ -81,6 +86,8 @@ beforeEach(() => {
     schema: facilitySchema, targetPages: ['facilities'], createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z',
   });
   (api.listFacilityAdminValues as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+  (api.listFacilityImportSources as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+  (api.getFacilityHistory as ReturnType<typeof vi.fn>).mockResolvedValue({ rows: [] });
 });
 
 describe('FacilityDialog', () => {
@@ -321,5 +328,85 @@ describe('FacilityDialog', () => {
     await waitFor(() => expect(api.createFacility).toHaveBeenCalled());
     const body = (api.createFacility as ReturnType<typeof vi.fn>).mock.calls[0][0];
     expect(body.answers['f-district']).toBe('Free Typed District');
+  });
+
+  // Task 10: "where a facility came from" — the read-only provenance panel on the edit view.
+  describe('Task 10: provenance panel', () => {
+    const HFR_SOURCE = {
+      id: 'cs-freg-hfr', url: 'HFR', name: 'National Health Facility Registry', code: 'HFR',
+      version: '2026-Q3', jurisdiction: 'TZ', contact: null, publisherId: null, active: true,
+    };
+
+    it('does not render a provenance panel for a NEW (unsaved) facility', async () => {
+      render(<FacilityDialog open facility={null} onOpenChange={vi.fn()} onSaved={vi.fn()} />);
+      await screen.findByLabelText('Name');
+      expect(screen.queryByText('Provenance')).not.toBeInTheDocument();
+    });
+
+    it('shows the Manual badge for a manually-entered facility, and Imported for an imported one', async () => {
+      render(<FacilityDialog open facility={editFacility} onOpenChange={vi.fn()} onSaved={vi.fn()} />);
+      expect(await screen.findByText('Provenance')).toBeInTheDocument();
+      expect(screen.getByText('Manual entry')).toBeInTheDocument();
+
+      const { unmount } = render(
+        <FacilityDialog open facility={{ ...editFacility, source: 'import' }} onOpenChange={vi.fn()} onSaved={vi.fn()} />,
+      );
+      expect(await screen.findAllByText('Imported')).not.toHaveLength(0);
+      unmount();
+    });
+
+    it('resolves authority, canonical URI and version from the matching register source', async () => {
+      (api.listFacilityImportSources as ReturnType<typeof vi.fn>).mockResolvedValue([HFR_SOURCE]);
+      render(
+        <FacilityDialog
+          open
+          facility={{ ...editFacility, nationalSystem: 'HFR', nationalCode: 'NC-001' }}
+          onOpenChange={vi.fn()}
+          onSaved={vi.fn()}
+        />,
+      );
+      expect(await screen.findByText('National Health Facility Registry')).toBeInTheDocument();
+      expect(screen.getByText('HFR')).toBeInTheDocument();
+      expect(screen.getByText('2026-Q3')).toBeInTheDocument();
+    });
+
+    it('still shows the canonical URI when no active register source matches it (deactivated or unknown)', async () => {
+      (api.listFacilityImportSources as ReturnType<typeof vi.fn>).mockResolvedValue([]); // active-only list, none match
+      render(
+        <FacilityDialog
+          open
+          facility={{ ...editFacility, nationalSystem: 'urn:tz:legacy-register' }}
+          onOpenChange={vi.fn()}
+          onSaved={vi.fn()}
+        />,
+      );
+      expect(await screen.findByText('urn:tz:legacy-register')).toBeInTheDocument();
+    });
+
+    it("shows 'not linked to a national register' when the facility has no nationalSystem", async () => {
+      render(<FacilityDialog open facility={editFacility} onOpenChange={vi.fn()} onSaved={vi.fn()} />);
+      expect(await screen.findByText(/not linked to a national register/i)).toBeInTheDocument();
+    });
+
+    it('shows the last import time from history when an import has touched this facility', async () => {
+      (api.getFacilityHistory as ReturnType<typeof vi.fn>).mockResolvedValue({
+        rows: [
+          { occurredAt: '2026-08-05T10:00:00Z', actorName: 'jane', action: 'facility.update', before: {}, after: {} },
+          { occurredAt: '2026-08-01T09:00:00Z', actorName: 'facility-import', action: 'facility.import.row', before: {}, after: {} },
+        ],
+      });
+      render(<FacilityDialog open facility={editFacility} onOpenChange={vi.fn()} onSaved={vi.fn()} />);
+      expect(await screen.findByText('Last import')).toBeInTheDocument();
+      expect(screen.getByText(/2026/)).toBeInTheDocument();
+      expect(screen.queryByText('Never imported')).not.toBeInTheDocument();
+    });
+
+    it("shows 'never imported' when this facility's history has no import row", async () => {
+      (api.getFacilityHistory as ReturnType<typeof vi.fn>).mockResolvedValue({
+        rows: [{ occurredAt: '2026-08-05T10:00:00Z', actorName: 'jane', action: 'facility.create', before: null, after: {} }],
+      });
+      render(<FacilityDialog open facility={editFacility} onOpenChange={vi.fn()} onSaved={vi.fn()} />);
+      expect(await screen.findByText('Never imported')).toBeInTheDocument();
+    });
   });
 });

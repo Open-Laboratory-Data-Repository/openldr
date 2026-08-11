@@ -8,6 +8,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
@@ -19,13 +20,16 @@ import {
   confirmFacilityImportRun,
   getFacilityImportRun,
   importFacilitiesCsv,
+  listFacilityImportSources,
   uploadFacilityImport,
   type ControlledField,
   type FacilityImportConfirmOptions,
   type FacilityImportResult,
   type FacilityImportRunStatus,
   type FacilityImportRunView,
+  type FacilityRegisterSource,
 } from '@/api';
+import { RegisterSourceDialog } from './RegisterSourceDialog';
 
 // CT-3 (whole-branch review): `FacilityImportResult.unmapped`/`notValidated` are keyed by this
 // fixed triple — mirrors `@openldr/bootstrap`'s `CONTROLLED_FIELDS`, not imported from it (this app
@@ -557,7 +561,26 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
 
   const [file, setFile] = useState<File | null>(null);
   const [csv, setCsv] = useState<string | null>(null);
+  // B1 Task 9: holds the CHOSEN SOURCE'S URI, and only ever that — see `handleNationalSystemChange`
+  // and the `Select` below. Before this task it was a free-text box hashed straight into every
+  // facility's permanent id (`idFor`, facility-csv.ts); the import routes now refuse anything that
+  // is not a registered source's own url (facilities-routes.ts's `unknownRegisterError`), so typing
+  // one in was never completable from here to begin with.
   const [nationalSystem, setNationalSystem] = useState('');
+  // The registers this operator may pick — `GET /api/facilities/import/sources`, fetched once per
+  // mount. This sheet is unmounted and remounted by its caller on every open (Facilities.tsx's
+  // `{importing && <ImportFacilitiesSheet ... />}`), so a mount-only effect already re-fetches on
+  // every open without needing `open` itself as a dependency.
+  const [sources, setSources] = useState<FacilityRegisterSource[]>([]);
+  // Starts `true`, not `false` — the Select must read as loading from the very first paint, not
+  // flash an "no registers configured" empty state for the instant before the fetch even begins.
+  const [sourcesLoading, setSourcesLoading] = useState(true);
+  const [sourcesError, setSourcesError] = useState(false);
+  // Review fix (B1 Task 9): the ⋯ menu's "Register a source" item opens this — the create
+  // affordance the original task shipped a tested route for but never actually wired to anything,
+  // leaving a fresh install (empty `facility_registry`, so migration 082's back-fill has nothing to
+  // seed from) with a permanently empty picklist and facility import unreachable from the UI.
+  const [registerSourceOpen, setRegisterSourceOpen] = useState(false);
   const [allowUnknownColumns, setAllowUnknownColumns] = useState(false);
   // Task 5: the explicit "I have seen the line numbers, import the rest" override for structurally
   // malformed (quarantined) rows — same shape as `allowUnknownColumns` above, but unlike that flag,
@@ -624,6 +647,54 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
    *  to survive a re-render — and it survives StrictMode's double-invoked effects too, which is what
    *  keeps `onImported` from firing twice for one applied run. */
   const notifiedRunRef = useRef<string | null>(null);
+
+  // B1 Task 9: populate the register picklist. `cancelled` mirrors the poll effect's own idiom below
+  // — under `<StrictMode>`'s double-invoked effects the first pass's in-flight request resolves into
+  // a no-op and the second pass's is the live one, rather than either racing to overwrite the other's
+  // state with stale data.
+  useEffect(() => {
+    let cancelled = false;
+    setSourcesLoading(true);
+    setSourcesError(false);
+    listFacilityImportSources()
+      .then((rows) => { if (!cancelled) setSources(rows); })
+      .catch(() => { if (!cancelled) { setSources([]); setSourcesError(true); } })
+      .finally(() => { if (!cancelled) setSourcesLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  /** Review fix (B1 Task 9): re-run after `RegisterSourceDialog` mints a new source, so the Select
+   *  offers it without the operator having to close and reopen the whole sheet (which is the only
+   *  thing that would otherwise re-trigger the mount effect above). Deliberately NOT folded into
+   *  that effect, and deliberately without a `cancelled` guard of its own: the guard above exists
+   *  for StrictMode's double-invoked EFFECTS, a race between two automatic re-runs of the same
+   *  effect body — it has nothing to do with a fetch kicked off from a click handler, which fires
+   *  exactly once per real click and is never re-entered by React. */
+  const refreshSources = async (): Promise<FacilityRegisterSource[]> => {
+    setSourcesLoading(true);
+    setSourcesError(false);
+    try {
+      const rows = await listFacilityImportSources();
+      setSources(rows);
+      return rows;
+    } catch {
+      setSources([]);
+      setSourcesError(true);
+      return [];
+    } finally {
+      setSourcesLoading(false);
+    }
+  };
+
+  /** The dialog's `onCreated` — refreshes the picklist AND selects what was just registered.
+   *  ⛔ Both matter: a refresh alone leaves the new source in `sources` but still unselected (the
+   *  operator would have to open the Select and pick it themselves, easy to miss); a selection alone
+   *  without the refresh would set `nationalSystem` to a url with no matching `SelectItem`, which
+   *  renders as the placeholder — the picked value would look unchosen even though it is the exact
+   *  string an import would send. */
+  const handleSourceCreated = (source: FacilityRegisterSource): void => {
+    void refreshSources().then(() => handleNationalSystemChange(source.url));
+  };
 
   // ⛔ POLLING, AND IT MUST SURVIVE `<StrictMode>`. The scheduling state is effect-LOCAL (`stopped`,
   // `timer`), never a component-level "mounted" ref: StrictMode mounts, cleans up and re-mounts while
@@ -1088,6 +1159,17 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              {/* Review fix (B1 Task 9): the create affordance the task's own gate was missing — a
+                  fresh install has no registers at all (migration 082's back-fill only seeds from
+                  `national_system` values a pre-existing `facility_registry` already carries), so
+                  without this item the Select below stays on its empty state forever and facility
+                  import is unreachable from the UI. Disabled with the rest of the sheet's inputs
+                  while a run holds the register — see `inputsDisabled` — for the same reason the
+                  Select itself is: registering a source an operator cannot yet select is no help. */}
+              <DropdownMenuItem disabled={inputsDisabled} onClick={() => setRegisterSourceOpen(true)}>
+                {t('facilities.import.registerSourceAction')}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
               {/* A2b: the background door. Offered only while no run is in play, and gated on
                   `runId` rather than `run` deliberately: `runId` is set the instant the upload
                   resolves, whereas `run` stays null until the FIRST POLL answers — a window in which
@@ -1185,16 +1267,47 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
               )}
             </div>
 
+            {/* B1 Task 9: a `Select` over registered sources, never a free-text box — the whole point
+                being that `nationalSystem` can no longer be TYPED. `handleNationalSystemChange`
+                receives the chosen `SelectItem`'s `value`, which is set to the source's `url` below,
+                never its `name` — sending the display name instead would re-open the exact
+                two-identities-one-namespace fork this slice exists to close (see `idFor`/
+                `observedFieldSystem`'s doc comments, facility-csv.ts / facility-controlled-
+                fields.ts). Disabled while loading, on error, or with nothing to offer — a `Select`
+                an operator could open onto zero rows is worse than one that stays closed. */}
             <Label htmlFor="facility-import-national-system" className="whitespace-nowrap">{t('facilities.import.nationalSystemLabel')}</Label>
             <div>
-              <Input
-                id="facility-import-national-system"
+              <Select
+                // A plain `''`, never `undefined` — Radix warns on a `value` prop that flips between
+                // controlled (a string) and uncontrolled (`undefined`) across renders, which is
+                // exactly what `nationalSystem || undefined` would do the moment a source is picked.
+                // An empty string never matches any `SelectItem` below (none is ever given `value=""`
+                // — Radix disallows that on the ITEM, not the root), so the placeholder still shows
+                // until a real source is chosen.
                 value={nationalSystem}
-                onChange={(e) => handleNationalSystemChange(e.target.value)}
-                placeholder={t('facilities.import.nationalSystemPlaceholder')}
-                disabled={inputsDisabled}
-              />
-              <p className="mt-1 text-xs text-muted-foreground">{t('facilities.import.nationalSystemHint')}</p>
+                onValueChange={handleNationalSystemChange}
+                disabled={inputsDisabled || sourcesLoading || sourcesError || sources.length === 0}
+              >
+                <SelectTrigger id="facility-import-national-system">
+                  <SelectValue placeholder={
+                    sourcesLoading
+                      ? t('facilities.import.nationalSystemLoading')
+                      : t('facilities.import.nationalSystemPlaceholder')
+                  } />
+                </SelectTrigger>
+                <SelectContent>
+                  {sources.map((s) => (
+                    <SelectItem key={s.id} value={s.url}>{s.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {sourcesError
+                  ? t('facilities.import.nationalSystemLoadError')
+                  : !sourcesLoading && sources.length === 0
+                    ? t('facilities.import.nationalSystemEmpty')
+                    : t('facilities.import.nationalSystemHint')}
+              </p>
             </div>
 
             {/* CT-3: which shape the file is — feeds `FacilityImportRequest.format` on every preview
@@ -1386,6 +1499,12 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
           confirmLabel={t('facilities.import.applyAction')}
           cancelLabel={t('common.cancel')}
           onConfirm={() => { void handleApplyConfirm(); }}
+        />
+
+        <RegisterSourceDialog
+          open={registerSourceOpen}
+          onOpenChange={setRegisterSourceOpen}
+          onCreated={handleSourceCreated}
         />
       </SheetContent>
     </Sheet>

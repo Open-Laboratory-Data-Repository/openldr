@@ -11,7 +11,10 @@ import {
   type FacilityJobStore,
   insertBatchPg,
   facilityRecordToRow,
+  FACILITY_REGISTER_STATE_DROPPED,
+  FACILITY_REGISTER_STATE_IN_REGISTER,
 } from '@openldr/db';
+import type { AuditStore } from '@openldr/audit';
 import { classifyFacilityRows, type ClassifiedRow, type ExistingFacility } from './facility-classify';
 import { projectRegistryRows, retireRegistryConcepts } from './facility-reconcile';
 import {
@@ -71,8 +74,23 @@ export interface FacilityImportDeps {
   /** Where a lost `facilityJobs.enqueue` is reported. Optional and structurally minimal so a caller
    *  can hand in the `AppContext`'s pino logger without this module taking a dependency on it; when
    *  omitted the same message goes to `console.error`, matching `projectRegistryRows`' precedent in
-   *  facility-reconcile.ts. Never a reason to fail an import — see the enqueue call below. */
+   *  facility-reconcile.ts. Never a reason to fail an import — see the enqueue call below. Also
+   *  where a missing/failing `audit` (below) is reported, for the same reason. */
   logger?: { error(obj: unknown, msg?: string): void };
+  /** Task 7 (facility audit-history slice): where each CHANGED facility gets its own
+   *  `facility.import.row` audit event — distinct from the register-scoped `facility.import`
+   *  summary event, which this function does NOT write; every existing caller (the inline route,
+   *  the CLI, the import worker) already writes that one itself after `importFacilities` returns,
+   *  and keeps doing so unchanged.
+   *
+   *  Optional, mirroring `admin`/`facilityJobs` above and matching the SAME optional shape
+   *  `facility-import-worker.ts`'s own `audit` dependency already uses
+   *  (`Pick<AuditStore, 'record'>`) — not every caller of this shared function has an audit store
+   *  wired (this module's own test suite, for one). When it is omitted, a call that actually had
+   *  changed rows to report logs the omission (via `logger` above, or `console.error`) rather than
+   *  refusing the import: an unaudited write is a gap worth seeing, never a reason to block an
+   *  operator's confirmed import. */
+  audit?: Pick<AuditStore, 'record'>;
 }
 
 export interface FacilityImportOptions {
@@ -292,11 +310,11 @@ export interface FacilityImportResult {
    *
    *  All 0 on a preview — now because nothing was WRITTEN, not because nothing was computed.
    *
-   *  `retired` is how many registry rows this apply actually flipped to `'inactive'` (and removed
-   *  from the mapping picker via `retireRegistryConcepts`) — the MUTATION, as distinct from the
-   *  `deleted`/`absent` populations above, which are what the file DESCRIBES. The two differ
-   *  whenever policy says so: `onAbsent: 'report'` (the default) reports a non-zero `absent` and
-   *  retires none of it. */
+   *  `retired` is how many registry rows this apply actually flipped `register_state` to `'dropped'`
+   *  on (and removed from the mapping picker via `retireRegistryConcepts`) — the MUTATION, as
+   *  distinct from the `deleted`/`absent` populations above, which are what the file DESCRIBES. The
+   *  two differ whenever policy says so: `onAbsent: 'report'` (the default) reports a non-zero
+   *  `absent` and retires none of it. */
   written: { created: number; updated: number; retired: number };
   /** Whatever `FacilityImportOptions.runId` carried in, echoed back so a caller that resolved a run
    *  can attach this result to it without threading the id through itself. Null when none was
@@ -393,7 +411,10 @@ function chunk<T>(items: T[], size: number): T[][] {
  * loudly: every field on `FacilityRecord` bar `id`/`name`/`source` is optional, so an omitted column
  * reaches `classifyFacilityRows` as `undefined`, and its `same()` treats `undefined` and `null`
  * alike as "no value" — the row would classify `unchanged` against a write that changes it. It also
- * buys nothing: of `facility_registry`'s 24 columns this uses 22, all but `source` and `created_at`.
+ * buys nothing: of `facility_registry`'s 25 columns (`FacilityRegistryTable`, packages/db/src/
+ * schema/internal.ts) this uses 23, excluding only `created_at` and `register_state`. `r.source`
+ * is read too (below) — carried on `ExistingFacility.source` for the `facility.import.row` audit's
+ * `before`, never fed into `fields`/`COMPARED`; see `ExistingFacility.source`'s docblock.
  */
 async function loadExisting(
   exec: Kysely<InternalSchema>, ids: string[],
@@ -406,6 +427,7 @@ async function loadExisting(
         id: r.id,
         localCode: r.local_code,
         extras: (r.extras as Record<string, unknown> | null) ?? null,
+        source: r.source as 'manual' | 'import',
         fields: {
           nationalSystem: r.national_system, nationalCode: r.national_code, name: r.name,
           level: r.level, ownership: r.ownership, status: r.status, country: r.country,
@@ -503,9 +525,10 @@ function dedupeById(records: FacilityRecord[]): { records: FacilityRecord[]; dup
  * docblock: the sync APPLIER stamps `'central'` on arrival, not an authoring path like this one).
  * Rows absent from the file are never DELETED — nothing in this function issues a DELETE against
  * `facility_registry`. They are not touched at all unless the caller both declares the file a
- * `completeRelease` and asks for `onAbsent: 'retire'`, in which case they are flipped to
- * `'inactive'` (never deleted, so a facility's aliases and history survive). ⛔ And not even then if
- * the file produced no records — see the absence query below.
+ * `completeRelease` and asks for `onAbsent: 'retire'`, in which case their `register_state` is
+ * flipped to `'dropped'` (never deleted, so a facility's aliases and history survive; and never
+ * `status` — see the retirement write below for why). ⛔ And not even then if the file produced no
+ * records — see the absence query below.
  *
  * ## What a re-import is, and is not, authoritative for
  *
@@ -669,7 +692,9 @@ export async function importFacilities(
   // `allowUnknownColumns`, duplicate headers, and a truncated download that kept only its header
   // line — and without this guard every one of them made `excludedFromAbsence` empty, so the query
   // below matched the ENTIRE register for this `nationalSystem` and (with `onAbsent: 'retire'`)
-  // flipped all of it to `'inactive'`. Measured: two of two rows retired by a headers-only file.
+  // retired all of it. Measured: two of two rows retired by a headers-only file (at the time this
+  // was measured, retirement wrote `status: 'inactive'`; as of Task 5 it writes `register_state:
+  // 'dropped'` — the guard below is unaffected by which column retirement lands on).
   // `null` here is the honest answer — NOT EVALUATED, per this field's contract — not `0`.
   //
   // ⚠ A publisher's DECLARED deletions are unaffected: `deletedIds` is computed from `deletions`
@@ -761,13 +786,17 @@ export async function importFacilities(
   // see the projectRegistryRows call after the transaction commits for why that has to happen
   // outside it.
   let mergedRecords: FacilityRecord[] = [];
+  // Populated inside the transaction below, read afterwards (same reason as `mergedRecords`) to
+  // build the `before` side of each `facility.import.row` audit event — see the audit block after
+  // the transaction commits.
+  let existingById: Map<string, ExistingFacility> = new Map();
 
   await deps.db.transaction().execute(async (trx) => {
     // Existing-row lookup runs on `trx`, inside this transaction, not on `deps.db` before it opens
     // (see the docblock above) — and it fetches whole rows, not just id, because `classifyFacilityRows`
     // both COMPARES the parser's columns against them and MERGES local_code/extras forward off them,
     // rather than overwriting those with the importer's blanks.
-    const existingById = await loadExisting(trx, ids);
+    existingById = await loadExisting(trx, ids);
 
     // The merge for what the importer is NOT authoritative for (see the docblock above) lives inside
     // `classifyFacilityRows` now, and each row's `.merged` is exactly what the statement below
@@ -828,22 +857,92 @@ export async function importFacilities(
     // ReferenceEntityType. `deps.capture` stays on FacilityImportDeps so re-enabling is restoring this
     // block, not re-wiring the deps shape.
 
+    // ⛔ REGISTER MEMBERSHIP, the other half of Task 5's `register_state` and the fix for whole-branch
+    // Critical 1. Before this, `'dropped'` (below) was the ONLY value anything ever wrote at runtime:
+    // `toRow` (packages/db's `facilityRecordToRow`) deliberately omits the column and `insertBatchPg`
+    // derives its column list from the row's own keys, so every row a register import created landed on
+    // the column DEFAULT, `'not_registered'` — "Not from a register" — for rows that had just arrived
+    // FROM a register. Measured consequences: on a fresh install the Studio's `registerState=in_register`
+    // filter matched nothing at all, ever; on an upgrade, migration 081 backfilled the rows that already
+    // existed to `'in_register'` while every row the next import added stayed `'not_registered'`, so one
+    // register was split across two membership states. Worse, `'dropped'` was a ONE-WAY DOOR: before
+    // Task 5 retirement wrote `status: 'inactive'`, and `status` IS in `COMPARED` and IS written by
+    // `toRow`, so the next release that re-listed a facility wrote the file's own status back and the
+    // retirement self-healed. Moving the fact to a column no write path restored took that away.
+    //
+    // ⛔ Written HERE — a targeted UPDATE inside this same transaction, immediately after the row write
+    // and immediately before the retirement write — NOT by adding `register_state` to `toRow`. Three
+    // reasons, in order of weight:
+    //   1. `toRow` also feeds `facilityRegistryStore.upsert()`, the MANUAL create/edit path behind
+    //      POST and PUT /api/facilities. A column there would stamp `'in_register'` on hand-entered
+    //      facilities that came from no register at all, and re-stamp it over a `'dropped'` row on
+    //      any unrelated edit.
+    //   2. Only rows in `toWrite` reach `toRow` at all — `create`/`changed`, plus `conflict` when the
+    //      caller opted into overwriting. A facility the register dropped and a later release RE-LISTS
+    //      identically classifies `unchanged`, so it is in none of those buckets and a `toRow` column
+    //      could never bring it back: exactly the regression described above, left unfixed.
+    //   3. Ordering. Writing it here, before the retirement block, lets a JSONL release that carries
+    //      both a `row` and a `deletion` for the same national code end on `'dropped'` — the publisher's
+    //      explicit deletion wins over the mere presence of a row, matching how `projectRegistryRows`
+    //      below already subtracts `retiredIds` from what it publishes.
+    //
+    // ⛔ The id set is `ids` — EVERY row the release carries — not `toWrite`. Membership is the
+    // publisher's claim ("the current release of its source carries this facility"), which is true of an
+    // `unchanged` row and of a `conflict` row the operator chose to skip: `onConflict: 'skip'` protects
+    // that row's CONTENT from being overwritten, it does not make the register stop listing it.
+    //
+    // ⛔ `register_state != 'in_register'` guard, and it is load-bearing, not an optimisation. A
+    // byte-identical re-import of a 13 000-row release must touch ZERO rows — that is the invariant
+    // FAC-P1-03 bought (see the `unchanged`-not-written comment above) and an unguarded UPDATE would
+    // spend it back, bumping 13 000 `updated_at` values (which are what the conflict watermark reads)
+    // for a fact that already held. With the guard, this statement writes only rows whose membership
+    // genuinely moved.
+    //
+    // ⛔ `register_state` is NOT in `COMPARED` (facility-classify.ts) and must never be: `classified`
+    // was computed above, from the fields the importer is authoritative for, so this write cannot turn
+    // an `unchanged` row into a `changed` one, cannot alter `written.created`/`written.updated`, and
+    // cannot cause a `facility.import.row` audit row. `source` is kept a sibling of `COMPARED` for the
+    // same reason — see `ExistingFacility.source`'s docblock. A re-listed facility therefore returns to
+    // `'in_register'` while still being reported, correctly, as `unchanged`.
+    //
+    // Chunked on the same `CHUNK` bound `loadExisting` uses, for the same reason: a national release is
+    // 13 000+ ids and an unbounded `WHERE id IN (...)` is a parameter-count hazard, not a style choice.
+    if (ids.length > 0) {
+      for (const idChunk of chunk(ids, CHUNK)) {
+        await trx.updateTable('facility_registry')
+          .set({ register_state: FACILITY_REGISTER_STATE_IN_REGISTER, updated_at: sql`now()` })
+          .where('id', 'in', idChunk)
+          .where('register_state', '!=', FACILITY_REGISTER_STATE_IN_REGISTER)
+          .execute();
+      }
+    }
+
     // Task 9: retirement, IN THE SAME TRANSACTION as the write above rather than after it commits
     // (contrast with `projectRegistryRows`/`facilityJobs.enqueue` below, both deliberately outside
-    // it) — a facility flipped to `inactive` whose mapping concept `retireRegistryConcepts` failed to
-    // retire (or the reverse) is a worse, silently half-done state than the whole apply rolling back
-    // and being retried. `retiredIds` was computed above, before this transaction opened, from
+    // it) — a facility whose `register_state` flipped to `'dropped'` but whose mapping concept
+    // `retireRegistryConcepts` failed to retire (or the reverse) is a worse, silently half-done state
+    // than the whole apply rolling back and being retried. `retiredIds` was computed above, before
+    // this transaction opened, from
     // `deletedIds`/`absentRows` and the `onDeleted`/`onAbsent` policy — never from `records`, so this
     // runs even though every id here is, by construction, ABSENT from `toWrite`.
     if (retiredIds.length > 0) {
-      // ⛔ 'inactive', NOT 'retired'. The seeded status vocabulary is HL7's own
+      // ⛔ `register_state`, NOT `status`. The seeded `status` vocabulary is HL7's own
       // `http://hl7.org/fhir/location-status` (migration 072), whose only codes are active/suspended/
-      // inactive. Adding a `retired` code to a CodeSystem HL7 owns would be inventing a non-conformant
-      // FHIR value. The *retired* semantics are carried by `retireRegistryConcepts` below, which
-      // removes the facility from the mapping picker while leaving history resolvable — nothing here,
-      // or anywhere in this function, ever issues a DELETE against `facility_registry`.
+      // inactive — HL7 has no concept of register membership, so carrying "the register stopped
+      // listing this row" there would mean inventing a non-conformant `retired` code in a CodeSystem
+      // HL7 owns. That reasoning is why this used to write `status: 'inactive'` here. But `status`
+      // answering "is this facility open" and "does the register still list it" at once was exactly
+      // the conflation this slice exists to remove: a facility the register dropped (merged,
+      // mis-registered, moved registers) is not necessarily closed, and a report filtering
+      // `status = 'active'` silently lost it either way. Task 5 (migration 081) gives register
+      // membership its own column — `facility_registry.register_state`, OpenLDR's own vocabulary, not
+      // HL7's — so this write moves there and `status` is left alone, going back to meaning
+      // operational status only. The *retired* mapping-picker semantics are still carried by
+      // `retireRegistryConcepts` below, which removes the facility from the mapping picker while
+      // leaving history resolvable — nothing here, or anywhere in this function, ever issues a DELETE
+      // against `facility_registry`.
       await trx.updateTable('facility_registry')
-        .set({ status: 'inactive', updated_at: sql`now()` })
+        .set({ register_state: FACILITY_REGISTER_STATE_DROPPED, updated_at: sql`now()` })
         .where('id', 'in', retiredIds)
         .execute();
       await retireRegistryConcepts({ internalDb: trx }, retiredIds);
@@ -865,8 +964,8 @@ export async function importFacilities(
   // `deletion` for the same national code, which puts that id in `mergedRecords` AND in
   // `retiredIds`; since this projection runs AFTER the transaction committed, it would re-publish
   // the very concept `retireRegistryConcepts` retired inside it, undoing the retirement in the
-  // mapping picker while `facility_registry.status` stayed `'inactive'`. Filtering here (rather
-  // than where `mergedRecords` is built) keeps the WRITE set and the PROJECTION set independent:
+  // mapping picker while `facility_registry.register_state` stayed `'dropped'`. Filtering here
+  // (rather than where `mergedRecords` is built) keeps the WRITE set and the PROJECTION set independent:
   // a retired id may still legitimately have been written as a row above.
   //
   // ⚠ Its `boolean` ("did this projection land") is DELIBERATELY ignored here, and that is a known
@@ -906,6 +1005,76 @@ export async function importFacilities(
       if (deps.logger) deps.logger.error({ err }, msg);
       // eslint-disable-next-line no-console -- no logger supplied; this is the only record left.
       else console.error(`[facility-import] ${msg}`, err);
+    }
+  }
+
+  // Task 7: one `facility.import.row` audit event per CHANGED facility — never per parsed row, and
+  // never for `create`/`unchanged`/`conflict` either. Filters the SAME classification this call
+  // already computed above (`classified`, which is exactly what `result.changed` counts via
+  // `summarise`) rather than re-deriving "did this row change" from scratch — see this function's
+  // docblock and `classifyFacilityRows` for why that comparison must only happen once.
+  //
+  // ⛔ THE WHOLE POINT: a byte-identical re-import classifies every row `unchanged`, so
+  // `changedRows` is `[]` and NOTHING is written here — audit volume tracks real change, not file
+  // size. A 13 000-row national release with one renamed facility writes exactly one row here, the
+  // same count `result.changed` reports.
+  //
+  // Placed AFTER the transaction, mirroring `projectRegistryRows`/`facilityJobs.enqueue` above and
+  // for the same reason: `deps.audit` (when supplied) is bound to `deps.db`, not to `trx`, so a
+  // call made from inside the transaction callback would not actually be part of it anyway — there
+  // is no atomicity to gain by moving it in, only pg-mem's documented "no rollback on a thrown
+  // error" hazard to risk by putting more work inside that callback.
+  const changedRows = classified.filter((c) => c.kind === 'changed');
+  if (changedRows.length > 0) {
+    if (!deps.audit) {
+      // Never a reason to fail — see `FacilityImportDeps.audit`'s doc comment. Logged once per call,
+      // not once per row: the gap is "this call's changed rows are unaudited", a single fact, not
+      // `changedRows.length` repetitions of it.
+      const msg = `applied a facility import with ${changedRows.length} changed row(s) but no audit `
+        + 'store wired; the per-row write is unaudited';
+      if (deps.logger) deps.logger.error({ nationalSystem: opts.nationalSystem }, msg);
+      // eslint-disable-next-line no-console -- no logger supplied; this is the only record left.
+      else console.error(`[facility-import] ${msg}`);
+    } else {
+      try {
+        // Dispatched together rather than one row-at-a-time `await` in a loop — the batching this
+        // task's binding constraint asks for. Bounded by `changedRows.length`, which is real change,
+        // never by how many rows the file parsed.
+        await Promise.all(changedRows.map((c) => {
+          // `existing` is never undefined here: `classifyFacilityRows` only produces `kind: 'changed'`
+          // when it found (and compared against) an existing row for this id — see facility-classify.ts.
+          const existing = existingById.get(c.merged.id);
+          // `source` spelled out explicitly, not folded into the `...existing.fields` spread: it is
+          // deliberately NOT a member of `fields` (see `ExistingFacility.source`'s docblock in
+          // facility-classify.ts) so it can never enter `COMPARED` by accident. `after` (`c.merged`,
+          // below) always carries `source: 'import'` — every parser stamps it unconditionally — so
+          // without this, `before` read as missing `source` and a field diff reported "source was
+          // added" on every single changed row, even one where the facility was already `'import'`
+          // and provenance never moved at all.
+          const before = existing
+            ? {
+              id: existing.id, localCode: existing.localCode, extras: existing.extras,
+              source: existing.source, ...existing.fields,
+            }
+            : null;
+          return deps.audit!.record({
+            actorType: 'system',
+            actorId: null,
+            actorName: 'facility-import',
+            action: 'facility.import.row',
+            entityType: 'facility',
+            entityId: c.merged.id,
+            before,
+            after: c.merged,
+            metadata: { nationalSystem: opts.nationalSystem, runId: opts.runId ?? null },
+          });
+        }));
+      } catch (err) {
+        const msg = 'failed to audit one or more changed facilities from this import';
+        if (deps.logger) deps.logger.error({ err, nationalSystem: opts.nationalSystem }, msg);
+        // eslint-disable-next-line no-console -- no logger supplied; this is the only record left.
+        else console.error(`[facility-import] ${msg}`, err);
+      }
     }
   }
 

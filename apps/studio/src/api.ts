@@ -768,6 +768,12 @@ export interface Facility {
   /** NULL = lab-local, 'central' = central-managed and replaceable by down-sync. */
   managedOrigin: string | null;
   source: 'manual' | 'import';
+  /** Task 10: registry MEMBERSHIP — `in_register` / `dropped` / `not_registered` (migration 081's
+   *  `FACILITY_REGISTER_STATE_*` constants) — distinct from `status` above, which is operational
+   *  only. Always present on a real response (the column is `NOT NULL DEFAULT 'not_registered'`
+   *  and `toRecord()` — packages/db/src/facility-registry-store.ts — reads it back on every row),
+   *  unlike `health`/`mappingCount` below, which genuinely are list()-only. */
+  registerState: string;
   /** Task 4 (scale): mapping/projection health, derived per row — see `FacilityHealth`
    *  (`@openldr/db`, aliased above as `FacilityRowHealth`) and `FacilityListRow.health`
    *  (facility-registry-store.ts). Optional, not just theoretically: `list()` computes it via a
@@ -800,6 +806,8 @@ export interface FacilityListQuery {
   country?: string; zone?: string; region?: string; district?: string; council?: string;
   status?: string; level?: string; ownership?: string;
   nationalSystem?: string; source?: string; managedOrigin?: string;
+  /** Task 10: registry membership — `in_register` / `dropped` / `not_registered`. */
+  registerState?: string;
   health?: FacilityRowHealth;
   limit?: number; offset?: number;
 }
@@ -833,6 +841,35 @@ export async function deleteFacility(id: string): Promise<void> {
   if (res.ok || res.status === 204) return;
   throw new Error(formatApiError('delete facility', await errorDetail(res)));
 }
+
+/** Task 10: one entry from `GET /api/facilities/:id/history` (Task 8's read model over
+ *  `audit_events` — apps/server/src/facilities-routes.ts). `before`/`after` are whatever the
+ *  writer recorded — a full `FacilityRecord`-shaped object for `facility.create`/`facility.update`/
+ *  `facility.import.row`, `null` for the missing half of a create (before) or a delete (after). Not
+ *  typed any more precisely than `Record<string, unknown>` — this app mirrors the server's wire
+ *  shape rather than sharing a type with it (the same "mirrored, not shared" reasoning `Facility`
+ *  itself follows), and the actual key set moves with whatever the writer chose to record. */
+export interface FacilityHistoryEntry {
+  occurredAt: string;
+  /** `null` for a system-authored write (e.g. an import) that never resolved an actor name. */
+  actorName: string | null;
+  /** One of 'facility.create' / 'facility.update' / 'facility.delete' / 'facility.import.row'.
+   *  Not because those are the only actions written with `entityType: 'facility'` — ten distinct
+   *  ones are, measured across apps/server, packages/cli and packages/bootstrap — but because the
+   *  route also filters `entity_id` to the facility's own id, and only these four ever put a
+   *  facility id there (see FacilityHistory.tsx's own comment for the full measurement). Left as
+   *  `string`, not a union, for the same "the server is the source of truth for what it wrote"
+   *  reasoning as `action` elsewhere in this file (e.g. `RecentPayload`). */
+  action: string;
+  before: Record<string, unknown> | null;
+  after: Record<string, unknown> | null;
+}
+
+/** `GET /api/facilities/:id/history` (`facilities.view`) — newest first, `{ rows: [] }` for an id
+ *  that never had one (including a deleted facility — see the route's own doc comment for why that
+ *  is deliberately NOT a 404). */
+export const getFacilityHistory = (id: string): Promise<{ rows: FacilityHistoryEntry[] }> =>
+  apiGet(`/api/facilities/${encodeURIComponent(id)}/history`, 'get facility history');
 
 // `FacilityAdminLevel` is IMPORTED (above, from `@openldr/db/facility-answers`), not
 // hand-duplicated — that subpath is dependency-free (no Kysely/pg; see the comment at the top of
@@ -1019,6 +1056,62 @@ export interface FacilityImportResult {
    *  omitted server-side), so no value of theirs could be classified mapped/unmapped at all. */
   notValidated: ControlledField[];
 }
+
+// B1 Task 9: the picklist `ImportFacilitiesSheet`'s national-system `Select` renders — the ONLY
+// spellings `POST /api/facilities/import` (and /import/upload) will accept from this point on (see
+// facilities-routes.ts's `unknownRegisterError`). Mirrors `@openldr/db`'s `FacilityRegisterSource`
+// field-for-field, same "mirrored, not shared" reasoning as `FacilityImportResult` above (this app
+// has no dependency on `@openldr/db`).
+export interface FacilityRegisterSource {
+  id: string;
+  /** The canonical URI — what the sheet actually SENDS as `nationalSystem`. Never the display
+   *  `name` below; sending that would re-open the exact fork this slice exists to close (see
+   *  ImportFacilitiesSheet.tsx's own comment on its Select). */
+  url: string;
+  name: string;
+  code: string;
+  version: string | null;
+  jurisdiction: string | null;
+  contact: string | null;
+  publisherId: string | null;
+  active: boolean;
+}
+
+/** The body `POST /api/facilities/import/sources` takes — the CREATE input, not the list shape
+ *  above. `url` is the canonical URI the register will forever be known by (it is what every future
+ *  import sends as `nationalSystem` and what `idFor` hashes into each facility's permanent id), so
+ *  it is the one field here that can never be corrected later. `active` is absent deliberately: the
+ *  route always creates an active register — see `createFacilityImportSource` below. */
+export interface FacilityRegisterSourceInput {
+  url: string;
+  name: string;
+  code: string;
+  version?: string | null;
+  jurisdiction?: string | null;
+  contact?: string | null;
+  publisherId?: string | null;
+}
+
+/** `GET /api/facilities/import/sources` — active registers only (the route's own default), ordered
+ *  by name. Excludes an INACTIVE register — the picklist must never offer a spelling the import
+ *  routes would then refuse. `createFacilityImportSource` below always writes a fresh row with
+ *  `active: true` (mirroring `FacilityRegisterSourceStore.create`'s own hardcoded `active: true`),
+ *  and this slice adds no route that can flip it back to `false` — so today the only way a row is
+ *  ever excluded here is a register created before this app existed at all (a pre-existing
+ *  `coding_systems` row this slice never touches) or a direct database edit, not anything this
+ *  app's own UI can cause. */
+export const listFacilityImportSources = (): Promise<FacilityRegisterSource[]> =>
+  apiGet<{ rows: FacilityRegisterSource[] }>('/api/facilities/import/sources', 'list facility import sources')
+    .then((r) => r.rows);
+
+/** `POST /api/facilities/import/sources` — the ONLY way a fresh install ever gets a register the
+ *  import sheet's `Select` can offer (review fix, B1 Task 9: the route existed and was tested, but
+ *  nothing in the studio ever called it, so a fresh install's picklist was permanently empty and
+ *  facility import was unreachable from the UI). Backs the ⋯ menu's "Register a source" item
+ *  (`RegisterSourceDialog.tsx`), never a standalone button — see ui-actions-in-dots-menu. */
+export const createFacilityImportSource = (input: FacilityRegisterSourceInput): Promise<FacilityRegisterSource> =>
+  authFetch('/api/facilities/import/sources', jbody(input, 'POST'))
+    .then((r) => okJson<FacilityRegisterSource>(r, 'register a facility source'));
 
 export interface FacilityImportRequest {
   csv: string;

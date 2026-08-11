@@ -15,11 +15,18 @@ vi.mock('@/api', async (orig) => {
     getFacilityImportRun: vi.fn(),
     confirmFacilityImportRun: vi.fn(),
     cancelFacilityImportRun: vi.fn(),
+    // B1 Task 9: backs the national-system `Select` — mocked here for the same reason as the four
+    // above, not in a second factory.
+    listFacilityImportSources: vi.fn(),
+    // Review fix (B1 Task 9): the create affordance's own client call, reached through
+    // `RegisterSourceDialog` (rendered by `ImportFacilitiesSheet` itself) — mocked here for the
+    // same "one factory, not two" reason as `listFacilityImportSources` above.
+    createFacilityImportSource: vi.fn(),
   };
 });
 
 import * as api from '@/api';
-import type { FacilityImportResult, FacilityImportRunView } from '@/api';
+import type { FacilityImportResult, FacilityImportRunView, FacilityRegisterSource } from '@/api';
 import { ImportFacilitiesSheet } from './ImportFacilitiesSheet';
 
 /** Open the sheet's own ⋯ actions menu (pointerdown; jsdom sometimes needs a follow-up Enter
@@ -43,9 +50,27 @@ function clickMenuItem(itemName: string | RegExp) {
 const csvFile = (contents = 'local_code,name\nLAB01,Dodoma RRH\n') =>
   new File([contents], 'register.csv', { type: 'text/csv' });
 
-function pickFileAndSystem(contents?: string) {
+/** B1 Task 9: the ONE registered source every test below (bar the ones that exercise the picklist
+ *  itself) needs — `url` is deliberately EVERY EXISTING assertion's literal `'HFR'`, so replacing the
+ *  free-text box with a `Select` costs those assertions nothing; `name` is deliberately DIFFERENT
+ *  from `url`, so a request that (by mutation) carried the display name instead of the URI would be
+ *  visibly wrong rather than accidentally matching. */
+const HFR_SOURCE: FacilityRegisterSource = {
+  id: 'cs-freg-hfr', url: 'HFR', name: 'National Health Facility Registry', code: 'HFR',
+  version: null, jurisdiction: null, contact: null, publisherId: null, active: true,
+};
+
+/** Picks the file AND the (only, mocked) register source from the `Select` — the picklist
+ *  `ImportFacilitiesSheet` now renders instead of a free-text box (B1 Task 9). Async because the
+ *  Select stays DISABLED until `listFacilityImportSources` resolves (see `sourcesLoading` in the
+ *  component) — this waits for that rather than a fixed delay, the same discipline `previewNow`
+ *  below already applies to `File.text()`'s own async read. */
+async function pickFileAndSystem(contents?: string) {
   fireEvent.change(screen.getByLabelText('File'), { target: { files: [csvFile(contents)] } });
-  fireEvent.change(screen.getByLabelText('National system'), { target: { value: 'HFR' } });
+  const trigger = await screen.findByRole('combobox', { name: 'National system' });
+  await waitFor(() => expect(trigger).toBeEnabled());
+  fireEvent.click(trigger);
+  fireEvent.click(await screen.findByRole('option', { name: HFR_SOURCE.name }));
 }
 
 /** Reading the File's text back out (`file.text()`) is genuinely asynchronous in jsdom, so the
@@ -114,6 +139,132 @@ async function uploadNow() {
 describe('ImportFacilitiesSheet', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // The ordinary setup for every test below: one registered source, so `pickFileAndSystem` (and
+    // any test that opens the Select directly) has something to pick. The picklist's own tests
+    // override this per-call with `mockResolvedValueOnce`/`mockResolvedValue` for the loading/empty/
+    // error states a single persistent mock here cannot represent.
+    mocked(api.listFacilityImportSources).mockResolvedValue([HFR_SOURCE]);
+  });
+
+  // ── B1 Task 9: the national-system picklist ─────────────────────────────────────────────────────
+
+  it('B1 Task 9: renders a Select populated from the API, keeps Preview disabled until a source is chosen, and sends the URI — never the display name', async () => {
+    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockResolvedValue(cleanPreview);
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    await waitFor(() => expect(api.listFacilityImportSources).toHaveBeenCalled());
+    const trigger = await screen.findByRole('combobox', { name: 'National system' });
+    await waitFor(() => expect(trigger).toBeEnabled());
+
+    // Populated from the API — the fixture's DISPLAY NAME renders as the option's own text.
+    fireEvent.click(trigger);
+    expect(await screen.findByRole('option', { name: HFR_SOURCE.name })).toBeInTheDocument();
+    // No option for the raw URI's own text — confirms the option's visible label really is `name`.
+    expect(screen.queryByRole('option', { name: HFR_SOURCE.url })).not.toBeInTheDocument();
+    fireEvent.keyDown(document.body, { key: 'Escape' }); // close without picking
+
+    // A file alone is not enough: Preview stays disabled with no register chosen.
+    fireEvent.change(screen.getByLabelText('File'), { target: { files: [csvFile()] } });
+    openMenu();
+    expect(screen.getByRole('menuitem', { name: /^preview$/i })).toHaveAttribute('aria-disabled', 'true');
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+
+    fireEvent.click(trigger);
+    fireEvent.click(await screen.findByRole('option', { name: HFR_SOURCE.name }));
+
+    await previewNow();
+    await waitFor(() => expect(api.importFacilitiesCsv).toHaveBeenCalledTimes(1));
+    // ⛔ THE WHOLE POINT: the source's URI reaches the request, never its display name.
+    expect(api.importFacilitiesCsv).toHaveBeenCalledWith(expect.objectContaining({ nationalSystem: HFR_SOURCE.url }));
+    expect(api.importFacilitiesCsv).not.toHaveBeenCalledWith(expect.objectContaining({ nationalSystem: HFR_SOURCE.name }));
+  });
+
+  it('B1 Task 9: disables the Select and shows a loading state while sources are still being fetched', async () => {
+    let resolveSources!: (rows: FacilityRegisterSource[]) => void;
+    mocked(api.listFacilityImportSources).mockReturnValue(
+      new Promise((resolve) => { resolveSources = resolve; }),
+    );
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    const trigger = await screen.findByRole('combobox', { name: 'National system' });
+    expect(trigger).toBeDisabled();
+    expect(screen.getByText(/loading registers/i)).toBeInTheDocument();
+
+    resolveSources([HFR_SOURCE]);
+
+    await waitFor(() => expect(trigger).toBeEnabled());
+    expect(screen.queryByText(/loading registers/i)).not.toBeInTheDocument();
+  });
+
+  it('B1 Task 9: shows an empty-state hint, and keeps the Select disabled, when no registers are configured', async () => {
+    mocked(api.listFacilityImportSources).mockResolvedValue([]);
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    expect(await screen.findByText(/no facility registers are configured/i)).toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'National system' })).toBeDisabled();
+  });
+
+  // ⛔ Review fix (B1 Task 9, CRITICAL): the route this covers existed and was tested, but nothing in
+  // the studio ever called it — a fresh install (no `national_system` values for migration 082's
+  // back-fill to seed from) had a permanently empty picklist and facility import was unreachable
+  // from the UI. This is the affordance that closes that gap end to end: menu → dialog → refreshed
+  // picklist → SELECTABLE (here, actually selected) — not just "created and forgotten".
+  it('B1 Task 9 review fix: "Register a source" refreshes the empty picklist and the new source becomes selectable', async () => {
+    const NEW_SOURCE: FacilityRegisterSource = {
+      id: 'cs-freg-new', url: 'urn:tz:hfr', name: 'Tanzania HFR', code: 'TZ_HFR',
+      version: null, jurisdiction: null, contact: null, publisherId: null, active: true,
+    };
+    // Starts with NOTHING configured — the fresh-install case the finding describes.
+    mocked(api.listFacilityImportSources).mockResolvedValueOnce([]);
+    mocked(api.createFacilityImportSource).mockResolvedValue(NEW_SOURCE);
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    expect(await screen.findByText(/no facility registers are configured/i)).toBeInTheDocument();
+
+    // Standalone button is refused by this codebase's own rule (ui-actions-in-dots-menu) — the
+    // affordance must live in the ⋯ menu, never next to it.
+    expect(screen.queryByRole('button', { name: /register a source/i })).not.toBeInTheDocument();
+    clickMenuItem(/register a source/i);
+
+    expect(await screen.findByText('Register a facility source')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Canonical URI'), { target: { value: NEW_SOURCE.url } });
+    fireEvent.change(screen.getByLabelText('Display name'), { target: { value: NEW_SOURCE.name } });
+    fireEvent.change(screen.getByLabelText('Code'), { target: { value: NEW_SOURCE.code } });
+
+    // From here on, listFacilityImportSources answers as if the register now exists — exactly what
+    // the real GET route would do after the real POST committed it.
+    mocked(api.listFacilityImportSources).mockResolvedValue([NEW_SOURCE]);
+    // ⛔ The dialog's OWN Register/Cancel are ALSO a ⋯ menu (ui-actions-in-dots-menu), not footer
+    // buttons — a second, nested ⋯ interaction, distinct from the sheet's own menu above.
+    fireEvent.pointerDown(
+      screen.getByRole('button', { name: 'Register source actions' }),
+      { button: 0, ctrlKey: false, pointerType: 'mouse' },
+    );
+    if (!screen.queryByRole('menu')) {
+      fireEvent.keyDown(screen.getByRole('button', { name: 'Register source actions' }), { key: 'Enter' });
+    }
+    fireEvent.click(screen.getByRole('menuitem', { name: /^register$/i }));
+
+    await waitFor(() => expect(api.createFacilityImportSource).toHaveBeenCalledWith(
+      expect.objectContaining({ url: NEW_SOURCE.url, name: NEW_SOURCE.name, code: NEW_SOURCE.code }),
+    ));
+    // The dialog closes on success.
+    await waitFor(() => expect(screen.queryByText('Register a facility source')).not.toBeInTheDocument());
+
+    // The picklist refreshed (the empty-state hint is gone) AND the just-registered source is
+    // SELECTED, not merely present as an option the operator still has to go find.
+    await waitFor(() => expect(screen.queryByText(/no facility registers are configured/i)).not.toBeInTheDocument());
+    const trigger = screen.getByRole('combobox', { name: 'National system' });
+    await waitFor(() => expect(trigger).toHaveTextContent(NEW_SOURCE.name));
+
+    // ⛔ THE WHOLE POINT: Preview is now reachable — a file plus the just-registered source is enough
+    // to import against it, which is exactly what "unreachable on a fresh install" denied before.
+    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockResolvedValue(cleanPreview);
+    fireEvent.change(screen.getByLabelText('File'), { target: { files: [csvFile()] } });
+    await previewNow();
+    await waitFor(() => expect(api.importFacilitiesCsv).toHaveBeenCalledWith(
+      expect.objectContaining({ nationalSystem: NEW_SOURCE.url }),
+    ));
   });
 
   it('never applies straight from the file picker — Preview is a dry run, Apply is not offered until one succeeds', async () => {
@@ -126,7 +277,7 @@ describe('ImportFacilitiesSheet', () => {
     expect(screen.queryByRole('menuitem', { name: /^apply$/i })).not.toBeInTheDocument();
     fireEvent.keyDown(document.body, { key: 'Escape' });
 
-    pickFileAndSystem();
+    await pickFileAndSystem();
     await previewNow();
 
     await waitFor(() => expect(api.importFacilitiesCsv).toHaveBeenCalledTimes(1));
@@ -146,7 +297,7 @@ describe('ImportFacilitiesSheet', () => {
     const onOpenChange = vi.fn();
     render(<ImportFacilitiesSheet open onOpenChange={onOpenChange} onImported={onImported} />);
 
-    pickFileAndSystem();
+    await pickFileAndSystem();
     await previewNow();
     expect(await screen.findByText(/3 row\(s\) will be imported/i)).toBeInTheDocument();
 
@@ -170,7 +321,7 @@ describe('ImportFacilitiesSheet', () => {
     (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockResolvedValue(baseResult({ parsed: 0 }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    pickFileAndSystem('the quick brown fox');
+    await pickFileAndSystem('the quick brown fox');
     await previewNow();
 
     expect(await screen.findByText(/no facility rows were found/i)).toBeInTheDocument();
@@ -185,7 +336,7 @@ describe('ImportFacilitiesSheet', () => {
       .mockResolvedValueOnce(baseResult({ parsed: 3, create: 3, unknownColumns: ['weird_col', 'other_col'] }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    pickFileAndSystem();
+    await pickFileAndSystem();
     await previewNow();
 
     expect(await screen.findByText(/weird_col, other_col/)).toBeInTheDocument();
@@ -215,7 +366,7 @@ describe('ImportFacilitiesSheet', () => {
     }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    pickFileAndSystem();
+    await pickFileAndSystem();
     await previewNow();
 
     expect(await screen.findByText(/line 3/i)).toBeInTheDocument();
@@ -254,7 +405,7 @@ describe('ImportFacilitiesSheet', () => {
     }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    pickFileAndSystem();
+    await pickFileAndSystem();
     await previewNow();
     await waitFor(() => expect(api.importFacilitiesCsv).toHaveBeenCalledTimes(1));
 
@@ -286,7 +437,7 @@ describe('ImportFacilitiesSheet', () => {
     const onImported = vi.fn();
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={onImported} />);
 
-    pickFileAndSystem();
+    await pickFileAndSystem();
     await previewNow();
     fireEvent.click(await screen.findByRole('checkbox', { name: /import anyway/i }));
 
@@ -322,7 +473,7 @@ describe('ImportFacilitiesSheet', () => {
     );
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    pickFileAndSystem();
+    await pickFileAndSystem();
     await previewNow();
 
     fireEvent.click(await screen.findByRole('checkbox', { name: /import anyway/i }));
@@ -356,7 +507,7 @@ describe('ImportFacilitiesSheet', () => {
     }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    pickFileAndSystem();
+    await pickFileAndSystem();
     await previewNow();
 
     expect(await screen.findByText(/2 duplicate national code/i)).toBeInTheDocument();
@@ -369,7 +520,7 @@ describe('ImportFacilitiesSheet', () => {
     const onOpenChange = vi.fn();
     render(<ImportFacilitiesSheet open onOpenChange={onOpenChange} onImported={vi.fn()} />);
 
-    pickFileAndSystem();
+    await pickFileAndSystem();
     await previewNow();
 
     expect(await screen.findByText(/invalid record length/i)).toBeInTheDocument();
@@ -389,7 +540,7 @@ describe('ImportFacilitiesSheet', () => {
     const onOpenChange = vi.fn();
     render(<ImportFacilitiesSheet open onOpenChange={onOpenChange} onImported={onImported} />);
 
-    pickFileAndSystem();
+    await pickFileAndSystem();
     await previewNow();
     expect(await screen.findByText(/3 row\(s\) will be imported/i)).toBeInTheDocument();
 
@@ -414,7 +565,7 @@ describe('ImportFacilitiesSheet', () => {
     }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    pickFileAndSystem();
+    await pickFileAndSystem();
     await previewNow();
 
     expect(await screen.findByText(/too large to apply/i)).toBeInTheDocument();
@@ -437,7 +588,7 @@ describe('ImportFacilitiesSheet', () => {
       .mockResolvedValueOnce(baseResult({ parsed: 0, skipped: 3000, unknownColumns: ['patient_id', 'dob', 'sex'] }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    pickFileAndSystem();
+    await pickFileAndSystem();
     await previewNow();
 
     expect(await screen.findByText(/patient_id, dob, sex/)).toBeInTheDocument();
@@ -469,7 +620,7 @@ describe('ImportFacilitiesSheet', () => {
     }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    pickFileAndSystem();
+    await pickFileAndSystem();
     await previewNow();
 
     // 2 create + 1 changed = 3 rows will actually land in the registry — NOT 5 parsed, and NOT
@@ -492,7 +643,7 @@ describe('ImportFacilitiesSheet', () => {
     }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    pickFileAndSystem();
+    await pickFileAndSystem();
     await previewNow();
 
     expect(await screen.findByText(/1 row\(s\) will be imported/i)).toBeInTheDocument();
@@ -505,7 +656,7 @@ describe('ImportFacilitiesSheet', () => {
     );
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    pickFileAndSystem();
+    await pickFileAndSystem();
     await previewNow();
 
     const friendly = await screen.findByText(/larger than this endpoint accepts/i);
@@ -528,7 +679,7 @@ describe('ImportFacilitiesSheet', () => {
     (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockResolvedValue(cleanPreview);
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    pickFileAndSystem();
+    await pickFileAndSystem();
     await previewNow();
     clickMenuItem(/^apply$/i);
     await screen.findByRole('button', { name: /^apply$/i });
@@ -549,7 +700,7 @@ describe('ImportFacilitiesSheet', () => {
     }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    pickFileAndSystem();
+    await pickFileAndSystem();
     await previewNow();
 
     expect(await screen.findByText(/2 facility row\(s\) will be created/i)).toBeInTheDocument();
@@ -565,7 +716,7 @@ describe('ImportFacilitiesSheet', () => {
     }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    pickFileAndSystem();
+    await pickFileAndSystem();
     await previewNow();
 
     expect(await screen.findByText(/conflicts:.*not evaluated/i)).toBeInTheDocument();
@@ -591,7 +742,7 @@ describe('ImportFacilitiesSheet', () => {
     }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    pickFileAndSystem();
+    await pickFileAndSystem();
     await previewNow();
 
     expect(await screen.findByText(/1 row\(s\) were changed since this preview/i)).toBeInTheDocument();
@@ -605,7 +756,7 @@ describe('ImportFacilitiesSheet', () => {
     }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    pickFileAndSystem();
+    await pickFileAndSystem();
     await previewNow();
 
     expect(await screen.findByText(/absent from this file:.*not evaluated/i)).toBeInTheDocument();
@@ -629,7 +780,7 @@ describe('ImportFacilitiesSheet', () => {
     }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    pickFileAndSystem();
+    await pickFileAndSystem();
     await previewNow();
 
     // The facility name heads the sample entry; the diff line beneath it shows the actual
@@ -645,7 +796,7 @@ describe('ImportFacilitiesSheet', () => {
     }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    pickFileAndSystem();
+    await pickFileAndSystem();
     await previewNow();
 
     expect(screen.queryByRole('combobox', { name: /rows this file says were removed/i })).not.toBeInTheDocument();
@@ -668,7 +819,7 @@ describe('ImportFacilitiesSheet', () => {
     }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    pickFileAndSystem();
+    await pickFileAndSystem();
     await previewNow();
 
     const select = await screen.findByRole('combobox', { name: /rows changed since this preview/i });
@@ -685,7 +836,7 @@ describe('ImportFacilitiesSheet', () => {
     }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    pickFileAndSystem();
+    await pickFileAndSystem();
     await previewNow();
 
     expect(screen.queryByRole('combobox', { name: /rows changed since this preview/i })).not.toBeInTheDocument();
@@ -697,7 +848,7 @@ describe('ImportFacilitiesSheet', () => {
     }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    pickFileAndSystem();
+    await pickFileAndSystem();
     await previewNow();
 
     expect(await screen.findByRole('combobox', { name: /rows this file says were removed/i })).toBeInTheDocument();
@@ -711,7 +862,7 @@ describe('ImportFacilitiesSheet', () => {
     }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    pickFileAndSystem();
+    await pickFileAndSystem();
     await previewNow();
 
     expect(await screen.findByRole('combobox', { name: /rows missing from this file/i })).toBeInTheDocument();
@@ -728,7 +879,7 @@ describe('ImportFacilitiesSheet', () => {
       }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    pickFileAndSystem();
+    await pickFileAndSystem();
     await previewNow();
 
     // Flip both retirement choices away from their defaults so the assertion below cannot pass by
@@ -760,7 +911,7 @@ describe('ImportFacilitiesSheet', () => {
       }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    pickFileAndSystem();
+    await pickFileAndSystem();
     await previewNow();
 
     // Flip away from the default 'skip' so the assertion below cannot pass by coincidence (sending
@@ -784,7 +935,7 @@ describe('ImportFacilitiesSheet', () => {
       .mockResolvedValueOnce(baseResult({ parsed: 3, written: { created: 2, updated: 0, retired: 0 }, conflict: 1, runId: 'run-44' }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    pickFileAndSystem();
+    await pickFileAndSystem();
     await previewNow();
 
     clickMenuItem(/^apply$/i);
@@ -802,7 +953,7 @@ describe('ImportFacilitiesSheet', () => {
     }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    pickFileAndSystem();
+    await pickFileAndSystem();
     await previewNow();
 
     expect(await screen.findByText(/new register identity/i)).toBeInTheDocument();
@@ -817,7 +968,7 @@ describe('ImportFacilitiesSheet', () => {
       .mockResolvedValueOnce(baseResult({ parsed: 3, written: { created: 2, updated: 1, retired: 0 }, skipped: 0 }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    pickFileAndSystem();
+    await pickFileAndSystem();
     await previewNow();
     clickMenuItem(/^apply$/i);
     fireEvent.click(await screen.findByRole('button', { name: /^apply$/i }));
@@ -833,7 +984,7 @@ describe('ImportFacilitiesSheet', () => {
       .mockResolvedValueOnce(baseResult({ parsed: 3, written: { created: 3, updated: 0, retired: 0 }, runId: 'run-9' }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    pickFileAndSystem();
+    await pickFileAndSystem();
 
     fireEvent.click(screen.getByRole('combobox', { name: /file format/i }));
     fireEvent.click(await screen.findByRole('option', { name: /jsonl release/i }));
@@ -868,7 +1019,7 @@ describe('ImportFacilitiesSheet', () => {
       .mockResolvedValueOnce(baseResult({ parsed: 2, create: 2 }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    pickFileAndSystem();
+    await pickFileAndSystem();
     await previewNow();
 
     expect(await screen.findByText(/rows with an invalid coordinate/i)).toBeInTheDocument();
@@ -892,7 +1043,7 @@ describe('ImportFacilitiesSheet', () => {
     }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    pickFileAndSystem();
+    await pickFileAndSystem();
     await previewNow();
 
     expect(await screen.findByText(/values with no canonical mapping/i)).toBeInTheDocument();
@@ -908,7 +1059,7 @@ describe('ImportFacilitiesSheet', () => {
     }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    pickFileAndSystem();
+    await pickFileAndSystem();
     await previewNow();
 
     expect(await screen.findByText(/declared counts do not match/i)).toBeInTheDocument();
@@ -930,7 +1081,7 @@ describe('ImportFacilitiesSheet', () => {
       }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    pickFileAndSystem();
+    await pickFileAndSystem();
     await previewNow();
     clickMenuItem(/^apply$/i);
     fireEvent.click(await screen.findByRole('button', { name: /^apply$/i }));
@@ -948,7 +1099,7 @@ describe('ImportFacilitiesSheet', () => {
       }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    pickFileAndSystem();
+    await pickFileAndSystem();
     await previewNow();
 
     fireEvent.click(await screen.findByRole('combobox', { name: /rows changed since this preview/i }));
@@ -967,7 +1118,7 @@ describe('ImportFacilitiesSheet', () => {
       .mockResolvedValueOnce(baseResult({ parsed: 3, written: { created: 3, updated: 0, retired: 0 } }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    pickFileAndSystem();
+    await pickFileAndSystem();
     await previewNow();
     clickMenuItem(/^apply$/i);
     fireEvent.click(await screen.findByRole('button', { name: /^apply$/i }));
@@ -988,7 +1139,7 @@ describe('ImportFacilitiesSheet', () => {
     mocked(api.getFacilityImportRun).mockResolvedValue(runView({ status: 'validating', phase: 'validating' }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    pickFileAndSystem();
+    await pickFileAndSystem();
     fireEvent.click(screen.getByRole('combobox', { name: /file format/i }));
     fireEvent.click(await screen.findByRole('option', { name: /jsonl release/i }));
     fireEvent.change(screen.getByLabelText('Release version'), { target: { value: 'r7' } });
@@ -1022,7 +1173,7 @@ describe('ImportFacilitiesSheet', () => {
     }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    pickFileAndSystem();
+    await pickFileAndSystem();
     await uploadNow();
 
     expect(await screen.findByText(/review the summary below/i)).toBeInTheDocument();
@@ -1052,7 +1203,7 @@ describe('ImportFacilitiesSheet', () => {
     mocked(api.confirmFacilityImportRun).mockResolvedValue({ runId: 'run-b1', status: 'confirmed' });
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    pickFileAndSystem();
+    await pickFileAndSystem();
     await uploadNow();
 
     // Flipped away from every default, so the assertion below cannot pass on values the sheet never
@@ -1091,7 +1242,7 @@ describe('ImportFacilitiesSheet', () => {
     mocked(api.confirmFacilityImportRun).mockResolvedValue({ runId: 'run-b1', status: 'confirmed' });
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    pickFileAndSystem();
+    await pickFileAndSystem();
     await uploadNow();
 
     expect(await screen.findByText(/line 3/i)).toBeInTheDocument();
@@ -1118,7 +1269,7 @@ describe('ImportFacilitiesSheet', () => {
     mocked(api.cancelFacilityImportRun).mockResolvedValue({ runId: 'run-b1', outcome: 'requested' });
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    pickFileAndSystem();
+    await pickFileAndSystem();
     await uploadNow();
     expect(await screen.findByText(/writing the register/i)).toBeInTheDocument();
 
@@ -1137,7 +1288,7 @@ describe('ImportFacilitiesSheet', () => {
     mocked(api.cancelFacilityImportRun).mockResolvedValue({ runId: 'run-b1', outcome: 'cancelled' });
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    pickFileAndSystem();
+    await pickFileAndSystem();
     await uploadNow();
     await screen.findByText(/3 facility row\(s\) will be created/i);
 
@@ -1171,7 +1322,7 @@ describe('ImportFacilitiesSheet', () => {
     expect(screen.queryByRole('menuitem', { name: 'Cancel this import' })).not.toBeInTheDocument();
     fireEvent.keyDown(document.body, { key: 'Escape' });
 
-    pickFileAndSystem();
+    await pickFileAndSystem();
     await uploadNow();
     await screen.findByText(/created 3, updated 0, skipped 0/i);
 
@@ -1192,7 +1343,7 @@ describe('ImportFacilitiesSheet', () => {
     mocked(api.confirmFacilityImportRun).mockResolvedValue({ runId: 'run-b1', status: 'confirmed' });
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    pickFileAndSystem();
+    await pickFileAndSystem();
     await uploadNow();
     await screen.findByText(/3 facility row\(s\) will be created/i);
 
@@ -1213,7 +1364,7 @@ describe('ImportFacilitiesSheet', () => {
     }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    pickFileAndSystem();
+    await pickFileAndSystem();
     await uploadNow();
 
     expect(await screen.findByText('Phase: applying')).toBeInTheDocument();
@@ -1227,7 +1378,7 @@ describe('ImportFacilitiesSheet', () => {
     }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    pickFileAndSystem();
+    await pickFileAndSystem();
     await uploadNow();
 
     expect(await screen.findByText(/5000 of 13000 row\(s\) processed/i)).toBeInTheDocument();
@@ -1244,7 +1395,7 @@ describe('ImportFacilitiesSheet', () => {
     }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    pickFileAndSystem();
+    await pickFileAndSystem();
     await uploadNow();
 
     expect(await screen.findByText(/14000 facility row\(s\) will be created/i)).toBeInTheDocument();
@@ -1262,7 +1413,7 @@ describe('ImportFacilitiesSheet', () => {
     const onImported = vi.fn();
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={onImported} />);
 
-    pickFileAndSystem();
+    await pickFileAndSystem();
     await uploadNow();
 
     expect(await screen.findByText(/created 2, updated 1, skipped 0/i)).toBeInTheDocument();
@@ -1275,7 +1426,7 @@ describe('ImportFacilitiesSheet', () => {
     );
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    pickFileAndSystem();
+    await pickFileAndSystem();
     await uploadNow();
 
     expect(await screen.findByText(/larger than the upload limit/i)).toBeInTheDocument();
@@ -1289,7 +1440,7 @@ describe('ImportFacilitiesSheet', () => {
     mocked(api.getFacilityImportRun).mockReturnValue(new Promise<never>(() => { /* never settles */ }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    pickFileAndSystem();
+    await pickFileAndSystem();
     await uploadNow();
 
     expect(await screen.findByText(/checking the import run/i)).toBeInTheDocument();
@@ -1312,7 +1463,7 @@ describe('ImportFacilitiesSheet', () => {
       </StrictMode>,
     );
 
-    pickFileAndSystem();
+    await pickFileAndSystem();
     await uploadNow();
 
     expect(await screen.findByText(/5 facility row\(s\) will be created/i)).toBeInTheDocument();
@@ -1332,7 +1483,7 @@ describe('ImportFacilitiesSheet', () => {
     mocked(api.getFacilityImportRun).mockResolvedValue(runView({ status: 'validating', phase: 'validating' }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    pickFileAndSystem();
+    await pickFileAndSystem();
     fireEvent.click(screen.getByRole('checkbox', { name: /this file is a complete release/i }));
     await uploadNow();
 
@@ -1354,7 +1505,7 @@ describe('ImportFacilitiesSheet', () => {
     mocked(api.getFacilityImportRun).mockResolvedValue(runView({ status: 'validating', phase: 'validating' }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    pickFileAndSystem();
+    await pickFileAndSystem();
     await uploadNow();
 
     await waitFor(() => expect(api.uploadFacilityImport).toHaveBeenCalledTimes(1));
@@ -1378,7 +1529,7 @@ describe('ImportFacilitiesSheet', () => {
     mocked(api.confirmFacilityImportRun).mockResolvedValue({ runId: 'run-b1', status: 'confirmed' });
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    pickFileAndSystem();
+    await pickFileAndSystem();
     await uploadNow();
     await screen.findByText(/3 facility row\(s\) will be created/i);
     // The five controls really are off screen — otherwise the exact-body assertion below would be
@@ -1419,7 +1570,7 @@ describe('ImportFacilitiesSheet', () => {
     mocked(api.confirmFacilityImportRun).mockResolvedValue({ runId: 'run-b1', status: 'confirmed' });
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    pickFileAndSystem();
+    await pickFileAndSystem();
     await uploadNow();
 
     // The premise, asserted rather than assumed: the amber notice really IS rendered at `parsed: 0`.
@@ -1461,7 +1612,7 @@ describe('ImportFacilitiesSheet', () => {
       .mockReturnValue(new Promise<never>(() => { /* never settles */ }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    pickFileAndSystem();
+    await pickFileAndSystem();
     await uploadNow();
     await screen.findByText(/ward_code/);
 
@@ -1504,7 +1655,7 @@ describe('ImportFacilitiesSheet', () => {
     }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    pickFileAndSystem();
+    await pickFileAndSystem();
     await uploadNow();
 
     expect(await screen.findByText(/do not block a JSONL release/i)).toBeInTheDocument();
@@ -1536,7 +1687,7 @@ describe('ImportFacilitiesSheet', () => {
       }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    pickFileAndSystem();
+    await pickFileAndSystem();
     await uploadNow();
     expect(await screen.findByText(/has to be set before validation/i)).toBeInTheDocument();
 
@@ -1571,7 +1722,7 @@ describe('ImportFacilitiesSheet', () => {
     mocked(api.confirmFacilityImportRun).mockResolvedValue({ runId: 'run-b1', status: 'confirmed' });
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    pickFileAndSystem();
+    await pickFileAndSystem();
     await uploadNow();
 
     fireEvent.click(await screen.findByRole('checkbox', { name: /skipping the rows that could not be read/i }));
@@ -1593,7 +1744,7 @@ describe('ImportFacilitiesSheet', () => {
     });
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    pickFileAndSystem();
+    await pickFileAndSystem();
     await uploadNow();
 
     // Indeterminate until the first progress event — `null`, never a frozen "0%".
@@ -1618,7 +1769,7 @@ describe('ImportFacilitiesSheet', () => {
     mocked(api.getFacilityImportRun).mockRejectedValue(new Error('import run not found: run-b1'));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    pickFileAndSystem();
+    await pickFileAndSystem();
     await uploadNow();
 
     expect(await screen.findByText(/import run not found: run-b1/i)).toBeInTheDocument();
@@ -1633,7 +1784,7 @@ describe('ImportFacilitiesSheet', () => {
     mocked(api.getFacilityImportRun).mockResolvedValue(runView({ status: 'queued' }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    pickFileAndSystem();
+    await pickFileAndSystem();
     await uploadNow();
 
     expect(await screen.findByText('Queued — waiting for an import worker.')).toBeInTheDocument();
@@ -1644,7 +1795,7 @@ describe('ImportFacilitiesSheet', () => {
     mocked(api.getFacilityImportRun).mockResolvedValue(runView({ status: 'confirmed' }));
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-    pickFileAndSystem();
+    await pickFileAndSystem();
     await uploadNow();
 
     expect(await screen.findByText('Confirmed — waiting for an import worker to write it.')).toBeInTheDocument();

@@ -1,4 +1,4 @@
-import { type Kysely, type SelectQueryBuilder, sql } from 'kysely';
+import { type Kysely, type SelectQueryBuilder, type Selectable, sql } from 'kysely';
 import type { InternalSchema } from './schema/internal';
 import type { ReferenceCapture } from './reference-capture';
 import { FACILITY_ADMIN_LEVELS, type FacilityAdminLevel } from './facility-answers';
@@ -42,6 +42,15 @@ export interface FacilityRecord {
   /** NULL = lab-local, 'central' = central-managed and replaceable by down-sync. */
   managedOrigin?: string | null;
   source: 'manual' | 'import';
+  /** `in_register` / `dropped` / `not_registered` (migration 081's `FACILITY_REGISTER_STATE_*`
+   *  constants, `@openldr/db`'s root index) — REGISTER MEMBERSHIP, never operational `status`. See
+   *  `toRow()`'s doc comment for why this store never WRITES it (the retirement path owns that);
+   *  `toRecord()` still reads it back off every row a `SELECT` returns. Optional, like almost every
+   *  other field on this interface, because a caller that builds a `FacilityRecord` OUTSIDE a DB
+   *  round-trip (e.g. `facility-classify.ts`'s in-memory merge during import classification) has no
+   *  register state to report yet — only a value this store itself produced (`get`/`list`/`upsert`)
+   *  is guaranteed to carry one. */
+  registerState?: string;
 }
 
 /** Derived per row by `list()`, never stored. */
@@ -92,6 +101,9 @@ export interface FacilityListOptions {
   source?: string;
   /** WHO owns the row's content — central sync vs local. */
   managedOrigin?: string;
+  /** Registry MEMBERSHIP — `in_register` / `dropped` / `not_registered` (migration 081). Distinct
+   *  from `status` (operational) and `health` (mapping/projection) below. */
+  registerState?: string;
   /** Defaults to 200 when omitted — a national register runs 10-15k rows and an unbounded scan is
    *  never what a caller wants. Pass an explicit value (including a large one) to override. */
   limit?: number;
@@ -168,12 +180,17 @@ export const DEFAULT_LIST_LIMIT = 200;
 const MAX_ADMIN_VALUES = 1000;
 
 type Row = InternalSchema['facility_registry'];
+// The shape a SELECT actually returns: `Selectable<>` unwraps `register_state`'s `Generated<string>`
+// (migration 081) down to a plain `string`, same as it always implicitly did for every other column
+// here (none of which were `ColumnType`-wrapped before). `Row` itself stays the raw table type — it
+// is still the right shape for `toRow()`'s Omit-based insert construction below.
+type SelectRow = Selectable<Row>;
 
 /** Exported for the bulk import path (facility-import.ts in @openldr/bootstrap): it writes rows via
  *  a batched multi-row upsert instead of this store's one-row-per-transaction `upsert()`, but needs
  *  the exact same camelCase <-> snake_case shape so a hand-entered facility, an interactively-edited
  *  one, and a bulk-imported one all land identically. */
-export function toRecord(r: Row): FacilityRecord {
+export function toRecord(r: SelectRow): FacilityRecord {
   return {
     id: r.id,
     localCode: r.local_code,
@@ -197,10 +214,33 @@ export function toRecord(r: Row): FacilityRecord {
     extras: (r.extras ?? {}) as Record<string, unknown>,
     managedOrigin: r.managed_origin,
     source: r.source as 'manual' | 'import',
+    // Read-only here — see `FacilityRecord.registerState`'s doc comment. `r.register_state` is
+    // always a real string on a `SELECT` row (the column is `NOT NULL DEFAULT 'not_registered'`),
+    // never actually undefined; the field stays optional on the TYPE only because a caller that
+    // builds a `FacilityRecord` by hand has nothing to put here.
+    registerState: r.register_state,
   };
 }
 
-export function toRow(rec: FacilityRecord): Omit<Row, 'created_at' | 'updated_at'> {
+// `register_state` (migration 081) is deliberately excluded from WRITES here, same as
+// `created_at`/`updated_at` — Task 10 made `toRecord()` (above) read it back, but this store still
+// never sets it. Omitting it here means a fresh INSERT gets the column default
+// ('not_registered'), and `upsert()`'s `doUpdateSet({ ...row, ... })` below leaves an EXISTING
+// row's register_state untouched on conflict, rather than stomping it back to the default on every
+// edit. That matters most for THIS store's own callers: `upsert()` backs the manual create/edit
+// path (POST and PUT /api/facilities), and a facility typed in by hand belongs to no register at
+// all — a column here would stamp it 'in_register' and would re-stamp an existing 'dropped' row on
+// any unrelated edit.
+//
+// The IMPORT path (`importFacilities`, packages/bootstrap/src/facility-import.ts) is what decides
+// register_state's value, and it writes BOTH values explicitly, via two direct UPDATEs inside its
+// own write transaction rather than through this row shape: 'in_register' for every row the release
+// carries, then 'dropped' for the ids that release retired. `facilityRecordToRow` (this function) is
+// what that path feeds `insertBatchPg`, and `insertBatchPg` derives its column list from the row's
+// own keys — so a `register_state` written here would ALSO reach that bulk write, which is precisely
+// what those two UPDATEs exist instead of. See the ⛔ comment on the 'in_register' write there for
+// why the write cannot live in this shape.
+export function toRow(rec: FacilityRecord): Omit<Row, 'created_at' | 'updated_at' | 'register_state'> {
   return {
     id: rec.id,
     local_code: rec.localCode ?? null,
@@ -291,7 +331,7 @@ export function createFacilityRegistryStore(
   return {
     async get(id) {
       const r = await db.selectFrom('facility_registry').selectAll().where('id', '=', id).executeTakeFirst();
-      return r ? toRecord(r as Row) : undefined;
+      return r ? toRecord(r as SelectRow) : undefined;
     },
 
     async list(opts = {}) {
@@ -315,6 +355,7 @@ export function createFacilityRegistryStore(
         if (opts.nationalSystem) q = q.where('national_system', '=', opts.nationalSystem);
         if (opts.source) q = q.where('source', '=', opts.source);
         if (opts.managedOrigin) q = q.where('managed_origin', '=', opts.managedOrigin);
+        if (opts.registerState) q = q.where('register_state', '=', opts.registerState);
         if (opts.q) {
           // `ilike` with a wrapped `%` — a leading wildcard means no plain btree index can serve
           // this; it is an unindexed sequential scan on every call. Not benchmarked at
@@ -406,7 +447,7 @@ export function createFacilityRegistryStore(
       const [rows, counted] = await Promise.all([rowsQ.execute(), countQ.executeTakeFirst()]);
       return {
         rows: rows.map((r) => ({
-          ...toRecord(r as Row),
+          ...toRecord(r as SelectRow),
           health: r.health as FacilityHealth,
           mappingCount: Number(r.mapping_count ?? 0),
         })),
@@ -428,7 +469,7 @@ export function createFacilityRegistryStore(
           .onConflict((oc) => oc.column('id').doUpdateSet({ ...row, updated_at: sql`now()` } as never))
           .execute();
         const stored = toRecord(
-          (await trx.selectFrom('facility_registry').selectAll().where('id', '=', rec.id).executeTakeFirstOrThrow()) as Row,
+          (await trx.selectFrom('facility_registry').selectAll().where('id', '=', rec.id).executeTakeFirstOrThrow()) as SelectRow,
         );
         // Capture SUSPENDED — see SUSPENDED_REFERENCE_ENTITY_TYPES in reference-change-log.ts. The
         // `capture` dep stays on this store's interface so re-enabling is one line, not a re-wiring.
