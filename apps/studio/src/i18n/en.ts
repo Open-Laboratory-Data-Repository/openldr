@@ -801,6 +801,13 @@ export const en = {
       districtAll: 'All districts',
       councilLabel: 'Council',
       councilAll: 'All councils',
+      // Task 10: registry MEMBERSHIP (migration 081's `register_state`) — distinct from the plain
+      // `statusLabel`/`statusPlaceholder` free-text filter above, which is operational status.
+      registerStateLabel: 'Register state',
+      registerStateAll: 'All register states',
+      registerStateInRegister: 'In register',
+      registerStateDropped: 'Dropped by register',
+      registerStateNotRegistered: 'Not from a register',
     },
     pager: {
       summary: '{{from}}–{{to}} of {{total}}',
@@ -978,6 +985,32 @@ export const en = {
       retryProjection: 'Retry {{facility}}',
       failedProjections_one: '{{count}} facility mapping needs attention',
       failedProjections_other: '{{count}} facility mappings need attention',
+    },
+    // Task 10: the read-only detail/provenance panel on FacilityDialog's edit view — "where a
+    // facility came from".
+    detail: {
+      provenanceTitle: 'Provenance',
+      authorityLabel: 'Authority',
+      canonicalUriLabel: 'Canonical URI',
+      versionLabel: 'Version',
+      lastImportLabel: 'Last import',
+      lastImportNever: 'Never imported',
+      notRegistered: 'Not linked to a national register.',
+    },
+    // Task 10: the per-facility change history Sheet (FacilityHistory.tsx) — "what has happened to
+    // it", read straight off `GET /api/facilities/:id/history` (Task 8).
+    history: {
+      menuItem: 'History',
+      title: 'Facility history',
+      description: 'Every recorded change to {{name}}, newest first.',
+      empty: 'No recorded history for this facility yet.',
+      unknownActor: 'Unknown',
+      actions: {
+        create: 'Created',
+        update: 'Updated',
+        delete: 'Deleted',
+        importRow: 'Imported',
+      },
     },
     tabs: {
       registry: 'Registry',

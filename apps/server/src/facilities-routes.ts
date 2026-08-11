@@ -779,6 +779,9 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       nationalSystem: ownFirstString(q, 'nationalSystem'),
       source: ownFirstString(q, 'source'),
       managedOrigin: ownFirstString(q, 'managedOrigin'),
+      // Task 10 (B1, facility-canonical-identity): registry MEMBERSHIP (`in_register`/`dropped`/
+      // `not_registered`, migration 081) — surfaces the studio's new register-state filter.
+      registerState: ownFirstString(q, 'registerState'),
       health: parseHealth(ownFirstString(q, 'health')),
       limit,
       offset,

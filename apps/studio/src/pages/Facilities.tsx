@@ -24,6 +24,8 @@ import {
 import { FacilityDialog } from '@/facilities/FacilityDialog';
 import { ImportFacilitiesSheet } from '@/facilities/ImportFacilitiesSheet';
 import { ObservedTab } from '@/facilities/ObservedTab';
+import { FacilityHistory } from '@/facilities/FacilityHistory';
+import { FACILITY_STATUS_VALUESET_ID, useCodeDisplayMap, displayFor } from '@/facilities/facility-code-labels';
 
 /** Fix wave 1 / Finding 1: every filter dimension `GET /api/facilities` accepts (Task 3), minus
  *  paging — held as page state (below) and read from/written to the URL so a filtered view is
@@ -33,17 +35,21 @@ import { ObservedTab } from '@/facilities/ObservedTab';
  *  presented and why. */
 type FacilitiesUrlState = Pick<FacilityListQuery,
   | 'q' | 'health' | 'source' | 'country' | 'zone' | 'region' | 'district' | 'council'
-  | 'status' | 'level' | 'ownership' | 'nationalSystem' | 'managedOrigin'
+  | 'status' | 'level' | 'ownership' | 'nationalSystem' | 'managedOrigin' | 'registerState'
 > & { offset: number };
 
 /** Fix wave 1: the open-vocabulary filter keys — everything on `FacilitiesUrlState` besides `q`,
  *  the two closed-union fields (`health`/`source`, which keep their own dedicated
  *  `isHealthValue`/`isSourceValue` predicates), and `offset`. Declared once so `readUrlState`,
  *  `writeUrlState` and the "how many extra filters are active" badge count all iterate the exact
- *  same list instead of three hand-kept ones that could drift out of sync. */
+ *  same list instead of three hand-kept ones that could drift out of sync. `registerState` (Task
+ *  10) IS a fixed three-value vocabulary and gets a `Select`, same as `zone`/`region`/`district`/
+ *  `council` already do — "open-vocabulary" names the URL-restore/passthrough TREATMENT this array
+ *  gives every key on it (no compile-time union to validate against, unlike health/source), not a
+ *  claim that every key's own UI control is free text. */
 const OPEN_VOCAB_FILTER_KEYS = [
   'country', 'zone', 'region', 'district', 'council', 'status', 'level', 'ownership',
-  'nationalSystem', 'managedOrigin',
+  'nationalSystem', 'managedOrigin', 'registerState',
 ] as const satisfies readonly (keyof FacilitiesUrlState)[];
 
 /** The three values `health` accepts on the wire — used to validate whatever `?health=` a restored
@@ -58,6 +64,25 @@ const SOURCE_VALUES: readonly NonNullable<Facility['source']>[] = ['manual', 'im
 function isSourceValue(v: string): v is NonNullable<Facility['source']> {
   return (SOURCE_VALUES as readonly string[]).includes(v);
 }
+
+/** Task 10: `facility_registry.register_state`'s three codes (migration 081's
+ *  `FACILITY_REGISTER_STATE_*` constants, `@openldr/db`) — hand-duplicated here rather than
+ *  imported, the same "closed vocabulary the client mirrors, not shares" reasoning `SOURCE_VALUES`/
+ *  `HEALTH_VALUES` above already follow: `@openldr/db`'s root export pulls in `kysely`/`pg`, which
+ *  this browser bundle must not depend on. Unlike `health`/`source`, this list backs a `Select`
+ *  inside `OPEN_VOCAB_FILTER_KEYS`'s generic passthrough (no dedicated `isRegisterStateValue`
+ *  predicate) — see that array's own doc comment for why an unvalidated value there is harmless. */
+const REGISTER_STATE_VALUES = ['in_register', 'dropped', 'not_registered'] as const;
+
+/** Each register-state code's i18n key, in the SAME fixed order the Select's options render in —
+ *  a `Record` over `REGISTER_STATE_VALUES`'s own type (not a second hand-typed list) so the two
+ *  cannot drift: dropping a value from `REGISTER_STATE_VALUES` makes this object's now-extra key
+ *  fail to compile, and adding one there without a matching entry here does too. */
+const REGISTER_STATE_LABEL_KEYS: Record<(typeof REGISTER_STATE_VALUES)[number], string> = {
+  in_register: 'facilities.filters.registerStateInRegister',
+  dropped: 'facilities.filters.registerStateDropped',
+  not_registered: 'facilities.filters.registerStateNotRegistered',
+};
 
 /** Read `q`/`health`/`source`/the open-vocabulary filters/`offset` back out of the current URL —
  *  the mirror of `writeUrlState` below. Used once, on mount, so a linked/reloaded filtered view
@@ -286,6 +311,14 @@ export function Facilities() {
   const [hasForm, setHasForm] = useState<boolean | null>(null);
   const [editing, setEditing] = useState<Facility | null | undefined>(undefined); // undefined = closed
   const [confirming, setConfirming] = useState<Facility | null>(null);
+  // Task 10: which row's History sheet is open, or `undefined` when closed — mirrors `editing`'s
+  // own undefined-means-closed convention. Unlike `editing`, this is reachable to EVERY viewer who
+  // reaches this page at all (facilities.view alone), not just `canManage` — see the per-row ⋯
+  // menu below for why History rides that menu regardless of capability.
+  const [viewingHistory, setViewingHistory] = useState<Facility | undefined>(undefined);
+  // Task 10: the Status column's terminology display-label lookup — see facility-code-labels.ts's
+  // own doc comment for why the ValueSet id is a frozen, hardcoded literal.
+  const statusDisplayMap = useCodeDisplayMap(FACILITY_STATUS_VALUESET_ID);
   const [importing, setImporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Task: one `⋯` on the TAB STRIP itself, right-aligned, instead of each tab wasting a second
@@ -395,6 +428,7 @@ export function Facilities() {
         ownership: urlState.ownership,
         nationalSystem: urlState.nationalSystem,
         managedOrigin: urlState.managedOrigin,
+        registerState: urlState.registerState,
         limit: PAGE_SIZE,
         offset: urlState.offset,
       });
@@ -862,6 +896,23 @@ export function Facilities() {
                 {councilOptions.map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}
               </SelectContent>
             </Select>
+            {/* Task 10: registry MEMBERSHIP (`in_register`/`dropped`/`not_registered`) — a closed,
+                three-value vocabulary, so this gets a `Select` (like zone/region/district/council
+                above) rather than the free-text `Input` the truly open-vocabulary filters use. */}
+            <Select
+              value={urlState.registerState ?? 'all'}
+              onValueChange={(v) => setUrlState((s) => ({ ...s, registerState: v !== 'all' ? v : undefined, offset: 0 }))}
+            >
+              <SelectTrigger aria-label={t('facilities.filters.registerStateLabel')} className="h-8 w-40 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{t('facilities.filters.registerStateAll')}</SelectItem>
+                {REGISTER_STATE_VALUES.map((v) => (
+                  <SelectItem key={v} value={v}>{t(REGISTER_STATE_LABEL_KEYS[v])}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         )}
 
@@ -897,6 +948,12 @@ export function Facilities() {
                   <TableHead>{t('facilities.region')}</TableHead>
                   <TableHead>{t('facilities.district')}</TableHead>
                   <TableHead>{t('facilities.status')}</TableHead>
+                  {/* Task 10: "where a facility came from" — Manual/Imported, at a glance in the
+                      list (the detail sheet, FacilityDialog, repeats it alongside the rest of the
+                      provenance panel). Reuses the existing Source filter's own copy — see this
+                      column's test in Facilities.test.tsx for why that isn't a second, driftable
+                      set of labels. */}
+                  <TableHead>{t('facilities.filters.sourceLabel')}</TableHead>
                   <TableHead className="w-12" />
                 </TableRow>
               </TableHeader>
@@ -911,23 +968,39 @@ export function Facilities() {
                     <TableCell className="text-xs">{f.name}</TableCell>
                     <TableCell className="text-xs">{f.region ?? '—'}</TableCell>
                     <TableCell className="text-xs">{f.district ?? '—'}</TableCell>
-                    <TableCell className="text-xs">{f.status ?? '—'}</TableCell>
+                    {/* Task 10: the terminology DISPLAY LABEL, never the stored code — `f.status`
+                        (e.g. 'active') is a `location-status`/`facility-type`-bound code, not
+                        something an operator scanning this list should have to decode. */}
+                    <TableCell className="text-xs">{displayFor(statusDisplayMap, f.status)}</TableCell>
+                    <TableCell className="text-xs">
+                      <Badge variant={f.source === 'import' ? 'default' : 'secondary'}>
+                        {f.source === 'import' ? t('facilities.filters.sourceImport') : t('facilities.filters.sourceManual')}
+                      </Badge>
+                    </TableCell>
                     <TableCell onClick={(e) => e.stopPropagation()}>
-                      {canManage ? (
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" aria-label={`${t('facilities.actions')} ${f.name}`}>
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem disabled={!hasForm} onClick={() => setEditing(f)}>{t('common.edit')}</DropdownMenuItem>
-                            <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setConfirming(f)}>
-                              {t('common.delete')}
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      ) : null}
+                      {/* Task 10: this menu is now ALWAYS rendered, unlike Add/Import above (still
+                          hard-gated on canManage) — History rides it too, and
+                          `GET /api/facilities/:id/history` only requires `facilities.view`, which
+                          every viewer reaching this page already holds (route/nav gate). Edit/
+                          Delete stay inside their own `canManage` guard, unchanged. */}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" aria-label={`${t('facilities.actions')} ${f.name}`}>
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => setViewingHistory(f)}>{t('facilities.history.menuItem')}</DropdownMenuItem>
+                          {canManage && (
+                            <>
+                              <DropdownMenuItem disabled={!hasForm} onClick={() => setEditing(f)}>{t('common.edit')}</DropdownMenuItem>
+                              <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setConfirming(f)}>
+                                {t('common.delete')}
+                              </DropdownMenuItem>
+                            </>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -1010,6 +1083,15 @@ export function Facilities() {
             open
             onOpenChange={setImporting}
             onImported={() => { void reload({ background: true }); }}
+          />
+        )}
+
+        {viewingHistory !== undefined && (
+          <FacilityHistory
+            open
+            onOpenChange={(o) => { if (!o) setViewingHistory(undefined); }}
+            facilityId={viewingHistory.id}
+            facilityName={viewingHistory.name}
           />
         )}
 

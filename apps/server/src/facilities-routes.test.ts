@@ -778,15 +778,16 @@ describe('facilities routes', () => {
       expect(ctx.__lastListOptions).toMatchObject({ q: 'alpha', health: 'unmapped', level: 'dispensary' });
     });
 
-    // Regression net for the full forwarding contract: the handler reads FIFTEEN keys off `q` and
+    // Regression net for the full forwarding contract: the handler reads SIXTEEN keys off `q` and
     // hands them to `ctx.facilityRegistry.list(...)` (q, country, zone, region, district, council,
-    // status, level, ownership, nationalSystem, source, managedOrigin, health, limit, offset). The
-    // test above only ever exercised three of them (q/health/level) via `toMatchObject`, which
-    // ignores any key not named in the expectation — so `country`, `zone`, `ownership`,
-    // `nationalSystem`, `source` and `managedOrigin` had NO regression net: deleting or mistyping any
-    // one of their `ownFirstString(q, '…')` lines in the route left every test in this file green.
-    // There is also no compile-time guard here (the handler has no return-type annotation), so this
-    // test is the ONLY thing pinning the forwarding contract.
+    // status, level, ownership, nationalSystem, source, managedOrigin, registerState, health, limit,
+    // offset — Task 10 added `registerState`). The test above only ever exercised three of them
+    // (q/health/level) via `toMatchObject`, which ignores any key not named in the expectation — so
+    // `country`, `zone`, `ownership`, `nationalSystem`, `source`, `managedOrigin` and `registerState`
+    // had NO regression net: deleting or mistyping any one of their `ownFirstString(q, '…')` lines in
+    // the route left every test in this file green. There is also no compile-time guard here (the
+    // handler has no return-type annotation), so this test is the ONLY thing pinning the forwarding
+    // contract.
     //
     // Every param below is set to a distinct, recognisable value, and the assertion is `toEqual`
     // against a COMPLETE expected object — not `toMatchObject` — specifically so it fails both when a
@@ -802,7 +803,7 @@ describe('facilities routes', () => {
         'q=alpha', 'country=country-val', 'zone=zone-val', 'region=region-val', 'district=district-val',
         'council=council-val', 'status=status-val', 'level=level-val', 'ownership=ownership-val',
         'nationalSystem=nationalSystem-val', 'source=source-val', 'managedOrigin=managedOrigin-val',
-        'health=unmapped', 'limit=7', 'offset=3',
+        'registerState=registerState-val', 'health=unmapped', 'limit=7', 'offset=3',
       ].join('&');
       const res = await app.inject({ method: 'GET', url: `/api/facilities?${qs}` });
       expect(res.statusCode).toBe(200);
@@ -819,6 +820,7 @@ describe('facilities routes', () => {
         nationalSystem: 'nationalSystem-val',
         source: 'source-val',
         managedOrigin: 'managedOrigin-val',
+        registerState: 'registerState-val',
         health: 'unmapped',
         limit: 7,
         offset: 3,
@@ -1153,6 +1155,30 @@ describe('Fix 1: POST/PUT /api/facilities project the row into FACILITY_REGISTRY
     const res = await app.inject({ method: 'POST', url: '/api/facilities', payload: body });
     expect(res.statusCode).toBe(201);
     expect(await internalDb.selectFrom('facility_registry').selectAll().execute()).toHaveLength(1);
+  });
+});
+
+// Task 10 (B1, facility-canonical-identity): `register_state` (migration 081) reaches the wire.
+// Against the REAL store (`fakeCreateCtx`, not `fakeCtx`'s in-memory double above) — proving the
+// route's own `?registerState=` param genuinely reaches `facility_registry.register_state`
+// end-to-end, not just that the fake recorded the option object (already covered by the
+// `toEqual` regression net in the "Task 3" describe block above).
+describe('Task 10: register_state reaches the wire', () => {
+  it('a created facility carries registerState, and the list can filter by it', async () => {
+    const internalDb = await makeMigratedDb();
+    const ctx = fakeCreateCtx(internalDb);
+    const app = await appWith(ctx);
+
+    const created = (await app.inject({ method: 'POST', url: '/api/facilities', payload: body })).json();
+    // A freshly created facility was never claimed by any register — the column's own DEFAULT
+    // ('not_registered'), never written by this store's upsert() (see toRow()'s doc comment).
+    expect(created.registerState).toBe('not_registered');
+
+    const matches = (await app.inject({ method: 'GET', url: '/api/facilities?registerState=not_registered' })).json();
+    expect(matches.rows.map((r: any) => r.id)).toContain(created.id);
+
+    const nonMatches = (await app.inject({ method: 'GET', url: '/api/facilities?registerState=in_register' })).json();
+    expect(nonMatches.rows.map((r: any) => r.id)).not.toContain(created.id);
   });
 });
 

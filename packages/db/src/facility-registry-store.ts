@@ -42,6 +42,15 @@ export interface FacilityRecord {
   /** NULL = lab-local, 'central' = central-managed and replaceable by down-sync. */
   managedOrigin?: string | null;
   source: 'manual' | 'import';
+  /** `in_register` / `dropped` / `not_registered` (migration 081's `FACILITY_REGISTER_STATE_*`
+   *  constants, `@openldr/db`'s root index) — REGISTER MEMBERSHIP, never operational `status`. See
+   *  `toRow()`'s doc comment for why this store never WRITES it (the retirement path owns that);
+   *  `toRecord()` still reads it back off every row a `SELECT` returns. Optional, like almost every
+   *  other field on this interface, because a caller that builds a `FacilityRecord` OUTSIDE a DB
+   *  round-trip (e.g. `facility-classify.ts`'s in-memory merge during import classification) has no
+   *  register state to report yet — only a value this store itself produced (`get`/`list`/`upsert`)
+   *  is guaranteed to carry one. */
+  registerState?: string;
 }
 
 /** Derived per row by `list()`, never stored. */
@@ -92,6 +101,9 @@ export interface FacilityListOptions {
   source?: string;
   /** WHO owns the row's content — central sync vs local. */
   managedOrigin?: string;
+  /** Registry MEMBERSHIP — `in_register` / `dropped` / `not_registered` (migration 081). Distinct
+   *  from `status` (operational) and `health` (mapping/projection) below. */
+  registerState?: string;
   /** Defaults to 200 when omitted — a national register runs 10-15k rows and an unbounded scan is
    *  never what a caller wants. Pass an explicit value (including a large one) to override. */
   limit?: number;
@@ -202,15 +214,21 @@ export function toRecord(r: SelectRow): FacilityRecord {
     extras: (r.extras ?? {}) as Record<string, unknown>,
     managedOrigin: r.managed_origin,
     source: r.source as 'manual' | 'import',
+    // Read-only here — see `FacilityRecord.registerState`'s doc comment. `r.register_state` is
+    // always a real string on a `SELECT` row (the column is `NOT NULL DEFAULT 'not_registered'`),
+    // never actually undefined; the field stays optional on the TYPE only because a caller that
+    // builds a `FacilityRecord` by hand has nothing to put here.
+    registerState: r.register_state,
   };
 }
 
-// `register_state` (migration 081) is deliberately excluded, same as `created_at`/`updated_at`: this
-// task seeds the column and its DEFAULT ('not_registered') only — nothing consumes or writes it yet.
-// Omitting it here means a fresh INSERT gets the column default, and `upsert()`'s
-// `doUpdateSet({ ...row, ... })` below leaves an EXISTING row's register_state untouched on conflict,
-// rather than stomping it back to the default on every edit. A later task in this plan is what
-// decides register_state's value and writes it explicitly.
+// `register_state` (migration 081) is deliberately excluded from WRITES here, same as
+// `created_at`/`updated_at` — Task 10 made `toRecord()` (above) read it back, but this store still
+// never sets it. Omitting it here means a fresh INSERT gets the column default
+// ('not_registered'), and `upsert()`'s `doUpdateSet({ ...row, ... })` below leaves an EXISTING
+// row's register_state untouched on conflict, rather than stomping it back to the default on every
+// edit. The retirement path (facility-import.ts) is what decides register_state's value and writes
+// it explicitly, via a direct update — never through this store's `upsert()`.
 export function toRow(rec: FacilityRecord): Omit<Row, 'created_at' | 'updated_at' | 'register_state'> {
   return {
     id: rec.id,
@@ -326,6 +344,7 @@ export function createFacilityRegistryStore(
         if (opts.nationalSystem) q = q.where('national_system', '=', opts.nationalSystem);
         if (opts.source) q = q.where('source', '=', opts.source);
         if (opts.managedOrigin) q = q.where('managed_origin', '=', opts.managedOrigin);
+        if (opts.registerState) q = q.where('register_state', '=', opts.registerState);
         if (opts.q) {
           // `ilike` with a wrapped `%` — a leading wildcard means no plain btree index can serve
           // this; it is an unindexed sequential scan on every call. Not benchmarked at

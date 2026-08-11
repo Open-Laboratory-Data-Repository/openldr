@@ -47,6 +47,17 @@ describe('createFacilityRegistryStore', () => {
     expect(await s.get('f1')).toMatchObject({ extras: { catchmentPop: 42000, tier: 'referral' } });
   });
 
+  // Task 10 (B1, facility-canonical-identity): `register_state` (migration 081) was seeded and
+  // written by the retirement path, but never READ back into a `FacilityRecord` — `toRecord()`
+  // silently dropped the column every `SELECT` already carried. Surfacing it is what lets the
+  // studio UI show/filter on registry membership at all.
+  it("surfaces register_state on get()/upsert(), defaulting to 'not_registered' for a plain upsert", async () => {
+    const { s } = await store();
+    const created = await s.upsert(manual);
+    expect(created.registerState).toBe('not_registered');
+    expect((await s.get('f1'))?.registerState).toBe('not_registered');
+  });
+
   it('filters the list by region and status', async () => {
     const { s } = await store();
     await s.upsert({ ...manual, region: 'Dodoma Region', status: 'Operating' });
@@ -74,7 +85,7 @@ describe('createFacilityRegistryStore', () => {
    *  to the WRONG column would still show up as a wrong count instead of hiding behind a coincidence
    *  of matching splits. Returns the store. */
   async function seedMany(n: number) {
-    const { s } = await store();
+    const { db, s } = await store();
     for (let i = 1; i <= n; i += 1) {
       const p = String(i).padStart(3, '0');
       await s.upsert({
@@ -96,6 +107,18 @@ describe('createFacilityRegistryStore', () => {
         // lab-local row (null) from a central-managed one, and a filter test for it needs both.
         managedOrigin: i % 5 === 3 ? 'central' : undefined,
       });
+      // `register_state` (migration 081) is NOT one of `upsert()`'s own columns — see
+      // `toRow()`'s doc comment — so a fixture that wants a non-default value has to write it
+      // directly, exactly the way the real retirement path (facility-import.ts) does. 5 rows land
+      // 'dropped' (i%5===0: 5,10,15,20,25), 5 land 'in_register' (i%5===1: 1,6,11,16,21), and the
+      // remaining 15 keep the column's own DEFAULT ('not_registered').
+      if (i % 5 === 0) {
+        await db.updateTable('facility_registry' as never).set({ register_state: 'dropped' } as never)
+          .where('id', '=', `f${p}`).execute();
+      } else if (i % 5 === 1) {
+        await db.updateTable('facility_registry' as never).set({ register_state: 'in_register' } as never)
+          .where('id', '=', `f${p}`).execute();
+      }
     }
     return s;
   }
@@ -196,7 +219,8 @@ describe('createFacilityRegistryStore', () => {
   // country/zone/district/council/ownership/managedOrigin at all, so no test in this file COULD
   // discriminate on them; a future refactor deleting any of those six predicates from `applyFilters`
   // left every test here green. Now genuinely covers every column-backed dimension `list()` accepts
-  // (region has its own dedicated test above/below and is not repeated here).
+  // (region has its own dedicated test above/below and is not repeated here) — Task 10 added
+  // `registerState` (migration 081's `register_state`) to that set.
   it('filters on every column-backed dimension', async () => {
     const s = await seedMany(25);
     expect((await s.list({ nationalSystem: 'urn:hfr' })).total).toBe(12);
@@ -210,6 +234,9 @@ describe('createFacilityRegistryStore', () => {
     expect((await s.list({ council: 'Bahi' })).total).toBe(5);
     expect((await s.list({ ownership: 'faith-based' })).total).toBe(3);
     expect((await s.list({ managedOrigin: 'central' })).total).toBe(5);
+    expect((await s.list({ registerState: 'in_register' })).total).toBe(5);
+    expect((await s.list({ registerState: 'dropped' })).total).toBe(5);
+    expect((await s.list({ registerState: 'not_registered' })).total).toBe(15);
   });
 
   it('combines search and filters conjunctively', async () => {
