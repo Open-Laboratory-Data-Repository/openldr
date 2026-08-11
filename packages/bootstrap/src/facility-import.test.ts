@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { Kysely } from 'kysely';
 import { makeMigratedDb } from '@openldr/db/testing';
+import { createAuditStore } from '@openldr/audit';
 import {
   createFacilityRegistryStore, createTerminologyAdminStore, createFacilityJobStore, referenceCapture,
   FACILITY_REGISTRY_SYSTEM, FACILITY_REGISTER_STATE_DROPPED, type InternalSchema, type TerminologyAdminStore, type FacilityJobStore,
@@ -1110,5 +1111,76 @@ describe('a retired facility is not re-published by the post-commit projection',
     const concepts = await db.selectFrom('terminology_concepts')
       .select(['code', 'status']).where('system', '=', FACILITY_REGISTRY_SYSTEM).execute();
     expect(concepts.map((c) => c.status)).toEqual(['RETIRED']);
+  });
+});
+
+// ── Task 7: per-facility audit rows for rows that actually changed ────────────────────────────
+//
+// A2a's reconciliation (`classifyFacilityRows`) already computes `create`/`changed`/`unchanged`
+// exactly — these tests pin that `importFacilities` reuses that SAME classification for its
+// per-facility audit writes rather than recomputing it, and that the volume of `facility.import.row`
+// events tracks real change, never the size of the file: a byte-identical re-import of a national
+// release must write zero of them, not one per parsed record.
+describe('per-facility audit rows for changed facilities (Task 7)', () => {
+  async function buildDepsWithAudit(): Promise<FacilityImportDeps & { db: Kysely<InternalSchema> }> {
+    const db = (await makeMigratedDb()) as Kysely<InternalSchema>;
+    return { db, capture: referenceCapture, audit: createAuditStore(db) };
+  }
+
+  async function auditCount(db: Kysely<InternalSchema>): Promise<number> {
+    const r = await db.selectFrom('audit_events')
+      .select((eb) => eb.fn.countAll<number>().as('n')).executeTakeFirst();
+    return Number(r?.n ?? 0);
+  }
+
+  async function auditRows(db: Kysely<InternalSchema>, action: string) {
+    return db.selectFrom('audit_events').selectAll().where('action', '=', action).execute();
+  }
+
+  const release = csv(['100,Alpha,,,,,,,,,,,,,,', '200,Beta,,,,,,,,,,,,,,']);
+  const applyOpts = { nationalSystem: SYSTEM, apply: true };
+
+  it('⛔ a byte-identical re-import writes ZERO per-facility audit rows', async () => {
+    const deps = await buildDepsWithAudit();
+    await importFacilities(deps, release, applyOpts); // first import: both rows CREATE
+    const before = await auditCount(deps.db);
+    await importFacilities(deps, release, applyOpts); // same bytes again: both rows UNCHANGED
+    expect(await auditCount(deps.db)).toBe(before);
+  });
+
+  it('writes one audit row per CHANGED facility, with before and after', async () => {
+    const deps = await buildDepsWithAudit();
+    await importFacilities(deps, release, applyOpts);
+    const renamed = csv(['100,Alpha Renamed,,,,,,,,,,,,,,', '200,Beta,,,,,,,,,,,,,,']); // only 100 changes
+    const result = await importFacilities(deps, renamed, applyOpts);
+    expect(result.changed).toBe(1);
+
+    const rows = await auditRows(deps.db, 'facility.import.row');
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ entity_type: 'facility' });
+    expect((rows[0].before as { name: string }).name).not.toBe((rows[0].after as { name: string }).name);
+    expect((rows[0].after as { name: string }).name).toBe('Alpha Renamed');
+  });
+
+  it('does not audit CREATE or UNCHANGED rows, only CHANGED ones', async () => {
+    const deps = await buildDepsWithAudit();
+    // First import: two CREATEs. Second: one CHANGED (100 renamed), one UNCHANGED (200 untouched).
+    await importFacilities(deps, release, applyOpts);
+    const renamed = csv(['100,Alpha Renamed,,,,,,,,,,,,,,', '200,Beta,,,,,,,,,,,,,,']);
+    await importFacilities(deps, renamed, applyOpts);
+
+    const rows = await auditRows(deps.db, 'facility.import.row');
+    // Exactly the renamed facility (100), never the 2 creates from the first call or the untouched 200.
+    expect(rows.map((r) => r.entity_id)).toEqual([(await rowFor(deps.db, '100'))!.id]);
+  });
+
+  it('an applied import with changed rows and NO audit store wired does not throw', async () => {
+    const deps = await buildDeps(); // buildDeps() supplies no `audit` — see its definition above
+    await importFacilities(deps, release, applyOpts);
+    const renamed = csv(['100,Alpha Renamed,,,,,,,,,,,,,,', '200,Beta,,,,,,,,,,,,,,']);
+    // Must still apply the write and report `changed: 1` — an unaudited write is a gap worth
+    // logging, never a reason to refuse the operator's confirmed import.
+    await expect(importFacilities(deps, renamed, applyOpts)).resolves.toMatchObject({ changed: 1 });
+    expect((await rowFor(deps.db, '100'))?.name).toBe('Alpha Renamed');
   });
 });

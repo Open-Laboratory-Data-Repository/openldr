@@ -13,6 +13,7 @@ import {
   facilityRecordToRow,
   FACILITY_REGISTER_STATE_DROPPED,
 } from '@openldr/db';
+import type { AuditStore } from '@openldr/audit';
 import { classifyFacilityRows, type ClassifiedRow, type ExistingFacility } from './facility-classify';
 import { projectRegistryRows, retireRegistryConcepts } from './facility-reconcile';
 import {
@@ -72,8 +73,23 @@ export interface FacilityImportDeps {
   /** Where a lost `facilityJobs.enqueue` is reported. Optional and structurally minimal so a caller
    *  can hand in the `AppContext`'s pino logger without this module taking a dependency on it; when
    *  omitted the same message goes to `console.error`, matching `projectRegistryRows`' precedent in
-   *  facility-reconcile.ts. Never a reason to fail an import — see the enqueue call below. */
+   *  facility-reconcile.ts. Never a reason to fail an import — see the enqueue call below. Also
+   *  where a missing/failing `audit` (below) is reported, for the same reason. */
   logger?: { error(obj: unknown, msg?: string): void };
+  /** Task 7 (facility audit-history slice): where each CHANGED facility gets its own
+   *  `facility.import.row` audit event — distinct from the register-scoped `facility.import`
+   *  summary event, which this function does NOT write; every existing caller (the inline route,
+   *  the CLI, the import worker) already writes that one itself after `importFacilities` returns,
+   *  and keeps doing so unchanged.
+   *
+   *  Optional, mirroring `admin`/`facilityJobs` above and matching the SAME optional shape
+   *  `facility-import-worker.ts`'s own `audit` dependency already uses
+   *  (`Pick<AuditStore, 'record'>`) — not every caller of this shared function has an audit store
+   *  wired (this module's own test suite, for one). When it is omitted, a call that actually had
+   *  changed rows to report logs the omission (via `logger` above, or `console.error`) rather than
+   *  refusing the import: an unaudited write is a gap worth seeing, never a reason to block an
+   *  operator's confirmed import. */
+  audit?: Pick<AuditStore, 'record'>;
 }
 
 export interface FacilityImportOptions {
@@ -765,13 +781,17 @@ export async function importFacilities(
   // see the projectRegistryRows call after the transaction commits for why that has to happen
   // outside it.
   let mergedRecords: FacilityRecord[] = [];
+  // Populated inside the transaction below, read afterwards (same reason as `mergedRecords`) to
+  // build the `before` side of each `facility.import.row` audit event — see the audit block after
+  // the transaction commits.
+  let existingById: Map<string, ExistingFacility> = new Map();
 
   await deps.db.transaction().execute(async (trx) => {
     // Existing-row lookup runs on `trx`, inside this transaction, not on `deps.db` before it opens
     // (see the docblock above) — and it fetches whole rows, not just id, because `classifyFacilityRows`
     // both COMPARES the parser's columns against them and MERGES local_code/extras forward off them,
     // rather than overwriting those with the importer's blanks.
-    const existingById = await loadExisting(trx, ids);
+    existingById = await loadExisting(trx, ids);
 
     // The merge for what the importer is NOT authoritative for (see the docblock above) lives inside
     // `classifyFacilityRows` now, and each row's `.merged` is exactly what the statement below
@@ -920,6 +940,66 @@ export async function importFacilities(
       if (deps.logger) deps.logger.error({ err }, msg);
       // eslint-disable-next-line no-console -- no logger supplied; this is the only record left.
       else console.error(`[facility-import] ${msg}`, err);
+    }
+  }
+
+  // Task 7: one `facility.import.row` audit event per CHANGED facility — never per parsed row, and
+  // never for `create`/`unchanged`/`conflict` either. Filters the SAME classification this call
+  // already computed above (`classified`, which is exactly what `result.changed` counts via
+  // `summarise`) rather than re-deriving "did this row change" from scratch — see this function's
+  // docblock and `classifyFacilityRows` for why that comparison must only happen once.
+  //
+  // ⛔ THE WHOLE POINT: a byte-identical re-import classifies every row `unchanged`, so
+  // `changedRows` is `[]` and NOTHING is written here — audit volume tracks real change, not file
+  // size. A 13 000-row national release with one renamed facility writes exactly one row here, the
+  // same count `result.changed` reports.
+  //
+  // Placed AFTER the transaction, mirroring `projectRegistryRows`/`facilityJobs.enqueue` above and
+  // for the same reason: `deps.audit` (when supplied) is bound to `deps.db`, not to `trx`, so a
+  // call made from inside the transaction callback would not actually be part of it anyway — there
+  // is no atomicity to gain by moving it in, only pg-mem's documented "no rollback on a thrown
+  // error" hazard to risk by putting more work inside that callback.
+  const changedRows = classified.filter((c) => c.kind === 'changed');
+  if (changedRows.length > 0) {
+    if (!deps.audit) {
+      // Never a reason to fail — see `FacilityImportDeps.audit`'s doc comment. Logged once per call,
+      // not once per row: the gap is "this call's changed rows are unaudited", a single fact, not
+      // `changedRows.length` repetitions of it.
+      const msg = `applied a facility import with ${changedRows.length} changed row(s) but no audit `
+        + 'store wired; the per-row write is unaudited';
+      if (deps.logger) deps.logger.error({ nationalSystem: opts.nationalSystem }, msg);
+      // eslint-disable-next-line no-console -- no logger supplied; this is the only record left.
+      else console.error(`[facility-import] ${msg}`);
+    } else {
+      try {
+        // Dispatched together rather than one row-at-a-time `await` in a loop — the batching this
+        // task's binding constraint asks for. Bounded by `changedRows.length`, which is real change,
+        // never by how many rows the file parsed.
+        await Promise.all(changedRows.map((c) => {
+          // `existing` is never undefined here: `classifyFacilityRows` only produces `kind: 'changed'`
+          // when it found (and compared against) an existing row for this id — see facility-classify.ts.
+          const existing = existingById.get(c.merged.id);
+          const before = existing
+            ? { id: existing.id, localCode: existing.localCode, extras: existing.extras, ...existing.fields }
+            : null;
+          return deps.audit!.record({
+            actorType: 'system',
+            actorId: null,
+            actorName: 'facility-import',
+            action: 'facility.import.row',
+            entityType: 'facility',
+            entityId: c.merged.id,
+            before,
+            after: c.merged,
+            metadata: { nationalSystem: opts.nationalSystem, runId: opts.runId ?? null },
+          });
+        }));
+      } catch (err) {
+        const msg = 'failed to audit one or more changed facilities from this import';
+        if (deps.logger) deps.logger.error({ err, nationalSystem: opts.nationalSystem }, msg);
+        // eslint-disable-next-line no-console -- no logger supplied; this is the only record left.
+        else console.error(`[facility-import] ${msg}`, err);
+      }
     }
   }
 
