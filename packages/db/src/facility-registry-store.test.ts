@@ -107,9 +107,14 @@ describe('createFacilityRegistryStore', () => {
         // lab-local row (null) from a central-managed one, and a filter test for it needs both.
         managedOrigin: i % 5 === 3 ? 'central' : undefined,
       });
-      // `register_state` (migration 081) is NOT one of `upsert()`'s own columns — see
-      // `toRow()`'s doc comment — so a fixture that wants a non-default value has to write it
-      // directly, exactly the way the real retirement path (facility-import.ts) does. 5 rows land
+      // `register_state` (migration 081) is NOT one of `upsert()`'s own columns — see `toRow()`'s doc
+      // comment — so a fixture that wants a non-default value has to write it directly. The real
+      // writer is the IMPORT path (`importFacilities`, packages/bootstrap/src/facility-import.ts),
+      // which likewise writes this column with its own direct UPDATEs rather than through `upsert()`:
+      // 'in_register' for the rows a release carries and 'dropped' for the ones it retired. (An
+      // earlier version of this comment said the fixture matched "the real retirement path" — that
+      // path only ever writes 'dropped', so it could not have been the model for the 'in_register'
+      // half below.) 5 rows land
       // 'dropped' (i%5===0: 5,10,15,20,25), 5 land 'in_register' (i%5===1: 1,6,11,16,21), and the
       // remaining 15 keep the column's own DEFAULT ('not_registered').
       if (i % 5 === 0) {

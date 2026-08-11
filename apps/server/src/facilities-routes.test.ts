@@ -1985,6 +1985,41 @@ describe('POST /api/facilities/import', () => {
     expect(ctx.__audit[0].entityId).toBe(SYSTEM);
   });
 
+  // ⛔ Whole-branch Critical 2, browser door. `importFacilities`' `deps.audit` had NO production
+  // caller at all: all three deps literals (this route, the CLI, and the background worker's
+  // `importDeps` in packages/bootstrap/src/index.ts) omitted it, so every applied import took the
+  // `if (!deps.audit)` branch and logged "the per-row write is unaudited". Task 7's whole feature was
+  // dead — `GET /api/facilities/:id/history` could never show an import, and the Studio's provenance
+  // panel said "Never imported" for a facility imported seconds earlier. The test above cannot see
+  // this: a first import CREATES rows, and only CHANGED rows are audited per-facility. This one
+  // imports twice, so the second apply has a real change to record.
+  it('⛔ a changed row from an applied import is audited as facility.import.row (the per-row audit is wired)', async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const created = await app.inject({
+      method: 'POST', url: '/api/facilities/import',
+      payload: { csv: facilityCsv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,']), nationalSystem: SYSTEM, apply: true },
+    });
+    expect(created.statusCode).toBe(200);
+
+    const renamed = await app.inject({
+      method: 'POST', url: '/api/facilities/import',
+      payload: { csv: facilityCsv(['100,Dodoma Regional Referral Hospital,,,,,,,,,,,,,,']), nationalSystem: SYSTEM, apply: true },
+    });
+    expect(renamed.statusCode).toBe(200);
+    expect(renamed.json().changed).toBe(1);
+
+    const perRow = ctx.__audit.filter((a: any) => a.action === 'facility.import.row');
+    expect(perRow).toHaveLength(1);
+    // The entityId must be the FACILITY's own id — that is the only thing that makes the event
+    // reachable from `GET /api/facilities/:id/history`, which filters on `entity_id`.
+    const row = await db.selectFrom('facility_registry').select(['id']).executeTakeFirstOrThrow();
+    expect(perRow[0].entityId).toBe(row.id);
+    expect(perRow[0].before).toMatchObject({ name: 'Dodoma Regional Referral' });
+    expect(perRow[0].after).toMatchObject({ name: 'Dodoma Regional Referral Hospital' });
+  });
+
   it('unknown columns are reported, never swallowed, and block the import unless explicitly allowed', async () => {
     const db = await importDb();
     const ctx = fakeImportCtx(db);

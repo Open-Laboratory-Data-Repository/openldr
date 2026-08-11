@@ -12,6 +12,7 @@ import {
   insertBatchPg,
   facilityRecordToRow,
   FACILITY_REGISTER_STATE_DROPPED,
+  FACILITY_REGISTER_STATE_IN_REGISTER,
 } from '@openldr/db';
 import type { AuditStore } from '@openldr/audit';
 import { classifyFacilityRows, type ClassifiedRow, type ExistingFacility } from './facility-classify';
@@ -855,6 +856,66 @@ export async function importFacilities(
     // deps.capture.record per updated row; both are gone now that facility_registry is not in
     // ReferenceEntityType. `deps.capture` stays on FacilityImportDeps so re-enabling is restoring this
     // block, not re-wiring the deps shape.
+
+    // ⛔ REGISTER MEMBERSHIP, the other half of Task 5's `register_state` and the fix for whole-branch
+    // Critical 1. Before this, `'dropped'` (below) was the ONLY value anything ever wrote at runtime:
+    // `toRow` (packages/db's `facilityRecordToRow`) deliberately omits the column and `insertBatchPg`
+    // derives its column list from the row's own keys, so every row a register import created landed on
+    // the column DEFAULT, `'not_registered'` — "Not from a register" — for rows that had just arrived
+    // FROM a register. Measured consequences: on a fresh install the Studio's `registerState=in_register`
+    // filter matched nothing at all, ever; on an upgrade, migration 081 backfilled the rows that already
+    // existed to `'in_register'` while every row the next import added stayed `'not_registered'`, so one
+    // register was split across two membership states. Worse, `'dropped'` was a ONE-WAY DOOR: before
+    // Task 5 retirement wrote `status: 'inactive'`, and `status` IS in `COMPARED` and IS written by
+    // `toRow`, so the next release that re-listed a facility wrote the file's own status back and the
+    // retirement self-healed. Moving the fact to a column no write path restored took that away.
+    //
+    // ⛔ Written HERE — a targeted UPDATE inside this same transaction, immediately after the row write
+    // and immediately before the retirement write — NOT by adding `register_state` to `toRow`. Three
+    // reasons, in order of weight:
+    //   1. `toRow` also feeds `facilityRegistryStore.upsert()`, the MANUAL create/edit path behind
+    //      POST and PUT /api/facilities. A column there would stamp `'in_register'` on hand-entered
+    //      facilities that came from no register at all, and re-stamp it over a `'dropped'` row on
+    //      any unrelated edit.
+    //   2. Only rows in `toWrite` reach `toRow` at all — `create`/`changed`, plus `conflict` when the
+    //      caller opted into overwriting. A facility the register dropped and a later release RE-LISTS
+    //      identically classifies `unchanged`, so it is in none of those buckets and a `toRow` column
+    //      could never bring it back: exactly the regression described above, left unfixed.
+    //   3. Ordering. Writing it here, before the retirement block, lets a JSONL release that carries
+    //      both a `row` and a `deletion` for the same national code end on `'dropped'` — the publisher's
+    //      explicit deletion wins over the mere presence of a row, matching how `projectRegistryRows`
+    //      below already subtracts `retiredIds` from what it publishes.
+    //
+    // ⛔ The id set is `ids` — EVERY row the release carries — not `toWrite`. Membership is the
+    // publisher's claim ("the current release of its source carries this facility"), which is true of an
+    // `unchanged` row and of a `conflict` row the operator chose to skip: `onConflict: 'skip'` protects
+    // that row's CONTENT from being overwritten, it does not make the register stop listing it.
+    //
+    // ⛔ `register_state != 'in_register'` guard, and it is load-bearing, not an optimisation. A
+    // byte-identical re-import of a 13 000-row release must touch ZERO rows — that is the invariant
+    // FAC-P1-03 bought (see the `unchanged`-not-written comment above) and an unguarded UPDATE would
+    // spend it back, bumping 13 000 `updated_at` values (which are what the conflict watermark reads)
+    // for a fact that already held. With the guard, this statement writes only rows whose membership
+    // genuinely moved.
+    //
+    // ⛔ `register_state` is NOT in `COMPARED` (facility-classify.ts) and must never be: `classified`
+    // was computed above, from the fields the importer is authoritative for, so this write cannot turn
+    // an `unchanged` row into a `changed` one, cannot alter `written.created`/`written.updated`, and
+    // cannot cause a `facility.import.row` audit row. `source` is kept a sibling of `COMPARED` for the
+    // same reason — see `ExistingFacility.source`'s docblock. A re-listed facility therefore returns to
+    // `'in_register'` while still being reported, correctly, as `unchanged`.
+    //
+    // Chunked on the same `CHUNK` bound `loadExisting` uses, for the same reason: a national release is
+    // 13 000+ ids and an unbounded `WHERE id IN (...)` is a parameter-count hazard, not a style choice.
+    if (ids.length > 0) {
+      for (const idChunk of chunk(ids, CHUNK)) {
+        await trx.updateTable('facility_registry')
+          .set({ register_state: FACILITY_REGISTER_STATE_IN_REGISTER, updated_at: sql`now()` })
+          .where('id', 'in', idChunk)
+          .where('register_state', '!=', FACILITY_REGISTER_STATE_IN_REGISTER)
+          .execute();
+      }
+    }
 
     // Task 9: retirement, IN THE SAME TRANSACTION as the write above rather than after it commits
     // (contrast with `projectRegistryRows`/`facilityJobs.enqueue` below, both deliberately outside

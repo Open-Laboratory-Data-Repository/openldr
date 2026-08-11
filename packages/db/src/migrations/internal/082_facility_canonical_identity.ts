@@ -125,11 +125,20 @@ function resolveRegisters(values: string[], registeredUrls: ReadonlySet<string>)
 
 /** One entry per registry row whose `national_system` string changes.
  *
- *  ⚠ `newId === oldId` for a row that carries a `national_system` but NO `national_code`. Such a row
- *  was never keyed by `idFor` — that hash is only ever applied to an imported row, and the table's
- *  `facility_registry_has_a_code` CHECK lets a hand-entered row carry a register name with only a
- *  `local_code`. Re-deriving its id would invent an identity it never had. Its `national_system` is
- *  still rewritten, so it names the register the same way every other row does. */
+ *  ⚠ `newId === oldId` for a row that carries a `national_system` but NO `national_code` — the
+ *  table's `facility_registry_has_a_code` CHECK lets a row carry a register name with only a
+ *  `local_code`, and `idFor` has no code to hash. Re-deriving its id would invent an identity it
+ *  never had. Its `national_system` is still rewritten, so it names the register the same way every
+ *  other row does.
+ *
+ *  ⚠ This does NOT look at `source`, and that is deliberate rather than an oversight. A MANUALLY
+ *  created facility can carry both `national_system` and `national_code` (POST /api/facilities
+ *  accepts them; apps/server/src/facilities-routes.ts mints its id with `randomUUID()`, not `idFor`),
+ *  so such a row IS re-keyed here too. Re-keying it is the point: the row names a register and a code
+ *  within it, so the register's canonical identity is the one it should be filed under, whoever typed
+ *  it in — otherwise the same facility could exist twice, once hand-entered and once imported, with
+ *  no way to tell. If its new id is one another row already holds, `assertNoIdClash` below REFUSES
+ *  the migration rather than merging the two. */
 function planMoves(rows: RegistryRow[], uriByValue: Map<string, string>): Move[] {
   const moves: Move[] = [];
   for (const row of rows) {

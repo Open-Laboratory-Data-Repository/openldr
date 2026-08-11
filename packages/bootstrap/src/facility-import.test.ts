@@ -4,7 +4,8 @@ import { makeMigratedDb } from '@openldr/db/testing';
 import { createAuditStore } from '@openldr/audit';
 import {
   createFacilityRegistryStore, createTerminologyAdminStore, createFacilityJobStore, referenceCapture,
-  FACILITY_REGISTRY_SYSTEM, FACILITY_REGISTER_STATE_DROPPED, type InternalSchema, type TerminologyAdminStore, type FacilityJobStore,
+  FACILITY_REGISTRY_SYSTEM, FACILITY_REGISTER_STATE_DROPPED, FACILITY_REGISTER_STATE_IN_REGISTER,
+  type InternalSchema, type TerminologyAdminStore, type FacilityJobStore,
 } from '@openldr/db';
 import { importFacilities, type FacilityImportDeps } from './facility-import';
 import { CONTROLLED_VALUE_SETS, observedFieldSystem } from './facility-controlled-fields';
@@ -902,6 +903,67 @@ describe('format: "jsonl" and declared deletions', () => {
     const row = await rowFor(deps.db, '100');
     expect(row?.register_state).toBe(FACILITY_REGISTER_STATE_DROPPED);
     expect(row?.status).toBe('active'); // ⛔ UNCHANGED — the facility is still open.
+  });
+
+  // ⛔ Whole-branch Critical 1. `'dropped'` used to be the ONLY register_state anything wrote at
+  // runtime, so an import filed every row it created under the column DEFAULT — 'not_registered',
+  // "Not from a register" — and the Studio's `registerState=in_register` filter matched nothing on a
+  // fresh install, permanently. Worse, the pre-Task-5 retirement (`status='inactive'`) SELF-HEALED:
+  // `status` is in `COMPARED` and is written by `toRow`, so a release that re-listed the facility
+  // wrote the file's own status back over it. Moving the fact to a column no write path restored
+  // turned 'dropped' into a one-way door. The three tests below are the fresh-install case, that
+  // lost self-heal, and the write ordering the second of the two UPDATEs depends on.
+  it('⛔ an applied import files every row it carries as in_register, not on the column default', async () => {
+    const deps = await buildDeps();
+    const r = await importFacilities(deps, csv([
+      '100,Alpha,,,,,,,,,,,,,,',
+      '200,Beta,,,,,,,,,,,,,,',
+    ]), { nationalSystem: SYSTEM, apply: true });
+    expect(r.written).toEqual({ created: 2, updated: 0, retired: 0 });
+    expect((await rowFor(deps.db, '100'))?.register_state).toBe(FACILITY_REGISTER_STATE_IN_REGISTER);
+    expect((await rowFor(deps.db, '200'))?.register_state).toBe(FACILITY_REGISTER_STATE_IN_REGISTER);
+
+    // ⛔ And a byte-identical re-import still classifies `unchanged` and writes nothing. The
+    // membership UPDATE must not have leaked into the change comparison (`COMPARED`,
+    // facility-classify.ts) — if it had, this row would report `changed: 1` and mint a
+    // `facility.import.row` audit event on every re-import of an unmodified national release.
+    const again = await importFacilities(deps, csv([
+      '100,Alpha,,,,,,,,,,,,,,',
+      '200,Beta,,,,,,,,,,,,,,',
+    ]), { nationalSystem: SYSTEM, apply: true });
+    expect(again).toMatchObject({ changed: 0, unchanged: 2, written: { created: 0, updated: 0, retired: 0 } });
+  });
+
+  it('⛔ a dropped facility the register RE-LISTS returns to in_register — the self-heal Task 5 removed', async () => {
+    const deps = await buildDeps();
+    await importFacilities(deps, csv(['100,Alpha,,,,,,,,,,,,,,']), { nationalSystem: SYSTEM, apply: true });
+    await importFacilities(deps, jsonl([deletionLine('100')]), {
+      nationalSystem: SYSTEM, format: 'jsonl', apply: true, onDeleted: 'retire',
+    });
+    expect((await rowFor(deps.db, '100'))?.register_state).toBe(FACILITY_REGISTER_STATE_DROPPED);
+
+    // The next release lists it again, BYTE-IDENTICALLY to what the registry already holds — so it
+    // classifies `unchanged` and is not in `toWrite` at all. That is exactly why the membership write
+    // cannot live in `toRow`/`insertBatchPg`: nothing would carry this row back.
+    const back = await importFacilities(deps, csv(['100,Alpha,,,,,,,,,,,,,,']), {
+      nationalSystem: SYSTEM, apply: true,
+    });
+    expect(back).toMatchObject({ changed: 0, unchanged: 1, written: { created: 0, updated: 0, retired: 0 } });
+    expect((await rowFor(deps.db, '100'))?.register_state).toBe(FACILITY_REGISTER_STATE_IN_REGISTER);
+  });
+
+  it('⛔ a release carrying both a row and a deletion for one code ends dropped — the publisher wins', async () => {
+    // The ordering the membership write depends on: 'in_register' is written first, the retirement
+    // second, inside one transaction. Reversed, a declared deletion would be undone by the same file
+    // that declared it, while `projectRegistryRows` (which subtracts `retiredIds`) kept the concept
+    // retired — register_state and the mapping picker disagreeing about the same facility.
+    const deps = await buildDeps();
+    await importFacilities(deps, csv(['100,Alpha,,,,,,,,,,,,,,']), { nationalSystem: SYSTEM, apply: true });
+    const r = await importFacilities(deps, jsonl([rowLine('100', 'Alpha'), deletionLine('100')]), {
+      nationalSystem: SYSTEM, format: 'jsonl', apply: true, onDeleted: 'retire',
+    });
+    expect(r.written.retired).toBe(1);
+    expect((await rowFor(deps.db, '100'))?.register_state).toBe(FACILITY_REGISTER_STATE_DROPPED);
   });
 
   it('does not count a declared deletion for a facility this registry never had', async () => {

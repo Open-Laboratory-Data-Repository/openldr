@@ -1530,7 +1530,16 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     // Task 5: `facilityJobs` lets an applied import enqueue the same `facility-map-rebuild` job a
     // single create/update/delete does (see importFacilities' own matching comment for why that is
     // a single call per import already, not per row).
-    const deps = { db: ctx.internalDb, capture: referenceCapture, admin: ctx.terminology.admin, facilityJobs: ctx.facilityJobs, logger: ctx.logger };
+    // ⛔ `audit` (whole-branch Critical 2). Task 7 writes one `facility.import.row` event per CHANGED
+    // facility, and it is what makes `GET /api/facilities/:id/history` (above) show an import at all
+    // and the Studio's provenance panel say anything other than "Never imported". Without it,
+    // `importFacilities` takes its `if (!deps.audit)` branch and logs that the per-row write is
+    // unaudited — so this literal omitting it made the whole feature dead on the browser door.
+    // The SAME store `recordAudit` (audit-helper.ts) uses for this route's own register-scoped
+    // `facility.import` entry, deliberately: two audit sinks for one import could disagree about
+    // whether it happened. Safe on the PREVIEW call this same object is passed to — the per-row audit
+    // block sits after the write transaction, which a preview never reaches.
+    const deps = { db: ctx.internalDb, capture: referenceCapture, admin: ctx.terminology.admin, facilityJobs: ctx.facilityJobs, audit: ctx.audit, logger: ctx.logger };
     const importOpts = {
       nationalSystem: p.data.nationalSystem,
       allowUnknownColumns: p.data.allowUnknownColumns,
@@ -1573,11 +1582,19 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       return { error: err.message };
     }
 
-    // Task 10 / the FAC-P1-04 boundary, and the whole of it. `nationalSystem` is free text feeding a
-    // deterministic id, so `HFR` and `hfr` are two registers that will never merge. Modelling sources
-    // properly is sub-project B's; what belongs here is refusing to let an operator create a second
-    // identity for the same register WITHOUT NOTICING. Reported, never blocked — a genuinely new
-    // register is a normal thing to import, and this cannot tell the two cases apart. Computed
+    // Task 10 / the FAC-P1-04 boundary. ⚠ Its ORIGINAL reason is gone: this used to guard free-text
+    // `nationalSystem`, where `HFR` and `hfr` were two registers that would never merge, and deferred
+    // "modelling sources properly" to a later sub-project. THIS IS THAT SUB-PROJECT (B1), and the
+    // modelling landed ~60 lines above — `registerSources.getByUrl` refuses anything that is not a
+    // registered register's canonical URI, exactly and case-sensitively, so a second identity for one
+    // register can no longer be typed into existence here at all.
+    //
+    // What the flag still answers is narrower and still worth reporting: has this install ever held a
+    // facility filed under this register before (`resolveKnownNationalSystem` — a single existence
+    // probe over `facility_registry.national_system`)? `false` means this apply is the register's
+    // FIRST import here, which is the moment an operator most wants to be told they may have picked
+    // the wrong register from the picklist. Reported, never blocked — a genuinely new register is a
+    // normal thing to import, and this cannot tell the two cases apart. Computed
     // unconditionally (both the standalone-preview and the apply-flow read this same `preview`), so
     // an operator applying straight through (no separate preview round-trip) still gets the warning
     // on the final response — see where `result.knownNationalSystem` is set below.

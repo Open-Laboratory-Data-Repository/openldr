@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { Kysely } from 'kysely';
 import { makeMigratedDb } from './migrations/internal/test-helpers';
 import { createFacilityRegisterSourceStore } from './facility-register-sources';
+import { FACILITY_REGISTER_KIND } from './migrations/internal/081_facility_source_and_register_state';
 import type { InternalSchema } from './schema/internal';
 
 const base = { url: 'urn:tz:hfr', name: 'Tanzania HFR', code: 'TZ_HFR' };
@@ -80,16 +81,28 @@ describe('createFacilityRegisterSourceStore', () => {
   });
 
   it('orders by name with a unique tiebreaker', async () => {
-    // pg-mem's scan order is STABLE and can never reveal a missing tiebreaker, so this asserts the
-    // ordered contract on rows sharing a name; the tiebreaker is what makes it deterministic on
-    // real Postgres.
+    // ⛔ The ids are SEEDED, deterministic, and deliberately in the OPPOSITE order to the inserts —
+    // `create()` mints `cs-freg-${randomUUID()}`, and two random ids sharing a name made this a coin
+    // flip: with `.orderBy('id','asc')` removed, pg-mem returns its stable scan (= insertion) order,
+    // which satisfied `rows[0].id < rows[1].id` on roughly half of all runs. MEASURED. So the rows go
+    // in directly, in the shape `create()` writes: `…-zzz` inserted first, `…-aaa` second. If the id
+    // tiebreaker is dropped, pg-mem hands back `…-zzz` first and this fails EVERY run, not one in two.
+    //
+    // pg-mem's scan order being stable is also why this can never prove the tiebreaker is NEEDED — on
+    // real Postgres a `system_name`-only ORDER BY across rows sharing a name is what is genuinely
+    // non-deterministic. This pins the contract; the store's comment carries the reason.
     const db = (await makeMigratedDb()) as Kysely<InternalSchema>;
     const store = createFacilityRegisterSourceStore(db);
-    await store.create({ url: 'urn:b', name: 'Same', code: 'B' });
-    await store.create({ url: 'urn:a', name: 'Same', code: 'A' });
+    const insert = (id: string, url: string, code: string) => db.insertInto('coding_systems').values({
+      id, system_code: code, system_name: 'Same', url, active: true, seeded: false,
+      kind: FACILITY_REGISTER_KIND,
+    } as never).execute();
+    await insert('cs-freg-zzz', 'urn:b', 'B');
+    await insert('cs-freg-aaa', 'urn:a', 'A');
     const rows = await store.list();
     expect(rows).toHaveLength(2);
-    expect(rows[0].id < rows[1].id).toBe(true);
+    expect(rows.map((r) => r.id)).toEqual(['cs-freg-aaa', 'cs-freg-zzz']);
+    expect(rows.map((r) => r.url)).toEqual(['urn:a', 'urn:b']);
   });
 
   it('excludes inactive sources unless asked', async () => {

@@ -170,7 +170,14 @@ export async function runFacilitiesImport(path: string, opts: FacilitiesImportOp
     // import through this command would be the one write that leaves `facility_map` stale with
     // nothing queued to rebuild it, sending the operator back to the manual
     // `facilities publish --apply` this slice exists to abolish.
-    const deps = { db: ctx.internalDb, capture: referenceCapture, admin: ctx.terminology.admin, facilityJobs: ctx.facilityJobs, logger: ctx.logger };
+    //
+    // ⛔ `audit` likewise, and for the same parity reason (whole-branch Critical 2). Task 7's
+    // per-facility `facility.import.row` events are what `GET /api/facilities/:id/history` reads
+    // back; omitting the store here made a register applied through the CLI the one write whose
+    // changed rows never reach a facility's own history, while `importFacilities` logged that the
+    // per-row write was unaudited. It is `ctx.audit` — the same store `recordAuditEvent` below uses
+    // for this command's register-scoped `facility.import` entry.
+    const deps = { db: ctx.internalDb, capture: referenceCapture, admin: ctx.terminology.admin, facilityJobs: ctx.facilityJobs, audit: ctx.audit, logger: ctx.logger };
     const importOptions = {
       nationalSystem: opts.nationalSystem, allowUnknownColumns: opts.allowUnknownColumns,
       allowMalformedRows: opts.allowMalformedRows,

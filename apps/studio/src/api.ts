@@ -853,11 +853,13 @@ export interface FacilityHistoryEntry {
   occurredAt: string;
   /** `null` for a system-authored write (e.g. an import) that never resolved an actor name. */
   actorName: string | null;
-  /** One of 'facility.create' / 'facility.update' / 'facility.delete' / 'facility.import.row' —
-   *  the only four actions ever written with `entityType: 'facility'` (see facilities-routes.ts's
-   *  own doc comment on this route). Left as `string`, not a union, for the same "the server is the
-   *  source of truth for what it wrote" reasoning as `action` elsewhere in this file (e.g.
-   *  `RecentPayload`). */
+  /** One of 'facility.create' / 'facility.update' / 'facility.delete' / 'facility.import.row'.
+   *  Not because those are the only actions written with `entityType: 'facility'` — ten distinct
+   *  ones are, measured across apps/server, packages/cli and packages/bootstrap — but because the
+   *  route also filters `entity_id` to the facility's own id, and only these four ever put a
+   *  facility id there (see FacilityHistory.tsx's own comment for the full measurement). Left as
+   *  `string`, not a union, for the same "the server is the source of truth for what it wrote"
+   *  reasoning as `action` elsewhere in this file (e.g. `RecentPayload`). */
   action: string;
   before: Record<string, unknown> | null;
   after: Record<string, unknown> | null;
@@ -1075,14 +1077,11 @@ export interface FacilityRegisterSource {
   active: boolean;
 }
 
-/** `GET /api/facilities/import/sources` — active registers only (the route's own default), ordered
- *  by name. Excludes an INACTIVE register — the picklist must never offer a spelling the import
- *  routes would then refuse. `createFacilityImportSource` below always writes a fresh row with
- *  `active: true` (mirroring `FacilityRegisterSourceStore.create`'s own hardcoded `active: true`),
- *  and this slice adds no route that can flip it back to `false` — so today the only way a row is
- *  ever excluded here is a register created before this app existed at all (a pre-existing
- *  `coding_systems` row this slice never touches) or a direct database edit, not anything this
- *  app's own UI can cause. */
+/** The body `POST /api/facilities/import/sources` takes — the CREATE input, not the list shape
+ *  above. `url` is the canonical URI the register will forever be known by (it is what every future
+ *  import sends as `nationalSystem` and what `idFor` hashes into each facility's permanent id), so
+ *  it is the one field here that can never be corrected later. `active` is absent deliberately: the
+ *  route always creates an active register — see `createFacilityImportSource` below. */
 export interface FacilityRegisterSourceInput {
   url: string;
   name: string;
@@ -1093,6 +1092,14 @@ export interface FacilityRegisterSourceInput {
   publisherId?: string | null;
 }
 
+/** `GET /api/facilities/import/sources` — active registers only (the route's own default), ordered
+ *  by name. Excludes an INACTIVE register — the picklist must never offer a spelling the import
+ *  routes would then refuse. `createFacilityImportSource` below always writes a fresh row with
+ *  `active: true` (mirroring `FacilityRegisterSourceStore.create`'s own hardcoded `active: true`),
+ *  and this slice adds no route that can flip it back to `false` — so today the only way a row is
+ *  ever excluded here is a register created before this app existed at all (a pre-existing
+ *  `coding_systems` row this slice never touches) or a direct database edit, not anything this
+ *  app's own UI can cause. */
 export const listFacilityImportSources = (): Promise<FacilityRegisterSource[]> =>
   apiGet<{ rows: FacilityRegisterSource[] }>('/api/facilities/import/sources', 'list facility import sources')
     .then((r) => r.rows);

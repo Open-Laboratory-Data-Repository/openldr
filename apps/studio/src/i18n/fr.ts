@@ -775,7 +775,9 @@ export const fr: EnShape = {
       sourceImport: 'Importé',
       moreFiltersToggle: 'Plus de filtres',
       nationalSystemLabel: 'Registre national',
-      nationalSystemPlaceholder: 'ex. HFR, MFL',
+      // Voir en.ts : correspondance EXACTE avec un URI canonique de registre (migration 082), et non
+      // un code court — « HFR » ne correspond plus à aucune ligne.
+      nationalSystemPlaceholder: 'ex. urn:openldr:cs:facility-register:hfr',
       managedOriginLabel: 'Origine gérée',
       managedOriginPlaceholder: 'ex. synchro centrale, local',
       ownershipLabel: 'Propriété',

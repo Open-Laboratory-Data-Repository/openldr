@@ -227,8 +227,19 @@ export function toRecord(r: SelectRow): FacilityRecord {
 // never sets it. Omitting it here means a fresh INSERT gets the column default
 // ('not_registered'), and `upsert()`'s `doUpdateSet({ ...row, ... })` below leaves an EXISTING
 // row's register_state untouched on conflict, rather than stomping it back to the default on every
-// edit. The retirement path (facility-import.ts) is what decides register_state's value and writes
-// it explicitly, via a direct update — never through this store's `upsert()`.
+// edit. That matters most for THIS store's own callers: `upsert()` backs the manual create/edit
+// path (POST and PUT /api/facilities), and a facility typed in by hand belongs to no register at
+// all — a column here would stamp it 'in_register' and would re-stamp an existing 'dropped' row on
+// any unrelated edit.
+//
+// The IMPORT path (`importFacilities`, packages/bootstrap/src/facility-import.ts) is what decides
+// register_state's value, and it writes BOTH values explicitly, via two direct UPDATEs inside its
+// own write transaction rather than through this row shape: 'in_register' for every row the release
+// carries, then 'dropped' for the ids that release retired. `facilityRecordToRow` (this function) is
+// what that path feeds `insertBatchPg`, and `insertBatchPg` derives its column list from the row's
+// own keys — so a `register_state` written here would ALSO reach that bulk write, which is precisely
+// what those two UPDATEs exist instead of. See the ⛔ comment on the 'in_register' write there for
+// why the write cannot live in this shape.
 export function toRow(rec: FacilityRecord): Omit<Row, 'created_at' | 'updated_at' | 'register_state'> {
   return {
     id: rec.id,

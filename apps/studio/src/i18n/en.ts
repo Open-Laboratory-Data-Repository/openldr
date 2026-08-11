@@ -782,7 +782,11 @@ export const en = {
       sourceImport: 'Imported',
       moreFiltersToggle: 'More filters',
       nationalSystemLabel: 'National system',
-      nationalSystemPlaceholder: 'e.g. HFR, MFL',
+      // ⛔ A CANONICAL REGISTER URI, not a short code. This filter is an EXACT match on
+      // `facility_registry.national_system` (facility-registry-store.ts's `list`), and migration 082
+      // rewrote every one of those values to a registered source's URI — so the previous
+      // 'e.g. HFR, MFL' told the operator to type a string that now matches nothing at all.
+      nationalSystemPlaceholder: 'e.g. urn:openldr:cs:facility-register:hfr',
       managedOriginLabel: 'Managed origin',
       managedOriginPlaceholder: 'e.g. central-sync, local',
       ownershipLabel: 'Ownership',

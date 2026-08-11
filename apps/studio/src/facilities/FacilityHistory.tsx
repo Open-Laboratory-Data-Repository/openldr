@@ -5,11 +5,21 @@ import { LoadingState } from '@/components/ui/spinner';
 import { getFacilityHistory, type FacilityHistoryEntry } from '@/api';
 import { FACILITY_STATUS_VALUESET_ID, FACILITY_LEVEL_VALUESET_ID, useCodeDisplayMap, displayFor } from './facility-code-labels';
 
-/** Task 10: the only four actions `GET /api/facilities/:id/history` can ever return — see that
- *  route's own doc comment (apps/server/src/facilities-routes.ts) for why (`entityType: 'facility'`
- *  is written from exactly these four call sites). Maps to the i18n key holding its label; an
- *  action outside this set (should never happen — see above) falls back to the raw string rather
- *  than a broken-looking translation lookup. */
+/** Task 10: the four actions `GET /api/facilities/:id/history` can return, mapped to the i18n key
+ *  holding each one's label.
+ *
+ *  ⚠ NOT because these are the only actions written with `entityType: 'facility'` — an earlier
+ *  version of this comment claimed that and it is wrong. MEASURED on this branch: ten distinct
+ *  actions are written with that entity type (facility.create/update/delete, facility.import.row,
+ *  facility.import, facility.import.uploaded/confirmed/cancelled, facility.scan, facility.publish)
+ *  across fifteen call sites in apps/server, packages/cli and packages/bootstrap. What makes this
+ *  set the reachable one is the route's OTHER predicate: it filters `entity_id = :id`, and only
+ *  these four ever use a facility's own id there. The rest name the operation
+ *  ('facility-observed:all-feeds'), the register's canonical URI, or an import-run id — none of
+ *  which can equal a facility id.
+ *
+ *  An action outside this set therefore should not appear, but if one ever does it falls back to the
+ *  raw string rather than a broken-looking translation lookup. */
 const ACTION_LABEL_KEYS: Record<string, string> = {
   'facility.create': 'facilities.history.actions.create',
   'facility.update': 'facilities.history.actions.update',
