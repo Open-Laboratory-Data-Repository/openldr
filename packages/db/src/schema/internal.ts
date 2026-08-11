@@ -771,6 +771,7 @@ export interface ReportDesignsTable {
   pages: unknown;
   parameters: unknown;
   margins: unknown | null;
+  page_numbers: boolean | null;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }

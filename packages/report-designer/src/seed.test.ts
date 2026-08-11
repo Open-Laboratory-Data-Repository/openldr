@@ -15,6 +15,7 @@ beforeEach(async () => {
     .addColumn('orientation', 'text')
     .addColumn('pages', 'jsonb').addColumn('parameters', 'jsonb')
     .addColumn('margins', 'jsonb')
+    .addColumn('page_numbers', 'boolean')
     .addColumn('created_at', 'text').addColumn('updated_at', 'text').execute();
 });
 

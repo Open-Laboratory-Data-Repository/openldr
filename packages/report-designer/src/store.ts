@@ -12,6 +12,9 @@ function toRow(d: ReportDesign) {
     pages: JSON.stringify(d.pages),
     parameters: JSON.stringify(d.parameters),
     margins: d.margins ? JSON.stringify(d.margins) : null,
+    // `?? null` not `?? false` — see migration 083. An unset flag must persist as NULL so it reads
+    // back `undefined` and leaves the content hash unchanged.
+    page_numbers: d.pageNumbers ?? null,
   };
 }
 
@@ -25,6 +28,7 @@ function fromRow(r: Record<string, unknown>): ReportDesign {
     pages: parse(r.pages, []),
     parameters: parse(r.parameters, []),
     margins: r.margins == null ? undefined : parse(r.margins, undefined),
+    pageNumbers: r.page_numbers == null ? undefined : Boolean(r.page_numbers),
     createdAt: r.created_at ? String(r.created_at) : undefined,
     updatedAt: r.updated_at ? String(r.updated_at) : undefined,
   });
@@ -44,6 +48,9 @@ function hashOf(d: ReportDesign): string {
   return canonicalHash({
     name: d.name, paper: d.paper, orientation: d.orientation,
     pages: d.pages, parameters: d.parameters, margins: d.margins,
+    // This field was previously absent here: a page-numbers toggle produced an unchanged hash, so
+    // the de-dupe in recordReferenceChange suppressed it and the change never reached a lab.
+    pageNumbers: d.pageNumbers,
   });
 }
 
