@@ -1475,6 +1475,14 @@ async function seedRegisterSource(db: any, url: string): Promise<void> {
   });
 }
 
+/** Review fix (B1 Task 3): the store's `create` always writes `active: true` and exposes no
+ *  deactivate method (Task 9's admin surface for register sources hasn't landed yet), so a test
+ *  wanting a deactivated register updates the `coding_systems` row directly — the same row shape
+ *  `getByUrl`/`list` both read, so this is a fixture detail, not a divergent path. */
+async function deactivateRegisterSource(db: any, url: string): Promise<void> {
+  await db.updateTable('coding_systems').set({ active: false }).where('url', '=', url).execute();
+}
+
 /** A migrated db with the given register URIs ALREADY REGISTERED — the ordinary setup for every
  *  import/upload test below, since B1 Task 3 made both import doors refuse a `nationalSystem` that
  *  is not a known register source. `makeMigratedDb()` alone seeds no register (nothing in the
@@ -1624,6 +1632,25 @@ describe('POST /api/facilities/import', () => {
     });
     expect(res.statusCode).toBe(400);
     expect(res.json().error).toMatch(/not a known facility register/i);
+  });
+
+  // Review fix (B1 Task 3, MINOR finding): `getByUrl` deliberately does not filter on `active` (it
+  // stays usable for historical-source lookups elsewhere), so without this check a DEACTIVATED
+  // register — one Task 9's import-sheet `Select` will never again offer, since `list()` defaults to
+  // active-only — would still pass the gate above and let an import write facilities under it.
+  it('⛔ refuses an import naming a DEACTIVATED register, distinctly from an unknown one', async () => {
+    const db = await importDb();
+    await deactivateRegisterSource(db, SYSTEM);
+    const app = await appWith(fakeImportCtx(db));
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities/import',
+      payload: { csv: facilityCsv(['100,Alpha,,,,,,,,,,,,,,']), nationalSystem: SYSTEM },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toMatch(/deactivated/i);
+    expect(res.json().error).not.toMatch(/not a known facility register/i);
+    expect(await db.selectFrom('facility_import_runs').selectAll().execute()).toHaveLength(0);
+    expect(await db.selectFrom('facility_registry').selectAll().execute()).toHaveLength(0);
   });
 
   it('I5: gated on facilities.manage — a facilities.view-only user gets 403', async () => {
@@ -3012,6 +3039,27 @@ describe('POST /api/facilities/import/upload', () => {
     expect(res.json().error).toMatch(/not a known facility register/i);
     // ⛔ BEFORE the transfer, not after it: a refused upload must not first cost a national
     // register's worth of bandwidth and leave an orphan object (or a `queued` run) behind.
+    expect(ctx.blob.__objects.size).toBe(0);
+    expect(await db.selectFrom('facility_import_runs').selectAll().execute()).toHaveLength(0);
+  });
+
+  // Review fix (B1 Task 3, MINOR finding): the SAME deactivated-register refusal as the inline
+  // route's version of this test above — `getByUrl` does not filter on `active`, so this door needs
+  // its own check too. BEFORE the transfer, like the unknown-register refusal it sits beside.
+  it('⛔ refuses an upload naming a DEACTIVATED register, before storing anything', async () => {
+    const db = await importDb();
+    await deactivateRegisterSource(db, SYSTEM);
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+
+    const res = await app.inject({
+      method: 'POST', url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv' }),
+      headers: UPLOAD_HEADERS, payload: Buffer.from(facilityCsv(['100,Alpha,,,,,,,,,,,,,,']), 'utf8'),
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toMatch(/deactivated/i);
+    expect(res.json().error).not.toMatch(/not a known facility register/i);
     expect(ctx.blob.__objects.size).toBe(0);
     expect(await db.selectFrom('facility_import_runs').selectAll().execute()).toHaveLength(0);
   });

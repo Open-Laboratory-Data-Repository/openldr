@@ -162,12 +162,14 @@ export async function runFacilitiesImport(path: string, opts: FacilitiesImportOp
     // behaviour as the HTTP route, per the repo's CLI-parity rule.
     //
     // ⛔ `facilityJobs` is NOT optional in practice on this path, despite the deps type allowing
-    // its omission. The HTTP import route REFUSES any apply over MAX_INLINE_APPLY_ROWS (2000) and
-    // directs the operator here, so this command is the ONLY way a register of the stated size —
-    // a 14 000-row national register — is ever applied. Without the store, `importFacilities`
-    // skips its enqueue (`if (deps.facilityJobs)`) and the largest import in the product would be
-    // the one write that leaves `facility_map` stale with nothing queued to rebuild it, sending
-    // the operator back to the manual `facilities publish --apply` this slice exists to abolish.
+    // its omission. This command is not the only way a national-scale register is applied — the
+    // HTTP route's `POST /api/facilities/import/upload` (A2b) carries no row cap at all, and is
+    // the door most national registers actually go through. But this command IS one of the doors a
+    // 14 000-row register can be applied through, and it must behave the same as the others once it
+    // is. Without the store, `importFacilities` skips its enqueue (`if (deps.facilityJobs)`) and an
+    // import through this command would be the one write that leaves `facility_map` stale with
+    // nothing queued to rebuild it, sending the operator back to the manual
+    // `facilities publish --apply` this slice exists to abolish.
     const deps = { db: ctx.internalDb, capture: referenceCapture, admin: ctx.terminology.admin, facilityJobs: ctx.facilityJobs, logger: ctx.logger };
     const importOptions = {
       nationalSystem: opts.nationalSystem, allowUnknownColumns: opts.allowUnknownColumns,

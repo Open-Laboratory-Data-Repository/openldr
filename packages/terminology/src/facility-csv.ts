@@ -102,8 +102,11 @@ export interface FacilityCsvResult {
  *
  *  ⚠ NOT YET EVERY CALLER: `openldr facilities import --national-system` (packages/cli/src/
  *  facilities.ts) calls `importFacilities` directly and carries NO such gate today, so free text
- *  still reaches this line through the CLI — and the CLI is the only path a register above the
- *  route's inline row cap can be applied through. This slice's Task 11 closes that door. */
+ *  still reaches this line through the CLI. Both HTTP doors are gated by this slice — INCLUDING
+ *  `POST /api/facilities/import/upload` (`apps/server/src/facilities-routes.ts`), the uncapped path
+ *  a national-scale register actually goes through, since `MAX_INLINE_APPLY_ROWS` never applied
+ *  there. The CLI is the one remaining ungated path, at any size, until this slice's Task 11 closes
+ *  that door. */
 export function idFor(nationalSystem: string, nationalCode: string): string {
   return `fac-${createHash('sha256').update(`${nationalSystem}|${nationalCode}`).digest('hex').slice(0, 16)}`;
 }

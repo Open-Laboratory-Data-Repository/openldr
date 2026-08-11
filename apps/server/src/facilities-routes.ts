@@ -609,6 +609,18 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       + 'canonical URI must exist on this install before facilities can be imported against it';
   }
 
+  /** ⛔ Review fix (B1 Task 3): `registerSources.list()` (the source of Task 9's import-sheet
+   *  `Select`) defaults to active-only, but `getByUrl` — deliberately, see its own store comment —
+   *  does not filter on `active` at all, so it still resolves a DEACTIVATED register. Without this
+   *  second check, an import naming that register's url would pass the gate above (the row exists)
+   *  and write facilities under an identity the picklist will never again offer, silently. Kept as
+   *  its own message rather than folded into `unknownRegisterError` so an operator who once saw this
+   *  register in the picklist is told it was retired, not that it never existed. */
+  function deactivatedRegisterError(nationalSystem: string): string {
+    return `"${nationalSystem}" names a facility register that has been deactivated; `
+      + 'facilities cannot be imported against a deactivated register';
+  }
+
   // A2b Task 3: a file upload is a stream, not a JSON body, and Fastify has no built-in parser for
   // either of these content types — without them it answers 415 before the handler ever runs.
   // Passthrough (`done(null, payload)`), so `req.body` IS the raw request stream. Guarded exactly
@@ -1345,6 +1357,10 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     // register is would put the fork straight back.
     const source = await registerSources.getByUrl(p.data.nationalSystem);
     if (!source) { reply.code(400); return { error: unknownRegisterError(p.data.nationalSystem) }; }
+    // ⛔ Review fix (B1 Task 3): `getByUrl` deliberately does not filter on `active` (it stays usable
+    // for historical-source lookups), so a DEACTIVATED register still resolves here and must be
+    // refused explicitly — see `deactivatedRegisterError`.
+    if (!source.active) { reply.code(400); return { error: deactivatedRegisterError(p.data.nationalSystem) }; }
 
     // Fix 1 (mapping-ux report): `admin` lets `importFacilities` project every written row into
     // FACILITY_REGISTRY_SYSTEM — the Facilities-page upload gets the same immediate-mapping
@@ -1701,6 +1717,11 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     // transfer: a refused upload must not first cost a national register's worth of bandwidth.
     const source = await registerSources.getByUrl(nationalSystem);
     if (!source) { reply.code(400); return { error: unknownRegisterError(nationalSystem) }; }
+    // ⛔ Review fix (B1 Task 3): the SAME deactivated-register refusal the inline route applies —
+    // see `deactivatedRegisterError`. Runs BEFORE the transfer, alongside the unknown-register check
+    // above it, for the same reason: a refused upload must not first cost a national register's
+    // worth of bandwidth.
+    if (!source.active) { reply.code(400); return { error: deactivatedRegisterError(nationalSystem) }; }
 
     // ⛔ The register gate runs BEFORE the transfer, not after it. A refused upload must not first
     // cost a national register's worth of bandwidth and leave an orphan object behind. Shared with

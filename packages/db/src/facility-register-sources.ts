@@ -21,6 +21,12 @@ export interface FacilityRegisterSource {
 export interface FacilityRegisterSourceStore {
   /** Active facility registers, ordered by name with a unique id tiebreaker. */
   list(opts?: { includeInactive?: boolean }): Promise<FacilityRegisterSource[]>;
+  /** Resolves a register by its canonical url REGARDLESS of `active` — deliberately, unlike `list`'s
+   *  default. A caller that needs "is this a known, currently-selectable register" (e.g. the import
+   *  gate in `apps/server/src/facilities-routes.ts`) must check the returned row's `active` itself;
+   *  a caller doing a historical lookup (naming a register a past import already used, which may
+   *  since have been deactivated) still needs it resolved. Narrowing this to active-only would break
+   *  that second caller, so the filtering stays the CALLER's decision, not this method's. */
   getByUrl(url: string): Promise<FacilityRegisterSource | null>;
   create(input: {
     url: string;
