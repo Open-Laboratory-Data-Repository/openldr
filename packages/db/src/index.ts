@@ -56,6 +56,8 @@ export * from './terminology-ingest-job-store';
 export { createFacilityJobStore } from './facility-job-store';
 export type { FacilityJob, FacilityJobKind, FacilityJobStatus, FacilityJobStore } from './facility-job-store';
 export { createFacilityImportRunStore, type FacilityImportRun, type FacilityImportRunStore } from './facility-import-run-store';
+export { createFacilityRegisterSourceStore } from './facility-register-sources';
+export type { FacilityRegisterSource, FacilityRegisterSourceStore } from './facility-register-sources';
 // `FacilityImportRunStatus` comes from HERE, not from the store — the store re-exports this same
 // type. Exporting it from both places would be a duplicate export, which is the compiler telling
 // the truth: there is one definition of the lifecycle and this module owns it.
