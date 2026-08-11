@@ -39,8 +39,15 @@ export const LAB_LOGO_MAX_CHARS = Math.ceil((LAB_LOGO_MAX_BYTES * 4) / 3) + 64;
  * into an `<img>` in the designer canvas; the same reasoning already excluded SVG from the
  * marketplace readme's image allowlist. PNG covers logos with transparency, which is what a
  * letterhead mark needs.
+ *
+ * ⛔ WebP is deliberately absent too. Measured: `pdfkit` (0.15.2, `js/pdfkit.js:3957-3962`) sniffs
+ * the image's magic bytes and draws exactly two formats — JPEG and PNG — throwing
+ * `Unknown image format.` for anything else. A WebP logo is accepted here, renders fine in the
+ * Settings preview and the designer canvas (both go through `<img>`), and then prints as a blank
+ * letterhead on every report, because the renderer catches that throw and draws its placeholder.
+ * Same defect class as the SVG exclusion above, just discovered later.
  */
-export const LAB_LOGO_MIME = ['image/png', 'image/jpeg', 'image/webp'] as const;
+export const LAB_LOGO_MIME = ['image/png', 'image/jpeg'] as const;
 
 export const LAB_IDENTITY_FIELDS: readonly LabIdentityFieldDefinition[] = [
   { id: 'lab.name', labelKey: 'settings.laboratory.name', maxLength: 200 },
