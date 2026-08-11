@@ -43,13 +43,14 @@ function fakeDeps(connectorList: { id: string; name: string; type?: string | nul
       // the shipped definition, so a stub fake would report drift on every run and make the
       // idempotence test vacuous.
       get: async (id) => designs.get(id) as never,
-      create: async (d) => {
-        designs.set(d.id, { ...d } as never);
-        return d;
-      },
-      update: async (id, d) => {
-        designs.set(id, { ...d, id } as never);
-        return { ...d, id } as never;
+      // The fake must model the REAL contract: `upsertPublished` always lands the row as
+      // `status: 'published'`, regardless of what `d.status` says — a stub that just spread `d`
+      // through would silently pass a seed that persisted a draft, which is exactly the bug this
+      // slice fixes.
+      upsertPublished: async (d) => {
+        const stored = { ...d, status: 'published' as const };
+        designs.set(d.id, stored as never);
+        return stored;
       },
     },
     reportDefs: {
@@ -229,6 +230,27 @@ describe('seedDataDrivenReports', () => {
     expect(second.designsUpdated).toBe(0);
     const third = await seedDataDrivenReports(deps);
     expect(third.designsUpdated).toBe(0);
+  });
+
+  // The case that was broken: `update(id, { ...d, status: 'published' })` handed the store a
+  // caller-supplied status, but the real store recomputes status from a content comparison and
+  // ignores what the caller asked for — so a content-changing refresh on an already-published
+  // built-in landed as a DRAFT, and the shipped fix never reached labs (capture is gated on
+  // published). `upsertPublished` closes that gap by writing content and publishing atomically.
+  it('an upgrade that refreshes a built-in design leaves it published, not stranded as a draft', async () => {
+    const { deps, designs } = fakeDeps([{ id: 'conn-123', name: DEFAULT_CONNECTOR_NAME }]);
+    await seedDataDrivenReports(deps);
+    const target = SEED_DESIGNS[0];
+    expect((designs.get(target.id) as { status?: string }).status).toBe('published');
+
+    // Simulate an older shipped version already on disk (an upgraded install).
+    designs.set(target.id, { ...(designs.get(target.id) as object), name: 'Stale name from an older release' } as never);
+
+    const second = await seedDataDrivenReports(deps);
+    expect(second.designsUpdated).toBe(1);
+    const refreshed = designs.get(target.id) as unknown as { name: string; status?: string };
+    expect(refreshed.name).toBe(target.name);
+    expect(refreshed.status).toBe('published');
   });
 });
 

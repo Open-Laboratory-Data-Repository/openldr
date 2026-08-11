@@ -117,8 +117,10 @@ export interface FormSeedTarget extends EssentialSeedTarget {
   // Report-design store, threaded so the seed can insert the default page designs (former studio
   // MOCK_TEMPLATES). Structural subset — AppContext.reportDesigns satisfies it.
   // 'remove' is also needed so the Slice S5 one-shot cleanup can drop retired demo designs on an
-  // existing pre-cutover install — see `removeRetiredDemoDesigns`.
-  reportDesigns: Pick<ReportDesignStore, 'get' | 'create' | 'remove' | 'update'>;
+  // existing pre-cutover install — see `removeRetiredDemoDesigns`. 'upsertPublished' is needed by
+  // `seedDataDrivenReports` (see its own doc comment in report-seeds.ts) — the atomic write+publish
+  // path used to refresh a built-in design without ever leaving it stranded as a draft.
+  reportDesigns: Pick<ReportDesignStore, 'get' | 'create' | 'remove' | 'update' | 'upsertPublished'>;
   // Report-def store, threaded so the seed can insert the S4 data-driven report records
   // (query+design triples that replace the hardcoded catalog). Structural subset —
   // AppContext.reportDefs satisfies it. Skipped (no-op) until the default warehouse connector

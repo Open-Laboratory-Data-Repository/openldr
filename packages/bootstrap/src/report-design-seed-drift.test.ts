@@ -25,7 +25,18 @@ beforeEach(async () => {
     .addColumn('pages', 'jsonb').addColumn('parameters', 'jsonb')
     .addColumn('margins', 'jsonb')
     .addColumn('page_numbers', 'boolean')
+    .addColumn('status', 'text')
     .addColumn('created_at', 'text').addColumn('updated_at', 'text').execute();
+
+  // T3 added `report_design_versions` (migration 083) — upsertPublished/publish() snapshot every
+  // write into it, so it must exist here too, matching store.test.ts's beforeEach shape.
+  await db.schema.createTable('report_design_versions')
+    .addColumn('id', 'text', (c) => c.primaryKey())
+    .addColumn('design_id', 'text').addColumn('version', 'integer')
+    .addColumn('name', 'text').addColumn('paper', 'text').addColumn('orientation', 'text')
+    .addColumn('pages', 'jsonb').addColumn('parameters', 'jsonb')
+    .addColumn('margins', 'jsonb').addColumn('page_numbers', 'boolean')
+    .addColumn('published_at', 'text').addColumn('published_by', 'text').execute();
 });
 
 function depsWithRealDesignStore(): SeedDataDrivenReportsDeps {

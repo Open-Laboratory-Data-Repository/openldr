@@ -263,6 +263,57 @@ describe('ReportDesignStore', () => {
     await store.create(makeDesign('v3', 'V'));
     expect(await store.listVersions('v3')).toEqual([]);
   });
+
+  describe('upsertPublished — the boot seed\'s atomic system write', () => {
+    it('on a design that does not exist yet: creates it published, mints version 1, captures once', async () => {
+      const { capture, hashes } = spyCapture();
+      const store = createReportDesignStore(db, capture);
+      const result = await store.upsertPublished(makeDesign('up-new', 'New'));
+
+      expect(result.status).toBe('published');
+      expect(await store.get('up-new')).toMatchObject({ status: 'published', name: 'New' });
+
+      const versions = await store.listVersions('up-new');
+      expect(versions.map((v) => v.version)).toEqual([1]);
+      expect(hashes).toHaveLength(1);
+    });
+
+    it('on an existing published design whose content differs: updates content, stays published, mints version 2, captures', async () => {
+      const { capture, hashes } = spyCapture();
+      const store = createReportDesignStore(db, capture);
+      const created = await store.upsertPublished(makeDesign('up-existing', 'Original'));
+      expect(hashes).toHaveLength(1);
+
+      const result = await store.upsertPublished({ ...created, name: 'Corrected' });
+      expect(result.status).toBe('published');
+      expect(result.name).toBe('Corrected');
+
+      const versions = await store.listVersions('up-existing');
+      expect(versions.map((v) => v.version)).toEqual([2, 1]);
+      expect(versions.map((v) => v.name)).toEqual(['Corrected', 'Original']);
+      expect(hashes).toHaveLength(2);
+    });
+
+    it('the returned design reflects the new content', async () => {
+      const store = createReportDesignStore(db);
+      await store.upsertPublished(makeDesign('up-reflect', 'Before'));
+      const result = await store.upsertPublished({ ...makeDesign('up-reflect', 'After'), orientation: 'landscape' });
+      expect(result.name).toBe('After');
+      expect(result.orientation).toBe('landscape');
+      expect((await store.get('up-reflect'))?.name).toBe('After');
+    });
+
+    it('does NOT un-publish or leave a draft window — status is published on every call, unlike update()', async () => {
+      const store = createReportDesignStore(db);
+      const created = await store.upsertPublished({ ...makeDesign('up-atomic', 'Pub'), status: 'draft' });
+      // Caller-supplied `status: 'draft'` above is deliberately ignored — this is the system path,
+      // not update()'s client-facing content gate.
+      expect(created.status).toBe('published');
+
+      const changed = await store.upsertPublished({ ...created, name: 'Changed content' });
+      expect(changed.status).toBe('published');
+    });
+  });
 });
 
 // The defect this slice fixes was "a field nobody remembered". A fixture alone cannot catch the

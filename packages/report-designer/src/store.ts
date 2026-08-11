@@ -21,6 +21,26 @@ function toRow(d: ReportDesign) {
   };
 }
 
+/** The `report_design_versions` snapshot column mapping, shared by `publish()` and
+ *  `upsertPublished()` so there is exactly one place that knows the null-handling: `margins` is
+ *  stringified only when set (`null` otherwise), and `pageNumbers` uses `?? null` — not `?? false`
+ *  — for the same reason `toRow` does (see migration 082). */
+function toVersionRow(design: ReportDesign, version: number, publishedBy: string | null) {
+  return {
+    id: `rdv-${randomUUID()}`,
+    design_id: design.id,
+    version,
+    name: design.name,
+    paper: design.paper,
+    orientation: design.orientation,
+    pages: JSON.stringify(design.pages),
+    parameters: JSON.stringify(design.parameters),
+    margins: design.margins ? JSON.stringify(design.margins) : null,
+    page_numbers: design.pageNumbers ?? null,
+    published_by: publishedBy,
+  };
+}
+
 function fromRow(r: Record<string, unknown>): ReportDesign {
   const parse = (v: unknown, fallback: unknown) => (typeof v === 'string' ? JSON.parse(v) : (v ?? fallback));
   return ReportDesignSchema.parse({
@@ -51,6 +71,9 @@ export interface ReportDesignStore {
   create(d: ReportDesign): Promise<ReportDesign>;
   update(id: string, d: ReportDesign): Promise<ReportDesign>;
   publish(id: string, publishedBy?: string | null): Promise<ReportDesign>;
+  /** Product-owned / system write path — see the doc comment on the implementation below for why it
+   *  exists and why it is NOT the same as `update()` followed by `publish()`. */
+  upsertPublished(d: ReportDesign, publishedBy?: string | null): Promise<ReportDesign>;
   listVersions(id: string): Promise<ReportDesignVersion[]>;
   remove(id: string): Promise<void>;
 }
@@ -135,25 +158,49 @@ export function createReportDesignStore(db: Kysely<InternalSchema>, capture?: Re
         const existing = await trx.selectFrom('report_design_versions').select(['version']).where('design_id', '=', id).execute();
         const version = computeNextDesignVersion(existing.map((v) => Number(v.version)));
 
-        await trx.insertInto('report_design_versions').values({
-          id: `rdv-${randomUUID()}`,
-          design_id: id,
-          version,
-          name: design.name,
-          paper: design.paper,
-          orientation: design.orientation,
-          pages: JSON.stringify(design.pages),
-          parameters: JSON.stringify(design.parameters),
-          margins: design.margins ? JSON.stringify(design.margins) : null,
-          page_numbers: design.pageNumbers ?? null,
-          published_by: publishedBy,
-        } as never).execute();
+        await trx.insertInto('report_design_versions').values(toVersionRow(design, version, publishedBy) as never).execute();
 
         await trx.updateTable('report_designs').set({ status: 'published' } as never).where('id', '=', id).execute();
 
         const persisted = fromRow((await trx.selectFrom('report_designs').selectAll().where('id', '=', id).executeTakeFirst()) as Record<string, unknown>);
         if (capture) await capture.record(trx, 'report_design', id, 'upsert', hashOf(persisted));
         return persisted;
+      });
+    },
+    /** Product-owned / system write path for the boot seed (`packages/reporting/src/seed/
+     *  report-seeds.ts`'s `seedDataDrivenReports`), NOT for any client-facing route.
+     *
+     *  `update()` deliberately overwrites any caller-supplied `status` with one it computes from
+     *  the before-row plus a content comparison — that is correct and load-bearing for a client: it
+     *  stops a save from smuggling `status: 'published'` past the content gate. But the seed is not
+     *  a client. It ships corrected built-in designs, and a corrected design only reaches labs once
+     *  it is BOTH written and published — capture (the thing that puts a design on the central→lab
+     *  reference-sync set) only fires on a published row. `update()` would compute `'draft'` for a
+     *  content change on an already-published design, exactly defeating the seed's own fix.
+     *
+     *  Calling `update()` then `publish()` is not an acceptable substitute: between the two calls
+     *  the design sits as a draft, and a crash in that window (or a concurrent read) leaves a
+     *  built-in stranded as a draft forever, with no drift left for a later boot to detect and
+     *  repair (the content already matches — `designContentFingerprint` sees no difference next
+     *  run). So this does the insert-or-update, the publish, and the version snapshot in ONE
+     *  transaction: the same guarantee `publish()` gives a human editor, extended to a system
+     *  write that must set content and status together. */
+    async upsertPublished(d, publishedBy = null) {
+      return db.transaction().execute(async (trx) => {
+        const row = toRow({ ...d, status: 'published' });
+        await trx.insertInto('report_designs')
+          .values(row as never)
+          .onConflict((oc) => oc.column('id').doUpdateSet(row as never))
+          .execute();
+
+        const design = fromRow((await trx.selectFrom('report_designs').selectAll().where('id', '=', d.id).executeTakeFirst()) as Record<string, unknown>);
+
+        const existing = await trx.selectFrom('report_design_versions').select(['version']).where('design_id', '=', d.id).execute();
+        const version = computeNextDesignVersion(existing.map((v) => Number(v.version)));
+        await trx.insertInto('report_design_versions').values(toVersionRow(design, version, publishedBy) as never).execute();
+
+        if (capture) await capture.record(trx, 'report_design', d.id, 'upsert', hashOf(design));
+        return design;
       });
     },
     async listVersions(id) {
