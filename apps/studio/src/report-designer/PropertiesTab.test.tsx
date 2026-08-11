@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { PropertiesTab } from './PropertiesTab';
 import { MOCK_TEMPLATES } from './mockTemplates';
 import type { DesignElement, ReportTemplate } from './types';
@@ -90,12 +90,14 @@ describe('PropertiesTab editing', () => {
     expect(onPatchElement).toHaveBeenCalledWith('rc', { style: { fill: '#123456' } }, undefined);
   });
 
-  it('edits image source (coalesced)', () => {
+  it('edits a token image source (coalesced)', () => {
+    // A bare URL is no longer typeable here — see the `PropertiesTab image source` describe block
+    // below. What remains editable as text is a token source, e.g. `{{lab.logo}}`.
     const onPatchElement = vi.fn();
-    render(<PropertiesTab template={tplWithEl({ id: 'im', kind: 'image', name: 'Image', rect: { x: 0, y: 0, w: 100, h: 100 } })}
+    render(<PropertiesTab template={tplWithEl({ id: 'im', kind: 'image', name: 'Image', rect: { x: 0, y: 0, w: 100, h: 100 }, src: '{{lab.logo}}' })}
       selectedIds={['im']} onPatchElement={onPatchElement} onPatchPage={vi.fn()} onPatchElements={vi.fn()} />);
-    fireEvent.change(screen.getByLabelText('Source'), { target: { value: 'http://x/y.png' } });
-    expect(onPatchElement).toHaveBeenCalledWith('im', { src: 'http://x/y.png' }, undefined);
+    fireEvent.change(screen.getByLabelText('Source'), { target: { value: '{{lab.other}}' } });
+    expect(onPatchElement).toHaveBeenCalledWith('im', { src: '{{lab.other}}' }, undefined);
   });
 
   it('shows bulk text controls for an all-text multi-selection and applies bold to all', () => {
@@ -250,5 +252,93 @@ describe('PropertiesTab scannability hint', () => {
     // 200 wide but 20 tall: measuring width alone would call this comfortable.
     setup({ template: tplWithEl(bc({ kind: 'qrcode', rect: { x: 0, y: 0, w: 200, h: 20 } })), selectedIds: ['sym'] });
     expect(screen.getByText(/too small to scan reliably/i)).toBeInTheDocument();
+  });
+});
+
+describe('PropertiesTab image source', () => {
+  const imageEl = (src: string): DesignElement =>
+    ({ id: 'i1', kind: 'image', name: 'Logo', rect: { x: 0, y: 0, w: 10, h: 10 }, src });
+
+  it('offers a file picker for an image element instead of a bare URL field', () => {
+    setup({ template: tplWithEl(imageEl('')), selectedIds: ['i1'] });
+    expect(screen.getByTestId('image-file')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Choose image…' })).toBeInTheDocument();
+  });
+
+  it('shows a token source as text and does not replace it with an upload widget', () => {
+    // The nine built-in designs bind their logo to `{{lab.logo}}`; the panel must stay able to
+    // show and edit that, not hide it behind a file picker.
+    setup({ template: tplWithEl(imageEl('{{lab.logo}}')), selectedIds: ['i1'] });
+    expect(screen.getByDisplayValue('{{lab.logo}}')).toBeInTheDocument();
+    expect(screen.getByText('Resolved at render')).toBeInTheDocument();
+    expect(screen.queryByTestId('image-file')).not.toBeInTheDocument();
+  });
+
+  it('shows the file picker, not the token text field, for a token merely EMBEDDED in another string', () => {
+    // Regression guard for the unanchored /\{\{[^}]+\}\}/ test this mirrors from image-src.ts:
+    // `https://x/logo.png?v={{n}}` contains a token but is not itself one — whatever it interpolates
+    // to is still a URL, which pdfkit cannot render, so the server rejects it as `not-a-data-uri`.
+    // The panel must not tell a different story by treating it as a valid editable token.
+    setup({ template: tplWithEl(imageEl('https://x/logo.png?v={{n}}')), selectedIds: ['i1'] });
+    expect(screen.getByTestId('image-file')).toBeInTheDocument();
+    expect(screen.queryByText('Resolved at render')).not.toBeInTheDocument();
+  });
+
+  it('reads a valid PNG file into a data URI and patches the element (happy path)', async () => {
+    const props = setup({ template: tplWithEl(imageEl('')), selectedIds: ['i1'] });
+    const png = new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3, 4])], 'logo.png', { type: 'image/png' });
+    fireEvent.change(screen.getByTestId('image-file'), { target: { files: [png] } });
+    await waitFor(() => expect(props.onPatchElement).toHaveBeenCalledWith(
+      'i1', { src: expect.stringMatching(/^data:image\/png;base64,/) }, undefined,
+    ));
+  });
+
+  it('resets the file input value after handling a pick, so re-choosing the same file fires change again', () => {
+    // Without this, choosing logo.png, removing it, and choosing logo.png again is a no-op: the
+    // input's `value` never changed, so no `change` event fires and neither the image nor an error
+    // ever appears.
+    setup({ template: tplWithEl(imageEl('')), selectedIds: ['i1'] });
+    const input = screen.getByTestId('image-file') as HTMLInputElement;
+    const svg = new File(['<svg/>'], 'x.svg', { type: 'image/svg+xml' }); // rejection path too
+    fireEvent.change(input, { target: { files: [svg] } });
+    expect(input.value).toBe('');
+  });
+
+  it('rejects an oversize file without patching the element', () => {
+    const props = setup({ template: tplWithEl(imageEl('')), selectedIds: ['i1'] });
+    const big = new File([new Uint8Array(300 * 1024)], 'big.png', { type: 'image/png' });
+    fireEvent.change(screen.getByTestId('image-file'), { target: { files: [big] } });
+    expect(screen.getByText(/too large/i)).toBeInTheDocument();
+    expect(props.onPatchElement).not.toHaveBeenCalled();
+  });
+
+  it('rejects an svg file without patching the element', () => {
+    const props = setup({ template: tplWithEl(imageEl('')), selectedIds: ['i1'] });
+    const svg = new File(['<svg/>'], 'x.svg', { type: 'image/svg+xml' });
+    fireEvent.change(screen.getByTestId('image-file'), { target: { files: [svg] } });
+    expect(screen.getByText(/Unsupported image type/i)).toBeInTheDocument();
+    expect(props.onPatchElement).not.toHaveBeenCalled();
+  });
+
+  it('clears a rejected-file error from one image element when a different element is selected', () => {
+    // ImageSource holds local `error` state. Without a `key` on it, switching the selection to a
+    // different element re-renders the SAME fiber instead of remounting it, so element B's panel
+    // would still show element A's "too large" error even though B was never touched.
+    const template: ReportTemplate = {
+      id: 't', name: 't', paper: 'A4', orientation: 'portrait', parameters: [],
+      pages: [{ id: 'p1', elements: [
+        { id: 'a', kind: 'image', name: 'Image A', rect: { x: 0, y: 0, w: 10, h: 10 }, src: '' },
+        { id: 'b', kind: 'image', name: 'Image B', rect: { x: 0, y: 0, w: 10, h: 10 }, src: '' },
+      ] }],
+    };
+    const { rerender } = render(<PropertiesTab template={template} selectedIds={['a']}
+      onPatchElement={vi.fn()} onPatchPage={vi.fn()} onPatchElements={vi.fn()} />);
+    const big = new File([new Uint8Array(300 * 1024)], 'big.png', { type: 'image/png' });
+    fireEvent.change(screen.getByTestId('image-file'), { target: { files: [big] } });
+    expect(screen.getByText(/too large/i)).toBeInTheDocument();
+
+    rerender(<PropertiesTab template={template} selectedIds={['b']}
+      onPatchElement={vi.fn()} onPatchPage={vi.fn()} onPatchElements={vi.fn()} />);
+    expect(screen.queryByText(/too large/i)).not.toBeInTheDocument();
   });
 });

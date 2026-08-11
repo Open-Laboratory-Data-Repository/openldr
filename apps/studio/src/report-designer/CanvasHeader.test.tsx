@@ -9,7 +9,7 @@ function setup(overrides = {}) {
     onUndo: vi.fn(), onRedo: vi.fn(), canUndo: false, canRedo: false,
     onPreview: vi.fn(), onSave: vi.fn(), onExportPdf: vi.fn(), onExportExcel: vi.fn(),
     onPublishAsReport: vi.fn(),
-    onCheck: vi.fn(), onDuplicate: vi.fn(), onDelete: vi.fn(), ...overrides,
+    onDuplicate: vi.fn(), onDelete: vi.fn(), ...overrides,
   };
   render(<CanvasHeader {...props} />);
   return props;
@@ -68,9 +68,24 @@ describe('CanvasHeader', () => {
   it('lists the actions in the kebab menu', async () => {
     setup();
     await openKebab();
-    for (const name of ['New template', 'Insert', 'Preview', 'Save', 'Export', 'Publish', 'Check', 'Duplicate', 'Delete']) {
+    for (const name of ['New template', 'Insert', 'Preview', 'Save', 'Export', 'Publish', 'Duplicate', 'Delete']) {
       expect(screen.getByRole('menuitem', { name })).toBeInTheDocument();
     }
+    // Check carries a second explanatory line, so its accessible name is no longer the bare word.
+    expect(screen.getByRole('menuitem', { name: /check/i })).toBeInTheDocument();
+  });
+
+  it('shows Check as disabled — it has no preflight behind it yet', async () => {
+    setup();
+    await openKebab();
+    expect(screen.getByRole('menuitem', { name: /check/i })).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  it('shows Duplicate as enabled and calls its handler', async () => {
+    const props = setup();
+    await openKebab();
+    fireEvent.click(screen.getByRole('menuitem', { name: /duplicate/i }));
+    expect(props.onDuplicate).toHaveBeenCalled();
   });
 
   it('fires Publish from the kebab', async () => {

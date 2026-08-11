@@ -290,6 +290,38 @@ describe('ReportDesignerPage', () => {
     expect(await screen.findByDisplayValue('AMR summary')).toBeInTheDocument();
   });
 
+  it('Duplicate creates an independent unsaved copy and leaves the original alone', async () => {
+    // The seed's managed-overwrite comment names Duplicate as the way to customise a built-in
+    // without losing the edits on the next boot, so the copy MUST get an id the seed never iterates.
+    await renderPage('rt-amr-summary');
+    await openKebab();
+    fireEvent.click(screen.getByRole('menuitem', { name: /duplicate/i }));
+
+    await waitFor(() => expect(screen.getByLabelText('Report name')).toHaveValue('Copy of AMR summary'));
+    // Transient: the copy is not persisted until Save, exactly like New template.
+    expect(createReportDesign).not.toHaveBeenCalled();
+    expect(updateReportDesign).not.toHaveBeenCalled();
+    // Duplicate is only a valid escape hatch from the boot seed's managed-overwrite loop if the copy
+    // lands OUTSIDE the ids that loop iterates (`SEED_DESIGNS`, `@openldr/reporting`). "Leaves the
+    // original alone" alone would pass even if the copy id happened to collide with a built-in id
+    // (the original's own content would still be untouched right up until the next boot silently
+    // overwrote the copy) — the whole point of Duplicate is that this can never happen. Save is the
+    // only way this test can observe the minted id, so trigger it here even though Duplicate itself
+    // stays transient until the author chooses to.
+    //
+    // The full invariant is split across two packages so this suite doesn't have to depend on
+    // @openldr/reporting (which drags in @openldr/db + kysely): this half pins the SHAPE the
+    // designer controls — `rt-${Date.now()}`, i.e. `rt-` followed by digits, distinct from the
+    // source id. The other half — that no built-in id in SEED_DESIGNS can ever take that shape —
+    // is pinned in packages/reporting/src/seed/report-seeds.test.ts.
+    await openKebab();
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Save' }));
+    await waitFor(() => expect(createReportDesign).toHaveBeenCalled());
+    const created = vi.mocked(createReportDesign).mock.calls[0][0] as { id: string };
+    expect(created.id).not.toBe('rt-amr-summary');
+    expect(created.id).toMatch(/^rt-\d+$/);
+  });
+
   it('deletes the open design after confirmation via deleteReportDesign', async () => {
     await renderPage();
     await openKebab();

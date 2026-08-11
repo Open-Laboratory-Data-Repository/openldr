@@ -12,6 +12,7 @@ import {
   type SeedDataDrivenReportsDeps,
 } from './report-seeds';
 import { pairRects, toPt, paperSizePt, type ReportDesign } from '@openldr/report-designer';
+import { findInvalidImageSources } from '@openldr/report-designer/pure';
 
 // In-memory fakes — no real Kysely instance needed (unlike `packages/bootstrap/src/seed.ts`,
 // which builds `customQueries` from a real DB handle; here we inject fakes directly to unit-test
@@ -209,6 +210,17 @@ describe('seedDataDrivenReports', () => {
     expect(testVolume?.sql).not.toContain('to_char(');
     expect(testVolume?.sql).not.toContain('format(');
     for (const q of queries.values()) expect(q.connectorId).toBe('conn-mysql');
+  });
+});
+
+describe('SEED_DESIGNS — every built-in image source would survive the API gate', () => {
+  it('every built-in design has an image source the API would accept', () => {
+    // ⛔ The seed writes designs straight through the store, bypassing the route-level image gate
+    // (`ReportDesignSchema.safeParse` + `findInvalidImageSources`, `apps/server/src/
+    // report-designs-routes.ts`). A built-in shipping a refused source would install fine and then
+    // be unsavable by any operator who opened it — the API would 400 the very design the boot seed
+    // just wrote.
+    expect(SEED_DESIGNS.flatMap((d) => findInvalidImageSources(d))).toEqual([]);
   });
 });
 
@@ -1223,5 +1235,15 @@ describe('SEED_DESIGNS — the antibiogram is transposed because it cannot fit o
         expect(e.transpose ?? false, `${d.id}/${e.id} is unexpectedly transposed`).toBe(false);
       }
     }
+  });
+});
+
+describe('SEED_DESIGNS — no built-in id can collide with a designer-minted id', () => {
+  it('no built-in design id can collide with a designer-minted id', () => {
+    // ⛔ The designer mints `rt-${Date.now()}` for New template and Duplicate. Duplicate is the
+    // sanctioned way to customise a built-in without the boot seed overwriting the edits, which
+    // only holds while the minted id lands OUTSIDE the ids this loop iterates. A built-in named
+    // `rt-<digits>` would silently break that guarantee.
+    expect(SEED_DESIGNS.filter((d) => /^rt-\d+$/.test(d.id))).toEqual([]);
   });
 });

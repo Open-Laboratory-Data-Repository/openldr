@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Input } from '@/components/ui/input';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { AlignLeft, AlignCenter, AlignRight, X } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import type { DesignElement, Margins, Orientation, Paper, Rect, ReportTemplate, TextAlign } from './types';
-import { encodeCode128, encodeQr, maxCode128Chars, minWidthPxFor, moduleWidthMm, MIN_MODULE_MM, QR_QUIET_ZONE } from './types';
+import { encodeCode128, encodeQr, maxCode128Chars, minWidthPxFor, moduleWidthMm, MIN_MODULE_MM, QR_QUIET_ZONE, ELEMENT_IMAGE_MAX_BYTES, ELEMENT_IMAGE_MIME, validateImageSrc } from './types';
 import { findElement, paperSize } from './model';
 import { clampRectToPage } from './geometry';
 import { ColorField } from './ColorField';
@@ -114,6 +114,82 @@ function ScanHint({ el }: { el: DesignElement }): JSX.Element | null {
   );
 }
 
+/** Image source. Mirrors Settings ▸ Laboratory's logo flow (`pages/settings/Laboratory.tsx`):
+ *  choose a file, read it as a data URI, store that. A URL is not offered, because pdfkit reads a
+ *  URL source as a file path and the image would silently vanish from the PDF while looking fine
+ *  here. A token source (`{{lab.logo}}`) stays editable as text — the built-in designs use one. */
+function ImageSource({ el, onPatch }: { el: DesignElement; onPatch: (patch: Partial<DesignElement>) => void }): JSX.Element {
+  const { t } = useTranslation();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [error, setError] = useState<string | null>(null);
+  const src = el.src ?? '';
+  // Anchored to match `image-src.ts`'s TOKEN regex exactly (including the trim before testing): an
+  // unanchored test called `https://x/logo.png?v={{n}}` a valid token, showing it in this editable
+  // text field captioned "Resolved at render" while the server rejects it as `not-a-data-uri` — the
+  // same defect already fixed once in `image-src.ts`, surviving here at a second site.
+  const isToken = /^\{\{[^}]+\}\}$/.test(src.trim());
+
+  const onFile = (file: File | undefined) => {
+    if (!file) return;
+    if (!(ELEMENT_IMAGE_MIME as readonly string[]).includes(file.type)) { setError(t('reportDesigner.imageType')); return; }
+    if (file.size > ELEMENT_IMAGE_MAX_BYTES) {
+      setError(t('reportDesigner.imageTooBig', { max: Math.round(ELEMENT_IMAGE_MAX_BYTES / 1024) })); return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const value = String(reader.result ?? '');
+      // Checked twice on purpose, not by oversight: the checks above run on the File BEFORE reading
+      // it, so a 40 MB pick is refused without being loaded into memory; this one runs on the
+      // encoded result, catching a file whose declared type disagrees with its bytes. The server
+      // remains authoritative — both of these only save the author a failed round trip.
+      const reason = validateImageSrc(value);
+      if (reason) { setError(t(reason === 'too-large' ? 'reportDesigner.imageTooBig' : 'reportDesigner.imageType', { max: Math.round(ELEMENT_IMAGE_MAX_BYTES / 1024) })); return; }
+      setError(null);
+      onPatch({ src: value });
+    };
+    reader.onerror = () => setError(t('reportDesigner.imageReadError'));
+    reader.readAsDataURL(file);
+  };
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">{t('reportDesigner.source')}</div>
+      {isToken ? (
+        <>
+          <Input aria-label={t('reportDesigner.source')} value={src}
+            onChange={(e) => onPatch({ src: e.target.value })} className="h-8 text-xs" />
+          <div className="text-[10px] text-muted-foreground">{t('reportDesigner.imageToken')}</div>
+        </>
+      ) : (
+        <div className="flex items-center gap-2">
+          {src
+            ? <img src={src} alt={el.name} className="h-10 w-10 border border-border object-contain" />
+            : <div className="flex h-10 w-10 items-center justify-center border border-dashed border-border text-[10px] text-muted-foreground">—</div>}
+          <input ref={fileRef} type="file" data-testid="image-file" aria-label={t('reportDesigner.chooseImage')}
+            className="hidden" accept={ELEMENT_IMAGE_MIME.join(',')}
+            onChange={(e) => {
+              onFile(e.target.files?.[0]);
+              // Reset so picking the SAME file again still fires `change` — without this, choosing
+              // logo.png, removing it, and choosing logo.png again is a no-op with no error, and so
+              // is retrying after a rejection. Cleared here (not inside onFile) so it runs on every
+              // path unconditionally, including both rejection branches.
+              e.target.value = '';
+            }} />
+          <Button type="button" variant="outline" size="sm" onClick={() => fileRef.current?.click()}>
+            {t('reportDesigner.chooseImage')}
+          </Button>
+          {src && (
+            <Button type="button" variant="ghost" size="sm" onClick={() => { setError(null); onPatch({ src: '' }); }}>
+              {t('reportDesigner.removeImage')}
+            </Button>
+          )}
+        </div>
+      )}
+      {error && <div className="text-[10px] text-destructive">{error}</div>}
+    </div>
+  );
+}
+
 function KindControls({ el, onPatch }: {
   el: import('./types').DesignElement;
   onPatch(patch: Partial<import('./types').DesignElement>, opts?: PatchOpts): void;
@@ -175,12 +251,9 @@ function KindControls({ el, onPatch }: {
   }
 
   if (el.kind === 'image') {
-    return (
-      <div>
-        <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">{t('reportDesigner.source')}</div>
-        <Input aria-label={t('reportDesigner.source')} value={el.src ?? ''} onChange={(e) => onPatch({ src: e.target.value })} placeholder="https://…" className="h-8 text-xs" />
-      </div>
-    );
+    // Keyed on el.id so switching elements REMOUNTS this: the local error state from a rejected
+    // pick would otherwise survive the selection change and appear on an unrelated element.
+    return <ImageSource key={el.id} el={el} onPatch={onPatch} />;
   }
 
   if (el.kind === 'barcode' || el.kind === 'qrcode') {

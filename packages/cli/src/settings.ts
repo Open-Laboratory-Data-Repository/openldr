@@ -1,5 +1,5 @@
 import { createAppContext, dangerResetDashboards, dangerFactoryReset, dangerClearAudit, getSyncConfig, setSyncConfig, recordAuditEvent } from '@openldr/bootstrap';
-import { loadConfig, type SyncConfigView, type SyncConfigInput } from '@openldr/config';
+import { loadConfig, LAB_LOGO_MIME, type SyncConfigView, type SyncConfigInput } from '@openldr/config';
 import { cliActor } from './cli-actor';
 
 interface JsonOpt { json: boolean }
@@ -238,7 +238,7 @@ export interface LabSetOpts extends JsonOpt {
   name?: string;
   address?: string;
   contact?: string;
-  /** Path to a PNG/JPEG/WebP file; read and stored as a data URI. */
+  /** Path to a PNG/JPEG file; read and stored as a data URI. */
   logoFile?: string;
 }
 
@@ -254,8 +254,14 @@ export async function runSettingsLabSet(opts: LabSetOpts): Promise<number> {
     } else {
       const { readFile } = await import('node:fs/promises');
       const { extname } = await import('node:path');
-      const mime = ({ '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp' } as Record<string, string>)[extname(opts.logoFile).toLowerCase()];
-      if (!mime) { process.stderr.write(`unsupported logo type "${extname(opts.logoFile)}" — use .png, .jpg or .webp\n`); return 1; }
+      const mime = ({ '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg' } as Record<string, string>)[extname(opts.logoFile).toLowerCase()];
+      // Cross-check against the shared allowlist rather than trusting this table alone: pdfkit
+      // (which renders the letterhead) only draws what LAB_LOGO_MIME accepts, so an extension
+      // added here without a matching entry there must fail loudly, not print a blank logo later.
+      if (!mime || !(LAB_LOGO_MIME as readonly string[]).includes(mime)) {
+        process.stderr.write(`unsupported logo type "${extname(opts.logoFile)}" — use .png or .jpg\n`);
+        return 1;
+      }
       let bytes: Buffer;
       try { bytes = await readFile(opts.logoFile); }
       catch { process.stderr.write(`cannot read ${opts.logoFile}\n`); return 1; }
