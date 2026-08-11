@@ -25,7 +25,7 @@ import { runSyncStatus, runSyncNow, runSyncEnroll, runSyncList, runSyncRotate, r
 import { runErrorsList } from './errors';
 import {
   runFacilitiesImport, runFacilitiesScanObserved, runFacilitiesPublish, runFacilitiesConflicts, runFacilitiesJobs,
-  runFacilitiesImportRuns, runFacilitiesImportRun, runFacilitiesImportRunCancel,
+  runFacilitiesImportRuns, runFacilitiesImportRun, runFacilitiesImportRunCancel, runFacilitiesImportSources,
 } from './facilities';
 import { setActorOverride } from './cli-actor';
 
@@ -271,6 +271,16 @@ export function buildProgram(): Command {
       json: boolean;
     }) => {
       process.exitCode = await runFacilitiesImport(path, opts);
+    });
+  // B1 Task 11: CLI parity for `GET /api/facilities/import/sources`. A SIBLING of `import`, never
+  // `facilities sources list` — commander parses a parent's declared options before dispatching to a
+  // subcommand, so a nested spelling has `--json` swallowed by the parent. Read-only, so no --apply.
+  facilities
+    .command('import-sources')
+    .description('List the facility registers an import may name — the canonical URIs `import --national-system` accepts. Active registers only.')
+    .option('--json', 'emit machine-readable JSON', false)
+    .action(async (opts: { json: boolean }) => {
+      process.exitCode = await runFacilitiesImportSources(opts);
     });
   // Task 12: CLI parity for Task 10's `GET /api/facilities/import/runs` and
   // `GET /api/facilities/import/runs/:id` — both read the same `facility_import_runs` table an

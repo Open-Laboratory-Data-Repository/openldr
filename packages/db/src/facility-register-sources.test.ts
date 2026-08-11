@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { Kysely } from 'kysely';
 import { makeMigratedDb } from './migrations/internal/test-helpers';
-import { createFacilityRegisterSourceStore } from './facility-register-sources';
+import { createFacilityRegisterSourceStore, resolveFacilityRegisterForImport } from './facility-register-sources';
 import { FACILITY_REGISTER_KIND } from './migrations/internal/081_facility_source_and_register_state';
 import type { InternalSchema } from './schema/internal';
 
@@ -113,5 +113,66 @@ describe('createFacilityRegisterSourceStore', () => {
       .where('id', '=', made.id).execute();
     expect(await store.list()).toHaveLength(0);
     expect(await store.list({ includeInactive: true })).toHaveLength(1);
+  });
+});
+
+// B1 Task 11: the gate both HTTP import doors (apps/server/src/facilities-routes.ts) and
+// `openldr facilities import` (packages/cli/src/facilities.ts) run before they write anything. The
+// decision lives here so the three call sites cannot drift apart; these tests are what pin it.
+describe('resolveFacilityRegisterForImport', () => {
+  it('refuses a url no register carries, naming the value the caller submitted', async () => {
+    const db = (await makeMigratedDb()) as Kysely<InternalSchema>;
+    const store = createFacilityRegisterSourceStore(db);
+    await store.create(base); // 'urn:tz:hfr' exists; the value below does not.
+
+    const gate = await resolveFacilityRegisterForImport(store, 'HFR');
+
+    expect(gate.ok).toBe(false);
+    expect(gate.ok === false && gate.error).toMatch(/"HFR" is not a known facility register/);
+  });
+
+  // ⛔ EXACT match, not case-insensitive — the property `getByUrl` exists to keep. A normalising
+  // lookup here would resolve both spellings while `idFor` (packages/terminology/src/facility-csv.ts)
+  // still hashed each to a DIFFERENT permanent facility id, which is the fork this whole slice
+  // removes.
+  it('⛔ refuses a case-variant spelling of a registered url', async () => {
+    const db = (await makeMigratedDb()) as Kysely<InternalSchema>;
+    const store = createFacilityRegisterSourceStore(db);
+    await store.create(base);
+
+    const gate = await resolveFacilityRegisterForImport(store, 'urn:tz:HFR');
+
+    expect(gate.ok).toBe(false);
+    expect(gate.ok === false && gate.error).toMatch(/not a known facility register/);
+  });
+
+  // `getByUrl` deliberately ignores `active` (see its own doc comment), so a deactivated register
+  // RESOLVES and would otherwise be imported against. It gets its own message: an operator who once
+  // picked this register from the import sheet must be told it was retired, not that it never existed.
+  it('refuses a deactivated register with its own message, not the unknown-register one', async () => {
+    const db = (await makeMigratedDb()) as Kysely<InternalSchema>;
+    const store = createFacilityRegisterSourceStore(db);
+    const made = await store.create(base);
+    await db.updateTable('coding_systems').set({ active: false } as never)
+      .where('id', '=', made.id).execute();
+
+    const gate = await resolveFacilityRegisterForImport(store, 'urn:tz:hfr');
+
+    expect(gate.ok).toBe(false);
+    expect(gate.ok === false && gate.error).toMatch(/deactivated/);
+    expect(gate.ok === false && gate.error).not.toMatch(/not a known facility register/);
+  });
+
+  // Proves the three refusals above are not vacuous: the one value that SHOULD pass, passes, and
+  // hands back the resolved row rather than just a boolean.
+  it('resolves an active register and returns the row', async () => {
+    const db = (await makeMigratedDb()) as Kysely<InternalSchema>;
+    const store = createFacilityRegisterSourceStore(db);
+    await store.create(base);
+
+    const gate = await resolveFacilityRegisterForImport(store, 'urn:tz:hfr');
+
+    expect(gate.ok).toBe(true);
+    expect(gate.ok === true && gate.source).toMatchObject({ url: 'urn:tz:hfr', name: 'Tanzania HFR', active: true });
   });
 });

@@ -39,6 +39,74 @@ export interface FacilityRegisterSourceStore {
   }): Promise<FacilityRegisterSource>;
 }
 
+/** What `resolveFacilityRegisterForImport` answers: the resolved register, or the one message to
+ *  show the operator. No third state — a caller that got `ok: false` has nothing to import against. */
+export type FacilityRegisterImportGate =
+  | { ok: true; source: FacilityRegisterSource }
+  | { ok: false; error: string };
+
+/**
+ * ⛔ THE REFUSAL THIS SLICE EXISTS FOR, and the reason it lives here rather than in a route file.
+ *
+ * `nationalSystem` used to be free text hashed straight into every facility's permanent id (`idFor`,
+ * packages/terminology/src/facility-csv.ts: `fac-` + sha256(`<value>|<national code>`)). MEASURED for
+ * national code `100`: `HFR` produced `fac-d112c779ad583160` and `hfr` produced `fac-49bce368724fb81a`
+ * — two permanent identities for one register — while `observedFieldSystem`
+ * (packages/bootstrap/src/facility-controlled-fields.ts) LOWERCASES its slug, so both spellings
+ * shared one controlled-field namespace. One register, two identities, one namespace: the data
+ * disagreed with itself.
+ *
+ * The fix is not a normalisation rule bolted onto either function — `idFor`'s hash and
+ * `observedFieldSystem`'s slug are both unchanged. It is that the value fed to them can no longer be
+ * typed at all: it must name a `coding_systems` row marked as a facility register
+ * (`FACILITY_REGISTER_KIND`, migration 081).
+ *
+ * ⛔ An EXACT match on the register's stored url (`getByUrl`), never a case-insensitive or otherwise
+ * normalising lookup. Normalising here would re-open the fork from the other end: two spellings would
+ * resolve, and the two `idFor` hashes they produce would still differ.
+ *
+ * ⛔ THREE doors call this — the inline import route, the upload route
+ * (apps/server/src/facilities-routes.ts) and `openldr facilities import`
+ * (packages/cli/src/facilities.ts) — and they must all decide it the same way. The CLI is why this
+ * moved out of the route file: it had no gate at all, so one command minted
+ * `sha256("HFR|<code>")` ids that duplicated a whole register (the `(national_system, national_code)`
+ * unique index permits it — the systems differ) into a controlled-field namespace migration 082
+ * emptied when it moved every mapping to the canonical URI's slug. Copying the two messages into a
+ * second file is how the doors drift apart; this is the one place that decides.
+ *
+ * Takes the store rather than a db handle so a caller that already built one (both routes do, once
+ * per registration) does not build a second.
+ */
+export async function resolveFacilityRegisterForImport(
+  sources: Pick<FacilityRegisterSourceStore, 'getByUrl'>,
+  nationalSystem: string,
+): Promise<FacilityRegisterImportGate> {
+  const source = await sources.getByUrl(nationalSystem);
+  if (!source) {
+    // The message names the register's OWN identity (its canonical URI) rather than pointing at a
+    // surface for creating one: the operator reading it may be at a shell, in the import sheet, or
+    // driving the upload API, and only one of those has a "create a register" button.
+    return {
+      ok: false,
+      error: `"${nationalSystem}" is not a known facility register; a facility register with that `
+        + 'canonical URI must exist on this install before facilities can be imported against it',
+    };
+  }
+  // ⛔ `getByUrl` deliberately does NOT filter on `active` (see its own doc comment — a historical
+  // lookup still needs a deactivated register to resolve), so a deactivated register arrives here
+  // resolved and must be refused explicitly. Its own message, not the unknown-register one: an
+  // operator who once saw this register in the import sheet's picklist is told it was retired, not
+  // that it never existed.
+  if (!source.active) {
+    return {
+      ok: false,
+      error: `"${nationalSystem}" names a facility register that has been deactivated; `
+        + 'facilities cannot be imported against a deactivated register',
+    };
+  }
+  return { ok: true, source };
+}
+
 interface CodingSystemRegisterRow {
   id: string;
   url: string | null;
@@ -107,7 +175,7 @@ export function createFacilityRegisterSourceStore(db: Kysely<InternalSchema>): F
     getByUrl,
     async create(input) {
       // ⛔ CASE-INSENSITIVE, and deliberately unlike `getByUrl` (which stays exact-match — see its
-      // own doc comment, and facilities-routes.ts's `unknownRegisterError`). `idFor`
+      // own doc comment, and `resolveFacilityRegisterForImport` above). `idFor`
       // (packages/terminology/src/facility-csv.ts) hashes a nationalSystem string WITHOUT
       // lowercasing it, while `observedFieldSystem` (packages/bootstrap/src/facility-controlled-
       // fields.ts) DOES lowercase its slug — so an exact-match-only check here would let

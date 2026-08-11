@@ -9,8 +9,9 @@ import {
   type FacilityImportResult,
 } from '@openldr/bootstrap';
 import {
-  referenceCapture, createFacilityImportRunStore, type ExternalSchema,
-  type FacilityImportRun, type FacilityImportRunStore,
+  referenceCapture, createFacilityImportRunStore, createFacilityRegisterSourceStore,
+  resolveFacilityRegisterForImport, type ExternalSchema,
+  type FacilityImportRun, type FacilityImportRunStore, type FacilityRegisterSource,
 } from '@openldr/db';
 import { cliActor } from './cli-actor';
 import { redactError } from './redact-error';
@@ -112,6 +113,29 @@ export async function runFacilitiesImport(path: string, opts: FacilitiesImportOp
   // path out of this function below that ran with `run` non-null MUST finish it before returning.
   let run: FacilityImportRun | null = null;
   try {
+    // ⛔ B1 Task 11: the register gate, FIRST — before the run is minted, before the file is parsed,
+    // before anything is written. The same `resolveFacilityRegisterForImport` (@openldr/db) both HTTP
+    // import doors call; see it for the two-identities-one-namespace defect all three close. This
+    // command had NO gate: `--national-system HFR --apply` hashed a second permanent identity for a
+    // register already filed under its canonical URI (`idFor`, facility-csv.ts) into a controlled-
+    // field namespace migration 082 had emptied — one command, a mapping-less duplicate of a whole
+    // national register.
+    //
+    // ⛔ BEFORE `startPreview`, not after: a refused import must not mint a `facility_import_runs`
+    // row, because that row holds `active_key` for the register and this command does not supersede
+    // an abandoned one (see the docblock above). Ordering mirrors the route, whose gate runs before
+    // `importFacilities` is called at all.
+    const register = await resolveFacilityRegisterForImport(
+      createFacilityRegisterSourceStore(ctx.internalDb), opts.nationalSystem,
+    );
+    if (!register.ok) {
+      // Same shape as the `startPreview` refusal below — a named business refusal, exit 1, with the
+      // message on stdout under `--json` and on stderr otherwise.
+      if (opts.json) process.stdout.write(JSON.stringify({ error: register.error }) + '\n');
+      else process.stderr.write(`facilities import refused: ${register.error}\n`);
+      return 1;
+    }
+
     if (opts.apply) {
       try {
         run = await importRuns.startPreview({
@@ -675,6 +699,73 @@ export async function runFacilitiesImportRunCancel(
   } finally {
     await ctx.close();
   }
+}
+
+// ── B1 Task 11: `openldr facilities import-sources` ───────────────────────────────────────────
+
+export interface FacilitiesImportSourcesOpts {
+  json: boolean;
+}
+
+/**
+ * `openldr facilities import-sources [--json]`
+ *
+ * The facility registers an import may name — CLI parity for `GET /api/facilities/import/sources`
+ * (apps/server/src/facilities-routes.ts), reading the same `registerSources.list()` the import
+ * sheet's `Select` is built from. Read-only: no `--apply`, nothing audited.
+ *
+ * This is the other half of the gate `runFacilitiesImport` now applies. An operator whose
+ * `--national-system` was refused needs to know which URIs this install does accept, and from a
+ * shell there was no way to find out — the picklist exists only in the browser.
+ *
+ * ⚠ ACTIVE-ONLY, by taking `list()`'s own default (see its doc comment in @openldr/db). That matches
+ * what this command answers: which registers an import may be run against. A deactivated one is
+ * refused by the gate, so listing it here would be offering a spelling that cannot be used.
+ *
+ * ⛔ SPELLED AS A SIBLING of `import` — `import-sources`, never `facilities sources list`. commander
+ * parses a parent command's declared options BEFORE dispatching to a subcommand, so under a nested
+ * spelling `--json` is swallowed by the parent and this function is handed `json: false`. Same
+ * measured constraint as `import-run-cancel`; `facilities-import-cli-parsing.test.ts` pins it.
+ */
+export async function runFacilitiesImportSources(opts: FacilitiesImportSourcesOpts): Promise<number> {
+  const ctx = await createAppContext(loadConfig());
+  try {
+    const sources = await createFacilityRegisterSourceStore(ctx.internalDb).list();
+    if (opts.json) {
+      process.stdout.write(JSON.stringify(sources, null, 2) + '\n');
+    } else {
+      process.stdout.write(formatImportSourcesHuman(sources) + '\n');
+    }
+    // An install with no registers yet is the fresh-install state, not a failure — exiting non-zero
+    // would break any script running this as a check. The empty message below says what it means.
+    return 0;
+  } catch (err) {
+    const msg = redactError(err);
+    if (opts.json) process.stdout.write(JSON.stringify({ error: msg }) + '\n');
+    else process.stderr.write(`facilities import-sources failed: ${msg}\n`);
+    return 1;
+  } finally {
+    await ctx.close();
+  }
+}
+
+function formatImportSourcesHuman(sources: FacilityRegisterSource[]): string {
+  // The empty case names the consequence, because it IS the consequence: with no register on this
+  // install, every `facilities import` is refused by the gate, and the refusal message alone does not
+  // say how to get one.
+  if (sources.length === 0) {
+    return 'no facility registers on this install — every facilities import will be refused until one exists.\n'
+      + 'Register one with POST /api/facilities/import/sources, or from the Facilities page: '
+      + 'the import sheet\'s ... menu, "Register a source".';
+  }
+  // `url` FIRST: it is the value `--national-system` takes, compared exactly and case-sensitively by
+  // the import gate. The name is what an operator recognises, so it comes next.
+  const rows = sources.map((s) => [s.url, s.name, s.code, s.version ?? '—', s.jurisdiction ?? '—']);
+  const header = ['url', 'name', 'code', 'version', 'jurisdiction'];
+  const widths = header.map((h, i) => Math.max(h.length, ...rows.map((r) => r[i].length)));
+  // The last column is never padded — trailing whitespace on every line for no visual benefit.
+  const line = (cells: string[]) => cells.map((c, i) => (i === cells.length - 1 ? c : c.padEnd(widths[i]))).join('  ');
+  return [line(header), ...rows.map(line)].join('\n');
 }
 
 // ── Task 8: observed-facility reconciliation CLI parity ────────────────────────────────────────
