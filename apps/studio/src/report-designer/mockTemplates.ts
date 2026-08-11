@@ -6,6 +6,7 @@ export const MOCK_TEMPLATES: ReportTemplate[] = [
     name: 'AMR summary',
     paper: 'A4',
     orientation: 'portrait',
+    status: 'draft',
     parameters: [
       { key: 'facility', label: 'Facility', value: 'Ndola' },
       { key: 'period', label: 'Period', value: 'Q2 2026' },
@@ -34,6 +35,7 @@ export const MOCK_TEMPLATES: ReportTemplate[] = [
     name: 'Monthly caseload',
     paper: 'A4',
     orientation: 'portrait',
+    status: 'draft',
     parameters: [{ key: 'month', label: 'Month', value: 'June 2026' }],
     pages: [
       { id: 'rt-monthly-caseload-p1', elements: [
@@ -47,6 +49,7 @@ export const MOCK_TEMPLATES: ReportTemplate[] = [
     name: 'Lab TAT',
     paper: 'Letter',
     orientation: 'landscape',
+    status: 'draft',
     parameters: [],
     pages: [
       { id: 'rt-lab-tat-p1', elements: [

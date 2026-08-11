@@ -19,7 +19,7 @@ describe('report-designer model', () => {
   });
 
   it('addElement appends to the given page immutably', () => {
-    const tpl: ReportTemplate = { id: 't', name: 'x', paper: 'A4', orientation: 'portrait', pages: [{ id: 'p1', elements: [] }], parameters: [] };
+    const tpl: ReportTemplate = { id: 't', name: 'x', paper: 'A4', orientation: 'portrait', status: 'draft', pages: [{ id: 'p1', elements: [] }], parameters: [] };
     const next = addElement(tpl, 0, newElement('text'));
     expect(next.pages[0].elements).toHaveLength(1);
     expect(tpl.pages[0].elements).toHaveLength(0);
