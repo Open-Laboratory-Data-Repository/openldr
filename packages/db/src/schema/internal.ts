@@ -764,8 +764,24 @@ export interface ReportDesignsTable {
   parameters: unknown;
   margins: unknown | null;
   page_numbers: boolean | null;
+  status: Generated<string>;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
+}
+
+export interface ReportDesignVersionsTable {
+  id: string;
+  design_id: string;
+  version: number;
+  name: string;
+  paper: Generated<string>;
+  orientation: Generated<string>;
+  pages: unknown;
+  parameters: unknown;
+  margins: unknown | null;
+  page_numbers: boolean | null;
+  published_at: Generated<Date>;
+  published_by: string | null;
 }
 
 export interface ReportsTable {
@@ -894,6 +910,7 @@ export interface InternalSchema {
   plugin_data: PluginDataTable;
   app_settings: AppSettingsTable;
   report_designs: ReportDesignsTable;
+  report_design_versions: ReportDesignVersionsTable;
   reports: ReportsTable;
   sync_sites: SyncSitesTable;
   workflow_secrets: WorkflowSecretsTable;
