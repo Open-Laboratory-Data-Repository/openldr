@@ -15,6 +15,7 @@ beforeEach(async () => {
     .addColumn('orientation', 'text')
     .addColumn('pages', 'jsonb').addColumn('parameters', 'jsonb')
     .addColumn('margins', 'jsonb')
+    .addColumn('page_numbers', 'boolean')
     .addColumn('created_at', 'text').addColumn('updated_at', 'text').execute();
 });
 
@@ -69,5 +70,29 @@ describe('ReportDesignStore', () => {
     expect(second.id).toBe('dup');
     expect(second.name).toBe(first.name);
     expect((await store.list()).length).toBe(1);
+  });
+
+  it('round-trips pageNumbers, and reads an unset flag back as undefined not false', async () => {
+    const store = createReportDesignStore(db);
+
+    await store.create({ ...makeDesign('pn-on', 'On'), pageNumbers: true });
+    expect((await store.get('pn-on'))?.pageNumbers).toBe(true);
+
+    await store.create({ ...makeDesign('pn-off', 'Off'), pageNumbers: false });
+    expect((await store.get('pn-off'))?.pageNumbers).toBe(false);
+
+    // Unset must come back `undefined`. `false` would change the design's content hash and
+    // re-ship every previously-unflagged design over reference sync (see migration 082).
+    await store.create(makeDesign('pn-unset', 'Unset'));
+    expect((await store.get('pn-unset'))?.pageNumbers).toBeUndefined();
+  });
+
+  it('preserves pageNumbers across an update', async () => {
+    const store = createReportDesignStore(db);
+    const created = await store.create({ ...makeDesign('pn-upd', 'Upd'), pageNumbers: true });
+    await store.update('pn-upd', { ...created, name: 'Renamed' });
+    const updated = await store.get('pn-upd');
+    expect(updated?.name).toBe('Renamed');
+    expect(updated?.pageNumbers).toBe(true);
   });
 });
