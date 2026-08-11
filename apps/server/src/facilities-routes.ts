@@ -6,7 +6,7 @@ import type { Kysely } from 'kysely';
 import { z } from 'zod';
 import { appError } from '@openldr/core';
 import {
-  importFacilities, resolveKnownNationalSystem,
+  importFacilities, resolveKnownNationalSystem, CONTROLLED_FIELDS, resolveControlledFields,
   scanObservedFacilities, resolveObservedFacilities, publishFacilityMap, projectRegistryRows,
   retireRegistryConcepts, reprojectAfterRegistryDelete, listFacilityMappingConflicts, facilityHealth,
   type AppContext, type FacilityImportResult, type ScanResult, type PublishResult,
@@ -19,6 +19,7 @@ import {
 } from '@openldr/db';
 import type {
   FacilityAdminLevel, ExternalSchema, FacilityHealth, FacilityImportRun, FacilityImportRunStatus,
+  FacilityRecord,
 } from '@openldr/db';
 import { requireCapability } from './rbac';
 import { recordAudit, actorFromRequest } from './audit-helper';
@@ -489,6 +490,51 @@ function parseJsonArray(raw: string): unknown[] | undefined {
 function nameTypeError(name: unknown): { error: string } | undefined {
   if (name !== undefined && typeof name !== 'string') return { error: 'name must be text' };
   return undefined;
+}
+
+// ── Task 6 (B1, facility-canonical-identity): server-enforced controlled vocabulary ────────────
+//
+// `resolveControlledFields`/`applyControlledFields` (packages/bootstrap/src/facility-controlled-
+// fields.ts) already run over every CSV-imported row via `importFacilities`, rewriting a raw source
+// string to its canonical code and WARNING on anything that doesn't resolve — warning only, import
+// never refuses a row over this. Manual create/edit (this route) ran no such check at all: a
+// hand-typed `status` could be 'Operating' while an imported row is always a canonical FHIR
+// location-status code. That disagreement between the two doors is what this closes — POST/PUT
+// below reuse the SAME resolver, not a second one, but REFUSE (400) rather than warn: there is no
+// "raw source string" here to preserve under `extras.__source`, only an operator's own typed input.
+//
+// ⛔ A controlled field passes ONLY if its submitted value is ALREADY a canonical code (present in
+// the value set's own expansion) — or that field's value set is not seeded on this install at all,
+// `resolveControlledFields`'s `notValidated` case, which is NOT enforced here either: refusing would
+// leave an unseeded install unable to create a facility at all. A value that resolves through an
+// ACTIVE `term_mappings` entry (`resolveControlledFields`'s `mapped` case) is treated the SAME as
+// `unmapped` — refused, not silently rewritten. That mapping vocabulary exists to canonicalise
+// strings a REGISTER supplied under its own `nationalSystem` during reconciliation; rewriting a
+// hand-typed value behind the operator's back on this route would trade one surprise for another.
+// An operator who wants a particular canonical value picks it directly.
+//
+// Only fields the CALLER actually submitted this request are checked (`record`, from
+// `splitFacilityAnswers` — never the row's other, already-persisted columns): an edit that touches
+// an unrelated field must not be blocked by a value written before this check existed.
+async function controlledFieldsError(
+  ctx: AppContext, record: Partial<FacilityRecord>,
+): Promise<{ error: string } | undefined> {
+  const submitted = CONTROLLED_FIELDS.filter(
+    (field) => typeof record[field] === 'string' && (record[field] as string).length > 0,
+  );
+  if (submitted.length === 0) return undefined;
+
+  // `nationalSystem` only decides which `term_mappings` namespace a non-canonical value is looked
+  // up under (`observedFieldSystem`) — it never decides pass/fail here, since `mapped` and
+  // `unmapped` are refused identically below. An absent one (the common manual-entry case) is a
+  // valid, deterministic namespace of its own, not an error.
+  const nationalSystem = typeof record.nationalSystem === 'string' ? record.nationalSystem : '';
+  const res = await resolveControlledFields(ctx.terminology.admin, nationalSystem, [record as FacilityRecord]);
+
+  const badField = submitted.find((field) => res.mapped[field].size > 0 || res.unmapped[field].length > 0);
+  if (!badField) return undefined;
+
+  return { error: `${badField} '${String(record[badField])}' is not a recognised canonical ${badField} value` };
 }
 
 // ── Task 6: observed-facility reconciliation ────────────────────────────────────────────────────
@@ -1067,6 +1113,11 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       return { error: 'a facility must have a local code or a national code' };
     }
 
+    // Task 6 (B1): reject a non-canonical level/status/country BEFORE the write — see
+    // `controlledFieldsError`'s doc comment for why this refuses rather than warns, unlike import.
+    const controlledErr = await controlledFieldsError(ctx, record);
+    if (controlledErr) { reply.code(400); return controlledErr; }
+
     // Only the write itself is guarded — an error from `recordAudit` below must never be mapped
     // as if it came from `upsert` (e.g. a 23505 from the audit table mis-reported to the client as
     // "a facility with that local code already exists" after the facility row already committed).
@@ -1195,6 +1246,13 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       reply.code(400);
       return { error: 'a facility must have a local code or a national code' };
     }
+
+    // Task 6 (B1): same rule as POST, and scoped the same way — only what THIS submission sets for
+    // level/status/country is checked, never a value inherited unchanged from `before` (see
+    // `controlledFieldsError`'s doc comment). An edit to an unrelated field on a facility whose
+    // status predates this check must not be blocked by that pre-existing value.
+    const controlledErr = await controlledFieldsError(ctx, record);
+    if (controlledErr) { reply.code(400); return controlledErr; }
 
     // Only the write itself is guarded — see the matching comment in POST.
     let after;

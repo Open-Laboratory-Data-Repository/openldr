@@ -12,13 +12,15 @@ import { valueSetToFhirResource } from '../../fhir-value-set';
 // 2. `facility_registry.register_state` separates REGISTER MEMBERSHIP from OPERATIONAL STATUS. The
 //    existing `status` column (070) answers "is this facility open" — HL7's own `location-status`
 //    vocabulary (active/suspended/inactive, seeded by 072). HL7 has no membership concept, so carrying
-//    "the register dropped this row" there would mean inventing a non-conformant code — see
-//    facility-import.ts's retirement comment, which is correct about why it writes `inactive` rather
-//    than a `retired` code. But today that write is the ONLY signal for "the register stopped listing
-//    this row" — `status` currently carries both facts at once, which is exactly the conflation this
-//    slice exists to remove. Task 5 moves that fact onto `register_state`, so `status` goes back to
-//    meaning operational status only. register_state is OpenLDR's own membership vocabulary, seeded
-//    below as its own ValueSet over its own CodeSystem.
+//    "the register dropped this row" there would mean inventing a non-conformant code — which is
+//    exactly what facility-import.ts's retirement block used to do, writing `status: 'inactive'` for a
+//    row the register stopped listing, before this column existed. That write was the ONLY signal for
+//    "the register stopped listing this row" — `status` carried both facts at once, which is exactly
+//    the conflation this slice exists to remove. Task 5 (already landed) moved that fact onto this
+//    column: facility-import.ts's retirement block now sets `register_state: 'dropped'` here instead
+//    and never touches `status`, which is back to meaning operational status only — see that file's
+//    retirement comment for the current write. register_state is OpenLDR's own membership vocabulary,
+//    seeded below as its own ValueSet over its own CodeSystem.
 export const FACILITY_REGISTER_STATE_VS = 'urn:openldr:valueset:facility-register-state';
 
 /** Marks a `coding_systems` row as a facility register.

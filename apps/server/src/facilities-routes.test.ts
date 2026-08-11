@@ -1329,6 +1329,145 @@ describe('POST/PUT report whether this call\'s projection landed', () => {
   });
 });
 
+// --- Task 6 (B1, facility-canonical-identity): server-enforced controlled vocabulary on manual
+// create/edit. `resolveControlledFields`/`applyControlledFields` (packages/bootstrap/src/facility-
+// controlled-fields.ts) already run over every CSV-imported row via `importFacilities`, but manual
+// create/edit (this route) applied no valueset at all — an imported row's `status` is always a
+// canonical FHIR location-status code (migration 072), a hand-typed one could be anything. These
+// tests pin the fix: POST/PUT reuse the SAME resolver and REFUSE (400) a controlled field whose raw
+// value is not already canonical — except when that field's value set is not seeded on this
+// install, which is reported NOT VALIDATED (passed through unenforced) rather than refused, exactly
+// mirroring `resolveControlledFields`'s own contract.
+//
+// Run against a REAL migrated db (`fakeCreateCtx`, defined above) rather than `fakeCtx()`'s
+// hand-rolled admin double: the double has no `valueSets`/`termMappings` at all, and the whole point
+// here is proving the route resolves against the REAL seeded value sets from migrations 072/073.
+
+const CONTROLLED_FORM_FIELDS = [
+  { id: 'k1', apiProperty: 'localCode' },
+  { id: 'k2', apiProperty: 'name' },
+  { id: 'k3', apiProperty: 'status' },
+  { id: 'k4', apiProperty: 'level' },
+  { id: 'k5', apiProperty: 'country' },
+];
+
+/** `fakeCreateCtx` above only registers `form-sample-facility` (FORM_FIELDS, no controlled
+ *  columns) — this variant additionally serves `form-controlled-fields`, mapping k3/k4/k5 onto
+ *  status/level/country so these tests can submit them directly. */
+function fakeControlledCtx(internalDb: any) {
+  const ctx = fakeCreateCtx(internalDb);
+  ctx.forms.get = async (formId: string) => (
+    formId === 'form-controlled-fields'
+      ? { id: 'form-controlled-fields', schema: { fields: CONTROLLED_FORM_FIELDS }, targetPages: ['facilities'] }
+      : undefined
+  );
+  return ctx;
+}
+
+function controlledBody(answers: Record<string, string>) {
+  return {
+    answers: { k1: 'CF01', k2: 'Controlled Fields Facility', ...answers },
+    formSchemaId: 'form-controlled-fields',
+    formVersion: 1,
+  };
+}
+
+describe('Task 6: server-enforced controlled vocabulary on manual create/edit', () => {
+  it('⛔ refuses a manually created facility whose status is not in the canonical valueset', async () => {
+    const internalDb = await makeMigratedDb();
+    const app = await appWith(fakeControlledCtx(internalDb));
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities', payload: controlledBody({ k3: 'Operating' }),
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toMatch(/status/i);
+  });
+
+  it('accepts a canonical status', async () => {
+    const internalDb = await makeMigratedDb();
+    const app = await appWith(fakeControlledCtx(internalDb));
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities', payload: controlledBody({ k3: 'active' }),
+    });
+    expect(res.statusCode).toBe(201);
+    expect(res.json().status).toBe('active');
+  });
+
+  it('applies the same rule to level and country', async () => {
+    const internalDb = await makeMigratedDb();
+    const app = await appWith(fakeControlledCtx(internalDb));
+
+    const badLevel = await app.inject({
+      method: 'POST', url: '/api/facilities', payload: controlledBody({ k4: 'Not A Real Level' }),
+    });
+    expect(badLevel.statusCode).toBe(400);
+    expect(badLevel.json().error).toMatch(/level/i);
+
+    // A distinct localCode: the level refusal above must not have written a row for CF01 to
+    // collide with (that would itself be evidence the refusal didn't actually block the write).
+    const badCountry = await app.inject({
+      method: 'POST', url: '/api/facilities',
+      payload: controlledBody({ k1: 'CF02', k5: 'Nowhereland' }),
+    });
+    expect(badCountry.statusCode).toBe(400);
+    expect(badCountry.json().error).toMatch(/country/i);
+  });
+
+  it('reports NOT VALIDATED rather than refusing when the valueset is not seeded', async () => {
+    const internalDb = await makeMigratedDb();
+    const ctx = fakeControlledCtx(internalDb);
+    // Simulate an install where migration 072's location-status ValueSet was never seeded.
+    // `resolveControlledFields`'s own contract (facility-controlled-fields.ts) reports a field
+    // whose value set is absent as `notValidated` and classifies none of its values — the route
+    // must mirror that by letting the create through, not refusing an operator's only way to
+    // register a facility on that install.
+    const real = ctx.terminology.admin.valueSets.getByUrl.bind(ctx.terminology.admin.valueSets);
+    ctx.terminology.admin.valueSets.getByUrl = async (url: string) => (
+      url === 'urn:openldr:valueset:location-status' ? null : real(url)
+    );
+    const app = await appWith(ctx);
+
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities', payload: controlledBody({ k3: 'Operating' }),
+    });
+    expect(res.statusCode).toBe(201);
+    expect(res.json().status).toBe('Operating');
+  });
+
+  it('refuses a PUT that edits status to a non-canonical value, without overwriting the existing canonical one', async () => {
+    const internalDb = await makeMigratedDb();
+    const app = await appWith(fakeControlledCtx(internalDb));
+    const created = (await app.inject({
+      method: 'POST', url: '/api/facilities', payload: controlledBody({ k3: 'active' }),
+    })).json();
+
+    const res = await app.inject({
+      method: 'PUT', url: `/api/facilities/${created.id}`,
+      payload: controlledBody({ k3: 'Operating' }),
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toMatch(/status/i);
+    const row = await internalDb.selectFrom('facility_registry').selectAll()
+      .where('id', '=', created.id).executeTakeFirstOrThrow();
+    expect(row.status).toBe('active');
+  });
+
+  it('accepts a PUT that edits status to a different canonical value', async () => {
+    const internalDb = await makeMigratedDb();
+    const app = await appWith(fakeControlledCtx(internalDb));
+    const created = (await app.inject({
+      method: 'POST', url: '/api/facilities', payload: controlledBody({ k3: 'active' }),
+    })).json();
+
+    const res = await app.inject({
+      method: 'PUT', url: `/api/facilities/${created.id}`,
+      payload: controlledBody({ k3: 'suspended' }),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().status).toBe('suspended');
+  });
+});
+
 // --- Task 9: DELETE is the third code-release path, and used to be the only one with no projection
 // work at all. It has TWO obligations, in a fixed order around the row removal — see
 // `retireRegistryConcepts`/`reprojectAfterRegistryDelete` in packages/bootstrap for why the order is
