@@ -135,14 +135,23 @@ const currentHealth: FacilityHealth = {
   projection: { failedCount: 0, failed: [] },
 };
 
-/** Open the ⋯ menu named `triggerName` and click the item matching `itemName`. Radix opens
- *  DropdownMenuContent on pointerdown; jsdom sometimes needs a follow-up Enter keydown. */
-function clickMenuItem(triggerName: string, itemName: string | RegExp) {
+/** Open the ⋯ menu named `triggerName`, leaving it open so a caller can assert on its contents.
+ *  Radix opens DropdownMenuContent on pointerdown; jsdom sometimes needs a follow-up Enter keydown.
+ *  Split out of `clickMenuItem` (below) so a test that needs to inspect the OPEN menu — e.g. assert
+ *  an item is absent — isn't forced to look after the click has already closed it. */
+function openMenu(triggerName: string, probeItemName: string | RegExp) {
   const trigger = screen.getByRole('button', { name: triggerName });
   fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
-  if (!screen.queryByRole('menuitem', { name: itemName })) {
+  if (!screen.queryByRole('menuitem', { name: probeItemName })) {
     fireEvent.keyDown(trigger, { key: 'Enter' });
   }
+}
+
+/** Open the ⋯ menu named `triggerName` and click the item matching `itemName`. Clicking closes the
+ *  menu (Radix `onSelect`), so any assertion about what else the menu did/didn't contain must run
+ *  BEFORE calling this — see `openMenu` above. */
+function clickMenuItem(triggerName: string, itemName: string | RegExp) {
+  openMenu(triggerName, itemName);
   fireEvent.click(screen.getByRole('menuitem', { name: itemName }));
 }
 
@@ -316,12 +325,15 @@ describe('Facilities page', () => {
       show();
       await waitFor(() => expect(screen.getByText('Dodoma Regional Referral')).toBeInTheDocument());
 
-      clickMenuItem(`Facility actions ${sampleFacility.name}`, /history/i);
-      await waitFor(() => expect(getFacilityHistory).toHaveBeenCalledWith(sampleFacility.id));
-
-      // Edit/Delete stay hidden for this actor — the same per-row menu, narrower contents.
+      // Open the menu and assert Edit/Delete are absent WHILE IT IS OPEN — clicking an item closes
+      // the menu (Radix `onSelect`), so checking after the click would pass trivially regardless
+      // of what the menu actually rendered.
+      openMenu(`Facility actions ${sampleFacility.name}`, /history/i);
       expect(screen.queryByRole('menuitem', { name: /^edit$/i })).not.toBeInTheDocument();
       expect(screen.queryByRole('menuitem', { name: /^delete$/i })).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('menuitem', { name: /history/i }));
+      await waitFor(() => expect(getFacilityHistory).toHaveBeenCalledWith(sampleFacility.id));
     });
   });
 

@@ -81,10 +81,11 @@ function formatOccurredAt(iso: string): string {
  * re-sort, so this can never disagree with the server's own tiebreak (`occurred_at` desc, `id` desc
  * — see that route's doc comment for why `id` is the second key).
  *
- * Reachable from the Registry table's per-row ⋯ menu (Facilities.tsx) — a `facilities.manage`-
- * gated affordance today (see that file's own comment on why History rides the existing Edit/
- * Delete menu rather than reopening that menu's `canManage` gate for a route that itself only
- * requires `facilities.view`).
+ * Reachable from the Registry table's per-row ⋯ menu (Facilities.tsx) — that menu is rendered
+ * unconditionally (not `facilities.manage`-gated) precisely so History stays reachable to a
+ * `facilities.view`-only actor, matching `GET /api/facilities/:id/history`'s own capability
+ * requirement; Edit/Delete remain inside that menu's separate `canManage` guard (see that file's
+ * own comment above its per-row menu for the detail).
  *
  * No ⋯ actions menu of its own: unlike every other Sheet in this app (which has a genuine Save/
  * Cancel to route through one, per ui-actions-in-dots-menu), this view has nothing to DO besides

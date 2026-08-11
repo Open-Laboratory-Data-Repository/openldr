@@ -115,9 +115,10 @@ export function FacilityDialog({ open, onOpenChange, facility, onSaved }: Facili
   // — the same one ImportFacilitiesSheet's national-system Select already uses), matched against
   // `facility.nationalSystem` by url; a register deactivated or unknown to this install simply has
   // no match, and the panel still shows the raw canonical URI (see the render below) rather than
-  // hiding it. `lastImportRow` is the newest `facility.import.row` history entry for this facility,
-  // `undefined` while unresolved and `null` once resolved-to-none (so the panel can tell "still
-  // loading" from "genuinely never imported" without a separate loading flag).
+  // hiding it. `lastImportAt` is the `occurredAt` timestamp of the newest `facility.import.row`
+  // history entry for this facility, `undefined` while unresolved and `null` once resolved-to-none
+  // (so the panel can tell "still loading" from "genuinely never imported" without a separate
+  // loading flag).
   const [registerSources, setRegisterSources] = useState<FacilityRegisterSource[]>([]);
   const [lastImportAt, setLastImportAt] = useState<string | null | undefined>(undefined);
 

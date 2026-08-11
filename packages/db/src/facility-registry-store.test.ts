@@ -113,10 +113,10 @@ describe('createFacilityRegistryStore', () => {
       // 'dropped' (i%5===0: 5,10,15,20,25), 5 land 'in_register' (i%5===1: 1,6,11,16,21), and the
       // remaining 15 keep the column's own DEFAULT ('not_registered').
       if (i % 5 === 0) {
-        await db.updateTable('facility_registry' as never).set({ register_state: 'dropped' } as never)
+        await db.updateTable('facility_registry').set({ register_state: 'dropped' })
           .where('id', '=', `f${p}`).execute();
       } else if (i % 5 === 1) {
-        await db.updateTable('facility_registry' as never).set({ register_state: 'in_register' } as never)
+        await db.updateTable('facility_registry').set({ register_state: 'in_register' })
           .where('id', '=', `f${p}`).execute();
       }
     }
