@@ -239,7 +239,9 @@ function KindControls({ el, onPatch }: {
   }
 
   if (el.kind === 'image') {
-    return <ImageSource el={el} onPatch={onPatch} />;
+    // Keyed on el.id so switching elements REMOUNTS this: the local error state from a rejected
+    // pick would otherwise survive the selection change and appear on an unrelated element.
+    return <ImageSource key={el.id} el={el} onPatch={onPatch} />;
   }
 
   if (el.kind === 'barcode' || el.kind === 'qrcode') {

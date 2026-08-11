@@ -289,4 +289,26 @@ describe('PropertiesTab image source', () => {
     expect(screen.getByText(/Unsupported image type/i)).toBeInTheDocument();
     expect(props.onPatchElement).not.toHaveBeenCalled();
   });
+
+  it('clears a rejected-file error from one image element when a different element is selected', () => {
+    // ImageSource holds local `error` state. Without a `key` on it, switching the selection to a
+    // different element re-renders the SAME fiber instead of remounting it, so element B's panel
+    // would still show element A's "too large" error even though B was never touched.
+    const template: ReportTemplate = {
+      id: 't', name: 't', paper: 'A4', orientation: 'portrait', parameters: [],
+      pages: [{ id: 'p1', elements: [
+        { id: 'a', kind: 'image', name: 'Image A', rect: { x: 0, y: 0, w: 10, h: 10 }, src: '' },
+        { id: 'b', kind: 'image', name: 'Image B', rect: { x: 0, y: 0, w: 10, h: 10 }, src: '' },
+      ] }],
+    };
+    const { rerender } = render(<PropertiesTab template={template} selectedIds={['a']}
+      onPatchElement={vi.fn()} onPatchPage={vi.fn()} onPatchElements={vi.fn()} />);
+    const big = new File([new Uint8Array(300 * 1024)], 'big.png', { type: 'image/png' });
+    fireEvent.change(screen.getByTestId('image-file'), { target: { files: [big] } });
+    expect(screen.getByText(/too large/i)).toBeInTheDocument();
+
+    rerender(<PropertiesTab template={template} selectedIds={['b']}
+      onPatchElement={vi.fn()} onPatchPage={vi.fn()} onPatchElements={vi.fn()} />);
+    expect(screen.queryByText(/too large/i)).not.toBeInTheDocument();
+  });
 });
