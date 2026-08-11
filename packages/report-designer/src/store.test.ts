@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { Kysely } from 'kysely';
+import { Kysely, sql } from 'kysely';
 import { newDb } from 'pg-mem';
 import { createReportDesignStore } from './store';
+import { ReportDesignSchema } from './schema';
 import type { ReportDesign } from './schema';
 import type { ReferenceCapture } from '@openldr/db';
 
@@ -17,7 +18,10 @@ beforeEach(async () => {
     .addColumn('pages', 'jsonb').addColumn('parameters', 'jsonb')
     .addColumn('margins', 'jsonb')
     .addColumn('page_numbers', 'boolean')
-    .addColumn('created_at', 'text').addColumn('updated_at', 'text').execute();
+    // Mirrors migration 042's `notNull().defaultTo(sql`now()`)` — needed so a DB-stamped timestamp is
+    // actually present to assert on (no earlier test in this file read createdAt/updatedAt).
+    .addColumn('created_at', 'timestamptz', (c) => c.notNull().defaultTo(sql`now()`))
+    .addColumn('updated_at', 'timestamptz', (c) => c.notNull().defaultTo(sql`now()`)).execute();
 });
 
 function makeDesign(id: string, name: string): ReportDesign {
@@ -135,5 +139,51 @@ describe('ReportDesignStore', () => {
     await store.create({ ...makeDesign('h-off', 'Same'), pageNumbers: false });
     await store.create({ ...makeDesign('h-on', 'Same'), pageNumbers: true });
     expect(hashes[0]).not.toBe(hashes[1]);
+  });
+});
+
+// The defect this slice fixes was "a field nobody remembered". A fixture alone cannot catch the
+// next one, because a new field is simply absent from it and everything still passes. The tripwire
+// is what forces the fixture to grow.
+const KNOWN_TOP_LEVEL_FIELDS = [
+  'id', 'name', 'paper', 'orientation', 'pages', 'parameters', 'margins', 'pageNumbers',
+  'createdAt', 'updatedAt',
+] as const;
+
+describe('ReportDesign round-trip completeness', () => {
+  it('has no top-level schema field the store has not been taught about', () => {
+    // FAILING HERE? You added a field to ReportDesignSchema. Do all three:
+    //   1. persist it in `toRow` and read it in `fromRow` (packages/report-designer/src/store.ts),
+    //      adding a column via a migration if it is not inside the `pages` jsonb blob;
+    //   2. add it to `hashOf`, or it will never sync;
+    //   3. add it to KNOWN_TOP_LEVEL_FIELDS and to EVERY_FIELD below, with a non-default value.
+    expect(Object.keys(ReportDesignSchema.shape).sort()).toEqual([...KNOWN_TOP_LEVEL_FIELDS].sort());
+  });
+
+  it('round-trips every persisted field at a non-default value', async () => {
+    const EVERY_FIELD: ReportDesign = {
+      id: 'full',
+      name: 'Every field set',
+      paper: 'Letter',
+      orientation: 'landscape',
+      margins: { top: 11, right: 22, bottom: 33, left: 44 },
+      parameters: [{ key: 'facility', label: 'Facility', type: 'select', required: true, value: 'Ndola' }],
+      pages: [{
+        id: 'full-p1',
+        elements: [{ id: 'e1', kind: 'text', name: 'Title', rect: { x: 1, y: 2, w: 3, h: 4 }, text: 'Hi' }],
+      }],
+      pageNumbers: true,
+    };
+
+    const store = createReportDesignStore(db);
+    await store.create(EVERY_FIELD);
+    const got = await store.get('full');
+    expect(got).toBeDefined();
+
+    // `createdAt`/`updatedAt` are stamped by the database, not round-tripped from the input.
+    const { createdAt, updatedAt, ...persisted } = got!;
+    expect(createdAt).toBeDefined();
+    expect(updatedAt).toBeDefined();
+    expect(persisted).toEqual(EVERY_FIELD);
   });
 });
