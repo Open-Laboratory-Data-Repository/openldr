@@ -3,7 +3,7 @@ import { computeNextDesignVersion, designContentFingerprint, designContentChange
 import type { ReportDesign } from './schema';
 
 const base: ReportDesign = {
-  id: 'd', name: 'Design', paper: 'A4', orientation: 'portrait',
+  id: 'd', name: 'Design', paper: 'A4', orientation: 'portrait', status: 'draft',
   pages: [{ id: 'p1', elements: [] }], parameters: [],
 };
 
@@ -43,7 +43,7 @@ describe('designContentChanged', () => {
   });
 
   it('is stable against key order', () => {
-    const reordered = { parameters: [], pages: [{ id: 'p1', elements: [] }], orientation: 'portrait', paper: 'A4', name: 'Design', id: 'd' } as ReportDesign;
+    const reordered = { parameters: [], pages: [{ id: 'p1', elements: [] }], orientation: 'portrait', paper: 'A4', name: 'Design', id: 'd', status: 'draft' } as ReportDesign;
     expect(designContentFingerprint(base)).toBe(designContentFingerprint(reordered));
   });
 });

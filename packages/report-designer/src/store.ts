@@ -2,6 +2,7 @@ import type { Kysely } from 'kysely';
 import { canonicalHash } from '@openldr/core';
 import type { InternalSchema, ReferenceCapture } from '@openldr/db';
 import { type ReportDesign, ReportDesignSchema } from './schema';
+import { designContentChanged } from './lifecycle';
 
 function toRow(d: ReportDesign) {
   return {
@@ -15,6 +16,7 @@ function toRow(d: ReportDesign) {
     // `?? null` not `?? false` — see migration 082. An unset flag must persist as NULL so it reads
     // back `undefined` and leaves the content hash unchanged.
     page_numbers: d.pageNumbers ?? null,
+    status: d.status ?? 'draft',
   };
 }
 
@@ -29,6 +31,7 @@ function fromRow(r: Record<string, unknown>): ReportDesign {
     parameters: parse(r.parameters, []),
     margins: r.margins == null ? undefined : parse(r.margins, undefined),
     pageNumbers: r.page_numbers == null ? undefined : Boolean(r.page_numbers),
+    status: r.status === 'published' ? 'published' : 'draft',
     createdAt: r.created_at ? String(r.created_at) : undefined,
     updatedAt: r.updated_at ? String(r.updated_at) : undefined,
   });
@@ -83,15 +86,30 @@ export function createReportDesignStore(db: Kysely<InternalSchema>, capture?: Re
         const persisted = inserted
           ? fromRow(inserted as Record<string, unknown>)
           : fromRow((await trx.selectFrom('report_designs').selectAll().where('id', '=', d.id).executeTakeFirst()) as Record<string, unknown>);
-        if (capture) await capture.record(trx, 'report_design', d.id, 'upsert', hashOf(persisted));
+        // Drafts are not synced. Labs mirror the published design; the eventual publish() captures
+        // the final state. Mirrors packages/forms/src/store.ts.
+        if (capture && persisted.status === 'published') {
+          await capture.record(trx, 'report_design', d.id, 'upsert', hashOf(persisted));
+        }
         return persisted;
       });
     },
     async update(id, d) {
       return db.transaction().execute(async (trx) => {
-        await trx.updateTable('report_designs').set({ ...toRow({ ...d, id }) } as never).where('id', '=', id).execute();
+        const beforeRow = await trx.selectFrom('report_designs').selectAll().where('id', '=', id).executeTakeFirst();
+        const before = beforeRow ? fromRow(beforeRow as Record<string, unknown>) : undefined;
+        // A published design drops to draft when its CONTENT changes. Gating on content matters:
+        // autosave fires on any dirty state, and a no-op save must not un-publish.
+        const nextStatus = before && before.status === 'published' && !designContentChanged(before, { ...d, id })
+          ? 'published'
+          : 'draft';
+        await trx.updateTable('report_designs')
+          .set({ ...toRow({ ...d, id, status: nextStatus }) } as never)
+          .where('id', '=', id).execute();
         const persisted = fromRow((await trx.selectFrom('report_designs').selectAll().where('id', '=', id).executeTakeFirst()) as Record<string, unknown>);
-        if (capture) await capture.record(trx, 'report_design', id, 'upsert', hashOf(persisted));
+        if (capture && persisted.status === 'published') {
+          await capture.record(trx, 'report_design', id, 'upsert', hashOf(persisted));
+        }
         return persisted;
       });
     },

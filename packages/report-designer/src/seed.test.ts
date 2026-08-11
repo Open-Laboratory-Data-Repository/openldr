@@ -16,6 +16,7 @@ beforeEach(async () => {
     .addColumn('pages', 'jsonb').addColumn('parameters', 'jsonb')
     .addColumn('margins', 'jsonb')
     .addColumn('page_numbers', 'boolean')
+    .addColumn('status', 'text')
     .addColumn('created_at', 'text').addColumn('updated_at', 'text').execute();
 });
 
@@ -41,7 +42,7 @@ describe('seedReportDesigns', () => {
 
 describe('removeRetiredDemoDesigns', () => {
   async function seedLegacyDemoDesign(store: ReturnType<typeof createReportDesignStore>, id: string): Promise<void> {
-    await store.create({ id, name: id, paper: 'A4', orientation: 'portrait', parameters: [], pages: [] });
+    await store.create({ id, name: id, paper: 'A4', orientation: 'portrait', status: 'draft', parameters: [], pages: [] });
   }
 
   it('is a no-op on a fresh install (the demo designs were never seeded)', async () => {
