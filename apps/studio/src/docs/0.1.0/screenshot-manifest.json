@@ -29,7 +29,28 @@
         "kind": "selector",
         "value": "[aria-label=\"Dashboard\"]"
       },
-      "steps": []
+      "steps": [
+        {
+          "action": "click",
+          "role": "button",
+          "name": "Dashboard menu"
+        },
+        {
+          "action": "click",
+          "role": "menuitem",
+          "name": "Edit"
+        },
+        {
+          "action": "click",
+          "role": "button",
+          "name": "Dashboard menu"
+        },
+        {
+          "action": "click",
+          "role": "menuitem",
+          "name": "Done"
+        }
+      ]
     },
     {
       "name": "dashboard-edit-widget.png",

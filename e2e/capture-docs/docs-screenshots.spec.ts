@@ -40,8 +40,16 @@ async function capture(browser: Browser, shot: CaptureManifestShot): Promise<voi
   try {
     await preparePage(page, shot.theme);
     await page.goto(resolveRoute(shot.route), { waitUntil: 'networkidle' });
+    // The studio bundle is ~6 MB, and a cold server can still be sending it when `networkidle`
+    // resolves. Every capture route is under /studio, so the AppShell sidebar is the signal that
+    // React has mounted. Without this, the first capture step races the boot and fails its own
+    // 5s timeout. Tolerated if absent so a route without the shell still captures.
+    await page.locator('nav').first().waitFor({ state: 'visible', timeout: 30_000 }).catch(() => undefined);
     await runCaptureSteps(page, shot.steps);
     await waitUntilReady(page, shot.ready);
+    // Steps that change state (entering edit mode, switching tabs) make widgets refetch. Without
+    // this the shot can catch a chart mid-load and bake an empty panel into the docs image.
+    await page.waitForLoadState('networkidle').catch(() => undefined);
     await disableAnimations(page);
     await addCallouts(page, shot.callouts ?? []);
 
