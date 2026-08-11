@@ -1059,7 +1059,7 @@ export interface FacilityImportResult {
 
 // B1 Task 9: the picklist `ImportFacilitiesSheet`'s national-system `Select` renders — the ONLY
 // spellings `POST /api/facilities/import` (and /import/upload) will accept from this point on (see
-// facilities-routes.ts's `unknownRegisterError`). Mirrors `@openldr/db`'s `FacilityRegisterSource`
+// `@openldr/db`'s `resolveFacilityRegisterForImport`). Mirrors `@openldr/db`'s `FacilityRegisterSource`
 // field-for-field, same "mirrored, not shared" reasoning as `FacilityImportResult` above (this app
 // has no dependency on `@openldr/db`).
 export interface FacilityRegisterSource {

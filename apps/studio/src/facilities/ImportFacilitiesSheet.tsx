@@ -564,7 +564,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   // B1 Task 9: holds the CHOSEN SOURCE'S URI, and only ever that — see `handleNationalSystemChange`
   // and the `Select` below. Before this task it was a free-text box hashed straight into every
   // facility's permanent id (`idFor`, facility-csv.ts); the import routes now refuse anything that
-  // is not a registered source's own url (facilities-routes.ts's `unknownRegisterError`), so typing
+  // is not a registered source's own url (`@openldr/db`'s `resolveFacilityRegisterForImport`), so typing
   // one in was never completable from here to begin with.
   const [nationalSystem, setNationalSystem] = useState('');
   // The registers this operator may pick — `GET /api/facilities/import/sources`, fetched once per
