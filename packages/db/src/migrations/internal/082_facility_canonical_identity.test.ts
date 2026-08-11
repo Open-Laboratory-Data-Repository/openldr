@@ -2,11 +2,14 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, it, expect } from 'vitest';
 import type { Kysely } from 'kysely';
+import { newDb } from 'pg-mem';
 import { makeMigratedDb } from './test-helpers';
+import { internalMigrations } from './index';
 import {
   FACILITY_REGISTER_URI_PREFIX,
   registerUriFor,
   rekey,
+  rowsPerStatement,
 } from './082_facility_canonical_identity';
 
 // ⛔ EVERY EXPECTED ID BELOW IS A LITERAL, MEASURED ONCE AND PINNED — never recomputed in the test
@@ -347,6 +350,94 @@ describe('082 facility canonical identity', () => {
     expect(registers.map((r) => r.url)).toEqual(['urn:tz:hfr']);
     // nothing changed, so no dimension rebuild was queued
     expect(await db.selectFrom('facility_jobs').select('id').execute()).toEqual([]);
+  });
+
+  // ⛔ WHAT THIS PAIR OF TESTS DOES AND DOES NOT PROVE.
+  // The defect is a real-Postgres one: a statement may bind at most 65535 parameters, and on an
+  // upgrade install `moves` holds one entry per facility in a national register. pg-mem has NO
+  // parameter ceiling, so it can never raise the failure; and 22 000 rows through pg-mem takes
+  // minutes (measured: 3 000 rows -> 90 s), so the real row count cannot be tested here either.
+  // These two tests therefore split the claim in half:
+  //   - the first pins the ARITHMETIC of the default budget against Postgres's real 65535;
+  //   - the second pins that the call sites actually LOOP, by running them at a budget small enough
+  //     to reach a second chunk in five rows, and counting the statements the executor issued.
+  // Neither exercises node-postgres's wire encoding. That layer is covered by
+  // `082_facility_canonical_identity.live.test.ts`, which is skipped unless a real server is named.
+  it('sizes a statement from the column count, under Postgres\'s 65535-parameter ceiling', () => {
+    const PG_HARD_LIMIT = 65535;
+    // `facility_concept_projection` is three columns (migration 077: registry_id, concept_code,
+    // updated_at), so its rows-per-statement is a THIRD of a one-column id list's. A fixed row cap
+    // shared between them is what silently blows the limit on the wider table.
+    expect(rowsPerStatement(3) * 3).toBeLessThanOrEqual(PG_HARD_LIMIT);
+    expect(rowsPerStatement(1) * 1).toBeLessThanOrEqual(PG_HARD_LIMIT);
+    expect(rowsPerStatement(5) * 5).toBeLessThanOrEqual(PG_HARD_LIMIT);
+    expect(rowsPerStatement(3)).toBeLessThan(rowsPerStatement(1));
+    // …and the failing scale is genuinely inside one chunk's reach, i.e. the budget is not so small
+    // that this fix would need thousands of statements for a normal register.
+    expect(rowsPerStatement(3)).toBeGreaterThan(10_000);
+    // Never zero, whatever the width — a 0 step would loop forever or write nothing.
+    expect(rowsPerStatement(1000)).toBeGreaterThanOrEqual(1);
+    expect(rowsPerStatement(0)).toBeGreaterThanOrEqual(1);
+  });
+
+  it('splits every list-bound statement into chunks rather than one statement per register', async () => {
+    // Built here rather than through `makeMigratedDb` only because this test needs Kysely's `log`
+    // hook to see each COMPILED statement and its bound parameters; pg-mem's own query interceptor
+    // sees the SQL with parameters already substituted, which cannot be counted reliably.
+    const mem = newDb();
+    const seen: { sql: string; params: number }[] = [];
+    const db = mem.adapters.createKysely(undefined, {
+      log: (e: any) => {
+        if (e.level === 'query') seen.push({ sql: e.query.sql, params: e.query.parameters.length });
+      },
+    }) as Kysely<any>;
+    for (const migration of Object.values(internalMigrations)) await migration.up(db);
+
+    const ids = ['fac-seed-1', 'fac-seed-2', 'fac-seed-3', 'fac-seed-4', 'fac-seed-5'];
+    for (const [i, id] of ids.entries()) {
+      await seedLegacyFacility(db, { id, nationalSystem: 'HFR', nationalCode: String(i + 1), name: `F${i + 1}` });
+    }
+    await db.insertInto('facility_concept_projection')
+      .values(ids.map((id) => ({ registry_id: id, concept_code: id })) as never).execute();
+    await db.insertInto('plugin_data').values(ids.map((id) => ({
+      plugin_id: 'dhis2-sink', collection: 'orgUnitMaps', key: id,
+      doc: JSON.stringify({ facilityId: id, orgUnitId: `OU${id}` }),
+    })) as never).execute();
+
+    seen.length = 0; // ignore the migrations and the seed
+    // Budget 6: 6 rows per one-column id list, 2 per three-column projection row, 1 per five-column
+    // plugin_data row. `up()` never passes this — see `rekey`'s doc comment.
+    await rekey(db, 6);
+
+    const inserts = (table: string) =>
+      seen.filter((s) => s.sql.startsWith(`insert into "${table}"`));
+    const projectionInserts = inserts('facility_concept_projection');
+    const pluginInserts = inserts('plugin_data');
+    // Printed so the numbers this assertion turns on are visible when a mutation makes it fail.
+    // eslint-disable-next-line no-console
+    console.log('082 chunking: projection inserts', JSON.stringify(projectionInserts.map((s) => s.params)),
+      'plugin_data inserts', JSON.stringify(pluginInserts.map((s) => s.params)));
+
+    // 5 links at 2 rows/statement = 3 statements binding 6, 6 and 3 parameters. Unchunked this is
+    // ONE statement binding 15 — which is the shape that binds 66 000 at 22 000 facilities.
+    expect(projectionInserts.map((s) => s.params)).toEqual([6, 6, 3]);
+    // 5 org-unit docs at 1 row/statement (five columns) = 5 statements of 5 parameters each.
+    expect(pluginInserts.map((s) => s.params)).toEqual([5, 5, 5, 5, 5]);
+
+    // …and the split lost nothing: every link is back, re-pointed at a live registry row.
+    const rows = await db.selectFrom('facility_registry').select('id').execute();
+    expect(rows).toHaveLength(5);
+    expect(rows.every((r: { id: string }) => !r.id.startsWith('fac-seed-'))).toBe(true);
+    const links = await db.selectFrom('facility_concept_projection')
+      .select(['registry_id', 'concept_code']).execute();
+    expect(links).toHaveLength(5);
+    const live = new Set(rows.map((r: { id: string }) => r.id));
+    expect(links.every((l: { registry_id: string; concept_code: string }) =>
+      live.has(l.registry_id) && l.concept_code === l.registry_id)).toBe(true);
+    const docs = await db.selectFrom('plugin_data').selectAll()
+      .where('collection', '=', 'orgUnitMaps').execute();
+    expect(docs).toHaveLength(5);
+    expect(docs.every((d) => live.has(d.key as string))).toBe(true);
   });
 
   it('is idempotent: a second pass over already-migrated rows re-keys nothing', async () => {
