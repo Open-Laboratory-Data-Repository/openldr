@@ -325,7 +325,7 @@ describe('PropertiesTab image source', () => {
     // different element re-renders the SAME fiber instead of remounting it, so element B's panel
     // would still show element A's "too large" error even though B was never touched.
     const template: ReportTemplate = {
-      id: 't', name: 't', paper: 'A4', orientation: 'portrait', parameters: [],
+      id: 't', name: 't', paper: 'A4', orientation: 'portrait', status: 'draft', parameters: [],
       pages: [{ id: 'p1', elements: [
         { id: 'a', kind: 'image', name: 'Image A', rect: { x: 0, y: 0, w: 10, h: 10 }, src: '' },
         { id: 'b', kind: 'image', name: 'Image B', rect: { x: 0, y: 0, w: 10, h: 10 }, src: '' },

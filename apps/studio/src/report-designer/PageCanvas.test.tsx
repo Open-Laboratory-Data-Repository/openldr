@@ -354,7 +354,7 @@ describe('PageCanvas letterhead tokens', () => {
 });
 
 function tplWithTable(el: DesignElement): ReportTemplate {
-  return { id: 't', name: 't', paper: 'A4', orientation: 'portrait', parameters: [], pages: [{ id: 'p1', elements: [el] }] };
+  return { id: 't', name: 't', paper: 'A4', orientation: 'portrait', status: 'draft', parameters: [], pages: [{ id: 'p1', elements: [el] }] };
 }
 function renderTable(el: DesignElement) {
   render(<PageCanvas template={tplWithTable(el)} zoom={1} selectedIds={[]} onSelect={vi.fn()} onCommitRects={vi.fn()} />);

@@ -70,7 +70,7 @@ describe('validateImageSrc', () => {
 
 describe('findInvalidImageSources', () => {
   const design = (elements: unknown[]): ReportDesign => ({
-    id: 'd', name: 'D', paper: 'A4', orientation: 'portrait',
+    id: 'd', name: 'D', paper: 'A4', orientation: 'portrait', status: 'draft',
     pages: [{ id: 'p1', elements: elements as never }], parameters: [],
   });
 
@@ -98,7 +98,7 @@ describe('findInvalidImageSources', () => {
 
   it('scans every page, not just the first', () => {
     const d: ReportDesign = {
-      id: 'd', name: 'D', paper: 'A4', orientation: 'portrait', parameters: [],
+      id: 'd', name: 'D', paper: 'A4', orientation: 'portrait', parameters: [], status: 'draft',
       pages: [
         { id: 'p1', elements: [] },
         { id: 'p2', elements: [{ id: 'bad', kind: 'image', name: 'X', rect: { x: 0, y: 0, w: 1, h: 1 }, src: 'ftp://x' }] as never },
