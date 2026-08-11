@@ -2798,6 +2798,145 @@ describe('POST /api/facilities/import', () => {
   });
 });
 
+// --- B1 Task 9: GET/POST /api/facilities/import/sources -----------------------------------------
+//
+// The registers an operator may PICK. GET backs the import sheet's `Select` (Task 9 turns the free-
+// text `nationalSystem` box into one); POST is the only way a fresh install ever gets a register to
+// offer at all. Both sit on `createFacilityRegisterSourceStore` — the same store `seedRegisterSource`
+// above already uses to seed a register for the import-route tests.
+
+describe('GET /api/facilities/import/sources', () => {
+  it('lists only facility registers, never other coding systems', async () => {
+    const db = await importDb([SYSTEM]);
+    // A coding system that is NOT a register — the reason `kind` exists, and must not appear here.
+    await db.insertInto('coding_systems').values({
+      id: 'cs-loinc', system_code: 'LOINC', system_name: 'LOINC', url: 'http://loinc.org',
+    }).execute();
+    const app = await appWith(fakeImportCtx(db));
+
+    const res = await app.inject({ method: 'GET', url: '/api/facilities/import/sources' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().rows.map((r: any) => r.url)).toEqual([SYSTEM]);
+  });
+
+  // Review fix (B1 Task 3)'s deactivated-register gate only has teeth if THIS list — the picklist's
+  // own source — never offers a spelling the import routes will then refuse.
+  it('excludes a deactivated register — the picklist must never offer a spelling the import routes refuse', async () => {
+    const db = await importDb([SYSTEM]);
+    await deactivateRegisterSource(db, SYSTEM);
+    const app = await appWith(fakeImportCtx(db));
+
+    const res = await app.inject({ method: 'GET', url: '/api/facilities/import/sources' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().rows).toEqual([]);
+  });
+
+  it('is gated on facilities.view — a user without it gets 403', async () => {
+    const db = await importDb([SYSTEM]);
+    const app = await appWith(fakeImportCtx(db), []);
+
+    const res = await app.inject({ method: 'GET', url: '/api/facilities/import/sources' });
+
+    expect(res.statusCode).toBe(403);
+  });
+});
+
+describe('POST /api/facilities/import/sources', () => {
+  it('creates a register source that the import route accepts immediately afterward', async () => {
+    const db = await makeMigratedDb(); // deliberately unregistered
+    const app = await appWith(fakeImportCtx(db));
+
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities/import/sources',
+      payload: { url: SYSTEM, name: 'Tanzania HFR', code: 'TZ_HFR' },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(res.json()).toMatchObject({ url: SYSTEM, name: 'Tanzania HFR', code: 'TZ_HFR', active: true });
+
+    // ⛔ THE WHOLE POINT of this route: what it just created is exactly what the import gate accepts.
+    const importRes = await app.inject({
+      method: 'POST', url: '/api/facilities/import',
+      payload: { csv: facilityCsv(['100,Alpha,,,,,,,,,,,,,,']), nationalSystem: SYSTEM },
+    });
+    expect(importRes.statusCode).toBe(200);
+    expect(importRes.json().parsed).toBe(1);
+  });
+
+  it('is gated on facilities.manage — a facilities.view-only user gets 403 and nothing is created', async () => {
+    const db = await makeMigratedDb();
+    // The migration set seeds its own coding systems (LOINC etc.) — this counts against THAT
+    // baseline rather than asserting an empty table, so it fails honestly if the seed set ever
+    // changes instead of asserting a number this test does not actually own.
+    const before = await db.selectFrom('coding_systems').selectAll().execute();
+    const app = await appWith(fakeImportCtx(db), ['facilities.view']);
+
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities/import/sources',
+      payload: { url: SYSTEM, name: 'Tanzania HFR', code: 'TZ_HFR' },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(await db.selectFrom('coding_systems').selectAll().execute()).toHaveLength(before.length);
+  });
+
+  it('400s on a missing required field', async () => {
+    const db = await makeMigratedDb();
+    const app = await appWith(fakeImportCtx(db));
+
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities/import/sources',
+      payload: { url: SYSTEM, name: 'Tanzania HFR' }, // no code
+    });
+
+    expect(res.statusCode).toBe(400);
+  });
+
+  // ⛔ Carry-forward 1 (deferred from B1 Task 3, closed here): an EXACT-match pre-check alone ships
+  // the original defect through this front door — 'urn:tz:hfr' and 'urn:tz:HFR' would each
+  // individually pass it, each earn their own row, each satisfy the import route's own exact-match
+  // gate, and each hash to a DIFFERENT `idFor` identity while sharing the SAME `observedFieldSystem`
+  // namespace (that function lowercases its slug; `idFor` does not — see facilities-routes.ts's own
+  // comment on the fork this whole slice exists to close). This is that same fork, arriving through
+  // the source route instead of the import route.
+  it('⛔ refuses a case-insensitive duplicate of a registered URL, not just an exact one', async () => {
+    const db = await importDb([SYSTEM]); // urn:tz:hfr
+    const app = await appWith(fakeImportCtx(db));
+
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities/import/sources',
+      payload: { url: 'urn:tz:HFR', name: 'Tanzania HFR (upper)', code: 'TZ_HFR_2' },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toMatch(/already exists/i);
+    expect(await createFacilityRegisterSourceStore(db).list({ includeInactive: true })).toHaveLength(1);
+  });
+
+  // ⛔ Carry-forward 2 (deferred from B1 Task 3, closed here): `coding_systems_url_uq` (migration
+  // 012) is a PLAIN unique index on `url` ALONE, not scoped by `kind` — while the store's own pre-
+  // checks (exact AND case-insensitive) ARE scoped to `kind = 'facility-register'`. MEASURED: before
+  // this fix, POSTing a url already used by a non-register coding system (e.g. 'http://loinc.org')
+  // passed the pre-check and threw a raw, unmapped 23505 — a bare 500, not a 4xx.
+  it('⛔ refuses (409, not 500) a URL already used by a NON-register coding system', async () => {
+    const db = await makeMigratedDb();
+    await db.insertInto('coding_systems').values({
+      id: 'cs-loinc', system_code: 'LOINC', system_name: 'LOINC', url: 'http://loinc.org',
+    }).execute();
+    const app = await appWith(fakeImportCtx(db));
+
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities/import/sources',
+      payload: { url: 'http://loinc.org', name: 'Not actually a register', code: 'X' },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toMatch(/already exists/i);
+  });
+});
+
 // --- A2b Task 3: POST /api/facilities/import/upload -------------------------------------------
 //
 // The upload END of the background import: the file goes to blob storage and a `queued` run is

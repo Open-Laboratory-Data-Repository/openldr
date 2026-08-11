@@ -1020,6 +1020,34 @@ export interface FacilityImportResult {
   notValidated: ControlledField[];
 }
 
+// B1 Task 9: the picklist `ImportFacilitiesSheet`'s national-system `Select` renders — the ONLY
+// spellings `POST /api/facilities/import` (and /import/upload) will accept from this point on (see
+// facilities-routes.ts's `unknownRegisterError`). Mirrors `@openldr/db`'s `FacilityRegisterSource`
+// field-for-field, same "mirrored, not shared" reasoning as `FacilityImportResult` above (this app
+// has no dependency on `@openldr/db`).
+export interface FacilityRegisterSource {
+  id: string;
+  /** The canonical URI — what the sheet actually SENDS as `nationalSystem`. Never the display
+   *  `name` below; sending that would re-open the exact fork this slice exists to close (see
+   *  ImportFacilitiesSheet.tsx's own comment on its Select). */
+  url: string;
+  name: string;
+  code: string;
+  version: string | null;
+  jurisdiction: string | null;
+  contact: string | null;
+  publisherId: string | null;
+  active: boolean;
+}
+
+/** `GET /api/facilities/import/sources` — active registers only (the route's own default), ordered
+ *  by name. A register a `POST /api/facilities/import/sources` create just deactivated, or one that
+ *  was never activated, is deliberately excluded — the picklist must never offer a spelling the
+ *  import routes would then refuse. */
+export const listFacilityImportSources = (): Promise<FacilityRegisterSource[]> =>
+  apiGet<{ rows: FacilityRegisterSource[] }>('/api/facilities/import/sources', 'list facility import sources')
+    .then((r) => r.rows);
+
 export interface FacilityImportRequest {
   csv: string;
   /** Which national register these codes belong to (HFR/MFL/etc). Required — the server never

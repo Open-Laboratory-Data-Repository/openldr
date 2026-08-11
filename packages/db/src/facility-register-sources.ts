@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import type { Kysely } from 'kysely';
+import { sql, type Kysely } from 'kysely';
 import type { InternalSchema } from './schema/internal';
 import { FACILITY_REGISTER_KIND } from './migrations/internal/081_facility_source_and_register_state';
 
@@ -51,6 +51,15 @@ interface CodingSystemRegisterRow {
   active: boolean;
 }
 
+/** Same defensive shape as `facility-job-store.ts`'s own `isUniqueViolation`: real Postgres always
+ *  carries `.code === '23505'` on a unique-index violation, but this store is exercised under pg-mem
+ *  in tests, and this codebase has already found pg-mem not always worth trusting to reproduce that
+ *  code — the message fallback is what keeps the catch below firing under BOTH engines. */
+function isUniqueViolation(err: unknown): boolean {
+  const e = err as { code?: string; message?: string };
+  return e?.code === '23505' || /unique|duplicate/i.test(e?.message ?? '');
+}
+
 function toSource(row: CodingSystemRegisterRow): FacilityRegisterSource {
   return {
     id: row.id,
@@ -97,27 +106,60 @@ export function createFacilityRegisterSourceStore(db: Kysely<InternalSchema>): F
     },
     getByUrl,
     async create(input) {
-      const existing = await getByUrl(input.url);
+      // ⛔ CASE-INSENSITIVE, and deliberately unlike `getByUrl` (which stays exact-match — see its
+      // own doc comment, and facilities-routes.ts's `unknownRegisterError`). `idFor`
+      // (packages/terminology/src/facility-csv.ts) hashes a nationalSystem string WITHOUT
+      // lowercasing it, while `observedFieldSystem` (packages/bootstrap/src/facility-controlled-
+      // fields.ts) DOES lowercase its slug — so an exact-match-only check here would let
+      // 'urn:tz:hfr' and 'urn:tz:HFR' each earn their own row, each individually pass the import
+      // route's exact-match gate, and each mint a DIFFERENT `idFor` identity while sharing the SAME
+      // controlled-field namespace. That is the original defect this whole slice exists to remove,
+      // arriving through THIS door instead of the import route's. Refusing a case-insensitive
+      // duplicate at creation is what keeps "one spelling of a register" true from the moment a
+      // register is minted, so the exact-match gate downstream never has two spellings to choose
+      // between.
+      const normalizedUrl = input.url.toLowerCase();
+      const existing = await db
+        .selectFrom('coding_systems')
+        .select(['id'])
+        .where('kind', '=', FACILITY_REGISTER_KIND)
+        .where((eb) => eb(sql`lower(url)`, '=', normalizedUrl))
+        .executeTakeFirst();
       if (existing) {
-        throw new Error(`a facility register already exists for ${input.url}`);
+        throw new Error(`a facility register already exists for a url matching "${input.url}" (case-insensitive)`);
       }
       const id = `cs-freg-${randomUUID()}`;
-      await db
-        .insertInto('coding_systems')
-        .values({
-          id,
-          system_code: input.code,
-          system_name: input.name,
-          url: input.url,
-          system_version: input.version ?? null,
-          jurisdiction: input.jurisdiction ?? null,
-          contact: input.contact ?? null,
-          publisher_id: input.publisherId ?? null,
-          active: true,
-          seeded: false,
-          kind: FACILITY_REGISTER_KIND,
-        } as never)
-        .execute();
+      try {
+        await db
+          .insertInto('coding_systems')
+          .values({
+            id,
+            system_code: input.code,
+            system_name: input.name,
+            url: input.url,
+            system_version: input.version ?? null,
+            jurisdiction: input.jurisdiction ?? null,
+            contact: input.contact ?? null,
+            publisher_id: input.publisherId ?? null,
+            active: true,
+            seeded: false,
+            kind: FACILITY_REGISTER_KIND,
+          } as never)
+          .execute();
+      } catch (err) {
+        // `coding_systems_url_uq` (migration 012) is a PLAIN unique index on `url` ALONE, not scoped
+        // by `kind` — while the pre-check above (like `getByUrl`) IS scoped to
+        // `kind = FACILITY_REGISTER_KIND`. MEASURED: a url already used by a NON-register coding
+        // system (e.g. one `upsertByUrl` conjured for a LOINC import) passes that pre-check and
+        // throws here instead, as a raw Postgres 23505 — a bare, unclassified exception, not the
+        // operator-legible refusal the case-insensitive check above gives for the register-vs-
+        // register collision. Recognised here and turned into the same shape of plain Error rather
+        // than left for the route (or, absent this, the app's generic 500 handler) to puzzle out.
+        if (isUniqueViolation(err)) {
+          throw new Error(`a coding system already exists for the url "${input.url}"`);
+        }
+        throw err;
+      }
       const created = await getByUrl(input.url);
       if (!created) {
         throw new Error(`failed to create facility register source for ${input.url}`);

@@ -222,6 +222,22 @@ const ImportSchema = z.object({
  *  parameter), which is the request that actually precedes the classification. What the operator
  *  decides HERE is `onAbsent` — whether a measured absence is acted on — and that split is the
  *  two-tier retirement design, not an omission. */
+/** B1 Task 9: `POST /api/facilities/import/sources`' body — a fresh `coding_systems` row marked as
+ *  a facility register (`registerSources.create`, `@openldr/db`). `url` is the canonical identity
+ *  the import routes will accept from this point on; every other field is display/provenance only.
+ *  `version`/`jurisdiction`/`contact`/`publisherId` mirror `FacilityRegisterSourceStore.create`'s
+ *  own optional fields exactly, so a key renamed on one side would be silently stripped by zod
+ *  rather than reaching the store. */
+const SourceCreateSchema = z.object({
+  url: z.string().min(1),
+  name: z.string().min(1),
+  code: z.string().min(1),
+  version: z.string().optional(),
+  jurisdiction: z.string().optional(),
+  contact: z.string().optional(),
+  publisherId: z.string().optional(),
+});
+
 const ConfirmSchema = z.object({
   onDeleted: z.enum(['retire', 'report']).optional(),
   onAbsent: z.enum(['retire', 'report']).optional(),
@@ -1098,8 +1114,10 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
   // written within the same millisecond are routine (e.g. a create immediately followed by a
   // projection retry, or two of Task 7's per-row import events in one batch) — pg-mem's real
   // millisecond wall-clock `now()` collides on roughly half of consecutive calls, so an
-  // `occurred_at`-only order is not reliably "newest first". `id` (a `randomUUID()`, audit-
-  // helper.ts / facility-import.ts) carries no ordering of its own, but it IS unique, so ordering
+  // `occurred_at`-only order is not reliably "newest first". `id` (a `randomUUID()` — generated
+  // inside `AuditStore.record()`, packages/audit/src/store.ts, not by either of its callers here
+  // — audit-helper.ts's `recordAudit` and facility-import.ts's per-row audit both just call it)
+  // carries no ordering of its own, but it IS unique, so ordering
   // by it as a second key makes ties resolve the same way every time instead of however the scan
   // happened to visit them.
   app.get('/api/facilities/:id/history', VIEW, async (req) => {
@@ -1428,6 +1446,44 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
 
     await recordAudit(ctx, req, { action: 'facility.delete', entityType: 'facility', entityId: id, before, after: null });
     return { ok: true };
+  });
+
+  // B1 Task 9: the registers an operator may NAME — GET backs the import sheet's `Select` (the free-
+  // text `nationalSystem` box this task removes), POST is the only way a fresh install ever gets one
+  // to offer. Both sit on `registerSources` (constructed above), never a second query against
+  // `coding_systems`.
+  app.get('/api/facilities/import/sources', VIEW, async () => {
+    // Active-only, on purpose: `list()`'s own default is what keeps a DEACTIVATED register off this
+    // picklist (see `FacilityRegisterSourceStore.list`'s own doc comment) — a `Select` offering a
+    // spelling the import routes would then refuse (`deactivatedRegisterError` above) is worse than
+    // one that offers fewer choices.
+    const rows = await registerSources.list();
+    return { rows };
+  });
+
+  app.post('/api/facilities/import/sources', MANAGE, async (req, reply) => {
+    const p = SourceCreateSchema.safeParse(req.body);
+    if (!p.success) { reply.code(400); return { error: p.error.message }; }
+    try {
+      const created = await registerSources.create(p.data);
+      reply.code(201);
+      return created;
+    } catch (err) {
+      // `registerSources.create` throws a plain Error, never a raw Postgres exception, for BOTH ways
+      // one url can already be spoken for — a case-insensitive collision with another register (its
+      // own pre-check) and a collision with a NON-register coding system, which only ever surfaces
+      // as `coding_systems_url_uq`'s 23505 (that index is on `url` ALONE, not scoped by `kind` — see
+      // the store's own comment on its insert's catch block). Recognised by message here rather than
+      // by a `.code` the store has already stripped off, and reported as a 409 conflict — same
+      // reasoning as `mapFacilityDbError` above, just against a different table and a store that has
+      // already done its own classification. Anything else rethrows, reaching the central error
+      // handler as the 500 it actually is.
+      if (err instanceof Error && /already exists/i.test(err.message)) {
+        reply.code(409);
+        return { error: err.message };
+      }
+      throw err;
+    }
   });
 
   // Task 4: CSV import — a thin HTTP wrapper over `@openldr/bootstrap`'s `importFacilities`, the

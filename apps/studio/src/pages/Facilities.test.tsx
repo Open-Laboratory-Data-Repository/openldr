@@ -30,6 +30,9 @@ vi.mock('@/api', async (orig) => {
     // filters" disclosure. Stubbed here so opening that panel in a test never reaches the real
     // network; most tests never open it, so most never touch this mock at all.
     listFacilityAdminValues: vi.fn(),
+    // B1 Task 9: backs the import sheet's national-system `Select` — stubbed here (not just in
+    // ImportFacilitiesSheet.test.tsx) because this page renders the real sheet, not a mock of it.
+    listFacilityImportSources: vi.fn(),
   };
 });
 
@@ -39,10 +42,19 @@ vi.mock('@/api', async (orig) => {
 const { useAuthMock } = vi.hoisted(() => ({ useAuthMock: vi.fn() }));
 vi.mock('@/auth/AuthProvider', () => ({ useAuth: useAuthMock }));
 
-import { listFacilities, listPublishedForms, getForm, importFacilitiesCsv, listObservedFacilities, getFacilityHealth, retryFacilityJob, deleteFacility, listFacilityAdminValues, type Facility, type FacilityHealth, type FacilityPage } from '@/api';
+import { listFacilities, listPublishedForms, getForm, importFacilitiesCsv, listFacilityImportSources, listObservedFacilities, getFacilityHealth, retryFacilityJob, deleteFacility, listFacilityAdminValues, type Facility, type FacilityHealth, type FacilityPage } from '@/api';
 import { Facilities } from './Facilities';
 
 const listFacilitiesMock = listFacilities as ReturnType<typeof vi.fn>;
+
+// B1 Task 9: the one registered source the import sheet's `Select` needs — `url` is the literal
+// 'HFR' every pre-existing import-sheet assertion in this file already checks
+// (`nationalSystem: 'HFR'`), so swapping the free-text box for a Select costs those assertions
+// nothing (same fixture shape as ImportFacilitiesSheet.test.tsx's own `HFR_SOURCE`).
+const HFR_SOURCE = {
+  id: 'cs-freg-hfr', url: 'HFR', name: 'National Health Facility Registry', code: 'HFR',
+  version: null, jurisdiction: null, contact: null, publisherId: null, active: true,
+};
 
 const publishedFacilityForm = {
   id: 'form-sample-facility',
@@ -139,6 +151,7 @@ describe('Facilities page', () => {
     (getFacilityHealth as ReturnType<typeof vi.fn>).mockResolvedValue(currentHealth);
     (retryFacilityJob as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
     (listFacilityAdminValues as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (listFacilityImportSources as ReturnType<typeof vi.fn>).mockResolvedValue([HFR_SOURCE]);
     // Default: a lab_admin-shaped actor who can both view and manage the registry. Individual
     // tests (I4) override this to a view-only actor.
     useAuthMock.mockReturnValue({
@@ -341,7 +354,13 @@ describe('Facilities page', () => {
     fireEvent.change(screen.getByLabelText('File'), {
       target: { files: [new File(['local_code,name\nLAB01,Dodoma RRH\n'], 'register.csv', { type: 'text/csv' })] },
     });
-    fireEvent.change(screen.getByLabelText('National system'), { target: { value: 'HFR' } });
+    // B1 Task 9: the sheet's free-text national-system box became a `Select` over registered
+    // sources — pick `HFR_SOURCE` (mocked in `beforeEach`) the same way
+    // ImportFacilitiesSheet.test.tsx's own `pickFileAndSystem` does, rather than typing.
+    const nationalSystemTrigger = await screen.findByRole('combobox', { name: 'National system' });
+    await waitFor(() => expect(nationalSystemTrigger).toBeEnabled());
+    fireEvent.click(nationalSystemTrigger);
+    fireEvent.click(await screen.findByRole('option', { name: HFR_SOURCE.name }));
 
     await clickImportMenuItem(/^preview$/i);
     await waitFor(() => expect(importFacilitiesCsv).toHaveBeenCalledTimes(1));

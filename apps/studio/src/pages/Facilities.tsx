@@ -754,10 +754,16 @@ export function Facilities() {
         {/* Fix wave 1 / Finding 1: the ten open-vocabulary filters, behind the disclosure toggle
             above. `nationalSystem` — the audit's actual "registry source" per the design's own
             provenance table, distinct from `source` above ("how did this row get into OUR
-            registry") — is deliberately NOT promoted to the always-visible row alongside it: it has
-            no closed vocabulary (see ImportFacilitiesSheet's own National system field, which is
-            free text for the same reason), so it gets an `Input` here rather than a `Select`, and a
-            free-text control on the primary row would read as a second search box. `zone`/`region`/
+            registry") — is deliberately NOT promoted to the always-visible row alongside it: unlike
+            ImportFacilitiesSheet's own National system field (a B1 Task 9 `Select` restricted to
+            REGISTERED sources — see that component's own comment), a FILTER over already-stored
+            rows must still match values written before this slice's picklist existed, or by a
+            register since deactivated (`registerSources.list()`'s own default excludes it from the
+            picklist, but a row imported under it is still in the registry and still filterable), so
+            it stays an open `Input` here rather than a closed `Select` — restricting it to the
+            CURRENT active-source list would hide rows this registry genuinely holds. A free-text
+            control on the primary row would read as a second search box, which is why it stays
+            behind the disclosure toggle rather than promoted alongside it. `zone`/`region`/
             `district`/`council` get a `Select` because they DO have a source of real values —
             `listFacilityAdminValues`, fetched above once this panel is open. The rest
             (`status`/`level`/`ownership`/`country`/`managedOrigin`) have no vocabulary at all (same
