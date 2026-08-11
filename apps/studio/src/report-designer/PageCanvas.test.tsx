@@ -121,7 +121,7 @@ describe('PageCanvas interaction', () => {
 });
 
 function tplWith(el: Partial<import('./types').DesignElement> & { id: string; kind: import('./types').ElementKind }, margins?: import('./types').Margins): ReportTemplate {
-  return { id: 't', name: 't', paper: 'A4', orientation: 'portrait', parameters: [], margins,
+  return { id: 't', name: 't', paper: 'A4', orientation: 'portrait', status: 'draft', parameters: [], margins,
     pages: [{ id: 'p1', elements: [{ name: el.id, rect: { x: 10, y: 10, w: 100, h: 40 }, ...el }] }] };
 }
 
@@ -227,7 +227,7 @@ describe('PageCanvas style rendering', () => {
 
 describe('PageCanvas keyvalue panel', () => {
   const kvTemplate = (el: Partial<import('./types').DesignElement>): ReportTemplate => ({
-    id: 't', name: 't', paper: 'A4', orientation: 'portrait', parameters: [],
+    id: 't', name: 't', paper: 'A4', orientation: 'portrait', status: 'draft', parameters: [],
     pages: [{ id: 'p1', elements: [{
       id: 'kv', kind: 'keyvalue', name: 'Panel', rect: { x: 10, y: 10, w: 300, h: 80 }, ...el,
     } as import('./types').DesignElement] }],
@@ -262,7 +262,7 @@ describe('PageCanvas keyvalue panel', () => {
 
 describe('PageCanvas barcode and QR', () => {
   const symTemplate = (el: Partial<import('./types').DesignElement>): ReportTemplate => ({
-    id: 't', name: 't', paper: 'A4', orientation: 'portrait', parameters: [],
+    id: 't', name: 't', paper: 'A4', orientation: 'portrait', status: 'draft', parameters: [],
     pages: [{ id: 'p1', elements: [{
       id: 'sym', kind: 'barcode', name: 'Symbol', rect: { x: 10, y: 10, w: 200, h: 60 }, ...el,
     } as import('./types').DesignElement] }],
@@ -314,7 +314,7 @@ describe('PageCanvas barcode and QR', () => {
 
 describe('PageCanvas letterhead tokens', () => {
   const tpl = (el: Partial<import('./types').DesignElement>): ReportTemplate => ({
-    id: 't', name: 't', paper: 'A4', orientation: 'portrait', parameters: [],
+    id: 't', name: 't', paper: 'A4', orientation: 'portrait', status: 'draft', parameters: [],
     pages: [{ id: 'p1', elements: [{
       id: 'e', kind: 'text', name: 'El', rect: { x: 0, y: 0, w: 300, h: 20 }, ...el,
     } as import('./types').DesignElement] }],
@@ -354,7 +354,7 @@ describe('PageCanvas letterhead tokens', () => {
 });
 
 function tplWithTable(el: DesignElement): ReportTemplate {
-  return { id: 't', name: 't', paper: 'A4', orientation: 'portrait', parameters: [], pages: [{ id: 'p1', elements: [el] }] };
+  return { id: 't', name: 't', paper: 'A4', orientation: 'portrait', status: 'draft', parameters: [], pages: [{ id: 'p1', elements: [el] }] };
 }
 function renderTable(el: DesignElement) {
   render(<PageCanvas template={tplWithTable(el)} zoom={1} selectedIds={[]} onSelect={vi.fn()} onCommitRects={vi.fn()} />);

@@ -6,7 +6,7 @@ import { redactError } from './redact-error';
 import { runFhirValidate, formatFhirValidate } from './fhir';
 import { runDbMigrate, runDbReset, runDbSeed } from './db';
 import { runFormsExtract, runFormsList } from './forms';
-import { runList as runReportDesignList, runDelete as runReportDesignDelete } from './report-design';
+import { runList as runReportDesignList, runDelete as runReportDesignDelete, runPublish as runReportDesignPublish, runVersions as runReportDesignVersions } from './report-design';
 import { runList as runReportDefList, runDelete as runReportDefDelete } from './report-def';
 import { runIngest, runPipelineStatus, runPipelineRetry, runPipelineLogs, runQueueStatus, runProvenanceAudit } from './ingest';
 import { runPluginInstall, runPluginList, runPluginTest, runPluginRun, runPluginRemove } from './plugin';
@@ -554,6 +554,12 @@ export function buildProgram(): Command {
   });
   reportDesign.command('delete <id>').description('Delete a report design (destructive)').option('--force', 'confirm deletion', false).action(async (id: string, opts: { force: boolean }) => {
     try { process.exitCode = await runReportDesignDelete(id, opts); } catch (err) { process.stderr.write(`report-design delete failed: ${redactError(err)}\n`); process.exitCode = 1; }
+  });
+  reportDesign.command('publish <id>').description('Publish the design as a new immutable revision').action(async (id: string) => {
+    try { process.exitCode = await runReportDesignPublish(id); } catch (err) { process.stderr.write(`report-design publish failed: ${redactError(err)}\n`); process.exitCode = 1; }
+  });
+  reportDesign.command('versions <id>').description('List a design\'s published revisions').option('--json', 'emit JSON', false).action(async (id: string, opts: { json: boolean }) => {
+    try { process.exitCode = await runReportDesignVersions(id, opts); } catch (err) { process.stderr.write(`report-design versions failed: ${redactError(err)}\n`); process.exitCode = 1; }
   });
 
   const reportDef = program.command('report-def').description('Data-driven report definitions');

@@ -131,6 +131,11 @@ function fakeApp(cfg: FormSeedTarget['cfg'] = {}) {
         if (idx !== -1) reportDesigns.splice(idx, 1);
       },
       update: async (id: string, d: { id: string }) => ({ ...d, id }) as never,
+      // seedDataDrivenReports's system write path — insert-or-update-and-publish atomically.
+      upsertPublished: async (d: { id: string }) => {
+        if (!reportDesigns.some((x) => x.id === d.id)) reportDesigns.push({ id: d.id });
+        return d as never;
+      },
     },
     reportDefs: {
       get: async (id: string) => reportDefs.find((r) => r.id === id) as never,

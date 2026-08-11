@@ -7,3 +7,4 @@ export * from './probe';
 export * from './health-registry';
 export * from './crash-log';
 export * from './canonical-json';
+export * from './canonical-hash';

@@ -84,6 +84,11 @@ export function simpleTableDesign(spec: SimpleDesignSpec): ReportDesign {
   return {
     id: spec.id,
     name: spec.name,
+    // Every built-in ships published — the seed loop stamps this explicitly on both the create
+    // and update path anyway (capture is gated on published status), but the literal here should
+    // say what these designs actually are rather than default to 'draft' and rely on the seed to
+    // override it silently.
+    status: 'published',
     paper: spec.paper ?? 'A4',
     orientation: spec.orientation ?? 'portrait',
     parameters: spec.parameters,

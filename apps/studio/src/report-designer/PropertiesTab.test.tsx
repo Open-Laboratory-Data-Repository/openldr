@@ -12,7 +12,7 @@ function setup(overrides = {}) {
 }
 
 function tplWithEl(el: DesignElement): ReportTemplate {
-  return { id: 't', name: 't', paper: 'A4', orientation: 'portrait', parameters: [], pages: [{ id: 'p1', elements: [el] }] };
+  return { id: 't', name: 't', paper: 'A4', orientation: 'portrait', status: 'draft', parameters: [], pages: [{ id: 'p1', elements: [el] }] };
 }
 
 describe('PropertiesTab editing', () => {
@@ -115,7 +115,7 @@ describe('PropertiesTab editing', () => {
   it('applies a bulk stroke width to an all-rect multi-selection', () => {
     const onPatchElements = vi.fn();
     const template: ReportTemplate = {
-      id: 't', name: 't', paper: 'A4', orientation: 'portrait', parameters: [],
+      id: 't', name: 't', paper: 'A4', orientation: 'portrait', status: 'draft', parameters: [],
       pages: [{ id: 'p1', elements: [
         { id: 'r1', kind: 'rect', name: 'Rect 1', rect: { x: 0, y: 0, w: 100, h: 100 } },
         { id: 'r2', kind: 'rect', name: 'Rect 2', rect: { x: 0, y: 0, w: 100, h: 100 } },
@@ -128,7 +128,7 @@ describe('PropertiesTab editing', () => {
 
   it('shows a Mixed placeholder for a size that differs across the text selection', () => {
     const template: ReportTemplate = {
-      id: 't', name: 't', paper: 'A4', orientation: 'portrait', parameters: [],
+      id: 't', name: 't', paper: 'A4', orientation: 'portrait', status: 'draft', parameters: [],
       pages: [{ id: 'p1', elements: [
         { id: 'x1', kind: 'text', name: 'Text 1', rect: { x: 0, y: 0, w: 100, h: 20 }, text: 'a', style: { fontSize: 12 } },
         { id: 'x2', kind: 'text', name: 'Text 2', rect: { x: 0, y: 0, w: 100, h: 20 }, text: 'b', style: { fontSize: 18 } },
@@ -325,7 +325,7 @@ describe('PropertiesTab image source', () => {
     // different element re-renders the SAME fiber instead of remounting it, so element B's panel
     // would still show element A's "too large" error even though B was never touched.
     const template: ReportTemplate = {
-      id: 't', name: 't', paper: 'A4', orientation: 'portrait', parameters: [],
+      id: 't', name: 't', paper: 'A4', orientation: 'portrait', status: 'draft', parameters: [],
       pages: [{ id: 'p1', elements: [
         { id: 'a', kind: 'image', name: 'Image A', rect: { x: 0, y: 0, w: 10, h: 10 }, src: '' },
         { id: 'b', kind: 'image', name: 'Image B', rect: { x: 0, y: 0, w: 10, h: 10 }, src: '' },

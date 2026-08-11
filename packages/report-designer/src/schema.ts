@@ -125,6 +125,9 @@ export const ReportDesignSchema = z.object({
   margins: MarginsSchema.optional(),
   /** opt-in "Page X of Y" footer on every physical page (default off) */
   pageNumbers: z.boolean().optional(),
+  /** Authoring state. `draft` is the working copy; `published` is what labs mirror and what the
+   *  reference-sync capture is gated on. Mirrors `form_definitions.status`. */
+  status: z.enum(['draft', 'published']).default('draft'),
   createdAt: z.string().optional(),
   updatedAt: z.string().optional(),
 });

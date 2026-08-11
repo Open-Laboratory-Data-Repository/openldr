@@ -7,7 +7,7 @@ import { type Kysely } from 'kysely';
 // `simpleTableDesign` built-ins ship `pageNumbers: true`, so the comparison was permanently unequal
 // and the seed overwrote them — and any operator edit to them — on every boot.
 //
-// ⛔ NULLABLE, NO DEFAULT, deliberately. `canonicalHash` (packages/core/src/canonical-json.ts) is
+// ⛔ NULLABLE, NO DEFAULT, deliberately. `canonicalHash` (packages/core/src/canonical-hash.ts) is
 // JSON.stringify-based, so an ABSENT key and `undefined` hash identically while `false` is a
 // distinct value. A `NOT NULL DEFAULT false` column would therefore change the content hash of
 // every design that never set the flag, and `reference_change_log` would ship each of them to every

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { Kysely, sql } from 'kysely';
 import { newDb } from 'pg-mem';
-import { createReportDesignStore } from './store';
+import { createReportDesignStore, type ReportDesignStore } from './store';
 import { ReportDesignSchema } from './schema';
 import type { ReportDesign } from './schema';
 import type { ReferenceCapture } from '@openldr/db';
@@ -18,10 +18,19 @@ beforeEach(async () => {
     .addColumn('pages', 'jsonb').addColumn('parameters', 'jsonb')
     .addColumn('margins', 'jsonb')
     .addColumn('page_numbers', 'boolean')
+    .addColumn('status', 'text')
     // Mirrors migration 042's `notNull().defaultTo(sql`now()`)` — needed so a DB-stamped timestamp is
     // actually present to assert on (no earlier test in this file read createdAt/updatedAt).
     .addColumn('created_at', 'timestamptz', (c) => c.notNull().defaultTo(sql`now()`))
     .addColumn('updated_at', 'timestamptz', (c) => c.notNull().defaultTo(sql`now()`)).execute();
+
+  await db.schema.createTable('report_design_versions')
+    .addColumn('id', 'text', (c) => c.primaryKey())
+    .addColumn('design_id', 'text').addColumn('version', 'integer')
+    .addColumn('name', 'text').addColumn('paper', 'text').addColumn('orientation', 'text')
+    .addColumn('pages', 'jsonb').addColumn('parameters', 'jsonb')
+    .addColumn('margins', 'jsonb').addColumn('page_numbers', 'boolean')
+    .addColumn('published_at', 'text').addColumn('published_by', 'text').execute();
 });
 
 function makeDesign(id: string, name: string): ReportDesign {
@@ -30,11 +39,21 @@ function makeDesign(id: string, name: string): ReportDesign {
     name,
     paper: 'A4',
     orientation: 'portrait',
+    status: 'draft',
     // Fixed, not derived from `id` — the hash tests compare two designs that must differ ONLY in
     // `pageNumbers`, and `hashOf` covers `pages`.
     pages: [{ id: 'p1', elements: [] }],
     parameters: [],
   };
+}
+
+/** Create a design and publish it. `create()` deliberately refuses a caller-supplied 'published'
+ *  status, so this is the only way a test gets a published row through the client-facing path. Both
+ *  calls run against the real store: `publish()` is what captures, so the hashes these tests compare
+ *  are the same hashes reference sync would ship. */
+async function createPublished(store: ReportDesignStore, d: ReportDesign): Promise<ReportDesign> {
+  await store.create(d);
+  return store.publish(d.id);
 }
 
 describe('ReportDesignStore', () => {
@@ -116,10 +135,12 @@ describe('ReportDesignStore', () => {
   it('hashes an unset pageNumbers identically to an explicitly undefined one', async () => {
     // Pins canonicalJson's undefined-dropping. If that ever changed, every never-flagged design's
     // hash would move and reference sync would re-ship the whole design set.
+    // Published, not draft — capture (and therefore hashOf) is now gated on status; a draft write
+    // would push nothing and this comparison would pass vacuously on two `undefined`s.
     const { capture, hashes } = spyCapture();
     const store = createReportDesignStore(db, capture);
-    await store.create(makeDesign('h-absent', 'Same'));
-    await store.create({ ...makeDesign('h-undef', 'Same'), pageNumbers: undefined });
+    await createPublished(store, makeDesign('h-absent', 'Same'));
+    await createPublished(store, { ...makeDesign('h-undef', 'Same'), pageNumbers: undefined });
     expect(hashes[0]).toBe(hashes[1]);
   });
 
@@ -128,16 +149,16 @@ describe('ReportDesignStore', () => {
     // so a NOT NULL DEFAULT false column would have moved every existing design's hash.
     const { capture, hashes } = spyCapture();
     const store = createReportDesignStore(db, capture);
-    await store.create(makeDesign('h-unset', 'Same'));
-    await store.create({ ...makeDesign('h-false', 'Same'), pageNumbers: false });
+    await createPublished(store, makeDesign('h-unset', 'Same'));
+    await createPublished(store, { ...makeDesign('h-false', 'Same'), pageNumbers: false });
     expect(hashes[0]).not.toBe(hashes[1]);
   });
 
   it('hashes true differently from false, so a real toggle propagates', async () => {
     const { capture, hashes } = spyCapture();
     const store = createReportDesignStore(db, capture);
-    await store.create({ ...makeDesign('h-off', 'Same'), pageNumbers: false });
-    await store.create({ ...makeDesign('h-on', 'Same'), pageNumbers: true });
+    await createPublished(store, { ...makeDesign('h-off', 'Same'), pageNumbers: false });
+    await createPublished(store, { ...makeDesign('h-on', 'Same'), pageNumbers: true });
     expect(hashes[0]).not.toBe(hashes[1]);
   });
 
@@ -160,12 +181,164 @@ describe('ReportDesignStore', () => {
     for (const [field, mutate] of HASHED_FIELD_MUTATIONS) {
       const { capture, hashes } = spyCapture();
       const store = createReportDesignStore(db, capture);
-      const baseline = makeDesign(`hf-${field}-base`, 'Baseline');
-      const mutated = mutate(makeDesign(`hf-${field}-mut`, 'Baseline'));
-      await store.create(baseline);
-      await store.create(mutated);
+      // Published — capture is gated on status, and a draft write emits no hash to compare.
+      await createPublished(store, makeDesign(`hf-${field}-base`, 'Baseline'));
+      await createPublished(store, mutate(makeDesign(`hf-${field}-mut`, 'Baseline')));
       expect(hashes[1], `hashOf did not change when '${field}' was mutated`).not.toBe(hashes[0]);
     }
+  });
+
+  it('round-trips status through publish, and defaults a design with no status to draft', async () => {
+    const store = createReportDesignStore(db);
+    await store.create(makeDesign('s1', 'S'));
+    await store.publish('s1');
+    expect((await store.get('s1'))?.status).toBe('published');
+
+    await store.create(makeDesign('s2', 'S'));
+    expect((await store.get('s2'))?.status).toBe('draft');
+  });
+
+  it('⛔ create() refuses a caller-supplied published status, and captures nothing', async () => {
+    // `update()` already discards a caller's `status` so a save cannot smuggle 'published' past the
+    // content gate. `create()` did not, and the studio's Duplicate action clones a published design
+    // — so duplicating a built-in and hitting Save pushed an unreviewed copy to every enrolled lab
+    // before a single element was edited. Publishing must stay a deliberate act: `publish()` for a
+    // human, `upsertPublished()` for the boot seed, and nothing else.
+    const { capture, hashes } = spyCapture();
+    const store = createReportDesignStore(db, capture);
+
+    const created = await store.create({ ...makeDesign('c-pub', 'Smuggled'), status: 'published' });
+
+    expect(created.status).toBe('draft');
+    expect((await store.get('c-pub'))?.status).toBe('draft');
+    expect(hashes).toEqual([]);
+    // And no version was minted, so the header could never read Published against an empty history.
+    expect(await store.listVersions('c-pub')).toEqual([]);
+  });
+
+  it('emits NO reference-sync record for a draft write', async () => {
+    // ⛔ This is the whole hazard: autosave fires 1.2s after a keystroke, and every update used to
+    // capture unconditionally, so a mid-edit design propagated to every enrolled lab.
+    const { capture, hashes } = spyCapture();
+    const store = createReportDesignStore(db, capture);
+    await store.create(makeDesign('d1', 'Draft'));
+    await store.update('d1', { ...makeDesign('d1', 'Draft'), name: 'Edited' });
+    expect(hashes).toEqual([]);
+  });
+
+  it('emits a record for a published write', async () => {
+    const { capture, hashes } = spyCapture();
+    const store = createReportDesignStore(db, capture);
+    await createPublished(store, makeDesign('p1', 'Pub'));
+    expect(hashes).toHaveLength(1);
+  });
+
+  it('drops a published design to draft when its content changes, and stops capturing', async () => {
+    const { capture, hashes } = spyCapture();
+    const store = createReportDesignStore(db, capture);
+    const created = await createPublished(store, makeDesign('p2', 'Pub'));
+    expect(hashes).toHaveLength(1);
+
+    const updated = await store.update('p2', { ...created, name: 'Renamed' });
+    expect(updated.status).toBe('draft');
+    expect(hashes).toHaveLength(1); // the draft edit emitted nothing
+  });
+
+  it('does not un-publish on a no-op save', async () => {
+    // Autosave fires on any dirty state; only a real content change may un-publish.
+    const store = createReportDesignStore(db);
+    const created = await createPublished(store, makeDesign('p3', 'Pub'));
+    const updated = await store.update('p3', { ...created });
+    expect(updated.status).toBe('published');
+  });
+
+  it('publish mints version 1 then 2, snapshots content, and captures', async () => {
+    const { capture, hashes } = spyCapture();
+    const store = createReportDesignStore(db, capture);
+    await store.create({ ...makeDesign('v1', 'V'), pageNumbers: true });
+    expect(hashes).toEqual([]); // created as a draft
+
+    const published = await store.publish('v1', 'alice');
+    expect(published.status).toBe('published');
+    expect(hashes).toHaveLength(1);
+
+    await store.update('v1', { ...published, name: 'Second' });
+    await store.publish('v1', 'alice');
+
+    const versions = await store.listVersions('v1');
+    expect(versions.map((v) => v.version)).toEqual([2, 1]);
+    expect(versions.map((v) => v.name)).toEqual(['Second', 'V']);
+    expect(versions[0].publishedBy).toBe('alice');
+  });
+
+  it('snapshots pageNumbers and margins, not just pages', async () => {
+    const store = createReportDesignStore(db);
+    await store.create({ ...makeDesign('v2', 'V'), pageNumbers: true, margins: { top: 9, right: 8, bottom: 7, left: 6 } });
+    await store.publish('v2', null);
+    const rows = await db.selectFrom('report_design_versions').selectAll().where('design_id', '=', 'v2').execute();
+    expect(rows[0].page_numbers).toBe(true);
+    // pg-mem (and node-postgres against real Postgres) auto-parses jsonb columns back to a JS
+    // object on select, so `rows[0].margins` is not guaranteed to be a JSON string here — mirror
+    // the `typeof v === 'string' ? JSON.parse(v) : v` tolerance store.ts's own `fromRow` uses.
+    const margins = typeof rows[0].margins === 'string' ? JSON.parse(rows[0].margins) : rows[0].margins;
+    expect(margins).toMatchObject({ top: 9, left: 6 });
+  });
+
+  it('listVersions on an unpublished design is empty, not an error', async () => {
+    const store = createReportDesignStore(db);
+    await store.create(makeDesign('v3', 'V'));
+    expect(await store.listVersions('v3')).toEqual([]);
+  });
+
+  describe('upsertPublished — the boot seed\'s atomic system write', () => {
+    it('on a design that does not exist yet: creates it published, mints version 1, captures once', async () => {
+      const { capture, hashes } = spyCapture();
+      const store = createReportDesignStore(db, capture);
+      const result = await store.upsertPublished(makeDesign('up-new', 'New'));
+
+      expect(result.status).toBe('published');
+      expect(await store.get('up-new')).toMatchObject({ status: 'published', name: 'New' });
+
+      const versions = await store.listVersions('up-new');
+      expect(versions.map((v) => v.version)).toEqual([1]);
+      expect(hashes).toHaveLength(1);
+    });
+
+    it('on an existing published design whose content differs: updates content, stays published, mints version 2, captures', async () => {
+      const { capture, hashes } = spyCapture();
+      const store = createReportDesignStore(db, capture);
+      const created = await store.upsertPublished(makeDesign('up-existing', 'Original'));
+      expect(hashes).toHaveLength(1);
+
+      const result = await store.upsertPublished({ ...created, name: 'Corrected' });
+      expect(result.status).toBe('published');
+      expect(result.name).toBe('Corrected');
+
+      const versions = await store.listVersions('up-existing');
+      expect(versions.map((v) => v.version)).toEqual([2, 1]);
+      expect(versions.map((v) => v.name)).toEqual(['Corrected', 'Original']);
+      expect(hashes).toHaveLength(2);
+    });
+
+    it('the returned design reflects the new content', async () => {
+      const store = createReportDesignStore(db);
+      await store.upsertPublished(makeDesign('up-reflect', 'Before'));
+      const result = await store.upsertPublished({ ...makeDesign('up-reflect', 'After'), orientation: 'landscape' });
+      expect(result.name).toBe('After');
+      expect(result.orientation).toBe('landscape');
+      expect((await store.get('up-reflect'))?.name).toBe('After');
+    });
+
+    it('does NOT un-publish or leave a draft window — status is published on every call, unlike update()', async () => {
+      const store = createReportDesignStore(db);
+      const created = await store.upsertPublished({ ...makeDesign('up-atomic', 'Pub'), status: 'draft' });
+      // Caller-supplied `status: 'draft'` above is deliberately ignored — this is the system path,
+      // not update()'s client-facing content gate.
+      expect(created.status).toBe('published');
+
+      const changed = await store.upsertPublished({ ...created, name: 'Changed content' });
+      expect(changed.status).toBe('published');
+    });
   });
 });
 
@@ -173,7 +346,7 @@ describe('ReportDesignStore', () => {
 // next one, because a new field is simply absent from it and everything still passes. The tripwire
 // is what forces the fixture to grow.
 const KNOWN_TOP_LEVEL_FIELDS = [
-  'id', 'name', 'paper', 'orientation', 'pages', 'parameters', 'margins', 'pageNumbers',
+  'id', 'name', 'paper', 'orientation', 'pages', 'parameters', 'margins', 'pageNumbers', 'status',
   'createdAt', 'updatedAt',
 ] as const;
 
@@ -204,6 +377,7 @@ describe('ReportDesign round-trip completeness', () => {
         elements: [{ id: 'e1', kind: 'text', name: 'Title', rect: { x: 1, y: 2, w: 3, h: 4 }, text: 'Hi' }],
       }],
       pageNumbers: true,
+      status: 'published',
     };
 
     // The KNOWN_TOP_LEVEL_FIELDS tripwire above only checks the schema's key SET. A new field can be
@@ -215,8 +389,10 @@ describe('ReportDesign round-trip completeness', () => {
     expect(Object.keys(EVERY_FIELD).sort())
       .toEqual(KNOWN_TOP_LEVEL_FIELDS.filter((f) => f !== 'createdAt' && f !== 'updatedAt').sort());
 
+    // Through create()+publish(), not create() alone: `status` is the one persisted field a client
+    // create may not set, so this is how the round-trip reaches its non-default value.
     const store = createReportDesignStore(db);
-    await store.create(EVERY_FIELD);
+    await createPublished(store, EVERY_FIELD);
     const got = await store.get('full');
     expect(got).toBeDefined();
 

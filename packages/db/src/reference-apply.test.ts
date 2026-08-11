@@ -247,6 +247,38 @@ describe('applyReferenceChange', () => {
     await db.destroy();
   });
 
+  // Same class as the pageNumbers finding above, one slice later. T3 added a `status` column with
+  // DEFAULT 'draft', and migration 084 backfills EXISTING rows to 'published'. If reportDesignRow
+  // omits status, the two install kinds diverge on the field T3 introduced: a lab upgraded through
+  // 084 has its designs 'published', while a lab enrolling fresh takes the DEFAULT and shows every
+  // design central published as a DRAFT. A constant is honest here — sync-serve.ts only ever serves
+  // published bodies (it returns null for a draft, which arrives as a delete).
+  it('stamps a pulled design published on insert — a fresh lab must not read central designs as drafts', async () => {
+    const db = await makeMigratedDb();
+    const apply = createReferenceApplier(db);
+    const body = { name: 'Quarterly', paper: 'A4', orientation: 'portrait', pages: [], parameters: [] };
+    await apply({ entityType: 'report_design', entityId: 'rd-st', op: 'upsert', body });
+    const row: any = await db.selectFrom('report_designs').selectAll().where('id', '=', 'rd-st').executeTakeFirst();
+    expect(row?.status).toBe('published');
+    await db.destroy();
+  });
+
+  it('restores published on update — a lab-side draft must not survive the next pull', async () => {
+    // The SET list in upsertOrDelete is derived from the row object, so an omitted key leaves the
+    // lab's existing value untouched. Without status in the row a lab row that somehow reads 'draft'
+    // stays 'draft' through every subsequent pull.
+    const db = await makeMigratedDb();
+    const apply = createReferenceApplier(db);
+    const body = { name: 'Quarterly', paper: 'A4', orientation: 'portrait', pages: [], parameters: [] };
+    await apply({ entityType: 'report_design', entityId: 'rd-st2', op: 'upsert', body });
+    await (db as any).updateTable('report_designs').set({ status: 'draft' }).where('id', '=', 'rd-st2').execute();
+    await apply({ entityType: 'report_design', entityId: 'rd-st2', op: 'upsert', body: { ...body, name: 'Quarterly v2' } });
+    const row: any = await db.selectFrom('report_designs').selectAll().where('id', '=', 'rd-st2').executeTakeFirst();
+    expect(row?.name).toBe('Quarterly v2');
+    expect(row?.status).toBe('published');
+    await db.destroy();
+  });
+
   it('report_design delete removes a central row but NOT a lab-local one', async () => {
     const db = await makeMigratedDb();
     const apply = createReferenceApplier(db);

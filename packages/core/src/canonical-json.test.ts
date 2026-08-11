@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { canonicalJson, canonicalHash } from './canonical-json';
+import { canonicalJson } from './canonical-json';
+import { canonicalHash } from './canonical-hash';
 
 describe('canonicalJson', () => {
   it('is insensitive to object key order', () => {

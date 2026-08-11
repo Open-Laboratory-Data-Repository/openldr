@@ -163,8 +163,19 @@ async function fetchReferenceBody(
       return (await ctx.reportDefs.get(id)) ?? null;
     // A report's two dependencies. Both serve their store RECORD shape, matching what
     // reference-apply's reportDesignRow / customQueryRowLocal consume.
-    case 'report_design':
-      return (await ctx.reportDesigns.get(id)) ?? null;
+    case 'report_design': {
+      // Labs may ONLY consume PUBLISHED designs — the same gate, for the same reason, as `form`
+      // below. T3 stopped a DRAFT write from writing a change_log row, but the log stores only
+      // (entity_id, content_hash) and the body is read LIVE here, so the log's latest row can still
+      // be 'upsert' from the last publish while the live row has since been edited back to a draft.
+      // Serving that would put a half-finished autosave on every lab — which is the whole hazard
+      // T3 exists to close. Any lab whose cursor is behind the last publish hits this, and a
+      // first-time enrolment replays from seq 0, so it is the normal path, not an edge case.
+      // A non-published live row returns null → the handler downgrades it to a `delete`, which is
+      // the convergence forms already chose.
+      const d = await ctx.reportDesigns.get(id);
+      return d && d.status === 'published' ? d : null;
+    }
     case 'custom_query': {
       // Read the raw row (custom_queries is not on AppContext) and serve the camelCase store shape
       // the applier's customQueryRowLocal consumes. `connector_id` is served as-is but the applier

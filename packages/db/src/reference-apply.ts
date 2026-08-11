@@ -122,6 +122,12 @@ function reportDesignRow(id: string, body: unknown) {
     // `?? null` not `?? false` — writing `false` for an unset flag would drift the lab's row away
     // from central's `undefined` and change its content hash (see packages/report-designer/src/store.ts hashOf).
     page_numbers: d.pageNumbers ?? null,
+    // A constant, not `d.status`: packages/bootstrap/src/sync-serve.ts only ever serves a PUBLISHED
+    // design (a draft returns null there and arrives as a delete), so anything reaching this applier
+    // is published by construction. Omitting the key was the bug — migration 084 defaults the column
+    // to 'draft' and backfills existing rows to 'published', so a fresh lab would read every design
+    // central published as a draft while an upgraded lab read them as published.
+    status: 'published',
     updated_at: sql`now()`,
     managed_origin: MANAGED,
   };
