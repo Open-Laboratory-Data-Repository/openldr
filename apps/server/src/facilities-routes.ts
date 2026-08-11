@@ -14,7 +14,7 @@ import {
 import {
   splitFacilityAnswers, CORE_FACILITY_KEYS, FACILITY_ADMIN_LEVELS, referenceCapture,
   FACILITY_REGISTRY_SYSTEM, DEFAULT_LIST_LIMIT, FACILITY_HEALTH_VALUES, createFacilityImportRunStore,
-  createFacilityRegisterSourceStore,
+  createFacilityRegisterSourceStore, resolveFacilityRegisterForImport,
   SUPERSEDABLE_RUN_STATES, RUNNING_RUN_STATES, TERMINAL_RUN_STATES, isApplicable, APPLY_PHASE,
 } from '@openldr/db';
 import type {
@@ -646,45 +646,12 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
   // reason `importRuns` above is — a thin closure over `ctx.internalDb`.
   const registerSources = createFacilityRegisterSourceStore(ctx.internalDb);
 
-  /** ⛔ THE REFUSAL THIS SLICE EXISTS FOR. `nationalSystem` used to be free text typed into the
-   *  import sheet and hashed straight into every facility's permanent id (`idFor`, facility-csv.ts:
-   *  `fac-` + sha256(`<value>|<national code>`)). MEASURED for national code `100`: `HFR` produced
-   *  `fac-d112c779ad583160` and `hfr` produced `fac-49bce368724fb81a` — two permanent identities for
-   *  one register — while `observedFieldSystem` (facility-controlled-fields.ts) LOWERCASES its slug,
-   *  so both spellings shared the one `…:facility-level:hfr` controlled-field namespace. One
-   *  register, two identities, one namespace: the data disagreed with itself.
-   *
-   *  The fix is not a normalisation rule bolted onto either function — `idFor`'s hash and
-   *  `observedFieldSystem`'s slug are both unchanged. It is that the VALUE fed to them can no longer
-   *  be typed at all: it must name a `coding_systems` row marked as a facility register
-   *  (`FACILITY_REGISTER_KIND`, migration 081), so there is exactly one spelling of a register to
-   *  feed. The import sheet still POSTs a typed string today — this slice's Task 9 is what turns that
-   *  text box into a `Select` over these same rows, and until it lands the sheet's own free text is
-   *  refused here exactly like any other unregistered value.
-   *
-   *  ⛔ An EXACT match on the register's stored url, never a case-insensitive or otherwise
-   *  normalising lookup. Normalising here would re-open the fork from the other end: two spellings
-   *  would resolve, and the two `idFor` hashes they produce would still differ. */
-  function unknownRegisterError(nationalSystem: string): string {
-    // The message names the register's OWN identity (its canonical URI) rather than pointing at a
-    // surface for creating one — this slice adds those (a source route and the sheet's Select in
-    // Task 9, `openldr facilities import-sources` in Task 11) AFTER this gate, and a message citing
-    // a route that does not exist yet would be a lie the moment an operator followed it.
-    return `"${nationalSystem}" is not a known facility register; a facility register with that `
-      + 'canonical URI must exist on this install before facilities can be imported against it';
-  }
-
-  /** ⛔ Review fix (B1 Task 3): `registerSources.list()` (the source of Task 9's import-sheet
-   *  `Select`) defaults to active-only, but `getByUrl` — deliberately, see its own store comment —
-   *  does not filter on `active` at all, so it still resolves a DEACTIVATED register. Without this
-   *  second check, an import naming that register's url would pass the gate above (the row exists)
-   *  and write facilities under an identity the picklist will never again offer, silently. Kept as
-   *  its own message rather than folded into `unknownRegisterError` so an operator who once saw this
-   *  register in the picklist is told it was retired, not that it never existed. */
-  function deactivatedRegisterError(nationalSystem: string): string {
-    return `"${nationalSystem}" names a facility register that has been deactivated; `
-      + 'facilities cannot be imported against a deactivated register';
-  }
+  // ⛔ THE REFUSAL THIS SLICE EXISTS FOR — both its decision and both its messages now live in
+  // `resolveFacilityRegisterForImport` (@openldr/db, facility-register-sources.ts), which carries the
+  // full reasoning: the two-identities-one-namespace defect, why the lookup stays an EXACT match, and
+  // why a deactivated register gets its own message. B1 Task 11 moved it there because `openldr
+  // facilities import` is a THIRD door onto the same write and had no gate at all; two hand-copied
+  // gates are how one door quietly loses a rule the others keep.
 
   // A2b Task 3: a file upload is a stream, not a JSON body, and Fastify has no built-in parser for
   // either of these content types — without them it answers 415 before the handler ever runs.
@@ -1461,7 +1428,7 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
   app.get('/api/facilities/import/sources', VIEW, async () => {
     // Active-only, on purpose: `list()`'s own default is what keeps a DEACTIVATED register off this
     // picklist (see `FacilityRegisterSourceStore.list`'s own doc comment) — a `Select` offering a
-    // spelling the import routes would then refuse (`deactivatedRegisterError` above) is worse than
+    // spelling the import routes would then refuse (`resolveFacilityRegisterForImport`) is worse than
     // one that offers fewer choices.
     const rows = await registerSources.list();
     return { rows };
@@ -1511,18 +1478,15 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       };
     }
 
-    // ⛔ B1 Task 3: the register gate — see `unknownRegisterError` for the two-identities-one-
-    // namespace defect it closes. It runs BEFORE `importFacilities` is called at all, so a refused
-    // import parses nothing, mints no run (which would hold this register's `active_key`) and
-    // certainly writes nothing. ⛔ BOTH import doors carry it: the upload route below has its own
-    // copy against its own query-string parsing, because two doors that disagree about what a
-    // register is would put the fork straight back.
-    const source = await registerSources.getByUrl(p.data.nationalSystem);
-    if (!source) { reply.code(400); return { error: unknownRegisterError(p.data.nationalSystem) }; }
-    // ⛔ Review fix (B1 Task 3): `getByUrl` deliberately does not filter on `active` (it stays usable
-    // for historical-source lookups), so a DEACTIVATED register still resolves here and must be
-    // refused explicitly — see `deactivatedRegisterError`.
-    if (!source.active) { reply.code(400); return { error: deactivatedRegisterError(p.data.nationalSystem) }; }
+    // ⛔ B1 Task 3: the register gate — see `resolveFacilityRegisterForImport` (@openldr/db) for the
+    // two-identities-one-namespace defect it closes, and for why a deactivated register is refused
+    // separately from an unregistered one. It runs BEFORE `importFacilities` is called at all, so a
+    // refused import parses nothing, mints no run (which would hold this register's `active_key`) and
+    // certainly writes nothing. ⛔ EVERY import door carries it — this route, the upload route below
+    // and `openldr facilities import` — all calling the same function, because doors that disagree
+    // about what a register is would put the fork straight back.
+    const register = await resolveFacilityRegisterForImport(registerSources, p.data.nationalSystem);
+    if (!register.ok) { reply.code(400); return { error: register.error }; }
 
     // Fix 1 (mapping-ux report): `admin` lets `importFacilities` project every written row into
     // FACILITY_REGISTRY_SYSTEM — the Facilities-page upload gets the same immediate-mapping
@@ -1889,18 +1853,14 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       return { error: 'expected the register file as a request-body stream (content-type: application/octet-stream or text/csv)' };
     }
 
-    // ⛔ B1 Task 3: the SAME register gate the inline route applies, against this route's own
-    // query-string parsing — see `unknownRegisterError`. Both doors must agree about what a register
-    // is; an ungated upload would re-open the two-identities fork at exactly the scale this path
-    // exists for (a full national register). Like the in-progress gate below it, it runs BEFORE the
-    // transfer: a refused upload must not first cost a national register's worth of bandwidth.
-    const source = await registerSources.getByUrl(nationalSystem);
-    if (!source) { reply.code(400); return { error: unknownRegisterError(nationalSystem) }; }
-    // ⛔ Review fix (B1 Task 3): the SAME deactivated-register refusal the inline route applies —
-    // see `deactivatedRegisterError`. Runs BEFORE the transfer, alongside the unknown-register check
-    // above it, for the same reason: a refused upload must not first cost a national register's
-    // worth of bandwidth.
-    if (!source.active) { reply.code(400); return { error: deactivatedRegisterError(nationalSystem) }; }
+    // ⛔ B1 Task 3: the SAME register gate the inline route applies — literally the same function
+    // (`resolveFacilityRegisterForImport`, @openldr/db), against this route's own query-string
+    // parsing. Every import door must agree about what a register is; an ungated upload would re-open
+    // the two-identities fork at exactly the scale this path exists for (a full national register).
+    // Like the in-progress gate below it, it runs BEFORE the transfer: a refused upload must not
+    // first cost a national register's worth of bandwidth.
+    const register = await resolveFacilityRegisterForImport(registerSources, nationalSystem);
+    if (!register.ok) { reply.code(400); return { error: register.error }; }
 
     // ⛔ The register gate runs BEFORE the transfer, not after it. A refused upload must not first
     // cost a national register's worth of bandwidth and leave an orphan object behind. Shared with

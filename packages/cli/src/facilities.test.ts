@@ -35,6 +35,14 @@ const mocks = vi.hoisted(() => ({
   // frees `active_key` — see "a failed --apply leaves no held active_key" below) reaches for the real
   // export via `vi.importActual` instead of this mock, for exactly that call.
   createFacilityImportRunStore: vi.fn(),
+  // B1 Task 11: same factory shape as `createFacilityImportRunStore` above — the factory is the
+  // vi.fn(), `registerStore` is the fake object it returns. `getByUrl` is the only method the import
+  // gate calls; `list` is what `facilities import-sources` prints.
+  createFacilityRegisterSourceStore: vi.fn(),
+  registerStore: {
+    getByUrl: vi.fn(),
+    list: vi.fn(),
+  },
   runStore: {
     startPreview: vi.fn(),
     completePreview: vi.fn(),
@@ -61,10 +69,20 @@ vi.mock('@openldr/bootstrap', () => ({
   recordAuditEvent: mocks.recordAuditEvent,
 }));
 
-vi.mock('@openldr/db', () => ({
-  referenceCapture: mocks.referenceCapture,
-  createFacilityImportRunStore: mocks.createFacilityImportRunStore,
-}));
+vi.mock('@openldr/db', async () => {
+  // ⛔ PARTIAL, and only for `resolveFacilityRegisterForImport`: the register gate's DECISION and its
+  // two refusal messages are what several tests below assert on, and a stubbed gate would let this
+  // file agree with a stub while the real function (and the two HTTP import doors that call the same
+  // one) said something else. The stores stay faked — they need a database; the gate is a pure
+  // function of whatever `getByUrl` returns.
+  const actual = await vi.importActual<typeof import('@openldr/db')>('@openldr/db');
+  return {
+    referenceCapture: mocks.referenceCapture,
+    createFacilityImportRunStore: mocks.createFacilityImportRunStore,
+    createFacilityRegisterSourceStore: mocks.createFacilityRegisterSourceStore,
+    resolveFacilityRegisterForImport: actual.resolveFacilityRegisterForImport,
+  };
+});
 
 vi.mock('node:fs', () => ({
   readFileSync: mocks.readFileSync,
@@ -72,12 +90,12 @@ vi.mock('node:fs', () => ({
 
 import {
   runFacilitiesImport, runFacilitiesScanObserved, runFacilitiesPublish, runFacilitiesConflicts, runFacilitiesJobs,
-  runFacilitiesImportRuns, runFacilitiesImportRun, runFacilitiesImportRunCancel,
+  runFacilitiesImportRuns, runFacilitiesImportRun, runFacilitiesImportRunCancel, runFacilitiesImportSources,
 } from './facilities';
 // ⛔ TYPE-only, so the `vi.mock('@openldr/db', ...)` above does not apply to it (type imports are
 // erased before the module graph is built). It is what makes `DEFAULT_RUN` below an EXHAUSTIVE
 // fixture: see the note there.
-import type { FacilityImportRun } from '@openldr/db';
+import type { FacilityImportRun, FacilityRegisterSource } from '@openldr/db';
 
 // The full `FacilityImportResult` shape (packages/bootstrap/src/facility-import.ts), not just the
 // subset the pre-Task-12 CLI printed: `formatHuman` now reads `create`/`changed`/`unchanged`/
@@ -120,6 +138,15 @@ const DEFAULT_RUN: FacilityImportRun = {
   blobKey: null, phase: null, processed: 0, total: null, cancelRequested: false, startedAt: null,
 };
 
+// B1 Task 11: the register every import test in this file names. ANNOTATED for the same reason
+// `DEFAULT_RUN` above is: `import-sources --json` asserts `JSON.stringify(<these rows>)`, so a
+// hand-built fixture would agree with itself; a column added to `FacilityRegisterSource` and not to
+// this object is a `tsc --noEmit` error instead of a silently narrowed wire shape.
+const HFR_SOURCE: FacilityRegisterSource = {
+  id: 'cs-freg-hfr', url: 'urn:tz:hfr', name: 'Tanzania HFR', code: 'TZ_HFR', version: '2026-Q3',
+  jurisdiction: 'TZ', contact: 'moh@example.tz', publisherId: null, active: true,
+};
+
 describe('facilities import CLI', () => {
   let stdoutSpy: ReturnType<typeof vi.fn>;
   let stderrSpy: ReturnType<typeof vi.fn>;
@@ -139,6 +166,11 @@ describe('facilities import CLI', () => {
     mocks.createFacilityImportRunStore.mockReturnValue(mocks.runStore);
     mocks.runStore.startPreview.mockResolvedValue(DEFAULT_RUN);
     mocks.runStore.finishApply.mockResolvedValue(undefined);
+    // B1 Task 11: every test in this block imports against `urn:tz:hfr`, and the gate now resolves
+    // that value before anything else happens — so the default is a REGISTERED, ACTIVE register.
+    // The refusal tests override `getByUrl` themselves.
+    mocks.createFacilityRegisterSourceStore.mockReturnValue(mocks.registerStore);
+    mocks.registerStore.getByUrl.mockResolvedValue(HFR_SOURCE);
   });
 
   afterEach(() => {
@@ -709,6 +741,171 @@ describe('facilities import CLI', () => {
 
     expect(stdoutSpy.mock.calls.map((c) => String(c[0])).join(''))
       .toMatch(/the release declares 13000 row\(s\), 12998 parsed/);
+  });
+
+  // ── B1 Task 11: the register gate ───────────────────────────────────────────────────────────
+  //
+  // ⛔ WHY THIS COMMAND NEEDED ONE. Both HTTP import doors resolved `nationalSystem` through the
+  // register store and refused with a 400 before any write. This command did not: it passed the flag
+  // straight to `startPreview` and `importFacilities`. So `--national-system HFR --apply` minted
+  // `sha256("HFR|<code>")` ids — a second, complete copy of a register already filed under its
+  // canonical URI, which the `(national_system, national_code)` unique index permits because the
+  // systems differ — into a controlled-field namespace migration 082 had emptied, so every controlled
+  // value on the copy read unmapped.
+
+  it('refuses an unregistered --national-system before minting a run or parsing anything', async () => {
+    mocks.registerStore.getByUrl.mockResolvedValue(null);
+
+    const code = await runFacilitiesImport('/some/file.csv', { nationalSystem: 'HFR', apply: true, json: false });
+
+    expect(code).toBe(1);
+    // The three things a refusal must not have done, in the order they would have happened.
+    expect(mocks.runStore.startPreview).not.toHaveBeenCalled();
+    expect(mocks.importFacilities).not.toHaveBeenCalled();
+    expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
+    const err = stderrSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(err).toMatch(/facilities import refused: "HFR" is not a known facility register/);
+    expect(mocks.ctx.close).toHaveBeenCalledTimes(1);
+  });
+
+  // The gate resolves the SUBMITTED string, exactly — the store's `getByUrl` is case-sensitive. This
+  // pins that the CLI hands it the raw flag value rather than lowercasing or otherwise normalising
+  // first, which would resolve a spelling `idFor` still hashes to a different permanent id.
+  it('asks the store for exactly the value passed, not a normalised one', async () => {
+    mocks.registerStore.getByUrl.mockResolvedValue(null);
+
+    await runFacilitiesImport('/some/file.csv', { nationalSystem: 'urn:tz:HFR', json: false });
+
+    expect(mocks.createFacilityRegisterSourceStore).toHaveBeenCalledWith(mocks.ctx.internalDb);
+    expect(mocks.registerStore.getByUrl).toHaveBeenCalledWith('urn:tz:HFR');
+  });
+
+  // ⛔ `getByUrl` deliberately ignores `active` (see its doc comment in @openldr/db), so a
+  // deactivated register RESOLVES. Without the second half of the gate this import would proceed
+  // and write facilities under an identity the import sheet's picklist will never again offer.
+  it('refuses a DEACTIVATED register, with its own message rather than the unknown-register one', async () => {
+    mocks.registerStore.getByUrl.mockResolvedValue({ ...HFR_SOURCE, active: false });
+
+    const code = await runFacilitiesImport('/some/file.csv', { nationalSystem: 'urn:tz:hfr', apply: true, json: false });
+
+    expect(code).toBe(1);
+    expect(mocks.importFacilities).not.toHaveBeenCalled();
+    const err = stderrSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(err).toMatch(/has been deactivated/);
+    expect(err).not.toMatch(/not a known facility register/);
+  });
+
+  // A dry run writes nothing, but it is also how an operator finds out whether the register they
+  // typed is the one they meant — refusing it here is what makes `--apply` predictable.
+  it('refuses a dry run too, not only an --apply', async () => {
+    mocks.registerStore.getByUrl.mockResolvedValue(null);
+
+    const code = await runFacilitiesImport('/some/file.csv', { nationalSystem: 'HFR', json: false });
+
+    expect(code).toBe(1);
+    expect(mocks.importFacilities).not.toHaveBeenCalled();
+  });
+
+  it('--json puts the refusal on stdout as an error object, leaving stderr clean', async () => {
+    mocks.registerStore.getByUrl.mockResolvedValue(null);
+
+    const code = await runFacilitiesImport('/some/file.csv', { nationalSystem: 'HFR', apply: true, json: true });
+
+    expect(code).toBe(1);
+    const out = stdoutSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(JSON.parse(out)).toEqual({ error: expect.stringContaining('"HFR" is not a known facility register') });
+    expect(stderrSpy).not.toHaveBeenCalled();
+  });
+});
+
+// ── B1 Task 11: `openldr facilities import-sources` ────────────────────────────────────────────
+//
+// CLI parity for `GET /api/facilities/import/sources` — the same `registerSources.list()` the import
+// sheet's `Select` is built from. Without it, an operator refused by the gate above has no way from a
+// shell to find out which URIs their install actually accepts.
+//
+// ⛔ SPELLED AS A SIBLING (`import-sources`), never `facilities sources list`: commander parses a
+// parent's declared options before dispatching to a subcommand, so a nested spelling has `--json`
+// swallowed by the parent. `facilities-import-cli-parsing.test.ts` is what pins the working spelling.
+describe('facilities import-sources CLI', () => {
+  let stdoutSpy: ReturnType<typeof vi.fn>;
+  let stderrSpy: ReturnType<typeof vi.fn>;
+
+  const OTHER_SOURCE: FacilityRegisterSource = {
+    id: 'cs-freg-mfl', url: 'urn:ke:mfl', name: 'Kenya MFL', code: 'KE_MFL', version: null,
+    jurisdiction: 'KE', contact: null, publisherId: null, active: true,
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true) as unknown as ReturnType<typeof vi.fn>;
+    stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true) as unknown as ReturnType<typeof vi.fn>;
+    mocks.createAppContext.mockResolvedValue(mocks.ctx);
+    mocks.ctx.close.mockResolvedValue(undefined);
+    mocks.createFacilityRegisterSourceStore.mockReturnValue(mocks.registerStore);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('prints every register with the URI --national-system takes', async () => {
+    mocks.registerStore.list.mockResolvedValue([HFR_SOURCE, OTHER_SOURCE]);
+
+    const code = await runFacilitiesImportSources({ json: false });
+
+    expect(code).toBe(0);
+    expect(mocks.createFacilityRegisterSourceStore).toHaveBeenCalledWith(mocks.ctx.internalDb);
+    const human = stdoutSpy.mock.calls.map((c) => String(c[0])).join('');
+    // The url is the load-bearing column — it is the exact string the gate above compares against.
+    expect(human).toMatch(/urn:tz:hfr/);
+    expect(human).toMatch(/urn:ke:mfl/);
+    expect(human).toMatch(/Tanzania HFR/);
+    expect(mocks.ctx.close).toHaveBeenCalledTimes(1);
+  });
+
+  // ⚠ ACTIVE-ONLY, because `list()`'s own default is (see its doc comment in @openldr/db) — and that
+  // is the right answer for this command: it names the registers an import may be run against, and
+  // the gate refuses a deactivated one. This asserts the CLI passes no `includeInactive` override.
+  it('asks the store for its default (active-only) list', async () => {
+    mocks.registerStore.list.mockResolvedValue([]);
+
+    await runFacilitiesImportSources({ json: false });
+
+    expect(mocks.registerStore.list).toHaveBeenCalledWith();
+  });
+
+  // An install with no registers is the FRESH-INSTALL state, not a failure — but every import will
+  // be refused until one exists, so the empty output has to say what to do next rather than print a
+  // bare header. Exit 0: a script listing sources has not failed by finding none.
+  it('exits 0 on an empty list and says why imports will be refused', async () => {
+    mocks.registerStore.list.mockResolvedValue([]);
+
+    const code = await runFacilitiesImportSources({ json: false });
+
+    expect(code).toBe(0);
+    const human = stdoutSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(human).toMatch(/no facility registers/i);
+  });
+
+  it('--json emits the store rows verbatim', async () => {
+    mocks.registerStore.list.mockResolvedValue([HFR_SOURCE, OTHER_SOURCE]);
+
+    const code = await runFacilitiesImportSources({ json: true });
+
+    expect(code).toBe(0);
+    expect(stdoutSpy).toHaveBeenCalledWith(JSON.stringify([HFR_SOURCE, OTHER_SOURCE], null, 2) + '\n');
+  });
+
+  it('closes the app context and reports a redacted message when the store throws', async () => {
+    mocks.registerStore.list.mockRejectedValue(new Error('db exploded'));
+
+    const code = await runFacilitiesImportSources({ json: false });
+
+    expect(code).toBe(1);
+    expect(mocks.ctx.close).toHaveBeenCalledTimes(1);
+    const err = stderrSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(err).toMatch(/facilities import-sources failed: db exploded/);
   });
 });
 

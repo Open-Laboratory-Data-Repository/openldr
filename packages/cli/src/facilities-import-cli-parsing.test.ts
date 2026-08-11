@@ -40,6 +40,10 @@ const mocks = vi.hoisted(() => ({
   // every other `openldr` command group parses its options. The test below is what holds the
   // working spelling in place.
   runFacilitiesImportRunCancel: vi.fn().mockResolvedValue(0),
+  // B1 Task 11. `import-sources` is registered as a SIBLING of `import` for the SAME measured reason
+  // `import-run-cancel` is: under a nested `facilities sources list --json`, commander hands the
+  // parent's declared `--json` to the parent and the handler receives `json: false`.
+  runFacilitiesImportSources: vi.fn().mockResolvedValue(0),
 }));
 
 // The function itself is already unit-tested in facilities.test.ts (including the pass-through
@@ -49,6 +53,7 @@ vi.mock('./facilities', () => ({
   runFacilitiesImportRuns: mocks.runFacilitiesImportRuns,
   runFacilitiesImportRun: mocks.runFacilitiesImportRun,
   runFacilitiesImportRunCancel: mocks.runFacilitiesImportRunCancel,
+  runFacilitiesImportSources: mocks.runFacilitiesImportSources,
 }));
 
 describe('facilities import — commander parsing path (program.ts, not the function directly)', () => {
@@ -216,6 +221,7 @@ describe('facilities import-runs / import-run — commander parsing path', () =>
     mocks.runFacilitiesImportRuns.mockClear();
     mocks.runFacilitiesImportRun.mockClear();
     mocks.runFacilitiesImportRunCancel.mockClear();
+    mocks.runFacilitiesImportSources.mockClear();
   });
 
   it('import-runs parses --national-system and --limit as a string and a number', async () => {
@@ -262,6 +268,29 @@ describe('facilities import-runs / import-run — commander parsing path', () =>
     await program.parseAsync(['node', 'openldr', 'facilities', 'import-run-cancel', 'fir_abc123']);
 
     const [, opts] = mocks.runFacilitiesImportRunCancel.mock.calls[0] as [string, { json: boolean }];
+    expect(opts.json).toBe(false);
+  });
+
+  // B1 Task 11: `import-sources` gets its own --json assertion for the same reason
+  // `import-run-cancel` does. `facilities import` (the sibling it sits next to) declares `--json`
+  // too, so this also proves the two commands' options do not collide.
+  it('import-sources resolves its own --json', async () => {
+    const program = buildProgram().exitOverride();
+
+    await program.parseAsync(['node', 'openldr', 'facilities', 'import-sources', '--json']);
+
+    expect(mocks.runFacilitiesImportSources).toHaveBeenCalledTimes(1);
+    const [opts] = mocks.runFacilitiesImportSources.mock.calls[0] as [{ json: boolean }];
+    expect(opts.json).toBe(true);
+  });
+
+  it('import-sources without --json resolves json false (proves the above is not vacuous)', async () => {
+    const program = buildProgram().exitOverride();
+
+    await program.parseAsync(['node', 'openldr', 'facilities', 'import-sources']);
+
+    expect(mocks.runFacilitiesImportSources).toHaveBeenCalledTimes(1);
+    const [opts] = mocks.runFacilitiesImportSources.mock.calls[0] as [{ json: boolean }];
     expect(opts.json).toBe(false);
   });
 
