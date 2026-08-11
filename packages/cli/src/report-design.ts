@@ -18,6 +18,18 @@ export async function deleteDesign(store: ReportDesignStore, id: string, opts: {
   await store.remove(id);
 }
 
+export async function publishDesign(store: ReportDesignStore, id: string, write: Writer = stdout): Promise<void> {
+  const d = await store.publish(id, 'cli');
+  write(`published ${d.id}\n`);
+}
+
+export async function listDesignVersions(store: ReportDesignStore, id: string, opts: { json: boolean }, write: Writer = stdout): Promise<void> {
+  const versions = await store.listVersions(id);
+  if (opts.json) { write(JSON.stringify(versions, null, 2) + '\n'); return; }
+  const lines = versions.map((v) => `v${v.version}\t${v.publishedAt}\t${v.publishedBy ?? '-'}\t${v.name}`);
+  write((lines.length ? lines.join('\n') : '(no published versions)') + '\n');
+}
+
 // ── Command entrypoints (open a real AppContext) ────────────────────────────
 export async function runList(opts: { json: boolean }): Promise<number> {
   const ctx = await createAppContext(loadConfig());
@@ -27,4 +39,14 @@ export async function runList(opts: { json: boolean }): Promise<number> {
 export async function runDelete(id: string, opts: { force: boolean }): Promise<number> {
   const ctx = await createAppContext(loadConfig());
   try { await deleteDesign(ctx.reportDesigns, id, opts); process.stdout.write(`deleted ${id}\n`); return 0; } finally { await ctx.close(); }
+}
+
+export async function runPublish(id: string): Promise<number> {
+  const ctx = await createAppContext(loadConfig());
+  try { await publishDesign(ctx.reportDesigns, id); return 0; } finally { await ctx.close(); }
+}
+
+export async function runVersions(id: string, opts: { json: boolean }): Promise<number> {
+  const ctx = await createAppContext(loadConfig());
+  try { await listDesignVersions(ctx.reportDesigns, id, opts); return 0; } finally { await ctx.close(); }
 }

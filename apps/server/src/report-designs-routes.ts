@@ -42,6 +42,22 @@ export function registerReportDesignRoutes(
     return after;
   });
 
+  app.post('/api/report-designs/:id/publish', MANAGE, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const before = await ctx.reportDesigns.get(id);
+    if (!before) { reply.code(404); return { error: 'not found' }; }
+    const after = await ctx.reportDesigns.publish(id, req.user?.id ?? null);
+    await recordAudit(ctx, req, { action: 'report-design.publish', entityType: 'report-design', entityId: id, before, after });
+    return after;
+  });
+
+  app.get('/api/report-designs/:id/versions', VIEW, async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const design = await ctx.reportDesigns.get(id);
+    if (!design) { reply.code(404); return { error: 'not found' }; }
+    return ctx.reportDesigns.listVersions(id);
+  });
+
   app.delete('/api/report-designs/:id', MANAGE, async (req, reply) => {
     const { id } = req.params as { id: string };
     const before = await ctx.reportDesigns.get(id);

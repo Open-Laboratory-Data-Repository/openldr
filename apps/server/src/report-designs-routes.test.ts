@@ -5,6 +5,7 @@ import './auth-plugin';
 
 function fakeCtx() {
   const data: any[] = [];
+  const versions: Array<{ designId: string; version: number; name: string; publishedAt: string; publishedBy: string | null }> = [];
   const auditEvents: any[] = [];
   return {
     reportDesigns: {
@@ -13,6 +14,31 @@ function fakeCtx() {
       create: async (d: any) => { data.push(d); return d; },
       update: async (id: string, d: any) => { const i = data.findIndex((x) => x.id === id); data[i] = d; return d; },
       remove: async (id: string) => { const i = data.findIndex((x) => x.id === id); if (i >= 0) data.splice(i, 1); },
+      // Models the real contract (packages/report-designer/src/store.ts): version numbers ascend
+      // per design, and publishing flips status — a fake returning constants would let a broken
+      // route pass.
+      publish: async (id: string, publishedBy: string | null = null) => {
+        const d = data.find((x) => x.id === id);
+        if (!d) throw new Error(`report design not found: ${id}`);
+        const existing = versions.filter((v) => v.designId === id).map((v) => v.version);
+        const version = existing.length ? Math.max(...existing) + 1 : 1;
+        versions.push({ designId: id, version, name: d.name, publishedAt: new Date().toISOString(), publishedBy });
+        d.status = 'published';
+        return d;
+      },
+      listVersions: async (id: string) =>
+        versions.filter((v) => v.designId === id)
+          .sort((a, b) => b.version - a.version)
+          .map((v) => ({ version: v.version, name: v.name, publishedAt: v.publishedAt, publishedBy: v.publishedBy })),
+      upsertPublished: async (d: any, publishedBy: string | null = null) => {
+        const i = data.findIndex((x) => x.id === d.id);
+        const published = { ...d, status: 'published' };
+        if (i >= 0) data[i] = published; else data.push(published);
+        const existing = versions.filter((v) => v.designId === d.id).map((v) => v.version);
+        const version = existing.length ? Math.max(...existing) + 1 : 1;
+        versions.push({ designId: d.id, version, name: d.name, publishedAt: new Date().toISOString(), publishedBy });
+        return published;
+      },
     },
     audit: { record: async (e: any) => { auditEvents.push(e); return e; } },
     // The preview route resolves the letterhead per render; an empty identity is the
@@ -171,6 +197,31 @@ describe('report-design routes', () => {
     expect(res.rawPayload.subarray(0, 4).toString()).toBe('%PDF');
     expect(calls.length).toBe(1);
     expect(calls[0].sql).toContain("'HQ'");
+  });
+
+  it('publishes a design and records an audit event', async () => {
+    const ctx = fakeCtx();
+    const app = appWith(ctx);
+    await app.inject({ method: 'POST', url: '/api/report-designs', payload: minimal });
+    const res = await app.inject({ method: 'POST', url: '/api/report-designs/rd1/publish' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().status).toBe('published');
+    expect(ctx.__auditEvents.some((e: any) => e.action === 'report-design.publish')).toBe(true);
+  });
+
+  it('404s publishing a design that does not exist', async () => {
+    const app = appWith(fakeCtx());
+    const res = await app.inject({ method: 'POST', url: '/api/report-designs/nope/publish' });
+    expect(res.statusCode).toBe(404);
+  });
+
+  it('lists versions, newest first', async () => {
+    const app = appWith(fakeCtx());
+    await app.inject({ method: 'POST', url: '/api/report-designs', payload: minimal });
+    await app.inject({ method: 'POST', url: '/api/report-designs/rd1/publish' });
+    const res = await app.inject({ method: 'GET', url: '/api/report-designs/rd1/versions' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()[0].version).toBe(1);
   });
 
   it('renders a design with no bound tables (static elements) to a PDF', async () => {
