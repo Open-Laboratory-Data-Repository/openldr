@@ -119,5 +119,10 @@ live('082 against real Postgres at national-register scale', () => {
     expect(state.org_units_joined).toBe(ROWS);
     expect(state.org_unit_docs_repointed).toBe(ROWS);
     expect(state.concepts_repointed).toBe(ROWS);
-  }, 900_000);
+    // 30 minutes. Measured GREEN on Docker Desktop for Windows over loopback TCP at 722 844 ms
+    // (~12 min) for these 22 000 rows, of which ~88 % is this host's per-statement round trip
+    // (4.107 ms measured for `select 1`), not Postgres doing work. The previous 900 000 ms left
+    // only 24 % headroom, so a host a quarter slower turned a pass into a timeout that reads like
+    // a regression. This is a timeout, not a budget: nothing here is expected to take 30 minutes.
+  }, 1_800_000);
 });

@@ -43,6 +43,58 @@ async function seedLegacyFacility(
   } as never).execute();
 }
 
+/** A pg-mem database seeded with five facilities in ONE register, a `facility_concept_projection`
+ *  link per facility and a DHIS2 org-unit doc per facility — plus `seen`, every statement `rekey`
+ *  compiled and how many parameters it bound.
+ *
+ *  Built here rather than through `makeMigratedDb` only because the chunking tests need Kysely's
+ *  `log` hook to see each COMPILED statement and its bound parameters; pg-mem's own query
+ *  interceptor sees the SQL with parameters already substituted, which cannot be counted reliably.
+ *
+ *  `seen` is emptied before returning, so it holds only what the caller's `rekey` issues. */
+async function makeChunkingDb(): Promise<{ db: Kysely<any>; seen: { sql: string; params: number }[] }> {
+  const mem = newDb();
+  const seen: { sql: string; params: number }[] = [];
+  const db = mem.adapters.createKysely(undefined, {
+    log: (e: any) => {
+      if (e.level === 'query') seen.push({ sql: e.query.sql, params: e.query.parameters.length });
+    },
+  }) as Kysely<any>;
+  for (const migration of Object.values(internalMigrations)) await migration.up(db);
+
+  const ids = ['fac-seed-1', 'fac-seed-2', 'fac-seed-3', 'fac-seed-4', 'fac-seed-5'];
+  for (const [i, id] of ids.entries()) {
+    await seedLegacyFacility(db, { id, nationalSystem: 'HFR', nationalCode: String(i + 1), name: `F${i + 1}` });
+  }
+  await db.insertInto('facility_concept_projection')
+    .values(ids.map((id) => ({ registry_id: id, concept_code: id })) as never).execute();
+  await db.insertInto('plugin_data').values(ids.map((id) => ({
+    plugin_id: 'dhis2-sink', collection: 'orgUnitMaps', key: id,
+    doc: JSON.stringify({ facilityId: id, orgUnitId: `OU${id}` }),
+  })) as never).execute();
+
+  seen.length = 0; // ignore the migrations and the seed
+  return { db, seen };
+}
+
+/** Every facility re-keyed away from its seeded id, and every link and org-unit doc still present
+ *  and still naming a live registry row. A chunking bug that drops a chunk shows up here. */
+async function expectNothingLost(db: Kysely<any>): Promise<void> {
+  const rows = await db.selectFrom('facility_registry').select('id').execute();
+  expect(rows).toHaveLength(5);
+  expect(rows.every((r: { id: string }) => !r.id.startsWith('fac-seed-'))).toBe(true);
+  const live = new Set(rows.map((r: { id: string }) => r.id));
+  const links = await db.selectFrom('facility_concept_projection')
+    .select(['registry_id', 'concept_code']).execute();
+  expect(links).toHaveLength(5);
+  expect(links.every((l: { registry_id: string; concept_code: string }) =>
+    live.has(l.registry_id) && l.concept_code === l.registry_id)).toBe(true);
+  const docs = await db.selectFrom('plugin_data').selectAll()
+    .where('collection', '=', 'orgUnitMaps').execute();
+  expect(docs).toHaveLength(5);
+  expect(docs.every((d) => live.has(d.key as string))).toBe(true);
+}
+
 describe('082 facility canonical identity', () => {
   it('resolves an existing typed national_system to a source row and rewrites it to the URI', async () => {
     const db = (await makeMigratedDb()) as Kysely<any>;
@@ -352,16 +404,17 @@ describe('082 facility canonical identity', () => {
     expect(await db.selectFrom('facility_jobs').select('id').execute()).toEqual([]);
   });
 
-  // ⛔ WHAT THIS PAIR OF TESTS DOES AND DOES NOT PROVE.
+  // ⛔ WHAT THE NEXT THREE TESTS DO AND DO NOT PROVE.
   // The defect is a real-Postgres one: a statement may bind at most 65535 parameters, and on an
   // upgrade install `moves` holds one entry per facility in a national register. pg-mem has NO
   // parameter ceiling, so it can never raise the failure; and 22 000 rows through pg-mem takes
   // minutes (measured: 3 000 rows -> 90 s), so the real row count cannot be tested here either.
-  // These two tests therefore split the claim in half:
+  // These three tests therefore split the claim into parts:
   //   - the first pins the ARITHMETIC of the default budget against Postgres's real 65535;
-  //   - the second pins that the call sites actually LOOP, by running them at a budget small enough
-  //     to reach a second chunk in five rows, and counting the statements the executor issued.
-  // Neither exercises node-postgres's wire encoding. That layer is covered by
+  //   - the second pins that the two multi-column INSERTs loop, at a budget that splits them;
+  //   - the third pins that the four id-bound SELECT/DELETE loops loop, at a SMALLER budget that
+  //     splits the id list — which the second test's budget does not, and neither does the live one.
+  // None exercises node-postgres's wire encoding. That layer is covered by
   // `082_facility_canonical_identity.live.test.ts`, which is skipped unless a real server is named.
   it('sizes a statement from the column count, under Postgres\'s 65535-parameter ceiling', () => {
     const PG_HARD_LIMIT = 65535;
@@ -377,67 +430,66 @@ describe('082 facility canonical identity', () => {
     expect(rowsPerStatement(3)).toBeGreaterThan(10_000);
     // Never zero, whatever the width — a 0 step would loop forever or write nothing.
     expect(rowsPerStatement(1000)).toBeGreaterThanOrEqual(1);
-    expect(rowsPerStatement(0)).toBeGreaterThanOrEqual(1);
+    // ⛔ The zero-width guard is pinned to the VALUE it produces, not to `>= 1`: the divisor is
+    // `Math.max(1, columns)`, so a 0 width is treated as one column and returns the whole budget.
+    // `>= 1` passed for that and would have passed for any other answer too — the shape of
+    // assertion-that-cannot-fail this file's header warns about. No call site passes 0.
+    expect(rowsPerStatement(0)).toBe(60_000);
+    expect(rowsPerStatement(0)).toBe(rowsPerStatement(1));
   });
 
-  it('splits every list-bound statement into chunks rather than one statement per register', async () => {
-    // Built here rather than through `makeMigratedDb` only because this test needs Kysely's `log`
-    // hook to see each COMPILED statement and its bound parameters; pg-mem's own query interceptor
-    // sees the SQL with parameters already substituted, which cannot be counted reliably.
-    const mem = newDb();
-    const seen: { sql: string; params: number }[] = [];
-    const db = mem.adapters.createKysely(undefined, {
-      log: (e: any) => {
-        if (e.level === 'query') seen.push({ sql: e.query.sql, params: e.query.parameters.length });
-      },
-    }) as Kysely<any>;
-    for (const migration of Object.values(internalMigrations)) await migration.up(db);
-
-    const ids = ['fac-seed-1', 'fac-seed-2', 'fac-seed-3', 'fac-seed-4', 'fac-seed-5'];
-    for (const [i, id] of ids.entries()) {
-      await seedLegacyFacility(db, { id, nationalSystem: 'HFR', nationalCode: String(i + 1), name: `F${i + 1}` });
-    }
-    await db.insertInto('facility_concept_projection')
-      .values(ids.map((id) => ({ registry_id: id, concept_code: id })) as never).execute();
-    await db.insertInto('plugin_data').values(ids.map((id) => ({
-      plugin_id: 'dhis2-sink', collection: 'orgUnitMaps', key: id,
-      doc: JSON.stringify({ facilityId: id, orgUnitId: `OU${id}` }),
-    })) as never).execute();
-
-    seen.length = 0; // ignore the migrations and the seed
+  it('splits the two multi-column INSERTs into chunks rather than one statement per register', async () => {
+    const { db, seen } = await makeChunkingDb();
     // Budget 6: 6 rows per one-column id list, 2 per three-column projection row, 1 per five-column
     // plugin_data row. `up()` never passes this — see `rekey`'s doc comment.
     await rekey(db, 6);
 
-    const inserts = (table: string) =>
-      seen.filter((s) => s.sql.startsWith(`insert into "${table}"`));
-    const projectionInserts = inserts('facility_concept_projection');
-    const pluginInserts = inserts('plugin_data');
-    // Printed so the numbers this assertion turns on are visible when a mutation makes it fail.
-    // eslint-disable-next-line no-console
-    console.log('082 chunking: projection inserts', JSON.stringify(projectionInserts.map((s) => s.params)),
-      'plugin_data inserts', JSON.stringify(pluginInserts.map((s) => s.params)));
+    const paramsOf = (prefix: string) =>
+      seen.filter((s) => s.sql.startsWith(prefix)).map((s) => s.params);
+    // Asserted as ONE labelled object so a failure prints both actual arrays — the numbers this
+    // test turns on are then visible without printing anything on a green run.
+    expect({
+      // 5 links at 2 rows/statement = 3 statements binding 6, 6 and 3 parameters. Unchunked this is
+      // ONE statement binding 15 — the shape that binds 66 000 at 22 000 facilities.
+      projectionInserts: paramsOf('insert into "facility_concept_projection"'),
+      // 5 org-unit docs at 1 row/statement (five columns) = 5 statements of 5 parameters each.
+      pluginInserts: paramsOf('insert into "plugin_data"'),
+    }).toEqual({ projectionInserts: [6, 6, 3], pluginInserts: [5, 5, 5, 5, 5] });
 
-    // 5 links at 2 rows/statement = 3 statements binding 6, 6 and 3 parameters. Unchunked this is
-    // ONE statement binding 15 — which is the shape that binds 66 000 at 22 000 facilities.
-    expect(projectionInserts.map((s) => s.params)).toEqual([6, 6, 3]);
-    // 5 org-unit docs at 1 row/statement (five columns) = 5 statements of 5 parameters each.
-    expect(pluginInserts.map((s) => s.params)).toEqual([5, 5, 5, 5, 5]);
+    await expectNothingLost(db);
+  });
 
-    // …and the split lost nothing: every link is back, re-pointed at a live registry row.
-    const rows = await db.selectFrom('facility_registry').select('id').execute();
-    expect(rows).toHaveLength(5);
-    expect(rows.every((r: { id: string }) => !r.id.startsWith('fac-seed-'))).toBe(true);
-    const links = await db.selectFrom('facility_concept_projection')
-      .select(['registry_id', 'concept_code']).execute();
-    expect(links).toHaveLength(5);
-    const live = new Set(rows.map((r: { id: string }) => r.id));
-    expect(links.every((l: { registry_id: string; concept_code: string }) =>
-      live.has(l.registry_id) && l.concept_code === l.registry_id)).toBe(true);
-    const docs = await db.selectFrom('plugin_data').selectAll()
-      .where('collection', '=', 'orgUnitMaps').execute();
-    expect(docs).toHaveLength(5);
-    expect(docs.every((d) => live.has(d.key as string))).toBe(true);
+  it('splits the id-bound SELECTs and DELETEs too, at a budget small enough to need a second chunk', async () => {
+    // ⛔ WHY A SECOND, SMALLER BUDGET. At budget 6 above, `rowsPerStatement(1, 6)` is 6, so five ids
+    // are a SINGLE chunk and the four id-bound loops each run exactly once. A loop that ignored its
+    // chunk and bound the whole `oldIds` list would look identical there — and identical in the live
+    // test too, where 22 000 ids against a 60 000 budget is also one chunk. Budget 3 gives chunks of
+    // [3, 2], so the loops must run twice and the two statements must bind different counts.
+    const { db, seen } = await makeChunkingDb();
+    // ⛔ The error is CAPTURED, not awaited into the failure, so the statement counts below are
+    // asserted even when `rekey` throws. A loop that re-reads the whole list per chunk returns each
+    // link twice and the re-insert dies on the primary key — a red test, but one whose message names
+    // a constraint rather than the chunking this test is about. The real error is re-thrown after.
+    const failure = await rekey(db, 3).then(() => null, (e: unknown) => e as Error);
+
+    const paramsOf = (prefix: string) =>
+      seen.filter((s) => s.sql.startsWith(prefix)).map((s) => s.params);
+    expect({
+      projectionSelects: paramsOf('select * from "facility_concept_projection"'),
+      projectionDeletes: paramsOf('delete from "facility_concept_projection"'),
+      // The `plugin_data` statements carry TWO fixed parameters besides the chunked list —
+      // `plugin_id` and `collection` — so their counts are the chunk size plus 2.
+      pluginSelects: paramsOf('select * from "plugin_data"'),
+      pluginDeletes: paramsOf('delete from "plugin_data"'),
+    }).toEqual({
+      projectionSelects: [3, 2],
+      projectionDeletes: [3, 2],
+      pluginSelects: [5, 4],
+      pluginDeletes: [5, 4],
+    });
+    if (failure) throw failure;
+
+    await expectNothingLost(db);
   });
 
   it('is idempotent: a second pass over already-migrated rows re-keys nothing', async () => {
