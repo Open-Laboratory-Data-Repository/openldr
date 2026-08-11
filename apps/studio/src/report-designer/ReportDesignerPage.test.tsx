@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, within, waitFor } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { ReportDesignerPage } from './ReportDesignerPage';
-import { createReportDesign, updateReportDesign, deleteReportDesign, listReportDesigns } from '../api';
+import { createReportDesign, updateReportDesign, deleteReportDesign, listReportDesigns, publishReportDesign } from '../api';
 
 // Mock the API layer: the list + single-design loads resolve from the mock seed data (which the
 // existing editor tests depend on), and the mutating calls resolve so we can assert they fire.
@@ -20,6 +20,11 @@ vi.mock('../api', async (importOriginal) => {
     createReportDesign: vi.fn(async (d: unknown) => d),
     updateReportDesign: vi.fn(async (_id: string, d: unknown) => d),
     deleteReportDesign: vi.fn(async () => {}),
+    publishReportDesign: vi.fn(async (id: string) => {
+      const d = MOCK_TEMPLATES.find((t) => t.id === id);
+      if (!d) throw new Error(`not found: ${id}`);
+      return { ...d, status: 'published' as const };
+    }),
   };
 });
 
@@ -330,6 +335,13 @@ describe('ReportDesignerPage', () => {
     expect(screen.getByTestId('save-status')).toHaveTextContent('Saved');
     await new Promise((r) => setTimeout(r, 1400));
     expect(updateReportDesign).not.toHaveBeenCalled();
+  });
+
+  it('publishes the open design and reflects the new status', async () => {
+    await renderPage('rt-amr-summary');
+    await openKebab();
+    fireEvent.click(screen.getByRole('menuitem', { name: /publish revision/i }));
+    await waitFor(() => expect(publishReportDesign).toHaveBeenCalledWith('rt-amr-summary'));
   });
 
   it('a late-resolving autosave for design A does not force the now-open design B to "Saved"', async () => {

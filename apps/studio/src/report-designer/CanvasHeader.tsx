@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next';
 import {
   Plus, Minus, Eye, MoreHorizontal, Undo2, Redo2,
   FilePlus, Save, Download, FileText, FileSpreadsheet, ShieldCheck, Copy, Trash2,
-  Check, Loader2, PanelRight,
+  Check, Loader2, PanelRight, Upload,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -33,6 +33,9 @@ interface Props {
   onExportPdf(): void;
   onExportExcel(): void;
   onPublishAsReport(): void;
+  onPublishRevision(): void;
+  /** The open design's lifecycle state — undefined (e.g. a transient, never-saved design) reads as draft. */
+  status?: 'draft' | 'published';
   /** Toggle the inspector drawer (mobile only). */
   onToggleInspector?(): void;
   onCheck(): void;
@@ -62,6 +65,9 @@ export function CanvasHeader(props: Props): JSX.Element {
             {status === 'unsaved' && t('reportDesigner.unsaved')}
             {status === 'error' && t('reportDesigner.saveFailed')}
           </span>
+        </span>
+        <span className="shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">
+          {t(props.status === 'published' ? 'reportDesigner.statusPublished' : 'reportDesigner.statusDraft')}
         </span>
       </div>
 
@@ -129,7 +135,8 @@ export function CanvasHeader(props: Props): JSX.Element {
                 <DropdownMenuItem onSelect={props.onExportExcel}><FileSpreadsheet className="mr-2 h-4 w-4" /> Excel</DropdownMenuItem>
               </DropdownMenuSubContent>
             </DropdownMenuSub>
-            <DropdownMenuItem onSelect={props.onPublishAsReport}><FileText className="mr-2 h-4 w-4" /> {t('reportDesigner.publishAsReport')}</DropdownMenuItem>
+            <DropdownMenuItem onSelect={props.onPublishRevision}><Upload className="mr-2 h-4 w-4" /> {t('reportDesigner.publishRevision')}</DropdownMenuItem>
+            <DropdownMenuItem onSelect={props.onPublishAsReport}><FileText className="mr-2 h-4 w-4" /> {t('reportDesigner.createReportFrom')}</DropdownMenuItem>
             <DropdownMenuItem onSelect={props.onCheck}><ShieldCheck className="mr-2 h-4 w-4" /> {t('reportDesigner.check')}</DropdownMenuItem>
             <DropdownMenuItem onSelect={props.onDuplicate}><Copy className="mr-2 h-4 w-4" /> {t('reportDesigner.duplicate')}</DropdownMenuItem>
             <DropdownMenuSeparator />

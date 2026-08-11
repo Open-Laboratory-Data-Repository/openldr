@@ -16,7 +16,7 @@ import { PageCanvas } from './PageCanvas';
 import { InspectorTabs } from './InspectorTabs';
 import { PreviewReportDesignDialog } from './PreviewReportDesignDialog';
 import { NewReportSheet } from '../reports/NewReportSheet';
-import { createReportDesign, deleteReportDesign, downloadReportDesignPdf, fetchLabIdentity, getReportDesign, listReportDesigns, updateReportDesign } from '../api';
+import { createReportDesign, deleteReportDesign, downloadReportDesignPdf, fetchLabIdentity, getReportDesign, listReportDesigns, publishReportDesign, updateReportDesign } from '../api';
 import { addElement, allElements, newElement, paperSize, removeElements, updateElement, updateElementRects, updateElements } from './model';
 import { clampRectToPage } from './geometry';
 import { exportDesignToExcel } from './exportExcel';
@@ -273,7 +273,7 @@ export function ReportDesignerPage(): JSX.Element {
     flushOpen(); // persist any pending edits on the currently-open design before switching away
     const id = `rt-${Date.now()}`;
     const tpl: ReportTemplate = {
-      id, name: 'Untitled template', paper: 'A4', orientation: 'portrait',
+      id, name: 'Untitled template', paper: 'A4', orientation: 'portrait', status: 'draft',
       pages: [{ id: `${id}-p1`, elements: [] }], parameters: [],
     };
     // Transient: lives only in local state until Save persists it (no navigation yet).
@@ -329,6 +329,20 @@ export function ReportDesignerPage(): JSX.Element {
     if (!template) return;
     if (transientIds.has(template.id)) { toast.info(t('reportDesigner.saveBeforePublish')); return; }
     setPublishOpen(true);
+  };
+
+  // Publishing is the deliberate act that reaches labs — autosave only ever writes a draft.
+  const onPublishRevision = async () => {
+    if (!template) return;
+    if (transientIds.has(template.id)) { toast.info(t('reportDesigner.saveBeforePublish')); return; }
+    try {
+      flushOpen(); // publish the saved state, not a stale one
+      const published = await publishReportDesign(template.id);
+      setTemplates((ts) => upsert(ts, published));
+      // No version number here on purpose: the publish endpoint returns the DESIGN, not the version
+      // it minted. Interpolating a guessed number would be wrong from v2 onward.
+      toast.success(t('reportDesigner.publishedToast', { name: published.name }));
+    } catch (e) { fail(e); }
   };
 
   const onDelete = async () => {
@@ -429,6 +443,7 @@ export function ReportDesignerPage(): JSX.Element {
                 onZoomIn={() => zoomStep(1)} onZoomOut={() => zoomStep(-1)}
                 onPreview={() => setPreviewOpen(true)} onSave={() => { void onSave(); }} onExportPdf={() => { void onExportPdf(); }} onExportExcel={() => { void onExportExcel(); }}
                 onPublishAsReport={onPublishAsReport}
+                status={template?.status} onPublishRevision={() => void onPublishRevision()}
                 onToggleInspector={() => setInspectorOpen((o) => !o)}
                 onCheck={noop} onDuplicate={noop} onDelete={() => setConfirmDeleteOpen(true)} />
               <PageCanvas template={template} zoom={zoom} selectedIds={selectedIds} onSelect={setSelectedIds} onCommitRects={commitRects}
@@ -484,7 +499,7 @@ export function ReportDesignerPage(): JSX.Element {
           open={publishOpen}
           onOpenChange={setPublishOpen}
           initialDesignId={template.id}
-          onCreated={() => toast.success(t('reportDesigner.publishedToast', { name: template.name }))}
+          onCreated={() => toast.success(t('reportDesigner.reportCreatedToast', { name: template.name }))}
         />
       )}
     </AppShell>
