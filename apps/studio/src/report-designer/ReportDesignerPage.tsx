@@ -28,8 +28,6 @@ const AUTOSAVE_MS = 1200;
 /** Autosave / dirty-state of the open design shown in the header. */
 export type SaveStatus = 'saved' | 'unsaved' | 'saving' | 'error';
 
-function noop(): void { /* wired to real actions in a later port */ }
-
 /** Replace `d` in the list (matched by id) or prepend it if new. */
 function upsert(list: ReportDesign[], d: ReportDesign): ReportDesign[] {
   return list.some((x) => x.id === d.id) ? list.map((x) => (x.id === d.id ? d : x)) : [d, ...list];
@@ -285,6 +283,32 @@ export function ReportDesignerPage(): JSX.Element {
     setEditingId(null);
   };
 
+  /** Duplicate the open design. Mirrors `newTemplate`: the copy is TRANSIENT until Save, so
+   *  duplicating never silently creates server state and the existing "Unsaved" chip carries the
+   *  pending state. Two adjacent menu items with opposite persistence semantics would be its own
+   *  false affordance.
+   *
+   *  Inner element ids are copied verbatim — nothing outside a design references them
+   *  (`resolveDesignTables` keys resolved tables by `el.id` within one design), so regenerating
+   *  them would add risk and buy nothing. A duplicate of a built-in therefore carries element ids
+   *  beginning with the original's id; that is cosmetic. */
+  const duplicateTemplate = () => {
+    if (!template) return;
+    flushOpen(); // persist any pending edits on the source before switching away
+    const id = `rt-${Date.now()}`;
+    const copy: ReportTemplate = {
+      ...structuredClone(template),
+      id,
+      name: t('reportDesigner.copyOf', { name: template.name }),
+    };
+    setTransientIds((s) => new Set(s).add(id));
+    loadedIdRef.current = id;
+    setTemplates((ts) => [copy, ...ts]);
+    setSelectedId(id);
+    setSelectedIds([]);
+    setEditingId(null);
+  };
+
   const onSave = async () => {
     if (!template) return;
     setError(undefined);
@@ -445,7 +469,7 @@ export function ReportDesignerPage(): JSX.Element {
                 onPublishAsReport={onPublishAsReport}
                 status={template?.status} onPublishRevision={() => void onPublishRevision()}
                 onToggleInspector={() => setInspectorOpen((o) => !o)}
-                onCheck={noop} onDuplicate={noop} onDelete={() => setConfirmDeleteOpen(true)} />
+                onDuplicate={duplicateTemplate} onDelete={() => setConfirmDeleteOpen(true)} />
               <PageCanvas template={template} zoom={zoom} selectedIds={selectedIds} onSelect={setSelectedIds} onCommitRects={commitRects}
                 editingId={editingId} onEditStart={startEdit} onEditChange={editChange} onEditEnd={endEdit}
                 identity={labIdentity} />

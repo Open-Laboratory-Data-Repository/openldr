@@ -12,8 +12,8 @@
 
 ## Global Constraints
 
-- **Migration number is `082`.** `081_facility_source_and_register_state.ts` is taken by the unmerged `slice/facility-canonical-identity` branch. Before creating the file, re-check `packages/db/src/migrations/internal/` on every live branch — a third concurrent session claiming `082` collides at merge.
-- **The resulting `081` gap is a runtime hazard, not just a bookkeeping one.** Kysely's migrator enforces strict prefix ordering by name (see Task 1 Step 5), so a database migrated from a 082-without-081 build cannot boot once `081` arrives. This is contained by merging `slice/facility-canonical-identity` first. **Until that merge, do not boot a server or run migrations against a persistent database from this worktree** — pg-mem tests are unaffected and safe.
+- **Migration number was originally `082`.** At the time this task was written, `081_facility_source_and_register_state.ts` was taken by the unmerged `slice/facility-canonical-identity` branch, and `082` was the next free number. That branch went on to also claim `082` (as `082_facility_canonical_identity`) before merging to `main`, so this migration collided at merge exactly as the warning below predicted, and was renumbered to `083` — the next free number after `main` gained both `081` and `082`. Before creating a migration file, re-check `packages/db/src/migrations/internal/` on every live branch — a fourth concurrent session claiming `083` collides the same way.
+- **The `081`/`082` gap was a runtime hazard, not just a bookkeeping one, while this branch predated the facilities merge.** Kysely's migrator enforces strict prefix ordering by name (see Task 1 Step 5), so a database migrated from a build missing `081` and `082` could not boot once they arrived. This was contained by merging `slice/facility-canonical-identity` first; renumbering to `083` after that merge removes the gap entirely, since `main` then has `081`, `082`, `083` in unbroken sequence.
 - **The column MUST be nullable with no default.** `canonicalHash` treats an absent key and `undefined` identically (`6ffddfd66fb48cc1`) but `false` as a distinct value (`73d48a5cffe2bba7`). A `NOT NULL DEFAULT false` column changes the content hash of every design that never set the flag and makes labs re-pull designs whose content did not change.
 - **`fromRow` MUST yield `undefined`, never `false`, for a NULL column.** The hash-identity property above depends on it.
 - **Never add a `Co-Authored-By: Claude` or `Co-Authored-By: Codex` trailer** to any commit.
@@ -27,9 +27,9 @@
 
 | File | Responsibility | Task |
 |---|---|---|
-| `packages/db/src/migrations/internal/082_report_design_page_numbers.ts` | Create — adds the nullable `page_numbers` column | 1 |
-| `packages/db/src/migrations/internal/082_report_design_page_numbers.test.ts` | Create — proves the column exists and round-trips under a fully migrated DB | 1 |
-| `packages/db/src/migrations/internal/index.ts` | Modify — register migration 082 | 1 |
+| `packages/db/src/migrations/internal/083_report_design_page_numbers.ts` | Create — adds the nullable `page_numbers` column | 1 |
+| `packages/db/src/migrations/internal/083_report_design_page_numbers.test.ts` | Create — proves the column exists and round-trips under a fully migrated DB | 1 |
+| `packages/db/src/migrations/internal/index.ts` | Modify — register migration 083 | 1 |
 | `packages/db/src/schema/internal.ts:758-768` | Modify — add `page_numbers` to `ReportDesignsTable` | 1 |
 | `packages/report-designer/src/store.ts:6-16, 18-31, 43-48` | Modify — `toRow`, `fromRow`, `hashOf` | 2, 3 |
 | `packages/report-designer/src/store.test.ts` | Modify — table setup, round trip, hash behaviour, tripwire, exhaustive fixture | 2, 3, 4 |
@@ -40,8 +40,8 @@
 ### Task 1: Add the `page_numbers` column
 
 **Files:**
-- Create: `packages/db/src/migrations/internal/082_report_design_page_numbers.ts`
-- Create: `packages/db/src/migrations/internal/082_report_design_page_numbers.test.ts`
+- Create: `packages/db/src/migrations/internal/083_report_design_page_numbers.ts`
+- Create: `packages/db/src/migrations/internal/083_report_design_page_numbers.test.ts`
 - Modify: `packages/db/src/migrations/internal/index.ts`
 - Modify: `packages/db/src/schema/internal.ts:758-768`
 
@@ -49,23 +49,23 @@
 - Consumes: nothing.
 - Produces: a nullable `boolean` column `report_designs.page_numbers`, and the TypeScript field `ReportDesignsTable.page_numbers: boolean | null`. Task 2 writes and reads it.
 
-- [ ] **Step 1: Confirm 082 is still free**
+- [ ] **Step 1: Confirm 083 is still free**
 
 Run:
 ```bash
 git branch -a --format='%(refname:short)' | while read b; do echo "-- $b"; git ls-tree --name-only "$b" packages/db/src/migrations/internal/ 2>/dev/null | grep -E '^packages.*/08[0-9]_' ; done
 ```
-Expected: `081_facility_source_and_register_state.ts` appears on `slice/facility-canonical-identity`; **no** `082_` on any branch. If an `082_` exists anywhere, stop and rename this migration to the next free number, updating every reference in this plan.
+Expected: `081_facility_source_and_register_state.ts` appears on `slice/facility-canonical-identity`; **no** `083_` on any branch. If an `083_` exists anywhere, stop and rename this migration to the next free number, updating every reference in this plan.
 
 - [ ] **Step 2: Write the failing migration test**
 
-Create `packages/db/src/migrations/internal/082_report_design_page_numbers.test.ts`:
+Create `packages/db/src/migrations/internal/083_report_design_page_numbers.test.ts`:
 
 ```ts
 import { describe, expect, it } from 'vitest';
 import { makeMigratedDb } from './test-helpers';
 
-describe('082_report_design_page_numbers', () => {
+describe('083_report_design_page_numbers', () => {
   it('adds a nullable page_numbers column that round-trips true, false and null', async () => {
     const db = await makeMigratedDb();
 
@@ -95,13 +95,13 @@ describe('082_report_design_page_numbers', () => {
 
 Run:
 ```bash
-cd packages/db && npx vitest run src/migrations/internal/082_report_design_page_numbers.test.ts
+cd packages/db && npx vitest run src/migrations/internal/083_report_design_page_numbers.test.ts
 ```
-Expected: FAIL — `Cannot find module './082_report_design_page_numbers'` is not the error (the test does not import it); the failure is a pg-mem error that column `page_numbers` does not exist.
+Expected: FAIL — `Cannot find module './083_report_design_page_numbers'` is not the error (the test does not import it); the failure is a pg-mem error that column `page_numbers` does not exist.
 
 - [ ] **Step 4: Write the migration**
 
-Create `packages/db/src/migrations/internal/082_report_design_page_numbers.ts`:
+Create `packages/db/src/migrations/internal/083_report_design_page_numbers.ts`:
 
 ```ts
 import { type Kysely } from 'kysely';
@@ -134,22 +134,22 @@ export async function down(db: Kysely<any>): Promise<void> {
 In `packages/db/src/migrations/internal/index.ts`, add the import after the `m080` import line:
 
 ```ts
-import * as m082 from './082_report_design_page_numbers';
+import * as m083 from './083_report_design_page_numbers';
 ```
 
 and add the entry as the last line of the `internalMigrations` object, after `'080_facility_import_runs'`:
 
 ```ts
-  '082_report_design_page_numbers': { up: m082.up, down: m082.down },
+  '083_report_design_page_numbers': { up: m083.up, down: m083.down },
 ```
 
-There is intentionally no `081` on this branch — it lives on the unmerged facilities branch and will slot in ahead of this one at merge.
+At the time this step was executed there was intentionally no `081` on this branch — it lived on the unmerged facilities branch and was expected to slot in ahead of this one at merge, as `082`.
 
-⛔ **The gap is safe only because of merge order. It is not harmless in itself** — an earlier revision of this plan claimed it was, and that was wrong. `createMigrator` (`packages/db/src/migrator.ts:5-10`) constructs `new Migrator({ db, provider })` without `allowUnorderedMigrations`, and Kysely 0.28.17 defaults that to `false` (`DEFAULT_ALLOW_UNORDERED_MIGRATIONS`). It then sorts migrations by name and requires the executed set to be a strict prefix, throwing `corrupted migrations: expected previously executed migration … to be at index N but … was found in its place` otherwise. So a database that applies `082` while `081` is absent, and is later upgraded to a build containing `081`, **fails to migrate — and `apps/server` self-migrates on startup, so that server will not boot.**
+⛔ **The gap was safe only because of merge order. It was not harmless in itself** — an earlier revision of this plan claimed it was, and that was wrong. `createMigrator` (`packages/db/src/migrator.ts:5-10`) constructs `new Migrator({ db, provider })` without `allowUnorderedMigrations`, and Kysely 0.28.17 defaults that to `false` (`DEFAULT_ALLOW_UNORDERED_MIGRATIONS`). It then sorts migrations by name and requires the executed set to be a strict prefix, throwing `corrupted migrations: expected previously executed migration … to be at index N but … was found in its place` otherwise. So a database that applies a later-numbered migration while an earlier one is absent, and is later upgraded to a build containing that earlier one, **fails to migrate — and `apps/server` self-migrates on startup, so that server will not boot.**
 
 `makeMigratedDb` cannot detect this: it iterates `Object.values(internalMigrations)` directly and never invokes Kysely's `Migrator`. No test in this repository exercises the ordering check.
 
-**The agreed resolution is merge order:** `slice/facility-canonical-identity` merges first, so `main` only ever sees `081` then `082` in sequence and the gap never exists on a shipped build. Until that merge, do **not** boot a server or run migrations against a persistent database from this worktree. If merge order cannot be guaranteed, the alternatives are renumbering, or setting `allowUnorderedMigrations: true` in `packages/db/src/migrator.ts` — the latter is a repo-wide change to migration semantics and deserves its own decision.
+**What actually happened:** merge order was not guaranteed. The facilities branch went on to claim `082` for its own migration (`082_facility_canonical_identity`) before merging, colliding with this branch's page-numbers migration exactly as the collision warning above predicted. The resolution was renumbering: this migration became `083`, the next free number once `main` carried both `081` and `082` from the facilities merge. `main` now sees `081`, `082`, `083` in unbroken sequence, so the gap this section warned about does not exist on any shipped build.
 
 - [ ] **Step 6: Add the column to the TypeScript table type**
 
@@ -174,7 +174,7 @@ export interface ReportDesignsTable {
 
 Run:
 ```bash
-cd packages/db && npx vitest run src/migrations/internal/082_report_design_page_numbers.test.ts
+cd packages/db && npx vitest run src/migrations/internal/083_report_design_page_numbers.test.ts
 ```
 Expected: PASS, 1 test.
 
@@ -189,7 +189,7 @@ Expected: no output, exit 0.
 - [ ] **Step 9: Commit**
 
 ```bash
-git add packages/db/src/migrations/internal/082_report_design_page_numbers.ts packages/db/src/migrations/internal/082_report_design_page_numbers.test.ts packages/db/src/migrations/internal/index.ts packages/db/src/schema/internal.ts
+git add packages/db/src/migrations/internal/083_report_design_page_numbers.ts packages/db/src/migrations/internal/083_report_design_page_numbers.test.ts packages/db/src/migrations/internal/index.ts packages/db/src/schema/internal.ts
 git commit -m "feat(report-designer): add nullable report_designs.page_numbers column
 
 Nullable with no default so an unset flag keeps hashing identically to
@@ -240,7 +240,7 @@ Append inside the existing `describe('ReportDesignStore', ...)` block in `packag
     expect((await store.get('pn-off'))?.pageNumbers).toBe(false);
 
     // Unset must come back `undefined`. `false` would change the design's content hash and
-    // re-ship every previously-unflagged design over reference sync (see migration 082).
+    // re-ship every previously-unflagged design over reference sync (see migration 083).
     await store.create(makeDesign('pn-unset', 'Unset'));
     expect((await store.get('pn-unset'))?.pageNumbers).toBeUndefined();
   });
@@ -277,7 +277,7 @@ function toRow(d: ReportDesign) {
     pages: JSON.stringify(d.pages),
     parameters: JSON.stringify(d.parameters),
     margins: d.margins ? JSON.stringify(d.margins) : null,
-    // `?? null` not `?? false` — see migration 082. An unset flag must persist as NULL so it reads
+    // `?? null` not `?? false` — see migration 083. An unset flag must persist as NULL so it reads
     // back `undefined` and leaves the content hash unchanged.
     page_numbers: d.pageNumbers ?? null,
   };
@@ -354,7 +354,7 @@ Then append inside the existing `describe('ReportDesignStore', ...)` block:
   });
 
   it('hashes false differently from unset', async () => {
-    // This is the property migration 082's nullability rests on: `false` is NOT the same as unset,
+    // This is the property migration 083's nullability rests on: `false` is NOT the same as unset,
     // so a NOT NULL DEFAULT false column would have moved every existing design's hash.
     const { capture, hashes } = spyCapture();
     const store = createReportDesignStore(db, capture);
@@ -720,7 +720,7 @@ Expected: a clean tree, and five commits from Tasks 1-5. No throwaway probe file
 
 ## Definition of Done
 
-- `report_designs.page_numbers` exists, nullable, registered as migration `082`.
+- `report_designs.page_numbers` exists, nullable, registered as migration `083`.
 - A design saved with page numbers enabled reads back enabled; a design that never set the flag reads back `undefined`, not `false`.
 - Toggling page numbers changes the design's content hash; leaving it unset does not.
 - `Object.keys(ReportDesignSchema.shape)` is pinned, and the tripwire has been observed to fail and recover.

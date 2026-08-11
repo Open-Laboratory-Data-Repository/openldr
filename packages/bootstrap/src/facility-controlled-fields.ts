@@ -40,7 +40,23 @@ function djb2Hex(s: string): string {
  *  cannot collide with another's: non-alphanumeric runs collapse to one `_`, edges trim, and a
  *  source name that slugifies to nothing at all (e.g. `///`) falls back to a deterministic hash of
  *  the untrimmed string instead of colliding with every other punctuation-only source under the bare
- *  field prefix. */
+ *  field prefix.
+ *
+ *  ⛔ `nationalSystem` IS A REGISTER'S CANONICAL URI (e.g. `urn:tz:hfr`) — the `url` of a
+ *  `coding_systems` row marked as a facility register — and NEVER a label somebody typed. The
+ *  slugification below LOWERCASES, while `idFor` (`packages/terminology/src/facility-csv.ts`) hashes
+ *  its argument verbatim. MEASURED before this was gated: `HFR` and `hfr` produced two DIFFERENT
+ *  facility ids while sharing this ONE namespace — one register, two identities, one mapping
+ *  namespace, so a mapping saved under one spelling silently resolved values imported under the
+ *  other. The import routes now refuse a `nationalSystem` that names no registered source
+ *  (`apps/server/src/facilities-routes.ts`), so there is one spelling of a register to feed —
+ *  ⚠ through the HTTP doors only: the CLI's `--national-system` is still free text until this
+ *  slice's Task 11.
+ *
+ *  ⛔ The slugification STAYS. It is not the defect and removing it would produce an invalid system
+ *  url: a URI carries `:` and `/`, and this value is a coding-system url in its own right, looked up
+ *  by `term_mappings.from_system`. What changed is its INPUT, not its behaviour — do not "fix" the
+ *  asymmetry by making `idFor` lowercase too, which would silently re-key every id already written. */
 export function observedFieldSystem(field: ControlledField, nationalSystem: string): string {
   const trimmed = (nationalSystem ?? '').trim();
   const slug = trimmed

@@ -782,7 +782,11 @@ export const en = {
       sourceImport: 'Imported',
       moreFiltersToggle: 'More filters',
       nationalSystemLabel: 'National system',
-      nationalSystemPlaceholder: 'e.g. HFR, MFL',
+      // ⛔ A CANONICAL REGISTER URI, not a short code. This filter is an EXACT match on
+      // `facility_registry.national_system` (facility-registry-store.ts's `list`), and migration 082
+      // rewrote every one of those values to a registered source's URI — so the previous
+      // 'e.g. HFR, MFL' told the operator to type a string that now matches nothing at all.
+      nationalSystemPlaceholder: 'e.g. urn:openldr:cs:facility-register:hfr',
       managedOriginLabel: 'Managed origin',
       managedOriginPlaceholder: 'e.g. central-sync, local',
       ownershipLabel: 'Ownership',
@@ -801,6 +805,13 @@ export const en = {
       districtAll: 'All districts',
       councilLabel: 'Council',
       councilAll: 'All councils',
+      // Task 10: registry MEMBERSHIP (migration 081's `register_state`) — distinct from the plain
+      // `statusLabel`/`statusPlaceholder` free-text filter above, which is operational status.
+      registerStateLabel: 'Register state',
+      registerStateAll: 'All register states',
+      registerStateInRegister: 'In register',
+      registerStateDropped: 'Dropped by register',
+      registerStateNotRegistered: 'Not from a register',
     },
     pager: {
       summary: '{{from}}–{{to}} of {{total}}',
@@ -818,8 +829,23 @@ export const en = {
       description: 'Upload a CSV export from a national facility register and preview it before writing anything.',
       fileLabel: 'File',
       nationalSystemLabel: 'National system',
-      nationalSystemPlaceholder: 'e.g. HFR, MFL',
+      nationalSystemPlaceholder: 'Select a register',
       nationalSystemHint: 'Required — the national register these codes belong to.',
+      nationalSystemLoading: 'Loading registers…',
+      nationalSystemEmpty: 'No facility registers are configured on this install yet.',
+      nationalSystemLoadError: 'Could not load facility registers.',
+      registerSourceAction: 'Register a source',
+      registerSourceActions: 'Register source actions',
+      registerSourceTitle: 'Register a facility source',
+      registerSourceHint: 'A national register this install can import against. Its canonical URI becomes the register’s permanent identity, so use the same URI this register’s publisher already uses elsewhere.',
+      registerSourceUrlLabel: 'Canonical URI',
+      registerSourceNameLabel: 'Display name',
+      registerSourceCodeLabel: 'Code',
+      registerSourceVersionLabel: 'Version',
+      registerSourceJurisdictionLabel: 'Jurisdiction',
+      registerSourceContactLabel: 'Contact',
+      registerSourceSave: 'Register',
+      registerSourceSaving: 'Registering…',
       formatLabel: 'File format',
       formatCsv: 'CSV export',
       formatJsonl: 'JSONL release',
@@ -964,6 +990,32 @@ export const en = {
       failedProjections_one: '{{count}} facility mapping needs attention',
       failedProjections_other: '{{count}} facility mappings need attention',
     },
+    // Task 10: the read-only detail/provenance panel on FacilityDialog's edit view — "where a
+    // facility came from".
+    detail: {
+      provenanceTitle: 'Provenance',
+      authorityLabel: 'Authority',
+      canonicalUriLabel: 'Canonical URI',
+      versionLabel: 'Version',
+      lastImportLabel: 'Last import',
+      lastImportNever: 'Never imported',
+      notRegistered: 'Not linked to a national register.',
+    },
+    // Task 10: the per-facility change history Sheet (FacilityHistory.tsx) — "what has happened to
+    // it", read straight off `GET /api/facilities/:id/history` (Task 8).
+    history: {
+      menuItem: 'History',
+      title: 'Facility history',
+      description: 'Every recorded change to {{name}}, newest first.',
+      empty: 'No recorded history for this facility yet.',
+      unknownActor: 'Unknown',
+      actions: {
+        create: 'Created',
+        update: 'Updated',
+        delete: 'Deleted',
+        importRow: 'Imported',
+      },
+    },
     tabs: {
       registry: 'Registry',
       observed: 'Observed',
@@ -1075,6 +1127,14 @@ export const en = {
     publishAsReport: 'Publish',
     check: 'Check',
     duplicate: 'Duplicate',
+    copyOf: 'Copy of {{name}}',
+    checkUnavailable: 'Preflight not available yet',
+    chooseImage: 'Choose image…',
+    removeImage: 'Remove image',
+    imageType: 'Unsupported image type — use PNG, JPEG or WebP',
+    imageTooBig: 'Image too large (max {{max}} KB)',
+    imageReadError: 'Could not read that file',
+    imageToken: 'Resolved at render',
     delete: 'Delete',
     properties: 'Properties',
     layers: 'Layers',
@@ -1174,6 +1234,8 @@ export const en = {
       text: 'Text', table: 'Table', image: 'Image', line: 'Line', rect: 'Rectangle', datetime: 'Date/time',
       keyvalue: 'Key/value panel', barcode: 'Barcode', qrcode: 'QR code',
     },
+    headersFromData: 'Headers from data',
+    rowsAtRender: 'Rows at render',
   },
   a11y: {
     expandSidebar: 'Expand sidebar',

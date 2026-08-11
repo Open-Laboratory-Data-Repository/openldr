@@ -6,6 +6,7 @@ import { makeMigratedDb } from '@openldr/db/testing';
 import { makeMigratedExternalDb } from '@openldr/db/testing-external';
 import {
   createTerminologyAdminStore, createFacilityRegistryStore, createFacilityJobStore,
+  createFacilityRegisterSourceStore,
   DEFAULT_OBSERVED_FACILITY_SYSTEM, FACILITY_REGISTRY_SYSTEM, DEFAULT_LIST_LIMIT, APPLY_PHASE,
 } from '@openldr/db';
 import { projectRegistryRows } from '@openldr/bootstrap';
@@ -777,15 +778,16 @@ describe('facilities routes', () => {
       expect(ctx.__lastListOptions).toMatchObject({ q: 'alpha', health: 'unmapped', level: 'dispensary' });
     });
 
-    // Regression net for the full forwarding contract: the handler reads FIFTEEN keys off `q` and
+    // Regression net for the full forwarding contract: the handler reads SIXTEEN keys off `q` and
     // hands them to `ctx.facilityRegistry.list(...)` (q, country, zone, region, district, council,
-    // status, level, ownership, nationalSystem, source, managedOrigin, health, limit, offset). The
-    // test above only ever exercised three of them (q/health/level) via `toMatchObject`, which
-    // ignores any key not named in the expectation — so `country`, `zone`, `ownership`,
-    // `nationalSystem`, `source` and `managedOrigin` had NO regression net: deleting or mistyping any
-    // one of their `ownFirstString(q, '…')` lines in the route left every test in this file green.
-    // There is also no compile-time guard here (the handler has no return-type annotation), so this
-    // test is the ONLY thing pinning the forwarding contract.
+    // status, level, ownership, nationalSystem, source, managedOrigin, registerState, health, limit,
+    // offset — Task 10 added `registerState`). The test above only ever exercised three of them
+    // (q/health/level) via `toMatchObject`, which ignores any key not named in the expectation — so
+    // `country`, `zone`, `ownership`, `nationalSystem`, `source`, `managedOrigin` and `registerState`
+    // had NO regression net: deleting or mistyping any one of their `ownFirstString(q, '…')` lines in
+    // the route left every test in this file green. There is also no compile-time guard here (the
+    // handler has no return-type annotation), so this test is the ONLY thing pinning the forwarding
+    // contract.
     //
     // Every param below is set to a distinct, recognisable value, and the assertion is `toEqual`
     // against a COMPLETE expected object — not `toMatchObject` — specifically so it fails both when a
@@ -801,7 +803,7 @@ describe('facilities routes', () => {
         'q=alpha', 'country=country-val', 'zone=zone-val', 'region=region-val', 'district=district-val',
         'council=council-val', 'status=status-val', 'level=level-val', 'ownership=ownership-val',
         'nationalSystem=nationalSystem-val', 'source=source-val', 'managedOrigin=managedOrigin-val',
-        'health=unmapped', 'limit=7', 'offset=3',
+        'registerState=registerState-val', 'health=unmapped', 'limit=7', 'offset=3',
       ].join('&');
       const res = await app.inject({ method: 'GET', url: `/api/facilities?${qs}` });
       expect(res.statusCode).toBe(200);
@@ -818,6 +820,7 @@ describe('facilities routes', () => {
         nationalSystem: 'nationalSystem-val',
         source: 'source-val',
         managedOrigin: 'managedOrigin-val',
+        registerState: 'registerState-val',
         health: 'unmapped',
         limit: 7,
         offset: 3,
@@ -1155,6 +1158,30 @@ describe('Fix 1: POST/PUT /api/facilities project the row into FACILITY_REGISTRY
   });
 });
 
+// Task 10 (B1, facility-canonical-identity): `register_state` (migration 081) reaches the wire.
+// Against the REAL store (`fakeCreateCtx`, not `fakeCtx`'s in-memory double above) — proving the
+// route's own `?registerState=` param genuinely reaches `facility_registry.register_state`
+// end-to-end, not just that the fake recorded the option object (already covered by the
+// `toEqual` regression net in the "Task 3" describe block above).
+describe('Task 10: register_state reaches the wire', () => {
+  it('a created facility carries registerState, and the list can filter by it', async () => {
+    const internalDb = await makeMigratedDb();
+    const ctx = fakeCreateCtx(internalDb);
+    const app = await appWith(ctx);
+
+    const created = (await app.inject({ method: 'POST', url: '/api/facilities', payload: body })).json();
+    // A freshly created facility was never claimed by any register — the column's own DEFAULT
+    // ('not_registered'), never written by this store's upsert() (see toRow()'s doc comment).
+    expect(created.registerState).toBe('not_registered');
+
+    const matches = (await app.inject({ method: 'GET', url: '/api/facilities?registerState=not_registered' })).json();
+    expect(matches.rows.map((r: any) => r.id)).toContain(created.id);
+
+    const nonMatches = (await app.inject({ method: 'GET', url: '/api/facilities?registerState=in_register' })).json();
+    expect(nonMatches.rows.map((r: any) => r.id)).not.toContain(created.id);
+  });
+});
+
 // --- A failed projection is durable, and the response says so -------------------------------------
 // `projectRegistryRows` never throws (see its doc comment) — a failure was previously invisible: the
 // route reported plain success while the facility was silently missing from (or stale in) the mapping
@@ -1328,6 +1355,145 @@ describe('POST/PUT report whether this call\'s projection landed', () => {
   });
 });
 
+// --- Task 6 (B1, facility-canonical-identity): server-enforced controlled vocabulary on manual
+// create/edit. `resolveControlledFields`/`applyControlledFields` (packages/bootstrap/src/facility-
+// controlled-fields.ts) already run over every CSV-imported row via `importFacilities`, but manual
+// create/edit (this route) applied no valueset at all — an imported row's `status` is always a
+// canonical FHIR location-status code (migration 072), a hand-typed one could be anything. These
+// tests pin the fix: POST/PUT reuse the SAME resolver and REFUSE (400) a controlled field whose raw
+// value is not already canonical — except when that field's value set is not seeded on this
+// install, which is reported NOT VALIDATED (passed through unenforced) rather than refused, exactly
+// mirroring `resolveControlledFields`'s own contract.
+//
+// Run against a REAL migrated db (`fakeCreateCtx`, defined above) rather than `fakeCtx()`'s
+// hand-rolled admin double: the double has no `valueSets`/`termMappings` at all, and the whole point
+// here is proving the route resolves against the REAL seeded value sets from migrations 072/073.
+
+const CONTROLLED_FORM_FIELDS = [
+  { id: 'k1', apiProperty: 'localCode' },
+  { id: 'k2', apiProperty: 'name' },
+  { id: 'k3', apiProperty: 'status' },
+  { id: 'k4', apiProperty: 'level' },
+  { id: 'k5', apiProperty: 'country' },
+];
+
+/** `fakeCreateCtx` above only registers `form-sample-facility` (FORM_FIELDS, no controlled
+ *  columns) — this variant additionally serves `form-controlled-fields`, mapping k3/k4/k5 onto
+ *  status/level/country so these tests can submit them directly. */
+function fakeControlledCtx(internalDb: any) {
+  const ctx = fakeCreateCtx(internalDb);
+  ctx.forms.get = async (formId: string) => (
+    formId === 'form-controlled-fields'
+      ? { id: 'form-controlled-fields', schema: { fields: CONTROLLED_FORM_FIELDS }, targetPages: ['facilities'] }
+      : undefined
+  );
+  return ctx;
+}
+
+function controlledBody(answers: Record<string, string>) {
+  return {
+    answers: { k1: 'CF01', k2: 'Controlled Fields Facility', ...answers },
+    formSchemaId: 'form-controlled-fields',
+    formVersion: 1,
+  };
+}
+
+describe('Task 6: server-enforced controlled vocabulary on manual create/edit', () => {
+  it('⛔ refuses a manually created facility whose status is not in the canonical valueset', async () => {
+    const internalDb = await makeMigratedDb();
+    const app = await appWith(fakeControlledCtx(internalDb));
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities', payload: controlledBody({ k3: 'Operating' }),
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toMatch(/status/i);
+  });
+
+  it('accepts a canonical status', async () => {
+    const internalDb = await makeMigratedDb();
+    const app = await appWith(fakeControlledCtx(internalDb));
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities', payload: controlledBody({ k3: 'active' }),
+    });
+    expect(res.statusCode).toBe(201);
+    expect(res.json().status).toBe('active');
+  });
+
+  it('applies the same rule to level and country', async () => {
+    const internalDb = await makeMigratedDb();
+    const app = await appWith(fakeControlledCtx(internalDb));
+
+    const badLevel = await app.inject({
+      method: 'POST', url: '/api/facilities', payload: controlledBody({ k4: 'Not A Real Level' }),
+    });
+    expect(badLevel.statusCode).toBe(400);
+    expect(badLevel.json().error).toMatch(/level/i);
+
+    // A distinct localCode: the level refusal above must not have written a row for CF01 to
+    // collide with (that would itself be evidence the refusal didn't actually block the write).
+    const badCountry = await app.inject({
+      method: 'POST', url: '/api/facilities',
+      payload: controlledBody({ k1: 'CF02', k5: 'Nowhereland' }),
+    });
+    expect(badCountry.statusCode).toBe(400);
+    expect(badCountry.json().error).toMatch(/country/i);
+  });
+
+  it('reports NOT VALIDATED rather than refusing when the valueset is not seeded', async () => {
+    const internalDb = await makeMigratedDb();
+    const ctx = fakeControlledCtx(internalDb);
+    // Simulate an install where migration 072's location-status ValueSet was never seeded.
+    // `resolveControlledFields`'s own contract (facility-controlled-fields.ts) reports a field
+    // whose value set is absent as `notValidated` and classifies none of its values — the route
+    // must mirror that by letting the create through, not refusing an operator's only way to
+    // register a facility on that install.
+    const real = ctx.terminology.admin.valueSets.getByUrl.bind(ctx.terminology.admin.valueSets);
+    ctx.terminology.admin.valueSets.getByUrl = async (url: string) => (
+      url === 'urn:openldr:valueset:location-status' ? null : real(url)
+    );
+    const app = await appWith(ctx);
+
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities', payload: controlledBody({ k3: 'Operating' }),
+    });
+    expect(res.statusCode).toBe(201);
+    expect(res.json().status).toBe('Operating');
+  });
+
+  it('refuses a PUT that edits status to a non-canonical value, without overwriting the existing canonical one', async () => {
+    const internalDb = await makeMigratedDb();
+    const app = await appWith(fakeControlledCtx(internalDb));
+    const created = (await app.inject({
+      method: 'POST', url: '/api/facilities', payload: controlledBody({ k3: 'active' }),
+    })).json();
+
+    const res = await app.inject({
+      method: 'PUT', url: `/api/facilities/${created.id}`,
+      payload: controlledBody({ k3: 'Operating' }),
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toMatch(/status/i);
+    const row = await internalDb.selectFrom('facility_registry').selectAll()
+      .where('id', '=', created.id).executeTakeFirstOrThrow();
+    expect(row.status).toBe('active');
+  });
+
+  it('accepts a PUT that edits status to a different canonical value', async () => {
+    const internalDb = await makeMigratedDb();
+    const app = await appWith(fakeControlledCtx(internalDb));
+    const created = (await app.inject({
+      method: 'POST', url: '/api/facilities', payload: controlledBody({ k3: 'active' }),
+    })).json();
+
+    const res = await app.inject({
+      method: 'PUT', url: `/api/facilities/${created.id}`,
+      payload: controlledBody({ k3: 'suspended' }),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().status).toBe('suspended');
+  });
+});
+
 // --- Task 9: DELETE is the third code-release path, and used to be the only one with no projection
 // work at all. It has TWO obligations, in a fixed order around the row removal — see
 // `retireRegistryConcepts`/`reprojectAfterRegistryDelete` in packages/bootstrap for why the order is
@@ -1464,6 +1630,34 @@ function facilityCsv(rows: string[]): string {
   return [CSV_HEADER, ...rows].join('\n') + '\n';
 }
 
+/** B1 Task 3: register `url` as a facility register, through the REAL store rather than a
+ *  hand-rolled `coding_systems` insert — the routes resolve a submitted `nationalSystem` with that
+ *  store's own `getByUrl`, and a fixture spelling the row itself would be free to disagree with what
+ *  `getByUrl` actually looks for (it filters on `kind`, see migration 081). */
+async function seedRegisterSource(db: any, url: string): Promise<void> {
+  await createFacilityRegisterSourceStore(db).create({
+    url, name: `Register ${url}`, code: url.replace(/[^a-zA-Z0-9]+/g, '_').toUpperCase(),
+  });
+}
+
+/** Review fix (B1 Task 3): the store's `create` always writes `active: true` and exposes no
+ *  deactivate method (Task 9's admin surface for register sources hasn't landed yet), so a test
+ *  wanting a deactivated register updates the `coding_systems` row directly — the same row shape
+ *  `getByUrl`/`list` both read, so this is a fixture detail, not a divergent path. */
+async function deactivateRegisterSource(db: any, url: string): Promise<void> {
+  await db.updateTable('coding_systems').set({ active: false }).where('url', '=', url).execute();
+}
+
+/** A migrated db with the given register URIs ALREADY REGISTERED — the ordinary setup for every
+ *  import/upload test below, since B1 Task 3 made both import doors refuse a `nationalSystem` that
+ *  is not a known register source. `makeMigratedDb()` alone seeds no register (nothing in the
+ *  migration set does), so a test wanting the REFUSAL uses `makeMigratedDb()` directly. */
+async function importDb(systems: string[] = [SYSTEM]): Promise<any> {
+  const db = await makeMigratedDb();
+  for (const url of systems) await seedRegisterSource(db, url);
+  return db;
+}
+
 // Important 5: a JSONL release fixture, mirroring `packages/bootstrap/src/facility-import.test.ts`'s
 // own `jsonl`/`rowLine`/`deletionLine` helpers — this file needs its own copy since it exercises the
 // ROUTE, not `importFacilities` directly, and has no dependency on that test file.
@@ -1552,8 +1746,80 @@ function fakeBlobStore() {
 }
 
 describe('POST /api/facilities/import', () => {
+  // --- B1 Task 3: the submitted register must be a REGISTERED one --------------------------------
+  //
+  // MEASURED before this slice: `nationalSystem` was free text typed into the import sheet and
+  // hashed straight into every facility's permanent id (`idFor`, facility-csv.ts). For national code
+  // `100`, `HFR` gave `fac-d112c779ad583160` and `hfr` gave `fac-49bce368724fb81a` — two identities
+  // for one register — while `observedFieldSystem` (facility-controlled-fields.ts) lowercases its
+  // slug, so BOTH shared the single `…:facility-level:hfr` mapping namespace. One register, two
+  // identities, one namespace. The fix is not a new normalisation rule: it is that the value can no
+  // longer be typed at all — it must name a row in `coding_systems` marked as a facility register.
+  it('⛔ refuses an import whose nationalSystem is not a known register source', async () => {
+    const db = await makeMigratedDb(); // deliberately unregistered — not `importDb()`
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities/import',
+      payload: { csv: facilityCsv(['100,Alpha,,,,,,,,,,,,,,']), nationalSystem: 'HFR' },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toMatch(/not a known facility register/i);
+    // ⛔ Refused BEFORE anything durable happened: no run row holding the register's `active_key`,
+    // and (this being a preview) nothing in the registry either. A gate that answered 400 after
+    // minting the run would lock the register out of every later preview.
+    expect(await db.selectFrom('facility_import_runs').selectAll().execute()).toHaveLength(0);
+    expect(await db.selectFrom('facility_registry').selectAll().execute()).toHaveLength(0);
+  });
+
+  it('accepts an import naming a registered source by its canonical URI', async () => {
+    const db = await importDb();
+    const app = await appWith(fakeImportCtx(db));
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities/import',
+      payload: { csv: facilityCsv(['100,Alpha,,,,,,,,,,,,,,']), nationalSystem: SYSTEM },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().parsed).toBe(1);
+  });
+
+  it('⛔ refuses a CASE VARIANT of a registered URI — the exact fork this slice removes', async () => {
+    // `urn:tz:hfr` is registered; `urn:tz:HFR` is not. These two hash to DIFFERENT facility ids
+    // (`idFor` does not lowercase) but to the SAME controlled-field namespace (`observedFieldSystem`
+    // does), so accepting both is precisely the disagreement measured above. The gate is an EXACT
+    // match against the register's stored url — never a case-insensitive or normalising lookup,
+    // which would silently adopt one spelling's rows under the other's identity.
+    const db = await importDb();
+    const app = await appWith(fakeImportCtx(db));
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities/import',
+      payload: { csv: facilityCsv(['100,Alpha,,,,,,,,,,,,,,']), nationalSystem: 'urn:tz:HFR' },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toMatch(/not a known facility register/i);
+  });
+
+  // Review fix (B1 Task 3, MINOR finding): `getByUrl` deliberately does not filter on `active` (it
+  // stays usable for historical-source lookups elsewhere), so without this check a DEACTIVATED
+  // register — one Task 9's import-sheet `Select` will never again offer, since `list()` defaults to
+  // active-only — would still pass the gate above and let an import write facilities under it.
+  it('⛔ refuses an import naming a DEACTIVATED register, distinctly from an unknown one', async () => {
+    const db = await importDb();
+    await deactivateRegisterSource(db, SYSTEM);
+    const app = await appWith(fakeImportCtx(db));
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities/import',
+      payload: { csv: facilityCsv(['100,Alpha,,,,,,,,,,,,,,']), nationalSystem: SYSTEM },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toMatch(/deactivated/i);
+    expect(res.json().error).not.toMatch(/not a known facility register/i);
+    expect(await db.selectFrom('facility_import_runs').selectAll().execute()).toHaveLength(0);
+    expect(await db.selectFrom('facility_registry').selectAll().execute()).toHaveLength(0);
+  });
+
   it('I5: gated on facilities.manage — a facilities.view-only user gets 403', async () => {
-    const db = await makeMigratedDb();
+    const db = await importDb();
     const app = await appWith(fakeImportCtx(db), ['facilities.view']);
     const res = await app.inject({
       method: 'POST', url: '/api/facilities/import',
@@ -1564,7 +1830,7 @@ describe('POST /api/facilities/import', () => {
   });
 
   it('dry-run (no `apply`) returns the full summary and writes nothing', async () => {
-    const db = await makeMigratedDb();
+    const db = await importDb();
     const ctx = fakeImportCtx(db);
     const app = await appWith(ctx);
     const csv = facilityCsv([
@@ -1611,7 +1877,7 @@ describe('POST /api/facilities/import', () => {
   // route must report its line number/reason verbatim, and `apply` must stay blocked until the
   // operator explicitly opts in with `allowMalformedRows`.
   it('returns quarantined rows with line numbers and applies nothing', async () => {
-    const db = await makeMigratedDb();
+    const db = await importDb();
     const ctx = fakeImportCtx(db);
     const app = await appWith(ctx);
     const res = await app.inject({
@@ -1637,7 +1903,7 @@ describe('POST /api/facilities/import', () => {
   // returns, and `blocked` is carried on the body regardless. That is the point: the two guards no
   // longer have to agree by coincidence, because only one of them decides.
   it('reports a duplicate-header file as blocked, with no override offered', async () => {
-    const db = await makeMigratedDb();
+    const db = await importDb();
     const ctx = fakeImportCtx(db);
     const app = await appWith(ctx);
     const res = await app.inject({
@@ -1657,7 +1923,7 @@ describe('POST /api/facilities/import', () => {
   });
 
   it('allowMalformedRows: true applies the well-formed rows despite the quarantined one, and still reports it', async () => {
-    const db = await makeMigratedDb();
+    const db = await importDb();
     const ctx = fakeImportCtx(db);
     const app = await appWith(ctx);
     const res = await app.inject({
@@ -1679,7 +1945,7 @@ describe('POST /api/facilities/import', () => {
   });
 
   it('apply: true writes and returns created/updated counts', async () => {
-    const db = await makeMigratedDb();
+    const db = await importDb();
     const ctx = fakeImportCtx(db);
     const app = await appWith(ctx);
     const csv = facilityCsv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,', '101,Kongwa DDH,,,,,,,,,,,,,,']);
@@ -1699,7 +1965,7 @@ describe('POST /api/facilities/import', () => {
   // wiring: an HTTP CSV upload through this route must leave a `facility-map-rebuild` job queued,
   // the same as a single facility create/update/delete does.
   it('an applied import leaves a facility-map-rebuild job queued', async () => {
-    const db = await makeMigratedDb();
+    const db = await importDb();
     const ctx = fakeImportCtx(db);
     const app = await appWith(ctx);
     const csv = facilityCsv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,']);
@@ -1710,7 +1976,7 @@ describe('POST /api/facilities/import', () => {
   });
 
   it('the applied mutation is audited as facility.import', async () => {
-    const db = await makeMigratedDb();
+    const db = await importDb();
     const ctx = fakeImportCtx(db);
     const app = await appWith(ctx);
     const csv = facilityCsv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,']);
@@ -1719,8 +1985,43 @@ describe('POST /api/facilities/import', () => {
     expect(ctx.__audit[0].entityId).toBe(SYSTEM);
   });
 
+  // ⛔ Whole-branch Critical 2, browser door. `importFacilities`' `deps.audit` had NO production
+  // caller at all: all three deps literals (this route, the CLI, and the background worker's
+  // `importDeps` in packages/bootstrap/src/index.ts) omitted it, so every applied import took the
+  // `if (!deps.audit)` branch and logged "the per-row write is unaudited". Task 7's whole feature was
+  // dead — `GET /api/facilities/:id/history` could never show an import, and the Studio's provenance
+  // panel said "Never imported" for a facility imported seconds earlier. The test above cannot see
+  // this: a first import CREATES rows, and only CHANGED rows are audited per-facility. This one
+  // imports twice, so the second apply has a real change to record.
+  it('⛔ a changed row from an applied import is audited as facility.import.row (the per-row audit is wired)', async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const created = await app.inject({
+      method: 'POST', url: '/api/facilities/import',
+      payload: { csv: facilityCsv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,']), nationalSystem: SYSTEM, apply: true },
+    });
+    expect(created.statusCode).toBe(200);
+
+    const renamed = await app.inject({
+      method: 'POST', url: '/api/facilities/import',
+      payload: { csv: facilityCsv(['100,Dodoma Regional Referral Hospital,,,,,,,,,,,,,,']), nationalSystem: SYSTEM, apply: true },
+    });
+    expect(renamed.statusCode).toBe(200);
+    expect(renamed.json().changed).toBe(1);
+
+    const perRow = ctx.__audit.filter((a: any) => a.action === 'facility.import.row');
+    expect(perRow).toHaveLength(1);
+    // The entityId must be the FACILITY's own id — that is the only thing that makes the event
+    // reachable from `GET /api/facilities/:id/history`, which filters on `entity_id`.
+    const row = await db.selectFrom('facility_registry').select(['id']).executeTakeFirstOrThrow();
+    expect(perRow[0].entityId).toBe(row.id);
+    expect(perRow[0].before).toMatchObject({ name: 'Dodoma Regional Referral' });
+    expect(perRow[0].after).toMatchObject({ name: 'Dodoma Regional Referral Hospital' });
+  });
+
   it('unknown columns are reported, never swallowed, and block the import unless explicitly allowed', async () => {
-    const db = await makeMigratedDb();
+    const db = await importDb();
     const ctx = fakeImportCtx(db);
     const app = await appWith(ctx);
     const csv = ['national_code,name,made_up_column', '100,Dodoma Regional Referral,xyz'].join('\n') + '\n';
@@ -1733,7 +2034,7 @@ describe('POST /api/facilities/import', () => {
   });
 
   it('allowUnknownColumns: true carries the unknown column into extras and still reports it', async () => {
-    const db = await makeMigratedDb();
+    const db = await importDb();
     const ctx = fakeImportCtx(db);
     const app = await appWith(ctx);
     const csv = ['national_code,name,made_up_column', '100,Dodoma Regional Referral,xyz'].join('\n') + '\n';
@@ -1748,7 +2049,7 @@ describe('POST /api/facilities/import', () => {
   });
 
   it('⛔ nationalSystem is required — an omitted value is a 400, never defaulted to a hardcoded register', async () => {
-    const db = await makeMigratedDb();
+    const db = await importDb();
     const app = await appWith(fakeImportCtx(db));
     const res = await app.inject({
       method: 'POST', url: '/api/facilities/import',
@@ -1759,7 +2060,7 @@ describe('POST /api/facilities/import', () => {
   });
 
   it('a non-string csv body is a clear 400, not a stack trace', async () => {
-    const db = await makeMigratedDb();
+    const db = await importDb();
     const app = await appWith(fakeImportCtx(db));
     const res = await app.inject({ method: 'POST', url: '/api/facilities/import', payload: { csv: 12345, nationalSystem: SYSTEM } });
     expect(res.statusCode).toBe(400);
@@ -1767,7 +2068,7 @@ describe('POST /api/facilities/import', () => {
   });
 
   it('an oversized csv body is rejected with a clear 400, not a stack trace', async () => {
-    const db = await makeMigratedDb();
+    const db = await importDb();
     const app = await appWith(fakeImportCtx(db));
     // Deliberately over any reasonable national-register size (see the route's MAX_IMPORT_CSV_BYTES
     // comment) — content doesn't need to be valid CSV, the size check runs before parsing.
@@ -1778,7 +2079,7 @@ describe('POST /api/facilities/import', () => {
   });
 
   it('⛔ apply is refused above the inline row cap — points the operator at the CLI instead of running a long transaction inline', async () => {
-    const db = await makeMigratedDb();
+    const db = await importDb();
     const ctx = fakeImportCtx(db);
     const app = await appWith(ctx);
     const rows = Array.from({ length: 2001 }, (_, i) => `${1000 + i},Facility ${i},,,,,,,,,,,,,,`);
@@ -1791,7 +2092,7 @@ describe('POST /api/facilities/import', () => {
   });
 
   it('a dry run (no apply) is NOT subject to the inline row cap — a large register can still be previewed', async () => {
-    const db = await makeMigratedDb();
+    const db = await importDb();
     const app = await appWith(fakeImportCtx(db));
     const rows = Array.from({ length: 2001 }, (_, i) => `${1000 + i},Facility ${i},,,,,,,,,,,,,,`);
     const csv = facilityCsv(rows);
@@ -1824,7 +2125,7 @@ describe('POST /api/facilities/import', () => {
 
     for (const [label, csv] of triggers) {
       it(`dry-run: ${label} -> 400 with the parser's message, not 500`, async () => {
-        const db = await makeMigratedDb();
+        const db = await importDb();
         const ctx = fakeImportCtx(db);
         const app = await appWith(ctx);
         const res = await app.inject({ method: 'POST', url: '/api/facilities/import', payload: { csv, nationalSystem: SYSTEM } });
@@ -1839,7 +2140,7 @@ describe('POST /api/facilities/import', () => {
       });
 
       it(`apply: ${label} -> 400 with the parser's message, not 500, and nothing is written`, async () => {
-        const db = await makeMigratedDb();
+        const db = await importDb();
         const ctx = fakeImportCtx(db);
         const app = await appWith(ctx);
         const res = await app.inject({
@@ -1860,7 +2161,7 @@ describe('POST /api/facilities/import', () => {
     // transaction by breaking the db handle after a WELL-FORMED preview has already succeeded, so
     // only the write half is exercised.
     it('⛔ a genuine DB failure during apply is rethrown as a 500, never reclassified as a parse-error 400', async () => {
-      const db = await makeMigratedDb();
+      const db = await importDb();
       const ctx = fakeImportCtx(db);
       const app = await appWith(ctx);
       const csv = facilityCsv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,']);
@@ -1879,7 +2180,7 @@ describe('POST /api/facilities/import', () => {
   // A UI that only checks `res.ok` must not read success from an upload that changed nothing.
 
   it('an empty csv is a 400, not an all-zero 200', async () => {
-    const db = await makeMigratedDb();
+    const db = await importDb();
     const app = await appWith(fakeImportCtx(db));
     const res = await app.inject({ method: 'POST', url: '/api/facilities/import', payload: { csv: '', nationalSystem: SYSTEM } });
     expect(res.statusCode).toBe(400);
@@ -1887,7 +2188,7 @@ describe('POST /api/facilities/import', () => {
   });
 
   it('a whitespace-only csv is a 400, not an all-zero 200', async () => {
-    const db = await makeMigratedDb();
+    const db = await importDb();
     const app = await appWith(fakeImportCtx(db));
     const res = await app.inject({
       method: 'POST', url: '/api/facilities/import',
@@ -1901,7 +2202,7 @@ describe('POST /api/facilities/import', () => {
 
   describe('Task 10: preview↔apply linkage and the run store', () => {
     it('a standalone preview persists a run, retrievable via GET .../runs/:id', async () => {
-      const db = await makeMigratedDb();
+      const db = await importDb();
       const app = await appWith(fakeImportCtx(db));
       const csv = facilityCsv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,']);
       const res = await app.inject({ method: 'POST', url: '/api/facilities/import', payload: { csv, nationalSystem: SYSTEM } });
@@ -1955,7 +2256,7 @@ describe('POST /api/facilities/import', () => {
     // try/catch), so the run-creation step runs unconditionally after that try/catch — a preview
     // that turns out blocked persists a run exactly like a clean one does.
     it('a preview persists a run even when the file turns out blocked (quarantined rows)', async () => {
-      const db = await makeMigratedDb();
+      const db = await importDb();
       const app = await appWith(fakeImportCtx(db));
       const csv = 'national_code,name\n1,Good\n2,Bad,Extra\n';
       const res = await app.inject({
@@ -2027,7 +2328,7 @@ describe('POST /api/facilities/import', () => {
     // and was reported back to the CALLER, but `startPreview`'s call in the route never threaded it
     // onto the RUN, so "the release declares 3 rows, we parsed 2" never reached the durable record.
     it('persists a JSONL release\'s declared row/deletion counts and publish date onto the run', async () => {
-      const db = await makeMigratedDb();
+      const db = await importDb();
       const app = await appWith(fakeImportCtx(db));
       const body = jsonl([
         { type: 'meta', country: 'TZ', version: 'r7', publishedAt: '2026-07-01', rowCount: 3, deletionCount: 1 },
@@ -2056,7 +2357,7 @@ describe('POST /api/facilities/import', () => {
     // `importFacilities`' docblock), so all three columns must stay null rather than the route
     // inventing zeros for "not declared".
     it('leaves declared row/deletion counts null for a plain CSV import (no release header)', async () => {
-      const db = await makeMigratedDb();
+      const db = await importDb();
       const app = await appWith(fakeImportCtx(db));
       const res = await app.inject({
         method: 'POST', url: '/api/facilities/import',
@@ -2070,7 +2371,7 @@ describe('POST /api/facilities/import', () => {
     });
 
     it('reports knownNationalSystem: true once the register exists, false for one never seen', async () => {
-      const db = await makeMigratedDb();
+      const db = await importDb([SYSTEM, 'urn:other:register']);
       const app = await appWith(fakeImportCtx(db));
       // Seeds SYSTEM via an applied import — an apply carrying no `runId` mints no run of its own
       // (see the route's own reasoning), so this cannot collide with the preview below.
@@ -2093,7 +2394,7 @@ describe('POST /api/facilities/import', () => {
     });
 
     it('an apply carrying its preview\'s runId evaluates conflicts and detects one', async () => {
-      const db = await makeMigratedDb();
+      const db = await importDb();
       const app = await appWith(fakeImportCtx(db));
       const csv = facilityCsv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,']);
       await app.inject({ method: 'POST', url: '/api/facilities/import', payload: { csv, nationalSystem: SYSTEM, apply: true } });
@@ -2125,7 +2426,7 @@ describe('POST /api/facilities/import', () => {
     });
 
     it('⛔ an apply without a runId reports conflict: null — NOT 0 — because nothing was evaluated', async () => {
-      const db = await makeMigratedDb();
+      const db = await importDb();
       const app = await appWith(fakeImportCtx(db));
       const csv = facilityCsv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,']);
       await app.inject({ method: 'POST', url: '/api/facilities/import', payload: { csv, nationalSystem: SYSTEM, apply: true } });
@@ -2140,7 +2441,7 @@ describe('POST /api/facilities/import', () => {
     // the mirror image of the default-skip test above (same stale-write setup), asserting the
     // opposite outcome once the request carries the explicit override.
     it('forwards onConflict: overwrite so a conflicting row IS written, still reporting it as conflict', async () => {
-      const db = await makeMigratedDb();
+      const db = await importDb();
       const app = await appWith(fakeImportCtx(db));
       const csv = facilityCsv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,']);
       await app.inject({ method: 'POST', url: '/api/facilities/import', payload: { csv, nationalSystem: SYSTEM, apply: true } });
@@ -2170,7 +2471,7 @@ describe('POST /api/facilities/import', () => {
     });
 
     it('applying against an unknown runId is a 404, not a silent fall-through to unlinked', async () => {
-      const db = await makeMigratedDb();
+      const db = await importDb();
       const app = await appWith(fakeImportCtx(db));
       const csv = facilityCsv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,']);
       const res = await app.inject({
@@ -2186,7 +2487,7 @@ describe('POST /api/facilities/import', () => {
     // register B's file using register A's `previewedAt` watermark, then call `finishApply` on A's
     // run row — corrupting A's durable history with B's outcome.
     it('⛔ an apply whose runId names a different national system than the request is a 400', async () => {
-      const db = await makeMigratedDb();
+      const db = await importDb([SYSTEM, 'urn:other:register']);
       const app = await appWith(fakeImportCtx(db));
       const csv = facilityCsv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,']);
       const preview = await app.inject({ method: 'POST', url: '/api/facilities/import', payload: { csv, nationalSystem: SYSTEM } });
@@ -2211,7 +2512,7 @@ describe('POST /api/facilities/import', () => {
     // retry) must not reuse the stale `previewedAt` watermark to perform a SECOND real write, nor
     // overwrite the first apply's terminal summary with the replay's.
     it('⛔ replaying an already-applied runId is a 409, not a second write', async () => {
-      const db = await makeMigratedDb();
+      const db = await importDb();
       const app = await appWith(fakeImportCtx(db));
       const csv = facilityCsv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,']);
       const preview = await app.inject({ method: 'POST', url: '/api/facilities/import', payload: { csv, nationalSystem: SYSTEM } });
@@ -2243,7 +2544,7 @@ describe('POST /api/facilities/import', () => {
     // pins that the durable record a reviewer reads back via GET matches what the client received,
     // not the importer's neutral `true` default that predates the route's own computation.
     it('the persisted run summary carries knownNationalSystem, matching what the client received', async () => {
-      const db = await makeMigratedDb();
+      const db = await importDb();
       const app = await appWith(fakeImportCtx(db));
       const csv = facilityCsv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,']);
       const preview = await app.inject({ method: 'POST', url: '/api/facilities/import', payload: { csv, nationalSystem: SYSTEM } });
@@ -2269,7 +2570,7 @@ describe('POST /api/facilities/import', () => {
     // short of a database reset. `startPreview` now supersedes exactly that case (see the route's own
     // comment where the retry lives), so the second preview succeeds instead.
     it('an abandoned preview does not lock the register forever — previewing again supersedes it', async () => {
-      const db = await makeMigratedDb();
+      const db = await importDb();
       const app = await appWith(fakeImportCtx(db));
       const csv = facilityCsv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,']);
       const first = await app.inject({ method: 'POST', url: '/api/facilities/import', payload: { csv, nationalSystem: SYSTEM } });
@@ -2305,7 +2606,7 @@ describe('POST /api/facilities/import', () => {
     // is deliberately left set — that is what makes the second preview's `startPreview` throw and
     // drives execution into the retry branch this test is aiming at.
     it('⛔ supersedes an awaiting_confirmation run — a widened enum must not re-lock the register', async () => {
-      const db = await makeMigratedDb();
+      const db = await importDb();
       const app = await appWith(fakeImportCtx(db));
       const csv = facilityCsv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,']);
       const first = await app.inject({ method: 'POST', url: '/api/facilities/import', payload: { csv, nationalSystem: SYSTEM } });
@@ -2335,7 +2636,7 @@ describe('POST /api/facilities/import', () => {
     // an `awaiting_confirmation` run — a run WITH a completed preview and therefore a trustworthy
     // `previewed_at` watermark — leaving the background path with no way to ever apply.
     it('⛔ applies an awaiting_confirmation run rather than 409ing it as "no longer applicable"', async () => {
-      const db = await makeMigratedDb();
+      const db = await importDb();
       const app = await appWith(fakeImportCtx(db));
       const csv = facilityCsv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,']);
       const preview = await app.inject({ method: 'POST', url: '/api/facilities/import', payload: { csv, nationalSystem: SYSTEM } });
@@ -2369,7 +2670,7 @@ describe('POST /api/facilities/import', () => {
     // covered by "⛔ 409s a TERMINAL run that is still holding `active_key`…" below, which forces the
     // state the gate would actually have to observe.
     it('an applied run releases the register and its terminal record survives a later preview', async () => {
-      const db = await makeMigratedDb();
+      const db = await importDb();
       const app = await appWith(fakeImportCtx(db));
       const csv = facilityCsv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,']);
       const preview = await app.inject({ method: 'POST', url: '/api/facilities/import', payload: { csv, nationalSystem: SYSTEM } });
@@ -2402,7 +2703,7 @@ describe('POST /api/facilities/import', () => {
     // Both cases below are 409s for different reasons: a TERMINAL run is already decided (touching it
     // would re-finish a finished run), a RUNNING run has a live worker (taking it over would race).
     it('⛔ 409s a TERMINAL run that is still holding `active_key` — never supersedes a decided run', async () => {
-      const db = await makeMigratedDb();
+      const db = await importDb();
       const app = await appWith(fakeImportCtx(db));
       const csv = facilityCsv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,']);
       const first = await app.inject({ method: 'POST', url: '/api/facilities/import', payload: { csv, nationalSystem: SYSTEM } });
@@ -2437,7 +2738,7 @@ describe('POST /api/facilities/import', () => {
     });
 
     it('⛔ 409s a RUNNING run rather than superseding it — taking over would race a live worker', async () => {
-      const db = await makeMigratedDb();
+      const db = await importDb();
       const app = await appWith(fakeImportCtx(db));
       const csv = facilityCsv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,']);
       const first = await app.inject({ method: 'POST', url: '/api/facilities/import', payload: { csv, nationalSystem: SYSTEM } });
@@ -2472,7 +2773,7 @@ describe('POST /api/facilities/import', () => {
     });
 
     it('a failed apply marks its run failed rather than leaving the register locked forever', async () => {
-      const db = await makeMigratedDb();
+      const db = await importDb();
       const app = await appWith(fakeImportCtx(db));
       const csv = facilityCsv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,']);
       const preview = await app.inject({ method: 'POST', url: '/api/facilities/import', payload: { csv, nationalSystem: SYSTEM } });
@@ -2498,14 +2799,14 @@ describe('POST /api/facilities/import', () => {
 
   describe('GET /api/facilities/import/runs', () => {
     it('gated on facilities.view — no capability at all is a 403', async () => {
-      const db = await makeMigratedDb();
+      const db = await importDb();
       const app = await appWith(fakeImportCtx(db), []);
       const res = await app.inject({ method: 'GET', url: '/api/facilities/import/runs' });
       expect(res.statusCode).toBe(403);
     });
 
     it('scopes by nationalSystem and orders newest first', async () => {
-      const db = await makeMigratedDb();
+      const db = await importDb([SYSTEM, 'urn:other:register']);
       const app = await appWith(fakeImportCtx(db));
       const csvA = facilityCsv(['100,Alpha,,,,,,,,,,,,,,']);
       const csvB = facilityCsv(['200,Beta,,,,,,,,,,,,,,']);
@@ -2550,11 +2851,165 @@ describe('POST /api/facilities/import', () => {
     });
 
     it('GET .../runs/:id 404s on an unknown id', async () => {
-      const db = await makeMigratedDb();
+      const db = await importDb();
       const app = await appWith(fakeImportCtx(db));
       const res = await app.inject({ method: 'GET', url: '/api/facilities/import/runs/nope' });
       expect(res.statusCode).toBe(404);
     });
+  });
+});
+
+// --- B1 Task 9: GET/POST /api/facilities/import/sources -----------------------------------------
+//
+// The registers an operator may PICK. GET backs the import sheet's `Select` (Task 9 turns the free-
+// text `nationalSystem` box into one); POST is the only way a fresh install ever gets a register to
+// offer at all. Both sit on `createFacilityRegisterSourceStore` — the same store `seedRegisterSource`
+// above already uses to seed a register for the import-route tests.
+
+describe('GET /api/facilities/import/sources', () => {
+  it('lists only facility registers, never other coding systems', async () => {
+    const db = await importDb([SYSTEM]);
+    // A coding system that is NOT a register — the reason `kind` exists, and must not appear here.
+    await db.insertInto('coding_systems').values({
+      id: 'cs-loinc', system_code: 'LOINC', system_name: 'LOINC', url: 'http://loinc.org',
+    }).execute();
+    const app = await appWith(fakeImportCtx(db));
+
+    const res = await app.inject({ method: 'GET', url: '/api/facilities/import/sources' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().rows.map((r: any) => r.url)).toEqual([SYSTEM]);
+  });
+
+  // Review fix (B1 Task 3)'s deactivated-register gate only has teeth if THIS list — the picklist's
+  // own source — never offers a spelling the import routes will then refuse.
+  it('excludes a deactivated register — the picklist must never offer a spelling the import routes refuse', async () => {
+    const db = await importDb([SYSTEM]);
+    await deactivateRegisterSource(db, SYSTEM);
+    const app = await appWith(fakeImportCtx(db));
+
+    const res = await app.inject({ method: 'GET', url: '/api/facilities/import/sources' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().rows).toEqual([]);
+  });
+
+  it('is gated on facilities.view — a user without it gets 403', async () => {
+    const db = await importDb([SYSTEM]);
+    const app = await appWith(fakeImportCtx(db), []);
+
+    const res = await app.inject({ method: 'GET', url: '/api/facilities/import/sources' });
+
+    expect(res.statusCode).toBe(403);
+  });
+});
+
+describe('POST /api/facilities/import/sources', () => {
+  it('creates a register source that the import route accepts immediately afterward', async () => {
+    const db = await makeMigratedDb(); // deliberately unregistered
+    const app = await appWith(fakeImportCtx(db));
+
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities/import/sources',
+      payload: { url: SYSTEM, name: 'Tanzania HFR', code: 'TZ_HFR' },
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(res.json()).toMatchObject({ url: SYSTEM, name: 'Tanzania HFR', code: 'TZ_HFR', active: true });
+
+    // ⛔ THE WHOLE POINT of this route: what it just created is exactly what the import gate accepts.
+    const importRes = await app.inject({
+      method: 'POST', url: '/api/facilities/import',
+      payload: { csv: facilityCsv(['100,Alpha,,,,,,,,,,,,,,']), nationalSystem: SYSTEM },
+    });
+    expect(importRes.statusCode).toBe(200);
+    expect(importRes.json().parsed).toBe(1);
+  });
+
+  it('is gated on facilities.manage — a facilities.view-only user gets 403 and nothing is created', async () => {
+    const db = await makeMigratedDb();
+    // The migration set seeds its own coding systems (LOINC etc.) — this counts against THAT
+    // baseline rather than asserting an empty table, so it fails honestly if the seed set ever
+    // changes instead of asserting a number this test does not actually own.
+    const before = await db.selectFrom('coding_systems').selectAll().execute();
+    const app = await appWith(fakeImportCtx(db), ['facilities.view']);
+
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities/import/sources',
+      payload: { url: SYSTEM, name: 'Tanzania HFR', code: 'TZ_HFR' },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(await db.selectFrom('coding_systems').selectAll().execute()).toHaveLength(before.length);
+  });
+
+  it('400s on a missing required field', async () => {
+    const db = await makeMigratedDb();
+    const app = await appWith(fakeImportCtx(db));
+
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities/import/sources',
+      payload: { url: SYSTEM, name: 'Tanzania HFR' }, // no code
+    });
+
+    expect(res.statusCode).toBe(400);
+  });
+
+  // ⛔ Carry-forward 1 (deferred from B1 Task 3, closed here): an EXACT-match pre-check alone ships
+  // the original defect through this front door — 'urn:tz:hfr' and 'urn:tz:HFR' would each
+  // individually pass it, each earn their own row, each satisfy the import route's own exact-match
+  // gate, and each hash to a DIFFERENT `idFor` identity while sharing the SAME `observedFieldSystem`
+  // namespace (that function lowercases its slug; `idFor` does not — see facilities-routes.ts's own
+  // comment on the fork this whole slice exists to close). This is that same fork, arriving through
+  // the source route instead of the import route.
+  it('⛔ refuses a case-insensitive duplicate of a registered URL, not just an exact one', async () => {
+    const db = await importDb([SYSTEM]); // urn:tz:hfr
+    const app = await appWith(fakeImportCtx(db));
+
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities/import/sources',
+      payload: { url: 'urn:tz:HFR', name: 'Tanzania HFR (upper)', code: 'TZ_HFR_2' },
+    });
+
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toMatch(/already exists/i);
+    expect(await createFacilityRegisterSourceStore(db).list({ includeInactive: true })).toHaveLength(1);
+  });
+
+  // ⛔ Carry-forward 2 (deferred from B1 Task 3, closed here): `coding_systems_url_uq` (migration
+  // 012) is a PLAIN unique index on `url` ALONE, not scoped by `kind` — while the store's own pre-
+  // checks (exact AND case-insensitive) ARE scoped to `kind = 'facility-register'`. MEASURED, on
+  // REAL POSTGRES ONLY (node-postgres puts a violation's `DETAIL` text on `err.detail`, never on
+  // `err.message`): before the store's catch (facility-register-sources.ts) existed, a url already
+  // used by a non-register coding system passed the pre-check and threw a raw, unmapped 23505 whose
+  // `.message` carried none of the "already exists" wording — a bare 500, not a 4xx.
+  //
+  // ⛔ THAT "bare 500" claim does NOT reproduce under pg-mem, this test's own engine — MEASURED:
+  // pg-mem inlines the constraint violation's DETAIL text straight into `err.message` ("... DETAIL:
+  // Key (url)=(http://loinc.org) already exists."), so even with the store's catch disarmed, the
+  // RAW driver error's `.message` still matches this route's own `/already exists/i` translator and
+  // still comes back 409 — coincidentally right, for the wrong reason. A regex assertion on that
+  // shared substring proves nothing about which of the two catches actually fired (confirmed by
+  // disarming the store's `isUniqueViolation` branch and re-running this test: it stayed green).
+  // The signal that only the STORE's translation can produce is the exact message below — the raw
+  // pg-mem error's message is a multi-paragraph SQL dump that does not equal it.
+  it('⛔ refuses (409, not 500) a URL already used by a NON-register coding system', async () => {
+    const db = await makeMigratedDb();
+    await db.insertInto('coding_systems').values({
+      id: 'cs-loinc', system_code: 'LOINC', system_name: 'LOINC', url: 'http://loinc.org',
+    }).execute();
+    const app = await appWith(fakeImportCtx(db));
+
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities/import/sources',
+      payload: { url: 'http://loinc.org', name: 'Not actually a register', code: 'X' },
+    });
+
+    expect(res.statusCode).toBe(409);
+    // Exact match, not a `/already exists/i` regex — see the block above for why the regex alone
+    // does not discriminate "the store translated this" from "pg-mem's raw driver message happens
+    // to contain the same words" under this test's own engine.
+    expect(res.json().error).toBe('a coding system already exists for the url "http://loinc.org"');
   });
 });
 
@@ -2582,7 +3037,7 @@ function onlyStoredObject(ctx: any): { key: string; bytes: Buffer } {
 
 describe('POST /api/facilities/import/upload', () => {
   it('gated on facilities.manage — a facilities.view-only user gets 403 and nothing is stored', async () => {
-    const db = await makeMigratedDb();
+    const db = await importDb();
     const ctx = fakeImportCtx(db);
     const app = await appWith(ctx, ['facilities.view']);
     const res = await app.inject({
@@ -2595,7 +3050,7 @@ describe('POST /api/facilities/import/upload', () => {
   });
 
   it('streams the file to the blob store and mints a `queued` run carrying its key, hash and size', async () => {
-    const db = await makeMigratedDb();
+    const db = await importDb();
     const ctx = fakeImportCtx(db);
     const app = await appWith(ctx);
     const csv = facilityCsv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,']);
@@ -2662,7 +3117,7 @@ describe('POST /api/facilities/import/upload', () => {
   // EVALUATED — no matter what the file is. The inline route is capped at `MAX_INLINE_APPLY_ROWS`,
   // so without this a national complete release could get absence-retirement through the CLI alone.
   it('records a declared complete release in the run\'s options, where the validate phase reads it', async () => {
-    const db = await makeMigratedDb();
+    const db = await importDb();
     const ctx = fakeImportCtx(db);
     const app = await appWith(ctx);
     const res = await app.inject({
@@ -2683,7 +3138,7 @@ describe('POST /api/facilities/import/upload', () => {
   // literal text 'false' as a declaration the operator explicitly declined to make — and a
   // declaration is the thing that lets an absence be counted at all.
   it('an explicitly declined complete release is recorded as declined, never as declared', async () => {
-    const db = await makeMigratedDb();
+    const db = await importDb();
     const ctx = fakeImportCtx(db);
     const app = await appWith(ctx);
     const res = await app.inject({
@@ -2697,7 +3152,7 @@ describe('POST /api/facilities/import/upload', () => {
   });
 
   it('refuses a completeRelease that is neither "true" nor "false", rather than guessing at it', async () => {
-    const db = await makeMigratedDb();
+    const db = await importDb();
     const ctx = fakeImportCtx(db);
     const app = await appWith(ctx);
     const res = await app.inject({
@@ -2713,7 +3168,7 @@ describe('POST /api/facilities/import/upload', () => {
   });
 
   it('audits the upload with the run it minted', async () => {
-    const db = await makeMigratedDb();
+    const db = await importDb();
     const ctx = fakeImportCtx(db);
     const app = await appWith(ctx);
     const csv = facilityCsv(['100,Alpha,,,,,,,,,,,,,,']);
@@ -2742,7 +3197,7 @@ describe('POST /api/facilities/import/upload', () => {
   // holds one open for nothing but the transfer, so a national register must go through it. A cap
   // re-applied here (or the two routes "unified") fails this test.
   it('⛔ accepts a register far ABOVE the inline apply cap — that cap bounds the inline route only', async () => {
-    const db = await makeMigratedDb();
+    const db = await importDb();
     const ctx = fakeImportCtx(db);
     const app = await appWith(ctx);
     const rows = Array.from({ length: 2500 }, (_, i) => `${1000 + i},Facility ${i},,,,,,,,,,,,,,`);
@@ -2762,7 +3217,7 @@ describe('POST /api/facilities/import/upload', () => {
   });
 
   it('a JSONL upload is stored under a .jsonl key and recorded as sourceFormat jsonl', async () => {
-    const db = await makeMigratedDb();
+    const db = await importDb();
     const ctx = fakeImportCtx(db);
     const app = await appWith(ctx);
     const body = jsonl([rowLine('100', 'Alpha'), rowLine('200', 'Beta')]);
@@ -2781,7 +3236,7 @@ describe('POST /api/facilities/import/upload', () => {
   // The same abandoned-register rule the inline preview route already follows, reached through the
   // upload: an operator who uploads and never confirms must not lock the register for good.
   it('supersedes an awaiting_confirmation run rather than refusing the new upload', async () => {
-    const db = await makeMigratedDb();
+    const db = await importDb();
     const ctx = fakeImportCtx(db);
     const app = await appWith(ctx);
     const csv = facilityCsv(['100,Alpha,,,,,,,,,,,,,,']);
@@ -2818,7 +3273,7 @@ describe('POST /api/facilities/import/upload', () => {
   });
 
   it('⛔ 409s while a run is `validating` — taking the register over would race a live worker', async () => {
-    const db = await makeMigratedDb();
+    const db = await importDb();
     const ctx = fakeImportCtx(db);
     const app = await appWith(ctx);
     const csv = facilityCsv(['100,Alpha,,,,,,,,,,,,,,']);
@@ -2856,7 +3311,7 @@ describe('POST /api/facilities/import/upload', () => {
   });
 
   it('a non-stream body is a clear 400, not a crash or a 415', async () => {
-    const db = await makeMigratedDb();
+    const db = await importDb();
     const ctx = fakeImportCtx(db);
     const app = await appWith(ctx);
     const res = await app.inject({
@@ -2872,7 +3327,7 @@ describe('POST /api/facilities/import/upload', () => {
   // An empty file must not mint a run: the run would hold `active_key` — locking the register out of
   // the next, real upload — until a worker got round to reporting that there was nothing in it.
   it('refuses an empty upload (400) and leaves neither a run nor a stored object behind', async () => {
-    const db = await makeMigratedDb();
+    const db = await importDb();
     const ctx = fakeImportCtx(db);
     const app = await appWith(ctx);
 
@@ -2897,7 +3352,7 @@ describe('POST /api/facilities/import/upload', () => {
   });
 
   it('refuses a missing nationalSystem and an unknown format (400) before storing anything', async () => {
-    const db = await makeMigratedDb();
+    const db = await importDb();
     const ctx = fakeImportCtx(db);
     const app = await appWith(ctx);
     const payload = Buffer.from(facilityCsv(['100,Alpha,,,,,,,,,,,,,,']), 'utf8');
@@ -2915,6 +3370,50 @@ describe('POST /api/facilities/import/upload', () => {
     expect(badFormat.statusCode).toBe(400);
     expect(badFormat.json().error).toMatch(/format/);
 
+    expect(ctx.blob.__objects.size).toBe(0);
+    expect(await db.selectFrom('facility_import_runs').selectAll().execute()).toHaveLength(0);
+  });
+
+  // ⛔ BOTH IMPORT DOORS ARE GATED. The inline route's own version of this test is above; this is
+  // the streaming one. They are separate handlers with separate parameter parsing (JSON body vs
+  // query string), and the predecessor slice's cautionary tale — twice over — is two doors that
+  // disagree. An ungated upload would hand the worker a typed-in register and re-open the fork at
+  // exactly the scale this path exists for (a full national register).
+  it('⛔ refuses an upload whose nationalSystem is not a known register source, before storing anything', async () => {
+    const db = await makeMigratedDb(); // deliberately unregistered
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+
+    const res = await app.inject({
+      method: 'POST', url: uploadUrl({ nationalSystem: 'HFR', format: 'csv' }),
+      headers: UPLOAD_HEADERS, payload: Buffer.from(facilityCsv(['100,Alpha,,,,,,,,,,,,,,']), 'utf8'),
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toMatch(/not a known facility register/i);
+    // ⛔ BEFORE the transfer, not after it: a refused upload must not first cost a national
+    // register's worth of bandwidth and leave an orphan object (or a `queued` run) behind.
+    expect(ctx.blob.__objects.size).toBe(0);
+    expect(await db.selectFrom('facility_import_runs').selectAll().execute()).toHaveLength(0);
+  });
+
+  // Review fix (B1 Task 3, MINOR finding): the SAME deactivated-register refusal as the inline
+  // route's version of this test above — `getByUrl` does not filter on `active`, so this door needs
+  // its own check too. BEFORE the transfer, like the unknown-register refusal it sits beside.
+  it('⛔ refuses an upload naming a DEACTIVATED register, before storing anything', async () => {
+    const db = await importDb();
+    await deactivateRegisterSource(db, SYSTEM);
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+
+    const res = await app.inject({
+      method: 'POST', url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv' }),
+      headers: UPLOAD_HEADERS, payload: Buffer.from(facilityCsv(['100,Alpha,,,,,,,,,,,,,,']), 'utf8'),
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toMatch(/deactivated/i);
+    expect(res.json().error).not.toMatch(/not a known facility register/i);
     expect(ctx.blob.__objects.size).toBe(0);
     expect(await db.selectFrom('facility_import_runs').selectAll().execute()).toHaveLength(0);
   });
@@ -2942,7 +3441,7 @@ describe('POST /api/facilities/import/upload', () => {
   //     request answering 500 exactly as before while the request stream and the transform are held
   //     for the life of the process (Fastify sets no `requestTimeout` — see app.ts).
   it('⛔ fails fast (500) when the blob store rejects WITHOUT draining, and tears the transfer down', async () => {
-    const db = await makeMigratedDb();
+    const db = await importDb();
     const ctx = fakeImportCtx(db);
     const deleted: string[] = [];
     // The hashing transform the route pipes into — captured, then abandoned unread.
@@ -3003,7 +3502,7 @@ describe('POST /api/facilities/import/upload', () => {
   // later), so the handler never returns and this test times out instead of failing on an assertion.
   // Without a budget it would stall the suite at whatever global timeout is in force.
   it('⛔ 413s an upload over `FACILITY_IMPORT_MAX_UPLOAD_BYTES` and stores no run', async () => {
-    const db = await makeMigratedDb();
+    const db = await importDb();
     const ctx = fakeImportCtx(db);
     ctx.cfg.FACILITY_IMPORT_MAX_UPLOAD_BYTES = 2;
     // ⚠ A store that REPLACES the stream's error with its own, as the real adapter does: it wraps
@@ -3068,7 +3567,7 @@ describe('POST /api/facilities/import/upload', () => {
   // db at registration, so only the gate's SELECT is intercepted — `supersede`'s CAS then runs
   // against the real, already-moved row and matches nothing, which is the branch under test.
   it('⛔ proceeds when the supersede CAS loses to a holder that moved TERMINAL — the register is free', async () => {
-    const db = await makeMigratedDb();
+    const db = await importDb();
     const ctx = fakeImportCtx(db);
     const app = await appWith(ctx);
     const csv = facilityCsv(['100,Alpha,,,,,,,,,,,,,,']);
@@ -3185,7 +3684,7 @@ const confirmUrl = (runId: string) => `/api/facilities/import/runs/${runId}/conf
 
 describe('POST /api/facilities/import/runs/:id/confirm', () => {
   it('gated on facilities.manage — a facilities.view-only user gets 403 and the run is untouched', async () => {
-    const db = await makeMigratedDb();
+    const db = await importDb();
     const ctx = fakeImportCtx(db);
     const manageApp = await appWith(ctx);
     const runId = await uploadAndPark(manageApp, db);
@@ -3199,7 +3698,7 @@ describe('POST /api/facilities/import/runs/:id/confirm', () => {
   });
 
   it('confirms a parked run onto the apply queue, merging the operator\'s choices into its options', async () => {
-    const db = await makeMigratedDb();
+    const db = await importDb();
     const ctx = fakeImportCtx(db);
     const app = await appWith(ctx);
     const runId = await uploadAndPark(app, db);
@@ -3233,7 +3732,7 @@ describe('POST /api/facilities/import/runs/:id/confirm', () => {
   });
 
   it('records only the choices the operator actually made — an omitted option is not invented', async () => {
-    const db = await makeMigratedDb();
+    const db = await importDb();
     const ctx = fakeImportCtx(db);
     const app = await appWith(ctx);
     const runId = await uploadAndPark(app, db);
@@ -3261,7 +3760,7 @@ describe('POST /api/facilities/import/runs/:id/confirm', () => {
   // — so accepting one here authorises a write over a record set nobody reviewed.
 
   it('⛔ refuses a confirm carrying allowUnknownColumns when the validated summary was computed without it', async () => {
-    const db = await makeMigratedDb();
+    const db = await importDb();
     const ctx = fakeImportCtx(db);
     const app = await appWith(ctx);
     // The validate FOUND an unrecognised column — so the override has something to act on, and
@@ -3286,7 +3785,7 @@ describe('POST /api/facilities/import/runs/:id/confirm', () => {
   });
 
   it('⛔ THE RETIREMENT CASE: allowUnknownColumns + onAbsent:retire cannot be authorised against a summary that measured absent: null', async () => {
-    const db = await makeMigratedDb();
+    const db = await importDb();
     const ctx = fakeImportCtx(db);
     const app = await appWith(ctx);
     // Exactly what a `completeRelease=true` upload of a file with one unrecognised column validates
@@ -3309,7 +3808,7 @@ describe('POST /api/facilities/import/runs/:id/confirm', () => {
   });
 
   it('⛔ …and the same refusal for allowInvalidCoordinates when the file had invalid rows', async () => {
-    const db = await makeMigratedDb();
+    const db = await importDb();
     const ctx = fakeImportCtx(db);
     const app = await appWith(ctx);
     const runId = await uploadAndPark(app, db, {
@@ -3359,7 +3858,7 @@ describe('POST /api/facilities/import/runs/:id/confirm', () => {
   };
 
   it('⛔ a JSONL run IS confirmable with allowUnknownColumns — that flag cannot change a JSONL parse', async () => {
-    const db = await makeMigratedDb();
+    const db = await importDb();
     const app = await appWith(fakeImportCtx(db));
     const runId = await uploadJsonlAndPark(app, db, UNKNOWN_COLUMN_SUMMARY);
 
@@ -3373,7 +3872,7 @@ describe('POST /api/facilities/import/runs/:id/confirm', () => {
   });
 
   it('⛔ …while the CSV twin of that EXACT summary is still refused — the format is the only difference', async () => {
-    const db = await makeMigratedDb();
+    const db = await importDb();
     const app = await appWith(fakeImportCtx(db));
     const runId = await uploadAndPark(app, db, UNKNOWN_COLUMN_SUMMARY);
 
@@ -3388,7 +3887,7 @@ describe('POST /api/facilities/import/runs/:id/confirm', () => {
   });
 
   it('⛔ and the exemption is `allowUnknownColumns` ALONE: a JSONL run still refuses allowInvalidCoordinates', async () => {
-    const db = await makeMigratedDb();
+    const db = await importDb();
     const app = await appWith(fakeImportCtx(db));
     // Both parsers honour `allowInvalidCoordinates` — facility-release.ts's `row` branch drops a bad
     // coordinate exactly as facility-csv.ts does — so it changes a JSONL parse and stays in play.
@@ -3406,7 +3905,7 @@ describe('POST /api/facilities/import/runs/:id/confirm', () => {
   });
 
   it('accepts the same override when the UPLOAD already declared it — the validate ran with it', async () => {
-    const db = await makeMigratedDb();
+    const db = await importDb();
     const ctx = fakeImportCtx(db);
     const app = await appWith(ctx);
     // The upload takes the parse-changing overrides, because it is the request that precedes the
@@ -3438,7 +3937,7 @@ describe('POST /api/facilities/import/runs/:id/confirm', () => {
   });
 
   it('⛔ …and refuses DROPPING an override the validate ran with — narrowing the parse is a change too', async () => {
-    const db = await makeMigratedDb();
+    const db = await importDb();
     const ctx = fakeImportCtx(db);
     const app = await appWith(ctx);
     const up = await app.inject({
@@ -3459,7 +3958,7 @@ describe('POST /api/facilities/import/runs/:id/confirm', () => {
   });
 
   it('rejects a non-boolean parse override on the upload rather than silently ignoring it', async () => {
-    const db = await makeMigratedDb();
+    const db = await importDb();
     const app = await appWith(fakeImportCtx(db));
     const res = await app.inject({
       method: 'POST',
@@ -3473,7 +3972,7 @@ describe('POST /api/facilities/import/runs/:id/confirm', () => {
   });
 
   it('audits the confirm with the operator who made it', async () => {
-    const db = await makeMigratedDb();
+    const db = await importDb();
     const ctx = fakeImportCtx(db);
     const app = await appWith(ctx);
     const runId = await uploadAndPark(app, db);
@@ -3495,14 +3994,14 @@ describe('POST /api/facilities/import/runs/:id/confirm', () => {
   });
 
   it('404s an unknown run id', async () => {
-    const db = await makeMigratedDb();
+    const db = await importDb();
     const app = await appWith(fakeImportCtx(db));
     const res = await app.inject({ method: 'POST', url: confirmUrl('fir_does-not-exist'), payload: {} });
     expect(res.statusCode).toBe(404);
   });
 
   it('⛔ 409s a run that is already applied — a confirm must not re-queue a decided run', async () => {
-    const db = await makeMigratedDb();
+    const db = await importDb();
     const ctx = fakeImportCtx(db);
     const app = await appWith(ctx);
     const runId = await uploadAndPark(app, db);
@@ -3518,7 +4017,7 @@ describe('POST /api/facilities/import/runs/:id/confirm', () => {
   });
 
   it('⛔ 409s a SECOND confirm of the same run — one confirm, one apply', async () => {
-    const db = await makeMigratedDb();
+    const db = await importDb();
     const ctx = fakeImportCtx(db);
     const app = await appWith(ctx);
     const runId = await uploadAndPark(app, db);
@@ -3536,7 +4035,7 @@ describe('POST /api/facilities/import/runs/:id/confirm', () => {
     // ⛔ READ off the stored summary (`blocked`/`blockedReason`, what `importFacilities` reported at
     // validate), never re-derived. Task 4 pins that a blocked file still PARKS — the operator is
     // entitled to see the reconciliation result — so this route is what must refuse to apply it.
-    const db = await makeMigratedDb();
+    const db = await importDb();
     const ctx = fakeImportCtx(db);
     const app = await appWith(ctx);
     const runId = await uploadAndPark(app, db, { blocked: true, blockedReason: 'duplicate-columns' });
@@ -3553,7 +4052,7 @@ describe('POST /api/facilities/import/runs/:id/confirm', () => {
   });
 
   it('⛔ 409s a quarantined-rows file until the operator supplies the override, then confirms it', async () => {
-    const db = await makeMigratedDb();
+    const db = await importDb();
     const ctx = fakeImportCtx(db);
     const app = await appWith(ctx);
     const runId = await uploadAndPark(app, db, { blocked: true, blockedReason: 'quarantined-rows' });
@@ -3575,7 +4074,7 @@ describe('POST /api/facilities/import/runs/:id/confirm', () => {
     // `blob_key` (it carried its CSV in the request body and never stored it). Confirming one would
     // hand the worker a run it can only fail, while taking the run out of the state the inline apply
     // route needs it in. A different question from the status guard, so it is asked separately.
-    const db = await makeMigratedDb();
+    const db = await importDb();
     const ctx = fakeImportCtx(db);
     const app = await appWith(ctx);
     const csv = facilityCsv(['100,Alpha,,,,,,,,,,,,,,']);
@@ -3592,7 +4091,7 @@ describe('POST /api/facilities/import/runs/:id/confirm', () => {
   });
 
   it('rejects an unknown option value (400) before touching the run', async () => {
-    const db = await makeMigratedDb();
+    const db = await importDb();
     const ctx = fakeImportCtx(db);
     const app = await appWith(ctx);
     const runId = await uploadAndPark(app, db);
@@ -3610,7 +4109,7 @@ const cancelUrl = (runId: string) => `/api/facilities/import/runs/${runId}/cance
 // A2b Task 6. The cancel surface, and the whole of it is about NOT overstating what happened.
 describe('POST /api/facilities/import/runs/:id/cancel', () => {
   it('gated on facilities.manage — a facilities.view-only user gets 403 and the run is untouched', async () => {
-    const db = await makeMigratedDb();
+    const db = await importDb();
     const ctx = fakeImportCtx(db);
     const manageApp = await appWith(ctx);
     const runId = await uploadAndPark(manageApp, db);
@@ -3627,7 +4126,7 @@ describe('POST /api/facilities/import/runs/:id/cancel', () => {
     // The Task 4/5 carry-forward, closed. No worker claims `awaiting_confirmation`, so a flag set on
     // it would never be read: the operator would be told their import had been asked to stop while
     // the register stayed locked forever behind a run nothing would look at again.
-    const db = await makeMigratedDb();
+    const db = await importDb();
     const app = await appWith(fakeImportCtx(db));
     const runId = await uploadAndPark(app, db);
 
@@ -3649,7 +4148,7 @@ describe('POST /api/facilities/import/runs/:id/cancel', () => {
     // 202 and `requested`, deliberately NOT 200/`cancelled`. The flag cannot interrupt the running
     // transaction, so the run may still finish `applied` — and reporting a cancellation that has not
     // happened is the one thing this surface must never do.
-    const db = await makeMigratedDb();
+    const db = await importDb();
     const app = await appWith(fakeImportCtx(db));
     const runId = await uploadAndPark(app, db);
     await db.updateTable('facility_import_runs').set({ status: 'validating' } as never)
@@ -3669,7 +4168,7 @@ describe('POST /api/facilities/import/runs/:id/cancel', () => {
   });
 
   it('409s a run that already finished, rather than reporting a false success', async () => {
-    const db = await makeMigratedDb();
+    const db = await importDb();
     const app = await appWith(fakeImportCtx(db));
     const runId = await uploadAndPark(app, db);
     await db.updateTable('facility_import_runs')
@@ -3687,7 +4186,7 @@ describe('POST /api/facilities/import/runs/:id/cancel', () => {
   });
 
   it('404s an unknown run', async () => {
-    const db = await makeMigratedDb();
+    const db = await importDb();
     const app = await appWith(fakeImportCtx(db));
 
     const res = await app.inject({ method: 'POST', url: cancelUrl('fir_nope'), payload: {} });
@@ -4364,6 +4863,115 @@ describe('GET /api/facilities/:id/impact', () => {
     // response shape, not the `:id` route's record leaking through.
     expect(body.name).toBeUndefined();
     expect(body.localCode).toBeUndefined();
+  });
+});
+
+// ── Task 8 (B1, facility-canonical-identity): GET /api/facilities/:id/history ───────────────────
+//
+// A read model only, over `audit_events` rows POST/PUT (facility.create/facility.update) and
+// Task 7's per-row import audit (facility.import.row) already write — no new table, no second
+// capture path, nothing seeded here that the route itself doesn't also read.
+
+/** Inserts `audit_events` rows directly (no store interface exposes writing an arbitrary
+ *  `occurred_at`/`id`, and this describe block needs both under its own control).
+ *
+ *  ⚠ Every row in one call shares the SAME literal `occurred_at` — never `new Date()` per row.
+ *  pg-mem's `now()` is real millisecond wall-clock and collides on roughly half of consecutive
+ *  calls (measured this slice), so relying on distinct auto-timestamps would make the ordering
+ *  test pass or fail by luck. Forcing an exact collision means the only way "newest first" can
+ *  come back right is the route's `id desc` tiebreaker actually running.
+ *
+ *  `id`s are ORDERED strings the caller chooses (`evt-1`, `evt-2`, ...), not `randomUUID()` — a
+ *  random id would make "which id sorts last" a coin flip, exactly the trap this slice's brief
+ *  warns about. */
+async function seedFacilityHistory(
+  internalDb: any,
+  entries: { id: string; action: string; entityId: string; before: unknown; after: unknown }[],
+): Promise<void> {
+  const occurredAt = new Date('2026-01-01T00:00:00.000Z');
+  for (const e of entries) {
+    await internalDb.insertInto('audit_events').values({
+      id: e.id,
+      occurred_at: occurredAt,
+      actor_type: 'user',
+      actor_id: 'u1',
+      actor_name: 'Alice',
+      action: e.action,
+      entity_type: 'facility',
+      entity_id: e.entityId,
+      before: (e.before ?? null) as never,
+      after: (e.after ?? null) as never,
+      metadata: null as never,
+    }).execute();
+  }
+}
+
+describe('Task 8: GET /api/facilities/:id/history', () => {
+  it('returns a facility\'s create/update events, newest first', async () => {
+    const internalDb = await makeMigratedDb();
+    const ctx = fakeReconcileCtx(internalDb, null);
+    // 'evt-2' must win the tiebreak over 'evt-1' — see seedFacilityHistory's doc comment on why
+    // both rows sharing one `occurred_at` makes that the ONLY thing `id desc` can be proven by.
+    await seedFacilityHistory(internalDb, [
+      { id: 'evt-1', action: 'facility.create', entityId: 'fac-1', before: null, after: { id: 'fac-1', name: 'Dodoma RRH' } },
+      { id: 'evt-2', action: 'facility.update', entityId: 'fac-1', before: { name: 'Dodoma RRH' }, after: { name: 'Dodoma Regional Referral' } },
+    ]);
+    const app = await appWith(ctx);
+
+    const res = await app.inject({ method: 'GET', url: '/api/facilities/fac-1/history' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({
+      rows: [
+        {
+          occurredAt: '2026-01-01T00:00:00.000Z', actorName: 'Alice', action: 'facility.update',
+          before: { name: 'Dodoma RRH' }, after: { name: 'Dodoma Regional Referral' },
+        },
+        {
+          occurredAt: '2026-01-01T00:00:00.000Z', actorName: 'Alice', action: 'facility.create',
+          before: null, after: { id: 'fac-1', name: 'Dodoma RRH' },
+        },
+      ],
+    });
+  });
+
+  it('excludes other facilities\' events', async () => {
+    const internalDb = await makeMigratedDb();
+    const ctx = fakeReconcileCtx(internalDb, null);
+    await seedFacilityHistory(internalDb, [
+      { id: 'evt-1', action: 'facility.create', entityId: 'fac-1', before: null, after: { id: 'fac-1' } },
+      { id: 'evt-2', action: 'facility.create', entityId: 'fac-2', before: null, after: { id: 'fac-2' } },
+    ]);
+    const app = await appWith(ctx);
+
+    const res = await app.inject({ method: 'GET', url: '/api/facilities/fac-1/history' });
+
+    expect(res.statusCode).toBe(200);
+    const { rows } = res.json();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].after).toEqual({ id: 'fac-1' });
+  });
+
+  it('is gated on facilities.view — a user without it gets 403', async () => {
+    const internalDb = await makeMigratedDb();
+    const app = await appWith(fakeReconcileCtx(internalDb, null), []);
+
+    const res = await app.inject({ method: 'GET', url: '/api/facilities/fac-1/history' });
+
+    expect(res.statusCode).toBe(403);
+  });
+
+  // The reason, not just the rule: a deleted facility's history is still meaningful — it is how an
+  // operator finds out a facility once existed and what happened to it — so an id `facilityRegistry`
+  // no longer (or never did) resolve must not 404 here, unlike GET /api/facilities/:id itself.
+  it('returns an empty array, not 404, for an unknown facility id', async () => {
+    const internalDb = await makeMigratedDb();
+    const app = await appWith(fakeReconcileCtx(internalDb, null));
+
+    const res = await app.inject({ method: 'GET', url: '/api/facilities/does-not-exist/history' });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ rows: [] });
   });
 });
 

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { MoreHorizontal } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import {
@@ -9,7 +10,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { createFacility, updateFacility, listPublishedForms, getForm, type Facility } from '@/api';
+import {
+  createFacility, updateFacility, listPublishedForms, getForm, listFacilityImportSources, getFacilityHistory,
+  type Facility, type FacilityRegisterSource,
+} from '@/api';
 import { FormRuntime } from '@/forms-runtime/FormRuntime';
 import { visibleIds } from '@/forms-runtime/runtime';
 import type { FormSchema, RuntimeAnswers } from '@/forms-runtime/types';
@@ -19,6 +23,15 @@ import { FormSchema as FormSchemaZ } from '@openldr/forms/pure';
 // only has an `import type` on `FacilityRecord`, which TypeScript erases entirely at compile time.
 import { CORE_FACILITY_KEYS } from '@openldr/db/facility-answers';
 import { useFacilityAdminSuggestions } from './useFacilityAdminSuggestions';
+
+/** Task 10: "last import" formatting for the provenance panel — same locale-formatted-with-raw-
+ *  fallback convention as Facilities.tsx's own `formatBuildTime` and FacilityHistory.tsx's own
+ *  `formatOccurredAt` (not imported: each of these three is a tiny, independently-testable local
+ *  helper over the same one-line `Date` idiom, not worth a shared module for). */
+function formatOccurredAt(iso: string): string {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleString();
+}
 
 interface FacilityDialogProps {
   open: boolean;
@@ -95,6 +108,43 @@ export function FacilityDialog({ open, onOpenChange, facility, onSaved }: Facili
   // design — FacilityDialog only owns wiring it to FormRuntime's `fieldSuggestions` prop and
   // reading the live answers back out via `onAnswersChange` below.
   const { suggestions: fieldSuggestions, reportAnswers } = useFacilityAdminSuggestions(schema, remountKey);
+
+  // Task 10: the read-only provenance panel's own data — independent of the form schema fetch
+  // above (it never touches `answers`/`extras`), so a fetch failure here degrades the panel alone,
+  // never the form. `registerSources` is the ACTIVE-only list (`GET /api/facilities/import/sources`
+  // — the same one ImportFacilitiesSheet's national-system Select already uses), matched against
+  // `facility.nationalSystem` by url; a register deactivated or unknown to this install simply has
+  // no match, and the panel still shows the raw canonical URI (see the render below) rather than
+  // hiding it. `lastImportAt` is the `occurredAt` timestamp of the newest `facility.import.row`
+  // history entry for this facility, `undefined` while unresolved and `null` once resolved-to-none
+  // (so the panel can tell "still loading" from "genuinely never imported" without a separate
+  // loading flag).
+  const [registerSources, setRegisterSources] = useState<FacilityRegisterSource[]>([]);
+  const [lastImportAt, setLastImportAt] = useState<string | null | undefined>(undefined);
+
+  useEffect(() => {
+    if (!open || !isEdit || !facility) { setLastImportAt(undefined); return; }
+    let cancelled = false;
+    setLastImportAt(undefined);
+    listFacilityImportSources()
+      .then((sources) => { if (!cancelled) setRegisterSources(sources); })
+      .catch(() => { if (!cancelled) setRegisterSources([]); });
+    getFacilityHistory(facility.id)
+      .then((page) => {
+        if (cancelled) return;
+        // Rows arrive newest-first (the route's own order); the FIRST import-row entry found is
+        // therefore the MOST RECENT one — no re-sort needed.
+        const lastImport = page.rows.find((r) => r.action === 'facility.import.row');
+        setLastImportAt(lastImport?.occurredAt ?? null);
+      })
+      .catch(() => { if (!cancelled) setLastImportAt(null); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, isEdit, facility?.id]);
+
+  const matchedRegisterSource = facility?.nationalSystem
+    ? registerSources.find((s) => s.url === facility.nationalSystem)
+    : undefined;
 
   // Load the published 'facilities' form schema whenever the dialog opens.
   useEffect(() => {
@@ -207,6 +257,42 @@ export function FacilityDialog({ open, onOpenChange, facility, onSaved }: Facili
         <div className="border-t border-border" />
 
         <div className="min-h-0 flex-1 overflow-y-auto">
+          {/* Task 10: "where a facility came from" — read-only, edit-only (a facility not yet
+              saved has no provenance to report). Inputs/filters are exempt from the ⋯-menu rule;
+              this panel has no controls at all, so that rule doesn't apply to it either way. */}
+          {isEdit && facility && (
+            <div className="mx-6 mt-4 space-y-1.5 rounded-md border border-border px-3 py-2 text-xs">
+              <div className="flex items-center justify-between">
+                <p className="font-medium">{t('facilities.detail.provenanceTitle')}</p>
+                <Badge variant={facility.source === 'import' ? 'default' : 'secondary'}>
+                  {facility.source === 'import' ? t('facilities.filters.sourceImport') : t('facilities.filters.sourceManual')}
+                </Badge>
+              </div>
+              {facility.nationalSystem ? (
+                <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-muted-foreground">
+                  <span>{t('facilities.detail.authorityLabel')}</span>
+                  <span className="text-foreground">{matchedRegisterSource?.name ?? '—'}</span>
+                  <span>{t('facilities.detail.canonicalUriLabel')}</span>
+                  <span className="text-foreground">{facility.nationalSystem}</span>
+                  <span>{t('facilities.detail.versionLabel')}</span>
+                  <span className="text-foreground">{matchedRegisterSource?.version ?? '—'}</span>
+                </div>
+              ) : (
+                <p className="text-muted-foreground">{t('facilities.detail.notRegistered')}</p>
+              )}
+              <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-muted-foreground">
+                <span>{t('facilities.detail.lastImportLabel')}</span>
+                <span className="text-foreground">
+                  {lastImportAt === undefined
+                    ? t('common.loading')
+                    : lastImportAt === null
+                      ? t('facilities.detail.lastImportNever')
+                      : formatOccurredAt(lastImportAt)}
+                </span>
+              </div>
+            </div>
+          )}
+
           {error ? (
             <div className="mx-6 mt-4 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</div>
           ) : null}

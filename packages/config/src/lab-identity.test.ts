@@ -33,9 +33,18 @@ describe('validateLabIdentityValue', () => {
   });
 
   it('accepts each supported image type as a data URI', () => {
-    for (const mime of ['image/png', 'image/jpeg', 'image/webp']) {
+    for (const mime of ['image/png', 'image/jpeg']) {
       expect(validateLabIdentityValue('lab.logo', dataUri(mime, 100))).toBeNull();
     }
+  });
+
+  // Measured: pdfkit 0.15.2 (js/pdfkit.js:3957-3962) sniffs magic bytes and draws exactly JPEG and
+  // PNG, throwing `Unknown image format.` for anything else — a WebP logo previews fine (both the
+  // Settings preview and the designer canvas go through `<img>`) and then prints as a blank
+  // letterhead. Do not re-add WebP to LAB_LOGO_MIME without re-measuring pdfkit's format support.
+  it('rejects WebP, which pdfkit cannot draw', () => {
+    expect(validateLabIdentityValue('lab.logo', 'data:image/webp;base64,UklGRg=='))
+      .toEqual({ key: 'lab.logo', reason: 'unsupported-image-type' });
   });
 
   it('⛔ REJECTS an https logo URL at WRITE time', () => {

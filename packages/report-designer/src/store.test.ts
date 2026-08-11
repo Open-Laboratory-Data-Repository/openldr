@@ -99,7 +99,7 @@ describe('ReportDesignStore', () => {
     expect((await store.get('pn-off'))?.pageNumbers).toBe(false);
 
     // Unset must come back `undefined`. `false` would change the design's content hash and
-    // re-ship every previously-unflagged design over reference sync (see migration 082).
+    // re-ship every previously-unflagged design over reference sync (see migration 083).
     await store.create(makeDesign('pn-unset', 'Unset'));
     expect((await store.get('pn-unset'))?.pageNumbers).toBeUndefined();
   });
@@ -136,7 +136,7 @@ describe('ReportDesignStore', () => {
   });
 
   it('hashes false differently from unset', async () => {
-    // This is the property migration 082's nullability rests on: `false` is NOT the same as unset,
+    // This is the property migration 083's nullability rests on: `false` is NOT the same as unset,
     // so a NOT NULL DEFAULT false column would have moved every existing design's hash.
     const { capture, hashes } = spyCapture();
     const store = createReportDesignStore(db, capture);
@@ -373,5 +373,20 @@ describe('ReportDesign round-trip completeness', () => {
     expect(createdAt).toBeDefined();
     expect(updatedAt).toBeDefined();
     expect(persisted).toEqual(EVERY_FIELD);
+  });
+
+  it('reads back a design whose image source would be refused on save', async () => {
+    // ⛔ Regression guard for the image rule's placement. The rule that rejects an https image
+    // source lives at the API's write boundary, NOT in ReportDesignSchema — because `fromRow`
+    // parses every stored design through that schema. If it ever migrates into the schema, a row
+    // written before the rule existed becomes permanently unopenable and this test fails.
+    const store = createReportDesignStore(db);
+    const d = makeDesign('img', 'Has a URL image');
+    d.pages = [{ id: 'p1', elements: [{ id: 'logo', kind: 'image', name: 'Logo', rect: { x: 0, y: 0, w: 10, h: 10 }, src: 'https://example.org/logo.png' }] }];
+    await store.create(d);
+
+    const got = await store.get('img');
+    expect(got).toBeDefined();
+    expect(got?.pages[0].elements[0].src).toBe('https://example.org/logo.png');
   });
 });

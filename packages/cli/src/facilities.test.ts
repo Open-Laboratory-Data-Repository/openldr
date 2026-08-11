@@ -152,7 +152,11 @@ describe('facilities import CLI', () => {
 
     expect(code).toBe(0);
     expect(mocks.importFacilities).toHaveBeenCalledWith(
-      { db: mocks.ctx.internalDb, capture: mocks.referenceCapture, admin: mocks.ctx.terminology.admin, facilityJobs: mocks.ctx.facilityJobs, logger: mocks.ctx.logger },
+      // ⚠ `audit` is on the deps of a DRY RUN too, and that is correct: the CLI builds one deps
+      // object for both calls, and `importFacilities`' per-row audit block sits after the write
+      // transaction, which a dry run never reaches. `recordAuditEvent` still not being called (below)
+      // is what proves a dry run audits nothing.
+      { db: mocks.ctx.internalDb, capture: mocks.referenceCapture, admin: mocks.ctx.terminology.admin, facilityJobs: mocks.ctx.facilityJobs, audit: mocks.ctx.audit, logger: mocks.ctx.logger },
       'national_code,name\n100,Dodoma\n',
       {
         nationalSystem: 'urn:tz:hfr', allowUnknownColumns: undefined, allowMalformedRows: undefined, apply: undefined,
@@ -225,7 +229,10 @@ describe('facilities import CLI', () => {
 
     expect(code).toBe(0);
     expect(mocks.importFacilities).toHaveBeenCalledWith(
-      { db: mocks.ctx.internalDb, capture: mocks.referenceCapture, admin: mocks.ctx.terminology.admin, facilityJobs: mocks.ctx.facilityJobs, logger: mocks.ctx.logger },
+      // `audit` added by the whole-branch Critical 2 fix — this stays an EXACT object assertion, so a
+      // dep added or dropped from the CLI's literal fails here rather than passing silently. See the
+      // dedicated per-row-audit test below for what that dep actually buys.
+      { db: mocks.ctx.internalDb, capture: mocks.referenceCapture, admin: mocks.ctx.terminology.admin, facilityJobs: mocks.ctx.facilityJobs, audit: mocks.ctx.audit, logger: mocks.ctx.logger },
       expect.any(String),
       {
         nationalSystem: 'urn:tz:hfr', allowUnknownColumns: undefined, allowMalformedRows: undefined, apply: true,
@@ -245,6 +252,28 @@ describe('facilities import CLI', () => {
     const human = stdoutSpy.mock.calls.map((c) => String(c[0])).join('');
     expect(human).toMatch(/created 2/);
     expect(human).toMatch(/updated 1/);
+  });
+
+  // ⛔ Whole-branch Critical 2, CLI door. `importFacilities` writes Task 7's per-facility
+  // `facility.import.row` events only when `deps.audit` is supplied; all three production deps
+  // literals omitted it, so every applied import instead logged "the per-row write is unaudited" and
+  // no facility's history ever showed an import. `importFacilities` is MOCKED in this file, so what
+  // is checkable at this seam is the handoff, and it is checked strictly: the store handed over must
+  // be the SAME object `recordAuditEvent` is given for this command's own register-scoped
+  // `facility.import` entry, not some second sink that could disagree about whether the import
+  // happened. That the store then produces real `facility.import.row` rows is proven against a real
+  // audit store and a real database in packages/bootstrap/src/facility-import.test.ts.
+  it('⛔ --apply hands importFacilities the SAME audit store the command audits through', async () => {
+    mocks.importFacilities.mockResolvedValue(CLEAN_RESULT);
+
+    await runFacilitiesImport('/some/file.csv', { nationalSystem: 'urn:tz:hfr', apply: true, json: false });
+
+    const [deps] = mocks.importFacilities.mock.calls[0] as [{ audit?: unknown }];
+    // Truthy is the actual predicate `importFacilities` branches on (`if (!deps.audit)`), so it is
+    // asserted as such and not merely as "a key exists".
+    expect(deps.audit).toBeTruthy();
+    expect(deps.audit).toBe(mocks.ctx.audit);
+    expect(mocks.recordAuditEvent.mock.calls[0][0]).toBe(mocks.ctx);
   });
 
   // Task 12: "record a facility_import_runs row" — an --apply mints one BEFORE the write (reserving

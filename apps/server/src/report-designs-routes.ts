@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import type { AppContext } from '@openldr/bootstrap';
-import { ReportDesignSchema } from '@openldr/report-designer/pure';
+import { ReportDesignSchema, findInvalidImageSources } from '@openldr/report-designer/pure';
 import { renderReportDesignPdf, resolveDesignTables } from '@openldr/report-designer';
 import { runStoredQuery, type RunStoredQueryDeps } from './run-stored-query';
 import { recordAudit } from './audit-helper';
@@ -22,9 +22,26 @@ export function registerReportDesignRoutes(
     return d;
   });
 
+  // Write-time image gate on POST/PUT only.
+  //
+  // ⛔ Deliberately NOT on `/preview`: an author must be able to preview a design that already
+  // contains a bad image in order to SEE the problem. Preview is diagnostic; save is the gate.
+  // ⛔ Deliberately not a zod refinement either — `fromRow` parses stored designs through the same
+  // schema, so a refinement would run on READ and make such a design permanently unopenable.
   app.post('/api/report-designs', MANAGE, async (req, reply) => {
     const p = ReportDesignSchema.safeParse(req.body);
     if (!p.success) { reply.code(400); return { error: p.error.message }; }
+    const invalidImages = findInvalidImageSources(p.data);
+    if (invalidImages.length > 0) {
+      reply.code(400);
+      // The bare 'invalid image source' string used to be the whole message the studio's error
+      // extractor (which reads only `body.error`) ever surfaces as a toast — opaque on an install
+      // with N images across M pages, and worse on autosave's 1.2s debounce with no click to
+      // correlate. Name the offending element(s) IN the string; keep `invalidImages` for programmatic
+      // callers.
+      const error = `invalid image source: ${invalidImages.map((i) => `${i.elementId} (${i.reason})`).join(', ')}`;
+      return { error, invalidImages };
+    }
     const created = await ctx.reportDesigns.create(p.data);
     await recordAudit(ctx, req, { action: 'report-design.create', entityType: 'report-design', entityId: created.id, before: null, after: created });
     reply.code(201);
@@ -35,6 +52,17 @@ export function registerReportDesignRoutes(
     const { id } = req.params as { id: string };
     const p = ReportDesignSchema.safeParse(req.body);
     if (!p.success) { reply.code(400); return { error: p.error.message }; }
+    const invalidImages = findInvalidImageSources(p.data);
+    if (invalidImages.length > 0) {
+      reply.code(400);
+      // The bare 'invalid image source' string used to be the whole message the studio's error
+      // extractor (which reads only `body.error`) ever surfaces as a toast — opaque on an install
+      // with N images across M pages, and worse on autosave's 1.2s debounce with no click to
+      // correlate. Name the offending element(s) IN the string; keep `invalidImages` for programmatic
+      // callers.
+      const error = `invalid image source: ${invalidImages.map((i) => `${i.elementId} (${i.reason})`).join(', ')}`;
+      return { error, invalidImages };
+    }
     const before = await ctx.reportDesigns.get(id);
     if (!before) { reply.code(404); return { error: 'not found' }; }
     const after = await ctx.reportDesigns.update(id, p.data);

@@ -79,8 +79,10 @@ import * as m077 from './077_facility_concept_projection';
 import * as m078 from './078_one_active_facility_resolution';
 import * as m079 from './079_facility_jobs';
 import * as m080 from './080_facility_import_runs';
-import * as m082 from './082_report_design_page_numbers';
-import * as m083 from './083_report_design_versions';
+import * as m081 from './081_facility_source_and_register_state';
+import * as m082 from './082_facility_canonical_identity';
+import * as m083 from './083_report_design_page_numbers';
+import * as m083v from './083_report_design_versions';
 
 export const internalMigrations: Record<string, Migration> = {
   '001_fhir_resources': { up: m001.up, down: m001.down },
@@ -163,6 +165,8 @@ export const internalMigrations: Record<string, Migration> = {
   '078_one_active_facility_resolution': { up: m078.up, down: m078.down },
   '079_facility_jobs': { up: m079.up, down: m079.down },
   '080_facility_import_runs': { up: m080.up, down: m080.down },
-  '082_report_design_page_numbers': { up: m082.up, down: m082.down },
-  '083_report_design_versions': { up: m083.up, down: m083.down },
+  '081_facility_source_and_register_state': { up: m081.up, down: m081.down },
+  '082_facility_canonical_identity': { up: m082.up, down: m082.down },
+  '083_report_design_page_numbers': { up: m083.up, down: m083.down },
+  '083_report_design_versions': { up: m083v.up, down: m083v.down },
 };

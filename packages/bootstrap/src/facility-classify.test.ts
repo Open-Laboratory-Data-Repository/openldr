@@ -10,7 +10,7 @@ const rec = (over: Partial<FacilityRecord> = {}): FacilityRecord => ({
 });
 
 const existing = (over: Partial<ExistingFacility> = {}): ExistingFacility => ({
-  id: 'fac-1', localCode: null, extras: null,
+  id: 'fac-1', localCode: null, extras: null, source: 'import',
   fields: {
     nationalSystem: 'S', nationalCode: '100', name: 'Alpha',
     level: null, ownership: null, status: null, country: null, zone: null, region: null,
@@ -29,6 +29,20 @@ describe('classifyFacilityRows', () => {
 
   it('classifies a byte-identical re-import as unchanged, NOT updated', () => {
     const map = new Map([['fac-1', existing()]]);
+    const [row] = classifyFacilityRows([rec()], map, { previewedAt: null });
+    expect(row.kind).toBe('unchanged');
+    expect(row.diff).toEqual([]);
+  });
+
+  // Review fix (Task 7 finding): `source` is carried on `ExistingFacility` now (for the audit
+  // `before`, see facility-import.ts), but must never influence `changed`-vs-`unchanged` — a
+  // manually-created facility (`source: 'manual'`) whose every COMPARED column already matches
+  // what an import would write must stay `unchanged`, not flip to `changed` on provenance alone.
+  // A mutation that added `'source'` to `COMPARED` would flip this to `changed` (`existing.fields`
+  // carries no `source` key, so the comparison would read `before: undefined` against
+  // `after: 'import'` and report a diff) — that is exactly the regression this test guards.
+  it('does NOT report a change when a manually-created facility differs only in source', () => {
+    const map = new Map([['fac-1', existing({ source: 'manual' })]]);
     const [row] = classifyFacilityRows([rec()], map, { previewedAt: null });
     expect(row.kind).toBe('unchanged');
     expect(row.diff).toEqual([]);

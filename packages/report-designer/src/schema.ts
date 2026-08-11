@@ -92,7 +92,10 @@ export const DesignElementSchema = z.object({
   caption: z.boolean().optional(),
   /** presentational style (text/line/rect) */
   style: ElementStyleSchema.optional(),
-  /** image source (URL or data: URI) */
+  /** image source: a `data:` URI or an interpolation token (`{{lab.logo}}`), never a bare URL — a
+   *  `https://…`/`http://…`/file-path source is refused at write (`image-src.ts`'s
+   *  `validateImageSrc`) because pdfkit reads a URL image source as a file path and throws, so it
+   *  would render fine on the studio canvas and silently vanish from the printed PDF. */
   src: z.string().optional(),
 });
 export type DesignElement = z.infer<typeof DesignElementSchema>;

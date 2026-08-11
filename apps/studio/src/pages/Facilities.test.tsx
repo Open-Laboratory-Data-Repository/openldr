@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import '@/i18n';
@@ -30,6 +30,13 @@ vi.mock('@/api', async (orig) => {
     // filters" disclosure. Stubbed here so opening that panel in a test never reaches the real
     // network; most tests never open it, so most never touch this mock at all.
     listFacilityAdminValues: vi.fn(),
+    // B1 Task 9: backs the import sheet's national-system `Select` — stubbed here (not just in
+    // ImportFacilitiesSheet.test.tsx) because this page renders the real sheet, not a mock of it.
+    listFacilityImportSources: vi.fn(),
+    // Task 10: the Status column's terminology display-label lookup, and the per-row History
+    // sheet's own data source — this page renders the real FacilityHistory sheet, not a mock.
+    expandValueSet: vi.fn(),
+    getFacilityHistory: vi.fn(),
   };
 });
 
@@ -39,10 +46,31 @@ vi.mock('@/api', async (orig) => {
 const { useAuthMock } = vi.hoisted(() => ({ useAuthMock: vi.fn() }));
 vi.mock('@/auth/AuthProvider', () => ({ useAuth: useAuthMock }));
 
-import { listFacilities, listPublishedForms, getForm, importFacilitiesCsv, listObservedFacilities, getFacilityHealth, retryFacilityJob, deleteFacility, listFacilityAdminValues, type Facility, type FacilityHealth, type FacilityPage } from '@/api';
+import { listFacilities, listPublishedForms, getForm, importFacilitiesCsv, listFacilityImportSources, listObservedFacilities, getFacilityHealth, retryFacilityJob, deleteFacility, listFacilityAdminValues, expandValueSet, getFacilityHistory, type Facility, type FacilityHealth, type FacilityPage } from '@/api';
 import { Facilities } from './Facilities';
 
 const listFacilitiesMock = listFacilities as ReturnType<typeof vi.fn>;
+
+// Task 10: the Status column's terminology lookup — same fixture shape FacilityHistory.test.tsx
+// uses, routed by id so both the status and level ValueSet fetches get a real answer regardless of
+// call order.
+const STATUS_CODES = {
+  codes: [
+    { system: 'http://hl7.org/fhir/location-status', code: 'active', display: 'Active' },
+    { system: 'http://hl7.org/fhir/location-status', code: 'suspended', display: 'Suspended' },
+  ],
+  total: 2,
+};
+const LEVEL_CODES = { codes: [{ system: 'urn:openldr:cs:facility-type', code: 'dispensary', display: 'Dispensary' }], total: 1 };
+
+// B1 Task 9: the one registered source the import sheet's `Select` needs — `url` is the literal
+// 'HFR' every pre-existing import-sheet assertion in this file already checks
+// (`nationalSystem: 'HFR'`), so swapping the free-text box for a Select costs those assertions
+// nothing (same fixture shape as ImportFacilitiesSheet.test.tsx's own `HFR_SOURCE`).
+const HFR_SOURCE = {
+  id: 'cs-freg-hfr', url: 'HFR', name: 'National Health Facility Registry', code: 'HFR',
+  version: null, jurisdiction: null, contact: null, publisherId: null, active: true,
+};
 
 const publishedFacilityForm = {
   id: 'form-sample-facility',
@@ -81,6 +109,7 @@ const sampleFacility: Facility = {
   level: 'Hospital', ownership: null, status: 'Operating', country: 'TZ', zone: 'Central', region: 'Dodoma Region',
   district: 'Dodoma', council: null, ward: null, village: null, addressText: null, phone: null,
   latitude: null, longitude: null, extras: {}, managedOrigin: null, source: 'manual',
+  registerState: 'not_registered',
 };
 
 // Task 4 (scale): GET /api/facilities returns a page, not a bare array (Task 3) — `makeRows`
@@ -106,14 +135,23 @@ const currentHealth: FacilityHealth = {
   projection: { failedCount: 0, failed: [] },
 };
 
-/** Open the ⋯ menu named `triggerName` and click the item matching `itemName`. Radix opens
- *  DropdownMenuContent on pointerdown; jsdom sometimes needs a follow-up Enter keydown. */
-function clickMenuItem(triggerName: string, itemName: string | RegExp) {
+/** Open the ⋯ menu named `triggerName`, leaving it open so a caller can assert on its contents.
+ *  Radix opens DropdownMenuContent on pointerdown; jsdom sometimes needs a follow-up Enter keydown.
+ *  Split out of `clickMenuItem` (below) so a test that needs to inspect the OPEN menu — e.g. assert
+ *  an item is absent — isn't forced to look after the click has already closed it. */
+function openMenu(triggerName: string, probeItemName: string | RegExp) {
   const trigger = screen.getByRole('button', { name: triggerName });
   fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
-  if (!screen.queryByRole('menuitem', { name: itemName })) {
+  if (!screen.queryByRole('menuitem', { name: probeItemName })) {
     fireEvent.keyDown(trigger, { key: 'Enter' });
   }
+}
+
+/** Open the ⋯ menu named `triggerName` and click the item matching `itemName`. Clicking closes the
+ *  menu (Radix `onSelect`), so any assertion about what else the menu did/didn't contain must run
+ *  BEFORE calling this — see `openMenu` above. */
+function clickMenuItem(triggerName: string, itemName: string | RegExp) {
+  openMenu(triggerName, itemName);
   fireEvent.click(screen.getByRole('menuitem', { name: itemName }));
 }
 
@@ -139,6 +177,10 @@ describe('Facilities page', () => {
     (getFacilityHealth as ReturnType<typeof vi.fn>).mockResolvedValue(currentHealth);
     (retryFacilityJob as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
     (listFacilityAdminValues as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    (listFacilityImportSources as ReturnType<typeof vi.fn>).mockResolvedValue([HFR_SOURCE]);
+    (expandValueSet as ReturnType<typeof vi.fn>).mockImplementation((id: string) =>
+      Promise.resolve(id === 'vs-location-status' ? STATUS_CODES : LEVEL_CODES));
+    (getFacilityHistory as ReturnType<typeof vi.fn>).mockResolvedValue({ rows: [] });
     // Default: a lab_admin-shaped actor who can both view and manage the registry. Individual
     // tests (I4) override this to a view-only actor.
     useAuthMock.mockReturnValue({
@@ -215,6 +257,86 @@ describe('Facilities page', () => {
     expect(screen.getByText('Dodoma Region')).toBeInTheDocument();
   });
 
+  // Task 10: "where a facility came from" — a Manual row shows the Manual badge, an Imported row
+  // the Imported badge. Reuses the existing filters.sourceManual/sourceImport copy (already proven
+  // real by the Source filter Select above it) rather than adding a second, driftable pair of
+  // labels for the same two values.
+  describe('Task 10: provenance — source badge, status label, register-state filter, history', () => {
+    it('shows the Manual badge for a manually-entered row and the Imported badge for an imported one', async () => {
+      (listPublishedForms as ReturnType<typeof vi.fn>).mockResolvedValue([publishedFacilityForm]);
+      listFacilitiesMock.mockResolvedValue(makePage([
+        { ...sampleFacility, id: 'f-manual', name: 'Manual Clinic', source: 'manual' },
+        { ...sampleFacility, id: 'f-import', name: 'Imported Clinic', source: 'import' },
+      ]));
+      show();
+      await waitFor(() => expect(screen.getByText('Manual Clinic')).toBeInTheDocument());
+      const manualRow = screen.getByText('Manual Clinic').closest('tr')!;
+      const importRow = screen.getByText('Imported Clinic').closest('tr')!;
+      expect(within(manualRow).getByText('Manual entry')).toBeInTheDocument();
+      expect(within(importRow).getByText('Imported')).toBeInTheDocument();
+      // Each row shows only ITS OWN badge, not both.
+      expect(within(manualRow).queryByText('Imported')).not.toBeInTheDocument();
+      expect(within(importRow).queryByText('Manual entry')).not.toBeInTheDocument();
+    });
+
+    // Step 5 target (mutation-proved in the task report): the Status column must render the
+    // terminology DISPLAY LABEL, not the stored code — verified against the real rendered copy
+    // `expandValueSet`'s mocked fixture actually produces (`STATUS_CODES` above), not a guess.
+    it('renders the Status column as its terminology display label, not the stored code', async () => {
+      (listPublishedForms as ReturnType<typeof vi.fn>).mockResolvedValue([publishedFacilityForm]);
+      listFacilitiesMock.mockResolvedValue(makePage([{ ...sampleFacility, status: 'active' }]));
+      show();
+      await waitFor(() => expect(screen.getByText('Dodoma Regional Referral')).toBeInTheDocument());
+      expect(await screen.findByText('Active')).toBeInTheDocument();
+      expect(screen.queryByText('active')).not.toBeInTheDocument();
+    });
+
+    it('an unmapped legacy status code still renders something, falling back to the raw value', async () => {
+      (listPublishedForms as ReturnType<typeof vi.fn>).mockResolvedValue([publishedFacilityForm]);
+      listFacilitiesMock.mockResolvedValue(makePage([{ ...sampleFacility, status: 'Operating' }]));
+      show();
+      // 'Operating' has no entry in the mocked STATUS_CODES fixture — displayFor's own fallback.
+      expect(await screen.findByText('Operating')).toBeInTheDocument();
+    });
+
+    it('offers History in the per-row ⋯ menu, opening a sheet that fetches this facility\'s history', async () => {
+      (listPublishedForms as ReturnType<typeof vi.fn>).mockResolvedValue([publishedFacilityForm]);
+      listFacilitiesMock.mockResolvedValue(makePage([sampleFacility]));
+      show();
+      await waitFor(() => expect(screen.getByText('Dodoma Regional Referral')).toBeInTheDocument());
+
+      clickMenuItem(`Facility actions ${sampleFacility.name}`, /history/i);
+
+      await waitFor(() => expect(getFacilityHistory).toHaveBeenCalledWith(sampleFacility.id));
+      expect(await screen.findByText('Facility history')).toBeInTheDocument();
+    });
+
+    it('I4: still offers History to a view-only actor (facilities.view alone), even though Edit/Delete stay hidden', async () => {
+      // The route this sheet reads (`GET /api/facilities/:id/history`) is gated on `facilities.view`
+      // alone (apps/server/src/facilities-routes.ts) — a view-only actor (data_analyst,
+      // system_auditor) must be able to reach it, not just a manage-capable one.
+      useAuthMock.mockReturnValue({
+        user: { id: 'analyst', username: 'analyst', displayName: null, roles: ['data_analyst'] },
+        loading: false,
+        hasCapability: (cap: string) => cap === 'facilities.view',
+      });
+      (listPublishedForms as ReturnType<typeof vi.fn>).mockResolvedValue([publishedFacilityForm]);
+      listFacilitiesMock.mockResolvedValue(makePage([sampleFacility]));
+      show();
+      await waitFor(() => expect(screen.getByText('Dodoma Regional Referral')).toBeInTheDocument());
+
+      // Open the menu and assert Edit/Delete are absent WHILE IT IS OPEN — clicking an item closes
+      // the menu (Radix `onSelect`), so checking after the click would pass trivially regardless
+      // of what the menu actually rendered.
+      openMenu(`Facility actions ${sampleFacility.name}`, /history/i);
+      expect(screen.queryByRole('menuitem', { name: /^edit$/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('menuitem', { name: /^delete$/i })).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('menuitem', { name: /history/i }));
+      await waitFor(() => expect(getFacilityHistory).toHaveBeenCalledWith(sampleFacility.id));
+    });
+  });
+
   it('I5: still shows the table for existing rows even with no published form — the no-form state gates writes, not the list', async () => {
     // A lab that imported the national register and later archived the Facilities form must not
     // lose visibility of rows it already has — !hasForm used to replace the whole body, table
@@ -256,12 +378,27 @@ describe('Facilities page', () => {
       expect(screen.queryByText(/^import facilities$/i)).not.toBeInTheDocument();
     });
 
-    it('hides the per-row Edit/Delete ⋯ menu', async () => {
+    // Task 10: the per-row ⋯ menu itself is NO LONGER hidden wholesale from a view-only actor — it
+    // now also carries History, which `GET /api/facilities/:id/history` gates on `facilities.view`
+    // alone (apps/server/src/facilities-routes.ts), the same capability this actor already holds.
+    // What stays hidden is specifically Edit/Delete — this is a genuine, deliberate contract change
+    // (documented in the Task 10 describe block below, which pins History's own reachability), not
+    // a weakening of the original intent: the old assertion (menu button absent) only ever proved
+    // that button's presence/absence, never that Edit/Delete specifically were gated — this proves
+    // the actual thing the test's own name always claimed.
+    it('hides the per-row Edit/Delete ⋯ menu items, though the menu itself now also carries History', async () => {
       (listPublishedForms as ReturnType<typeof vi.fn>).mockResolvedValue([publishedFacilityForm]);
       listFacilitiesMock.mockResolvedValue(makePage([sampleFacility]));
       show();
       await waitFor(() => expect(screen.getByText('Dodoma Regional Referral')).toBeInTheDocument());
-      expect(screen.queryByRole('button', { name: /facility actions dodoma regional referral/i })).not.toBeInTheDocument();
+
+      const trigger = screen.getByRole('button', { name: /facility actions dodoma regional referral/i });
+      fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+      if (!screen.queryByRole('menuitem', { name: /history/i })) fireEvent.keyDown(trigger, { key: 'Enter' });
+
+      expect(screen.getByRole('menuitem', { name: /history/i })).toBeInTheDocument();
+      expect(screen.queryByRole('menuitem', { name: /^edit$/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('menuitem', { name: /^delete$/i })).not.toBeInTheDocument();
     });
 
     it('does not open the edit dialog by clicking the row', async () => {
@@ -341,7 +478,13 @@ describe('Facilities page', () => {
     fireEvent.change(screen.getByLabelText('File'), {
       target: { files: [new File(['local_code,name\nLAB01,Dodoma RRH\n'], 'register.csv', { type: 'text/csv' })] },
     });
-    fireEvent.change(screen.getByLabelText('National system'), { target: { value: 'HFR' } });
+    // B1 Task 9: the sheet's free-text national-system box became a `Select` over registered
+    // sources — pick `HFR_SOURCE` (mocked in `beforeEach`) the same way
+    // ImportFacilitiesSheet.test.tsx's own `pickFileAndSystem` does, rather than typing.
+    const nationalSystemTrigger = await screen.findByRole('combobox', { name: 'National system' });
+    await waitFor(() => expect(nationalSystemTrigger).toBeEnabled());
+    fireEvent.click(nationalSystemTrigger);
+    fireEvent.click(await screen.findByRole('option', { name: HFR_SOURCE.name }));
 
     await clickImportMenuItem(/^preview$/i);
     await waitFor(() => expect(importFacilitiesCsv).toHaveBeenCalledTimes(1));
@@ -745,6 +888,37 @@ describe('Facilities page', () => {
       await waitFor(() => expect(listFacilitiesMock).toHaveBeenCalledWith(
         expect.objectContaining({ nationalSystem: 'HFR' }),
       ));
+    });
+
+    // Task 10: registerState — a CLOSED-vocabulary filter (unlike nationalSystem above), so it
+    // gets a Select rather than an Input, but round-trips through the URL the exact same way. Lives
+    // in THIS describe block (not the standalone Task 10 one further up), same as every other
+    // "Task 4" test: this whole block deliberately runs LAST and shares `window.location` between
+    // its own tests without resetting it (see the block's own doc comment) — a test that mutates
+    // the URL and lives OUTSIDE this block would leak that mutation into whichever test in here
+    // happens to run next (this was measured: it broke "Fix wave 1 / Finding 1" when this test
+    // briefly lived in the standalone Task 10 describe block instead).
+    it('Task 10: the list gains a register_state filter that round-trips through the URL and the store call', async () => {
+      window.history.replaceState({}, '', '/facilities');
+      (listPublishedForms as ReturnType<typeof vi.fn>).mockResolvedValue([publishedFacilityForm]);
+      listFacilitiesMock.mockResolvedValue(makePage([sampleFacility]));
+      show();
+      await waitFor(() => expect(screen.getByText('Dodoma Regional Referral')).toBeInTheDocument());
+
+      expect(screen.queryByRole('combobox', { name: 'Register state' })).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: /more filters/i }));
+      const trigger = await screen.findByRole('combobox', { name: 'Register state' });
+
+      fireEvent.click(trigger);
+      fireEvent.click(await screen.findByRole('option', { name: 'In register' }));
+
+      await waitFor(() => expect(window.location.search).toContain('registerState=in_register'));
+      await waitFor(() => expect(listFacilitiesMock).toHaveBeenCalledWith(
+        expect.objectContaining({ registerState: 'in_register' }),
+      ));
+      // Cleans up after itself — the next test in this block (and StrictMode's later re-mount test,
+      // further down the file) must not inherit `registerState=in_register` left in the URL.
+      window.history.replaceState({}, '', '/facilities');
     });
 
     // Fix wave 1 / Finding 2: `reload()` had no request-sequencing guard — every keystroke fired an

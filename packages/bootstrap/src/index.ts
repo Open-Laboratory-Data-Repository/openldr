@@ -915,7 +915,13 @@ const reporting: ReportingApi = {
   const facilityImportWorker = createFacilityImportWorkerIfEnabled(opts.runFacilityImportWorker === true, {
     runs: facilityImportRuns,
     blob,
-    importDeps: { db: internal.db, capture: referenceCapture, admin: termAdmin, facilityJobs, logger },
+    // ⛔ `audit` belongs on BOTH this literal and the worker's own `audit` below, and they are not the
+    // same event (whole-branch Critical 2). This one reaches `importFacilities`' Task 7 per-facility
+    // `facility.import.row` writes — the events `GET /api/facilities/:id/history` reads back; the one
+    // below records the register-scoped `facility.import` summary for the run as a whole. Omitting it
+    // here left the background upload door — the door most national registers actually come through —
+    // writing no per-row history at all, while `importFacilities` logged that the write was unaudited.
+    importDeps: { db: internal.db, capture: referenceCapture, admin: termAdmin, facilityJobs, audit, logger },
     // The SAME value the upload route enforces on the transfer, so a file this server accepted is
     // always one the worker can read back. Wired rather than left to the worker's own default
     // precisely so an operator who tunes the cap moves both ceilings at once.
