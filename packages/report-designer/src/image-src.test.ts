@@ -39,6 +39,29 @@ describe('validateImageSrc', () => {
     const huge = `data:image/png;base64,${'A'.repeat(ELEMENT_IMAGE_MAX_CHARS)}`;
     expect(validateImageSrc(huge)).toBe('too-large');
   });
+
+  it('does not let a token embedded in a URL skip validation', () => {
+    // ⛔ Regression guard: an unanchored token test made this return null, defeating the URL,
+    // SVG and size checks at once — whatever the token interpolates to, the result is still a URL.
+    expect(validateImageSrc('https://evil.example/logo.png?v={{n}}')).toBe('not-a-data-uri');
+  });
+
+  it('does not let a trailing token smuggle an svg past validation', () => {
+    // ⚠ Not 'unsupported-image-type': DATA_URI is anchored at both ends (`^...$`), so a trailing
+    // `{{n}}` breaks the base64-payload match before the MIME group is ever inspected. The result
+    // is 'not-a-data-uri' instead — still correctly rejected, just caught one check earlier. Either
+    // way the smuggling attempt fails; only the specific reason code differs from a naive guess.
+    expect(validateImageSrc('data:image/svg+xml;base64,PHN2Zz4={{n}}')).toBe('not-a-data-uri');
+  });
+
+  it('does not let a trailing token smuggle an oversize value past the cap', () => {
+    expect(validateImageSrc(`${'A'.repeat(ELEMENT_IMAGE_MAX_CHARS)}{{n}}`)).toBe('too-large');
+  });
+
+  it('still accepts a bare token, with or without surrounding whitespace', () => {
+    expect(validateImageSrc('{{lab.logo}}')).toBeNull();
+    expect(validateImageSrc('  {{lab.logo}}  ')).toBeNull();
+  });
 });
 
 describe('findInvalidImageSources', () => {

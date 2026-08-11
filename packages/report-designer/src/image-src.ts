@@ -39,8 +39,10 @@ export interface InvalidImageSource {
 
 const DATA_URI = /^data:([a-z]+\/[a-z0-9.+-]+);base64,([A-Za-z0-9+/]+={0,2})$/;
 
-/** `{{lab.logo}}`, `{{param.crest}}` — resolved by the renderer, not a literal source. */
-const TOKEN = /\{\{[^}]+\}\}/;
+/** A source that IS a token, e.g. `{{lab.logo}}` — the seeded shape. Anchored on purpose: a token
+ *  merely EMBEDDED in another string (`https://x/y.png?v={{n}}`) must NOT skip validation, because
+ *  whatever it interpolates to is still a URL, which pdfkit cannot render. */
+const TOKEN = /^\{\{[^}]+\}\}$/;
 
 /**
  * Validate one image element's `src`. Returns `null` when acceptable.
@@ -54,7 +56,9 @@ const TOKEN = /\{\{[^}]+\}\}/;
 export function validateImageSrc(src: string): ImageSrcReason | null {
   if (src === '') return null;
   // Tokens are the seeded shape (`{{lab.logo}}`) and resolve at render; nothing to check here.
-  if (TOKEN.test(src)) return null;
+  // Trim before testing so trailing whitespace can't defeat the anchor — but the untrimmed
+  // value is still what the length and data-URI checks below judge.
+  if (TOKEN.test(src.trim())) return null;
   // Length first: cheaper than running the pattern over a multi-megabyte string.
   if (src.length > ELEMENT_IMAGE_MAX_CHARS) return 'too-large';
 
