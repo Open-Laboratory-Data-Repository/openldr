@@ -210,6 +210,26 @@ describe('seedDataDrivenReports', () => {
     expect(testVolume?.sql).not.toContain('format(');
     for (const q of queries.values()) expect(q.connectorId).toBe('conn-mysql');
   });
+
+  it('seeds every built-in design as PUBLISHED', async () => {
+    // ⛔ Capture is gated on published status. A built-in seeded as a draft emits no reference
+    // change, so labs receive ZERO designs — the exact failure migration 065 was written to fix
+    // (central published 8 reports, each lab got 8 rows with dangling design_ids).
+    const { deps, designs } = fakeDeps([{ id: 'conn-123', name: DEFAULT_CONNECTOR_NAME }]);
+    await seedDataDrivenReports(deps);
+    for (const d of SEED_DESIGNS) {
+      expect((designs.get(d.id) as { status?: string } | undefined)?.status).toBe('published');
+    }
+  });
+
+  it('is still idempotent once designs carry a status', async () => {
+    const { deps } = fakeDeps([{ id: 'conn-123', name: DEFAULT_CONNECTOR_NAME }]);
+    await seedDataDrivenReports(deps);
+    const second = await seedDataDrivenReports(deps);
+    expect(second.designsUpdated).toBe(0);
+    const third = await seedDataDrivenReports(deps);
+    expect(third.designsUpdated).toBe(0);
+  });
 });
 
 describe('SEED_QUERIES — every entry carries all three dialect variants', () => {

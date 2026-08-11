@@ -1,5 +1,6 @@
 import type { NewCustomQuery, ReportRecord, CustomQueryStore, ReportStore, ConnectorStore } from '@openldr/db';
 import type { ReportDesign, ReportDesignStore } from '@openldr/report-designer';
+import { designContentFingerprint } from '@openldr/report-designer/pure';
 import { simpleTableDesign } from './simple-design';
 
 // NOTE on why this isn't `import type { SqlDialect } from '@openldr/dashboards'` (as the plan
@@ -2168,6 +2169,9 @@ export const SEED_DESIGNS: ReportDesign[] = [
   {
     id: 'rt-clinical-micro',
     name: 'Clinical Microbiology Report',
+    // Ships published, same as every other SEED_DESIGNS entry — the seed loop also stamps this
+    // explicitly (capture is gated on published status), but the literal should say what it is.
+    status: 'published',
     paper: 'A4',
     orientation: 'portrait',
     margins: { top: 32, right: 32, bottom: 32, left: 32 },
@@ -2450,17 +2454,6 @@ function paramsEqual(a: unknown, b: unknown): boolean {
   return canonicalJson(a ?? []) === canonicalJson(b ?? []);
 }
 
-/** The parts of a seeded design the product owns. Deliberately EXCLUDES `createdAt`/`updatedAt`,
- *  which the store stamps — comparing them would report drift on every boot and rewrite the row
- *  forever. */
-function designContent(d: ReportDesign): string {
-  return canonicalJson({
-    name: d.name, paper: d.paper, orientation: d.orientation,
-    margins: d.margins ?? null, pageNumbers: d.pageNumbers ?? false,
-    parameters: d.parameters ?? [], pages: d.pages ?? [],
-  });
-}
-
 /** Same idea for a report record. `status` is included: a built-in that ships `published` should be
  *  restored to published if a previous version shipped it as a draft. */
 function reportContent(r: ReportRecord): string {
@@ -2524,16 +2517,18 @@ export async function seedDataDrivenReports(deps: SeedDataDrivenReportsDeps): Pr
   for (const d of SEED_DESIGNS) {
     const existing = await deps.designs.get(d.id);
     if (!existing) {
-      await deps.designs.create(d);
+      await deps.designs.create({ ...d, status: 'published' });
       designsSeeded += 1;
-    } else if (designContent(existing) !== designContent(d)) {
+      // ⛔ `status: 'published'` is not cosmetic. Capture is gated on published status, so a
+      // built-in seeded as a draft emits no reference change and labs receive ZERO designs.
+    } else if (designContentFingerprint(existing) !== designContentFingerprint(d)) {
       // Managed-overwrite, same contract as SEED_QUERIES above: built-in ids are PRODUCT-OWNED, so
       // a shipped fix reaches an existing install instead of only fresh ones. Before this, these
       // were create-if-absent, which meant a corrected built-in design could never reach anybody
       // who already had the old one.
       // ⚠ An operator who edits a built-in IN PLACE loses those edits here. That is the accepted
       // trade: customise via Duplicate (⋯ menu), which mints a new id this loop never iterates.
-      await deps.designs.update(d.id, d);
+      await deps.designs.update(d.id, { ...d, status: 'published' });
       designsUpdated += 1;
     }
   }
