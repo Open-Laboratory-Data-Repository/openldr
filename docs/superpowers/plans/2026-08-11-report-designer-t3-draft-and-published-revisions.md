@@ -804,27 +804,24 @@ Replace the private `designContent` function with the shared one — change its 
 import { designContentFingerprint } from '@openldr/report-designer/pure';
 ```
 
-```ts
-/** The parts of a seeded design the product owns. Delegates to the shared lifecycle fingerprint so
- *  the seed's drift check and the store's un-publish check can never disagree — T1's defect was
- *  exactly those two answers differing. */
-function designContent(d: ReportDesign): string {
-  return designContentFingerprint(d);
-}
-```
+**Delete the private `designContent` function entirely** and call the shared one at its use sites. A wrapper that only forwards to another function is indirection without benefit — the point of this change is that there is exactly ONE definition, and leaving a local alias invites the two to drift apart again later.
 
-Then in the seed loop, stamp the status on both paths:
+Then in the seed loop, use the shared fingerprint directly and stamp the status on both paths:
 
 ```ts
     const existing = await deps.designs.get(d.id);
     if (!existing) {
       await deps.designs.create({ ...d, status: 'published' });
       designsSeeded += 1;
-    } else if (designContent(existing) !== designContent(d)) {
+      // ⛔ `status: 'published'` is not cosmetic. Capture is gated on published status, so a
+      // built-in seeded as a draft emits no reference change and labs receive ZERO designs.
+    } else if (designContentFingerprint(existing) !== designContentFingerprint(d)) {
       await deps.designs.update(d.id, { ...d, status: 'published' });
       designsUpdated += 1;
     }
 ```
+
+Check for other callers of `designContent` before deleting it (`grep -n "designContent" packages/reporting/src/seed/report-seeds.ts`) and update each to the shared function.
 
 ⚠ `status` is deliberately absent from `designContentFingerprint`, so stamping it cannot itself trigger drift on the next boot.
 
