@@ -99,7 +99,7 @@ function dashboardRow(id: string, body: unknown) {
   };
 }
 
-// Mirrors packages/db/src/report-store.ts toRow.
+// Mirrors packages/report-designer/src/store.ts toRow.
 interface ReportDesignBody {
   name: string;
   paper?: string;
@@ -107,6 +107,7 @@ interface ReportDesignBody {
   pages?: unknown[];
   parameters?: unknown[];
   margins?: unknown | null;
+  pageNumbers?: boolean;
 }
 function reportDesignRow(id: string, body: unknown) {
   const d = body as ReportDesignBody;
@@ -118,6 +119,9 @@ function reportDesignRow(id: string, body: unknown) {
     pages: JSON.stringify(d.pages ?? []),
     parameters: JSON.stringify(d.parameters ?? []),
     margins: d.margins == null ? null : JSON.stringify(d.margins),
+    // `?? null` not `?? false` — writing `false` for an unset flag would drift the lab's row away
+    // from central's `undefined` and change its content hash (see packages/report-designer/src/store.ts hashOf).
+    page_numbers: d.pageNumbers ?? null,
     updated_at: sql`now()`,
     managed_origin: MANAGED,
   };

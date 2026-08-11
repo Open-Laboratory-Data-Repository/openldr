@@ -48,8 +48,8 @@ function hashOf(d: ReportDesign): string {
   return canonicalHash({
     name: d.name, paper: d.paper, orientation: d.orientation,
     pages: d.pages, parameters: d.parameters, margins: d.margins,
-    // Omitted until T1: a page-numbers toggle produced an unchanged hash, so the de-dupe in
-    // recordReferenceChange suppressed it and the change never reached a lab.
+    // This field was previously absent here: a page-numbers toggle produced an unchanged hash, so
+    // the de-dupe in recordReferenceChange suppressed it and the change never reached a lab.
     pageNumbers: d.pageNumbers,
   });
 }

@@ -140,6 +140,33 @@ describe('ReportDesignStore', () => {
     await store.create({ ...makeDesign('h-on', 'Same'), pageNumbers: true });
     expect(hashes[0]).not.toBe(hashes[1]);
   });
+
+  // Finding 3 (final whole-branch review of T1): the spec's recurrence guard requires proving
+  // hashOf's coverage per field, not just for pageNumbers. Without this, a future field dropped from
+  // hashOf alone (it still persists via toRow/fromRow, it just never syncs) would pass every other
+  // test in this file. `id`, `createdAt` and `updatedAt` are deliberately NOT hashed and must not
+  // appear in this table. A new hashed field is a one-line addition here.
+  const HASHED_FIELD_MUTATIONS: Array<[string, (d: ReportDesign) => ReportDesign]> = [
+    ['name', (d) => ({ ...d, name: 'Different Name' })],
+    ['paper', (d) => ({ ...d, paper: 'Letter' })],
+    ['orientation', (d) => ({ ...d, orientation: 'landscape' })],
+    ['pages', (d) => ({ ...d, pages: [{ id: 'other-page', elements: [] }] })],
+    ['parameters', (d) => ({ ...d, parameters: [{ key: 'k', label: 'K' }] })],
+    ['margins', (d) => ({ ...d, margins: { top: 1, right: 2, bottom: 3, left: 4 } })],
+    ['pageNumbers', (d) => ({ ...d, pageNumbers: true })],
+  ];
+
+  it('hashOf changes when any individually-hashed field is mutated', async () => {
+    for (const [field, mutate] of HASHED_FIELD_MUTATIONS) {
+      const { capture, hashes } = spyCapture();
+      const store = createReportDesignStore(db, capture);
+      const baseline = makeDesign(`hf-${field}-base`, 'Baseline');
+      const mutated = mutate(makeDesign(`hf-${field}-mut`, 'Baseline'));
+      await store.create(baseline);
+      await store.create(mutated);
+      expect(hashes[1], `hashOf did not change when '${field}' was mutated`).not.toBe(hashes[0]);
+    }
+  });
 });
 
 // The defect this slice fixes was "a field nobody remembered". A fixture alone cannot catch the
@@ -152,11 +179,15 @@ const KNOWN_TOP_LEVEL_FIELDS = [
 
 describe('ReportDesign round-trip completeness', () => {
   it('has no top-level schema field the store has not been taught about', () => {
-    // FAILING HERE? You added a field to ReportDesignSchema. Do all three:
+    // FAILING HERE? You added a field to ReportDesignSchema. Do all four:
     //   1. persist it in `toRow` and read it in `fromRow` (packages/report-designer/src/store.ts),
     //      adding a column via a migration if it is not inside the `pages` jsonb blob;
     //   2. add it to `hashOf`, or it will never sync;
-    //   3. add it to KNOWN_TOP_LEVEL_FIELDS and to EVERY_FIELD below, with a non-default value.
+    //   3. add it to KNOWN_TOP_LEVEL_FIELDS and to EVERY_FIELD below, with a non-default value;
+    //   4. add it to `reportDesignRow` in packages/db/src/reference-apply.ts, or it will persist on
+    //      this side but a design pulled from central will never carry it to a lab (this is exactly
+    //      the gap the final whole-branch review of slice T1 found: the field was in `hashOf` but
+    //      not in the lab-side applier, so the hash moved and the value still never arrived).
     expect(Object.keys(ReportDesignSchema.shape).sort()).toEqual([...KNOWN_TOP_LEVEL_FIELDS].sort());
   });
 
@@ -174,6 +205,15 @@ describe('ReportDesign round-trip completeness', () => {
       }],
       pageNumbers: true,
     };
+
+    // The KNOWN_TOP_LEVEL_FIELDS tripwire above only checks the schema's key SET. A new field can be
+    // added there alone and the array-equality check passes without EVERY_FIELD (or toRow/fromRow/
+    // hashOf) ever being touched, because every field added to this schema so far — margins,
+    // pageNumbers, createdAt, updatedAt — has been optional, so the ReportDesign type annotation on
+    // EVERY_FIELD does not force the compiler to catch the omission either. This assertion makes
+    // fixture completeness an actual check instead of a comment three lines above asking nicely.
+    expect(Object.keys(EVERY_FIELD).sort())
+      .toEqual(KNOWN_TOP_LEVEL_FIELDS.filter((f) => f !== 'createdAt' && f !== 'updatedAt').sort());
 
     const store = createReportDesignStore(db);
     await store.create(EVERY_FIELD);

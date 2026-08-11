@@ -221,6 +221,32 @@ describe('applyReferenceChange', () => {
     await db.destroy();
   });
 
+  // Finding 1 (final whole-branch review): reportDesignRow previously omitted pageNumbers entirely,
+  // so a design pulled from central landed with page_numbers NULL on insert, and — because the SET
+  // list in upsertOrDelete is derived from this same row — an update never touched the column
+  // either, leaving the lab's stale value in place. This is the propagation that adding the field to
+  // hashOf (packages/report-designer/src/store.ts) was meant to enable.
+  it('carries pageNumbers through on insert', async () => {
+    const db = await makeMigratedDb();
+    const apply = createReferenceApplier(db);
+    const body = { name: 'Quarterly', paper: 'A4', orientation: 'landscape', pages: [{ n: 1 }], parameters: [], margins: { top: 10 }, pageNumbers: true };
+    expect(await apply({ entityType: 'report_design', entityId: 'rd-pn', op: 'upsert', body })).toBe('applied');
+    const row: any = await db.selectFrom('report_designs').selectAll().where('id', '=', 'rd-pn').executeTakeFirst();
+    expect(row?.page_numbers).toBe(true);
+    await db.destroy();
+  });
+
+  it('carries a pageNumbers toggle through on update, not just insert', async () => {
+    const db = await makeMigratedDb();
+    const apply = createReferenceApplier(db);
+    const body = { name: 'Quarterly', paper: 'A4', orientation: 'landscape', pages: [{ n: 1 }], parameters: [], margins: { top: 10 } };
+    await apply({ entityType: 'report_design', entityId: 'rd-pn2', op: 'upsert', body });
+    await apply({ entityType: 'report_design', entityId: 'rd-pn2', op: 'upsert', body: { ...body, pageNumbers: true } });
+    const row: any = await db.selectFrom('report_designs').selectAll().where('id', '=', 'rd-pn2').executeTakeFirst();
+    expect(row?.page_numbers).toBe(true);
+    await db.destroy();
+  });
+
   it('report_design delete removes a central row but NOT a lab-local one', async () => {
     const db = await makeMigratedDb();
     const apply = createReferenceApplier(db);
