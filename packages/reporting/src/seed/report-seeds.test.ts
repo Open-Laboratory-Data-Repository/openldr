@@ -1237,3 +1237,13 @@ describe('SEED_DESIGNS — the antibiogram is transposed because it cannot fit o
     }
   });
 });
+
+describe('SEED_DESIGNS — no built-in id can collide with a designer-minted id', () => {
+  it('no built-in design id can collide with a designer-minted id', () => {
+    // ⛔ The designer mints `rt-${Date.now()}` for New template and Duplicate. Duplicate is the
+    // sanctioned way to customise a built-in without the boot seed overwriting the edits, which
+    // only holds while the minted id lands OUTSIDE the ids this loop iterates. A built-in named
+    // `rt-<digits>` would silently break that guarantee.
+    expect(SEED_DESIGNS.filter((d) => /^rt-\d+$/.test(d.id))).toEqual([]);
+  });
+});

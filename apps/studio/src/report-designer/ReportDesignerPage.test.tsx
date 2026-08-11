@@ -3,7 +3,6 @@ import { render, screen, fireEvent, within, waitFor } from '@testing-library/rea
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { ReportDesignerPage } from './ReportDesignerPage';
 import { createReportDesign, updateReportDesign, deleteReportDesign, listReportDesigns } from '../api';
-import { SEED_DESIGNS } from '@openldr/reporting';
 
 // Mock the API layer: the list + single-design loads resolve from the mock seed data (which the
 // existing editor tests depend on), and the mutating calls resolve so we can assert they fire.
@@ -309,12 +308,18 @@ describe('ReportDesignerPage', () => {
     // overwrote the copy) — the whole point of Duplicate is that this can never happen. Save is the
     // only way this test can observe the minted id, so trigger it here even though Duplicate itself
     // stays transient until the author chooses to.
+    //
+    // The full invariant is split across two packages so this suite doesn't have to depend on
+    // @openldr/reporting (which drags in @openldr/db + kysely): this half pins the SHAPE the
+    // designer controls — `rt-${Date.now()}`, i.e. `rt-` followed by digits, distinct from the
+    // source id. The other half — that no built-in id in SEED_DESIGNS can ever take that shape —
+    // is pinned in packages/reporting/src/seed/report-seeds.test.ts.
     await openKebab();
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Save' }));
     await waitFor(() => expect(createReportDesign).toHaveBeenCalled());
     const created = vi.mocked(createReportDesign).mock.calls[0][0] as { id: string };
     expect(created.id).not.toBe('rt-amr-summary');
-    expect(SEED_DESIGNS.map((d) => d.id)).not.toContain(created.id);
+    expect(created.id).toMatch(/^rt-\d+$/);
   });
 
   it('deletes the open design after confirmation via deleteReportDesign', async () => {
