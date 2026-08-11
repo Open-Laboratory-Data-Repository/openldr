@@ -40,6 +40,33 @@ const CONTROLLED_FIELD_PREFIXES = [
   'urn:openldr:cs:facility-country:',
 ];
 
+/** Parameters one statement may bind, kept under Postgres's hard 65535 ceiling with margin for the
+ *  fixed parameters a statement carries besides its chunked list (`plugin_id` and `collection` on
+ *  the `plugin_data` reads below).
+ *
+ *  ⛔ Copied, not imported, for the same frozen-snapshot reason as the constants above. The value and
+ *  the sizing rule mirror `PG_PARAM_BUDGET` and `chunkSize` in `packages/db/src/batch-upsert.ts`;
+ *  `chunk` below mirrors the helper of the same name in `packages/bootstrap/src/facility-import.ts`.
+ *  Importing either would let a later edit to those modules change what this migration does on an
+ *  install that has not run it yet. */
+const PG_PARAM_BUDGET = 60000;
+
+/** How many rows one statement may carry when each row binds `columns` parameters.
+ *
+ *  ⛔ Sized from the ACTUAL column count, never a fixed row cap: each row of a multi-row statement
+ *  binds one parameter PER COLUMN, so a cap that is safe for a one-column id list silently blows the
+ *  ceiling on a three-column insert. Exported so a test can pin the arithmetic against Postgres's
+ *  65535 rather than re-deriving it from this same code. */
+export function rowsPerStatement(columns: number, budget: number = PG_PARAM_BUDGET): number {
+  return Math.max(1, Math.floor(budget / Math.max(1, columns)));
+}
+
+function chunk<T>(items: readonly T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
+
 /** The exact algorithm `observedFieldSystem` and `observedSystemForFeed` use — duplicated, not
  *  imported, for the frozen-snapshot reason above (and `@openldr/bootstrap` is downstream of this
  *  package anyway). */
@@ -220,8 +247,21 @@ function assertNoIdClash(moves: Move[], allRows: RegistryRow[]): void {
  *  - `facility_import_runs.national_system`. It names a REGISTER, and its `active_key` is derived
  *    per register; left behind, the run history for a register no longer joins to it. The file
  *    hash, counts and actor of each run are untouched — only the register's spelling changes.
+ *
+ * ⛔ EVERY LIST-BOUND STATEMENT BELOW IS CHUNKED. `moves` holds one entry per moved facility, which
+ * on an upgrade install is every row of a national register. Sending that list as one statement
+ * exceeds Postgres's 65535-parameter ceiling — measured on real Postgres at 22 000 facilities, where
+ * the three-column projection insert bound 66 000 parameters and node-postgres reported
+ * `bind message has 464 parameter formats but 0 parameters` (08P01): the wire protocol's count field
+ * is a 16-bit integer, so 66 000 wraps to 464. `apps/server` migrates on boot, so an unchunked
+ * statement here is a failed upgrade start, not a slow one.
+ *
+ * `paramBudget` exists so a pg-mem test can drive the chunking loops with a budget small enough to
+ * reach a second chunk in a handful of rows — pg-mem has no parameter ceiling and cannot reproduce
+ * the failure, and 22 000 rows through it takes minutes. `up()` never passes it. The default is what
+ * runs in production, and a separate test pins that default against 65535.
  */
-export async function rekey<DB>(db: Kysely<DB>): Promise<void> {
+export async function rekey<DB>(db: Kysely<DB>, paramBudget: number = PG_PARAM_BUDGET): Promise<void> {
   const anyDb = db as unknown as Kysely<any>;
 
   const rows: RegistryRow[] = await anyDb
@@ -275,13 +315,23 @@ export async function rekey<DB>(db: Kysely<DB>): Promise<void> {
   const newIdByOld = new Map(moves.map((m) => [m.oldId, m.newId]));
   const oldIds = moves.map((m) => m.oldId);
 
+  // Each id in an `in (…)` list binds one parameter, so the list is split by the one-column size.
+  // Every phase below runs to completion before the next begins — the deletes must ALL land before
+  // the parent rows move, or the FK refuses the update for whichever chunk had not been cleared yet.
+  const idChunks = chunk(oldIds, rowsPerStatement(1, paramBudget));
+
   // 2. Lift the projection links out of the way of the FK (see this function's ⛔ note), …
-  const links = await anyDb
-    .selectFrom('facility_concept_projection')
-    .selectAll()
-    .where('registry_id', 'in', oldIds)
-    .execute() as { registry_id: string; concept_code: string }[];
-  await anyDb.deleteFrom('facility_concept_projection').where('registry_id', 'in', oldIds).execute();
+  const links: { registry_id: string; concept_code: string }[] = [];
+  for (const ids of idChunks) {
+    links.push(...await anyDb
+      .selectFrom('facility_concept_projection')
+      .selectAll()
+      .where('registry_id', 'in', ids)
+      .execute() as { registry_id: string; concept_code: string }[]);
+  }
+  for (const ids of idChunks) {
+    await anyDb.deleteFrom('facility_concept_projection').where('registry_id', 'in', ids).execute();
+  }
 
   // 3. … move the registry rows themselves, …
   for (const m of moves) {
@@ -300,13 +350,20 @@ export async function rekey<DB>(db: Kysely<DB>): Promise<void> {
     // The `?? l.registry_id` fallbacks are unreachable — `links` was selected `where registry_id in
     // oldIds` and `newIdByOld` is keyed on exactly those ids — and exist only to keep the value a
     // `string` rather than `string | undefined`.
-    await anyDb.insertInto('facility_concept_projection').values(links.map((l) => ({
+    const linkRows = links.map((l) => ({
       ...l,
       registry_id: newIdByOld.get(l.registry_id) ?? l.registry_id,
       concept_code: l.concept_code === l.registry_id
         ? (newIdByOld.get(l.registry_id) ?? l.registry_id)
         : l.concept_code,
-    })) as never).execute();
+    }));
+    // `selectAll()` above means these rows carry every column the table has, so the chunk is sized
+    // from the row's own key count rather than a number written here that a later column would
+    // falsify. This is the statement that failed first on real Postgres: three columns, so one
+    // statement covers only 65535/3 = 21845 facilities.
+    for (const part of chunk(linkRows, rowsPerStatement(Object.keys(linkRows[0]).length, paramBudget))) {
+      await anyDb.insertInto('facility_concept_projection').values(part as never).execute();
+    }
   }
 
   // 5. Everything else that names the old id as a plain string.
@@ -334,27 +391,37 @@ export async function rekey<DB>(db: Kysely<DB>): Promise<void> {
   //    row KEY (part of the primary key, so the row is re-inserted rather than updated) and a field
   //    inside the jsonb doc. The doc is rewritten in JS, not with a jsonb operator, so this works
   //    the same on every dialect and under pg-mem.
-  const orgUnitDocs = await anyDb
-    .selectFrom('plugin_data')
-    .selectAll()
-    .where('plugin_id', '=', DHIS2_PLUGIN_ID)
-    .where('collection', '=', DHIS2_ORG_UNIT_COLLECTION)
-    .where('key', 'in', oldIds)
-    .execute() as { key: string; doc: unknown }[];
-  if (orgUnitDocs.length > 0) {
-    await anyDb.deleteFrom('plugin_data')
+  const orgUnitDocs: { key: string; doc: unknown }[] = [];
+  for (const ids of idChunks) {
+    orgUnitDocs.push(...await anyDb
+      .selectFrom('plugin_data')
+      .selectAll()
       .where('plugin_id', '=', DHIS2_PLUGIN_ID)
       .where('collection', '=', DHIS2_ORG_UNIT_COLLECTION)
-      .where('key', 'in', oldIds)
-      .execute();
-    await anyDb.insertInto('plugin_data').values(orgUnitDocs.map((row) => {
+      .where('key', 'in', ids)
+      .execute() as { key: string; doc: unknown }[]);
+  }
+  if (orgUnitDocs.length > 0) {
+    for (const ids of idChunks) {
+      await anyDb.deleteFrom('plugin_data')
+        .where('plugin_id', '=', DHIS2_PLUGIN_ID)
+        .where('collection', '=', DHIS2_ORG_UNIT_COLLECTION)
+        .where('key', 'in', ids)
+        .execute();
+    }
+    const docRows = orgUnitDocs.map((row) => {
       const newId = newIdByOld.get(row.key) ?? row.key;
       const doc = typeof row.doc === 'string' ? JSON.parse(row.doc) : row.doc;
       const rewritten = doc && typeof doc === 'object' && (doc as { facilityId?: unknown }).facilityId === row.key
         ? { ...(doc as object), facilityId: newId }
         : doc;
       return { ...row, key: newId, doc: JSON.stringify(rewritten) };
-    }) as never).execute();
+    });
+    // Sized from the row's own key count for the same reason as the projection insert above —
+    // `plugin_data` is five columns wide, so its safe rows-per-statement is a different number.
+    for (const part of chunk(docRows, rowsPerStatement(Object.keys(docRows[0]).length, paramBudget))) {
+      await anyDb.insertInto('plugin_data').values(part as never).execute();
+    }
   }
 
   // 7. Per-VALUE rewrites — the three locations that name the register STRING rather than a facility
