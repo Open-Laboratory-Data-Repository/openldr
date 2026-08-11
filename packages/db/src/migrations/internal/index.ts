@@ -80,6 +80,7 @@ import * as m078 from './078_one_active_facility_resolution';
 import * as m079 from './079_facility_jobs';
 import * as m080 from './080_facility_import_runs';
 import * as m081 from './081_facility_source_and_register_state';
+import * as m082 from './082_facility_canonical_identity';
 
 export const internalMigrations: Record<string, Migration> = {
   '001_fhir_resources': { up: m001.up, down: m001.down },
@@ -163,4 +164,5 @@ export const internalMigrations: Record<string, Migration> = {
   '079_facility_jobs': { up: m079.up, down: m079.down },
   '080_facility_import_runs': { up: m080.up, down: m080.down },
   '081_facility_source_and_register_state': { up: m081.up, down: m081.down },
+  '082_facility_canonical_identity': { up: m082.up, down: m082.down },
 };
