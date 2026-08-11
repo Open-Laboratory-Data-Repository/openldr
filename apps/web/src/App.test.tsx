@@ -14,7 +14,13 @@ describe('App routes', () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByRole('heading', { name: 'OpenLDR' })).toBeInTheDocument();
+    const heading = screen.getByRole('heading', { name: 'OpenLDR' });
+    const workflow = screen.getByLabelText(/openldr ingest workflow/i);
+
+    expect(heading).toBeInTheDocument();
+    // The workflow canvas sits below the hero copy, not beside it.
+    expect(heading.compareDocumentPosition(workflow) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByText(/build your own workflows/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/openldr install command/i)).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: /Install OpenLDR in one line/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'The pieces you need, shown directly.' })).not.toBeInTheDocument();

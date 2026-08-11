@@ -9,7 +9,7 @@ export function Hero() {
   };
 
   return (
-    <section className="mx-auto grid max-w-6xl items-center gap-8 px-6 py-16 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.25fr)] lg:py-20">
+    <section className="mx-auto grid max-w-6xl items-center gap-10 px-6 py-16 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.25fr)] lg:py-20">
       <div>
         <p className="text-xs font-semibold uppercase text-primary">Open laboratory data repository</p>
         <h1 className="mt-3 text-4xl font-semibold tracking-normal sm:text-5xl">OpenLDR</h1>
@@ -32,7 +32,7 @@ export function Hero() {
       <ScreenshotFrame
         name="dashboard-overview.png"
         alt="OpenLDR dashboard overview"
-        caption="Studio dashboard overview"
+        chrome
         priority
       />
     </section>

@@ -1,5 +1,6 @@
 import { Routes, Route, Link } from 'react-router-dom';
 import { Hero } from '@/components/Hero';
+import { WorkflowPreview } from '@/components/WorkflowPreview';
 import { InstallBlock } from '@/components/InstallBlock';
 import { Footer } from '@/components/Footer';
 import { DocsPage } from '@/docs/DocsPage';
@@ -8,7 +9,21 @@ function Landing() {
   return (
     <>
       <Hero />
-      <InstallBlock />
+      {/* Full-bleed rules separate the landing sections, matching the header and footer. */}
+      <div className="border-t border-border">
+        <div className="mx-auto max-w-6xl px-6 py-16 text-center">
+          <p className="mx-auto max-w-2xl text-base leading-7 text-muted-foreground">
+            Build your own workflows. Drag nodes to decide how each payload is routed, checked,
+            and stored.
+          </p>
+          <div className="mt-10">
+            <WorkflowPreview />
+          </div>
+        </div>
+      </div>
+      <div className="border-t border-border">
+        <InstallBlock />
+      </div>
     </>
   );
 }
