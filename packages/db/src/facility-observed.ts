@@ -80,7 +80,11 @@ export interface ObservedFacilityInput {
   /** The wire-supplied display (`DiagnosticReport.performer[0].display`, e.g. "Aga Khan") to seed a
    *  NEW concept's display with, in preference to the bare code ("BAMAA"). Never overrides an
    *  operator-curated `existing.display` — that always wins. Falls back to `code` when absent
-   *  (a sender with no display either) or blank. */
+   *  (a sender with no display either) or blank.
+   *
+   *  ⚠ "Curated" means `existing.display !== code`. A stored display EQUAL to the code is this
+   *  function's own fallback, not operator work, and this value replaces it — see the doc comment
+   *  below. */
   defaultDisplay?: string | null;
 }
 
@@ -103,6 +107,19 @@ export interface ConceptRowInput {
  * have curated it) and `firstSeen` is carried forward — SCAN TO SCAN. Only `lastSeen` and
  * `reportCount` advance in that path.
  *
+ * ⛔ "Operator work" is `existing.display !== input.code`. A stored display EQUAL to the code is
+ * this function's OWN fallback from a capture that had no display to offer, and `defaultDisplay`
+ * replaces it. Protecting it as if curated is what made the live bug permanent: the ingest hook
+ * created every concept with `display = code` (it never passed `defaultDisplay`), and then every
+ * later scan — which DOES pass it — preserved that value forever. All 88 `urn:openldr:default_fac`
+ * concepts read `0EJAA` while `diagnostic_reports.performer_display` said `Korogwe`.
+ *
+ * ⚠ The rule cannot tell "still the default" from "an operator deliberately typed the code as the
+ * name". The second case loses its display to the wire's on the next scan. That is accepted: the
+ * two are indistinguishable in the stored row, and the first case is the one that actually happens.
+ * Distinguishing them would need a "display was curated" flag in `properties`, which `terms.update`
+ * would destroy anyway (see the ⚠ below).
+ *
  * ⚠ This function cannot guarantee `firstSeen` survives an operator edit made through the
  * terminology admin store's `terms.update()`. That path's `packProps` (`terminology-admin-store.ts`
  * lines 185-193) keeps only `shortName`/`class`/`unit`/`replacedBy`/`metadata` and drops everything
@@ -116,10 +133,15 @@ export function observedFacilityConceptRow(input: ObservedFacilityInput): Concep
   const prior = (input.existing?.properties ?? null) as Partial<ObservedFacilityProperties> | null;
   const firstSeen = typeof prior?.firstSeen === 'string' ? prior.firstSeen : input.seenAt;
   const defaultDisplay = input.defaultDisplay && input.defaultDisplay.trim() !== '' ? input.defaultDisplay : null;
+  // `undefined` (no existing row) and a display equal to the code (this function's own fallback)
+  // both fall through to `defaultDisplay`; only a display that DIFFERS from the code is curated.
+  const curated = input.existing?.display != null && input.existing.display !== input.code
+    ? input.existing.display
+    : null;
   return {
     system: input.system,
     code: input.code,
-    display: input.existing?.display ?? defaultDisplay ?? input.code,
+    display: curated ?? defaultDisplay ?? input.code,
     status: 'ACTIVE',
     properties: { firstSeen, lastSeen: input.seenAt, reportCount: input.reportCount },
   };

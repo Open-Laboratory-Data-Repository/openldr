@@ -978,6 +978,47 @@ describe('facility identifier: performer_display and performer_system', () => {
     expect(rows[0].display).toBe('Dodoma');
   });
 
+  // ⛔ The repair path for the 88 live concepts. The ingest hook created each one with
+  // `display = code` before it threaded the wire display through, and a scan used to preserve ANY
+  // existing display — so the wrong value was permanent. A display equal to the code is now treated
+  // as "never named", and the scan repairs it from `performer_display`.
+  it('scan repairs an existing concept whose display is still the bare code', async () => {
+    const deps = await makeReconcileDeps();
+    await seedPerformers(deps, [['0EJAA', 2]], { performerDisplay: 'Korogwe' });
+    // The pre-fix state, written the way the ingest hook wrote it: display = code, no display known.
+    await captureObservedFacility(deps, DEFAULT_OBSERVED_FACILITY_SYSTEM, '0EJAA', '2026-08-06T03:53:24.450Z');
+    const before = await deps.internalDb
+      .selectFrom('terminology_concepts')
+      .select(['display'])
+      .where('system', '=', DEFAULT_OBSERVED_FACILITY_SYSTEM)
+      .where('code', '=', '0EJAA')
+      .executeTakeFirstOrThrow();
+    expect(before.display).toBe('0EJAA'); // not vacuous: the broken state really is set up
+
+    await scanObservedFacilities(deps, { now: '2026-08-12T00:00:00.000Z', apply: true });
+
+    const { rows } = await deps.admin.terms.search(DEFAULT_OBSERVED_FACILITY_SYSTEM, { limit: 10, offset: 0 });
+    expect(rows[0].display).toBe('Korogwe');
+  });
+
+  // The other side of the repair rule — a scan must still never overwrite a name an operator typed.
+  it('scan leaves an operator-curated display alone', async () => {
+    const deps = await makeReconcileDeps();
+    await seedPerformers(deps, [['BAMAA', 1]], { performerDisplay: 'Aga Khan' });
+    await scanObservedFacilities(deps, { now: '2026-08-05T00:00:00.000Z', apply: true });
+    await deps.internalDb
+      .updateTable('terminology_concepts')
+      .set({ display: 'Aga Khan Hospital, Dar es Salaam' })
+      .where('system', '=', DEFAULT_OBSERVED_FACILITY_SYSTEM)
+      .where('code', '=', 'BAMAA')
+      .execute();
+
+    await scanObservedFacilities(deps, { now: '2026-08-12T00:00:00.000Z', apply: true });
+
+    const { rows } = await deps.admin.terms.search(DEFAULT_OBSERVED_FACILITY_SYSTEM, { limit: 10, offset: 0 });
+    expect(rows[0].display).toBe('Aga Khan Hospital, Dar es Salaam');
+  });
+
   // The wire is more authoritative than our own source_system-based inference — a sender that
   // supplies `identifier.system` gets its concept registered under THAT system, not the one
   // `observedSystemForFeed(source_system)` would have derived.
@@ -2667,6 +2708,30 @@ describe('captureObservedFacilityFromProjection', () => {
     // Must NOT have landed in the default system.
     const { total: defaultTotal } = await deps.admin.terms.search(DEFAULT_OBSERVED_FACILITY_SYSTEM, { limit: 10, offset: 0 });
     expect(defaultTotal).toBe(0);
+  });
+
+  // ⛔ The live bug. `projectDiagnosticReport` already returns `performer_display` alongside
+  // `performer` — the relational writer stores it as `diagnostic_reports.performer_display` — but
+  // this hook read only `performer`/`performer_system` and dropped the name. Every concept was
+  // therefore created with `display = code`, and because a scan preserves an existing display, no
+  // later scan could repair it. All 88 live `urn:openldr:default_fac` concepts read as their code.
+  it("seeds the concept display from the wire's performer display, not the bare code", async () => {
+    const deps = await makeReconcileDeps();
+    const resource = {
+      resourceType: 'DiagnosticReport',
+      id: 'dr-display-1',
+      performer: [{ identifier: { system: DEFAULT_OBSERVED_FACILITY_SYSTEM, value: '0EJAA' }, display: 'Korogwe' }],
+    };
+
+    await captureObservedFacilityFromProjection(deps, 'DiagnosticReport', resource, 'webhook-ingest', '2026-08-05T00:00:00.000Z');
+
+    const row = await deps.internalDb
+      .selectFrom('terminology_concepts')
+      .select(['code', 'display'])
+      .where('system', '=', DEFAULT_OBSERVED_FACILITY_SYSTEM)
+      .executeTakeFirstOrThrow();
+    expect(row.code).toBe('0EJAA');
+    expect(row.display).toBe('Korogwe');
   });
 
   // Same system preference as scan/resolve: a resource carrying `performer[0].identifier.system`

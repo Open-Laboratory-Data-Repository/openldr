@@ -1865,6 +1865,11 @@ export async function reprojectAfterRegistryDelete(
  * over the warehouse this path cannot see from a single resource; the scan owns it. A code first
  * seen here carries `reportCount: 0` until the next scan corrects it.
  *
+ * `display` is the wire's `performer[0].display`, and it MATTERS: this is the path that first
+ * creates the concept, so a missing display here is what an operator sees in `/terminology` until
+ * someone runs a scan. Omitting it created 88 concepts named after their own code. It is only ever
+ * a DEFAULT — `observedFacilityConceptRow` keeps a curated display over it.
+ *
  * ⛔ Do NOT go through `deps.admin.terms.search` to check for an existing concept, and do not
  * "simplify" this back to that call. `terms.search` runs `lower(code) LIKE %query%` ordered by
  * `code` (`terminology-admin-store.ts`'s `terms.search`) and this call sites a `limit: 1` page — so
@@ -1886,6 +1891,7 @@ export async function captureObservedFacility(
   system: string,
   code: string,
   now: string,
+  display?: string | null,
 ): Promise<void> {
   if (!code) return;
   const existing = await deps.internalDb
@@ -1899,7 +1905,7 @@ export async function captureObservedFacility(
   // unconditionally — see `registerObservedSystem`'s doc comment for why.
   await registerObservedSystem(deps, system);
   await deps.admin.terms.importRows([
-    observedFacilityConceptRow({ system, code, seenAt: now, reportCount: 0 }),
+    observedFacilityConceptRow({ system, code, seenAt: now, reportCount: 0, defaultDisplay: display }),
   ]);
 }
 
@@ -1984,7 +1990,12 @@ export async function captureObservedFacilityFromProjection(
   // system`) wins over the feed-based inference, so a code captured here at ingest time lands
   // under the SAME system a later full scan would also file it under.
   const system = resolvedObservedSystem(projected.performer_system, sourceSystem);
-  await captureObservedFacility(deps, system, performer, now);
+  // ⛔ `performer_display` comes from the SAME `projectDiagnosticReport` call as `performer`, so the
+  // name stored on the concept and the one the Observed tab reads off
+  // `diagnostic_reports.performer_display` can never disagree. Dropping it here is what created 88
+  // concepts displaying their own code: this hook is what first writes the concept, and
+  // `observedFacilityConceptRow` falls back to `code` when given no display.
+  await captureObservedFacility(deps, system, performer, now, projected.performer_display);
 }
 
 // ── Task 13: the mapping-conflict review queue ─────────────────────────────────────────────────

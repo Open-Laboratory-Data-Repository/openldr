@@ -196,6 +196,39 @@ describe('facility-observed', () => {
     expect(row.display).toBe('Aga Khan Hospital, Dar es Salaam');
   });
 
+  // ⛔ A stored display that is merely the bare code is NOT operator work — it is this function's
+  // OWN fallback from a capture that had no display to offer (the ingest path before it threaded
+  // `performer_display` through). Treating it as curated made it permanent: the concept was created
+  // at ingest with `display = code`, and every later scan preserved it, so all 88 live DEFAULT_FAC
+  // concepts read "0EJAA" while the wire said "Korogwe". Only a display that DIFFERS from the code
+  // can have come from an operator, so only that one is protected.
+  it('replaces a stored display that is merely the bare code with the wire display', () => {
+    const row = observedFacilityConceptRow({
+      system: DEFAULT_OBSERVED_FACILITY_SYSTEM,
+      code: '0EJAA',
+      seenAt: '2026-08-12T00:00:00.000Z',
+      reportCount: 2,
+      defaultDisplay: 'Korogwe',
+      existing: { display: '0EJAA', properties: { firstSeen: '2026-08-06T03:53:24.450Z' } },
+    });
+    expect(row.display).toBe('Korogwe');
+    // The repair must not cost the provenance it was carrying.
+    expect((row.properties as { firstSeen: string }).firstSeen).toBe('2026-08-06T03:53:24.450Z');
+  });
+
+  // The other half of the rule: with no wire display to repair TO, the code-as-display stays. A
+  // repair rule that blanked it instead would leave the operator with an empty name column.
+  it('keeps a stored display equal to the code when there is no wire display to repair to', () => {
+    const row = observedFacilityConceptRow({
+      system: DEFAULT_OBSERVED_FACILITY_SYSTEM,
+      code: '0EJAA',
+      seenAt: '2026-08-12T00:00:00.000Z',
+      reportCount: 2,
+      existing: { display: '0EJAA', properties: null },
+    });
+    expect(row.display).toBe('0EJAA');
+  });
+
   it('preserves firstSeen and a curated display when merging over an existing concept', () => {
     const row = observedFacilityConceptRow({
       system: DEFAULT_OBSERVED_FACILITY_SYSTEM,
