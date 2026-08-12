@@ -1,6 +1,9 @@
 import { Routes, Route, Link } from 'react-router-dom';
 import { Hero } from '@/components/Hero';
 import { WorkflowPreview } from '@/components/WorkflowPreview';
+import { FeatureGrid } from '@/components/FeatureGrid';
+import { MarketplaceTable } from '@/components/MarketplaceTable';
+import { Gallery } from '@/components/Gallery';
 import { InstallBlock } from '@/components/InstallBlock';
 import { Footer } from '@/components/Footer';
 import { GitHubLink } from '@/components/GitHubLink';
@@ -13,15 +16,26 @@ function Landing() {
       <Hero />
       {/* Full-bleed rules separate the landing sections, matching the header and footer. */}
       <div className="border-t border-border">
-        <div className="mx-auto max-w-6xl px-6 py-16 text-center">
-          <p className="mx-auto max-w-2xl text-base leading-7 text-muted-foreground">
-            Build your own workflows. Drag nodes to decide how each payload is routed, checked,
-            and stored.
-          </p>
-          <div className="mt-10">
-            <WorkflowPreview />
+        <FeatureGrid />
+      </div>
+      <div className="border-t border-border">
+        {/* Same heading-plus-subtitle block as the feature section above, so the two landing
+            sections introduce themselves the same way. */}
+        <div className="mx-auto max-w-6xl px-6 py-16">
+          <div className="mx-auto mb-12 max-w-2xl text-center">
+            <h2 className="text-3xl font-semibold tracking-tight">Build your own workflows</h2>
+            <p className="mt-3 text-base leading-7 text-muted-foreground">
+              Drag nodes to decide how each payload is routed, checked, and stored
+            </p>
           </div>
+          <WorkflowPreview />
         </div>
+      </div>
+      <div className="border-t border-border">
+        <MarketplaceTable />
+      </div>
+      <div className="border-t border-border">
+        <Gallery />
       </div>
       <div className="border-t border-border">
         <InstallBlock />

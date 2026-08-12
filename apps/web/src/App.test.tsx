@@ -21,6 +21,7 @@ describe('App routes', () => {
     // The workflow canvas sits below the hero copy, not beside it.
     expect(heading.compareDocumentPosition(workflow) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(screen.getByText(/build your own workflows/i)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /everything a laboratory network needs/i })).toBeInTheDocument();
     expect(screen.getByLabelText(/openldr install command/i)).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: /Install OpenLDR in one line/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'The pieces you need, shown directly.' })).not.toBeInTheDocument();
