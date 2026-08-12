@@ -473,6 +473,46 @@ describe('createFacilityImportWorker — apply phase', () => {
     expect(after?.phase).toBe('applied');
   });
 
+  // ⛔ TASK 8b: `columnMap` (@openldr/terminology's `FacilityColumnMap`) HAS TO SURVIVE INTO BOTH
+  // PHASES, and be the SAME one in each. It rides `run.options` exactly like `completeRelease` above
+  // (see that test's own comment) — `validateOptions`/`applyOptions` (facility-import-worker.ts) both
+  // spread `run.options` unconditionally, so this is a wiring test, not new worker logic: neither
+  // function needed to change for this to pass.
+  it('⛔ carries a columnMap from upload through validate AND apply — the same map both phases see', async () => {
+    // Neither header spells a contract field on its own — without the map `parseFacilityCsv` refuses
+    // the file for unrecognised columns (`parsed: 0`), exactly like the inline route's own test for
+    // the same file.
+    const MAPPED_CSV = 'MFL Code,Facility Name\n100,Dodoma Regional Referral\n';
+    const columnMap = { columns: { 'MFL Code': 'national_code', 'Facility Name': 'name' } };
+    const h = await harness(MAPPED_CSV);
+
+    const run = await h.runs.startUpload({
+      ...upload(), byteSize: MAPPED_CSV.length, options: { nationalSystem: SYSTEM, columnMap },
+    });
+
+    await h.worker.tickOnce();
+    const validated = await h.runs.get(run.id);
+    expect(validated?.status).toBe('awaiting_confirmation');
+    // The proof validate actually used the map: `parsed: 1`, not the `0` an unmapped file would give.
+    expect(validated?.summary).toMatchObject({ parsed: 1, unknownColumns: [], blocked: false });
+
+    // Mirrors what `POST .../confirm` computes server-side (`{ ...storedOptions, ...chosen }`, and
+    // `ConfirmSchema` has no `columnMap` key — see facilities-routes.ts) — the stored map survives
+    // the merge untouched.
+    expect(await h.runs.confirm(run.id, 'awaiting_confirmation', { nationalSystem: SYSTEM, columnMap })).toBe(true);
+    await h.worker.tickOnce();
+    await h.worker.stop();
+
+    const applied = await h.runs.get(run.id);
+    expect(applied?.status).toBe('applied');
+    const rows = await registryRows(h.db);
+    expect(rows).toHaveLength(1);
+    // The facility was actually written under the MAPPED fields — apply parsed with the same map
+    // validate did, not raw (unrecognised) headers.
+    expect(rows[0].national_code).toBe('100');
+    expect(rows[0].name).toBe('Dodoma Regional Referral');
+  });
+
   it('audits facility.import once, matching the inline route\'s record', async () => {
     const h = await harness(CSV);
     const runId = await uploadValidateConfirm(h, { nationalSystem: SYSTEM, allowMalformedRows: true });

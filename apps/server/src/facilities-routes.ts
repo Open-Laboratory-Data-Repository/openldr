@@ -5,6 +5,7 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 import type { Kysely } from 'kysely';
 import { z } from 'zod';
 import { appError } from '@openldr/core';
+import type { FacilityColumnMap } from '@openldr/terminology';
 import {
   importFacilities, resolveKnownNationalSystem, CONTROLLED_FIELDS, CONTROLLED_VALUE_SETS,
   resolveControlledFields, suggestColumns, suggestValues, saveFacilityValueMappings,
@@ -154,6 +155,19 @@ function nationalSystemSlug(nationalSystem: string): string {
   return slug || 'register';
 }
 
+// Task 8b (facility-import-mapping wire gap): the wire shape of `FacilityColumnMap`
+// (@openldr/terminology), validated for SHAPE ONLY. A semantically bad map (duplicate targets, an
+// unknown target, a missing required field) is NOT re-checked here — `parseFacilityCsv`'s own
+// `validateColumnMap` (reached inside `importFacilities`) already does that and reports it as
+// `blockedReason: 'column-map'`; checking twice would risk the two disagreeing about what "bad"
+// means. A shape failure (the wrong types) can never reach that check at all, so it has to be a 400
+// here rather than a crash inside the parser.
+const ColumnMapSchema = z.object({
+  columns: z.record(z.string()),
+  constants: z.record(z.string()).optional(),
+  extras: z.array(z.string()).optional(),
+});
+
 const ImportSchema = z.object({
   // ⚠ Minor fix: blank/whitespace-only content is refused here, not left to reach
   // `parseFacilityCsv` and come back as an all-zero `{ parsed: 0, ... }` 200 — a UI that only
@@ -200,6 +214,12 @@ const ImportSchema = z.object({
   // Recorded on the run for FAC-P1-03's "who imported which release and when"; never read by
   // `importFacilities` itself (which has no `releaseVersion` option).
   releaseVersion: z.string().optional(),
+  // Task 8b: how this file's own headers map onto the 16-field contract (`FacilityColumnMap`,
+  // @openldr/terminology) — see `ColumnMapSchema` above for what is (and isn't) checked here. Fed
+  // into the SAME `importOpts` object the handler builds below, which both the preview and the apply
+  // call read from — so the two can never see a different map, the exact bug class this sheet has
+  // hit before (see `ImportFacilitiesSheet.tsx:124`'s own comment on `allowMalformedRows`).
+  columnMap: ColumnMapSchema.optional(),
 });
 
 /** A2b Task 5: the operator's choices at the confirm step — the decisions the UPLOAD deliberately
@@ -223,7 +243,14 @@ const ImportSchema = z.object({
  *  stored declaration. The UPLOAD route takes it instead (see its `completeRelease` query
  *  parameter), which is the request that actually precedes the classification. What the operator
  *  decides HERE is `onAbsent` — whether a measured absence is acted on — and that split is the
- *  two-tier retirement design, not an omission. */
+ *  two-tier retirement design, not an omission.
+ *
+ *  ⛔ Task 8b: no `columnMap` either, and for the same PARSE-CHANGING reason `allowUnknownColumns`/
+ *  `allowInvalidCoordinates` stay off the two lines above. The map decides which rows the VALIDATE
+ *  turns into records at all — a confirm carrying one, honoured here, would authorise an apply over a
+ *  record set the operator never reviewed. The upload route takes it instead (its own `columnMap`
+ *  query parameter), stored on `run.options` before validate ever runs, which `chosen` below can then
+ *  never overwrite. */
 /** B1 Task 9: `POST /api/facilities/import/sources`' body — a fresh `coding_systems` row marked as
  *  a facility register (`registerSources.create`, `@openldr/db`). `url` is the canonical identity
  *  the import routes will accept from this point on; every other field is display/provenance only.
@@ -1615,6 +1642,11 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       onDeleted: p.data.onDeleted,
       onAbsent: p.data.onAbsent,
       onConflict: p.data.onConflict,
+      // Task 8b: threaded through unchanged from the request. `undefined` when the operator sent
+      // none — `parseFacilityCsv` treats an absent map exactly as it did before this option existed
+      // (headers must already BE the contract), so an import with no mapping decision behind it is
+      // unaffected.
+      columnMap: p.data.columnMap,
     };
 
     // Always preview first (importFacilities reads the registry — a chunked `WHERE id IN (...)`
@@ -1946,6 +1978,32 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       if (value !== undefined) parseOverrides[key] = value;
     }
 
+    // Task 8b: how this file's own headers map onto the contract — the SAME parse-changing family as
+    // `allowUnknownColumns`/`allowInvalidCoordinates` just above, and belongs to the UPLOAD for the
+    // identical reason: the worker's VALIDATE phase is what turns this file into the summary an
+    // operator reviews, so a map arriving only at confirm time would let an operator confirm a
+    // summary the apply then contradicts — the exact bug class this route's sibling gate exists to
+    // close (see the confirm route's own "parse-override gate" comment). There is no multipart body
+    // on this route (the request body IS the file — see `isReadableBody` below), so the map rides the
+    // query string JSON-encoded, exactly like every other upload parameter.
+    const columnMapRaw = ownFirstString(q, 'columnMap');
+    let columnMap: FacilityColumnMap | undefined;
+    if (columnMapRaw !== undefined) {
+      let columnMapJson: unknown;
+      try {
+        columnMapJson = JSON.parse(columnMapRaw);
+      } catch {
+        reply.code(400);
+        return { error: 'columnMap must be valid JSON' };
+      }
+      const mapResult = ColumnMapSchema.safeParse(columnMapJson);
+      if (!mapResult.success) {
+        reply.code(400);
+        return { error: `columnMap is malformed: ${mapResult.error.message}` };
+      }
+      columnMap = mapResult.data;
+    }
+
     // A JSON body (the INLINE route's shape, sent here by mistake) arrives as a parsed object and
     // must be refused before anything else happens — piping it would throw somewhere far less
     // legible.
@@ -2086,10 +2144,18 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
         // same conditional spread: they select which rows the VALIDATE turns into records, so they
         // have to be in place before the summary the operator reviews is computed. See
         // `parseOverrides` and the confirm route's parse-override gate.
+        //
+        // ⚠ …and `columnMap` joins them for the identical reason (Task 8b) — it is the THIRD
+        // parse-changing input, and the reason it must be set HERE rather than at confirm time. The
+        // confirm route's `ConfirmSchema` deliberately has no `columnMap` key: `chosen` (built from
+        // that schema) can therefore never overwrite what this line wrote, so an apply is guaranteed
+        // to run with the SAME map its validate did — "the same map it was validated with" holds by
+        // construction, not by a comparison anywhere.
         options: {
           nationalSystem,
           ...(completeRelease === undefined ? {} : { completeRelease }),
           ...parseOverrides,
+          ...(columnMap ? { columnMap } : {}),
         },
         requestedBy: actorFromRequest(req).actorId,
       });

@@ -2048,6 +2048,75 @@ describe('POST /api/facilities/import', () => {
     expect(row?.extras).toEqual({ made_up_column: 'xyz' });
   });
 
+  // ── Task 8b: the wire gap — `columnMap` reaches the route at all ────────────────────────────────
+  //
+  // `apps/server/src/facilities-routes.ts` had zero occurrences of `columnMap` before this fix: the
+  // route's zod schema had no such key, so a client-submitted map was silently STRIPPED and the file
+  // parsed as if the operator had never mapped anything — refused here for "unrecognised columns"
+  // exactly like the test just above.
+
+  it('⛔ Task 8b: a columnMap lets the import parse a file whose headers are NOT the contract', async () => {
+    const db = await importDb();
+    const app = await appWith(fakeImportCtx(db));
+    // Neither header spells a contract field on its own — without the map this is exactly the
+    // "unrecognised columns" case two tests up (`parsed: 0`, nothing written).
+    const csv = ['MFL Code,Facility Name', '100,Dodoma Regional Referral'].join('\n') + '\n';
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities/import',
+      payload: {
+        csv, nationalSystem: SYSTEM, apply: true,
+        columnMap: { columns: { 'MFL Code': 'national_code', 'Facility Name': 'name' } },
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({
+      unknownColumns: [], columnMapErrors: [], parsed: 1, written: { created: 1, updated: 0 },
+    });
+    const row = await db.selectFrom('facility_registry').selectAll().executeTakeFirst();
+    expect(row?.national_code).toBe('100');
+    expect(row?.name).toBe('Dodoma Regional Referral');
+  });
+
+  it('⛔ Task 8b: a bad columnMap (two headers claiming one field) blocks the import and writes nothing', async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const csv = ['MFL Code,Alt Code,Facility Name', '100,100b,Dodoma Regional Referral'].join('\n') + '\n';
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities/import',
+      payload: {
+        csv, nationalSystem: SYSTEM, apply: true,
+        columnMap: {
+          // Both headers claim `national_code` — `validateColumnMap`'s `duplicate_target`.
+          columns: { 'MFL Code': 'national_code', 'Alt Code': 'national_code', 'Facility Name': 'name' },
+        },
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().blocked).toBe(true);
+    expect(res.json().blockedReason).toBe('column-map');
+    expect(res.json().columnMapErrors).toEqual([
+      { reason: 'duplicate_target', subject: 'Alt Code', target: 'national_code', other: 'MFL Code' },
+    ]);
+    expect(await db.selectFrom('facility_registry').selectAll().execute()).toHaveLength(0);
+    expect(ctx.__audit).toHaveLength(0); // nothing was written — must not be audited
+  });
+
+  it('⛔ Task 8b: a malformed columnMap (wrong shape) is a 400, not a 500', async () => {
+    const db = await importDb();
+    const app = await appWith(fakeImportCtx(db));
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities/import',
+      payload: {
+        csv: facilityCsv(['100,Alpha,,,,,,,,,,,,,,']), nationalSystem: SYSTEM,
+        // `columns` must be a map of strings; a number value is not a valid target.
+        columnMap: { columns: { 'MFL Code': 42 } },
+      },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toBeTruthy();
+  });
+
   it('⛔ nationalSystem is required — an omitted value is a 400, never defaulted to a hardcoded register', async () => {
     const db = await importDb();
     const app = await appWith(fakeImportCtx(db));
@@ -3308,6 +3377,58 @@ describe('POST /api/facilities/import/upload', () => {
     expect(run.options).toEqual({ nationalSystem: SYSTEM, completeRelease: false });
   });
 
+  // ── Task 8b: the upload door's own columnMap wire gap ────────────────────────────────────────────
+  //
+  // This route has no multipart body — the request body IS the file (`isReadableBody`) — so the map
+  // rides the query string JSON-encoded, exactly like `completeRelease`/`allowUnknownColumns` above.
+  // It belongs to the UPLOAD, not the confirm: the worker's VALIDATE phase is what turns this file
+  // into the summary an operator reviews, so a map arriving only at confirm time would let an
+  // operator confirm a summary the apply then contradicts.
+
+  it('records a columnMap sent on the query string in the run\'s options, where the validate phase reads it', async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const columnMap = { columns: { 'MFL Code': 'national_code', 'Facility Name': 'name' } };
+    const res = await app.inject({
+      method: 'POST',
+      url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv', columnMap: JSON.stringify(columnMap) }),
+      headers: UPLOAD_HEADERS,
+      payload: Buffer.from(['MFL Code,Facility Name', '100,Alpha'].join('\n') + '\n', 'utf8'),
+    });
+    expect(res.statusCode).toBe(202);
+    const run = (await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${res.json().runId}` })).json();
+    expect(run.options).toEqual({ nationalSystem: SYSTEM, columnMap });
+  });
+
+  it('refuses a columnMap that is not valid JSON, before the transfer', async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const res = await app.inject({
+      method: 'POST',
+      url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv', columnMap: '{not json' }),
+      headers: UPLOAD_HEADERS, payload: Buffer.from(facilityCsv(['100,Alpha,,,,,,,,,,,,,,']), 'utf8'),
+    });
+    expect(res.statusCode).toBe(400);
+    expect(ctx.blob.__objects.size).toBe(0);
+    expect(await db.selectFrom('facility_import_runs').selectAll().execute()).toHaveLength(0);
+  });
+
+  it('refuses a columnMap of the wrong shape, before the transfer', async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const res = await app.inject({
+      method: 'POST',
+      url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv', columnMap: JSON.stringify({ columns: 'nope' }) }),
+      headers: UPLOAD_HEADERS, payload: Buffer.from(facilityCsv(['100,Alpha,,,,,,,,,,,,,,']), 'utf8'),
+    });
+    expect(res.statusCode).toBe(400);
+    expect(ctx.blob.__objects.size).toBe(0);
+    expect(await db.selectFrom('facility_import_runs').selectAll().execute()).toHaveLength(0);
+  });
+
   it('refuses a completeRelease that is neither "true" nor "false", rather than guessing at it', async () => {
     const db = await importDb();
     const ctx = fakeImportCtx(db);
@@ -3907,6 +4028,43 @@ describe('POST /api/facilities/import/runs/:id/confirm', () => {
     // opposite belief and proved to be dead code — mutating it away changed nothing). Mutating one
     // key to `.optional().default(false)` DOES fail this test, which is the regression it guards.
     expect(run.options).toEqual({ nationalSystem: SYSTEM, onConflict: 'skip' });
+  });
+
+  // ── Task 8b: a confirmed run applies with the SAME columnMap it was validated with ─────────────
+  //
+  // `columnMap` is PARSE-CHANGING — the same family as `allowUnknownColumns`/`allowInvalidCoordinates`
+  // below — so it belongs to the UPLOAD, not this route. `ConfirmSchema` has no `columnMap` key at
+  // all (see its own doc comment), so a value the operator's client sends here is silently stripped by
+  // zod and can never overwrite what the upload already stored — proving the guarantee holds by
+  // construction, not by a runtime comparison.
+
+  it('⛔ Task 8b: the map set at upload survives a confirm untouched — ConfirmSchema cannot carry one', async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const columnMap = { columns: { 'MFL Code': 'national_code', 'Facility Name': 'name' } };
+    const uploadRes = await app.inject({
+      method: 'POST',
+      url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv', columnMap: JSON.stringify(columnMap) }),
+      headers: UPLOAD_HEADERS,
+      payload: Buffer.from(['MFL Code,Facility Name', '100,Alpha'].join('\n') + '\n', 'utf8'),
+    });
+    expect(uploadRes.statusCode).toBe(202);
+    const runId = uploadRes.json().runId as string;
+    await parkForConfirmation(db, runId, { blocked: false, blockedReason: null, unknownColumns: [], invalid: [], parsed: 1 });
+
+    // The client also sends `columnMap` in the confirm body (mirroring the studio wizard's own
+    // `confirmOptionsFor`) — it must have NO EFFECT: the map that governs is the one the validate
+    // already ran with, never a second copy handed over at confirm time.
+    const res = await app.inject({
+      method: 'POST', url: confirmUrl(runId),
+      payload: { onConflict: 'skip', columnMap: { columns: { 'Facility Name': 'national_code', 'MFL Code': 'name' } } },
+    });
+    expect(res.statusCode).toBe(202);
+
+    const run = (await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${runId}` })).json();
+    // The upload's own map, unchanged — never the different one the confirm body tried to carry.
+    expect(run.options).toEqual({ nationalSystem: SYSTEM, columnMap, onConflict: 'skip' });
   });
 
   // ── Whole-branch review I2: an override that changes how the file PARSES ──────────────────────
