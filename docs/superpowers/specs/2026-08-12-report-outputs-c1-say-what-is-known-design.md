@@ -61,29 +61,42 @@ open questions.
 
 ### 1. Refuse a report that has no data
 
-`ReportDesign` gains one optional field:
+A constant in `@openldr/reporting`, beside `SEED_DESIGNS`:
 
 ```ts
-/** The id of a bound element that MUST resolve to at least one row for this design to be
- *  rendered as a report. Zero rows means the subject does not exist — for the clinical report,
- *  no such request — and a report-shaped PDF of nothing can be mistaken for a valid result. */
-requiresData?: string;
+/** Designs that must not render as a report when their subject does not exist, mapped to the bound
+ *  element whose row IS that subject. Zero rows there means the subject is absent — for the clinical
+ *  report, no such request — and a report-shaped PDF of nothing can be mistaken for a valid result. */
+export const DESIGNS_REQUIRING_DATA: Readonly<Record<string, string>> = {
+  'rt-clinical-micro': 'hdr',
+};
 ```
 
-`rt-clinical-micro` sets `requiresData: 'hdr'` — the bound `keyvalue` panel named
-"Patient & specimen". Note its element ids are **bare** (`hdr`, `org`, `tbl`), not design-prefixed
-the way `simpleTableDesign` builds them (`${spec.id}-meta`); this design is a hand-authored literal.
+⛔ **A constant, deliberately, and NOT a field on `ReportDesign`.** `toRow` persists every top-level
+design field as its own column (`packages/report-designer/src/store.ts:8-21`), so a schema field
+would need migration `085` — and then, by the lesson slices T1 and T3 both learned the hard way,
+five more sites: `toRow`/`fromRow`, `hashOf`, **`reference-apply.ts`'s `reportDesignRow`** (the lab-side
+applier that silently dropped `pageNumbers` and then `status`), three hand-built pg-mem
+`report_designs` fixtures, and the exact-array manifest in `migrations.test.ts`. Six sites and a
+migration-numbering hazard, for one flag on one design that nobody needs to author.
 
-`hdr` is the right one to name because it binds `q-clinical-micro-header`, whose row *is* the
-request. `org` binds the same query, and `tbl` binds `q-clinical-micro-ast` — a real request with no
-isolate legitimately has zero AST rows, so gating on `tbl` would refuse valid reports.
+The cost of the constant is honest and small: a lab cannot set this on its own design. No user
+action requires that today (AGENTS.md §4), and moving it into the schema later is a contained change.
 
-No other seeded design sets `requiresData`, and every one of them renders unchanged.
+`hdr` is the bound `keyvalue` panel named "Patient & specimen". Note the clinical design's element
+ids are **bare** (`hdr`, `org`, `tbl`), not design-prefixed the way `simpleTableDesign` builds them
+(`${spec.id}-meta`); this design is a hand-authored literal.
+
+`hdr` is the right element because it binds `q-clinical-micro-header`, whose row *is* the request.
+`org` binds the same query, and `tbl` binds `q-clinical-micro-ast` — a real request with no isolate
+legitimately has zero AST rows, so gating on `tbl` would refuse valid reports.
+
+No other design appears in the map, and every one of them renders unchanged.
 
 **Enforced at the report render path only.** `renderDataDriven`
 (`packages/bootstrap/src/index.ts:238`) already calls `resolveDesignTables` at `:249`; immediately
-after that, if the named element resolved to zero rows, throw `appError('RP0005')` rather than
-producing a PDF. `reporting.renderPdf` (`:655`) delegates here, so the API's `:id.pdf` route and the
+after that, look the design's id up in `DESIGNS_REQUIRING_DATA`; if it is listed and the named
+element resolved to zero rows, throw `appError('RP0005')` rather than producing a PDF. `reporting.renderPdf` (`:655`) delegates here, so the API's `:id.pdf` route and the
 CLI's `report run --format pdf` are both covered by the one change.
 
 A new catalog entry in `packages/core/src/error-catalog.ts`, following the existing `RP` block
@@ -136,9 +149,9 @@ audit's P0-03 read a paper workflow as a software claim.
 
 | What | Layer it proves | Layer it does NOT prove |
 |---|---|---|
-| `requiresData` unset → renders as today, for all seeded designs | no collateral change | — |
-| `requiresData` set + named element resolves ≥1 row → renders | the gate does not fire on good data | — |
-| `requiresData` set + zero rows → throws `RP0005`, and **no PDF buffer is produced** | the refusal | not the HTTP status |
+| a design absent from the map → renders as today, for all seeded designs | no collateral change | — |
+| a listed design whose named element resolves ≥1 row → renders | the gate does not fire on good data | — |
+| a listed design with zero rows → throws `RP0005`, and **no PDF buffer is produced** | the refusal | not the HTTP status |
 | The route returns the catalog's status for `RP0005`, not 500 | the wire shape — route tests are the only thing that pins it | — |
 | CLI `report run --format pdf` on an unknown request exits non-zero with the coded message | the operator surface | — |
 | **`POST /api/report-designs/preview` still renders a design whose tables are empty** | the boundary — a designer can still author | — |

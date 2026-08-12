@@ -4,7 +4,7 @@
 
 **Goal:** Refuse to render a clinical report for a request that does not exist, and print a control block carrying the few document facts this system actually holds.
 
-**Architecture:** One optional `requiresData` field on `ReportDesign` names the bound element whose row is the report's subject. The report render path throws a coded error when that element resolves to zero rows. The clinical design sets it, and gains a control-block panel.
+**Architecture:** A constant maps a design id to the bound element whose row is that report's subject. The report render path throws a coded error when that element resolves to zero rows. The clinical report is the only entry, and gains a control-block panel.
 
 **Tech Stack:** TypeScript, vitest, pg-mem, Fastify, pdfkit (rendered and inspected in the last task).
 
@@ -19,22 +19,28 @@
 - `apps/server` is the only package with real lint; it enforces a return/await `reply.send` rule.
 - No `Co-Authored-By` trailers. Stage named paths only, never `git add -A`.
 - Work in the worktree `.worktrees/report-outputs-c1` on branch `slice/report-outputs-c1`. Dependencies are installed.
-- No migration. No new i18n keys.
+- **No migration, and that is load-bearing.** The refusal flag is a CONSTANT keyed by design id, not
+  a field on `ReportDesign`. `toRow` persists every top-level design field as its own column
+  (`packages/report-designer/src/store.ts:8-21`), so a schema field would need migration `085` plus
+  five more sites — `toRow`/`fromRow`, `hashOf`, `reference-apply.ts`'s `reportDesignRow`, three
+  pg-mem fixtures, and `migrations.test.ts`'s manifest. **Do not add a schema field.** If you find
+  yourself editing `packages/report-designer/src/schema.ts`, stop and report.
+- No new i18n keys.
 
 ---
 
-### Task 1: The mechanism — `requiresData` and the refusal
+### Task 1: The mechanism — `DESIGNS_REQUIRING_DATA` and the refusal
 
 **Files:**
-- Modify: `packages/report-designer/src/schema.ts` (the top-level design fields, beside `pageNumbers` at `:127`)
+- Modify: `packages/reporting/src/seed/report-seeds.ts` (the constant, beside `SEED_DESIGNS` at `:2011`)
 - Modify: `packages/core/src/error-catalog.ts:38-41` (the `RP` block)
 - Modify: `packages/bootstrap/src/index.ts:238-252` (`renderDataDriven`)
-- Test: `packages/report-designer/src/store.test.ts`, `packages/core/src/error-catalog.test.ts`, `packages/bootstrap/src/index.test.ts`
+- Test: `packages/core/src/error-catalog.test.ts`, `packages/bootstrap/src/index.test.ts`
 
 **Interfaces:**
 - Consumes: nothing.
 - Produces, both used by Task 2:
-  - `ReportDesign.requiresData?: string` — names a bound element id.
+  - `DESIGNS_REQUIRING_DATA: Readonly<Record<string, string>>` from `@openldr/reporting` — design id → the bound element id whose row is that design's subject. Seeded with `{ 'rt-clinical-micro': 'hdr' }`.
   - Error code `RP0005`, domain `reports`, HTTP 404, message `no data for this report request`.
 
 - [ ] **Step 1: Write the failing tests**
@@ -50,16 +56,16 @@ Add to `packages/core/src/error-catalog.test.ts`:
   });
 ```
 
-Add to `packages/bootstrap/src/index.test.ts`, following that file's existing pattern for building a `renderDataDriven` dependency set — read it first and match how it stubs `reportDefs`, `reportDesigns`, `resolveDesignTables` and `renderReportDesignPdf`:
+Add to `packages/bootstrap/src/index.test.ts`, following that file's existing pattern for building a `renderDataDriven` dependency set — read it first and match how it stubs `reportDefs`, `reportDesigns`, `resolveDesignTables` and `renderReportDesignPdf`. The DESIGN ID drives the lookup, so these use `rt-clinical-micro` and an id absent from the map:
 
 ```ts
-  it('⛔ refuses to render a report whose required element resolved to ZERO rows', async () => {
+  it('the refusal: a listed design whose required element resolved to ZERO rows', async () => {
     // The audit photographed a clinical report showing labels with no values and a signature line.
     // `keyValuePairs` renders zero rows exactly that way (draw.ts:340), so the page reads as a real,
     // signable result for a request that was never made.
     let rendered = false;
     const dd = makeDataDriven({
-      design: { id: 'd1', requiresData: 'hdr', pages: [], parameters: [] },
+      design: { id: 'rt-clinical-micro', pages: [], parameters: [] },
       resolved: new Map([['hdr', { columns: [], rows: [] }]]),
       onRender: () => { rendered = true; },
     });
@@ -67,27 +73,27 @@ Add to `packages/bootstrap/src/index.test.ts`, following that file's existing pa
     expect(rendered, 'no PDF may be produced for a refused report').toBe(false);
   });
 
-  it('renders normally when the required element has rows', async () => {
+  it('renders a listed design when its required element has rows', async () => {
     const dd = makeDataDriven({
-      design: { id: 'd1', requiresData: 'hdr', pages: [], parameters: [] },
+      design: { id: 'rt-clinical-micro', pages: [], parameters: [] },
       resolved: new Map([['hdr', { columns: [{ key: 'a', label: 'A' }], rows: [{ a: 1 }] }]]),
     });
     await expect(dd.renderDataDriven('r1', {})).resolves.toBeInstanceOf(Buffer);
   });
 
-  it('does NOT refuse on a query error — the renderer draws a visible placeholder for that', async () => {
+  it('does NOT refuse on a query error - the renderer draws a visible placeholder for that', async () => {
     // An error is loud. Refusing here would turn a visible red box into a failed download, and the
     // spec deliberately scopes the refusal to the silent case.
     const dd = makeDataDriven({
-      design: { id: 'd1', requiresData: 'hdr', pages: [], parameters: [] },
+      design: { id: 'rt-clinical-micro', pages: [], parameters: [] },
       resolved: new Map([['hdr', { error: 'boom' }]]),
     });
     await expect(dd.renderDataDriven('r1', {})).resolves.toBeInstanceOf(Buffer);
   });
 
-  it('renders a design that declares no requiresData, whatever its tables resolved to', async () => {
+  it('renders a design ABSENT from the map, whatever its tables resolved to', async () => {
     const dd = makeDataDriven({
-      design: { id: 'd1', pages: [], parameters: [] },
+      design: { id: 'rt-amr-antibiogram', pages: [], parameters: [] },
       resolved: new Map([['hdr', { columns: [], rows: [] }]]),
     });
     await expect(dd.renderDataDriven('r1', {})).resolves.toBeInstanceOf(Buffer);
@@ -95,18 +101,6 @@ Add to `packages/bootstrap/src/index.test.ts`, following that file's existing pa
 ```
 
 If `index.test.ts` has no such helper, build the smallest one that supplies exactly the four deps `renderDataDriven` reads (`reportDefs.get`, `reportDesigns.get`, `resolveDesignTables`, `renderReportDesignPdf`) plus `labIdentity`. Do not reach for a real database.
-
-Add to `packages/report-designer/src/store.test.ts`, inside the `ReportDesign round-trip completeness` describe block:
-
-```ts
-  it('round-trips requiresData', async () => {
-    const store = createReportDesignStore(db);
-    await store.create({ ...makeDesign('rq', 'R'), requiresData: 'hdr' });
-    expect((await store.get('rq'))?.requiresData).toBe('hdr');
-  });
-```
-
-⚠ That file carries a tripwire asserting the schema's key set (`KNOWN_TOP_LEVEL_FIELDS`) and a second one asserting `EVERY_FIELD` covers them. Adding a schema field **will** fire both. Extend both, and add `requiresData` to `EVERY_FIELD` at a non-default value. Do **not** add it to the hash-mutation table — see Step 3.
 
 - [ ] **Step 2: Run the tests to verify they fail**
 
@@ -122,20 +116,32 @@ cd packages/bootstrap && npx vitest run src/index.test.ts
 
 Expected: FAIL — the refusal test resolves to a Buffer instead of rejecting.
 
-- [ ] **Step 3: Add the schema field**
+- [ ] **Step 3: Add the constant**
 
-In `packages/report-designer/src/schema.ts`, beside `pageNumbers` (`:127`):
+In `packages/reporting/src/seed/report-seeds.ts`, beside `SEED_DESIGNS` (`:2011`):
 
 ```ts
-  /** The id of a bound element that MUST resolve to at least one row for this design to render as a
-   *  REPORT. Zero rows means the subject does not exist — for the clinical report, no such request —
-   *  and `keyValuePairs` renders zero rows as labels with EMPTY values (draw.ts:340), which reads as
-   *  a real, signable result. Not enforced on the design PREVIEW path: an author must be able to lay
-   *  out a design before any data exists. */
-  requiresData: z.string().optional(),
+/**
+ * Designs that must NOT render as a report when their subject does not exist, mapped to the bound
+ * element whose row IS that subject. Zero rows there means the subject is absent - for the clinical
+ * report, no such request.
+ *
+ * A constant, not a field on `ReportDesign`, deliberately. `toRow` persists every top-level design
+ * field as its own column (packages/report-designer/src/store.ts:8-21), so a schema field would need
+ * a migration plus five more sites - toRow/fromRow, hashOf, reference-apply.ts's reportDesignRow
+ * (the lab-side applier that silently dropped pageNumbers and then status), three hand-built pg-mem
+ * fixtures, and migrations.test.ts's manifest. Six sites for one flag on one design that nobody
+ * needs to author.
+ *
+ * `hdr`, NOT `tbl`: `hdr` binds q-clinical-micro-header, whose row IS the request. A real request
+ * with no isolate legitimately has zero AST rows, so gating on `tbl` would refuse valid reports.
+ */
+export const DESIGNS_REQUIRING_DATA: Readonly<Record<string, string>> = {
+  'rt-clinical-micro': 'hdr',
+};
 ```
 
-⛔ **Do NOT add `requiresData` to `hashOf`** in `packages/report-designer/src/store.ts`. It is authoring/publication metadata, not report content, and adding it would move the content hash of every design and re-ship the whole design set over reference sync. The `status` field set the same precedent in slice T3.
+Do **not** add a field to `packages/report-designer/src/schema.ts`. If you find yourself editing that file, stop and report.
 
 - [ ] **Step 4: Add the catalog entry**
 
@@ -147,25 +153,26 @@ In `packages/core/src/error-catalog.ts`, after `RP0004` (`:41`):
 
 - [ ] **Step 5: Add the gate**
 
-In `packages/bootstrap/src/index.ts`, extend the `@openldr/core` import at `:11` with `appError`, then insert immediately after `const resolved = await deps.resolveDesignTables(...)` (`:249`):
+In `packages/bootstrap/src/index.ts`, extend the `@openldr/core` import at `:11` with `appError`, add `DESIGNS_REQUIRING_DATA` to the existing `@openldr/reporting` import, then insert immediately after `const resolved = await deps.resolveDesignTables(...)` (`:249`):
 
 ```ts
-    // ⛔ Refuse rather than render. `requiresData` names the bound element whose row IS this
+    // ⛔ Refuse rather than render. DESIGNS_REQUIRING_DATA names the bound element whose row IS this
     // report's subject, so zero rows means the subject does not exist — for the clinical report,
     // no such request. `keyValuePairs` renders zero rows as labels with EMPTY values
     // (packages/report-designer/src/render/draw.ts:340), which is the page the 2026-08-07 audit
     // photographed and read as ready for sign-off.
     // A query ERROR deliberately does NOT refuse: the renderer already draws a visible red
     // placeholder for it, which is loud rather than misleading.
-    if (design.requiresData) {
-      const subject = resolved.get(design.requiresData);
+    const requiredElement = DESIGNS_REQUIRING_DATA[design.id];
+    if (requiredElement) {
+      const subject = resolved.get(requiredElement);
       if (!subject || (!('error' in subject) && subject.rows.length === 0)) {
-        throw appError('RP0005', { details: { reportId: id, element: design.requiresData } });
+        throw appError('RP0005', { details: { reportId: id, element: requiredElement } });
       }
     }
 ```
 
-A missing map entry refuses too: it means `requiresData` names an element that is not bound, which would otherwise disable the gate silently. Task 2 adds a seed-level test so that misconfiguration cannot reach production.
+A missing `resolved` entry refuses too: it means the constant names an element that is not bound, which would otherwise disable the gate silently. Task 2 adds a seed-level test so that misconfiguration cannot reach production.
 
 - [ ] **Step 6: Run the tests to verify they pass**
 
@@ -174,7 +181,7 @@ cd packages/core && npx vitest run && npx tsc --noEmit -p tsconfig.json
 ```
 
 ```bash
-cd packages/report-designer && npx vitest run && npx tsc --noEmit -p tsconfig.json
+cd packages/reporting && npx vitest run src/seed/ && npx tsc --noEmit -p tsconfig.json
 ```
 
 ```bash
@@ -186,52 +193,72 @@ Expected: all pass, tsc exit 0 in each.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add packages/report-designer/src/schema.ts packages/report-designer/src/store.test.ts packages/core/src/error-catalog.ts packages/core/src/error-catalog.test.ts packages/bootstrap/src/index.ts packages/bootstrap/src/index.test.ts
-git commit -m "feat(reporting): let a design require data, and refuse to render a report without it"
+git add packages/reporting/src/seed/report-seeds.ts packages/core/src/error-catalog.ts packages/core/src/error-catalog.test.ts packages/bootstrap/src/index.ts packages/bootstrap/src/index.test.ts
+git commit -m "feat(reporting): refuse to render a report whose subject does not exist"
 ```
 
 ---
 
-### Task 2: Turn it on for the clinical report, and stop the gate being silently misconfigured
+### Task 2: Stop the gate being silently misconfigured, and prove the wire
+
+⚠ **These are regression guards, not TDD.** Task 1 already put `rt-clinical-micro` in the map, so
+both tests here will pass the moment you write them. A test that has never failed proves nothing, so
+each one carries a **deliberate break** step: break the thing it guards, watch it go red, restore it,
+watch it go green. Report all four outputs. Do not skip that — it is the whole value of this task.
 
 **Files:**
-- Modify: `packages/reporting/src/seed/report-seeds.ts` (the `rt-clinical-micro` literal)
 - Test: `packages/reporting/src/seed/report-seeds.test.ts`, `apps/server/src/reports-routes.test.ts`
 
 **Interfaces:**
-- Consumes: `ReportDesign.requiresData` and `RP0005` from Task 1.
+- Consumes: `DESIGNS_REQUIRING_DATA` and `RP0005` from Task 1.
 - Produces: nothing later tasks depend on.
 
-- [ ] **Step 1: Write the failing tests**
+- [ ] **Step 1: Write the misconfiguration guard**
 
 Add to `packages/reporting/src/seed/report-seeds.test.ts`:
 
 ```ts
-describe('SEED_DESIGNS — requiresData', () => {
-  it('the clinical report requires its patient & specimen panel', () => {
-    const d = SEED_DESIGNS.find((x) => x.id === 'rt-clinical-micro')!;
-    expect(d.requiresData).toBe('hdr');
+describe('DESIGNS_REQUIRING_DATA', () => {
+  it('names the clinical report and its patient & specimen panel', () => {
+    expect(DESIGNS_REQUIRING_DATA['rt-clinical-micro']).toBe('hdr');
   });
 
-  // ⛔ A typo here would disable the gate SILENTLY — the refusal would simply never fire and an
-  // empty report would render exactly as it does today. `hdr` binds q-clinical-micro-header, whose
-  // row IS the request. Do NOT point this at `tbl`: a real request with no isolate legitimately has
-  // zero AST rows, so gating on it would refuse valid reports.
-  it('every requiresData names an element of its own design that is actually BOUND', () => {
-    for (const d of SEED_DESIGNS) {
-      if (!d.requiresData) continue;
-      const el = d.pages.flatMap((p) => p.elements).find((e) => e.id === d.requiresData);
-      expect(el, `${d.id}: requiresData names '${d.requiresData}', which is not an element`).toBeDefined();
-      expect(el!.dataSource, `${d.id}: '${d.requiresData}' is not bound to a query`).toBeDefined();
+  // A typo in either half would disable the refusal SILENTLY - `resolved.get(undefined)` never
+  // matches, the gate never fires, and an empty report renders exactly as it does today. This is
+  // the only thing standing between a one-character slip and the defect coming back.
+  it('every entry names a real, BOUND element of the design it claims', () => {
+    for (const [designId, elementId] of Object.entries(DESIGNS_REQUIRING_DATA)) {
+      const d = SEED_DESIGNS.find((x) => x.id === designId);
+      expect(d, `DESIGNS_REQUIRING_DATA names design '${designId}', which is not a seeded design`).toBeDefined();
+      const el = d!.pages.flatMap((pg) => pg.elements).find((e) => e.id === elementId);
+      expect(el, `${designId}: '${elementId}' is not one of its elements`).toBeDefined();
+      expect(el!.dataSource, `${designId}: '${elementId}' is not bound to a query`).toBeDefined();
     }
   });
 });
 ```
 
-Add to `apps/server/src/reports-routes.test.ts`, using that file's `appWith(reporting)` helper (`:19` — it takes the reporting stub **directly**, not an options object):
+- [ ] **Step 2: Prove that guard has teeth**
+
+Run it green first:
+
+```bash
+cd packages/reporting && npx vitest run src/seed/report-seeds.test.ts -t "DESIGNS_REQUIRING_DATA"
+```
+
+Then temporarily change the constant's value in `report-seeds.ts` from `'hdr'` to `'hrd'` and re-run
+the same command. Expected: FAIL with `'hrd' is not one of its elements`. Restore `'hdr'` and confirm
+green again. **Report all three outputs.**
+
+- [ ] **Step 3: Write the wire guard**
+
+Add to `apps/server/src/reports-routes.test.ts`, using that file's `appWith(reporting)` helper
+(`:19` — it takes the reporting stub **directly**, not an options object):
 
 ```ts
-  it('⛔ a report with no data is a 404 with a code, not a 500 and not a PDF', async () => {
+  it('a report with no data is a coded 404, not a 500 and not a PDF', async () => {
+    // The refusal is only useful if it reaches the operator as a real message. A 500 would read as
+    // a bug in the server rather than a request that does not exist.
     const { appError } = await import('@openldr/core');
     const app = appWith({ renderPdf: async () => { throw appError('RP0005'); } });
     const res = await app.inject({ method: 'GET', url: '/api/reports/r-clinical-micro.pdf?request=nope' });
@@ -241,35 +268,23 @@ Add to `apps/server/src/reports-routes.test.ts`, using that file's `appWith(repo
   });
 ```
 
-If that file's error-shape assertions read a different envelope, match the shape its existing coded-error tests assert rather than inventing one.
+If that file's error-shape assertions read a different envelope, match the shape its existing
+coded-error tests assert rather than inventing one.
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [ ] **Step 4: Prove that guard has teeth**
 
-```bash
-cd packages/reporting && npx vitest run src/seed/report-seeds.test.ts -t "requiresData"
-```
-
-Expected: FAIL — `expected undefined to be 'hdr'`.
+Run it green:
 
 ```bash
 cd apps/server && npx vitest run src/reports-routes.test.ts -t "no data"
 ```
 
-Expected: FAIL — the route returns 500, because nothing maps `RP0005` yet, or the stub is not wired.
+Then temporarily change the stub to `throw new Error('boom')` instead of `appError('RP0005')` and
+re-run. Expected: FAIL — a bare `Error` is not in the catalog, so the handler returns 500 and the
+status assertion fails. Restore and confirm green. **Report both outputs.** This is what proves the
+test is checking the coded path rather than merely that some error happened.
 
-- [ ] **Step 3: Set it on the clinical design**
-
-In `packages/reporting/src/seed/report-seeds.ts`, on the `rt-clinical-micro` design literal, beside its other top-level fields (`paper`, `orientation`, `margins`, `status`):
-
-```ts
-    // ⛔ Zero rows from `hdr` means there is no such request. Rendering anyway produces the page the
-    // 2026-08-07 audit photographed: labels with no values, an empty organism panel, a susceptibility
-    // table with only its header — and a signature line, which made it read as ready for sign-off.
-    // NOT `tbl`: a real request with no isolate legitimately has zero AST rows.
-    requiresData: 'hdr',
-```
-
-- [ ] **Step 4: Run the tests to verify they pass**
+- [ ] **Step 5: Full checks**
 
 ```bash
 cd packages/reporting && npx vitest run src/seed/ && npx tsc --noEmit -p tsconfig.json
@@ -279,14 +294,17 @@ cd packages/reporting && npx vitest run src/seed/ && npx tsc --noEmit -p tsconfi
 cd apps/server && npx vitest run src/reports-routes.test.ts && npx tsc --noEmit -p tsconfig.json && npx eslint src/reports-routes.ts
 ```
 
-Expected: all pass, tsc exit 0, eslint clean.
+Expected: all pass, tsc exit 0 in both, eslint clean.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
-git add packages/reporting/src/seed/report-seeds.ts packages/reporting/src/seed/report-seeds.test.ts apps/server/src/reports-routes.test.ts
-git commit -m "fix(reporting): refuse a clinical report for a request that does not exist"
+git add packages/reporting/src/seed/report-seeds.test.ts apps/server/src/reports-routes.test.ts
+git commit -m "test(reporting): guard the refusal against a silent misconfiguration"
 ```
+
+⚠ Confirm `git diff --stat HEAD` shows **only the two test files** before committing — the deliberate
+breaks in Steps 2 and 4 must both have been restored.
 
 ---
 
