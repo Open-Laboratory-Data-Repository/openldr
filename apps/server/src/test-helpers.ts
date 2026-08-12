@@ -12,6 +12,10 @@ type FakeAdmin = AppContext['terminology']['admin'];
 type FakeOntology = AppContext['terminology']['ontology'];
 type FakeLoaders = AppContext['terminology']['loaders'];
 
+/** The url the fake's facility register is filed under. Module-local: the route tests address the
+ *  register by its id (`cs-freg-hfr`), so nothing outside this file needs the url. */
+const FACILITY_REGISTER_URL = 'urn:openldr:cs:facility-register:hfr';
+
 /** Minimal in-memory fake admin store for route tests.
  *  The harness hand-mocks ctx (no pg-mem DB available here), so we use a fake.
  *  @openldr/db is not a dep of @openldr/server — types are derived from AppContext.
@@ -24,7 +28,15 @@ function buildFakeAdmin(): FakeAdmin {
   ];
   const systems: Array<{ id: string; systemCode: string; systemName: string; url: string | null; systemVersion: string | null; description: string | null; active: boolean; publisherId: string | null; seeded: boolean }> = [
     { id: 'sys1', systemCode: 'X', systemName: 'Test System', url: 'http://x', systemVersion: null, description: null, active: true, publisherId: null, seeded: false },
+    // A facility register with facilities filed under it. `seeded: false`, exactly as the real
+    // register writers mint one, so nothing but the facility count can refuse its delete.
+    { id: 'cs-freg-hfr', systemCode: 'HFR', systemName: 'Health Facility Registry', url: FACILITY_REGISTER_URL, systemVersion: null, description: null, active: true, publisherId: null, seeded: false },
   ];
+  /** How many facilities are filed under each register url. The real store counts
+   *  `facility_registry` rows; this fake holds the count directly so a route test can drive both
+   *  the refusal and the zero case. */
+  const facilitiesByRegisterUrl = new Map<string, number>([[FACILITY_REGISTER_URL, 2]]);
+  const facilitiesFiledUnder = (url: string | null): number => (url ? facilitiesByRegisterUrl.get(url) ?? 0 : 0);
   type TermRow = { system: string; code: string; display: string | null; status: string; shortName: string | null; class: string | null; unit: string | null; replacedBy: string | null; metadata: Record<string, unknown> | null; mappingCount: number };
   const terms: TermRow[] = [
     { system: 'http://x', code: 'AMP', display: 'Ampicillin', status: 'ACTIVE', shortName: null, class: null, unit: null, replacedBy: null, metadata: null, mappingCount: 0 },
@@ -83,9 +95,23 @@ function buildFakeAdmin(): FakeAdmin {
       async delete(id) {
         const idx = systems.findIndex((x) => x.id === id);
         if (idx === -1) throw adminErr(`not found: ${id}`, 'not-found');
+        const filed = facilitiesFiledUnder(systems[idx].url);
+        if (filed > 0) {
+          // Singular/plural like the real store's message (packages/db/src/terminology-admin-store.ts),
+          // so a test seeding exactly one facility does not read back "1 facilities".
+          throw adminErr(
+            `Cannot delete this facility register: ${filed} ${filed === 1 ? 'facility is' : 'facilities are'} filed under it.`,
+            'conflict',
+          );
+        }
         systems.splice(idx, 1);
       },
-      async deletionImpact() { return { termCount: 0, mappingCount: 0 }; },
+      async deletionImpact(id) {
+        const s = systems.find((x) => x.id === id);
+        if (!s) throw adminErr(`not found: ${id}`, 'not-found');
+        // termCount/mappingCount are not modelled here — this fake counts facilities only.
+        return { termCount: 0, mappingCount: 0, facilityCount: facilitiesFiledUnder(s.url) };
+      },
       async upsertByUrl() { /* no-op in fake */ },
       async getByUrl(url) { return systems.find((s) => s.url === url) ?? null; },
     },

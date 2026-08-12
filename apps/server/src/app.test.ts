@@ -160,6 +160,39 @@ describe('terminology admin routes', () => {
     await app.close();
   });
 
+  // These two pin the WIRE shape of the facility-register guard. The store tests prove the refusal
+  // and the count in packages/db; only a route test proves the status code and the response body.
+  it('DELETE of a facility register that has facilities answers 409, and the row survives', async () => {
+    const app = await buildApp(ctxWith('up'));
+
+    const res = await app.inject({ method: 'DELETE', url: '/api/terminology/systems/cs-freg-hfr' });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error).toMatch(/facilities are filed under it/);
+
+    // Still listed afterwards — a 409 must not be a delete that also reported an error.
+    const list = await app.inject({ method: 'GET', url: '/api/terminology/systems' });
+    expect(JSON.parse(list.body).some((s: { id: string }) => s.id === 'cs-freg-hfr')).toBe(true);
+
+    await app.close();
+  });
+
+  it('GET deletion-impact carries facilityCount on the wire, non-zero for a register and 0 otherwise', async () => {
+    const app = await buildApp(ctxWith('up'));
+
+    const register = await app.inject({ method: 'GET', url: '/api/terminology/systems/cs-freg-hfr/deletion-impact' });
+    expect(register.statusCode).toBe(200);
+    expect(register.json()).toMatchObject({ facilityCount: 2 });
+
+    // A plain coding system reports 0 — the field is always present, so the studio dialog can
+    // branch on it without a fallback.
+    const plain = await app.inject({ method: 'GET', url: '/api/terminology/systems/sys1/deletion-impact' });
+    expect(plain.statusCode).toBe(200);
+    expect(plain.json()).toMatchObject({ facilityCount: 0 });
+    expect(Object.keys(plain.json())).toContain('facilityCount');
+
+    await app.close();
+  });
+
   it('searches terms and creates a mapping', async () => {
     const app = await buildApp(ctxWith('up'));
 

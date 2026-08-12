@@ -1712,7 +1712,11 @@ export async function deleteCodingSystem(id: string): Promise<void> {
     throw new Error(msg);
   }
 }
-export const systemDeletionImpact = (id: string) => authFetch(`/api/terminology/systems/${id}/deletion-impact`).then((r) => okJson<{ termCount: number; mappingCount: number }>(r, 'impact'));
+// `facilityCount` is non-zero only for a facility register (`coding_systems.kind`): the facilities
+// whose permanent ids were hashed from this system's url. A register carries no terms and usually no
+// concept-map elements, so without this the dialog reads "0 term(s) and 0 mapping(s)" over a delete
+// the server now refuses.
+export const systemDeletionImpact = (id: string) => authFetch(`/api/terminology/systems/${id}/deletion-impact`).then((r) => okJson<{ termCount: number; mappingCount: number; facilityCount: number }>(r, 'impact'));
 
 // Value sets (SP3)
 export interface ValueSetComposeConcept { code: string; display?: string }

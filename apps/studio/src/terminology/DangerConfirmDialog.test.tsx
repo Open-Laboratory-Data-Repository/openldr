@@ -94,6 +94,32 @@ describe('DangerConfirmDialog', () => {
     expect(screen.getByRole('textbox', { name: 'Confirm name' })).toHaveValue('');
   });
 
+  it('blocked: offers no confirm action and no name input, only a close control', () => {
+    const onConfirm = vi.fn();
+    render(
+      <DangerConfirmDialog
+        open
+        onOpenChange={() => {}}
+        title="Delete X"
+        confirmName="HFR"
+        confirmLabel="Delete"
+        blocked
+        summary={<span>2 facilities are filed under this facility register.</span>}
+        onConfirm={onConfirm}
+      />,
+    );
+
+    // The reason is shown, but nothing can be submitted: the server would refuse it.
+    expect(screen.getByText(/2 facilities are filed/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: 'Confirm name' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/to confirm/)).not.toBeInTheDocument();
+    // "Cancel" implies something was pending; nothing is.
+    expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument();
+    expect(onConfirm).not.toHaveBeenCalled();
+  });
+
   it('shows a busy state while an async onConfirm runs, blocking the action and cancel', async () => {
     let resolveConfirm!: () => void;
     const onConfirm = vi.fn(() => new Promise<void>((r) => { resolveConfirm = r; }));

@@ -99,6 +99,8 @@ interface ConfirmState {
   confirmName: string;
   confirmLabel: string;
   summary: ReactNode;
+  /** The server refuses this one, so the dialog shows the reason and offers no confirm action. */
+  blocked?: boolean;
   onConfirm: () => void;
 }
 
@@ -251,11 +253,25 @@ export function Terminology(): JSX.Element {
   const handleSystemDelete = async (sys: CodingSystem): Promise<void> => {
     try {
       const impact = await systemDeletionImpact(sys.id);
+      // Only a facility register ever reports facilities. The store raises a 409 for that case, so
+      // the dialog must not offer a confirm action: it would ask the operator to type the name for
+      // a request that can only come back as an error toast. `blocked` drops the input and the
+      // Delete button, and the summary REPLACES the delete copy rather than appending to it — the
+      // counts and "cannot be undone" would both be false when nothing is going to happen.
+      const blocked = impact.facilityCount > 0;
       setConfirm({
         title: 'Delete coding system',
         confirmName: sys.systemCode,
         confirmLabel: 'Delete',
-        summary: (
+        blocked,
+        summary: blocked ? (
+          <span>
+            &ldquo;{sys.systemCode}&rdquo; cannot be deleted:{' '}
+            {impact.facilityCount === 1 ? '1 facility is' : `${impact.facilityCount} facilities are`}{' '}
+            filed under this facility register. Their permanent ids were derived from its URL, so
+            deleting it would orphan every one of them.
+          </span>
+        ) : (
           <span>
             Permanently deletes &ldquo;{sys.systemCode}&rdquo; with {impact.termCount} term(s) and{' '}
             {impact.mappingCount} mapping(s). This action cannot be undone.
@@ -1038,6 +1054,7 @@ export function Terminology(): JSX.Element {
             confirmName={confirm.confirmName}
             confirmLabel={confirm.confirmLabel}
             summary={confirm.summary}
+            blocked={confirm.blocked}
             onConfirm={confirm.onConfirm}
           />
         )}

@@ -4,6 +4,7 @@ import { newDb } from 'pg-mem';
 import { internalMigrations } from './migrations/internal/index';
 import { createTerminologyAdminStore, TerminologyAdminError, type TermMappingInput } from './terminology-admin-store';
 import { referenceCapture } from './reference-capture';
+import { FACILITY_REGISTER_KIND } from './migrations/internal/081_facility_source_and_register_state';
 import type { InternalSchema } from './schema/internal';
 
 // Same pg-mem migrated-db construction as 012_terminology_admin.test.ts.
@@ -616,6 +617,149 @@ describe('terminology admin store', () => {
       await s.termMappings.delete(res.mapping.id);
       await s.publishers.delete(p.id);
       expect(await db.selectFrom('reference_change_log').selectAll().execute()).toHaveLength(0);
+    });
+  });
+
+  // A facility's permanent id is sha256(`<register url>|<national code>`) — `idFor`,
+  // packages/terminology/src/facility-csv.ts. Destroy or re-spell the register's url and every id
+  // hashed from it is orphaned: `resolveFacilityRegisterForImport` (facility-register-sources.ts)
+  // then refuses every import against it. These tests pin the three doors that used to allow it.
+  describe('facility register protection', () => {
+    const REGISTER_URL = 'urn:openldr:cs:facility-register:hfr';
+
+    /** A `coding_systems` row shaped exactly as `createFacilityRegisterSourceStore.create` writes
+     *  one — including `seeded: false`, which is why the existing seeded-system refusal in
+     *  `delete` never fires for a register. */
+    async function seedRegister(db: Kysely<InternalSchema>, url = REGISTER_URL, id = 'cs-freg-hfr'): Promise<string> {
+      await db.insertInto('coding_systems').values({
+        id, system_code: 'HFR', system_name: 'Health Facility Registry', url,
+        system_version: null, description: null, active: true, publisher_id: null,
+        seeded: false, kind: FACILITY_REGISTER_KIND,
+      } as never).execute();
+      return id;
+    }
+
+    async function seedFacility(db: Kysely<InternalSchema>, id: string, nationalSystem: string, nationalCode: string): Promise<void> {
+      await db.insertInto('facility_registry').values({
+        id, name: 'Alpha Hospital', local_code: null,
+        national_system: nationalSystem, national_code: nationalCode, source: 'import',
+      } as never).execute();
+    }
+
+    it('refuses to delete a facility register that still has facilities, naming the count', async () => {
+      const { db, s } = await store();
+      const id = await seedRegister(db);
+      await seedFacility(db, 'fac-1', REGISTER_URL, '100');
+      await seedFacility(db, 'fac-2', REGISTER_URL, '200');
+
+      await expect(s.codingSystems.delete(id, { cascade: true })).rejects.toMatchObject({ kind: 'conflict' });
+      await expect(s.codingSystems.delete(id, { cascade: true })).rejects.toThrow(/2 facilities are filed under it/);
+      // The refusal must land BEFORE the first write: pg-mem does not roll back on a thrown error,
+      // so a guard placed after the cascade would leave the concepts already deleted.
+      expect(await db.selectFrom('coding_systems').selectAll().where('id', '=', id).execute()).toHaveLength(1);
+    });
+
+    it('still deletes a facility register that has no facilities filed under it', async () => {
+      const { db, s } = await store();
+      const id = await seedRegister(db);
+      // A facility under a DIFFERENT register must not protect this one.
+      await seedFacility(db, 'fac-other', 'urn:openldr:cs:facility-register:other', '100');
+
+      await s.codingSystems.delete(id, { cascade: true });
+      expect(await db.selectFrom('coding_systems').selectAll().where('id', '=', id).execute()).toHaveLength(0);
+    });
+
+    it('refuses to change a facility register url while facilities are filed under the old one', async () => {
+      const { db, s } = await store();
+      const id = await seedRegister(db);
+      await seedFacility(db, 'fac-1', REGISTER_URL, '100');
+
+      const attempt = (): Promise<unknown> => s.codingSystems.update(id, {
+        systemCode: 'HFR', systemName: 'Health Facility Registry',
+        url: 'urn:openldr:cs:facility-register:hfr-v2', active: true, publisherId: null,
+      });
+      await expect(attempt()).rejects.toMatchObject({ kind: 'conflict' });
+      // Singular wording — the count is 1 here, so this also pins the message's singular branch.
+      await expect(attempt()).rejects.toThrow(/1 facility is filed under "urn:openldr:cs:facility-register:hfr"/);
+      const row = await db.selectFrom('coding_systems').select(['url']).where('id', '=', id).executeTakeFirstOrThrow();
+      expect(row.url).toBe(REGISTER_URL);
+    });
+
+    it('still edits name, version, description and active on a register that HAS facilities', async () => {
+      const { db, s } = await store();
+      const id = await seedRegister(db);
+      await seedFacility(db, 'fac-1', REGISTER_URL, '100');
+      // Guard against a trivially-passing "still works" test: the setup above must really put a
+      // facility under this register, or the url guard would never be reached at all.
+      const filed = await db.selectFrom('facility_registry').selectAll().where('national_system', '=', REGISTER_URL).execute();
+      expect(filed).toHaveLength(1);
+
+      const updated = await s.codingSystems.update(id, {
+        systemCode: 'HFR', systemName: 'HFR (renamed)', url: REGISTER_URL,
+        systemVersion: '2026-08', description: 'national register', active: false, publisherId: null,
+      });
+      expect(updated.systemName).toBe('HFR (renamed)');
+      expect(updated.systemVersion).toBe('2026-08');
+      expect(updated.description).toBe('national register');
+      expect(updated.active).toBe(false);
+      expect(updated.url).toBe(REGISTER_URL);
+    });
+
+    it('still changes the url of a NON-register coding system, even with facilities filed under that url', async () => {
+      const { db, s } = await store();
+      // `create` writes no `kind`, so this row is not a register — but it carries the very url the
+      // facility below is filed under. A guard that dropped the `kind` gate would count 1 here and
+      // refuse the url change, so this is not a trivially-passing "still works" test.
+      const sys = await s.codingSystems.create({ systemCode: 'X', systemName: 'X', url: REGISTER_URL, active: true, publisherId: null });
+      await seedFacility(db, 'fac-1', REGISTER_URL, '100');
+      const filed = await db.selectFrom('facility_registry').selectAll().where('national_system', '=', REGISTER_URL).execute();
+      expect(filed).toHaveLength(1);
+      const kind = await db.selectFrom('coding_systems').select(['kind']).where('id', '=', sys.id).executeTakeFirstOrThrow();
+      expect(kind.kind).not.toBe(FACILITY_REGISTER_KIND);
+
+      const updated = await s.codingSystems.update(sys.id, {
+        systemCode: 'X', systemName: 'X', url: 'http://x/v2', active: true, publisherId: null,
+      });
+      expect(updated.url).toBe('http://x/v2');
+    });
+
+    it('deletionImpact reports the facilities filed under a register', async () => {
+      const { db, s } = await store();
+      const id = await seedRegister(db);
+      await seedFacility(db, 'fac-1', REGISTER_URL, '100');
+      await seedFacility(db, 'fac-2', REGISTER_URL, '200');
+      await seedFacility(db, 'fac-other', 'urn:openldr:cs:facility-register:other', '100');
+
+      expect((await s.codingSystems.deletionImpact(id)).facilityCount).toBe(2);
+    });
+
+    it('deletionImpact reports 0 facilities for a coding system that is not a register', async () => {
+      const { db, s } = await store();
+      // Same url as facilities are filed under, but `kind` is NULL — not a register.
+      const sys = await s.codingSystems.create({ systemCode: 'X', systemName: 'X', url: REGISTER_URL, active: true, publisherId: null });
+      await seedFacility(db, 'fac-1', REGISTER_URL, '100');
+
+      expect((await s.codingSystems.deletionImpact(sys.id)).facilityCount).toBe(0);
+      // …and the delete guard is gated on the same `kind`, so this row stays deletable.
+      await s.codingSystems.delete(sys.id, { cascade: true });
+      expect(await s.codingSystems.getByUrl(REGISTER_URL)).toBeNull();
+    });
+
+    // Evidence for leaving `term_mappings` out of `mappingCount`: the store is the ONLY writer of
+    // `term_mappings` (grep: two `insertInto('term_mappings')` sites, both here), and both mirror
+    // the row into `concept_map_elements`. A mapping naming the register url is therefore already
+    // one `mappingCount`; counting `term_mappings` on top would count it twice.
+    it('a mapping naming the register url is already one mappingCount, not zero', async () => {
+      const { db, s } = await store();
+      const id = await seedRegister(db);
+      await s.termMappings.create({
+        fromSystem: 'urn:openldr:cs:facility-observed', fromCode: 'ALPHA HOSP',
+        toSystem: REGISTER_URL, toCode: '100', toDisplay: 'Alpha Hospital',
+        mapType: 'SAME-AS', relationship: null, owner: null, isActive: true,
+      });
+      const mirrored = await db.selectFrom('concept_map_elements').selectAll().where('target_system', '=', REGISTER_URL).execute();
+      expect(mirrored).toHaveLength(1);
+      expect((await s.codingSystems.deletionImpact(id)).mappingCount).toBe(1);
     });
   });
 });
