@@ -212,9 +212,10 @@ export function parseFacilityRelease(jsonl: string, opts: FacilityCsvOptions): F
     // an unrecognised key on one JSONL row cannot invalidate the whole file the way a shifted CSV
     // column can (every row is self-describing), so this never blocks the import.
     unknownColumns: [...unknownKeys].sort(),
-    // No header in JSONL, so there is no concept of a duplicate column. Kept only for structural
-    // parity with `FacilityCsvResult`.
+    // No header in JSONL, so there is no concept of a duplicate column or a column map. Kept only
+    // for structural parity with `FacilityCsvResult`.
     duplicateColumns: [],
+    columnMapErrors: [],
     quarantined,
     skipped,
     invalid,

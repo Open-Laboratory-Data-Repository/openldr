@@ -164,6 +164,110 @@ describe('parseFacilityCsv', () => {
   });
 });
 
+describe('parseFacilityCsv with a column map', () => {
+  const map = {
+    columns: { 'MFL Code': 'national_code', Name: 'name', Province: 'zone', Type: 'level' },
+    constants: { country: 'ZMB' },
+    extras: ['DHIS2 UID'],
+  };
+
+  it('renames headers, applies constants, and carries opted-in columns to extras', () => {
+    const r = parseFacilityCsv(
+      'MFL Code,Name,Province,Type,DHIS2 UID\n1835,Namatindi RHC,Western,Health Centre,fykM10MbEBA\n',
+      { nationalSystem: HFR, columnMap: map },
+    );
+    expect(r.columnMapErrors).toEqual([]);
+    expect(r.unknownColumns).toEqual([]);
+    expect(r.records).toHaveLength(1);
+    expect(r.records[0]).toMatchObject({
+      nationalCode: '1835', name: 'Namatindi RHC', zone: 'Western',
+      level: 'Health Centre', country: 'ZMB',
+    });
+    // extras keys stay lowercased — existing behaviour, see facility-csv.ts:205
+    expect(r.records[0].extras).toEqual({ 'dhis2 uid': 'fykM10MbEBA' });
+  });
+
+  it('matches map keys case-insensitively against the file header', () => {
+    const r = parseFacilityCsv('mfl code,name\n1835,Namatindi RHC\n', {
+      nationalSystem: HFR,
+      columnMap: { columns: { 'MFL Code': 'national_code', Name: 'name' } },
+    });
+    expect(r.columnMapErrors).toEqual([]);
+    expect(r.records[0].nationalCode).toBe('1835');
+  });
+
+  it('⛔ refuses a header in neither columns nor extras, exactly as an unknown column today', () => {
+    const r = parseFacilityCsv('MFL Code,Name,Surprise\n1835,X,y\n', {
+      nationalSystem: HFR,
+      columnMap: { columns: { 'MFL Code': 'national_code', Name: 'name' } },
+    });
+    expect(r.unknownColumns).toEqual(['surprise']);
+    expect(r.records).toEqual([]);
+  });
+
+  it('⛔ refuses two headers mapped to the same field, reporting both', () => {
+    const r = parseFacilityCsv('A,B,Name\n1,2,X\n', {
+      nationalSystem: HFR,
+      columnMap: { columns: { A: 'national_code', B: 'national_code', Name: 'name' } },
+    });
+    expect(r.columnMapErrors).toEqual([
+      { reason: 'duplicate_target', subject: 'B', target: 'national_code', other: 'A' },
+    ]);
+    expect(r.records).toEqual([]);
+  });
+
+  it('⛔ refuses a constant that collides with a mapped column', () => {
+    const r = parseFacilityCsv('MFL Code,Name,Country\n1,X,Zambia\n', {
+      nationalSystem: HFR,
+      columnMap: {
+        columns: { 'MFL Code': 'national_code', Name: 'name', Country: 'country' },
+        constants: { country: 'ZMB' },
+      },
+    });
+    expect(r.columnMapErrors).toEqual([
+      { reason: 'constant_collision', subject: 'country', target: 'country', other: 'Country' },
+    ]);
+    expect(r.records).toEqual([]);
+  });
+
+  it('⛔ refuses a target outside the contract', () => {
+    const r = parseFacilityCsv('MFL Code,Name\n1,X\n', {
+      nationalSystem: HFR,
+      columnMap: { columns: { 'MFL Code': 'national_code', Name: 'name', Nope: 'password' } },
+    });
+    expect(r.columnMapErrors).toEqual([
+      { reason: 'unknown_target', subject: 'Nope', target: 'password' },
+    ]);
+    expect(r.records).toEqual([]);
+  });
+
+  it('⛔ refuses when a required field is neither mapped nor constant', () => {
+    const r = parseFacilityCsv('MFL Code\n1835\n', {
+      nationalSystem: HFR,
+      columnMap: { columns: { 'MFL Code': 'national_code' } },
+    });
+    expect(r.columnMapErrors).toEqual([
+      { reason: 'missing_required', subject: 'name', target: 'name' },
+    ]);
+    expect(r.records).toEqual([]);
+  });
+
+  it('reports EVERY map problem at once, so one fix pass repairs the file', () => {
+    const r = parseFacilityCsv('A,B\n1,2\n', {
+      nationalSystem: HFR,
+      columnMap: { columns: { A: 'national_code', B: 'national_code' } },
+    });
+    expect(r.columnMapErrors.map((e) => e.reason).sort())
+      .toEqual(['duplicate_target', 'missing_required']);
+  });
+
+  it('leaves behaviour identical when no column map is supplied', () => {
+    const r = csv('national_code,name\n122023-5,BAHEBE\n');
+    expect(r.columnMapErrors).toEqual([]);
+    expect(r.records[0].nationalCode).toBe('122023-5');
+  });
+});
+
 describe('coordinate validation', () => {
   const H = 'national_code,name,latitude,longitude';
   const parse = (rows: string[]) => parseFacilityCsv([H, ...rows].join('\n') + '\n', { nationalSystem: 'S' });

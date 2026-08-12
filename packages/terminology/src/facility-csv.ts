@@ -12,6 +12,40 @@ const OPTIONAL = [
 ] as const;
 const KNOWN = new Set<string>([...REQUIRED, ...OPTIONAL]);
 
+/** The contract's field names, in contract order. Exported so nothing else has to re-declare them —
+ *  a second copy would drift the moment a field is added, and the copy would silently stop being
+ *  offered by the suggestion engine that reads it. */
+export const FACILITY_CONTRACT_FIELDS: readonly string[] = [...REQUIRED, ...OPTIONAL];
+
+/** How a file's own headers map onto the contract above.
+ *
+ *  ⛔ `columns` keys are headers AS THEY APPEAR IN THE FILE — the operator matches what they see.
+ *  The parser lowercases them for lookup, because `headers` is already lowercased (see
+ *  `parseFacilityCsv`). `extras` keys, by contrast, stay lowercased on the record: that is existing
+ *  behaviour for every register already imported, and re-keying it would silently break them. */
+export interface FacilityColumnMap {
+  /** file header -> contract field */
+  columns: Record<string, string>;
+  /** contract field -> literal value written on every row (e.g. `country: 'ZMB'`) */
+  constants?: Record<string, string>;
+  /** file headers deliberately carried into `extras` rather than mapped */
+  extras?: string[];
+}
+
+export type ColumnMapErrorReason =
+  | 'duplicate_target' | 'constant_collision' | 'unknown_target' | 'missing_required';
+
+export interface ColumnMapError {
+  reason: ColumnMapErrorReason;
+  /** The header (or, for a constant/required error, the field) the problem is about, spelled as the
+   *  operator wrote it — so they can find it in their own map. */
+  subject: string;
+  /** The contract field involved. */
+  target: string;
+  /** The other header/field, when the problem is a collision between two things. */
+  other?: string;
+}
+
 export const FACILITY_CSV_TEMPLATE =
   'national_code,name,level,ownership,status,country,zone,region,district,council,ward,village,address,phone,latitude,longitude\n';
 
@@ -32,6 +66,9 @@ export interface FacilityCsvOptions {
    *  expressed. The row's `RowError`s are pushed into `invalid` either way — this flag decides
    *  whether the row is DROPPED, never whether it is REPORTED. */
   allowInvalidCoordinates?: boolean;
+  /** Map this file's headers onto the contract. Omitted ⇒ headers must already BE the contract,
+   *  exactly as before this option existed. */
+  columnMap?: FacilityColumnMap;
 }
 
 export interface QuarantinedRow {
@@ -69,6 +106,10 @@ export interface FacilityCsvResult {
   /** Headers appearing more than once. Non-empty ⇒ nothing imported: which column wins is arbitrary,
    *  so mapping either one is a guess about master data. */
   duplicateColumns: string[];
+  /** Problems with the column map itself, ALL of them, so one fix pass repairs the file. Non-empty
+   *  ⇒ nothing imported: every one of these is a guess about master data that this parser refuses to
+   *  make, the same reasoning as `duplicateColumns` above. */
+  columnMapErrors: ColumnMapError[];
   /** Rows whose field count did not match the header's. NEVER mapped to columns — that is the whole
    *  point (see the docblock). Distinct from `skipped`, which counts well-formed rows missing a
    *  REQUIRED value. */
@@ -160,6 +201,46 @@ export function coordinatePair(
   return { latitude, longitude, errors };
 }
 
+/** Validate a column map against the contract and return EVERY problem, never just the first. */
+export function validateColumnMap(map: FacilityColumnMap): ColumnMapError[] {
+  const errors: ColumnMapError[] = [];
+  const claimedBy = new Map<string, string>(); // contract field -> the header that claimed it
+
+  for (const [header, target] of Object.entries(map.columns)) {
+    if (!KNOWN.has(target)) {
+      errors.push({ reason: 'unknown_target', subject: header, target });
+      continue;
+    }
+    const owner = claimedBy.get(target);
+    if (owner !== undefined) {
+      errors.push({ reason: 'duplicate_target', subject: header, target, other: owner });
+      continue;
+    }
+    claimedBy.set(target, header);
+  }
+
+  for (const [field, _value] of Object.entries(map.constants ?? {})) {
+    if (!KNOWN.has(field)) {
+      errors.push({ reason: 'unknown_target', subject: field, target: field });
+      continue;
+    }
+    const owner = claimedBy.get(field);
+    if (owner !== undefined) {
+      errors.push({ reason: 'constant_collision', subject: field, target: field, other: owner });
+      continue;
+    }
+    claimedBy.set(field, field);
+  }
+
+  for (const required of REQUIRED) {
+    if (!claimedBy.has(required)) {
+      errors.push({ reason: 'missing_required', subject: required, target: required });
+    }
+  }
+
+  return errors;
+}
+
 /**
  * Parse a national facility CSV.
  *
@@ -199,18 +280,44 @@ export function parseFacilityCsv(csv: string, opts: FacilityCsvOptions): Facilit
   }) as { record: string[]; info: { lines: number }; raw: string }[];
 
   if (rows.length === 0) {
-    return { records: [], unknownColumns: [], duplicateColumns: [], quarantined: [], skipped: 0, invalid: [] };
+    return { records: [], unknownColumns: [], duplicateColumns: [], columnMapErrors: [], quarantined: [], skipped: 0, invalid: [] };
   }
 
-  const headers = rows[0].record.map((h) => h.trim().toLowerCase());
+  const rawHeaders = rows[0].record.map((h) => h.trim());
+  const headers = rawHeaders.map((h) => h.toLowerCase());
   const duplicateColumns = headers.filter((h, i) => h !== '' && headers.indexOf(h) !== i);
-  const unknownColumns = headers.filter((h, i) => h !== '' && headers.indexOf(h) === i && !KNOWN.has(h));
+
+  const columnMapErrors = opts.columnMap ? validateColumnMap(opts.columnMap) : [];
+
+  // Rename headers through the map. Lookup is on the LOWERCASED header, so a map written against
+  // `MFL Code` still matches a file that spells it `mfl code`.
+  const lowerToTarget = new Map<string, string>();
+  const extrasOptIn = new Set<string>();
+  if (opts.columnMap) {
+    for (const [header, target] of Object.entries(opts.columnMap.columns)) {
+      lowerToTarget.set(header.trim().toLowerCase(), target);
+    }
+    for (const header of opts.columnMap.extras ?? []) {
+      extrasOptIn.add(header.trim().toLowerCase());
+    }
+  }
+  const effective = opts.columnMap
+    ? headers.map((h) => lowerToTarget.get(h) ?? h)
+    : headers;
+
+  // A header is unknown unless it mapped to a contract field, already IS one, or was explicitly
+  // opted in to extras. The refusal itself is unchanged — see this function's docblock.
+  const unknownColumns = effective.filter((h, i) =>
+    h !== '' && effective.indexOf(h) === i && !KNOWN.has(h) && !extrasOptIn.has(headers[i]));
 
   if (duplicateColumns.length > 0) {
-    return { records: [], unknownColumns, duplicateColumns: [...new Set(duplicateColumns)], quarantined: [], skipped: 0, invalid: [] };
+    return { records: [], unknownColumns, duplicateColumns: [...new Set(duplicateColumns)], columnMapErrors, quarantined: [], skipped: 0, invalid: [] };
+  }
+  if (columnMapErrors.length > 0) {
+    return { records: [], unknownColumns, duplicateColumns: [], columnMapErrors, quarantined: [], skipped: 0, invalid: [] };
   }
   if (unknownColumns.length > 0 && !opts.allowUnknownColumns) {
-    return { records: [], unknownColumns, duplicateColumns: [], quarantined: [], skipped: 0, invalid: [] };
+    return { records: [], unknownColumns, duplicateColumns: [], columnMapErrors, quarantined: [], skipped: 0, invalid: [] };
   }
 
   const quarantined: QuarantinedRow[] = [];
@@ -229,7 +336,10 @@ export function parseFacilityCsv(csv: string, opts: FacilityCsvOptions): Facilit
     }
 
     const r: Record<string, string> = {};
-    headers.forEach((h, i) => { r[h] = record[i]; });
+    effective.forEach((h, i) => { r[h] = record[i]; });
+    for (const [field, value] of Object.entries(opts.columnMap?.constants ?? {})) {
+      r[field] = value;
+    }
 
     const nationalCode = text(r.national_code);
     const name = text(r.name);
@@ -243,9 +353,11 @@ export function parseFacilityCsv(csv: string, opts: FacilityCsvOptions): Facilit
     const longitude = badCoords ? null : coords.longitude;
 
     const extras: Record<string, unknown> = {};
-    for (const col of unknownColumns) {
-      const v = text(r[col]);
-      if (v !== null) extras[col] = v;
+    for (let i = 0; i < effective.length; i += 1) {
+      const target = effective[i];
+      if (KNOWN.has(target)) continue;
+      const v = text(record[i]);
+      if (v !== null) extras[headers[i]] = v;
     }
 
     records.push({
@@ -273,5 +385,5 @@ export function parseFacilityCsv(csv: string, opts: FacilityCsvOptions): Facilit
     });
   }
 
-  return { records, unknownColumns, duplicateColumns: [], quarantined, skipped, invalid };
+  return { records, unknownColumns, duplicateColumns: [], columnMapErrors, quarantined, skipped, invalid };
 }
