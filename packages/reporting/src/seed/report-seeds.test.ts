@@ -683,24 +683,67 @@ describe('SEED_DESIGNS — rt-amr-antibiogram', () => {
   // ⛔ P0-05. The cells read `0% (1)` and `100% (1)`. Nothing on the page said the percentage was
   // RESISTANT — the meaning lived only in the Reports-page `description`, which is not on the PDF.
   // A reader saw 100% and read excellent susceptibility. It means the opposite.
-  it('states on the document that the percentage is resistant, and what the parenthesised number is', () => {
+  //
+  // ⚠ Rendered-PDF regression: the metric used to ALSO carry "the figure in parentheses is the
+  // number of isolates tested", and rendering the real PDF showed it ellipsized off the page — the
+  // scope panel is a narrow two-column keyvalue box, not the full page width. That sentence now
+  // lives on the LEGEND (full content width, does not truncate), so this test only checks the
+  // metric for "resistant"; the "what is the parenthesised number" assertion moved to the legend
+  // test below, next to "explains a blank cell", so both live where the reader actually sees them.
+  it('states on the document that the percentage is resistant', () => {
     const d = SEED_DESIGNS.find((x) => x.id === 'rt-amr-antibiogram')!;
     const panel = d.pages[0].elements.find((e) => e.id === 'rt-amr-antibiogram-meta')!;
     const metric = (panel.rows as [string, string][]).find(([k]) => k === 'Metric');
     expect(metric).toBeDefined();
     expect(metric![1]).toMatch(/resistant/i);
-    expect(metric![1]).toMatch(/tested/i);
   });
 
-  // ⛔ P0-07. antibiogramCellSql emits '' only when count(*) = 0 for that antibiotic, so a blank
-  // has exactly ONE meaning. State that one meaning; do not invent tokens for states the data
-  // cannot produce. When P0-06 adds suppression, it extends this line with its own token.
-  it('explains a blank cell on the document', () => {
+  // ⛔ P0-07 + the parenthesised-count explanation (moved here from the metric — see above).
+  // antibiogramCellSql emits '' only when count(*) = 0 for that antibiotic, so a blank has exactly
+  // ONE meaning. State that one meaning; do not invent tokens for states the data cannot produce.
+  // When P0-06 adds suppression, it extends this line with its own token.
+  it('explains what the parenthesised number is, and a blank cell, on the document', () => {
     const d = SEED_DESIGNS.find((x) => x.id === 'rt-amr-antibiogram')!;
     const legend = d.pages[0].elements.find((e) => e.id === 'rt-amr-antibiogram-legend')!;
     expect(legend.kind).toBe('text');
+    expect(legend.text).toMatch(/tested/i);
     expect(legend.text).toMatch(/blank/i);
     expect(legend.text).toMatch(/not tested/i);
+  });
+
+  // Guard against the exact defect above reopening silently: every unit test asserted the design
+  // OBJECT's string, never the box pdfkit renders it into, so an 83-char metric passed every test
+  // while the real PDF ellipsized it. This derives the value column's actual width from the SAME
+  // code path the renderer uses (toPt -> pairRects, `packages/report-designer/src/render/draw.ts`)
+  // rather than guessing a magic number, and bounds the metric's character count against it.
+  it('keeps the metric VALUE short enough to render un-ellipsized in the scope panel', () => {
+    const d = SEED_DESIGNS.find((x) => x.id === 'rt-amr-antibiogram')!;
+    const meta = d.pages[0].elements.find((e) => e.id === 'rt-amr-antibiogram-meta')!;
+    const rows = (meta.rows ?? []) as [string, string][];
+    const metricIndex = rows.findIndex(([k]) => k === 'Metric');
+    expect(metricIndex, 'Metric pair missing from the scope panel').toBeGreaterThanOrEqual(0);
+
+    // Same conversion `drawElement` applies before calling `pairRects`: the design rect is px@96,
+    // pairRects' own constants (KV_PAD_X, KV_GUTTER, KV_LABEL_FRAC, ...) are raw points.
+    const box = toPt(meta.rect);
+    const pairs = pairRects(box, rows.length, meta.layout ?? 'inline', meta.panelColumns ?? 1, false);
+    const valueBoxW = pairs[metricIndex].value.w;
+
+    // pdfkit itself is not reachable from this test: it is a dependency of
+    // `@openldr/report-designer`, not a direct dependency of `@openldr/reporting`, so
+    // `doc.widthOfString` cannot be called here to get an exact glyph measurement. In its place:
+    // a CONSERVATIVE average Helvetica character width of 0.6em (60% of KV_VALUE_SIZE, the panel's
+    // 8pt value font in draw.ts) — wider than Helvetica's typical ~0.5em average for running
+    // English text, so a string that fits this budget is guaranteed to fit the real render. This
+    // is a FLOOR, not pdfkit's true limit: it may refuse a string pdfkit would actually still fit,
+    // but it cannot pass a string pdfkit would ellipsize.
+    const CONSERVATIVE_AVG_CHAR_W_PT = 0.6 * 8;
+    const budget = Math.floor(valueBoxW / CONSERVATIVE_AVG_CHAR_W_PT);
+
+    expect(
+      rows[metricIndex][1].length,
+      `metric value must fit roughly ${budget} chars at an ${valueBoxW.toFixed(1)}pt-wide value column`,
+    ).toBeLessThanOrEqual(budget);
   });
 });
 

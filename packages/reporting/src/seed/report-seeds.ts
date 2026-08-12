@@ -2169,8 +2169,15 @@ export const SEED_DESIGNS: ReportDesign[] = [
     transposeLabel: 'Antibiotic',
     // ⛔ P0-05/P0-07. These two strings are the whole point of the report being safe to read. They
     // are design DATA, not renderer code, so a lab can reword them for its own standard.
-    metric: 'Percent resistant (%R). The figure in parentheses is the number of isolates tested.',
-    legend: 'A blank cell means that antibiotic was not tested against that organism in this period.',
+    // ⛔ RENDERED-PDF DEFECT: the metric used to carry BOTH sentences and got cut to "…the
+    // figure in parentheses is the…" — the scope panel is a two-column INLINE keyvalue panel, so
+    // the value gets a fixed, narrow box and pdfkit ellipsizes anything longer, silently. The
+    // explanation of the parenthesised count never reached the page. The legend element is
+    // different: it spans the FULL content width and does not truncate (the GLASS design's
+    // 200+ char legend renders in full at the same size), so the notation sentence moved there
+    // and `metric` keeps only the short label the narrow box can actually show.
+    metric: 'Percent resistant (%R)',
+    legend: 'The figure in parentheses is the number of isolates tested. A blank cell means that antibiotic was not tested against that organism in this period.',
     columns: [
       { key: 'pathogen', label: 'Pathogen' },
       ...ANTIBIOGRAM_PANEL.map((a) => ({ key: a, label: a })),
