@@ -1325,6 +1325,44 @@ describe('SEED_DESIGNS — rt-amr-glass-ris document legibility', () => {
   });
 });
 
+describe('q-amr-glass-ris display names', () => {
+  const q = () => SEED_QUERIES.find((x) => x.id === 'q-amr-glass-ris')!;
+
+  // The three dialects are STRING-COMPARED here, never executed. Only postgres runs under pg-mem
+  // and only the live warehouse proves mssql/mysql. This asserts the projection exists in each.
+  it.each(['postgres', 'mssql', 'mysql'] as const)('projects Pathogen and SpecimenName in %s', (d) => {
+    const sql = q().sql[d]!;
+    expect(sql).toMatch(/pathogen_name as [`"]Pathogen[`"]/);
+    expect(sql).toMatch(/specimen_name as [`"]SpecimenName[`"]/);
+    expect(sql).toMatch(/coalesce\(s\.type_text, s\.type_code, '\(unknown\)'\) as specimen_name/);
+  });
+
+  // ⛔ The submission columns are read by a national programme. Adding display names must not
+  // rename, reorder or remove any of them.
+  it.each(['postgres', 'mssql', 'mysql'] as const)('leaves every submission column intact in %s', (d) => {
+    const sql = q().sql[d]!;
+    for (const c of ['Iso3Country', 'Year', 'Specimen', 'PathogenCode', 'AntibioticCode',
+      'Gender', 'AgeGroup', 'Origin', 'Resistant', 'Intermediate', 'Susceptible', 'Total']) {
+      expect(sql).toMatch(new RegExp(`as [\`"]${c}[\`"]`));
+    }
+    expect(sql).toMatch(/pathogen_code as [`"]PathogenCode[`"]/);
+    expect(sql).toMatch(/specimen_type as [`"]Specimen[`"]/);
+  });
+
+  it('binds the NAME columns on the design, and no longer calls the antibiotic a code', () => {
+    const d = SEED_DESIGNS.find((x) => x.id === 'rt-amr-glass-ris')!;
+    const table = d.pages[0].elements.find((e) => e.kind === 'table')!;
+    const keys = table.boundColumns!.map((c) => c.key);
+    expect(keys).toContain('Pathogen');
+    expect(keys).toContain('SpecimenName');
+    expect(keys).not.toContain('PathogenCode');
+    expect(keys).not.toContain('Specimen');
+    // antibioticNormalizeSql already emits the DISPLAY name; only the key said "code".
+    const abx = table.boundColumns!.find((c) => c.key === 'AntibioticCode')!;
+    expect(abx.label).toBe('Antibiotic');
+  });
+});
+
 describe('SEED_DESIGNS — no built-in id can collide with a designer-minted id', () => {
   it('no built-in design id can collide with a designer-minted id', () => {
     // ⛔ The designer mints `rt-${Date.now()}` for New template and Duplicate. Duplicate is the
