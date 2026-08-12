@@ -5,14 +5,23 @@ import { loadConfig } from '@openldr/config';
 import {
   createAppContext, importFacilities, recordAuditEvent, scanObservedFacilities, publishFacilityMap,
   listFacilityMappingConflicts, facilityHealth,
+  // Task 9: the offline suggestion engine (Task 2) and the value-mapping writer (Task 5) — the SAME
+  // `@openldr/bootstrap` functions the HTTP routes call (Task 4/6, apps/server/src/facilities-routes.ts).
+  // Reused verbatim below; nothing here re-implements ranking or validation.
+  suggestColumns, suggestValues, saveFacilityValueMappings, resolveControlledFields,
+  CONTROLLED_FIELDS, CONTROLLED_VALUE_SETS,
   type AppContext, type ScanResult, type PublishResult, type FacilityMappingConflict, type FacilityHealth,
-  type FacilityImportResult,
+  type FacilityImportResult, type ColumnSuggestion, type ValueMappingEntry, type ControlledField,
 } from '@openldr/bootstrap';
 import {
   referenceCapture, createFacilityImportRunStore, createFacilityRegisterSourceStore,
   resolveFacilityRegisterForImport, type ExternalSchema,
   type FacilityImportRun, type FacilityImportRunStore, type FacilityRegisterSource,
 } from '@openldr/db';
+// Task 9: `parseFacilityCsv` is what `suggest-values` runs the file through to find each controlled
+// field's raw values (real, pure — no database). `FacilityColumnMap`/`ColumnMapError` are the wire
+// shapes `--column-map` reads and reports; never re-declared here.
+import { parseFacilityCsv, type FacilityColumnMap, type ColumnMapError } from '@openldr/terminology';
 import { cliActor } from './cli-actor';
 import { redactError } from './redact-error';
 
@@ -48,7 +57,68 @@ export interface FacilitiesImportOpts {
   /** Mirrors `FacilityImportOptions.onConflict`. Currently has no effect on this CLI path because
    *  the single-step apply lacks a preview watermark to detect conflicts against. */
   onConflict?: 'skip' | 'overwrite';
+  /** Path to a column-map JSON file (a `FacilityColumnMap`, packages/terminology) mapping this
+   *  file's headers onto the contract. Produce a starting point with `openldr facilities
+   *  suggest-map`, review it, and feed it back here unchanged or edited. Threaded straight into
+   *  `FacilityImportOptions.columnMap` — a bad map is refused by the real parser (Task 1/3), not
+   *  re-validated here, and its `columnMapErrors` are printed either way. */
+  columnMap?: string;
+  /** Path to a value-map JSON file — a JSON array of `{ field, rawValue, toCode }` entries written
+   *  through `saveFacilityValueMappings` (Task 5), the SAME function the HTTP
+   *  `/api/facilities/import/value-mappings` route (Task 6) calls. Written ONLY on `--apply`,
+   *  before the import itself, so this apply's own preview resolves what it just wrote — mirroring
+   *  every other write this command can perform: a dry run writes nothing (see this interface's own
+   *  class doc comment above).
+   *
+   *  ⛔ `--national-system` stays FREE TEXT on this command (facility-csv.ts:103) — the HTTP doors
+   *  gate it through a registered-source lookup and this CLI does not, and that gap is a separate
+   *  slice this task does not close. A value map writes under
+   *  `observedFieldSystem(field, <whatever --national-system was typed>)`
+   *  (packages/bootstrap/src/facility-controlled-fields.ts), so a MISTYPED register here writes
+   *  mappings that will never resolve against anything — silently, with no error anywhere in the
+   *  system to catch it. Spell `--national-system` exactly as `facilities import-sources` prints it. */
+  valueMap?: string;
   json: boolean;
+}
+
+/** Reads a file and parses it as JSON, folding both failure modes (unreadable, unparseable) into one
+ *  operator-facing message — never a raw stack trace. Shared by every `--column-map`/`--value-map`/
+ *  `suggest-values --column-map` file read below, so the three read the exact same way. */
+function readJsonFile<T>(path: string): { ok: true; value: T } | { ok: false; error: string } {
+  let text: string;
+  try {
+    text = readFileSync(path, 'utf8');
+  } catch (err) {
+    return { ok: false, error: `could not read ${path}: ${redactError(err)}` };
+  }
+  try {
+    return { ok: true, value: JSON.parse(text) as T };
+  } catch {
+    return { ok: false, error: `${path} is not valid JSON` };
+  }
+}
+
+/** One `ColumnMapError` (packages/terminology/src/facility-csv.ts), rendered for an operator to act
+ *  on — the fix for the bug this task closes: every blocked import used to print "N row(s)
+ *  quarantined" regardless of WHY it was blocked, so a misrouted column sent an operator chasing a
+ *  quarantine problem that was never there. One branch per `ColumnMapErrorReason`, matching exactly
+ *  what `validateColumnMap` (facility-csv.ts) can produce — a reason added there and not here is a
+ *  `tsc` exhaustiveness error via the `default` branch below, not a silently generic message. */
+function describeColumnMapError(e: ColumnMapError): string {
+  switch (e.reason) {
+    case 'duplicate_target':
+      return `"${e.subject}" and "${e.other}" both map to "${e.target}" — only one column may claim a field`;
+    case 'constant_collision':
+      return `constant "${e.target}" collides with "${e.other}", which already maps a column to it`;
+    case 'unknown_target':
+      return `"${e.subject}" maps to "${e.target}", which is not one of the 16 contract fields`;
+    case 'missing_required':
+      return `required field "${e.target}" has no column or constant mapped to it`;
+    default: {
+      const _exhaustive: never = e.reason;
+      return `${_exhaustive}: ${e.subject} -> ${e.target}`;
+    }
+  }
 }
 
 /**
@@ -107,6 +177,30 @@ export async function runFacilitiesImport(path: string, opts: FacilitiesImportOp
     return 1;
   }
 
+  // Task 9: `--column-map`/`--value-map` files are read and parsed HERE — before `createAppContext`
+  // — so a typo'd path or broken JSON refuses fast, the same way the missing-`path`-file check above
+  // does, without ever opening a database connection for a call that cannot proceed.
+  let columnMap: FacilityColumnMap | undefined;
+  if (opts.columnMap) {
+    const read = readJsonFile<FacilityColumnMap>(opts.columnMap);
+    if (!read.ok) {
+      if (opts.json) process.stdout.write(JSON.stringify({ error: read.error }) + '\n');
+      else process.stderr.write(`facilities import failed: ${read.error}\n`);
+      return 1;
+    }
+    columnMap = read.value;
+  }
+  let valueMapEntries: ValueMappingEntry[] | undefined;
+  if (opts.valueMap) {
+    const read = readJsonFile<ValueMappingEntry[]>(opts.valueMap);
+    if (!read.ok) {
+      if (opts.json) process.stdout.write(JSON.stringify({ error: read.error }) + '\n');
+      else process.stderr.write(`facilities import failed: ${read.error}\n`);
+      return 1;
+    }
+    valueMapEntries = read.value;
+  }
+
   const ctx = await createAppContext(loadConfig());
   const importRuns = createFacilityImportRunStore(ctx.internalDb);
   // Populated only for `--apply` — see the docblock above for why a dry run mints nothing. Every
@@ -134,6 +228,25 @@ export async function runFacilitiesImport(path: string, opts: FacilitiesImportOp
       if (opts.json) process.stdout.write(JSON.stringify({ error: register.error }) + '\n');
       else process.stderr.write(`facilities import refused: ${register.error}\n`);
       return 1;
+    }
+
+    // Task 9: `--value-map`, written BEFORE the preview/apply below, so this call's own preview
+    // resolves the mappings it just wrote (no second CLI invocation needed to see the effect) —
+    // gated on `opts.apply` for the same reason every other write here is: a dry run writes NOTHING
+    // (this interface's own class doc comment), and a value mapping is a real write to
+    // `term_mappings`, not merely a report. `saveFacilityValueMappings` validates every entry against
+    // its value set BEFORE writing any of them (Task 5) and throws on the first bad one; that refusal
+    // is reported the same way `startPreview`'s refusal below is, and no run is minted for it since
+    // this runs BEFORE `startPreview`.
+    if (valueMapEntries && opts.apply) {
+      try {
+        await saveFacilityValueMappings(ctx.terminology.admin, opts.nationalSystem, valueMapEntries);
+      } catch (err) {
+        const msg = redactError(err);
+        if (opts.json) process.stdout.write(JSON.stringify({ error: msg }) + '\n');
+        else process.stderr.write(`facilities import refused: value map: ${msg}\n`);
+        return 1;
+      }
     }
 
     if (opts.apply) {
@@ -208,6 +321,12 @@ export async function runFacilitiesImport(path: string, opts: FacilitiesImportOp
       allowInvalidCoordinates: opts.allowInvalidCoordinates,
       format: opts.format, completeRelease: opts.completeRelease, releaseVersion: opts.releaseVersion,
       onDeleted: opts.onDeleted, onAbsent: opts.onAbsent, onConflict: opts.onConflict,
+      // Task 9: the parsed `--column-map`, verbatim — `undefined` when the flag was omitted, which
+      // is exactly `FacilityImportOptions.columnMap`'s own "headers must already BE the contract"
+      // default (facility-csv.ts). Existing exact-object `toHaveBeenCalledWith` assertions in
+      // facilities.test.ts are unaffected: `toEqual`-based matching treats an `undefined`-valued key
+      // the same as an absent one.
+      columnMap,
       // ⛔ `previewedAt` is deliberately NOT threaded from `run` here — see the docblock above:
       // this run's `previewed_at` (were we to complete it) would be set microseconds before this
       // same call, evaluating a conflict window that cannot contain a real conflict, only ever
@@ -268,19 +387,40 @@ export async function runFacilitiesImport(path: string, opts: FacilitiesImportOp
     // — duplicate headers have no override, so telling an operator to pass --allow-malformed-rows
     // would be pointing at a switch that cannot help them.
     if (preview.blocked) {
+      // ⛔ Task 9 bug fix: this used to be a two-way `duplicate-columns` / "everything else" branch,
+      // so a `'column-map'` block — a real reason once `--column-map` existed — fell into the
+      // "everything else" arm and was reported as "N row(s) quarantined" even though `quarantined`
+      // was empty and nothing was actually quarantined. That sent an operator chasing a quarantine
+      // problem that did not exist, instead of the misrouted column that did. Three explicit arms
+      // now, one per `FacilityImportBlockedReason`, matching the precedence documented on
+      // `FacilityImportResult.blockedReason` (facility-import.ts) — a reason added there and not
+      // here silently falls into the `quarantined-rows` message, same risk this fix removes for
+      // `'column-map'`, so keep this in lockstep with that type if it ever grows a fourth value.
       if (run) {
         const reason = preview.blockedReason === 'duplicate-columns'
           ? `refused: duplicate column header(s): ${preview.duplicateColumns.join(', ')}`
-          : `refused: ${preview.quarantined.length} row(s) quarantined`;
+          : preview.blockedReason === 'column-map'
+            ? `refused: column map error(s): ${preview.columnMapErrors.map(describeColumnMapError).join('; ')}`
+            : `refused: ${preview.quarantined.length} row(s) quarantined`;
         await finishRun(importRuns, run.id, 'failed', reason);
       }
       if (opts.json) {
+        // `columnMapErrors` (and every other counter) is already IN `preview` here — see the brief's
+        // own instruction to print it in both JSON and human output; JSON gets it for free.
         process.stdout.write(JSON.stringify(preview, null, 2) + '\n');
       } else if (preview.blockedReason === 'duplicate-columns') {
         process.stderr.write(
           `facilities import refused: duplicate column header(s) in ${path}: ${preview.duplicateColumns.join(', ')}\n` +
             'which of two identically-named columns wins is arbitrary, so there is no override — ' +
             'remove or rename the duplicate(s) and re-run\n',
+        );
+      } else if (preview.blockedReason === 'column-map') {
+        for (const e of preview.columnMapErrors) {
+          process.stderr.write(`${describeColumnMapError(e)}\n`);
+        }
+        process.stderr.write(
+          `${preview.columnMapErrors.length} column map error(s) in --column-map; fix the file and re-run — ` +
+            'there is no override, a misrouted column cannot be imported safely\n',
         );
       } else {
         for (const row of preview.quarantined) {
@@ -426,6 +566,243 @@ function formatHuman(result: FacilityImportResult, opts: FacilitiesImportOpts): 
  *  not where that list belongs — `--json` carries every entry. */
 const INVALID_LINES_SHOWN = 10;
 const UNMAPPED_VALUES_SHOWN = 10;
+
+// ── Task 9: `openldr facilities suggest-map <path> [--json]` ──────────────────────────────────
+//
+// CLI parity for `POST /api/facilities/import/suggest-map` (apps/server/src/facilities-routes.ts) —
+// both call the SAME `suggestColumns` (`@openldr/bootstrap`, Task 2). Read-only, no database: this
+// command never calls `createAppContext`, matching the engine's own "pure and offline" contract
+// (facility-mapping-suggest.ts) — a lab technician can run this with no server, no network.
+
+export interface FacilitiesSuggestMapOpts {
+  json: boolean;
+}
+
+/**
+ * `openldr facilities suggest-map <path> [--json]`
+ *
+ * Reads only the FIRST LINE of the file — same deliberately naive comma split as the HTTP route's
+ * own `suggest-map` endpoint (a quoted header containing a comma would split wrongly; acceptable
+ * because this is advisory and the operator reviews every header before anything is imported; the
+ * AUTHORITATIVE header parse stays `parseFacilityCsv`'s) — and prints a `FacilityColumnMap` whose
+ * `columns` holds every EXACT/LIKELY suggestion and whose `extras` holds every header the engine
+ * returned NO candidate for at all. That is the round trip this command exists for: the printed
+ * object is valid `--column-map` input, unedited, for a file whose columns the engine was confident
+ * about — the operator's job is to review it and fill in whatever it left out.
+ *
+ * ⛔ NO collision dedup, unlike the studio wizard's `ColumnMapStep` (Task 7): that panel pre-selects
+ * a `Select` widget per header and MUST leave two colliding exact matches (e.g. `Province` and
+ * `Zone` both suggesting `zone` on the real Zambia file) unmapped, because pre-selecting either would
+ * silently pick a winner. This command has no such constraint — it prints its best guess for EVERY
+ * header with an exact/likely candidate, even one two headers share, because the whole point is a
+ * file the operator reads before feeding it back; a map with a genuine collision is caught by
+ * `validateColumnMap`'s `duplicate_target` (surfaced as `blockedReason: 'column-map'` on the next
+ * `facilities import --column-map`) the moment it is used, not silently resolved here.
+ *
+ * A header whose top candidate is only `weak` is left out of BOTH `columns` and `extras` — same as
+ * the studio panel's "a weak guess never pre-selects" rule — because a weak guess an operator does
+ * not read is worse than a blank they must fill in (facility-mapping-suggest.ts's own header).
+ */
+export async function runFacilitiesSuggestMap(path: string, opts: FacilitiesSuggestMapOpts): Promise<number> {
+  let csv: string;
+  try {
+    csv = readFileSync(path, 'utf8');
+  } catch (err) {
+    const msg = redactError(err);
+    if (opts.json) process.stdout.write(JSON.stringify({ error: msg }) + '\n');
+    else process.stderr.write(`facilities suggest-map failed: could not read ${path}: ${msg}\n`);
+    return 1;
+  }
+
+  const firstLine = csv.split(/\r?\n/, 1)[0] ?? '';
+  const headers = firstLine.split(',').map((h) => h.trim()).filter((h) => h !== '');
+  if (headers.length === 0) {
+    const msg = `no header row found in ${path}`;
+    if (opts.json) process.stdout.write(JSON.stringify({ error: msg }) + '\n');
+    else process.stderr.write(`facilities suggest-map failed: ${msg}\n`);
+    return 1;
+  }
+
+  const suggestions = suggestColumns(headers);
+  const map = buildSuggestedColumnMap(headers, suggestions);
+
+  if (opts.json) {
+    process.stdout.write(JSON.stringify(map, null, 2) + '\n');
+  } else {
+    process.stdout.write(formatSuggestMapHuman(headers, suggestions, map) + '\n');
+  }
+  return 0;
+}
+
+/** See `runFacilitiesSuggestMap`'s own docblock for the three-way split (`columns` / `extras` /
+ *  neither) this implements — deliberately WITHOUT the studio panel's collision dedup. */
+function buildSuggestedColumnMap(headers: string[], suggestions: ColumnSuggestion[]): FacilityColumnMap {
+  const byHeader = new Map(suggestions.map((s) => [s.header, s]));
+  const columns: Record<string, string> = {};
+  const extras: string[] = [];
+  for (const header of headers) {
+    const candidates = byHeader.get(header)?.candidates ?? [];
+    const top = candidates[0];
+    if (!top) {
+      extras.push(header);
+    } else if (top.confidence === 'exact' || top.confidence === 'likely') {
+      columns[header] = top.target;
+    }
+    // `top.confidence === 'weak'`: neither mapped nor sent to extras — the operator decides by hand.
+  }
+  return extras.length > 0 ? { columns, extras } : { columns };
+}
+
+function formatSuggestMapHuman(headers: string[], suggestions: ColumnSuggestion[], map: FacilityColumnMap): string {
+  const byHeader = new Map(suggestions.map((s) => [s.header, s]));
+  const rows = headers.map((header) => {
+    const top = byHeader.get(header)?.candidates[0];
+    if (header in map.columns) return [header, map.columns[header], top?.confidence ?? ''];
+    if ((map.extras ?? []).includes(header)) return [header, '(extras)', ''];
+    return [header, '(not mapped — needs a decision)', top ? top.confidence : ''];
+  });
+  const headerRow = ['header', 'target', 'confidence'];
+  const widths = headerRow.map((h, i) => Math.max(h.length, ...rows.map((r) => r[i].length)));
+  const line = (cells: string[]) => cells.map((c, i) => (i === cells.length - 1 ? c : c.padEnd(widths[i]))).join('  ');
+  return [
+    line(headerRow), ...rows.map(line),
+    '',
+    `${Object.keys(map.columns).length} column(s) mapped, ${(map.extras ?? []).length} sent to extras — ` +
+      'review, edit if needed, and feed back with: openldr facilities import <path> --column-map <this-output.json>',
+  ].join('\n');
+}
+
+// ── Task 9: `openldr facilities suggest-values <path> --national-system <sys> [--column-map]` ──
+//
+// CLI parity for `POST /api/facilities/import/suggest-values` (apps/server/src/facilities-routes.ts).
+// Unlike that route (which takes one field's already-known raw values), this command finds the raw
+// values itself: it parses the file (Task 1's `parseFacilityCsv`, real and pure — no database), asks
+// the SAME `resolveControlledFields` (`@openldr/bootstrap`) `importFacilities` runs for every parsed
+// record which `level`/`status`/`country` values still have no mapping, and ranks each one with the
+// REAL `suggestValues` (Task 2) against its bound value set's expansion.
+
+export interface FacilitiesSuggestValuesOpts {
+  /** ⛔ FREE TEXT, same as `facilities import`'s own `--national-system` — see that option's doc
+   *  comment. `resolveControlledFields` derives `observedFieldSystem(field, nationalSystem)` from
+   *  this exact string to find which raw values already have a mapping; a mistyped register here
+   *  finds none, and every value looks unmapped, but nothing errors. This command does NOT gate it
+   *  through the registered-source lookup either — see `facilities import`'s own boundary note. */
+  nationalSystem: string;
+  /** Optional column map — the SAME file `facilities import --column-map` takes — so the raw values
+   *  gathered come from the file's OWN controlled-field columns rather than requiring headers already
+   *  spelled `level`/`status`/`country`. Omitted ⇒ the file's headers must already match the
+   *  contract, same default as `--column-map` everywhere else. */
+  columnMap?: string;
+  json: boolean;
+}
+
+interface SuggestValuesFieldResult {
+  notValidated: boolean;
+  values: ReturnType<typeof suggestValues>;
+}
+
+/**
+ * `openldr facilities suggest-values <path> --national-system <sys> [--column-map <file>] [--json]`
+ */
+export async function runFacilitiesSuggestValues(
+  path: string, opts: FacilitiesSuggestValuesOpts,
+): Promise<number> {
+  let csv: string;
+  try {
+    csv = readFileSync(path, 'utf8');
+  } catch (err) {
+    const msg = redactError(err);
+    if (opts.json) process.stdout.write(JSON.stringify({ error: msg }) + '\n');
+    else process.stderr.write(`facilities suggest-values failed: could not read ${path}: ${msg}\n`);
+    return 1;
+  }
+
+  let columnMap: FacilityColumnMap | undefined;
+  if (opts.columnMap) {
+    const read = readJsonFile<FacilityColumnMap>(opts.columnMap);
+    if (!read.ok) {
+      if (opts.json) process.stdout.write(JSON.stringify({ error: read.error }) + '\n');
+      else process.stderr.write(`facilities suggest-values failed: ${read.error}\n`);
+      return 1;
+    }
+    columnMap = read.value;
+  }
+
+  // `allowUnknownColumns`/`allowInvalidCoordinates`: this is a PREVIEW of vocabulary, not an import —
+  // it must see every row's `level`/`status`/`country` regardless of an unrelated bad coordinate or
+  // an extra column the operator has not yet decided where to route.
+  const parsed = parseFacilityCsv(csv, {
+    nationalSystem: opts.nationalSystem, columnMap, allowUnknownColumns: true, allowInvalidCoordinates: true,
+  });
+  if (parsed.duplicateColumns.length > 0 || parsed.columnMapErrors.length > 0) {
+    const msg = parsed.duplicateColumns.length > 0
+      ? `duplicate column header(s): ${parsed.duplicateColumns.join(', ')}`
+      : parsed.columnMapErrors.map(describeColumnMapError).join('; ');
+    if (opts.json) process.stdout.write(JSON.stringify({ error: msg }) + '\n');
+    else process.stderr.write(`facilities suggest-values refused: ${msg}\n`);
+    return 1;
+  }
+
+  const ctx = await createAppContext(loadConfig());
+  try {
+    const resolution = await resolveControlledFields(ctx.terminology.admin, opts.nationalSystem, parsed.records);
+    const byField: Record<ControlledField, SuggestValuesFieldResult> = {} as Record<ControlledField, SuggestValuesFieldResult>;
+    for (const field of CONTROLLED_FIELDS) {
+      if (resolution.notValidated.includes(field)) {
+        byField[field] = { notValidated: true, values: [] };
+        continue;
+      }
+      const raw = resolution.unmapped[field];
+      if (raw.length === 0) {
+        byField[field] = { notValidated: false, values: [] };
+        continue;
+      }
+      const vs = await ctx.terminology.admin.valueSets.getByUrl(CONTROLLED_VALUE_SETS[field]);
+      const candidates = vs
+        ? (await ctx.terminology.admin.valueSets.expand(vs.id)).codes.map(
+          (c: { code: string; display: string | null }) => ({ code: c.code, display: c.display ?? null }),
+        )
+        : [];
+      byField[field] = { notValidated: false, values: suggestValues(raw, candidates) };
+    }
+
+    if (opts.json) {
+      process.stdout.write(JSON.stringify(byField, null, 2) + '\n');
+    } else {
+      process.stdout.write(formatSuggestValuesHuman(byField) + '\n');
+    }
+    return 0;
+  } catch (err) {
+    const msg = redactError(err);
+    if (opts.json) process.stdout.write(JSON.stringify({ error: msg }) + '\n');
+    else process.stderr.write(`facilities suggest-values failed: ${msg}\n`);
+    return 1;
+  } finally {
+    await ctx.close();
+  }
+}
+
+function formatSuggestValuesHuman(byField: Record<ControlledField, SuggestValuesFieldResult>): string {
+  const lines: string[] = [];
+  for (const field of CONTROLLED_FIELDS) {
+    const r = byField[field];
+    if (r.notValidated) {
+      lines.push(`${field}: not validated — no value set seeded on this install`);
+      continue;
+    }
+    if (r.values.length === 0) {
+      lines.push(`${field}: every value already maps, or the file carries none`);
+      continue;
+    }
+    lines.push(`${field}:`);
+    for (const v of r.values) {
+      const top = v.candidates[0];
+      const target = top ? `${top.target} (${top.confidence})` : '(no suggestion — needs a decision)';
+      lines.push(`  ${v.value} -> ${target}`);
+    }
+  }
+  return lines.join('\n');
+}
 
 // ── Task 12: `openldr facilities import-runs` / `import-run <id>` ─────────────────────────────
 //

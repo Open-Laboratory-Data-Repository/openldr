@@ -1,0 +1,30 @@
+{
+  "columns": {
+    "MFL Code": "national_code",
+    "Name": "name",
+    "Province": "zone",
+    "District": "district",
+    "Constituency": "council",
+    "Ward": "ward",
+    "Type": "level",
+    "Ownership": "ownership",
+    "Operational status": "status",
+    "Latitude": "latitude",
+    "Longitude": "longitude"
+  },
+  "constants": {
+    "country": "ZMB"
+  },
+  "extras": [
+    "DHIS2 UID",
+    "Hims code",
+    "Zone",
+    "Location",
+    "Ownership type",
+    "Mobility status",
+    "Accesibility",
+    "Catchment population head count",
+    "Catchment population cso",
+    "Number of households"
+  ]
+}

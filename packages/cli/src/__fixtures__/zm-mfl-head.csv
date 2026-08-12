@@ -1,0 +1,4 @@
+MFL Code,DHIS2 UID,Hims code,Name,Province,District,Constituency,Ward,Zone,Location,Type,Ownership,Ownership type,Operational status,Mobility status,Accesibility,Catchment population head count,Catchment population cso,Number of households,Latitude,Longitude
+100001,dhis2uid01,HC001,Chunga Clinic,Lusaka,Lusaka,Munali,Chunga,Chamakubi Zone,Urban,Health Centre,GRZ,Government,Functional,Fixed,Yes,5000,4800,1200,-15.42,28.28
+100002,dhis2uid02,HC002,Ngwerere Health Post,Lusaka,Lusaka,Munali,Ngwerere,Chamakubi Zone,Rural,Health Post,GRZ,Government,Functional,Fixed,No,3000,2900,800,-15.30,28.35
+100003,dhis2uid03,HP003,Kabwata 1st Level Hospital,Lusaka,Lusaka,Kabwata,Kabwata,Chamakubi Zone,Urban,1st Level Hospital,GRZ,Government,Temporarily closure,Fixed,Yes,12000,11500,3000,-15.43,28.30
