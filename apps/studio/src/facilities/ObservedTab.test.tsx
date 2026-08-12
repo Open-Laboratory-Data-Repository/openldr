@@ -509,9 +509,15 @@ describe('ObservedTab', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: /^map$/i }));
     await screen.findByText(/^new mapping$/i);
 
-    // Search mode (the default on create): the ONLY combobox on the page is "Map type" — never a
+    // Search mode (the default on create): the ONLY Select on the page is "Map type" — never a
     // second one offering a choice of target system, even though 4 systems are active.
-    expect(screen.getAllByRole('combobox')).toHaveLength(1);
+    //
+    // Counted by element, not by role. `TermPicker`'s search box is a `role="combobox"` <input>
+    // (the WAI-ARIA combobox pattern, added with its keyboard support), so a bare role count is no
+    // longer a count of Selects. A Radix `SelectTrigger` is a <button>; the picker is an <input>.
+    const selectTriggers = (): HTMLElement[] =>
+      screen.getAllByRole('combobox').filter((el) => el.tagName === 'BUTTON');
+    expect(selectTriggers()).toHaveLength(1);
     // The operator can still tell what they're mapping TO — a real, accessibly-labelled field (Fix
     // 1, facility-mapping-targets round 1: this used to be a plain text `<div>`, invisible to
     // assistive tech; it's now a readOnly/disabled `<Input>` reachable via `getByLabelText`, whose
@@ -524,9 +530,9 @@ describe('ObservedTab', () => {
     expect(screen.queryByText('HFR')).not.toBeInTheDocument();
     expect(screen.queryByText('DEFAULT_FAC')).not.toBeInTheDocument();
 
-    // Manual mode: same story. Still exactly one combobox, and the accessible locked field persists.
+    // Manual mode: same story. Still exactly one Select, and the accessible locked field persists.
     fireEvent.click(screen.getByRole('button', { name: /enter manually/i }));
-    expect(screen.getAllByRole('combobox')).toHaveLength(1);
+    expect(selectTriggers()).toHaveLength(1);
     expect(screen.getByLabelText('System')).toBeInTheDocument();
     expect(screen.getByDisplayValue('FACILITY-REGISTRY')).toBeInTheDocument();
     expect(screen.queryByText('LOINC')).not.toBeInTheDocument();

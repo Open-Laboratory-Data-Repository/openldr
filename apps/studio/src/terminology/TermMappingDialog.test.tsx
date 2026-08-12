@@ -364,12 +364,18 @@ describe('TermMappingDialog', () => {
     );
 
     // Search mode (default on create): 2+ active systems renders the "System" Select — a SECOND
-    // combobox alongside "Map type".
-    expect(screen.getAllByRole('combobox')).toHaveLength(2);
+    // Select alongside "Map type".
+    //
+    // Counted by element, not by role. `TermPicker`'s search box is a `role="combobox"` <input>
+    // (the WAI-ARIA combobox pattern, added with its keyboard support), so a bare role count is no
+    // longer a count of Selects. A Radix `SelectTrigger` is a <button>; the picker is an <input>.
+    const selectTriggers = (): HTMLElement[] =>
+      screen.getAllByRole('combobox').filter((el) => el.tagName === 'BUTTON');
+    expect(selectTriggers()).toHaveLength(2);
 
     // Manual mode: same Select, unconditionally rendered, offering both systems.
     fireEvent.click(screen.getByRole('button', { name: /manual/i }));
-    const comboboxes = screen.getAllByRole('combobox');
+    const comboboxes = selectTriggers();
     expect(comboboxes).toHaveLength(2);
     fireEvent.click(comboboxes[comboboxes.length - 1]);
     expect(screen.getByRole('option', { name: 'LOINC' })).toBeInTheDocument();

@@ -59,6 +59,14 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       host: rootEnv.DEV_HOST || undefined,
+      // Pin the port. Studio and web both used Vite's default 5173 and relied on the
+      // "port in use, trying another one" fallback to separate them. That fallback only
+      // fires on EADDRINUSE, and once DEV_HOST binds the literal 127.0.0.1 while web
+      // binds `localhost` (::1 on Windows), the two sockets no longer collide — both
+      // servers keep 5173 and the browser reaches whichever one it resolves to.
+      // strictPort so a real conflict fails loudly instead of drifting again.
+      port: 5173,
+      strictPort: true,
       proxy: { '/api': 'http://localhost:3000' },
     },
     test: { environment: 'jsdom', globals: true, setupFiles: ['./src/setupTests.ts'] },
