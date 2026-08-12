@@ -1303,6 +1303,28 @@ describe('SEED_DESIGNS — the antibiogram is transposed because it cannot fit o
   });
 });
 
+describe('SEED_DESIGNS — rt-amr-glass-ris document legibility', () => {
+  // ⛔ P0-09. CSF, HAEIN, R/I/S, AMR, GLASS and RIS were all presented with no legend.
+  it('spells out R/I/S, AMR and GLASS on the document', () => {
+    const d = SEED_DESIGNS.find((x) => x.id === 'rt-amr-glass-ris')!;
+    const legend = d.pages[0].elements.find((e) => e.id === 'rt-amr-glass-ris-legend')!;
+    expect(legend.kind).toBe('text');
+    expect(legend.text).toMatch(/resistant/i);
+    expect(legend.text).toMatch(/intermediate/i);
+    expect(legend.text).toMatch(/susceptible/i);
+    expect(legend.text).toMatch(/antimicrobial resistance/i);
+    expect(legend.text).toMatch(/Global Antimicrobial Resistance and Use Surveillance System/i);
+  });
+
+  it('states what the table counts', () => {
+    const d = SEED_DESIGNS.find((x) => x.id === 'rt-amr-glass-ris')!;
+    const panel = d.pages[0].elements.find((e) => e.id === 'rt-amr-glass-ris-meta')!;
+    const metric = (panel.rows as [string, string][]).find(([k]) => k === 'Metric');
+    expect(metric).toBeDefined();
+    expect(metric![1]).toMatch(/isolate/i);
+  });
+});
+
 describe('SEED_DESIGNS — no built-in id can collide with a designer-minted id', () => {
   it('no built-in design id can collide with a designer-minted id', () => {
     // ⛔ The designer mints `rt-${Date.now()}` for New template and Duplicate. Duplicate is the

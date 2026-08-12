@@ -2113,6 +2113,10 @@ export const SEED_DESIGNS: ReportDesign[] = [
       { key: 'country', label: 'Country code', type: 'text', required: false, value: '' },
       { key: 'year', label: 'Year', type: 'text', required: false, value: '' },
     ],
+    metric: 'Counts of isolates by antimicrobial susceptibility test result.',
+    legend: 'R resistant, I intermediate, S susceptible. AMR: antimicrobial resistance. '
+      + 'GLASS: Global Antimicrobial Resistance and Use Surveillance System. '
+      + '(unknown) means the value was not recorded in the source record.',
   }),
   simpleTableDesign({
     id: 'rt-amr-first-isolate-summary',
