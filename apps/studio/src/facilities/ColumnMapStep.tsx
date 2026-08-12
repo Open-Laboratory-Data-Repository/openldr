@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo } from 'react';
+import { Fragment, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { MoreHorizontal } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -83,26 +83,61 @@ export function ColumnMapStep({
     return result;
   }, [headers, suggestionByHeader]);
 
-  /** What this header currently shows in its `Select` — the operator's own choice if they made one,
-   *  else the (collision-free) auto suggestion, else `Not mapped`. */
-  const selectedTarget = (header: string): string =>
-    value.columns[header] ?? autoTargetByHeader.get(header) ?? UNMAPPED;
+  // ⛔ Fix pass (declined-suggestion finding): `autoTargetByHeader` used to be consulted as a
+  // fallback on EVERY render, so an operator's explicit "Clear" or "Keep as extra" — both of which
+  // just delete `value.columns[header]` — was indistinguishable from a header nobody had touched
+  // yet. Clearing snapped the Select back to the suggestion, and "kept as extra" still silently
+  // counted toward `claimedTargets`, so the blocking summary could say "safe to continue" on a map
+  // the server's `validateColumnMap` would refuse. See `docs/superpowers/sdd/task-7-report.md` §Fix
+  // pass for the measured cases.
+  //
+  // Fix: seed the suggestions into `value.columns` via `onChange` ONCE, below, the first time this
+  // file's headers are seen. From that point on `value` is the single source of truth — an absent
+  // header genuinely means "not mapped" (never touched, or explicitly cleared: both look the same
+  // in the wire shape, and both are correctly "unmapped"). No more read-time fallback here.
+  const seededHeadersRef = useRef<string | null>(null);
+  useEffect(() => {
+    const signature = headers.join('\u0000');
+    if (seededHeadersRef.current === signature) return;
+    seededHeadersRef.current = signature;
+    const extras = new Set(value.extras ?? []);
+    const columns = { ...value.columns };
+    let changed = false;
+    for (const [header, target] of autoTargetByHeader) {
+      // A header already in `columns` (operator chose, or a resumed draft) or already sent to
+      // `extras` (a resumed draft's own "kept as extra") must not be overwritten by the seed.
+      if (!(header in columns) && !extras.has(header)) {
+        columns[header] = target;
+        changed = true;
+      }
+    }
+    if (changed) onChange({ ...value, columns });
+    // Deliberately keyed on the header signature + the (memoized, collision-resolved) suggestion
+    // map only. `value`/`onChange` are read for their current-render values but must stay OUT of
+    // this array — the ref above, not this array, is what stops the seed from firing more than
+    // once per file; including them would refire this on the very re-render our own `onChange`
+    // call causes, i.e. an infinite loop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [headers, autoTargetByHeader]);
 
-  /** Every contract field currently satisfied — by a column (the value actually shown in that row's
-   *  `Select`, auto-selected or chosen) or by a non-empty constant. Read for both the constants
-   *  section (a field already claimed by a column has nothing to set a constant for) and the
-   *  blocking summary below. */
+  /** What this header currently shows in its `Select`. Post-seed, `value.columns` is authoritative —
+   *  see the fix-pass note above. */
+  const selectedTarget = (header: string): string => value.columns[header] ?? UNMAPPED;
+
+  /** Every contract field currently satisfied — by a column actually mapped to it, or by a
+   *  non-empty constant. A header sitting in `extras` maps to nothing and is correctly invisible
+   *  here (it is absent from `value.columns` by construction — see `keepAsExtra`). Read for both
+   *  the constants section (a field already claimed by a column has nothing to set a constant for)
+   *  and the blocking summary below; mirrors what the server's `validateColumnMap` (Task 1) treats
+   *  as satisfied. */
   const claimedTargets = useMemo(() => {
     const claimed = new Set<string>();
-    for (const header of headers) {
-      const target = value.columns[header] ?? autoTargetByHeader.get(header);
-      if (target) claimed.add(target);
-    }
+    for (const target of Object.values(value.columns)) claimed.add(target);
     for (const [field, raw] of Object.entries(value.constants ?? {})) {
       if (raw.trim() !== '') claimed.add(field);
     }
     return claimed;
-  }, [headers, value.columns, value.constants, autoTargetByHeader]);
+  }, [value.columns, value.constants]);
 
   const missingRequired = REQUIRED_FIELDS.filter((f) => !claimedTargets.has(f));
   const unclaimedFields = CONTRACT_FIELDS.filter((f) => !claimedTargets.has(f));
