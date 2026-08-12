@@ -164,6 +164,35 @@ describe('report routes', () => {
     expect(run).toHaveBeenCalledTimes(1);
     expect(run).toHaveBeenCalledWith('r-amr-glass-ris', expect.anything());
   });
+
+  it('⛔ the GLASS submission CSV emits the pinned columns, never the extra ones', async () => {
+    const app = appWith({
+      run: async () => ({
+          columns: [
+            { key: 'Iso3Country', label: 'Iso3Country' }, { key: 'Year', label: 'Year' },
+            { key: 'Specimen', label: 'Specimen' }, { key: 'SpecimenName', label: 'Specimen name' },
+            { key: 'PathogenCode', label: 'PathogenCode' }, { key: 'Pathogen', label: 'Pathogen' },
+            { key: 'AntibioticCode', label: 'AntibioticCode' }, { key: 'Gender', label: 'Gender' },
+            { key: 'AgeGroup', label: 'AgeGroup' }, { key: 'Origin', label: 'Origin' },
+            { key: 'Resistant', label: 'Resistant' }, { key: 'Intermediate', label: 'Intermediate' },
+            { key: 'Susceptible', label: 'Susceptible' }, { key: 'Total', label: 'Total' },
+          ],
+          rows: [{
+            Iso3Country: 'ZMB', Year: 2026, Specimen: 'BLD', SpecimenName: 'Blood',
+            PathogenCode: 'ECOLI', Pathogen: 'Escherichia coli', AntibioticCode: 'Ciprofloxacin',
+            Gender: 'male', AgeGroup: '25-34', Origin: 'inpatient',
+            Resistant: 1, Intermediate: 0, Susceptible: 0, Total: 1,
+          }],
+      }),
+    });
+    const res = await app.inject({ method: 'GET', url: '/api/reports/glass/ris.csv' });
+    expect(res.statusCode).toBe(200);
+    const [header, first] = res.body.trim().split('\n');
+    expect(header).toBe('Iso3Country,Year,Specimen,PathogenCode,AntibioticCode,Gender,AgeGroup,Origin,Resistant,Intermediate,Susceptible,Total');
+    expect(header).not.toContain('SpecimenName');
+    expect(header).not.toContain('Pathogen,');
+    expect(first).toBe('ZMB,2026,BLD,ECOLI,Ciprofloxacin,male,25-34,inpatient,1,0,0,1');
+  });
 });
 
 describe('GET /api/reports/:id/options', () => {

@@ -24,3 +24,17 @@ export function toGlassRis(isolates: Isolate[], meta: { country: string; year: n
     a.Specimen.localeCompare(b.Specimen) || a.PathogenCode.localeCompare(b.PathogenCode) || a.AntibioticCode.localeCompare(b.AntibioticCode) ||
     a.Gender.localeCompare(b.Gender) || a.AgeGroup.localeCompare(b.AgeGroup) || a.Origin.localeCompare(b.Origin));
 }
+
+/**
+ * The exact ordered columns a GLASS submission file carries — the header and field order a national
+ * programme receives.
+ *
+ * ⛔ Pinned deliberately. Both submission paths used to call `toCsv(result.columns, rows)`, so the
+ * file's shape was a side effect of whatever the query happened to project. The query now also
+ * projects display-name columns for the human-facing PDF; without this pin they would silently
+ * appear in the submission. `key === label` because a machine file's header is its field name.
+ */
+export const GLASS_SUBMISSION_COLUMNS: readonly { key: string; label: string }[] = [
+  'Iso3Country', 'Year', 'Specimen', 'PathogenCode', 'AntibioticCode',
+  'Gender', 'AgeGroup', 'Origin', 'Resistant', 'Intermediate', 'Susceptible', 'Total',
+].map((k) => ({ key: k, label: k }));
