@@ -710,7 +710,8 @@ it('⛔ BLOCKS on a bad column map and writes nothing', async () => {
       apply: true,
     },
   );
-  expect(res.blocked).toBe('column-map');
+  expect(res.blocked).toBe(true);
+  expect(res.blockedReason).toBe('column-map');
   expect(res.columnMapErrors.map((e) => e.reason).sort())
     .toEqual(['duplicate_target', 'missing_required']);
   expect(res.written.created).toBe(0);
@@ -752,27 +753,39 @@ parsers. Add `columnMap: opts.columnMap` to that object. `parseFacilityRelease` 
 
 - [ ] **Step 4: Block on map errors**
 
-`FacilityImportBlockedReason` (line ~334) gains the new member:
+`FacilityImportBlockedReason` (line 186) gains the new member:
 
 ```ts
 export type FacilityImportBlockedReason =
-  'duplicate-columns' | 'quarantined-rows' | 'column-map' | null;
+  'duplicate-columns' | 'column-map' | 'quarantined-rows' | null;
 ```
 
-Add `columnMapErrors: ColumnMapError[]` to `FacilityImportResult`, and in the body — immediately
-after the existing duplicate-columns block — refuse:
+⛔ **There is no early `return` here, and no `emptyResult` object.** The result carries
+`blocked: boolean` **and** `blockedReason` (`facility-import.ts:245-253`), and both are computed in
+exactly one place — the `blockedReason` ternary at `facility-import.ts:647-650`. Extend that ternary
+rather than adding a return path; every consumer reads `blocked`/`blockedReason` and the file's own
+docblock forbids re-deriving the predicate anywhere else.
 
 ```ts
-  // A bad map is a guess about master data the parser refused to make (see `validateColumnMap`).
-  // Blocked BEFORE the quarantine check, because a misrouted column can make every row look
-  // malformed and the operator would chase the wrong problem.
-  if (parsed.columnMapErrors.length > 0) {
-    return { ...emptyResult, columnMapErrors: parsed.columnMapErrors, blocked: 'column-map' };
-  }
+  const blockedReason: FacilityImportResult['blockedReason'] =
+    duplicateColumns.length > 0
+      ? 'duplicate-columns'
+      : (parsed.columnMapErrors.length > 0
+        ? 'column-map'
+        : (quarantined.length > 0 && !opts.allowMalformedRows ? 'quarantined-rows' : null));
+  const blocked = blockedReason !== null;
 ```
 
-Carry `columnMapErrors: parsed.columnMapErrors` onto every other return path in the function so the
-field is never absent — including the success path.
+**Precedence, stated because it is a decision and not an accident:** `'duplicate-columns'` still
+wins, because a header appearing twice makes any map for it ambiguous — no map can fix it, so
+reporting the map error first would offer the operator a repair that cannot work. `'column-map'`
+beats `'quarantined-rows'` for the mirror-image reason: a misrouted column makes rows look malformed,
+so an operator shown the quarantine count would chase the wrong problem. This matches the parser's
+own ordering in Task 1.
+
+Add `columnMapErrors: ColumnMapError[]` to `FacilityImportResult`, and include
+`columnMapErrors: parsed.columnMapErrors` in the single result construction at
+`facility-import.ts:740`, beside `duplicates, blocked, blockedReason`.
 
 - [ ] **Step 5: Run the tests to verify they pass**
 
@@ -834,8 +847,10 @@ it('suggests value mappings from the bound value set', async () => {
   });
   expect(res.statusCode).toBe(200);
   const byValue = Object.fromEntries(res.json().values.map((v: any) => [v.value, v.candidates]));
-  expect(byValue.Functional).toEqual([]);          // 'Functional' vs active/suspended/inactive
-  expect(byValue['Temporarily closure'][0]?.target).toBeUndefined();
+  // Neither Zambian word resembles active/suspended/inactive closely enough to clear the floor.
+  // Mapping them is a human judgement, and the engine says so by offering nothing.
+  expect(byValue.Functional).toEqual([]);
+  expect(byValue['Temporarily closure']).toEqual([]);
 });
 
 it('refuses suggest-values for a field that is not controlled', async () => {
