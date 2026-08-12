@@ -39,6 +39,7 @@ const ENTRIES: readonly CatalogEntry[] = [
   { code: 'RP0002', domain: 'reports', httpStatus: 404, message: 'report not found' },
   { code: 'RP0003', domain: 'reports', httpStatus: 500, message: 'report generation failed' },
   { code: 'RP0004', domain: 'reports', httpStatus: 400, message: 'invalid report parameters' },
+  { code: 'RP0005', domain: 'reports', httpStatus: 404, message: 'no data for this report request' },
   // Connectors (CN)
   { code: 'CN0001', domain: 'connectors', httpStatus: 404, message: 'connector not found' },
   { code: 'CN0002', domain: 'connectors', httpStatus: 503, message: 'connector unreachable', retryable: true },

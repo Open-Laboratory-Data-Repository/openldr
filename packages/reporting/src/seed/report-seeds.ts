@@ -2016,6 +2016,25 @@ where q.id = {{param.request}}` },
   },
 ];
 
+/**
+ * Designs that must NOT render as a report when their subject does not exist, mapped to the bound
+ * element whose row IS that subject. Zero rows there means the subject is absent - for the clinical
+ * report, no such request.
+ *
+ * A constant, not a field on `ReportDesign`, deliberately. `toRow` persists every top-level design
+ * field as its own column (packages/report-designer/src/store.ts:8-21), so a schema field would need
+ * a migration plus five more sites - toRow/fromRow, hashOf, reference-apply.ts's reportDesignRow
+ * (the lab-side applier that silently dropped pageNumbers and then status), three hand-built pg-mem
+ * fixtures, and migrations.test.ts's manifest. Six sites for one flag on one design that nobody
+ * needs to author.
+ *
+ * `hdr`, NOT `tbl`: `hdr` binds q-clinical-micro-header, whose row IS the request. A real request
+ * with no isolate legitimately has zero AST rows, so gating on `tbl` would refuse valid reports.
+ */
+export const DESIGNS_REQUIRING_DATA: Readonly<Record<string, string>> = {
+  'rt-clinical-micro': 'hdr',
+};
+
 /** Report-designer page designs, one table bound to a `SEED_QUERIES` entry (via `simpleTableDesign`). */
 export const SEED_DESIGNS: ReportDesign[] = [
   simpleTableDesign({

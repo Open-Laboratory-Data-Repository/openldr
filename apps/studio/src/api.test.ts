@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { authFetch, createCodingSystem, fetchReport, formatApiError } from './api';
+import { authFetch, createCodingSystem, fetchReport, fetchReportPdf, formatApiError } from './api';
 import { setAccessToken, setAuthEnforced, setUnauthorizedHandler } from './auth/token';
 
 describe('api error handling', () => {
@@ -27,6 +27,32 @@ describe('api error handling', () => {
 
     await expect(fetchReport('r-amr-antibiogram')).rejects.toThrow(
       'report r-amr-antibiogram failed: required parameter: from · RP0001 · a1b2c3d4',
+    );
+  });
+
+  // Regression: the route answers a missing report request with 404 + { code: 'RP0005',
+  // message: '...' } (see reports-pdf.route.test.ts), but fetchReportPdf used to throw a bare
+  // "...failed: 404" and discard the body — the studio told the clinician the renderer broke
+  // when the real reason was "no such request".
+  it('fetchReportPdf surfaces the server message on a coded 404', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(
+      JSON.stringify({ code: 'RP0005', message: 'no data for this report request' }),
+      { status: 404, headers: { 'content-type': 'application/json' } },
+    )));
+
+    await expect(fetchReportPdf('r-clinical-report')).rejects.toThrow(
+      'report pdf r-clinical-report failed: no data for this report request · RP0005',
+    );
+  });
+
+  it('fetchReportPdf falls back to the status-based message on a non-JSON body, without throwing a parse error', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(
+      '',
+      { status: 500, headers: { 'content-type': 'text/plain' } },
+    )));
+
+    await expect(fetchReportPdf('r-clinical-report')).rejects.toThrow(
+      'report pdf r-clinical-report failed: 500',
     );
   });
 });

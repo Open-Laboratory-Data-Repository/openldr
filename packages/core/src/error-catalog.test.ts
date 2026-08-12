@@ -109,4 +109,11 @@ describe('error catalog', () => {
       expect(CATALOG[codeForStatus(status)], `status ${status}`).toBeDefined();
     }
   });
+
+  it('carries RP0005 for a report whose subject does not exist', () => {
+    // 404, not 400 or 500: the parameters were well-formed and the system worked — the request
+    // simply does not exist. A 500 would read as a bug; a 400 would blame the caller's input.
+    expect(CATALOG.RP0005.domain).toBe('reports');
+    expect(CATALOG.RP0005.httpStatus).toBe(404);
+  });
 });

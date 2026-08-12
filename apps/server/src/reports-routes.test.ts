@@ -165,6 +165,17 @@ describe('report routes', () => {
     expect(run).toHaveBeenCalledWith('r-amr-glass-ris', expect.anything());
   });
 
+  it('a report with no data is a coded 404, not a 500 and not a PDF', async () => {
+    // The refusal is only useful if it reaches the operator as a real message. A 500 would read as
+    // a bug in the server rather than a request that does not exist.
+    const { appError } = await import('@openldr/core');
+    const app = appWith({ renderPdf: async () => { throw appError('RP0005'); } });
+    const res = await app.inject({ method: 'GET', url: '/api/reports/r-clinical-micro.pdf?request=nope' });
+    expect(res.statusCode).toBe(404);
+    expect(res.headers['content-type']).not.toContain('application/pdf');
+    expect(res.json().code).toBe('RP0005');
+  });
+
   it('⛔ the GLASS submission CSV emits the pinned columns, never the extra ones', async () => {
     const app = appWith({
       run: async () => ({
