@@ -760,6 +760,7 @@ export const en = {
     noForm: 'No facility form is published.',
     noFormHelp: 'Facilities are entered through a published form targeting the Facilities page, and none exists yet — create one, or publish a draft, in the Form Builder.',
     openForms: 'Open Form Builder',
+    ambiguousForm: 'More than one facility form is published ({{names}}). Facilities can only be captured through one — archive or deactivate the others in the Form Builder, then reopen this dialog.',
     editTitle: 'Edit facility',
     newTitle: 'New facility',
     editDesc: 'Update this facility’s details.',

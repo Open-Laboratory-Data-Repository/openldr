@@ -756,6 +756,7 @@ export const pt: EnShape = {
     noForm: 'Nenhum formulário de unidades está publicado.',
     noFormHelp: 'As unidades são inseridas através de um formulário publicado que tem como destino a página Unidades, e ainda não existe nenhum — crie um, ou publique um rascunho, no Construtor de Formulários.',
     openForms: 'Abrir o Construtor de Formulários',
+    ambiguousForm: 'Há mais de um formulário de unidades publicado ({{names}}). As unidades só podem ser inseridas através de um — arquive ou desative os restantes no Construtor de Formulários e reabra esta janela.',
     editTitle: 'Editar unidade',
     newTitle: 'Nova unidade',
     editDesc: 'Atualizar os detalhes desta unidade.',

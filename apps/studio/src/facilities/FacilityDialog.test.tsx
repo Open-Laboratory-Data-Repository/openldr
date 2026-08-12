@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '@/i18n';
 
 vi.mock('@/api', async (orig) => {
@@ -195,6 +195,128 @@ describe('FacilityDialog', () => {
     // carries its real value through, confirming the fix narrows the restore loop's blank-'' path
     // rather than disabling field submission generally.
     expect(body.answers).toHaveProperty('f-phone', '+255700000000');
+  });
+
+  // ── Task 2: which form, and what happens to a load that lands too late ──────────────────────
+
+  /** A `listPublishedForms` row. Only `id` and `name` matter to the dialog. */
+  function summary(id: string, name: string) {
+    return {
+      id, name, versionLabel: null, status: 'published', active: true, fhirResourceType: null,
+      targetPages: ['facilities'], fieldCount: 4, updatedAt: '2026-01-01T00:00:00Z',
+    };
+  }
+
+  const formDefinition = {
+    id: FORM_DEFINITION_ID, name: 'Facility', versionLabel: null, fhirResourceType: null,
+    status: 'published', active: true, schema: facilitySchema, targetPages: ['facilities'],
+    createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z',
+  };
+
+  it('refuses to capture when two facility forms are published, naming both, instead of taking the first', async () => {
+    (api.listPublishedForms as ReturnType<typeof vi.fn>).mockResolvedValue([
+      summary('form-def-national', 'Facility (national)'),
+      summary('form-def-legacy', 'Facility (legacy)'),
+    ]);
+    render(<FacilityDialog open facility={null} onOpenChange={vi.fn()} onSaved={vi.fn()} />);
+
+    expect(await screen.findByText(/more than one facility form is published/i)).toBeInTheDocument();
+    // Both names are in the message, so the operator knows which two to choose between.
+    expect(screen.getByText(/Facility \(legacy\)/)).toBeInTheDocument();
+    expect(screen.getByText(/Facility \(national\)/)).toBeInTheDocument();
+    // No form is rendered, and neither candidate was even fetched — the dialog does not fall
+    // through to summaries[0], whose position is decided by a server ORDER BY name with no
+    // unique tiebreaker (packages/forms/src/store.ts listPublished).
+    expect(screen.queryByLabelText('Name')).not.toBeInTheDocument();
+    expect(api.getForm).not.toHaveBeenCalled();
+  });
+
+  // Differs from editFacility in every seeded value, so a stale seed is unmistakable.
+  const otherFacility: Facility = {
+    ...editFacility, id: 'fac-2', name: 'Mbeya ZRH', localCode: 'LAB02', phone: null, extras: {},
+  };
+
+  it('a form load abandoned by a facility switch does not fill the dialog, nor report the pending load as finished', async () => {
+    let landFirst!: (def: unknown) => void;
+    let landSecond!: (def: unknown) => void;
+    const firstLoad = new Promise((res) => { landFirst = res; });
+    const secondLoad = new Promise((res) => { landSecond = res; });
+    (api.getForm as ReturnType<typeof vi.fn>)
+      .mockReturnValueOnce(firstLoad)
+      .mockReturnValueOnce(secondLoad);
+
+    const { rerender } = render(
+      <FacilityDialog open facility={editFacility} onOpenChange={vi.fn()} onSaved={vi.fn()} />,
+    );
+    await waitFor(() => expect(api.getForm).toHaveBeenCalledTimes(1));
+
+    rerender(<FacilityDialog open facility={otherFacility} onOpenChange={vi.fn()} onSaved={vi.fn()} />);
+    await waitFor(() => expect(api.getForm).toHaveBeenCalledTimes(2));
+
+    // The FIRST facility's load lands only now — genuinely after the switch, and before the
+    // second facility's own load has resolved.
+    await act(async () => { landFirst(formDefinition); });
+
+    // Its schema was not taken, and it did not clear the loading flag the still-pending SECOND
+    // load owns — clearing it would render the dialog blank rather than loading.
+    expect(screen.queryByLabelText('Name')).not.toBeInTheDocument();
+    expect(screen.getByText('Loading…')).toBeInTheDocument();
+
+    // The second facility's own load then fills the form with ITS values.
+    await act(async () => { landSecond(formDefinition); });
+    await waitFor(() => expect(screen.getByLabelText('Name')).toHaveValue('Mbeya ZRH'));
+  });
+
+  it('a form load abandoned by a facility switch does not reseed the answers with the previous facility', async () => {
+    // The ordering the test above cannot reach: the CURRENT facility's load has already finished
+    // and rendered when the abandoned one lands. The schema it sets has the same schema.id, so
+    // remountKey does not change and FormRuntime keeps showing the right values — the damage is
+    // invisible on screen and only reaches the operator through Save, where handleSubmit's
+    // clear-restore loop walks initialAnswers.
+    let landFirst!: (def: unknown) => void;
+    const firstLoad = new Promise((res) => { landFirst = res; });
+    (api.getForm as ReturnType<typeof vi.fn>).mockReturnValueOnce(firstLoad);
+    (api.updateFacility as ReturnType<typeof vi.fn>).mockResolvedValue(otherFacility);
+
+    const { rerender } = render(
+      <FacilityDialog open facility={editFacility} onOpenChange={vi.fn()} onSaved={vi.fn()} />,
+    );
+    await waitFor(() => expect(api.getForm).toHaveBeenCalledTimes(1));
+
+    rerender(<FacilityDialog open facility={otherFacility} onOpenChange={vi.fn()} onSaved={vi.fn()} />);
+    await waitFor(() => expect(screen.getByLabelText('Name')).toHaveValue('Mbeya ZRH'));
+
+    await act(async () => { landFirst(formDefinition); });
+
+    clickMenuItem(/^save$/i);
+    await waitFor(() => expect(api.updateFacility).toHaveBeenCalled());
+    const [savedId, body] = (api.updateFacility as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(savedId).toBe('fac-2');
+    // Phone and contact belong to the FIRST facility and were never this one's. Seeded from it,
+    // they are absent from the submission and the restore loop turns them into explicit clears.
+    expect(body.answers).not.toHaveProperty('f-phone');
+    expect(body.answers).not.toHaveProperty('f-contact');
+    expect(body.answers['f-name']).toBe('Mbeya ZRH');
+  });
+
+  it('a form load that FAILS after a facility switch does not put its error on the new facility', async () => {
+    // The .catch has to be guarded for the same reason the .then is — a transient failure hits
+    // one request and not the retry, so the abandoned load can fail while the live one succeeds.
+    let failFirst!: (e: unknown) => void;
+    const firstLoad = new Promise((_res, rej) => { failFirst = rej; });
+    (api.getForm as ReturnType<typeof vi.fn>).mockReturnValueOnce(firstLoad);
+
+    const { rerender } = render(
+      <FacilityDialog open facility={editFacility} onOpenChange={vi.fn()} onSaved={vi.fn()} />,
+    );
+    await waitFor(() => expect(api.getForm).toHaveBeenCalledTimes(1));
+
+    rerender(<FacilityDialog open facility={otherFacility} onOpenChange={vi.fn()} onSaved={vi.fn()} />);
+    await waitFor(() => expect(screen.getByLabelText('Name')).toHaveValue('Mbeya ZRH'));
+
+    await act(async () => { failFirst(new Error('get form failed: 503')); });
+
+    expect(screen.queryByText(/get form failed/i)).not.toBeInTheDocument();
   });
 
   // ── Task 5: admin-area suggestions (zone/region/district/council) ───────────────────────────
