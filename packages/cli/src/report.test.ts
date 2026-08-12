@@ -76,4 +76,27 @@ describe('runReportGlassExport — submission column pin', () => {
     expect(first).toBe('ZMB,2026,BLD,ECOLI,Ciprofloxacin,male,25-34,inpatient,1,0,0,1');
     expect(mocks.appCtx.close).toHaveBeenCalled();
   });
+
+  it('--json also carries only the pinned twelve columns, in order', async () => {
+    let stdout = '';
+    const spy = vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+      stdout += chunk;
+      return true;
+    });
+
+    try {
+      const code = await runReportGlassExport({ country: 'ZM', year: '2026', json: true });
+      expect(code).toBe(0);
+    } finally {
+      spy.mockRestore();
+    }
+
+    const parsed = JSON.parse(stdout);
+    expect(Object.keys(parsed[0])).toEqual([
+      'Iso3Country', 'Year', 'Specimen', 'PathogenCode', 'AntibioticCode', 'Gender',
+      'AgeGroup', 'Origin', 'Resistant', 'Intermediate', 'Susceptible', 'Total',
+    ]);
+    expect(parsed[0]).not.toHaveProperty('SpecimenName');
+    expect(parsed[0]).not.toHaveProperty('Pathogen');
+  });
 });
