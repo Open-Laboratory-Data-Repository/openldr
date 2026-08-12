@@ -65,7 +65,7 @@ Append inside the existing `describe('simpleTableDesign', ...)` block in `packag
 
   it('grows the panel and pushes the table down by exactly one row when a metric is added', () => {
     const base = { id: 'rt-g', name: 'G', queryId: 'q-g', columns: [{ key: 'a', label: 'A' }],
-      parameters: [{ key: 'dateRange', label: 'Date range', type: 'daterange' }] };
+      parameters: [{ key: 'dateRange', label: 'Date range', type: 'daterange' as const }] };
     const without = simpleTableDesign(base);
     const with_ = simpleTableDesign({ ...base, metric: 'X' });
     const t = (d: typeof without) => d.pages[0].elements.find((e) => e.kind === 'table')!.rect.y;
