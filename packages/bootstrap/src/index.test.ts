@@ -4,7 +4,7 @@ import { createAppSettingsStore, createReportStore, createRoleStore, referenceCa
 import { createDashboardStore, createColumnPolicyStore, joinableTablesForClient } from '@openldr/dashboards';
 import { createFormStore } from '@openldr/forms';
 import type { Config } from '@openldr/config';
-import { createAppContext, capabilityBackfillEvents, type AppContext } from './index';
+import { createAppContext, capabilityBackfillEvents, buildReportingForTest, type AppContext } from './index';
 import { truncateTables } from './danger';
 
 const cfg: Config = Object.freeze({
@@ -296,5 +296,76 @@ describe('boot-time capability reconciliation audit', () => {
   // An ordinary restart changes nothing; it must not write an event, or the signal is worthless.
   it('emits no events when nothing was granted', () => {
     expect(capabilityBackfillEvents([])).toEqual([]);
+  });
+});
+
+/**
+ * Root C1 Task 1: the render-time refusal for a report whose subject does not exist. Builds the
+ * smallest `renderDataDriven` dependency set (the four `createDataDrivenReporting` reads, via the
+ * existing `buildReportingForTest` seam — see `reporting-data-driven.test.ts` for the same deps
+ * shape) so the gate in index.ts's `renderDataDriven` can be exercised without a real DB.
+ */
+function makeDataDriven(opts: {
+  design: { id: string; pages: unknown[]; parameters: unknown[] };
+  resolved: Map<string, { columns: { key: string; label: string }[]; rows: Record<string, unknown>[] } | { error: string }>;
+  onRender?: () => void;
+}) {
+  const def = {
+    id: 'r1', name: 'R', description: '', category: 'other', designId: opts.design.id,
+    primaryQueryId: 'q1', summaryMetrics: null, chart: null, paramOptions: null, status: 'published',
+  } as any;
+  const deps = {
+    reportDefs: { list: async () => [def], get: async (id: string) => (id === 'r1' ? def : undefined) },
+    reportDesigns: { get: async (id: string) => (id === opts.design.id ? opts.design : undefined) },
+    runStoredQuery: async () => ({ columns: [], rows: [] }),
+    resolveDesignTables: async () => opts.resolved,
+    renderReportDesignPdf: async () => {
+      opts.onRender?.();
+      return Buffer.from('%PDF-1.4 fake');
+    },
+  };
+  const reporting = buildReportingForTest(deps as any);
+  return { renderDataDriven: (id: string, params: unknown) => reporting.renderPdf(id, params) };
+}
+
+describe('renderDataDriven refuses a listed design whose subject has zero rows (Root C1 Task 1)', () => {
+  it('the refusal: a listed design whose required element resolved to ZERO rows', async () => {
+    // The audit photographed a clinical report showing labels with no values and a signature line.
+    // `keyValuePairs` renders zero rows exactly that way (draw.ts:340), so the page reads as a real,
+    // signable result for a request that was never made.
+    let rendered = false;
+    const dd = makeDataDriven({
+      design: { id: 'rt-clinical-micro', pages: [], parameters: [] },
+      resolved: new Map([['hdr', { columns: [], rows: [] }]]),
+      onRender: () => { rendered = true; },
+    });
+    await expect(dd.renderDataDriven('r1', {})).rejects.toMatchObject({ code: 'RP0005' });
+    expect(rendered, 'no PDF may be produced for a refused report').toBe(false);
+  });
+
+  it('renders a listed design when its required element has rows', async () => {
+    const dd = makeDataDriven({
+      design: { id: 'rt-clinical-micro', pages: [], parameters: [] },
+      resolved: new Map([['hdr', { columns: [{ key: 'a', label: 'A' }], rows: [{ a: 1 }] }]]),
+    });
+    await expect(dd.renderDataDriven('r1', {})).resolves.toBeInstanceOf(Buffer);
+  });
+
+  it('does NOT refuse on a query error - the renderer draws a visible placeholder for that', async () => {
+    // An error is loud. Refusing here would turn a visible red box into a failed download, and the
+    // spec deliberately scopes the refusal to the silent case.
+    const dd = makeDataDriven({
+      design: { id: 'rt-clinical-micro', pages: [], parameters: [] },
+      resolved: new Map([['hdr', { error: 'boom' }]]),
+    });
+    await expect(dd.renderDataDriven('r1', {})).resolves.toBeInstanceOf(Buffer);
+  });
+
+  it('renders a design ABSENT from the map, whatever its tables resolved to', async () => {
+    const dd = makeDataDriven({
+      design: { id: 'rt-amr-antibiogram', pages: [], parameters: [] },
+      resolved: new Map([['hdr', { columns: [], rows: [] }]]),
+    });
+    await expect(dd.renderDataDriven('r1', {})).resolves.toBeInstanceOf(Buffer);
   });
 });

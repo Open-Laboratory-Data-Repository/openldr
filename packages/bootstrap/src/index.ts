@@ -8,14 +8,14 @@ import { createEventBus } from '@openldr/adapter-event-bus';
 import { createS3Bucket } from '@openldr/adapter-s3-bucket';
 import { toS3BucketConfig } from './s3-config';
 import type { Config } from '@openldr/config';
-import { createLogger, HealthRegistry, open, seal, parseSecretKey, redact, type Logger } from '@openldr/core';
+import { createLogger, HealthRegistry, open, seal, parseSecretKey, redact, appError, type Logger } from '@openldr/core';
 import { createInternalDb, createFhirStore, createRelationalWriter, persistResources, createTerminologyStore, createTerminologyAdminStore, createOntologyStore, createReportRunStore, createReportScheduleStore, createMarketplaceInstallStore, createRegistryStore, createAppSettingsStore, deriveSystemCode, resolveSeedPublisherId, createProjectionRunner, fetchSafeChangeRows, readCursor as readChangeCursor, advanceCursor as advanceChangeCursor, createReferenceApplier, referenceCapture, markTerminologyChanged, createRoleStore, createFacilityRegistryStore, type TerminologyAdminStore, type OntologyStore, type FhirStore, type ReportRunStore, type ReportScheduleStore, type AppSettingStore, type RoleStore, type FacilityRegistryStore } from '@openldr/db';
 import type { ExternalSchema, InternalSchema, Provenance, SyncActivityStore, TargetEngine, CapabilityReconciliation } from '@openldr/db';
 import type { AuthPort, BlobStoragePort, EventingPort, TargetStorePort } from '@openldr/ports';
 import { createAuditStore, safeRecord, type AuditStore } from '@openldr/audit';
 import { createUserStore, type UserStore, createUserProfileStore, type UserProfileStore } from '@openldr/users';
 import { createFormStore, type FormStore } from '@openldr/forms';
-import { getEventSource, eventSourceCatalog, toCsv, type ReportResult, type ReportSummary, type ReportParamMeta, type ReportMetricMeta } from '@openldr/reporting';
+import { getEventSource, eventSourceCatalog, toCsv, DESIGNS_REQUIRING_DATA, type ReportResult, type ReportSummary, type ReportParamMeta, type ReportMetricMeta } from '@openldr/reporting';
 import { createDashboardStore, getModel, runBuilderQuery, runSqlQuery, applyTemplate, resolveValues, collectVettedSqlTemplates, isSqlExecutionAllowed, seedDefaultDashboard, runStoredQuery, compileBuilderQuery, formatSql, modelsForClient, joinableTablesForClient, createColumnPolicyStore, seedColumnExposurePolicy, type DashboardStore, type WidgetQuery, type RunStoredQueryDeps, type ClientQueryModel, type ClientJoinableTable, type ColumnPolicyStore, type ColumnPolicy } from '@openldr/dashboards';
 import { createReportDesignStore, renderReportDesignPdf, resolveDesignTables, type ReportDesignStore } from '@openldr/report-designer';
 import {
@@ -247,6 +247,20 @@ function createDataDrivenReporting(deps: ReportingDataDrivenDeps) {
     // this call returns, on a SEPARATE copy — see `withDisplayLabels` — and that copy must never
     // be fed back into resolveDesignTables.
     const resolved = await deps.resolveDesignTables(design, values, deps.runStoredQuery);
+    // ⛔ Refuse rather than render. DESIGNS_REQUIRING_DATA names the bound element whose row IS this
+    // report's subject, so zero rows means the subject does not exist — for the clinical report,
+    // no such request. `keyValuePairs` renders zero rows as labels with EMPTY values
+    // (packages/report-designer/src/render/draw.ts:340), which is the page the 2026-08-07 audit
+    // photographed and read as ready for sign-off.
+    // A query ERROR deliberately does NOT refuse: the renderer already draws a visible red
+    // placeholder for it, which is loud rather than misleading.
+    const requiredElement = DESIGNS_REQUIRING_DATA[design.id];
+    if (requiredElement) {
+      const subject = resolved.get(requiredElement);
+      if (!subject || (!('error' in subject) && subject.rows.length === 0)) {
+        throw appError('RP0005', { details: { reportId: id, element: requiredElement } });
+      }
+    }
     const identity = await deps.labIdentity?.tokens();
     const displayValues = await withDisplayLabels(id, def, design, values);
     return deps.renderReportDesignPdf(design, resolved, { identity, values: displayValues });
