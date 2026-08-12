@@ -9,6 +9,7 @@ import {
   ANTIBIOTIC_CODES,
   UNMAPPED_ANTIBIOTIC,
   antibioticNormalizeSql,
+  DESIGNS_REQUIRING_DATA,
   type SeedDataDrivenReportsDeps,
 } from './report-seeds';
 import { pairRects, toPt, paperSizePt, type ReportDesign } from '@openldr/report-designer';
@@ -252,6 +253,25 @@ describe('seedDataDrivenReports', () => {
     const refreshed = designs.get(target.id) as unknown as { name: string; status?: string };
     expect(refreshed.name).toBe(target.name);
     expect(refreshed.status).toBe('published');
+  });
+});
+
+describe('DESIGNS_REQUIRING_DATA', () => {
+  it('names the clinical report and its patient & specimen panel', () => {
+    expect(DESIGNS_REQUIRING_DATA['rt-clinical-micro']).toBe('hdr');
+  });
+
+  // A typo in either half would disable the refusal SILENTLY - `resolved.get(undefined)` never
+  // matches, the gate never fires, and an empty report renders exactly as it does today. This is
+  // the only thing standing between a one-character slip and the defect coming back.
+  it('every entry names a real, BOUND element of the design it claims', () => {
+    for (const [designId, elementId] of Object.entries(DESIGNS_REQUIRING_DATA)) {
+      const d = SEED_DESIGNS.find((x) => x.id === designId);
+      expect(d, `DESIGNS_REQUIRING_DATA names design '${designId}', which is not a seeded design`).toBeDefined();
+      const el = d!.pages.flatMap((pg) => pg.elements).find((e) => e.id === elementId);
+      expect(el, `${designId}: '${elementId}' is not one of its elements`).toBeDefined();
+      expect(el!.dataSource, `${designId}: '${elementId}' is not bound to a query`).toBeDefined();
+    }
   });
 });
 
