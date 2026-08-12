@@ -4,6 +4,10 @@ import type { ReportDesign, DesignElement, DesignPage } from '../schema';
 import type { ResolvedTable } from './index';
 
 const NOW = new Date('2026-07-08T00:00:00Z');
+// Local midnight, so `getDate()` is 8 in EVERY timezone. `NOW` above is a UTC instant and is 7 July
+// in any negative-offset zone, which would make a literal date expectation pass in Nairobi and fail
+// in New York.
+const NOW_LOCAL = new Date(2026, 6, 8);
 
 function design(over: Partial<ReportDesign> = {}): ReportDesign {
   return {
@@ -16,20 +20,41 @@ describe('paramMap', () => {
     const m = paramMap(design({ parameters: [
       { key: 'lab', label: 'Lab', type: 'text', value: 'Ndola' },
       { key: 'range', label: 'Range', type: 'daterange', value: { from: '2026-01-01', to: '2026-06-30' } },
-    ] }), NOW);
+    ] }), NOW_LOCAL);
     expect(m.get('lab')).toBe('Ndola');
-    expect(m.get('from')).toBe('2026-01-01');
-    expect(m.get('to')).toBe('2026-06-30');
-    expect(m.get('date')).toBe(NOW.toLocaleDateString());
+    // The reporting period is reformatted too — the audit called the raw ISO range mechanical.
+    expect(m.get('from')).toBe('1 Jan 2026');
+    expect(m.get('to')).toBe('30 Jun 2026');
+    // A LITERAL, not `NOW.toLocaleDateString()`. The old expectation called the same function as the
+    // code, so it passed whatever the format was — including the ambiguous `07/08/2026` this slice
+    // exists to remove.
+    expect(m.get('date')).toBe('8 Jul 2026');
   });
 
   it('renders a declared-but-unset param as an em dash, and still sets date', () => {
     // A blank beside a label reads as a failed render; "—" reads as "not filtered". (Previously this
     // param was left out of the map entirely — that changed when `paramMap` started always emitting
     // a declared parameter's token, so a design that prints it never shows a literal `{{param.x}}`.)
-    const m = paramMap(design({ parameters: [{ key: 'empty', label: 'E', type: 'text' }] }), NOW);
+    const m = paramMap(design({ parameters: [{ key: 'empty', label: 'E', type: 'text' }] }), NOW_LOCAL);
     expect(m.get('empty')).toBe('—');
-    expect(m.get('date')).toBe(NOW.toLocaleDateString());
+    expect(m.get('date')).toBe('8 Jul 2026');
+  });
+
+  it('leaves an unset date range as em dashes rather than formatting them', () => {
+    // `from`/`to` are declared `text` and hold `—` when the range is not supplied. Formatting that
+    // would print `Invalid Date` on the scope panel of a clinical report.
+    const m = paramMap(design({ parameters: [
+      { key: 'range', label: 'Range', type: 'daterange' },
+    ] }), NOW_LOCAL);
+    expect(m.get('from')).toBe('—');
+    expect(m.get('to')).toBe('—');
+  });
+
+  it('leaves a non-date parameter value alone', () => {
+    const m = paramMap(design({ parameters: [
+      { key: 'site', label: 'Site', type: 'text', value: 'Ndola' },
+    ] }), NOW_LOCAL);
+    expect(m.get('site')).toBe('Ndola');
   });
 });
 
@@ -46,8 +71,8 @@ describe('paramMap prefers the RUN values over the design defaults', () => {
     // queries declare from/to as their own params, so values['dateRange'] is always undefined.
     // Keying on the parameter's own name renders every date range as two em dashes.
     const m = paramMap(paramDesign, NOW, undefined, { from: '2026-01-01', to: '2026-03-31', facility: 'BAMAA' });
-    expect(m.get('from')).toBe('2026-01-01');
-    expect(m.get('to')).toBe('2026-03-31');
+    expect(m.get('from')).toBe('1 Jan 2026');
+    expect(m.get('to')).toBe('31 Mar 2026');
     expect(m.get('facility')).toBe('BAMAA');
   });
 
@@ -59,7 +84,7 @@ describe('paramMap prefers the RUN values over the design defaults', () => {
 
   it('still falls back to the design defaults when no run values are supplied', () => {
     const m = paramMap(paramDesign, NOW);
-    expect(m.get('from')).toBe('2000-01-01');
+    expect(m.get('from')).toBe('1 Jan 2000');
   });
 });
 
@@ -452,7 +477,7 @@ describe('pairRects', () => {
 
 describe('lab identity tokens', () => {
   const tokens = (identity?: Record<string, string>) =>
-    paramMap(design({ parameters: [{ key: 'site', label: 'Site', type: 'text', value: 'Ndola' }] }), NOW, identity);
+    paramMap(design({ parameters: [{ key: 'site', label: 'Site', type: 'text', value: 'Ndola' }] }), NOW_LOCAL, identity);
 
   it('resolves each {{lab.*}} token', () => {
     const t = tokens({ name: 'Muhimbili', address: 'PO Box 65000\nDar es Salaam', contact: '+255 22' });
@@ -471,7 +496,7 @@ describe('lab identity tokens', () => {
   it('leaves param and date behaviour exactly as before', () => {
     const t = tokens({ name: 'Muhimbili' });
     expect(interpolate('{{param.site}}', t)).toBe('Ndola');
-    expect(interpolate('{{date}}', t)).toBe(NOW.toLocaleDateString());
+    expect(interpolate('{{date}}', t)).toBe('8 Jul 2026');
   });
 
   it('⛔ a design PARAMETER cannot shadow the lab identity', () => {
