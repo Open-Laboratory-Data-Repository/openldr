@@ -223,3 +223,30 @@ describe('policy-aware exposure', () => {
     expect(PII_COLUMNS.patients).toEqual(expect.arrayContaining(['national_id', 'phone', 'surname']));
   });
 });
+
+// FAC-P1-17: facility_map is the warehouse reporting dimension (facility names/codes/areas). It
+// was in EXTERNAL_TABLE_COLUMNS but in no denylist, so it was exposed by omission rather than by
+// decision. Literal column names below, never HARDCODED_DENY_UNION.facility_map — an assertion
+// built from the constant it checks cannot fail.
+describe('facility_map exposure policy', () => {
+  it('hides only the internal surrogate ids', () => {
+    expect(new Set(HARDCODED_DENY_UNION.facility_map)).toEqual(new Set(['id', 'registry_id']));
+  });
+
+  it('keeps the three seeded-report join columns exposed', () => {
+    // packages/reporting/src/seed/report-seeds.ts joins facility_map on these three.
+    const cols = tableExposableColumns('facility_map');
+    expect(cols).toEqual(expect.arrayContaining(['source_system', 'performer_system', 'source_code']));
+  });
+
+  it('hides id and registry_id from the exposable set', () => {
+    const cols = tableExposableColumns('facility_map');
+    expect(cols).not.toContain('id');
+    expect(cols).not.toContain('registry_id');
+    expect(cols).toContain('name');
+  });
+
+  it('classifies no facility_map column as PII', () => {
+    expect(PII_COLUMNS.facility_map).toEqual([]);
+  });
+});
