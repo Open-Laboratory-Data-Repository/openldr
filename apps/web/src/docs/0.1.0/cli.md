@@ -30,6 +30,7 @@ admin/danger actions are also available in the Studio UI under Settings.
 | `fhir` | Validate FHIR R4 resources. |
 | `forms` | List form definitions; extract answers from a QuestionnaireResponse. |
 | `ingest` | Ingest a file through the pipeline (optionally via a plugin). |
+| `facilities` | Import a national facility register: `suggest-map`, `suggest-values`, `import` (column and value mapping — see [Facilities](/docs/facilities)). |
 | `pipeline` | Inspect ingest batches: `status`, `retry`, `logs`. |
 | `queue` | Inspect the event queue. |
 | `provenance` | Provenance audit tooling. |

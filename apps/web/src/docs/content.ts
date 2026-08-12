@@ -44,6 +44,7 @@ export const DEFAULT_DOC_VERSION: string =
 export const TITLES: Record<string, string> = {
   'getting-started': 'Getting started',
   'load-data': 'Load & push data',
+  facilities: 'Facilities',
   requirements: 'Requirements',
   install: 'Install',
   'windows-server': 'Windows Server',
@@ -56,6 +57,7 @@ export const TITLES: Record<string, string> = {
 export const NAV: Array<{ slug: string; children?: string[] }> = [
   { slug: 'getting-started' },
   { slug: 'load-data' },
+  { slug: 'facilities' },
   { slug: 'requirements' },
   { slug: 'install', children: ['windows-server'] },
   { slug: 'environment' },

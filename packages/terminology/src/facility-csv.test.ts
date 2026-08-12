@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { parseFacilityCsv, FACILITY_CSV_TEMPLATE } from './facility-csv';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { parseFacilityCsv, FACILITY_CSV_TEMPLATE, type FacilityColumnMap } from './facility-csv';
 
 const HFR = 'urn:tz:hfr';
 const csv = (body: string) => parseFacilityCsv(body, { nationalSystem: HFR });
@@ -371,5 +373,101 @@ describe('coordinate validation', () => {
       expect(parseAllowing(['2,Beta,,']).records[0].latitude).toBeNull();
       expect(parseAllowing(['3,Gamma,-2.4,35']).invalid).toEqual([]);
     });
+  });
+});
+
+describe('parseFacilityCsv against the real Zambia MFL export', () => {
+  // packages/terminology/src/__fixtures__/zm-mfl-sample.csv — 20 rows, 21 columns, an UNEDITED slice
+  // of the real Zambia Master Facility List. It deliberately keeps the source file's quirks: three
+  // Type values with a leading space, one Name with a stray internal double space, two rows with
+  // BOTH coordinates blank, and a header row carrying both `Province`/`Zone` and `Ownership`/
+  // `Ownership type` — the exact pair the map below has to route without a `duplicate_target` refusal.
+  const fixtureCsv = readFileSync(join(__dirname, '__fixtures__', 'zm-mfl-sample.csv'), 'utf8');
+
+  // ⛔ THE COLLISION. The file has both `Province` and `Zone`, and both `Ownership` and
+  // `Ownership type`. Mapping `Province -> zone` while ALSO mapping `Zone -> zone` would trip
+  // `duplicate_target` — correctly, because the parser has no way to guess which of two columns
+  // should win. This map puts `Province` on `region` and `Zone` on `zone` — two DIFFERENT contract
+  // fields — so both survive. `Ownership type` has nowhere to go: the contract has one `ownership`
+  // field and `Ownership` already claims it, so `Ownership type` is left unmapped on purpose and
+  // lands in `extras`, alongside the 8 other columns (`DHIS2 UID`, `Hims code`, `Location`,
+  // `Mobility status`, `Accesibility`, and the three catchment/household counts) this map does not
+  // carry onto the contract.
+  const ZM_MFL_MAP: FacilityColumnMap = {
+    columns: {
+      'MFL Code': 'national_code',
+      Name: 'name',
+      Province: 'region',
+      Zone: 'zone',
+      District: 'district',
+      Constituency: 'council',
+      Ward: 'ward',
+      Type: 'level',
+      Ownership: 'ownership',
+      'Operational status': 'status',
+      Latitude: 'latitude',
+      Longitude: 'longitude',
+    },
+    constants: { country: 'ZMB' },
+    extras: [
+      'DHIS2 UID', 'Hims code', 'Location', 'Ownership type', 'Mobility status',
+      'Accesibility', 'Catchment population head count', 'Catchment population cso',
+      'Number of households',
+    ],
+  };
+
+  it('maps the real Zambia MFL export end to end', () => {
+    const r = parseFacilityCsv(fixtureCsv, {
+      nationalSystem: 'urn:zm:mfl',
+      columnMap: ZM_MFL_MAP,
+      allowUnknownColumns: false,
+    });
+
+    expect(r.columnMapErrors).toEqual([]);
+    expect(r.unknownColumns).toEqual([]);
+    expect(r.duplicateColumns).toEqual([]);
+    expect(r.quarantined).toEqual([]);
+    expect(r.skipped).toBe(0);
+    expect(r.records).toHaveLength(20);
+
+    // The sheet has no country column at all — 'ZMB' reaches every record only because it is a
+    // CONSTANT on the map, and it is the ISO alpha-3 code, never the free-text 'Zambia' that
+    // appears nowhere in this file either.
+    expect(r.records.every((rec) => rec.country === 'ZMB')).toBe(true);
+
+    // The 9 headers this map deliberately does not carry onto the contract all land in `extras`,
+    // lowercased and trimmed — existing behaviour every already-imported register depends on
+    // (facility-csv.ts:205). Collected as a union across records because a blank cell for one row
+    // simply omits that key (see facility-csv.ts:381-387), so no single row is guaranteed to carry
+    // all 9.
+    const extraKeys = new Set<string>();
+    for (const rec of r.records) Object.keys(rec.extras ?? {}).forEach((k) => extraKeys.add(k));
+    expect([...extraKeys].sort()).toEqual([
+      'accesibility', 'catchment population cso', 'catchment population head count',
+      'dhis2 uid', 'hims code', 'location', 'mobility status', 'number of households',
+      'ownership type',
+    ]);
+
+    // 2 of the 20 rows have BOTH latitude and longitude blank in the source. Blank means the
+    // coordinate was never recorded — not an invalid value — so `invalid` must stay empty; a row is
+    // only reported there for a HALF-supplied pair or an unparseable/out-of-range value.
+    expect(r.invalid).toEqual([]);
+    expect(r.records.filter((rec) => rec.latitude === null && rec.longitude === null)).toHaveLength(2);
+
+    // Three Type values carry a leading space in the source (` 2nd Level Hospital`,
+    // ` 3rd Level Hospital`, ` Hospice`) — csv-parse's own `trim: true` strips it before this
+    // parser ever sees the field, so none should survive onto `level`.
+    const levels = new Set(r.records.map((rec) => rec.level));
+    expect(levels.has('2nd Level Hospital')).toBe(true);
+    expect(levels.has('3rd Level Hospital')).toBe(true);
+    expect(levels.has('Hospice')).toBe(true);
+    expect([...levels].every((l) => !(l ?? '').startsWith(' '))).toBe(true);
+    expect(levels.size).toBe(9); // 9 distinct Type values in this sample, all three hospital tiers included
+
+    // The one row whose Name carries a stray internal double space ('Mankhaka  Health Post') still
+    // parses to a non-empty, non-null name — internal whitespace collapsing is not this parser's job,
+    // only leading/trailing trim is.
+    expect(r.records.some((rec) => rec.name.includes('Mankhaka'))).toBe(true);
+    expect(r.records.every((rec) => rec.name.trim().length > 0)).toBe(true);
   });
 });
