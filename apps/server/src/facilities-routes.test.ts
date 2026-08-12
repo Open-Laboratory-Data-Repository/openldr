@@ -1846,7 +1846,7 @@ describe('POST /api/facilities/import', () => {
     // `created: 0, updated: 0` it used to return before ever consulting the registry (FAC-P1-03);
     // `written` is what a statement actually wrote, and is the only pair that stays zero here.
     expect(res.json()).toEqual({
-      parsed: 1, skipped: 1, unknownColumns: [], duplicateColumns: [], quarantined: [], invalid: [],
+      parsed: 1, skipped: 1, unknownColumns: [], duplicateColumns: [], columnMapErrors: [], quarantined: [], invalid: [],
       duplicates: 0, blocked: false, blockedReason: null,
       create: 1, changed: 0, unchanged: 0,
       conflict: null, absent: null, deleted: 0,
@@ -2270,7 +2270,7 @@ describe('POST /api/facilities/import', () => {
       // let a field silently vanish from the response without failing.
       const body = res.json();
       expect(body).toEqual({
-        parsed: 1, skipped: 0, unknownColumns: [], duplicateColumns: [],
+        parsed: 1, skipped: 0, unknownColumns: [], duplicateColumns: [], columnMapErrors: [],
         quarantined: [{ line: 3, reason: 'too_many_fields', raw: '2,Bad,Extra' }],
         invalid: [], duplicates: 0, blocked: true, blockedReason: 'quarantined-rows',
         create: 1, changed: 0, unchanged: 0, conflict: null, absent: null, deleted: 0,
