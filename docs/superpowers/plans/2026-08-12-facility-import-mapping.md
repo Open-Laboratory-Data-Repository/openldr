@@ -230,6 +230,22 @@ Add to `FacilityCsvResult` (after `duplicateColumns`, line 71):
 
 - [ ] **Step 4: Add the map validator**
 
+⛔ **AS-BUILT CORRECTION — the snippet below shipped with two confirmed bugs. Read this first.**
+Task 1 is complete; `facility-csv.ts` is the source of truth, not this snippet. Two defects were
+found by review and fixed in `5ac1fe50`:
+
+1. **The validator must take the file's headers, not just the map** — signature is
+   `validateColumnMap(map, headers = [])`. Checking the map only against itself misses a mapped
+   field colliding with an *untouched* header that already spells a contract field. Measured:
+   `columns: { 'MFL Code': 'national_code' }` over a file that also has its own `national_code`
+   column silently used the wrong value, and `nationalCode` feeds `idFor` — so that is a wrong
+   permanent facility id, and a re-import creates a duplicate instead of updating. All four
+   combinations must be caught: map-vs-map, map-vs-passthrough, constant-vs-map,
+   constant-vs-passthrough.
+2. **The extras loop needs its `headers[i] === ''` guard.** Without it a trailing comma in the
+   header row put `extras: { '': ... }` on every row — with **no column map supplied at all**,
+   breaking this plan's own byte-for-byte constraint.
+
 Above `parseFacilityCsv` in the same file:
 
 ```ts
