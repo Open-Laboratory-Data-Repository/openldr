@@ -930,6 +930,19 @@ export const fr: EnShape = {
       runFailedTitle: 'Cet import ne s’est pas terminé',
       tooLargeUploadError: 'Ce fichier dépasse la limite de téléversement d’un import en arrière-plan. Importez un registre de cette taille avec la CLI : openldr facilities import.',
       tooLargeUseUpload: 'Ou importez-le ici en arrière-plan : choisissez « Téléverser et valider » dans le menu d’actions ci-dessus.',
+      columnMap: {
+        notMapped: 'Non mappé',
+        checkThisBadge: 'À vérifier',
+        keepAsExtra: 'Conserver en tant que donnée supplémentaire',
+        clear: 'Effacer',
+        rowActions: 'Actions pour {{header}}',
+        constantsTitle: 'Valeurs fixes',
+        constantsHint: 'Pour un champ du contrat qu’aucune colonne de ce fichier ne porte — chaque ligne recevra cette valeur.',
+        constantPlaceholder: 'ex. ZMB',
+        missingRequiredTitle: 'Des champs obligatoires n’ont ni colonne ni valeur fixe',
+        missingRequired: '{{field}} n’est pas mappé.',
+        rowCountHint: 'Ce mappage s’applique à {{count}} établissement(s) dans ce fichier.',
+      },
     },
     health: {
       states: {

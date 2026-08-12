@@ -949,7 +949,12 @@ export interface FacilityChangeSample extends FacilitySample {
   diff: { field: string; before: unknown; after: unknown }[];
 }
 
-export type FacilityImportBlockedReason = 'duplicate-columns' | 'quarantined-rows' | null;
+// Task 7 (known gap closed): this used to stop at 'duplicate-columns' | 'quarantined-rows', which
+// predates the column-map work — the server's own `FacilityImportBlockedReason`
+// (packages/bootstrap/src/facility-import.ts) gained 'column-map' in Task 3. A hand-mirrored type
+// like this one does not fail typecheck when the server adds a value; it only reads wrong at
+// runtime, which is exactly the class of drift this mirror exists to avoid.
+export type FacilityImportBlockedReason = 'duplicate-columns' | 'column-map' | 'quarantined-rows' | null;
 
 /** Mirrors the server's `FacilityReleaseMeta` (packages/terminology/src/facility-release.ts) — a
  *  JSONL release's own header line, verbatim. Always `null` on `FacilityImportResult.meta` for a
@@ -966,6 +971,37 @@ export interface FacilityReleaseMeta {
  *  the three facility columns rewritten to a canonical code via `term_mappings` on import. */
 export type ControlledField = 'level' | 'status' | 'country';
 
+// Task 7: mirrors the server's `ColumnMapError`/`ColumnMapErrorReason`/`FacilityColumnMap`
+// (packages/terminology/src/facility-csv.ts) — "mirrored, not shared", same reasoning as
+// `FacilityImportResult` below (this app has no dependency on that package).
+export type ColumnMapErrorReason =
+  | 'duplicate_target' | 'constant_collision' | 'unknown_target' | 'missing_required';
+
+/** One problem with a `FacilityColumnMap`, reported so an operator can fix it without a second
+ *  round trip — `validateColumnMap` (server-side) always returns every problem, never just the
+ *  first. */
+export interface ColumnMapError {
+  reason: ColumnMapErrorReason;
+  /** The header (or, for a constant/required error, the field) the problem is about, spelled as
+   *  the operator wrote it. */
+  subject: string;
+  /** The contract field involved. */
+  target: string;
+  /** The other header/field, when the problem is a collision between two things. */
+  other?: string;
+}
+
+/** How a file's own headers map onto the 16-field import contract. `columns` keys are headers AS
+ *  THEY APPEAR IN THE FILE — the operator matches what they see, not a lowercased copy. */
+export interface FacilityColumnMap {
+  /** file header -> contract field */
+  columns: Record<string, string>;
+  /** contract field -> literal value written on every row (e.g. `country: 'ZMB'`) */
+  constants?: Record<string, string>;
+  /** file headers deliberately carried into `extras` rather than mapped */
+  extras?: string[];
+}
+
 // A2a (FAC-P1-03/05, whole-branch review): this interface used to stop at `created`/`updated` —
 // flat counts a dry-run preview reported as `0` before this task, which read as "nothing to do"
 // rather than "not computed". It now mirrors the server's FacilityImportResult FIELD FOR FIELD
@@ -980,6 +1016,11 @@ export interface FacilityImportResult {
   /** Headers appearing more than once — see the server's `FacilityCsvResult.duplicateColumns`.
    *  Non-empty ⇒ apply is always blocked; there is no override (unlike `quarantined` below). */
   duplicateColumns: string[];
+  /** Problems with the column map itself (Task 1's `validateColumnMap`), ALL of them, so one fix
+   *  pass repairs the file. Non-empty ⇒ nothing imported, same reasoning as `duplicateColumns`
+   *  above — `blockedReason` reads `'column-map'` whenever this is non-empty. Always `[]` when the
+   *  request carried no `columnMap` at all. */
+  columnMapErrors: ColumnMapError[];
   /** Structurally malformed rows, never mapped to columns — see `FacilityImportQuarantinedRow`.
    *  Non-empty ⇒ apply is blocked unless the caller sets `allowMalformedRows`. */
   quarantined: FacilityImportQuarantinedRow[];
@@ -1106,6 +1147,28 @@ export interface FacilityRegisterSourceInput {
 export const listFacilityImportSources = (): Promise<FacilityRegisterSource[]> =>
   apiGet<{ rows: FacilityRegisterSource[] }>('/api/facilities/import/sources', 'list facility import sources')
     .then((r) => r.rows);
+
+// ── Task 7: offline column-mapping suggestions (Task 4's route, Task 2's engine) ────────────────
+
+/** Mirrors the server's `ColumnSuggestion` (packages/bootstrap/src/facility-mapping-suggest.ts). */
+export interface ColumnSuggestion {
+  /** The header exactly as it appears in the file. */
+  header: string;
+  /** Best first. EMPTY when the engine deliberately declined to guess — never render that as a
+   *  failure, see that file's own docblock. */
+  candidates: {
+    target: string;
+    display: string | null;
+    score: number;
+    confidence: 'exact' | 'likely' | 'weak';
+  }[];
+}
+
+/** `POST /api/facilities/import/suggest-map` — only the file's first line is sent server-side to a
+ *  pure, offline ranking function; nothing here writes anything. */
+export const suggestColumnMap = (csv: string): Promise<{ headers: string[]; columns: ColumnSuggestion[] }> =>
+  authFetch('/api/facilities/import/suggest-map', jbody({ csv }, 'POST'))
+    .then((r) => okJson<{ headers: string[]; columns: ColumnSuggestion[] }>(r, 'suggest column map'));
 
 /** `POST /api/facilities/import/sources` — the ONLY way a fresh install ever gets a register the
  *  import sheet's `Select` can offer (review fix, B1 Task 9: the route existed and was tested, but

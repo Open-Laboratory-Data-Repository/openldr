@@ -970,6 +970,22 @@ export const en = {
       // Shown beside the inline over-cap notice: the background path has no row cap, which is the
       // whole reason it exists.
       tooLargeUseUpload: 'Or import it here in the background: choose Upload and validate from the actions menu above.',
+      // Task 7: the column-mapping panel — one row per file header, a Select over the 16 contract
+      // fields, and a constants section for a field no column carries (`country` is the case that
+      // forced it).
+      columnMap: {
+        notMapped: 'Not mapped',
+        checkThisBadge: 'Check this',
+        keepAsExtra: 'Keep as extra',
+        clear: 'Clear',
+        rowActions: 'Actions for {{header}}',
+        constantsTitle: 'Fixed values',
+        constantsHint: 'For a contract field no column in this file carries — every row gets this value.',
+        constantPlaceholder: 'e.g. ZMB',
+        missingRequiredTitle: 'Required fields still need a column or a fixed value',
+        missingRequired: '{{field}} is not mapped.',
+        rowCountHint: 'This map applies to {{count}} facilities in this file.',
+      },
     },
     // Task 11: the report-dimension health chip — whether the report-facing `facility_map`
     // dimension has caught up with the current registry/mapping state (GET /api/facilities/health).

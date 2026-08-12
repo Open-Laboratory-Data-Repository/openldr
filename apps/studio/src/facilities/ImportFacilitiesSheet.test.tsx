@@ -91,7 +91,7 @@ async function previewNow() {
  */
 function baseResult(overrides: Partial<FacilityImportResult> = {}): FacilityImportResult {
   return {
-    parsed: 0, skipped: 0, unknownColumns: [], duplicateColumns: [], quarantined: [], invalid: [],
+    parsed: 0, skipped: 0, unknownColumns: [], duplicateColumns: [], columnMapErrors: [], quarantined: [], invalid: [],
     duplicates: 0, blocked: false, blockedReason: null,
     create: 0, changed: 0, unchanged: 0, conflict: null, absent: null, deleted: 0,
     samples: { create: [], changed: [], conflict: [], absent: [], deleted: [] },

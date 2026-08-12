@@ -930,6 +930,19 @@ export const pt: EnShape = {
       runFailedTitle: 'Esta importação não terminou',
       tooLargeUploadError: 'Este ficheiro é maior do que o limite de carregamento de uma importação em segundo plano. Importe um registo deste tamanho com a CLI: openldr facilities import.',
       tooLargeUseUpload: 'Ou importe-o aqui em segundo plano: escolha «Carregar e validar» no menu de ações acima.',
+      columnMap: {
+        notMapped: 'Não mapeado',
+        checkThisBadge: 'Verificar',
+        keepAsExtra: 'Manter como dado extra',
+        clear: 'Limpar',
+        rowActions: 'Ações para {{header}}',
+        constantsTitle: 'Valores fixos',
+        constantsHint: 'Para um campo do contrato que nenhuma coluna deste ficheiro carrega — cada linha recebe este valor.',
+        constantPlaceholder: 'ex. ZMB',
+        missingRequiredTitle: 'Campos obrigatórios ainda sem coluna ou valor fixo',
+        missingRequired: '{{field}} não está mapeado.',
+        rowCountHint: 'Este mapeamento aplica-se a {{count}} unidade(s) neste ficheiro.',
+      },
     },
     health: {
       states: {
