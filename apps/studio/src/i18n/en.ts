@@ -986,6 +986,17 @@ export const en = {
         missingRequired: '{{field}} is not mapped.',
         rowCountHint: 'This map applies to {{count}} facilities in this file.',
       },
+      // Task 8: the value-mapping panel — one row per unmapped raw value (level/status/country),
+      // grouped by field, each with a ranked Select over that field's own value set. An unmapped
+      // value never blocks — see ValueMapPanel.tsx's own docblock — so there is deliberately no
+      // "cannot continue"-style copy anywhere in this group.
+      valueMap: {
+        actions: 'Value mapping actions',
+        saveAction: 'Save mappings',
+        saving: 'Saving…',
+        notMapped: 'Not mapped',
+        savedCount: '{{count}} mapping(s) written.',
+      },
     },
     // Task 11: the report-dimension health chip — whether the report-facing `facility_map`
     // dimension has caught up with the current registry/mapping state (GET /api/facilities/health).

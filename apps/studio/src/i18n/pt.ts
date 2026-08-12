@@ -943,6 +943,13 @@ export const pt: EnShape = {
         missingRequired: '{{field}} não está mapeado.',
         rowCountHint: 'Este mapeamento aplica-se a {{count}} unidade(s) neste ficheiro.',
       },
+      valueMap: {
+        actions: 'Ações de mapeamento de valores',
+        saveAction: 'Guardar mapeamentos',
+        saving: 'A guardar…',
+        notMapped: 'Não mapeado',
+        savedCount: '{{count}} mapeamento(s) guardado(s).',
+      },
     },
     health: {
       states: {

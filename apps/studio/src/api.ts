@@ -1170,6 +1170,60 @@ export const suggestColumnMap = (csv: string): Promise<{ headers: string[]; colu
   authFetch('/api/facilities/import/suggest-map', jbody({ csv }, 'POST'))
     .then((r) => okJson<{ headers: string[]; columns: ColumnSuggestion[] }>(r, 'suggest column map'));
 
+// ── Task 8: value-mapping suggestions and writes (Task 4's route/Task 2's engine; Task 6's route) ──
+
+/** Mirrors the server's `ValueSuggestion` (packages/bootstrap/src/facility-mapping-suggest.ts) — the
+ *  same `Suggestion` candidate shape `ColumnSuggestion` above uses, but ranked against one
+ *  controlled field's bound value set rather than the 16 contract fields. */
+export interface ValueSuggestion {
+  /** The raw source value exactly as it appears in the file. */
+  value: string;
+  /** Best first. EMPTY when the engine deliberately declined to guess — same meaning as
+   *  `ColumnSuggestion.candidates`, never render an empty list as a failure. */
+  candidates: {
+    /** A code from the field's bound value set. */
+    target: string;
+    display: string | null;
+    score: number;
+    confidence: 'exact' | 'likely' | 'weak';
+  }[];
+}
+
+/** `POST /api/facilities/import/suggest-values` — ranked candidates for one controlled field's
+ *  unmapped raw values, drawn from that field's own bound value set expansion.
+ *
+ *  `notValidated` mirrors what it means on `FacilityImportResult.notValidated` for this one field:
+ *  the value set is not seeded on this install, so nothing exists to rank against at all — every
+ *  entry in `values` comes back with `candidates: []`, and that emptiness must be read as "could not
+ *  be checked", never as "the engine tried and found nothing" (see `ColumnSuggestion`'s own note). */
+export const suggestValueMappings = (
+  field: ControlledField, values: string[],
+): Promise<{ values: ValueSuggestion[]; notValidated: boolean }> =>
+  authFetch('/api/facilities/import/suggest-values', jbody({ field, values }, 'POST'))
+    .then((r) => okJson<{ values: ValueSuggestion[]; notValidated: boolean }>(r, 'suggest value mappings'));
+
+/** Mirrors the server's `ValueMappingEntry` (packages/bootstrap/src/facility-value-mappings.ts) — one
+ *  raw-string -> canonical-code decision. */
+export interface ValueMappingEntry {
+  field: ControlledField;
+  /** The source value exactly as the parser produced it. `resolveControlledFields` looks it up by
+   *  exact string, so a differently-spaced copy would never resolve. */
+  rawValue: string;
+  /** A code from the field's bound value set. */
+  toCode: string;
+}
+
+/** `POST /api/facilities/import/value-mappings` — `ValueMapPanel`'s Save action. Validates every
+ *  entry against its field's value set BEFORE writing any of them; refuses with 400 (writing
+ *  nothing) on the first `toCode` that is not in that set. `written`/`superseded` mirror the server's
+ *  `SaveValueMappingsResult` (facility-value-mappings.ts) — `superseded` lists the mapping ids
+ *  deactivated because they were the previous active mapping for the same raw value. */
+export const writeFacilityValueMappings = (
+  nationalSystem: string, mappings: ValueMappingEntry[],
+): Promise<{ written: number; superseded: string[] }> =>
+  authFetch('/api/facilities/import/value-mappings', jbody({ nationalSystem, mappings }, 'POST'))
+    .then((r) => okJson<{ written: number; superseded: string[] }>(r, 'write facility value mappings'));
+
 /** `POST /api/facilities/import/sources` — the ONLY way a fresh install ever gets a register the
  *  import sheet's `Select` can offer (review fix, B1 Task 9: the route existed and was tested, but
  *  nothing in the studio ever called it, so a fresh install's picklist was permanently empty and
@@ -1234,6 +1288,16 @@ export interface FacilityImportRequest {
    *  it changes which rows land in `records` and therefore `create`/`changed`/`unchanged`, not merely
    *  whether Apply is allowed to proceed. */
   allowInvalidCoordinates?: boolean;
+  /** Task 8: how this file's own headers map onto the 16-field contract (`ColumnMapStep.tsx`) —
+   *  CSV only, per `FacilityColumnMap`'s own doc comment; a JSONL release is already in the
+   *  contract's shape and the parser ignores this for one rather than erroring. Sent on every
+   *  preview AND every apply, same discipline `format`/`completeRelease` already follow: a preview
+   *  and an apply that parse the file differently is a bug this sheet has learned before (see
+   *  `ImportFacilitiesSheet.tsx`'s own comment on `format`). Omitted rather than sent empty when the
+   *  operator has not actually mapped, constant-filled or extra'd anything yet — an empty-but-present
+   *  map would still trip `missing_required` for `national_code`/`name` the moment the server honours
+   *  this field, which is a decision nobody made. */
+  columnMap?: FacilityColumnMap;
 }
 
 export const importFacilitiesCsv = (body: FacilityImportRequest): Promise<FacilityImportResult> =>
@@ -1331,6 +1395,13 @@ export function uploadFacilityImport(
      *  verdict, never the parse, so it stays the confirm's. */
     allowUnknownColumns?: boolean;
     allowInvalidCoordinates?: boolean;
+    /** Task 8b: how this file's own headers map onto the 16-field contract — the SAME parse-changing
+     *  family as the two flags above, and belongs here for the identical reason: the route reads it
+     *  off the query string, JSON-encoded (`facilities-routes.ts`'s `columnMapRaw`/`ColumnMapSchema`),
+     *  and stores it on the run's `options` before validate ever runs. Sent only when the caller has
+     *  a real map to send — `ImportFacilitiesSheet.tsx`'s `hasColumnMapContent` decides that, the same
+     *  guard `confirmOptionsFor` already applies to the inline door's own `columnMap`. */
+    columnMap?: FacilityColumnMap;
   },
   onProgress?: (fraction: number | null) => void,
 ): Promise<{ runId: string }> {
@@ -1347,6 +1418,9 @@ export function uploadFacilityImport(
     // against — a `false` written there is a decision nobody made.
     if (p.allowUnknownColumns) params.set('allowUnknownColumns', 'true');
     if (p.allowInvalidCoordinates) params.set('allowInvalidCoordinates', 'true');
+    // JSON-encoded, matching `columnMapRaw`'s `JSON.parse` on the server. Omitted entirely when the
+    // caller has no map — an empty object is not the same as no map (see `hasColumnMapContent`).
+    if (p.columnMap) params.set('columnMap', JSON.stringify(p.columnMap));
     const xhr = new XMLHttpRequest();
     xhr.open('POST', `/api/facilities/import/upload?${params.toString()}`);
     // Both are accepted by the route's passthrough parser; naming the real one keeps the stored
@@ -1395,6 +1469,21 @@ export interface FacilityImportConfirmOptions {
   allowUnknownColumns?: boolean;
   allowMalformedRows?: boolean;
   allowInvalidCoordinates?: boolean;
+  /** Task 8: the same map the INLINE door's own VALIDATE parsed the file with
+   *  (`ImportFacilitiesSheet.tsx`'s `confirmOptionsFor`) — sent for the reason `allowMalformedRows`
+   *  above is: a confirmed apply that re-parses the file without the map it was validated with would
+   *  read raw headers instead and refuse the file (`missing_required`), the same class of bug the
+   *  file's own comment on `allowMalformedRows` documents.
+   *
+   *  ⚠ The server's confirm route (`ConfirmSchema`) has no `columnMap` key, deliberately — see that
+   *  route's own comment: a map arriving at confirm time would let an apply authorise a record set the
+   *  operator never reviewed. `confirmOptionsFor` still sends this key on a background run's confirm
+   *  (`ImportFacilitiesSheet.tsx`'s `handleConfirmRun`), but zod strips what it does not know, so it
+   *  reaches the server and is silently dropped there — inert, not refused with an error. The map that
+   *  actually governs a background run's validate travels on `uploadFacilityImport`'s own `columnMap`
+   *  query parameter instead, stored on the run's `options` before validate ever runs — Task 8b closed
+   *  that gap for the door that needed it. */
+  columnMap?: FacilityColumnMap;
 }
 
 /** 202 — the register has NOT been imported when this resolves; a worker will do that. */

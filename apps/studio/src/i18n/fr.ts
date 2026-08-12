@@ -943,6 +943,13 @@ export const fr: EnShape = {
         missingRequired: '{{field}} n’est pas mappé.',
         rowCountHint: 'Ce mappage s’applique à {{count}} établissement(s) dans ce fichier.',
       },
+      valueMap: {
+        actions: 'Actions de mappage des valeurs',
+        saveAction: 'Enregistrer les mappages',
+        saving: 'Enregistrement…',
+        notMapped: 'Non mappé',
+        savedCount: '{{count}} mappage(s) enregistré(s).',
+      },
     },
     health: {
       states: {
