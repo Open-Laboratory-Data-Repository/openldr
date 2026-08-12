@@ -94,9 +94,11 @@ column goes. A header in neither is `unknownColumns`, and the file is refused ex
 sheet has no country column, and the bound value set is ISO 3166-1 **alpha-3**
 (`073_facility_country_and_admin_fields.ts:49`), so the value is `ZMB`, never `Zambia`.
 
-A column sent to `extras` keeps its **original header** as the key, verbatim, including spacing and
-the sheet's own `Accesibility` misspelling. The operator has to recognise it later, and a normalised
-key would not match what they see in the file.
+A column sent to `extras` keeps today's key: the header **lowercased and trimmed**
+(`facility-csv.ts:205`), so the sheet's `Accesibility` misspelling survives but its casing does not.
+This is existing behaviour for every register already imported, and changing it would silently
+re-key their `extras`. The column map's own keys are the headers **as they appear in the file**, so
+the operator matches what they see; the parser lowercases them for lookup.
 
 ### 2. Applied in the parser
 
