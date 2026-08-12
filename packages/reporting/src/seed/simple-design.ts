@@ -21,6 +21,11 @@ export interface SimpleDesignSpec {
    *  the data (the organisms that cleared the isolate threshold), which a static design cannot know. */
   transpose?: boolean;
   transposeLabel?: string;
+  /** One line stating what the table's numbers measure, e.g. "Percent resistant (%R)." Rendered as
+   *  the last scope pair before `Generated`, because the metric IS part of the scope a run was
+   *  computed under — and because the panel already sizes itself from its pair count, so this costs
+   *  no layout arithmetic. Authored design DATA: a lab can edit it in the Report Designer. */
+  metric?: string;
 }
 
 /** `pairRects`'s KV_PAD_Y/KV_INLINE_H, raw POINTS (not px@96) — see the height comment below. */
@@ -41,6 +46,7 @@ function scopePairs(spec: SimpleDesignSpec): [string, string][] {
     if (p.key === 'facility') return ['Facility', '{{param.facility}}'];
     return [p.label, `{{param.${p.key}}}`];
   });
+  if (spec.metric) pairs.push(['Metric', spec.metric]);
   pairs.push(['Generated', '{{date}}']);
   return pairs;
 }
