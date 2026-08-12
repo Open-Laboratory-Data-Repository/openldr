@@ -631,9 +631,11 @@ describe('renderReportDesignPdf prefers RUN parameter values over the design def
     const texts = pdfTexts(await renderReportDesignPdf(paramDesign(), new Map(), {
       now: NOW, values: { from: '2026-01-01', to: '2026-03-31' },
     }));
-    expect(texts.some((t) => t.includes('2026-01-01') && t.includes('2026-03-31'))).toBe(true);
-    expect(texts.join('')).not.toContain('2000-01-01');
-    expect(texts.join('')).not.toContain('2000-12-31');
+    // Reformatted for the page, not left as raw ISO — draw.ts now routes from/to through
+    // `formatDisplayDate`, so the rendered text is '1 Jan 2026', not '2026-01-01'.
+    expect(texts.some((t) => t.includes('1 Jan 2026') && t.includes('31 Mar 2026'))).toBe(true);
+    expect(texts.join('')).not.toContain('1 Jan 2000');
+    expect(texts.join('')).not.toContain('31 Dec 2000');
   });
 
   it('interpolates an UNBOUND keyvalue pair with the run value too, not the literal token', async () => {
@@ -647,9 +649,9 @@ describe('renderReportDesignPdf prefers RUN parameter values over the design def
     const texts = pdfTexts(await renderReportDesignPdf(design, new Map(), {
       now: NOW, values: { from: '2026-01-01', to: '2026-03-31' },
     }));
-    expect(texts.some((t) => t.includes('2026-01-01') && t.includes('2026-03-31'))).toBe(true);
+    expect(texts.some((t) => t.includes('1 Jan 2026') && t.includes('31 Mar 2026'))).toBe(true);
     expect(texts.join('')).not.toContain('{{param.from}}');
-    expect(texts.join('')).not.toContain('2000-01-01');
+    expect(texts.join('')).not.toContain('1 Jan 2000');
   });
 });
 

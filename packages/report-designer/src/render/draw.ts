@@ -3,6 +3,7 @@ import { CELL_STATUSES } from '../schema';
 import { encodeCode128, encodeQr, QR_QUIET_ZONE } from '../encode';
 import { toPt, PX_TO_PT } from './units';
 import type { ResolvedTable } from './index';
+import { formatDisplayDate, formatDisplayDateOf } from './format-date';
 
 type Doc = PDFKit.PDFDocument;
 type Box = { x: number; y: number; w: number; h: number };
@@ -180,8 +181,11 @@ export function paramMap(
     // undefined. Keying on p.key here renders every date range as two em dashes.
     if (p.type === 'daterange') {
       const dflt = (p.value ?? {}) as { from?: string; to?: string };
-      m.set('from', (values?.from as string) || dflt.from || UNSET);
-      m.set('to', (values?.to as string) || dflt.to || UNSET);
+      // Formatted for the page, not left as raw ISO — the audit called the ISO range mechanical.
+      // `formatDisplayDate` passes anything that is not a plain ISO date through untouched, so the
+      // UNSET em dash below survives as an em dash.
+      m.set('from', formatDisplayDate((values?.from as string) || dflt.from || UNSET));
+      m.set('to', formatDisplayDate((values?.to as string) || dflt.to || UNSET));
       continue;
     }
     // Every other parameter is keyed by its own name in both places. The RUN's value wins over the
@@ -191,9 +195,14 @@ export function paramMap(
     const v = run !== undefined && run !== '' ? run : p.value;
     // Declared but unset renders an em dash, not ''. A blank beside a label reads as a failed
     // render, where "—" reads as "not filtered".
-    m.set(p.key, typeof v === 'string' && v !== '' ? v : UNSET);
+    // A `text` parameter can legitimately hold a date — the seeded patient-demographics report
+    // declares `asOf` as `type: 'text'` — so route it through `formatDisplayDate` too. That
+    // function is a filter, not a parser: it returns its input unchanged unless the value is
+    // exactly `YYYY-MM-DD` and a real calendar date, so a code, a GLASS year, or a
+    // `Name (CODE)` label built by `withDisplayLabels` passes through untouched.
+    m.set(p.key, typeof v === 'string' && v !== '' ? formatDisplayDate(v) : UNSET);
   }
-  m.set('date', now.toLocaleDateString());
+  m.set('date', formatDisplayDateOf(now));
   // Namespaced, and added LAST so a design parameter can never shadow the lab's own identity —
   // a report whose letterhead could be overwritten by a parameter value is a forgery risk, not a
   // convenience.
