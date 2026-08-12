@@ -201,10 +201,24 @@ export function coordinatePair(
   return { latitude, longitude, errors };
 }
 
-/** Validate a column map against the contract and return EVERY problem, never just the first. */
-export function validateColumnMap(map: FacilityColumnMap): ColumnMapError[] {
+/** Validate a column map against the contract AND the file's OWN headers, returning EVERY problem in
+ *  one pass, never just the first.
+ *
+ *  ⛔ A header the map does not mention still claims its contract field if it already spells one —
+ *  a "passthrough" header. Checking the map against itself is not enough: a file with both `MFL Code`
+ *  (mapped to `national_code`) and an untouched `national_code` header used to pass with
+ *  `columnMapErrors: []`, and the two columns silently overwrote each other in row order with no
+ *  error at all. That is not cosmetic — `nationalCode` feeds `idFor`, which derives a facility's
+ *  PERMANENT id, so the silent overwrite produced a wrong identity, not just a wrong display value.
+ *  A constant colliding with a passthrough header is `constant_collision` for the same reason a
+ *  constant colliding with a mapped column already was.
+ *
+ *  `headers` must be the file's headers, lowercased and trimmed the same way `parseFacilityCsv`
+ *  computes its own `headers` — case-insensitive lookup against `map.columns`' keys depends on it. */
+export function validateColumnMap(map: FacilityColumnMap, headers: string[] = []): ColumnMapError[] {
   const errors: ColumnMapError[] = [];
-  const claimedBy = new Map<string, string>(); // contract field -> the header that claimed it
+  const claimedBy = new Map<string, string>(); // contract field -> the header/field that claimed it
+  const mappedHeaders = new Set(Object.keys(map.columns).map((h) => h.trim().toLowerCase()));
 
   for (const [header, target] of Object.entries(map.columns)) {
     if (!KNOWN.has(target)) {
@@ -217,6 +231,18 @@ export function validateColumnMap(map: FacilityColumnMap): ColumnMapError[] {
       continue;
     }
     claimedBy.set(target, header);
+  }
+
+  // Passthrough: a header the map does not mention, but which already spells a contract field,
+  // claims that field too — see the docblock above.
+  for (const header of headers) {
+    if (header === '' || mappedHeaders.has(header) || !KNOWN.has(header)) continue;
+    const owner = claimedBy.get(header);
+    if (owner !== undefined) {
+      errors.push({ reason: 'duplicate_target', subject: header, target: header, other: owner });
+      continue;
+    }
+    claimedBy.set(header, header);
   }
 
   for (const [field, _value] of Object.entries(map.constants ?? {})) {
@@ -283,11 +309,10 @@ export function parseFacilityCsv(csv: string, opts: FacilityCsvOptions): Facilit
     return { records: [], unknownColumns: [], duplicateColumns: [], columnMapErrors: [], quarantined: [], skipped: 0, invalid: [] };
   }
 
-  const rawHeaders = rows[0].record.map((h) => h.trim());
-  const headers = rawHeaders.map((h) => h.toLowerCase());
+  const headers = rows[0].record.map((h) => h.trim().toLowerCase());
   const duplicateColumns = headers.filter((h, i) => h !== '' && headers.indexOf(h) !== i);
 
-  const columnMapErrors = opts.columnMap ? validateColumnMap(opts.columnMap) : [];
+  const columnMapErrors = opts.columnMap ? validateColumnMap(opts.columnMap, headers) : [];
 
   // Rename headers through the map. Lookup is on the LOWERCASED header, so a map written against
   // `MFL Code` still matches a file that spells it `mfl code`.
@@ -354,6 +379,7 @@ export function parseFacilityCsv(csv: string, opts: FacilityCsvOptions): Facilit
 
     const extras: Record<string, unknown> = {};
     for (let i = 0; i < effective.length; i += 1) {
+      if (headers[i] === '') continue;
       const target = effective[i];
       if (KNOWN.has(target)) continue;
       const v = text(record[i]);

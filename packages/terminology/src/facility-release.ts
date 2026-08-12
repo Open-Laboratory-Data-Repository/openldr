@@ -76,6 +76,12 @@ function numeric(v: unknown): string | undefined {
  * can be applied through — while the route accepted the same file. That refusal is now format-aware
  * (packages/cli/src/facilities.ts).
  *
+ * `opts.columnMap` is ALSO a NO-OP here, for the same reason `allowUnknownColumns` is: `columnMap`
+ * exists to rename a CSV's own file headers onto the contract before the unknown-column check runs,
+ * and a JSONL release has no header row to rename — every line is a self-describing object whose keys
+ * are already fixed by `KNOWN_ROW_KEYS`. There is nothing for a column map to rename. A caller passing
+ * one here is not wrong, just talking to the wrong parser; this function simply never reads the field.
+ *
  * Records come out in the exact `FacilityRecord` shape `parseFacilityCsv` produces, including the
  * SAME deterministic `id` (`idFor`, imported from `facility-csv.ts` — never reimplemented), so a
  * release and a CSV of the same register produce identical ids for the same facility.

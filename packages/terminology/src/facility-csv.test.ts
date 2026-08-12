@@ -162,6 +162,15 @@ describe('parseFacilityCsv', () => {
     expect(r.records).toEqual([]);
     expect(r.duplicateColumns).toEqual(['name']);
   });
+
+  // Finding 2 (review, task-1-report.md fix pass): the Task 1 rewrite of the extras loop dropped the
+  // `h !== ''` guard every other header-scanning filter in this file has, so a trailing comma in the
+  // header row (common in exported CSVs) now reaches `extras` as an empty-string key — a regression
+  // with NO column map involved at all. Before Task 1 this produced no `extras`.
+  it('drops a blank trailing header instead of putting it in extras — no column map involved', () => {
+    const r = csv('national_code,name,\n1,A,X\n');
+    expect(r.records[0].extras).toBeUndefined();
+  });
 });
 
 describe('parseFacilityCsv with a column map', () => {
@@ -265,6 +274,36 @@ describe('parseFacilityCsv with a column map', () => {
     const r = csv('national_code,name\n122023-5,BAHEBE\n');
     expect(r.columnMapErrors).toEqual([]);
     expect(r.records[0].nationalCode).toBe('122023-5');
+  });
+
+  // Finding 1 (review, task-1-report.md fix pass): a mapped field can collide with an UNTOUCHED
+  // header that already spells the same contract field. Before the fix, `validateColumnMap` only
+  // checked the map against itself, so this passed with `columnMapErrors: []` and silently overwrote
+  // the mapped column's value with the passthrough header's — and `nationalCode` feeds `idFor`,
+  // which derives a facility's PERMANENT id, so a silent overwrite here is a wrong identity.
+  it('⛔ refuses a mapped field that collides with an untouched header spelling the same field', () => {
+    const r = parseFacilityCsv('MFL Code,national_code,name\n1835,LEGACY-9,Namatindi RHC\n', {
+      nationalSystem: HFR,
+      columnMap: { columns: { 'MFL Code': 'national_code', Name: 'name' } },
+    });
+    expect(r.columnMapErrors).toEqual([
+      { reason: 'duplicate_target', subject: 'national_code', target: 'national_code', other: 'MFL Code' },
+    ]);
+    expect(r.records).toEqual([]);
+  });
+
+  it('⛔ refuses a constant that collides with a passthrough header, not just a mapped one', () => {
+    const r = parseFacilityCsv('MFL Code,name,country\n1835,Namatindi RHC,Zambia\n', {
+      nationalSystem: HFR,
+      columnMap: {
+        columns: { 'MFL Code': 'national_code' },
+        constants: { country: 'ZMB' },
+      },
+    });
+    expect(r.columnMapErrors).toEqual([
+      { reason: 'constant_collision', subject: 'country', target: 'country', other: 'country' },
+    ]);
+    expect(r.records).toEqual([]);
   });
 });
 
