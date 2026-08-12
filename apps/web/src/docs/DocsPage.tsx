@@ -1,4 +1,4 @@
-import { useState, type ComponentProps, type ReactNode } from 'react';
+import { useEffect, useState, type ComponentProps, type ReactNode } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -30,8 +30,19 @@ function textContent(children: ReactNode): string {
 // The app runs under a HashRouter, so raw docs links can collide with client
 // routing. Render internal page links through react-router and same-page anchors
 // through scrollIntoView so they do not replace the route hash.
+/**
+ * Drops the body's own leading `# Title`, which the page already prints above the article.
+ *
+ * This used to be a "skip the first h1" flag inside the renderer. That flag is mutable state
+ * driven by render order, and React's StrictMode renders twice — the second pass reused a closure
+ * whose flag was already spent, so the title rendered twice in the browser while jsdom tests,
+ * which do not double-render, saw one. Editing the source instead is order-independent.
+ */
+export function stripLeadingH1(markdown: string): string {
+  return markdown.replace(/^\s*#[^#\n][^\n]*\n+/, '');
+}
+
 function markdownComponents(): Components {
-  let skippedFirstHeading = false;
   const usedSlugs = new Map<string, number>();
   const headingId = (children: ReactNode) => {
     const base = slugify(textContent(children));
@@ -41,10 +52,6 @@ function markdownComponents(): Components {
   };
   return {
     h1({ children }: ComponentProps<'h1'>) {
-      if (!skippedFirstHeading) {
-        skippedFirstHeading = true;
-        return null;
-      }
       return <h1 id={headingId(children)} className="scroll-mt-20">{children}</h1>;
     },
     h2({ children }: ComponentProps<'h2'>) {
@@ -114,20 +121,28 @@ export function DocsPage() {
   const key = page && TITLES[page] ? page : 'getting-started';
   const body = docBody(key, version);
 
+  // Opening another page keeps the window's scroll position, which drops the reader into the
+  // middle of the new page. Same-page anchor links do not change `key`, so their smooth scroll
+  // is left alone.
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'auto' });
+  }, [key]);
+
   return (
     <div className="mx-auto grid max-w-6xl gap-8 px-6 py-10 lg:grid-cols-[16rem_minmax(0,1fr)]">
       <aside className="lg:sticky lg:top-20 lg:self-start">
         <div className="mb-4">
           <p className="text-xs font-semibold uppercase text-primary">Documentation</p>
-          <h1 className="mt-2 text-2xl font-semibold">Public docs</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Install, configure, deploy, and develop OpenLDR.
-          </p>
         </div>
         <Select value={version} onValueChange={setVersion}>
           <SelectTrigger className="h-8 w-full gap-1 px-2 text-xs" aria-label="Documentation version">
+            {/* The trigger spreads its children apart, so without ml-auto the version floats in
+                the middle instead of sitting beside the chevron. Radix's SelectValue drops a
+                className, hence the wrapper. */}
             <span className="text-muted-foreground">Version</span>
-            <SelectValue />
+            <span className="ml-auto">
+              <SelectValue />
+            </span>
           </SelectTrigger>
           <SelectContent>
             {DOC_VERSIONS.map((docVersion) => (
@@ -151,16 +166,18 @@ export function DocsPage() {
       <article className="doc-content min-w-0 max-w-3xl" aria-labelledby="doc-title">
         <div className="mb-6 border-b border-border pb-4">
           <p className="text-xs font-medium text-muted-foreground">OpenLDR {version}</p>
-          <h2 id="doc-title" className="mt-1 text-3xl font-semibold">
+          {/* The page's own h1. The sidebar's "Documentation" is a label, not a heading, so the
+              open doc's title is the top of the outline. */}
+          <h1 id="doc-title" className="mt-1 text-3xl font-semibold">
             {TITLES[key]}
-          </h2>
+          </h1>
         </div>
         {body == null ? (
           <p className="text-muted-foreground">This page is not available for version {version}.</p>
         ) : (
           <div className="doc-markdown">
             <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents()}>
-              {body}
+              {stripLeadingH1(body)}
             </ReactMarkdown>
           </div>
         )}
