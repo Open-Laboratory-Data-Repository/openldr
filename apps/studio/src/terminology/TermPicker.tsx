@@ -79,9 +79,12 @@ export function TermPicker({ value, onChange, systemId, statuses, minQueryLength
   const [pickedNotice, setPickedNotice] = useState('');
   /** Bumped by every pick, purely to give the focus effect below something to fire on. */
   const [pickCount, setPickCount] = useState(0);
+  /** The same, for clearing — the focus move goes the other way. */
+  const [clearCount, setClearCount] = useState(0);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
   const containerRef = useRef<HTMLDivElement>(null);
   const clearRef = useRef<HTMLButtonElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   // Monotonic request number. A debounce only NARROWS the window in which two requests are in
   // flight at once; it cannot order their answers, so the older one can still land last and
   // overwrite the newer. Only comparing against the latest number closes that.
@@ -171,11 +174,50 @@ export function TermPicker({ value, onChange, systemId, statuses, minQueryLength
     clearRef.current?.focus();
   }, [pickCount]);
 
+  // The return leg. Clearing unmounts the chip that holds the focused Clear button and mounts the
+  // search box in its place, and nothing moves focus with it, so it drops to <body>. That is the
+  // ordinary next step now rather than an edge case: every keyboard pick parks focus on Clear.
+  // Same counter trick as the pick above — `value` alone cannot drive this, because a call site
+  // that never stores a value (`CodesEditor`) leaves it null through both.
+  useEffect(() => {
+    if (clearCount === 0) return;
+    inputRef.current?.focus();
+  }, [clearCount]);
+
+  // Escape must be caught in the CAPTURE phase, from `window`, or the picker never gets it.
+  // Both call sites nest this picker in a Radix Sheet — `TermMappingDialog` directly, `CodesEditor`
+  // inside `FieldEditorSheet` — and Radix's DismissableLayer registers its own Escape handler on
+  // `document` with `{capture: true}`. A React handler on the input is bubble-phase, so it runs
+  // strictly afterwards: by then Escape has already torn down the whole sheet and the operator's
+  // half-finished mapping with it. Calling `stopPropagation` from the input is too late for the
+  // same reason.
+  //
+  // `window` is one step further out than `document` in the capture path, so this listener runs
+  // BEFORE Radix's and `stopPropagation` keeps the key from ever reaching it. Registered only while
+  // the panel is open: once it is shut the picker has nothing to dismiss, and Escape goes back to
+  // being the sheet's — which is a keyboard operator's only way out of the sheet.
+  useEffect(() => {
+    if (!panelOpen) return;
+    const onEscapeCapture = (e: KeyboardEvent): void => {
+      if (e.key !== 'Escape') return;
+      if (!containerRef.current?.contains(e.target as Node)) return;
+      e.stopPropagation();
+      setOpen(false);
+      setActive(-1);
+    };
+    window.addEventListener('keydown', onEscapeCapture, true);
+    return () => window.removeEventListener('keydown', onEscapeCapture, true);
+  }, [panelOpen]);
+
   const onKeyDown = (e: React.KeyboardEvent): void => {
-    if (e.key === 'Escape') { setOpen(false); setActive(-1); return; }
-    // Escape shuts the panel but keeps the typed query. Without this, the only way back to the
-    // results is editing the text, which is a dead end for someone who dismissed the panel to read
-    // what was underneath it.
+    // No Escape branch here on purpose. While the panel is open the capture listener above takes
+    // the key and stops it, so React never dispatches Escape to this handler at all. While the
+    // panel is shut there is nothing for the picker to dismiss and Escape belongs to whatever
+    // encloses it. Either way this handler has no Escape work to do.
+    //
+    // ArrowDown reopens a panel Escape dismissed, keeping the typed query. Without it, the only
+    // route back to the results is editing the text, which is a dead end for someone who dismissed
+    // the panel to read what was underneath it.
     if (e.key === 'ArrowDown' && !panelOpen && query.trim().length > 0) { e.preventDefault(); setOpen(true); return; }
     if (!panelOpen || rows.length === 0) return;
     if (e.key === 'ArrowDown') { e.preventDefault(); setActive((i) => Math.min(i + 1, rows.length - 1)); return; }
@@ -194,7 +236,16 @@ export function TermPicker({ value, onChange, systemId, statuses, minQueryLength
     <div ref={containerRef} className="relative">
       {/* Mounted in both branches below, and never conditionally: a live region that appears in the
           same commit as its text is usually not announced at all. Keeping it outside the
-          search-box/chip swap is what lets the pick announcement survive that swap. */}
+          search-box/chip swap is what lets the pick announcement survive that swap.
+
+          `aria-live="polite"` is what `role="status"` already implies. It is written out anyway
+          because the tests read it, and because it is the one attribute a reader of this line
+          actually cares about.
+
+          ⚠ This is the SECOND `role="status"` in the component while a search is in flight — the
+          spinner inside `LoadingState` is the other one. A `getByRole('status')` with no name will
+          throw "multiple elements". Query this one by its text, and the spinner by its
+          `name: /loading/i`. */}
       <p role="status" aria-live="polite" className="sr-only">{liveMessage}</p>
 
       {value ? (
@@ -211,7 +262,11 @@ export function TermPicker({ value, onChange, systemId, statuses, minQueryLength
             aria-label={L.clear}
             /* 28×28 — above the 24×24 floor of WCAG 2.2 SC 2.5.8. */
             className="h-7 w-7 shrink-0"
-            onClick={() => onChange(null)}
+            /* Wipe the pick announcement as well as the value. Leaving it would keep the live
+               region asserting "Selected L-2 — Bravo Lab" about a term that is gone. Nothing
+               replaces it: the search box comes back and takes focus, and its own name is what a
+               screen reader reads next, so a second announcement on top of that is noise. */
+            onClick={() => { setPickedNotice(''); setClearCount((n) => n + 1); onChange(null); }}
           >
             ×
           </Button>
@@ -219,12 +274,19 @@ export function TermPicker({ value, onChange, systemId, statuses, minQueryLength
       ) : (
         <>
           <Input
+            ref={inputRef}
             role="combobox"
             aria-label={L.searchLabel}
             aria-expanded={panelOpen}
             aria-controls={listboxId}
             aria-autocomplete="list"
-            aria-activedescendant={active >= 0 && rows[active] ? optionId(active) : undefined}
+            /* `panelOpen` first, and it is load-bearing. The options render only under
+                `panelOpen`, but `active` and `rows` survive a close: an outside mousedown sets
+                `open = false` and touches neither, and deleting the query shuts the panel in the
+                same commit while `state` is still `ready`. Either way the id named here would have
+                left the DOM. A dangling id reference is worse than no reference — the screen
+                reader has nothing to resolve and announces nothing at all. */
+            aria-activedescendant={panelOpen && active >= 0 && rows[active] ? optionId(active) : undefined}
             value={query}
             onChange={(e) => { setQuery(e.target.value); setOpen(true); setPickedNotice(''); }}
             onFocus={() => setOpen(true)}

@@ -2,6 +2,7 @@ import { StrictMode, useState } from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { TermPicker, type PickedTerm } from './TermPicker';
+import { Sheet, SheetContent, SheetTitle, SheetDescription } from '../components/ui/sheet';
 import * as api from '../api';
 
 const term = (code: string, display: string, status = 'ACTIVE') => ({
@@ -377,6 +378,45 @@ describe('TermPicker — keyboard and screen reader', () => {
     expect(document.activeElement).toBe(box);
   });
 
+  // ── aria-activedescendant must never outlive the option it names ───────────────────────────────
+  //
+  // `aria-activedescendant` is an ID REFERENCE. When it names an id that is no longer in the
+  // document, a screen reader has nothing to read and says nothing at all — worse than never
+  // having pointed anywhere. Escape was the only close route any test exercised, and Escape
+  // happens to reset the highlight, so the two routes below went unnoticed.
+  //
+  // Both assert the id is gone from the DOM as well as gone from the attribute. Asserting the
+  // attribute alone would still pass if the attribute merely changed to some other dead id.
+  it('drops aria-activedescendant when a click outside shuts the panel', async () => {
+    const box = await openWithResults();
+    fireEvent.keyDown(box, { key: 'ArrowDown' });
+    const namedId = box.getAttribute('aria-activedescendant')!;
+    expect(document.getElementById(namedId)).not.toBeNull();
+
+    // The picker closes on mousedown outside it, not on click — see the document listener.
+    fireEvent.mouseDown(document.body);
+
+    expect(screen.queryByRole('listbox')).toBeNull();
+    expect(document.getElementById(namedId)).toBeNull();
+    expect(box).not.toHaveAttribute('aria-activedescendant');
+  });
+
+  it('drops aria-activedescendant when the query is deleted', async () => {
+    const box = await openWithResults();
+    fireEvent.keyDown(box, { key: 'ArrowDown' });
+    const namedId = box.getAttribute('aria-activedescendant')!;
+    expect(document.getElementById(namedId)).not.toBeNull();
+
+    // Backspacing the query shuts the panel in the SAME commit. No await: the debounced search
+    // has not run yet, so the row list is still `ready` and the stale index still resolves.
+    // Awaiting here would hide the defect behind the 200 ms reset.
+    fireEvent.change(box, { target: { value: '' } });
+
+    expect(screen.queryByRole('listbox')).toBeNull();
+    expect(document.getElementById(namedId)).toBeNull();
+    expect(box).not.toHaveAttribute('aria-activedescendant');
+  });
+
   it('ArrowDown reopens the panel Escape dismissed, without retyping', async () => {
     const box = await openWithResults();
     fireEvent.keyDown(box, { key: 'Escape' });
@@ -450,6 +490,56 @@ describe('TermPicker — keyboard and screen reader', () => {
     await waitFor(() => expect(document.activeElement).toBe(clear));
   });
 
+  // The other half of that handoff. Every keyboard pick now parks focus on Clear, so pressing it
+  // is the ordinary next step, not an edge case — and it unmounts the chip that holds the focused
+  // button. Without a return handoff focus lands on <body> and the operator has to tab in from the
+  // top of the sheet to reach the search box that just reappeared.
+  it('returns focus to the search box when the selection is cleared', async () => {
+    function Harness(): JSX.Element {
+      const [v, setV] = useState<PickedTerm | null>(null);
+      return <TermPicker value={v} onChange={setV} systemId="sys1" />;
+    }
+    vi.spyOn(api, 'searchTerms').mockResolvedValue({ rows: ROWS, total: ROWS.length } as never);
+    render(<Harness />);
+    const box = screen.getByRole('combobox', { name: /search terms/i });
+    act(() => { box.focus(); });
+    fireEvent.change(box, { target: { value: 'lab' } });
+    await screen.findByRole('option', { name: /Alpha Lab/ });
+
+    fireEvent.keyDown(box, { key: 'ArrowDown' });
+    fireEvent.keyDown(box, { key: 'Enter' });
+    const clear = await screen.findByRole('button', { name: /clear/i });
+    await waitFor(() => expect(document.activeElement).toBe(clear));
+
+    fireEvent.click(clear);
+
+    const reborn = await screen.findByRole('combobox', { name: /search terms/i });
+    await waitFor(() => expect(document.activeElement).toBe(reborn));
+    // Not <body> — the failure this guards against is silent, because a focused body still
+    // "works" for a mouse.
+    expect(document.activeElement).not.toBe(document.body);
+  });
+
+  it('stops announcing a term once it has been cleared', async () => {
+    function Harness(): JSX.Element {
+      const [v, setV] = useState<PickedTerm | null>(null);
+      return <TermPicker value={v} onChange={setV} systemId="sys1" />;
+    }
+    vi.spyOn(api, 'searchTerms').mockResolvedValue({ rows: ROWS, total: ROWS.length } as never);
+    render(<Harness />);
+    const box = screen.getByRole('combobox', { name: /search terms/i });
+    fireEvent.change(box, { target: { value: 'lab' } });
+    await screen.findByRole('option', { name: /Alpha Lab/ });
+
+    fireEvent.click(screen.getByText('Bravo Lab'));
+    expect(await screen.findByText('Selected L-2 — Bravo Lab')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /clear/i }));
+    // A live region that still reads "Selected L-2" after the chip is gone asserts a selection
+    // that no longer exists.
+    expect(screen.queryByText('Selected L-2 — Bravo Lab')).toBeNull();
+  });
+
   // Every other test in this file mounts bare, so mount effects run once and a StrictMode-only
   // defect stays invisible. The app itself renders inside <StrictMode> (main.tsx), where every
   // effect mounts, cleans up and mounts again — the debounce timer and the highlight reset both
@@ -470,5 +560,75 @@ describe('TermPicker — keyboard and screen reader', () => {
     expect(box).toHaveAttribute('aria-activedescendant', screen.getAllByRole('option')[2]!.id);
     fireEvent.keyDown(box, { key: 'Enter' });
     expect(onChange).toHaveBeenCalledWith({ system: 'http://x', code: 'L-3', display: 'Charlie Lab' });
+  });
+});
+
+// ── Escape inside a Sheet, which is where the picker actually lives ───────────────────────────────
+//
+// BOTH real call sites nest the picker in a Radix Sheet: `TermMappingDialog` renders one directly,
+// and `CodesEditor` is rendered inside `FieldEditorSheet`. Radix's DismissableLayer registers its
+// Escape handler on `document` in the CAPTURE phase
+// (@radix-ui/react-use-escape-keydown: `addEventListener("keydown", handleKeyDown, {capture:true})`),
+// so a React bubble-phase handler on the input runs strictly afterwards and cannot stop it —
+// `stopPropagation` there is already too late.
+//
+// The bare renders above can never see this. Every other test in this file mounts the picker with
+// no dialog around it, so Escape has nothing to tear down and the panel-only close looks correct.
+describe('TermPicker — Escape inside a Sheet', () => {
+  beforeEach(() => vi.restoreAllMocks());
+
+  const ROWS = [term('L-1', 'Alpha Lab'), term('L-2', 'Bravo Lab'), term('L-3', 'Charlie Lab')];
+
+  /** The picker inside a controlled Sheet, mirroring `TermMappingDialog`. */
+  function SheetHarness({ onOpenChange }: { onOpenChange: (o: boolean) => void }): JSX.Element {
+    const [open, setOpen] = useState(true);
+    return (
+      <Sheet
+        open={open}
+        onOpenChange={(o) => { setOpen(o); onOpenChange(o); }}
+      >
+        <SheetContent>
+          <SheetTitle>Map term</SheetTitle>
+          <SheetDescription>Pick a target term</SheetDescription>
+          <TermPicker value={null} onChange={vi.fn()} systemId="sys1" />
+        </SheetContent>
+      </Sheet>
+    );
+  }
+
+  async function openInSheet(onOpenChange = vi.fn()): Promise<HTMLElement> {
+    vi.spyOn(api, 'searchTerms').mockResolvedValue({ rows: ROWS, total: ROWS.length } as never);
+    render(<SheetHarness onOpenChange={onOpenChange} />);
+    const box = await screen.findByRole('combobox', { name: /search terms/i });
+    fireEvent.change(box, { target: { value: 'lab' } });
+    await screen.findByRole('option', { name: /Alpha Lab/ });
+    return box;
+  }
+
+  it('Escape shuts the results panel and leaves the sheet standing', async () => {
+    const onOpenChange = vi.fn();
+    const box = await openInSheet(onOpenChange);
+    expect(screen.getByText('Map term')).toBeInTheDocument();
+
+    fireEvent.keyDown(box, { key: 'Escape' });
+
+    expect(screen.queryByRole('listbox')).toBeNull();
+    expect(box).toHaveAttribute('aria-expanded', 'false');
+    // The sheet — and the operator's half-finished mapping — must survive.
+    expect(screen.getByText('Map term')).toBeInTheDocument();
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
+
+  it('a second Escape, with the panel already shut, closes the sheet as usual', async () => {
+    const onOpenChange = vi.fn();
+    const box = await openInSheet(onOpenChange);
+
+    fireEvent.keyDown(box, { key: 'Escape' });
+    expect(screen.getByText('Map term')).toBeInTheDocument();
+
+    // The picker only intercepts Escape while its panel is open. Once it is shut, Escape is the
+    // sheet's again — otherwise the picker would have swallowed the only way out of the sheet.
+    fireEvent.keyDown(box, { key: 'Escape' });
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
   });
 });
