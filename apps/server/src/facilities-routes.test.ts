@@ -3107,6 +3107,69 @@ describe('POST /api/facilities/import/suggest-values', () => {
   });
 });
 
+// Task 6 (facility-import-mapping): the wizard's value panel writes its raw-string -> canonical-code
+// decisions here (Task 5's `saveFacilityValueMappings`). Real store, real migrated db (like
+// suggest-values above) — the whole point is proving these decisions land against the REAL seeded
+// location-status value set (migration 072), not a hand-rolled double.
+describe('POST /api/facilities/import/value-mappings', () => {
+  it('writes value mappings and audits them', async () => {
+    const internalDb = await importDb([SYSTEM]);
+    const ctx = fakeCreateCtx(internalDb);
+    const app = await appWith(ctx);
+
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities/import/value-mappings',
+      payload: {
+        nationalSystem: SYSTEM,
+        mappings: [{ field: 'status', rawValue: 'Operating', toCode: 'active' }],
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().written).toBe(1);
+    expect(ctx.__audit.map((a: any) => a.action)).toEqual(['facility.value-mapping']);
+  });
+
+  it('refuses a nationalSystem that names no registered source', async () => {
+    const internalDb = await makeMigratedDb();
+    const app = await appWith(fakeCreateCtx(internalDb));
+
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities/import/value-mappings',
+      payload: { nationalSystem: 'typed by hand', mappings: [] },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('is gated on facilities.manage — a facilities.view-only user gets 403', async () => {
+    const internalDb = await importDb([SYSTEM]);
+    const app = await appWith(fakeCreateCtx(internalDb), ['facilities.view']);
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities/import/value-mappings',
+      payload: { nationalSystem: SYSTEM, mappings: [] },
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
+  // Mirrors saveFacilityValueMappings' own "refuses a target that is not in the field value set"
+  // test (facility-value-mappings.test.ts) — proving the route surfaces that refusal as a 400 with
+  // the store's own message, rather than a bare 500, and audits nothing when it's refused.
+  it('refuses a toCode that is not in the field value set, and writes/audits nothing', async () => {
+    const internalDb = await importDb([SYSTEM]);
+    const ctx = fakeCreateCtx(internalDb);
+    const app = await appWith(ctx);
+
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities/import/value-mappings',
+      payload: {
+        nationalSystem: SYSTEM,
+        mappings: [{ field: 'status', rawValue: 'Operating', toCode: 'not-a-real-code' }],
+      },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(ctx.__audit).toHaveLength(0);
+  });
+});
+
 // --- A2b Task 3: POST /api/facilities/import/upload -------------------------------------------
 //
 // The upload END of the background import: the file goes to blob storage and a `queued` run is

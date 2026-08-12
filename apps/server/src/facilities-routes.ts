@@ -7,10 +7,11 @@ import { z } from 'zod';
 import { appError } from '@openldr/core';
 import {
   importFacilities, resolveKnownNationalSystem, CONTROLLED_FIELDS, CONTROLLED_VALUE_SETS,
-  resolveControlledFields, suggestColumns, suggestValues,
+  resolveControlledFields, suggestColumns, suggestValues, saveFacilityValueMappings,
   scanObservedFacilities, resolveObservedFacilities, publishFacilityMap, projectRegistryRows,
   retireRegistryConcepts, reprojectAfterRegistryDelete, listFacilityMappingConflicts, facilityHealth,
   type AppContext, type FacilityImportResult, type ScanResult, type PublishResult, type ControlledField,
+  type ValueMappingEntry,
 } from '@openldr/bootstrap';
 import {
   splitFacilityAnswers, CORE_FACILITY_KEYS, FACILITY_ADMIN_LEVELS, referenceCapture,
@@ -240,6 +241,24 @@ const SourceCreateSchema = z.object({
   jurisdiction: z.string().optional().nullable(),
   contact: z.string().optional().nullable(),
   publisherId: z.string().optional().nullable(),
+});
+
+// Task 6 (facility-import-mapping): the wizard's value panel body — one raw string -> canonical
+// code decision per entry, forwarded verbatim to Task 5's `saveFacilityValueMappings`. `field` is
+// restricted to CONTROLLED_FIELDS (not a free string) so a typo lands as a 400 here rather than as
+// a silently-ignored `entry.field` inside that function.
+const ValueMappingEntrySchema = z.object({
+  field: z.enum(CONTROLLED_FIELDS),
+  rawValue: z.string().min(1),
+  toCode: z.string().min(1),
+});
+
+const ValueMappingsSchema = z.object({
+  // ⛔ Same identity as ImportSchema's `nationalSystem` above: must resolve through
+  // `resolveFacilityRegisterForImport` to a REGISTERED facility register, never a typed label —
+  // see this route's own comment for why.
+  nationalSystem: z.string().min(1),
+  mappings: z.array(ValueMappingEntrySchema),
 });
 
 const ConfirmSchema = z.object({
@@ -1500,6 +1519,45 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     const { codes } = await ctx.terminology.admin.valueSets.expand(vs.id);
     const candidates = codes.map((c) => ({ code: c.code, display: c.display ?? null }));
     return { values: suggestValues(values, candidates), notValidated: false };
+  });
+
+  // Task 6 (facility-import-mapping): the wizard's value panel writes its raw-string -> canonical-
+  // code decisions here (Task 5's `saveFacilityValueMappings`, @openldr/bootstrap). It validates
+  // every entry against the field's value set BEFORE writing any of them, so a half-applied set is
+  // impossible by construction — this route only needs to turn that thrown refusal into a 400.
+  //
+  // ⛔ Same register gate as both import doors above (`resolveFacilityRegisterForImport`):
+  // `nationalSystem` must name a REGISTERED facility register, never a label somebody typed.
+  // `observedFieldSystem` (facility-controlled-fields.ts:60) slugifies whatever it is given, so a
+  // typed string would write mappings under a namespace nothing will ever resolve against, with no
+  // error anywhere else in the system to catch it.
+  app.post('/api/facilities/import/value-mappings', MANAGE, async (req, reply) => {
+    const p = ValueMappingsSchema.safeParse(req.body);
+    if (!p.success) { reply.code(400); return { error: p.error.message }; }
+
+    const register = await resolveFacilityRegisterForImport(registerSources, p.data.nationalSystem);
+    if (!register.ok) { reply.code(400); return { error: register.error }; }
+
+    const entries: ValueMappingEntry[] = p.data.mappings;
+    let result;
+    try {
+      result = await saveFacilityValueMappings(ctx.terminology.admin, register.source.url, entries);
+    } catch (err) {
+      reply.code(400);
+      return { error: err instanceof Error ? err.message : String(err) };
+    }
+
+    await recordAudit(ctx, req, {
+      action: 'facility.value-mapping',
+      entityType: 'facility',
+      entityId: register.source.url,
+      before: null,
+      after: null,
+      metadata: {
+        nationalSystem: register.source.url, written: result.written, superseded: result.superseded.length,
+      },
+    });
+    return result;
   });
 
   // Task 4: CSV import — a thin HTTP wrapper over `@openldr/bootstrap`'s `importFacilities`, the
