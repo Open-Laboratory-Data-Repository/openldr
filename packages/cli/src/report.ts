@@ -1,7 +1,7 @@
 import { writeFileSync } from 'node:fs';
 import { createAppContext } from '@openldr/bootstrap';
 import { loadConfig } from '@openldr/config';
-import { toCsv } from '@openldr/reporting';
+import { toCsv, GLASS_SUBMISSION_COLUMNS } from '@openldr/reporting';
 
 interface RunOpts {
   param?: string[];
@@ -64,9 +64,18 @@ export async function runReportGlassExport(opts: { country: string; year: string
     if (opts.from) params.from = opts.from;
     if (opts.to) params.to = opts.to;
     const result = await ctx.reporting.run('r-amr-glass-ris', params);
-    const csv = toCsv(result.columns, result.rows);
+    const csv = toCsv(GLASS_SUBMISSION_COLUMNS as { key: string; label: string }[], result.rows);
     if (opts.out) { writeFileSync(opts.out, csv); process.stdout.write(`wrote ${opts.out}\n`); }
-    else if (opts.json) process.stdout.write(JSON.stringify(result.rows, null, 2) + '\n');
+    else if (opts.json) {
+      // All three branches describe the same GLASS submission, so they must carry the same
+      // fields. `result.rows` come straight off the query, which deliberately projects more
+      // than the submission does (e.g. display names for the PDF) — project down to the
+      // pinned columns, same keys and order as the CSV, before serialising.
+      const pinned = result.rows.map((r) =>
+        Object.fromEntries(GLASS_SUBMISSION_COLUMNS.map((c) => [c.key, r[c.key]])),
+      );
+      process.stdout.write(JSON.stringify(pinned, null, 2) + '\n');
+    }
     else process.stdout.write(csv);
     return 0;
   } finally {

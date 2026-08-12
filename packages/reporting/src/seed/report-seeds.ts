@@ -961,6 +961,7 @@ isolate_meta as (
     oo.specimen_id,
     oo.patient_id,
     coalesce(s.type_code, '(unknown)') as specimen_type,
+    coalesce(s.type_text, s.type_code, '(unknown)') as specimen_name,
     case when s.origin in ('inpatient', 'outpatient') then s.origin else 'unknown' end as origin,
     coalesce(oo.coded_value, '(unknown)') as pathogen_code,
     coalesce(oo.text_value, oo.coded_value, '(unknown)') as pathogen_name,
@@ -981,7 +982,7 @@ age_banded as (
 ),
 first_isolates as (
   select distinct on (patient_id, pathogen_code, specimen_type)
-    obs_id, specimen_id, patient_id, specimen_type, origin, pathogen_code, pathogen_name, iso_date, gender,
+    obs_id, specimen_id, patient_id, specimen_type, specimen_name, origin, pathogen_code, pathogen_name, iso_date, gender,
     case
       when birth_date is null then 'unknown'
       when age_years < 0 then 'unknown'
@@ -1016,7 +1017,9 @@ select
   coalesce(nullif({{param.country}}, ''), 'XXX') as "Iso3Country",
   iso_year::int as "Year",
   specimen_type as "Specimen",
+  min(specimen_name) as "SpecimenName",
   pathogen_code as "PathogenCode",
+  min(pathogen_name) as "Pathogen",
   antibiotic as "AntibioticCode",
   gender as "Gender",
   age_band as "AgeGroup",
@@ -1026,7 +1029,7 @@ select
   sum(case when ris = 'S' then 1 else 0 end)::int as "Susceptible",
   count(*)::int as "Total"
 from results
-group by specimen_type, pathogen_code, pathogen_name, antibiotic, gender, age_band, origin, iso_year
+group by specimen_type, pathogen_code, antibiotic, gender, age_band, origin, iso_year
 order by "Specimen", "PathogenCode", "AntibioticCode", "Gender", "AgeGroup", "Origin"`,
       // Task 2 port — FLAGGED for extra parity-harness attention (the most structurally complex
       // query in the seed set):
@@ -1058,6 +1061,7 @@ isolate_meta as (
     oo.specimen_id,
     oo.patient_id,
     coalesce(s.type_code, '(unknown)') as specimen_type,
+    coalesce(s.type_text, s.type_code, '(unknown)') as specimen_name,
     case when s.origin in ('inpatient', 'outpatient') then s.origin else 'unknown' end as origin,
     coalesce(oo.coded_value, '(unknown)') as pathogen_code,
     coalesce(oo.text_value, oo.coded_value, '(unknown)') as pathogen_name,
@@ -1092,7 +1096,7 @@ ranked as (
 ),
 first_isolates as (
   select
-    obs_id, specimen_id, patient_id, specimen_type, origin, pathogen_code, pathogen_name, iso_date, gender,
+    obs_id, specimen_id, patient_id, specimen_type, specimen_name, origin, pathogen_code, pathogen_name, iso_date, gender,
     case
       when birth_date is null then 'unknown'
       when age_years < 0 then 'unknown'
@@ -1127,7 +1131,9 @@ select
   coalesce(nullif({{param.country}}, ''), 'XXX') as "Iso3Country",
   cast(iso_year as int) as "Year",
   specimen_type as "Specimen",
+  min(specimen_name) as "SpecimenName",
   pathogen_code as "PathogenCode",
+  min(pathogen_name) as "Pathogen",
   antibiotic as "AntibioticCode",
   gender as "Gender",
   age_band as "AgeGroup",
@@ -1137,7 +1143,7 @@ select
   cast(sum(case when ris = 'S' then 1 else 0 end) as int) as "Susceptible",
   cast(count(*) as int) as "Total"
 from results
-group by specimen_type, pathogen_code, pathogen_name, antibiotic, gender, age_band, origin, iso_year
+group by specimen_type, pathogen_code, antibiotic, gender, age_band, origin, iso_year
 order by "Specimen", "PathogenCode", "AntibioticCode", "Gender", "AgeGroup", "Origin"`,
       // Task 5 mysql port — same CTE-chain shape as the mssql variant (distinct on ->
       // row_number()/rn=1 dedup) but with MySQL's simpler calendar-exact age:
@@ -1162,6 +1168,7 @@ isolate_meta as (
     oo.specimen_id,
     oo.patient_id,
     coalesce(s.type_code, '(unknown)') as specimen_type,
+    coalesce(s.type_text, s.type_code, '(unknown)') as specimen_name,
     case when s.origin in ('inpatient', 'outpatient') then s.origin else 'unknown' end as origin,
     coalesce(oo.coded_value, '(unknown)') as pathogen_code,
     coalesce(oo.text_value, oo.coded_value, '(unknown)') as pathogen_name,
@@ -1190,7 +1197,7 @@ ranked as (
 ),
 first_isolates as (
   select
-    obs_id, specimen_id, patient_id, specimen_type, origin, pathogen_code, pathogen_name, iso_date, gender,
+    obs_id, specimen_id, patient_id, specimen_type, specimen_name, origin, pathogen_code, pathogen_name, iso_date, gender,
     case
       when birth_date is null then 'unknown'
       when age_years < 0 then 'unknown'
@@ -1225,7 +1232,9 @@ select
   coalesce(nullif({{param.country}}, ''), 'XXX') as \`Iso3Country\`,
   cast(iso_year as signed) as \`Year\`,
   specimen_type as \`Specimen\`,
+  min(specimen_name) as \`SpecimenName\`,
   pathogen_code as \`PathogenCode\`,
+  min(pathogen_name) as \`Pathogen\`,
   antibiotic as \`AntibioticCode\`,
   gender as \`Gender\`,
   age_band as \`AgeGroup\`,
@@ -1235,7 +1244,7 @@ select
   cast(sum(case when ris = 'S' then 1 else 0 end) as signed) as \`Susceptible\`,
   cast(count(*) as signed) as \`Total\`
 from results
-group by specimen_type, pathogen_code, pathogen_name, antibiotic, gender, age_band, origin, iso_year
+group by specimen_type, pathogen_code, antibiotic, gender, age_band, origin, iso_year
 order by \`Specimen\`, \`PathogenCode\`, \`AntibioticCode\`, \`Gender\`, \`AgeGroup\`, \`Origin\``,
     },
   },
@@ -2093,12 +2102,16 @@ export const SEED_DESIGNS: ReportDesign[] = [
     queryId: 'q-amr-glass-ris',
     paper: 'Letter',
     orientation: 'landscape',
-    // boundColumns mirror amr-glass-ris.ts's `columns` array 1:1 (keys + labels + order). The query
-    // additionally SELECTs Iso3Country/Year, but the catalog table never projected them, so they are
-    // intentionally NOT bound into the displayed table.
+    // boundColumns NO LONGER mirror amr-glass-ris.ts's `columns` 1:1, deliberately. The PDF binds
+    // the DISPLAY-name columns (`SpecimenName`, `Pathogen`); the submission file keeps the codes and
+    // takes its shape from GLASS_SUBMISSION_COLUMNS, not from this list. The human document and the
+    // machine artifact are separate on purpose.
     columns: [
-      { key: 'Specimen', label: 'Specimen' },
-      { key: 'PathogenCode', label: 'Pathogen' },
+      // The NAME columns, not the codes — the codes stay in the query for the submission CSV
+      // (GLASS_SUBMISSION_COLUMNS), which no longer reads from this list.
+      { key: 'SpecimenName', label: 'Specimen' },
+      { key: 'Pathogen', label: 'Pathogen' },
+      // antibioticNormalizeSql already emits a display name; only the column KEY says "code".
       { key: 'AntibioticCode', label: 'Antibiotic' },
       { key: 'Gender', label: 'Gender' },
       { key: 'AgeGroup', label: 'Age' },
@@ -2113,6 +2126,10 @@ export const SEED_DESIGNS: ReportDesign[] = [
       { key: 'country', label: 'Country code', type: 'text', required: false, value: '' },
       { key: 'year', label: 'Year', type: 'text', required: false, value: '' },
     ],
+    metric: 'Isolate counts by susceptibility result.',
+    legend: 'R resistant, I intermediate, S susceptible. AMR: antimicrobial resistance. '
+      + 'GLASS: Global Antimicrobial Resistance and Use Surveillance System. '
+      + '(unknown) means the value was not recorded in the source record.',
   }),
   simpleTableDesign({
     id: 'rt-amr-first-isolate-summary',
@@ -2150,6 +2167,17 @@ export const SEED_DESIGNS: ReportDesign[] = [
     // are the organisms, which no static design can enumerate.
     transpose: true,
     transposeLabel: 'Antibiotic',
+    // ⛔ P0-05/P0-07. These two strings are the whole point of the report being safe to read. They
+    // are design DATA, not renderer code, so a lab can reword them for its own standard.
+    // ⛔ RENDERED-PDF DEFECT: the metric used to carry BOTH sentences and got cut to "…the
+    // figure in parentheses is the…" — the scope panel is a two-column INLINE keyvalue panel, so
+    // the value gets a fixed, narrow box and pdfkit ellipsizes anything longer, silently. The
+    // explanation of the parenthesised count never reached the page. The legend element is
+    // different: it spans the FULL content width and does not truncate (the GLASS design's
+    // 200+ char legend renders in full at the same size), so the notation sentence moved there
+    // and `metric` keeps only the short label the narrow box can actually show.
+    metric: 'Percent resistant (%R)',
+    legend: 'The figure in parentheses is the number of isolates tested. A blank cell means no susceptibility result was recorded for that antibiotic against that organism in this period.',
     columns: [
       { key: 'pathogen', label: 'Pathogen' },
       ...ANTIBIOGRAM_PANEL.map((a) => ({ key: a, label: a })),

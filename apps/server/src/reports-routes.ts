@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { z, ZodError } from 'zod';
 import { ReportNotFoundError, type AppContext } from '@openldr/bootstrap';
-import { toCsv, nextRunAt, type ScheduleFrequency } from '@openldr/reporting';
+import { toCsv, nextRunAt, GLASS_SUBMISSION_COLUMNS, type ScheduleFrequency } from '@openldr/reporting';
 import { appError, type AppError } from '@openldr/core';
 import { requireCapability } from './rbac';
 
@@ -66,7 +66,8 @@ export function registerReportRoutes(app: FastifyInstance<any, any, any, any>, c
     try {
       const result = await ctx.reporting.run('r-amr-glass-ris', req.query as Record<string, unknown>);
       reply.header('content-type', 'text/csv').header('content-disposition', 'attachment; filename="glass-ris.csv"');
-      return toCsv(result.columns, result.rows);
+      // The PINNED submission shape, not result.columns — see GLASS_SUBMISSION_COLUMNS.
+      return toCsv(GLASS_SUBMISSION_COLUMNS as { key: string; label: string }[], result.rows);
     } catch (err) { rethrowAsAppError(err); }
   });
 

@@ -679,6 +679,94 @@ describe('SEED_DESIGNS — rt-amr-antibiogram', () => {
       expect(sql, `q-amr-antibiogram stopped projecting ${agent}`).toContain(agent);
     }
   });
+
+  // ⛔ P0-05. The cells read `0% (1)` and `100% (1)`. Nothing on the page said the percentage was
+  // RESISTANT — the meaning lived only in the Reports-page `description`, which is not on the PDF.
+  // A reader saw 100% and read excellent susceptibility. It means the opposite.
+  //
+  // ⚠ Rendered-PDF regression: the metric used to ALSO carry "the figure in parentheses is the
+  // number of isolates tested", and rendering the real PDF showed it ellipsized off the page — the
+  // scope panel is a narrow two-column keyvalue box, not the full page width. That sentence now
+  // lives on the LEGEND (full content width, does not truncate), so this test only checks the
+  // metric for "resistant"; the "what is the parenthesised number" assertion moved to the legend
+  // test below, next to "explains a blank cell", so both live where the reader actually sees them.
+  it('states on the document that the percentage is resistant', () => {
+    const d = SEED_DESIGNS.find((x) => x.id === 'rt-amr-antibiogram')!;
+    const panel = d.pages[0].elements.find((e) => e.id === 'rt-amr-antibiogram-meta')!;
+    const metric = (panel.rows as [string, string][]).find(([k]) => k === 'Metric');
+    expect(metric).toBeDefined();
+    expect(metric![1]).toMatch(/resistant/i);
+  });
+
+  // ⛔ P0-07 + the parenthesised-count explanation (moved here from the metric — see above).
+  // antibiogramCellSql emits '' when sum(...) = 0 for that antibiotic — which is true both when the
+  // antibiotic was never tested AND when it was tested but the result carried no S/I/R
+  // interpretation (ast_obs filters `abnormal_flag in ('S','I','R')`, report-seeds.ts:1609). "Not
+  // tested" over-claims the second case, so the legend states the one thing a blank always means:
+  // no S/I/R result was recorded. When P0-06 adds suppression, it extends this line with its own
+  // token.
+  it('explains what the parenthesised number is, and a blank cell, on the document', () => {
+    const d = SEED_DESIGNS.find((x) => x.id === 'rt-amr-antibiogram')!;
+    const legend = d.pages[0].elements.find((e) => e.id === 'rt-amr-antibiogram-legend')!;
+    expect(legend.kind).toBe('text');
+    expect(legend.text).toMatch(/tested/i);
+    expect(legend.text).toMatch(/blank/i);
+    expect(legend.text).toMatch(/no susceptibility result was recorded/i);
+  });
+});
+
+// Guard against the exact defect above reopening silently: every unit test asserted the design
+// OBJECT's string, never the box pdfkit renders it into, so an over-budget metric passed every
+// test while the real PDF ellipsized it (the GLASS metric fit its own budget by 0.9pt). This
+// used to live only inside the antibiogram describe block above and check ONE named design, so it
+// never ran against GLASS or any design added later. Hoisted to top level and iterates every
+// design in SEED_DESIGNS, checking whichever ones carry a static 'Metric' scope pair (built by
+// `simpleTableDesign`'s `spec.metric`, see `./simple-design.ts`) — so a future design, or a
+// lengthened existing one, cannot reopen this silently.
+describe('SEED_DESIGNS — every design keeps its Metric value un-ellipsized', () => {
+  it('keeps each design\'s metric VALUE short enough to render un-ellipsized in its scope panel', () => {
+    let checked = 0;
+    for (const d of SEED_DESIGNS) {
+      for (const page of d.pages) {
+        for (const el of page.elements) {
+          if (el.kind !== 'keyvalue' || !el.rows) continue;
+          const rows = el.rows as [string, string][];
+          const metricIndex = rows.findIndex(([k]) => k === 'Metric');
+          if (metricIndex < 0) continue;
+          checked += 1;
+
+          // Same conversion `drawElement` applies before calling `pairRects`: the design rect is
+          // px@96, pairRects' own constants (KV_PAD_X, KV_GUTTER, KV_LABEL_FRAC, ...) are raw
+          // points.
+          const box = toPt(el.rect);
+          const pairs = pairRects(box, rows.length, el.layout ?? 'inline', el.panelColumns ?? 1, false);
+          const valueBoxW = pairs[metricIndex].value.w;
+
+          // pdfkit itself is not reachable from this test: it is a dependency of
+          // `@openldr/report-designer`, not a direct dependency of `@openldr/reporting`, so
+          // `doc.widthOfString` cannot be called here to get an exact glyph measurement. In its
+          // place: a CONSERVATIVE average Helvetica character width of 0.6em (60% of
+          // KV_VALUE_SIZE, the panel's 8pt value font in draw.ts) — wider than Helvetica's
+          // typical ~0.5em average for running English text, so a string that fits this budget
+          // is guaranteed to fit the real render. This is a FLOOR, not pdfkit's true limit: it
+          // may refuse a string pdfkit would actually still fit, but it cannot pass a string
+          // pdfkit would ellipsize.
+          const CONSERVATIVE_AVG_CHAR_W_PT = 0.6 * 8;
+          const budget = Math.floor(valueBoxW / CONSERVATIVE_AVG_CHAR_W_PT);
+
+          expect(
+            rows[metricIndex][1].length,
+            `${d.id}: metric "${rows[metricIndex][1]}" must fit roughly ${budget} chars `
+              + `at an ${valueBoxW.toFixed(1)}pt-wide value column`,
+          ).toBeLessThanOrEqual(budget);
+        }
+      }
+    }
+    // A design that carries no Metric pair at all would make this test pass vacuously. Pin the
+    // count so a refactor that stops the loop from finding GLASS/antibiogram fails loudly instead
+    // of silently checking nothing.
+    expect(checked).toBeGreaterThanOrEqual(2);
+  });
 });
 
 describe('SEED_REPORT_DEFS — r-amr-antibiogram', () => {
@@ -1277,6 +1365,91 @@ describe('SEED_DESIGNS — the antibiogram is transposed because it cannot fit o
         expect(e.transpose ?? false, `${d.id}/${e.id} is unexpectedly transposed`).toBe(false);
       }
     }
+  });
+});
+
+describe('SEED_DESIGNS — rt-amr-glass-ris document legibility', () => {
+  // ⛔ P0-09. CSF, HAEIN, R/I/S, AMR, GLASS and RIS were all presented with no legend.
+  it('spells out R/I/S, AMR and GLASS on the document', () => {
+    const d = SEED_DESIGNS.find((x) => x.id === 'rt-amr-glass-ris')!;
+    const legend = d.pages[0].elements.find((e) => e.id === 'rt-amr-glass-ris-legend')!;
+    expect(legend.kind).toBe('text');
+    expect(legend.text).toMatch(/resistant/i);
+    expect(legend.text).toMatch(/intermediate/i);
+    expect(legend.text).toMatch(/susceptible/i);
+    expect(legend.text).toMatch(/antimicrobial resistance/i);
+    expect(legend.text).toMatch(/Global Antimicrobial Resistance and Use Surveillance System/i);
+  });
+
+  it('states what the table counts', () => {
+    const d = SEED_DESIGNS.find((x) => x.id === 'rt-amr-glass-ris')!;
+    const panel = d.pages[0].elements.find((e) => e.id === 'rt-amr-glass-ris-meta')!;
+    const metric = (panel.rows as [string, string][]).find(([k]) => k === 'Metric');
+    expect(metric).toBeDefined();
+    expect(metric![1]).toMatch(/isolate/i);
+  });
+});
+
+describe('q-amr-glass-ris display names', () => {
+  const q = () => SEED_QUERIES.find((x) => x.id === 'q-amr-glass-ris')!;
+
+  // The three dialects are STRING-COMPARED here, never executed. Only postgres runs under pg-mem
+  // and only the live warehouse proves mssql/mysql. This asserts the projection exists in each.
+  it.each(['postgres', 'mssql', 'mysql'] as const)('projects Pathogen and SpecimenName in %s', (d) => {
+    const sql = q().sql[d]!;
+    expect(sql).toMatch(/min\(pathogen_name\) as [`"]Pathogen[`"]/);
+    expect(sql).toMatch(/min\(specimen_name\) as [`"]SpecimenName[`"]/);
+    expect(sql).toMatch(/coalesce\(s\.type_text, s\.type_code, '\(unknown\)'\) as specimen_name/);
+  });
+
+  // ⛔ The reviewer proved that deleting `specimen_name` from the `first_isolates` column list in
+  // all three dialects left 122 tests passing while every dialect would fail at runtime with an
+  // unknown column. This pins the carry: `specimen_name` (and `pathogen_name`) must survive
+  // `isolate_meta` -> `first_isolates` un-dropped, since the final SELECT's min() aggregates read
+  // from `results`, which is built on top of `first_isolates`.
+  it.each(['postgres', 'mssql', 'mysql'] as const)('carries specimen_name and pathogen_name through first_isolates in %s', (d) => {
+    const sql = q().sql[d]!;
+    expect(sql).toMatch(
+      /obs_id, specimen_id, patient_id, specimen_type, specimen_name, origin, pathogen_code, pathogen_name, iso_date, gender,/,
+    );
+  });
+
+  // ⛔ The final GROUP BY must key on the CODE columns only. `specimen_name`/`pathogen_name` are
+  // unnormalised free text (two rows coded the same specimen/pathogen can carry different display
+  // text) — grouping on them would split one submission stratum into two output rows with the
+  // count split between them. The display name is a scalar aggregate (min()) instead.
+  it.each(['postgres', 'mssql', 'mysql'] as const)('groups by the code columns only, not the display names, in %s', (d) => {
+    const sql = q().sql[d]!;
+    const groupByLine = sql.match(/group by [^\n]+/)![0];
+    expect(groupByLine).not.toMatch(/\bspecimen_name\b/);
+    expect(groupByLine).not.toMatch(/\bpathogen_name\b/);
+    expect(groupByLine).toMatch(/\bspecimen_type\b/);
+    expect(groupByLine).toMatch(/\bpathogen_code\b/);
+  });
+
+  // ⛔ The submission columns are read by a national programme. Adding display names must not
+  // rename, reorder or remove any of them.
+  it.each(['postgres', 'mssql', 'mysql'] as const)('leaves every submission column intact in %s', (d) => {
+    const sql = q().sql[d]!;
+    for (const c of ['Iso3Country', 'Year', 'Specimen', 'PathogenCode', 'AntibioticCode',
+      'Gender', 'AgeGroup', 'Origin', 'Resistant', 'Intermediate', 'Susceptible', 'Total']) {
+      expect(sql).toMatch(new RegExp(`as [\`"]${c}[\`"]`));
+    }
+    expect(sql).toMatch(/pathogen_code as [`"]PathogenCode[`"]/);
+    expect(sql).toMatch(/specimen_type as [`"]Specimen[`"]/);
+  });
+
+  it('binds the NAME columns on the design, and no longer calls the antibiotic a code', () => {
+    const d = SEED_DESIGNS.find((x) => x.id === 'rt-amr-glass-ris')!;
+    const table = d.pages[0].elements.find((e) => e.kind === 'table')!;
+    const keys = table.boundColumns!.map((c) => c.key);
+    expect(keys).toContain('Pathogen');
+    expect(keys).toContain('SpecimenName');
+    expect(keys).not.toContain('PathogenCode');
+    expect(keys).not.toContain('Specimen');
+    // antibioticNormalizeSql already emits the DISPLAY name; only the key said "code".
+    const abx = table.boundColumns!.find((c) => c.key === 'AntibioticCode')!;
+    expect(abx.label).toBe('Antibiotic');
   });
 });
 
