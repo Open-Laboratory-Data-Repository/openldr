@@ -49,7 +49,7 @@ Two new studio files rather than growing `ImportFacilitiesSheet.tsx`, which is a
 
 **Interfaces:**
 - Consumes: nothing from earlier tasks.
-- Produces: `FacilityColumnMap`, `ColumnMapError`, `ColumnMapErrorReason`; `FacilityCsvOptions.columnMap`; `FacilityCsvResult.columnMapErrors`.
+- Produces: `FacilityColumnMap`, `ColumnMapError`, `ColumnMapErrorReason`; `FacilityCsvOptions.columnMap`; `FacilityCsvResult.columnMapErrors`; **`FACILITY_CONTRACT_FIELDS`** (Task 2 imports this rather than re-declaring the field names).
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -172,6 +172,13 @@ Expected: FAIL. TypeScript rejects `columnMap` as an unknown option, and `column
 - [ ] **Step 3: Add the types**
 
 In `packages/terminology/src/facility-csv.ts`, after the `KNOWN` set (line 13):
+
+```ts
+/** The contract's field names, in contract order. Exported so nothing else has to re-declare them —
+ *  a second copy would drift the moment a field is added, and the copy would silently stop being
+ *  offered by the suggestion engine that reads it. */
+export const FACILITY_CONTRACT_FIELDS: readonly string[] = [...REQUIRED, ...OPTIONAL];
+```
 
 ```ts
 /** How a file's own headers map onto the contract above.
@@ -480,15 +487,7 @@ Create `packages/bootstrap/src/facility-mapping-suggest.ts`:
 // worse than a blank they have to fill in: it ships a wrong vocabulary looking confirmed. `WEAK_MIN`
 // is the floor below which this module returns no candidate at all.
 
-/** The contract's own field names — mirrors `REQUIRED`/`OPTIONAL` in
- *  `packages/terminology/src/facility-csv.ts`. Duplicated, not imported: `@openldr/bootstrap` may
- *  depend on `@openldr/terminology`, but this list is also the ORDER suggestions are offered in,
- *  which is a presentation decision this module owns. */
-const CONTRACT_FIELDS = [
-  'national_code', 'name', 'level', 'ownership', 'status',
-  'country', 'zone', 'region', 'district', 'council', 'ward', 'village',
-  'address', 'phone', 'latitude', 'longitude',
-] as const;
+import { FACILITY_CONTRACT_FIELDS } from '@openldr/terminology';
 
 /** Header words that name a contract field without spelling it.
  *
@@ -606,13 +605,13 @@ export function suggestColumns(headers: readonly string[]): ColumnSuggestion[] {
     if (synonym) {
       return { header, candidates: [{ target: synonym, display: null, score: 1, confidence: 'exact' as const }] };
     }
-    const direct = CONTRACT_FIELDS.find((f) => normaliseLabel(f) === n);
+    const direct = FACILITY_CONTRACT_FIELDS.find((f) => normaliseLabel(f) === n);
     if (direct) {
       return { header, candidates: [{ target: direct, display: null, score: 1, confidence: 'exact' as const }] };
     }
     return {
       header,
-      candidates: rank(header, CONTRACT_FIELDS.map((f) => ({ code: f, display: null }))),
+      candidates: rank(header, FACILITY_CONTRACT_FIELDS.map((f) => ({ code: f, display: null }))),
     };
   });
 }
@@ -973,18 +972,31 @@ import { observedFieldSystem } from './facility-controlled-fields';
 
 const SYSTEM = 'urn:zm:mfl';
 
+/** Codes per value-set url, so a `status` entry validates against status codes rather than level's. */
+const EXPANSIONS: Record<string, { code: string; display: string }[]> = {
+  'urn:openldr:valueset:facility-type': [
+    { code: 'health-center', display: 'Health Center' },
+    { code: 'health-post', display: 'Health Post' },
+  ],
+  'urn:openldr:valueset:location-status': [
+    { code: 'active', display: 'Active' },
+    { code: 'inactive', display: 'Inactive' },
+  ],
+  'urn:openldr:valueset:country': [{ code: 'ZMB', display: 'Zambia' }],
+};
+
 function fakeAdmin() {
   const saved: any[] = [];
   const systems: any[] = [];
-  const terms: any[] = [];
+  const createdTerms: any[] = [];
   return {
-    saved, systems, terms,
+    saved, systems, createdTerms,
     valueSets: {
-      getByUrl: async () => ({ id: 'vs-facility-type' }),
-      expand: async () => ({ codes: [{ code: 'health-center', display: 'Health Center' }] }),
+      getByUrl: async (url: string) => ({ id: url }),
+      expand: async (id: string) => ({ codes: EXPANSIONS[id] ?? [] }),
     },
     codingSystems: { upsertByUrl: async (i: any) => { systems.push(i); } },
-    terms: { create: async (i: any) => { terms.push(i); } },
+    terms: { create: async (i: any) => { createdTerms.push(i); } },
     termMappings: {
       saveExclusive: async (i: any) => { saved.push(i); return { mapping: i, draftCreated: false, superseded: [] }; },
     },
@@ -1007,12 +1019,17 @@ describe('saveFacilityValueMappings', () => {
     });
   });
 
-  it('⛔ pins ONE mapType, because the resolver ignores toSystem entirely', async () => {
-    // resolveControlledFields takes the FIRST active mapping from listOutgoing(fromSystem, raw)
-    // without looking at toSystem, while saveExclusive scopes exclusivity BY toSystem and mapType.
-    // Two mappings under different scopes would both stay active and resolution would pick between
-    // them arbitrarily. One pinned type is what makes the two agree.
-    expect(FACILITY_VALUE_MAP_TYPE).toBe('SAME-AS');
+  it('uses the SAME map type for every field, so exclusivity and resolution agree', async () => {
+    // Not an assertion about the constant's literal value — that would prove nothing. This asserts
+    // the property that matters: two mappings written for DIFFERENT fields still share one map type,
+    // which is what makes saveExclusive's (toSystem, mapType) scope line up with
+    // resolveControlledFields' toSystem-blind lookup. Vary the type per field and the two disagree.
+    const admin = fakeAdmin();
+    await saveFacilityValueMappings(admin, SYSTEM, [
+      { field: 'level', rawValue: 'Health Centre', toCode: 'health-center' },
+      { field: 'status', rawValue: 'Functional', toCode: 'active' },
+    ]);
+    expect(new Set(admin.saved.map((m: any) => m.mapType)).size).toBe(1);
   });
 
   it('creates the source coding system and its concept, so the mapping is editable afterwards', async () => {
@@ -1021,7 +1038,7 @@ describe('saveFacilityValueMappings', () => {
       { field: 'status', rawValue: 'Functional', toCode: 'active' },
     ]);
     expect(admin.systems[0]).toMatchObject({ url: observedFieldSystem('status', SYSTEM) });
-    expect(admin.terms[0]).toMatchObject({ code: 'Functional' });
+    expect(admin.createdTerms[0]).toMatchObject({ code: 'Functional' });
   });
 
   it('refuses a target that is not in the field value set, rather than minting a draft', async () => {
