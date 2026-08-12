@@ -12,7 +12,10 @@ interface Props {
 export function ReportDocumentTab({ reportId, params, onDownload }: Props) {
   const { t } = useTranslation();
   const [blob, setBlob] = useState<Blob | null>(null);
-  const [error, setError] = useState(false);
+  // Holds the thrown error's own message when it has one (e.g. the server's coded refusal
+  // reason — RP0005 "no data for this report request"). `true` alone means "failed, no message
+  // to show" — the render below falls back to the untranslated-but-generic pdfRenderError copy.
+  const [error, setError] = useState<string | boolean>(false);
   const [loading, setLoading] = useState(true);
   const key = `${reportId}?${new URLSearchParams(params).toString()}`;
 
@@ -30,10 +33,13 @@ export function ReportDocumentTab({ reportId, params, onDownload }: Props) {
       })
       .catch((e: unknown) => {
         if (active) {
-          // Keep the technical detail out of the report view (it belongs in logs);
-          // show the user a clean message instead.
+          // Still logged for the technical detail (stack, cause). The message itself is now also
+          // shown to the user when the server sent one (e.g. a coded refusal reason) — it's the
+          // one thing that tells them "no such request" instead of "the renderer broke". Fall
+          // back to the translated pdfRenderError below when there's no message to show (a
+          // network failure, or any other rejection that isn't an Error with text).
           console.error('[reports] failed to render report PDF:', e);
-          setError(true);
+          setError(e instanceof Error && e.message ? e.message : true);
           setLoading(false);
         }
       });
@@ -51,9 +57,12 @@ export function ReportDocumentTab({ reportId, params, onDownload }: Props) {
     );
   }
   if (error) {
+    // The server's message (when we have one) is data from the API, not UI copy, so it is
+    // shown as-is in whatever language the server sent it — not translated. That's a real
+    // limitation: an operator on a non-English locale sees an English refusal reason here.
     return (
       <div className="flex h-full items-center justify-center px-6 text-center">
-        <p className="text-sm text-destructive">{t('reports.pdfRenderError')}</p>
+        <p className="text-sm text-destructive">{typeof error === 'string' ? error : t('reports.pdfRenderError')}</p>
       </div>
     );
   }

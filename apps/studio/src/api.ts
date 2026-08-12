@@ -153,7 +153,10 @@ export async function fetchReportOptions(id: string): Promise<Record<string, Rep
 export async function fetchReportPdf(id: string, params: Record<string, string> = {}): Promise<Blob> {
   const qs = new URLSearchParams(params).toString();
   const res = await authFetch(`/api/reports/${encodeURIComponent(id)}.pdf${qs ? `?${qs}` : ''}`);
-  if (!res.ok) throw new Error(`report pdf ${id} failed: ${res.status}`);
+  // Same coded-error surfacing as okJson (errorDetail + formatApiError below), just without the
+  // res.json() success path — a PDF response body is a Blob, not JSON, so okJson itself can't be
+  // reused here. On success this is unchanged: still res.blob(), still a Blob.
+  if (!res.ok) throw new Error(formatApiError(`report pdf ${id}`, await errorDetail(res)));
   return res.blob();
 }
 
