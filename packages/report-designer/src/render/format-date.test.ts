@@ -62,4 +62,10 @@ describe('formatDisplayDateOf', () => {
     expect(formatDisplayDateOf(new Date(2026, 6, 8))).toBe('8 Jul 2026');
     expect(formatDisplayDateOf(new Date(2026, 11, 31, 23, 59))).toBe('31 Dec 2026');
   });
+
+  it('renders an unreadable clock as an em dash, not the word "undefined"', () => {
+    // `now` is caller-supplied. Without this guard `MONTHS[NaN]` is `undefined` and the page prints
+    // the literal `NaN undefined NaN`.
+    expect(formatDisplayDateOf(new Date('nonsense'))).toBe('—');
+  });
 });

@@ -47,7 +47,14 @@ export function formatDisplayDate(value: string): string {
  * means the lab's calendar day. Reading UTC components would make a report generated at 01:00 local
  * claim yesterday's date. The FORMAT is environment-independent; the DAY follows the host zone, and
  * that is correct.
+ *
+ * `now` is caller-supplied (`render/index.ts`). An invalid `Date` makes `getDate()`/`getMonth()`/
+ * `getFullYear()` all `NaN`/`undefined`, which without this guard prints the literal string
+ * `NaN undefined NaN` on the page. Degrade to the same em dash `draw.ts`'s `UNSET` renders for a
+ * declared-but-unset parameter — the literal is repeated here rather than imported to avoid a
+ * circular dependency, since `draw.ts` already imports this module.
  */
 export function formatDisplayDateOf(d: Date): string {
+  if (Number.isNaN(d.getTime())) return '—';
   return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
 }
