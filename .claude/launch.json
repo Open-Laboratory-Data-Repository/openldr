@@ -8,6 +8,12 @@
       "port": 5173
     },
     {
+      "name": "api",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@openldr/server", "dev"],
+      "port": 3000
+    },
+    {
       "name": "web",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--filter", "@openldr/web", "dev"],
