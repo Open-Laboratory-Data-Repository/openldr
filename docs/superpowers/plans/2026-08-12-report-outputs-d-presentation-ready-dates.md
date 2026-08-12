@@ -306,7 +306,6 @@ Expected: FAIL. The date assertions fail with something like `expected '08/07/20
 In `packages/report-designer/src/render/draw.ts`, add to the imports at the top of the file:
 
 ```ts
-import { readFileSync } from 'node:fs';
 import { formatDisplayDate, formatDisplayDateOf } from './format-date';
 ```
 
