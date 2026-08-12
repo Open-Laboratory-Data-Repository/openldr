@@ -679,6 +679,29 @@ describe('SEED_DESIGNS — rt-amr-antibiogram', () => {
       expect(sql, `q-amr-antibiogram stopped projecting ${agent}`).toContain(agent);
     }
   });
+
+  // ⛔ P0-05. The cells read `0% (1)` and `100% (1)`. Nothing on the page said the percentage was
+  // RESISTANT — the meaning lived only in the Reports-page `description`, which is not on the PDF.
+  // A reader saw 100% and read excellent susceptibility. It means the opposite.
+  it('states on the document that the percentage is resistant, and what the parenthesised number is', () => {
+    const d = SEED_DESIGNS.find((x) => x.id === 'rt-amr-antibiogram')!;
+    const panel = d.pages[0].elements.find((e) => e.id === 'rt-amr-antibiogram-meta')!;
+    const metric = (panel.rows as [string, string][]).find(([k]) => k === 'Metric');
+    expect(metric).toBeDefined();
+    expect(metric![1]).toMatch(/resistant/i);
+    expect(metric![1]).toMatch(/tested/i);
+  });
+
+  // ⛔ P0-07. antibiogramCellSql emits '' only when count(*) = 0 for that antibiotic, so a blank
+  // has exactly ONE meaning. State that one meaning; do not invent tokens for states the data
+  // cannot produce. When P0-06 adds suppression, it extends this line with its own token.
+  it('explains a blank cell on the document', () => {
+    const d = SEED_DESIGNS.find((x) => x.id === 'rt-amr-antibiogram')!;
+    const legend = d.pages[0].elements.find((e) => e.id === 'rt-amr-antibiogram-legend')!;
+    expect(legend.kind).toBe('text');
+    expect(legend.text).toMatch(/blank/i);
+    expect(legend.text).toMatch(/not tested/i);
+  });
 });
 
 describe('SEED_REPORT_DEFS — r-amr-antibiogram', () => {

@@ -2150,6 +2150,10 @@ export const SEED_DESIGNS: ReportDesign[] = [
     // are the organisms, which no static design can enumerate.
     transpose: true,
     transposeLabel: 'Antibiotic',
+    // ⛔ P0-05/P0-07. These two strings are the whole point of the report being safe to read. They
+    // are design DATA, not renderer code, so a lab can reword them for its own standard.
+    metric: 'Percent resistant (%R). The figure in parentheses is the number of isolates tested.',
+    legend: 'A blank cell means that antibiotic was not tested against that organism in this period.',
     columns: [
       { key: 'pathogen', label: 'Pathogen' },
       ...ANTIBIOGRAM_PANEL.map((a) => ({ key: a, label: a })),
