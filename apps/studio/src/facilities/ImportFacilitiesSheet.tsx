@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { MoreHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -23,6 +24,7 @@ import {
   listFacilityImportSources,
   suggestColumnMap,
   uploadFacilityImport,
+  type ColumnMapError,
   type ColumnSuggestion,
   type ControlledField,
   type FacilityColumnMap,
@@ -32,7 +34,7 @@ import {
   type FacilityImportRunView,
   type FacilityRegisterSource,
 } from '@/api';
-import { ColumnMapStep } from './ColumnMapStep';
+import { ColumnMapStep, CONTRACT_FIELDS } from './ColumnMapStep';
 import { RegisterSourceDialog } from './RegisterSourceDialog';
 import { ValueMapPanel } from './ValueMapPanel';
 
@@ -52,6 +54,33 @@ const EMPTY_COLUMN_MAP: FacilityColumnMap = { columns: {}, constants: {}, extras
 /** A diff cell's `before`/`after` value, formatted for display. `null`/`undefined` (the field was
  *  never set) reads as an em-dash rather than the literal string "null"/"undefined". */
 const fmtDiffValue = (v: unknown): string => (v === null || v === undefined ? '—' : String(v));
+
+/** One `ColumnMapError` (packages/terminology/src/facility-csv.ts, mirrored as `@/api`'s
+ *  `ColumnMapError`), rendered for an operator to act on — whole-branch review, MUST FIX 3.
+ *  `columnMapErrors` was mirrored in `api.ts` and rendered NOWHERE: an operator who mapped two
+ *  headers to one field saw a blocked preview with no explanation of why. This mirrors
+ *  `describeColumnMapError` (`packages/cli/src/facilities.ts`) reason for reason — the same four the
+ *  CLI already prints — through i18n instead of a raw string, so the wording is translated rather
+ *  than hardcoded English. One branch per `ColumnMapErrorReason`; a reason added there and not here
+ *  is a `tsc` exhaustiveness error via the `default` branch, not a silently generic message. */
+function describeColumnMapError(t: TFunction, e: ColumnMapError): string {
+  switch (e.reason) {
+    case 'duplicate_target':
+      return t('facilities.import.columnMapErrorDuplicateTarget', { subject: e.subject, other: e.other, target: e.target });
+    case 'constant_collision':
+      return t('facilities.import.columnMapErrorConstantCollision', { target: e.target, other: e.other });
+    case 'unknown_target':
+      return t('facilities.import.columnMapErrorUnknownTarget', {
+        subject: e.subject, target: e.target, count: CONTRACT_FIELDS.length,
+      });
+    case 'missing_required':
+      return t('facilities.import.columnMapErrorMissingRequired', { target: e.target });
+    default: {
+      const _exhaustive: never = e.reason;
+      return `${_exhaustive}: ${e.subject} -> ${e.target}`;
+    }
+  }
+}
 
 // A2a (FAC-P1-03) superseded the original F3 fix. `parsed - duplicates` only ever accounted for
 // rows the FILE itself repeated — every other accepted row still read as something an import would
@@ -332,6 +361,23 @@ function ReconciliationSummary(props: ReconciliationSummaryProps) {
               )}
             </p>
           ))}
+        </div>
+      )}
+
+      {/* Whole-branch review, MUST FIX 3: `columnMapErrors` — same reasoning as `duplicateColumns`
+          (which this sheet still does not render; that gap is separate and out of scope here): a
+          non-empty list means nothing imported, and there is no override — the operator must fix
+          the map, which is exactly why `ColumnMapStep` stays mounted below for this specific
+          `blockedReason` (see its own render gate). Rendered ahead of `noOutcomeStated` and the
+          other amber boxes: this is the reason nothing else on this file could be evaluated. */}
+      {result.columnMapErrors.length > 0 && (
+        <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+          <p className="font-medium">{t('facilities.import.columnMapErrorsTitle')}</p>
+          <ul className="mt-1 space-y-0.5">
+            {result.columnMapErrors.map((e, i) => (
+              <li key={`${e.reason}-${e.subject}-${i}`}>{describeColumnMapError(t, e)}</li>
+            ))}
+          </ul>
         </div>
       )}
 
@@ -657,6 +703,15 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   // — Task 3's own doc comment on `FacilityImportOptions.columnMap`).
   const [columnMapHeaders, setColumnMapHeaders] = useState<string[]>([]);
   const [columnMapSuggestions, setColumnMapSuggestions] = useState<ColumnSuggestion[]>([]);
+  // Whole-branch review, MUST FIX 3: `ColumnMapStep`'s own `onValidityChange` — wired here to a
+  // NON-BLOCKING notice only (see its render site below), never to disabling Preview/Upload.
+  // ⛔ Gating either action on this was tried and reverted: the "resets the column map on a file
+  // swap" test below picks a file whose headers satisfy NO required field and still expects Preview
+  // to fire — this sheet leaves "is the map complete" to the SERVER's own authoritative refusal
+  // (now actually rendered, via `columnMapErrors` above), never to a client-side guess that could
+  // diverge from it. Starts `true` so a file with no `ColumnMapStep` rendered yet (or none at all,
+  // e.g. JSONL) never shows a stale notice.
+  const [columnMapValid, setColumnMapValid] = useState(true);
   // A2a: what to do with rows this file's reconciliation classified as `deleted` (the publisher
   // explicitly declared them removed) or `absent` (this registry holds them, the file is simply
   // silent about them). Defaults mirror the server's own (`FacilityImportOptions.onDeleted`/
@@ -825,6 +880,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
     setColumnMap(EMPTY_COLUMN_MAP);
     setColumnMapHeaders([]);
     setColumnMapSuggestions([]);
+    setColumnMapValid(true);
     // A2b: a new file starts a new import in every sense. The picker is disabled while a run is
     // live (see `inputsDisabled`), so this only ever discards a run that has already finished.
     setRunId(null);
@@ -1263,6 +1319,15 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   // the importer's own `blocked` verdict.
   const canConfirmRun = !!awaitingSummary && !blockedFor(awaitingSummary);
   const willWriteCount = reviewResult ? willWrite(reviewResult) : 0;
+  // Whole-branch review, MUST FIX 3: `ColumnMapStep`'s `rowCount` — a plain count of non-empty data
+  // lines in the picked file, informational only ("This map applies to N facilities in this file").
+  // ⛔ NOT the authoritative row count: a quoted multi-line field would over-count here, the same
+  // acceptable impurity `suggestColumnMap`'s own naive header split already carries (see this
+  // sheet's `.catch` on that call) — the real count is `previewResult.parsed`, computed by the
+  // server, which this panel never has before that request runs.
+  const columnMapRowCount = csv
+    ? csv.split(/\r?\n/).filter((line, i) => i > 0 && line.trim() !== '').length
+    : undefined;
   // While a run holds the register, the inputs it was uploaded with must not drift out from under
   // it — the run is for THAT file under THAT national system, and nothing here can retract it.
   const inputsDisabled = applying || uploading || runActive;
@@ -1564,7 +1629,14 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
               on screen (`!reviewResult`): the design's own flow maps columns exactly once, before
               the file ever leaves this tab, and the operator cannot edit it again afterwards — see
               `columnMap`'s own reset-on-file-swap comment for why it must not persist past that. */}
-          {format === 'csv' && columnMapHeaders.length > 0 && !run && !reviewResult && !appliedSummary && (
+          {format === 'csv' && columnMapHeaders.length > 0 && !run && !appliedSummary
+            // ⛔ Fix pass (whole-branch review, MUST FIX 3): kept mounted THROUGH a 'column-map'
+            // refusal, not just before any `reviewResult` exists — before this, the panel unmounted
+            // the instant a preview came back (any `reviewResult`), so the operator who most needed
+            // it (the one whose map the server just refused) lost it at the same moment the refusal
+            // appeared, with no way to fix it in place. Still gone once a DIFFERENT block reason
+            // exists (or none), preserving the original "map columns exactly once" flow.
+            && (!reviewResult || reviewResult.blockedReason === 'column-map') && (
             <div className="mx-6 mt-4">
               <ColumnMapStep
                 headers={columnMapHeaders}
@@ -1572,7 +1644,17 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
                 value={columnMap}
                 // ⛔ MUST STAY THIS DIRECT — see `columnMap`'s own state comment above.
                 onChange={setColumnMap}
+                rowCount={columnMapRowCount}
+                onValidityChange={setColumnMapValid}
               />
+              {/* Non-blocking — see `columnMapValid`'s own state comment for why this never
+                  disables Preview/Upload. Purely a heads-up: the server's own refusal (rendered
+                  above, in `ReconciliationSummary`) is what actually explains any problem. */}
+              {!columnMapValid && (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  {t('facilities.import.columnMapIncompleteHint')}
+                </p>
+              )}
             </div>
           )}
 

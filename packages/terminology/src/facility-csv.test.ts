@@ -307,6 +307,55 @@ describe('parseFacilityCsv with a column map', () => {
     ]);
     expect(r.records).toEqual([]);
   });
+
+  // Fix pass (whole-branch review, MUST FIX 1): an explicit `extras` entry must RELEASE a header's
+  // claim on a contract field it already spells — before this fix, `validateColumnMap`'s passthrough
+  // loop never consulted `map.extras` at all, and the parse loop's own extras loop skipped any
+  // column whose target was a KNOWN contract field regardless of an `extras` opt-in. Confirmed by
+  // execution: `{ columns: {}, extras: ['status'] }` over `national_code,name,status` reported
+  // `columnMapErrors: []` and `record.status` held the file's value instead of `extras.status`.
+  it('⛔ lets an explicit extras entry release a header that already spells a contract field', () => {
+    const r = parseFacilityCsv('national_code,name,status\n1,BAHEBE,Functional\n', {
+      nationalSystem: HFR,
+      columnMap: { columns: {}, extras: ['status'] },
+    });
+    expect(r.columnMapErrors).toEqual([]);
+    expect(r.records).toHaveLength(1);
+    // Released: the passthrough header no longer claims the `status` contract field.
+    expect(r.records[0].status).toBeNull();
+    // ...and its value lands in extras instead, same as any other opted-in column.
+    expect(r.records[0].extras).toEqual({ status: 'Functional' });
+  });
+
+  // The exact reproduction the finding cites: mapping `Province -> zone` while an UNTOUCHED `Zone`
+  // header (which spells the `zone` contract field on its own) is explicitly sent to extras must NOT
+  // trip `duplicate_target` — before the fix, `Zone` claimed `zone` "whether it is unmapped, cleared,
+  // or explicitly sent to extras", which is exactly what made the real Zambia file unmappable (see
+  // the fixture describe block below).
+  it('⛔ an extras entry for an untouched header avoids duplicate_target with a mapped column', () => {
+    const r = parseFacilityCsv('national_code,name,Province,Zone\n1,BAHEBE,Western,junk\n', {
+      nationalSystem: HFR,
+      columnMap: { columns: { Province: 'zone' }, extras: ['Zone'] },
+    });
+    expect(r.columnMapErrors).toEqual([]);
+    expect(r.records).toHaveLength(1);
+    expect(r.records[0].zone).toBe('Western');
+    expect(r.records[0].extras).toEqual({ zone: 'junk' });
+  });
+
+  // ⛔ Do not reopen Task 1's Critical: an UNTOUCHED header that already spells a contract field must
+  // still claim it when nothing releases it — only an EXPLICIT extras entry does. This test stays
+  // green across the fix; it is the guard the fix must not break.
+  it('still refuses a mapped field colliding with an untouched header NOT sent to extras (unchanged)', () => {
+    const r = parseFacilityCsv('MFL Code,national_code,name\n1835,LEGACY-9,Namatindi RHC\n', {
+      nationalSystem: HFR,
+      columnMap: { columns: { 'MFL Code': 'national_code', Name: 'name' } },
+    });
+    expect(r.columnMapErrors).toEqual([
+      { reason: 'duplicate_target', subject: 'national_code', target: 'national_code', other: 'MFL Code' },
+    ]);
+    expect(r.records).toEqual([]);
+  });
 });
 
 describe('coordinate validation', () => {
@@ -384,21 +433,20 @@ describe('parseFacilityCsv against the real Zambia MFL export', () => {
   // `Ownership type` — the exact pair the map below has to route without a `duplicate_target` refusal.
   const fixtureCsv = readFileSync(join(__dirname, '__fixtures__', 'zm-mfl-sample.csv'), 'utf8');
 
-  // ⛔ THE COLLISION. The file has both `Province` and `Zone`, and both `Ownership` and
-  // `Ownership type`. Mapping `Province -> zone` while ALSO mapping `Zone -> zone` would trip
-  // `duplicate_target` — correctly, because the parser has no way to guess which of two columns
-  // should win. This map puts `Province` on `region` and `Zone` on `zone` — two DIFFERENT contract
-  // fields — so both survive. `Ownership type` has nowhere to go: the contract has one `ownership`
-  // field and `Ownership` already claims it, so `Ownership type` is left unmapped on purpose and
-  // lands in `extras`, alongside the 8 other columns (`DHIS2 UID`, `Hims code`, `Location`,
-  // `Mobility status`, `Accesibility`, and the three catchment/household counts) this map does not
-  // carry onto the contract.
+  // ⛔ THE COLLISION, AND THE FIX (whole-branch review, MUST FIX 1). The file has both `Province`
+  // and `Zone`. Before the fix, `Zone` claimed the `zone` contract field the instant it spelled that
+  // name — whether it was unmapped, cleared, or sent to `extras` — so the ONLY expressible map put
+  // `Province` on `region` and left `Zone` on `zone`, filing Zambian province names under `region`
+  // and an untouched junk column under `zone`. Now that an explicit `extras` entry actually releases
+  // a passthrough header's claim, `Zone` can be routed to `extras` on purpose and `Province` — the
+  // file's real administrative-division column — takes `zone` instead. `Ownership type` still has
+  // nowhere to go (the contract has one `ownership` field and `Ownership` already claims it), so it
+  // stays in `extras` too, alongside the other columns this map does not carry onto the contract.
   const ZM_MFL_MAP: FacilityColumnMap = {
     columns: {
       'MFL Code': 'national_code',
       Name: 'name',
-      Province: 'region',
-      Zone: 'zone',
+      Province: 'zone',
       District: 'district',
       Constituency: 'council',
       Ward: 'ward',
@@ -410,7 +458,7 @@ describe('parseFacilityCsv against the real Zambia MFL export', () => {
     },
     constants: { country: 'ZMB' },
     extras: [
-      'DHIS2 UID', 'Hims code', 'Location', 'Ownership type', 'Mobility status',
+      'DHIS2 UID', 'Hims code', 'Zone', 'Location', 'Ownership type', 'Mobility status',
       'Accesibility', 'Catchment population head count', 'Catchment population cso',
       'Number of households',
     ],
@@ -435,11 +483,25 @@ describe('parseFacilityCsv against the real Zambia MFL export', () => {
     // appears nowhere in this file either.
     expect(r.records.every((rec) => rec.country === 'ZMB')).toBe(true);
 
-    // The 9 headers this map deliberately does not carry onto the contract all land in `extras`,
+    // `Province` now takes the `zone` contract field — a real administrative division ('Western',
+    // 'Eastern', ...), not the untouched `Zone` junk column the pre-fix map filed there by accident.
+    expect(r.records.every((rec) => typeof rec.zone === 'string' && rec.zone.length > 0)).toBe(true);
+    expect(new Set(r.records.map((rec) => rec.zone)).has('Western')).toBe(true);
+
+    // The headers this map deliberately does not carry onto the contract all land in `extras`,
     // lowercased and trimmed — existing behaviour every already-imported register depends on
     // (facility-csv.ts:205). Collected as a union across records because a blank cell for one row
     // simply omits that key (see facility-csv.ts:381-387), so no single row is guaranteed to carry
-    // all 9.
+    // all of them.
+    //
+    // ⚠ `Zone` is in `extras` (released from `zone` by the fix) but does NOT appear here: this
+    // 20-row sample's own `Zone` column is blank on every row (verified directly against the
+    // fixture), so it never earns an `extras` entry (a blank cell is omitted, not written as `''`
+    // — see facility-csv.ts:381-387). A NON-blank `Zone` reproduction — `national_code,name,
+    // Province,Zone` with a real value — is covered in the "with a column map" describe block above
+    // ("an extras entry for an untouched header avoids duplicate_target with a mapped column"),
+    // and `packages/cli/src/facilities.test.ts` covers it again against a fixture whose `Zone`
+    // column genuinely repeats a junk value ('Chamakubi Zone').
     const extraKeys = new Set<string>();
     for (const rec of r.records) Object.keys(rec.extras ?? {}).forEach((k) => extraKeys.add(k));
     expect([...extraKeys].sort()).toEqual([

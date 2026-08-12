@@ -35,7 +35,11 @@ as they appear in the file** — not the contract's names. For every header you 
 - **Keep it as extra data.** The column still gets imported — carried into the record's `extras` —
   but it is not treated as one of the contract fields.
 
-Every header in the file has to land in one of those three places before an import can run.
+You do not have to decide every header. Leave one untouched and it still claims its field on its
+own, as long as it already spells a contract field's name exactly — the parser calls this a
+**passthrough** column. An untouched header that spells nothing on the contract is refused, unless
+you turn on **Allow unrecognized columns**, which carries it into `extras` the same way choosing
+"keep as extra data" does.
 
 ## How to get a suggested map
 

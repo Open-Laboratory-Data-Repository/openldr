@@ -1529,13 +1529,23 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
   });
 
   app.post('/api/facilities/import/suggest-values', IMPORT, async (req, reply) => {
-    const reqBody = (req.body ?? {}) as { field?: string; values?: string[] };
+    const reqBody = (req.body ?? {}) as { field?: string; values?: unknown };
     const field = reqBody.field as ControlledField | undefined;
     if (!field || !CONTROLLED_FIELDS.includes(field)) {
       reply.code(400);
       return { error: `field must be one of ${CONTROLLED_FIELDS.join(', ')}` };
     }
-    const values = Array.isArray(reqBody.values) ? reqBody.values : [];
+    // Whole-branch review, M1: the OLD cast (`as { values?: string[] }`) only ever checked
+    // `Array.isArray` below, never each element's TYPE. `suggestValues` -> `rank` ->
+    // `normaliseLabel` calls `.replace` on every raw value with no guard of its own — a non-string
+    // element (e.g. `values: [42]`) reached that `.replace` and threw an unhandled 500, where a
+    // malformed request body is already the documented 400 case just above.
+    if (reqBody.values !== undefined
+      && !(Array.isArray(reqBody.values) && reqBody.values.every((v) => typeof v === 'string'))) {
+      reply.code(400);
+      return { error: 'values must be an array of strings' };
+    }
+    const values = Array.isArray(reqBody.values) ? (reqBody.values as string[]) : [];
 
     const vs = await ctx.terminology.admin.valueSets.getByUrl(CONTROLLED_VALUE_SETS[field]);
     if (!vs) {

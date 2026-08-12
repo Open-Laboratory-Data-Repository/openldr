@@ -127,7 +127,10 @@ import { CONTROLLED_VALUE_SETS } from '@openldr/bootstrap';
 // Fix pass (finding 3): real, pure constant — NOT mocked (this file never mocks
 // `@openldr/terminology`) — so the count named in `describeColumnMapError`'s `unknown_target`
 // message can be asserted against the SAME source the fix reads, not a copy that could drift.
-import { FACILITY_CONTRACT_FIELDS } from '@openldr/terminology';
+// Whole-branch review, MUST FIX 2: `parseFacilityCsv` — real, pure, not mocked either — so the
+// checked-in `zm-mfl-map.json` fixture can be run through the ACTUAL parser it is a map FOR, rather
+// than only ever being handed to a mocked `importFacilities` that agrees with whatever it is told.
+import { FACILITY_CONTRACT_FIELDS, parseFacilityCsv, type FacilityColumnMap } from '@openldr/terminology';
 // ⛔ TYPE-only, so the `vi.mock('@openldr/db', ...)` above does not apply to it (type imports are
 // erased before the module graph is built). It is what makes `DEFAULT_RUN` below an EXHAUSTIVE
 // fixture: see the note there.
@@ -206,8 +209,12 @@ const ZM_MFL_CSV =
   + '1st Level Hospital,GRZ,Government,Temporarily closure,Fixed,Yes,12000,11500,3000,-15.43,28.30\n';
 
 // The map `packages/cli/src/__fixtures__/zm-mfl-map.json` carries — every one of the 21 headers
-// above accounted for, in `columns` or `extras`, matching `validateColumnMap`'s "every header must
-// appear in exactly one" rule (design doc §1). Inlined for the same reason `ZM_MFL_CSV` is.
+// above accounted for, in `columns` or `extras`. ⛔ NOT because `validateColumnMap` requires that:
+// it does not. An untouched header that already spells a contract field passes through on its own
+// (no entry needed), and an unrecognised header only blocks the import unless `allowUnknownColumns`
+// is set — it is never required to appear in `columns`/`extras` either. This map is simply thorough,
+// by choice, so nothing in this real export is left to passthrough or override by accident. Inlined
+// for the same reason `ZM_MFL_CSV` is.
 const ZM_MFL_MAP = {
   columns: {
     'MFL Code': 'national_code', Name: 'name', Province: 'zone', District: 'district',
@@ -841,6 +848,36 @@ describe('facilities import CLI', () => {
     );
     const out = JSON.parse(stdoutSpy.mock.calls.map((c) => String(c[0])).join(''));
     expect(out.columnMapErrors).toEqual([]);
+  });
+
+  // Whole-branch review, MUST FIX 2: the test above proves this command reads `--column-map` and
+  // hands it on — it says nothing about whether the checked-in reference map is actually USABLE,
+  // because `importFacilities` is mocked throughout this suite. Before the terminology fix (MUST FIX
+  // 1), running `zm-mfl-map.json` through the REAL `parseFacilityCsv` against its own fixture CSV
+  // produced `duplicate_target` on `zone` and zero records — a worked example that refused itself,
+  // caught nowhere because no test here ever ran the real parser over it. This one does, reading both
+  // fixtures off the real disk (`vi.importActual`, same pattern as the `describeColumnMapError` test
+  // below) rather than through `mocks.readFileSync`, which stands in for every file THIS suite's
+  // production code reads but has no bearing on what the terminology package's own parser accepts.
+  it('⛔ the reference zm-mfl-map.json is accepted by the REAL parseFacilityCsv, not just the mock', async () => {
+    const realFs = await vi.importActual<typeof import('node:fs')>('node:fs');
+    const fixturesDir = fileURLToPath(new URL('./__fixtures__/', import.meta.url));
+    const map = JSON.parse(realFs.readFileSync(`${fixturesDir}zm-mfl-map.json`, 'utf8')) as FacilityColumnMap;
+    const csvText = realFs.readFileSync(`${fixturesDir}zm-mfl-head.csv`, 'utf8');
+
+    const r = parseFacilityCsv(csvText, { nationalSystem: 'urn:tz:hfr', columnMap: map });
+
+    expect(r.columnMapErrors).toEqual([]);
+    expect(r.duplicateColumns).toEqual([]);
+    expect(r.unknownColumns).toEqual([]);
+    expect(r.records).toHaveLength(3);
+    // `Province -> zone`: every row in this fixture is 'Lusaka'.
+    expect(r.records.every((rec) => rec.zone === 'Lusaka')).toBe(true);
+    // `Zone` is released to `extras` by the fix — and this fixture's `Zone` column is NOT blank
+    // (unlike the terminology package's own 20-row sample): it repeats a junk value on every row,
+    // which is exactly what proves the release actually carries a real value into `extras` rather
+    // than merely avoiding the collision.
+    expect(r.records.every((rec) => rec.extras?.zone === 'Chamakubi Zone')).toBe(true);
   });
 
   it('⛔ reports a bad column map instead of importing, and does not call importFacilities with apply: true', async () => {

@@ -114,6 +114,32 @@ describe('saveFacilityValueMappings', () => {
     }
   });
 
+  // Whole-branch review, M4: `expansions` (facility-value-mappings.ts) is a `Map<field, Map<code,
+  // {display, system}>>` keyed by CODE ALONE. Safe today only because all three controlled value
+  // sets (facility-type/location-status/country) each compose exactly one coding system, so no
+  // expansion has ever actually carried one code under two systems — but nothing enforces that, and
+  // it is the only thing standing between an expansion like that and the pinned `FACILITY_VALUE_MAP_TYPE`
+  // ('SAME-AS') invariant this whole file's docblock is about: `saveExclusive` scopes exclusivity by
+  // `(toSystem, mapType)`, so silently picking ONE of two systems for a code (whichever `expand`
+  // happened to list last) could write a mapping under a system the operator never chose, with no
+  // error anywhere.
+  it('⛔ refuses to save when a value set\'s expansion carries one code under two systems', async () => {
+    const admin = fakeAdmin();
+    admin.valueSets.expand = async () => ({
+      codes: [
+        { system: 'urn:openldr:cs:facility-type', code: 'health-center', display: 'Health Center' },
+        { system: 'urn:some:other:cs', code: 'health-center', display: 'Health Center (other)' },
+      ],
+    });
+
+    await expect(saveFacilityValueMappings(admin, SYSTEM, [
+      { field: 'level', rawValue: 'Health Centre', toCode: 'health-center' },
+    ])).rejects.toThrow(/two different systems/);
+    // Nothing partially written — the same "validate every entry before writing any" discipline
+    // this file's other refusal (the not-in-value-set one above) already follows.
+    expect(admin.saved).toEqual([]);
+  });
+
   it('upserts the observed coding system once per FIELD, not once per entry', async () => {
     const admin = fakeAdmin();
     await saveFacilityValueMappings(admin, SYSTEM, [

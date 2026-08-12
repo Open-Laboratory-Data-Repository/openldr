@@ -21,7 +21,11 @@ const OPTIONAL_FIELDS = [
   'country', 'zone', 'region', 'district', 'council', 'ward', 'village',
   'address', 'phone', 'latitude', 'longitude',
 ] as const;
-const CONTRACT_FIELDS: readonly string[] = [...REQUIRED_FIELDS, ...OPTIONAL_FIELDS];
+// Exported (fix pass, whole-branch review MUST FIX 3) so `ImportFacilitiesSheet.tsx` can name the
+// CURRENT contract-field count in its own `unknown_target` message — the same "read live rather
+// than hardcode" discipline `packages/cli/src/facilities.ts`'s `describeColumnMapError` already
+// follows for `FACILITY_CONTRACT_FIELDS.length` — instead of a second, driftable literal.
+export const CONTRACT_FIELDS: readonly string[] = [...REQUIRED_FIELDS, ...OPTIONAL_FIELDS];
 
 /** Not a contract field — a real header could never collide with it. */
 const UNMAPPED = '__not_mapped__';

@@ -68,10 +68,26 @@ export async function saveFacilityValueMappings(
       const vs = await admin.valueSets.getByUrl(CONTROLLED_VALUE_SETS[entry.field]);
       if (!vs) throw new Error(`no ${entry.field} value set is seeded on this install`);
       const { codes } = await admin.valueSets.expand(vs.id);
-      expansions.set(
-        entry.field,
-        new Map(codes.map((c) => [c.code, { display: c.display ?? null, system: c.system }])),
-      );
+      // ⛔ Fix pass (whole-branch review, M4): keyed by CODE ALONE, safe today only because the
+      // three controlled value sets each compose exactly one coding system. Nothing else enforces
+      // that — an expansion carrying one code under two DIFFERENT systems would otherwise pick
+      // whichever `expand` happened to list last, silently, and could write a mapping under a
+      // `toSystem` the operator never chose. This is the one guard standing between that and the
+      // pinned `FACILITY_VALUE_MAP_TYPE` invariant this file's own docblock explains: `saveExclusive`
+      // scopes its exclusivity by `(toSystem, mapType)`, so two systems for one code silently
+      // defeats it.
+      const byCode = new Map<string, { display: string | null; system: string }>();
+      for (const c of codes) {
+        const existing = byCode.get(c.code);
+        if (existing && existing.system !== c.system) {
+          throw new Error(
+            `code "${c.code}" appears under two different systems (${existing.system} and `
+            + `${c.system}) in the ${entry.field} value set — refusing rather than guessing which one`,
+          );
+        }
+        byCode.set(c.code, { display: c.display ?? null, system: c.system });
+      }
+      expansions.set(entry.field, byCode);
     }
     if (!expansions.get(entry.field)!.has(entry.toCode)) {
       throw new Error(

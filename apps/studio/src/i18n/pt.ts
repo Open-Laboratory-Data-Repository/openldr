@@ -930,6 +930,12 @@ export const pt: EnShape = {
       runFailedTitle: 'Esta importação não terminou',
       tooLargeUploadError: 'Este ficheiro é maior do que o limite de carregamento de uma importação em segundo plano. Importe um registo deste tamanho com a CLI: openldr facilities import.',
       tooLargeUseUpload: 'Ou importe-o aqui em segundo plano: escolha «Carregar e validar» no menu de ações acima.',
+      columnMapErrorsTitle: 'Este mapeamento de colunas não pode ser usado',
+      columnMapErrorDuplicateTarget: '«{{subject}}» e «{{other}}» estão ambos mapeados para «{{target}}» — apenas uma coluna pode reivindicar um campo.',
+      columnMapErrorConstantCollision: 'O valor fixo de «{{target}}» entra em conflito com «{{other}}», que já mapeia uma coluna para esse campo.',
+      columnMapErrorUnknownTarget: '«{{subject}}» está mapeado para «{{target}}», que não é um dos {{count}} campos do contrato.',
+      columnMapErrorMissingRequired: 'O campo obrigatório «{{target}}» não tem coluna nem valor fixo mapeado para ele.',
+      columnMapIncompleteHint: 'Ainda pode pré-visualizar ou carregar com este mapeamento incompleto — a importação explicará exatamente o que falta mapear.',
       columnMap: {
         notMapped: 'Não mapeado',
         checkThisBadge: 'Verificar',

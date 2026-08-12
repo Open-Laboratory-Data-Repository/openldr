@@ -213,12 +213,23 @@ export function coordinatePair(
  *  A constant colliding with a passthrough header is `constant_collision` for the same reason a
  *  constant colliding with a mapped column already was.
  *
+ *  ⛔ Fix pass (whole-branch review, MUST FIX 1): a passthrough header explicitly listed in
+ *  `map.extras` does NOT claim its field — an operator who opts a contract-spelled header into
+ *  `extras` is making a decision, and this parser must not overrule it by claiming the field anyway.
+ *  Before this fix, `extras` was never consulted here at all, so an `extras`-opted header still
+ *  collided with a genuinely mapped column (`duplicate_target`) with no way to avoid it — the only
+ *  expressible map for a file carrying both `Province` and `Zone` had to leave `Zone` claiming
+ *  `zone` on its own, whichever of the two the operator actually wanted there. Only an EXPLICIT
+ *  `extras` entry releases the claim; an untouched header not sent to extras still claims its field
+ *  exactly as before — that guard is what Task 1's Critical fixed and it stays.
+ *
  *  `headers` must be the file's headers, lowercased and trimmed the same way `parseFacilityCsv`
  *  computes its own `headers` — case-insensitive lookup against `map.columns`' keys depends on it. */
 export function validateColumnMap(map: FacilityColumnMap, headers: string[] = []): ColumnMapError[] {
   const errors: ColumnMapError[] = [];
   const claimedBy = new Map<string, string>(); // contract field -> the header/field that claimed it
   const mappedHeaders = new Set(Object.keys(map.columns).map((h) => h.trim().toLowerCase()));
+  const extrasHeaders = new Set((map.extras ?? []).map((h) => h.trim().toLowerCase()));
 
   for (const [header, target] of Object.entries(map.columns)) {
     if (!KNOWN.has(target)) {
@@ -234,9 +245,10 @@ export function validateColumnMap(map: FacilityColumnMap, headers: string[] = []
   }
 
   // Passthrough: a header the map does not mention, but which already spells a contract field,
-  // claims that field too — see the docblock above.
+  // claims that field too — UNLESS an explicit `extras` entry releases it (see the docblock above).
   for (const header of headers) {
     if (header === '' || mappedHeaders.has(header) || !KNOWN.has(header)) continue;
+    if (extrasHeaders.has(header)) continue;
     const owner = claimedBy.get(header);
     if (owner !== undefined) {
       errors.push({ reason: 'duplicate_target', subject: header, target: header, other: owner });
@@ -360,8 +372,16 @@ export function parseFacilityCsv(csv: string, opts: FacilityCsvOptions): Facilit
       continue;
     }
 
+    // ⛔ Fix pass (MUST FIX 1): a header explicitly opted into `extras` must NOT also land in `r`
+    // under its contract-field name — that write is what let a header released via `extras` still
+    // silently win the contract field below (`r.status` held the value even though `status` had
+    // been sent to extras). See the extras loop after this one, which is what actually carries the
+    // value to `extras[headers[i]]` instead.
     const r: Record<string, string> = {};
-    effective.forEach((h, i) => { r[h] = record[i]; });
+    effective.forEach((h, i) => {
+      if (extrasOptIn.has(headers[i])) return;
+      r[h] = record[i];
+    });
     for (const [field, value] of Object.entries(opts.columnMap?.constants ?? {})) {
       r[field] = value;
     }
@@ -381,7 +401,11 @@ export function parseFacilityCsv(csv: string, opts: FacilityCsvOptions): Facilit
     for (let i = 0; i < effective.length; i += 1) {
       if (headers[i] === '') continue;
       const target = effective[i];
-      if (KNOWN.has(target)) continue;
+      // ⛔ Fix pass (MUST FIX 1): a column reaches `extras` when its target is not a contract field
+      // at all (the existing rule) OR when an explicit `extras` entry released it from one it DOES
+      // spell (`extrasOptIn.has(headers[i])`) — before this fix, a released header's target was
+      // still `KNOWN`, so this loop skipped it and `r[target]` (built above) won instead.
+      if (KNOWN.has(target) && !extrasOptIn.has(headers[i])) continue;
       const v = text(record[i]);
       if (v !== null) extras[headers[i]] = v;
     }

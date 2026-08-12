@@ -3174,6 +3174,20 @@ describe('POST /api/facilities/import/suggest-values', () => {
     });
     expect(res.statusCode).toBe(403);
   });
+
+  // Whole-branch review, M1: `values` used to be a bare `as { values?: string[] }` cast — it checked
+  // `Array.isArray` but never each element's type. `{"field":"status","values":[42]}` reached
+  // `suggestValues` -> `rank` -> `normaliseLabel`, which calls `.replace` on the raw value — a
+  // TypeError (`.replace is not a function`) that surfaced as an unhandled 500 where a 400 is already
+  // the documented refusal for a bad request body.
+  it('⛔ refuses a values array with a non-string element as a 400, not a 500', async () => {
+    const app = await appWith(fakeCtx());
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities/import/suggest-values',
+      payload: { field: 'status', values: [42] },
+    });
+    expect(res.statusCode).toBe(400);
+  });
 });
 
 // Task 6 (facility-import-mapping): the wizard's value panel writes its raw-string -> canonical-code

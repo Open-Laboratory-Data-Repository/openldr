@@ -17,7 +17,7 @@ export might call the code column `MFL Code` and the region column `Province`.
 
 A **column map** is the translation from a file's own headers to the contract above. Its keys
 are **the file's own header text, exactly as it appears in the file** — never the contract's
-field names. Every header ends up in one of three places:
+field names. A header you choose to map ends up in one of three places:
 
 - **Mapped** to one contract field. Two headers can never map to the same field: the importer
   refuses rather than guess which one should win.
@@ -25,6 +25,11 @@ field names. Every header ends up in one of three places:
   national file usually has no `country` column, so `country` is normally supplied this way —
   the ISO alpha-3 code (`ZMB`, `TZA`, …), never a free-text label.
 - **`extras`**, kept on the record but not treated as a contract field.
+
+Not every header needs a decision. One left out of the map still claims its field on its own if
+it already spells a contract field's name exactly (a **passthrough** column) — and one that
+spells nothing on the contract is refused, unless `allowUnknownColumns` is set, which routes it
+to `extras` the same way listing it there explicitly would.
 
 ```json
 {

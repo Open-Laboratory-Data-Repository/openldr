@@ -1891,4 +1891,106 @@ describe('ImportFacilitiesSheet', () => {
     // no columnMap is sent at all.
     expect(api.importFacilitiesCsv).toHaveBeenCalledWith(expect.objectContaining({ columnMap: undefined }));
   });
+
+  // ── Whole-branch review, MUST FIX 3: `columnMapErrors` was mirrored in `api.ts` and rendered
+  // NOWHERE — an operator who mapped two headers to one field got "no rows found" or a misleading
+  // unknown-columns message, no column-map errors shown, and the mapping panel gone (it unmounted
+  // the instant `reviewResult` existed). Recovery needed re-picking the file. ────────────────────────
+
+  it('⛔ renders columnMapErrors and keeps ColumnMapStep mounted so the operator can fix it in place', async () => {
+    mocked(api.suggestColumnMap).mockResolvedValueOnce({
+      headers: ['MFL Code', 'MFL Code 2'],
+      columns: [
+        { header: 'MFL Code', candidates: [] },
+        { header: 'MFL Code 2', candidates: [] },
+      ],
+    });
+    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockResolvedValue(baseResult({
+      blocked: true, blockedReason: 'column-map',
+      columnMapErrors: [
+        { reason: 'duplicate_target', subject: 'MFL Code 2', target: 'national_code', other: 'MFL Code' },
+      ],
+    }));
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    await pickFileAndSystem('MFL Code,MFL Code 2\n1,2\n');
+    await previewNow();
+
+    // The refusal is explained — not a silent "no rows found" and not a bare quarantine message.
+    expect(await screen.findByText(
+      /"MFL Code 2" and "MFL Code" both map to "national_code"/,
+    )).toBeInTheDocument();
+
+    // ⛔ THE OTHER HALF OF THE FIX: before it, `ColumnMapStep` unmounted the instant `reviewResult`
+    // existed (its own render gate read `!reviewResult`), so the very panel needed to fix the
+    // refusal disappeared at the same moment the refusal appeared. It must stay mounted here.
+    expect(screen.getByLabelText('MFL Code')).toBeInTheDocument();
+    expect(screen.getByLabelText('MFL Code 2')).toBeInTheDocument();
+  });
+
+  it('does not render the columnMapErrors block, or keep the panel mounted, once the file parses cleanly', async () => {
+    mocked(api.suggestColumnMap).mockResolvedValueOnce({
+      headers: ['MFL Code', 'Name'],
+      columns: [
+        { header: 'MFL Code', candidates: [{ target: 'national_code', display: null, score: 1, confidence: 'exact' }] },
+        { header: 'Name', candidates: [{ target: 'name', display: null, score: 1, confidence: 'exact' }] },
+      ],
+    });
+    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockResolvedValue(cleanPreview);
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    await pickFileAndSystem('MFL Code,Name\n1835,Namatindi RHC\n');
+    await previewNow();
+
+    await screen.findByText(/facility row\(s\) will be created/i);
+    expect(screen.queryByText(/both map to/)).not.toBeInTheDocument();
+    // The design's ordinary flow: the panel maps columns exactly once, then gets out of the way —
+    // unaffected by the fix, which only keeps it mounted for the 'column-map' refusal specifically.
+    expect(screen.queryByLabelText('MFL Code')).not.toBeInTheDocument();
+  });
+
+  // ── Whole-branch review, MUST FIX 3: `rowCount`/`onValidityChange` were exported by ColumnMapStep
+  // and passed by NEITHER caller — dead props. `rowCount` is wired here to a plain line count of the
+  // picked file (informational, not authoritative). `onValidityChange` is wired to a NON-BLOCKING
+  // notice, deliberately: gating Preview/Upload on it would contradict this sheet's own established
+  // design, proven by the "resets the column map on a file swap" test above, which picks a file whose
+  // headers satisfy NO required field and still expects Preview to fire — this app leaves "is the map
+  // complete" to the server's own authoritative refusal (now actually shown, per the fix above),
+  // never to a client-side guess that could diverge from it. ─────────────────────────────────────────
+
+  it('shows the row-count hint and a non-blocking notice while the column map is incomplete, without disabling Preview', async () => {
+    mocked(api.suggestColumnMap).mockResolvedValueOnce({
+      headers: ['Code', 'Facility Name'],
+      columns: [{ header: 'Code', candidates: [] }, { header: 'Facility Name', candidates: [] }],
+    });
+    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockResolvedValue(cleanPreview);
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    await pickFileAndSystem('Code,Facility Name\nA,B\nC,D\n');
+
+    // rowCount wired: 2 data rows in the picked file.
+    expect(await screen.findByText(/applies to 2 facilities/i)).toBeInTheDocument();
+    // onValidityChange wired: neither header satisfies a required field, so the notice shows.
+    expect(screen.getByText(/still preview or upload/i)).toBeInTheDocument();
+
+    // ...and it does not block anything — `previewNow` itself waits for Preview to become enabled,
+    // so this line is the proof: it would time out were Preview gated on validity.
+    await previewNow();
+    expect(api.importFacilitiesCsv).toHaveBeenCalled();
+  });
+
+  it('the incomplete-map notice clears once the required fields are satisfied', async () => {
+    mocked(api.suggestColumnMap).mockResolvedValueOnce({
+      headers: ['MFL Code', 'Name'],
+      columns: [
+        { header: 'MFL Code', candidates: [{ target: 'national_code', display: null, score: 1, confidence: 'exact' }] },
+        { header: 'Name', candidates: [{ target: 'name', display: null, score: 1, confidence: 'exact' }] },
+      ],
+    });
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    await pickFileAndSystem('MFL Code,Name\n1835,Namatindi RHC\n');
+    await screen.findByLabelText('MFL Code');
+    expect(screen.queryByText(/still preview or upload/i)).not.toBeInTheDocument();
+  });
 });
