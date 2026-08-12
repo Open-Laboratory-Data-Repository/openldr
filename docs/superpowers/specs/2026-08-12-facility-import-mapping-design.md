@@ -257,8 +257,16 @@ mistyped register on the CLI writes mappings that will never resolve. Documented
 - An unmapped *value* never blocks. Existing behaviour, and it is right: the raw string writes
   through and the count is reported (`facility-controlled-fields.ts:155`).
 - An unmapped *required column* always blocks. A file with no `name` is not a facility list.
-- A value mapping whose target is not in the value set surfaces as `draftCreated: true` from the
-  store. Treat it as an operator error and refuse, rather than quietly minting a draft concept.
+- A value mapping whose target is not in the value set is refused by validating against the value
+  set's own expansion **before any write**, so a half-applied set is impossible.
+
+  ⛔ **Do not lean on the store's `draftCreated: true` for this.** As built, that signal turned out
+  to be unusable: `saveExclusive` looks for the target concept at `(toSystem, toCode)`, and passing
+  the field's **ValueSet** url — which is not where concepts are filed — made the lookup miss on
+  every call, so `draftCreated` was unconditionally true and meant nothing. The target's system now
+  comes from the value set's own expansion (each expanded concept carries its `system`), so mappings
+  file under the real coding system and no orphaned draft is minted. Found in review of Task 5,
+  fixed in `e3eceb56`.
 
 ## Testing
 
