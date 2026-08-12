@@ -3013,6 +3013,100 @@ describe('POST /api/facilities/import/sources', () => {
   });
 });
 
+// Task 4 (facility-import-mapping): the offline suggestion engine (Task 2, facility-mapping-
+// suggest.ts) exposed over HTTP for BOTH import doors — the inline path already holds the file
+// text client-side, the streamed upload path does not (the file is a blob only the server can
+// read). One endpoint rather than two mechanisms that would drift.
+describe('POST /api/facilities/import/suggest-map', () => {
+  it('suggests a column map from a file header row', async () => {
+    const app = await appWith(fakeCtx());
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities/import/suggest-map',
+      payload: { csv: 'MFL Code,Name,Province,Catchment population cso\n1835,X,Western,10\n' },
+    });
+    expect(res.statusCode).toBe(200);
+    const resBody = res.json();
+    expect(resBody.headers).toEqual(['MFL Code', 'Name', 'Province', 'Catchment population cso']);
+    const byHeader = Object.fromEntries(resBody.columns.map((c: any) => [c.header, c.candidates]));
+    expect(byHeader['MFL Code'][0]).toMatchObject({ target: 'national_code' });
+    expect(byHeader.Province[0]).toMatchObject({ target: 'zone' });
+    expect(byHeader['Catchment population cso']).toEqual([]);
+  });
+
+  it('refuses a suggest-map request with no header row', async () => {
+    const app = await appWith(fakeCtx());
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities/import/suggest-map', payload: { csv: '' },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('is gated on facilities.manage — a facilities.view-only user gets 403', async () => {
+    const app = await appWith(fakeCtx(), ['facilities.view']);
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities/import/suggest-map',
+      payload: { csv: 'Name\nX\n' },
+    });
+    expect(res.statusCode).toBe(403);
+  });
+});
+
+describe('POST /api/facilities/import/suggest-values', () => {
+  it('suggests value mappings from the bound value set', async () => {
+    // The real store against a real migrated db (migration 072 seeds location-status), not
+    // `fakeCtx()`'s hand-rolled admin double — the whole point of this test is that neither
+    // Zambian word resembles active/suspended/inactive closely enough to clear the engine's floor.
+    const internalDb = await makeMigratedDb();
+    const app = await appWith(fakeCreateCtx(internalDb));
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities/import/suggest-values',
+      payload: { field: 'status', values: ['Functional', 'Temporarily closure'] },
+    });
+    expect(res.statusCode).toBe(200);
+    const byValue = Object.fromEntries(res.json().values.map((v: any) => [v.value, v.candidates]));
+    // Mapping them is a human judgement, and the engine says so by offering nothing.
+    expect(byValue.Functional).toEqual([]);
+    expect(byValue['Temporarily closure']).toEqual([]);
+  });
+
+  it('refuses suggest-values for a field that is not controlled', async () => {
+    const app = await appWith(fakeCtx());
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities/import/suggest-values',
+      payload: { field: 'name', values: ['x'] },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  // A field's value set not seeded on this install mirrors `resolveControlledFields`'s own
+  // contract: reported `notValidated`, never a 500 or a refusal.
+  it('reports notValidated rather than erroring when the field\'s value set is not seeded', async () => {
+    // Same simulated-absence pattern as Task 6's "reports NOT VALIDATED" test above: a real store,
+    // with its own `getByUrl` overridden to report the location-status ValueSet absent.
+    const internalDb = await makeMigratedDb();
+    const ctx = fakeCreateCtx(internalDb);
+    ctx.terminology.admin.valueSets.getByUrl = async () => null;
+    const app = await appWith(ctx);
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities/import/suggest-values',
+      payload: { field: 'status', values: ['Functional'] },
+    });
+    expect(res.statusCode).toBe(200);
+    const resBody = res.json();
+    expect(resBody.notValidated).toBe(true);
+    expect(resBody.values).toEqual([{ value: 'Functional', candidates: [] }]);
+  });
+
+  it('is gated on facilities.manage — a facilities.view-only user gets 403', async () => {
+    const app = await appWith(fakeCtx(), ['facilities.view']);
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities/import/suggest-values',
+      payload: { field: 'status', values: ['x'] },
+    });
+    expect(res.statusCode).toBe(403);
+  });
+});
+
 // --- A2b Task 3: POST /api/facilities/import/upload -------------------------------------------
 //
 // The upload END of the background import: the file goes to blob storage and a `queued` run is

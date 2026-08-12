@@ -6,10 +6,11 @@ import type { Kysely } from 'kysely';
 import { z } from 'zod';
 import { appError } from '@openldr/core';
 import {
-  importFacilities, resolveKnownNationalSystem, CONTROLLED_FIELDS, resolveControlledFields,
+  importFacilities, resolveKnownNationalSystem, CONTROLLED_FIELDS, CONTROLLED_VALUE_SETS,
+  resolveControlledFields, suggestColumns, suggestValues,
   scanObservedFacilities, resolveObservedFacilities, publishFacilityMap, projectRegistryRows,
   retireRegistryConcepts, reprojectAfterRegistryDelete, listFacilityMappingConflicts, facilityHealth,
-  type AppContext, type FacilityImportResult, type ScanResult, type PublishResult,
+  type AppContext, type FacilityImportResult, type ScanResult, type PublishResult, type ControlledField,
 } from '@openldr/bootstrap';
 import {
   splitFacilityAnswers, CORE_FACILITY_KEYS, FACILITY_ADMIN_LEVELS, referenceCapture,
@@ -1457,6 +1458,48 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       }
       throw err;
     }
+  });
+
+  // Task 4 (facility-import-mapping): header row + ranked suggestions, for BOTH import doors. The
+  // inline path already holds the file text client-side; the streamed path (A2b upload) does not,
+  // since the file is a blob only the server can read. One endpoint rather than two mechanisms
+  // that would drift.
+  app.post('/api/facilities/import/suggest-map', IMPORT, async (req, reply) => {
+    const reqBody = (req.body ?? {}) as { csv?: string };
+    // Only the first line is needed. Parsing the whole file to read its header would make a 64 MiB
+    // upload pay for a suggestion.
+    //
+    // ⛔ DELIBERATELY NAIVE — split on `,`, not a real CSV parse. A quoted header containing a
+    // comma would split wrongly. That is acceptable here: this suggestion is advisory and the
+    // operator sees and confirms every header before anything is imported. The AUTHORITATIVE
+    // header parse remains `parseFacilityCsv`'s. Do not "fix" this into a second CSV parser.
+    const firstLine = (reqBody.csv ?? '').split(/\r?\n/, 1)[0] ?? '';
+    const headers = firstLine.split(',').map((h) => h.trim()).filter((h) => h !== '');
+    if (headers.length === 0) {
+      reply.code(400);
+      return { error: 'no header row found in the supplied file' };
+    }
+    return { headers, columns: suggestColumns(headers) };
+  });
+
+  app.post('/api/facilities/import/suggest-values', IMPORT, async (req, reply) => {
+    const reqBody = (req.body ?? {}) as { field?: string; values?: string[] };
+    const field = reqBody.field as ControlledField | undefined;
+    if (!field || !CONTROLLED_FIELDS.includes(field)) {
+      reply.code(400);
+      return { error: `field must be one of ${CONTROLLED_FIELDS.join(', ')}` };
+    }
+    const values = Array.isArray(reqBody.values) ? reqBody.values : [];
+
+    const vs = await ctx.terminology.admin.valueSets.getByUrl(CONTROLLED_VALUE_SETS[field]);
+    if (!vs) {
+      // The field's value set is not seeded on this install — the same condition
+      // `resolveControlledFields` reports as `notValidated`. No candidates exist to rank against.
+      return { values: values.map((value) => ({ value, candidates: [] })), notValidated: true };
+    }
+    const { codes } = await ctx.terminology.admin.valueSets.expand(vs.id);
+    const candidates = codes.map((c) => ({ code: c.code, display: c.display ?? null }));
+    return { values: suggestValues(values, candidates), notValidated: false };
   });
 
   // Task 4: CSV import — a thin HTTP wrapper over `@openldr/bootstrap`'s `importFacilities`, the
