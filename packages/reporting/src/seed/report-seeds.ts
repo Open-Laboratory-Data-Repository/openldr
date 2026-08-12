@@ -2177,7 +2177,7 @@ export const SEED_DESIGNS: ReportDesign[] = [
     // 200+ char legend renders in full at the same size), so the notation sentence moved there
     // and `metric` keeps only the short label the narrow box can actually show.
     metric: 'Percent resistant (%R)',
-    legend: 'The figure in parentheses is the number of isolates tested. A blank cell means that antibiotic was not tested against that organism in this period.',
+    legend: 'The figure in parentheses is the number of isolates tested. A blank cell means no susceptibility result was recorded for that antibiotic against that organism in this period.',
     columns: [
       { key: 'pathogen', label: 'Pathogen' },
       ...ANTIBIOGRAM_PANEL.map((a) => ({ key: a, label: a })),

@@ -699,16 +699,19 @@ describe('SEED_DESIGNS — rt-amr-antibiogram', () => {
   });
 
   // ⛔ P0-07 + the parenthesised-count explanation (moved here from the metric — see above).
-  // antibiogramCellSql emits '' only when count(*) = 0 for that antibiotic, so a blank has exactly
-  // ONE meaning. State that one meaning; do not invent tokens for states the data cannot produce.
-  // When P0-06 adds suppression, it extends this line with its own token.
+  // antibiogramCellSql emits '' when sum(...) = 0 for that antibiotic — which is true both when the
+  // antibiotic was never tested AND when it was tested but the result carried no S/I/R
+  // interpretation (ast_obs filters `abnormal_flag in ('S','I','R')`, report-seeds.ts:1609). "Not
+  // tested" over-claims the second case, so the legend states the one thing a blank always means:
+  // no S/I/R result was recorded. When P0-06 adds suppression, it extends this line with its own
+  // token.
   it('explains what the parenthesised number is, and a blank cell, on the document', () => {
     const d = SEED_DESIGNS.find((x) => x.id === 'rt-amr-antibiogram')!;
     const legend = d.pages[0].elements.find((e) => e.id === 'rt-amr-antibiogram-legend')!;
     expect(legend.kind).toBe('text');
     expect(legend.text).toMatch(/tested/i);
     expect(legend.text).toMatch(/blank/i);
-    expect(legend.text).toMatch(/not tested/i);
+    expect(legend.text).toMatch(/no susceptibility result was recorded/i);
   });
 });
 
