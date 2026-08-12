@@ -115,6 +115,16 @@
         {
           "action": "click",
           "role": "button",
+          "name": "Actions"
+        },
+        {
+          "action": "click",
+          "role": "menuitem",
+          "name": "Parameters"
+        },
+        {
+          "action": "click",
+          "role": "button",
           "name": "Run"
         },
         {
@@ -134,7 +144,7 @@
         },
         {
           "number": 2,
-          "selector": "button:has-text(\"Run\")"
+          "selector": "[aria-label=\"Actions\"]"
         },
         {
           "number": 3,
