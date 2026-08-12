@@ -162,6 +162,40 @@ describe('terminology admin store', () => {
       expect((await s.terms.search('http://x', { query: 'cipro', limit: 10, offset: 0 })).rows.map((r) => r.code)).toEqual(['CIP']);
       expect((await s.terms.search('http://x', { statuses: ['ACTIVE'], limit: 10, offset: 0 })).rows.map((r) => r.code)).toEqual(['AMP']);
     });
+
+    // ⛔ The row class no route test can build. Every loader in @openldr/terminology writes
+    // `status: null` on import, never an explicit 'ACTIVE' — organisms.ts:64, whonet.ts:42,
+    // result-parameters.ts:70, generic.ts:39 — and the column is nullable with no default
+    // (migrations/internal/007_terminology.ts:10). `terms.create` and the create route both
+    // type `status` as a non-null TermStatus, so NO fixture built through them can hold NULL.
+    // These two insert straight into the table instead.
+    //
+    // SQL `IN` never matches NULL, so a bare `status in ('ACTIVE')` drops every loader-fed
+    // concept — the organism dictionary and the LOINC corpus included.
+    async function loadedAndCurated() {
+      const { db, s } = await store();
+      // As a loader writes it: no status column value at all.
+      await db.insertInto('terminology_concepts')
+        .values({ system: 'http://x', code: 'ORG-1', display: 'Escherichia coli', status: null, properties: null })
+        .execute();
+      await s.terms.create({ system: 'http://x', code: 'DEP-1', display: 'Retired code', status: 'DEPRECATED', shortName: null, class: null, unit: null, replacedBy: null, metadata: null });
+      return s;
+    }
+
+    it('asking for ACTIVE also returns a loader-imported concept whose status is NULL', async () => {
+      const s = await loadedAndCurated();
+      const page = await s.terms.search('http://x', { statuses: ['ACTIVE'], limit: 10, offset: 0 });
+      expect(page.rows.map((r) => r.code)).toEqual(['ORG-1']);
+      // `total` drives the picker's pagination, so the count has to agree with the rows.
+      expect(page.total).toBe(1);
+    });
+
+    it('asking for DEPRECATED alone does NOT return the NULL-status rows', async () => {
+      const s = await loadedAndCurated();
+      const page = await s.terms.search('http://x', { statuses: ['DEPRECATED'], limit: 10, offset: 0 });
+      expect(page.rows.map((r) => r.code)).toEqual(['DEP-1']);
+      expect(page.total).toBe(1);
+    });
   });
 
   describe('termMappings', () => {

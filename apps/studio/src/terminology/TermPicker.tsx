@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { searchTerms, type Term } from '../api';
+import { searchTerms, type Term, type TermStatus } from '../api';
 import { Input } from '../components/ui/input';
 import { Button } from '../components/ui/button';
 import { LoadingState } from '../components/ui/spinner';
@@ -8,9 +8,14 @@ import { TruncatedText } from '../components/ui/truncated-text';
 
 export interface PickedTerm { system: string; code: string; display: string | null }
 
-/** Below this, no request is issued: a one-character query over a national facility register scans
- *  most of it to fill a 20-row dropdown the operator cannot use anyway. */
-const MIN_QUERY_LENGTH = 2;
+/** Default shortest query that issues a request: a one-character query over a national facility
+ *  register scans most of it to fill a 20-row dropdown the operator cannot use anyway.
+ *
+ *  It is a DEFAULT, not a rule for every system. `forms-builder/field-editor/CodesEditor.tsx`
+ *  points the same picker at arbitrary coding systems where one-character codes are ordinary —
+ *  `S`/`I`/`R` interpretations, `M`/`F`, the ABO groups — and passes 1 so they stay findable by
+ *  code and not only by display text. */
+const DEFAULT_MIN_QUERY_LENGTH = 2;
 
 /** What the dropdown is showing. These are four DIFFERENT things and were previously one empty
  *  `results` array, so a failed request and a search that found nothing looked identical — the
@@ -21,12 +26,14 @@ type SearchState =
   | { kind: 'error' }
   | { kind: 'ready'; rows: Term[] };
 
-export function TermPicker({ value, onChange, systemId, statuses }: {
+export function TermPicker({ value, onChange, systemId, statuses, minQueryLength = DEFAULT_MIN_QUERY_LENGTH }: {
   value: PickedTerm | null;
   onChange: (v: PickedTerm | null) => void;
   systemId: string;
   /** Statuses to offer. ALL of them are sent — asking for two no longer collapses to no filter. */
-  statuses?: string[];
+  statuses?: TermStatus[];
+  /** Shortest query that issues a request. See `DEFAULT_MIN_QUERY_LENGTH`. */
+  minQueryLength?: number;
 }): JSX.Element {
   const [query, setQuery] = useState('');
   const [state, setState] = useState<SearchState>({ kind: 'below-minimum' });
@@ -42,14 +49,14 @@ export function TermPicker({ value, onChange, systemId, statuses }: {
   // literal, so a parent re-render hands over a new array object; keying `search` on that identity
   // makes the effect below clear and re-arm its timer on every parent render, and a parent that
   // re-renders faster than the debounce means the search never runs at all. Joining on a comma is
-  // safe because a status is one of the four `TermStatus` tokens, none of which contains one.
+  // safe because the prop is typed `TermStatus[]`, and none of those four tokens contains a comma.
   const statusKey = (statuses ?? []).join(',');
 
   const search = useCallback(async (q: string) => {
     const trimmed = q.trim();
     const generation = generationRef.current + 1;
     generationRef.current = generation;
-    if (trimmed.length < MIN_QUERY_LENGTH) { setState({ kind: 'below-minimum' }); return; }
+    if (trimmed.length < minQueryLength) { setState({ kind: 'below-minimum' }); return; }
     setState({ kind: 'loading' });
     try {
       const res = await searchTerms(systemId, {
@@ -63,7 +70,7 @@ export function TermPicker({ value, onChange, systemId, statuses }: {
       if (generationRef.current !== generation) return;
       setState({ kind: 'error' });
     }
-  }, [systemId, statusKey]);
+  }, [systemId, statusKey, minQueryLength]);
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -110,10 +117,15 @@ export function TermPicker({ value, onChange, systemId, statuses }: {
         placeholder="Search terms…"
         className="h-9 text-sm"
       />
-      {open && (
+      {/* The panel is absolutely positioned, so whatever it opens over is COVERED, not pushed down.
+          Opening it on focus alone therefore drops a "type at least 2 characters" box over the
+          content below every call site — including `TermMappingDialog`'s own hint paragraph, which
+          sits directly beneath the picker. Gate on the operator having typed something: the hint
+          then appears exactly when it is useful (a query too short to run) and never before. */}
+      {open && query.trim().length > 0 && (
         <div className="absolute z-20 mt-1 max-h-64 w-full overflow-y-auto rounded-md border border-border bg-popover shadow-md">
           {state.kind === 'below-minimum' && (
-            <StripedEmpty className="min-h-[4rem]">Type at least {MIN_QUERY_LENGTH} characters to search.</StripedEmpty>
+            <StripedEmpty className="min-h-[4rem]">Type at least {minQueryLength} characters to search.</StripedEmpty>
           )}
           {/* Spinner over the same backdrop, never stripes alone — stripes mean "nothing here", and
               nothing is known yet while the request is open. */}

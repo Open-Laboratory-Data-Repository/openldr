@@ -558,9 +558,9 @@ function isAdminError(err: unknown): err is { message: string; kind: 'not-found'
 /**
  * The terms search `status` query param, normalised for the store's `statuses: string[]`.
  *
- * `status` may repeat — `?status=ACTIVE&status=DRAFT`. Fastify's default query parser (Node's
- * `querystring.parse`) hands back a bare string for one occurrence and an array for several, so
- * both shapes arrive here and only one may reach the store.
+ * `status` may repeat — `?status=ACTIVE&status=DRAFT`. Fastify 5's default query parser
+ * (`fast-querystring`, not Node's `querystring`) hands back a bare string for one occurrence and
+ * an array for several, so both shapes arrive here and only one may reach the store.
  *
  * Empty values are dropped and an empty result becomes `undefined`, so `?status=` keeps meaning
  * "no filter" rather than "status equal to the empty string", which matches nothing.

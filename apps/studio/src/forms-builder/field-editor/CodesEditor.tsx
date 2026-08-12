@@ -99,10 +99,16 @@ export function CodesEditor({ field, onUpdate }: CodesEditorProps): JSX.Element 
             className="h-8 text-xs flex-1 font-mono"
           />
         </div>
+        {/* One character searches here. The picker's 2-character default protects a national
+            facility register from a scan that fills a dropdown nobody can use, but this editor
+            points at whatever coding system the form author typed above, and single-character
+            codes are ordinary in those: S/I/R interpretations, M/F, the ABO groups. At the
+            default they were findable only by display text. */}
         <TermPicker
           value={pickerValue}
           onChange={handlePick}
           systemId={systemId}
+          minQueryLength={1}
         />
       </div>
     </section>

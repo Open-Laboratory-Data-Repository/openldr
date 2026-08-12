@@ -226,8 +226,9 @@ describe('policy-aware exposure', () => {
 
 // FAC-P1-17: facility_map is the warehouse reporting dimension (facility names/codes/areas). It
 // was in EXTERNAL_TABLE_COLUMNS but in no denylist, so it was exposed by omission rather than by
-// decision. Literal column names below, never HARDCODED_DENY_UNION.facility_map — an assertion
-// built from the constant it checks cannot fail.
+// decision. The EXPECTED side below is always a literal set, never derived from
+// HARDCODED_DENY_UNION.facility_map — an assertion whose expectation is built from the constant
+// it checks cannot fail.
 describe('facility_map exposure policy', () => {
   it('hides only the internal surrogate ids', () => {
     expect(new Set(HARDCODED_DENY_UNION.facility_map)).toEqual(new Set(['id', 'registry_id']));

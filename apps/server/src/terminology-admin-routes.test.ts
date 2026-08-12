@@ -261,7 +261,8 @@ describe('terms search: the status filter on the wire', () => {
       req.user = { id: 'admin1', username: 'admin', displayName: null, roles: ['lab_admin'], capabilities: ['terminology.manage'] };
     });
     registerTerminologyAdminRoutes(app, ctx);
-    return { app };
+    // `internalDb` is handed back so a test can write a row the create route CANNOT produce.
+    return { app, internalDb };
   }
 
   /** A system with one term per status, so any filter's effect is visible in the returned codes. */
@@ -321,6 +322,44 @@ describe('terms search: the status filter on the wire', () => {
     const res = await app.inject({ method: 'GET', url: `/api/terminology/systems/${id}/terms?status=` });
     expect(res.statusCode).toBe(200);
     expect(codes(res)).toEqual(['L-1', 'L-2', 'L-8', 'L-9']);
+  });
+
+  // ⛔ The row class `seeded` above CANNOT build. It creates every term through
+  // POST /terms, whose body types `status` as a non-null TermStatus, so no fixture row it
+  // makes can have `status IS NULL` — and NULL is the only class a `status in (…)` filter
+  // silently drops. Every wire test above passed while 41% of a real install's concepts
+  // would have disappeared from the picker.
+  //
+  // NULL is what the loaders actually write (organisms.ts:64, whonet.ts:42,
+  // result-parameters.ts:70, generic.ts:39). So this one goes in through the db directly.
+  // Note the response still SAYS 'ACTIVE': the store's `termRow` reports `status ?? 'ACTIVE'`,
+  // which is exactly why a response-shape assertion could never have caught this either.
+  it('a loader-imported concept (status NULL in the table) survives ?status=ACTIVE', async () => {
+    const { app, internalDb } = await realApp();
+    const id = await seeded(app);
+    await internalDb.insertInto('terminology_concepts')
+      .values({ system: 'http://example.org/statuses', code: 'L-0', display: 'Loaded Lab', status: null, properties: null })
+      .execute();
+
+    const res = await app.inject({ method: 'GET', url: `/api/terminology/systems/${id}/terms?status=ACTIVE&status=DRAFT` });
+    expect(res.statusCode).toBe(200);
+    expect(codes(res)).toEqual(['L-0', 'L-1', 'L-2']);
+    expect(res.json().total).toBe(3);
+    expect((res.json().rows as { code: string; status: string }[]).find((r) => r.code === 'L-0')!.status).toBe('ACTIVE');
+  });
+
+  // The converse on the wire: NULL means active, so a caller asking only for retired codes
+  // must not be handed the loaded dictionary.
+  it('?status=DEPRECATED alone does not return the NULL-status concept', async () => {
+    const { app, internalDb } = await realApp();
+    const id = await seeded(app);
+    await internalDb.insertInto('terminology_concepts')
+      .values({ system: 'http://example.org/statuses', code: 'L-0', display: 'Loaded Lab', status: null, properties: null })
+      .execute();
+
+    const res = await app.inject({ method: 'GET', url: `/api/terminology/systems/${id}/terms?status=DEPRECATED` });
+    expect(res.statusCode).toBe(200);
+    expect(codes(res)).toEqual(['L-9']);
   });
 });
 

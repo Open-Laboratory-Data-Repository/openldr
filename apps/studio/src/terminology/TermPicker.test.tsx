@@ -69,21 +69,50 @@ describe('TermPicker', () => {
     expect(spy.mock.calls.at(-1)![1].status).toBeUndefined();
   });
 
-  // The user-visible half of the same defect. The fake filters by the `status` it is handed, exactly
-  // as the terms route's `status in (…)` does, so a picker that sends no filter is handed the
-  // DEPRECATED row and offers a deleted facility as a mapping target.
-  it('does not offer a term whose status was not asked for', async () => {
-    const rows = [term('L-1', 'Active Lab'), term('L-2', 'Draft Lab', 'DRAFT'), term('L-9', 'Deleted Lab', 'DEPRECATED')];
+  // The user-visible half of the same defect, against a fake that models what the SERVER really
+  // does — not a simplified `wanted.includes(row.status)`.
+  //
+  // Two things that simpler fake got wrong, and both hid a Critical regression:
+  //   1. A loader-imported concept is stored with status NULL, never 'ACTIVE'
+  //      (organisms.ts:64, whonet.ts:42, result-parameters.ts:70, generic.ts:39). SQL `IN` does
+  //      not match NULL, so the store has to let NULL in whenever ACTIVE is asked for; the
+  //      `storedStatus` field below is that row class. On the live dev database 328 of 790
+  //      concepts are in it.
+  //   2. The wire never shows NULL. The store's `termRow` reports `status ?? 'ACTIVE'`, so the
+  //      row arrives looking ACTIVE. Filtering on the REPORTED status is what made the class
+  //      invisible to every test.
+  const fakeSearch = (rows: { row: ReturnType<typeof term>; storedStatus: string | null }[]) =>
     vi.spyOn(api, 'searchTerms').mockImplementation(async (_systemId, p) => {
       const wanted = p.status === undefined ? undefined : (Array.isArray(p.status) ? p.status : [p.status]);
-      const kept = wanted ? rows.filter((r) => wanted.includes(r.status)) : rows;
-      return { rows: kept, total: kept.length } as never;
+      const kept = wanted
+        ? rows.filter((r) => (r.storedStatus === null ? wanted.includes('ACTIVE') : wanted.includes(r.storedStatus)))
+        : rows;
+      return { rows: kept.map((r) => r.row), total: kept.length } as never;
     });
+
+  it('does not offer a term whose status was not asked for', async () => {
+    fakeSearch([
+      { row: term('L-1', 'Active Lab'), storedStatus: 'ACTIVE' },
+      { row: term('L-2', 'Draft Lab', 'DRAFT'), storedStatus: 'DRAFT' },
+      { row: term('L-9', 'Deleted Lab', 'DEPRECATED'), storedStatus: 'DEPRECATED' },
+    ]);
     render(<TermPicker value={null} onChange={vi.fn()} systemId="sys1" statuses={['ACTIVE', 'DRAFT']} />);
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'lab' } });
 
     await screen.findByText('Active Lab');
     expect(screen.getByText('Draft Lab')).toBeInTheDocument();
+    expect(screen.queryByText('Deleted Lab')).toBeNull();
+  });
+
+  it('still offers a loader-imported term, whose stored status is NULL rather than ACTIVE', async () => {
+    fakeSearch([
+      { row: term('ORG-1', 'Escherichia coli'), storedStatus: null },
+      { row: term('L-9', 'Deleted Lab', 'DEPRECATED'), storedStatus: 'DEPRECATED' },
+    ]);
+    render(<TermPicker value={null} onChange={vi.fn()} systemId="sys1" statuses={['ACTIVE', 'DRAFT']} />);
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'coli' } });
+
+    expect(await screen.findByText('Escherichia coli')).toBeInTheDocument();
     expect(screen.queryByText('Deleted Lab')).toBeNull();
   });
 
@@ -149,6 +178,34 @@ describe('TermPicker', () => {
     expect(await screen.findByText(/at least 2 characters/i)).toBeInTheDocument();
     await act(async () => { await new Promise((r) => setTimeout(r, 400)); });
     expect(spy).not.toHaveBeenCalled();
+  });
+
+  // `CodesEditor` points this picker at arbitrary coding systems where a one-character code is
+  // ordinary (S/I/R, M/F, ABO). At the 2-character default those were findable only by display
+  // text, so the minimum has to be overridable per call site.
+  it('searches on one character when the call site lowers the minimum', async () => {
+    const spy = vi.spyOn(api, 'searchTerms').mockResolvedValue({ rows: [term('R', 'Resistant')], total: 1 } as never);
+    render(<TermPicker value={null} onChange={vi.fn()} systemId="sys1" minQueryLength={1} />);
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'R' } });
+
+    expect(await screen.findByText('Resistant')).toBeInTheDocument();
+    expect(spy.mock.calls.at(-1)![1].q).toBe('R');
+    expect(screen.queryByText(/at least/i)).toBeNull();
+  });
+
+  // The dropdown is absolutely positioned, so it COVERS what is below it rather than pushing it
+  // down. Opening on focus alone therefore hid `TermMappingDialog`'s search hint behind a panel
+  // that had nothing to say yet.
+  it('does not open the panel on focus alone, and opens it once something is typed', async () => {
+    vi.spyOn(api, 'searchTerms').mockResolvedValue({ rows: [], total: 0 } as never);
+    render(<TermPicker value={null} onChange={vi.fn()} systemId="sys1" />);
+    const box = screen.getByRole('textbox');
+
+    fireEvent.focus(box);
+    expect(screen.queryByText(/at least 2 characters/i)).toBeNull();
+
+    fireEvent.change(box, { target: { value: 'l' } });
+    expect(await screen.findByText(/at least 2 characters/i)).toBeInTheDocument();
   });
 
   it('shows a spinner while the search is in flight, and no "no results" until it answers', async () => {

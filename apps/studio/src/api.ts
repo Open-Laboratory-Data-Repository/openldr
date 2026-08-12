@@ -1834,8 +1834,9 @@ export interface TermMappingInput { fromSystem: string; fromCode: string; toSyst
 // an unencoded URL injects extra `/` and the request can never match `/systems/:id/terms`, which is
 // why binding a form field to LOINC 404'd with "search terms failed: Not Found".
 // `status` may be one status or several. Several are sent as a REPEATED param
-// (`?status=ACTIVE&status=DRAFT`), which Fastify's default query parser turns back into an array
-// for the route's `status in (…)`. One status sends one `status=`, exactly as before.
+// (`?status=ACTIVE&status=DRAFT`), which Fastify 5's default query parser (`fast-querystring`)
+// turns back into an array for the route's status filter. One status sends one `status=`,
+// exactly as before.
 export const searchTerms = (systemId: string, p: { q?: string; status?: string | string[]; limit?: number; offset?: number }) => {
   const qs = new URLSearchParams();
   if (p.q) qs.set('q', p.q);
