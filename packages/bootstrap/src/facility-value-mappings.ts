@@ -52,13 +52,26 @@ export async function saveFacilityValueMappings(
 ): Promise<SaveValueMappingsResult> {
   // Validate EVERY entry before writing ANY of them: a half-applied mapping set is worse than a
   // refused one, because the operator cannot tell which half landed.
-  const expansions = new Map<ControlledField, Map<string, string | null>>();
+  //
+  // ⛔ `toSystem` for a mapping is the CODE'S OWN coding system (e.g.
+  // `urn:openldr:cs:facility-type`), never the value-set url that merely bounds valid choices
+  // (`urn:openldr:valueset:facility-type`). `terminology_concepts` rows are only ever inserted
+  // under the former — migrations 072/073 — so a mapping written with the value-set url as
+  // `toSystem` would miss `saveExclusive`'s `(toSystem, toCode)` lookup on every call and mint an
+  // orphaned DRAFT concept under a "system" with no `coding_systems` row
+  // (terminology-admin-store.ts:724). `admin.valueSets.expand()` already returns each code's
+  // system as `ExpandedConcept.system` (`packages/db/src/value-set-expander.ts:4`), so it is
+  // captured here rather than re-derived or hardcoded.
+  const expansions = new Map<ControlledField, Map<string, { display: string | null; system: string }>>();
   for (const entry of entries) {
     if (!expansions.has(entry.field)) {
       const vs = await admin.valueSets.getByUrl(CONTROLLED_VALUE_SETS[entry.field]);
       if (!vs) throw new Error(`no ${entry.field} value set is seeded on this install`);
       const { codes } = await admin.valueSets.expand(vs.id);
-      expansions.set(entry.field, new Map(codes.map((c) => [c.code, c.display ?? null])));
+      expansions.set(
+        entry.field,
+        new Map(codes.map((c) => [c.code, { display: c.display ?? null, system: c.system }])),
+      );
     }
     if (!expansions.get(entry.field)!.has(entry.toCode)) {
       throw new Error(
@@ -69,18 +82,24 @@ export async function saveFacilityValueMappings(
 
   const superseded: string[] = [];
   let written = 0;
+  // Dedupe per FIELD, mirroring the `expansions.has(...)` guard above: N entries for one field
+  // must issue one upsert, not N identical idempotent ones.
+  const upsertedSystems = new Set<ControlledField>();
 
   for (const entry of entries) {
     const fromSystem = observedFieldSystem(entry.field, nationalSystem);
-    const toDisplay = expansions.get(entry.field)!.get(entry.toCode) ?? null;
+    const target = expansions.get(entry.field)!.get(entry.toCode)!;
 
-    await admin.codingSystems.upsertByUrl({
-      systemCode: `FAC-${entry.field.toUpperCase()}-OBSERVED`,
-      systemName: `Observed facility ${entry.field} values`,
-      url: fromSystem,
-      systemVersion: null,
-      publisherId: 'pub-system',
-    });
+    if (!upsertedSystems.has(entry.field)) {
+      await admin.codingSystems.upsertByUrl({
+        systemCode: `FAC-${entry.field.toUpperCase()}-OBSERVED`,
+        systemName: `Observed facility ${entry.field} values`,
+        url: fromSystem,
+        systemVersion: null,
+        publisherId: 'pub-system',
+      });
+      upsertedSystems.add(entry.field);
+    }
     // `terms.create` is itself an upsert (`onConflict(['system','code']).doUpdateSet(...)`,
     // terminology-admin-store.ts:640-647) — it never rejects a duplicate code, so re-running a
     // mapping over the same raw value is already idempotent without a try/catch here.
@@ -91,9 +110,9 @@ export async function saveFacilityValueMappings(
     const res = await admin.termMappings.saveExclusive({
       fromSystem,
       fromCode: entry.rawValue,
-      toSystem: CONTROLLED_VALUE_SETS[entry.field],
+      toSystem: target.system,
       toCode: entry.toCode,
-      toDisplay,
+      toDisplay: target.display,
       mapType: FACILITY_VALUE_MAP_TYPE,
       isActive: true,
     });

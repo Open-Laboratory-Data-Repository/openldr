@@ -4,17 +4,26 @@ import { observedFieldSystem } from './facility-controlled-fields';
 
 const SYSTEM = 'urn:zm:mfl';
 
-/** Codes per value-set url, so a `status` entry validates against status codes rather than level's. */
-const EXPANSIONS: Record<string, { code: string; display: string }[]> = {
+/**
+ * Codes per value-set url, so a `status` entry validates against status codes rather than level's.
+ * Each code also carries its OWN coding-system url (`system`) — distinct from the value-set url
+ * itself, mirroring migrations 072/073: `terminology_concepts` rows are filed under
+ * `urn:openldr:cs:facility-type` / `http://hl7.org/fhir/location-status` / `urn:iso:std:iso:3166`,
+ * never under a `urn:openldr:valueset:*` url. `admin.valueSets.expand()` returns `ExpandedConcept`
+ * (`packages/db/src/value-set-expander.ts:4`), which already carries this as `system`.
+ */
+const EXPANSIONS: Record<string, { system: string; code: string; display: string }[]> = {
   'urn:openldr:valueset:facility-type': [
-    { code: 'health-center', display: 'Health Center' },
-    { code: 'health-post', display: 'Health Post' },
+    { system: 'urn:openldr:cs:facility-type', code: 'health-center', display: 'Health Center' },
+    { system: 'urn:openldr:cs:facility-type', code: 'health-post', display: 'Health Post' },
   ],
   'urn:openldr:valueset:location-status': [
-    { code: 'active', display: 'Active' },
-    { code: 'inactive', display: 'Inactive' },
+    { system: 'http://hl7.org/fhir/location-status', code: 'active', display: 'Active' },
+    { system: 'http://hl7.org/fhir/location-status', code: 'inactive', display: 'Inactive' },
   ],
-  'urn:openldr:valueset:country': [{ code: 'ZMB', display: 'Zambia' }],
+  'urn:openldr:valueset:country': [
+    { system: 'urn:iso:std:iso:3166', code: 'ZMB', display: 'Zambia' },
+  ],
 };
 
 function fakeAdmin() {
@@ -79,5 +88,40 @@ describe('saveFacilityValueMappings', () => {
       { field: 'level', rawValue: 'Hospice', toCode: 'not-a-real-code' },
     ])).rejects.toThrow(/not in the .* value set/);
     expect(admin.saved).toEqual([]);
+  });
+
+  it('writes the mapping under the CODE\'s own coding system, not the value-set url', async () => {
+    // Regression guard: terminology_concepts rows for a target code are filed under a coding
+    // system (e.g. `urn:openldr:cs:facility-type`), never under the value set that bounds it
+    // (`urn:openldr:valueset:facility-type`). `saveExclusive`/`create` looks up
+    // `(toSystem, toCode)` in `terminology_concepts` and mints a DRAFT concept on a miss
+    // (`packages/db/src/terminology-admin-store.ts:724`) — passing the value-set url as
+    // `toSystem` would miss on every call and pollute an invisible, unseeded "system".
+    const admin = fakeAdmin();
+    await saveFacilityValueMappings(admin, SYSTEM, [
+      { field: 'level', rawValue: 'Health Centre', toCode: 'health-center' },
+      { field: 'status', rawValue: 'Functional', toCode: 'active' },
+      { field: 'country', rawValue: 'ZAMBIA', toCode: 'ZMB' },
+    ]);
+    expect(admin.saved.map((m: any) => m.toSystem)).toEqual([
+      'urn:openldr:cs:facility-type',
+      'http://hl7.org/fhir/location-status',
+      'urn:iso:std:iso:3166',
+    ]);
+    // None of them should be the value-set url.
+    for (const m of admin.saved) {
+      expect(m.toSystem).not.toMatch(/^urn:openldr:valueset:/);
+    }
+  });
+
+  it('upserts the observed coding system once per FIELD, not once per entry', async () => {
+    const admin = fakeAdmin();
+    await saveFacilityValueMappings(admin, SYSTEM, [
+      { field: 'level', rawValue: 'Health Centre', toCode: 'health-center' },
+      { field: 'level', rawValue: 'Health Post', toCode: 'health-post' },
+      { field: 'level', rawValue: 'Clinic', toCode: 'health-post' },
+    ]);
+    expect(admin.systems).toHaveLength(1);
+    expect(admin.systems[0]).toMatchObject({ url: observedFieldSystem('level', SYSTEM) });
   });
 });
