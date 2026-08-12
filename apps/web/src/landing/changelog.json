@@ -1,0 +1,1745 @@
+{
+  "generatedAt": "2026-08-12",
+  "days": [
+    {
+      "date": "2026-08-12",
+      "version": null,
+      "entries": [
+        {
+          "hash": "fbfe0f70",
+          "type": "fix",
+          "scope": "terminology",
+          "title": "Escape shuts the term picker's panel, not the whole sheet"
+        },
+        {
+          "hash": "42f38ea6",
+          "type": "fix",
+          "scope": "terminology",
+          "title": "A keyboard-only operator can use the term picker"
+        },
+        {
+          "hash": "6493db62",
+          "type": "fix",
+          "scope": "dev",
+          "title": "Pin the studio and web dev-server ports"
+        },
+        {
+          "hash": "0867c865",
+          "type": "fix",
+          "scope": "report-designer",
+          "title": "An unreadable clock renders an em dash, not \"undefined\""
+        },
+        {
+          "hash": "ab789c3d",
+          "type": "fix",
+          "scope": "report-designer",
+          "title": "Format a text parameter that holds a date"
+        },
+        {
+          "hash": "6c6f2ec8",
+          "type": "fix",
+          "scope": "report-designer",
+          "title": "Print an unambiguous date and reporting period"
+        },
+        {
+          "hash": "f391a2bc",
+          "type": "feat",
+          "scope": "report-designer",
+          "title": "Add an environment-independent display date formatter"
+        },
+        {
+          "hash": "45348bea",
+          "type": "fix",
+          "scope": "terminology",
+          "title": "Let a NULL status match a filter that asks for ACTIVE"
+        },
+        {
+          "hash": "ae438965",
+          "type": "feat",
+          "scope": "data-exposure",
+          "title": "Govern facility_map's columns instead of exposing them by omission"
+        },
+        {
+          "hash": "c4be6965",
+          "type": "fix",
+          "scope": "reporting",
+          "title": "The antibiogram legend says what a blank cell actually means"
+        },
+        {
+          "hash": "08924778",
+          "type": "fix",
+          "scope": "reporting",
+          "title": "Shorten the GLASS metric and guard every design's metric width"
+        },
+        {
+          "hash": "0217867f",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Choose the capture form explicitly and cancel an abandoned load"
+        },
+        {
+          "hash": "b5fc2ed0",
+          "type": "fix",
+          "scope": "reporting",
+          "title": "Move the antibiogram's notation to the untruncated legend line"
+        },
+        {
+          "hash": "79a14826",
+          "type": "fix",
+          "scope": "terminology",
+          "title": "Send every status the term picker was given"
+        },
+        {
+          "hash": "5218faf2",
+          "type": "fix",
+          "scope": "reporting",
+          "title": "Group GLASS rows by code, take the display name as an aggregate"
+        },
+        {
+          "hash": "67bbef39",
+          "type": "feat",
+          "scope": "reporting",
+          "title": "GLASS shows pathogen and specimen names, codes stay in the submission"
+        },
+        {
+          "hash": "05a03164",
+          "type": "fix",
+          "scope": "reporting",
+          "title": "GLASS spells out R/I/S, AMR and GLASS on the document"
+        },
+        {
+          "hash": "0caabcb7",
+          "type": "fix",
+          "scope": "reporting",
+          "title": "The antibiogram states that its percentages are resistance"
+        },
+        {
+          "hash": "6472e2de",
+          "type": "fix",
+          "scope": "cli",
+          "title": "Glass-export --json carries the pinned submission fields too"
+        },
+        {
+          "hash": "b4d35e83",
+          "type": "fix",
+          "scope": "reporting",
+          "title": "Pin the GLASS submission CSV's columns instead of echoing the query"
+        },
+        {
+          "hash": "79d85f30",
+          "type": "fix",
+          "scope": "terminology",
+          "title": "Stop the delete dialog offering a delete the server refuses"
+        },
+        {
+          "hash": "f0057bde",
+          "type": "fix",
+          "scope": "reporting",
+          "title": "Widen-proof the metric test's parameter literal"
+        },
+        {
+          "hash": "53340693",
+          "type": "feat",
+          "scope": "reporting",
+          "title": "Let a seeded design carry a legend under its table"
+        },
+        {
+          "hash": "3bbae252",
+          "type": "feat",
+          "scope": "reporting",
+          "title": "Let a seeded design declare the metric its numbers measure"
+        },
+        {
+          "hash": "6099948f",
+          "type": "fix",
+          "scope": "terminology",
+          "title": "Refuse destroying a facility register that has facilities"
+        },
+        {
+          "hash": "ba1d8fc6",
+          "type": "fix",
+          "scope": "studio",
+          "title": "A local production build no longer emits dev JSX"
+        },
+        {
+          "hash": "9703d913",
+          "type": "feat",
+          "scope": "web",
+          "title": "Give the ingest workflow its own section on the landing page"
+        }
+      ]
+    },
+    {
+      "date": "2026-08-11",
+      "version": null,
+      "entries": [
+        {
+          "hash": "b57cf4c1",
+          "type": "fix",
+          "scope": "db",
+          "title": "Chunk migration 082 under Postgres's parameter limit"
+        },
+        {
+          "hash": "1aebdd65",
+          "type": "fix",
+          "scope": "report-designer",
+          "title": "A duplicated design starts as a draft"
+        },
+        {
+          "hash": "bf4cf4d1",
+          "type": "fix",
+          "scope": "db",
+          "title": "Carry status to the lab when a design is applied"
+        },
+        {
+          "hash": "0aaa0e0f",
+          "type": "fix",
+          "scope": "sync",
+          "title": "Serve a design body only while it is published"
+        },
+        {
+          "hash": "7a543528",
+          "type": "feat",
+          "scope": "cli",
+          "title": "List facility register sources and import against one"
+        },
+        {
+          "hash": "dc4c73e0",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Write the register membership an import implies, and wire the audit that records it"
+        },
+        {
+          "hash": "c7c87df0",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Unbreak the db typecheck and stop two assertions that could not fail"
+        },
+        {
+          "hash": "6d07d9af",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Show where a facility came from and what happened to it"
+        },
+        {
+          "hash": "0cc4ad9f",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Publish a revision, and show whether a design is a draft"
+        },
+        {
+          "hash": "26a0880d",
+          "type": "feat",
+          "scope": "server,cli",
+          "title": "Publish a report design revision"
+        },
+        {
+          "hash": "63ccbb81",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Give a fresh install a way to register a facility source"
+        },
+        {
+          "hash": "3b125767",
+          "type": "fix",
+          "scope": "report-designer",
+          "title": "Give the seed an atomic publish path"
+        },
+        {
+          "hash": "c98515c2",
+          "type": "fix",
+          "scope": "reporting",
+          "title": "Seed built-in designs as published"
+        },
+        {
+          "hash": "d3378400",
+          "type": "feat",
+          "scope": "report-designer",
+          "title": "Add publish and listVersions"
+        },
+        {
+          "hash": "7205c5e8",
+          "type": "feat",
+          "scope": "report-designer",
+          "title": "Gate reference-sync capture on published status"
+        },
+        {
+          "hash": "ad819ff9",
+          "type": "fix",
+          "scope": "core",
+          "title": "Add a browser-safe entry point, and use it from the lifecycle module"
+        },
+        {
+          "hash": "8ba5dac0",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Pick a register source instead of typing one"
+        },
+        {
+          "hash": "a06d9be1",
+          "type": "feat",
+          "scope": "report-designer",
+          "title": "Add the design lifecycle module"
+        },
+        {
+          "hash": "4f877bbd",
+          "type": "feat",
+          "scope": "db",
+          "title": "Add report design versions and a draft/published status"
+        },
+        {
+          "hash": "c8d9b87c",
+          "type": "fix",
+          "scope": "config",
+          "title": "Drop WebP from the lab logo allowlist — pdfkit cannot draw it"
+        },
+        {
+          "hash": "36b7aed6",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Serve a facility's change history from audit events"
+        },
+        {
+          "hash": "fa1c4ad2",
+          "type": "fix",
+          "scope": "report-designer",
+          "title": "Drop WebP, and close the gaps the branch review found"
+        },
+        {
+          "hash": "2b2e0327",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Carry source in the Task 7 audit before, not just after"
+        },
+        {
+          "hash": "d9f6c228",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Give a transposed table the same rows-at-render affordance"
+        },
+        {
+          "hash": "06681001",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Show a bound table's real headers on the canvas"
+        },
+        {
+          "hash": "3e32be07",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Implement Duplicate, mark Check unavailable"
+        },
+        {
+          "hash": "f78a1a4a",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Audit imported facility changes per row, only when they changed"
+        },
+        {
+          "hash": "cc988275",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Reset the image error when the selected element changes"
+        },
+        {
+          "hash": "95f74d83",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Give image elements a file picker instead of a URL field"
+        },
+        {
+          "hash": "163a4e6e",
+          "type": "feat",
+          "scope": "server",
+          "title": "Reject unrenderable image sources when saving a design"
+        },
+        {
+          "hash": "b9e09fbf",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Enforce the canonical vocabulary on manual facility writes"
+        },
+        {
+          "hash": "f64262a1",
+          "type": "fix",
+          "scope": "report-designer",
+          "title": "Anchor the image-source token check"
+        },
+        {
+          "hash": "5ef4bc3f",
+          "type": "feat",
+          "scope": "report-designer",
+          "title": "Add the element-image source rule"
+        },
+        {
+          "hash": "7f1c9c90",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "A dropped register row no longer overwrites operational status"
+        },
+        {
+          "hash": "cca4c133",
+          "type": "fix",
+          "scope": "db",
+          "title": "Carry pageNumbers through the lab-side reference applier"
+        },
+        {
+          "hash": "5acff2ab",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Re-key facility identity onto the canonical source URI"
+        },
+        {
+          "hash": "727aed52",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Correct a false idFor comment and gate deactivated registers"
+        },
+        {
+          "hash": "6c9a37c7",
+          "type": "fix",
+          "scope": "report-designer",
+          "title": "Include pageNumbers in the design content hash"
+        },
+        {
+          "hash": "7dd2bbd8",
+          "type": "fix",
+          "scope": "report-designer",
+          "title": "Persist pageNumbers through the design store"
+        },
+        {
+          "hash": "e341859b",
+          "type": "feat",
+          "scope": "report-designer",
+          "title": "Add nullable report_designs.page_numbers column"
+        },
+        {
+          "hash": "85074ac4",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Key registry identity on the source's canonical URI"
+        },
+        {
+          "hash": "4526614e",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "A facility-register source surface over coding_systems"
+        },
+        {
+          "hash": "2086b699",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Correct migration 081's retirement-comment claims, tighten backfill typing"
+        },
+        {
+          "hash": "e1546622",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Add source kind/jurisdiction/contact and register_state"
+        }
+      ]
+    },
+    {
+      "date": "2026-08-10",
+      "version": null,
+      "entries": [
+        {
+          "hash": "bd31fe02",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Give the browser a completable import path, and stop the confirm refusing a JSONL no-op"
+        },
+        {
+          "hash": "25db6a90",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Keep the import sweep out of CLI processes and off live runs"
+        },
+        {
+          "hash": "2605fd7b",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Stop the progress-threshold test failing the repo's gate"
+        },
+        {
+          "hash": "b179f620",
+          "type": "fix",
+          "scope": "cli",
+          "title": "Make import-run-cancel's exit codes mirror the route, and drop a false comment"
+        },
+        {
+          "hash": "6798bba8",
+          "type": "feat",
+          "scope": "cli",
+          "title": "Cancel and inspect job-path import runs"
+        },
+        {
+          "hash": "35d92f9f",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Stop the confirm dropping an override the operator ticked"
+        },
+        {
+          "hash": "678abe8d",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Let the job path declare a complete release, and stop it overstating"
+        },
+        {
+          "hash": "f878f32a",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Upload and confirm a register import from the browser"
+        },
+        {
+          "hash": "121c104d",
+          "type": "perf",
+          "scope": "facilities",
+          "title": "Measure where per-row import progress becomes observable"
+        },
+        {
+          "hash": "268ea279",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Let an operator request cancellation of an import run"
+        },
+        {
+          "hash": "935de90e",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Apply a confirmed import in the worker"
+        },
+        {
+          "hash": "dcd4e8cd",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Bound what the import worker will buffer, and say which cap is which"
+        },
+        {
+          "hash": "9d3a4a7b",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Validate an uploaded register in a worker"
+        },
+        {
+          "hash": "0ee04d99",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Give the upload a real byte ceiling and a transfer that fails fast"
+        },
+        {
+          "hash": "6f1b4f25",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Stream an import upload to blob and mint its run"
+        },
+        {
+          "hash": "b204f65b",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Give the import-run store a worker surface"
+        },
+        {
+          "hash": "8b16f14b",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Pin the supersede gate's 409 half and correct five overstated comments"
+        },
+        {
+          "hash": "74f3365d",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Make the whole preview surface reachable in the browser"
+        },
+        {
+          "hash": "199eab3e",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Add the coordinate override, and export the controlled-field layer"
+        },
+        {
+          "hash": "7d61cd4d",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Never infer absence from a file that produced no records"
+        },
+        {
+          "hash": "166b3319",
+          "type": "feat",
+          "scope": "cli",
+          "title": "Carry the import summary and retirement policy to the CLI"
+        },
+        {
+          "hash": "4d5cf1fe",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Wire the conflict overwrite option end to end"
+        },
+        {
+          "hash": "f2adade0",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Show the real reconciliation summary in the import sheet"
+        },
+        {
+          "hash": "c2842ca0",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Validate the import runId and release an abandoned preview"
+        },
+        {
+          "hash": "f7b89827",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Link import preview to apply and expose import runs"
+        },
+        {
+          "hash": "c1c954dd",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Report absent and publisher-deleted rows, retire only on request"
+        },
+        {
+          "hash": "5e86be4a",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Name schema violations distinctly and stop silent meta drops"
+        },
+        {
+          "hash": "44824663",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Parse the JSONL national-release format"
+        },
+        {
+          "hash": "1fd055f6",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Resolve level/status/country through term_mappings"
+        },
+        {
+          "hash": "0a15cb24",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Pin the unchanged-write and conflict paths, correct four comments"
+        },
+        {
+          "hash": "5ef4e612",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Make the import preview report real database impact"
+        }
+      ]
+    },
+    {
+      "date": "2026-08-09",
+      "version": null,
+      "entries": [
+        {
+          "hash": "7600b1bd",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Classify import rows as create/changed/unchanged/conflict"
+        },
+        {
+          "hash": "7330a860",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Reject unparseable and out-of-range coordinates instead of nulling them"
+        },
+        {
+          "hash": "4ccf59cf",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Add the import-run store"
+        },
+        {
+          "hash": "e2c661f3",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Type byte_size as integer and correct the audit quote"
+        },
+        {
+          "hash": "56bacc03",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Add facility_import_runs, the durable record of an import"
+        },
+        {
+          "hash": "20b9c7ed",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Stop the Registry spinner stranding on every load"
+        },
+        {
+          "hash": "3214e5ab",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Tiebreak non-unique paging, backfill filter test coverage, and correct four false comments"
+        },
+        {
+          "hash": "ae986623",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Wire the ten missing filters, guard reload() against out-of-order responses, and debounce filter input"
+        },
+        {
+          "hash": "bdac5d76",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Page the registry table with search, filters and URL state"
+        },
+        {
+          "hash": "7530d327",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Expose paging, search and filters on GET /api/facilities"
+        },
+        {
+          "hash": "393f4176",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Report mapping/projection health per registry row"
+        },
+        {
+          "hash": "a9091546",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Page, search and filter the registry with an exact total"
+        },
+        {
+          "hash": "68480efc",
+          "type": "fix",
+          "scope": "db",
+          "title": "Drop 015's narrowing cast — MSSQL MIN(nvarchar(max)) is not broken"
+        },
+        {
+          "hash": "827bcd1d",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Close the NULL/'' seam that made resolvedObservedSystem's own invariant false"
+        },
+        {
+          "hash": "e6f7484a",
+          "type": "fix",
+          "scope": "bootstrap",
+          "title": "Update facility-durable-updates.e2e regression pin for Task 3's join"
+        },
+        {
+          "hash": "cba10752",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Enqueue a facility-map rebuild on every boot"
+        },
+        {
+          "hash": "fd769a5a",
+          "type": "feat",
+          "scope": "reports",
+          "title": "Join facility_map on the observed namespace as well as the feed"
+        },
+        {
+          "hash": "bf4b96cf",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Publish one facility_map row per raw observed wire tuple"
+        },
+        {
+          "hash": "bc7e4544",
+          "type": "fix",
+          "scope": "db,bootstrap",
+          "title": "Enforce, not assume, the pg-mem 015 rescue's safety claim"
+        },
+        {
+          "hash": "262de7a4",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Add facility_map.performer_system and backfill it"
+        }
+      ]
+    },
+    {
+      "date": "2026-08-08",
+      "version": null,
+      "entries": [
+        {
+          "hash": "50a3ec0b",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Make failed projections retryable, the chip live, and two enqueues correct"
+        },
+        {
+          "hash": "99e10383",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Stop Retry wedging the job mechanism, and enqueue on the CLI import path"
+        },
+        {
+          "hash": "c317f473",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Show report-dimension freshness on the Facilities page"
+        },
+        {
+          "hash": "8b791b6d",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Audit facility job retries and pin the attempts-reset test"
+        },
+        {
+          "hash": "0a97cbe8",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Expose report-dimension health and job retry"
+        },
+        {
+          "hash": "dbf32bf7",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Resolve the report-dimension health state"
+        },
+        {
+          "hash": "532ee596",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Report the projection outcome of THIS call, not \"ever projected\""
+        },
+        {
+          "hash": "4c3dd660",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Make a failed projection durable and the response truthful"
+        },
+        {
+          "hash": "e2cb5608",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Enqueue a dimension rebuild when a facility mapping changes"
+        },
+        {
+          "hash": "6b0a1f49",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Pin the import route's job-store wiring and contain enqueue failures"
+        },
+        {
+          "hash": "08397cda",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Enqueue a dimension rebuild after every facility mutation"
+        },
+        {
+          "hash": "d3630d19",
+          "type": "fix",
+          "scope": "bootstrap",
+          "title": "Extract facility job runners so apply:true and the missing-row path are testable"
+        },
+        {
+          "hash": "018e75f1",
+          "type": "feat",
+          "scope": "bootstrap",
+          "title": "Run the facility job worker in the app context"
+        },
+        {
+          "hash": "627e7ef4",
+          "type": "feat",
+          "scope": "bootstrap",
+          "title": "Add the facility job worker"
+        },
+        {
+          "hash": "6ff91167",
+          "type": "fix",
+          "scope": "db",
+          "title": "Stage claimNext race+tiebreak tests, tighten facility-job-store comments"
+        },
+        {
+          "hash": "7cddf6e7",
+          "type": "fix",
+          "scope": "db",
+          "title": "Scope facility job coalescing per identity, not per kind"
+        },
+        {
+          "hash": "27be919b",
+          "type": "feat",
+          "scope": "db",
+          "title": "Add createFacilityJobStore"
+        },
+        {
+          "hash": "d44e7eb4",
+          "type": "feat",
+          "scope": "db",
+          "title": "Add facility_jobs for durable facility work"
+        }
+      ]
+    },
+    {
+      "date": "2026-08-07",
+      "version": null,
+      "entries": [
+        {
+          "hash": "9ee8344e",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "State what 077 actually guarantees, and let the import override work both ways"
+        },
+        {
+          "hash": "0ec3cda4",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Stop a facility mapping being re-pointed at the wrong lab"
+        },
+        {
+          "hash": "1a38e31b",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Expose the mapping-conflict review queue"
+        },
+        {
+          "hash": "807d4397",
+          "type": "fix",
+          "scope": "db",
+          "title": "Replace migration 078's literal NUL byte with an escape"
+        },
+        {
+          "hash": "352d6c03",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "A superseded mapping takes its mirror element and its audit record with it"
+        },
+        {
+          "hash": "08fa6f28",
+          "type": "feat",
+          "scope": "db",
+          "title": "Enforce one active SAME-AS facility resolution per observed key"
+        },
+        {
+          "hash": "995207e3",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "A mapping edit retargets, it never moves the source term"
+        },
+        {
+          "hash": "dbd00c2a",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Enforce SAME-AS and single active resolution at the API boundary"
+        },
+        {
+          "hash": "6afddf3b",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Duplicate mappings to the same facility are not a conflict"
+        },
+        {
+          "hash": "c75d9825",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Only SAME-AS resolves, and competing mappings resolve to nothing"
+        },
+        {
+          "hash": "0e05ffa7",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Retire a deleted facility's concept, and reproject what the delete frees"
+        },
+        {
+          "hash": "5258c4fe",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Reproject the incumbent when a batch RELEASES a contested code"
+        },
+        {
+          "hash": "adc4b29f",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Make both projection paths agree on a colliding code"
+        },
+        {
+          "hash": "b4ec42db",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Collide on projected codes, and pin the reprojection contract"
+        },
+        {
+          "hash": "c3da93ab",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Migrate term_mappings when a facility's projected code moves"
+        },
+        {
+          "hash": "cb8370f0",
+          "type": "feat",
+          "scope": "db",
+          "title": "Add facility_concept_projection link table"
+        },
+        {
+          "hash": "8677e76a",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Surface quarantined CSV rows in route, CLI, and import sheet"
+        },
+        {
+          "hash": "53411516",
+          "type": "feat",
+          "scope": "bootstrap",
+          "title": "Block facility import apply while rows are quarantined"
+        },
+        {
+          "hash": "068ad21a",
+          "type": "fix",
+          "scope": "terminology",
+          "title": "Quarantine ragged facility CSV rows instead of shifting columns"
+        },
+        {
+          "hash": "b5fd236c",
+          "type": "fix",
+          "scope": "sync",
+          "title": "Purge logged facility_registry change rows"
+        },
+        {
+          "hash": "432b825e",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Remove dead hash helpers, correct stale apply-cap rationale"
+        },
+        {
+          "hash": "d062852d",
+          "type": "fix",
+          "scope": "sync",
+          "title": "Suspend facility_registry capture, serve, and apply"
+        },
+        {
+          "hash": "155103a8",
+          "type": "fix",
+          "scope": "reporting",
+          "title": "Transpose the antibiogram so its columns are readable"
+        },
+        {
+          "hash": "4dffcf02",
+          "type": "fix",
+          "scope": "reporting,bootstrap,server",
+          "title": "Dedupe facility picker, resolve names in scope panel, pin predicates"
+        },
+        {
+          "hash": "c752da89",
+          "type": "feat",
+          "scope": "bootstrap",
+          "title": "Seed the OpenLDR mark and a default laboratory name"
+        },
+        {
+          "hash": "263185ed",
+          "type": "fix",
+          "scope": "reporting",
+          "title": "Derive seeded-report footer/table geometry from the design's own page size"
+        },
+        {
+          "hash": "f9c9a16c",
+          "type": "feat",
+          "scope": "reporting",
+          "title": "Letterhead and scope panel on every seeded report"
+        },
+        {
+          "hash": "93f9eace",
+          "type": "fix",
+          "scope": "report-designer",
+          "title": "Render run parameters, and interpolate authored keyvalue pairs"
+        },
+        {
+          "hash": "3e19a46b",
+          "type": "fix",
+          "scope": "reporting",
+          "title": "The facility filter filters on the report performer"
+        },
+        {
+          "hash": "750edcdb",
+          "type": "fix",
+          "scope": "reporting",
+          "title": "Q-amr-facility-summary label rejected by MySQL ONLY_FULL_GROUP_BY"
+        }
+      ]
+    },
+    {
+      "date": "2026-08-06",
+      "version": null,
+      "entries": [
+        {
+          "hash": "db932117",
+          "type": "fix",
+          "scope": "reporting",
+          "title": "Q-amr-facility-summary no longer forks one lab across rows"
+        },
+        {
+          "hash": "49772e53",
+          "type": "feat",
+          "scope": "reporting",
+          "title": "Resolve facility names in the picker and the AMR facility report"
+        },
+        {
+          "hash": "8440cece",
+          "type": "feat",
+          "scope": "reports",
+          "title": "Param options carry a value and a label"
+        },
+        {
+          "hash": "14d7983c",
+          "type": "fix",
+          "scope": "reporting",
+          "title": "Keyvalue capacity computed in px@96 vs pt was the clipped-row bug"
+        },
+        {
+          "hash": "6bfbab93",
+          "type": "feat",
+          "scope": "reporting",
+          "title": "Print the performing laboratory on the clinical micro report"
+        },
+        {
+          "hash": "e4df8b9f",
+          "type": "fix",
+          "scope": "reporting",
+          "title": "Fold facilities to one row before joining the clinical header"
+        },
+        {
+          "hash": "c9388e8f",
+          "type": "feat",
+          "scope": "reporting",
+          "title": "Resolve the performing laboratory in the clinical header query"
+        },
+        {
+          "hash": "0b1d0f2a",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Show observed-facility location on the Observed tab"
+        },
+        {
+          "hash": "63f24261",
+          "type": "feat",
+          "scope": "bootstrap",
+          "title": "Join facilities.region/district onto resolveObservedFacilities"
+        },
+        {
+          "hash": "90c6a5ec",
+          "type": "feat",
+          "scope": "db",
+          "title": "ProjectFacility reads Organization.address into region/district"
+        },
+        {
+          "hash": "90c465b5",
+          "type": "feat",
+          "scope": "db",
+          "title": "Add facilities.region/district for the CDR Organization.address"
+        },
+        {
+          "hash": "b3113a86",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Add Remove mapping to the Observed tab's row menu"
+        },
+        {
+          "hash": "3c6ba1e6",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Stop TermMappingDialog silently retargeting a locked mapping's stored toSystem"
+        },
+        {
+          "hash": "492d22ac",
+          "type": "fix",
+          "scope": "studio,bootstrap",
+          "title": "Close review findings on facility-mapping-targets"
+        },
+        {
+          "hash": "ea008f0b",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Drop the Observed tab's mapping-target System selector entirely"
+        },
+        {
+          "hash": "10fd1e07",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Add TermMappingDialog.lockedTargetSystem for a fixed mapping target"
+        },
+        {
+          "hash": "0460e92f",
+          "type": "fix",
+          "scope": "server",
+          "title": "Remove GET /api/facilities/mapping-target-systems"
+        },
+        {
+          "hash": "e960a741",
+          "type": "fix",
+          "scope": "bootstrap",
+          "title": "Drop facilityMappingTargetSystems — facility mapping targets only the registry"
+        },
+        {
+          "hash": "44e539a8",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Restrict the Observed tab's mapping dialog to real facility targets"
+        },
+        {
+          "hash": "b102054e",
+          "type": "feat",
+          "scope": "server",
+          "title": "Add GET /api/facilities/mapping-target-systems"
+        },
+        {
+          "hash": "95dcfb74",
+          "type": "fix",
+          "scope": "bootstrap",
+          "title": "Stop misclassifying a self- or non-facility mapping as target missing"
+        },
+        {
+          "hash": "0db380ab",
+          "type": "fix",
+          "scope": "bootstrap",
+          "title": "Gate the term_mappings check on what deleteSupersededIdConcepts actually deletes"
+        },
+        {
+          "hash": "3f03e57c",
+          "type": "fix",
+          "scope": "db,bootstrap",
+          "title": "Delete a facility's superseded id-keyed registry concept"
+        },
+        {
+          "hash": "7dbe820f",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Stop lowering ReferencePicker.test.tsx's async timeout, fix the real race"
+        },
+        {
+          "hash": "0518e7d3",
+          "type": "fix",
+          "scope": "db,bootstrap",
+          "title": "Key facility registry concepts on the operator's own code, not the row id"
+        },
+        {
+          "hash": "a61ef171",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Distinguish \"index not built yet\" from \"this system can never be browsed\""
+        },
+        {
+          "hash": "e144c527",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Relabel facilities.observed.publish now that it is no longer the only path to mapping"
+        },
+        {
+          "hash": "6ac3975e",
+          "type": "fix",
+          "scope": "bootstrap,server,cli",
+          "title": "Project a facility into FACILITY_REGISTRY_SYSTEM on write, not just on publish"
+        },
+        {
+          "hash": "874e7326",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Don't let the re-auth guard latch a tab out of ever logging in again"
+        },
+        {
+          "hash": "34f7bb77",
+          "type": "fix",
+          "scope": "bootstrap",
+          "title": "Suppress auth.failed notifications for reasons that carry no security signal"
+        },
+        {
+          "hash": "d050123f",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Answer credential-less API calls locally instead of asking the server to reject them"
+        },
+        {
+          "hash": "2a763924",
+          "type": "feat",
+          "scope": "db",
+          "title": "Seed the facility-registry coding_systems row on every install"
+        },
+        {
+          "hash": "fe7208bd",
+          "type": "fix",
+          "scope": "bootstrap",
+          "title": "Register coding_systems row on ingest-time facility capture"
+        },
+        {
+          "hash": "201359ab",
+          "type": "fix",
+          "scope": "bootstrap,server",
+          "title": "Sum reportCount in the fold, not a route-side join"
+        },
+        {
+          "hash": "18f3c933",
+          "type": "fix",
+          "scope": "bootstrap",
+          "title": "Dedupe resolveObservedFacilities to one row per (system, code)"
+        },
+        {
+          "hash": "80565ad8",
+          "type": "feat",
+          "scope": "server,studio",
+          "title": "Show the observed facility's name next to its code"
+        },
+        {
+          "hash": "32476e9e",
+          "type": "feat",
+          "scope": "bootstrap",
+          "title": "Reconcile facilities on performer_system/display, not display"
+        },
+        {
+          "hash": "fbada0d8",
+          "type": "feat",
+          "scope": "db",
+          "title": "Project performer as identifier.value, not display"
+        },
+        {
+          "hash": "e7399eb7",
+          "type": "feat",
+          "scope": "db",
+          "title": "Add performer_display/performer_system to diagnostic_reports"
+        },
+        {
+          "hash": "c575560d",
+          "type": "feat",
+          "scope": "fhir",
+          "title": "Model Reference.identifier for logical references"
+        }
+      ]
+    },
+    {
+      "date": "2026-08-05",
+      "version": null,
+      "entries": [
+        {
+          "hash": "169c9ad6",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Give ReferencePicker's post-type findBy* assertions real headroom"
+        },
+        {
+          "hash": "bd3bf2a7",
+          "type": "fix",
+          "scope": "facility-reconcile",
+          "title": "Whole-branch review fixes for facility-reconciliation slice"
+        },
+        {
+          "hash": "a4e99790",
+          "type": "feat",
+          "scope": "cli",
+          "title": "Facilities scan-observed and publish commands"
+        },
+        {
+          "hash": "6d709a20",
+          "type": "fix",
+          "scope": "facility-reconcile",
+          "title": "Thread the feed system through live ingest and the mapping dialog"
+        },
+        {
+          "hash": "b35983c2",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Bind each ingest feed to its own observed-facility coding system"
+        },
+        {
+          "hash": "73a55254",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Show local code in Observed detail line only when it differs from the observed code"
+        },
+        {
+          "hash": "43735bd4",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Restore flex on Facilities TabsContent so height reaches Observed/Registry"
+        },
+        {
+          "hash": "f98858bc",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Task 9 fix round — local code disambiguation, pagination, tab-primitive hardening"
+        },
+        {
+          "hash": "5fc72756",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Keep display off TabsContent so the inactive Facilities tab collapses"
+        },
+        {
+          "hash": "b04939a6",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Observed facilities tab on the Facilities page"
+        },
+        {
+          "hash": "07660f13",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Impact route ignores deactivated term_mappings"
+        },
+        {
+          "hash": "a0f141d2",
+          "type": "feat",
+          "scope": "server",
+          "title": "Facility deletion impact, mappings survive delete"
+        },
+        {
+          "hash": "17579a78",
+          "type": "feat",
+          "scope": "server",
+          "title": "Observed-facility list, scan and publish routes"
+        },
+        {
+          "hash": "7d911ca3",
+          "type": "fix",
+          "scope": "bootstrap",
+          "title": "Close facility-reconcile review findings (F1-F4)"
+        },
+        {
+          "hash": "87bc933a",
+          "type": "feat",
+          "scope": "bootstrap",
+          "title": "Capture observed facilities at ingest time"
+        },
+        {
+          "hash": "c932a0f3",
+          "type": "feat",
+          "scope": "bootstrap",
+          "title": "Project facility_registry into a pickable coding system"
+        },
+        {
+          "hash": "8340ff71",
+          "type": "feat",
+          "scope": "bootstrap",
+          "title": "Resolve observed facilities and publish facility_map"
+        },
+        {
+          "hash": "f44ad172",
+          "type": "fix",
+          "scope": "bootstrap",
+          "title": "Address facility-reconcile review findings F1-F3"
+        },
+        {
+          "hash": "761fe420",
+          "type": "feat",
+          "scope": "bootstrap",
+          "title": "Re-runnable observed-facility discovery scan"
+        },
+        {
+          "hash": "17accee3",
+          "type": "feat",
+          "scope": "db",
+          "title": "Observed-facility constants and pure concept shaping"
+        },
+        {
+          "hash": "1dd25c39",
+          "type": "fix",
+          "scope": "db",
+          "title": "Enforce NOT NULL on facility_map join keys, add unmapped-row test"
+        },
+        {
+          "hash": "657a6987",
+          "type": "feat",
+          "scope": "db",
+          "title": "Add facility_map warehouse dimension (external 012)"
+        },
+        {
+          "hash": "b4d40c3e",
+          "type": "fix",
+          "scope": "cli",
+          "title": "Hoist ./program import out of facilities-import test bodies"
+        },
+        {
+          "hash": "8da3b43f",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Repair Facilities CSV import review findings (F1-F6)"
+        },
+        {
+          "hash": "42ed37fb",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Import facilities from a CSV on the Facilities page"
+        },
+        {
+          "hash": "e0d5a108",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Malformed CSV import is a 400 with the parser's message, not a 500"
+        },
+        {
+          "hash": "40ed0407",
+          "type": "feat",
+          "scope": "server",
+          "title": "Facility CSV import endpoint"
+        },
+        {
+          "hash": "72729cd2",
+          "type": "fix",
+          "scope": "cli",
+          "title": "Remove is-main guard, extract buildProgram() factory"
+        },
+        {
+          "hash": "2a9ae559",
+          "type": "feat",
+          "scope": "cli",
+          "title": "Openldr facilities import"
+        },
+        {
+          "hash": "c97e443f",
+          "type": "fix",
+          "scope": "facility-import",
+          "title": "Always report duplicates, correct two docblock claims"
+        },
+        {
+          "hash": "e891a168",
+          "type": "fix",
+          "scope": "facility-import",
+          "title": "Dedupe by id, preserve local_code/extras, pin hash parity"
+        },
+        {
+          "hash": "c3ca9abf",
+          "type": "feat",
+          "scope": "bootstrap",
+          "title": "Shared facility CSV import (parse, report, apply)"
+        },
+        {
+          "hash": "3e0daa92",
+          "type": "fix",
+          "scope": "server",
+          "title": "Keep importer-written facility extras through an edit"
+        },
+        {
+          "hash": "90b35a36",
+          "type": "fix",
+          "scope": "forms-builder",
+          "title": "Derive Field Type picklist from FieldType enum"
+        },
+        {
+          "hash": "3045d5e8",
+          "type": "fix",
+          "scope": "facility-registry",
+          "title": "Scope admin suggestions to ancestors, retry on failure, gate debounce, i18n copy"
+        },
+        {
+          "hash": "ac121cc5",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Drive the admin-area fields from registry suggestions"
+        },
+        {
+          "hash": "79e7fc9e",
+          "type": "feat",
+          "scope": "db",
+          "title": "Seed Country ValueSet, bind admin-hierarchy fields on the Facility form"
+        },
+        {
+          "hash": "893d9bb7",
+          "type": "fix",
+          "scope": "facility-registry",
+          "title": "Remove pg-mem clause-order dependency from admin-values NULL guard"
+        },
+        {
+          "hash": "f2a45227",
+          "type": "feat",
+          "scope": "server",
+          "title": "Distinct admin-area values scoped by the chosen parent"
+        },
+        {
+          "hash": "166edd27",
+          "type": "fix",
+          "scope": "db",
+          "title": "Commit the lockfile entry for csv-parse"
+        },
+        {
+          "hash": "30182d11",
+          "type": "feat",
+          "scope": "db",
+          "title": "Add ISO 3166-1 country literals + drift guard against the fixture"
+        },
+        {
+          "hash": "ec554b18",
+          "type": "feat",
+          "scope": "forms",
+          "title": "Add a suggest field type that proposes without constraining"
+        }
+      ]
+    },
+    {
+      "date": "2026-08-04",
+      "version": null,
+      "entries": [
+        {
+          "hash": "8877013d",
+          "type": "fix",
+          "scope": "bootstrap",
+          "title": "Rebaseline sync-handle pendingPush tests for migration 072"
+        },
+        {
+          "hash": "968d87b8",
+          "type": "fix",
+          "scope": "facility-registry",
+          "title": "072 writes resource_history, drops concept marker"
+        },
+        {
+          "hash": "0b5a77bd",
+          "type": "fix",
+          "scope": "facility-registry",
+          "title": "072 writes change_log, down() respects concept ownership"
+        },
+        {
+          "hash": "46b9d37f",
+          "type": "feat",
+          "scope": "db",
+          "title": "Seed facility-type and location-status ValueSets and bind the form"
+        },
+        {
+          "hash": "41f5cb8d",
+          "type": "feat",
+          "scope": "forms",
+          "title": "Bind facility Level and Status to ValueSets"
+        },
+        {
+          "hash": "cde14f45",
+          "type": "fix",
+          "scope": "db",
+          "title": "Fall back to code when a coding answer's display is blank"
+        },
+        {
+          "hash": "d5881f64",
+          "type": "feat",
+          "scope": "db",
+          "title": "Flatten a picked coding answer onto its facility column"
+        },
+        {
+          "hash": "2bef484c",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Let the Facilities empty state bleed to the pane edges"
+        },
+        {
+          "hash": "82facd5e",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Drop false-justified cast, pin hasCoreField's reject branch, fix stale rename refs"
+        },
+        {
+          "hash": "0a9113e1",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Guard the limit/region contract and repoint hasCoreField at targetPages"
+        },
+        {
+          "hash": "a034091d",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Close round-2 facility-registry review findings"
+        },
+        {
+          "hash": "1befc58a",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Close facility-registry review findings (I1-I5, Minor 1/3/4)"
+        },
+        {
+          "hash": "3ae6fc2c",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Facilities page driven by the Facility form"
+        },
+        {
+          "hash": "6eae082d",
+          "type": "fix",
+          "scope": "db",
+          "title": "Recognise all three historical Facility form shapes, not just one"
+        },
+        {
+          "hash": "345ef3ae",
+          "type": "fix",
+          "scope": "facility-registry",
+          "title": "Rewrite the form schema on repoint, make down() a real inverse"
+        },
+        {
+          "hash": "4b7b181f",
+          "type": "feat",
+          "scope": "forms",
+          "title": "Point the Facility form at the Facilities page and make it essential"
+        },
+        {
+          "hash": "8325aa0b",
+          "type": "fix",
+          "scope": "server",
+          "title": "Facilities wrong-form guard, name-type agreement, honest query-param tests"
+        },
+        {
+          "hash": "68c9e62e",
+          "type": "fix",
+          "scope": "server",
+          "title": "Facilities routes clear-on-blank, unresolved-form guard, DB error mapping"
+        },
+        {
+          "hash": "c02861ed",
+          "type": "feat",
+          "scope": "server",
+          "title": "Facilities CRUD routes with a server-side answer split"
+        },
+        {
+          "hash": "d16be868",
+          "type": "feat",
+          "scope": "rbac",
+          "title": "Add facilities.view and facilities.manage capabilities"
+        },
+        {
+          "hash": "239c6fb5",
+          "type": "feat",
+          "scope": "bootstrap",
+          "title": "Expose the facility registry store on AppContext"
+        },
+        {
+          "hash": "f58ba75c",
+          "type": "feat",
+          "scope": "db",
+          "title": "Split facility form answers into columns and extras"
+        },
+        {
+          "hash": "fd359a64",
+          "type": "fix",
+          "scope": "facility-registry",
+          "title": "Stop the parser stamping managed_origin, harden CSV parsing"
+        },
+        {
+          "hash": "d03f6f88",
+          "type": "fix",
+          "scope": "db",
+          "title": "Update migration-list assertion for 070_facility_registry"
+        },
+        {
+          "hash": "d7b2c862",
+          "type": "feat",
+          "scope": "terminology",
+          "title": "Facility CSV import contract that refuses to drop columns"
+        },
+        {
+          "hash": "0cefe637",
+          "type": "fix",
+          "scope": "db",
+          "title": "Hash facility_registry content with canonicalHash, not JSON.stringify"
+        },
+        {
+          "hash": "ceeed63d",
+          "type": "feat",
+          "scope": "db",
+          "title": "Facility registry store with lab-local aliases"
+        },
+        {
+          "hash": "99c76043",
+          "type": "feat",
+          "scope": "db",
+          "title": "Type the facility registry tables"
+        },
+        {
+          "hash": "07c3f8e9",
+          "type": "feat",
+          "scope": "db",
+          "title": "Add facility_registry and facility_aliases tables"
+        }
+      ]
+    }
+  ]
+}

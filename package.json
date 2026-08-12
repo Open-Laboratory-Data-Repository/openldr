@@ -21,6 +21,7 @@
     "build:dhis2-sink": "node scripts/build-dhis2-sink.mjs",
     "make:whonet-sample": "node scripts/make-whonet-sample.mjs",
     "make:docs-marketplace-bundle": "tsx scripts/make-docs-marketplace-bundle.ts",
+    "make:changelog": "tsx scripts/make-changelog.ts",
     "e2e": "turbo build --filter=@openldr/studio --filter=@openldr/server && pnpm --filter @openldr/e2e e2e",
     "verify:ui": "turbo build --filter=@openldr/studio --filter=@openldr/server && pnpm --filter @openldr/e2e capture",
     "docs:screenshots": "turbo build --filter=@openldr/studio --filter=@openldr/server && pnpm --filter @openldr/e2e docs:screenshots",
