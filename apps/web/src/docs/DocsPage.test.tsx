@@ -133,6 +133,24 @@ describe('DocsPage', () => {
     });
   });
 
+  // Ids used to come from a counter that ticked once per heading render. StrictMode renders each
+  // heading twice, so every id came out suffixed `-1` in the browser and every anchor pointed at
+  // nothing — while this suite, which does not double-render, saw clean ids.
+  it('keeps anchor ids unsuffixed when React renders twice', () => {
+    render(
+      <StrictMode>
+        <MemoryRouter initialEntries={['/docs/environment']}>
+          <Routes>
+            <Route path="/docs/:page" element={<DocsPage />} />
+          </Routes>
+        </MemoryRouter>
+      </StrictMode>,
+    );
+
+    expect(document.getElementById('adapters')).not.toBeNull();
+    expect(document.getElementById('adapters-1')).toBeNull();
+  });
+
   it('deduplicates generated heading ids for repeated markdown headings', () => {
     renderDocs('/docs/install');
 

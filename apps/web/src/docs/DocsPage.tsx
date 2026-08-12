@@ -42,23 +42,46 @@ export function stripLeadingH1(markdown: string): string {
   return markdown.replace(/^\s*#[^#\n][^\n]*\n+/, '');
 }
 
-function markdownComponents(): Components {
-  const usedSlugs = new Map<string, number>();
-  const headingId = (children: ReactNode) => {
+/**
+ * Assigns each heading an id, suffixing a repeat so two headings never claim one anchor.
+ *
+ * The counter is keyed on the heading's AST node, not just bumped per call. StrictMode invokes
+ * every heading component twice with the SAME node object, and a plain counter therefore counted
+ * each heading twice — ids came out suffixed `-1` in the browser and every in-page anchor pointed
+ * at nothing, while this app's tests, which do not double-render, saw clean ids. Keyed on the node,
+ * the second invocation returns the id already assigned.
+ *
+ * (react-markdown v10 does not put `position` on the node it passes, so the source line is not
+ * available to key on — the node's identity is.)
+ */
+function makeHeadingId(): (node: object | undefined, children: ReactNode) => string {
+  const used = new Map<string, number>();
+  const assigned = new WeakMap<object, string>();
+
+  return (node, children) => {
+    const existing = node && assigned.get(node);
+    if (existing) return existing;
+
     const base = slugify(textContent(children));
-    const count = usedSlugs.get(base) ?? 0;
-    usedSlugs.set(base, count + 1);
-    return count === 0 ? base : `${base}-${count}`;
+    const count = used.get(base) ?? 0;
+    used.set(base, count + 1);
+    const id = count === 0 ? base : `${base}-${count}`;
+    if (node) assigned.set(node, id);
+    return id;
   };
+}
+
+function markdownComponents(): Components {
+  const headingId = makeHeadingId();
   return {
-    h1({ children }: ComponentProps<'h1'>) {
-      return <h1 id={headingId(children)} className="scroll-mt-20">{children}</h1>;
+    h1({ children, node }) {
+      return <h1 id={headingId(node, children)} className="scroll-mt-20">{children}</h1>;
     },
-    h2({ children }: ComponentProps<'h2'>) {
-      return <h2 id={headingId(children)} className="scroll-mt-20">{children}</h2>;
+    h2({ children, node }) {
+      return <h2 id={headingId(node, children)} className="scroll-mt-20">{children}</h2>;
     },
-    h3({ children }: ComponentProps<'h3'>) {
-      return <h3 id={headingId(children)} className="scroll-mt-20">{children}</h3>;
+    h3({ children, node }) {
+      return <h3 id={headingId(node, children)} className="scroll-mt-20">{children}</h3>;
     },
     table({ children }: ComponentProps<'table'>) {
       return (

@@ -46,7 +46,7 @@ export const TITLES: Record<string, string> = {
   'load-data': 'Load & push data',
   requirements: 'Requirements',
   install: 'Install',
-  'windows-server': 'Windows Server (WSL2)',
+  'windows-server': 'Windows Server',
   environment: 'Environment variables',
   development: 'Development',
   cli: 'Command-line interface (CLI)',

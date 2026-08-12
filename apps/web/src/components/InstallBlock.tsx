@@ -59,15 +59,18 @@ export function InstallBlock() {
       aria-label="OpenLDR installation"
       className="mx-auto max-w-5xl px-6 py-20 text-center"
     >
-      <div className="mx-auto max-w-2xl">
-        <p className="text-base leading-7 text-muted-foreground">
-          Requires Docker. The installer brings up the full self-hosted stack locally.
+      {/* Same heading-plus-subtitle block as the two sections above. This is also where the hero's
+          "Get started" button scrolls to, so the heading has to confirm the reader arrived. */}
+      <div className="mx-auto mb-12 max-w-2xl">
+        <h2 className="text-3xl font-semibold tracking-tight">Install in one line</h2>
+        <p className="mt-3 text-base leading-7 text-muted-foreground">
+          Requires Docker. The installer brings up the full stack locally
         </p>
       </div>
 
       <div
         aria-label="OpenLDR install command"
-        className="mx-auto mt-8 max-w-4xl overflow-hidden rounded-lg border border-border bg-card text-left shadow-sm"
+        className="mx-auto max-w-4xl overflow-hidden rounded-lg border border-border bg-card text-left shadow-sm"
       >
         <Tabs value={activeCommand} onValueChange={setActiveCommand} className="relative w-full">
           <TabsList className="h-auto w-full max-w-full overflow-x-auto border-b border-border px-4 py-3 pr-16">
@@ -87,7 +90,7 @@ export function InstallBlock() {
               value="wsl"
               className="rounded-md border-b-0 px-3 data-[state=active]:border-b-0 data-[state=active]:bg-background"
             >
-              Windows Server (WSL2)
+              Windows Server
             </TabsTrigger>
           </TabsList>
           <div className="absolute right-4 top-2.5">
@@ -109,11 +112,11 @@ export function InstallBlock() {
           <TabsContent value="wsl" className="px-5 py-6">
             <CommandRow command={COMMANDS.wsl} />
             <p className="mt-4 text-sm text-muted-foreground">
-              Windows Server can&apos;t run these Linux images natively - install Docker CE
-              inside a WSL2 Ubuntu distro and run the command above there (it&apos;s Linux).
-              New to this?{' '}
+              Windows Server can&apos;t run these Linux images natively - install Docker CE on a
+              Linux host it provides, either a WSL2 Ubuntu distro or a Hyper-V virtual machine,
+              and run the command above there. New to this?{' '}
               <Link to="/docs/windows-server" className="text-foreground underline underline-offset-4">
-                Windows Server (WSL2) setup guide
+                Windows Server setup guide
               </Link>
               .
             </p>

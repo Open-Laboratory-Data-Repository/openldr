@@ -13,17 +13,19 @@ describe('InstallBlock', () => {
     render(<InstallBlock />, { wrapper: MemoryRouter });
     // Radix Tabs activates its trigger on mousedown (primary button), not on a
     // synthetic click, so jsdom's fireEvent.click never reaches the handler.
-    // Exact name avoids also matching the "Windows Server (WSL2)" tab.
+    // Exact name avoids also matching the "Windows Server" tab.
     fireEvent.mouseDown(screen.getByRole('tab', { name: 'Windows' }), { button: 0, ctrlKey: false });
     expect(screen.getByText(/irm/)).toBeInTheDocument();
     expect(screen.getByText(/install\.ps1/)).toBeInTheDocument();
   });
 
-  it('shows the Linux installer under the Windows Server (WSL2) tab', () => {
+  it('shows the Linux installer under the Windows Server tab, for either Linux host', () => {
     render(<InstallBlock />, { wrapper: MemoryRouter });
-    fireEvent.mouseDown(screen.getByRole('tab', { name: /wsl2/i }), { button: 0, ctrlKey: false });
+    fireEvent.mouseDown(screen.getByRole('tab', { name: 'Windows Server' }), { button: 0, ctrlKey: false });
     expect(screen.getByText(/install\.sh \| bash/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /setup guide/i })).toBeInTheDocument();
+    // The guide covers WSL2 and Hyper-V, so the tab must not send readers to WSL2 alone.
+    expect(screen.getByText(/WSL2 Ubuntu distro or a Hyper-V virtual machine/i)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Windows Server setup guide' })).toBeInTheDocument();
   });
 
   it('copies the active command to the clipboard', async () => {
