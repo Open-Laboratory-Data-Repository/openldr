@@ -97,7 +97,12 @@ function buildFakeAdmin(): FakeAdmin {
         if (idx === -1) throw adminErr(`not found: ${id}`, 'not-found');
         const filed = facilitiesFiledUnder(systems[idx].url);
         if (filed > 0) {
-          throw adminErr(`Cannot delete this facility register: ${filed} facilities are filed under it.`, 'conflict');
+          // Singular/plural like the real store's message (packages/db/src/terminology-admin-store.ts),
+          // so a test seeding exactly one facility does not read back "1 facilities".
+          throw adminErr(
+            `Cannot delete this facility register: ${filed} ${filed === 1 ? 'facility is' : 'facilities are'} filed under it.`,
+            'conflict',
+          );
         }
         systems.splice(idx, 1);
       },

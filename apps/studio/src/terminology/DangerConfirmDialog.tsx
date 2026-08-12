@@ -21,13 +21,14 @@ interface Props {
   confirmName: string;
   /** Label for the destructive action button (e.g. "Delete"). */
   confirmLabel: string;
-  /** Blast-radius summary (counts, warnings) rendered above the input. */
+  /** Blast-radius summary (counts, warnings). Rendered above the input, or alone when `blocked`. */
   summary: ReactNode;
   /**
    * The server will refuse this action, so there is nothing to confirm: the type-to-confirm input
-   * and the destructive button are both hidden and only a close control is left. `summary` must
-   * then say why it is refused. Without this the dialog would ask for a confirmation it cannot
-   * honour, and the click would only ever produce an error toast.
+   * and the destructive button are NOT RENDERED — not merely hidden, which would leave the button
+   * tabbable and the impossible action still reachable — and only a close control is left.
+   * `summary` must then say why it is refused. Without this the dialog would ask for a confirmation
+   * it cannot honour, and the click would only ever produce an error toast.
    */
   blocked?: boolean;
   /** May be async — the dialog shows a busy state and stays open until it settles. */
