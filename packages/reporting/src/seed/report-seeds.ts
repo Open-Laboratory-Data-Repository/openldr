@@ -1017,9 +1017,9 @@ select
   coalesce(nullif({{param.country}}, ''), 'XXX') as "Iso3Country",
   iso_year::int as "Year",
   specimen_type as "Specimen",
-  specimen_name as "SpecimenName",
+  min(specimen_name) as "SpecimenName",
   pathogen_code as "PathogenCode",
-  pathogen_name as "Pathogen",
+  min(pathogen_name) as "Pathogen",
   antibiotic as "AntibioticCode",
   gender as "Gender",
   age_band as "AgeGroup",
@@ -1029,7 +1029,7 @@ select
   sum(case when ris = 'S' then 1 else 0 end)::int as "Susceptible",
   count(*)::int as "Total"
 from results
-group by specimen_type, specimen_name, pathogen_code, pathogen_name, antibiotic, gender, age_band, origin, iso_year
+group by specimen_type, pathogen_code, antibiotic, gender, age_band, origin, iso_year
 order by "Specimen", "PathogenCode", "AntibioticCode", "Gender", "AgeGroup", "Origin"`,
       // Task 2 port — FLAGGED for extra parity-harness attention (the most structurally complex
       // query in the seed set):
@@ -1131,9 +1131,9 @@ select
   coalesce(nullif({{param.country}}, ''), 'XXX') as "Iso3Country",
   cast(iso_year as int) as "Year",
   specimen_type as "Specimen",
-  specimen_name as "SpecimenName",
+  min(specimen_name) as "SpecimenName",
   pathogen_code as "PathogenCode",
-  pathogen_name as "Pathogen",
+  min(pathogen_name) as "Pathogen",
   antibiotic as "AntibioticCode",
   gender as "Gender",
   age_band as "AgeGroup",
@@ -1143,7 +1143,7 @@ select
   cast(sum(case when ris = 'S' then 1 else 0 end) as int) as "Susceptible",
   cast(count(*) as int) as "Total"
 from results
-group by specimen_type, specimen_name, pathogen_code, pathogen_name, antibiotic, gender, age_band, origin, iso_year
+group by specimen_type, pathogen_code, antibiotic, gender, age_band, origin, iso_year
 order by "Specimen", "PathogenCode", "AntibioticCode", "Gender", "AgeGroup", "Origin"`,
       // Task 5 mysql port — same CTE-chain shape as the mssql variant (distinct on ->
       // row_number()/rn=1 dedup) but with MySQL's simpler calendar-exact age:
@@ -1232,9 +1232,9 @@ select
   coalesce(nullif({{param.country}}, ''), 'XXX') as \`Iso3Country\`,
   cast(iso_year as signed) as \`Year\`,
   specimen_type as \`Specimen\`,
-  specimen_name as \`SpecimenName\`,
+  min(specimen_name) as \`SpecimenName\`,
   pathogen_code as \`PathogenCode\`,
-  pathogen_name as \`Pathogen\`,
+  min(pathogen_name) as \`Pathogen\`,
   antibiotic as \`AntibioticCode\`,
   gender as \`Gender\`,
   age_band as \`AgeGroup\`,
@@ -1244,7 +1244,7 @@ select
   cast(sum(case when ris = 'S' then 1 else 0 end) as signed) as \`Susceptible\`,
   cast(count(*) as signed) as \`Total\`
 from results
-group by specimen_type, specimen_name, pathogen_code, pathogen_name, antibiotic, gender, age_band, origin, iso_year
+group by specimen_type, pathogen_code, antibiotic, gender, age_band, origin, iso_year
 order by \`Specimen\`, \`PathogenCode\`, \`AntibioticCode\`, \`Gender\`, \`AgeGroup\`, \`Origin\``,
     },
   },

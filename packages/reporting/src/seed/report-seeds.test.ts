@@ -1332,9 +1332,34 @@ describe('q-amr-glass-ris display names', () => {
   // and only the live warehouse proves mssql/mysql. This asserts the projection exists in each.
   it.each(['postgres', 'mssql', 'mysql'] as const)('projects Pathogen and SpecimenName in %s', (d) => {
     const sql = q().sql[d]!;
-    expect(sql).toMatch(/pathogen_name as [`"]Pathogen[`"]/);
-    expect(sql).toMatch(/specimen_name as [`"]SpecimenName[`"]/);
+    expect(sql).toMatch(/min\(pathogen_name\) as [`"]Pathogen[`"]/);
+    expect(sql).toMatch(/min\(specimen_name\) as [`"]SpecimenName[`"]/);
     expect(sql).toMatch(/coalesce\(s\.type_text, s\.type_code, '\(unknown\)'\) as specimen_name/);
+  });
+
+  // ⛔ The reviewer proved that deleting `specimen_name` from the `first_isolates` column list in
+  // all three dialects left 122 tests passing while every dialect would fail at runtime with an
+  // unknown column. This pins the carry: `specimen_name` (and `pathogen_name`) must survive
+  // `isolate_meta` -> `first_isolates` un-dropped, since the final SELECT's min() aggregates read
+  // from `results`, which is built on top of `first_isolates`.
+  it.each(['postgres', 'mssql', 'mysql'] as const)('carries specimen_name and pathogen_name through first_isolates in %s', (d) => {
+    const sql = q().sql[d]!;
+    expect(sql).toMatch(
+      /obs_id, specimen_id, patient_id, specimen_type, specimen_name, origin, pathogen_code, pathogen_name, iso_date, gender,/,
+    );
+  });
+
+  // ⛔ The final GROUP BY must key on the CODE columns only. `specimen_name`/`pathogen_name` are
+  // unnormalised free text (two rows coded the same specimen/pathogen can carry different display
+  // text) — grouping on them would split one submission stratum into two output rows with the
+  // count split between them. The display name is a scalar aggregate (min()) instead.
+  it.each(['postgres', 'mssql', 'mysql'] as const)('groups by the code columns only, not the display names, in %s', (d) => {
+    const sql = q().sql[d]!;
+    const groupByLine = sql.match(/group by [^\n]+/)![0];
+    expect(groupByLine).not.toMatch(/\bspecimen_name\b/);
+    expect(groupByLine).not.toMatch(/\bpathogen_name\b/);
+    expect(groupByLine).toMatch(/\bspecimen_type\b/);
+    expect(groupByLine).toMatch(/\bpathogen_code\b/);
   });
 
   // ⛔ The submission columns are read by a national programme. Adding display names must not
