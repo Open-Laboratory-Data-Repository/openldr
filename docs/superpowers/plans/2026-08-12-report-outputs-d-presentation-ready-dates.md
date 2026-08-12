@@ -39,6 +39,7 @@ Create `packages/report-designer/src/render/format-date.test.ts`:
 
 ```ts
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { formatDisplayDate, formatDisplayDateOf } from './format-date';
 
 describe('formatDisplayDate', () => {
@@ -71,21 +72,25 @@ describe('formatDisplayDate', () => {
     expect(formatDisplayDate(input)).toBe(input);
   });
 
-  // The whole point of the slice. `toLocaleDateString()` with no locale let the SERVER decide what
-  // a Ministry document said. This asserts there is nothing environment-dependent left in the
-  // FORMAT. ⚠ Do NOT add a TZ sweep here — `formatDisplayDate` takes a string and never touches a
-  // clock, and `formatDisplayDateOf`'s calendar day follows the host zone BY DESIGN.
-  it('formats identically under a different process locale', () => {
-    const before = process.env.LANG;
-    const beforeAll = process.env.LC_ALL;
-    try {
-      process.env.LANG = 'de_DE.UTF-8';
-      process.env.LC_ALL = 'de_DE.UTF-8';
-      expect(formatDisplayDate('2026-08-12')).toBe('12 Aug 2026');
-    } finally {
-      if (before === undefined) delete process.env.LANG; else process.env.LANG = before;
-      if (beforeAll === undefined) delete process.env.LC_ALL; else process.env.LC_ALL = beforeAll;
-    }
+  // ⛔ The invariant the whole slice rests on: this module reads NOTHING from the environment.
+  //
+  // A runtime test cannot prove that. Setting `process.env.LANG` mid-test does not move ICU's
+  // default locale — that is resolved when the process starts — so a "formats the same under a
+  // different LANG" test would pass even if this module were rewritten to use
+  // `Intl.DateTimeFormat(undefined, …)`, which is precisely the environment dependence being
+  // removed. It would assert nothing while looking rigorous.
+  //
+  // So assert it at the only layer where it is decidable: the source. `toLocaleDateString()` with
+  // no locale is what let the SERVER decide whether a Ministry document said 7 August or 8 July.
+  it('reaches for no locale API — the CODE contains neither Intl nor toLocale', () => {
+    const src = readFileSync(new URL('./format-date.ts', import.meta.url), 'utf8')
+      // ⚠ Strip comments FIRST. That file's doc comments deliberately name `Intl.DateTimeFormat`
+      // and `toLocaleDateString` to explain why neither is used, so matching the raw text would
+      // fail on the explanation rather than on a real regression.
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/\/\/.*$/gm, '');
+    expect(src).not.toMatch(/\bIntl\b/);
+    expect(src).not.toMatch(/toLocale/);
   });
 });
 
@@ -174,7 +179,7 @@ export function formatDisplayDateOf(d: Date): string {
 cd packages/report-designer && npx vitest run src/render/format-date.test.ts
 ```
 
-Expected: PASS, 19 tests — 5 formatted, 12 returned unchanged, 1 locale-independence, 1 for `formatDisplayDateOf`.
+Expected: PASS, 19 tests — 5 formatted, 12 returned unchanged, 1 source guard, 1 for `formatDisplayDateOf`.
 
 - [ ] **Step 5: Typecheck**
 
@@ -301,6 +306,7 @@ Expected: FAIL. The date assertions fail with something like `expected '08/07/20
 In `packages/report-designer/src/render/draw.ts`, add to the imports at the top of the file:
 
 ```ts
+import { readFileSync } from 'node:fs';
 import { formatDisplayDate, formatDisplayDateOf } from './format-date';
 ```
 
