@@ -69,8 +69,11 @@ Append inside the existing `describe('simpleTableDesign', ...)` block in `packag
     const without = simpleTableDesign(base);
     const with_ = simpleTableDesign({ ...base, metric: 'X' });
     const t = (d: typeof without) => d.pages[0].elements.find((e) => e.kind === 'table')!.rect.y;
-    // 2 pairs -> 1 panel row; 3 pairs -> 2 panel rows. One KV_INLINE_H_PT (14pt) in px@96.
-    expect(t(with_) - t(without)).toBe(Math.ceil(14 / 0.75));
+    // 2 pairs -> 1 panel row -> ceil((4*2 + 1*14)/0.75) = ceil(29.33) = 30
+    // 3 pairs -> 2 panel rows -> ceil((4*2 + 2*14)/0.75) = 48
+    // Difference is 18, NOT ceil(14/0.75) = 19. The two ceilings do not distribute over the
+    // subtraction — that is exactly the px@96-vs-points arithmetic this file gets wrong.
+    expect(t(with_) - t(without)).toBe(18);
   });
 ```
 
@@ -470,7 +473,15 @@ In `packages/reporting/src/seed/report-seeds.ts`, inside the `simpleTableDesign(
 cd packages/reporting && npx vitest run src/seed/report-seeds.test.ts
 ```
 
-Expected: PASS, whole file. Watch for the drift guard at `report-seeds.test.ts:1275` (`for (const d of SEED_DESIGNS.filter((x) => x.id !== 'rt-amr-antibiogram'))`) — if it asserts an element count, update the antibiogram's expected count, not the filter.
+Expected: PASS, whole file.
+
+⛔ **This run is the real proof, not the two tests above.** `report-seeds.test.ts:1169-1235` already
+runs three geometry guards over every non-clinical seeded design: pair-clipping, clearance of the
+page-number band, and — the important one — **"leaves no element overprinting another"**, a pairwise
+rect-overlap check across all elements. Adding a legend to a real design puts `LEGEND_H_PX` under
+that guard for the first time. If the constant is wrong, it fails here with
+`rt-amr-antibiogram: rt-amr-antibiogram-legend overprints rt-amr-antibiogram-rule2`.
+Do not "fix" that by shrinking the guard — fix the constant.
 
 - [ ] **Step 5: Commit**
 
@@ -690,7 +701,21 @@ In the `rt-amr-glass-ris` `simpleTableDesign` call, replace the first three entr
     ],
 ```
 
-- [ ] **Step 6: Run the tests**
+- [ ] **Step 6: Correct the comment this task deliberately invalidates**
+
+`report-seeds.ts:2096-2098` currently says the design's `boundColumns` "mirror amr-glass-ris.ts's
+`columns` array 1:1 (keys + labels + order)". This task ends that on purpose: the PDF binds display
+names while `packages/reporting/src/amr/glass.ts` keeps the submission shape. **No test asserts the
+mirror, so nothing goes red — the comment simply becomes false.** Replace it with:
+
+```ts
+    // boundColumns NO LONGER mirror amr-glass-ris.ts's `columns` 1:1, deliberately. The PDF binds
+    // the DISPLAY-name columns (`SpecimenName`, `Pathogen`); the submission file keeps the codes and
+    // takes its shape from GLASS_SUBMISSION_COLUMNS, not from this list. The human document and the
+    // machine artifact are separate on purpose.
+```
+
+- [ ] **Step 7: Run the tests**
 
 ```bash
 cd packages/reporting && npx vitest run src/seed/
@@ -698,7 +723,7 @@ cd packages/reporting && npx vitest run src/seed/
 
 Expected: PASS. If the postgres query is executed anywhere under pg-mem, a missing `specimen_name` in a dedup CTE surfaces here as a column-not-found error — fix the CTE, not the final select.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
 git add packages/reporting/src/seed/report-seeds.ts packages/reporting/src/seed/report-seeds.test.ts
