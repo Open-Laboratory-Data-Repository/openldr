@@ -20,8 +20,15 @@ import {
 } from '@openldr/db';
 // Task 9: `parseFacilityCsv` is what `suggest-values` runs the file through to find each controlled
 // field's raw values (real, pure — no database). `FacilityColumnMap`/`ColumnMapError` are the wire
-// shapes `--column-map` reads and reports; never re-declared here.
-import { parseFacilityCsv, type FacilityColumnMap, type ColumnMapError } from '@openldr/terminology';
+// shapes `--column-map` reads and reports; never re-declared here. `FACILITY_CONTRACT_FIELDS` is the
+// contract's field count, read live rather than hardcoded (fix pass, finding 3 — a field added there
+// must not leave a stale count in `describeColumnMapError` below). `validateColumnMap` is the SAME
+// check `--column-map` is refused by; `suggest-map` runs it over its own output (fix pass, finding 2)
+// to disclose a self-collision rather than let it surface only on the NEXT command.
+import {
+  parseFacilityCsv, validateColumnMap, FACILITY_CONTRACT_FIELDS,
+  type FacilityColumnMap, type ColumnMapError,
+} from '@openldr/terminology';
 import { cliActor } from './cli-actor';
 import { redactError } from './redact-error';
 
@@ -65,10 +72,14 @@ export interface FacilitiesImportOpts {
   columnMap?: string;
   /** Path to a value-map JSON file — a JSON array of `{ field, rawValue, toCode }` entries written
    *  through `saveFacilityValueMappings` (Task 5), the SAME function the HTTP
-   *  `/api/facilities/import/value-mappings` route (Task 6) calls. Written ONLY on `--apply`,
-   *  before the import itself, so this apply's own preview resolves what it just wrote — mirroring
-   *  every other write this command can perform: a dry run writes nothing (see this interface's own
-   *  class doc comment above).
+   *  `/api/facilities/import/value-mappings` route (Task 6) calls. Written ONLY on `--apply`, and
+   *  ONLY after the preview below has classified the file and confirmed it is NOT blocked — never
+   *  before, and never on a refused import (fix pass, finding 1: this used to write unconditionally
+   *  as soon as `--apply` was set, so a file refused for `duplicate-columns`/`column-map`/
+   *  `quarantined-rows` had already committed a real, audited `term_mappings` write by the time the
+   *  refusal printed). See `runFacilitiesImport`'s own body for exactly where this now runs —
+   *  mirroring every other write this command can perform: a dry run writes nothing (see this
+   *  interface's own class doc comment above).
    *
    *  ⛔ `--national-system` stays FREE TEXT on this command (facility-csv.ts:103) — the HTTP doors
    *  gate it through a registered-source lookup and this CLI does not, and that gap is a separate
@@ -111,7 +122,7 @@ function describeColumnMapError(e: ColumnMapError): string {
     case 'constant_collision':
       return `constant "${e.target}" collides with "${e.other}", which already maps a column to it`;
     case 'unknown_target':
-      return `"${e.subject}" maps to "${e.target}", which is not one of the 16 contract fields`;
+      return `"${e.subject}" maps to "${e.target}", which is not one of the ${FACILITY_CONTRACT_FIELDS.length} contract fields`;
     case 'missing_required':
       return `required field "${e.target}" has no column or constant mapped to it`;
     default: {
@@ -228,25 +239,6 @@ export async function runFacilitiesImport(path: string, opts: FacilitiesImportOp
       if (opts.json) process.stdout.write(JSON.stringify({ error: register.error }) + '\n');
       else process.stderr.write(`facilities import refused: ${register.error}\n`);
       return 1;
-    }
-
-    // Task 9: `--value-map`, written BEFORE the preview/apply below, so this call's own preview
-    // resolves the mappings it just wrote (no second CLI invocation needed to see the effect) —
-    // gated on `opts.apply` for the same reason every other write here is: a dry run writes NOTHING
-    // (this interface's own class doc comment), and a value mapping is a real write to
-    // `term_mappings`, not merely a report. `saveFacilityValueMappings` validates every entry against
-    // its value set BEFORE writing any of them (Task 5) and throws on the first bad one; that refusal
-    // is reported the same way `startPreview`'s refusal below is, and no run is minted for it since
-    // this runs BEFORE `startPreview`.
-    if (valueMapEntries && opts.apply) {
-      try {
-        await saveFacilityValueMappings(ctx.terminology.admin, opts.nationalSystem, valueMapEntries);
-      } catch (err) {
-        const msg = redactError(err);
-        if (opts.json) process.stdout.write(JSON.stringify({ error: msg }) + '\n');
-        else process.stderr.write(`facilities import refused: value map: ${msg}\n`);
-        return 1;
-      }
     }
 
     if (opts.apply) {
@@ -433,6 +425,37 @@ export async function runFacilitiesImport(path: string, opts: FacilitiesImportOp
       return 1;
     }
 
+    // Fix pass (finding 1, CRITICAL): `--value-map`, written HERE — after both refusal checks above
+    // have passed, never before either of them — so a refused import (duplicate headers, a bad
+    // --column-map, quarantined rows) writes NOTHING to `term_mappings`, matching the same invariant
+    // `saveFacilityValueMappings` itself documents: a half-applied set is worse than a refused one,
+    // because the operator cannot tell which half landed. This used to run unconditionally as soon as
+    // `--apply` was set, before the preview above had even classified the file, so a blocked import
+    // had already committed a real, audited write by the time its refusal was printed.
+    //
+    // Gated on `opts.apply` for the same reason every other write here is: a dry run writes NOTHING
+    // (this interface's own class doc comment), and a value mapping is a real write to
+    // `term_mappings`, not merely a report. `saveFacilityValueMappings` validates every entry against
+    // its value set BEFORE writing any of them (Task 5) and throws on the first bad one; that refusal
+    // is reported the same way every refusal above is — finishing the run `startPreview` already
+    // minted (as 'failed'), since it exists by this point, unlike before this fix.
+    //
+    // ⛔ The preview above therefore does NOT see these mappings — only the real apply write below
+    // does. That is the cost of never writing before every refusal has been decided; the printed
+    // result always comes from the real apply call (`result` below), never from `preview`, whenever
+    // `opts.apply` is set, so what is reported to the operator is accurate either way.
+    if (valueMapEntries && opts.apply) {
+      try {
+        await saveFacilityValueMappings(ctx.terminology.admin, opts.nationalSystem, valueMapEntries);
+      } catch (err) {
+        const msg = redactError(err);
+        if (run) await finishRun(importRuns, run.id, 'failed', `value map: ${msg}`);
+        if (opts.json) process.stdout.write(JSON.stringify({ error: msg }) + '\n');
+        else process.stderr.write(`facilities import refused: value map: ${msg}\n`);
+        return 1;
+      }
+    }
+
     // Every refusal has now passed, so — and only so — does the write run. A dry run reuses the
     // preview above verbatim: `apply` was already falsy on that call, so there is nothing left for a
     // second one to do.
@@ -595,9 +618,18 @@ export interface FacilitiesSuggestMapOpts {
  * `Zone` both suggesting `zone` on the real Zambia file) unmapped, because pre-selecting either would
  * silently pick a winner. This command has no such constraint — it prints its best guess for EVERY
  * header with an exact/likely candidate, even one two headers share, because the whole point is a
- * file the operator reads before feeding it back; a map with a genuine collision is caught by
- * `validateColumnMap`'s `duplicate_target` (surfaced as `blockedReason: 'column-map'` on the next
- * `facilities import --column-map`) the moment it is used, not silently resolved here.
+ * file the operator reads before feeding it back. The map itself is UNCHANGED by this — the round
+ * trip stays a straight copy of the engine's own best guesses.
+ *
+ * ⚠ Fix pass (finding 2): a genuine collision — e.g. `Province`/`Zone` both landing on `zone`,
+ * `Ownership`/`Ownership type` both landing on `ownership`, BOTH measured on the real Zambia file
+ * this feature was built for (facility-mapping-suggest.test.ts's "12 of 21" test) — used to be caught
+ * only by `validateColumnMap`'s `duplicate_target` on the NEXT command, `facilities import
+ * --column-map`, so this command's first-run output on its own reference file tripped
+ * `blockedReason: 'column-map'` with nothing here to say why. `runFacilitiesSuggestMap` now runs that
+ * SAME `validateColumnMap` over its own output before printing, and disclosed the result as
+ * `warnings` (`--json`) / a printed block (human) — never silently, and never by changing what is
+ * mapped.
  *
  * A header whose top candidate is only `weak` is left out of BOTH `columns` and `extras` — same as
  * the studio panel's "a weak guess never pre-selects" rule — because a weak guess an operator does
@@ -625,11 +657,18 @@ export async function runFacilitiesSuggestMap(path: string, opts: FacilitiesSugg
 
   const suggestions = suggestColumns(headers);
   const map = buildSuggestedColumnMap(headers, suggestions);
+  // Fix pass (finding 2): validate the map THIS COMMAND JUST BUILT against itself, the SAME check
+  // `--column-map` is refused by (`validateColumnMap`, packages/terminology/src/facility-csv.ts) —
+  // `headers` lowercased/trimmed to match how that function expects them (mirroring
+  // `parseFacilityCsv`'s own `headers` computation). Disclosure only: `map` itself is never edited
+  // as a result, so the round trip this command exists for is unchanged for a file with no collision.
+  const warnings = validateColumnMap(map, headers.map((h) => h.trim().toLowerCase()))
+    .map(describeColumnMapError);
 
   if (opts.json) {
-    process.stdout.write(JSON.stringify(map, null, 2) + '\n');
+    process.stdout.write(JSON.stringify(warnings.length > 0 ? { ...map, warnings } : map, null, 2) + '\n');
   } else {
-    process.stdout.write(formatSuggestMapHuman(headers, suggestions, map) + '\n');
+    process.stdout.write(formatSuggestMapHuman(headers, suggestions, map, warnings) + '\n');
   }
   return 0;
 }
@@ -653,7 +692,9 @@ function buildSuggestedColumnMap(headers: string[], suggestions: ColumnSuggestio
   return extras.length > 0 ? { columns, extras } : { columns };
 }
 
-function formatSuggestMapHuman(headers: string[], suggestions: ColumnSuggestion[], map: FacilityColumnMap): string {
+function formatSuggestMapHuman(
+  headers: string[], suggestions: ColumnSuggestion[], map: FacilityColumnMap, warnings: string[],
+): string {
   const byHeader = new Map(suggestions.map((s) => [s.header, s]));
   const rows = headers.map((header) => {
     const top = byHeader.get(header)?.candidates[0];
@@ -664,8 +705,15 @@ function formatSuggestMapHuman(headers: string[], suggestions: ColumnSuggestion[
   const headerRow = ['header', 'target', 'confidence'];
   const widths = headerRow.map((h, i) => Math.max(h.length, ...rows.map((r) => r[i].length)));
   const line = (cells: string[]) => cells.map((c, i) => (i === cells.length - 1 ? c : c.padEnd(widths[i]))).join('  ');
+  // Fix pass (finding 2): printed AFTER the table, never silently — the same `describeColumnMapError`
+  // strings `facilities import`'s own blocked-column-map branch prints, so an operator who has seen
+  // one has seen the other.
+  const warningBlock = warnings.length > 0
+    ? ['', `WARNING: ${warnings.length} collision(s) in this suggested map — fix before using --column-map:`,
+      ...warnings.map((w) => `  ${w}`)]
+    : [];
   return [
-    line(headerRow), ...rows.map(line),
+    line(headerRow), ...rows.map(line), ...warningBlock,
     '',
     `${Object.keys(map.columns).length} column(s) mapped, ${(map.extras ?? []).length} sent to extras — ` +
       'review, edit if needed, and feed back with: openldr facilities import <path> --column-map <this-output.json>',

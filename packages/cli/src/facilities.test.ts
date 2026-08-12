@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { fileURLToPath } from 'node:url';
 // ⛔ NOT mocked by the `vi.mock('@openldr/db', ...)` below — that mock only replaces the base
 // `@openldr/db` specifier; `@openldr/db/testing` is a distinct export path (package.json's
 // `exports['./testing']`), so this stays the REAL `makeMigratedDb`. Used by exactly one test (the
@@ -123,6 +124,10 @@ import {
 // faked. Used to tell `mocks.ctx.terminology.admin.valueSets.getByUrl` which url each controlled
 // field resolves to, the same way `runFacilitiesSuggestValues` itself does.
 import { CONTROLLED_VALUE_SETS } from '@openldr/bootstrap';
+// Fix pass (finding 3): real, pure constant — NOT mocked (this file never mocks
+// `@openldr/terminology`) — so the count named in `describeColumnMapError`'s `unknown_target`
+// message can be asserted against the SAME source the fix reads, not a copy that could drift.
+import { FACILITY_CONTRACT_FIELDS } from '@openldr/terminology';
 // ⛔ TYPE-only, so the `vi.mock('@openldr/db', ...)` above does not apply to it (type imports are
 // erased before the module graph is built). It is what makes `DEFAULT_RUN` below an EXHAUSTIVE
 // fixture: see the note there.
@@ -929,16 +934,56 @@ describe('facilities import CLI', () => {
     expect(err).toMatch(/broken-map\.json/);
   });
 
+  // ── Fix pass (review finding 3, MINOR) ──────────────────────────────────────────────────────
+  //
+  // `describeColumnMapError`'s `unknown_target` branch hardcoded the string "16 contract fields".
+  // `FACILITY_CONTRACT_FIELDS.length` (packages/terminology/src/facility-csv.ts:18) is 16 TODAY, so
+  // a behavioural assertion on the printed number alone cannot fail against the un-fixed code — this
+  // reads the source text directly to prove no literal count survives, then a behavioural test
+  // confirms the wiring end to end.
+  it('⛔ the unknown_target message does not hardcode the contract-field count', async () => {
+    const realFs = await vi.importActual<typeof import('node:fs')>('node:fs');
+    const src = realFs.readFileSync(fileURLToPath(new URL('./facilities.ts', import.meta.url)), 'utf8');
+    expect(src).not.toMatch(/not one of the \d+ contract fields/);
+    expect(src).toMatch(/FACILITY_CONTRACT_FIELDS\.length/);
+  });
+
+  it('an unknown-target column map names the CURRENT contract field count', async () => {
+    const badMap = { columns: { 'MFL Code': 'national_code', Name: 'name', Extra: 'not_a_real_field' } };
+    mocks.readFileSync.mockImplementation((p: string) => (
+      String(p).endsWith('bad-map.json') ? JSON.stringify(badMap) : ZM_MFL_CSV
+    ));
+    mocks.importFacilities.mockResolvedValue({
+      ...CLEAN_RESULT, parsed: 0,
+      columnMapErrors: [{ reason: 'unknown_target', subject: 'Extra', target: 'not_a_real_field' }],
+      blocked: true, blockedReason: 'column-map',
+    });
+
+    const code = await runFacilitiesImport('/some/zm-mfl-head.csv', {
+      nationalSystem: 'urn:tz:hfr', columnMap: '/some/bad-map.json', apply: true, json: false,
+    });
+
+    expect(code).toBe(1);
+    const err = stderrSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(err).toMatch(new RegExp(`not one of the ${FACILITY_CONTRACT_FIELDS.length} contract fields`));
+  });
+
   // ── Task 9: `--value-map <file.json>` ───────────────────────────────────────────────────────
   //
   // Reuses `saveFacilityValueMappings` (Task 5) verbatim — the same function the HTTP
   // `/api/facilities/import/value-mappings` route (Task 6) calls. Gated behind `--apply`, matching
   // every other write this command can perform: the class doc comment on `FacilitiesImportOpts`
   // promises a dry run writes NOTHING, and a value mapping is a real write to `term_mappings`.
+  //
+  // ⛔ Fix pass (review finding 1, CRITICAL): the write now lands AFTER the preview below has
+  // classified the file and confirmed it is NOT blocked, and BEFORE the real (`apply: true`) write —
+  // never before the preview, which is where it used to sit. A refused import (duplicate headers, a
+  // bad --column-map, quarantined rows) must not commit a real, audited `term_mappings` write while
+  // reporting that nothing happened.
   describe('--value-map', () => {
     const ENTRIES = [{ field: 'level', rawValue: 'Health Centre', toCode: 'health-center' }];
 
-    it('--apply writes the value map BEFORE the import, so this apply\'s own preview resolves it', async () => {
+    it('--apply writes the value map AFTER the preview classifies the file and BEFORE the real write', async () => {
       mocks.readFileSync.mockImplementation((p: string) => (
         String(p).endsWith('value-map.json') ? JSON.stringify(ENTRIES) : ZM_MFL_CSV
       ));
@@ -953,9 +998,12 @@ describe('facilities import CLI', () => {
       expect(mocks.saveFacilityValueMappings).toHaveBeenCalledWith(
         mocks.ctx.terminology.admin, 'urn:tz:hfr', ENTRIES,
       );
+      expect(mocks.importFacilities).toHaveBeenCalledTimes(2);
+      const previewOrder = mocks.importFacilities.mock.invocationCallOrder[0];
       const saveOrder = mocks.saveFacilityValueMappings.mock.invocationCallOrder[0];
-      const importOrder = mocks.importFacilities.mock.invocationCallOrder[0];
-      expect(saveOrder).toBeLessThan(importOrder);
+      const applyOrder = mocks.importFacilities.mock.invocationCallOrder[1];
+      expect(previewOrder).toBeLessThan(saveOrder);
+      expect(saveOrder).toBeLessThan(applyOrder);
     });
 
     it('a dry run writes NO value mappings — --value-map alone, without --apply, writes nothing', async () => {
@@ -972,12 +1020,46 @@ describe('facilities import CLI', () => {
       expect(mocks.saveFacilityValueMappings).not.toHaveBeenCalled();
     });
 
+    // ⛔ CRITICAL (review finding 1): reproduces the review's own repro — a bad --column-map
+    // alongside a good --value-map. Before the fix, `saveFacilityValueMappings` ran unconditionally
+    // on `--apply`, before the preview that decides `blocked` had even run, so this committed a
+    // real, audited `term_mappings` write and THEN reported refusal with exit code 1.
+    it('⛔ a blocked import (bad --column-map) writes NO value mappings, even with a valid --value-map', async () => {
+      const badMap = { columns: { 'MFL Code': 'national_code', 'Hims code': 'national_code' } };
+      mocks.readFileSync.mockImplementation((p: string) => {
+        const s = String(p);
+        if (s.endsWith('bad-map.json')) return JSON.stringify(badMap);
+        if (s.endsWith('value-map.json')) return JSON.stringify(ENTRIES);
+        return ZM_MFL_CSV;
+      });
+      mocks.importFacilities.mockResolvedValue({
+        ...CLEAN_RESULT, parsed: 0,
+        columnMapErrors: [{ reason: 'duplicate_target', subject: 'Hims code', target: 'national_code', other: 'MFL Code' }],
+        blocked: true, blockedReason: 'column-map',
+      });
+
+      const code = await runFacilitiesImport('/some/zm-mfl-head.csv', {
+        nationalSystem: 'urn:tz:hfr', columnMap: '/some/bad-map.json', valueMap: 'value-map.json',
+        apply: true, json: true,
+      });
+
+      expect(code).toBe(1);
+      expect(mocks.saveFacilityValueMappings).not.toHaveBeenCalled();
+      expect(mocks.importFacilities).toHaveBeenCalledTimes(1);
+      expect(mocks.importFacilities).not.toHaveBeenCalledWith(
+        expect.anything(), expect.any(String), expect.objectContaining({ apply: true }),
+      );
+    });
+
     // `saveFacilityValueMappings` validates every entry against its value set BEFORE writing any —
-    // this is what that refusal looks like from the CLI: no partial write, no import attempted.
-    it('a value outside the value set refuses, writes nothing, and never calls importFacilities', async () => {
+    // this is what that refusal looks like from the CLI now: the preview has already run and passed
+    // (unblocked) by this point — `startPreview` and ONE `importFacilities` preview call HAVE
+    // happened — what must never happen is the real (`apply: true`) write.
+    it('a value outside the value set refuses, writes nothing further, and never calls the real apply', async () => {
       mocks.readFileSync.mockImplementation((p: string) => (
         String(p).endsWith('value-map.json') ? JSON.stringify(ENTRIES) : ZM_MFL_CSV
       ));
+      mocks.importFacilities.mockResolvedValue(CLEAN_RESULT);
       mocks.saveFacilityValueMappings.mockRejectedValue(
         new Error('bogus-code is not in the level value set — refusing rather than minting a draft concept'),
       );
@@ -987,8 +1069,12 @@ describe('facilities import CLI', () => {
       });
 
       expect(code).toBe(1);
-      expect(mocks.importFacilities).not.toHaveBeenCalled();
-      expect(mocks.runStore.startPreview).not.toHaveBeenCalled();
+      expect(mocks.runStore.startPreview).toHaveBeenCalled();
+      expect(mocks.importFacilities).toHaveBeenCalledTimes(1);
+      expect(mocks.runStore.finishApply).toHaveBeenCalledWith(
+        DEFAULT_RUN.id, 'failed',
+        expect.objectContaining({ error: expect.stringMatching(/bogus-code is not in the level value set/) }),
+      );
       const err = stderrSpy.mock.calls.map((c) => String(c[0])).join('');
       expect(err).toMatch(/bogus-code is not in the level value set/);
     });
@@ -1173,6 +1259,54 @@ describe('facilities suggest-map CLI', () => {
     expect(human).toMatch(/MFL Code/);
     expect(human).toMatch(/national_code/);
     expect(() => JSON.parse(human)).toThrow();
+  });
+
+  // ── Fix pass (review finding 2, IMPORTANT) ──────────────────────────────────────────────────
+  //
+  // `buildSuggestedColumnMap` maps every header with an exact/likely candidate and applies NO
+  // collision check (see its own docblock). Measured on the real Zambia file
+  // (facility-mapping-suggest.test.ts's "12 of 21" test): `Province`/`Zone` both suggest `zone`
+  // exact, and `Ownership`/`Ownership type` both suggest `ownership` exact — so suggest-map's own
+  // FIRST-RUN output on the file this feature was built for prints a map with two `duplicate_target`
+  // collisions, and feeding it back unedited to `--column-map` trips `blockedReason: 'column-map'`
+  // with no warning anywhere that it would. The map itself must NOT change (the round-trip test
+  // above pins `map.columns.Province === 'zone'`) — only disclosure is added.
+  it('⛔ warns about both real collisions in the Zambia file, without changing what is mapped', async () => {
+    const code = await runFacilitiesSuggestMap('/some/zm-mfl-head.csv', { json: true });
+
+    expect(code).toBe(0);
+    const out = JSON.parse(stdoutSpy.mock.calls.map((c) => String(c[0])).join(''));
+    // Unchanged from the round-trip test above — disclosure, not a changed map.
+    expect(out.columns.Province).toBe('zone');
+    expect(out.columns.Zone).toBe('zone');
+    expect(out.columns.Ownership).toBe('ownership');
+    expect(out.columns['Ownership type']).toBe('ownership');
+    expect(out.warnings).toEqual(expect.arrayContaining([
+      expect.stringContaining('"Zone" and "Province" both map to "zone"'),
+      expect.stringContaining('"Ownership type" and "Ownership" both map to "ownership"'),
+    ]));
+    expect(out.warnings).toHaveLength(2);
+  });
+
+  it('the human table also shows the collision warnings, naming both headers', async () => {
+    const code = await runFacilitiesSuggestMap('/some/zm-mfl-head.csv', { json: false });
+
+    expect(code).toBe(0);
+    const human = stdoutSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(human).toMatch(/collision/i);
+    expect(human).toMatch(/"Zone" and "Province" both map to "zone"/);
+    expect(human).toMatch(/"Ownership type" and "Ownership" both map to "ownership"/);
+  });
+
+  it('a clean map (no collisions) carries no warnings key at all', async () => {
+    mocks.readFileSync.mockReturnValue('national_code,name\n100,Dodoma\n');
+
+    const code = await runFacilitiesSuggestMap('/some/clean.csv', { json: true });
+
+    expect(code).toBe(0);
+    const out = JSON.parse(stdoutSpy.mock.calls.map((c) => String(c[0])).join(''));
+    expect(out.columns).toEqual({ national_code: 'national_code', name: 'name' });
+    expect(out.warnings).toBeUndefined();
   });
 
   it('a missing file exits non-zero with a clear message, not a stack trace', async () => {
