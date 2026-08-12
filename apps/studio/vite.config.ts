@@ -35,7 +35,16 @@ export default defineConfig(({ mode }) => {
   // repo-root .env — which is gitignored — so no machine-specific address lands in this tracked
   // file, and the `DEV_` prefix keeps the rest of that file (secrets) out of this config.
   // Unset => Vite's localhost-only default, which is what CI and everyone else keeps getting.
+  // `loadEnv` copies a NODE_ENV found in those files into process.env.VITE_USER_NODE_ENV even
+  // though the prefix filter is 'DEV_'. The repo-root .env sets NODE_ENV=development, so that
+  // leak makes Vite resolve isProduction=false for `vite build`, which emits jsxDEV() calls
+  // against the production jsx-runtime — the built SPA then dies on load with
+  // "jsxDEV is not a function" and renders a blank page. CI and Docker never see it: they have
+  // no repo-root .env. Restore the variable so only the real environment decides.
+  const userNodeEnvBefore = process.env.VITE_USER_NODE_ENV;
   const rootEnv = loadEnv(mode, fileURLToPath(new URL('../../', import.meta.url)), 'DEV_');
+  if (userNodeEnvBefore === undefined) delete process.env.VITE_USER_NODE_ENV;
+  else process.env.VITE_USER_NODE_ENV = userNodeEnvBefore;
 
   return {
     base: '/studio/',

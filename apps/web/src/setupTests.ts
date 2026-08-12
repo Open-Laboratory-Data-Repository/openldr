@@ -15,3 +15,14 @@ if (typeof Element !== 'undefined') {
   if (!Element.prototype.releasePointerCapture) Element.prototype.releasePointerCapture = () => {};
   if (!Element.prototype.scrollIntoView) Element.prototype.scrollIntoView = () => {};
 }
+
+// XYFlow observes its canvas size. Browsers provide this API; jsdom does not.
+if (typeof ResizeObserver === 'undefined') {
+  class ResizeObserverMock {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+
+  globalThis.ResizeObserver = ResizeObserverMock as typeof ResizeObserver;
+}

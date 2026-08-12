@@ -6,7 +6,20 @@ export interface ScreenshotFrameProps {
   alt: string;
   caption?: string;
   priority?: boolean;
+  /** Draw a generic application window title bar above the image. */
+  chrome?: boolean;
   className?: string;
+}
+
+// Deliberately not Mac or Windows chrome: three neutral dots, no close/minimise semantics.
+function WindowBar() {
+  return (
+    <div className="flex h-8 items-center gap-2 border-b border-border bg-muted px-3.5">
+      <span className="h-2.5 w-2.5 rounded-full bg-muted-foreground/40" />
+      <span className="h-2.5 w-2.5 rounded-full bg-muted-foreground/40" />
+      <span className="h-2.5 w-2.5 rounded-full bg-muted-foreground/40" />
+    </div>
+  );
 }
 
 export function ScreenshotFrame({
@@ -14,6 +27,7 @@ export function ScreenshotFrame({
   alt,
   caption,
   priority = false,
+  chrome = false,
   className,
 }: ScreenshotFrameProps) {
   const url = screenshotUrl(name);
@@ -36,6 +50,7 @@ export function ScreenshotFrame({
   return (
     <figure className={cn('m-0 w-full', className)}>
       <div className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
+        {chrome ? <WindowBar /> : null}
         <img
           src={url}
           alt={alt}

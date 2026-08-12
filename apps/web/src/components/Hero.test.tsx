@@ -2,19 +2,18 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { Hero } from './Hero';
 
-vi.mock('./ScreenshotFrame', () => ({
-  ScreenshotFrame: ({ alt }: { alt: string }) => <img src="/mock-dashboard.png" alt={alt} />,
-}));
-
 describe('Hero', () => {
-  it('presents OpenLDR with clear CTAs and the dashboard screenshot', () => {
-    render(<Hero />, { wrapper: MemoryRouter });
+  it('presents OpenLDR with clear CTAs and the dashboard in a window frame', () => {
+    const { container } = render(<Hero />, { wrapper: MemoryRouter });
 
     expect(screen.getByRole('heading', { name: 'OpenLDR' })).toBeInTheDocument();
     expect(screen.getByText(/self-hosted laboratory data/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /get started/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /read the docs/i })).toHaveAttribute('href', '/docs');
+    // The workflow canvas moved to its own section below the hero.
+    expect(screen.queryByLabelText(/openldr ingest workflow/i)).not.toBeInTheDocument();
     expect(screen.getByRole('img', { name: 'OpenLDR dashboard overview' })).toBeInTheDocument();
+    expect(container.querySelectorAll('figure .rounded-full')).toHaveLength(3);
   });
 
   it('scrolls to install without changing the hash when Get started is clicked', () => {

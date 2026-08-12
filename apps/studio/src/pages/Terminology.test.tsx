@@ -364,6 +364,62 @@ describe('Terminology page', () => {
     expect(screen.queryByText('Stored distribution deleted.')).not.toBeInTheDocument();
   });
 
+  /** Opens the code-system row's ⋯ menu → Delete → Coding system. Same path as the purge test. */
+  async function openDeleteCodingSystem(): Promise<void> {
+    const allActions = await screen.findAllByRole('button', { name: /actions/i });
+    const rowActions = allActions[allActions.length - 1];
+    fireEvent.pointerDown(rowActions, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+    if (!screen.queryByText('Delete')) fireEvent.keyDown(rowActions, { key: 'Enter' });
+    fireEvent.pointerMove(await screen.findByText('Delete'));
+    fireEvent.keyDown(await screen.findByText('Delete'), { key: 'Enter' });
+    fireEvent.click(await screen.findByText('Coding system'));
+    await screen.findByRole('alertdialog');
+  }
+
+  it('a facility register with facilities filed under it: the dialog states the refusal and offers no Delete', async () => {
+    vi.spyOn(api, 'systemDeletionImpact').mockResolvedValue({ termCount: 0, mappingCount: 0, facilityCount: 2 });
+    const deleteSpy = vi.spyOn(api, 'deleteCodingSystem').mockResolvedValue(undefined as never);
+
+    render(<MemoryRouter><Terminology /></MemoryRouter>);
+    await openDeleteCodingSystem();
+
+    expect(screen.getByText(/2 facilities are filed under this facility register/)).toBeInTheDocument();
+    // The three claims the old copy made are all gone: no counts, no "cannot be undone", no
+    // confirm control — the request would be refused with a 409.
+    expect(screen.queryByText(/Permanently deletes/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/cannot be undone/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Confirm name')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument();
+    expect(deleteSpy).not.toHaveBeenCalled();
+  });
+
+  it('a register with 1 facility reads in the singular', async () => {
+    vi.spyOn(api, 'systemDeletionImpact').mockResolvedValue({ termCount: 0, mappingCount: 0, facilityCount: 1 });
+    render(<MemoryRouter><Terminology /></MemoryRouter>);
+    await openDeleteCodingSystem();
+    expect(screen.getByText(/1 facility is filed under this facility register/)).toBeInTheDocument();
+  });
+
+  it('a coding system with no facilities: the delete copy and the type-to-confirm flow are unchanged', async () => {
+    vi.spyOn(api, 'systemDeletionImpact').mockResolvedValue({ termCount: 7, mappingCount: 3, facilityCount: 0 });
+    const deleteSpy = vi.spyOn(api, 'deleteCodingSystem').mockResolvedValue(undefined as never);
+
+    render(<MemoryRouter><Terminology /></MemoryRouter>);
+    await openDeleteCodingSystem();
+
+    expect(screen.getByText(/with 7 term\(s\) and 3 mapping\(s\)/)).toBeInTheDocument();
+    expect(screen.getByText(/This action cannot be undone/)).toBeInTheDocument();
+    expect(screen.queryByText(/filed under this facility register/)).not.toBeInTheDocument();
+
+    const deleteButton = await screen.findByRole('button', { name: 'Delete' });
+    expect(deleteButton).toBeDisabled();
+    fireEvent.change(screen.getByLabelText('Confirm name'), { target: { value: 'LOINC' } });
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
+
+    await waitFor(() => expect(deleteSpy).toHaveBeenCalledWith('cs1'));
+  });
+
   it('starting a distribution import fires exactly one start toast and renders no inline banner', async () => {
     const uploadSpy = vi.spyOn(api, 'uploadTerminologyDistribution').mockResolvedValue({ jobId: 'tij_1' });
     vi.spyOn(api, 'getTerminologyIngestJob').mockResolvedValue({
