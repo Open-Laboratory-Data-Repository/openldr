@@ -20,6 +20,15 @@ export const HARDCODED_DENY_UNION: Record<string, string[]> = {
   lab_requests: ['id', 'request_id', 'patient_id', 'source_system', 'plugin_id', 'plugin_version', 'batch_id'],
   facilities: ['plugin_id', 'plugin_version', 'batch_id'],
   diagnostic_reports: ['id', 'patient_id', 'plugin_id', 'plugin_version', 'batch_id'],
+  // FAC-P1-17. facility_map is the warehouse reporting dimension (facility name, code and
+  // administrative area) rebuilt from registry resolution. It had no entry here, so it was
+  // exposed by omission rather than by decision. Decision: hide only the two internal surrogate
+  // ids — the same shape of call as `facilities` above, which hides only its internal
+  // provenance columns. Internal row keys stay separate from the public codes (`local_code`,
+  // `national_code`) a report or export should quote.
+  // `source_system`, `performer_system` and `source_code` are deliberately NOT hidden: the
+  // seeded reports join facility_map on those three (packages/reporting/src/seed/report-seeds.ts).
+  facility_map: ['id', 'registry_id'],
 };
 
 /** Columns classified as PII for the Data Exposure UI badge + un-hide confirmation ONLY.
@@ -27,6 +36,9 @@ export const HARDCODED_DENY_UNION: Record<string, string[]> = {
 export const PII_COLUMNS: Record<string, string[]> = {
   patients: ['patient_guid', 'surname', 'firstname', 'national_id', 'phone', 'email', 'date_of_birth'],
   specimens: [], lab_requests: [], facilities: [], diagnostic_reports: [], lab_results: [],
+  // facility_map holds facility names, codes and administrative areas — no patient data — so no
+  // column gets the PII badge or the un-hide confirmation.
+  facility_map: [],
 };
 
 /** Hidden-column set for a table: the policy entry, else the hardcoded union fallback. */

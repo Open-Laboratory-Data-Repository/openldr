@@ -614,7 +614,23 @@ export function createTerminologyAdminStore(db: Kysely<InternalSchema>, projecti
             eb(sql`lower(display)`, 'like', like),
           ]));
         }
-        if (q.statuses && q.statuses.length) base = base.where('status', 'in', q.statuses);
+        if (q.statuses && q.statuses.length) {
+          // NULL status counts as ACTIVE — the same rule as `listSystemConcepts` at :303, for the
+          // same reason: every loader in @openldr/terminology (organisms, whonet, result-parameters,
+          // the generic loader) deliberately writes `status: null` on import, never an explicit
+          // 'ACTIVE', and the column is nullable with no default (migration 007_terminology.ts).
+          // SQL `IN` never matches NULL, so a bare `status in ('ACTIVE',…)` would drop every
+          // loader-fed concept — the organism dictionary and the LOINC corpus included — from the
+          // mapping picker that sends this filter.
+          //
+          // The converse holds too: a caller asking for DEPRECATED alone must NOT be handed the
+          // NULL rows, because NULL means active here. So NULL joins in only when 'ACTIVE' is one
+          // of the statuses asked for.
+          const statuses = q.statuses;
+          base = statuses.includes('ACTIVE')
+            ? base.where((eb) => eb.or([eb('status', 'in', statuses), eb('status', 'is', null)]))
+            : base.where('status', 'in', statuses);
+        }
         const rows = await base.selectAll().orderBy('code').limit(q.limit).offset(q.offset).execute();
         const totalRow = await base.select((eb) => eb.fn.countAll<number>().as('n')).executeTakeFirst();
         // N+1 count per row (parallel, fine for a ~25-row page). TODO: lateral join if page sizes grow.

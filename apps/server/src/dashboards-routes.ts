@@ -26,6 +26,10 @@ const GOVERNED: Array<{ table: keyof typeof EXTERNAL_TABLE_COLUMNS; label: strin
   { table: 'lab_requests', label: 'Request' },
   { table: 'facilities', label: 'Facility' },
   { table: 'diagnostic_reports', label: 'Report' },
+  // FAC-P1-17: facility_map is the warehouse reporting dimension (facility name, code and
+  // administrative area). It was in EXTERNAL_TABLE_COLUMNS but in no policy, so its columns were
+  // exposed by omission. Its defaults live in HARDCODED_DENY_UNION/PII_COLUMNS.facility_map.
+  { table: 'facility_map', label: 'Facility Map' },
 ];
 
 // Collect the set of already-vetted SQL templates (trimmed) from a persisted dashboard. On

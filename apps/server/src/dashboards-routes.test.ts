@@ -25,7 +25,7 @@ function fakeCtx(cfg: { DASHBOARD_SQL_ENABLED?: boolean } = {}) {
       },
       compileSql: async (q: any) => `select count(*) as value from lab_requests where status = 'active' -- model:${q.model}`,
       columnPolicy: {
-        listHidden: async () => ({ patients: ['national_id'] }),
+        listHidden: async () => ({ patients: ['national_id'], facility_map: ['id', 'registry_id'] }),
         replaceTable: vi.fn(async () => {}),
       },
       reloadColumnPolicy: vi.fn(async () => {}),
@@ -220,6 +220,49 @@ describe('dashboard routes', () => {
     const events = ctx.__auditEvents as Array<{ action: string; entityType: string; entityId: string }>;
     const auditEvent = events.find((e) => e.action === 'data_exposure.policy.updated');
     expect(auditEvent).toMatchObject({ entityType: 'column_exposure_policy', entityId: 'global' });
+  });
+
+  // FAC-P1-17: facility_map is the warehouse reporting dimension. These pin the WIRE, not the
+  // constants: the expected table/label/column names are literals, so they still fail if
+  // GOVERNED changes shape. typecheck cannot catch a route dropping this table (AGENTS §7).
+  it('GET /api/dashboards/column-policy carries facility_map with its columns and no PII flags', async () => {
+    const app = appWith(fakeCtx(), ['lab_admin'], ADMIN_CAPS_WITH_EXPOSURE);
+    const res = await app.inject({ method: 'GET', url: '/api/dashboards/column-policy' });
+    expect(res.statusCode).toBe(200);
+    const fm = res.json().tables.find((t: any) => t.table === 'facility_map');
+    expect(fm.label).toBe('Facility Map');
+    expect(fm.columns.map((c: any) => c.name)).toEqual([
+      'id', 'source_system', 'performer_system', 'source_code', 'registry_id', 'local_code',
+      'name', 'level', 'status', 'region', 'district', 'council', 'national_system',
+      'national_code', 'resolved_via', 'updated_at',
+    ]);
+    // No facility_map column is patient data, so none carries the PII badge.
+    expect(fm.columns.every((c: any) => c.pii === false)).toBe(true);
+  });
+
+  it('GET /api/dashboards/column-policy reports the stored facility_map hidden flags', async () => {
+    // The fake store hides id + registry_id; the route must project that per column.
+    const app = appWith(fakeCtx(), ['lab_admin'], ADMIN_CAPS_WITH_EXPOSURE);
+    const res = await app.inject({ method: 'GET', url: '/api/dashboards/column-policy' });
+    const fm = res.json().tables.find((t: any) => t.table === 'facility_map');
+    const hiddenNames = fm.columns.filter((c: any) => c.hidden).map((c: any) => c.name);
+    expect(hiddenNames).toEqual(['id', 'registry_id']);
+    // The three columns the seeded reports join on must stay shown.
+    for (const name of ['source_system', 'performer_system', 'source_code']) {
+      expect(fm.columns.find((c: any) => c.name === name)).toMatchObject({ hidden: false });
+    }
+  });
+
+  it('PUT /api/dashboards/column-policy accepts facility_map and drops unknown columns', async () => {
+    const ctx = fakeCtx();
+    const app = appWith(ctx, ['lab_admin'], ADMIN_CAPS_WITH_EXPOSURE);
+    const res = await app.inject({
+      method: 'PUT',
+      url: '/api/dashboards/column-policy',
+      payload: { facility_map: ['registry_id', 'not_a_real_column'] },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(ctx.dashboards.columnPolicy.replaceTable).toHaveBeenCalledWith('facility_map', ['registry_id'], 'admin');
   });
 
   it('column-policy routes are gated by data_exposure.manage', async () => {

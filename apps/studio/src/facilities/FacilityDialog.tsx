@@ -156,11 +156,32 @@ export function FacilityDialog({ open, onOpenChange, facility, onSaved }: Facili
     setNoForm(false);
 
     setSchemaLoading(true);
+    // Same cancel guard as the lastImportAt effect above — one idiom in this file, not two. It
+    // matters more here: this chain sets the schema AND the seeded answers. A load abandoned by a
+    // facility switch used to land anyway, and did one of two things depending on when it landed:
+    // rendered the PREVIOUS facility's values in a dialog now showing another one, or — once the
+    // live load had already rendered — replaced initialAnswers invisibly, which handleSubmit's
+    // clear-restore loop below then reads on Save.
+    let cancelled = false;
     listPublishedForms('facilities')
       .then(async (summaries) => {
+        // Deliberately no cancel check yet: everything up to the getForm await below is
+        // facility-independent — the same published-forms list answers either facility — so an
+        // abandoned load can only reach the conclusion the live one is about to reach anyway.
+        // The guard goes on the first line that uses per-facility state.
         if (summaries.length === 0) { setNoForm(true); return; }
+        // More than one published form targets the Facilities page. listPublished orders by name
+        // with no unique tiebreaker (packages/forms/src/store.ts), so summaries[0] is not a choice
+        // — it is whichever row the database returned first. Refuse and name every candidate
+        // rather than capture a facility through an arbitrary one. Sorted so the message reads the
+        // same on every install regardless of that server-side order.
+        if (summaries.length > 1) {
+          setError(t('facilities.ambiguousForm', { names: summaries.map((s) => s.name).sort().join(', ') }));
+          return;
+        }
         const summary = summaries[0];
         const def = await getForm(summary.id);
+        if (cancelled) return;
         const parsed = FormSchemaZ.safeParse(def.schema);
         if (!parsed.success) {
           setNoForm(true);
@@ -174,9 +195,12 @@ export function FacilityDialog({ open, onOpenChange, facility, onSaved }: Facili
         else setInitialAnswers({});
       })
       .catch((e: unknown) => {
-        setError(e instanceof Error ? e.message : String(e));
+        if (!cancelled) setError(e instanceof Error ? e.message : String(e));
       })
-      .finally(() => setSchemaLoading(false));
+      // Guarded too: an abandoned load clearing this flag would report the CURRENT, still-pending
+      // load as finished, leaving the dialog blank instead of loading.
+      .finally(() => { if (!cancelled) setSchemaLoading(false); });
+    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, facility?.id]);
 

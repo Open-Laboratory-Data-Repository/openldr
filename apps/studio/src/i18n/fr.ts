@@ -756,6 +756,7 @@ export const fr: EnShape = {
     noForm: 'Aucun formulaire d’établissement n’est publié.',
     noFormHelp: 'Les établissements sont saisis via un formulaire publié ciblant la page Établissements, et aucun n’existe encore — créez-en un, ou publiez un brouillon, dans le Générateur de formulaires.',
     openForms: 'Ouvrir le Générateur de formulaires',
+    ambiguousForm: 'Plusieurs formulaires d’établissement sont publiés ({{names}}). Les établissements ne peuvent être saisis que par un seul — archivez ou désactivez les autres dans le Générateur de formulaires, puis rouvrez cette fenêtre.',
     editTitle: 'Modifier l’établissement',
     newTitle: 'Nouvel établissement',
     editDesc: 'Mettre à jour les informations de cet établissement.',
