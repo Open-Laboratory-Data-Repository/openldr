@@ -491,7 +491,8 @@ export function createTerminologyAdminStore(db: Kysely<InternalSchema>, projecti
         // url. Name, version, description, contact, jurisdiction, publisher and active stay editable
         // on a register that has facilities — the url is the only field their permanent ids were
         // hashed from, so it is the only one whose edit orphans them. Checked here, before the
-        // transaction opens, because pg-mem does not roll back on a thrown error.
+        // transaction opens, because pg-mem does not roll back on a thrown error. It carries the
+        // same unclosed race window described on `delete` below.
         const nextUrl = input.url ?? null;
         if (nextUrl !== existing.url) {
           const facilityCount = await facilitiesFiledUnder(existing);
@@ -524,9 +525,17 @@ export function createTerminologyAdminStore(db: Kysely<InternalSchema>, projecti
         // A register with no facilities under it is still deletable — one created by mistake must
         // stay removable — but one with facilities is not.
         //
-        // Raised before the first write for two reasons: pg-mem does not roll back on a thrown error,
-        // and the caller in apps/server/src/terminology-admin-routes.ts deletes the ingest blobs after
-        // this returns, which nothing would undo either.
+        // Raised before the first write because pg-mem — which every test of this store runs on —
+        // does not roll back on a thrown error, so a guard placed after the cascade would leave the
+        // concepts already deleted.
+        //
+        // ⚠ NOT race-free, and moving it would not make it so. The count is read outside the
+        // transaction, so on real Postgres a facility import that commits between this count and the
+        // delete below is not seen and its rows are orphaned. Running the count inside the
+        // transaction would only shorten that window, not close it: under read-committed the count
+        // takes no lock on `facility_registry`, so an import can still commit between the count
+        // statement and the delete statement. Closing it needs a lock or a constraint, and
+        // `facility_registry.national_system` has no foreign key to `coding_systems.url`. Left open.
         const facilityCount = await facilitiesFiledUnder(row);
         if (facilityCount > 0) {
           throw new TerminologyAdminError(

@@ -705,6 +705,24 @@ describe('terminology admin store', () => {
       expect(updated.url).toBe(REGISTER_URL);
     });
 
+    it('still changes the url of a NON-register coding system, even with facilities filed under that url', async () => {
+      const { db, s } = await store();
+      // `create` writes no `kind`, so this row is not a register — but it carries the very url the
+      // facility below is filed under. A guard that dropped the `kind` gate would count 1 here and
+      // refuse the url change, so this is not a trivially-passing "still works" test.
+      const sys = await s.codingSystems.create({ systemCode: 'X', systemName: 'X', url: REGISTER_URL, active: true, publisherId: null });
+      await seedFacility(db, 'fac-1', REGISTER_URL, '100');
+      const filed = await db.selectFrom('facility_registry').selectAll().where('national_system', '=', REGISTER_URL).execute();
+      expect(filed).toHaveLength(1);
+      const kind = await db.selectFrom('coding_systems').select(['kind']).where('id', '=', sys.id).executeTakeFirstOrThrow();
+      expect(kind.kind).not.toBe(FACILITY_REGISTER_KIND);
+
+      const updated = await s.codingSystems.update(sys.id, {
+        systemCode: 'X', systemName: 'X', url: 'http://x/v2', active: true, publisherId: null,
+      });
+      expect(updated.url).toBe('http://x/v2');
+    });
+
     it('deletionImpact reports the facilities filed under a register', async () => {
       const { db, s } = await store();
       const id = await seedRegister(db);

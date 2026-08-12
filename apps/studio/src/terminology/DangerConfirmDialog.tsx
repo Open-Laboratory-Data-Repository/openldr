@@ -23,6 +23,13 @@ interface Props {
   confirmLabel: string;
   /** Blast-radius summary (counts, warnings) rendered above the input. */
   summary: ReactNode;
+  /**
+   * The server will refuse this action, so there is nothing to confirm: the type-to-confirm input
+   * and the destructive button are both hidden and only a close control is left. `summary` must
+   * then say why it is refused. Without this the dialog would ask for a confirmation it cannot
+   * honour, and the click would only ever produce an error toast.
+   */
+  blocked?: boolean;
   /** May be async — the dialog shows a busy state and stays open until it settles. */
   onConfirm: () => void | Promise<void>;
 }
@@ -39,6 +46,7 @@ export function DangerConfirmDialog({
   confirmName,
   confirmLabel,
   summary,
+  blocked = false,
   onConfirm,
 }: Props): JSX.Element {
   const [typed, setTyped] = useState('');
@@ -66,39 +74,44 @@ export function DangerConfirmDialog({
           </AlertDialogDescription>
         </AlertDialogHeader>
 
-        <div className="flex flex-col gap-3 pt-2">
-          <Label htmlFor="dangerConfirmInput" className="text-xs">
-            Type <code className="font-mono font-semibold">{confirmName}</code>{' '}
-            to confirm.
-          </Label>
-          <Input
-            id="dangerConfirmInput"
-            aria-label="Confirm name"
-            value={typed}
-            onChange={(e) => setTyped(e.target.value)}
-            className="h-9 text-sm"
-            autoComplete="off"
-            autoFocus
-            disabled={busy}
-          />
-        </div>
+        {!blocked && (
+          <div className="flex flex-col gap-3 pt-2">
+            <Label htmlFor="dangerConfirmInput" className="text-xs">
+              Type <code className="font-mono font-semibold">{confirmName}</code>{' '}
+              to confirm.
+            </Label>
+            <Input
+              id="dangerConfirmInput"
+              aria-label="Confirm name"
+              value={typed}
+              onChange={(e) => setTyped(e.target.value)}
+              className="h-9 text-sm"
+              autoComplete="off"
+              autoFocus
+              disabled={busy}
+            />
+          </div>
+        )}
 
         <AlertDialogFooter>
-          <AlertDialogCancel disabled={busy}>Cancel</AlertDialogCancel>
-          <AlertDialogAction
-            disabled={!matches || busy}
-            // preventDefault so the dialog does not auto-close on click; we keep it open (with a
-            // busy spinner) until the async onConfirm settles, then the parent flips `open`.
-            onClick={(e) => {
-              e.preventDefault();
-              setBusy(true);
-              void Promise.resolve(onConfirm()).finally(() => setBusy(false));
-            }}
-            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-          >
-            {busy && <Spinner className="mr-2 text-destructive-foreground" />}
-            {busy ? `${confirmLabel}…` : confirmLabel}
-          </AlertDialogAction>
+          {/* "Cancel" would imply something was pending; when blocked nothing is. */}
+          <AlertDialogCancel disabled={busy}>{blocked ? 'Close' : 'Cancel'}</AlertDialogCancel>
+          {!blocked && (
+            <AlertDialogAction
+              disabled={!matches || busy}
+              // preventDefault so the dialog does not auto-close on click; we keep it open (with a
+              // busy spinner) until the async onConfirm settles, then the parent flips `open`.
+              onClick={(e) => {
+                e.preventDefault();
+                setBusy(true);
+                void Promise.resolve(onConfirm()).finally(() => setBusy(false));
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {busy && <Spinner className="mr-2 text-destructive-foreground" />}
+              {busy ? `${confirmLabel}…` : confirmLabel}
+            </AlertDialogAction>
+          )}
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
