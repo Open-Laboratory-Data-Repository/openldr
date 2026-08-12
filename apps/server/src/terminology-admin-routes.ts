@@ -155,8 +155,8 @@ export function registerTerminologyAdminRoutes(app: FastifyInstance<any, any, an
   app.get('/api/terminology/systems/:id/terms', async (req, reply) => {
     try {
       const url = await systemUrl((req.params as IdParam).id);
-      const { q, status, limit, offset } = req.query as { q?: string; status?: string; limit?: string; offset?: string };
-      return await admin.terms.search(url, { query: q, statuses: status ? [status] : undefined, limit: Number(limit ?? 50), offset: Number(offset ?? 0) });
+      const { q, status, limit, offset } = req.query as { q?: string; status?: string | string[]; limit?: string; offset?: string };
+      return await admin.terms.search(url, { query: q, statuses: statusFilter(status), limit: Number(limit ?? 50), offset: Number(offset ?? 0) });
     } catch (e) { return mapErr(e, reply); }
   });
   app.post('/api/terminology/systems/:id/terms', MANAGE, async (req, reply) => {
@@ -553,6 +553,21 @@ function isAdminError(err: unknown): err is { message: string; kind: 'not-found'
     (err as { name?: string }).name === 'TerminologyAdminError' &&
     typeof (err as { kind?: unknown }).kind === 'string'
   );
+}
+
+/**
+ * The terms search `status` query param, normalised for the store's `statuses: string[]`.
+ *
+ * `status` may repeat — `?status=ACTIVE&status=DRAFT`. Fastify's default query parser (Node's
+ * `querystring.parse`) hands back a bare string for one occurrence and an array for several, so
+ * both shapes arrive here and only one may reach the store.
+ *
+ * Empty values are dropped and an empty result becomes `undefined`, so `?status=` keeps meaning
+ * "no filter" rather than "status equal to the empty string", which matches nothing.
+ */
+function statusFilter(status: string | string[] | undefined): string[] | undefined {
+  const list = (Array.isArray(status) ? status : status === undefined ? [] : [status]).filter((s) => s !== '');
+  return list.length ? list : undefined;
 }
 
 /** Whether this mapping write TARGETS the facility registry — the only coding system the two rules

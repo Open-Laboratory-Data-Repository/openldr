@@ -239,6 +239,91 @@ describe('terminology distribution upload/status/purge (publisher-scoped)', () =
   });
 });
 
+// ── the terms search `status` filter on the wire ────────────────────────────────────────────────
+//
+// The store has always taken `statuses: string[]`; the ROUTE was what narrowed it to one
+// (`statuses: status ? [status] : undefined`), so `TermPicker` could only ever ask for a single
+// status and sent none at all when the caller wanted two. `typecheck` cannot pin a query string —
+// only a request through the real route can — so these go through a real migrated db and the real
+// store rather than a hand-written double that would just report its own argument back.
+describe('terms search: the status filter on the wire', () => {
+  async function realApp() {
+    const internalDb = await makeMigratedDb();
+    const ctx = {
+      terminology: { admin: createTerminologyAdminStore(internalDb) },
+      audit: { record: async () => {} },
+      logger: { error() {}, warn() {}, info() {} },
+      internalDb,
+    } as unknown as AppContext;
+    const app = Fastify();
+    registerErrorHandler(app);
+    app.addHook('onRequest', async (req) => {
+      req.user = { id: 'admin1', username: 'admin', displayName: null, roles: ['lab_admin'], capabilities: ['terminology.manage'] };
+    });
+    registerTerminologyAdminRoutes(app, ctx);
+    return { app };
+  }
+
+  /** A system with one term per status, so any filter's effect is visible in the returned codes. */
+  async function seeded(app: any): Promise<string> {
+    const sys = await app.inject({
+      method: 'POST', url: '/api/terminology/systems',
+      payload: { systemCode: 'STATUSES', systemName: 'Status fixture', url: 'http://example.org/statuses', active: true },
+    });
+    expect(sys.statusCode).toBe(201);
+    const id = sys.json().id as string;
+    for (const [code, status] of [['L-1', 'ACTIVE'], ['L-2', 'DRAFT'], ['L-8', 'DISABLED'], ['L-9', 'DEPRECATED']]) {
+      const res = await app.inject({ method: 'POST', url: `/api/terminology/systems/${id}/terms`, payload: { code, display: `Lab ${code}`, status } });
+      expect(res.statusCode).toBe(201);
+    }
+    return id;
+  }
+
+  const codes = (res: any) => (res.json().rows as { code: string }[]).map((r) => r.code);
+
+  it('a repeated status param filters on BOTH statuses', async () => {
+    const { app } = await realApp();
+    const id = await seeded(app);
+
+    const res = await app.inject({ method: 'GET', url: `/api/terminology/systems/${id}/terms?status=ACTIVE&status=DRAFT` });
+    expect(res.statusCode).toBe(200);
+    expect(codes(res)).toEqual(['L-1', 'L-2']);
+    // `total` drives pagination, so it has to be filtered too — an unfiltered count would page the
+    // picker past the end of its own result set.
+    expect(res.json().total).toBe(2);
+  });
+
+  it('one status still filters on that one', async () => {
+    const { app } = await realApp();
+    const id = await seeded(app);
+
+    const res = await app.inject({ method: 'GET', url: `/api/terminology/systems/${id}/terms?status=ACTIVE` });
+    expect(res.statusCode).toBe(200);
+    expect(codes(res)).toEqual(['L-1']);
+  });
+
+  it('no status param still returns every status', async () => {
+    const { app } = await realApp();
+    const id = await seeded(app);
+
+    const res = await app.inject({ method: 'GET', url: `/api/terminology/systems/${id}/terms` });
+    expect(res.statusCode).toBe(200);
+    expect(codes(res)).toEqual(['L-1', 'L-2', 'L-8', 'L-9']);
+  });
+
+  // ⛔ An empty `status=` must keep meaning "no filter", not "status equal to the empty string" —
+  // the latter matches nothing and would empty the picker for a caller that built the query from a
+  // cleared dropdown.
+  it('an empty status param means no filter, not a filter on the empty string', async () => {
+    const { app } = await realApp();
+    const id = await seeded(app);
+
+    const res = await app.inject({ method: 'GET', url: `/api/terminology/systems/${id}/terms?status=` });
+    expect(res.statusCode).toBe(200);
+    expect(codes(res)).toEqual(['L-1', 'L-2', 'L-8', 'L-9']);
+  });
+});
+
 // ── facilities-phase-0 Task 11: facility mapping semantics at the API boundary ──────────────────
 //
 // The facilities Observed tab maps an observed string onto a registry facility by opening the

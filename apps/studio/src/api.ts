@@ -1833,10 +1833,13 @@ export interface TermMappingInput { fromSystem: string; fromCode: string; toSyst
 // canonical system URL (`http://loinc.org`) — the server resolves both. It MUST be percent-encoded:
 // an unencoded URL injects extra `/` and the request can never match `/systems/:id/terms`, which is
 // why binding a form field to LOINC 404'd with "search terms failed: Not Found".
-export const searchTerms = (systemId: string, p: { q?: string; status?: string; limit?: number; offset?: number }) => {
+// `status` may be one status or several. Several are sent as a REPEATED param
+// (`?status=ACTIVE&status=DRAFT`), which Fastify's default query parser turns back into an array
+// for the route's `status in (…)`. One status sends one `status=`, exactly as before.
+export const searchTerms = (systemId: string, p: { q?: string; status?: string | string[]; limit?: number; offset?: number }) => {
   const qs = new URLSearchParams();
   if (p.q) qs.set('q', p.q);
-  if (p.status) qs.set('status', p.status);
+  for (const s of Array.isArray(p.status) ? p.status : p.status ? [p.status] : []) qs.append('status', s);
   qs.set('limit', String(p.limit ?? 50));
   qs.set('offset', String(p.offset ?? 0));
   return authFetch(`/api/terminology/systems/${encodeURIComponent(systemId)}/terms?${qs}`).then((r) => okJson<{ rows: Term[]; total: number }>(r, 'search terms'));

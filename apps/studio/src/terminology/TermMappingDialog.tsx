@@ -467,27 +467,24 @@ export function TermMappingDialog({
                   </div>
                 )}
                 {searchSystemId && (
-                  // ⛔ ACTIVE ALONE under the lock, and the single-element array is the POINT, not an
-                  // accident: `TermPicker` forwards a status filter to the API only when EXACTLY ONE
-                  // status is selected (the endpoint takes one `status` query param), so
-                  // `['ACTIVE', 'DRAFT']` sends NO filter at all and the server answers with every
-                  // status — RETIRED included. The registry-locked flow is the facility mapping
+                  // ⛔ ACTIVE ALONE under the lock. The registry-locked flow is the facility mapping
                   // picker, and a deleted facility's concept is RETIRED rather than deleted
                   // (`retireRegistryConcepts`, packages/bootstrap/src/facility-reconcile.ts) so the
                   // operator's existing mapping keeps naming a concept that EXISTS instead of a
                   // dangling code. (It does NOT stay resolvable — `resolveObservedFacilities`
                   // re-derives codes from `facility_registry` and never reads the concept, so a
                   // deleted facility reads as `targetMissing`; see that function's doc comment.)
-                  // Asking for two statuses here would make the retirement invisible and keep
-                  // offering deleted facilities as mapping targets — the exact ghost the retirement
-                  // exists to remove. Nothing is lost:
-                  // `registryConceptRows` writes registry concepts as ACTIVE unconditionally, so
-                  // there is no such thing as a DRAFT facility to exclude.
+                  // Asking for DRAFT here as well would keep offering deleted facilities as mapping
+                  // targets and make the retirement invisible — the exact ghost the retirement
+                  // exists to remove. Nothing is lost: `registryConceptRows` writes registry
+                  // concepts as ACTIVE unconditionally, so there is no such thing as a DRAFT
+                  // facility to exclude.
                   //
-                  // Unlocked (/terminology's own dialog) keeps both: a mapping onto a DRAFT concept
-                  // an operator has not curated yet is legitimate there, and that flow's deliberate
-                  // consequence is that it sends no status filter — which is the pre-existing
-                  // behaviour, unchanged.
+                  // Unlocked (/terminology's own dialog) asks for both, and now gets both: a mapping
+                  // onto a DRAFT concept an operator has not curated yet is legitimate there.
+                  // `TermPicker` used to send a status only when exactly ONE was selected, so this
+                  // two-status list silently sent NO filter and the server answered with every
+                  // status, DEPRECATED included (FAC-P1-14). It now sends every status it is given.
                   <TermPicker
                     value={picked}
                     onChange={setPicked}
