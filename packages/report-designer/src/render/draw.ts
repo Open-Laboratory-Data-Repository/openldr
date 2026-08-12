@@ -195,7 +195,12 @@ export function paramMap(
     const v = run !== undefined && run !== '' ? run : p.value;
     // Declared but unset renders an em dash, not ''. A blank beside a label reads as a failed
     // render, where "—" reads as "not filtered".
-    m.set(p.key, typeof v === 'string' && v !== '' ? v : UNSET);
+    // A `text` parameter can legitimately hold a date — the seeded patient-demographics report
+    // declares `asOf` as `type: 'text'` — so route it through `formatDisplayDate` too. That
+    // function is a filter, not a parser: it returns its input unchanged unless the value is
+    // exactly `YYYY-MM-DD` and a real calendar date, so a code, a GLASS year, or a
+    // `Name (CODE)` label built by `withDisplayLabels` passes through untouched.
+    m.set(p.key, typeof v === 'string' && v !== '' ? formatDisplayDate(v) : UNSET);
   }
   m.set('date', formatDisplayDateOf(now));
   // Namespaced, and added LAST so a design parameter can never shadow the lab's own identity —

@@ -56,6 +56,24 @@ describe('paramMap', () => {
     ] }), NOW_LOCAL);
     expect(m.get('site')).toBe('Ndola');
   });
+
+  it('formats a TEXT parameter that holds a date — the seeded patient-demographics `asOf` does', () => {
+    const m = paramMap(design({ parameters: [
+      { key: 'asOf', label: 'As of (YYYY-MM-DD)', type: 'text', value: '2026-08-12' },
+    ] }), NOW_LOCAL);
+    expect(m.get('asOf')).toBe('12 Aug 2026');
+  });
+
+  it('leaves a text parameter that is NOT a date alone', () => {
+    const m = paramMap(design({ parameters: [
+      { key: 'year', label: 'Year', type: 'text', value: '2026' },
+      { key: 'country', label: 'Country code', type: 'text', value: 'ZMB' },
+      { key: 'facility', label: 'Facility', type: 'text', value: 'Ndola (NDL-001)' },
+    ] }), NOW_LOCAL);
+    expect(m.get('year')).toBe('2026');
+    expect(m.get('country')).toBe('ZMB');
+    expect(m.get('facility')).toBe('Ndola (NDL-001)');
+  });
 });
 
 describe('paramMap prefers the RUN values over the design defaults', () => {
