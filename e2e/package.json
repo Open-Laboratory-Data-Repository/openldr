@@ -7,6 +7,7 @@
     "e2e": "playwright test --project=smoke",
     "capture": "playwright test --project=capture",
     "docs:screenshots": "playwright test --project=docs-capture",
+    "gallery:screenshots": "playwright test --project=gallery-capture",
     "docs:manifest": "tsx --test capture-docs/manifest.test.ts",
     "typecheck": "tsc --noEmit",
     "lint": "echo \"no lint\""

@@ -33,6 +33,8 @@ export default defineConfig({
     { name: 'smoke', testDir: 'tests' },
     { name: 'capture', testDir: 'capture' },
     { name: 'docs-capture', testDir: 'capture-docs' },
+    // The landing gallery's captures — same screens as the docs shots, without the callouts.
+    { name: 'gallery-capture', testDir: 'capture-gallery' },
   ],
   webServer: {
     command: 'node apps/server/dist/index.js',
