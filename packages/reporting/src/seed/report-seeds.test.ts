@@ -710,40 +710,59 @@ describe('SEED_DESIGNS — rt-amr-antibiogram', () => {
     expect(legend.text).toMatch(/blank/i);
     expect(legend.text).toMatch(/not tested/i);
   });
+});
 
-  // Guard against the exact defect above reopening silently: every unit test asserted the design
-  // OBJECT's string, never the box pdfkit renders it into, so an 83-char metric passed every test
-  // while the real PDF ellipsized it. This derives the value column's actual width from the SAME
-  // code path the renderer uses (toPt -> pairRects, `packages/report-designer/src/render/draw.ts`)
-  // rather than guessing a magic number, and bounds the metric's character count against it.
-  it('keeps the metric VALUE short enough to render un-ellipsized in the scope panel', () => {
-    const d = SEED_DESIGNS.find((x) => x.id === 'rt-amr-antibiogram')!;
-    const meta = d.pages[0].elements.find((e) => e.id === 'rt-amr-antibiogram-meta')!;
-    const rows = (meta.rows ?? []) as [string, string][];
-    const metricIndex = rows.findIndex(([k]) => k === 'Metric');
-    expect(metricIndex, 'Metric pair missing from the scope panel').toBeGreaterThanOrEqual(0);
+// Guard against the exact defect above reopening silently: every unit test asserted the design
+// OBJECT's string, never the box pdfkit renders it into, so an over-budget metric passed every
+// test while the real PDF ellipsized it (the GLASS metric fit its own budget by 0.9pt). This
+// used to live only inside the antibiogram describe block above and check ONE named design, so it
+// never ran against GLASS or any design added later. Hoisted to top level and iterates every
+// design in SEED_DESIGNS, checking whichever ones carry a static 'Metric' scope pair (built by
+// `simpleTableDesign`'s `spec.metric`, see `./simple-design.ts`) — so a future design, or a
+// lengthened existing one, cannot reopen this silently.
+describe('SEED_DESIGNS — every design keeps its Metric value un-ellipsized', () => {
+  it('keeps each design\'s metric VALUE short enough to render un-ellipsized in its scope panel', () => {
+    let checked = 0;
+    for (const d of SEED_DESIGNS) {
+      for (const page of d.pages) {
+        for (const el of page.elements) {
+          if (el.kind !== 'keyvalue' || !el.rows) continue;
+          const rows = el.rows as [string, string][];
+          const metricIndex = rows.findIndex(([k]) => k === 'Metric');
+          if (metricIndex < 0) continue;
+          checked += 1;
 
-    // Same conversion `drawElement` applies before calling `pairRects`: the design rect is px@96,
-    // pairRects' own constants (KV_PAD_X, KV_GUTTER, KV_LABEL_FRAC, ...) are raw points.
-    const box = toPt(meta.rect);
-    const pairs = pairRects(box, rows.length, meta.layout ?? 'inline', meta.panelColumns ?? 1, false);
-    const valueBoxW = pairs[metricIndex].value.w;
+          // Same conversion `drawElement` applies before calling `pairRects`: the design rect is
+          // px@96, pairRects' own constants (KV_PAD_X, KV_GUTTER, KV_LABEL_FRAC, ...) are raw
+          // points.
+          const box = toPt(el.rect);
+          const pairs = pairRects(box, rows.length, el.layout ?? 'inline', el.panelColumns ?? 1, false);
+          const valueBoxW = pairs[metricIndex].value.w;
 
-    // pdfkit itself is not reachable from this test: it is a dependency of
-    // `@openldr/report-designer`, not a direct dependency of `@openldr/reporting`, so
-    // `doc.widthOfString` cannot be called here to get an exact glyph measurement. In its place:
-    // a CONSERVATIVE average Helvetica character width of 0.6em (60% of KV_VALUE_SIZE, the panel's
-    // 8pt value font in draw.ts) — wider than Helvetica's typical ~0.5em average for running
-    // English text, so a string that fits this budget is guaranteed to fit the real render. This
-    // is a FLOOR, not pdfkit's true limit: it may refuse a string pdfkit would actually still fit,
-    // but it cannot pass a string pdfkit would ellipsize.
-    const CONSERVATIVE_AVG_CHAR_W_PT = 0.6 * 8;
-    const budget = Math.floor(valueBoxW / CONSERVATIVE_AVG_CHAR_W_PT);
+          // pdfkit itself is not reachable from this test: it is a dependency of
+          // `@openldr/report-designer`, not a direct dependency of `@openldr/reporting`, so
+          // `doc.widthOfString` cannot be called here to get an exact glyph measurement. In its
+          // place: a CONSERVATIVE average Helvetica character width of 0.6em (60% of
+          // KV_VALUE_SIZE, the panel's 8pt value font in draw.ts) — wider than Helvetica's
+          // typical ~0.5em average for running English text, so a string that fits this budget
+          // is guaranteed to fit the real render. This is a FLOOR, not pdfkit's true limit: it
+          // may refuse a string pdfkit would actually still fit, but it cannot pass a string
+          // pdfkit would ellipsize.
+          const CONSERVATIVE_AVG_CHAR_W_PT = 0.6 * 8;
+          const budget = Math.floor(valueBoxW / CONSERVATIVE_AVG_CHAR_W_PT);
 
-    expect(
-      rows[metricIndex][1].length,
-      `metric value must fit roughly ${budget} chars at an ${valueBoxW.toFixed(1)}pt-wide value column`,
-    ).toBeLessThanOrEqual(budget);
+          expect(
+            rows[metricIndex][1].length,
+            `${d.id}: metric "${rows[metricIndex][1]}" must fit roughly ${budget} chars `
+              + `at an ${valueBoxW.toFixed(1)}pt-wide value column`,
+          ).toBeLessThanOrEqual(budget);
+        }
+      }
+    }
+    // A design that carries no Metric pair at all would make this test pass vacuously. Pin the
+    // count so a refactor that stops the loop from finding GLASS/antibiogram fails loudly instead
+    // of silently checking nothing.
+    expect(checked).toBeGreaterThanOrEqual(2);
   });
 });
 
