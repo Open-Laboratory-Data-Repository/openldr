@@ -671,9 +671,11 @@ describe('seeded reference answers are resolved before validation sees them', ()
     });
   });
 
-  it('still blocks when the stored value names no concept, and says so', async () => {
-    // 'Health Centre' is what the Zambia register writes. It is genuinely not in the value set, so
-    // the honest outcome is the field asking for a pick — NOT a silent dead Save button.
+  it('submits an UNRESOLVABLE seeded value untouched, instead of demanding the operator re-pick it', async () => {
+    // 'Health Centre' is what the Zambia register writes, and it is genuinely not in the value set —
+    // the importer writes an unmapped value through deliberately, and mapping is optional. Blocking
+    // here made 3788 of 3788 imported rows uneditable: renaming one demanded first re-picking a
+    // level the operator never entered. The raw value must survive the round trip untouched.
     const onSubmit = vi.fn();
     vi.mocked(referenceSearch).mockResolvedValue(codingResult);
 
@@ -681,7 +683,16 @@ describe('seeded reference answers are resolved before validation sees them', ()
     await waitFor(() => expect(vi.mocked(referenceSearch)).toHaveBeenCalled());
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
-    await waitFor(() => expect(screen.getByText('select a value from the list')).toBeInTheDocument());
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit.mock.calls[0][0].level).toBe('Health Centre');
+  });
+
+  it('still blocks a required reference field left EMPTY — the exemption is for seeded values only', async () => {
+    const onSubmit = vi.fn();
+    render(<FormRuntime schema={refSchema} formDefinitionId="form-1" initialAnswers={{}} onSubmit={onSubmit} submitLabel="Save" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(screen.getByText('field level is required')).toBeInTheDocument());
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
