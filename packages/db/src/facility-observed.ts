@@ -150,25 +150,30 @@ export function observedFacilityConceptRow(input: ObservedFacilityInput): Concep
 export interface RegistryRowForConcept {
   id: string;
   name: string;
-  /** OURS. `null`/`undefined` both mean "absent", mirroring `FacilityRecord.localCode`. */
-  localCode?: string | null;
-  /** THEIRS. Only consulted when `localCode` is absent. */
-  nationalCode?: string | null;
+  /** The row's one code (migration 086). `null`/`undefined` both mean "absent". */
+  facilityCode?: string | null;
 }
 
 /**
- * The operator-facing code a `facility_registry` row WANTS to project as — `local_code` when
- * present, else `national_code`. `null` only when both are absent, which the
- * `facility_registry_has_a_code` CHECK constraint makes impossible for a real stored row (a caller
- * assembling a `RegistryRowForConcept` by hand, e.g. in a test, can still omit both).
+ * The operator-facing code a `facility_registry` row projects as.
  *
- * Exported so a caller with only partial registry visibility (`projectRegistryRows`,
- * `packages/bootstrap/src/facility-reconcile.ts`) can compute a row's candidate code the SAME way
- * `registryConceptRows` does, without duplicating the preference order, when it has to go looking for
- * OTHER rows that might collide with it.
+ * There is no preference order left to express: a row has ONE code. This used to be
+ * `localCode ?? nationalCode`, and that fallback is what let the Facilities table display a code the
+ * Edit sheet could not bind — the defect this whole arc began with.
+ *
+ * ⚠ THE WINNER FLIPPED FOR ROWS THAT CARRIED BOTH CODES. The old rule preferred the LOCAL code;
+ * `facility_code` is backfilled national-first (migration 086), because the register's identity is
+ * the authoritative one. So a row that had both projects under a different code than before, and any
+ * `term_mappings` entry authored against the old local code stops resolving. Migration 086 parks the
+ * displaced value in `extras.__localCode`, so it is recoverable. Measured 0 such rows on the dev
+ * install; count them before migrating any other one.
+ *
+ * Still exported (rather than inlined) so a caller with only partial registry visibility —
+ * `projectRegistryRows`, packages/bootstrap/src/facility-reconcile.ts — derives a row's candidate
+ * code through the same function when it goes looking for OTHER rows that might collide with it.
  */
-export function registryPreferredCode(row: { localCode?: string | null; nationalCode?: string | null }): string | null {
-  return row.localCode ?? row.nationalCode ?? null;
+export function registryPreferredCode(row: { facilityCode?: string | null }): string | null {
+  return row.facilityCode ?? null;
 }
 
 /**

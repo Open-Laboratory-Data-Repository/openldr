@@ -746,10 +746,15 @@ export const forceUserLogout = (id: string): Promise<void> =>
 // verbatim by GET/POST/PUT /api/facilities.
 export interface Facility {
   id: string;
-  /** OURS — required at data entry, absent on a nationally-imported row. */
+  /** The register this facility is listed in, by canonical URI. With `facilityCode`, its identity. */
+  facilitySystem: string | null;
+  /** The code that register carries for it. */
+  facilityCode: string | null;
+  /** @deprecated Superseded by `facilityCode` (migration 086); still served through the transition. */
   localCode: string | null;
+  /** @deprecated Superseded by `facilitySystem`. */
   nationalSystem: string | null;
-  /** THEIRS — the only code an imported row carries. */
+  /** @deprecated Superseded by `facilityCode`. */
   nationalCode: string | null;
   name: string;
   level: string | null;
@@ -1534,10 +1539,9 @@ export interface ObservedFacility {
   sourceDistrict: string | null;
   reportCount: number;
   registryId: string | null;
-  /** `facility_registry.local_code` of the resolved row — OURS, distinct from `nationalCode`
-   *  (THEIRS). Disambiguates similarly-named facilities (e.g. "Dodoma Regional Referral" vs
-   *  "Dodoma Zonal Lab"). */
-  localCode: string | null;
+  /** `facility_registry.facility_code` of the resolved row. Disambiguates similarly-named facilities
+   *  (e.g. "Dodoma Regional Referral" vs "Dodoma Zonal Lab"). */
+  facilityCode: string | null;
   name: string | null;
   level: string | null;
   status: string | null;

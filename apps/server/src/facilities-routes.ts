@@ -1612,8 +1612,7 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
 
     const { failedRegistryIds } = await reprojectAfterRegistryDelete(deps, {
       id,
-      localCode: before.localCode ?? null,
-      nationalCode: before.nationalCode ?? null,
+      facilityCode: before.facilityCode ?? null,
     });
 
     // Task 7's contract — "a failed projection is never only a console.error" — applied to this

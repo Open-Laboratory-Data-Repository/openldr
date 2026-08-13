@@ -55,7 +55,8 @@ const facilitySchema = {
 };
 
 const editFacility: Facility = {
-  id: 'fac-1', localCode: 'LAB01', nationalSystem: null, nationalCode: null, name: 'Dodoma RRH',
+  id: 'fac-1', facilitySystem: null, facilityCode: 'LAB01',
+  localCode: 'LAB01', nationalSystem: null, nationalCode: null, name: 'Dodoma RRH',
   level: null, ownership: null, status: null, country: null, zone: null, region: null, district: null,
   council: null, ward: null, village: null, addressText: null, phone: '+255700000000',
   latitude: null, longitude: null, extras: { 'f-contact': 'Jane Doe' }, managedOrigin: null, source: 'manual',

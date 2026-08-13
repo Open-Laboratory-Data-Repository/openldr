@@ -51,8 +51,8 @@ function adminAreaLine(district: string | null, region: string | null): string |
  */
 function facilityDetailLine(row: ObservedFacility, viaLabel: string): string {
   const adminArea = adminAreaLine(row.district, row.region);
-  const localCode = row.localCode && row.localCode !== row.sourceCode ? row.localCode : null;
-  return [localCode, row.level, adminArea, viaLabel].filter((part): part is string => !!part).join(' · ');
+  const facilityCode = row.facilityCode && row.facilityCode !== row.sourceCode ? row.facilityCode : null;
+  return [facilityCode, row.level, adminArea, viaLabel].filter((part): part is string => !!part).join(' · ');
 }
 
 /**

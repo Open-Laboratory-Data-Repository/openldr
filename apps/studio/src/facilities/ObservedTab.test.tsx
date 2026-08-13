@@ -33,7 +33,7 @@ import { ObservedTab } from './ObservedTab';
 
 const dodoma: ObservedFacility = {
   sourceSystem: 'webhook-ingest', sourceCode: 'Dodoma', sourceDisplay: null, sourceRegion: null, sourceDistrict: null, reportCount: 247,
-  registryId: 'f1', localCode: 'DOD-REF', name: 'Dodoma Regional Referral Hospital', level: 'Hospital', status: null,
+  registryId: 'f1', facilityCode: 'DOD-REF', name: 'Dodoma Regional Referral Hospital', level: 'Hospital', status: null,
   region: 'Dodoma', district: 'Dodoma Urban', council: null, nationalSystem: null, nationalCode: null,
   resolvedVia: 'registry', targetMissing: false, nonFacilityTarget: false, ambiguous: false,
 };
@@ -43,12 +43,12 @@ const dodoma: ObservedFacility = {
 // so this fixture is deliberately renamed/reordered to break that coincidence).
 const arusha: ObservedFacility = {
   sourceSystem: 'webhook-ingest', sourceCode: 'Arusha', sourceDisplay: null, sourceRegion: null, sourceDistrict: null, reportCount: 148,
-  registryId: null, localCode: null, name: null, level: null, status: null, region: null, district: null,
+  registryId: null, facilityCode: null, name: null, level: null, status: null, region: null, district: null,
   council: null, nationalSystem: null, nationalCode: null, resolvedVia: null, targetMissing: false, nonFacilityTarget: false, ambiguous: false,
 };
 const oceanRoad: ObservedFacility = {
   sourceSystem: 'webhook-ingest', sourceCode: 'Ocean Road Cancer Institute (O', sourceDisplay: null, sourceRegion: null, sourceDistrict: null, reportCount: 6,
-  registryId: null, localCode: null, name: null, level: null, status: null, region: null, district: null,
+  registryId: null, facilityCode: null, name: null, level: null, status: null, region: null, district: null,
   council: null, nationalSystem: null, nationalCode: null, resolvedVia: null, targetMissing: true, nonFacilityTarget: false, ambiguous: false,
 };
 // DisaGlobal.dbo.LOCNDIC4 holds five distinct facility codes whose DESCRIPTION is all exactly
@@ -57,7 +57,7 @@ const oceanRoad: ObservedFacility = {
 // from the other four.
 const bamaa: ObservedFacility = {
   sourceSystem: 'webhook-ingest', sourceCode: 'BAMAA', sourceDisplay: 'Aga Khan', sourceRegion: null, sourceDistrict: null, reportCount: 12,
-  registryId: null, localCode: null, name: null, level: null, status: null, region: null, district: null,
+  registryId: null, facilityCode: null, name: null, level: null, status: null, region: null, district: null,
   council: null, nationalSystem: null, nationalCode: null, resolvedVia: null, targetMissing: false, nonFacilityTarget: false, ambiguous: false,
 };
 // A second of the five "Aga Khan" codes — BBFAF — sharing bamaa's display but carrying its OWN
@@ -70,7 +70,7 @@ const bbfaf: ObservedFacility = {
 // as `nonFacilityTarget`, not `targetMissing`.
 const balab: ObservedFacility = {
   sourceSystem: 'webhook-ingest', sourceCode: 'BALAB', sourceDisplay: null, sourceRegion: null, sourceDistrict: null, reportCount: 6,
-  registryId: null, localCode: null, name: null, level: null, status: null, region: null, district: null,
+  registryId: null, facilityCode: null, name: null, level: null, status: null, region: null, district: null,
   council: null, nationalSystem: null, nationalCode: null, resolvedVia: null, targetMissing: false, nonFacilityTarget: true, ambiguous: false,
 };
 
@@ -181,7 +181,7 @@ describe('ObservedTab', () => {
 
   it('shows the local code, level and admin area under a resolved name, so two similarly-named facilities are distinguishable', async () => {
     // Operator request: "I need to know is it Dodoma referral or Dodoma zonal lab" — the name alone
-    // cannot answer that; `dodoma`'s fixture carries localCode: 'DOD-REF', level: 'Hospital',
+    // cannot answer that; `dodoma`'s fixture carries facilityCode: 'DOD-REF', level: 'Hospital',
     // district: 'Dodoma Urban', region: 'Dodoma'.
     show();
     const rows = await screen.findAllByRole('row');
@@ -193,7 +193,7 @@ describe('ObservedTab', () => {
     // A registry-resolved row with NO localCode/level/district/region set (only region/district
     // absent, say) must not render stray "· ·" from the omitted parts.
     const sparse = {
-      ...dodoma, sourceCode: 'Sparse', localCode: null, level: null, region: null, district: null,
+      ...dodoma, sourceCode: 'Sparse', facilityCode: null, level: null, region: null, district: null,
     };
     (listObservedFacilities as ReturnType<typeof vi.fn>).mockResolvedValue([sparse]);
     show();
@@ -206,7 +206,7 @@ describe('ObservedTab', () => {
     // or a verbatim repeat of the observed code (column 1) — showing it again in the detail line
     // is pure noise. Here sourceCode === localCode === 'NHLQATC', the measured live-DB shape.
     const sameCode = {
-      ...dodoma, sourceCode: 'NHLQATC', localCode: 'NHLQATC', level: 'Hospital',
+      ...dodoma, sourceCode: 'NHLQATC', facilityCode: 'NHLQATC', level: 'Hospital',
       district: 'Dodoma Urban', region: 'Dodoma',
     };
     (listObservedFacilities as ReturnType<typeof vi.fn>).mockResolvedValue([sameCode]);
@@ -229,7 +229,7 @@ describe('ObservedTab', () => {
     // Measured live-DB shape: 3 of 4 facility_registry rows have local_code NULL (the CSV importer
     // only writes national fields). This must not render a leading "· Hospital · ..." nor a
     // doubled "· ·" where the omitted localCode would have been.
-    const noLocalCode = { ...dodoma, localCode: null };
+    const noLocalCode = { ...dodoma, facilityCode: null };
     (listObservedFacilities as ReturnType<typeof vi.fn>).mockResolvedValue([noLocalCode]);
     show();
     const rows = await screen.findAllByRole('row');

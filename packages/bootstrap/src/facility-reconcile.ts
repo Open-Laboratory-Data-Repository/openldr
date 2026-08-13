@@ -347,18 +347,18 @@ export interface ResolvedFacility {
    *  whole-branch review round 2, Fix 1). */
   reportCount: number;
   registryId: string | null;
-  /** `facility_registry.local_code` of the resolved row — OURS, distinct from `nationalCode`
-   *  (THEIRS). Lets an operator tell apart two similarly-named facilities (e.g. "Dodoma Regional
-   *  Referral" vs "Dodoma Zonal Lab") on the Observed tab. */
-  localCode: string | null;
+  /** `facility_registry.facility_code` of the resolved row. Lets an operator tell apart two
+   *  similarly-named facilities (e.g. "Dodoma Regional Referral" vs "Dodoma Zonal Lab") on the
+   *  Observed tab. Was `localCode`, before the registry collapsed onto one code (migration 086). */
+  facilityCode: string | null;
   name: string | null;
   level: string | null;
   status: string | null;
   region: string | null;
   district: string | null;
   council: string | null;
-  nationalSystem: string | null;
-  nationalCode: string | null;
+  /** The register the resolved row belongs to. Was `nationalSystem`. */
+  facilitySystem: string | null;
   resolvedVia: ResolvedVia | null;
   /** A mapping exists, and its target system genuinely IS a facility register (the registry
    *  system, or a `national_system` some LIVE `facility_registry` row actually carries), but the
@@ -653,7 +653,7 @@ export async function resolveObservedFacilities(deps: ReconcileDeps): Promise<Re
   // the row's bare `id` was correct back when every concept's code WAS the id; it is retired here for
   // that reason, not merely renamed.
   const registryConcepts = registryConceptRows(
-    registry.map((r): RegistryRowForConcept => ({ id: r.id, name: r.name, localCode: r.local_code, nationalCode: r.national_code })),
+    registry.map((r): RegistryRowForConcept => ({ id: r.id, name: r.name, facilityCode: r.facility_code })),
   );
   const byRegistryCode = new Map(registry.map((r, i) => [registryConcepts[i].code, r]));
   const byNational = new Map(
@@ -758,15 +758,14 @@ export async function resolveObservedFacilities(deps: ReconcileDeps): Promise<Re
       sourceDistrict: location.district,
       reportCount: r.reportCount,
       registryId: row?.id ?? null,
-      localCode: row?.local_code ?? null,
+      facilityCode: row?.facility_code ?? null,
       name: row?.name ?? null,
       level: row?.level ?? null,
       status: row?.status ?? null,
       region: row?.region ?? null,
       district: row?.district ?? null,
       council: row?.council ?? null,
-      nationalSystem: row?.national_system ?? null,
-      nationalCode: row?.national_code ?? null,
+      facilitySystem: row?.facility_system ?? null,
       resolvedVia,
       targetMissing,
       nonFacilityTarget,
@@ -832,15 +831,19 @@ export async function publishFacilityMap(
     performer_system: o.performerSystem,
     source_code: r.sourceCode,
     registry_id: r.registryId,
-    local_code: r.localCode,
+    // ⛔ `facility_map` KEEPS its two code columns (the external warehouse is deliberately untouched
+    // by the registry's collapse — `column_exposure_policy` holds explicit rows for both, and a
+    // rename there would silently drop them from the Data Exposure policy). So the registry's ONE
+    // code fills both, and the dimension's shape stays exactly as any saved report expects.
+    local_code: r.facilityCode,
     name: r.name,
     level: r.level,
     status: r.status,
     region: r.region,
     district: r.district,
     council: r.council,
-    national_system: r.nationalSystem,
-    national_code: r.nationalCode,
+    national_system: r.facilitySystem,
+    national_code: r.facilityCode,
     resolved_via: r.resolvedVia,
   })));
 
@@ -1178,13 +1181,13 @@ async function claimantsOf(
   const wanted = new Set(codes);
   const rows = await deps.internalDb
     .selectFrom('facility_registry')
-    .select(['id', 'name', 'local_code', 'national_code'])
+    .select(['id', 'name', 'facility_code'])
     .where((eb) => eb.or([eb('local_code', 'in', codes), eb('national_code', 'in', codes)]))
     .execute();
   const out: { id: string; name: string; claimed: string }[] = [];
   for (const r of rows) {
     if (exclude.has(r.id)) continue;
-    const claimed = registryPreferredCode({ localCode: r.local_code, nationalCode: r.national_code });
+    const claimed = registryPreferredCode({ facilityCode: r.facility_code });
     if (claimed === null || !wanted.has(claimed)) continue;
     out.push({ id: r.id, name: r.name, claimed });
   }
@@ -1198,13 +1201,13 @@ async function widenToCollidingRows(
   const ids = rows.map((r) => r.id);
   const own = await deps.internalDb
     .selectFrom('facility_registry')
-    .select(['id', 'local_code', 'national_code'])
+    .select(['id', 'facility_code'])
     .where('id', 'in', ids)
     .execute();
 
   const candidates = new Set<string>();
   for (const r of own) {
-    const c = registryPreferredCode({ localCode: r.local_code, nationalCode: r.national_code });
+    const c = registryPreferredCode({ facilityCode: r.facility_code });
     if (c !== null) candidates.add(c);
   }
 
@@ -1241,14 +1244,14 @@ async function widenToCollidingRows(
     if (parkedIds.length > 0) {
       const parked = await deps.internalDb
         .selectFrom('facility_registry')
-        .select(['id', 'name', 'local_code', 'national_code'])
+        .select(['id', 'name', 'facility_code'])
         .where('id', 'in', parkedIds)
         .execute();
       for (const p of parked) {
         byId.set(p.id, { id: p.id, name: p.name });
         // A freed row's candidate must join `candidates` too, or the claimant lookup below cannot
         // tell whether it is still contested.
-        const c = registryPreferredCode({ localCode: p.local_code, nationalCode: p.national_code });
+        const c = registryPreferredCode({ facilityCode: p.facility_code });
         if (c !== null) candidates.add(c);
       }
     }
@@ -1480,14 +1483,14 @@ export async function reprojectRegistryRows(
   const ids = widened.map((r) => r.id);
   const own = await deps.internalDb
     .selectFrom('facility_registry')
-    .select(['id', 'local_code', 'national_code'])
+    .select(['id', 'facility_code'])
     .where('id', 'in', ids)
     .execute();
   const ownById = new Map(own.map((r) => [r.id, r]));
 
   const inputs: RegistryRowForConcept[] = widened.map((r) => {
     const found = ownById.get(r.id);
-    return { id: r.id, name: r.name, localCode: found?.local_code ?? null, nationalCode: found?.national_code ?? null };
+    return { id: r.id, name: r.name, facilityCode: found?.facility_code ?? null };
   });
 
   // No `forceOwnIdFor`: the widening above guarantees that every row projecting to one of this
@@ -1818,14 +1821,14 @@ export async function retireRegistryConcepts(
  */
 export async function reprojectAfterRegistryDelete(
   deps: Pick<ReconcileDeps, 'admin' | 'internalDb'>,
-  deleted: { id: string; localCode: string | null; nationalCode: string | null },
+  deleted: { id: string; facilityCode: string | null },
 ): Promise<{ failedRegistryIds: string[] }> {
   // Declared out here so the catch below can still name the survivors when the throw happens AFTER
   // they were identified. A throw before that point leaves this empty, which is the honest answer:
   // there is no facility this call can name for the caller to repair.
   let survivorIds: string[] = [];
   try {
-    const freed = registryPreferredCode({ localCode: deleted.localCode, nationalCode: deleted.nationalCode });
+    const freed = registryPreferredCode({ facilityCode: deleted.facilityCode });
     // `facility_registry_has_a_code` makes this unreachable for a real row, but the caller hands in a
     // snapshot, not the row — a codeless snapshot frees nothing and must not become a bare query.
     if (freed === null) return { failedRegistryIds: [] };

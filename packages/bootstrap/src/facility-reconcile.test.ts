@@ -245,19 +245,19 @@ describe('resolveObservedFacilities', () => {
     expect(row.resolvedVia).toBe('registry');
     expect(row.region).toBe('Dodoma');
     expect(row.targetMissing).toBe(false);
-    // Operator request: the local code disambiguates two similarly-named facilities (e.g. "Dodoma
+    // Operator request: the facility code disambiguates two similarly-named facilities (e.g. "Dodoma
     // Regional Referral" vs "Dodoma Zonal Lab") — the name alone cannot.
-    expect(row.localCode).toBe('DOD');
+    expect(row.facilityCode).toBe('DOD');
   });
 
-  it('reports localCode as null for an unmapped code (no registry row to read it from)', async () => {
+  it('reports facilityCode as null for an unmapped code (no registry row to read it from)', async () => {
     const deps = await makeReconcileDeps();
     await seedPerformers(deps, [['Kibondo', 148]]);
     await scanObservedFacilities(deps, { now: '2026-08-05T00:00:00.000Z', apply: true });
 
     const [row] = await resolveObservedFacilities(deps);
 
-    expect(row.localCode).toBeNull();
+    expect(row.facilityCode).toBeNull();
   });
 
   it('resolves a national-route mapping through (national_system, national_code)', async () => {
@@ -1261,13 +1261,19 @@ describe('publishRegistryConcepts', () => {
     const first = await publishRegistryConcepts(deps, { apply: true });
     expect(first).toEqual({ concepts: 1, systemRegistered: true, codeChanges: 0, carryOverSkipped: 0 });
 
-    await deps.internalDb.updateTable('facility_registry').set({ local_code: 'NEW-1' }).where('id', '=', 'fac-1').execute();
+    await deps.internalDb.updateTable('facility_registry').set({ facility_code: 'NEW-1', local_code: 'NEW-1' }).where('id', '=', 'fac-1').execute();
     const second = await publishRegistryConcepts(deps, { apply: true });
 
     expect(second).toEqual({ concepts: 1, systemRegistered: true, codeChanges: 1, carryOverSkipped: 0 });
     expect(await currentConceptCode(deps, 'fac-1')).toBe('NEW-1');
   });
 
+  // ⛔ TWO TESTS WERE DELETED HERE, deliberately. Both covered "a row that merely carries the code in
+  // a NON-preferred column" — row B holding 'X' in `national_code` while projecting as its
+  // `local_code` 'Y'. Migration 086 collapsed the two columns into one, so a non-preferred column no
+  // longer exists and that state is unreachable. Rewriting them would have asserted something the
+  // schema cannot produce. The collision guard they protected is still covered, by the same-code
+  // cases in facility-observed.test.ts and by the swap test further down this file.
   it('registers an ACTIVE coding_systems row', async () => {
     const deps = await makeReconcileDeps();
     await seedRegistry(deps, { id: 'fac-1', name: 'Dodoma Regional Referral Hospital', localCode: 'DOD' });
@@ -1600,7 +1606,7 @@ describe('projectRegistryRows', () => {
     expect((await resolveObservedFacilities(deps)).find((r) => r.sourceCode === 'BALAB')!.registryId).toBe('fac-B');
 
     // PUT /api/facilities/fac-A: only Alpha is renamed, and only Alpha is handed to the projection.
-    await deps.internalDb.updateTable('facility_registry').set({ local_code: 'Y' }).where('id', '=', 'fac-A').execute();
+    await deps.internalDb.updateTable('facility_registry').set({ facility_code: 'Y', local_code: 'Y' }).where('id', '=', 'fac-A').execute();
     await projectRegistryRows(deps, [{ id: 'fac-A', name: 'Alpha' }]);
 
     // Beta followed the freed code at the moment the release actually happened, not on a later Scan.
@@ -1626,18 +1632,6 @@ describe('projectRegistryRows', () => {
   // pairs included (see `projectRegistryRows`' doc comment for the measured case). Neither row here
   // is parked, so that branch never runs, and the assertion below is about the SQL prefilter's
   // in-memory narrowing alone.
-  it('does not widen to a row that merely carries the code in a NON-preferred column', async () => {
-    const deps = await makeReconcileDeps();
-    await seedRegistry(deps, { id: 'fac-A', name: 'Alpha', localCode: 'X' });
-    await seedRegistry(deps, { id: 'fac-B', name: 'Beta', localCode: 'Y', nationalSystem: 'urn:tz:hfr', nationalCode: 'X' });
-
-    await projectRegistryRows(deps, [{ id: 'fac-A', name: 'Alpha' }]);
-
-    const { rows } = await deps.admin.terms.search(FACILITY_REGISTRY_SYSTEM, { limit: 50, offset: 0 });
-    expect(rows.map((r) => r.code)).toEqual(['X']);
-    expect(await currentConceptCode(deps, 'fac-B')).toBeNull();
-  });
-
   it('registers an ACTIVE coding_systems row', async () => {
     const deps = await makeReconcileDeps();
     await seedRegistry(deps, { id: 'fac-1', name: 'National Public Health Laboratory', localCode: '111317-4' });
@@ -1842,7 +1836,7 @@ describe('reprojectRegistryRows', () => {
     await reprojectRegistryRows(deps, [{ id: 'fac-A', name: 'Alpha' }]);
     await seedMapping(deps, { fromSystem: DEFAULT_OBSERVED_FACILITY_SYSTEM, fromCode: 'BALAB', toSystem: FACILITY_REGISTRY_SYSTEM, toCode: 'OLD-1' });
 
-    await deps.internalDb.updateTable('facility_registry').set({ local_code: 'NEW-1' }).where('id', '=', 'fac-A').execute();
+    await deps.internalDb.updateTable('facility_registry').set({ facility_code: 'NEW-1', local_code: 'NEW-1' }).where('id', '=', 'fac-A').execute();
     const r = await reprojectRegistryRows(deps, [{ id: 'fac-A', name: 'Alpha' }]);
 
     expect(r.codeChanges).toEqual([{ registryId: 'fac-A', from: 'OLD-1', to: 'NEW-1', mappingsMigrated: 1, carryOverSkipped: false }]);
@@ -1857,7 +1851,7 @@ describe('reprojectRegistryRows', () => {
     const deps = await makeReconcileDeps();
     await seedRegistry(deps, { id: 'fac-A', name: 'Alpha', localCode: 'OLD-1' });
     await reprojectRegistryRows(deps, [{ id: 'fac-A', name: 'Alpha' }]);
-    await deps.internalDb.updateTable('facility_registry').set({ local_code: 'NEW-1' }).where('id', '=', 'fac-A').execute();
+    await deps.internalDb.updateTable('facility_registry').set({ facility_code: 'NEW-1', local_code: 'NEW-1' }).where('id', '=', 'fac-A').execute();
     await reprojectRegistryRows(deps, [{ id: 'fac-A', name: 'Alpha' }]);
 
     const codes = await deps.internalDb.selectFrom('terminology_concepts')
@@ -1875,7 +1869,7 @@ describe('reprojectRegistryRows', () => {
     await reprojectRegistryRows(deps, [{ id: 'fac-A', name: 'Alpha' }]);
     await seedMapping(deps, { fromSystem: DEFAULT_OBSERVED_FACILITY_SYSTEM, fromCode: 'BALAB', toSystem: FACILITY_REGISTRY_SYSTEM, toCode: 'OLD-1' });
 
-    await deps.internalDb.updateTable('facility_registry').set({ local_code: 'NEW-1' }).where('id', '=', 'fac-A').execute();
+    await deps.internalDb.updateTable('facility_registry').set({ facility_code: 'NEW-1', local_code: 'NEW-1' }).where('id', '=', 'fac-A').execute();
     await reprojectRegistryRows(deps, [{ id: 'fac-A', name: 'Alpha' }]);
 
     const mirror = await deps.internalDb.selectFrom('concept_map_elements')
@@ -1917,7 +1911,7 @@ describe('reprojectRegistryRows', () => {
     await reprojectRegistryRows(deps, [{ id: 'fac-A', name: 'Alpha' }]);
     await seedMapping(deps, { fromSystem: DEFAULT_OBSERVED_FACILITY_SYSTEM, fromCode: 'BALAB', toSystem: FACILITY_REGISTRY_SYSTEM, toCode: 'X' });
 
-    await deps.internalDb.updateTable('facility_registry').set({ local_code: 'Y' }).where('id', '=', 'fac-A').execute();
+    await deps.internalDb.updateTable('facility_registry').set({ facility_code: 'Y', local_code: 'Y' }).where('id', '=', 'fac-A').execute();
     await seedRegistry(deps, { id: 'fac-B', name: 'Beta', localCode: 'X' });
     await reprojectRegistryRows(deps, [{ id: 'fac-A', name: 'Alpha' }, { id: 'fac-B', name: 'Beta' }]);
 
@@ -1962,42 +1956,13 @@ describe('reprojectRegistryRows', () => {
   // UUIDs: a ghost 'X' concept left behind, Alpha's
   // mapping migrated onto 'fac-A' — a code `resolveObservedFacilities` (which derives preferred
   // codes) can never resolve — and no facility touched by the operator at all.
-  it('does not force a row onto its id when another row merely carries its code in a NON-preferred column', async () => {
-    const deps = await makeReconcileDeps();
-    await seedPerformers(deps, [['BALAB', 1]]);
-    await seedRegistry(deps, { id: 'fac-A', name: 'Alpha', localCode: 'X' });
-    await reprojectRegistryRows(deps, [{ id: 'fac-A', name: 'Alpha' }]);
-    await seedMapping(deps, { fromSystem: DEFAULT_OBSERVED_FACILITY_SYSTEM, fromCode: 'BALAB', toSystem: FACILITY_REGISTRY_SYSTEM, toCode: 'X' });
-
-    await seedRegistry(deps, { id: 'fac-B', name: 'Beta', localCode: 'Y', nationalSystem: 'urn:tz:hfr', nationalCode: 'X' });
-    const r = await reprojectRegistryRows(deps, [{ id: 'fac-A', name: 'Alpha' }, { id: 'fac-B', name: 'Beta' }]);
-
-    // Nothing moved, because nothing collided.
-    expect(r.codeChanges).toEqual([]);
-    expect(await currentConceptCode(deps, 'fac-A')).toBe('X');
-    expect(await currentConceptCode(deps, 'fac-B')).toBe('Y');
-    const codes = await deps.internalDb.selectFrom('terminology_concepts')
-      .select('code').where('system', '=', FACILITY_REGISTRY_SYSTEM).execute();
-    expect(codes.map((c) => c.code).sort()).toEqual(['X', 'Y']);
-    // The operator-visible outcome, and the one that would break: resolution derives preferred
-    // codes, so a projection that forced UUIDs here would resolve to nothing.
-    const resolved = await resolveObservedFacilities(deps);
-    expect(resolved.find((x) => x.sourceCode === 'BALAB')!.registryId).toBe('fac-A');
-  });
-
-  // ⛔ PINS THE ORDERING CONTRACT (write new concept -> rewrite mappings -> delete old concept). The
-  // three steps are NOT one transaction (see the function's doc comment for why they cannot cheaply
-  // be), so the ORDER is the entire safety argument, and until this test existed the argument was
-  // prose: moving the concept delete ahead of the mapping rewrite passed every other test in the
-  // file. A mid-rewrite failure must leave BOTH concepts alive, so every mapping — migrated or not —
-  // still points at something that resolves.
   it('leaves the old concept in place when the mapping rewrite fails', async () => {
     const deps = await makeReconcileDeps();
     await seedPerformers(deps, [['BALAB', 1]]);
     await seedRegistry(deps, { id: 'fac-A', name: 'Alpha', localCode: 'OLD-1' });
     await reprojectRegistryRows(deps, [{ id: 'fac-A', name: 'Alpha' }]);
     await seedMapping(deps, { fromSystem: DEFAULT_OBSERVED_FACILITY_SYSTEM, fromCode: 'BALAB', toSystem: FACILITY_REGISTRY_SYSTEM, toCode: 'OLD-1' });
-    await deps.internalDb.updateTable('facility_registry').set({ local_code: 'NEW-1' }).where('id', '=', 'fac-A').execute();
+    await deps.internalDb.updateTable('facility_registry').set({ facility_code: 'NEW-1', local_code: 'NEW-1' }).where('id', '=', 'fac-A').execute();
 
     // Same technique as `projectRegistryRows`' "swallows a projection failure" test: a spread over
     // `deps` with one store method replaced.
@@ -2044,7 +2009,7 @@ describe('reprojectRegistryRows', () => {
     await deps.internalDb.insertInto('facility_concept_projection')
       .values({ registry_id: 'fac-C', concept_code: 'SHARED', updated_at: new Date() }).execute();
 
-    await deps.internalDb.updateTable('facility_registry').set({ local_code: 'NEW-A' }).where('id', '=', 'fac-A').execute();
+    await deps.internalDb.updateTable('facility_registry').set({ facility_code: 'NEW-A', local_code: 'NEW-A' }).where('id', '=', 'fac-A').execute();
     const r = await reprojectRegistryRows(deps, [{ id: 'fac-A', name: 'Alpha' }]);
 
     // THE SUBSTANTIVE HALF FIRST, so neutering the guard fails on the damage and not merely on the
@@ -2193,9 +2158,9 @@ describe('reprojectRegistryRows', () => {
 
     // Three hops, not two: `local_code` is unique on its own, so A cannot take 'Y' while B still
     // holds it.
-    await deps.internalDb.updateTable('facility_registry').set({ local_code: 'TMP' }).where('id', '=', 'fac-A').execute();
-    await deps.internalDb.updateTable('facility_registry').set({ local_code: 'X' }).where('id', '=', 'fac-B').execute();
-    await deps.internalDb.updateTable('facility_registry').set({ local_code: 'Y' }).where('id', '=', 'fac-A').execute();
+    await deps.internalDb.updateTable('facility_registry').set({ facility_code: 'TMP', local_code: 'TMP' }).where('id', '=', 'fac-A').execute();
+    await deps.internalDb.updateTable('facility_registry').set({ facility_code: 'X', local_code: 'X' }).where('id', '=', 'fac-B').execute();
+    await deps.internalDb.updateTable('facility_registry').set({ facility_code: 'Y', local_code: 'Y' }).where('id', '=', 'fac-A').execute();
 
     const r = await reprojectRegistryRows(deps, [{ id: 'fac-A', name: 'Alpha' }, { id: 'fac-B', name: 'Beta' }]);
 
@@ -2261,7 +2226,7 @@ describe('retireRegistryConcepts', () => {
     // remove the row, then reproject whatever the removal freed.
     expect(await retireRegistryConcepts(deps, ['fac-A'])).toBe(1);
     await deps.internalDb.deleteFrom('facility_registry').where('id', '=', 'fac-A').execute();
-    await reprojectAfterRegistryDelete(deps, { id: 'fac-A', localCode: 'L-1', nationalCode: null });
+    await reprojectAfterRegistryDelete(deps, { id: 'fac-A', facilityCode: 'L-1' });
 
     // Asserting the row still EXISTS (executeTakeFirstOrThrow) is half the point — a `status`
     // assertion alone would pass against a store that deleted the row if the read tolerated
@@ -2378,7 +2343,7 @@ describe('reprojectAfterRegistryDelete', () => {
     // The DELETE route's exact sequence — retire while the link still exists, remove, then reproject.
     await retireRegistryConcepts(deps, ['fac-A']);
     await deps.internalDb.deleteFrom('facility_registry').where('id', '=', 'fac-A').execute();
-    await reprojectAfterRegistryDelete(deps, { id: 'fac-A', localCode: 'X', nationalCode: null });
+    await reprojectAfterRegistryDelete(deps, { id: 'fac-A', facilityCode: 'X' });
 
     expect(await currentConceptCode(deps, 'fac-B')).toBe('X');
     const row = (await resolveObservedFacilities(deps)).find((r) => r.sourceCode === 'BALAB')!;
@@ -2397,7 +2362,7 @@ describe('reprojectAfterRegistryDelete', () => {
     await retireRegistryConcepts(deps, ['fac-A']);
     await deps.internalDb.deleteFrom('facility_registry').where('id', '=', 'fac-A').execute();
 
-    await reprojectAfterRegistryDelete(deps, { id: 'fac-A', localCode: 'L-1', nationalCode: null });
+    await reprojectAfterRegistryDelete(deps, { id: 'fac-A', facilityCode: 'L-1' });
 
     const { rows } = await deps.admin.terms.search(FACILITY_REGISTRY_SYSTEM, { limit: 50, offset: 0 });
     expect(rows.map((r) => ({ code: r.code, status: r.status }))).toEqual([{ code: 'L-1', status: 'RETIRED' }]);
@@ -2422,7 +2387,7 @@ describe('reprojectAfterRegistryDelete', () => {
       admin: { ...deps.admin, terms: { ...deps.admin.terms, importRows: async () => { throw new Error('terminology store unreachable'); } } },
     } as typeof deps;
 
-    const result = await reprojectAfterRegistryDelete(broken, { id: 'fac-A', localCode: 'X', nationalCode: null });
+    const result = await reprojectAfterRegistryDelete(broken, { id: 'fac-A', facilityCode: 'X' });
 
     expect(result.failedRegistryIds).toEqual(['fac-B']);
   });
@@ -2434,7 +2399,7 @@ describe('reprojectAfterRegistryDelete', () => {
     await publishRegistryConcepts(deps, { apply: true });
     await deps.internalDb.deleteFrom('facility_registry').where('id', '=', 'fac-A').execute();
 
-    const result = await reprojectAfterRegistryDelete(deps, { id: 'fac-A', localCode: 'X', nationalCode: null });
+    const result = await reprojectAfterRegistryDelete(deps, { id: 'fac-A', facilityCode: 'X' });
 
     // Not vacuous: fac-B really did move up to the freed code, so there WAS a projection to report on.
     expect(await currentConceptCode(deps, 'fac-B')).toBe('X');

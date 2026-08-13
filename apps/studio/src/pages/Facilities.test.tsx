@@ -105,7 +105,8 @@ const facilityFormSchema = {
 };
 
 const sampleFacility: Facility = {
-  id: 'f1', localCode: 'LAB01', nationalSystem: null, nationalCode: null, name: 'Dodoma Regional Referral',
+  id: 'f1', facilitySystem: null, facilityCode: 'LAB01',
+  localCode: 'LAB01', nationalSystem: null, nationalCode: null, name: 'Dodoma Regional Referral',
   level: 'Hospital', ownership: null, status: 'Operating', country: 'TZ', zone: 'Central', region: 'Dodoma Region',
   district: 'Dodoma', council: null, ward: null, village: null, addressText: null, phone: null,
   latitude: null, longitude: null, extras: {}, managedOrigin: null, source: 'manual',

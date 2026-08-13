@@ -4890,13 +4890,13 @@ describe('Task 6: POST /api/facilities/scan-observed', () => {
     const ctx = fakeReconcileCtx(internalDb, externalDb);
     const app = await appWith(ctx);
     await internalDb.insertInto('facility_registry')
-      .values({ id: 'fac-1', name: 'Alpha Clinic', local_code: 'OLD-1', source: 'manual' }).execute();
+      .values({ id: 'fac-1', name: 'Alpha Clinic', facility_code: 'OLD-1', local_code: 'OLD-1', source: 'manual' }).execute();
 
     // First scan projects fac-1 as 'OLD-1' and records the link it will later be compared against.
     await app.inject({ method: 'POST', url: '/api/facilities/scan-observed', payload: { apply: true } });
     // The code changes without this route being involved — a national import, an out-of-band
     // correction. Exactly the case where nobody would otherwise know their mappings just moved.
-    await internalDb.updateTable('facility_registry').set({ local_code: 'NEW-1' }).where('id', '=', 'fac-1').execute();
+    await internalDb.updateTable('facility_registry').set({ facility_code: 'NEW-1', local_code: 'NEW-1' }).where('id', '=', 'fac-1').execute();
 
     const res = await app.inject({ method: 'POST', url: '/api/facilities/scan-observed', payload: { apply: true } });
 
