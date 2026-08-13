@@ -231,6 +231,8 @@ export const fr: EnShape = {
     selectedCount: '{{selected}} sur {{total}} sélectionnées',
     noCapabilities: 'Aucune capacité disponible.',
     actions: 'Actions',
+    searchPlaceholder: 'Rechercher des rôles',
+    noMatch: 'Aucun rôle ne correspond.',
   },
   settings: {
     title: 'Paramètres',

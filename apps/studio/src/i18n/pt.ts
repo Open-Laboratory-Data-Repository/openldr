@@ -231,6 +231,8 @@ export const pt: EnShape = {
     selectedCount: '{{selected}} de {{total}} selecionadas',
     noCapabilities: 'Não há capacidades disponíveis.',
     actions: 'Ações',
+    searchPlaceholder: 'Pesquisar funções',
+    noMatch: 'Nenhuma função corresponde.',
   },
   settings: {
     title: 'Definições',

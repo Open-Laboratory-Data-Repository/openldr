@@ -227,6 +227,8 @@ export const en = {
     selectedCount: '{{selected}} of {{total}} selected',
     noCapabilities: 'No capabilities available.',
     actions: 'Actions',
+    searchPlaceholder: 'Search roles',
+    noMatch: 'No roles match.',
   },
   settings: {
     title: 'Settings',
