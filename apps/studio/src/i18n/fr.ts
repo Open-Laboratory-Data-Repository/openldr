@@ -234,6 +234,18 @@ export const fr: EnShape = {
     searchPlaceholder: 'Rechercher des rôles',
     noMatch: 'Aucun rôle ne correspond.',
   },
+  forms: {
+    colName: 'Nom',
+    colFhirType: 'Type FHIR',
+    colFields: 'Champs',
+    colVersion: 'Version',
+    colStatus: 'Statut',
+    colActive: 'Actif',
+    colUpdated: 'Mis à jour',
+    searchPlaceholder: 'Rechercher des formulaires ou un type FHIR',
+    emptyTitle: 'Aucun formulaire pour le moment',
+    noMatch: 'Aucun formulaire ne correspond.',
+  },
   settings: {
     title: 'Paramètres',
     saved: 'Enregistré',

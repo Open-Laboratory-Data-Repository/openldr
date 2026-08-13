@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import '@/i18n';
+import { addFilterViaPopover, expectStandardTableToolbar } from '@/components/data-table/expectStandardTableToolbar';
 import { Forms } from './Forms';
 import * as api from '../api';
 
@@ -133,5 +135,21 @@ describe('Forms page', () => {
     if (!screen.queryByText('Duplicate')) fireEvent.keyDown(screen.getByRole('button', { name: /actions for specimen intake/i }), { key: 'Enter' });
     fireEvent.click(await screen.findByText('Duplicate'));
     await waitFor(() => expect(duplicateSpy).toHaveBeenCalledWith('form-1'));
+  });
+
+  it('renders the standard table toolbar with the chips row', async () => {
+    render(<MemoryRouter><Forms /></MemoryRouter>);
+    await screen.findByText('Specimen intake');
+
+    await addFilterViaPopover('Specimen');
+    expectStandardTableToolbar();
+  });
+
+  it('filters rows by the search box', async () => {
+    render(<MemoryRouter><Forms /></MemoryRouter>);
+    await screen.findByText('Specimen intake');
+
+    fireEvent.change(screen.getByPlaceholderText(/search forms/i), { target: { value: 'zzz-no-such-form' } });
+    expect(screen.queryByText('Specimen intake')).not.toBeInTheDocument();
   });
 });

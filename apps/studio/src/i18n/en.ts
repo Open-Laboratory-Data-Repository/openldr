@@ -230,6 +230,18 @@ export const en = {
     searchPlaceholder: 'Search roles',
     noMatch: 'No roles match.',
   },
+  forms: {
+    colName: 'Name',
+    colFhirType: 'FHIR type',
+    colFields: 'Fields',
+    colVersion: 'Version',
+    colStatus: 'Status',
+    colActive: 'Active',
+    colUpdated: 'Updated',
+    searchPlaceholder: 'Search forms or FHIR type',
+    emptyTitle: 'No forms yet',
+    noMatch: 'No forms match.',
+  },
   settings: {
     title: 'Settings',
     saved: 'Saved',

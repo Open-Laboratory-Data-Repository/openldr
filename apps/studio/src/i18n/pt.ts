@@ -234,6 +234,18 @@ export const pt: EnShape = {
     searchPlaceholder: 'Pesquisar funções',
     noMatch: 'Nenhuma função corresponde.',
   },
+  forms: {
+    colName: 'Nome',
+    colFhirType: 'Tipo FHIR',
+    colFields: 'Campos',
+    colVersion: 'Versão',
+    colStatus: 'Estado',
+    colActive: 'Ativo',
+    colUpdated: 'Atualizado',
+    searchPlaceholder: 'Pesquisar formulários ou tipo FHIR',
+    emptyTitle: 'Ainda não há formulários',
+    noMatch: 'Nenhum formulário corresponde.',
+  },
   settings: {
     title: 'Definições',
     saved: 'Guardado',
