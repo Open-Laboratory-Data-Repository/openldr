@@ -1367,6 +1367,29 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       return { error: 'a facility must have a local code or a national code' };
     }
 
+    // ⛔ The national code and its register are this row's IDENTITY, not two more editable columns:
+    // the importer derives `id = fac-sha256(nationalSystem|nationalCode)` (`idFor`,
+    // packages/terminology/src/facility-csv.ts) and this handler updates BY id without re-deriving
+    // it. An edit that moved either value would leave the row filed under an id its own code no
+    // longer produces — the next import of that register would not find it, and would either
+    // collide on `facility_registry_national_unique` (migration 070) or insert a second row for the
+    // same facility.
+    //
+    // Re-keying a live row is deliberately NOT attempted here: `facility_map.registry_id`,
+    // `facility_concept_projection`, and any mapping authored against the projected code all point
+    // at the id. That is its own slice. The accepted cost is that a facility created WITHOUT a
+    // national code can never acquire one — it must be deleted and registered again. A row that has
+    // neither value is unaffected: `changedCoreKeys` sees no change, so it stays freely editable.
+    const identityChanged = changedCoreKeys(record, before);
+    if (identityChanged.has('nationalCode') || cleared.has('nationalCode')) {
+      reply.code(400);
+      return { error: "a facility's national code cannot be changed on an existing facility; it is part of the facility's identity" };
+    }
+    if (identityChanged.has('nationalSystem') || cleared.has('nationalSystem')) {
+      reply.code(400);
+      return { error: "a facility's facility register cannot be changed on an existing facility; it is part of the facility's identity" };
+    }
+
     // Task 6 (B1), rescoped: only a level/status/country this submission actually CHANGED is
     // checked. The sheet resubmits every field it seeded, so scoping on "submitted" checked every
     // value on every edit — which made an imported facility carrying an unmapped raw value
