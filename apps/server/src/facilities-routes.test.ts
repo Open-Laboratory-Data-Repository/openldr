@@ -5732,6 +5732,22 @@ describe('Stage 2: a facility code and its register can be corrected', () => {
     expect(ctx.__rows[0].nationalSystem).toBe(MFL);
   });
 
+  it('phrases that refusal for an EDIT, and names the remedy', async () => {
+    // Measured on a live sheet: the import gate's own wording ("…before facilities can be imported
+    // against it") reached the Edit sheet, where the operator was not importing anything and was
+    // left with no idea where a register comes from.
+    const ctx = ctxWithRegister();
+    ctx.__rows.push({ ...seeded });
+    const app = await appWith(ctx);
+    const res = await app.inject({
+      method: 'PUT', url: '/api/facilities/fac-1',
+      payload: editBody({ f2: 'Commando Urban', f6: '100', f7: 'urn:tz:mfl' }),
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).not.toContain('imported against');
+    expect(res.json().error).toContain('Import facilities');
+  });
+
   it('leaves a facility with NO register editable — there is no change to gate', async () => {
     const ctx = ctxWithRegister();
     ctx.__rows.push({

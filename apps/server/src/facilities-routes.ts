@@ -661,6 +661,23 @@ function changedCoreKeys(record: Partial<FacilityRecord>, before: FacilityRecord
 //
 // POST passes no `before` — there is nothing to have changed FROM, so every submitted value is
 // checked, exactly as before.
+/**
+ * The register gate's refusal, phrased for a FACILITY being assigned to a register rather than a
+ * file being imported against one.
+ *
+ * `resolveFacilityRegisterForImport` stays the single place that DECIDES; this only re-phrases. Its
+ * own wording ends "before facilities can be imported against it", which reached the Edit sheet and
+ * read as a non-sequitur — the operator was editing one facility, not importing anything.
+ *
+ * The remedy is named, because "not a known register" without one leaves an operator stuck: registers
+ * are minted from the Import facilities sheet, and nowhere else.
+ */
+function registerRefusal(gate: { reason: 'unknown-register' | 'deactivated-register'; error: string }, system: string): string {
+  return gate.reason === 'unknown-register'
+    ? `"${system}" is not a known facility register on this install. Add it under Facilities → Import facilities before assigning a facility to it.`
+    : `"${system}" names a facility register that has been deactivated; a facility cannot be assigned to it.`;
+}
+
 async function controlledFieldsError(
   ctx: AppContext, record: Partial<FacilityRecord>, before?: FacilityRecord,
 ): Promise<{ error: string } | undefined> {
@@ -1320,7 +1337,7 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       // mints two identities for one register. See `resolveFacilityRegisterForImport` (@openldr/db)
       // for the full defect. Doors that disagree about what a register is put the fork straight back.
       const register = await resolveFacilityRegisterForImport(registerSources, nationalSystem);
-      if (!register.ok) { reply.code(400); return { error: register.error }; }
+      if (!register.ok) { reply.code(400); return { error: registerRefusal(register, nationalSystem) }; }
       id = idFor(nationalSystem, nationalCode);
       // ⛔ `facilityRegistry.upsert` is `onConflict('id').doUpdateSet(...)`
       // (packages/db/src/facility-registry-store.ts). That was harmless while every created id was
@@ -1489,7 +1506,7 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       const submittedSystem = record[key];
       if (!identityChanged.has(key) || typeof submittedSystem !== 'string' || submittedSystem === '') continue;
       const register = await resolveFacilityRegisterForImport(registerSources, submittedSystem);
-      if (!register.ok) { reply.code(400); return { error: register.error }; }
+      if (!register.ok) { reply.code(400); return { error: registerRefusal(register, submittedSystem) }; }
     }
 
     // Required is enforced only for what this submission MOVED. `identityChanged`/`cleared` are

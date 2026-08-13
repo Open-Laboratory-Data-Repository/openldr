@@ -82,3 +82,41 @@ describe('SuggestCombobox', () => {
     expect(input).toHaveAttribute('aria-activedescendant', 'city-suggest-option-0');
   });
 });
+
+describe('SuggestCombobox — optionLabels', () => {
+  const registers = { 'urn:zm:mfl': 'Zambia MFL', 'urn:tz:hfr': 'Tanzania HFR' };
+
+  it('shows the LABEL while the option value stays the stored one', () => {
+    // The facility register field stores a canonical URI because `idFor` hashes exactly that string
+    // into every facility's permanent id — but an operator should be choosing "Zambia MFL".
+    const onChange = vi.fn();
+    render(
+      <SuggestCombobox
+        value="" onChange={onChange}
+        options={['urn:zm:mfl', 'urn:tz:hfr']} optionLabels={registers}
+      />,
+    );
+    fireEvent.focus(screen.getByRole('combobox'));
+    expect(screen.getByText('Zambia MFL')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Zambia MFL'));
+    expect(onChange).toHaveBeenCalledWith('urn:zm:mfl');
+  });
+
+  it('matches a query against the label, not only the value', () => {
+    render(
+      <SuggestCombobox
+        value="zambia" onChange={vi.fn()}
+        options={['urn:zm:mfl', 'urn:tz:hfr']} optionLabels={registers}
+      />,
+    );
+    fireEvent.focus(screen.getByRole('combobox'));
+    expect(screen.getByText('Zambia MFL')).toBeInTheDocument();
+    expect(screen.queryByText('Tanzania HFR')).not.toBeInTheDocument();
+  });
+
+  it('falls back to the raw value when no label is given', () => {
+    render(<SuggestCombobox value="" onChange={vi.fn()} options={['urn:zm:mfl']} />);
+    fireEvent.focus(screen.getByRole('combobox'));
+    expect(screen.getByText('urn:zm:mfl')).toBeInTheDocument();
+  });
+});

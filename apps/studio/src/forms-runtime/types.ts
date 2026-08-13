@@ -13,6 +13,9 @@ export type RuntimeAnswers = Record<string, unknown>;
 export interface SuggestionState {
   status: 'loading' | 'ready' | 'error';
   options: string[];
+  /** Optional value → human label. The facility register field stores a canonical URI but should
+   *  show the register's name; see `SuggestComboboxProps.optionLabels`. */
+  optionLabels?: Record<string, string>;
   error?: string;
 }
 

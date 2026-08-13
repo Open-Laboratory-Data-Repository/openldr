@@ -164,10 +164,10 @@ export function FacilityDialog({ open, onOpenChange, facility, onSaved }: Facili
   // URI. Fed from the same `registerSources` fetch the provenance panel already makes,
   // not a second request. Declared here, below that state, rather than beside the hook it spreads.
   //
-  // ⚠ `SuggestionState.options` is `string[]` — values, no labels — so this offers each register's
-  // canonical URI rather than its friendly name. Honest (the URI is what is stored, and what the
-  // server matches EXACTLY) but not pretty; showing a name means widening `SuggestionState` and
-  // `SuggestCombobox`, which is deliberately out of this slice.
+  // The list shows each register's NAME while storing its canonical URI — `optionLabels`. The URI is
+  // what `idFor` hashes into every facility's permanent id, so it has to be the stored value, but an
+  // operator should be choosing "Zambia MFL", not typing `urn:zm:mfl`. Typing a URI by hand is how
+  // one register earns two identities.
   //
   // The list is convenience, never the gate: POST resolves whatever is submitted through
   // `resolveFacilityRegisterForImport` and refuses an unregistered or deactivated register. That is
@@ -175,7 +175,11 @@ export function FacilityDialog({ open, onOpenChange, facility, onSaved }: Facili
   // move the refusal earlier without making it any softer.
   const suggestionsWithRegisters: FieldSuggestions = {
     ...fieldSuggestions,
-    'fld-fac-system': { status: 'ready', options: registerSources.map((s) => s.url) },
+    'fld-fac-system': {
+      status: 'ready',
+      options: registerSources.map((s) => s.url),
+      optionLabels: Object.fromEntries(registerSources.map((s) => [s.url, s.name])),
+    },
   };
 
   const matchedRegisterSource = facility?.nationalSystem
