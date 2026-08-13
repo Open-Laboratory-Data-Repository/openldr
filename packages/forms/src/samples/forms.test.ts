@@ -114,12 +114,19 @@ describe('the seeded Facility form', () => {
     // a field silently losing its `required: true` from the opposite direction — council quietly
     // gaining company, or a required field quietly becoming optional and this test not noticing
     // because it only ever asserted equality on the required side.
-    expect(facility().fields.filter((f) => !f.required).map((f) => f.apiProperty)).toEqual(['council']);
+    // Migration 085 widened this set from council alone to five. Each addition has its own reason,
+    // and none of them is "required felt too strict":
+    //   nationalCode/nationalSystem — a lab-only facility genuinely has neither.
+    //   localCode                   — a CSV import never produces one, by design.
+    //   region                      — not every register has a tier there (Zambia's has none).
+    expect(facility().fields.filter((f) => !f.required).map((f) => f.apiProperty).sort()).toEqual(
+      ['council', 'localCode', 'nationalCode', 'nationalSystem', 'region'].sort(),
+    );
   });
 
   it('every field carries an apiProperty from the full set, including the optional council', () => {
     expect(facility().fields.map((f) => f.apiProperty).sort()).toEqual(
-      ['council', 'country', 'district', 'level', 'localCode', 'name', 'region', 'status', 'zone'].sort(),
+      ['council', 'country', 'district', 'level', 'localCode', 'name', 'nationalCode', 'nationalSystem', 'region', 'status', 'zone'].sort(),
     );
   });
 
@@ -135,10 +142,13 @@ describe('the seeded Facility form', () => {
   });
 
   it('marks the required fields required', () => {
-    // council excluded — see 'carries exactly the agreed OPTIONAL set — council alone' above, which
-    // pins the complementary (not-required) side instead of re-deriving this same set.
+    // The optional five are excluded — see the OPTIONAL-set test above, which pins the complementary
+    // side instead of re-deriving this same set. ⛔ A facility's IDENTITY is deliberately absent
+    // here: neither code is required, because `facility_registry_has_a_code` (migration 070) asks
+    // only that at least ONE of them be present, and no single form field can express "or". The
+    // route enforces that pair rule directly.
     const required = facility().fields.filter((f) => f.required).map((f) => f.apiProperty).sort();
-    expect(required).toEqual(['country', 'district', 'level', 'localCode', 'name', 'region', 'status', 'zone'].sort());
+    expect(required).toEqual(['country', 'district', 'level', 'name', 'status', 'zone'].sort());
   });
 
   it('binds status and level to their ValueSets as searchable reference fields, not free text', () => {
@@ -169,8 +179,41 @@ describe('the seeded Facility form', () => {
       const f = facility().fields.find((x) => x.id === id)!;
       expect(f.fieldType, `${id}.fieldType`).toBe('suggest');
       expect(f.valueSetUrl, `${id}.valueSetUrl`).toBeUndefined();
-      expect(f.required, `${id}.required`).toBe(true);
     }
+  });
+
+  it('requires zone and district but NOT region — a register with no tier there cannot fill it', () => {
+    // Split out of the binding test above by migration 085. Zambia's national list has nothing
+    // between Province and District: 3788 of 3788 rows in its MFL export carry no region, so a
+    // required marker there blocked every one of them from being edited at all. zone/district stay
+    // required so this relaxation cannot be mistaken for the admin chain going soft.
+    expect(facility().fields.find((f) => f.id === 'fld-fac-region')!.required).toBe(false);
+    for (const id of ['fld-fac-zone', 'fld-fac-district']) {
+      expect(facility().fields.find((f) => f.id === id)!.required, `${id}.required`).toBe(true);
+    }
+  });
+
+  it('offers both codes — the national one first, neither required', () => {
+    const fields = facility().fields;
+    const national = fields.find((f) => f.id === 'fld-fac-national-code')!;
+    const register = fields.find((f) => f.id === 'fld-fac-national-system')!;
+    const local = fields.find((f) => f.id === 'fld-fac-local-code')!;
+
+    // Until migration 085 no field bound `nationalCode` at all, so a nationally-imported facility
+    // showed an empty code box in the Edit sheet beside a table cell that displayed its code.
+    expect(national.apiProperty).toBe('nationalCode');
+    expect(national.displayLabel).toBe('National code');
+    expect(national.required).toBe(false);
+    expect(register.apiProperty).toBe('nationalSystem');
+    expect(register.fieldType).toBe('suggest');
+
+    // Relabelled from the generic "Facility code", which read as the same thing the Facilities
+    // table's CODE column shows — that column falls back `localCode ?? nationalCode`.
+    expect(local.apiProperty).toBe('localCode');
+    expect(local.displayLabel).toBe('Local code');
+    expect(local.required).toBe(false);
+
+    expect(national.order).toBeLessThan(local.order);
   });
 
   it('binds council to `suggest` too, but — unlike zone/region/district — it is OPTIONAL with no FHIR path', () => {
@@ -191,18 +234,19 @@ describe('the seeded Facility form', () => {
     expect(t.requiredKeys.sort()).toEqual(['localCode', 'name']);
   });
 
-  // Migration 073_facility_country_and_admin_fields rewrites an already-migrated install's persisted
+  // Migration 085_facility_national_code_field rewrites an already-migrated install's persisted
   // Facility form to a frozen BOUND_FIELDS snapshot copied (not imported) from this sample, because
-  // a migration must not live-track a file that keeps changing. (Migration 071 pinned this same way
-  // against its own NEW_FIELDS snapshot before level/status were bound to ValueSets; 072 then pinned
-  // against ITS OWN BOUND_FIELDS snapshot once level/status were bound; 073 is now the frozen
-  // snapshot that reflects the CURRENT sample, since it is 073 — not 072 — that ships country's
-  // ValueSet binding and the suggest-typed admin chain to already-migrated installs.) That snapshot
+  // a migration must not live-track a file that keeps changing. (071 pinned this same way against
+  // its own NEW_FIELDS snapshot before level/status were bound to ValueSets; 072 pinned against ITS
+  // OWN once they were; 073 against its own once country and the suggest-typed admin chain shipped;
+  // 085 is now the frozen snapshot that reflects the CURRENT sample, since it is 085 — not 073 —
+  // that ships the national code/register fields and the relaxed local-code and region markers to
+  // already-migrated installs.) That snapshot
   // is a duplicate by construction, so nothing stops the two silently drifting apart: edit a field
   // here without also updating the migration and BOTH suites stay green — the migration's own test
   // only ever compares the migration's output to the migration's own constant. Pinning FROM THIS SIDE
   // against the db-exported snapshot is what actually catches that drift.
-  it('⛔ matches migration 073\'s frozen BOUND_FIELDS snapshot exactly, so a future edit here cannot silently desynchronise an already-migrated install from what the migration thinks "bound" looks like', () => {
+  it('⛔ matches migration 085\'s frozen BOUND_FIELDS snapshot exactly, so a future edit here cannot silently desynchronise an already-migrated install from what the migration thinks "bound" looks like', () => {
     expect(facility().fields).toEqual(FACILITY_FORM_MIGRATION_BOUND_FIELDS);
   });
 });

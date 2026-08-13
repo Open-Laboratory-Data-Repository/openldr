@@ -16,7 +16,7 @@ import {
 } from '@/api';
 import { FormRuntime } from '@/forms-runtime/FormRuntime';
 import { visibleIds } from '@/forms-runtime/runtime';
-import type { FormSchema, RuntimeAnswers } from '@/forms-runtime/types';
+import type { FieldSuggestions, FormSchema, RuntimeAnswers } from '@/forms-runtime/types';
 import { FormSchema as FormSchemaZ } from '@openldr/forms/pure';
 // A dedicated subpath (NOT the package root, which pulls in `pg`/kysely and the rest of the
 // server DB engine) so this stays a zero-dependency browser-safe import — `facility-answers.ts`
@@ -122,13 +122,23 @@ export function FacilityDialog({ open, onOpenChange, facility, onSaved }: Facili
   const [registerSources, setRegisterSources] = useState<FacilityRegisterSource[]>([]);
   const [lastImportAt, setLastImportAt] = useState<string | null | undefined>(undefined);
 
+  // Deliberately NOT inside the edit-only effect below: the register list also feeds the
+  // `fld-fac-national-system` field's suggestions (see `suggestionsWithRegisters`), and CREATE is
+  // exactly when an operator needs it — that is the whole point of registering a facility against a
+  // national register by hand. Scoped on `open` alone so both paths get it.
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    listFacilityImportSources()
+      .then((sources) => { if (!cancelled) setRegisterSources(sources); })
+      .catch(() => { if (!cancelled) setRegisterSources([]); });
+    return () => { cancelled = true; };
+  }, [open]);
+
   useEffect(() => {
     if (!open || !isEdit || !facility) { setLastImportAt(undefined); return; }
     let cancelled = false;
     setLastImportAt(undefined);
-    listFacilityImportSources()
-      .then((sources) => { if (!cancelled) setRegisterSources(sources); })
-      .catch(() => { if (!cancelled) setRegisterSources([]); });
     getFacilityHistory(facility.id)
       .then((page) => {
         if (cancelled) return;
@@ -141,6 +151,24 @@ export function FacilityDialog({ open, onOpenChange, facility, onSaved }: Facili
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, isEdit, facility?.id]);
+
+  // The `fld-fac-national-system` field (migration 085) names a REGISTERED facility register by its
+  // canonical URI. Fed from the same `registerSources` fetch the provenance panel already makes,
+  // not a second request. Declared here, below that state, rather than beside the hook it spreads.
+  //
+  // ⚠ `SuggestionState.options` is `string[]` — values, no labels — so this offers each register's
+  // canonical URI rather than its friendly name. Honest (the URI is what is stored, and what the
+  // server matches EXACTLY) but not pretty; showing a name means widening `SuggestionState` and
+  // `SuggestCombobox`, which is deliberately out of this slice.
+  //
+  // The list is convenience, never the gate: POST resolves whatever is submitted through
+  // `resolveFacilityRegisterForImport` and refuses an unregistered or deactivated register. That is
+  // also why `suggest` (free entry allowed) is the right field type — a hard picklist would only
+  // move the refusal earlier without making it any softer.
+  const suggestionsWithRegisters: FieldSuggestions = {
+    ...fieldSuggestions,
+    'fld-fac-national-system': { status: 'ready', options: registerSources.map((s) => s.url) },
+  };
 
   const matchedRegisterSource = facility?.nationalSystem
     ? registerSources.find((s) => s.url === facility.nationalSystem)
@@ -332,7 +360,7 @@ export function FacilityDialog({ open, onOpenChange, facility, onSaved }: Facili
               formDefinitionId={formDefId ?? undefined}
               initialAnswers={initialAnswers}
               onSubmit={handleSubmit}
-              fieldSuggestions={fieldSuggestions}
+              fieldSuggestions={suggestionsWithRegisters}
               onAnswersChange={reportAnswers}
               suggestCopy={{
                 placeholder: t('facilities.suggest.placeholder'),

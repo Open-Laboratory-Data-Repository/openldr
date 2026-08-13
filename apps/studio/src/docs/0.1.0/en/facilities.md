@@ -82,6 +82,54 @@ incomplete:
 In short: a column problem stops the import before it starts; a value problem is recorded and can be
 cleaned up afterward.
 
+## Registering a facility by hand
+
+Most facilities arrive by import. You can also add one from the Facilities page, and a facility that
+exists in your national list should be registered as such rather than as a purely local one.
+
+### The two codes
+
+A facility row has room for two codes, and they are not the same thing:
+
+- **National code** — the code your national or master facility list carries. Optional, because a
+  lab-only site has none.
+- **Local code** — your own numbering, whatever your LIS calls the site. Also optional.
+
+At least one of the two must be present. The Facilities table's CODE column shows the local code when
+there is one and falls back to the national code otherwise, which is the same rule the rest of the
+system uses to give a facility its public code.
+
+### Why the register matters
+
+A facility's permanent id is derived from its **facility register plus its national code**. Supply
+both and the facility is filed under exactly the identity a CSV import of that register would give
+it, so a later import of the same list updates your row instead of creating a second one.
+
+Leave the national code empty and the facility keeps a private id. That is correct for a site that
+genuinely is not in the national list.
+
+The register must already exist on this install. An unknown or deactivated one is refused, with a
+message naming which. Registers are the same list the import wizard offers.
+
+### What you cannot change afterward
+
+**The national code and the facility register are fixed once the facility is created.** They are part
+of its identity, not ordinary fields — moving either one would leave the row filed under an id its
+own code no longer produces, and the next import of that register would not find it.
+
+So a facility created without a national code cannot acquire one later. If you need to add one,
+delete the facility and register it again.
+
+### Required fields
+
+The form's required markers are enforced when you save, and the server enforces them too.
+
+Two fields are deliberately **not** required, because no national register can be assumed to supply
+them: the local code (an import never produces one) and the region (not every country has a tier
+there — Zambia's list has nothing between Province and District). When you edit an existing facility,
+only the fields you actually change are re-checked, so an imported facility with a gap in it stays
+editable.
+
 ## Related guides
 
 - [Terminology](/docs/terminology)

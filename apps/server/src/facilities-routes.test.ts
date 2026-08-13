@@ -20,6 +20,14 @@ const FORM_FIELDS = [
   { id: 'f2', apiProperty: 'name' },
   { id: 'f3', apiProperty: 'region' },
   { id: 'f4', apiProperty: 'catchmentPop' },
+  // `level` is a CONTROLLED field, so a payload that carries f5 reaches `controlledFieldsError`.
+  // The baseline `body` below deliberately omits it, which keeps every pre-existing test on the
+  // guard's `submitted.length === 0` short-circuit exactly as before.
+  { id: 'f5', apiProperty: 'level' },
+  // The national pair. Also absent from the baseline `body`, so POST's id derivation stays on its
+  // `randomUUID()` branch for every pre-existing test.
+  { id: 'f6', apiProperty: 'nationalCode' },
+  { id: 'f7', apiProperty: 'nationalSystem' },
 ];
 
 // A resolvable form whose fields map onto NONE of CORE_FACILITY_KEYS — the "wrong form" case (Q2):
@@ -5606,5 +5614,294 @@ describe('Task 10: POST /api/facilities/jobs/:id/retry', () => {
       before: { status: 'failed' },
       after: { status: 'queued', attempts: 0 },
     });
+  });
+});
+
+describe('Task 1: an unchanged controlled value does not block an edit', () => {
+  // A ctx whose `level` value set expands to exactly one canonical code, so any other string is
+  // `unmapped` — the same state an imported facility is in before its vocabulary is mapped.
+  function ctxWithLevelValueSet() {
+    const ctx = fakeCtx();
+    ctx.terminology.admin.valueSets = {
+      getByUrl: async () => ({ id: 'vs-level' }),
+      expand: async () => ({ codes: [{ code: 'health-center' }] }),
+    };
+    ctx.terminology.admin.termMappings = { listOutgoing: async () => [] };
+    return ctx;
+  }
+
+  const importedBody = {
+    answers: { f1: 'LAB01', f2: 'Commando Urban', f3: 'Copperbelt', f5: 'Health Centre' },
+    formSchemaId: 'form-sample-facility',
+    formVersion: 1,
+  };
+
+  it('lets an edit through when the raw level is resubmitted unchanged', async () => {
+    const ctx = ctxWithLevelValueSet();
+    const app = await appWith(ctx);
+    // Seeded directly rather than through POST: POST would refuse the raw level, which is the very
+    // asymmetry between the import door and the edit door that this test exists for.
+    ctx.__rows.push({
+      id: 'fac-1', localCode: 'LAB01', name: 'Commando Urban', region: 'Copperbelt',
+      level: 'Health Centre', extras: {}, source: 'import',
+    });
+    const res = await app.inject({
+      method: 'PUT', url: '/api/facilities/fac-1',
+      payload: { ...importedBody, answers: { ...importedBody.answers, f2: 'Commando Urban Clinic' } },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().name).toBe('Commando Urban Clinic');
+    expect(res.json().level).toBe('Health Centre');
+  });
+
+  it('still refuses when the edit CHANGES the level to another unrecognised value', async () => {
+    const ctx = ctxWithLevelValueSet();
+    const app = await appWith(ctx);
+    ctx.__rows.push({
+      id: 'fac-1', localCode: 'LAB01', name: 'Commando Urban', region: 'Copperbelt',
+      level: 'Health Centre', extras: {}, source: 'import',
+    });
+    const res = await app.inject({
+      method: 'PUT', url: '/api/facilities/fac-1',
+      payload: { ...importedBody, answers: { ...importedBody.answers, f5: 'District Hospital' } },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toContain("level 'District Hospital'");
+  });
+});
+
+describe('Task 3: national identity is immutable on an edit', () => {
+  const seeded = {
+    id: 'fac-1', localCode: null, nationalSystem: 'urn:openldr:facility-register:mfl',
+    nationalCode: '100', name: 'Commando Urban', extras: {}, source: 'import',
+  };
+  const editBody = (answers: Record<string, unknown>) => ({
+    answers, formSchemaId: 'form-sample-facility', formVersion: 1,
+  });
+
+  it('allows an edit that resubmits the same national code', async () => {
+    const ctx = fakeCtx();
+    ctx.__rows.push({ ...seeded });
+    const app = await appWith(ctx);
+    const res = await app.inject({
+      method: 'PUT', url: '/api/facilities/fac-1',
+      payload: editBody({ f2: 'Commando Urban Clinic', f6: '100', f7: 'urn:openldr:facility-register:mfl' }),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().name).toBe('Commando Urban Clinic');
+  });
+
+  it('refuses an edit that changes the national code', async () => {
+    const ctx = fakeCtx();
+    ctx.__rows.push({ ...seeded });
+    const app = await appWith(ctx);
+    const res = await app.inject({
+      method: 'PUT', url: '/api/facilities/fac-1',
+      payload: editBody({ f2: 'Commando Urban', f6: '200', f7: 'urn:openldr:facility-register:mfl' }),
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toContain('national code cannot be changed');
+    // The row must be untouched — a refusal that still wrote would be worse than no refusal.
+    expect(ctx.__rows[0].nationalCode).toBe('100');
+  });
+
+  it('refuses an edit that changes the register', async () => {
+    const ctx = fakeCtx();
+    ctx.__rows.push({ ...seeded });
+    const app = await appWith(ctx);
+    const res = await app.inject({
+      method: 'PUT', url: '/api/facilities/fac-1',
+      payload: editBody({ f2: 'Commando Urban', f6: '100', f7: 'urn:openldr:facility-register:other' }),
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toContain('facility register cannot be changed');
+    expect(ctx.__rows[0].nationalSystem).toBe('urn:openldr:facility-register:mfl');
+  });
+
+  it('refuses an edit that BLANKS the national code, rather than nulling the row\'s identity', async () => {
+    const ctx = fakeCtx();
+    // A local code so the has-a-code CHECK is satisfied and this reaches the identity guard rather
+    // than being refused earlier for a different reason.
+    ctx.__rows.push({ ...seeded, localCode: 'LAB01' });
+    const app = await appWith(ctx);
+    const res = await app.inject({
+      method: 'PUT', url: '/api/facilities/fac-1',
+      payload: editBody({ f1: 'LAB01', f2: 'Commando Urban', f6: '', f7: 'urn:openldr:facility-register:mfl' }),
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toContain('national code cannot be changed');
+    expect(ctx.__rows[0].nationalCode).toBe('100');
+  });
+
+  it('leaves a facility with NO national code editable — there is no identity to move', async () => {
+    const ctx = fakeCtx();
+    ctx.__rows.push({
+      id: 'fac-2', localCode: 'LAB01', nationalSystem: null, nationalCode: null,
+      name: 'Bahebe Health Laboratory', extras: {}, source: 'manual',
+    });
+    const app = await appWith(ctx);
+    const res = await app.inject({
+      method: 'PUT', url: '/api/facilities/fac-2',
+      payload: editBody({ f1: 'LAB01', f2: 'Bahebe Health Lab' }),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().name).toBe('Bahebe Health Lab');
+  });
+});
+
+describe('Task 4: a manual create keys the same way an import does', () => {
+  const MFL = 'urn:openldr:facility-register:mfl';
+
+  // `registerSources` is built over ctx.internalDb at route registration, and `fakeCtx`'s
+  // internalDb is a narrow Proxy that cannot answer a real query. Inject the store instead — this
+  // suite is about the ROUTE's derivation and gate; the store's own SQL is covered in packages/db.
+  function ctxWithRegister() {
+    const ctx = fakeCtx();
+    ctx.__registerSources = {
+      getByUrl: async (url: string) => (url === MFL ? { url, name: 'MFL', active: true } : undefined),
+    };
+    return ctx;
+  }
+
+  const nationalBody = {
+    answers: { f2: 'Commando Urban', f6: '100', f7: MFL },
+    formSchemaId: 'form-sample-facility',
+    formVersion: 1,
+  };
+
+  const derivedId = (system: string, code: string) =>
+    `fac-${createHash('sha256').update(`${system}|${code}`).digest('hex').slice(0, 16)}`;
+
+  it('derives the id from the register and national code, exactly as the importer does', async () => {
+    const ctx = ctxWithRegister();
+    const app = await appWith(ctx);
+    const res = await app.inject({ method: 'POST', url: '/api/facilities', payload: nationalBody });
+    expect(res.statusCode).toBe(201);
+    expect(res.json().id).toBe(derivedId(MFL, '100'));
+  });
+
+  it('keeps a random id when there is no national code — nothing to hash', async () => {
+    const ctx = ctxWithRegister();
+    const app = await appWith(ctx);
+    const res = await app.inject({ method: 'POST', url: '/api/facilities', payload: body });
+    expect(res.statusCode).toBe(201);
+    expect(res.json().id).not.toMatch(/^fac-/);
+  });
+
+  it('keeps a random id when a register is named but no code is given', async () => {
+    // Mirrors migration 082's own rule: a row carrying a register but no national code keeps its
+    // id, because `idFor` has nothing to hash and re-deriving would invent an identity.
+    const ctx = ctxWithRegister();
+    const app = await appWith(ctx);
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities',
+      payload: { ...nationalBody, answers: { f1: 'LAB01', f2: 'Commando Urban', f7: MFL } },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(res.json().id).not.toMatch(/^fac-/);
+  });
+
+  it('refuses an unregistered register instead of hashing a typed label into a permanent id', async () => {
+    const ctx = ctxWithRegister();
+    const app = await appWith(ctx);
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities',
+      payload: { ...nationalBody, answers: { ...nationalBody.answers, f7: 'MFL' } },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toContain('is not a known facility register');
+    expect(ctx.__rows).toHaveLength(0);
+  });
+
+  it('⛔ refuses rather than OVERWRITING a facility already under that national code', async () => {
+    // `facilityRegistry.upsert` is onConflict(id).doUpdateSet (packages/db/facility-registry-store.ts).
+    // With a DERIVED id, a create that reached it would silently replace an imported facility —
+    // no error, and no record of what was lost. This is the test that pins the refusal.
+    const ctx = ctxWithRegister();
+    const app = await appWith(ctx);
+    await app.inject({ method: 'POST', url: '/api/facilities', payload: nationalBody });
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities',
+      payload: { ...nationalBody, answers: { ...nationalBody.answers, f2: 'A different name' } },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(ctx.__rows).toHaveLength(1);
+    expect(ctx.__rows[0].name).toBe('Commando Urban');
+  });
+});
+
+describe('Task 5: required is enforced on the route, not only in the studio', () => {
+  // `resolveForm` reads the WHOLE stored form now, so this fixture must look like a real one:
+  // `validateAnswers` walks `schema.fields` and reads displayLabel/required/enabled off each.
+  function ctxWithRequiredRegion() {
+    const ctx = fakeCtx();
+    const field = (over: Record<string, unknown>) => ({
+      fhirPath: null, description: null, enabled: true, cardinality: { min: 0, max: '1' }, ...over,
+    });
+    ctx.forms.get = async (formId: string) => (formId === 'form-sample-facility'
+      ? {
+        id: 'form-sample-facility',
+        targetPages: ['facilities'],
+        schema: {
+          id: 's', name: 'Facility', sections: [], fields: [
+            field({ id: 'f1', displayLabel: 'Local code', fieldType: 'identifier', required: false, order: 0, apiProperty: 'localCode' }),
+            field({ id: 'f2', displayLabel: 'Name', fieldType: 'text', required: true, order: 1, apiProperty: 'name' }),
+            field({ id: 'f3', displayLabel: 'Region', fieldType: 'text', required: true, order: 2, apiProperty: 'region' }),
+          ],
+        },
+      }
+      : undefined);
+    return ctx;
+  }
+
+  const submit = (answers: Record<string, unknown>) => ({
+    answers, formSchemaId: 'form-sample-facility', formVersion: 1,
+  });
+
+  it('refuses a create that omits a required field', async () => {
+    const ctx = ctxWithRequiredRegion();
+    const app = await appWith(ctx);
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities', payload: submit({ f1: 'LAB01', f2: 'Commando Urban' }),
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toContain('Region');
+    expect(ctx.__rows).toHaveLength(0);
+  });
+
+  it('names the field by its LABEL, not its id — the operator never sees a field id', async () => {
+    const ctx = ctxWithRequiredRegion();
+    const app = await appWith(ctx);
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities', payload: submit({ f1: 'LAB01', f2: 'Commando Urban' }),
+    });
+    expect(res.json().error).toBe('Region is required');
+  });
+
+  it('lets an edit through when the missing required field is one this submission did not touch', async () => {
+    // ⛔ THE trap this slice exists to avoid: 3788 imported rows have no region. If PUT enforced the
+    // whole form, none of them could ever be edited again.
+    const ctx = ctxWithRequiredRegion();
+    ctx.__rows.push({ id: 'fac-1', localCode: 'LAB01', name: 'Commando Urban', region: null, extras: {}, source: 'import' });
+    const app = await appWith(ctx);
+    const res = await app.inject({
+      method: 'PUT', url: '/api/facilities/fac-1',
+      payload: submit({ f1: 'LAB01', f2: 'Commando Urban Clinic' }),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().name).toBe('Commando Urban Clinic');
+  });
+
+  it('refuses an edit that BLANKS a required field', async () => {
+    const ctx = ctxWithRequiredRegion();
+    ctx.__rows.push({ id: 'fac-1', localCode: 'LAB01', name: 'Commando Urban', region: 'Copperbelt', extras: {}, source: 'import' });
+    const app = await appWith(ctx);
+    const res = await app.inject({
+      method: 'PUT', url: '/api/facilities/fac-1',
+      payload: submit({ f1: 'LAB01', f2: 'Commando Urban', f3: '' }),
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toContain('Region');
+    expect(ctx.__rows[0].region).toBe('Copperbelt');
   });
 });

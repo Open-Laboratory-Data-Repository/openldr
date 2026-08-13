@@ -90,6 +90,33 @@ A column map and a value map solve different problems, and behave differently wh
   contains a raw value your value set does not recognize, the row still imports with that raw
   text, and the value is reported so it can be mapped afterward — nothing blocks on it.
 
+## Registering a facility by hand
+
+Most facilities arrive by import. One can also be added from the Facilities page, and a facility that
+exists in the national list should be registered as such rather than as a purely local one.
+
+**Two codes, and they differ.** The **national code** is what the master facility list carries; the
+**local code** is the site's own numbering. Both are optional, but at least one must be present. The
+Facilities table shows the local code when there is one and falls back to the national code —
+the same rule the rest of the system uses to give a facility its public code.
+
+**The register decides the identity.** A facility's permanent id is derived from its facility
+register plus its national code. Supply both and the facility is filed under exactly the identity a
+CSV import of that register would give it, so a later import updates that row instead of creating a
+second one. Leave the national code empty and the facility keeps a private id — correct for a site
+that genuinely is not in the national list. The register must already exist on the install; an
+unknown or deactivated one is refused.
+
+**Neither is editable afterward.** The national code and the register are part of a facility's
+identity, so they are fixed once it is created. Moving either would leave the row filed under an id
+its own code no longer produces, and the next import would not find it. A facility created without a
+national code cannot acquire one — delete it and register it again.
+
+**Two fields are deliberately not required**, because no national register can be assumed to supply
+them: the local code (an import never produces one) and the region (not every country has a tier
+there). Editing an existing facility re-checks only the fields actually changed, so an imported
+facility with a gap stays editable.
+
 ## Related
 
 - [Load & push data](/docs/load-data)

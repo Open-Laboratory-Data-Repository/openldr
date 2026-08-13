@@ -6,6 +6,12 @@ import type { Kysely } from 'kysely';
 import { z } from 'zod';
 import { appError } from '@openldr/core';
 import type { FacilityColumnMap } from '@openldr/terminology';
+// The SAME id derivation the CSV importer uses. Imported rather than re-implemented: two spellings
+// of `fac-` + sha256(`system|code`) is exactly how the manual and import doors drifted apart.
+import { idFor } from '@openldr/terminology';
+// The SAME required-field check `forms-routes.ts` already runs on a form submission — see
+// `requiredFieldsError` below for how this route scopes it.
+import { validateAnswers } from '@openldr/forms';
 import {
   importFacilities, resolveKnownNationalSystem, CONTROLLED_FIELDS, CONTROLLED_VALUE_SETS,
   resolveControlledFields, suggestColumns, suggestValues, saveFacilityValueMappings,
@@ -314,7 +320,11 @@ type FieldRef = { id: string; apiProperty?: string | null };
  *  `targetsFacilitiesPage` is a boundary function that normalizes it (see that function's doc
  *  comment for why: it accepts both the parsed array the real store returns and, defensively, a raw
  *  JSON string), not because `ctx.forms` itself is loosely typed. */
-type ResolvedForm = { fields: FieldRef[]; targetPages: unknown };
+/*  `schema` is the WHOLE stored form, carried alongside the destructured `fields` because
+ *  `validateAnswers` (@openldr/forms) takes a full `FormSchema`, not a field list — see
+ *  `requiredFieldsError` below. Typed `unknown` for the same reason `targetPages` is: this is a
+ *  boundary, and the one consumer casts at the call site exactly as `forms-routes.ts:321` does. */
+type ResolvedForm = { fields: FieldRef[]; targetPages: unknown; schema: unknown };
 
 /** Resolve the submitted form so `apiProperty` and `targetPages` can be read. Returns
  *  `{ fields: [], targetPages: null }` both when no form id was submitted AND when the id does not
@@ -322,11 +332,11 @@ type ResolvedForm = { fields: FieldRef[]; targetPages: unknown };
  *  to write, never as "no core fields, everything is extras" (see the empty-field-list guards in
  *  POST/PUT below). */
 async function resolveForm(ctx: AppContext, formSchemaId: string | null | undefined): Promise<ResolvedForm> {
-  if (!formSchemaId) return { fields: [], targetPages: null };
+  if (!formSchemaId) return { fields: [], targetPages: null, schema: null };
   const def = await ctx.forms.get(formSchemaId);
-  if (!def) return { fields: [], targetPages: null };
+  if (!def) return { fields: [], targetPages: null, schema: null };
   const schema = def.schema as { fields?: FieldRef[] } | undefined;
-  return { fields: schema?.fields ?? [], targetPages: def.targetPages ?? null };
+  return { fields: schema?.fields ?? [], targetPages: def.targetPages ?? null, schema: schema ?? null };
 }
 
 /**
@@ -558,6 +568,67 @@ function nameTypeError(name: unknown): { error: string } | undefined {
   return undefined;
 }
 
+/**
+ * Core columns whose submitted value DIFFERS from what is already stored.
+ *
+ * ⛔ Every PUT-side guard below keys off THIS, never off mere presence. The Edit sheet seeds every
+ * field off the facility (`seedAnswers`, apps/studio/src/facilities/FacilityDialog.tsx) and posts
+ * them all back on Save, so "the caller submitted it" is true of every field on every edit. That is
+ * what disarmed the submitted-only scoping `controlledFieldsError` was originally written with: a
+ * value the operator never touched was indistinguishable from one they had just typed.
+ *
+ * `undefined` means the submission carried no answer for that field at all and is never a change —
+ * a deliberate BLANK arrives through `clearedCoreKeys`, not here. Empty string and null normalise
+ * together so a blanked-then-restored field does not read as changed.
+ *
+ * ⚠ `latitude`/`longitude` are numbers here and may arrive as strings off the driver, so they can
+ * read as changed when they are not. Harmless today: no caller of this function guards a numeric
+ * column.
+ */
+/**
+ * Required-field refusal, shared by POST and PUT.
+ *
+ * The form's `required` markers used to be enforced by the studio alone (`validate`,
+ * apps/studio/src/forms-runtime/runtime.ts, which blocks submit). Nothing checked them here, so a
+ * direct `PUT` carrying an empty required field returned 200 and wrote NULL.
+ *
+ * `changedFieldIds` is `null` on POST — a create must be complete, so every required field is
+ * checked. On PUT it is the set of FIELD ids whose core column this submission changed or cleared:
+ * an imported facility with a pre-existing gap stays editable, but the operator cannot blank a
+ * required field. Checking the whole form on every edit would block an unrelated change on a value
+ * the import never supplied — the same defect, one layer up, that `changedCoreKeys` exists for.
+ *
+ * ⚠ `validateAnswers` has NO visibility check, unlike the studio's own `validate`
+ * (runtime.ts:33, which skips hidden fields). On a form carrying a visibility rule this route
+ * therefore enforces required on a field the client never did. The shipped Facility form has no
+ * visibility rules, so this is inert today and live the moment an operator adds one.
+ */
+function requiredFieldsError(
+  formSchema: unknown, answers: Record<string, unknown>, changedFieldIds: Set<string> | null,
+): { error: string } | undefined {
+  // `as never` matches apps/server/src/forms-routes.ts:321, the only other caller in the codebase —
+  // that route hands `validateAnswers` a stored schema the same way, without re-parsing it. One
+  // convention, not two.
+  const errors = validateAnswers(formSchema as never, answers as never)
+    .filter((e) => e.reason === 'required')
+    .filter((e) => changedFieldIds === null || changedFieldIds.has(e.fieldId));
+  if (errors.length === 0) return undefined;
+  return { error: `${errors.map((e) => e.label).join(', ')} ${errors.length === 1 ? 'is' : 'are'} required` };
+}
+
+function changedCoreKeys(record: Partial<FacilityRecord>, before: FacilityRecord): Set<string> {
+  const norm = (v: unknown) => (v === null || v === undefined || v === '' ? null : v);
+  const stored = before as unknown as Record<string, unknown>;
+  const submitted = record as Record<string, unknown>;
+  const changed = new Set<string>();
+  for (const key of Object.keys(submitted)) {
+    if (!CORE_FACILITY_KEYS.has(key)) continue;
+    if (submitted[key] === undefined) continue;
+    if (norm(submitted[key]) !== norm(stored[key])) changed.add(key);
+  }
+  return changed;
+}
+
 // ── Task 6 (B1, facility-canonical-identity): server-enforced controlled vocabulary ────────────
 //
 // `resolveControlledFields`/`applyControlledFields` (packages/bootstrap/src/facility-controlled-
@@ -579,14 +650,24 @@ function nameTypeError(name: unknown): { error: string } | undefined {
 // hand-typed value behind the operator's back on this route would trade one surprise for another.
 // An operator who wants a particular canonical value picks it directly.
 //
-// Only fields the CALLER actually submitted this request are checked (`record`, from
-// `splitFacilityAnswers` — never the row's other, already-persisted columns): an edit that touches
-// an unrelated field must not be blocked by a value written before this check existed.
+// ⛔ Scoped to what this request CHANGED, not to what it submitted. Scoping on "submitted" was the
+// original intent — an edit that touches an unrelated field must not be blocked by a value written
+// before this check existed — but it never held from the studio client, which seeds every field off
+// the facility and posts them all back (see `changedCoreKeys`). The effect was that an imported
+// facility carrying a raw, unmapped level could not be edited AT ALL until that value was mapped,
+// and mapping is optional by design: `applyControlledFields` writes an unmapped value through
+// untouched (packages/bootstrap/src/facility-controlled-fields.ts). Two subsystems each behaving
+// correctly, disagreeing at the seam.
+//
+// POST passes no `before` — there is nothing to have changed FROM, so every submitted value is
+// checked, exactly as before.
 async function controlledFieldsError(
-  ctx: AppContext, record: Partial<FacilityRecord>,
+  ctx: AppContext, record: Partial<FacilityRecord>, before?: FacilityRecord,
 ): Promise<{ error: string } | undefined> {
+  const changed = before ? changedCoreKeys(record, before) : null;
   const submitted = CONTROLLED_FIELDS.filter(
-    (field) => typeof record[field] === 'string' && (record[field] as string).length > 0,
+    (field) => typeof record[field] === 'string' && (record[field] as string).length > 0
+      && (changed === null || changed.has(field)),
   );
   if (submitted.length === 0) return undefined;
 
@@ -691,7 +772,15 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
 
   // B1 Task 3: the registers an import may name. Constructed once per registration for the same
   // reason `importRuns` above is — a thin closure over `ctx.internalDb`.
-  const registerSources = createFacilityRegisterSourceStore(ctx.internalDb);
+  //
+  // ⛔ `ctx.__registerSources` is a TEST SEAM, never a production path. `fakeCtx()` in
+  // facilities-routes.test.ts has no real database for this store to close over — its `internalDb`
+  // is a narrow, allow-listed Kysely Proxy that throws on any call outside the measured set — so a
+  // test exercising POST's register gate has no other way to answer `getByUrl`. Production always
+  // takes the real store, since nothing outside that fixture ever sets this property.
+  const registerSources = (ctx as unknown as {
+    __registerSources?: ReturnType<typeof createFacilityRegisterSourceStore>;
+  }).__registerSources ?? createFacilityRegisterSourceStore(ctx.internalDb);
 
   // ⛔ THE REFUSAL THIS SLICE EXISTS FOR — both its decision and both its messages now live in
   // `resolveFacilityRegisterForImport` (@openldr/db, facility-register-sources.ts), which carries the
@@ -1165,7 +1254,7 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     const p = SubmitSchema.safeParse(req.body);
     if (!p.success) { reply.code(400); return { error: p.error.message }; }
 
-    const { fields, targetPages } = await resolveForm(ctx, p.data.formSchemaId);
+    const { fields, targetPages, schema: formSchema } = await resolveForm(ctx, p.data.formSchemaId);
     // An empty field list means the submitted form could not be resolved — NOT "every field is
     // extras". Refuse the write rather than silently persisting nothing but a bare id.
     if (fields.length === 0) { reply.code(400); return { error: 'the submitted form could not be resolved' }; }
@@ -1193,22 +1282,65 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       return { error: 'a facility must have a local code or a national code' };
     }
 
+    // A create must be COMPLETE — every required field, not just the ones this submission moved.
+    // There is no `before` to inherit a value from.
+    const requiredErr = requiredFieldsError(formSchema, p.data.answers, null);
+    if (requiredErr) { reply.code(400); return requiredErr; }
+
     // Task 6 (B1): reject a non-canonical level/status/country BEFORE the write — see
     // `controlledFieldsError`'s doc comment for why this refuses rather than warns, unlike import.
     const controlledErr = await controlledFieldsError(ctx, record);
     if (controlledErr) { reply.code(400); return controlledErr; }
+
+    // ⛔ The id is SERVER-derived, never client-chosen — that part is unchanged, and is why a
+    // client-supplied `id` is still ignored here.
+    //
+    // When this facility names a register AND a code within it, the id comes from the SAME function
+    // the CSV importer uses (`idFor`, packages/terminology/src/facility-csv.ts). Otherwise the same
+    // facility exists twice — once hand-entered under a random id, once imported under the derived
+    // one — and no later import can ever reconcile them. Migration 082's `planMoves` already
+    // re-keyed the manual rows that predate this and states the rule in full; this is that rule
+    // applied at the door, instead of once, by a migration that will never run again.
+    //
+    // No national code means nothing to hash, so the random id stands — the same case 082 leaves
+    // alone rather than inventing an identity for.
+    const nationalSystem = typeof record.nationalSystem === 'string' ? record.nationalSystem.trim() : '';
+    const nationalCode = typeof record.nationalCode === 'string' ? record.nationalCode.trim() : '';
+    // Annotated `string`, not inferred: `randomUUID()` returns the narrow
+    // `${string}-${string}-...` template-literal type, which `idFor`'s plain string cannot be
+    // assigned to.
+    let id: string = randomUUID();
+    if (nationalSystem && nationalCode) {
+      // The same gate every import door already applies, for the same reason: `idFor` hashes this
+      // string into a PERMANENT identity without normalising it, so a typed label ('HFR' vs 'hfr')
+      // mints two identities for one register. See `resolveFacilityRegisterForImport` (@openldr/db)
+      // for the full defect. Doors that disagree about what a register is put the fork straight back.
+      const register = await resolveFacilityRegisterForImport(registerSources, nationalSystem);
+      if (!register.ok) { reply.code(400); return { error: register.error }; }
+      id = idFor(nationalSystem, nationalCode);
+      // ⛔ `facilityRegistry.upsert` is `onConflict('id').doUpdateSet(...)`
+      // (packages/db/src/facility-registry-store.ts). That was harmless while every created id was
+      // random. With a DERIVED id it is not: a create landing on an existing row would silently
+      // OVERWRITE it — most likely an imported facility — with no error and no record of what was
+      // lost. A create must never do that, so the collision is refused before the write.
+      //
+      // This is a check-then-write, so it is not a substitute for the database's own guarantee: the
+      // partial unique index on (national_system, national_code) (migration 070) is what actually
+      // closes the race, and `mapFacilityDbError` turns its 23505 into the same 409 below.
+      if (await ctx.facilityRegistry.get(id)) {
+        reply.code(409);
+        return { error: 'a facility with that national code already exists in this register' };
+      }
+    }
 
     // Only the write itself is guarded — an error from `recordAudit` below must never be mapped
     // as if it came from `upsert` (e.g. a 23505 from the audit table mis-reported to the client as
     // "a facility with that local code already exists" after the facility row already committed).
     let created;
     try {
-      // ⛔ The id is ALWAYS generated here. The CSV importer derives ids deterministically from
-      // sha256(nationalSystem|nationalCode), so a client-chosen id could collide with an imported
-      // row and silently overwrite it.
       created = await ctx.facilityRegistry.upsert({
         ...record,
-        id: randomUUID(),
+        id,
         name,
         extras,
         // Lab-authored: managedOrigin stays NULL. Only the sync applier stamps 'central'.
@@ -1282,7 +1414,7 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     const before = await ctx.facilityRegistry.get(id);
     if (!before) { reply.code(404); return { error: 'not found' }; }
 
-    const { fields, targetPages } = await resolveForm(ctx, p.data.formSchemaId);
+    const { fields, targetPages, schema: formSchema } = await resolveForm(ctx, p.data.formSchemaId);
     if (fields.length === 0) { reply.code(400); return { error: 'the submitted form could not be resolved' }; }
     // Same wrong-form guard as POST (see targetsFacilitiesPage's doc comment) — without it a
     // resolvable but unrelated form (a Patient form's formSchemaId, say) sails past the check
@@ -1327,11 +1459,53 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       return { error: 'a facility must have a local code or a national code' };
     }
 
-    // Task 6 (B1): same rule as POST, and scoped the same way — only what THIS submission sets for
-    // level/status/country is checked, never a value inherited unchanged from `before` (see
-    // `controlledFieldsError`'s doc comment). An edit to an unrelated field on a facility whose
-    // status predates this check must not be blocked by that pre-existing value.
-    const controlledErr = await controlledFieldsError(ctx, record);
+    // ⛔ The national code and its register are this row's IDENTITY, not two more editable columns:
+    // the importer derives `id = fac-sha256(nationalSystem|nationalCode)` (`idFor`,
+    // packages/terminology/src/facility-csv.ts) and this handler updates BY id without re-deriving
+    // it. An edit that moved either value would leave the row filed under an id its own code no
+    // longer produces — the next import of that register would not find it, and would either
+    // collide on `facility_registry_national_unique` (migration 070) or insert a second row for the
+    // same facility.
+    //
+    // Re-keying a live row is deliberately NOT attempted here: `facility_map.registry_id`,
+    // `facility_concept_projection`, and any mapping authored against the projected code all point
+    // at the id. That is its own slice. The accepted cost is that a facility created WITHOUT a
+    // national code can never acquire one — it must be deleted and registered again. A row that has
+    // neither value is unaffected: `changedCoreKeys` sees no change, so it stays freely editable.
+    const identityChanged = changedCoreKeys(record, before);
+    if (identityChanged.has('nationalCode') || cleared.has('nationalCode')) {
+      reply.code(400);
+      return { error: "a facility's national code cannot be changed on an existing facility; it is part of the facility's identity" };
+    }
+    if (identityChanged.has('nationalSystem') || cleared.has('nationalSystem')) {
+      reply.code(400);
+      return { error: "a facility's facility register cannot be changed on an existing facility; it is part of the facility's identity" };
+    }
+
+    // Required is enforced only for what this submission MOVED. `identityChanged`/`cleared` are
+    // keyed on COLUMN names while `validateAnswers` reports FIELD ids, so map through the submitted
+    // form's own field list rather than assuming the two are spelled the same.
+    //
+    // The effect: an imported facility whose register never supplied, say, a district stays
+    // editable — the operator can still fix its name — but blanking a required field is refused.
+    // Enforcing the whole form here instead would make every row with a pre-existing gap
+    // permanently uneditable, which is the trap this whole slice exists to avoid.
+    const changedFieldIds = new Set(
+      fields
+        .filter((f) => {
+          const key = f.apiProperty ?? '';
+          return identityChanged.has(key) || cleared.has(key);
+        })
+        .map((f) => f.id),
+    );
+    const requiredErr = requiredFieldsError(formSchema, p.data.answers, changedFieldIds);
+    if (requiredErr) { reply.code(400); return requiredErr; }
+
+    // Task 6 (B1), rescoped: only a level/status/country this submission actually CHANGED is
+    // checked. The sheet resubmits every field it seeded, so scoping on "submitted" checked every
+    // value on every edit — which made an imported facility carrying an unmapped raw value
+    // uneditable until that value was mapped. See `controlledFieldsError`'s doc comment.
+    const controlledErr = await controlledFieldsError(ctx, record, before);
     if (controlledErr) { reply.code(400); return controlledErr; }
 
     // Only the write itself is guarded — see the matching comment in POST.
