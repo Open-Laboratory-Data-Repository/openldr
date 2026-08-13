@@ -1,7 +1,19 @@
-import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+// Same shape ReferencePicker.test.tsx already uses — one idiom in this folder, not two. FormRuntime
+// itself now calls these to resolve seeded reference answers on load.
+vi.mock('@/api', () => ({
+  referenceSearch: vi.fn(),
+  referenceSearchPreview: vi.fn(),
+}));
+import { referenceSearch, referenceSearchPreview } from '@/api';
 import { FormRuntime } from './FormRuntime';
 import type { FormSchema } from './types';
+
+beforeEach(() => {
+  vi.mocked(referenceSearch).mockReset();
+  vi.mocked(referenceSearchPreview).mockReset();
+});
 
 // New flat-model schema: required text field, a boolean, and a conditional text field.
 const schema: FormSchema = {
@@ -623,5 +635,80 @@ describe('FormRuntime', () => {
     const input = screen.getByLabelText('Name');
     fireEvent.change(input, { target: { value: 'No listener' } });
     expect((input as HTMLInputElement).value).toBe('No listener');
+  });
+});
+
+describe('seeded reference answers are resolved before validation sees them', () => {
+  const refSchema = {
+    id: 's', name: 'S', sections: [], version: 1,
+    versionLabel: null, fhirVersion: null, fhirResourceType: null, fhirProfileUrl: null, facilityId: null,
+    fields: [{
+      id: 'level', fhirPath: null, description: null, displayLabel: 'Level',
+      fieldType: 'reference', required: true, enabled: true, order: 0,
+      cardinality: { min: 1, max: '1' }, valueSetUrl: 'urn:openldr:valueset:facility-type',
+    }],
+  } as never as FormSchema;
+
+  const codingResult = {
+    kind: 'coding' as const,
+    total: 1,
+    rows: [{ system: 'urn:openldr:cs:facility-type', code: 'health-center', display: 'Health Center' }],
+  };
+
+  it('submits a facility seeded with a stored DISPLAY, instead of blocking on it', async () => {
+    // The defect: the sheet seeds 'Health Center' (a string), `validate` demands {system, code},
+    // and Save silently does nothing. Measured on a live install before this fix.
+    const onSubmit = vi.fn();
+    vi.mocked(referenceSearch).mockResolvedValue(codingResult);
+
+    render(<FormRuntime schema={refSchema} formDefinitionId="form-1" initialAnswers={{ level: 'Health Center' }} onSubmit={onSubmit} submitLabel="Save" />);
+    await waitFor(() => expect(vi.mocked(referenceSearch)).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit.mock.calls[0][0].level).toEqual({
+      system: 'urn:openldr:cs:facility-type', code: 'health-center', display: 'Health Center',
+    });
+  });
+
+  it('submits an UNRESOLVABLE seeded value untouched, instead of demanding the operator re-pick it', async () => {
+    // 'Health Centre' is what the Zambia register writes, and it is genuinely not in the value set —
+    // the importer writes an unmapped value through deliberately, and mapping is optional. Blocking
+    // here made 3788 of 3788 imported rows uneditable: renaming one demanded first re-picking a
+    // level the operator never entered. The raw value must survive the round trip untouched.
+    const onSubmit = vi.fn();
+    vi.mocked(referenceSearch).mockResolvedValue(codingResult);
+
+    render(<FormRuntime schema={refSchema} formDefinitionId="form-1" initialAnswers={{ level: 'Health Centre' }} onSubmit={onSubmit} submitLabel="Save" />);
+    await waitFor(() => expect(vi.mocked(referenceSearch)).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit.mock.calls[0][0].level).toBe('Health Centre');
+  });
+
+  it('still blocks a required reference field left EMPTY — the exemption is for seeded values only', async () => {
+    const onSubmit = vi.fn();
+    render(<FormRuntime schema={refSchema} formDefinitionId="form-1" initialAnswers={{}} onSubmit={onSubmit} submitLabel="Save" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(screen.getByText('field level is required')).toBeInTheDocument());
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it("a failed lookup degrades to today's behaviour rather than blanking the field", async () => {
+    vi.mocked(referenceSearch).mockRejectedValue(new Error('network'));
+    render(<FormRuntime schema={refSchema} formDefinitionId="form-1" initialAnswers={{ level: 'Health Center' }} onSubmit={vi.fn()} submitLabel="Save" />);
+    await waitFor(() => expect(vi.mocked(referenceSearch)).toHaveBeenCalled());
+    // The value is still displayed — a lookup failure must never eat the operator's data.
+    // Rendered as a selected chip, not an input value: ReferencePicker shows a selected reference in
+    // a div and falls back to the value's own string form when it is not a coding object.
+    expect(screen.getByText('Health Center')).toBeInTheDocument();
+  });
+
+  it('does not search when there is no form id to scope the search to', async () => {
+    render(<FormRuntime schema={refSchema} initialAnswers={{ level: 'Health Center' }} onSubmit={vi.fn()} submitLabel="Save" />);
+    await new Promise((r) => { setTimeout(r, 50); });
+    expect(vi.mocked(referenceSearch)).not.toHaveBeenCalled();
   });
 });

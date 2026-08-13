@@ -25,7 +25,26 @@ function isEmpty(v: unknown): boolean {
  * Client-side validation. Returns per-field error messages for visible fields
  * that fail required / cardinality / numeric constraints.
  */
-export function validate(schema: FormSchema, answers: RuntimeAnswers): Record<string, string> {
+/**
+ * @param exemptReferenceIds Reference fields whose answer this submission did NOT touch — it is
+ *   still exactly the value that was seeded from storage. Their "must be a coding" check is skipped.
+ *
+ *   ⛔ WHY. A stored reference value is a plain string (the column is `text`, and
+ *   `splitFacilityAnswers` flattens a coding to its display), and some of those strings are not in
+ *   the value set at all — the facility importer writes an unmapped value through DELIBERATELY, and
+ *   mapping is optional by design. Without this exemption, renaming an imported facility demanded
+ *   the operator first re-pick a level they never entered: 3788 of 3788 Zambia rows were uneditable
+ *   for that reason. Measured 2026-08-13.
+ *
+ *   This mirrors the rule the facilities route already follows — check only what this submission
+ *   changed. A value the operator DID pick is an object and never needs the exemption; a value they
+ *   changed is no longer equal to its seed and so is not exempt.
+ */
+export function validate(
+  schema: FormSchema,
+  answers: RuntimeAnswers,
+  exemptReferenceIds: ReadonlySet<string> = new Set(),
+): Record<string, string> {
   const visible = visibleIds(schema, answers);
   const errors: Record<string, string> = {};
 
@@ -44,7 +63,8 @@ export function validate(schema: FormSchema, answers: RuntimeAnswers): Record<st
     // actually rendered. FormRuntime falls back to a text input for a reference-family field
     // that declares no source, so demanding an object there pointed the user at a list that
     // does not exist. Gate on the same condition FormRuntime uses to choose the control.
-    if (isReferenceFieldType(field.fieldType) && resolveReferenceSource(field).ok && values.length > 0) {
+    if (isReferenceFieldType(field.fieldType) && resolveReferenceSource(field).ok && values.length > 0
+      && !exemptReferenceIds.has(field.id)) {
       if (values.some((v) => !isCodingAnswer(v) && !isEntityAnswer(v))) {
         errors[field.id] = 'select a value from the list';
         continue;

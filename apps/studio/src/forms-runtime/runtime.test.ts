@@ -58,3 +58,28 @@ describe('cleanAnswers', () => {
     expect(out.tests).toEqual([codingA, codingB]);
   });
 });
+
+describe('validate — the seeded-value exemption', () => {
+  const refSchema = (over: Record<string, unknown> = {}) => ({
+    id: 's', name: 'S', sections: [], fields: [{
+      id: 'level', fhirPath: null, displayLabel: 'Level', description: null,
+      fieldType: 'reference', required: true, enabled: true, order: 0,
+      cardinality: { min: 0, max: '1' }, valueSetUrl: 'urn:vs', ...over,
+    }],
+  }) as never;
+
+  it('accepts a bare string for an EXEMPT reference field', () => {
+    // The operator did not type this — storage did, and the value set does not contain it.
+    expect(validate(refSchema(), { level: 'Health Centre' }, new Set(['level']))).toEqual({});
+  });
+
+  it('still rejects a bare string for a field that is NOT exempt', () => {
+    // i.e. a value this submission changed. The exemption is scoped, not a blanket relaxation.
+    expect(validate(refSchema(), { level: 'Health Centre' })).toEqual({ level: 'select a value from the list' });
+  });
+
+  it('still reports a required EMPTY field even when that field is exempt', () => {
+    // Exemption covers the coding-shape check only; presence is a separate rule.
+    expect(validate(refSchema(), {}, new Set(['level']))).toEqual({ level: 'field level is required' });
+  });
+});
