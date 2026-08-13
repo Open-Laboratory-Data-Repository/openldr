@@ -1644,6 +1644,19 @@ export {
   resolveControlledFields, applyControlledFields,
 } from './facility-controlled-fields';
 export type { ControlledField, ControlledResolution } from './facility-controlled-fields';
+// Task 2 (facility import mapping): offline column/value suggestion engine. Task 4 (HTTP route) and
+// Task 9 (CLI) both call it — shared here so neither consumer re-declares the SYNONYMS table.
+export {
+  normaliseLabel, similarity, suggestColumns, suggestValues,
+} from './facility-mapping-suggest';
+export type {
+  Suggestion, SuggestionConfidence, ColumnSuggestion, ValueCandidate, ValueSuggestion,
+} from './facility-mapping-suggest';
+// Task 5 (facility import mapping): writes the operator's controlled-field value-mapping decisions
+// so `resolveControlledFields` picks them up on the next parse. Exported for Task 6's route and
+// Task 8's wizard wiring.
+export { saveFacilityValueMappings, FACILITY_VALUE_MAP_TYPE } from './facility-value-mappings';
+export type { ValueMappingEntry, SaveValueMappingsResult } from './facility-value-mappings';
 export { scanObservedFacilities, resolveObservedFacilities, publishFacilityMap, projectRegistryRows, retireRegistryConcepts, reprojectAfterRegistryDelete, listFacilityMappingConflicts } from './facility-reconcile';
 export type { ReconcileDeps, ScanResult, ScanOptions, ResolvedFacility, ResolvedVia, PublishResult, FacilityMappingConflict } from './facility-reconcile';
 // Task 10 (facility durable-updates): surfaces Task 9's dimension-state resolver to the HTTP route

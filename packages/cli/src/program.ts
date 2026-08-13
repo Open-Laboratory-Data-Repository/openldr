@@ -26,6 +26,7 @@ import { runErrorsList } from './errors';
 import {
   runFacilitiesImport, runFacilitiesScanObserved, runFacilitiesPublish, runFacilitiesConflicts, runFacilitiesJobs,
   runFacilitiesImportRuns, runFacilitiesImportRun, runFacilitiesImportRunCancel, runFacilitiesImportSources,
+  runFacilitiesSuggestMap, runFacilitiesSuggestValues,
 } from './facilities';
 import { setActorOverride } from './cli-actor';
 
@@ -262,15 +263,39 @@ export function buildProgram(): Command {
     .option('--on-deleted <retire|report>', 'what to do with rows the publisher explicitly declared removed (JSONL only; default: retire)')
     .option('--on-absent <retire|report>', 'what to do with rows merely absent from a --complete-release file (default: report)')
     .option('--on-conflict <skip|overwrite>', 'what to do with a row touched since the preview watermark this apply is linked to (default: skip); currently has no effect on the CLI path because this command lacks a two-step preview/apply to establish a watermark')
+    .option('--column-map <file.json>', 'path to a FacilityColumnMap JSON file mapping this file\'s headers onto the contract (see `facilities suggest-map` for a starting point)')
+    .option('--value-map <file.json>', 'path to a JSON array of { field, rawValue, toCode } value-mapping entries (see `facilities suggest-values`); written ONLY with --apply, before the import. WARNING: --national-system is free text on this command (unlike the studio wizard) — a mistyped register writes mappings that will never resolve, silently; spell it exactly as `facilities import-sources` prints it')
     .option('--json', 'emit machine-readable JSON', false)
     .action(async (path: string, opts: {
       nationalSystem: string; apply: boolean; allowUnknownColumns: boolean; allowMalformedRows: boolean;
       allowInvalidCoordinates: boolean;
       format?: 'csv' | 'jsonl'; releaseVersion?: string; completeRelease: boolean;
       onDeleted?: 'retire' | 'report'; onAbsent?: 'retire' | 'report'; onConflict?: 'skip' | 'overwrite';
+      columnMap?: string; valueMap?: string;
       json: boolean;
     }) => {
       process.exitCode = await runFacilitiesImport(path, opts);
+    });
+  // Task 9: CLI parity for `POST /api/facilities/import/suggest-map` — the SAME offline `suggestColumns`
+  // (@openldr/bootstrap, Task 2) the route calls. No database, no --apply: read-only and pure.
+  facilities
+    .command('suggest-map <path>')
+    .description('Print a FacilityColumnMap of ranked column suggestions for this file\'s header row, ready to review and feed back to `import --column-map`.')
+    .option('--json', 'emit machine-readable JSON', false)
+    .action(async (path: string, opts: { json: boolean }) => {
+      process.exitCode = await runFacilitiesSuggestMap(path, opts);
+    });
+  // Task 9: CLI parity for `POST /api/facilities/import/suggest-values`, extended to find the raw
+  // values itself (the route takes them as input; this command parses the file to get them) — the
+  // SAME `resolveControlledFields`/`suggestValues` (@openldr/bootstrap) `importFacilities` runs.
+  facilities
+    .command('suggest-values <path>')
+    .description('Rank candidate canonical values for every level/status/country value this file carries with no mapping yet, ready to review and write with `import --value-map`.')
+    .requiredOption('--national-system <sys>', 'the register these raw values were captured under. WARNING: free text on this command — a mistyped register finds no existing mappings and every value looks unmapped, with no error; spell it exactly as `facilities import-sources` prints it')
+    .option('--column-map <file.json>', 'the same FacilityColumnMap `import --column-map` takes, so the raw values come from this file\'s own headers rather than requiring them to already be named level/status/country')
+    .option('--json', 'emit machine-readable JSON', false)
+    .action(async (path: string, opts: { nationalSystem: string; columnMap?: string; json: boolean }) => {
+      process.exitCode = await runFacilitiesSuggestValues(path, opts);
     });
   // B1 Task 11: CLI parity for `GET /api/facilities/import/sources`. A SIBLING of `import`, never
   // `facilities sources list` — commander parses a parent's declared options before dispatching to a

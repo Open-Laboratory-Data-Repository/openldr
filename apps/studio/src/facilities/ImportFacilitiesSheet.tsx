@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { MoreHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -21,15 +22,21 @@ import {
   getFacilityImportRun,
   importFacilitiesCsv,
   listFacilityImportSources,
+  suggestColumnMap,
   uploadFacilityImport,
+  type ColumnMapError,
+  type ColumnSuggestion,
   type ControlledField,
+  type FacilityColumnMap,
   type FacilityImportConfirmOptions,
   type FacilityImportResult,
   type FacilityImportRunStatus,
   type FacilityImportRunView,
   type FacilityRegisterSource,
 } from '@/api';
+import { ColumnMapStep, CONTRACT_FIELDS } from './ColumnMapStep';
 import { RegisterSourceDialog } from './RegisterSourceDialog';
+import { ValueMapPanel } from './ValueMapPanel';
 
 // CT-3 (whole-branch review): `FacilityImportResult.unmapped`/`notValidated` are keyed by this
 // fixed triple — mirrors `@openldr/bootstrap`'s `CONTROLLED_FIELDS`, not imported from it (this app
@@ -39,9 +46,41 @@ import { RegisterSourceDialog } from './RegisterSourceDialog';
 // field-name translations.
 const CONTROLLED_FIELDS: ControlledField[] = ['level', 'status', 'country'];
 
+/** Task 8: the reset value for a freshly picked file — no header has been mapped, constant-filled or
+ *  carried to extras yet. A single module-level constant, not re-literalled at every call site, so
+ *  `handleFileChange`'s reset and `columnMap`'s own initial state can never drift apart. */
+const EMPTY_COLUMN_MAP: FacilityColumnMap = { columns: {}, constants: {}, extras: [] };
+
 /** A diff cell's `before`/`after` value, formatted for display. `null`/`undefined` (the field was
  *  never set) reads as an em-dash rather than the literal string "null"/"undefined". */
 const fmtDiffValue = (v: unknown): string => (v === null || v === undefined ? '—' : String(v));
+
+/** One `ColumnMapError` (packages/terminology/src/facility-csv.ts, mirrored as `@/api`'s
+ *  `ColumnMapError`), rendered for an operator to act on — whole-branch review, MUST FIX 3.
+ *  `columnMapErrors` was mirrored in `api.ts` and rendered NOWHERE: an operator who mapped two
+ *  headers to one field saw a blocked preview with no explanation of why. This mirrors
+ *  `describeColumnMapError` (`packages/cli/src/facilities.ts`) reason for reason — the same four the
+ *  CLI already prints — through i18n instead of a raw string, so the wording is translated rather
+ *  than hardcoded English. One branch per `ColumnMapErrorReason`; a reason added there and not here
+ *  is a `tsc` exhaustiveness error via the `default` branch, not a silently generic message. */
+function describeColumnMapError(t: TFunction, e: ColumnMapError): string {
+  switch (e.reason) {
+    case 'duplicate_target':
+      return t('facilities.import.columnMapErrorDuplicateTarget', { subject: e.subject, other: e.other, target: e.target });
+    case 'constant_collision':
+      return t('facilities.import.columnMapErrorConstantCollision', { target: e.target, other: e.other });
+    case 'unknown_target':
+      return t('facilities.import.columnMapErrorUnknownTarget', {
+        subject: e.subject, target: e.target, count: CONTRACT_FIELDS.length,
+      });
+    case 'missing_required':
+      return t('facilities.import.columnMapErrorMissingRequired', { target: e.target });
+    default: {
+      const _exhaustive: never = e.reason;
+      return `${_exhaustive}: ${e.subject} -> ${e.target}`;
+    }
+  }
+}
 
 // A2a (FAC-P1-03) superseded the original F3 fix. `parsed - duplicates` only ever accounted for
 // rows the FILE itself repeated — every other accepted row still read as something an import would
@@ -82,6 +121,25 @@ const RUN_POLLED_STATUSES: FacilityImportRunStatus[] = ['queued', 'validating', 
 /** Matches the import worker's own default poll interval (`createFacilityImportWorker`'s
  *  `intervalMs ?? 3000`), so the sheet asks at roughly the rate the run can actually change. */
 const RUN_POLL_MS = 3000;
+
+/** Task 8: is this `FacilityColumnMap` worth sending at all? `ColumnMapStep` seeds real entries into
+ *  it the moment its headers are known (see that file's own fix-pass docblock), so in ordinary use
+ *  this is only ever empty in the brief window before that seed lands (or for a JSONL release, which
+ *  never renders the panel at all — see `columnMap`'s reset in `handleFileChange`).
+ *
+ *  ⛔ AN EMPTY MAP IS NOT THE SAME AS NO MAP. `validateColumnMap` (packages/terminology/src/
+ *  facility-csv.ts) treats a PRESENT `columnMap` as authoritative: a header that already spells
+ *  `national_code`/`name` verbatim still passes through and satisfies the required-field check on
+ *  its own — but ONLY when nothing else claims it AND the map itself doesn't get in the way; sending
+ *  `{ columns: {}, extras: [] }` with no operator decision behind it yet would misreport this file's
+ *  own real headers as unmapped the instant the server route honours this field (see this file's own
+ *  note on that gap). Same principle `confirmOptionsFor` already applies to every other override: a
+ *  key sent for a control nobody has actually used is a decision nobody made. */
+function hasColumnMapContent(map: FacilityColumnMap): boolean {
+  return Object.keys(map.columns).length > 0
+    || Object.keys(map.constants ?? {}).length > 0
+    || (map.extras ?? []).length > 0;
+}
 
 /** The confirm request's body: EXACTLY the choices whose control the operator was actually shown,
  *  and no others.
@@ -127,13 +185,21 @@ const RUN_POLL_MS = 3000;
  *  `onConflict` carries no count gate of its own because its control has none: a conflict can only
  *  be discovered by the apply this confirm authorises, so the choice is always made in advance (see
  *  `showConflictChoice`, which is constantly true on THIS door — the summary under review here is
- *  always a run's, so `fromRun` is true). The wrapper it sits in is therefore its only gate. */
+ *  always a run's, so `fromRun` is true). The wrapper it sits in is therefore its only gate.
+ *
+ *  Task 8: `columnMap` joins `allowMalformedRows` outside the `parsed > 0` wrapper and with no
+ *  render-gate of its own, for the same reason that field has none — there is no amber box a column
+ *  map's presence toggles on this door; it is sent whenever the sheet actually has one worth sending
+ *  (`hasColumnMapContent`), never merely because a run exists. A background run that VALIDATED with a
+ *  map and then applied without it would re-parse the file against raw headers and refuse it — the
+ *  same class of bug this file's own comment on `allowMalformedRows` documents for that flag. */
 function confirmOptionsFor(
   result: FacilityImportResult,
   chosen: Required<Omit<FacilityImportConfirmOptions, 'allowUnknownColumns' | 'allowInvalidCoordinates'>>,
 ): FacilityImportConfirmOptions {
   return {
     ...(result.quarantined.length > 0 ? { allowMalformedRows: chosen.allowMalformedRows } : {}),
+    ...(hasColumnMapContent(chosen.columnMap) ? { columnMap: chosen.columnMap } : {}),
     ...(result.parsed > 0
       ? {
         ...(result.deleted > 0 ? { onDeleted: chosen.onDeleted } : {}),
@@ -219,6 +285,12 @@ interface ReconciliationSummaryProps {
   overCap: boolean;
   /** `null` on the inline door; the run's own parse-override state on the background one. */
   reupload: ReuploadOverrides | null;
+  /** Task 8: the register `ValueMapPanel` writes mappings under — same identity on both doors, the
+   *  sheet's own `nationalSystem` state. */
+  nationalSystem: string;
+  /** Task 8: `ValueMapPanel`'s `onSaved` — a just-written mapping only takes effect on a fresh
+   *  parse, so this re-runs whichever preview produced `result`. */
+  onValueMappingsSaved: () => void;
 }
 
 /** A2a's reconciliation summary — what a file would actually DO to the registry, as the server
@@ -289,6 +361,23 @@ function ReconciliationSummary(props: ReconciliationSummaryProps) {
               )}
             </p>
           ))}
+        </div>
+      )}
+
+      {/* Whole-branch review, MUST FIX 3: `columnMapErrors` — same reasoning as `duplicateColumns`
+          (which this sheet still does not render; that gap is separate and out of scope here): a
+          non-empty list means nothing imported, and there is no override — the operator must fix
+          the map, which is exactly why `ColumnMapStep` stays mounted below for this specific
+          `blockedReason` (see its own render gate). Rendered ahead of `noOutcomeStated` and the
+          other amber boxes: this is the reason nothing else on this file could be evaluated. */}
+      {result.columnMapErrors.length > 0 && (
+        <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+          <p className="font-medium">{t('facilities.import.columnMapErrorsTitle')}</p>
+          <ul className="mt-1 space-y-0.5">
+            {result.columnMapErrors.map((e, i) => (
+              <li key={`${e.reason}-${e.subject}-${i}`}>{describeColumnMapError(t, e)}</li>
+            ))}
+          </ul>
         </div>
       )}
 
@@ -445,23 +534,19 @@ function ReconciliationSummary(props: ReconciliationSummaryProps) {
             </div>
           )}
 
-          {/* CT-3: the controlled-field layer (FAC-P1-05) — a raw source value for
-              level/status/country that resolved to no canonical `term_mappings` code. A
-              WARNING, never a block: the raw value is still written exactly as before this
-              layer existed (see facility-import.ts's `unmapped` doc comment). */}
+          {/* CT-3 / Task 8: the controlled-field layer (FAC-P1-05) — a raw source value for
+              level/status/country that resolved to no canonical `term_mappings` code. A WARNING,
+              never a block: the raw value is still written exactly as before this layer existed
+              (see facility-import.ts's `unmapped` doc comment) — `ValueMapPanel` turns it into an
+              opportunity to fix it, never into a wall (see that file's own docblock). It renders its
+              own heading using the SAME `unmappedTitle` copy the plain warning box used to show, so
+              the operator sees no unexplained change in wording, only new controls underneath it. */}
           {CONTROLLED_FIELDS.some((f) => result.unmapped[f].length > 0) && (
-            <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700">
-              <p className="font-medium">{t('facilities.import.unmappedTitle')}</p>
-              {CONTROLLED_FIELDS.filter((f) => result.unmapped[f].length > 0).map((field) => (
-                <p key={field}>
-                  {t('facilities.import.unmappedMessage', {
-                    count: result.unmapped[field].length,
-                    field: t(`facilities.filters.${field}Label`),
-                    values: result.unmapped[field].join(', '),
-                  })}
-                </p>
-              ))}
-            </div>
+            <ValueMapPanel
+              nationalSystem={props.nationalSystem}
+              unmapped={result.unmapped}
+              onSaved={props.onValueMappingsSaved}
+            />
           )}
           {/* Informational, not a warning box: these fields simply have no seeded value set
               to check against on this install, so mapped/unmapped could not be determined. */}
@@ -601,6 +686,32 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   const [completeRelease, setCompleteRelease] = useState(false);
   // Optional provenance only — never read by `importFacilities` itself (see api.ts's doc comment).
   const [releaseVersion, setReleaseVersion] = useState('');
+  // Task 8: the operator's column map for THIS file. Reset to `EMPTY_COLUMN_MAP` on every new file
+  // pick (`handleFileChange`) — load-bearing, not cosmetic: `ColumnMapStep`'s own `claimedTargets`
+  // reads `Object.values(value.columns)` unfiltered by the CURRENT file's headers, so an entry keyed
+  // on a PREVIOUS file's header would still satisfy a required field here, and the blocking summary
+  // would wave through a map the server's own `validateColumnMap` would then refuse.
+  //
+  // ⛔ `onChange={setColumnMap}` BELOW MUST STAY A DIRECT, SYNCHRONOUS ROUND-TRIP. `ColumnMapStep` is
+  // a controlled component whose OWN pre-selection depends on the value it just emitted landing back
+  // in `value` before the next render — see that file's fix-pass docblock ("an explicitly declined
+  // suggestion must stick"). Debouncing, batching, or dropping this call makes the panel look broken
+  // for reasons that are not in the panel.
+  const [columnMap, setColumnMap] = useState<FacilityColumnMap>(EMPTY_COLUMN_MAP);
+  // The current file's header row and this app's own ranked suggestions for it — CSV only (see the
+  // effect below); a JSONL release never renders `ColumnMapStep` at all (a map for one is meaningless
+  // — Task 3's own doc comment on `FacilityImportOptions.columnMap`).
+  const [columnMapHeaders, setColumnMapHeaders] = useState<string[]>([]);
+  const [columnMapSuggestions, setColumnMapSuggestions] = useState<ColumnSuggestion[]>([]);
+  // Whole-branch review, MUST FIX 3: `ColumnMapStep`'s own `onValidityChange` — wired here to a
+  // NON-BLOCKING notice only (see its render site below), never to disabling Preview/Upload.
+  // ⛔ Gating either action on this was tried and reverted: the "resets the column map on a file
+  // swap" test below picks a file whose headers satisfy NO required field and still expects Preview
+  // to fire — this sheet leaves "is the map complete" to the SERVER's own authoritative refusal
+  // (now actually rendered, via `columnMapErrors` above), never to a client-side guess that could
+  // diverge from it. Starts `true` so a file with no `ColumnMapStep` rendered yet (or none at all,
+  // e.g. JSONL) never shows a stale notice.
+  const [columnMapValid, setColumnMapValid] = useState(true);
   // A2a: what to do with rows this file's reconciliation classified as `deleted` (the publisher
   // explicitly declared them removed) or `absent` (this registry holds them, the file is simply
   // silent about them). Defaults mirror the server's own (`FacilityImportOptions.onDeleted`/
@@ -759,6 +870,17 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
     setOnDeleted('retire');
     setOnAbsent('report');
     setOnConflict('skip');
+    // Task 8: the two handed-off items, both closed HERE. (1) A different file means different
+    // headers, so any prior mapping decision is reset — `ColumnMapStep`'s own `claimedTargets` reads
+    // `Object.values(value.columns)` unfiltered by the CURRENT file's headers, so a header-keyed entry
+    // surviving a file swap would still satisfy a required field for a file it was never chosen
+    // against. (2) `columnMapHeaders`/`columnMapSuggestions` reset alongside it — the effect below
+    // will repopulate them for the NEW file once its `csv` resolves, but until then a stale header
+    // list must not linger and render `ColumnMapStep` against the wrong file's columns.
+    setColumnMap(EMPTY_COLUMN_MAP);
+    setColumnMapHeaders([]);
+    setColumnMapSuggestions([]);
+    setColumnMapValid(true);
     // A2b: a new file starts a new import in every sense. The picker is disabled while a run is
     // live (see `inputsDisabled`), so this only ever discards a run that has already finished.
     setRunId(null);
@@ -776,6 +898,42 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
       setError(err instanceof Error ? err.message : String(err));
     });
   };
+
+  // Task 8: the header row + this app's own ranked suggestions for the current CSV file — one
+  // network round-trip, headers and suggestions together (never headers-first-suggestions-later:
+  // `ColumnMapStep`'s own seed effect is gated on a header SIGNATURE alone, so headers arriving
+  // before their matching suggestions would let it seed nothing and then never retry once the real
+  // suggestions landed a moment later). Re-runs whenever the file's text OR the declared format
+  // changes — `format` because switching to `jsonl` must clear any CSV-only header list, `csv`
+  // because a new file means new headers.
+  useEffect(() => {
+    if (!csv || format !== 'csv') {
+      setColumnMapHeaders([]);
+      setColumnMapSuggestions([]);
+      return;
+    }
+    let cancelled = false;
+    suggestColumnMap(csv)
+      .then((res) => {
+        if (cancelled) return;
+        setColumnMapHeaders(res.headers);
+        setColumnMapSuggestions(res.columns);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        // The suggestion call failed (network, or an unrecognised header row) — the panel must still
+        // be usable, just without ranked help. Mirrors the server's own `suggest-map` route's
+        // deliberately naive header split (facilities-routes.ts): only the first line, split on `,`
+        // and trimmed. A quoted header containing a comma would split wrongly, which is acceptable
+        // here for the same reason it is there — this is advisory, and the operator sees and confirms
+        // every header before anything is imported; the authoritative parse stays the server's own.
+        const firstLine = csv.split(/\r?\n/, 1)[0] ?? '';
+        const headers = firstLine.split(',').map((h) => h.trim()).filter((h) => h !== '');
+        setColumnMapHeaders(headers);
+        setColumnMapSuggestions([]);
+      });
+    return () => { cancelled = true; };
+  }, [csv, format]);
 
   const handleNationalSystemChange = (value: string) => {
     setNationalSystem(value);
@@ -840,6 +998,11 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
         format,
         completeRelease,
         releaseVersion: releaseVersion.trim() || undefined,
+        // Task 8: the same discipline `format`/`completeRelease` above already follow — a preview
+        // and an apply that parse the file differently is a bug this sheet has learned before (see
+        // `handleApplyConfirm`'s matching `columnMap`, and `hasColumnMapContent`'s own doc comment
+        // for why an unpopulated map is sent as no map at all rather than an empty one).
+        columnMap: hasColumnMapContent(columnMap) ? columnMap : undefined,
         apply: false,
       });
       setPreviewResult(result);
@@ -909,6 +1072,11 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
         format,
         completeRelease,
         releaseVersion: releaseVersion.trim() || undefined,
+        // Task 8: the SAME map the linked preview sent — `ColumnMapStep` disappears from the sheet
+        // the moment `previewResult` exists (see its render gate below), so by the time Apply runs
+        // `columnMap` state can only be whatever the preview it is linked to already used. Sent with
+        // the identical `hasColumnMapContent` gate as the preview above, for the identical reason.
+        columnMap: hasColumnMapContent(columnMap) ? columnMap : undefined,
         apply: true,
         // A2a: without this, the apply is not linked to the preview the operator just read, and
         // `conflict` reports `null` (not evaluated) even though a preview DID run — see api.ts's
@@ -977,6 +1145,12 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
           // an apply that parses nothing, writes nothing and still reports `applied`).
           allowUnknownColumns: allowUnknown,
           allowInvalidCoordinates: allowInvalid,
+          // Task 8b: the same guard the inline door and `confirmOptionsFor` already apply — an empty
+          // map is not the same as no map (see `hasColumnMapContent`'s own doc comment), so this is
+          // sent only when the operator actually mapped something. Stored on the run's `options`
+          // before its own validate runs, which is what makes this door's validate agree with what
+          // the operator sees, instead of reading the file's raw headers.
+          columnMap: hasColumnMapContent(columnMap) ? columnMap : undefined,
         },
         setUploadProgress,
       );
@@ -1005,9 +1179,12 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
     setError(null);
     try {
       // ⛔ The two parse-changing overrides are deliberately not offered here — see
-      // `confirmOptionsFor`'s docblock. The run already carries whatever the UPLOAD declared.
+      // `confirmOptionsFor`'s docblock. The run already carries whatever the UPLOAD declared,
+      // `columnMap` included now that `uploadFacilityImport` sends its own (Task 8b) — the server's
+      // `ConfirmSchema` still has no `columnMap` key and drops this one, so sending it here is inert,
+      // not load-bearing; see `FacilityImportConfirmOptions.columnMap`'s own doc comment.
       await confirmFacilityImportRun(runId, confirmOptionsFor(awaitingSummary, {
-        onDeleted, onAbsent, onConflict, allowMalformedRows,
+        onDeleted, onAbsent, onConflict, allowMalformedRows, columnMap,
       }));
       // 202: the register has NOT been written yet. Go and watch what the worker actually does with
       // it — including the case where a newer upload supersedes the run before any worker claims it,
@@ -1048,6 +1225,17 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
    *  upload clears any inline preview (see `handleUpload`) and picking a file clears any run. */
   const reviewResult: FacilityImportResult | null = previewResult ?? awaitingSummary;
   const fromRun = awaitingSummary !== null;
+  /** Task 8: `ValueMapPanel`'s `onSaved` — a just-written mapping only takes effect on a fresh parse,
+   *  so this re-runs whichever preview produced the summary on screen. On the inline door that is a
+   *  plain re-preview. There is no equivalent light-weight re-validate for a background run — its
+   *  summary came from a worker's validate over the uploaded blob, not from a request this tab can
+   *  simply repeat — so this re-streams the SAME file, which mints a fresh run and supersedes the one
+   *  under review, the same mechanism the re-upload actions above already use for a parse-changing
+   *  override. */
+  const handleValueMappingsSaved = (): void => {
+    if (fromRun) void handleUpload();
+    else void runPreview();
+  };
   /** The run door's parse-override state, read off the RUN rather than this sheet's own — see
    *  `ReuploadOverrides`. `null` while an inline preview is what is under review, which is what makes
    *  the checkboxes stay checkboxes on that door. */
@@ -1131,6 +1319,15 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   // the importer's own `blocked` verdict.
   const canConfirmRun = !!awaitingSummary && !blockedFor(awaitingSummary);
   const willWriteCount = reviewResult ? willWrite(reviewResult) : 0;
+  // Whole-branch review, MUST FIX 3: `ColumnMapStep`'s `rowCount` — a plain count of non-empty data
+  // lines in the picked file, informational only ("This map applies to N facilities in this file").
+  // ⛔ NOT the authoritative row count: a quoted multi-line field would over-count here, the same
+  // acceptable impurity `suggestColumnMap`'s own naive header split already carries (see this
+  // sheet's `.catch` on that call) — the real count is `previewResult.parsed`, computed by the
+  // server, which this panel never has before that request runs.
+  const columnMapRowCount = csv
+    ? csv.split(/\r?\n/).filter((line, i) => i > 0 && line.trim() !== '').length
+    : undefined;
   // While a run holds the register, the inputs it was uploaded with must not drift out from under
   // it — the run is for THAT file under THAT national system, and nothing here can retract it.
   const inputsDisabled = applying || uploading || runActive;
@@ -1424,9 +1621,48 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
             </div>
           )}
 
+          {/* Task 8: the column-mapping panel — after a file is chosen, before the preview. CSV
+              only: a JSONL release is already in the contract's own shape, so a map for one is
+              meaningless (Task 3's own doc comment on `FacilityImportOptions.columnMap`) — `format
+              === 'csv'` alone gates that, since `columnMapHeaders` is always `[]` for `'jsonl'` (see
+              the header-fetch effect above). Gone once a run exists at all (`!run`) or a summary is
+              on screen (`!reviewResult`): the design's own flow maps columns exactly once, before
+              the file ever leaves this tab, and the operator cannot edit it again afterwards — see
+              `columnMap`'s own reset-on-file-swap comment for why it must not persist past that. */}
+          {format === 'csv' && columnMapHeaders.length > 0 && !run && !appliedSummary
+            // ⛔ Fix pass (whole-branch review, MUST FIX 3): kept mounted THROUGH a 'column-map'
+            // refusal, not just before any `reviewResult` exists — before this, the panel unmounted
+            // the instant a preview came back (any `reviewResult`), so the operator who most needed
+            // it (the one whose map the server just refused) lost it at the same moment the refusal
+            // appeared, with no way to fix it in place. Still gone once a DIFFERENT block reason
+            // exists (or none), preserving the original "map columns exactly once" flow.
+            && (!reviewResult || reviewResult.blockedReason === 'column-map') && (
+            <div className="mx-6 mt-4">
+              <ColumnMapStep
+                headers={columnMapHeaders}
+                suggestions={columnMapSuggestions}
+                value={columnMap}
+                // ⛔ MUST STAY THIS DIRECT — see `columnMap`'s own state comment above.
+                onChange={setColumnMap}
+                rowCount={columnMapRowCount}
+                onValidityChange={setColumnMapValid}
+              />
+              {/* Non-blocking — see `columnMapValid`'s own state comment for why this never
+                  disables Preview/Upload. Purely a heads-up: the server's own refusal (rendered
+                  above, in `ReconciliationSummary`) is what actually explains any problem. */}
+              {!columnMapValid && (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  {t('facilities.import.columnMapIncompleteHint')}
+                </p>
+              )}
+            </div>
+          )}
+
           {reviewResult && !appliedSummary && (
             <ReconciliationSummary
               result={reviewResult}
+              nationalSystem={nationalSystem.trim()}
+              onValueMappingsSaved={handleValueMappingsSaved}
               allowUnknownColumns={allowUnknownColumns}
               allowMalformedRows={allowMalformedRows}
               allowInvalidCoordinates={allowInvalidCoordinates}

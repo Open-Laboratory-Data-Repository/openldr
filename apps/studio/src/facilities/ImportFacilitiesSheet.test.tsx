@@ -22,6 +22,12 @@ vi.mock('@/api', async (orig) => {
     // `RegisterSourceDialog` (rendered by `ImportFacilitiesSheet` itself) — mocked here for the
     // same "one factory, not two" reason as `listFacilityImportSources` above.
     createFacilityImportSource: vi.fn(),
+    // Task 8: `ColumnMapStep`'s own header+suggestion fetch, and `ValueMapPanel`'s two calls
+    // (rendered by `ImportFacilitiesSheet` itself, same as `RegisterSourceDialog` above) — mocked
+    // here for the same "one factory, not two" reason.
+    suggestColumnMap: vi.fn(),
+    suggestValueMappings: vi.fn(),
+    writeFacilityValueMappings: vi.fn(),
   };
 });
 
@@ -91,7 +97,7 @@ async function previewNow() {
  */
 function baseResult(overrides: Partial<FacilityImportResult> = {}): FacilityImportResult {
   return {
-    parsed: 0, skipped: 0, unknownColumns: [], duplicateColumns: [], quarantined: [], invalid: [],
+    parsed: 0, skipped: 0, unknownColumns: [], duplicateColumns: [], columnMapErrors: [], quarantined: [], invalid: [],
     duplicates: 0, blocked: false, blockedReason: null,
     create: 0, changed: 0, unchanged: 0, conflict: null, absent: null, deleted: 0,
     samples: { create: [], changed: [], conflict: [], absent: [], deleted: [] },
@@ -144,6 +150,18 @@ describe('ImportFacilitiesSheet', () => {
     // override this per-call with `mockResolvedValueOnce`/`mockResolvedValue` for the loading/empty/
     // error states a single persistent mock here cannot represent.
     mocked(api.listFacilityImportSources).mockResolvedValue([HFR_SOURCE]);
+    // Task 8: `ColumnMapStep`'s own fetch, defaulted to "nothing to map" so it stays OFF SCREEN for
+    // every test below that does not care about it — an empty `headers` never satisfies this sheet's
+    // own render gate (`columnMapHeaders.length > 0`). Real usage never sees an empty array here (the
+    // server 400s a header-less file), but every existing test's fixture CSV headers
+    // (`local_code,name`) have no home in the 16-field contract, and a real column map would
+    // therefore legitimately require the operator to map `national_code` before Preview/Apply would
+    // ever be reachable in production — which is exactly the behaviour this task deliberately does
+    // NOT gate on (see `ImportFacilitiesSheet.tsx`'s own note on `Preview` staying ungated). Tests
+    // that exercise the panel itself override this per-call.
+    mocked(api.suggestColumnMap).mockResolvedValue({ headers: [], columns: [] });
+    mocked(api.suggestValueMappings).mockResolvedValue({ values: [], notValidated: false });
+    mocked(api.writeFacilityValueMappings).mockResolvedValue({ written: 0, superseded: [] });
   });
 
   // ── B1 Task 9: the national-system picklist ─────────────────────────────────────────────────────
@@ -1035,7 +1053,11 @@ describe('ImportFacilitiesSheet', () => {
     expect(await screen.findByText(/2 row\(s\) will be imported/i)).toBeInTheDocument();
   });
 
-  it('CT-3: renders unmapped controlled-field values by name, and which fields could not be validated at all', async () => {
+  // Task 8: this used to assert a static warning sentence — `ValueMapPanel` now renders that same
+  // spot as an interactive picker (see ImportFacilitiesSheet.tsx's comment on why the heading copy
+  // is unchanged). The `notValidated` half of this test is untouched: that stays the sheet's own
+  // plain informational line, not part of the panel.
+  it('CT-3/Task 8: renders one pick-list row per unmapped controlled-field value, and which fields could not be validated at all', async () => {
     (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockResolvedValue(baseResult({
       parsed: 3, create: 3,
       unmapped: { level: ['Zonal Hospital', 'District Clinic'], status: [], country: [] },
@@ -1047,8 +1069,8 @@ describe('ImportFacilitiesSheet', () => {
     await previewNow();
 
     expect(await screen.findByText(/values with no canonical mapping/i)).toBeInTheDocument();
-    expect(screen.getByText(/2 Level value\(s\) have no canonical mapping/i)).toBeInTheDocument();
-    expect(screen.getByText(/Zonal Hospital, District Clinic/)).toBeInTheDocument();
+    expect(screen.getByLabelText('Zonal Hospital')).toHaveTextContent('Not mapped');
+    expect(screen.getByLabelText('District Clinic')).toHaveTextContent('Not mapped');
     expect(screen.getByText(/not checked against a canonical value set.*Status/i)).toBeInTheDocument();
   });
 
@@ -1799,5 +1821,176 @@ describe('ImportFacilitiesSheet', () => {
     await uploadNow();
 
     expect(await screen.findByText('Confirmed — waiting for an import worker to write it.')).toBeInTheDocument();
+  });
+
+  // ── Task 8: ColumnMapStep wiring — the two items the brief handed off explicitly ────────────────
+
+  it('Task 8: ColumnMapStep is a real controlled round-trip — a seeded suggestion actually reaches the sent columnMap', async () => {
+    mocked(api.suggestColumnMap).mockResolvedValueOnce({
+      headers: ['MFL Code', 'Name'],
+      columns: [
+        { header: 'MFL Code', candidates: [{ target: 'national_code', display: null, score: 1, confidence: 'exact' }] },
+        { header: 'Name', candidates: [{ target: 'name', display: null, score: 1, confidence: 'exact' }] },
+      ],
+    });
+    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockResolvedValue(cleanPreview);
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    await pickFileAndSystem('MFL Code,Name\n1835,Namatindi RHC\n');
+    // If the sheet fed `onChange` into anything OTHER than `columnMap` state directly — a debounce,
+    // a batched update, a dropped call — the seed `ColumnMapStep` computes on mount would never land
+    // back in `value`, and both rows would still read "Not mapped" here (this is exactly the bug
+    // ColumnMapStep's own fix pass closed — see that file's docblock).
+    expect(await screen.findByLabelText('MFL Code')).toHaveTextContent('national_code');
+    expect(screen.getByLabelText('Name')).toHaveTextContent('name');
+
+    await previewNow();
+    expect(api.importFacilitiesCsv).toHaveBeenCalledWith(expect.objectContaining({
+      columnMap: { columns: { 'MFL Code': 'national_code', Name: 'name' }, constants: {}, extras: [] },
+    }));
+  });
+
+  it('Task 8: resets the column map on a file swap, so a stale mapping keyed on the OLD headers cannot satisfy the new file', async () => {
+    mocked(api.suggestColumnMap)
+      .mockResolvedValueOnce({
+        headers: ['MFL Code', 'Name'],
+        columns: [
+          { header: 'MFL Code', candidates: [{ target: 'national_code', display: null, score: 1, confidence: 'exact' }] },
+          { header: 'Name', candidates: [{ target: 'name', display: null, score: 1, confidence: 'exact' }] },
+        ],
+      })
+      // The SECOND file's headers share nothing with the first, and the engine offers no guess for
+      // either — nothing should auto-seed, and nothing from the first file should still be there.
+      .mockResolvedValueOnce({
+        headers: ['Code', 'Facility Name'],
+        columns: [
+          { header: 'Code', candidates: [] },
+          { header: 'Facility Name', candidates: [] },
+        ],
+      });
+    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockResolvedValue(cleanPreview);
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    await pickFileAndSystem('MFL Code,Name\n1835,Namatindi RHC\n');
+    expect(await screen.findByLabelText('MFL Code')).toHaveTextContent('national_code');
+
+    // Pick a DIFFERENT file — headers the first file's mapping decisions know nothing about.
+    fireEvent.change(screen.getByLabelText('File'), {
+      target: { files: [csvFile('Code,Facility Name\nX,Y\n')] },
+    });
+
+    expect(await screen.findByLabelText('Code')).toHaveTextContent('Not mapped');
+    expect(screen.queryByLabelText('MFL Code')).not.toBeInTheDocument();
+
+    await previewNow();
+    // ⛔ THE FIX, PROVEN: without the reset, `columnMap.columns` would still carry
+    // `{'MFL Code':'national_code', Name:'name'}` from the FIRST file — entries keyed on headers this
+    // file does not even have — and the blocking summary would have waved through a map the server's
+    // own `validateColumnMap` would then refuse (`missing_required` for `national_code`/`name`, since
+    // no header of THIS file actually claims them). Nothing was ever chosen for the second file, so
+    // no columnMap is sent at all.
+    expect(api.importFacilitiesCsv).toHaveBeenCalledWith(expect.objectContaining({ columnMap: undefined }));
+  });
+
+  // ── Whole-branch review, MUST FIX 3: `columnMapErrors` was mirrored in `api.ts` and rendered
+  // NOWHERE — an operator who mapped two headers to one field got "no rows found" or a misleading
+  // unknown-columns message, no column-map errors shown, and the mapping panel gone (it unmounted
+  // the instant `reviewResult` existed). Recovery needed re-picking the file. ────────────────────────
+
+  it('⛔ renders columnMapErrors and keeps ColumnMapStep mounted so the operator can fix it in place', async () => {
+    mocked(api.suggestColumnMap).mockResolvedValueOnce({
+      headers: ['MFL Code', 'MFL Code 2'],
+      columns: [
+        { header: 'MFL Code', candidates: [] },
+        { header: 'MFL Code 2', candidates: [] },
+      ],
+    });
+    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockResolvedValue(baseResult({
+      blocked: true, blockedReason: 'column-map',
+      columnMapErrors: [
+        { reason: 'duplicate_target', subject: 'MFL Code 2', target: 'national_code', other: 'MFL Code' },
+      ],
+    }));
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    await pickFileAndSystem('MFL Code,MFL Code 2\n1,2\n');
+    await previewNow();
+
+    // The refusal is explained — not a silent "no rows found" and not a bare quarantine message.
+    expect(await screen.findByText(
+      /"MFL Code 2" and "MFL Code" both map to "national_code"/,
+    )).toBeInTheDocument();
+
+    // ⛔ THE OTHER HALF OF THE FIX: before it, `ColumnMapStep` unmounted the instant `reviewResult`
+    // existed (its own render gate read `!reviewResult`), so the very panel needed to fix the
+    // refusal disappeared at the same moment the refusal appeared. It must stay mounted here.
+    expect(screen.getByLabelText('MFL Code')).toBeInTheDocument();
+    expect(screen.getByLabelText('MFL Code 2')).toBeInTheDocument();
+  });
+
+  it('does not render the columnMapErrors block, or keep the panel mounted, once the file parses cleanly', async () => {
+    mocked(api.suggestColumnMap).mockResolvedValueOnce({
+      headers: ['MFL Code', 'Name'],
+      columns: [
+        { header: 'MFL Code', candidates: [{ target: 'national_code', display: null, score: 1, confidence: 'exact' }] },
+        { header: 'Name', candidates: [{ target: 'name', display: null, score: 1, confidence: 'exact' }] },
+      ],
+    });
+    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockResolvedValue(cleanPreview);
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    await pickFileAndSystem('MFL Code,Name\n1835,Namatindi RHC\n');
+    await previewNow();
+
+    await screen.findByText(/facility row\(s\) will be created/i);
+    expect(screen.queryByText(/both map to/)).not.toBeInTheDocument();
+    // The design's ordinary flow: the panel maps columns exactly once, then gets out of the way —
+    // unaffected by the fix, which only keeps it mounted for the 'column-map' refusal specifically.
+    expect(screen.queryByLabelText('MFL Code')).not.toBeInTheDocument();
+  });
+
+  // ── Whole-branch review, MUST FIX 3: `rowCount`/`onValidityChange` were exported by ColumnMapStep
+  // and passed by NEITHER caller — dead props. `rowCount` is wired here to a plain line count of the
+  // picked file (informational, not authoritative). `onValidityChange` is wired to a NON-BLOCKING
+  // notice, deliberately: gating Preview/Upload on it would contradict this sheet's own established
+  // design, proven by the "resets the column map on a file swap" test above, which picks a file whose
+  // headers satisfy NO required field and still expects Preview to fire — this app leaves "is the map
+  // complete" to the server's own authoritative refusal (now actually shown, per the fix above),
+  // never to a client-side guess that could diverge from it. ─────────────────────────────────────────
+
+  it('shows the row-count hint and a non-blocking notice while the column map is incomplete, without disabling Preview', async () => {
+    mocked(api.suggestColumnMap).mockResolvedValueOnce({
+      headers: ['Code', 'Facility Name'],
+      columns: [{ header: 'Code', candidates: [] }, { header: 'Facility Name', candidates: [] }],
+    });
+    (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockResolvedValue(cleanPreview);
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    await pickFileAndSystem('Code,Facility Name\nA,B\nC,D\n');
+
+    // rowCount wired: 2 data rows in the picked file.
+    expect(await screen.findByText(/applies to 2 facilities/i)).toBeInTheDocument();
+    // onValidityChange wired: neither header satisfies a required field, so the notice shows.
+    expect(screen.getByText(/still preview or upload/i)).toBeInTheDocument();
+
+    // ...and it does not block anything — `previewNow` itself waits for Preview to become enabled,
+    // so this line is the proof: it would time out were Preview gated on validity.
+    await previewNow();
+    expect(api.importFacilitiesCsv).toHaveBeenCalled();
+  });
+
+  it('the incomplete-map notice clears once the required fields are satisfied', async () => {
+    mocked(api.suggestColumnMap).mockResolvedValueOnce({
+      headers: ['MFL Code', 'Name'],
+      columns: [
+        { header: 'MFL Code', candidates: [{ target: 'national_code', display: null, score: 1, confidence: 'exact' }] },
+        { header: 'Name', candidates: [{ target: 'name', display: null, score: 1, confidence: 'exact' }] },
+      ],
+    });
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    await pickFileAndSystem('MFL Code,Name\n1835,Namatindi RHC\n');
+    await screen.findByLabelText('MFL Code');
+    expect(screen.queryByText(/still preview or upload/i)).not.toBeInTheDocument();
   });
 });

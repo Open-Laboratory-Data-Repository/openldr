@@ -5,11 +5,14 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 import type { Kysely } from 'kysely';
 import { z } from 'zod';
 import { appError } from '@openldr/core';
+import type { FacilityColumnMap } from '@openldr/terminology';
 import {
-  importFacilities, resolveKnownNationalSystem, CONTROLLED_FIELDS, resolveControlledFields,
+  importFacilities, resolveKnownNationalSystem, CONTROLLED_FIELDS, CONTROLLED_VALUE_SETS,
+  resolveControlledFields, suggestColumns, suggestValues, saveFacilityValueMappings,
   scanObservedFacilities, resolveObservedFacilities, publishFacilityMap, projectRegistryRows,
   retireRegistryConcepts, reprojectAfterRegistryDelete, listFacilityMappingConflicts, facilityHealth,
-  type AppContext, type FacilityImportResult, type ScanResult, type PublishResult,
+  type AppContext, type FacilityImportResult, type ScanResult, type PublishResult, type ControlledField,
+  type ValueMappingEntry,
 } from '@openldr/bootstrap';
 import {
   splitFacilityAnswers, CORE_FACILITY_KEYS, FACILITY_ADMIN_LEVELS, referenceCapture,
@@ -152,6 +155,19 @@ function nationalSystemSlug(nationalSystem: string): string {
   return slug || 'register';
 }
 
+// Task 8b (facility-import-mapping wire gap): the wire shape of `FacilityColumnMap`
+// (@openldr/terminology), validated for SHAPE ONLY. A semantically bad map (duplicate targets, an
+// unknown target, a missing required field) is NOT re-checked here — `parseFacilityCsv`'s own
+// `validateColumnMap` (reached inside `importFacilities`) already does that and reports it as
+// `blockedReason: 'column-map'`; checking twice would risk the two disagreeing about what "bad"
+// means. A shape failure (the wrong types) can never reach that check at all, so it has to be a 400
+// here rather than a crash inside the parser.
+const ColumnMapSchema = z.object({
+  columns: z.record(z.string()),
+  constants: z.record(z.string()).optional(),
+  extras: z.array(z.string()).optional(),
+});
+
 const ImportSchema = z.object({
   // ⚠ Minor fix: blank/whitespace-only content is refused here, not left to reach
   // `parseFacilityCsv` and come back as an all-zero `{ parsed: 0, ... }` 200 — a UI that only
@@ -198,6 +214,12 @@ const ImportSchema = z.object({
   // Recorded on the run for FAC-P1-03's "who imported which release and when"; never read by
   // `importFacilities` itself (which has no `releaseVersion` option).
   releaseVersion: z.string().optional(),
+  // Task 8b: how this file's own headers map onto the 16-field contract (`FacilityColumnMap`,
+  // @openldr/terminology) — see `ColumnMapSchema` above for what is (and isn't) checked here. Fed
+  // into the SAME `importOpts` object the handler builds below, which both the preview and the apply
+  // call read from — so the two can never see a different map, the exact bug class this sheet has
+  // hit before (see `ImportFacilitiesSheet.tsx:124`'s own comment on `allowMalformedRows`).
+  columnMap: ColumnMapSchema.optional(),
 });
 
 /** A2b Task 5: the operator's choices at the confirm step — the decisions the UPLOAD deliberately
@@ -221,7 +243,14 @@ const ImportSchema = z.object({
  *  stored declaration. The UPLOAD route takes it instead (see its `completeRelease` query
  *  parameter), which is the request that actually precedes the classification. What the operator
  *  decides HERE is `onAbsent` — whether a measured absence is acted on — and that split is the
- *  two-tier retirement design, not an omission. */
+ *  two-tier retirement design, not an omission.
+ *
+ *  ⛔ Task 8b: no `columnMap` either, and for the same PARSE-CHANGING reason `allowUnknownColumns`/
+ *  `allowInvalidCoordinates` stay off the two lines above. The map decides which rows the VALIDATE
+ *  turns into records at all — a confirm carrying one, honoured here, would authorise an apply over a
+ *  record set the operator never reviewed. The upload route takes it instead (its own `columnMap`
+ *  query parameter), stored on `run.options` before validate ever runs, which `chosen` below can then
+ *  never overwrite. */
 /** B1 Task 9: `POST /api/facilities/import/sources`' body — a fresh `coding_systems` row marked as
  *  a facility register (`registerSources.create`, `@openldr/db`). `url` is the canonical identity
  *  the import routes will accept from this point on; every other field is display/provenance only.
@@ -239,6 +268,24 @@ const SourceCreateSchema = z.object({
   jurisdiction: z.string().optional().nullable(),
   contact: z.string().optional().nullable(),
   publisherId: z.string().optional().nullable(),
+});
+
+// Task 6 (facility-import-mapping): the wizard's value panel body — one raw string -> canonical
+// code decision per entry, forwarded verbatim to Task 5's `saveFacilityValueMappings`. `field` is
+// restricted to CONTROLLED_FIELDS (not a free string) so a typo lands as a 400 here rather than as
+// a silently-ignored `entry.field` inside that function.
+const ValueMappingEntrySchema = z.object({
+  field: z.enum(CONTROLLED_FIELDS),
+  rawValue: z.string().min(1),
+  toCode: z.string().min(1),
+});
+
+const ValueMappingsSchema = z.object({
+  // ⛔ Same identity as ImportSchema's `nationalSystem` above: must resolve through
+  // `resolveFacilityRegisterForImport` to a REGISTERED facility register, never a typed label —
+  // see this route's own comment for why.
+  nationalSystem: z.string().min(1),
+  mappings: z.array(ValueMappingEntrySchema),
 });
 
 const ConfirmSchema = z.object({
@@ -1459,6 +1506,97 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     }
   });
 
+  // Task 4 (facility-import-mapping): header row + ranked suggestions, for BOTH import doors. The
+  // inline path already holds the file text client-side; the streamed path (A2b upload) does not,
+  // since the file is a blob only the server can read. One endpoint rather than two mechanisms
+  // that would drift.
+  app.post('/api/facilities/import/suggest-map', IMPORT, async (req, reply) => {
+    const reqBody = (req.body ?? {}) as { csv?: string };
+    // Only the first line is needed. Parsing the whole file to read its header would make a 64 MiB
+    // upload pay for a suggestion.
+    //
+    // ⛔ DELIBERATELY NAIVE — split on `,`, not a real CSV parse. A quoted header containing a
+    // comma would split wrongly. That is acceptable here: this suggestion is advisory and the
+    // operator sees and confirms every header before anything is imported. The AUTHORITATIVE
+    // header parse remains `parseFacilityCsv`'s. Do not "fix" this into a second CSV parser.
+    const firstLine = (reqBody.csv ?? '').split(/\r?\n/, 1)[0] ?? '';
+    const headers = firstLine.split(',').map((h) => h.trim()).filter((h) => h !== '');
+    if (headers.length === 0) {
+      reply.code(400);
+      return { error: 'no header row found in the supplied file' };
+    }
+    return { headers, columns: suggestColumns(headers) };
+  });
+
+  app.post('/api/facilities/import/suggest-values', IMPORT, async (req, reply) => {
+    const reqBody = (req.body ?? {}) as { field?: string; values?: unknown };
+    const field = reqBody.field as ControlledField | undefined;
+    if (!field || !CONTROLLED_FIELDS.includes(field)) {
+      reply.code(400);
+      return { error: `field must be one of ${CONTROLLED_FIELDS.join(', ')}` };
+    }
+    // Whole-branch review, M1: the OLD cast (`as { values?: string[] }`) only ever checked
+    // `Array.isArray` below, never each element's TYPE. `suggestValues` -> `rank` ->
+    // `normaliseLabel` calls `.replace` on every raw value with no guard of its own — a non-string
+    // element (e.g. `values: [42]`) reached that `.replace` and threw an unhandled 500, where a
+    // malformed request body is already the documented 400 case just above.
+    if (reqBody.values !== undefined
+      && !(Array.isArray(reqBody.values) && reqBody.values.every((v) => typeof v === 'string'))) {
+      reply.code(400);
+      return { error: 'values must be an array of strings' };
+    }
+    const values = Array.isArray(reqBody.values) ? (reqBody.values as string[]) : [];
+
+    const vs = await ctx.terminology.admin.valueSets.getByUrl(CONTROLLED_VALUE_SETS[field]);
+    if (!vs) {
+      // The field's value set is not seeded on this install — the same condition
+      // `resolveControlledFields` reports as `notValidated`. No candidates exist to rank against.
+      return { values: values.map((value) => ({ value, candidates: [] })), notValidated: true };
+    }
+    const { codes } = await ctx.terminology.admin.valueSets.expand(vs.id);
+    const candidates = codes.map((c) => ({ code: c.code, display: c.display ?? null }));
+    return { values: suggestValues(values, candidates), notValidated: false };
+  });
+
+  // Task 6 (facility-import-mapping): the wizard's value panel writes its raw-string -> canonical-
+  // code decisions here (Task 5's `saveFacilityValueMappings`, @openldr/bootstrap). It validates
+  // every entry against the field's value set BEFORE writing any of them, so a half-applied set is
+  // impossible by construction — this route only needs to turn that thrown refusal into a 400.
+  //
+  // ⛔ Same register gate as both import doors above (`resolveFacilityRegisterForImport`):
+  // `nationalSystem` must name a REGISTERED facility register, never a label somebody typed.
+  // `observedFieldSystem` (facility-controlled-fields.ts:60) slugifies whatever it is given, so a
+  // typed string would write mappings under a namespace nothing will ever resolve against, with no
+  // error anywhere else in the system to catch it.
+  app.post('/api/facilities/import/value-mappings', MANAGE, async (req, reply) => {
+    const p = ValueMappingsSchema.safeParse(req.body);
+    if (!p.success) { reply.code(400); return { error: p.error.message }; }
+
+    const register = await resolveFacilityRegisterForImport(registerSources, p.data.nationalSystem);
+    if (!register.ok) { reply.code(400); return { error: register.error }; }
+
+    const entries: ValueMappingEntry[] = p.data.mappings;
+    let result;
+    try {
+      result = await saveFacilityValueMappings(ctx.terminology.admin, register.source.url, entries);
+    } catch (err) {
+      reply.code(400);
+      return { error: err instanceof Error ? err.message : String(err) };
+    }
+
+    await recordAudit(ctx, req, {
+      action: 'facility.value-mapping',
+      entityType: 'facility',
+      entityId: register.source.url,
+      before: null,
+      after: null,
+      metadata: {
+        nationalSystem: register.source.url, written: result.written, superseded: result.superseded.length,
+      },
+    });
+    return result;
+  });
+
   // Task 4: CSV import — a thin HTTP wrapper over `@openldr/bootstrap`'s `importFacilities`, the
   // SAME function `openldr facilities import` (packages/cli/src/facilities.ts) calls, per the
   // repo's CLI-parity rule. See the MAX_IMPORT_CSV_BYTES / MAX_INLINE_APPLY_ROWS comments above for
@@ -1514,6 +1652,11 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       onDeleted: p.data.onDeleted,
       onAbsent: p.data.onAbsent,
       onConflict: p.data.onConflict,
+      // Task 8b: threaded through unchanged from the request. `undefined` when the operator sent
+      // none — `parseFacilityCsv` treats an absent map exactly as it did before this option existed
+      // (headers must already BE the contract), so an import with no mapping decision behind it is
+      // unaffected.
+      columnMap: p.data.columnMap,
     };
 
     // Always preview first (importFacilities reads the registry — a chunked `WHERE id IN (...)`
@@ -1845,6 +1988,32 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       if (value !== undefined) parseOverrides[key] = value;
     }
 
+    // Task 8b: how this file's own headers map onto the contract — the SAME parse-changing family as
+    // `allowUnknownColumns`/`allowInvalidCoordinates` just above, and belongs to the UPLOAD for the
+    // identical reason: the worker's VALIDATE phase is what turns this file into the summary an
+    // operator reviews, so a map arriving only at confirm time would let an operator confirm a
+    // summary the apply then contradicts — the exact bug class this route's sibling gate exists to
+    // close (see the confirm route's own "parse-override gate" comment). There is no multipart body
+    // on this route (the request body IS the file — see `isReadableBody` below), so the map rides the
+    // query string JSON-encoded, exactly like every other upload parameter.
+    const columnMapRaw = ownFirstString(q, 'columnMap');
+    let columnMap: FacilityColumnMap | undefined;
+    if (columnMapRaw !== undefined) {
+      let columnMapJson: unknown;
+      try {
+        columnMapJson = JSON.parse(columnMapRaw);
+      } catch {
+        reply.code(400);
+        return { error: 'columnMap must be valid JSON' };
+      }
+      const mapResult = ColumnMapSchema.safeParse(columnMapJson);
+      if (!mapResult.success) {
+        reply.code(400);
+        return { error: `columnMap is malformed: ${mapResult.error.message}` };
+      }
+      columnMap = mapResult.data;
+    }
+
     // A JSON body (the INLINE route's shape, sent here by mistake) arrives as a parsed object and
     // must be refused before anything else happens — piping it would throw somewhere far less
     // legible.
@@ -1985,10 +2154,18 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
         // same conditional spread: they select which rows the VALIDATE turns into records, so they
         // have to be in place before the summary the operator reviews is computed. See
         // `parseOverrides` and the confirm route's parse-override gate.
+        //
+        // ⚠ …and `columnMap` joins them for the identical reason (Task 8b) — it is the THIRD
+        // parse-changing input, and the reason it must be set HERE rather than at confirm time. The
+        // confirm route's `ConfirmSchema` deliberately has no `columnMap` key: `chosen` (built from
+        // that schema) can therefore never overwrite what this line wrote, so an apply is guaranteed
+        // to run with the SAME map its validate did — "the same map it was validated with" holds by
+        // construction, not by a comparison anywhere.
         options: {
           nationalSystem,
           ...(completeRelease === undefined ? {} : { completeRelease }),
           ...parseOverrides,
+          ...(columnMap ? { columnMap } : {}),
         },
         requestedBy: actorFromRequest(req).actorId,
       });

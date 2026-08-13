@@ -1,0 +1,21 @@
+MFL Code,DHIS2 UID,Hims code,Name,Province,District,Constituency,Ward,Zone,Location,Type,Ownership,Ownership type,Operational status,Mobility status,Accesibility,Catchment population head count,Catchment population cso,Number of households,Latitude,Longitude
+1835,fykM10MbEBA,90010019,Namatindi Rural Health Centre,Western,Kalabo,Kalabo Central,Ndoka,,Rural,Health Centre,MOH,Public,Functional,Fixed,Open,6782,6377,,-14.44888262,22.76034052
+2564,giU2oIx29d9,30040029,Mankhaka  Health Post,Eastern,Lundazi,Lundazi,Lunevwa,,Rural,Health Post,MOH,Public,Functional,Fixed,Open,,8153,,-12.28888333,33.17441667
+4157,oHlcVn3rdb1, 40020001 ,Chienge District Hospital,Luapula,Chienge,Chienge,Chienge,,Rural,1st Level Hospital,MOH,Public,Functional,Fixed,Open,,,,-8.65494,29.16818	
+2377,gYziJIvbSpY,20030016,Kalulushi General Hospital,Copperbelt,Kalulushi,Kalulushi,Kalanga,,Urban, 2nd Level Hospital,MOH,Public,Functional,Fixed,Open,,,,-12.833538,28.100348
+3915,,50060172,Maina Soko Hospital,Lusaka,Lusaka,Lusaka Central,Lubwa,,Urban, 3rd Level Hospital,ZDF,Public,Functional,Fixed,Open,,,,,
+1027,jKhrgiXb5T4,80060034,St. Joseph's Hospice,Southern,Livingstone,Livingstone,Namatama,,Urban, Hospice,MOH,Public,Functional,Fixed,Open,3467,4273,881,-17.833556,25.884706
+4356,,,Wellspring Specialty Clinic,Lusaka,Lusaka,Munali,Munali,,Urban,General clinic,Private,Private,Permanent closure,Fixed,Open,,,,-15.388164,28.318405
+4196,U4WTwuY97yJ,,Teal Dermatology,Lusaka,Chilanga,Chilanga,Chilanga,,Urban,Others,Private,Private,Functional,Fixed,Open,"13,402",,,,
+3481,ZVmjD9okMQ9,55020010,Lubwa Rural Health Centre,Muchinga,Chinsali,Chinsali,Lubwa,,Rural,Health Centre,Faith Based ,Public,Functional,Fixed,Open,9491,10896,1934,-10.591334,32.006834
+4084,IegtibyJG2A,90090011, Chisu Health Post,Western,Mwandi,Mwandi,Chisu,,Rural,Health Post,MOH,Public,Functional,Fixed,Open,1409,995,,-17.264517,24.383903
+1815,gEweSN8WhZF,90150001,Kaluwe Rural Health Centre,Western,Sikongo,Sikongo,Nengu,,Rural,Health Centre,MOH,Public,Functional,Fixed,Open,3710,2930,,-14.501655,22.134218
+1337,rm5rfKGTRRX,100400018,Nanzhila Rural Health Centre,Southern,Itezhi-Tezhi,Itezhi-Tezhi,Luchena,,Rural,Health Centre,MOH,Public,Functional,Fixed,Open,11505,4736,1698,-16.095959,26.08017
+3467,SYXuVDTkCWp,90070010,Lealui Rural Health Centre,Western,Mongu,Mongu Central,Lealui Lower,,Rural,Health Centre,MOH,Public,Functional,Fixed,Open,7389,6791,1132,-15.23853,23.024347
+3662,tour3dWaWFA,50040030,Zubeda Clinic,Lusaka,Kafue,Kafue,Kafue,,Urban,Diagnostic centre,Private,Private,Functional,Fixed,Open,,,,-15.7726,28.18208
+1830,uUiYjRMs1RE,10050026,Katondo Urban Health Centre,Central,Kabwe,Kabwe Central,Luansase,,Urban,Health Centre,MOH,Public,Functional,Fixed,Open,,18946,,-14.45656559,28.471535
+2503,VjtgxrdsR2z,70040039,Mutanda Rural Health Centre,North-Western,Kalumbila,Solwezi West,Mwajimambwe,,Rural,Health Centre,MOH,Public,Functional,Fixed,Open,6911,4839,1721,-12.422681,26.220345
+3283,Y5biOpmM5L9,80030017,Hamatuba Health Post,Southern,Gwembe,Gwembe,Kkota Kkota,,Rural,Health Post,MOH,Public,Functional,Fixed,Open,1724,1628,378,-16.77294134,28.06408955
+3237,yMIYLAmfBhX,90120007,Lumbe Nanyenzu Health Post,Western,Senanga,Senanga,Mata,,Rural,Health Post,MOH,Public,Functional,Fixed,Open,2045,1331,,-16.105277,23.298611
+1901,,30030016,Kawaza Rural Health Post,Eastern,Katete,Milanzi,Milanzi,,Rural,Health Post,MOH,Public,Functional,Fixed,Open,,3524,,-14.256272,32.164201
+2817,,40090007,Katuta Rural Health Centre,Luapula,Mwense,Mambilima,Mpasa,,Rural,Health Centre,MOH,Public,Functional,Fixed,Open,5258,4813,1249,-10.7849,28.5906

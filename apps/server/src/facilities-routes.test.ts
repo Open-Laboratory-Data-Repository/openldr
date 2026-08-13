@@ -1846,7 +1846,7 @@ describe('POST /api/facilities/import', () => {
     // `created: 0, updated: 0` it used to return before ever consulting the registry (FAC-P1-03);
     // `written` is what a statement actually wrote, and is the only pair that stays zero here.
     expect(res.json()).toEqual({
-      parsed: 1, skipped: 1, unknownColumns: [], duplicateColumns: [], quarantined: [], invalid: [],
+      parsed: 1, skipped: 1, unknownColumns: [], duplicateColumns: [], columnMapErrors: [], quarantined: [], invalid: [],
       duplicates: 0, blocked: false, blockedReason: null,
       create: 1, changed: 0, unchanged: 0,
       conflict: null, absent: null, deleted: 0,
@@ -2046,6 +2046,75 @@ describe('POST /api/facilities/import', () => {
     expect(res.json()).toMatchObject({ unknownColumns: ['made_up_column'], parsed: 1, written: { created: 1, updated: 0 } });
     const row = await db.selectFrom('facility_registry').selectAll().executeTakeFirst();
     expect(row?.extras).toEqual({ made_up_column: 'xyz' });
+  });
+
+  // ── Task 8b: the wire gap — `columnMap` reaches the route at all ────────────────────────────────
+  //
+  // `apps/server/src/facilities-routes.ts` had zero occurrences of `columnMap` before this fix: the
+  // route's zod schema had no such key, so a client-submitted map was silently STRIPPED and the file
+  // parsed as if the operator had never mapped anything — refused here for "unrecognised columns"
+  // exactly like the test just above.
+
+  it('⛔ Task 8b: a columnMap lets the import parse a file whose headers are NOT the contract', async () => {
+    const db = await importDb();
+    const app = await appWith(fakeImportCtx(db));
+    // Neither header spells a contract field on its own — without the map this is exactly the
+    // "unrecognised columns" case two tests up (`parsed: 0`, nothing written).
+    const csv = ['MFL Code,Facility Name', '100,Dodoma Regional Referral'].join('\n') + '\n';
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities/import',
+      payload: {
+        csv, nationalSystem: SYSTEM, apply: true,
+        columnMap: { columns: { 'MFL Code': 'national_code', 'Facility Name': 'name' } },
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({
+      unknownColumns: [], columnMapErrors: [], parsed: 1, written: { created: 1, updated: 0 },
+    });
+    const row = await db.selectFrom('facility_registry').selectAll().executeTakeFirst();
+    expect(row?.national_code).toBe('100');
+    expect(row?.name).toBe('Dodoma Regional Referral');
+  });
+
+  it('⛔ Task 8b: a bad columnMap (two headers claiming one field) blocks the import and writes nothing', async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const csv = ['MFL Code,Alt Code,Facility Name', '100,100b,Dodoma Regional Referral'].join('\n') + '\n';
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities/import',
+      payload: {
+        csv, nationalSystem: SYSTEM, apply: true,
+        columnMap: {
+          // Both headers claim `national_code` — `validateColumnMap`'s `duplicate_target`.
+          columns: { 'MFL Code': 'national_code', 'Alt Code': 'national_code', 'Facility Name': 'name' },
+        },
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().blocked).toBe(true);
+    expect(res.json().blockedReason).toBe('column-map');
+    expect(res.json().columnMapErrors).toEqual([
+      { reason: 'duplicate_target', subject: 'Alt Code', target: 'national_code', other: 'MFL Code' },
+    ]);
+    expect(await db.selectFrom('facility_registry').selectAll().execute()).toHaveLength(0);
+    expect(ctx.__audit).toHaveLength(0); // nothing was written — must not be audited
+  });
+
+  it('⛔ Task 8b: a malformed columnMap (wrong shape) is a 400, not a 500', async () => {
+    const db = await importDb();
+    const app = await appWith(fakeImportCtx(db));
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities/import',
+      payload: {
+        csv: facilityCsv(['100,Alpha,,,,,,,,,,,,,,']), nationalSystem: SYSTEM,
+        // `columns` must be a map of strings; a number value is not a valid target.
+        columnMap: { columns: { 'MFL Code': 42 } },
+      },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toBeTruthy();
   });
 
   it('⛔ nationalSystem is required — an omitted value is a 400, never defaulted to a hardcoded register', async () => {
@@ -2270,7 +2339,7 @@ describe('POST /api/facilities/import', () => {
       // let a field silently vanish from the response without failing.
       const body = res.json();
       expect(body).toEqual({
-        parsed: 1, skipped: 0, unknownColumns: [], duplicateColumns: [],
+        parsed: 1, skipped: 0, unknownColumns: [], duplicateColumns: [], columnMapErrors: [],
         quarantined: [{ line: 3, reason: 'too_many_fields', raw: '2,Bad,Extra' }],
         invalid: [], duplicates: 0, blocked: true, blockedReason: 'quarantined-rows',
         create: 1, changed: 0, unchanged: 0, conflict: null, absent: null, deleted: 0,
@@ -3013,6 +3082,177 @@ describe('POST /api/facilities/import/sources', () => {
   });
 });
 
+// Task 4 (facility-import-mapping): the offline suggestion engine (Task 2, facility-mapping-
+// suggest.ts) exposed over HTTP for BOTH import doors — the inline path already holds the file
+// text client-side, the streamed upload path does not (the file is a blob only the server can
+// read). One endpoint rather than two mechanisms that would drift.
+describe('POST /api/facilities/import/suggest-map', () => {
+  it('suggests a column map from a file header row', async () => {
+    const app = await appWith(fakeCtx());
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities/import/suggest-map',
+      payload: { csv: 'MFL Code,Name,Province,Catchment population cso\n1835,X,Western,10\n' },
+    });
+    expect(res.statusCode).toBe(200);
+    const resBody = res.json();
+    expect(resBody.headers).toEqual(['MFL Code', 'Name', 'Province', 'Catchment population cso']);
+    const byHeader = Object.fromEntries(resBody.columns.map((c: any) => [c.header, c.candidates]));
+    expect(byHeader['MFL Code'][0]).toMatchObject({ target: 'national_code' });
+    expect(byHeader.Province[0]).toMatchObject({ target: 'zone' });
+    expect(byHeader['Catchment population cso']).toEqual([]);
+  });
+
+  it('refuses a suggest-map request with no header row', async () => {
+    const app = await appWith(fakeCtx());
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities/import/suggest-map', payload: { csv: '' },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('is gated on facilities.manage — a facilities.view-only user gets 403', async () => {
+    const app = await appWith(fakeCtx(), ['facilities.view']);
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities/import/suggest-map',
+      payload: { csv: 'Name\nX\n' },
+    });
+    expect(res.statusCode).toBe(403);
+  });
+});
+
+describe('POST /api/facilities/import/suggest-values', () => {
+  it('suggests value mappings from the bound value set', async () => {
+    // The real store against a real migrated db (migration 072 seeds location-status), not
+    // `fakeCtx()`'s hand-rolled admin double — the whole point of this test is that neither
+    // Zambian word resembles active/suspended/inactive closely enough to clear the engine's floor.
+    const internalDb = await makeMigratedDb();
+    const app = await appWith(fakeCreateCtx(internalDb));
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities/import/suggest-values',
+      payload: { field: 'status', values: ['Functional', 'Temporarily closure'] },
+    });
+    expect(res.statusCode).toBe(200);
+    const byValue = Object.fromEntries(res.json().values.map((v: any) => [v.value, v.candidates]));
+    // Mapping them is a human judgement, and the engine says so by offering nothing.
+    expect(byValue.Functional).toEqual([]);
+    expect(byValue['Temporarily closure']).toEqual([]);
+  });
+
+  it('refuses suggest-values for a field that is not controlled', async () => {
+    const app = await appWith(fakeCtx());
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities/import/suggest-values',
+      payload: { field: 'name', values: ['x'] },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  // A field's value set not seeded on this install mirrors `resolveControlledFields`'s own
+  // contract: reported `notValidated`, never a 500 or a refusal.
+  it('reports notValidated rather than erroring when the field\'s value set is not seeded', async () => {
+    // Same simulated-absence pattern as Task 6's "reports NOT VALIDATED" test above: a real store,
+    // with its own `getByUrl` overridden to report the location-status ValueSet absent.
+    const internalDb = await makeMigratedDb();
+    const ctx = fakeCreateCtx(internalDb);
+    ctx.terminology.admin.valueSets.getByUrl = async () => null;
+    const app = await appWith(ctx);
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities/import/suggest-values',
+      payload: { field: 'status', values: ['Functional'] },
+    });
+    expect(res.statusCode).toBe(200);
+    const resBody = res.json();
+    expect(resBody.notValidated).toBe(true);
+    expect(resBody.values).toEqual([{ value: 'Functional', candidates: [] }]);
+  });
+
+  it('is gated on facilities.manage — a facilities.view-only user gets 403', async () => {
+    const app = await appWith(fakeCtx(), ['facilities.view']);
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities/import/suggest-values',
+      payload: { field: 'status', values: ['x'] },
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
+  // Whole-branch review, M1: `values` used to be a bare `as { values?: string[] }` cast — it checked
+  // `Array.isArray` but never each element's type. `{"field":"status","values":[42]}` reached
+  // `suggestValues` -> `rank` -> `normaliseLabel`, which calls `.replace` on the raw value — a
+  // TypeError (`.replace is not a function`) that surfaced as an unhandled 500 where a 400 is already
+  // the documented refusal for a bad request body.
+  it('⛔ refuses a values array with a non-string element as a 400, not a 500', async () => {
+    const app = await appWith(fakeCtx());
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities/import/suggest-values',
+      payload: { field: 'status', values: [42] },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+});
+
+// Task 6 (facility-import-mapping): the wizard's value panel writes its raw-string -> canonical-code
+// decisions here (Task 5's `saveFacilityValueMappings`). Real store, real migrated db (like
+// suggest-values above) — the whole point is proving these decisions land against the REAL seeded
+// location-status value set (migration 072), not a hand-rolled double.
+describe('POST /api/facilities/import/value-mappings', () => {
+  it('writes value mappings and audits them', async () => {
+    const internalDb = await importDb([SYSTEM]);
+    const ctx = fakeCreateCtx(internalDb);
+    const app = await appWith(ctx);
+
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities/import/value-mappings',
+      payload: {
+        nationalSystem: SYSTEM,
+        mappings: [{ field: 'status', rawValue: 'Operating', toCode: 'active' }],
+      },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().written).toBe(1);
+    expect(ctx.__audit.map((a: any) => a.action)).toEqual(['facility.value-mapping']);
+  });
+
+  it('refuses a nationalSystem that names no registered source', async () => {
+    const internalDb = await makeMigratedDb();
+    const app = await appWith(fakeCreateCtx(internalDb));
+
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities/import/value-mappings',
+      payload: { nationalSystem: 'typed by hand', mappings: [] },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('is gated on facilities.manage — a facilities.view-only user gets 403', async () => {
+    const internalDb = await importDb([SYSTEM]);
+    const app = await appWith(fakeCreateCtx(internalDb), ['facilities.view']);
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities/import/value-mappings',
+      payload: { nationalSystem: SYSTEM, mappings: [] },
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
+  // Mirrors saveFacilityValueMappings' own "refuses a target that is not in the field value set"
+  // test (facility-value-mappings.test.ts) — proving the route surfaces that refusal as a 400 with
+  // the store's own message, rather than a bare 500, and audits nothing when it's refused.
+  it('refuses a toCode that is not in the field value set, and writes/audits nothing', async () => {
+    const internalDb = await importDb([SYSTEM]);
+    const ctx = fakeCreateCtx(internalDb);
+    const app = await appWith(ctx);
+
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities/import/value-mappings',
+      payload: {
+        nationalSystem: SYSTEM,
+        mappings: [{ field: 'status', rawValue: 'Operating', toCode: 'not-a-real-code' }],
+      },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(ctx.__audit).toHaveLength(0);
+  });
+});
+
 // --- A2b Task 3: POST /api/facilities/import/upload -------------------------------------------
 //
 // The upload END of the background import: the file goes to blob storage and a `queued` run is
@@ -3149,6 +3389,58 @@ describe('POST /api/facilities/import/upload', () => {
     expect(res.statusCode).toBe(202);
     const run = (await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${res.json().runId}` })).json();
     expect(run.options).toEqual({ nationalSystem: SYSTEM, completeRelease: false });
+  });
+
+  // ── Task 8b: the upload door's own columnMap wire gap ────────────────────────────────────────────
+  //
+  // This route has no multipart body — the request body IS the file (`isReadableBody`) — so the map
+  // rides the query string JSON-encoded, exactly like `completeRelease`/`allowUnknownColumns` above.
+  // It belongs to the UPLOAD, not the confirm: the worker's VALIDATE phase is what turns this file
+  // into the summary an operator reviews, so a map arriving only at confirm time would let an
+  // operator confirm a summary the apply then contradicts.
+
+  it('records a columnMap sent on the query string in the run\'s options, where the validate phase reads it', async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const columnMap = { columns: { 'MFL Code': 'national_code', 'Facility Name': 'name' } };
+    const res = await app.inject({
+      method: 'POST',
+      url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv', columnMap: JSON.stringify(columnMap) }),
+      headers: UPLOAD_HEADERS,
+      payload: Buffer.from(['MFL Code,Facility Name', '100,Alpha'].join('\n') + '\n', 'utf8'),
+    });
+    expect(res.statusCode).toBe(202);
+    const run = (await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${res.json().runId}` })).json();
+    expect(run.options).toEqual({ nationalSystem: SYSTEM, columnMap });
+  });
+
+  it('refuses a columnMap that is not valid JSON, before the transfer', async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const res = await app.inject({
+      method: 'POST',
+      url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv', columnMap: '{not json' }),
+      headers: UPLOAD_HEADERS, payload: Buffer.from(facilityCsv(['100,Alpha,,,,,,,,,,,,,,']), 'utf8'),
+    });
+    expect(res.statusCode).toBe(400);
+    expect(ctx.blob.__objects.size).toBe(0);
+    expect(await db.selectFrom('facility_import_runs').selectAll().execute()).toHaveLength(0);
+  });
+
+  it('refuses a columnMap of the wrong shape, before the transfer', async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const res = await app.inject({
+      method: 'POST',
+      url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv', columnMap: JSON.stringify({ columns: 'nope' }) }),
+      headers: UPLOAD_HEADERS, payload: Buffer.from(facilityCsv(['100,Alpha,,,,,,,,,,,,,,']), 'utf8'),
+    });
+    expect(res.statusCode).toBe(400);
+    expect(ctx.blob.__objects.size).toBe(0);
+    expect(await db.selectFrom('facility_import_runs').selectAll().execute()).toHaveLength(0);
   });
 
   it('refuses a completeRelease that is neither "true" nor "false", rather than guessing at it', async () => {
@@ -3750,6 +4042,43 @@ describe('POST /api/facilities/import/runs/:id/confirm', () => {
     // opposite belief and proved to be dead code — mutating it away changed nothing). Mutating one
     // key to `.optional().default(false)` DOES fail this test, which is the regression it guards.
     expect(run.options).toEqual({ nationalSystem: SYSTEM, onConflict: 'skip' });
+  });
+
+  // ── Task 8b: a confirmed run applies with the SAME columnMap it was validated with ─────────────
+  //
+  // `columnMap` is PARSE-CHANGING — the same family as `allowUnknownColumns`/`allowInvalidCoordinates`
+  // below — so it belongs to the UPLOAD, not this route. `ConfirmSchema` has no `columnMap` key at
+  // all (see its own doc comment), so a value the operator's client sends here is silently stripped by
+  // zod and can never overwrite what the upload already stored — proving the guarantee holds by
+  // construction, not by a runtime comparison.
+
+  it('⛔ Task 8b: the map set at upload survives a confirm untouched — ConfirmSchema cannot carry one', async () => {
+    const db = await importDb();
+    const ctx = fakeImportCtx(db);
+    const app = await appWith(ctx);
+    const columnMap = { columns: { 'MFL Code': 'national_code', 'Facility Name': 'name' } };
+    const uploadRes = await app.inject({
+      method: 'POST',
+      url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv', columnMap: JSON.stringify(columnMap) }),
+      headers: UPLOAD_HEADERS,
+      payload: Buffer.from(['MFL Code,Facility Name', '100,Alpha'].join('\n') + '\n', 'utf8'),
+    });
+    expect(uploadRes.statusCode).toBe(202);
+    const runId = uploadRes.json().runId as string;
+    await parkForConfirmation(db, runId, { blocked: false, blockedReason: null, unknownColumns: [], invalid: [], parsed: 1 });
+
+    // The client also sends `columnMap` in the confirm body (mirroring the studio wizard's own
+    // `confirmOptionsFor`) — it must have NO EFFECT: the map that governs is the one the validate
+    // already ran with, never a second copy handed over at confirm time.
+    const res = await app.inject({
+      method: 'POST', url: confirmUrl(runId),
+      payload: { onConflict: 'skip', columnMap: { columns: { 'Facility Name': 'national_code', 'MFL Code': 'name' } } },
+    });
+    expect(res.statusCode).toBe(202);
+
+    const run = (await app.inject({ method: 'GET', url: `/api/facilities/import/runs/${runId}` })).json();
+    // The upload's own map, unchanged — never the different one the confirm body tried to carry.
+    expect(run.options).toEqual({ nationalSystem: SYSTEM, columnMap, onConflict: 'skip' });
   });
 
   // ── Whole-branch review I2: an override that changes how the file PARSES ──────────────────────

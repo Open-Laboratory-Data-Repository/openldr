@@ -76,6 +76,12 @@ function numeric(v: unknown): string | undefined {
  * can be applied through — while the route accepted the same file. That refusal is now format-aware
  * (packages/cli/src/facilities.ts).
  *
+ * `opts.columnMap` is ALSO a NO-OP here, for the same reason `allowUnknownColumns` is: `columnMap`
+ * exists to rename a CSV's own file headers onto the contract before the unknown-column check runs,
+ * and a JSONL release has no header row to rename — every line is a self-describing object whose keys
+ * are already fixed by `KNOWN_ROW_KEYS`. There is nothing for a column map to rename. A caller passing
+ * one here is not wrong, just talking to the wrong parser; this function simply never reads the field.
+ *
  * Records come out in the exact `FacilityRecord` shape `parseFacilityCsv` produces, including the
  * SAME deterministic `id` (`idFor`, imported from `facility-csv.ts` — never reimplemented), so a
  * release and a CSV of the same register produce identical ids for the same facility.
@@ -212,9 +218,10 @@ export function parseFacilityRelease(jsonl: string, opts: FacilityCsvOptions): F
     // an unrecognised key on one JSONL row cannot invalidate the whole file the way a shifted CSV
     // column can (every row is self-describing), so this never blocks the import.
     unknownColumns: [...unknownKeys].sort(),
-    // No header in JSONL, so there is no concept of a duplicate column. Kept only for structural
-    // parity with `FacilityCsvResult`.
+    // No header in JSONL, so there is no concept of a duplicate column or a column map. Kept only
+    // for structural parity with `FacilityCsvResult`.
     duplicateColumns: [],
+    columnMapErrors: [],
     quarantined,
     skipped,
     invalid,

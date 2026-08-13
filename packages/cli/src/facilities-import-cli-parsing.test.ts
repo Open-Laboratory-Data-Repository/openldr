@@ -44,6 +44,10 @@ const mocks = vi.hoisted(() => ({
   // `import-run-cancel` is: under a nested `facilities sources list --json`, commander hands the
   // parent's declared `--json` to the parent and the handler receives `json: false`.
   runFacilitiesImportSources: vi.fn().mockResolvedValue(0),
+  // Task 9: same reasoning as every mock above — `runFacilitiesSuggestMap`/`runFacilitiesSuggestValues`
+  // are already unit-tested in facilities.test.ts; this file isolates what commander itself resolves.
+  runFacilitiesSuggestMap: vi.fn().mockResolvedValue(0),
+  runFacilitiesSuggestValues: vi.fn().mockResolvedValue(0),
 }));
 
 // The function itself is already unit-tested in facilities.test.ts (including the pass-through
@@ -54,6 +58,8 @@ vi.mock('./facilities', () => ({
   runFacilitiesImportRun: mocks.runFacilitiesImportRun,
   runFacilitiesImportRunCancel: mocks.runFacilitiesImportRunCancel,
   runFacilitiesImportSources: mocks.runFacilitiesImportSources,
+  runFacilitiesSuggestMap: mocks.runFacilitiesSuggestMap,
+  runFacilitiesSuggestValues: mocks.runFacilitiesSuggestValues,
 }));
 
 describe('facilities import — commander parsing path (program.ts, not the function directly)', () => {
@@ -212,6 +218,95 @@ describe('facilities import — commander parsing path (program.ts, not the func
     expect(opts.onAbsent).toBeUndefined();
     expect(opts.onConflict).toBeUndefined();
     expect(opts.completeRelease).toBeFalsy();
+  });
+
+  // Task 9: `--column-map`/`--value-map` are new flags on this same `import` command — same seam,
+  // same reasoning as the Task 12 flags above: `facilities.test.ts` calls `runFacilitiesImport()`
+  // directly and never exercises commander's own `.option()` registration for them.
+  it('parses --column-map and --value-map on the command line and resolves them onto opts', async () => {
+    const program = buildProgram().exitOverride();
+
+    await program.parseAsync([
+      'node', 'openldr', 'facilities', 'import', '/some/register.csv',
+      '--national-system', 'urn:tz:hfr', '--apply',
+      '--column-map', '/some/map.json',
+      '--value-map', '/some/value-map.json',
+    ]);
+
+    expect(mocks.runFacilitiesImport).toHaveBeenCalledTimes(1);
+    const [, opts] = mocks.runFacilitiesImport.mock.calls[0] as [string, Record<string, unknown>];
+    expect(opts.columnMap).toBe('/some/map.json');
+    expect(opts.valueMap).toBe('/some/value-map.json');
+  });
+
+  it('omitting --column-map/--value-map resolves both undefined', async () => {
+    const program = buildProgram().exitOverride();
+
+    await program.parseAsync([
+      'node', 'openldr', 'facilities', 'import', '/some/register.csv',
+      '--national-system', 'urn:tz:hfr',
+    ]);
+
+    expect(mocks.runFacilitiesImport).toHaveBeenCalledTimes(1);
+    const [, opts] = mocks.runFacilitiesImport.mock.calls[0] as [string, Record<string, unknown>];
+    expect(opts.columnMap).toBeUndefined();
+    expect(opts.valueMap).toBeUndefined();
+  });
+});
+
+// ── Task 9: `facilities suggest-map` / `facilities suggest-values` — real commander parsing ────
+describe('facilities suggest-map / suggest-values — commander parsing path', () => {
+  beforeEach(() => {
+    mocks.runFacilitiesSuggestMap.mockClear();
+    mocks.runFacilitiesSuggestValues.mockClear();
+  });
+
+  it('suggest-map resolves the positional path and its own --json', async () => {
+    const program = buildProgram().exitOverride();
+
+    await program.parseAsync(['node', 'openldr', 'facilities', 'suggest-map', '/some/file.csv', '--json']);
+
+    expect(mocks.runFacilitiesSuggestMap).toHaveBeenCalledTimes(1);
+    const [path, opts] = mocks.runFacilitiesSuggestMap.mock.calls[0] as [string, { json: boolean }];
+    expect(path).toBe('/some/file.csv');
+    expect(opts.json).toBe(true);
+  });
+
+  it('suggest-map without --json resolves json false (proves the above is not vacuous)', async () => {
+    const program = buildProgram().exitOverride();
+
+    await program.parseAsync(['node', 'openldr', 'facilities', 'suggest-map', '/some/file.csv']);
+
+    const [, opts] = mocks.runFacilitiesSuggestMap.mock.calls[0] as [string, { json: boolean }];
+    expect(opts.json).toBe(false);
+  });
+
+  it('suggest-values requires --national-system and resolves --column-map/--json', async () => {
+    const program = buildProgram().exitOverride();
+
+    await program.parseAsync([
+      'node', 'openldr', 'facilities', 'suggest-values', '/some/file.csv',
+      '--national-system', 'urn:zm:mfl', '--column-map', '/some/map.json', '--json',
+    ]);
+
+    expect(mocks.runFacilitiesSuggestValues).toHaveBeenCalledTimes(1);
+    const [path, opts] = mocks.runFacilitiesSuggestValues.mock.calls[0] as [
+      string, { nationalSystem: string; columnMap?: string; json: boolean },
+    ];
+    expect(path).toBe('/some/file.csv');
+    expect(opts.nationalSystem).toBe('urn:zm:mfl');
+    expect(opts.columnMap).toBe('/some/map.json');
+    expect(opts.json).toBe(true);
+  });
+
+  it('suggest-values without --national-system errors out rather than silently proceeding', async () => {
+    const program = buildProgram().exitOverride();
+
+    await expect(program.parseAsync(
+      ['node', 'openldr', 'facilities', 'suggest-values', '/some/file.csv'],
+    )).rejects.toThrow();
+
+    expect(mocks.runFacilitiesSuggestValues).not.toHaveBeenCalled();
   });
 });
 

@@ -2,6 +2,7 @@ import { type Kysely, sql } from 'kysely';
 import {
   parseFacilityCsv, parseFacilityRelease,
   type FacilityReleaseResult, type FacilityReleaseMeta, type QuarantinedRow, type RowError,
+  type FacilityColumnMap, type ColumnMapError,
 } from '@openldr/terminology';
 import {
   type FacilityRecord,
@@ -120,6 +121,10 @@ export interface FacilityImportOptions {
   onAbsent?: 'retire' | 'report';
   /** Import despite unrecognised columns, carrying them into each record's `extras`. */
   allowUnknownColumns?: boolean;
+  /** Map this file's headers onto the contract before parsing (`FacilityColumnMap`,
+   *  packages/terminology). CSV only — a JSONL release is already in the contract's own shape, so a
+   *  map for one is meaningless and is ignored rather than erroring. */
+  columnMap?: FacilityColumnMap;
   /** Apply despite structurally malformed rows (see `FacilityImportResult.quarantined`) — the
    *  explicit "I have seen the line numbers, import the rest" override, mirroring
    *  `allowUnknownColumns` above so a problem file has exactly one idiom for proceeding anyway.
@@ -183,7 +188,8 @@ export interface FacilityChangeSample extends FacilitySample {
   diff: { field: string; before: unknown; after: unknown }[];
 }
 
-export type FacilityImportBlockedReason = 'duplicate-columns' | 'quarantined-rows' | null;
+export type FacilityImportBlockedReason =
+  'duplicate-columns' | 'column-map' | 'quarantined-rows' | null;
 
 export interface FacilityImportResult {
   /** Rows the parser accepted (present regardless of `apply`, even on a dry run). Counts every
@@ -206,6 +212,15 @@ export interface FacilityImportResult {
    *  `apply` is always blocked — there is no override, unlike `quarantined` below: which of two
    *  identically-named columns wins is arbitrary, so applying either is a guess about master data. */
   duplicateColumns: string[];
+  /** Problems with `FacilityImportOptions.columnMap` itself (see `ColumnMapError`, packages/
+   *  terminology) — a target named twice, a target colliding with a `constants` key, a target the
+   *  contract doesn't define, or a required field the map never routes anything to. Non-empty ⇒
+   *  `apply` is blocked (see `blockedReason` below) — a bad map cannot be trusted to route ANY
+   *  column correctly, so nothing it produced is written. Always `[]` when no `columnMap` was
+   *  supplied, and always `[]` for `format: 'jsonl'`: a release is already in the contract's own
+   *  shape, so a map for one is meaningless and `parseFacilityRelease` ignores it rather than
+   *  validating it. */
+  columnMapErrors: ColumnMapError[];
   /** Rows whose field count did not match the header's — never mapped to columns (see
    *  facility-csv.ts's `QuarantinedRow`). Non-empty ⇒ `apply` is blocked unless the caller sets
    *  `allowMalformedRows`. Present on a dry run too, same as every sibling counter here, so an
@@ -244,12 +259,17 @@ export interface FacilityImportResult {
    *  a WRITE transaction. */
   blocked: boolean;
   /** Why `blocked` is true, or null when it is false. A machine token, not a message: each consumer
-   *  already renders its own explanation for these two cases (line-numbered quarantine detail, the
-   *  duplicate column names), and this exists so a consumer can tell them apart without inspecting
-   *  `duplicateColumns`/`quarantined` and re-deriving the precedence.
+   *  already renders its own explanation for these cases (line-numbered quarantine detail, the
+   *  duplicate column names, the column-map errors), and this exists so a consumer can tell them
+   *  apart without inspecting `duplicateColumns`/`columnMapErrors`/`quarantined` and re-deriving the
+   *  precedence.
    *
-   *  `'duplicate-columns'` wins when both hold: it has NO override, so reporting the overridable
-   *  reason would offer an operator a switch that cannot unblock the file. */
+   *  Precedence, when more than one holds: `'duplicate-columns'` > `'column-map'` >
+   *  `'quarantined-rows'`. A header appearing twice makes any map for it ambiguous — no map can fix
+   *  it, so reporting the map error first would offer an operator a repair that cannot work.
+   *  `'column-map'` beats `'quarantined-rows'` for the mirror-image reason: a misrouted column makes
+   *  rows look malformed, so an operator shown the quarantine count would chase the wrong problem.
+   *  This matches `parseFacilityCsv`'s own ordering (Task 1). */
   blockedReason: FacilityImportBlockedReason;
 
   // ── What this file would DO to the registry ───────────────────────────────────────────────────
@@ -588,9 +608,12 @@ export async function importFacilities(
     nationalSystem: opts.nationalSystem,
     allowUnknownColumns: opts.allowUnknownColumns,
     allowInvalidCoordinates: opts.allowInvalidCoordinates,
+    columnMap: opts.columnMap,
   };
   const parsed = isRelease ? parseFacilityRelease(input, parseOpts) : parseFacilityCsv(input, parseOpts);
-  const { records: parsedRecords, unknownColumns, duplicateColumns, quarantined, skipped, invalid } = parsed;
+  const {
+    records: parsedRecords, unknownColumns, duplicateColumns, columnMapErrors, quarantined, skipped, invalid,
+  } = parsed;
   // Publisher-declared removals. `[]` for CSV — `FacilityCsvResult` has no `deletions` field, a CSV
   // row is either present or it is not (which is `absent`, an inference, never a declaration).
   //
@@ -647,7 +670,9 @@ export async function importFacilities(
   const blockedReason: FacilityImportResult['blockedReason'] =
     duplicateColumns.length > 0
       ? 'duplicate-columns'
-      : (quarantined.length > 0 && !opts.allowMalformedRows ? 'quarantined-rows' : null);
+      : (columnMapErrors.length > 0
+        ? 'column-map'
+        : (quarantined.length > 0 && !opts.allowMalformedRows ? 'quarantined-rows' : null));
   const blocked = blockedReason !== null;
 
   const ids = records.map((r) => r.id);
@@ -736,7 +761,7 @@ export async function importFacilities(
   ): FacilityImportResult => {
     const { counts, samples } = summarise(classified);
     return {
-      parsed: parsedRecords.length, skipped, unknownColumns, duplicateColumns, quarantined, invalid,
+      parsed: parsedRecords.length, skipped, unknownColumns, duplicateColumns, columnMapErrors, quarantined, invalid,
       duplicates, blocked, blockedReason,
       create: counts.create, changed: counts.changed, unchanged: counts.unchanged,
       conflict: conflictsEvaluated ? counts.conflict : null,

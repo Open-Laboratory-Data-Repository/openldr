@@ -452,7 +452,7 @@ describe('Facilities page', () => {
     // — release provenance and controlled-field warnings, both empty for this plain CSV fixture.
     (importFacilitiesCsv as ReturnType<typeof vi.fn>)
       .mockResolvedValueOnce({
-        parsed: 3, skipped: 0, unknownColumns: [], duplicateColumns: [], quarantined: [], invalid: [], duplicates: 0,
+        parsed: 3, skipped: 0, unknownColumns: [], duplicateColumns: [], columnMapErrors: [], quarantined: [], invalid: [], duplicates: 0,
         blocked: false, blockedReason: null,
         create: 3, changed: 0, unchanged: 0, conflict: null, absent: null, deleted: 0,
         samples: { create: [], changed: [], conflict: [], absent: [], deleted: [] },
@@ -461,7 +461,7 @@ describe('Facilities page', () => {
         unmapped: { level: [], status: [], country: [] }, notValidated: [],
       })
       .mockResolvedValueOnce({
-        parsed: 3, skipped: 0, unknownColumns: [], duplicateColumns: [], quarantined: [], invalid: [], duplicates: 0,
+        parsed: 3, skipped: 0, unknownColumns: [], duplicateColumns: [], columnMapErrors: [], quarantined: [], invalid: [], duplicates: 0,
         blocked: false, blockedReason: null,
         create: 2, changed: 1, unchanged: 0, conflict: null, absent: null, deleted: 0,
         samples: { create: [], changed: [], conflict: [], absent: [], deleted: [] },

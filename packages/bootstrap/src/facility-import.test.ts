@@ -47,7 +47,7 @@ describe('importFacilities', () => {
     // reshape drop a counter unnoticed — which is how `created: 0, updated: 0` survived as a dry
     // run's answer for three slices.
     expect(result).toEqual({
-      parsed: 1, skipped: 1, unknownColumns: [], duplicateColumns: [], quarantined: [], invalid: [],
+      parsed: 1, skipped: 1, unknownColumns: [], duplicateColumns: [], columnMapErrors: [], quarantined: [], invalid: [],
       duplicates: 0, blocked: false, blockedReason: null,
       // The row does not exist in the registry, so it would be created — reported on a DRY RUN,
       // where nothing is written. That distinction is the entire point of the two vocabularies.
@@ -124,7 +124,7 @@ describe('importFacilities', () => {
     // PARSER refused: every bucket must read zero/empty here because there is genuinely nothing to
     // classify — `records: []` — not because the comparison was skipped.
     expect(blocked).toEqual({
-      parsed: 0, skipped: 0, unknownColumns: ['beds'], duplicateColumns: [], quarantined: [], invalid: [],
+      parsed: 0, skipped: 0, unknownColumns: ['beds'], duplicateColumns: [], columnMapErrors: [], quarantined: [], invalid: [],
       // NOT blocked: unrecognised columns are refused by the PARSER (records: []), which is a
       // different mechanism from `blocked` — that one is about a file the parser accepted.
       duplicates: 0, blocked: false, blockedReason: null,
@@ -144,6 +144,48 @@ describe('importFacilities', () => {
     expect(allowed).toMatchObject({ parsed: 1, unknownColumns: ['beds'], written: { created: 1, updated: 0 } });
     const row = await rowFor(deps.db, '100');
     expect(row?.extras).toMatchObject({ beds: '250' });
+  });
+
+  it('imports a file whose headers are not the contract, through a column map', async () => {
+    const deps = await buildDeps();
+    const res = await importFacilities(
+      deps,
+      'MFL Code,Name,Province\n1835,Namatindi RHC,Western\n',
+      {
+        nationalSystem: SYSTEM,
+        columnMap: {
+          columns: { 'MFL Code': 'national_code', Name: 'name', Province: 'zone' },
+          constants: { country: 'ZMB' },
+        },
+        apply: true,
+      },
+    );
+    expect(res.columnMapErrors).toEqual([]);
+    // Brief note: the task brief wrote `expect(res.blocked).toBeNull()` here, but `blocked` is typed
+    // `boolean` (never `null` — see FacilityImportResult.blocked) and a successful apply (written.
+    // created: 1 below) must have `blocked === false`, not blocked. Corrected to match the type and
+    // this file's existing convention (e.g. line 51's `blocked: false, blockedReason: null`).
+    expect(res.blocked).toBe(false);
+    expect(res.blockedReason).toBeNull();
+    expect(res.written.created).toBe(1);
+  });
+
+  it('⛔ BLOCKS on a bad column map and writes nothing', async () => {
+    const deps = await buildDeps();
+    const res = await importFacilities(
+      deps,
+      'A,B\n1,2\n',
+      {
+        nationalSystem: SYSTEM,
+        columnMap: { columns: { A: 'national_code', B: 'national_code' } },
+        apply: true,
+      },
+    );
+    expect(res.blocked).toBe(true);
+    expect(res.blockedReason).toBe('column-map');
+    expect(res.columnMapErrors.map((e) => e.reason).sort())
+      .toEqual(['duplicate_target', 'missing_required']);
+    expect(res.written.created).toBe(0);
   });
 
   it('rows missing a required field are counted in skipped, not thrown', async () => {

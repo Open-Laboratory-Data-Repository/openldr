@@ -970,6 +970,44 @@ export const en = {
       // Shown beside the inline over-cap notice: the background path has no row cap, which is the
       // whole reason it exists.
       tooLargeUseUpload: 'Or import it here in the background: choose Upload and validate from the actions menu above.',
+      // Whole-branch review, MUST FIX 3: the four column-map refusal reasons, worded the same as
+      // the CLI's own `describeColumnMapError` (packages/cli/src/facilities.ts) — this is the
+      // server's authoritative refusal, rendered so it is no longer silent.
+      columnMapErrorsTitle: 'This column map cannot be used',
+      columnMapErrorDuplicateTarget: '"{{subject}}" and "{{other}}" both map to "{{target}}" — only one column may claim a field.',
+      columnMapErrorConstantCollision: 'The fixed value for "{{target}}" collides with "{{other}}", which already maps a column to it.',
+      columnMapErrorUnknownTarget: '"{{subject}}" maps to "{{target}}", which is not one of the {{count}} contract fields.',
+      columnMapErrorMissingRequired: 'Required field "{{target}}" has no column or fixed value mapped to it.',
+      // Non-blocking — shown beside the panel while a required field is still unmapped, but Preview
+      // and Upload stay available either way; the server's own refusal (above) is authoritative.
+      columnMapIncompleteHint: 'You can still preview or upload with this map incomplete — the import will explain exactly what still needs to be mapped.',
+      // Task 7: the column-mapping panel — one row per file header, a Select over the 16 contract
+      // fields, and a constants section for a field no column carries (`country` is the case that
+      // forced it).
+      columnMap: {
+        notMapped: 'Not mapped',
+        checkThisBadge: 'Check this',
+        keepAsExtra: 'Keep as extra',
+        clear: 'Clear',
+        rowActions: 'Actions for {{header}}',
+        constantsTitle: 'Fixed values',
+        constantsHint: 'For a contract field no column in this file carries — every row gets this value.',
+        constantPlaceholder: 'e.g. ZMB',
+        missingRequiredTitle: 'Required fields still need a column or a fixed value',
+        missingRequired: '{{field}} is not mapped.',
+        rowCountHint: 'This map applies to {{count}} facilities in this file.',
+      },
+      // Task 8: the value-mapping panel — one row per unmapped raw value (level/status/country),
+      // grouped by field, each with a ranked Select over that field's own value set. An unmapped
+      // value never blocks — see ValueMapPanel.tsx's own docblock — so there is deliberately no
+      // "cannot continue"-style copy anywhere in this group.
+      valueMap: {
+        actions: 'Value mapping actions',
+        saveAction: 'Save mappings',
+        saving: 'Saving…',
+        notMapped: 'Not mapped',
+        savedCount: '{{count}} mapping(s) written.',
+      },
     },
     // Task 11: the report-dimension health chip — whether the report-facing `facility_map`
     // dimension has caught up with the current registry/mapping state (GET /api/facilities/health).

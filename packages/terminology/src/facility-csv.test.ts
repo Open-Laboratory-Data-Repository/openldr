@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { parseFacilityCsv, FACILITY_CSV_TEMPLATE } from './facility-csv';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { parseFacilityCsv, FACILITY_CSV_TEMPLATE, type FacilityColumnMap } from './facility-csv';
 
 const HFR = 'urn:tz:hfr';
 const csv = (body: string) => parseFacilityCsv(body, { nationalSystem: HFR });
@@ -162,6 +164,198 @@ describe('parseFacilityCsv', () => {
     expect(r.records).toEqual([]);
     expect(r.duplicateColumns).toEqual(['name']);
   });
+
+  // Finding 2 (review, task-1-report.md fix pass): the Task 1 rewrite of the extras loop dropped the
+  // `h !== ''` guard every other header-scanning filter in this file has, so a trailing comma in the
+  // header row (common in exported CSVs) now reaches `extras` as an empty-string key — a regression
+  // with NO column map involved at all. Before Task 1 this produced no `extras`.
+  it('drops a blank trailing header instead of putting it in extras — no column map involved', () => {
+    const r = csv('national_code,name,\n1,A,X\n');
+    expect(r.records[0].extras).toBeUndefined();
+  });
+});
+
+describe('parseFacilityCsv with a column map', () => {
+  const map = {
+    columns: { 'MFL Code': 'national_code', Name: 'name', Province: 'zone', Type: 'level' },
+    constants: { country: 'ZMB' },
+    extras: ['DHIS2 UID'],
+  };
+
+  it('renames headers, applies constants, and carries opted-in columns to extras', () => {
+    const r = parseFacilityCsv(
+      'MFL Code,Name,Province,Type,DHIS2 UID\n1835,Namatindi RHC,Western,Health Centre,fykM10MbEBA\n',
+      { nationalSystem: HFR, columnMap: map },
+    );
+    expect(r.columnMapErrors).toEqual([]);
+    expect(r.unknownColumns).toEqual([]);
+    expect(r.records).toHaveLength(1);
+    expect(r.records[0]).toMatchObject({
+      nationalCode: '1835', name: 'Namatindi RHC', zone: 'Western',
+      level: 'Health Centre', country: 'ZMB',
+    });
+    // extras keys stay lowercased — existing behaviour, see facility-csv.ts:205
+    expect(r.records[0].extras).toEqual({ 'dhis2 uid': 'fykM10MbEBA' });
+  });
+
+  it('matches map keys case-insensitively against the file header', () => {
+    const r = parseFacilityCsv('mfl code,name\n1835,Namatindi RHC\n', {
+      nationalSystem: HFR,
+      columnMap: { columns: { 'MFL Code': 'national_code', Name: 'name' } },
+    });
+    expect(r.columnMapErrors).toEqual([]);
+    expect(r.records[0].nationalCode).toBe('1835');
+  });
+
+  it('⛔ refuses a header in neither columns nor extras, exactly as an unknown column today', () => {
+    const r = parseFacilityCsv('MFL Code,Name,Surprise\n1835,X,y\n', {
+      nationalSystem: HFR,
+      columnMap: { columns: { 'MFL Code': 'national_code', Name: 'name' } },
+    });
+    expect(r.unknownColumns).toEqual(['surprise']);
+    expect(r.records).toEqual([]);
+  });
+
+  it('⛔ refuses two headers mapped to the same field, reporting both', () => {
+    const r = parseFacilityCsv('A,B,Name\n1,2,X\n', {
+      nationalSystem: HFR,
+      columnMap: { columns: { A: 'national_code', B: 'national_code', Name: 'name' } },
+    });
+    expect(r.columnMapErrors).toEqual([
+      { reason: 'duplicate_target', subject: 'B', target: 'national_code', other: 'A' },
+    ]);
+    expect(r.records).toEqual([]);
+  });
+
+  it('⛔ refuses a constant that collides with a mapped column', () => {
+    const r = parseFacilityCsv('MFL Code,Name,Country\n1,X,Zambia\n', {
+      nationalSystem: HFR,
+      columnMap: {
+        columns: { 'MFL Code': 'national_code', Name: 'name', Country: 'country' },
+        constants: { country: 'ZMB' },
+      },
+    });
+    expect(r.columnMapErrors).toEqual([
+      { reason: 'constant_collision', subject: 'country', target: 'country', other: 'Country' },
+    ]);
+    expect(r.records).toEqual([]);
+  });
+
+  it('⛔ refuses a target outside the contract', () => {
+    const r = parseFacilityCsv('MFL Code,Name\n1,X\n', {
+      nationalSystem: HFR,
+      columnMap: { columns: { 'MFL Code': 'national_code', Name: 'name', Nope: 'password' } },
+    });
+    expect(r.columnMapErrors).toEqual([
+      { reason: 'unknown_target', subject: 'Nope', target: 'password' },
+    ]);
+    expect(r.records).toEqual([]);
+  });
+
+  it('⛔ refuses when a required field is neither mapped nor constant', () => {
+    const r = parseFacilityCsv('MFL Code\n1835\n', {
+      nationalSystem: HFR,
+      columnMap: { columns: { 'MFL Code': 'national_code' } },
+    });
+    expect(r.columnMapErrors).toEqual([
+      { reason: 'missing_required', subject: 'name', target: 'name' },
+    ]);
+    expect(r.records).toEqual([]);
+  });
+
+  it('reports EVERY map problem at once, so one fix pass repairs the file', () => {
+    const r = parseFacilityCsv('A,B\n1,2\n', {
+      nationalSystem: HFR,
+      columnMap: { columns: { A: 'national_code', B: 'national_code' } },
+    });
+    expect(r.columnMapErrors.map((e) => e.reason).sort())
+      .toEqual(['duplicate_target', 'missing_required']);
+  });
+
+  it('leaves behaviour identical when no column map is supplied', () => {
+    const r = csv('national_code,name\n122023-5,BAHEBE\n');
+    expect(r.columnMapErrors).toEqual([]);
+    expect(r.records[0].nationalCode).toBe('122023-5');
+  });
+
+  // Finding 1 (review, task-1-report.md fix pass): a mapped field can collide with an UNTOUCHED
+  // header that already spells the same contract field. Before the fix, `validateColumnMap` only
+  // checked the map against itself, so this passed with `columnMapErrors: []` and silently overwrote
+  // the mapped column's value with the passthrough header's — and `nationalCode` feeds `idFor`,
+  // which derives a facility's PERMANENT id, so a silent overwrite here is a wrong identity.
+  it('⛔ refuses a mapped field that collides with an untouched header spelling the same field', () => {
+    const r = parseFacilityCsv('MFL Code,national_code,name\n1835,LEGACY-9,Namatindi RHC\n', {
+      nationalSystem: HFR,
+      columnMap: { columns: { 'MFL Code': 'national_code', Name: 'name' } },
+    });
+    expect(r.columnMapErrors).toEqual([
+      { reason: 'duplicate_target', subject: 'national_code', target: 'national_code', other: 'MFL Code' },
+    ]);
+    expect(r.records).toEqual([]);
+  });
+
+  it('⛔ refuses a constant that collides with a passthrough header, not just a mapped one', () => {
+    const r = parseFacilityCsv('MFL Code,name,country\n1835,Namatindi RHC,Zambia\n', {
+      nationalSystem: HFR,
+      columnMap: {
+        columns: { 'MFL Code': 'national_code' },
+        constants: { country: 'ZMB' },
+      },
+    });
+    expect(r.columnMapErrors).toEqual([
+      { reason: 'constant_collision', subject: 'country', target: 'country', other: 'country' },
+    ]);
+    expect(r.records).toEqual([]);
+  });
+
+  // Fix pass (whole-branch review, MUST FIX 1): an explicit `extras` entry must RELEASE a header's
+  // claim on a contract field it already spells — before this fix, `validateColumnMap`'s passthrough
+  // loop never consulted `map.extras` at all, and the parse loop's own extras loop skipped any
+  // column whose target was a KNOWN contract field regardless of an `extras` opt-in. Confirmed by
+  // execution: `{ columns: {}, extras: ['status'] }` over `national_code,name,status` reported
+  // `columnMapErrors: []` and `record.status` held the file's value instead of `extras.status`.
+  it('⛔ lets an explicit extras entry release a header that already spells a contract field', () => {
+    const r = parseFacilityCsv('national_code,name,status\n1,BAHEBE,Functional\n', {
+      nationalSystem: HFR,
+      columnMap: { columns: {}, extras: ['status'] },
+    });
+    expect(r.columnMapErrors).toEqual([]);
+    expect(r.records).toHaveLength(1);
+    // Released: the passthrough header no longer claims the `status` contract field.
+    expect(r.records[0].status).toBeNull();
+    // ...and its value lands in extras instead, same as any other opted-in column.
+    expect(r.records[0].extras).toEqual({ status: 'Functional' });
+  });
+
+  // The exact reproduction the finding cites: mapping `Province -> zone` while an UNTOUCHED `Zone`
+  // header (which spells the `zone` contract field on its own) is explicitly sent to extras must NOT
+  // trip `duplicate_target` — before the fix, `Zone` claimed `zone` "whether it is unmapped, cleared,
+  // or explicitly sent to extras", which is exactly what made the real Zambia file unmappable (see
+  // the fixture describe block below).
+  it('⛔ an extras entry for an untouched header avoids duplicate_target with a mapped column', () => {
+    const r = parseFacilityCsv('national_code,name,Province,Zone\n1,BAHEBE,Western,junk\n', {
+      nationalSystem: HFR,
+      columnMap: { columns: { Province: 'zone' }, extras: ['Zone'] },
+    });
+    expect(r.columnMapErrors).toEqual([]);
+    expect(r.records).toHaveLength(1);
+    expect(r.records[0].zone).toBe('Western');
+    expect(r.records[0].extras).toEqual({ zone: 'junk' });
+  });
+
+  // ⛔ Do not reopen Task 1's Critical: an UNTOUCHED header that already spells a contract field must
+  // still claim it when nothing releases it — only an EXPLICIT extras entry does. This test stays
+  // green across the fix; it is the guard the fix must not break.
+  it('still refuses a mapped field colliding with an untouched header NOT sent to extras (unchanged)', () => {
+    const r = parseFacilityCsv('MFL Code,national_code,name\n1835,LEGACY-9,Namatindi RHC\n', {
+      nationalSystem: HFR,
+      columnMap: { columns: { 'MFL Code': 'national_code', Name: 'name' } },
+    });
+    expect(r.columnMapErrors).toEqual([
+      { reason: 'duplicate_target', subject: 'national_code', target: 'national_code', other: 'MFL Code' },
+    ]);
+    expect(r.records).toEqual([]);
+  });
 });
 
 describe('coordinate validation', () => {
@@ -228,5 +422,114 @@ describe('coordinate validation', () => {
       expect(parseAllowing(['2,Beta,,']).records[0].latitude).toBeNull();
       expect(parseAllowing(['3,Gamma,-2.4,35']).invalid).toEqual([]);
     });
+  });
+});
+
+describe('parseFacilityCsv against the real Zambia MFL export', () => {
+  // packages/terminology/src/__fixtures__/zm-mfl-sample.csv — 20 rows, 21 columns, an UNEDITED slice
+  // of the real Zambia Master Facility List. It deliberately keeps the source file's quirks: three
+  // Type values with a leading space, one Name with a stray internal double space, two rows with
+  // BOTH coordinates blank, and a header row carrying both `Province`/`Zone` and `Ownership`/
+  // `Ownership type` — the exact pair the map below has to route without a `duplicate_target` refusal.
+  const fixtureCsv = readFileSync(join(__dirname, '__fixtures__', 'zm-mfl-sample.csv'), 'utf8');
+
+  // ⛔ THE COLLISION, AND THE FIX (whole-branch review, MUST FIX 1). The file has both `Province`
+  // and `Zone`. Before the fix, `Zone` claimed the `zone` contract field the instant it spelled that
+  // name — whether it was unmapped, cleared, or sent to `extras` — so the ONLY expressible map put
+  // `Province` on `region` and left `Zone` on `zone`, filing Zambian province names under `region`
+  // and an untouched junk column under `zone`. Now that an explicit `extras` entry actually releases
+  // a passthrough header's claim, `Zone` can be routed to `extras` on purpose and `Province` — the
+  // file's real administrative-division column — takes `zone` instead. `Ownership type` still has
+  // nowhere to go (the contract has one `ownership` field and `Ownership` already claims it), so it
+  // stays in `extras` too, alongside the other columns this map does not carry onto the contract.
+  const ZM_MFL_MAP: FacilityColumnMap = {
+    columns: {
+      'MFL Code': 'national_code',
+      Name: 'name',
+      Province: 'zone',
+      District: 'district',
+      Constituency: 'council',
+      Ward: 'ward',
+      Type: 'level',
+      Ownership: 'ownership',
+      'Operational status': 'status',
+      Latitude: 'latitude',
+      Longitude: 'longitude',
+    },
+    constants: { country: 'ZMB' },
+    extras: [
+      'DHIS2 UID', 'Hims code', 'Zone', 'Location', 'Ownership type', 'Mobility status',
+      'Accesibility', 'Catchment population head count', 'Catchment population cso',
+      'Number of households',
+    ],
+  };
+
+  it('maps the real Zambia MFL export end to end', () => {
+    const r = parseFacilityCsv(fixtureCsv, {
+      nationalSystem: 'urn:zm:mfl',
+      columnMap: ZM_MFL_MAP,
+      allowUnknownColumns: false,
+    });
+
+    expect(r.columnMapErrors).toEqual([]);
+    expect(r.unknownColumns).toEqual([]);
+    expect(r.duplicateColumns).toEqual([]);
+    expect(r.quarantined).toEqual([]);
+    expect(r.skipped).toBe(0);
+    expect(r.records).toHaveLength(20);
+
+    // The sheet has no country column at all — 'ZMB' reaches every record only because it is a
+    // CONSTANT on the map, and it is the ISO alpha-3 code, never the free-text 'Zambia' that
+    // appears nowhere in this file either.
+    expect(r.records.every((rec) => rec.country === 'ZMB')).toBe(true);
+
+    // `Province` now takes the `zone` contract field — a real administrative division ('Western',
+    // 'Eastern', ...), not the untouched `Zone` junk column the pre-fix map filed there by accident.
+    expect(r.records.every((rec) => typeof rec.zone === 'string' && rec.zone.length > 0)).toBe(true);
+    expect(new Set(r.records.map((rec) => rec.zone)).has('Western')).toBe(true);
+
+    // The headers this map deliberately does not carry onto the contract all land in `extras`,
+    // lowercased and trimmed — existing behaviour every already-imported register depends on
+    // (facility-csv.ts:205). Collected as a union across records because a blank cell for one row
+    // simply omits that key (see facility-csv.ts:381-387), so no single row is guaranteed to carry
+    // all of them.
+    //
+    // ⚠ `Zone` is in `extras` (released from `zone` by the fix) but does NOT appear here: this
+    // 20-row sample's own `Zone` column is blank on every row (verified directly against the
+    // fixture), so it never earns an `extras` entry (a blank cell is omitted, not written as `''`
+    // — see facility-csv.ts:381-387). A NON-blank `Zone` reproduction — `national_code,name,
+    // Province,Zone` with a real value — is covered in the "with a column map" describe block above
+    // ("an extras entry for an untouched header avoids duplicate_target with a mapped column"),
+    // and `packages/cli/src/facilities.test.ts` covers it again against a fixture whose `Zone`
+    // column genuinely repeats a junk value ('Chamakubi Zone').
+    const extraKeys = new Set<string>();
+    for (const rec of r.records) Object.keys(rec.extras ?? {}).forEach((k) => extraKeys.add(k));
+    expect([...extraKeys].sort()).toEqual([
+      'accesibility', 'catchment population cso', 'catchment population head count',
+      'dhis2 uid', 'hims code', 'location', 'mobility status', 'number of households',
+      'ownership type',
+    ]);
+
+    // 2 of the 20 rows have BOTH latitude and longitude blank in the source. Blank means the
+    // coordinate was never recorded — not an invalid value — so `invalid` must stay empty; a row is
+    // only reported there for a HALF-supplied pair or an unparseable/out-of-range value.
+    expect(r.invalid).toEqual([]);
+    expect(r.records.filter((rec) => rec.latitude === null && rec.longitude === null)).toHaveLength(2);
+
+    // Three Type values carry a leading space in the source (` 2nd Level Hospital`,
+    // ` 3rd Level Hospital`, ` Hospice`) — csv-parse's own `trim: true` strips it before this
+    // parser ever sees the field, so none should survive onto `level`.
+    const levels = new Set(r.records.map((rec) => rec.level));
+    expect(levels.has('2nd Level Hospital')).toBe(true);
+    expect(levels.has('3rd Level Hospital')).toBe(true);
+    expect(levels.has('Hospice')).toBe(true);
+    expect([...levels].every((l) => !(l ?? '').startsWith(' '))).toBe(true);
+    expect(levels.size).toBe(9); // 9 distinct Type values in this sample, all three hospital tiers included
+
+    // The one row whose Name carries a stray internal double space ('Mankhaka  Health Post') still
+    // parses to a non-empty, non-null name — internal whitespace collapsing is not this parser's job,
+    // only leading/trailing trim is.
+    expect(r.records.some((rec) => rec.name.includes('Mankhaka'))).toBe(true);
+    expect(r.records.every((rec) => rec.name.trim().length > 0)).toBe(true);
   });
 });
