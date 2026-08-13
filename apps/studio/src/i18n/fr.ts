@@ -245,6 +245,7 @@ export const fr: EnShape = {
     searchPlaceholder: 'Rechercher des formulaires ou un type FHIR',
     emptyTitle: 'Aucun formulaire pour le moment',
     noMatch: 'Aucun formulaire ne correspond.',
+    refresh: 'Actualiser',
   },
   settings: {
     title: 'Paramètres',

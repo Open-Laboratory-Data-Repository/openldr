@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import '@/i18n';
 import { addFilterViaPopover, expectStandardTableToolbar } from '@/components/data-table/expectStandardTableToolbar';
@@ -151,5 +151,43 @@ describe('Forms page', () => {
 
     fireEvent.change(screen.getByPlaceholderText(/search forms/i), { target: { value: 'zzz-no-such-form' } });
     expect(screen.queryByText('Specimen intake')).not.toBeInTheDocument();
+  });
+
+  // Regression for the search-vs-popover-filter fold bug: applyTableState folds rules flat,
+  // left-to-right (applyTableState.ts:80-92), so appending a multi-field OR search rule to an
+  // active popover filter list turned `A AND B OR C` into `(A AND B) OR C` — a row matching only
+  // the trailing OR term (fhirResourceType) came back regardless of the popover filter.
+  it('excludes a row that matches search only via FHIR type but fails the active popover filter', async () => {
+    // addFilterViaPopover always targets the first filterable column (name) with that type's
+    // first valid operator, which for 'text' is 'eq', not 'like' (types.ts validOperators) —
+    // so the popover filter here is an EXACT match: name eq 'Alpha Intake'.
+    const alpha: api.FormSummary = { ...form, id: 'form-a', name: 'Alpha Intake', fhirResourceType: 'Encounter' };
+    const beta: api.FormSummary = { ...form, id: 'form-b', name: 'Beta Form', fhirResourceType: 'AlphaType' };
+    vi.spyOn(api, 'listForms').mockResolvedValue([alpha, beta]);
+    render(<MemoryRouter><Forms /></MemoryRouter>);
+    await screen.findByText('Alpha Intake');
+
+    await addFilterViaPopover('Alpha Intake');
+    // Scoped to the table: the applied-filter chip also renders the value 'Alpha Intake'
+    // in a sibling element, so an unscoped query matches both and throws.
+    const table = screen.getByRole('table');
+    expect(await within(table).findByText('Alpha Intake')).toBeInTheDocument();
+    expect(within(table).queryByText('Beta Form')).not.toBeInTheDocument();
+
+    // Search term 'Alpha' also matches Beta Form's fhirResourceType ('AlphaType'), but Beta
+    // Form's name does not equal the popover filter's value. It must stay excluded.
+    fireEvent.change(screen.getByPlaceholderText(/search forms/i), { target: { value: 'Alpha' } });
+    expect(await within(table).findByText('Alpha Intake')).toBeInTheDocument();
+    expect(within(table).queryByText('Beta Form')).not.toBeInTheDocument();
+  });
+
+  it('matches search against FHIR type alone, with no popover filter active', async () => {
+    const gamma: api.FormSummary = { ...form, id: 'form-c', name: 'Gamma Form', fhirResourceType: 'XRayStudy' };
+    vi.spyOn(api, 'listForms').mockResolvedValue([gamma]);
+    render(<MemoryRouter><Forms /></MemoryRouter>);
+    await screen.findByText('Gamma Form');
+
+    fireEvent.change(screen.getByPlaceholderText(/search forms/i), { target: { value: 'xray' } });
+    expect(await screen.findByText('Gamma Form')).toBeInTheDocument();
   });
 });

@@ -71,6 +71,9 @@ function isImportableSchema(value: unknown): value is { name: string; fhirResour
   return typeof schema.name === 'string';
 }
 
+// Module level — stable, outside the component.
+const SEARCH_FIELDS = [(f: FormSummary) => f.name, (f: FormSummary) => f.fhirResourceType ?? ''];
+
 export function Forms() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -141,20 +144,19 @@ export function Forms() {
 
   const table = useTableState({ columns, defaultPageSize: 25 });
 
-  // The bespoke search box this replaces matched name OR fhirResourceType (`Forms.tsx` search,
-  // pre-toolbar); the OR-combined second rule preserves that.
-  const effectiveFilters = useMemo(() => {
-    const q = search.trim();
-    if (!q) return table.filters;
-    return [...table.filters,
-      { id: '__search__', column: 'name', operator: 'like' as const, value: q, combine: 'and' as const },
-      { id: '__search2__', column: 'fhirResourceType', operator: 'like' as const, value: q, combine: 'or' as const },
-    ];
-  }, [table.filters, search]);
+  // Free-text search is applied BEFORE applyTableState, never as a filter rule.
+  // applyTableState folds rules flat, left-to-right (applyTableState.ts:80-92), so appending a
+  // multi-field OR search would discard an active popover filter for rows matching only the
+  // trailing OR term. Pre-filtering keeps the semantics `search AND (popover rules)`.
+  const searched = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter((r) => SEARCH_FIELDS.some((f) => (f(r) ?? '').toLowerCase().includes(q)));
+  }, [rows, search]);
 
   const view = useMemo(
-    () => applyTableState(rows, { filters: effectiveFilters, sorts: table.sorts, page: table.page, pageSize: table.pageSize }, columns, valueGetters),
-    [rows, effectiveFilters, table.sorts, table.page, table.pageSize, columns, valueGetters],
+    () => applyTableState(searched, { filters: table.filters, sorts: table.sorts, page: table.page, pageSize: table.pageSize }, columns, valueGetters),
+    [searched, table.filters, table.sorts, table.page, table.pageSize, columns, valueGetters],
   );
 
   const importJson = async (file: File | undefined) => {
@@ -259,7 +261,7 @@ export function Forms() {
                 <DropdownMenuContent align="end">
                   <DropdownMenuItem onClick={() => navigate('/forms/new')}>New</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => fileRef.current?.click()}>Import</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => { void load(); }}>Refresh</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => { void load(); }}>{t('forms.refresh')}</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             }

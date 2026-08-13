@@ -241,6 +241,7 @@ export const en = {
     searchPlaceholder: 'Search forms or FHIR type',
     emptyTitle: 'No forms yet',
     noMatch: 'No forms match.',
+    refresh: 'Refresh',
   },
   settings: {
     title: 'Settings',
