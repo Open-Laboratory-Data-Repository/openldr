@@ -6,6 +6,9 @@ import type { Kysely } from 'kysely';
 import { z } from 'zod';
 import { appError } from '@openldr/core';
 import type { FacilityColumnMap } from '@openldr/terminology';
+// The SAME id derivation the CSV importer uses. Imported rather than re-implemented: two spellings
+// of `fac-` + sha256(`system|code`) is exactly how the manual and import doors drifted apart.
+import { idFor } from '@openldr/terminology';
 import {
   importFacilities, resolveKnownNationalSystem, CONTROLLED_FIELDS, CONTROLLED_VALUE_SETS,
   resolveControlledFields, suggestColumns, suggestValues, saveFacilityValueMappings,
@@ -731,7 +734,15 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
 
   // B1 Task 3: the registers an import may name. Constructed once per registration for the same
   // reason `importRuns` above is — a thin closure over `ctx.internalDb`.
-  const registerSources = createFacilityRegisterSourceStore(ctx.internalDb);
+  //
+  // ⛔ `ctx.__registerSources` is a TEST SEAM, never a production path. `fakeCtx()` in
+  // facilities-routes.test.ts has no real database for this store to close over — its `internalDb`
+  // is a narrow, allow-listed Kysely Proxy that throws on any call outside the measured set — so a
+  // test exercising POST's register gate has no other way to answer `getByUrl`. Production always
+  // takes the real store, since nothing outside that fixture ever sets this property.
+  const registerSources = (ctx as unknown as {
+    __registerSources?: ReturnType<typeof createFacilityRegisterSourceStore>;
+  }).__registerSources ?? createFacilityRegisterSourceStore(ctx.internalDb);
 
   // ⛔ THE REFUSAL THIS SLICE EXISTS FOR — both its decision and both its messages now live in
   // `resolveFacilityRegisterForImport` (@openldr/db, facility-register-sources.ts), which carries the
@@ -1238,17 +1249,55 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     const controlledErr = await controlledFieldsError(ctx, record);
     if (controlledErr) { reply.code(400); return controlledErr; }
 
+    // ⛔ The id is SERVER-derived, never client-chosen — that part is unchanged, and is why a
+    // client-supplied `id` is still ignored here.
+    //
+    // When this facility names a register AND a code within it, the id comes from the SAME function
+    // the CSV importer uses (`idFor`, packages/terminology/src/facility-csv.ts). Otherwise the same
+    // facility exists twice — once hand-entered under a random id, once imported under the derived
+    // one — and no later import can ever reconcile them. Migration 082's `planMoves` already
+    // re-keyed the manual rows that predate this and states the rule in full; this is that rule
+    // applied at the door, instead of once, by a migration that will never run again.
+    //
+    // No national code means nothing to hash, so the random id stands — the same case 082 leaves
+    // alone rather than inventing an identity for.
+    const nationalSystem = typeof record.nationalSystem === 'string' ? record.nationalSystem.trim() : '';
+    const nationalCode = typeof record.nationalCode === 'string' ? record.nationalCode.trim() : '';
+    // Annotated `string`, not inferred: `randomUUID()` returns the narrow
+    // `${string}-${string}-...` template-literal type, which `idFor`'s plain string cannot be
+    // assigned to.
+    let id: string = randomUUID();
+    if (nationalSystem && nationalCode) {
+      // The same gate every import door already applies, for the same reason: `idFor` hashes this
+      // string into a PERMANENT identity without normalising it, so a typed label ('HFR' vs 'hfr')
+      // mints two identities for one register. See `resolveFacilityRegisterForImport` (@openldr/db)
+      // for the full defect. Doors that disagree about what a register is put the fork straight back.
+      const register = await resolveFacilityRegisterForImport(registerSources, nationalSystem);
+      if (!register.ok) { reply.code(400); return { error: register.error }; }
+      id = idFor(nationalSystem, nationalCode);
+      // ⛔ `facilityRegistry.upsert` is `onConflict('id').doUpdateSet(...)`
+      // (packages/db/src/facility-registry-store.ts). That was harmless while every created id was
+      // random. With a DERIVED id it is not: a create landing on an existing row would silently
+      // OVERWRITE it — most likely an imported facility — with no error and no record of what was
+      // lost. A create must never do that, so the collision is refused before the write.
+      //
+      // This is a check-then-write, so it is not a substitute for the database's own guarantee: the
+      // partial unique index on (national_system, national_code) (migration 070) is what actually
+      // closes the race, and `mapFacilityDbError` turns its 23505 into the same 409 below.
+      if (await ctx.facilityRegistry.get(id)) {
+        reply.code(409);
+        return { error: 'a facility with that national code already exists in this register' };
+      }
+    }
+
     // Only the write itself is guarded — an error from `recordAudit` below must never be mapped
     // as if it came from `upsert` (e.g. a 23505 from the audit table mis-reported to the client as
     // "a facility with that local code already exists" after the facility row already committed).
     let created;
     try {
-      // ⛔ The id is ALWAYS generated here. The CSV importer derives ids deterministically from
-      // sha256(nationalSystem|nationalCode), so a client-chosen id could collide with an imported
-      // row and silently overwrite it.
       created = await ctx.facilityRegistry.upsert({
         ...record,
-        id: randomUUID(),
+        id,
         name,
         extras,
         // Lab-authored: managedOrigin stays NULL. Only the sync applier stamps 'central'.

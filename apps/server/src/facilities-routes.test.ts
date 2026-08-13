@@ -5748,3 +5748,84 @@ describe('Task 3: national identity is immutable on an edit', () => {
     expect(res.json().name).toBe('Bahebe Health Lab');
   });
 });
+
+describe('Task 4: a manual create keys the same way an import does', () => {
+  const MFL = 'urn:openldr:facility-register:mfl';
+
+  // `registerSources` is built over ctx.internalDb at route registration, and `fakeCtx`'s
+  // internalDb is a narrow Proxy that cannot answer a real query. Inject the store instead — this
+  // suite is about the ROUTE's derivation and gate; the store's own SQL is covered in packages/db.
+  function ctxWithRegister() {
+    const ctx = fakeCtx();
+    ctx.__registerSources = {
+      getByUrl: async (url: string) => (url === MFL ? { url, name: 'MFL', active: true } : undefined),
+    };
+    return ctx;
+  }
+
+  const nationalBody = {
+    answers: { f2: 'Commando Urban', f6: '100', f7: MFL },
+    formSchemaId: 'form-sample-facility',
+    formVersion: 1,
+  };
+
+  const derivedId = (system: string, code: string) =>
+    `fac-${createHash('sha256').update(`${system}|${code}`).digest('hex').slice(0, 16)}`;
+
+  it('derives the id from the register and national code, exactly as the importer does', async () => {
+    const ctx = ctxWithRegister();
+    const app = await appWith(ctx);
+    const res = await app.inject({ method: 'POST', url: '/api/facilities', payload: nationalBody });
+    expect(res.statusCode).toBe(201);
+    expect(res.json().id).toBe(derivedId(MFL, '100'));
+  });
+
+  it('keeps a random id when there is no national code — nothing to hash', async () => {
+    const ctx = ctxWithRegister();
+    const app = await appWith(ctx);
+    const res = await app.inject({ method: 'POST', url: '/api/facilities', payload: body });
+    expect(res.statusCode).toBe(201);
+    expect(res.json().id).not.toMatch(/^fac-/);
+  });
+
+  it('keeps a random id when a register is named but no code is given', async () => {
+    // Mirrors migration 082's own rule: a row carrying a register but no national code keeps its
+    // id, because `idFor` has nothing to hash and re-deriving would invent an identity.
+    const ctx = ctxWithRegister();
+    const app = await appWith(ctx);
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities',
+      payload: { ...nationalBody, answers: { f1: 'LAB01', f2: 'Commando Urban', f7: MFL } },
+    });
+    expect(res.statusCode).toBe(201);
+    expect(res.json().id).not.toMatch(/^fac-/);
+  });
+
+  it('refuses an unregistered register instead of hashing a typed label into a permanent id', async () => {
+    const ctx = ctxWithRegister();
+    const app = await appWith(ctx);
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities',
+      payload: { ...nationalBody, answers: { ...nationalBody.answers, f7: 'MFL' } },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toContain('is not a known facility register');
+    expect(ctx.__rows).toHaveLength(0);
+  });
+
+  it('⛔ refuses rather than OVERWRITING a facility already under that national code', async () => {
+    // `facilityRegistry.upsert` is onConflict(id).doUpdateSet (packages/db/facility-registry-store.ts).
+    // With a DERIVED id, a create that reached it would silently replace an imported facility —
+    // no error, and no record of what was lost. This is the test that pins the refusal.
+    const ctx = ctxWithRegister();
+    const app = await appWith(ctx);
+    await app.inject({ method: 'POST', url: '/api/facilities', payload: nationalBody });
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities',
+      payload: { ...nationalBody, answers: { ...nationalBody.answers, f2: 'A different name' } },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(ctx.__rows).toHaveLength(1);
+    expect(ctx.__rows[0].name).toBe('Commando Urban');
+  });
+});
