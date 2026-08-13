@@ -671,6 +671,7 @@ export const fr: EnShape = {
     colStage: 'Étape',
     colStatus: 'Statut',
     empty: 'Aucune charge récente.',
+    noMatch: 'Aucune charge ne correspond.',
     noSource: 'Aucune',
     openDetail: 'Ouvrir le cycle de vie de la charge',
     detailTitle: 'Cycle de vie de la charge',

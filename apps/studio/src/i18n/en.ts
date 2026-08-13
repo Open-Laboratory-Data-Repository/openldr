@@ -675,6 +675,7 @@ export const en = {
     colStage: 'Stage',
     colStatus: 'Status',
     empty: 'No recent payloads.',
+    noMatch: 'No payloads match.',
     noSource: 'None',
     openDetail: 'Open payload lifecycle',
     detailTitle: 'Payload lifecycle',
