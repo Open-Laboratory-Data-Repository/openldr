@@ -5670,71 +5670,70 @@ describe('Task 1: an unchanged controlled value does not block an edit', () => {
   });
 });
 
-describe('Task 3: national identity is immutable on an edit', () => {
+describe('Stage 2: a facility code and its register can be corrected', () => {
+  const MFL = 'urn:openldr:facility-register:mfl';
   const seeded = {
-    id: 'fac-1', localCode: null, nationalSystem: 'urn:openldr:facility-register:mfl',
+    id: 'fac-1', localCode: null, nationalSystem: MFL,
     nationalCode: '100', name: 'Commando Urban', extras: {}, source: 'import',
   };
   const editBody = (answers: Record<string, unknown>) => ({
     answers, formSchemaId: 'form-sample-facility', formVersion: 1,
   });
-
-  it('allows an edit that resubmits the same national code', async () => {
+  function ctxWithRegister() {
     const ctx = fakeCtx();
+    ctx.__registerSources = {
+      getByUrl: async (url: string) => (url === MFL ? { url, name: 'MFL', active: true } : undefined),
+    };
+    return ctx;
+  }
+
+  it('allows an edit that resubmits the same code', async () => {
+    const ctx = ctxWithRegister();
     ctx.__rows.push({ ...seeded });
     const app = await appWith(ctx);
     const res = await app.inject({
       method: 'PUT', url: '/api/facilities/fac-1',
-      payload: editBody({ f2: 'Commando Urban Clinic', f6: '100', f7: 'urn:openldr:facility-register:mfl' }),
+      payload: editBody({ f2: 'Commando Urban Clinic', f6: '100', f7: MFL }),
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().name).toBe('Commando Urban Clinic');
   });
 
-  it('refuses an edit that changes the national code', async () => {
-    const ctx = fakeCtx();
+  it('⛔ ALLOWS an edit that changes the code — the refusal that used to live here is gone', async () => {
+    // It existed because the importer matched by id alone, so a moved code stranded the row. The
+    // importer now resolves by (facility_system, facility_code) first (resolveIdsByPair), so the next
+    // import reconciles a corrected code without anything being re-keyed.
+    const ctx = ctxWithRegister();
     ctx.__rows.push({ ...seeded });
     const app = await appWith(ctx);
     const res = await app.inject({
       method: 'PUT', url: '/api/facilities/fac-1',
-      payload: editBody({ f2: 'Commando Urban', f6: '200', f7: 'urn:openldr:facility-register:mfl' }),
+      payload: editBody({ f2: 'Commando Urban', f6: '200', f7: MFL }),
     });
-    expect(res.statusCode).toBe(400);
-    expect(res.json().error).toContain('national code cannot be changed');
-    // The row must be untouched — a refusal that still wrote would be worse than no refusal.
-    expect(ctx.__rows[0].nationalCode).toBe('100');
+    expect(res.statusCode).toBe(200);
+    expect(ctx.__rows[0].nationalCode).toBe('200');
+    // The row keeps its id. Nothing is re-keyed, which is what keeps facility_map, the concept
+    // projection and the audit trail pointing at a row that still exists.
+    expect(ctx.__rows[0].id).toBe('fac-1');
   });
 
-  it('refuses an edit that changes the register', async () => {
-    const ctx = fakeCtx();
+  it('⛔ still REFUSES a register that is not registered on this install', async () => {
+    // Dropping the immutability refusal must not also drop the register gate: `idFor` hashes the
+    // system string without normalising it, so a typed label mints a second permanent identity.
+    const ctx = ctxWithRegister();
     ctx.__rows.push({ ...seeded });
     const app = await appWith(ctx);
     const res = await app.inject({
       method: 'PUT', url: '/api/facilities/fac-1',
-      payload: editBody({ f2: 'Commando Urban', f6: '100', f7: 'urn:openldr:facility-register:other' }),
+      payload: editBody({ f2: 'Commando Urban', f6: '100', f7: 'MFL' }),
     });
     expect(res.statusCode).toBe(400);
-    expect(res.json().error).toContain('facility register cannot be changed');
-    expect(ctx.__rows[0].nationalSystem).toBe('urn:openldr:facility-register:mfl');
+    expect(res.json().error).toContain('is not a known facility register');
+    expect(ctx.__rows[0].nationalSystem).toBe(MFL);
   });
 
-  it('refuses an edit that BLANKS the national code, rather than nulling the row\'s identity', async () => {
-    const ctx = fakeCtx();
-    // A local code so the has-a-code CHECK is satisfied and this reaches the identity guard rather
-    // than being refused earlier for a different reason.
-    ctx.__rows.push({ ...seeded, localCode: 'LAB01' });
-    const app = await appWith(ctx);
-    const res = await app.inject({
-      method: 'PUT', url: '/api/facilities/fac-1',
-      payload: editBody({ f1: 'LAB01', f2: 'Commando Urban', f6: '', f7: 'urn:openldr:facility-register:mfl' }),
-    });
-    expect(res.statusCode).toBe(400);
-    expect(res.json().error).toContain('national code cannot be changed');
-    expect(ctx.__rows[0].nationalCode).toBe('100');
-  });
-
-  it('leaves a facility with NO national code editable — there is no identity to move', async () => {
-    const ctx = fakeCtx();
+  it('leaves a facility with NO register editable — there is no change to gate', async () => {
+    const ctx = ctxWithRegister();
     ctx.__rows.push({
       id: 'fac-2', localCode: 'LAB01', nationalSystem: null, nationalCode: null,
       name: 'Bahebe Health Laboratory', extras: {}, source: 'manual',

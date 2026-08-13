@@ -1304,8 +1304,12 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     //
     // No national code means nothing to hash, so the random id stands — the same case 082 leaves
     // alone rather than inventing an identity for.
-    const nationalSystem = typeof record.nationalSystem === 'string' ? record.nationalSystem.trim() : '';
-    const nationalCode = typeof record.nationalCode === 'string' ? record.nationalCode.trim() : '';
+    // `facilitySystem`/`facilityCode` are authoritative (migration 086); the deprecated pair is the
+    // fallback while the seeded form still carries it. A later stage drops the fallback with the
+    // columns.
+    const str = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
+    const nationalSystem = str(record.facilitySystem) || str(record.nationalSystem);
+    const nationalCode = str(record.facilityCode) || str(record.nationalCode);
     // Annotated `string`, not inferred: `randomUUID()` returns the narrow
     // `${string}-${string}-...` template-literal type, which `idFor`'s plain string cannot be
     // assigned to.
@@ -1459,27 +1463,33 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       return { error: 'a facility must have a local code or a national code' };
     }
 
-    // ⛔ The national code and its register are this row's IDENTITY, not two more editable columns:
-    // the importer derives `id = fac-sha256(nationalSystem|nationalCode)` (`idFor`,
-    // packages/terminology/src/facility-csv.ts) and this handler updates BY id without re-deriving
-    // it. An edit that moved either value would leave the row filed under an id its own code no
-    // longer produces — the next import of that register would not find it, and would either
-    // collide on `facility_registry_national_unique` (migration 070) or insert a second row for the
-    // same facility.
+    // The refusal that used to live here — "a facility's national code cannot be changed" — is GONE,
+    // and its removal is the point of this stage rather than a relaxation.
     //
-    // Re-keying a live row is deliberately NOT attempted here: `facility_map.registry_id`,
-    // `facility_concept_projection`, and any mapping authored against the projected code all point
-    // at the id. That is its own slice. The accepted cost is that a facility created WITHOUT a
-    // national code can never acquire one — it must be deleted and registered again. A row that has
-    // neither value is unaffected: `changedCoreKeys` sees no change, so it stays freely editable.
+    // It existed because the importer matched rows by id alone, so moving a code left the row filed
+    // under an id its own code no longer produced and the next import could not find it. The importer
+    // now resolves by `(facility_system, facility_code)` first (`resolveIdsByPair`,
+    // packages/bootstrap/src/facility-import.ts), so a changed code reconciles on the next import
+    // without anything being re-keyed. The operator can correct a facility that was registered under
+    // the wrong code, and adopt one into a register it turns out to belong to — which is what they
+    // tried to do the first time they used the form.
+    //
+    // `changedCoreKeys` is still computed: the required-field check below is scoped by it.
     const identityChanged = changedCoreKeys(record, before);
-    if (identityChanged.has('nationalCode') || cleared.has('nationalCode')) {
-      reply.code(400);
-      return { error: "a facility's national code cannot be changed on an existing facility; it is part of the facility's identity" };
-    }
-    if (identityChanged.has('nationalSystem') || cleared.has('nationalSystem')) {
-      reply.code(400);
-      return { error: "a facility's facility register cannot be changed on an existing facility; it is part of the facility's identity" };
+
+    // The register gate, scoped to a CHANGE. Dropping the immutability refusal above must not also
+    // drop this: `idFor` hashes a system string without normalising it, so a typed label ('HFR' vs
+    // 'hfr') mints a second permanent identity for one register — the defect migration 082 had to
+    // clean up. Every other door already applies this gate; PUT is now a door.
+    //
+    // Scoped to a change, not to presence, for the reason the whole arc turns on: the Edit sheet
+    // resubmits every field it seeded, so gating on presence would refuse an unrelated edit to any
+    // facility whose system predates the register registry.
+    for (const key of ['facilitySystem', 'nationalSystem'] as const) {
+      const submittedSystem = record[key];
+      if (!identityChanged.has(key) || typeof submittedSystem !== 'string' || submittedSystem === '') continue;
+      const register = await resolveFacilityRegisterForImport(registerSources, submittedSystem);
+      if (!register.ok) { reply.code(400); return { error: register.error }; }
     }
 
     // Required is enforced only for what this submission MOVED. `identityChanged`/`cleared` are
