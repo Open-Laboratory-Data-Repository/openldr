@@ -5829,3 +5829,79 @@ describe('Task 4: a manual create keys the same way an import does', () => {
     expect(ctx.__rows[0].name).toBe('Commando Urban');
   });
 });
+
+describe('Task 5: required is enforced on the route, not only in the studio', () => {
+  // `resolveForm` reads the WHOLE stored form now, so this fixture must look like a real one:
+  // `validateAnswers` walks `schema.fields` and reads displayLabel/required/enabled off each.
+  function ctxWithRequiredRegion() {
+    const ctx = fakeCtx();
+    const field = (over: Record<string, unknown>) => ({
+      fhirPath: null, description: null, enabled: true, cardinality: { min: 0, max: '1' }, ...over,
+    });
+    ctx.forms.get = async (formId: string) => (formId === 'form-sample-facility'
+      ? {
+        id: 'form-sample-facility',
+        targetPages: ['facilities'],
+        schema: {
+          id: 's', name: 'Facility', sections: [], fields: [
+            field({ id: 'f1', displayLabel: 'Local code', fieldType: 'identifier', required: false, order: 0, apiProperty: 'localCode' }),
+            field({ id: 'f2', displayLabel: 'Name', fieldType: 'text', required: true, order: 1, apiProperty: 'name' }),
+            field({ id: 'f3', displayLabel: 'Region', fieldType: 'text', required: true, order: 2, apiProperty: 'region' }),
+          ],
+        },
+      }
+      : undefined);
+    return ctx;
+  }
+
+  const submit = (answers: Record<string, unknown>) => ({
+    answers, formSchemaId: 'form-sample-facility', formVersion: 1,
+  });
+
+  it('refuses a create that omits a required field', async () => {
+    const ctx = ctxWithRequiredRegion();
+    const app = await appWith(ctx);
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities', payload: submit({ f1: 'LAB01', f2: 'Commando Urban' }),
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toContain('Region');
+    expect(ctx.__rows).toHaveLength(0);
+  });
+
+  it('names the field by its LABEL, not its id — the operator never sees a field id', async () => {
+    const ctx = ctxWithRequiredRegion();
+    const app = await appWith(ctx);
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities', payload: submit({ f1: 'LAB01', f2: 'Commando Urban' }),
+    });
+    expect(res.json().error).toBe('Region is required');
+  });
+
+  it('lets an edit through when the missing required field is one this submission did not touch', async () => {
+    // ⛔ THE trap this slice exists to avoid: 3788 imported rows have no region. If PUT enforced the
+    // whole form, none of them could ever be edited again.
+    const ctx = ctxWithRequiredRegion();
+    ctx.__rows.push({ id: 'fac-1', localCode: 'LAB01', name: 'Commando Urban', region: null, extras: {}, source: 'import' });
+    const app = await appWith(ctx);
+    const res = await app.inject({
+      method: 'PUT', url: '/api/facilities/fac-1',
+      payload: submit({ f1: 'LAB01', f2: 'Commando Urban Clinic' }),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().name).toBe('Commando Urban Clinic');
+  });
+
+  it('refuses an edit that BLANKS a required field', async () => {
+    const ctx = ctxWithRequiredRegion();
+    ctx.__rows.push({ id: 'fac-1', localCode: 'LAB01', name: 'Commando Urban', region: 'Copperbelt', extras: {}, source: 'import' });
+    const app = await appWith(ctx);
+    const res = await app.inject({
+      method: 'PUT', url: '/api/facilities/fac-1',
+      payload: submit({ f1: 'LAB01', f2: 'Commando Urban', f3: '' }),
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toContain('Region');
+    expect(ctx.__rows[0].region).toBe('Copperbelt');
+  });
+});

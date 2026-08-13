@@ -9,6 +9,9 @@ import type { FacilityColumnMap } from '@openldr/terminology';
 // The SAME id derivation the CSV importer uses. Imported rather than re-implemented: two spellings
 // of `fac-` + sha256(`system|code`) is exactly how the manual and import doors drifted apart.
 import { idFor } from '@openldr/terminology';
+// The SAME required-field check `forms-routes.ts` already runs on a form submission — see
+// `requiredFieldsError` below for how this route scopes it.
+import { validateAnswers } from '@openldr/forms';
 import {
   importFacilities, resolveKnownNationalSystem, CONTROLLED_FIELDS, CONTROLLED_VALUE_SETS,
   resolveControlledFields, suggestColumns, suggestValues, saveFacilityValueMappings,
@@ -317,7 +320,11 @@ type FieldRef = { id: string; apiProperty?: string | null };
  *  `targetsFacilitiesPage` is a boundary function that normalizes it (see that function's doc
  *  comment for why: it accepts both the parsed array the real store returns and, defensively, a raw
  *  JSON string), not because `ctx.forms` itself is loosely typed. */
-type ResolvedForm = { fields: FieldRef[]; targetPages: unknown };
+/*  `schema` is the WHOLE stored form, carried alongside the destructured `fields` because
+ *  `validateAnswers` (@openldr/forms) takes a full `FormSchema`, not a field list — see
+ *  `requiredFieldsError` below. Typed `unknown` for the same reason `targetPages` is: this is a
+ *  boundary, and the one consumer casts at the call site exactly as `forms-routes.ts:321` does. */
+type ResolvedForm = { fields: FieldRef[]; targetPages: unknown; schema: unknown };
 
 /** Resolve the submitted form so `apiProperty` and `targetPages` can be read. Returns
  *  `{ fields: [], targetPages: null }` both when no form id was submitted AND when the id does not
@@ -325,11 +332,11 @@ type ResolvedForm = { fields: FieldRef[]; targetPages: unknown };
  *  to write, never as "no core fields, everything is extras" (see the empty-field-list guards in
  *  POST/PUT below). */
 async function resolveForm(ctx: AppContext, formSchemaId: string | null | undefined): Promise<ResolvedForm> {
-  if (!formSchemaId) return { fields: [], targetPages: null };
+  if (!formSchemaId) return { fields: [], targetPages: null, schema: null };
   const def = await ctx.forms.get(formSchemaId);
-  if (!def) return { fields: [], targetPages: null };
+  if (!def) return { fields: [], targetPages: null, schema: null };
   const schema = def.schema as { fields?: FieldRef[] } | undefined;
-  return { fields: schema?.fields ?? [], targetPages: def.targetPages ?? null };
+  return { fields: schema?.fields ?? [], targetPages: def.targetPages ?? null, schema: schema ?? null };
 }
 
 /**
@@ -578,6 +585,37 @@ function nameTypeError(name: unknown): { error: string } | undefined {
  * read as changed when they are not. Harmless today: no caller of this function guards a numeric
  * column.
  */
+/**
+ * Required-field refusal, shared by POST and PUT.
+ *
+ * The form's `required` markers used to be enforced by the studio alone (`validate`,
+ * apps/studio/src/forms-runtime/runtime.ts, which blocks submit). Nothing checked them here, so a
+ * direct `PUT` carrying an empty required field returned 200 and wrote NULL.
+ *
+ * `changedFieldIds` is `null` on POST — a create must be complete, so every required field is
+ * checked. On PUT it is the set of FIELD ids whose core column this submission changed or cleared:
+ * an imported facility with a pre-existing gap stays editable, but the operator cannot blank a
+ * required field. Checking the whole form on every edit would block an unrelated change on a value
+ * the import never supplied — the same defect, one layer up, that `changedCoreKeys` exists for.
+ *
+ * ⚠ `validateAnswers` has NO visibility check, unlike the studio's own `validate`
+ * (runtime.ts:33, which skips hidden fields). On a form carrying a visibility rule this route
+ * therefore enforces required on a field the client never did. The shipped Facility form has no
+ * visibility rules, so this is inert today and live the moment an operator adds one.
+ */
+function requiredFieldsError(
+  formSchema: unknown, answers: Record<string, unknown>, changedFieldIds: Set<string> | null,
+): { error: string } | undefined {
+  // `as never` matches apps/server/src/forms-routes.ts:321, the only other caller in the codebase —
+  // that route hands `validateAnswers` a stored schema the same way, without re-parsing it. One
+  // convention, not two.
+  const errors = validateAnswers(formSchema as never, answers as never)
+    .filter((e) => e.reason === 'required')
+    .filter((e) => changedFieldIds === null || changedFieldIds.has(e.fieldId));
+  if (errors.length === 0) return undefined;
+  return { error: `${errors.map((e) => e.label).join(', ')} ${errors.length === 1 ? 'is' : 'are'} required` };
+}
+
 function changedCoreKeys(record: Partial<FacilityRecord>, before: FacilityRecord): Set<string> {
   const norm = (v: unknown) => (v === null || v === undefined || v === '' ? null : v);
   const stored = before as unknown as Record<string, unknown>;
@@ -1216,7 +1254,7 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     const p = SubmitSchema.safeParse(req.body);
     if (!p.success) { reply.code(400); return { error: p.error.message }; }
 
-    const { fields, targetPages } = await resolveForm(ctx, p.data.formSchemaId);
+    const { fields, targetPages, schema: formSchema } = await resolveForm(ctx, p.data.formSchemaId);
     // An empty field list means the submitted form could not be resolved — NOT "every field is
     // extras". Refuse the write rather than silently persisting nothing but a bare id.
     if (fields.length === 0) { reply.code(400); return { error: 'the submitted form could not be resolved' }; }
@@ -1243,6 +1281,11 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       reply.code(400);
       return { error: 'a facility must have a local code or a national code' };
     }
+
+    // A create must be COMPLETE — every required field, not just the ones this submission moved.
+    // There is no `before` to inherit a value from.
+    const requiredErr = requiredFieldsError(formSchema, p.data.answers, null);
+    if (requiredErr) { reply.code(400); return requiredErr; }
 
     // Task 6 (B1): reject a non-canonical level/status/country BEFORE the write — see
     // `controlledFieldsError`'s doc comment for why this refuses rather than warns, unlike import.
@@ -1371,7 +1414,7 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     const before = await ctx.facilityRegistry.get(id);
     if (!before) { reply.code(404); return { error: 'not found' }; }
 
-    const { fields, targetPages } = await resolveForm(ctx, p.data.formSchemaId);
+    const { fields, targetPages, schema: formSchema } = await resolveForm(ctx, p.data.formSchemaId);
     if (fields.length === 0) { reply.code(400); return { error: 'the submitted form could not be resolved' }; }
     // Same wrong-form guard as POST (see targetsFacilitiesPage's doc comment) — without it a
     // resolvable but unrelated form (a Patient form's formSchemaId, say) sails past the check
@@ -1438,6 +1481,25 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       reply.code(400);
       return { error: "a facility's facility register cannot be changed on an existing facility; it is part of the facility's identity" };
     }
+
+    // Required is enforced only for what this submission MOVED. `identityChanged`/`cleared` are
+    // keyed on COLUMN names while `validateAnswers` reports FIELD ids, so map through the submitted
+    // form's own field list rather than assuming the two are spelled the same.
+    //
+    // The effect: an imported facility whose register never supplied, say, a district stays
+    // editable — the operator can still fix its name — but blanking a required field is refused.
+    // Enforcing the whole form here instead would make every row with a pre-existing gap
+    // permanently uneditable, which is the trap this whole slice exists to avoid.
+    const changedFieldIds = new Set(
+      fields
+        .filter((f) => {
+          const key = f.apiProperty ?? '';
+          return identityChanged.has(key) || cleared.has(key);
+        })
+        .map((f) => f.id),
+    );
+    const requiredErr = requiredFieldsError(formSchema, p.data.answers, changedFieldIds);
+    if (requiredErr) { reply.code(400); return requiredErr; }
 
     // Task 6 (B1), rescoped: only a level/status/country this submission actually CHANGED is
     // checked. The sheet resubmits every field it seeded, so scoping on "submitted" checked every
