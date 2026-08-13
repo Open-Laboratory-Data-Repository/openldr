@@ -509,7 +509,7 @@ describe('createFacilityImportWorker — apply phase', () => {
     expect(rows).toHaveLength(1);
     // The facility was actually written under the MAPPED fields — apply parsed with the same map
     // validate did, not raw (unrecognised) headers.
-    expect(rows[0].national_code).toBe('100');
+    expect(rows[0].facility_code).toBe('100');
     expect(rows[0].name).toBe('Dodoma Regional Referral');
   });
 
@@ -572,7 +572,7 @@ describe('createFacilityImportWorker — apply phase', () => {
     // measured reason, as the inline route's conflict tests in apps/server.
     await h.db.updateTable('facility_registry')
       .set({ updated_at: sql`now() + interval '1 second'` } as never)
-      .where('national_code', '=', '100').execute();
+      .where('facility_code', '=', '100').execute();
 
     expect(await h.runs.confirm(run.id, 'awaiting_confirmation', { nationalSystem: SYSTEM })).toBe(true);
     await h.worker.tickOnce();
@@ -604,7 +604,7 @@ describe('createFacilityImportWorker — apply phase', () => {
 
     await h.db.updateTable('facility_registry')
       .set({ updated_at: sql`now() + interval '1 second'` } as never)
-      .where('national_code', '=', '100').execute();
+      .where('facility_code', '=', '100').execute();
 
     expect(await h.runs.confirm(run.id, 'awaiting_confirmation', {
       nationalSystem: SYSTEM, onConflict: 'overwrite',

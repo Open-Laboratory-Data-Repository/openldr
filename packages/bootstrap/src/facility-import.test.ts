@@ -18,7 +18,7 @@ async function buildDeps(): Promise<FacilityImportDeps & { db: Kysely<InternalSc
 }
 
 async function rowFor(db: Kysely<InternalSchema>, nationalCode: string) {
-  return db.selectFrom('facility_registry').selectAll().where('national_code', '=', nationalCode).executeTakeFirst();
+  return db.selectFrom('facility_registry').selectAll().where('facility_code', '=', nationalCode).executeTakeFirst();
 }
 
 const HEADER = 'national_code,name,level,ownership,status,country,zone,region,district,council,ward,village,address,phone,latitude,longitude';
@@ -208,7 +208,7 @@ describe('importFacilities', () => {
   it('rows absent from the import are NOT deleted', async () => {
     const deps = await buildDeps();
     const store = createFacilityRegistryStore(deps.db);
-    await store.upsert({ id: 'manual-1', localCode: 'LAB01', name: 'Hand-entered facility', source: 'manual' });
+    await store.upsert({ id: 'manual-1', facilityCode: 'LAB01', name: 'Hand-entered facility', source: 'manual' });
 
     const body = csv(['100,Dodoma Regional Referral,,,,,,,,,,,,,,']);
     await importFacilities(deps, body, { nationalSystem: SYSTEM, apply: true });
@@ -269,7 +269,7 @@ describe('importFacilities', () => {
     const result = await importFacilities(deps, body, { nationalSystem: SYSTEM, apply: true });
     expect(result).toMatchObject({ parsed: 2, written: { created: 1, updated: 0 }, duplicates: 1 });
 
-    const rows = await deps.db.selectFrom('facility_registry').selectAll().where('national_code', '=', '100').execute();
+    const rows = await deps.db.selectFrom('facility_registry').selectAll().where('facility_code', '=', '100').execute();
     expect(rows).toHaveLength(1);
     expect(rows[0].name).toBe('Second Name (final)');
   });
@@ -331,15 +331,17 @@ describe('importFacilities', () => {
     const id = row!.id;
 
     const stored = await store.get(id);
-    await store.upsert({ ...stored!, localCode: 'LAB01' });
-    expect((await store.get(id))?.localCode).toBe('LAB01');
+    // The operator's own edit is an EXTRA, not a second code — there is no second code column since
+    // migration 088. This still pins what the original test was really about: a re-import updates
+    // the register's fields without discarding what the operator added.
+    await store.upsert({ ...stored!, extras: { ...(stored!.extras ?? {}), ward_note: 'operator note' } });
 
     const renamed = csv(['100,Dodoma Regional Referral Hospital,,,,,,,,,,,,,,']);
     const r2 = await importFacilities(deps, renamed, { nationalSystem: SYSTEM, apply: true });
     expect(r2).toMatchObject({ changed: 1, written: { created: 0, updated: 1 } });
 
     const after = await store.get(id);
-    expect(after?.localCode).toBe('LAB01');
+    expect((after?.extras as Record<string, unknown>)?.ward_note).toBe('operator note');
     expect(after?.name).toBe('Dodoma Regional Referral Hospital');
   });
 
@@ -656,7 +658,7 @@ describe('preview reports real database impact (FAC-P1-03)', () => {
 
     // The register itself, asserted FIRST: this is the damage, and it must be what a regression
     // reports. (Measured before the fix: `["inactive", "inactive"]`.)
-    const rows = await deps.db.selectFrom('facility_registry').select(['national_code', 'status']).execute();
+    const rows = await deps.db.selectFrom('facility_registry').select(['facility_code', 'status']).execute();
     expect(rows.map((x) => x.status)).toEqual([null, null]);
     expect(r.unknownColumns).toEqual(['extra_col']);
     // ⛔ NOT EVALUATED, never 0 and never 2: a file that produced no records is not evidence that
@@ -1276,7 +1278,7 @@ describe('per-facility audit rows for changed facilities (Task 7)', () => {
     // Same id `idFor(SYSTEM, '100')` produces (see the dry-run test above for the literal value) —
     // pre-seeded as hand-entered so the import below UPDATES this exact row rather than creating one.
     await store.upsert({
-      id: 'fac-0eea98ab9108599d', localCode: 'LAB01', name: 'Old Hand-Entered Name', source: 'manual',
+      id: 'fac-0eea98ab9108599d', facilitySystem: SYSTEM, facilityCode: '100', name: 'Old Hand-Entered Name', source: 'manual',
     });
 
     const result = await importFacilities(deps, release, applyOpts); // renames '100' to 'Alpha'

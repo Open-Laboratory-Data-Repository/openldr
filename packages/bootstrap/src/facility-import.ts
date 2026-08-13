@@ -52,7 +52,7 @@ export async function resolveKnownNationalSystem(
   db: Kysely<InternalSchema>, nationalSystem: string,
 ): Promise<boolean> {
   const known = await db.selectFrom('facility_registry').select('id')
-    .where('national_system', '=', nationalSystem).limit(1).executeTakeFirst();
+    .where('facility_system', '=', nationalSystem).limit(1).executeTakeFirst();
   return !!known;
 }
 
@@ -508,11 +508,10 @@ async function loadExisting(
     for (const r of rows) {
       out.set(r.id, {
         id: r.id,
-        localCode: r.local_code,
         extras: (r.extras as Record<string, unknown> | null) ?? null,
         source: r.source as 'manual' | 'import',
         fields: {
-          nationalSystem: r.national_system, nationalCode: r.national_code, name: r.name,
+          facilitySystem: r.facility_system, facilityCode: r.facility_code, name: r.name,
           level: r.level, ownership: r.ownership, status: r.status, country: r.country,
           zone: r.zone, region: r.region, district: r.district, council: r.council,
           ward: r.ward, village: r.village, addressText: r.address_text, phone: r.phone,
@@ -526,7 +525,7 @@ async function loadExisting(
 }
 
 const sampleOf = (r: FacilityRecord): FacilitySample =>
-  ({ id: r.id, nationalCode: r.nationalCode ?? null, name: r.name });
+  ({ id: r.id, nationalCode: r.facilityCode ?? null, name: r.name });
 
 /** Fold the classified rows into the counts and bounded samples the result reports. Shared by both
  *  return paths below, so the preview's numbers and the apply's are produced by the same code —
@@ -746,8 +745,8 @@ export async function importFacilities(
   const conflictsEvaluated = previewedAt !== null;
 
   // A row this query returns from `facility_registry`, shaped into a `FacilitySample`.
-  const toSample = (r: { id: string; national_code: string | null; name: string }): FacilitySample =>
-    ({ id: r.id, nationalCode: r.national_code, name: r.name });
+  const toSample = (r: { id: string; facility_code: string | null; name: string }): FacilitySample =>
+    ({ id: r.id, nationalCode: r.facility_code, name: r.name });
 
   // ⛔ A declared deletion is a PUBLISHER FACT, matched against what this registry actually holds for
   // THIS `nationalSystem` — a deletion record naming a facility we never had is not a retirement (it
@@ -756,9 +755,9 @@ export async function importFacilities(
   // a deletion line carries no `nationalSystem` of its own to feed `idFor` with, only the code.
   const deletedMatches = deletions.length === 0 ? [] : await deps.db
     .selectFrom('facility_registry')
-    .select(['id', 'national_code', 'name'])
-    .where('national_system', '=', opts.nationalSystem)
-    .where('national_code', 'in', deletions)
+    .select(['id', 'facility_code', 'name'])
+    .where('facility_system', '=', opts.nationalSystem)
+    .where('facility_code', 'in', deletions)
     .execute();
   const deletedIds = deletedMatches.map((r) => r.id);
 
@@ -791,8 +790,8 @@ export async function importFacilities(
   const excludedFromAbsence = [...ids, ...deletedIds];
   const absentRows = (!opts.completeRelease || records.length === 0) ? null : await deps.db
     .selectFrom('facility_registry')
-    .select(['id', 'national_code', 'name'])
-    .where('national_system', '=', opts.nationalSystem)
+    .select(['id', 'facility_code', 'name'])
+    .where('facility_system', '=', opts.nationalSystem)
     // Never empty on this branch: `records.length > 0` ⇒ `ids.length > 0` ⇒ this is non-empty. (The
     // `['']` placeholder that used to guard an empty list here is gone with the guard that made it
     // reachable — keeping it would only preserve the shape of the bug.)
@@ -1153,7 +1152,7 @@ export async function importFacilities(
           // and provenance never moved at all.
           const before = existing
             ? {
-              id: existing.id, localCode: existing.localCode, extras: existing.extras,
+              id: existing.id, extras: existing.extras,
               source: existing.source, ...existing.fields,
             }
             : null;

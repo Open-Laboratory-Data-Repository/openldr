@@ -16,7 +16,7 @@ import { registerFacilitiesRoutes } from './facilities-routes';
 import { registerErrorHandler } from './error-handler';
 
 const FORM_FIELDS = [
-  { id: 'f1', apiProperty: 'localCode' },
+  { id: 'f1', apiProperty: 'facilityCode' },
   { id: 'f2', apiProperty: 'name' },
   { id: 'f3', apiProperty: 'region' },
   { id: 'f4', apiProperty: 'catchmentPop' },
@@ -24,10 +24,9 @@ const FORM_FIELDS = [
   // The baseline `body` below deliberately omits it, which keeps every pre-existing test on the
   // guard's `submitted.length === 0` short-circuit exactly as before.
   { id: 'f5', apiProperty: 'level' },
-  // The national pair. Also absent from the baseline `body`, so POST's id derivation stays on its
-  // `randomUUID()` branch for every pre-existing test.
-  { id: 'f6', apiProperty: 'nationalCode' },
-  { id: 'f7', apiProperty: 'nationalSystem' },
+  // The register. Absent from the baseline `body`, so POST's id derivation stays on its
+  // `randomUUID()` branch for every pre-existing test — a facility with a code but no register.
+  { id: 'f7', apiProperty: 'facilitySystem' },
 ];
 
 // A resolvable form whose fields map onto NONE of CORE_FACILITY_KEYS — the "wrong form" case (Q2):
@@ -209,9 +208,9 @@ function fakeCtx() {
         const i = rows.findIndex((r) => r.id === rec.id);
         // Mirror the real store's UNIQUE(local_code) constraint (SQLSTATE 23505) so the route's
         // error-mapping (I3) has something real to map.
-        const dupe = rows.find((r) => r.id !== rec.id && rec.localCode != null && r.localCode === rec.localCode);
+        const dupe = rows.find((r) => r.id !== rec.id && rec.facilityCode != null && r.facilityCode === rec.facilityCode);
         if (dupe) {
-          const err: any = new Error('duplicate key value violates unique constraint "facility_registry_local_code_key"');
+          const err: any = new Error('duplicate key value violates unique constraint "facility_registry_system_code_unique"');
           err.code = '23505';
           throw err;
         }
@@ -263,7 +262,7 @@ describe('facilities routes', () => {
     expect(res.statusCode).toBe(201);
     const created = res.json();
     expect(created).toMatchObject({
-      localCode: 'LAB01', name: 'Dodoma Regional Referral', region: 'Dodoma Region', source: 'manual',
+      facilityCode: 'LAB01', name: 'Dodoma Regional Referral', region: 'Dodoma Region', source: 'manual',
     });
     expect(created.extras).toEqual({ catchmentPop: '42000' });
     // managed_origin stays lab-local: only the sync applier stamps 'central'.
@@ -324,7 +323,7 @@ describe('facilities routes', () => {
     expect(ctx.__rows[0].region ?? null).toBeNull();
   });
 
-  it('C1: PUT clearing the only identifying code (leaving both codes null) is a 400, not a write', async () => {
+  it('C1: PUT clearing the facility code is a 400, not a write', async () => {
     // The facility from `body` only ever has a localCode (the form has no nationalCode field), so
     // blanking f1 would leave BOTH local_code and national_code null — the DB's
     // `facility_registry_has_a_code` CHECK constraint.
@@ -335,9 +334,9 @@ describe('facilities routes', () => {
     const cleared = { ...body, answers: { ...body.answers, f1: '' } };
     const res = await app.inject({ method: 'PUT', url: `/api/facilities/${id}`, payload: cleared });
     expect(res.statusCode).toBe(400);
-    expect(res.json().error).toMatch(/local code|national code/i);
+    expect(res.json().error).toMatch(/facility code/i);
     // Nothing was written — the pre-existing localCode survives.
-    expect(ctx.__rows[0].localCode).toBe('LAB01');
+    expect(ctx.__rows[0].facilityCode).toBe('LAB01');
   });
 
   it('C1/I4: PUT that blanks the name is a 400, never a null write (NOT NULL column)', async () => {
@@ -406,7 +405,7 @@ describe('facilities routes', () => {
     // C2's exact failure mode — silent data loss behind a 200 — reached through a form that
     // resolves and has fields, unlike the C2 tests above.
     expect(ctx.__rows[0].extras).toEqual({ catchmentPop: '42000' });
-    expect(ctx.__rows[0].localCode).toBe('LAB01');
+    expect(ctx.__rows[0].facilityCode).toBe('LAB01');
     expect(ctx.__audit.map((a: any) => a.action)).toEqual(['facility.create']); // no facility.update was recorded
   });
 
@@ -487,7 +486,7 @@ describe('facilities routes', () => {
       payload: { ...body, formSchemaId: 'form-real-shape' },
     });
     expect(res.statusCode).toBe(201);
-    expect(res.json().localCode).toBe('LAB01');
+    expect(res.json().facilityCode).toBe('LAB01');
   });
 
   // --- Fix 2: hasCoreField's own rejection must still be reachable, distinct from the
@@ -842,7 +841,7 @@ describe('facilities routes', () => {
       // use to manipulate `ctx.__rows` directly) — this test only needs a fixed count to check
       // against, not real facility_registry rows.
       for (let i = 0; i < 12; i++) {
-        ctx.__rows.push({ id: `seed-${i}`, localCode: `SEED${i}`, name: `Seed Facility ${i}`, source: 'manual', extras: {} });
+        ctx.__rows.push({ id: `seed-${i}`, facilityCode: `SEED${i}`, name: `Seed Facility ${i}`, source: 'manual', extras: {} });
       }
       const res = await app.inject({ method: 'GET', url: '/api/facilities?health=banana' });
       expect(res.statusCode).toBe(200);
@@ -865,7 +864,7 @@ describe('facilities routes', () => {
       // size — see the report's limit-echo decision.
       const ctx = fakeCtx();
       const app = await appWith(ctx);
-      ctx.__rows.push({ id: 'only-row', localCode: 'ONLY1', name: 'Only Facility', source: 'manual', extras: {} });
+      ctx.__rows.push({ id: 'only-row', facilityCode: 'ONLY1', name: 'Only Facility', source: 'manual', extras: {} });
       const res = await app.inject({ method: 'GET', url: '/api/facilities' });
       const body2 = res.json();
       expect(body2.rows).toHaveLength(1);
@@ -890,7 +889,7 @@ describe('facilities routes', () => {
       const app = await appWith(ctx);
       for (let i = 0; i < 12; i++) {
         await ctx.facilityRegistry.upsert({
-          id: randomUUID(), localCode: `LC${String(i).padStart(3, '0')}`, name: `Facility ${String(i).padStart(2, '0')}`,
+          id: randomUUID(), facilityCode: `LC${String(i).padStart(3, '0')}`, name: `Facility ${String(i).padStart(2, '0')}`,
           source: 'manual',
         });
       }
@@ -1378,7 +1377,7 @@ describe('POST/PUT report whether this call\'s projection landed', () => {
 // here is proving the route resolves against the REAL seeded value sets from migrations 072/073.
 
 const CONTROLLED_FORM_FIELDS = [
-  { id: 'k1', apiProperty: 'localCode' },
+  { id: 'k1', apiProperty: 'facilityCode' },
   { id: 'k2', apiProperty: 'name' },
   { id: 'k3', apiProperty: 'status' },
   { id: 'k4', apiProperty: 'level' },
@@ -1544,8 +1543,8 @@ describe('Task 9: DELETE /api/facilities/:id and the projection', () => {
     const app = await appWith(ctx);
     const deps = { internalDb, admin: ctx.terminology.admin };
 
-    await ctx.facilityRegistry.upsert({ id: 'fac-A', name: 'Alpha', localCode: 'X', source: 'manual' } as any);
-    await ctx.facilityRegistry.upsert({ id: 'fac-B', name: 'Beta', nationalSystem: 'urn:tz:hfr', nationalCode: 'X', source: 'manual' } as any);
+    await ctx.facilityRegistry.upsert({ id: 'fac-A', name: 'Alpha', facilityCode: 'X', source: 'manual' } as any);
+    await ctx.facilityRegistry.upsert({ id: 'fac-B', name: 'Beta', facilitySystem: 'urn:tz:hfr', facilityCode: 'X', source: 'manual' } as any);
     await projectRegistryRows(deps, [{ id: 'fac-A', name: 'Alpha' }, { id: 'fac-B', name: 'Beta' }]);
     // Both parked on their ids — the state the operator authored the mapping in.
     expect((await internalDb.selectFrom('facility_concept_projection').select(['registry_id', 'concept_code']).execute())
@@ -1582,8 +1581,8 @@ describe('Task 9: DELETE /api/facilities/:id and the projection', () => {
     const app = await appWith(ctx);
     const deps = { internalDb, admin: ctx.terminology.admin };
 
-    await ctx.facilityRegistry.upsert({ id: 'fac-A', name: 'Alpha', localCode: 'X', source: 'manual' } as any);
-    await ctx.facilityRegistry.upsert({ id: 'fac-B', name: 'Beta', nationalSystem: 'urn:tz:hfr', nationalCode: 'X', source: 'manual' } as any);
+    await ctx.facilityRegistry.upsert({ id: 'fac-A', name: 'Alpha', facilityCode: 'X', source: 'manual' } as any);
+    await ctx.facilityRegistry.upsert({ id: 'fac-B', name: 'Beta', facilitySystem: 'urn:tz:hfr', facilityCode: 'X', source: 'manual' } as any);
     await projectRegistryRows(deps, [{ id: 'fac-A', name: 'Alpha' }, { id: 'fac-B', name: 'Beta' }]);
     // `ctx.facilityJobs` here is the REAL store (see `fakeCreateCtx`), and the setup above writes
     // through the store/reconcile functions directly rather than through a route — so nothing is
@@ -2081,7 +2080,9 @@ describe('POST /api/facilities/import', () => {
       unknownColumns: [], columnMapErrors: [], parsed: 1, written: { created: 1, updated: 0 },
     });
     const row = await db.selectFrom('facility_registry').selectAll().executeTakeFirst();
-    expect(row?.national_code).toBe('100');
+    // The CONTRACT field is still `national_code` (what the map targets); the COLUMN it lands in is
+    // `facility_code` since migration 088.
+    expect(row?.facility_code).toBe('100');
     expect(row?.name).toBe('Dodoma Regional Referral');
   });
 
@@ -2490,7 +2491,7 @@ describe('POST /api/facilities/import', () => {
       // under load. A fixed future offset makes "touched after the preview" true unconditionally —
       // see the identical fix (and this same comment) a few tests below.
       await db.updateTable('facility_registry')
-        .set({ updated_at: sql`now() + interval '1 second'` }).where('national_code', '=', '100').execute();
+        .set({ updated_at: sql`now() + interval '1 second'` }).where('facility_code', '=', '100').execute();
 
       const res = await app.inject({
         method: 'POST', url: '/api/facilities/import',
@@ -2532,7 +2533,7 @@ describe('POST /api/facilities/import', () => {
       // own `completePreview` watermark and intermittently fails to register as a conflict at all
       // under load. A fixed future offset makes "touched after the preview" true unconditionally.
       await db.updateTable('facility_registry')
-        .set({ updated_at: sql`now() + interval '1 second'` }).where('national_code', '=', '100').execute();
+        .set({ updated_at: sql`now() + interval '1 second'` }).where('facility_code', '=', '100').execute();
 
       const renamed = facilityCsv(['100,Dodoma Regional Referral Hospital,,,,,,,,,,,,,,']);
       const res = await app.inject({
@@ -2543,7 +2544,7 @@ describe('POST /api/facilities/import', () => {
       expect(res.json().conflict).toBe(1);
       expect(res.json().written).toEqual({ created: 0, updated: 1, retired: 0 });
 
-      const row = await db.selectFrom('facility_registry').selectAll().where('national_code', '=', '100').executeTakeFirst();
+      const row = await db.selectFrom('facility_registry').selectAll().where('facility_code', '=', '100').executeTakeFirst();
       expect(row?.name).toBe('Dodoma Regional Referral Hospital');
     });
 
@@ -3411,7 +3412,7 @@ describe('POST /api/facilities/import/upload', () => {
     const db = await importDb();
     const ctx = fakeImportCtx(db);
     const app = await appWith(ctx);
-    const columnMap = { columns: { 'MFL Code': 'national_code', 'Facility Name': 'name' } };
+    const columnMap = { columns: { 'MFL Code': 'facility_code', 'Facility Name': 'name' } };
     const res = await app.inject({
       method: 'POST',
       url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv', columnMap: JSON.stringify(columnMap) }),
@@ -4064,7 +4065,7 @@ describe('POST /api/facilities/import/runs/:id/confirm', () => {
     const db = await importDb();
     const ctx = fakeImportCtx(db);
     const app = await appWith(ctx);
-    const columnMap = { columns: { 'MFL Code': 'national_code', 'Facility Name': 'name' } };
+    const columnMap = { columns: { 'MFL Code': 'facility_code', 'Facility Name': 'name' } };
     const uploadRes = await app.inject({
       method: 'POST',
       url: uploadUrl({ nationalSystem: SYSTEM, format: 'csv', columnMap: JSON.stringify(columnMap) }),
@@ -4080,7 +4081,7 @@ describe('POST /api/facilities/import/runs/:id/confirm', () => {
     // already ran with, never a second copy handed over at confirm time.
     const res = await app.inject({
       method: 'POST', url: confirmUrl(runId),
-      payload: { onConflict: 'skip', columnMap: { columns: { 'Facility Name': 'national_code', 'MFL Code': 'name' } } },
+      payload: { onConflict: 'skip', columnMap: { columns: { 'Facility Name': 'facility_code', 'MFL Code': 'name' } } },
     });
     expect(res.statusCode).toBe(202);
 
@@ -4778,8 +4779,8 @@ describe('Task 6: GET /api/facilities/observed', () => {
     const internalDb = await makeMigratedDb();
     const externalDb = await makeMigratedExternalDb();
     await seedObservedReports(externalDb, [['BALAB', 6]]);
-    await createFacilityRegistryStore(internalDb).upsert({ id: 'fac-A', name: 'Alpha', localCode: 'L-1', source: 'manual' });
-    await createFacilityRegistryStore(internalDb).upsert({ id: 'fac-B', name: 'Beta', localCode: 'L-2', source: 'manual' });
+    await createFacilityRegistryStore(internalDb).upsert({ id: 'fac-A', name: 'Alpha', facilityCode: 'L-1', source: 'manual' });
+    await createFacilityRegistryStore(internalDb).upsert({ id: 'fac-B', name: 'Beta', facilityCode: 'L-2', source: 'manual' });
     // ⛔ Migration 078 added a partial unique index that makes this state UNREACHABLE through the
     // database, which is the point of it — so the index has to come off before the state can be
     // constructed at all. The resolver's `ambiguous` verdict is still worth pinning as defence in
@@ -4890,13 +4891,13 @@ describe('Task 6: POST /api/facilities/scan-observed', () => {
     const ctx = fakeReconcileCtx(internalDb, externalDb);
     const app = await appWith(ctx);
     await internalDb.insertInto('facility_registry')
-      .values({ id: 'fac-1', name: 'Alpha Clinic', facility_code: 'OLD-1', local_code: 'OLD-1', source: 'manual' }).execute();
+      .values({ id: 'fac-1', name: 'Alpha Clinic', facility_code: 'OLD-1', source: 'manual' }).execute();
 
     // First scan projects fac-1 as 'OLD-1' and records the link it will later be compared against.
     await app.inject({ method: 'POST', url: '/api/facilities/scan-observed', payload: { apply: true } });
     // The code changes without this route being involved — a national import, an out-of-band
     // correction. Exactly the case where nobody would otherwise know their mappings just moved.
-    await internalDb.updateTable('facility_registry').set({ facility_code: 'NEW-1', local_code: 'NEW-1' }).where('id', '=', 'fac-1').execute();
+    await internalDb.updateTable('facility_registry').set({ facility_code: 'NEW-1' }).where('id', '=', 'fac-1').execute();
 
     const res = await app.inject({ method: 'POST', url: '/api/facilities/scan-observed', payload: { apply: true } });
 
@@ -5028,7 +5029,7 @@ describe('GET /api/facilities/:id/impact', () => {
     const internalDb = await makeMigratedDb();
     const externalDb = await makeMigratedExternalDb();
     const ctx = impactCtx(internalDb, externalDb);
-    await ctx.facilityRegistry.upsert({ id: 'fac-1', name: 'Dodoma Regional Referral', localCode: 'LAB01', source: 'manual' });
+    await ctx.facilityRegistry.upsert({ id: 'fac-1', name: 'Dodoma Regional Referral', facilityCode: 'LAB01', source: 'manual' });
     await seedMapping(internalDb);
     await seedObservedReports(externalDb, [['Dodoma', 247]]);
     const app = await appWith(ctx);
@@ -5042,7 +5043,7 @@ describe('GET /api/facilities/:id/impact', () => {
     const internalDb = await makeMigratedDb();
     const externalDb = await makeMigratedExternalDb();
     const ctx = impactCtx(internalDb, externalDb);
-    await ctx.facilityRegistry.upsert({ id: 'fac-1', name: 'Dodoma Regional Referral', localCode: 'LAB01', source: 'manual' });
+    await ctx.facilityRegistry.upsert({ id: 'fac-1', name: 'Dodoma Regional Referral', facilityCode: 'LAB01', source: 'manual' });
     await seedMapping(internalDb);
     await seedObservedReports(externalDb, [['Dodoma', 247]]);
     const app = await appWith(ctx);
@@ -5064,9 +5065,12 @@ describe('GET /api/facilities/:id/impact', () => {
     const internalDb = await makeMigratedDb();
     const externalDb = await makeMigratedExternalDb();
     const ctx = impactCtx(internalDb, externalDb);
+    // One code, two ROUTES to it: a mapping may point at the registry's own coding system, or at the
+    // REGISTER's system. Both name the same code now — before migration 088 they named a local and a
+    // national code that happened to belong to the same row.
     await ctx.facilityRegistry.upsert({
-      id: 'fac-1', name: 'Dodoma Regional Referral', localCode: 'LAB01',
-      nationalSystem: 'urn:tz:hfr', nationalCode: '100', source: 'manual',
+      id: 'fac-1', name: 'Dodoma Regional Referral',
+      facilitySystem: 'urn:tz:hfr', facilityCode: '100', source: 'manual',
     });
     await seedMapping(internalDb);
     await seedMapping(internalDb, { from_code: 'DDM', to_system: 'urn:tz:hfr', to_code: '100' });
@@ -5088,7 +5092,7 @@ describe('GET /api/facilities/:id/impact', () => {
     const internalDb = await makeMigratedDb();
     const externalDb = await makeMigratedExternalDb();
     const ctx = impactCtx(internalDb, externalDb);
-    await ctx.facilityRegistry.upsert({ id: 'fac-1', name: 'Dodoma Regional Referral', localCode: 'LAB01', source: 'manual' });
+    await ctx.facilityRegistry.upsert({ id: 'fac-1', name: 'Dodoma Regional Referral', facilityCode: 'LAB01', source: 'manual' });
     await seedMapping(internalDb, { is_active: false });
     await seedObservedReports(externalDb, [['Dodoma', 247]]);
     const app = await appWith(ctx);
@@ -5105,7 +5109,7 @@ describe('GET /api/facilities/:id/impact', () => {
     const internalDb = await makeMigratedDb();
     const externalDb = await makeMigratedExternalDb();
     const ctx = impactCtx(internalDb, externalDb);
-    await ctx.facilityRegistry.upsert({ id: 'fac-1', name: 'Dodoma Regional Referral', localCode: 'LAB01', source: 'manual' });
+    await ctx.facilityRegistry.upsert({ id: 'fac-1', name: 'Dodoma Regional Referral', facilityCode: 'LAB01', source: 'manual' });
     await seedMapping(internalDb, { from_code: 'Dodoma', is_active: true });
     await seedMapping(internalDb, { from_code: 'DDM-OLD', is_active: false });
     await seedObservedReports(externalDb, [['Dodoma', 247], ['DDM-OLD', 999]]);
@@ -5127,7 +5131,7 @@ describe('GET /api/facilities/:id/impact', () => {
     const internalDb = await makeMigratedDb();
     const externalDb = await makeMigratedExternalDb();
     const ctx = impactCtx(internalDb, externalDb);
-    await ctx.facilityRegistry.upsert({ id: 'fac-1', name: 'Dodoma Regional Referral', localCode: 'LAB01', source: 'manual' });
+    await ctx.facilityRegistry.upsert({ id: 'fac-1', name: 'Dodoma Regional Referral', facilityCode: 'LAB01', source: 'manual' });
     await seedMapping(internalDb, { from_code: 'Rogue', to_system: '', to_code: '', to_display: null });
     await seedObservedReports(externalDb, [['Rogue', 500]]);
     const app = await appWith(ctx);
@@ -5158,7 +5162,7 @@ describe('GET /api/facilities/:id/impact', () => {
     const internalDb = await makeMigratedDb();
     const externalDb = await makeMigratedExternalDb();
     const ctx = impactCtx(internalDb, externalDb);
-    await ctx.facilityRegistry.upsert({ id: 'fac-1', name: 'Dodoma Regional Referral', localCode: 'LAB01', source: 'manual' });
+    await ctx.facilityRegistry.upsert({ id: 'fac-1', name: 'Dodoma Regional Referral', facilityCode: 'LAB01', source: 'manual' });
     const app = await appWith(ctx, ['facilities.view']);
     const res = await app.inject({ method: 'GET', url: '/api/facilities/fac-1/impact' });
     expect(res.statusCode).toBe(200);
@@ -5177,7 +5181,7 @@ describe('GET /api/facilities/:id/impact', () => {
     const internalDb = await makeMigratedDb();
     const externalDb = await makeMigratedExternalDb();
     const ctx = impactCtx(internalDb, externalDb);
-    await ctx.facilityRegistry.upsert({ id: 'impact', name: 'A Facility Named Impact', localCode: 'IMP01', source: 'manual' });
+    await ctx.facilityRegistry.upsert({ id: 'impact', name: 'A Facility Named Impact', facilityCode: 'IMP01', source: 'manual' });
     const app = await appWith(ctx);
 
     const res = await app.inject({ method: 'GET', url: '/api/facilities/impact' });
@@ -5189,7 +5193,7 @@ describe('GET /api/facilities/:id/impact', () => {
     const internalDb = await makeMigratedDb();
     const externalDb = await makeMigratedExternalDb();
     const ctx = impactCtx(internalDb, externalDb);
-    await ctx.facilityRegistry.upsert({ id: 'fac-1', name: 'Dodoma Regional Referral', localCode: 'LAB01', source: 'manual' });
+    await ctx.facilityRegistry.upsert({ id: 'fac-1', name: 'Dodoma Regional Referral', facilityCode: 'LAB01', source: 'manual' });
     const app = await appWith(ctx);
 
     const res = await app.inject({ method: 'GET', url: '/api/facilities/fac-1/impact' });
@@ -5433,7 +5437,7 @@ describe('Task 13: GET /api/facilities/mapping-conflicts', () => {
     const internalDb = await makeMigratedDb();
     const externalDb = await makeMigratedExternalDb();
     const ctx = impactCtx(internalDb, externalDb); // needs a REAL facilityRegistry for the :id lookup
-    await ctx.facilityRegistry.upsert({ id: 'mapping-conflicts', name: 'Oddly Named', localCode: 'ODD01', source: 'manual' });
+    await ctx.facilityRegistry.upsert({ id: 'mapping-conflicts', name: 'Oddly Named', facilityCode: 'ODD01', source: 'manual' });
     await seedConflict(internalDb);
     const app = await appWith(ctx);
 
@@ -5642,7 +5646,7 @@ describe('Task 1: an unchanged controlled value does not block an edit', () => {
     // Seeded directly rather than through POST: POST would refuse the raw level, which is the very
     // asymmetry between the import door and the edit door that this test exists for.
     ctx.__rows.push({
-      id: 'fac-1', localCode: 'LAB01', name: 'Commando Urban', region: 'Copperbelt',
+      id: 'fac-1', facilityCode: 'LAB01', name: 'Commando Urban', region: 'Copperbelt',
       level: 'Health Centre', extras: {}, source: 'import',
     });
     const res = await app.inject({
@@ -5658,7 +5662,7 @@ describe('Task 1: an unchanged controlled value does not block an edit', () => {
     const ctx = ctxWithLevelValueSet();
     const app = await appWith(ctx);
     ctx.__rows.push({
-      id: 'fac-1', localCode: 'LAB01', name: 'Commando Urban', region: 'Copperbelt',
+      id: 'fac-1', facilityCode: 'LAB01', name: 'Commando Urban', region: 'Copperbelt',
       level: 'Health Centre', extras: {}, source: 'import',
     });
     const res = await app.inject({
@@ -5673,8 +5677,8 @@ describe('Task 1: an unchanged controlled value does not block an edit', () => {
 describe('Stage 2: a facility code and its register can be corrected', () => {
   const MFL = 'urn:openldr:facility-register:mfl';
   const seeded = {
-    id: 'fac-1', localCode: null, nationalSystem: MFL,
-    nationalCode: '100', name: 'Commando Urban', extras: {}, source: 'import',
+    id: 'fac-1', localCode: null, facilitySystem: MFL,
+    facilityCode: '100', name: 'Commando Urban', extras: {}, source: 'import',
   };
   const editBody = (answers: Record<string, unknown>) => ({
     answers, formSchemaId: 'form-sample-facility', formVersion: 1,
@@ -5693,7 +5697,7 @@ describe('Stage 2: a facility code and its register can be corrected', () => {
     const app = await appWith(ctx);
     const res = await app.inject({
       method: 'PUT', url: '/api/facilities/fac-1',
-      payload: editBody({ f2: 'Commando Urban Clinic', f6: '100', f7: MFL }),
+      payload: editBody({ f2: 'Commando Urban Clinic', f1: '100', f7: MFL }),
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().name).toBe('Commando Urban Clinic');
@@ -5708,10 +5712,10 @@ describe('Stage 2: a facility code and its register can be corrected', () => {
     const app = await appWith(ctx);
     const res = await app.inject({
       method: 'PUT', url: '/api/facilities/fac-1',
-      payload: editBody({ f2: 'Commando Urban', f6: '200', f7: MFL }),
+      payload: editBody({ f2: 'Commando Urban', f1: '200', f7: MFL }),
     });
     expect(res.statusCode).toBe(200);
-    expect(ctx.__rows[0].nationalCode).toBe('200');
+    expect(ctx.__rows[0].facilityCode).toBe('200');
     // The row keeps its id. Nothing is re-keyed, which is what keeps facility_map, the concept
     // projection and the audit trail pointing at a row that still exists.
     expect(ctx.__rows[0].id).toBe('fac-1');
@@ -5725,11 +5729,11 @@ describe('Stage 2: a facility code and its register can be corrected', () => {
     const app = await appWith(ctx);
     const res = await app.inject({
       method: 'PUT', url: '/api/facilities/fac-1',
-      payload: editBody({ f2: 'Commando Urban', f6: '100', f7: 'MFL' }),
+      payload: editBody({ f2: 'Commando Urban', f1: '100', f7: 'MFL' }),
     });
     expect(res.statusCode).toBe(400);
     expect(res.json().error).toContain('is not a known facility register');
-    expect(ctx.__rows[0].nationalSystem).toBe(MFL);
+    expect(ctx.__rows[0].facilitySystem).toBe(MFL);
   });
 
   it('phrases that refusal for an EDIT, and names the remedy', async () => {
@@ -5741,7 +5745,7 @@ describe('Stage 2: a facility code and its register can be corrected', () => {
     const app = await appWith(ctx);
     const res = await app.inject({
       method: 'PUT', url: '/api/facilities/fac-1',
-      payload: editBody({ f2: 'Commando Urban', f6: '100', f7: 'urn:tz:mfl' }),
+      payload: editBody({ f2: 'Commando Urban', f1: '100', f7: 'urn:tz:mfl' }),
     });
     expect(res.statusCode).toBe(400);
     expect(res.json().error).not.toContain('imported against');
@@ -5751,7 +5755,7 @@ describe('Stage 2: a facility code and its register can be corrected', () => {
   it('leaves a facility with NO register editable — there is no change to gate', async () => {
     const ctx = ctxWithRegister();
     ctx.__rows.push({
-      id: 'fac-2', localCode: 'LAB01', nationalSystem: null, nationalCode: null,
+      id: 'fac-2', facilityCode: 'LAB01', facilitySystem: null,
       name: 'Bahebe Health Laboratory', extras: {}, source: 'manual',
     });
     const app = await appWith(ctx);
@@ -5779,7 +5783,7 @@ describe('Task 4: a manual create keys the same way an import does', () => {
   }
 
   const nationalBody = {
-    answers: { f2: 'Commando Urban', f6: '100', f7: MFL },
+    answers: { f2: 'Commando Urban', f1: '100', f7: MFL },
     formSchemaId: 'form-sample-facility',
     formVersion: 1,
   };
@@ -5803,17 +5807,20 @@ describe('Task 4: a manual create keys the same way an import does', () => {
     expect(res.json().id).not.toMatch(/^fac-/);
   });
 
-  it('keeps a random id when a register is named but no code is given', async () => {
-    // Mirrors migration 082's own rule: a row carrying a register but no national code keeps its
-    // id, because `idFor` has nothing to hash and re-deriving would invent an identity.
+  it('keeps a random id for a facility in NO register', async () => {
+    // Was "a register named but no code is given" — unreachable since migration 088 made the code
+    // required, so that half of migration 082's rule has no cases left. The surviving half is this
+    // one: no register means nothing to hash with, so the id stays random rather than being derived
+    // from a code alone (which would collide across registers).
     const ctx = ctxWithRegister();
     const app = await appWith(ctx);
     const res = await app.inject({
       method: 'POST', url: '/api/facilities',
-      payload: { ...nationalBody, answers: { f1: 'LAB01', f2: 'Commando Urban', f7: MFL } },
+      payload: { ...nationalBody, answers: { f1: 'LAB01', f2: 'Commando Urban' } },
     });
     expect(res.statusCode).toBe(201);
     expect(res.json().id).not.toMatch(/^fac-/);
+    expect(res.json().facilityCode).toBe('LAB01');
   });
 
   it('refuses an unregistered register instead of hashing a typed label into a permanent id', async () => {
@@ -5859,7 +5866,7 @@ describe('Task 5: required is enforced on the route, not only in the studio', ()
         targetPages: ['facilities'],
         schema: {
           id: 's', name: 'Facility', sections: [], fields: [
-            field({ id: 'f1', displayLabel: 'Local code', fieldType: 'identifier', required: false, order: 0, apiProperty: 'localCode' }),
+            field({ id: 'f1', displayLabel: 'Facility code', fieldType: 'identifier', required: true, order: 0, apiProperty: 'facilityCode' }),
             field({ id: 'f2', displayLabel: 'Name', fieldType: 'text', required: true, order: 1, apiProperty: 'name' }),
             field({ id: 'f3', displayLabel: 'Region', fieldType: 'text', required: true, order: 2, apiProperty: 'region' }),
           ],
@@ -5877,7 +5884,7 @@ describe('Task 5: required is enforced on the route, not only in the studio', ()
     const ctx = ctxWithRequiredRegion();
     const app = await appWith(ctx);
     const res = await app.inject({
-      method: 'POST', url: '/api/facilities', payload: submit({ f1: 'LAB01', f2: 'Commando Urban' }),
+      method: 'POST', url: '/api/facilities', payload: submit({ f1: 'LAB01', f2: 'Commando Urban' }), // f1 is the code; Region is what is missing
     });
     expect(res.statusCode).toBe(400);
     expect(res.json().error).toContain('Region');
@@ -5888,7 +5895,7 @@ describe('Task 5: required is enforced on the route, not only in the studio', ()
     const ctx = ctxWithRequiredRegion();
     const app = await appWith(ctx);
     const res = await app.inject({
-      method: 'POST', url: '/api/facilities', payload: submit({ f1: 'LAB01', f2: 'Commando Urban' }),
+      method: 'POST', url: '/api/facilities', payload: submit({ f1: 'LAB01', f2: 'Commando Urban' }), // f1 is the code; Region is what is missing
     });
     expect(res.json().error).toBe('Region is required');
   });
@@ -5897,7 +5904,7 @@ describe('Task 5: required is enforced on the route, not only in the studio', ()
     // ⛔ THE trap this slice exists to avoid: 3788 imported rows have no region. If PUT enforced the
     // whole form, none of them could ever be edited again.
     const ctx = ctxWithRequiredRegion();
-    ctx.__rows.push({ id: 'fac-1', localCode: 'LAB01', name: 'Commando Urban', region: null, extras: {}, source: 'import' });
+    ctx.__rows.push({ id: 'fac-1', facilityCode: 'LAB01', name: 'Commando Urban', region: null, extras: {}, source: 'import' });
     const app = await appWith(ctx);
     const res = await app.inject({
       method: 'PUT', url: '/api/facilities/fac-1',
@@ -5909,7 +5916,7 @@ describe('Task 5: required is enforced on the route, not only in the studio', ()
 
   it('refuses an edit that BLANKS a required field', async () => {
     const ctx = ctxWithRequiredRegion();
-    ctx.__rows.push({ id: 'fac-1', localCode: 'LAB01', name: 'Commando Urban', region: 'Copperbelt', extras: {}, source: 'import' });
+    ctx.__rows.push({ id: 'fac-1', facilityCode: 'LAB01', name: 'Commando Urban', region: 'Copperbelt', extras: {}, source: 'import' });
     const app = await appWith(ctx);
     const res = await app.inject({
       method: 'PUT', url: '/api/facilities/fac-1',

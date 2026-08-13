@@ -692,7 +692,7 @@ async function controlledFieldsError(
   // up under (`observedFieldSystem`) — it never decides pass/fail here, since `mapped` and
   // `unmapped` are refused identically below. An absent one (the common manual-entry case) is a
   // valid, deterministic namespace of its own, not an error.
-  const nationalSystem = typeof record.nationalSystem === 'string' ? record.nationalSystem : '';
+  const nationalSystem = typeof record.facilitySystem === 'string' ? record.facilitySystem : '';
   const res = await resolveControlledFields(ctx.terminology.admin, nationalSystem, [record as FacilityRecord]);
 
   const badField = submitted.find((field) => res.mapped[field].size > 0 || res.unmapped[field].length > 0);
@@ -1196,12 +1196,12 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       .where('is_active', '=', true)
       .execute();
 
-    const nationalMappings = (facility.nationalSystem != null && facility.nationalCode != null)
+    const nationalMappings = (facility.facilitySystem != null && facility.facilityCode != null)
       ? await deps.internalDb
           .selectFrom('term_mappings')
           .select(['from_code'])
-          .where('to_system', '=', facility.nationalSystem)
-          .where('to_code', '=', facility.nationalCode)
+          .where('to_system', '=', facility.facilitySystem)
+          .where('to_code', '=', facility.facilityCode)
           .where('is_active', '=', true)
           .execute()
       : [];
@@ -1294,9 +1294,12 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     const name = typeof record.name === 'string' ? record.name : '';
     if (!name) { reply.code(400); return { error: 'name is required' }; }
 
-    if (record.localCode == null && record.nationalCode == null) {
+    // One code, and it is required. The old rule was "a local code OR a national code", an OR across
+    // two nullable columns that `facility_registry_has_a_code` enforced and no single form field
+    // could express. Migration 088 replaced it with a NOT NULL.
+    if (record.facilityCode == null || String(record.facilityCode).trim() === '') {
       reply.code(400);
-      return { error: 'a facility must have a local code or a national code' };
+      return { error: 'a facility must have a facility code' };
     }
 
     // A create must be COMPLETE — every required field, not just the ones this submission moved.
@@ -1325,8 +1328,8 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     // fallback while the seeded form still carries it. A later stage drops the fallback with the
     // columns.
     const str = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
-    const nationalSystem = str(record.facilitySystem) || str(record.nationalSystem);
-    const nationalCode = str(record.facilityCode) || str(record.nationalCode);
+    const nationalSystem = str(record.facilitySystem);
+    const nationalCode = str(record.facilityCode);
     // Annotated `string`, not inferred: `randomUUID()` returns the narrow
     // `${string}-${string}-...` template-literal type, which `idFor`'s plain string cannot be
     // assigned to.
@@ -1472,12 +1475,11 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     const nulls: Record<string, null> = {};
     for (const key of cleared) nulls[key] = null;
 
-    // `facility_registry_has_a_code`: at least one of local/national code must survive the clear.
-    const effectiveLocalCode = cleared.has('localCode') ? null : (record.localCode ?? before.localCode);
-    const effectiveNationalCode = cleared.has('nationalCode') ? null : (record.nationalCode ?? before.nationalCode);
-    if (effectiveLocalCode == null && effectiveNationalCode == null) {
+    // `facility_code` is NOT NULL (migration 088), so an edit may never clear it away.
+    const effectiveCode = cleared.has('facilityCode') ? null : (record.facilityCode ?? before.facilityCode);
+    if (effectiveCode == null || String(effectiveCode).trim() === '') {
       reply.code(400);
-      return { error: 'a facility must have a local code or a national code' };
+      return { error: 'a facility must have a facility code' };
     }
 
     // The refusal that used to live here — "a facility's national code cannot be changed" — is GONE,
@@ -1502,9 +1504,8 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     // Scoped to a change, not to presence, for the reason the whole arc turns on: the Edit sheet
     // resubmits every field it seeded, so gating on presence would refuse an unrelated edit to any
     // facility whose system predates the register registry.
-    for (const key of ['facilitySystem', 'nationalSystem'] as const) {
-      const submittedSystem = record[key];
-      if (!identityChanged.has(key) || typeof submittedSystem !== 'string' || submittedSystem === '') continue;
+    const submittedSystem = record.facilitySystem;
+    if (identityChanged.has('facilitySystem') && typeof submittedSystem === 'string' && submittedSystem !== '') {
       const register = await resolveFacilityRegisterForImport(registerSources, submittedSystem);
       if (!register.ok) { reply.code(400); return { error: registerRefusal(register, submittedSystem) }; }
     }

@@ -86,7 +86,7 @@ describe('facilityHealth', () => {
     // rendered because a state that cannot be displayed cannot be diagnosed.
     const deps = await withCompletedRebuild();
     await deps.internalDb.insertInto('facility_registry').values({
-      id: 'fac-A', name: 'Alpha', local_code: 'L-1', source: 'manual',
+      id: 'fac-A', name: 'Alpha', facility_code: 'L-1', source: 'manual',
       updated_at: sql`now() + interval '1 hour'`,
     } as never).execute();
 

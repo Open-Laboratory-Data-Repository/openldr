@@ -417,8 +417,6 @@ export function parseFacilityCsv(csv: string, opts: FacilityCsvOptions): Facilit
       // columns; the store keeps both shapes in step.
       facilitySystem: opts.nationalSystem,
       facilityCode: nationalCode,
-      nationalSystem: opts.nationalSystem,
-      nationalCode,
       name,
       level: text(r.level),
       ownership: text(r.ownership),

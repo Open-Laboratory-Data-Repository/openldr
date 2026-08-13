@@ -22,11 +22,6 @@ export interface FacilityRecord {
   facilitySystem?: string | null;
   /** The code that register carries for this facility. */
   facilityCode?: string | null;
-  /** @deprecated Superseded by `facilityCode` — see migration 086. Written through the transition. */
-  localCode?: string | null;
-  nationalSystem?: string | null;
-  /** THEIRS — the only code an imported row carries. */
-  nationalCode?: string | null;
   name: string;
   level?: string | null;
   ownership?: string | null;
@@ -200,9 +195,6 @@ export function toRecord(r: SelectRow): FacilityRecord {
     id: r.id,
     facilitySystem: r.facility_system,
     facilityCode: r.facility_code,
-    localCode: r.local_code,
-    nationalSystem: r.national_system,
-    nationalCode: r.national_code,
     name: r.name,
     level: r.level,
     ownership: r.ownership,
@@ -250,14 +242,12 @@ export function toRecord(r: SelectRow): FacilityRecord {
 export function toRow(rec: FacilityRecord): Omit<Row, 'created_at' | 'updated_at' | 'register_state'> {
   return {
     id: rec.id,
-    // Dual-write through the transition (migration 086 expands, a later one contracts).
-    // `facility_code` is authoritative; the deprecated pair is kept in step so anything still reading
-    // it sees the same value. A local-only row keeps a NULL system on purpose — see 086.
-    facility_system: rec.facilitySystem ?? rec.nationalSystem ?? null,
-    facility_code: rec.facilityCode ?? rec.nationalCode ?? rec.localCode ?? null,
-    local_code: rec.localCode ?? null,
-    national_system: rec.nationalSystem ?? null,
-    national_code: rec.nationalCode ?? null,
+    // The dual-write that carried the transition is gone with the columns (migration 088).
+    // `facility_code` is NOT NULL in the database; `?? ''` is a type bridge, not a fallback — a
+    // record reaching here without one is a caller bug, and an empty string trips the NOT NULL
+    // rather than writing a plausible-looking row.
+    facility_system: rec.facilitySystem ?? null,
+    facility_code: rec.facilityCode ?? '',
     name: rec.name,
     level: rec.level ?? null,
     ownership: rec.ownership ?? null,
@@ -364,7 +354,7 @@ export function createFacilityRegistryStore(
         if (opts.status) q = q.where('status', '=', opts.status);
         if (opts.level) q = q.where('level', '=', opts.level);
         if (opts.ownership) q = q.where('ownership', '=', opts.ownership);
-        if (opts.nationalSystem) q = q.where('national_system', '=', opts.nationalSystem);
+        if (opts.nationalSystem) q = q.where('facility_system', '=', opts.nationalSystem);
         if (opts.source) q = q.where('source', '=', opts.source);
         if (opts.managedOrigin) q = q.where('managed_origin', '=', opts.managedOrigin);
         if (opts.registerState) q = q.where('register_state', '=', opts.registerState);
@@ -380,8 +370,7 @@ export function createFacilityRegistryStore(
           const like = `%${opts.q}%`;
           q = q.where((eb) => eb.or([
             eb('name', 'ilike', like),
-            eb('local_code', 'ilike', like),
-            eb('national_code', 'ilike', like),
+            eb('facility_code', 'ilike', like),
             eb('region', 'ilike', like),
             eb('district', 'ilike', like),
             eb('council', 'ilike', like),

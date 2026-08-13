@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, it, expect } from 'vitest';
 import type { Kysely } from 'kysely';
 import { newDb } from 'pg-mem';
-import { makeMigratedDb } from './test-helpers';
+import { makeMigratedDbUpTo } from './test-helpers';
 import { internalMigrations } from './index';
 import {
   FACILITY_REGISTER_URI_PREFIX,
@@ -60,7 +60,13 @@ async function makeChunkingDb(): Promise<{ db: Kysely<any>; seen: { sql: string;
       if (e.level === 'query') seen.push({ sql: e.query.sql, params: e.query.parameters.length });
     },
   }) as Kysely<any>;
-  for (const migration of Object.values(internalMigrations)) await migration.up(db);
+  // ⛔ Stops at 082's own era, like every other test in this file. Migration 088 drops the columns
+  // this migration reads, so running the full list would test it against a schema that never existed
+  // when it shipped.
+  for (const [name, migration] of Object.entries(internalMigrations)) {
+    await migration.up(db);
+    if (name === '082_facility_canonical_identity') break;
+  }
 
   const ids = ['fac-seed-1', 'fac-seed-2', 'fac-seed-3', 'fac-seed-4', 'fac-seed-5'];
   for (const [i, id] of ids.entries()) {
@@ -97,7 +103,7 @@ async function expectNothingLost(db: Kysely<any>): Promise<void> {
 
 describe('082 facility canonical identity', () => {
   it('resolves an existing typed national_system to a source row and rewrites it to the URI', async () => {
-    const db = (await makeMigratedDb()) as Kysely<any>;
+    const db = (await makeMigratedDbUpTo('082_facility_canonical_identity')) as Kysely<any>;
     await seedLegacyFacility(db, { id: ID_TYPED_HFR_100, nationalSystem: 'HFR', nationalCode: '100' });
 
     await rekey(db);
@@ -132,7 +138,7 @@ describe('082 facility canonical identity', () => {
   });
 
   it('⛔ REFUSES when two typed values would collapse into one source', async () => {
-    const db = (await makeMigratedDb()) as Kysely<any>;
+    const db = (await makeMigratedDbUpTo('082_facility_canonical_identity')) as Kysely<any>;
     // 'HFR' and 'hfr' both slug to `…:hfr`. Silently merging them would fuse two registers'
     // facilities — the failure A2b spent a slice proving is how registers get corrupted.
     await seedLegacyFacility(db, { id: ID_TYPED_HFR_100, nationalSystem: 'HFR', nationalCode: '100' });
@@ -157,7 +163,7 @@ describe('082 facility canonical identity', () => {
   });
 
   it('⛔ REFUSES when a re-keyed id is already held by another facility', async () => {
-    const db = (await makeMigratedDb()) as Kysely<any>;
+    const db = (await makeMigratedDbUpTo('082_facility_canonical_identity')) as Kysely<any>;
     // The id `HFR|100` re-keys to is already occupied by an unrelated (manual) row. Letting the
     // update run would either raise a raw primary-key violation or — if the occupant happened to
     // move first — silently overwrite it, and which of those happened would depend on scan order.
@@ -176,7 +182,7 @@ describe('082 facility canonical identity', () => {
   });
 
   it('re-keys the facility id and every INTERNAL reference that does not cascade', async () => {
-    const db = (await makeMigratedDb()) as Kysely<any>;
+    const db = (await makeMigratedDbUpTo('082_facility_canonical_identity')) as Kysely<any>;
     const parked = ID_TYPED_HFR_100;
     const humanCoded = ID_TYPED_hfr_200;
     // Two facilities in ONE register (same typed value), so nothing collapses. `parked` carries the
@@ -297,7 +303,7 @@ describe('082 facility canonical identity', () => {
   });
 
   it('re-points the controlled-field namespaces the register name is slugged into', async () => {
-    const db = (await makeMigratedDb()) as Kysely<any>;
+    const db = (await makeMigratedDbUpTo('082_facility_canonical_identity')) as Kysely<any>;
     await seedLegacyFacility(db, { id: ID_TYPED_HFR_100, nationalSystem: 'HFR', nationalCode: '100' });
     // `observedFieldSystem(field, nationalSystem)` (packages/bootstrap/src/facility-controlled-
     // fields.ts) slugifies its argument, so a register imported as 'HFR' authored its level/status/
@@ -329,7 +335,7 @@ describe('082 facility canonical identity', () => {
   });
 
   it('⛔ marks the facility-map dimension stale and never writes to the warehouse', async () => {
-    const db = (await makeMigratedDb()) as Kysely<any>;
+    const db = (await makeMigratedDbUpTo('082_facility_canonical_identity')) as Kysely<any>;
     await seedLegacyFacility(db, { id: ID_TYPED_HFR_100, nationalSystem: 'HFR', nationalCode: '100' });
 
     await rekey(db);
@@ -359,7 +365,7 @@ describe('082 facility canonical identity', () => {
   });
 
   it('leaves a manual row (NULL national_system) untouched', async () => {
-    const db = (await makeMigratedDb()) as Kysely<any>;
+    const db = (await makeMigratedDbUpTo('082_facility_canonical_identity')) as Kysely<any>;
     await seedLegacyFacility(db, { id: 'fac-manual-null', nationalSystem: null, nationalCode: null, localCode: 'L1', name: 'Manual A' });
     await seedLegacyFacility(db, { id: 'fac-manual-blank', nationalSystem: '', nationalCode: null, localCode: 'L2', name: 'Manual B' });
     // A legacy row alongside them, so the pass genuinely runs rather than returning early.
@@ -380,7 +386,7 @@ describe('082 facility canonical identity', () => {
   });
 
   it('leaves a row already keyed on a REGISTERED source URI alone, and re-running changes nothing', async () => {
-    const db = (await makeMigratedDb()) as Kysely<any>;
+    const db = (await makeMigratedDbUpTo('082_facility_canonical_identity')) as Kysely<any>;
     // Task 3 gated both HTTP import doors on a registered source's canonical URI, so a live install
     // can already hold rows keyed this way. Deriving a URI from a URI would re-key them a second
     // time — a permanent id moving for no reason.
@@ -493,7 +499,7 @@ describe('082 facility canonical identity', () => {
   });
 
   it('is idempotent: a second pass over already-migrated rows re-keys nothing', async () => {
-    const db = (await makeMigratedDb()) as Kysely<any>;
+    const db = (await makeMigratedDbUpTo('082_facility_canonical_identity')) as Kysely<any>;
     await seedLegacyFacility(db, { id: ID_TYPED_HFR_100, nationalSystem: 'HFR', nationalCode: '100' });
 
     await rekey(db);

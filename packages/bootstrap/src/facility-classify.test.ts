@@ -3,16 +3,16 @@ import { classifyFacilityRows, type ExistingFacility } from './facility-classify
 import type { FacilityRecord } from '@openldr/db';
 
 const rec = (over: Partial<FacilityRecord> = {}): FacilityRecord => ({
-  id: 'fac-1', nationalSystem: 'S', nationalCode: '100', name: 'Alpha',
+  id: 'fac-1', facilitySystem: 'S', facilityCode: '100', name: 'Alpha',
   level: null, ownership: null, status: null, country: null, zone: null, region: null,
   district: null, council: null, ward: null, village: null, addressText: null, phone: null,
   latitude: null, longitude: null, source: 'import', ...over,
 });
 
 const existing = (over: Partial<ExistingFacility> = {}): ExistingFacility => ({
-  id: 'fac-1', localCode: null, extras: null, source: 'import',
+  id: 'fac-1', extras: null, source: 'import',
   fields: {
-    nationalSystem: 'S', nationalCode: '100', name: 'Alpha',
+    facilitySystem: 'S', facilityCode: '100', name: 'Alpha',
     level: null, ownership: null, status: null, country: null, zone: null, region: null,
     district: null, council: null, ward: null, village: null, addressText: null, phone: null,
     latitude: null, longitude: null, managedOrigin: null,
@@ -76,12 +76,11 @@ describe('classifyFacilityRows', () => {
     expect(row.kind).toBe('unchanged');
   });
 
-  it('preserves an existing local_code the importer never carries, without calling it a change', () => {
-    const map = new Map([['fac-1', existing({ localCode: 'LOCAL-9' })]]);
-    const [row] = classifyFacilityRows([rec()], map, { previewedAt: null });
-    expect(row.kind).toBe('unchanged');
-    expect(row.merged.localCode).toBe('LOCAL-9');
-  });
+  // ⛔ A TEST WAS DELETED HERE, deliberately: "preserves an existing local_code the importer never
+  // carries, without calling it a change". It guarded a carry-forward that existed because the
+  // importer produced no local code and had to keep the operator's. Migration 088 removed that
+  // column, so there is nothing to carry and nothing to mistake for a change. The row's one code is
+  // now the key `resolveIdsByPair` matched on, which is why `COMPARED` excludes it outright.
 
   it('classifies a row touched after the preview as conflict', () => {
     const map = new Map([['fac-1', existing({ updatedAt: new Date('2026-06-01T00:00:00Z') })]]);

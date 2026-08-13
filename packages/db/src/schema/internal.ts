@@ -239,19 +239,11 @@ export interface ColumnExposurePolicyTable {
  *  the uncurated projection of ingested Organization/Location resources. */
 export interface FacilityRegistryTable {
   id: string;
-  /** The register this facility is listed in, by canonical URI. With `facility_code` it is the row's
-   *  identity — unique as a pair. NULL while an install is mid-transition, or on a facility in no
-   *  register at all; migration 086 explains why CE mints no default one. */
+  /** The register this facility is listed in, by canonical URI. NULL for a facility in no register
+   *  at all — CE ships no default one (migration 086). Unique WITH `facility_code`. */
   facility_system: string | null;
-  /** The code that register carries for this facility. */
-  facility_code: string | null;
-  /** @deprecated Superseded by `facility_code`. Still written through the transition; dropped by the
-   *  contract migration. */
-  local_code: string | null;
-  /** @deprecated Superseded by `facility_system`. */
-  national_system: string | null;
-  /** @deprecated Superseded by `facility_code`. */
-  national_code: string | null;
+  /** The code that register carries for this facility. NOT NULL since migration 088. */
+  facility_code: string;
   name: string;
   level: string | null;
   ownership: string | null;

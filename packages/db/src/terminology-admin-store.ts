@@ -260,7 +260,7 @@ export function createTerminologyAdminStore(db: Kysely<InternalSchema>, projecti
   async function facilitiesFiledUnder(row: { kind: string | null; url: string | null }): Promise<number> {
     if (row.kind !== FACILITY_REGISTER_KIND || !row.url) return 0;
     const r = await db.selectFrom('facility_registry').select((eb) => eb.fn.countAll<number>().as('n'))
-      .where('national_system', '=', row.url).executeTakeFirst();
+      .where('facility_system', '=', row.url).executeTakeFirst();
     return Number(r?.n ?? 0);
   }
 

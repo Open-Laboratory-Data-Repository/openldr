@@ -1261,7 +1261,7 @@ describe('publishRegistryConcepts', () => {
     const first = await publishRegistryConcepts(deps, { apply: true });
     expect(first).toEqual({ concepts: 1, systemRegistered: true, codeChanges: 0, carryOverSkipped: 0 });
 
-    await deps.internalDb.updateTable('facility_registry').set({ facility_code: 'NEW-1', local_code: 'NEW-1' }).where('id', '=', 'fac-1').execute();
+    await deps.internalDb.updateTable('facility_registry').set({ facility_code: 'NEW-1' }).where('id', '=', 'fac-1').execute();
     const second = await publishRegistryConcepts(deps, { apply: true });
 
     expect(second).toEqual({ concepts: 1, systemRegistered: true, codeChanges: 1, carryOverSkipped: 0 });
@@ -1606,7 +1606,7 @@ describe('projectRegistryRows', () => {
     expect((await resolveObservedFacilities(deps)).find((r) => r.sourceCode === 'BALAB')!.registryId).toBe('fac-B');
 
     // PUT /api/facilities/fac-A: only Alpha is renamed, and only Alpha is handed to the projection.
-    await deps.internalDb.updateTable('facility_registry').set({ facility_code: 'Y', local_code: 'Y' }).where('id', '=', 'fac-A').execute();
+    await deps.internalDb.updateTable('facility_registry').set({ facility_code: 'Y' }).where('id', '=', 'fac-A').execute();
     await projectRegistryRows(deps, [{ id: 'fac-A', name: 'Alpha' }]);
 
     // Beta followed the freed code at the moment the release actually happened, not on a later Scan.
@@ -1836,7 +1836,7 @@ describe('reprojectRegistryRows', () => {
     await reprojectRegistryRows(deps, [{ id: 'fac-A', name: 'Alpha' }]);
     await seedMapping(deps, { fromSystem: DEFAULT_OBSERVED_FACILITY_SYSTEM, fromCode: 'BALAB', toSystem: FACILITY_REGISTRY_SYSTEM, toCode: 'OLD-1' });
 
-    await deps.internalDb.updateTable('facility_registry').set({ facility_code: 'NEW-1', local_code: 'NEW-1' }).where('id', '=', 'fac-A').execute();
+    await deps.internalDb.updateTable('facility_registry').set({ facility_code: 'NEW-1' }).where('id', '=', 'fac-A').execute();
     const r = await reprojectRegistryRows(deps, [{ id: 'fac-A', name: 'Alpha' }]);
 
     expect(r.codeChanges).toEqual([{ registryId: 'fac-A', from: 'OLD-1', to: 'NEW-1', mappingsMigrated: 1, carryOverSkipped: false }]);
@@ -1851,7 +1851,7 @@ describe('reprojectRegistryRows', () => {
     const deps = await makeReconcileDeps();
     await seedRegistry(deps, { id: 'fac-A', name: 'Alpha', localCode: 'OLD-1' });
     await reprojectRegistryRows(deps, [{ id: 'fac-A', name: 'Alpha' }]);
-    await deps.internalDb.updateTable('facility_registry').set({ facility_code: 'NEW-1', local_code: 'NEW-1' }).where('id', '=', 'fac-A').execute();
+    await deps.internalDb.updateTable('facility_registry').set({ facility_code: 'NEW-1' }).where('id', '=', 'fac-A').execute();
     await reprojectRegistryRows(deps, [{ id: 'fac-A', name: 'Alpha' }]);
 
     const codes = await deps.internalDb.selectFrom('terminology_concepts')
@@ -1869,7 +1869,7 @@ describe('reprojectRegistryRows', () => {
     await reprojectRegistryRows(deps, [{ id: 'fac-A', name: 'Alpha' }]);
     await seedMapping(deps, { fromSystem: DEFAULT_OBSERVED_FACILITY_SYSTEM, fromCode: 'BALAB', toSystem: FACILITY_REGISTRY_SYSTEM, toCode: 'OLD-1' });
 
-    await deps.internalDb.updateTable('facility_registry').set({ facility_code: 'NEW-1', local_code: 'NEW-1' }).where('id', '=', 'fac-A').execute();
+    await deps.internalDb.updateTable('facility_registry').set({ facility_code: 'NEW-1' }).where('id', '=', 'fac-A').execute();
     await reprojectRegistryRows(deps, [{ id: 'fac-A', name: 'Alpha' }]);
 
     const mirror = await deps.internalDb.selectFrom('concept_map_elements')
@@ -1911,7 +1911,7 @@ describe('reprojectRegistryRows', () => {
     await reprojectRegistryRows(deps, [{ id: 'fac-A', name: 'Alpha' }]);
     await seedMapping(deps, { fromSystem: DEFAULT_OBSERVED_FACILITY_SYSTEM, fromCode: 'BALAB', toSystem: FACILITY_REGISTRY_SYSTEM, toCode: 'X' });
 
-    await deps.internalDb.updateTable('facility_registry').set({ facility_code: 'Y', local_code: 'Y' }).where('id', '=', 'fac-A').execute();
+    await deps.internalDb.updateTable('facility_registry').set({ facility_code: 'Y' }).where('id', '=', 'fac-A').execute();
     await seedRegistry(deps, { id: 'fac-B', name: 'Beta', localCode: 'X' });
     await reprojectRegistryRows(deps, [{ id: 'fac-A', name: 'Alpha' }, { id: 'fac-B', name: 'Beta' }]);
 
@@ -1962,7 +1962,7 @@ describe('reprojectRegistryRows', () => {
     await seedRegistry(deps, { id: 'fac-A', name: 'Alpha', localCode: 'OLD-1' });
     await reprojectRegistryRows(deps, [{ id: 'fac-A', name: 'Alpha' }]);
     await seedMapping(deps, { fromSystem: DEFAULT_OBSERVED_FACILITY_SYSTEM, fromCode: 'BALAB', toSystem: FACILITY_REGISTRY_SYSTEM, toCode: 'OLD-1' });
-    await deps.internalDb.updateTable('facility_registry').set({ facility_code: 'NEW-1', local_code: 'NEW-1' }).where('id', '=', 'fac-A').execute();
+    await deps.internalDb.updateTable('facility_registry').set({ facility_code: 'NEW-1' }).where('id', '=', 'fac-A').execute();
 
     // Same technique as `projectRegistryRows`' "swallows a projection failure" test: a spread over
     // `deps` with one store method replaced.
@@ -2009,7 +2009,7 @@ describe('reprojectRegistryRows', () => {
     await deps.internalDb.insertInto('facility_concept_projection')
       .values({ registry_id: 'fac-C', concept_code: 'SHARED', updated_at: new Date() }).execute();
 
-    await deps.internalDb.updateTable('facility_registry').set({ facility_code: 'NEW-A', local_code: 'NEW-A' }).where('id', '=', 'fac-A').execute();
+    await deps.internalDb.updateTable('facility_registry').set({ facility_code: 'NEW-A' }).where('id', '=', 'fac-A').execute();
     const r = await reprojectRegistryRows(deps, [{ id: 'fac-A', name: 'Alpha' }]);
 
     // THE SUBSTANTIVE HALF FIRST, so neutering the guard fails on the damage and not merely on the
@@ -2103,16 +2103,19 @@ describe('reprojectRegistryRows', () => {
     const mappingBefore = await deps.internalDb.selectFrom('term_mappings').selectAll()
       .where('to_system', '=', FACILITY_REGISTRY_SYSTEM).execute();
 
-    await deps.internalDb.schema.dropTable('facility_concept_projection').execute();
-    // The explicit index drop is NOT redundant: pg-mem keeps the primary key's implicit index
-    // registered after `drop table`, so 077's `create table` then dies on
-    // `relation "facility_concept_projection_pkey" already exists`. Real Postgres drops it with the
-    // table; this line is pg-mem's bookkeeping only.
-    await deps.internalDb.schema.dropIndex('facility_concept_projection_pkey').ifExists().execute();
-    await internalMigrations['077_facility_concept_projection'].up(deps.internalDb as never);
+    // ⛔ 077's `up()` USED to be re-run here for real, so this test would fail the moment anyone
+    // "fixed" 077 to dedupe by code. That is no longer possible: 077's backfill selects
+    // `coalesce(r.local_code, r.national_code)`, and migration 088 dropped both columns — it cannot
+    // execute against a current schema at all, which is a stronger statement than any assertion here
+    // could make. The link state it produced is seeded directly instead.
+    //
+    // What this test is actually for is unchanged: given two facilities linked to ONE shared concept,
+    // `reprojectRegistryRows` must refuse the mapping carry-over rather than guess which one owns it.
+    await deps.internalDb.insertInto('facility_concept_projection').values([
+      { registry_id: 'fac-A', concept_code: 'X' },
+      { registry_id: 'fac-B', concept_code: 'X' },
+    ] as never).execute();
 
-    // FIRST: the backfill really does produce the shared link. If this ever stops holding, the
-    // comments that now say it does are the things to change, not this assertion.
     const links = await deps.internalDb.selectFrom('facility_concept_projection')
       .select(['registry_id', 'concept_code']).orderBy('registry_id').execute();
     expect(links).toEqual([
@@ -2158,9 +2161,9 @@ describe('reprojectRegistryRows', () => {
 
     // Three hops, not two: `local_code` is unique on its own, so A cannot take 'Y' while B still
     // holds it.
-    await deps.internalDb.updateTable('facility_registry').set({ facility_code: 'TMP', local_code: 'TMP' }).where('id', '=', 'fac-A').execute();
-    await deps.internalDb.updateTable('facility_registry').set({ facility_code: 'X', local_code: 'X' }).where('id', '=', 'fac-B').execute();
-    await deps.internalDb.updateTable('facility_registry').set({ facility_code: 'Y', local_code: 'Y' }).where('id', '=', 'fac-A').execute();
+    await deps.internalDb.updateTable('facility_registry').set({ facility_code: 'TMP' }).where('id', '=', 'fac-A').execute();
+    await deps.internalDb.updateTable('facility_registry').set({ facility_code: 'X' }).where('id', '=', 'fac-B').execute();
+    await deps.internalDb.updateTable('facility_registry').set({ facility_code: 'Y' }).where('id', '=', 'fac-A').execute();
 
     const r = await reprojectRegistryRows(deps, [{ id: 'fac-A', name: 'Alpha' }, { id: 'fac-B', name: 'Beta' }]);
 

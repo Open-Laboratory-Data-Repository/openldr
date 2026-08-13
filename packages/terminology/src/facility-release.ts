@@ -178,8 +178,6 @@ export function parseFacilityRelease(jsonl: string, opts: FacilityCsvOptions): F
         // columns; the store keeps both shapes in step.
         facilitySystem: opts.nationalSystem,
         facilityCode: nationalCode,
-        nationalSystem: opts.nationalSystem,
-        nationalCode,
         name,
         level: text(str(o.facilityLevel)),
         country: text(str(o.countryCode)),

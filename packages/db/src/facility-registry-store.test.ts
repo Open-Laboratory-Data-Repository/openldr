@@ -7,13 +7,13 @@ async function store() {
   return { db, s: createFacilityRegistryStore(db as never) };
 }
 
-const manual = { id: 'f1', localCode: 'LAB01', name: 'Dodoma Regional Referral', source: 'manual' as const };
+const manual = { id: 'f1', facilityCode: 'LAB01', name: 'Dodoma Regional Referral', source: 'manual' as const };
 
 describe('createFacilityRegistryStore', () => {
   it('round-trips a hand-entered facility', async () => {
     const { s } = await store();
     await s.upsert(manual);
-    expect(await s.get('f1')).toMatchObject({ id: 'f1', localCode: 'LAB01', name: 'Dodoma Regional Referral' });
+    expect(await s.get('f1')).toMatchObject({ id: 'f1', facilityCode: 'LAB01', name: 'Dodoma Regional Referral' });
   });
 
   it('upsert updates a record in place, keyed on id (re-upsert is an in-place rename, not a new row)', async () => {
@@ -35,7 +35,7 @@ describe('createFacilityRegistryStore', () => {
       record: async (_trx, entityType, entityId, op) => { captured.push({ entityType, entityId, op }); },
     });
 
-    await s.upsert({ id: 'f9', name: 'Clinic', localCode: 'L9', source: 'manual' } as never);
+    await s.upsert({ id: 'f9', name: 'Clinic', facilityCode: 'L9', source: 'manual' } as never);
     await s.remove('f9');
 
     expect(captured).toEqual([]);
@@ -61,7 +61,7 @@ describe('createFacilityRegistryStore', () => {
   it('filters the list by region and status', async () => {
     const { s } = await store();
     await s.upsert({ ...manual, region: 'Dodoma Region', status: 'Operating' });
-    await s.upsert({ id: 'f2', localCode: 'LAB02', name: 'Closed One', source: 'manual', region: 'Dodoma Region', status: 'Closed' });
+    await s.upsert({ id: 'f2', facilityCode: 'LAB02', name: 'Closed One', source: 'manual', region: 'Dodoma Region', status: 'Closed' });
     expect((await s.list({ region: 'Dodoma Region' })).rows).toHaveLength(2);
     expect((await s.list({ region: 'Dodoma Region', status: 'Operating' })).rows).toHaveLength(1);
   });
@@ -69,7 +69,7 @@ describe('createFacilityRegistryStore', () => {
   it('caps list() at a default of 200 rows when no limit is given — a national register runs 10-15k', async () => {
     const { db, s } = await store();
     const rows = Array.from({ length: 205 }, (_, i) => ({
-      id: `f${i}`, local_code: `LAB${i}`, name: `Facility ${i}`, source: 'manual',
+      id: `f${i}`, facility_code: `LAB${i}`, name: `Facility ${i}`, source: 'manual',
     }));
     await db.insertInto('facility_registry' as never).values(rows as never).execute();
     expect((await s.list()).rows).toHaveLength(200);
@@ -91,9 +91,10 @@ describe('createFacilityRegistryStore', () => {
       await s.upsert({
         id: `f${p}`,
         name: `Facility ${p}`,
-        localCode: `LC-${p}`,
-        nationalSystem: i % 2 === 0 ? 'urn:hfr' : 'urn:mfl',
-        nationalCode: `NC-${p}`,
+        // One code per facility now. It stays unique per row so the paging/filter assertions below
+        // still distinguish 25 seeded facilities.
+        facilityCode: `LC-${p}`,
+        facilitySystem: i % 2 === 0 ? 'urn:hfr' : 'urn:mfl',
         region: i % 2 === 0 ? 'Dodoma' : 'Mwanza',
         status: i % 3 === 0 ? 'Closed' : 'Active',
         level: 'dispensary',
@@ -172,7 +173,7 @@ describe('createFacilityRegistryStore', () => {
     // insertion order lining up with the tiebreaker's sort order.
     const ids = ['f-c', 'f-a', 'f-e', 'f-b', 'f-d'];
     for (const id of ids) {
-      await s.upsert({ id, name: 'Bagamoyo Dispensary', localCode: `LC-${id}`, source: 'manual' as const });
+      await s.upsert({ id, name: 'Bagamoyo Dispensary', facilityCode: `LC-${id}`, source: 'manual' as const });
     }
 
     const seen: string[] = [];
@@ -198,11 +199,13 @@ describe('createFacilityRegistryStore', () => {
     expect(dodoma.rows.every((r) => r.region === 'Dodoma')).toBe(true);
   });
 
-  it('searches name, local code, national code and admin area, case-insensitively', async () => {
+  it('searches name, facility code and admin area, case-insensitively', async () => {
+    // Was "local code, national code" — one code column now (migration 088), so the or-group has one
+    // code branch instead of two. `nc-009` no longer names anything; `lc-009` is the same facility.
     const s = await seedMany(25);
     expect((await s.list({ q: 'facility 007' })).total).toBe(1);
     expect((await s.list({ q: 'LC-008' })).total).toBe(1);
-    expect((await s.list({ q: 'nc-009' })).total).toBe(1);
+    expect((await s.list({ q: 'lc-009' })).total).toBe(1);
     expect((await s.list({ q: 'dodoma' })).total).toBe(12);
     expect((await s.list({ q: 'no such facility' })).total).toBe(0);
   });
@@ -254,7 +257,7 @@ describe('createFacilityRegistryStore', () => {
   it('handles a realistically long facility name without truncating or erroring', async () => {
     const { s } = await store();
     const long = `Mwananyamala Regional Referral Hospital ${'and Community Outreach Annexe '.repeat(6)}`.trim();
-    await s.upsert({ id: 'long', name: long, localCode: 'L', source: 'manual' as const });
+    await s.upsert({ id: 'long', name: long, facilityCode: 'L', source: 'manual' as const });
     const r = await s.list({ q: 'Outreach' });
     expect(r.total).toBe(1);
     expect(r.rows[0].name).toBe(long);
@@ -268,12 +271,12 @@ describe('createFacilityRegistryStore', () => {
       // Dodoma x3, Kongwa x1, Chamwino x2 — the ranking must be Dodoma(3), Chamwino(2), Kongwa(1),
       // NOT insertion order and NOT alphabetical.
       const rows = [
-        { id: 'f1', local_code: 'LAB1', name: 'A', source: 'manual', district: 'Dodoma' },
-        { id: 'f2', local_code: 'LAB2', name: 'B', source: 'manual', district: 'Dodoma' },
-        { id: 'f3', local_code: 'LAB3', name: 'C', source: 'manual', district: 'Dodoma' },
-        { id: 'f4', local_code: 'LAB4', name: 'D', source: 'manual', district: 'Kongwa' },
-        { id: 'f5', local_code: 'LAB5', name: 'E', source: 'manual', district: 'Chamwino' },
-        { id: 'f6', local_code: 'LAB6', name: 'F', source: 'manual', district: 'Chamwino' },
+        { id: 'f1', facility_code: 'LAB1', name: 'A', source: 'manual', district: 'Dodoma' },
+        { id: 'f2', facility_code: 'LAB2', name: 'B', source: 'manual', district: 'Dodoma' },
+        { id: 'f3', facility_code: 'LAB3', name: 'C', source: 'manual', district: 'Dodoma' },
+        { id: 'f4', facility_code: 'LAB4', name: 'D', source: 'manual', district: 'Kongwa' },
+        { id: 'f5', facility_code: 'LAB5', name: 'E', source: 'manual', district: 'Chamwino' },
+        { id: 'f6', facility_code: 'LAB6', name: 'F', source: 'manual', district: 'Chamwino' },
       ];
       await db.insertInto('facility_registry' as never).values(rows as never).execute();
       expect(await s.distinctAdminValues('district')).toEqual([
@@ -286,10 +289,10 @@ describe('createFacilityRegistryStore', () => {
     it('scopes by the parent level already chosen (e.g. districts filtered by region)', async () => {
       const { db, s } = await store();
       const rows = [
-        { id: 'f1', local_code: 'LAB1', name: 'A', source: 'manual', region: 'Dodoma Region', district: 'Dodoma' },
-        { id: 'f2', local_code: 'LAB2', name: 'B', source: 'manual', region: 'Dodoma Region', district: 'Kongwa' },
+        { id: 'f1', facility_code: 'LAB1', name: 'A', source: 'manual', region: 'Dodoma Region', district: 'Dodoma' },
+        { id: 'f2', facility_code: 'LAB2', name: 'B', source: 'manual', region: 'Dodoma Region', district: 'Kongwa' },
         // Same district NAME, different region — must NOT bleed into the Dodoma-region result.
-        { id: 'f3', local_code: 'LAB3', name: 'C', source: 'manual', region: 'Mbeya Region', district: 'Dodoma' },
+        { id: 'f3', facility_code: 'LAB3', name: 'C', source: 'manual', region: 'Mbeya Region', district: 'Dodoma' },
       ];
       await db.insertInto('facility_registry' as never).values(rows as never).execute();
       const result = await s.distinctAdminValues('district', { region: 'Dodoma Region' });
@@ -300,8 +303,8 @@ describe('createFacilityRegistryStore', () => {
     it('an absent or blank scope value means unfiltered for that level, not "match empty string"', async () => {
       const { db, s } = await store();
       const rows = [
-        { id: 'f1', local_code: 'LAB1', name: 'A', source: 'manual', region: 'Dodoma Region', district: 'Dodoma' },
-        { id: 'f2', local_code: 'LAB2', name: 'B', source: 'manual', region: 'Mbeya Region', district: 'Mbeya' },
+        { id: 'f1', facility_code: 'LAB1', name: 'A', source: 'manual', region: 'Dodoma Region', district: 'Dodoma' },
+        { id: 'f2', facility_code: 'LAB2', name: 'B', source: 'manual', region: 'Mbeya Region', district: 'Mbeya' },
       ];
       await db.insertInto('facility_registry' as never).values(rows as never).execute();
       // No scope at all.
@@ -313,9 +316,9 @@ describe('createFacilityRegistryStore', () => {
     it('excludes NULL and blank values — they are not suggestions', async () => {
       const { db, s } = await store();
       const rows = [
-        { id: 'f1', local_code: 'LAB1', name: 'A', source: 'manual', district: 'Dodoma' },
-        { id: 'f2', local_code: 'LAB2', name: 'B', source: 'manual', district: null },
-        { id: 'f3', local_code: 'LAB3', name: 'C', source: 'manual', district: '' },
+        { id: 'f1', facility_code: 'LAB1', name: 'A', source: 'manual', district: 'Dodoma' },
+        { id: 'f2', facility_code: 'LAB2', name: 'B', source: 'manual', district: null },
+        { id: 'f3', facility_code: 'LAB3', name: 'C', source: 'manual', district: '' },
       ];
       await db.insertInto('facility_registry' as never).values(rows as never).execute();
       expect(await s.distinctAdminValues('district')).toEqual([{ value: 'Dodoma', count: 1 }]);
@@ -324,8 +327,8 @@ describe('createFacilityRegistryStore', () => {
     it('never treats a scope entry for the requested level itself as a filter', async () => {
       const { db, s } = await store();
       const rows = [
-        { id: 'f1', local_code: 'LAB1', name: 'A', source: 'manual', district: 'Dodoma' },
-        { id: 'f2', local_code: 'LAB2', name: 'B', source: 'manual', district: 'Kongwa' },
+        { id: 'f1', facility_code: 'LAB1', name: 'A', source: 'manual', district: 'Dodoma' },
+        { id: 'f2', facility_code: 'LAB2', name: 'B', source: 'manual', district: 'Kongwa' },
       ];
       await db.insertInto('facility_registry' as never).values(rows as never).execute();
       // scope.district is nonsensical when level === 'district'; it must be ignored, not applied
@@ -342,7 +345,7 @@ describe('createFacilityRegistryStore', () => {
       // including an accidentally-much-smaller one (e.g. a stray off-by-a-lot slicing bug) — it
       // does not actually pin the documented cap.
       const rows = Array.from({ length: 1005 }, (_, i) => ({
-        id: `f${i}`, local_code: `LAB${i}`, name: `Facility ${i}`, source: 'manual', zone: `Zone ${i}`,
+        id: `f${i}`, facility_code: `LAB${i}`, name: `Facility ${i}`, source: 'manual', zone: `Zone ${i}`,
       }));
       await db.insertInto('facility_registry' as never).values(rows as never).execute();
       const result = await s.distinctAdminValues('zone');
@@ -395,9 +398,9 @@ describe('createFacilityRegistryStore', () => {
 
   it('reports unprojected, unmapped and mapped health', async () => {
     const { db, s } = await store();
-    await s.upsert({ id: 'a', name: 'Alpha', localCode: 'L-A', source: 'manual' as const });
-    await s.upsert({ id: 'b', name: 'Beta', localCode: 'L-B', source: 'manual' as const });
-    await s.upsert({ id: 'c', name: 'Gamma', localCode: 'L-C', source: 'manual' as const });
+    await s.upsert({ id: 'a', name: 'Alpha', facilityCode: 'L-A', source: 'manual' as const });
+    await s.upsert({ id: 'b', name: 'Beta', facilityCode: 'L-B', source: 'manual' as const });
+    await s.upsert({ id: 'c', name: 'Gamma', facilityCode: 'L-C', source: 'manual' as const });
     await project(db, 'a', 'L-A', 1);
     await project(db, 'b', 'L-B', 0);
     // 'c' is never projected — it cannot be picked as a mapping target at all.
@@ -413,7 +416,7 @@ describe('createFacilityRegistryStore', () => {
     // The fan-out guard. term_mappings permits many observed codes to resolve to one facility, so a
     // plain left join would return this facility twice and report total 2.
     const { db, s } = await store();
-    await s.upsert({ id: 'a', name: 'Alpha', localCode: 'L-A', source: 'manual' as const });
+    await s.upsert({ id: 'a', name: 'Alpha', facilityCode: 'L-A', source: 'manual' as const });
     await project(db, 'a', 'L-A', 2);
 
     const r = await s.list({});
@@ -431,7 +434,7 @@ describe('createFacilityRegistryStore', () => {
   // observable and cannot hide behind the other assertion's throw.
   it('⭐ a facility targeted by TWO mappings does not inflate the total', async () => {
     const { db, s } = await store();
-    await s.upsert({ id: 'a', name: 'Alpha', localCode: 'L-A', source: 'manual' as const });
+    await s.upsert({ id: 'a', name: 'Alpha', facilityCode: 'L-A', source: 'manual' as const });
     await project(db, 'a', 'L-A', 2);
 
     const r = await s.list({});
@@ -440,7 +443,7 @@ describe('createFacilityRegistryStore', () => {
 
   it('an inactive or non-SAME-AS mapping does not make a facility read as mapped', async () => {
     const { db, s } = await store();
-    await s.upsert({ id: 'a', name: 'Alpha', localCode: 'L-A', source: 'manual' as const });
+    await s.upsert({ id: 'a', name: 'Alpha', facilityCode: 'L-A', source: 'manual' as const });
     await db.insertInto('facility_concept_projection')
       .values({ registry_id: 'a', concept_code: 'L-A' }).execute();
     await db.insertInto('term_mappings').values([
@@ -459,9 +462,9 @@ describe('createFacilityRegistryStore', () => {
 
   it('filters by health, with a total that matches', async () => {
     const { db, s } = await store();
-    await s.upsert({ id: 'a', name: 'Alpha', localCode: 'L-A', source: 'manual' as const });
-    await s.upsert({ id: 'b', name: 'Beta', localCode: 'L-B', source: 'manual' as const });
-    await s.upsert({ id: 'c', name: 'Gamma', localCode: 'L-C', source: 'manual' as const });
+    await s.upsert({ id: 'a', name: 'Alpha', facilityCode: 'L-A', source: 'manual' as const });
+    await s.upsert({ id: 'b', name: 'Beta', facilityCode: 'L-B', source: 'manual' as const });
+    await s.upsert({ id: 'c', name: 'Gamma', facilityCode: 'L-C', source: 'manual' as const });
     await project(db, 'a', 'L-A', 1);
     await project(db, 'b', 'L-B', 0);
 

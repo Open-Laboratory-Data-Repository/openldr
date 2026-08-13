@@ -641,7 +641,7 @@ export async function resolveObservedFacilities(deps: ReconcileDeps): Promise<Re
   // what makes a candidate's `toSystem` a genuine national route (see `ResolvedFacility
   // .nonFacilityTarget`'s doc comment for the bug this replaces).
   const knownNationalSystems = new Set(
-    registry.map((r) => r.national_system).filter((s): s is string => s !== null),
+    registry.map((r) => r.facility_system).filter((s): s is string => s !== null),
   );
   // The registry-route mapping's `to_code` is whatever code `TermMappingDialog` showed the operator
   // when they picked this row as a target — i.e. exactly what `registryConceptRows`
@@ -658,8 +658,8 @@ export async function resolveObservedFacilities(deps: ReconcileDeps): Promise<Re
   const byRegistryCode = new Map(registry.map((r, i) => [registryConcepts[i].code, r]));
   const byNational = new Map(
     registry
-      .filter((r) => r.national_system && r.national_code)
-      .map((r) => [`${r.national_system}|${r.national_code}`, r]),
+      .filter((r) => r.facility_system && r.facility_code)
+      .map((r) => [`${r.facility_system}|${r.facility_code}`, r]),
   );
 
   // Keyed on (from_system, from_code) TOGETHER — a plain `from_code` key, as before Task 9b, would
@@ -1182,7 +1182,7 @@ async function claimantsOf(
   const rows = await deps.internalDb
     .selectFrom('facility_registry')
     .select(['id', 'name', 'facility_code'])
-    .where((eb) => eb.or([eb('local_code', 'in', codes), eb('national_code', 'in', codes)]))
+    .where('facility_code', 'in', codes)
     .execute();
   const out: { id: string; name: string; claimed: string }[] = [];
   for (const r of rows) {
