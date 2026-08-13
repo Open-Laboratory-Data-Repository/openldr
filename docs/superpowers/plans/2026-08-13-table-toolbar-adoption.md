@@ -38,7 +38,6 @@
 - `apps/studio/src/pages/settings/DistributedSync.tsx` (+ new test)
 - `apps/studio/src/pages/Terminology.tsx` + `Terminology.test.tsx`
 - `apps/studio/src/i18n/{en,fr,pt}.ts` — column labels for pages whose headers are hardcoded
-- `apps/studio/src/components/data-table/index.ts` — export the test helper
 - `apps/studio/src/docs/0.1.0/{en,fr,pt}/*.md` — docs describing replaced controls
 
 **Task order is deliberate:** Task 2 (Roles) is the smallest and proves the "add a toolbar where there was none" path. Task 3 (Forms) proves the "replace a search box" path *and* the i18n-keys path. Everything after reuses those two shapes. Terminology is last because it is the hardest.
@@ -116,7 +115,6 @@ And the table body block:
 
 **Files:**
 - Create: `apps/studio/src/components/data-table/expectStandardTableToolbar.ts`
-- Modify: `apps/studio/src/components/data-table/index.ts`
 - Test: `apps/studio/src/components/data-table/expectStandardTableToolbar.test.tsx`
 
 **Interfaces:**
@@ -279,11 +277,17 @@ The label strings come from the `table` i18n namespace at `en.ts:23-50` — `fil
 
 **One caveat to expect:** `addFilterViaPopover` types into the input labelled "Enter value", which `FilterValueInput` renders only for text-ish columns (`FilterPopover.tsx:117-125`). If a page's *first filterable column* is an enum or date, the popover renders a Select or DatePicker instead and `findByLabelText(/enter value/i)` will fail. On those pages, either order `columns` so a text column comes first, or set `filterable: false` on the leading non-text column.
 
-Add to `apps/studio/src/components/data-table/index.ts`:
+⛔ **Do NOT export this from `index.ts`.** The helper imports `vitest`, which is a
+devDependency (`apps/studio/package.json:83`), and production pages import the barrel
+(`pages/Users.tsx:16`). Adding it there puts a devDependency into the production module graph.
+
+Tests import it by direct path instead:
 
 ```ts
-export { expectStandardTableToolbar, addFilterViaPopover } from "./expectStandardTableToolbar";
+import { addFilterViaPopover, expectStandardTableToolbar } from '@/components/data-table/expectStandardTableToolbar';
 ```
+
+`index.ts` is therefore **not** modified by this task.
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -293,7 +297,7 @@ Expected: PASS, 3 tests.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add apps/studio/src/components/data-table/expectStandardTableToolbar.ts apps/studio/src/components/data-table/expectStandardTableToolbar.test.tsx apps/studio/src/components/data-table/index.ts
+git add apps/studio/src/components/data-table/expectStandardTableToolbar.ts apps/studio/src/components/data-table/expectStandardTableToolbar.test.tsx
 git commit -m "test(studio): shared assertion that a page adopted the full table toolbar"
 ```
 
@@ -414,7 +418,7 @@ git commit -m "feat(studio): Roles adopts the standard table toolbar"
 Add to `apps/studio/src/pages/Forms.test.tsx`:
 
 ```tsx
-import { addFilterViaPopover, expectStandardTableToolbar } from '@/components/data-table';
+import { addFilterViaPopover, expectStandardTableToolbar } from '@/components/data-table/expectStandardTableToolbar';
 
 it('renders the standard table toolbar with the chips row', async () => {
   render(<MemoryRouter><Forms /></MemoryRouter>);
@@ -545,7 +549,7 @@ git commit -m "feat(studio): Forms adopts the standard table toolbar and transla
 Add to `apps/studio/src/pages/Activity.test.tsx`:
 
 ```tsx
-import { addFilterViaPopover, expectStandardTableToolbar } from '@/components/data-table';
+import { addFilterViaPopover, expectStandardTableToolbar } from '@/components/data-table/expectStandardTableToolbar';
 
 it('renders the standard table toolbar with the chips row', async () => {
   render(<MemoryRouter><Activity /></MemoryRouter>);
@@ -614,7 +618,7 @@ git commit -m "feat(studio): Activity adopts the standard table toolbar"
 If `Connectors.test.tsx` does not exist, create it. Copy the `vi.mock('@/api', …)` setup and the render wrapper from `src/pages/Users.test.tsx` — that file is the working reference for mocking the api layer and providing the i18n and router context.
 
 ```tsx
-import { addFilterViaPopover, expectStandardTableToolbar } from '@/components/data-table';
+import { addFilterViaPopover, expectStandardTableToolbar } from '@/components/data-table/expectStandardTableToolbar';
 
 it('renders the standard table toolbar with the chips row', async () => {
   render(<MemoryRouter><Connectors /></MemoryRouter>);
@@ -681,7 +685,7 @@ git commit -m "feat(studio): Connectors adopts the standard table toolbar"
 Create or extend `Sites.test.tsx`, copying the api-mock and render wrapper from `src/pages/Users.test.tsx`:
 
 ```tsx
-import { addFilterViaPopover, expectStandardTableToolbar } from '@/components/data-table';
+import { addFilterViaPopover, expectStandardTableToolbar } from '@/components/data-table/expectStandardTableToolbar';
 
 it('renders the standard table toolbar with the chips row', async () => {
   render(<MemoryRouter><Sites /></MemoryRouter>);
@@ -752,7 +756,7 @@ git commit -m "feat(studio): Sites adopts the standard table toolbar"
 Create or extend `DistributedSync.test.tsx`, copying the api-mock and render wrapper from `src/pages/Users.test.tsx`:
 
 ```tsx
-import { addFilterViaPopover, expectStandardTableToolbar } from '@/components/data-table';
+import { addFilterViaPopover, expectStandardTableToolbar } from '@/components/data-table/expectStandardTableToolbar';
 
 it('renders the standard table toolbar on the sync activity table', async () => {
   render(<MemoryRouter><DistributedSync /></MemoryRouter>);
@@ -833,7 +837,7 @@ git commit -m "feat(studio): DistributedSync activity table adopts the standard 
 Add to `Terminology.test.tsx`:
 
 ```tsx
-import { addFilterViaPopover, expectStandardTableToolbar } from '@/components/data-table';
+import { addFilterViaPopover, expectStandardTableToolbar } from '@/components/data-table/expectStandardTableToolbar';
 
 it('renders the standard table toolbar on the value sets table', async () => {
   render(<MemoryRouter><Terminology /></MemoryRouter>);
