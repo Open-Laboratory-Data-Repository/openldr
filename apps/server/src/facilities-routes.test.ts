@@ -20,6 +20,10 @@ const FORM_FIELDS = [
   { id: 'f2', apiProperty: 'name' },
   { id: 'f3', apiProperty: 'region' },
   { id: 'f4', apiProperty: 'catchmentPop' },
+  // `level` is a CONTROLLED field, so a payload that carries f5 reaches `controlledFieldsError`.
+  // The baseline `body` below deliberately omits it, which keeps every pre-existing test on the
+  // guard's `submitted.length === 0` short-circuit exactly as before.
+  { id: 'f5', apiProperty: 'level' },
 ];
 
 // A resolvable form whose fields map onto NONE of CORE_FACILITY_KEYS — the "wrong form" case (Q2):
@@ -5606,5 +5610,58 @@ describe('Task 10: POST /api/facilities/jobs/:id/retry', () => {
       before: { status: 'failed' },
       after: { status: 'queued', attempts: 0 },
     });
+  });
+});
+
+describe('Task 1: an unchanged controlled value does not block an edit', () => {
+  // A ctx whose `level` value set expands to exactly one canonical code, so any other string is
+  // `unmapped` — the same state an imported facility is in before its vocabulary is mapped.
+  function ctxWithLevelValueSet() {
+    const ctx = fakeCtx();
+    ctx.terminology.admin.valueSets = {
+      getByUrl: async () => ({ id: 'vs-level' }),
+      expand: async () => ({ codes: [{ code: 'health-center' }] }),
+    };
+    ctx.terminology.admin.termMappings = { listOutgoing: async () => [] };
+    return ctx;
+  }
+
+  const importedBody = {
+    answers: { f1: 'LAB01', f2: 'Commando Urban', f3: 'Copperbelt', f5: 'Health Centre' },
+    formSchemaId: 'form-sample-facility',
+    formVersion: 1,
+  };
+
+  it('lets an edit through when the raw level is resubmitted unchanged', async () => {
+    const ctx = ctxWithLevelValueSet();
+    const app = await appWith(ctx);
+    // Seeded directly rather than through POST: POST would refuse the raw level, which is the very
+    // asymmetry between the import door and the edit door that this test exists for.
+    ctx.__rows.push({
+      id: 'fac-1', localCode: 'LAB01', name: 'Commando Urban', region: 'Copperbelt',
+      level: 'Health Centre', extras: {}, source: 'import',
+    });
+    const res = await app.inject({
+      method: 'PUT', url: '/api/facilities/fac-1',
+      payload: { ...importedBody, answers: { ...importedBody.answers, f2: 'Commando Urban Clinic' } },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().name).toBe('Commando Urban Clinic');
+    expect(res.json().level).toBe('Health Centre');
+  });
+
+  it('still refuses when the edit CHANGES the level to another unrecognised value', async () => {
+    const ctx = ctxWithLevelValueSet();
+    const app = await appWith(ctx);
+    ctx.__rows.push({
+      id: 'fac-1', localCode: 'LAB01', name: 'Commando Urban', region: 'Copperbelt',
+      level: 'Health Centre', extras: {}, source: 'import',
+    });
+    const res = await app.inject({
+      method: 'PUT', url: '/api/facilities/fac-1',
+      payload: { ...importedBody, answers: { ...importedBody.answers, f5: 'District Hospital' } },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toContain("level 'District Hospital'");
   });
 });

@@ -558,6 +558,36 @@ function nameTypeError(name: unknown): { error: string } | undefined {
   return undefined;
 }
 
+/**
+ * Core columns whose submitted value DIFFERS from what is already stored.
+ *
+ * ⛔ Every PUT-side guard below keys off THIS, never off mere presence. The Edit sheet seeds every
+ * field off the facility (`seedAnswers`, apps/studio/src/facilities/FacilityDialog.tsx) and posts
+ * them all back on Save, so "the caller submitted it" is true of every field on every edit. That is
+ * what disarmed the submitted-only scoping `controlledFieldsError` was originally written with: a
+ * value the operator never touched was indistinguishable from one they had just typed.
+ *
+ * `undefined` means the submission carried no answer for that field at all and is never a change —
+ * a deliberate BLANK arrives through `clearedCoreKeys`, not here. Empty string and null normalise
+ * together so a blanked-then-restored field does not read as changed.
+ *
+ * ⚠ `latitude`/`longitude` are numbers here and may arrive as strings off the driver, so they can
+ * read as changed when they are not. Harmless today: no caller of this function guards a numeric
+ * column.
+ */
+function changedCoreKeys(record: Partial<FacilityRecord>, before: FacilityRecord): Set<string> {
+  const norm = (v: unknown) => (v === null || v === undefined || v === '' ? null : v);
+  const stored = before as unknown as Record<string, unknown>;
+  const submitted = record as Record<string, unknown>;
+  const changed = new Set<string>();
+  for (const key of Object.keys(submitted)) {
+    if (!CORE_FACILITY_KEYS.has(key)) continue;
+    if (submitted[key] === undefined) continue;
+    if (norm(submitted[key]) !== norm(stored[key])) changed.add(key);
+  }
+  return changed;
+}
+
 // ── Task 6 (B1, facility-canonical-identity): server-enforced controlled vocabulary ────────────
 //
 // `resolveControlledFields`/`applyControlledFields` (packages/bootstrap/src/facility-controlled-
@@ -579,14 +609,24 @@ function nameTypeError(name: unknown): { error: string } | undefined {
 // hand-typed value behind the operator's back on this route would trade one surprise for another.
 // An operator who wants a particular canonical value picks it directly.
 //
-// Only fields the CALLER actually submitted this request are checked (`record`, from
-// `splitFacilityAnswers` — never the row's other, already-persisted columns): an edit that touches
-// an unrelated field must not be blocked by a value written before this check existed.
+// ⛔ Scoped to what this request CHANGED, not to what it submitted. Scoping on "submitted" was the
+// original intent — an edit that touches an unrelated field must not be blocked by a value written
+// before this check existed — but it never held from the studio client, which seeds every field off
+// the facility and posts them all back (see `changedCoreKeys`). The effect was that an imported
+// facility carrying a raw, unmapped level could not be edited AT ALL until that value was mapped,
+// and mapping is optional by design: `applyControlledFields` writes an unmapped value through
+// untouched (packages/bootstrap/src/facility-controlled-fields.ts). Two subsystems each behaving
+// correctly, disagreeing at the seam.
+//
+// POST passes no `before` — there is nothing to have changed FROM, so every submitted value is
+// checked, exactly as before.
 async function controlledFieldsError(
-  ctx: AppContext, record: Partial<FacilityRecord>,
+  ctx: AppContext, record: Partial<FacilityRecord>, before?: FacilityRecord,
 ): Promise<{ error: string } | undefined> {
+  const changed = before ? changedCoreKeys(record, before) : null;
   const submitted = CONTROLLED_FIELDS.filter(
-    (field) => typeof record[field] === 'string' && (record[field] as string).length > 0,
+    (field) => typeof record[field] === 'string' && (record[field] as string).length > 0
+      && (changed === null || changed.has(field)),
   );
   if (submitted.length === 0) return undefined;
 
@@ -1327,11 +1367,11 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       return { error: 'a facility must have a local code or a national code' };
     }
 
-    // Task 6 (B1): same rule as POST, and scoped the same way — only what THIS submission sets for
-    // level/status/country is checked, never a value inherited unchanged from `before` (see
-    // `controlledFieldsError`'s doc comment). An edit to an unrelated field on a facility whose
-    // status predates this check must not be blocked by that pre-existing value.
-    const controlledErr = await controlledFieldsError(ctx, record);
+    // Task 6 (B1), rescoped: only a level/status/country this submission actually CHANGED is
+    // checked. The sheet resubmits every field it seeded, so scoping on "submitted" checked every
+    // value on every edit — which made an imported facility carrying an unmapped raw value
+    // uneditable until that value was mapped. See `controlledFieldsError`'s doc comment.
+    const controlledErr = await controlledFieldsError(ctx, record, before);
     if (controlledErr) { reply.code(400); return controlledErr; }
 
     // Only the write itself is guarded — see the matching comment in POST.
