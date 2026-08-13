@@ -18,6 +18,9 @@ const LabIdentityPatchSchema = z.object({
   'lab.address': z.string().optional(),
   'lab.contact': z.string().optional(),
   'lab.logo': z.string().optional(),
+  // The install's default facility register (canonical URI). See LAB_IDENTITY_FIELDS' entry for why
+  // the studio renders it as a picker and never a text box.
+  'lab.facilitySystem': z.string().optional(),
 }).strict();
 
 const FEATURE_FLAGS = { preHandler: requireCapability('settings.feature_flags') };
@@ -69,7 +72,12 @@ export function registerSettingsRoutes(app: FastifyInstance<any, any, any, any>,
   // and studio must not import the registry directly. The logo limits ride along for the same
   // reason — the client validates the upload before sending, from ONE source of truth.
   app.get('/api/settings/lab', { preHandler: requireCapability('reports.view') }, async () => ({
-    fields: LAB_IDENTITY_FIELDS.map((f) => ({ id: f.id, labelKey: f.labelKey, multiline: f.multiline ?? false })),
+    // `source` rides along so the studio knows which fields must be PICKED rather than typed —
+    // omitted (not `null`) when absent, so the client's optional property stays optional.
+    fields: LAB_IDENTITY_FIELDS.map((f) => ({
+      id: f.id, labelKey: f.labelKey, multiline: f.multiline ?? false,
+      ...(f.source ? { source: f.source } : {}),
+    })),
     values: await ctx.labIdentity.all(),
     logo: { maxBytes: LAB_LOGO_MAX_BYTES, mimeTypes: LAB_LOGO_MIME },
   }));

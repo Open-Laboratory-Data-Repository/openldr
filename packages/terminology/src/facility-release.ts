@@ -173,8 +173,11 @@ export function parseFacilityRelease(jsonl: string, opts: FacilityCsvOptions): F
 
       records.push({
         id: idFor(opts.nationalSystem, nationalCode),
-        nationalSystem: opts.nationalSystem,
-        nationalCode,
+        // The register and the code it carries — see migration 086. `nationalSystem`/
+        // `nationalCode` are still emitted beside them until the contract migration drops the
+        // columns; the store keeps both shapes in step.
+        facilitySystem: opts.nationalSystem,
+        facilityCode: nationalCode,
         name,
         level: text(str(o.facilityLevel)),
         country: text(str(o.countryCode)),

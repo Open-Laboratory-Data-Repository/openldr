@@ -19,6 +19,15 @@ export interface LabIdentityFieldDefinition {
   maxLength: number;
   /** Rendered as a multi-line block (address), not a single line. */
   multiline?: boolean;
+  /**
+   * Render as a PICKER over this source rather than a free-text box.
+   *
+   * ⛔ `facility-registers` is not cosmetic. `idFor` (packages/terminology/src/facility-csv.ts)
+   * hashes a register's URI into every facility's permanent id WITHOUT normalising it, so a typed
+   * label mints a second identity for one register — the defect migration 082 had to clean up. A
+   * value here must be a register that already exists on the install, never something typed.
+   */
+  source?: 'facility-registers';
 }
 
 /** Decoded-image ceiling for `lab.logo`. Generous for a letterhead mark at print resolution.
@@ -54,6 +63,16 @@ export const LAB_IDENTITY_FIELDS: readonly LabIdentityFieldDefinition[] = [
   { id: 'lab.address', labelKey: 'settings.laboratory.address', maxLength: 500, multiline: true },
   { id: 'lab.contact', labelKey: 'settings.laboratory.contact', maxLength: 200 },
   { id: 'lab.logo', labelKey: 'settings.laboratory.logo', maxLength: LAB_LOGO_MAX_CHARS },
+  /**
+   * The register this installation's facilities belong to, by canonical URI.
+   *
+   * Lives beside the letterhead because it is the same KIND of fact: something an operator states
+   * once about their installation rather than re-entering per record. The Facility form's System
+   * field defaults from it.
+   *
+   * A URI is well under this bound; the length exists only so a paste cannot store something absurd.
+   */
+  { id: 'lab.facilitySystem', labelKey: 'settings.laboratory.facilitySystem', maxLength: 500, source: 'facility-registers' },
 ];
 
 export const LAB_IDENTITY_KEYS = LAB_IDENTITY_FIELDS.map((f) => f.id);

@@ -114,19 +114,17 @@ describe('the seeded Facility form', () => {
     // a field silently losing its `required: true` from the opposite direction — council quietly
     // gaining company, or a required field quietly becoming optional and this test not noticing
     // because it only ever asserted equality on the required side.
-    // Migration 085 widened this set from council alone to five. Each addition has its own reason,
-    // and none of them is "required felt too strict":
-    //   nationalCode/nationalSystem — a lab-only facility genuinely has neither.
-    //   localCode                   — a CSV import never produces one, by design.
-    //   region                      — not every register has a tier there (Zambia's has none).
+    // Back to two, once the three code fields collapsed into one required pair (migration 087).
+    //   region  — not every register has a tier there (Zambia's has none: measured 3788/3788).
+    //   council — nobody may be blocked from saving when council data is unknown.
     expect(facility().fields.filter((f) => !f.required).map((f) => f.apiProperty).sort()).toEqual(
-      ['council', 'localCode', 'nationalCode', 'nationalSystem', 'region'].sort(),
+      ['council', 'region'].sort(),
     );
   });
 
   it('every field carries an apiProperty from the full set, including the optional council', () => {
     expect(facility().fields.map((f) => f.apiProperty).sort()).toEqual(
-      ['council', 'country', 'district', 'level', 'localCode', 'name', 'nationalCode', 'nationalSystem', 'region', 'status', 'zone'].sort(),
+      ['council', 'country', 'district', 'facilityCode', 'facilitySystem', 'level', 'name', 'region', 'status', 'zone'].sort(),
     );
   });
 
@@ -142,13 +140,13 @@ describe('the seeded Facility form', () => {
   });
 
   it('marks the required fields required', () => {
-    // The optional five are excluded — see the OPTIONAL-set test above, which pins the complementary
-    // side instead of re-deriving this same set. ⛔ A facility's IDENTITY is deliberately absent
-    // here: neither code is required, because `facility_registry_has_a_code` (migration 070) asks
-    // only that at least ONE of them be present, and no single form field can express "or". The
-    // route enforces that pair rule directly.
+    // ⛔ A facility's IDENTITY is now REQUIRED, which it could not be while there were two nullable
+    // code columns joined by an OR-shaped CHECK that no single form field could express. One pair,
+    // unique, both required.
     const required = facility().fields.filter((f) => f.required).map((f) => f.apiProperty).sort();
-    expect(required).toEqual(['country', 'district', 'level', 'name', 'status', 'zone'].sort());
+    expect(required).toEqual(
+      ['country', 'district', 'facilityCode', 'facilitySystem', 'level', 'name', 'status', 'zone'].sort(),
+    );
   });
 
   it('binds status and level to their ValueSets as searchable reference fields, not free text', () => {
@@ -193,27 +191,27 @@ describe('the seeded Facility form', () => {
     }
   });
 
-  it('offers both codes — the national one first, neither required', () => {
+  it('offers ONE code and the system that names it, system first, both required', () => {
     const fields = facility().fields;
-    const national = fields.find((f) => f.id === 'fld-fac-national-code')!;
-    const register = fields.find((f) => f.id === 'fld-fac-national-system')!;
-    const local = fields.find((f) => f.id === 'fld-fac-local-code')!;
+    const system = fields.find((f) => f.id === 'fld-fac-system')!;
+    const code = fields.find((f) => f.id === 'fld-fac-code')!;
 
-    // Until migration 085 no field bound `nationalCode` at all, so a nationally-imported facility
-    // showed an empty code box in the Edit sheet beside a table cell that displayed its code.
-    expect(national.apiProperty).toBe('nationalCode');
-    expect(national.displayLabel).toBe('National code');
-    expect(national.required).toBe(false);
-    expect(register.apiProperty).toBe('nationalSystem');
-    expect(register.fieldType).toBe('suggest');
+    expect(system.apiProperty).toBe('facilitySystem');
+    expect(system.fieldType).toBe('suggest');
+    expect(system.required).toBe(true);
+    expect(code.apiProperty).toBe('facilityCode');
+    expect(code.displayLabel).toBe('Facility code');
+    expect(code.required).toBe(true);
+    expect(system.order).toBeLessThan(code.order);
+  });
 
-    // Relabelled from the generic "Facility code", which read as the same thing the Facilities
-    // table's CODE column shows — that column falls back `localCode ?? nationalCode`.
-    expect(local.apiProperty).toBe('localCode');
-    expect(local.displayLabel).toBe('Local code');
-    expect(local.required).toBe(false);
-
-    expect(national.order).toBeLessThan(local.order);
+  it('⛔ no longer offers two code boxes for an operator to choose between', () => {
+    // The confusion this arc came from: a hand-registered facility's code went into "Facility code"
+    // (localCode), the table showed the OTHER column, and moving it was refused.
+    const ids = facility().fields.map((f) => f.id);
+    expect(ids).not.toContain('fld-fac-local-code');
+    expect(ids).not.toContain('fld-fac-national-code');
+    expect(ids).not.toContain('fld-fac-national-system');
   });
 
   it('binds council to `suggest` too, but — unlike zone/region/district — it is OPTIONAL with no FHIR path', () => {
@@ -228,10 +226,10 @@ describe('the seeded Facility form', () => {
     expect(council.cardinality).toEqual({ min: 0, max: '1' });
   });
 
-  it('offers facilities as a page target, requiring name plus the only code a template can supply', () => {
+  it('offers facilities as a page target, requiring the identity pair plus name', () => {
     const t = PAGE_TARGETS.find((p) => p.id === 'facilities')!;
     expect(t.available).toBe(true);
-    expect(t.requiredKeys.sort()).toEqual(['localCode', 'name']);
+    expect(t.requiredKeys.sort()).toEqual(['facilityCode', 'facilitySystem', 'name'].sort());
   });
 
   // Migration 085_facility_national_code_field rewrites an already-migrated install's persisted

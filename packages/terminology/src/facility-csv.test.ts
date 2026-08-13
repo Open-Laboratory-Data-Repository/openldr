@@ -16,8 +16,8 @@ describe('parseFacilityCsv', () => {
     expect(r.unknownColumns).toEqual([]);
     expect(r.records).toHaveLength(1);
     expect(r.records[0]).toMatchObject({
-      nationalSystem: HFR,
-      nationalCode: '122023-5',
+      facilitySystem: HFR,
+      facilityCode: '122023-5',
       name: 'BAHEBE HEALTH LABORATORY',
       level: 'Level IA2 (Dispensary Laboratory)',
       region: 'Geita',
@@ -28,9 +28,13 @@ describe('parseFacilityCsv', () => {
     });
   });
 
-  it('gives an imported row NO local code — a national register has no concept of one', () => {
+  it('gives an imported row the register\'s code as its ONE code', () => {
+    // This used to assert the row got NO local code, because a national register has no concept of
+    // one. Migrations 086/088 removed the second column entirely, so the distinction the assertion
+    // guarded no longer exists — what matters now is that the register's code lands as THE code.
     const r = csv('national_code,name\n122023-5,BAHEBE\n');
-    expect(r.records[0].localCode).toBeUndefined();
+    expect(r.records[0].facilityCode).toBe('122023-5');
+    expect(r.records[0].facilitySystem).toBe(opts.nationalSystem);
   });
 
   it('⛔ REPORTS unknown columns and yields NO records, rather than silently dropping them', () => {
@@ -86,14 +90,14 @@ describe('parseFacilityCsv', () => {
     const r = csv('﻿national_code,name\n122023-5,BAHEBE\n');
     expect(r.unknownColumns).toEqual([]);
     expect(r.records).toHaveLength(1);
-    expect(r.records[0]).toMatchObject({ nationalCode: '122023-5', name: 'BAHEBE' });
+    expect(r.records[0]).toMatchObject({ facilityCode: '122023-5', name: 'BAHEBE' });
   });
 
   it('accepts uppercase/mixed-case headers', () => {
     const r = csv('NATIONAL_CODE,NAME\n122023-5,BAHEBE\n');
     expect(r.unknownColumns).toEqual([]);
     expect(r.records).toHaveLength(1);
-    expect(r.records[0]).toMatchObject({ nationalCode: '122023-5', name: 'BAHEBE' });
+    expect(r.records[0]).toMatchObject({ facilityCode: '122023-5', name: 'BAHEBE' });
   });
 
   it('BOM detection on a header-only file (no data rows) matches the same-file-with-data path', () => {
@@ -111,7 +115,7 @@ describe('parseFacilityCsv', () => {
       'TOOFEW\n' +
       '999-9,GOOD ROW,Level IB\n',
     );
-    expect(r.records.map((rec) => rec.nationalCode)).toEqual(['122023-5', '999-9']);
+    expect(r.records.map((rec) => rec.facilityCode)).toEqual(['122023-5', '999-9']);
     expect(r.skipped).toBe(0);
     expect(r.quarantined).toEqual([{ line: 3, raw: 'TOOFEW', reason: 'too_few_fields' }]);
   });
@@ -139,7 +143,7 @@ describe('parseFacilityCsv', () => {
   it('never throws on a ragged row — one bad row must not kill a national import', () => {
     const csvText = 'national_code,name\n1,Good\n2,Bad,Extra\n3,AlsoGood\n';
     const r = parseFacilityCsv(csvText, opts);
-    expect(r.records.map((x) => x.nationalCode)).toEqual(['1', '3']);
+    expect(r.records.map((x) => x.facilityCode)).toEqual(['1', '3']);
     expect(r.quarantined).toHaveLength(1);
     expect(r.quarantined[0].line).toBe(3);
   });
@@ -191,7 +195,7 @@ describe('parseFacilityCsv with a column map', () => {
     expect(r.unknownColumns).toEqual([]);
     expect(r.records).toHaveLength(1);
     expect(r.records[0]).toMatchObject({
-      nationalCode: '1835', name: 'Namatindi RHC', zone: 'Western',
+      facilityCode: '1835', name: 'Namatindi RHC', zone: 'Western',
       level: 'Health Centre', country: 'ZMB',
     });
     // extras keys stay lowercased — existing behaviour, see facility-csv.ts:205
@@ -204,7 +208,7 @@ describe('parseFacilityCsv with a column map', () => {
       columnMap: { columns: { 'MFL Code': 'national_code', Name: 'name' } },
     });
     expect(r.columnMapErrors).toEqual([]);
-    expect(r.records[0].nationalCode).toBe('1835');
+    expect(r.records[0].facilityCode).toBe('1835');
   });
 
   it('⛔ refuses a header in neither columns nor extras, exactly as an unknown column today', () => {
@@ -275,7 +279,7 @@ describe('parseFacilityCsv with a column map', () => {
   it('leaves behaviour identical when no column map is supplied', () => {
     const r = csv('national_code,name\n122023-5,BAHEBE\n');
     expect(r.columnMapErrors).toEqual([]);
-    expect(r.records[0].nationalCode).toBe('122023-5');
+    expect(r.records[0].facilityCode).toBe('122023-5');
   });
 
   // Finding 1 (review, task-1-report.md fix pass): a mapped field can collide with an UNTOUCHED

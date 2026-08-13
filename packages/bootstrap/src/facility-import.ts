@@ -52,7 +52,7 @@ export async function resolveKnownNationalSystem(
   db: Kysely<InternalSchema>, nationalSystem: string,
 ): Promise<boolean> {
   const known = await db.selectFrom('facility_registry').select('id')
-    .where('national_system', '=', nationalSystem).limit(1).executeTakeFirst();
+    .where('facility_system', '=', nationalSystem).limit(1).executeTakeFirst();
   return !!known;
 }
 
@@ -436,6 +436,69 @@ function chunk<T>(items: T[], size: number): T[][] {
  * is read too (below) — carried on `ExistingFacility.source` for the `facility.import.row` audit's
  * `before`, never fed into `fields`/`COMPARED`; see `ExistingFacility.source`'s docblock.
  */
+/**
+ * Re-key parsed records onto the rows that already hold their `(facility_system, facility_code)`.
+ *
+ * ⛔ THE PAIR IS THE IDENTITY; THE ID IS ONLY A WRITE KEY.
+ *
+ * A facility registered by hand carries a `randomUUID` id, so a later import of the same register
+ * derives an id that does not match it. Without this, that row is classified `create`, the INSERT
+ * collides with `facility_registry_system_code_unique` (migration 086), and the row fails — while the
+ * operator's hand-registered facility sits there unmatched. Adopting the existing id instead is what
+ * lets an operator register a facility that later turns up in the national file, and is why neither
+ * this importer nor any migration ever has to RE-KEY a row (which would strand
+ * `facility_map.registry_id`, `facility_concept_projection`, `facility_jobs` and the audit trail).
+ *
+ * ⛔ The returned records must replace `records` for EVERY id-keyed step that follows —
+ * `loadExisting`, classification, the `in_register` membership write and the retirement id set. A
+ * remap applied to only some of those would mark the wrong rows as in-register and could count a
+ * present facility as absent.
+ *
+ * Chunked on the same `CHUNK` bound `loadExisting` uses: one bind parameter per code, plus one for
+ * the system. A parameter overflow reads as `bind message has N parameter formats but 0 parameters`,
+ * which does not mention chunking at all.
+ */
+async function resolveIdsByPair(
+  exec: Kysely<InternalSchema>, records: FacilityRecord[],
+): Promise<FacilityRecord[]> {
+  const wanted = records.filter((r) => r.facilitySystem && r.facilityCode);
+  if (wanted.length === 0) return records;
+
+  // Grouped by system, then ONE `code in (...)` per system.
+  //
+  // ⛔ NOT an OR of `(system = ? and code = ?)` pairs — that was the first shape here and it 500s: a
+  // 2001-row register builds a 2001-term OR that pg-mem cannot evaluate, and on real Postgres it is
+  // an unindexable mess. A register import carries exactly one system, so this is one query with one
+  // IN list, which the `(facility_system, facility_code)` index serves directly.
+  const bySystem = new Map<string, FacilityRecord[]>();
+  for (const r of wanted) {
+    const key = r.facilitySystem as string;
+    const list = bySystem.get(key);
+    if (list) list.push(r); else bySystem.set(key, [r]);
+  }
+
+  const remap = new Map<string, string>();
+  for (const [system, group] of bySystem) {
+    for (const part of chunk(group, CHUNK)) {
+      const rows = await exec
+        .selectFrom('facility_registry')
+        .select(['id', 'facility_code'])
+        .where('facility_system', '=', system)
+        .where('facility_code', 'in', part.map((r) => r.facilityCode as string))
+        .execute();
+      const byCode = new Map(rows.map((r) => [r.facility_code as string, r.id]));
+      for (const r of part) {
+        const existing = byCode.get(r.facilityCode as string);
+        // Only a DIFFERENT id is worth recording. The common case — an imported row keyed by the same
+        // derivation the parser just used — needs no remapping at all.
+        if (existing !== undefined && existing !== r.id) remap.set(r.id, existing);
+      }
+    }
+  }
+  if (remap.size === 0) return records;
+  return records.map((r) => (remap.has(r.id) ? { ...r, id: remap.get(r.id) as string } : r));
+}
+
 async function loadExisting(
   exec: Kysely<InternalSchema>, ids: string[],
 ): Promise<Map<string, ExistingFacility>> {
@@ -445,11 +508,10 @@ async function loadExisting(
     for (const r of rows) {
       out.set(r.id, {
         id: r.id,
-        localCode: r.local_code,
         extras: (r.extras as Record<string, unknown> | null) ?? null,
         source: r.source as 'manual' | 'import',
         fields: {
-          nationalSystem: r.national_system, nationalCode: r.national_code, name: r.name,
+          facilitySystem: r.facility_system, facilityCode: r.facility_code, name: r.name,
           level: r.level, ownership: r.ownership, status: r.status, country: r.country,
           zone: r.zone, region: r.region, district: r.district, council: r.council,
           ward: r.ward, village: r.village, addressText: r.address_text, phone: r.phone,
@@ -463,7 +525,7 @@ async function loadExisting(
 }
 
 const sampleOf = (r: FacilityRecord): FacilitySample =>
-  ({ id: r.id, nationalCode: r.nationalCode ?? null, name: r.name });
+  ({ id: r.id, nationalCode: r.facilityCode ?? null, name: r.name });
 
 /** Fold the classified rows into the counts and bounded samples the result reports. Shared by both
  *  return paths below, so the preview's numbers and the apply's are produced by the same code —
@@ -683,8 +745,8 @@ export async function importFacilities(
   const conflictsEvaluated = previewedAt !== null;
 
   // A row this query returns from `facility_registry`, shaped into a `FacilitySample`.
-  const toSample = (r: { id: string; national_code: string | null; name: string }): FacilitySample =>
-    ({ id: r.id, nationalCode: r.national_code, name: r.name });
+  const toSample = (r: { id: string; facility_code: string | null; name: string }): FacilitySample =>
+    ({ id: r.id, nationalCode: r.facility_code, name: r.name });
 
   // ⛔ A declared deletion is a PUBLISHER FACT, matched against what this registry actually holds for
   // THIS `nationalSystem` — a deletion record naming a facility we never had is not a retirement (it
@@ -693,9 +755,9 @@ export async function importFacilities(
   // a deletion line carries no `nationalSystem` of its own to feed `idFor` with, only the code.
   const deletedMatches = deletions.length === 0 ? [] : await deps.db
     .selectFrom('facility_registry')
-    .select(['id', 'national_code', 'name'])
-    .where('national_system', '=', opts.nationalSystem)
-    .where('national_code', 'in', deletions)
+    .select(['id', 'facility_code', 'name'])
+    .where('facility_system', '=', opts.nationalSystem)
+    .where('facility_code', 'in', deletions)
     .execute();
   const deletedIds = deletedMatches.map((r) => r.id);
 
@@ -728,8 +790,8 @@ export async function importFacilities(
   const excludedFromAbsence = [...ids, ...deletedIds];
   const absentRows = (!opts.completeRelease || records.length === 0) ? null : await deps.db
     .selectFrom('facility_registry')
-    .select(['id', 'national_code', 'name'])
-    .where('national_system', '=', opts.nationalSystem)
+    .select(['id', 'facility_code', 'name'])
+    .where('facility_system', '=', opts.nationalSystem)
     // Never empty on this branch: `records.length > 0` ⇒ `ids.length > 0` ⇒ this is non-empty. (The
     // `['']` placeholder that used to guard an empty list here is gone with the guard that made it
     // reachable — keeping it would only preserve the shape of the bug.)
@@ -795,9 +857,14 @@ export async function importFacilities(
     // NO ordinary rows at all, but still has real writing to do. Without the `retiredIds` half of this
     // condition such a file would take this read-only shortcut on every `apply: true` call and never
     // retire anything.
-    const existing = records.length === 0 ? new Map<string, ExistingFacility>() : await loadExisting(deps.db, ids);
+    // Re-keyed FIRST, so a dry run's create/changed counts describe what an apply would actually do.
+    // Without this a hand-registered facility previews as `create` and then applies as `changed`.
+    const previewRecords = records.length === 0 ? records : await resolveIdsByPair(deps.db, records);
+    const existing = previewRecords.length === 0
+      ? new Map<string, ExistingFacility>()
+      : await loadExisting(deps.db, previewRecords.map((r) => r.id));
     return resultOf(
-      classifyFacilityRows(records, existing, { previewedAt }),
+      classifyFacilityRows(previewRecords, existing, { previewedAt }),
       // ⛔ `retired: 0` on a DRY RUN even when `retiredIds` is non-empty. A preview REPORTS the
       // retirable populations (`deleted`/`absent`) and performs none of it — `written` describes
       // mutations that happened, and on this branch none did.
@@ -821,7 +888,14 @@ export async function importFacilities(
     // (see the docblock above) — and it fetches whole rows, not just id, because `classifyFacilityRows`
     // both COMPARES the parser's columns against them and MERGES local_code/extras forward off them,
     // rather than overwriting those with the importer's blanks.
-    existingById = await loadExisting(trx, ids);
+    // ⛔ Re-key BEFORE anything id-keyed runs, and inside this transaction — a lookup before it
+    // opened would let a concurrent create slip between the lookup and the write. `keyed`/
+    // `keyedIds` replace `records`/`ids` for the rest of this transaction: classification, the
+    // `in_register` membership write, and the retirement id set all key on id, and a remap
+    // applied to only some of them would mark the wrong rows.
+    const keyed = await resolveIdsByPair(trx, records);
+    const keyedIds = keyed.map((r) => r.id);
+    existingById = await loadExisting(trx, keyedIds);
 
     // The merge for what the importer is NOT authoritative for (see the docblock above) lives inside
     // `classifyFacilityRows` now, and each row's `.merged` is exactly what the statement below
@@ -829,7 +903,7 @@ export async function importFacilities(
     // step used to also feed a content_hash logged into reference_change_log via
     // `contentHashOf`/`hashOf`; both were removed as dead code once facilities-phase-0 Task 1
     // suspended that capture — see the "SUSPENDED" docblock section above.)
-    classified = classifyFacilityRows(records, existingById, { previewedAt });
+    classified = classifyFacilityRows(keyed, existingById, { previewedAt });
 
     // ⛔ `unchanged` rows are NOT written — which is what lets `written.updated` be believed. The old
     // code wrote every parsed row and counted every pre-existing one as `updated`, so a byte-identical
@@ -932,8 +1006,8 @@ export async function importFacilities(
     //
     // Chunked on the same `CHUNK` bound `loadExisting` uses, for the same reason: a national release is
     // 13 000+ ids and an unbounded `WHERE id IN (...)` is a parameter-count hazard, not a style choice.
-    if (ids.length > 0) {
-      for (const idChunk of chunk(ids, CHUNK)) {
+    if (keyedIds.length > 0) {
+      for (const idChunk of chunk(keyedIds, CHUNK)) {
         await trx.updateTable('facility_registry')
           .set({ register_state: FACILITY_REGISTER_STATE_IN_REGISTER, updated_at: sql`now()` })
           .where('id', 'in', idChunk)
@@ -1078,7 +1152,7 @@ export async function importFacilities(
           // and provenance never moved at all.
           const before = existing
             ? {
-              id: existing.id, localCode: existing.localCode, extras: existing.extras,
+              id: existing.id, extras: existing.extras,
               source: existing.source, ...existing.fields,
             }
             : null;

@@ -43,7 +43,11 @@ export interface FacilityRegisterSourceStore {
  *  show the operator. No third state — a caller that got `ok: false` has nothing to import against. */
 export type FacilityRegisterImportGate =
   | { ok: true; source: FacilityRegisterSource }
-  | { ok: false; error: string };
+  /** `reason` lets a caller PHRASE the refusal for its own surface while this function stays the one
+   *  place that DECIDES it. The import doors use `error` verbatim; the facility routes say "assigned
+   *  to" rather than "imported against", because an operator editing one facility is not importing.
+   *  Measured: the import wording reached the Edit sheet and read as a non-sequitur. */
+  | { ok: false; reason: 'unknown-register' | 'deactivated-register'; error: string };
 
 /**
  * ⛔ THE REFUSAL THIS SLICE EXISTS FOR, and the reason it lives here rather than in a route file.
@@ -88,6 +92,7 @@ export async function resolveFacilityRegisterForImport(
     // driving the upload API, and only one of those has a "create a register" button.
     return {
       ok: false,
+      reason: 'unknown-register',
       error: `"${nationalSystem}" is not a known facility register; a facility register with that `
         + 'canonical URI must exist on this install before facilities can be imported against it',
     };
@@ -100,6 +105,7 @@ export async function resolveFacilityRegisterForImport(
   if (!source.active) {
     return {
       ok: false,
+      reason: 'deactivated-register',
       error: `"${nationalSystem}" names a facility register that has been deactivated; `
         + 'facilities cannot be imported against a deactivated register',
     };

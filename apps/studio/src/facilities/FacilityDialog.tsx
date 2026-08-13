@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import {
   createFacility, updateFacility, listPublishedForms, getForm, listFacilityImportSources, getFacilityHistory,
+  fetchLabIdentity,
   type Facility, type FacilityRegisterSource,
 } from '@/api';
 import { FormRuntime } from '@/forms-runtime/FormRuntime';
@@ -120,6 +121,9 @@ export function FacilityDialog({ open, onOpenChange, facility, onSaved }: Facili
   // (so the panel can tell "still loading" from "genuinely never imported" without a separate
   // loading flag).
   const [registerSources, setRegisterSources] = useState<FacilityRegisterSource[]>([]);
+  /** `lab.facilitySystem` — the register this installation's facilities belong to, set once in
+   *  Settings ▸ Laboratory. Empty string when unset, which simply means no pre-fill. */
+  const [defaultSystem, setDefaultSystem] = useState('');
   const [lastImportAt, setLastImportAt] = useState<string | null | undefined>(undefined);
 
   // Deliberately NOT inside the edit-only effect below: the register list also feeds the
@@ -132,6 +136,10 @@ export function FacilityDialog({ open, onOpenChange, facility, onSaved }: Facili
     listFacilityImportSources()
       .then((sources) => { if (!cancelled) setRegisterSources(sources); })
       .catch(() => { if (!cancelled) setRegisterSources([]); });
+    // A failure here just means no pre-fill — never a blocked sheet.
+    fetchLabIdentity()
+      .then((r) => { if (!cancelled) setDefaultSystem(r.values['lab.facilitySystem'] ?? ''); })
+      .catch(() => { if (!cancelled) setDefaultSystem(''); });
     return () => { cancelled = true; };
   }, [open]);
 
@@ -152,14 +160,14 @@ export function FacilityDialog({ open, onOpenChange, facility, onSaved }: Facili
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, isEdit, facility?.id]);
 
-  // The `fld-fac-national-system` field (migration 085) names a REGISTERED facility register by its
-  // canonical URI. Fed from the same `registerSources` fetch the provenance panel already makes,
+  // The `fld-fac-system` field (migration 087) names a REGISTERED facility register by its canonical
+  // URI. Fed from the same `registerSources` fetch the provenance panel already makes,
   // not a second request. Declared here, below that state, rather than beside the hook it spreads.
   //
-  // ⚠ `SuggestionState.options` is `string[]` — values, no labels — so this offers each register's
-  // canonical URI rather than its friendly name. Honest (the URI is what is stored, and what the
-  // server matches EXACTLY) but not pretty; showing a name means widening `SuggestionState` and
-  // `SuggestCombobox`, which is deliberately out of this slice.
+  // The list shows each register's NAME while storing its canonical URI — `optionLabels`. The URI is
+  // what `idFor` hashes into every facility's permanent id, so it has to be the stored value, but an
+  // operator should be choosing "Zambia MFL", not typing `urn:zm:mfl`. Typing a URI by hand is how
+  // one register earns two identities.
   //
   // The list is convenience, never the gate: POST resolves whatever is submitted through
   // `resolveFacilityRegisterForImport` and refuses an unregistered or deactivated register. That is
@@ -167,7 +175,11 @@ export function FacilityDialog({ open, onOpenChange, facility, onSaved }: Facili
   // move the refusal earlier without making it any softer.
   const suggestionsWithRegisters: FieldSuggestions = {
     ...fieldSuggestions,
-    'fld-fac-national-system': { status: 'ready', options: registerSources.map((s) => s.url) },
+    'fld-fac-system': {
+      status: 'ready',
+      options: registerSources.map((s) => s.url),
+      optionLabels: Object.fromEntries(registerSources.map((s) => [s.url, s.name])),
+    },
   };
 
   const matchedRegisterSource = facility?.nationalSystem
@@ -220,7 +232,11 @@ export function FacilityDialog({ open, onOpenChange, facility, onSaved }: Facili
         setSchema(loaded);
         setFormDefId(def.id);
         if (facility) setInitialAnswers(seedAnswers(loaded, facility));
-        else setInitialAnswers({});
+        // On CREATE, pre-fill the register from `lab.facilitySystem` (Settings ▸ Laboratory). The
+        // operator states their register once for the installation instead of retyping a URI per
+        // facility — and a URI retyped is a URI mistyped, which `idFor` would hash into a second
+        // permanent identity for the same register.
+        else setInitialAnswers(defaultSystem ? { 'fld-fac-system': defaultSystem } : {});
       })
       .catch((e: unknown) => {
         if (!cancelled) setError(e instanceof Error ? e.message : String(e));

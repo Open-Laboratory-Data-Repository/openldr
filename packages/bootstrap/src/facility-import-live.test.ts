@@ -91,7 +91,7 @@ live('importFacilities against real Postgres', () => {
       const row = await db
         .selectFrom('facility_registry')
         .select('updated_at')
-        .where('national_system', '=', system)
+        .where('facility_system', '=', system)
         .executeTakeFirstOrThrow();
       const stalePreviewedAt = new Date(new Date(row.updated_at).getTime() - 1000);
 
@@ -104,11 +104,11 @@ live('importFacilities against real Postgres', () => {
       const after = await db
         .selectFrom('facility_registry')
         .select('latitude')
-        .where('national_system', '=', system)
+        .where('facility_system', '=', system)
         .executeTakeFirstOrThrow();
       expect(after.latitude).toBe(-2.4048);
     } finally {
-      await db.deleteFrom('facility_registry').where('national_system', '=', system).execute();
+      await db.deleteFrom('facility_registry').where('facility_system', '=', system).execute();
     }
   }, 120_000);
 });

@@ -4,7 +4,11 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { LoadingState } from '@/components/ui/spinner';
-import { fetchLabIdentity, saveLabIdentity, type LabIdentity, type LabIdentityResponse } from '@/api';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  fetchLabIdentity, saveLabIdentity, listFacilityImportSources,
+  type LabIdentity, type LabIdentityResponse, type FacilityRegisterSource,
+} from '@/api';
 
 const LOGO_KEY = 'lab.logo';
 
@@ -27,6 +31,10 @@ export function Laboratory(): JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  // The registers this install knows about — the only values the facility-system picker may offer.
+  // Active-only, matching the import sheet's own picklist: offering a deactivated register here
+  // would let Settings hand the Facility form a value the route then refuses.
+  const [registers, setRegisters] = useState<FacilityRegisterSource[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -36,6 +44,16 @@ export function Laboratory(): JSX.Element {
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [t]);
+
+  useEffect(() => {
+    let cancelled = false;
+    // A failure here degrades the picker to an empty list, never the whole page: the letterhead
+    // fields have nothing to do with facility registers.
+    void listFacilityImportSources()
+      .then((rows) => { if (!cancelled) setRegisters(rows); })
+      .catch(() => { if (!cancelled) setRegisters([]); });
+    return () => { cancelled = true; };
+  }, []);
 
   const set = (key: string, value: string) => {
     setValues((v) => ({ ...v, [key]: value }));
@@ -98,7 +116,24 @@ export function Laboratory(): JSX.Element {
 
       <div className="grid grid-cols-[10rem_1fr] items-center gap-x-4 gap-y-3">
         {meta.fields.filter((f) => f.id !== LOGO_KEY).map((f) => (
-          f.multiline ? (
+          /* ⛔ A PICKER, never a text box. `idFor` hashes this register's URI into every facility's
+             permanent id WITHOUT normalising it, so a typed label ('HFR' vs 'hfr') mints a second
+             identity for one register — the defect migration 082 had to clean up. Only a register
+             that already exists on this install can be chosen. */
+          f.source === 'facility-registers' ? (
+            <FieldRow key={f.id} id={f.id} label={t(f.labelKey)}>
+              <Select value={values[f.id] ?? ''} onValueChange={(v) => set(f.id, v)}>
+                <SelectTrigger id={f.id} aria-label={t(f.labelKey)} className="h-8 text-xs">
+                  <SelectValue placeholder={t('settings.laboratory.facilitySystemPlaceholder')} />
+                </SelectTrigger>
+                <SelectContent>
+                  {registers.map((r) => (
+                    <SelectItem key={r.url} value={r.url}>{r.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FieldRow>
+          ) : f.multiline ? (
             <FieldRow key={f.id} id={f.id} label={t(f.labelKey)} alignTop>
               <Textarea id={f.id} aria-label={t(f.labelKey)} value={values[f.id] ?? ''}
                 onChange={(e) => set(f.id, e.target.value)} className="min-h-[64px] text-xs" />

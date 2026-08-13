@@ -134,9 +134,10 @@ export async function seedRegistry(deps: ReconcileDeps, input: SeedRegistryInput
   await store.upsert({
     id: input.id,
     name: input.name,
-    localCode: input.localCode ?? null,
-    nationalSystem: input.nationalSystem ?? null,
-    nationalCode: input.nationalCode ?? null,
+    // One code now (migration 086/088). The fixture still accepts the old input names so callers
+    // read naturally — `localCode` for a registerless facility, `nationalCode` with a system.
+    facilityCode: input.nationalCode ?? input.localCode ?? null,
+    facilitySystem: input.nationalSystem ?? null,
     region: input.region ?? null,
     district: input.district ?? null,
     council: input.council ?? null,

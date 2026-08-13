@@ -964,7 +964,10 @@ export function Facilities() {
                     className={canEdit ? 'cursor-pointer transition-colors hover:bg-[rgba(70,130,180,0.08)]' : undefined}
                     onClick={canEdit ? () => setEditing(f) : undefined}
                   >
-                    <TableCell className="text-xs">{f.localCode ?? f.nationalCode ?? '—'}</TableCell>
+                    {/* One code, no fallback. `localCode ?? nationalCode` lived here, and it is what
+                        let this column show a code the Edit sheet could not bind — the defect this
+                        whole arc started from. */}
+                    <TableCell className="text-xs">{f.facilityCode ?? '—'}</TableCell>
                     <TableCell className="text-xs">{f.name}</TableCell>
                     <TableCell className="text-xs">{f.region ?? '—'}</TableCell>
                     <TableCell className="text-xs">{f.district ?? '—'}</TableCell>

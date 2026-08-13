@@ -1,9 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { makeMigratedDb } from './test-helpers';
+// ⛔ Migrated only as far as this migration's own era. Migration 088 drops `local_code`,
+// `national_code` and `national_system`; this migration predates that and reads them. Running
+// the FULL list first would test it against a schema that never existed when it shipped.
+import { makeMigratedDbUpTo } from './test-helpers';
 
 describe('070_facility_registry', () => {
   it('creates a registry row identified by a local code alone', async () => {
-    const db = await makeMigratedDb();
+    const db = await makeMigratedDbUpTo('070_facility_registry');
     await db.insertInto('facility_registry' as never).values({
       id: 'f1', local_code: 'LAB01', name: 'Bahebe Health Laboratory', source: 'manual',
     } as never).execute();
@@ -16,7 +19,7 @@ describe('070_facility_registry', () => {
   });
 
   it('creates a registry row identified by a national code alone', async () => {
-    const db = await makeMigratedDb();
+    const db = await makeMigratedDbUpTo('070_facility_registry');
     await db.insertInto('facility_registry' as never).values({
       id: 'f2', national_system: 'urn:tz:hfr', national_code: '122023-5',
       name: 'BAHEBE HEALTH LABORATORY', source: 'import', managed_origin: 'central',
@@ -27,7 +30,7 @@ describe('070_facility_registry', () => {
   });
 
   it('REJECTS a row carrying neither code — a facility must be identifiable somehow', async () => {
-    const db = await makeMigratedDb();
+    const db = await makeMigratedDbUpTo('070_facility_registry');
     await expect(db.insertInto('facility_registry' as never).values({
       id: 'f3', name: 'Nameless', source: 'manual',
     } as never).execute()).rejects.toThrow();

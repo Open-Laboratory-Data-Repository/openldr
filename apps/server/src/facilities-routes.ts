@@ -661,6 +661,23 @@ function changedCoreKeys(record: Partial<FacilityRecord>, before: FacilityRecord
 //
 // POST passes no `before` — there is nothing to have changed FROM, so every submitted value is
 // checked, exactly as before.
+/**
+ * The register gate's refusal, phrased for a FACILITY being assigned to a register rather than a
+ * file being imported against one.
+ *
+ * `resolveFacilityRegisterForImport` stays the single place that DECIDES; this only re-phrases. Its
+ * own wording ends "before facilities can be imported against it", which reached the Edit sheet and
+ * read as a non-sequitur — the operator was editing one facility, not importing anything.
+ *
+ * The remedy is named, because "not a known register" without one leaves an operator stuck: registers
+ * are minted from the Import facilities sheet, and nowhere else.
+ */
+function registerRefusal(gate: { reason: 'unknown-register' | 'deactivated-register'; error: string }, system: string): string {
+  return gate.reason === 'unknown-register'
+    ? `"${system}" is not a known facility register on this install. Add it under Facilities → Import facilities before assigning a facility to it.`
+    : `"${system}" names a facility register that has been deactivated; a facility cannot be assigned to it.`;
+}
+
 async function controlledFieldsError(
   ctx: AppContext, record: Partial<FacilityRecord>, before?: FacilityRecord,
 ): Promise<{ error: string } | undefined> {
@@ -675,7 +692,7 @@ async function controlledFieldsError(
   // up under (`observedFieldSystem`) — it never decides pass/fail here, since `mapped` and
   // `unmapped` are refused identically below. An absent one (the common manual-entry case) is a
   // valid, deterministic namespace of its own, not an error.
-  const nationalSystem = typeof record.nationalSystem === 'string' ? record.nationalSystem : '';
+  const nationalSystem = typeof record.facilitySystem === 'string' ? record.facilitySystem : '';
   const res = await resolveControlledFields(ctx.terminology.admin, nationalSystem, [record as FacilityRecord]);
 
   const badField = submitted.find((field) => res.mapped[field].size > 0 || res.unmapped[field].length > 0);
@@ -1179,12 +1196,12 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       .where('is_active', '=', true)
       .execute();
 
-    const nationalMappings = (facility.nationalSystem != null && facility.nationalCode != null)
+    const nationalMappings = (facility.facilitySystem != null && facility.facilityCode != null)
       ? await deps.internalDb
           .selectFrom('term_mappings')
           .select(['from_code'])
-          .where('to_system', '=', facility.nationalSystem)
-          .where('to_code', '=', facility.nationalCode)
+          .where('to_system', '=', facility.facilitySystem)
+          .where('to_code', '=', facility.facilityCode)
           .where('is_active', '=', true)
           .execute()
       : [];
@@ -1277,9 +1294,12 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     const name = typeof record.name === 'string' ? record.name : '';
     if (!name) { reply.code(400); return { error: 'name is required' }; }
 
-    if (record.localCode == null && record.nationalCode == null) {
+    // One code, and it is required. The old rule was "a local code OR a national code", an OR across
+    // two nullable columns that `facility_registry_has_a_code` enforced and no single form field
+    // could express. Migration 088 replaced it with a NOT NULL.
+    if (record.facilityCode == null || String(record.facilityCode).trim() === '') {
       reply.code(400);
-      return { error: 'a facility must have a local code or a national code' };
+      return { error: 'a facility must have a facility code' };
     }
 
     // A create must be COMPLETE — every required field, not just the ones this submission moved.
@@ -1304,8 +1324,12 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     //
     // No national code means nothing to hash, so the random id stands — the same case 082 leaves
     // alone rather than inventing an identity for.
-    const nationalSystem = typeof record.nationalSystem === 'string' ? record.nationalSystem.trim() : '';
-    const nationalCode = typeof record.nationalCode === 'string' ? record.nationalCode.trim() : '';
+    // `facilitySystem`/`facilityCode` are authoritative (migration 086); the deprecated pair is the
+    // fallback while the seeded form still carries it. A later stage drops the fallback with the
+    // columns.
+    const str = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
+    const nationalSystem = str(record.facilitySystem);
+    const nationalCode = str(record.facilityCode);
     // Annotated `string`, not inferred: `randomUUID()` returns the narrow
     // `${string}-${string}-...` template-literal type, which `idFor`'s plain string cannot be
     // assigned to.
@@ -1316,7 +1340,7 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       // mints two identities for one register. See `resolveFacilityRegisterForImport` (@openldr/db)
       // for the full defect. Doors that disagree about what a register is put the fork straight back.
       const register = await resolveFacilityRegisterForImport(registerSources, nationalSystem);
-      if (!register.ok) { reply.code(400); return { error: register.error }; }
+      if (!register.ok) { reply.code(400); return { error: registerRefusal(register, nationalSystem) }; }
       id = idFor(nationalSystem, nationalCode);
       // ⛔ `facilityRegistry.upsert` is `onConflict('id').doUpdateSet(...)`
       // (packages/db/src/facility-registry-store.ts). That was harmless while every created id was
@@ -1451,35 +1475,39 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     const nulls: Record<string, null> = {};
     for (const key of cleared) nulls[key] = null;
 
-    // `facility_registry_has_a_code`: at least one of local/national code must survive the clear.
-    const effectiveLocalCode = cleared.has('localCode') ? null : (record.localCode ?? before.localCode);
-    const effectiveNationalCode = cleared.has('nationalCode') ? null : (record.nationalCode ?? before.nationalCode);
-    if (effectiveLocalCode == null && effectiveNationalCode == null) {
+    // `facility_code` is NOT NULL (migration 088), so an edit may never clear it away.
+    const effectiveCode = cleared.has('facilityCode') ? null : (record.facilityCode ?? before.facilityCode);
+    if (effectiveCode == null || String(effectiveCode).trim() === '') {
       reply.code(400);
-      return { error: 'a facility must have a local code or a national code' };
+      return { error: 'a facility must have a facility code' };
     }
 
-    // ⛔ The national code and its register are this row's IDENTITY, not two more editable columns:
-    // the importer derives `id = fac-sha256(nationalSystem|nationalCode)` (`idFor`,
-    // packages/terminology/src/facility-csv.ts) and this handler updates BY id without re-deriving
-    // it. An edit that moved either value would leave the row filed under an id its own code no
-    // longer produces — the next import of that register would not find it, and would either
-    // collide on `facility_registry_national_unique` (migration 070) or insert a second row for the
-    // same facility.
+    // The refusal that used to live here — "a facility's national code cannot be changed" — is GONE,
+    // and its removal is the point of this stage rather than a relaxation.
     //
-    // Re-keying a live row is deliberately NOT attempted here: `facility_map.registry_id`,
-    // `facility_concept_projection`, and any mapping authored against the projected code all point
-    // at the id. That is its own slice. The accepted cost is that a facility created WITHOUT a
-    // national code can never acquire one — it must be deleted and registered again. A row that has
-    // neither value is unaffected: `changedCoreKeys` sees no change, so it stays freely editable.
+    // It existed because the importer matched rows by id alone, so moving a code left the row filed
+    // under an id its own code no longer produced and the next import could not find it. The importer
+    // now resolves by `(facility_system, facility_code)` first (`resolveIdsByPair`,
+    // packages/bootstrap/src/facility-import.ts), so a changed code reconciles on the next import
+    // without anything being re-keyed. The operator can correct a facility that was registered under
+    // the wrong code, and adopt one into a register it turns out to belong to — which is what they
+    // tried to do the first time they used the form.
+    //
+    // `changedCoreKeys` is still computed: the required-field check below is scoped by it.
     const identityChanged = changedCoreKeys(record, before);
-    if (identityChanged.has('nationalCode') || cleared.has('nationalCode')) {
-      reply.code(400);
-      return { error: "a facility's national code cannot be changed on an existing facility; it is part of the facility's identity" };
-    }
-    if (identityChanged.has('nationalSystem') || cleared.has('nationalSystem')) {
-      reply.code(400);
-      return { error: "a facility's facility register cannot be changed on an existing facility; it is part of the facility's identity" };
+
+    // The register gate, scoped to a CHANGE. Dropping the immutability refusal above must not also
+    // drop this: `idFor` hashes a system string without normalising it, so a typed label ('HFR' vs
+    // 'hfr') mints a second permanent identity for one register — the defect migration 082 had to
+    // clean up. Every other door already applies this gate; PUT is now a door.
+    //
+    // Scoped to a change, not to presence, for the reason the whole arc turns on: the Edit sheet
+    // resubmits every field it seeded, so gating on presence would refuse an unrelated edit to any
+    // facility whose system predates the register registry.
+    const submittedSystem = record.facilitySystem;
+    if (identityChanged.has('facilitySystem') && typeof submittedSystem === 'string' && submittedSystem !== '') {
+      const register = await resolveFacilityRegisterForImport(registerSources, submittedSystem);
+      if (!register.ok) { reply.code(400); return { error: registerRefusal(register, submittedSystem) }; }
     }
 
     // Required is enforced only for what this submission MOVED. `identityChanged`/`cleared` are
@@ -1602,8 +1630,7 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
 
     const { failedRegistryIds } = await reprojectAfterRegistryDelete(deps, {
       id,
-      localCode: before.localCode ?? null,
-      nationalCode: before.nationalCode ?? null,
+      facilityCode: before.facilityCode ?? null,
     });
 
     // Task 7's contract — "a failed projection is never only a console.error" — applied to this

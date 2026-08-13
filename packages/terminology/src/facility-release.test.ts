@@ -33,8 +33,8 @@ describe('parseFacilityRelease', () => {
     const r = parseFacilityRelease(`${metaLine()}\n${rowLine()}\n`, opts);
     expect(r.records).toHaveLength(1);
     expect(r.records[0]).toMatchObject({
-      nationalSystem: HFR,
-      nationalCode: 'TZ-000001',
+      facilitySystem: HFR,
+      facilityCode: 'TZ-000001',
       name: 'Uwanja Hospital',
       level: 'hospital',
       district: 'Handeni',

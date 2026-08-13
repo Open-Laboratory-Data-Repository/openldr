@@ -239,11 +239,11 @@ export interface ColumnExposurePolicyTable {
  *  the uncurated projection of ingested Organization/Location resources. */
 export interface FacilityRegistryTable {
   id: string;
-  /** OURS. Required at data entry, absent on a nationally-imported row. */
-  local_code: string | null;
-  national_system: string | null;
-  /** THEIRS. The only code an imported row carries. */
-  national_code: string | null;
+  /** The register this facility is listed in, by canonical URI. NULL for a facility in no register
+   *  at all — CE ships no default one (migration 086). Unique WITH `facility_code`. */
+  facility_system: string | null;
+  /** The code that register carries for this facility. NOT NULL since migration 088. */
+  facility_code: string;
   name: string;
   level: string | null;
   ownership: string | null;

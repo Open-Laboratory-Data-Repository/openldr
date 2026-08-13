@@ -501,6 +501,7 @@ function FieldControl({
           value={value != null ? String(value) : ''}
           onChange={(v) => onChange(v || undefined)}
           options={suggestion?.options ?? []}
+          optionLabels={suggestion?.optionLabels}
           status={suggestion?.status ?? 'ready'}
           error={suggestion?.error}
           placeholder={field.placeholder ?? suggestCopy?.placeholder}

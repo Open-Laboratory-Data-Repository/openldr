@@ -243,6 +243,8 @@ export const pt: EnShape = {
       address: 'Morada',
       contact: 'Contacto',
       logo: 'Logótipo',
+      facilitySystem: 'Registo de unidades',
+      facilitySystemPlaceholder: 'Selecionar um registo…',
       chooseLogo: 'Escolher ficheiro…',
       clearLogo: 'Limpar',
       save: 'Guardar',

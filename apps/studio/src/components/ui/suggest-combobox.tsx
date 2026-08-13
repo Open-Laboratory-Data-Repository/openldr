@@ -18,6 +18,14 @@ export interface SuggestComboboxProps {
   onChange: (value: string) => void;
   /** Candidate values to propose. Never constrains: any other typed value is accepted as-is. */
   options: string[];
+  /**
+   * Optional value → human label, for options whose VALUE is not readable.
+   *
+   * The facility register field stores a canonical URI (`urn:zm:mfl`) because `idFor` hashes exactly
+   * that string into every facility's permanent id — but an operator should be choosing "Zambia MFL".
+   * The label is display and search only; the value stored is always the option itself.
+   */
+  optionLabels?: Record<string, string>;
   /** Defaults to 'ready' so a caller that hasn't wired fetching yet still gets a usable field. */
   status?: SuggestStatus;
   error?: string | null;
@@ -49,7 +57,7 @@ export interface SuggestComboboxProps {
  * "select from a fixed list" interaction model doesn't fit free text.
  */
 export function SuggestCombobox({
-  id, value, onChange, options, status = 'ready', error = null,
+  id, value, onChange, options, optionLabels, status = 'ready', error = null,
   placeholder = 'Type or pick a suggestion…',
   loadingLabel = 'Loading suggestions…',
   noSuggestionsLabel = 'No suggestions',
@@ -60,10 +68,16 @@ export function SuggestCombobox({
   const [active, setActive] = useState(-1);
   const containerRef = useRef<HTMLDivElement>(null);
 
+  const labelOf = (o: string): string => optionLabels?.[o] ?? o;
+
   const filtered = useMemo(() => {
     const q = value.trim().toLowerCase();
-    return q ? options.filter((o) => o.toLowerCase().includes(q)) : options;
-  }, [options, value]);
+    if (!q) return options;
+    // Matches the LABEL as well as the value: an operator typing "zambia" is looking for the register
+    // they can see, not the URI underneath it.
+    return options.filter((o) => o.toLowerCase().includes(q) || labelOf(o).toLowerCase().includes(q));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [options, optionLabels, value]);
 
   useEffect(() => { setActive(-1); }, [filtered.length, open]);
 
@@ -141,7 +155,7 @@ export function SuggestCombobox({
               onMouseEnter={() => setActive(i)}
               className={`flex w-full items-center px-3 py-2 text-left text-sm transition-colors hover:bg-accent ${i === active ? 'bg-accent' : ''}`}
             >
-              <TruncatedText text={opt} className="min-w-0" />
+              <TruncatedText text={labelOf(opt)} className="min-w-0" />
             </button>
           ))}
         </div>

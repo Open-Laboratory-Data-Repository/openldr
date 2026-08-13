@@ -33,9 +33,9 @@ describe('facility-observed', () => {
     expect(row.status).toBe('ACTIVE');
   });
 
-  it('registryConceptRows keys the concept on local_code when present, displayed as name', () => {
+  it('registryConceptRows keys the concept on the facility code, displayed as name', () => {
     const [row] = registryConceptRows([
-      { id: 'fac-1', name: 'National Public Health Laboratory', localCode: '111317-4' },
+      { id: 'fac-1', name: 'National Public Health Laboratory', facilityCode: '111317-4' },
     ]);
     expect(row).toEqual({
       system: FACILITY_REGISTRY_SYSTEM,
@@ -46,30 +46,32 @@ describe('facility-observed', () => {
     });
   });
 
-  it('registryConceptRows falls back to national_code when local_code is absent', () => {
+  it('registryConceptRows falls back to the row id when there is no code at all', () => {
+    // There is no second code to fall back to any more (migration 086). A row without one is only
+    // reachable by assembling a RegistryRowForConcept by hand — a stored row always has a code.
     const [row] = registryConceptRows([
-      { id: 'fac-2', name: 'Muhimbili National Hospital', nationalCode: 'TZ-001' },
+      { id: 'fac-2', name: 'Muhimbili National Hospital' },
     ]);
-    expect(row.code).toBe('TZ-001');
+    expect(row.code).toBe('fac-2');
   });
 
-  // ⛔ The load-bearing collision guard. local_code is globally unique and (national_system,
-  // national_code) is unique as a PAIR — but nothing stops row A's local_code from equalling row B's
-  // national_code. Since concepts are keyed on (system, code) alone, a naive `localCode ?? nationalCode`
-  // would silently merge these two DIFFERENT facilities into ONE concept.
+  // ⛔ The load-bearing collision guard, and it SURVIVES the collapse to one code. `facility_code` is
+  // unique only WITHIN a `facility_system` (migration 086's paired index), so two facilities in two
+  // different registers can legitimately carry the same code. Concepts are keyed on (system, code)
+  // alone, so projecting both under that code would silently merge two DIFFERENT facilities into ONE.
   it('falls back to id for BOTH rows when their candidate codes collide, keeping them distinct', () => {
     const rows = registryConceptRows([
-      { id: 'fac-a', name: 'Facility A', localCode: 'X' },
-      { id: 'fac-b', name: 'Facility B', nationalCode: 'X' },
+      { id: 'fac-a', name: 'Facility A', facilityCode: 'X' },
+      { id: 'fac-b', name: 'Facility B', facilityCode: 'X' },
     ]);
     expect(rows.map((r) => r.code).sort()).toEqual(['fac-a', 'fac-b']);
   });
 
   it('a row whose candidate code is unique within the batch is unaffected by an unrelated collision elsewhere', () => {
     const rows = registryConceptRows([
-      { id: 'fac-a', name: 'Facility A', localCode: 'X' },
-      { id: 'fac-b', name: 'Facility B', nationalCode: 'X' },
-      { id: 'fac-c', name: 'Facility C', localCode: 'UNIQUE' },
+      { id: 'fac-a', name: 'Facility A', facilityCode: 'X' },
+      { id: 'fac-b', name: 'Facility B', facilityCode: 'X' },
+      { id: 'fac-c', name: 'Facility C', facilityCode: 'UNIQUE' },
     ]);
     const c = rows.find((r) => r.display === 'Facility C');
     expect(c?.code).toBe('UNIQUE');
@@ -77,16 +79,16 @@ describe('facility-observed', () => {
 
   it('opts.forceOwnIdFor forces a row to its own id even without an in-batch collision', () => {
     const [row] = registryConceptRows(
-      [{ id: 'fac-1', name: 'Solo Facility', localCode: 'SOLO' }],
+      [{ id: 'fac-1', name: 'Solo Facility', facilityCode: 'SOLO' }],
       { forceOwnIdFor: new Set(['fac-1']) },
     );
     expect(row.code).toBe('fac-1');
   });
 
-  it('registryPreferredCode prefers localCode, falls back to nationalCode, then null', () => {
-    expect(registryPreferredCode({ localCode: 'LC', nationalCode: 'NC' })).toBe('LC');
-    expect(registryPreferredCode({ nationalCode: 'NC' })).toBe('NC');
+  it('registryPreferredCode is the facility code, or null — there is no preference order left', () => {
+    expect(registryPreferredCode({ facilityCode: 'FC' })).toBe('FC');
     expect(registryPreferredCode({})).toBeNull();
+    expect(registryPreferredCode({ facilityCode: null })).toBeNull();
   });
 
   // The defect this fix closes: `0518e7d3` moved a row's concept `code` off its `id` onto its
@@ -98,19 +100,19 @@ describe('facility-observed', () => {
   describe('registryRowIdsWithSupersededIdConcept', () => {
     it('flags a row whose id-keyed concept is superseded by a now-usable preferred code', () => {
       const ids = registryRowIdsWithSupersededIdConcept([
-        { id: 'fac-1', name: 'National Public Health Laboratory', localCode: '111317-4' },
+        { id: 'fac-1', name: 'National Public Health Laboratory', facilityCode: '111317-4' },
       ]);
       expect(ids).toEqual(['fac-1']);
     });
 
-    // The collision-fallback case: the row's local_code differs from its id (so it is NOT the
-    // "both columns null" case, which the CHECK constraint makes impossible for a real row), but
-    // colliding with another row forces THIS row's projected code back to its own id anyway — so
-    // there is nothing superseded. Deleting here would destroy the row's ONLY concept.
+    // The collision-fallback case: the row's facility_code differs from its id (so it is NOT the
+    // "no code at all" case, which a stored row cannot be), but colliding with another row forces
+    // THIS row's projected code back to its own id anyway — so there is nothing superseded. Deleting
+    // here would destroy the row's ONLY concept.
     it('does not flag a row whose candidate code collides and falls back to its own id', () => {
       const rows = [
-        { id: 'fac-a', name: 'Facility A', localCode: 'X' },
-        { id: 'fac-b', name: 'Facility B', nationalCode: 'X' },
+        { id: 'fac-a', name: 'Facility A', facilityCode: 'X' },
+        { id: 'fac-b', name: 'Facility B', facilityCode: 'X' },
       ];
       expect(registryRowIdsWithSupersededIdConcept(rows)).toEqual([]);
     });
@@ -119,7 +121,7 @@ describe('facility-observed', () => {
     // determination — a row forced to its own id by a collision discovered outside the batch is
     // exactly as un-superseded as an in-batch collision.
     it('does not flag a row forced to its own id via opts.forceOwnIdFor', () => {
-      const rows = [{ id: 'fac-1', name: 'Solo Facility', localCode: 'SOLO' }];
+      const rows = [{ id: 'fac-1', name: 'Solo Facility', facilityCode: 'SOLO' }];
       expect(
         registryRowIdsWithSupersededIdConcept(rows, { forceOwnIdFor: new Set(['fac-1']) }),
       ).toEqual([]);
@@ -127,8 +129,8 @@ describe('facility-observed', () => {
 
     it('returns ids only for rows actually passed in, never inventing one', () => {
       const rows = [
-        { id: 'fac-1', name: 'National Public Health Laboratory', localCode: '111317-4' },
-        { id: 'fac-2', name: 'Muhimbili National Hospital', nationalCode: 'TZ-001' },
+        { id: 'fac-1', name: 'National Public Health Laboratory', facilityCode: '111317-4' },
+        { id: 'fac-2', name: 'Muhimbili National Hospital', facilityCode: 'TZ-001' },
       ];
       expect(registryRowIdsWithSupersededIdConcept(rows).sort()).toEqual(['fac-1', 'fac-2']);
     });

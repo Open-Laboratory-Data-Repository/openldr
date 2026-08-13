@@ -17,6 +17,9 @@ import type { FacilityRecord } from './facility-registry-store';
  * the next down-sync.
  */
 export const CORE_FACILITY_KEYS: ReadonlySet<string> = new Set([
+  // `facilityCode`/`facilitySystem` supersede the local/national pair (migration 086). All five are
+  // accepted while the transition runs; the deprecated three go with the columns.
+  'facilityCode', 'facilitySystem',
   'localCode', 'nationalCode', 'nationalSystem', 'name', 'level', 'ownership', 'status',
   'country', 'zone', 'region', 'district', 'council', 'ward', 'village',
   'addressText', 'phone', 'latitude', 'longitude',

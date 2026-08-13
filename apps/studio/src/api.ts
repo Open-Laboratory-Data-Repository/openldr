@@ -442,7 +442,15 @@ export const setFeatureFlag = (key: string, value: boolean): Promise<{ key: stri
 /** The issuing lab's letterhead identity, keyed by its `lab.*` app_settings keys. */
 export type LabIdentity = Record<string, string>;
 
-export interface LabIdentityField { id: string; labelKey: string; multiline: boolean }
+export interface LabIdentityField {
+  id: string;
+  labelKey: string;
+  multiline: boolean;
+  /** Present when the field must be PICKED from a list rather than typed — today only
+   *  `facility-registers`. See `LAB_IDENTITY_FIELDS` (@openldr/config) for why free text is unsafe
+   *  for a register URI. */
+  source?: 'facility-registers';
+}
 /** Field definitions come FROM the server: `@openldr/config` re-exports an env loader that reads
  *  process.env, so studio cannot import the registry (same reason feature flags work this way). */
 export interface LabIdentityResponse {
@@ -746,10 +754,15 @@ export const forceUserLogout = (id: string): Promise<void> =>
 // verbatim by GET/POST/PUT /api/facilities.
 export interface Facility {
   id: string;
-  /** OURS — required at data entry, absent on a nationally-imported row. */
+  /** The register this facility is listed in, by canonical URI. With `facilityCode`, its identity. */
+  facilitySystem: string | null;
+  /** The code that register carries for it. */
+  facilityCode: string | null;
+  /** @deprecated Superseded by `facilityCode` (migration 086); still served through the transition. */
   localCode: string | null;
+  /** @deprecated Superseded by `facilitySystem`. */
   nationalSystem: string | null;
-  /** THEIRS — the only code an imported row carries. */
+  /** @deprecated Superseded by `facilityCode`. */
   nationalCode: string | null;
   name: string;
   level: string | null;
@@ -1534,10 +1547,9 @@ export interface ObservedFacility {
   sourceDistrict: string | null;
   reportCount: number;
   registryId: string | null;
-  /** `facility_registry.local_code` of the resolved row — OURS, distinct from `nationalCode`
-   *  (THEIRS). Disambiguates similarly-named facilities (e.g. "Dodoma Regional Referral" vs
-   *  "Dodoma Zonal Lab"). */
-  localCode: string | null;
+  /** `facility_registry.facility_code` of the resolved row. Disambiguates similarly-named facilities
+   *  (e.g. "Dodoma Regional Referral" vs "Dodoma Zonal Lab"). */
+  facilityCode: string | null;
   name: string | null;
   level: string | null;
   status: string | null;

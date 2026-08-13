@@ -675,8 +675,8 @@ describe('terminology admin store', () => {
 
     async function seedFacility(db: Kysely<InternalSchema>, id: string, nationalSystem: string, nationalCode: string): Promise<void> {
       await db.insertInto('facility_registry').values({
-        id, name: 'Alpha Hospital', local_code: null,
-        national_system: nationalSystem, national_code: nationalCode, source: 'import',
+        id, name: 'Alpha Hospital',
+        facility_system: nationalSystem, facility_code: nationalCode, source: 'import',
       } as never).execute();
     }
 
@@ -725,7 +725,7 @@ describe('terminology admin store', () => {
       await seedFacility(db, 'fac-1', REGISTER_URL, '100');
       // Guard against a trivially-passing "still works" test: the setup above must really put a
       // facility under this register, or the url guard would never be reached at all.
-      const filed = await db.selectFrom('facility_registry').selectAll().where('national_system', '=', REGISTER_URL).execute();
+      const filed = await db.selectFrom('facility_registry').selectAll().where('facility_system', '=', REGISTER_URL).execute();
       expect(filed).toHaveLength(1);
 
       const updated = await s.codingSystems.update(id, {
@@ -746,7 +746,7 @@ describe('terminology admin store', () => {
       // refuse the url change, so this is not a trivially-passing "still works" test.
       const sys = await s.codingSystems.create({ systemCode: 'X', systemName: 'X', url: REGISTER_URL, active: true, publisherId: null });
       await seedFacility(db, 'fac-1', REGISTER_URL, '100');
-      const filed = await db.selectFrom('facility_registry').selectAll().where('national_system', '=', REGISTER_URL).execute();
+      const filed = await db.selectFrom('facility_registry').selectAll().where('facility_system', '=', REGISTER_URL).execute();
       expect(filed).toHaveLength(1);
       const kind = await db.selectFrom('coding_systems').select(['kind']).where('id', '=', sys.id).executeTakeFirstOrThrow();
       expect(kind.kind).not.toBe(FACILITY_REGISTER_KIND);

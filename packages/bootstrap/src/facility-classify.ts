@@ -5,7 +5,6 @@ export type FacilityChangeKind = 'create' | 'changed' | 'unchanged' | 'conflict'
 
 export interface ExistingFacility {
   id: string;
-  localCode: string | null;
   extras: Record<string, unknown> | null;
   /** The row's CURRENT provenance — carried for the audit `before` only (see `importFacilities`'
    *  `facility.import.row` write in facility-import.ts), never for comparison. A parsed row's
@@ -18,7 +17,7 @@ export interface ExistingFacility {
    *  unrelated reason, should ever see it move. */
   source: FacilityRecord['source'];
   /** Every comparable column, already in FacilityRecord's camelCase shape. */
-  fields: Omit<FacilityRecord, 'id' | 'source' | 'extras' | 'localCode'>;
+  fields: Omit<FacilityRecord, 'id' | 'source' | 'extras'>;
   /** `timestamptz` from the driver — a Date, despite FacilityRegistryTable declaring `string`. */
   updatedAt: Date | string;
 }
@@ -35,21 +34,21 @@ export interface ClassifiedRow {
  * Columns the IMPORTER is authoritative for, and therefore the only ones a difference in may be
  * called a change.
  *
- * ⛔ `localCode` is deliberately absent: `parseFacilityCsv` never produces one (there is no such
- * column in the contract), it is a UNIQUE value an operator assigns by hand, and `importFacilities`
- * preserves the existing one. Including it here would mark every hand-coded facility as "changed"
- * on every import, forever — the same class of false positive FAC-P1-03 is about, one layer down.
- * `managedOrigin` is absent for the same reason: the sync applier owns it, not this path.
+ * ⛔ `facilityCode`/`facilitySystem` are deliberately absent, but for a DIFFERENT reason than the
+ * `localCode` rule they replace. `localCode` was excluded because the importer never produced one
+ * and had to preserve the operator's; there is no such column now. The pair is excluded because it
+ * is the row's IDENTITY — `resolveIdsByPair` matched this record to this row BY that pair, so it
+ * cannot differ, and comparing it would be asserting the join it just performed.
+ * `managedOrigin` is absent because the sync applier owns it, not this path.
  *
  * ⛔ `source` is ALSO deliberately absent, even though `ExistingFacility` now carries it (as a
  * sibling of `fields`, not inside it — see that field's docblock). Every parsed row is unconditionally
  * `source: 'import'`, so comparing it here would classify a manually-created facility `changed` on
  * the FIRST import that ever touches it even when every other column already matches — a false
- * positive on the exact same shape as `localCode` above, just triggered by provenance instead of a
- * hand-assigned code.
+ * positive on the same shape, triggered by provenance instead of a code.
  */
 const COMPARED: (keyof FacilityRecord)[] = [
-  'nationalSystem', 'nationalCode', 'name', 'level', 'ownership', 'status', 'country',
+  'name', 'level', 'ownership', 'status', 'country',
   'zone', 'region', 'district', 'council', 'ward', 'village', 'addressText', 'phone',
   'latitude', 'longitude',
 ];
@@ -75,12 +74,13 @@ export function classifyFacilityRows(
     if (!existing) return { kind: 'create' as const, merged: r, diff: [] };
 
     // Merge exactly what `importFacilities` will write, and compare against THAT — not against the
-    // raw parsed record. The importer is not authoritative for local_code or for extras keys it did
-    // not produce, so a comparison that ignored the merge would report a change the write does not
-    // actually make.
+    // raw parsed record. The importer is not authoritative for extras keys it did not produce, so a
+    // comparison that ignored the merge would report a change the write does not actually make.
+    //
+    // The `localCode` carry-forward that used to sit here is gone with the column: there is no
+    // operator-assigned code left for a re-import to preserve.
     const merged: FacilityRecord = {
       ...r,
-      localCode: r.localCode ?? existing.localCode ?? null,
       extras: { ...(existing.extras ?? {}), ...(r.extras ?? {}) },
     };
 
