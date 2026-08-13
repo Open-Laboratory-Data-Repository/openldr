@@ -26,16 +26,46 @@ const facilityForm: FormSchema = {
   createdAt: NOW,
   updatedAt: NOW,
   fields: [
+    // THEIRS — the code the national/master facility list carries, and the row's key material:
+    // `id = fac-sha256(nationalSystem|nationalCode)` (`idFor`, packages/terminology/src/facility-csv.ts).
+    // OPTIONAL, because a lab-only facility never has one. Listed FIRST because on a registry row
+    // this is the code that matters; `registryPreferredCode` (packages/db/src/facility-observed.ts)
+    // and the Facilities table both fall back `localCode ?? nationalCode`, and until migration 085
+    // no form field bound this column at all — so a nationally-imported facility showed a blank
+    // code box beside a table cell that displayed one. Seeded by migration 085.
     {
+      id: 'fld-fac-national-code', fhirPath: 'identifier.value',
+      fhirDiscriminator: { system: NATIONAL_FACILITY_SYSTEM },
+      displayLabel: 'National code', description: null, fieldType: 'identifier',
+      required: false, enabled: true, order: 0, cardinality: { min: 0, max: '1' },
+      apiProperty: 'nationalCode',
+    },
+    {
+      // Names the register the national code belongs to, by CANONICAL URI. `suggest` (not a bound
+      // ValueSet): the registers are per-install rows in `coding_systems`, not a shipped vocabulary,
+      // and apps/studio feeds this field from /api/facilities/import/sources. Free entry is not the
+      // gate — POST resolves it through `resolveFacilityRegisterForImport` and refuses an
+      // unregistered or deactivated register, the same gate every import door applies.
+      // `fhirPath: null` for the same reason council carries one; see that field's comment.
+      id: 'fld-fac-national-system', fhirPath: null,
+      displayLabel: 'Facility register', description: null, fieldType: 'suggest',
+      required: false, enabled: true, order: 1, cardinality: { min: 0, max: '1' },
+      apiProperty: 'nationalSystem',
+    },
+    {
+      // OURS — the site's own numbering. OPTIONAL since migration 085, and relabelled from the
+      // generic "Facility code": a CSV import never produces one (`parseFacilityCsv` refuses to
+      // invent one — a national register has no concept of a local code), so requiring it made every
+      // imported facility unsaveable from the Edit sheet.
       id: 'fld-fac-local-code', fhirPath: 'identifier.value',
       fhirDiscriminator: { system: LOCAL_FACILITY_SYSTEM },
-      displayLabel: 'Facility code', description: null, fieldType: 'identifier',
-      required: true, enabled: true, order: 0, cardinality: { min: 1, max: '1' },
+      displayLabel: 'Local code', description: null, fieldType: 'identifier',
+      required: false, enabled: true, order: 2, cardinality: { min: 0, max: '1' },
       apiProperty: 'localCode',
     },
     {
       id: 'fld-fac-name', fhirPath: 'name', displayLabel: 'Name', description: null,
-      fieldType: 'text', required: true, enabled: true, order: 1,
+      fieldType: 'text', required: true, enabled: true, order: 3,
       cardinality: { min: 1, max: '1' }, apiProperty: 'name',
     },
     // Bound to the seeded ISO 3166 ValueSet rather than free text — same reasoning as status/level
@@ -45,7 +75,7 @@ const facilityForm: FormSchema = {
     // install's Facility form (see migrations 071/072) to this exact shape.
     {
       id: 'fld-fac-country', fhirPath: 'address.country', displayLabel: 'Country', description: null,
-      fieldType: 'reference', required: true, enabled: true, order: 2,
+      fieldType: 'reference', required: true, enabled: true, order: 4,
       cardinality: { min: 1, max: '1' }, apiProperty: 'country',
       valueSetUrl: 'urn:openldr:valueset:country',
     },
@@ -59,17 +89,21 @@ const facilityForm: FormSchema = {
     // yet, since a newly gazetted district must be enterable on day one.
     {
       id: 'fld-fac-zone', fhirPath: 'address.district', displayLabel: 'Zone', description: null,
-      fieldType: 'suggest', required: true, enabled: true, order: 3,
+      fieldType: 'suggest', required: true, enabled: true, order: 5,
       cardinality: { min: 1, max: '1' }, apiProperty: 'zone',
     },
     {
+      // OPTIONAL since migration 085, unlike its zone/district siblings. Not every national register
+      // has a tier here: Zambia's has nothing between Province and District, so 3788 of 3788 rows in
+      // its MFL export carry no region at all. A required marker on a column the import path cannot
+      // fill is a promise the data can never keep.
       id: 'fld-fac-region', fhirPath: 'address.state', displayLabel: 'Region', description: null,
-      fieldType: 'suggest', required: true, enabled: true, order: 4,
-      cardinality: { min: 1, max: '1' }, apiProperty: 'region',
+      fieldType: 'suggest', required: false, enabled: true, order: 6,
+      cardinality: { min: 0, max: '1' }, apiProperty: 'region',
     },
     {
       id: 'fld-fac-district', fhirPath: 'address.city', displayLabel: 'District', description: null,
-      fieldType: 'suggest', required: true, enabled: true, order: 5,
+      fieldType: 'suggest', required: true, enabled: true, order: 7,
       cardinality: { min: 1, max: '1' }, apiProperty: 'district',
     },
     {
@@ -83,7 +117,7 @@ const facilityForm: FormSchema = {
       // (`if (!field.enabled || !field.fhirPath) continue`), so `null` is valid and lint-clean.
       // council is FACILITY_ADMIN_LEVELS' fourth column (packages/db/src/facility-answers.ts).
       id: 'fld-fac-council', fhirPath: null, displayLabel: 'Council', description: null,
-      fieldType: 'suggest', required: false, enabled: true, order: 6,
+      fieldType: 'suggest', required: false, enabled: true, order: 8,
       cardinality: { min: 0, max: '1' }, apiProperty: 'council',
     },
     // Bound to seeded ValueSets rather than free text, same reasoning as the specimen-type field
@@ -95,13 +129,13 @@ const facilityForm: FormSchema = {
     // to make room for the new council field, without touching either binding itself.
     {
       id: 'fld-fac-status', fhirPath: 'status', displayLabel: 'Status', description: null,
-      fieldType: 'reference', required: true, enabled: true, order: 7,
+      fieldType: 'reference', required: true, enabled: true, order: 9,
       cardinality: { min: 1, max: '1' }, apiProperty: 'status',
       valueSetUrl: 'urn:openldr:valueset:location-status',
     },
     {
       id: 'fld-fac-level', fhirPath: 'physicalType', displayLabel: 'Level', description: null,
-      fieldType: 'reference', required: true, enabled: true, order: 8,
+      fieldType: 'reference', required: true, enabled: true, order: 10,
       cardinality: { min: 1, max: '1' }, apiProperty: 'level',
       valueSetUrl: 'urn:openldr:valueset:facility-type',
     },

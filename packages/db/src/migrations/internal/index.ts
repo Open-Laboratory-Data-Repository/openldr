@@ -83,6 +83,7 @@ import * as m081 from './081_facility_source_and_register_state';
 import * as m082 from './082_facility_canonical_identity';
 import * as m083 from './083_report_design_page_numbers';
 import * as m084 from './084_report_design_versions';
+import * as m085 from './085_facility_national_code_field';
 
 export const internalMigrations: Record<string, Migration> = {
   '001_fhir_resources': { up: m001.up, down: m001.down },
@@ -169,4 +170,5 @@ export const internalMigrations: Record<string, Migration> = {
   '082_facility_canonical_identity': { up: m082.up, down: m082.down },
   '083_report_design_page_numbers': { up: m083.up, down: m083.down },
   '084_report_design_versions': { up: m084.up, down: m084.down },
+  '085_facility_national_code_field': { up: m085.up, down: m085.down },
 };
