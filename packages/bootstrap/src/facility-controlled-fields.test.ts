@@ -5,15 +5,25 @@ import type { FacilityRecord } from '@openldr/db';
 const rec = (over: Partial<FacilityRecord>): FacilityRecord =>
   ({ id: 'fac-1', name: 'A', source: 'import', ...over } as FacilityRecord);
 
+/** A concept in a fixture value set: a bare code, or a code with the display an operator would
+ *  actually pick. Both shapes accepted so the existing call sites below stay untouched. */
+type ConceptFixture = string | { code: string; display: string | null };
+
 function fakeAdmin(opts: {
-  valueSets?: Record<string, string[]>;
+  valueSets?: Record<string, ConceptFixture[]>;
   mappings?: Record<string, { toCode: string; isActive: boolean }[]>;
 }) {
   return {
     valueSets: {
       async getByUrl(url: string) { return opts.valueSets?.[url] ? { id: url } : null; },
       async expand(id: string) {
-        return { codes: (opts.valueSets?.[id] ?? []).map((code) => ({ code })), total: 0 };
+        // A bare string stays code-only, exactly as before — that is what every pre-existing call
+        // site passes, and inventing a display for them would make those tests assert something
+        // untrue about what the value set contains.
+        const codes = (opts.valueSets?.[id] ?? []).map((c) => (
+          typeof c === 'string' ? { code: c, display: null } : c
+        ));
+        return { codes, total: 0 };
       },
     },
     termMappings: {
@@ -109,5 +119,40 @@ describe('observedFieldSystem under canonical-URI input', () => {
 
   it('⛔ still namespaces per FIELD, so one register\'s level and status never share mappings', () => {
     expect(observedFieldSystem('status', 'urn:tz:hfr')).not.toBe(observedFieldSystem('level', 'urn:tz:hfr'));
+  });
+});
+
+describe('resolveControlledFields — a canonical DISPLAY is canonical', () => {
+  const VS = 'urn:openldr:valueset:facility-type';
+
+  it('accepts a canonical display, not only a canonical code', async () => {
+    // `splitFacilityAnswers` flattens a picked answer to its display, so the column holds
+    // 'Health Center' — never 'health-center'. Comparing against codes alone refused the value set's
+    // own vocabulary: measured `level 'Health Center' is not a recognised canonical level value` on
+    // a live create.
+    const admin = fakeAdmin({ valueSets: { [VS]: [{ code: 'health-center', display: 'Health Center' }] } });
+    const res = await resolveControlledFields(admin, 'urn:zm:mfl', [rec({ level: 'Health Center' })]);
+    expect(res.unmapped.level).toEqual([]);
+    expect(res.mapped.level.size).toBe(0);
+  });
+
+  it('still accepts a canonical code', async () => {
+    const admin = fakeAdmin({ valueSets: { [VS]: [{ code: 'health-center', display: 'Health Center' }] } });
+    const res = await resolveControlledFields(admin, 'urn:zm:mfl', [rec({ level: 'health-center' })]);
+    expect(res.unmapped.level).toEqual([]);
+  });
+
+  it('still reports a value that is NEITHER a code nor a display', async () => {
+    // 'Health Centre' (British) is what the Zambia register writes. It must stay unmapped so the
+    // import keeps reporting it and the operator can map it.
+    const admin = fakeAdmin({ valueSets: { [VS]: [{ code: 'health-center', display: 'Health Center' }] } });
+    const res = await resolveControlledFields(admin, 'urn:zm:mfl', [rec({ level: 'Health Centre' })]);
+    expect(res.unmapped.level).toEqual(['Health Centre']);
+  });
+
+  it('ignores a null display rather than treating it as a matchable value', async () => {
+    const admin = fakeAdmin({ valueSets: { [VS]: [{ code: 'health-center', display: null }] } });
+    const res = await resolveControlledFields(admin, 'urn:zm:mfl', [rec({ level: '' }), rec({ level: 'x' })]);
+    expect(res.unmapped.level).toEqual(['x']);
   });
 });

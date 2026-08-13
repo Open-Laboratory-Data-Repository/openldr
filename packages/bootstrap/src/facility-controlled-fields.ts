@@ -128,7 +128,19 @@ export async function resolveControlledFields(
       continue;
     }
     const { codes } = await admin.valueSets.expand(vs.id);
-    const canonical = new Set(codes.map((c) => c.code));
+    // ⛔ Codes AND displays. A picked answer reaches this column as its DISPLAY —
+    // `splitFacilityAnswers` flattens `{system, code, display}` to `display` so the column stays
+    // human-readable for reports that group on it (packages/db/src/facility-answers.ts:134-141).
+    // Comparing against codes alone therefore refused the value set's OWN vocabulary: a facility
+    // created by picking "Health Center" from the picker was rejected as non-canonical, and the one
+    // hand-made facility on a live install carried `Level IA2 (Dispensary Laboratory)` and was
+    // refused the same way. A `null` display contributes nothing — it is absence, not a matchable
+    // empty string.
+    const canonical = new Set<string>();
+    for (const c of codes) {
+      canonical.add(c.code);
+      if (c.display !== null && c.display !== '') canonical.add(c.display);
+    }
 
     const fromSystem = observedFieldSystem(field, nationalSystem);
     for (const raw of rawValues) {
