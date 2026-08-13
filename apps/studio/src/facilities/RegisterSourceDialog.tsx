@@ -129,7 +129,7 @@ export function RegisterSourceDialog({
             id="register-source-url"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
-            placeholder="urn:tz:hfr"
+            placeholder={t('facilities.import.registerSourceUrlPlaceholder')}
             className="font-mono"
           />
 
@@ -140,7 +140,7 @@ export function RegisterSourceDialog({
             id="register-source-name"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Tanzania Health Facility Registry"
+            placeholder={t('facilities.import.registerSourceNamePlaceholder')}
           />
 
           <Label htmlFor="register-source-code" className="whitespace-nowrap">

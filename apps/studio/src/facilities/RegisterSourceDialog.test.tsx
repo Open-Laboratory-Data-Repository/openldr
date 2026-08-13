@@ -47,6 +47,17 @@ describe('RegisterSourceDialog', () => {
     expect(screen.getByRole('menuitem', { name: /^cancel$/i })).toBeInTheDocument();
   });
 
+  it('draws the example URI/name placeholders from i18n, so they translate and name no single country', () => {
+    render(<RegisterSourceDialog open onOpenChange={vi.fn()} onCreated={vi.fn()} />);
+    // A wrong key path renders as raw text rather than throwing, so assert the resolved
+    // English string — that is what proves the key exists and is wired up.
+    expect(screen.getByLabelText('Canonical URI')).toHaveAttribute('placeholder', 'urn:example:hfr');
+    expect(screen.getByLabelText('Display name')).toHaveAttribute(
+      'placeholder',
+      'National Health Facility Registry',
+    );
+  });
+
   it('keeps Register disabled until url/name/code are all filled, then sends them (trimmed) to createFacilityImportSource', async () => {
     mocked(api.createFacilityImportSource).mockResolvedValue(CREATED);
     const onCreated = vi.fn();
