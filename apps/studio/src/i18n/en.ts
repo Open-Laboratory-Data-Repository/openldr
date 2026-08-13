@@ -239,6 +239,8 @@ export const en = {
       address: 'Address',
       contact: 'Contact',
       logo: 'Logo',
+      facilitySystem: 'Facility register',
+      facilitySystemPlaceholder: 'Select a register…',
       chooseLogo: 'Choose file…',
       clearLogo: 'Clear',
       save: 'Save',

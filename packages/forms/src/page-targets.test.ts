@@ -17,12 +17,12 @@ describe('page targets', () => {
   });
   it('reports missing required keys for a target page', () => {
     const violations = validateTemplateTargets(['facilities'], [field({ apiProperty: undefined })]);
-    expect(violations[0]).toMatchObject({ pageId: 'facilities', missing: ['localCode', 'name'] });
+    expect(violations[0]).toMatchObject({ pageId: 'facilities', missing: ['facilitySystem', 'facilityCode', 'name'] });
   });
   it('passes when an enabled field supplies the key', () => {
     expect(validateTemplateTargets(
       ['facilities'],
-      [field({ apiProperty: 'localCode' }), field({ apiProperty: 'name' })],
+      [field({ apiProperty: 'facilitySystem' }), field({ apiProperty: 'facilityCode' }), field({ apiProperty: 'name' })],
     )).toEqual([]);
   });
 });

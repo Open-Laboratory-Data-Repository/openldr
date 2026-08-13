@@ -243,6 +243,8 @@ export const fr: EnShape = {
       address: 'Adresse',
       contact: 'Contact',
       logo: 'Logo',
+      facilitySystem: 'Registre des établissements',
+      facilitySystemPlaceholder: 'Sélectionner un registre…',
       chooseLogo: 'Choisir un fichier…',
       clearLogo: 'Effacer',
       save: 'Enregistrer',

@@ -442,7 +442,15 @@ export const setFeatureFlag = (key: string, value: boolean): Promise<{ key: stri
 /** The issuing lab's letterhead identity, keyed by its `lab.*` app_settings keys. */
 export type LabIdentity = Record<string, string>;
 
-export interface LabIdentityField { id: string; labelKey: string; multiline: boolean }
+export interface LabIdentityField {
+  id: string;
+  labelKey: string;
+  multiline: boolean;
+  /** Present when the field must be PICKED from a list rather than typed — today only
+   *  `facility-registers`. See `LAB_IDENTITY_FIELDS` (@openldr/config) for why free text is unsafe
+   *  for a register URI. */
+  source?: 'facility-registers';
+}
 /** Field definitions come FROM the server: `@openldr/config` re-exports an env loader that reads
  *  process.env, so studio cannot import the registry (same reason feature flags work this way). */
 export interface LabIdentityResponse {

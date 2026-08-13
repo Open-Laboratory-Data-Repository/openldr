@@ -8,13 +8,24 @@ const dataUri = (mime: string, bytes: number): string =>
   `data:${mime};base64,${'A'.repeat(Math.ceil((bytes * 4) / 3))}`;
 
 describe('LAB_IDENTITY_FIELDS', () => {
-  it('declares exactly the four letterhead keys, all namespaced', () => {
-    expect(LAB_IDENTITY_KEYS).toEqual(['lab.name', 'lab.address', 'lab.contact', 'lab.logo']);
+  it('declares exactly the installation-identity keys, all namespaced', () => {
+    // `lab.facilitySystem` joined the four letterhead keys: it is the same kind of fact — something
+    // stated once about this installation rather than re-entered per record.
+    expect(LAB_IDENTITY_KEYS).toEqual([
+      'lab.name', 'lab.address', 'lab.contact', 'lab.logo', 'lab.facilitySystem',
+    ]);
     expect(LAB_IDENTITY_FIELDS.every((f) => f.id.startsWith('lab.'))).toBe(true);
   });
 
   it('marks only the address multi-line', () => {
     expect(LAB_IDENTITY_FIELDS.filter((f) => f.multiline).map((f) => f.id)).toEqual(['lab.address']);
+  });
+
+  it('⛔ marks the facility system as a PICKER, never a free-text box', () => {
+    // `idFor` hashes the register URI into every facility's permanent id without normalising it, so
+    // a typed label mints a second identity for one register — migration 082's defect.
+    expect(LAB_IDENTITY_FIELDS.filter((f) => f.source).map((f) => [f.id, f.source]))
+      .toEqual([['lab.facilitySystem', 'facility-registers']]);
   });
 });
 
