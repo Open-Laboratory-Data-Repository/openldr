@@ -12,8 +12,10 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { isMultiValued, resolveReferenceSource } from '@openldr/forms/pure';
+import { referenceSearch, referenceSearchPreview } from '@/api';
 import type { FieldSuggestions, FormField, FormSchema, FormSection, RuntimeAnswers } from './types';
 import { cleanAnswers, fieldLabel, groupChildren, validate, visibleIds } from './runtime';
+import { fieldsNeedingResolution, pickSeededMatch, type ResolvableRow } from './seeded-references';
 import { ReferencePicker, type ReferenceValue } from './ReferencePicker';
 
 /**
@@ -93,6 +95,67 @@ export function FormRuntime({
   const [answers, setAnswers] = useState<RuntimeAnswers>(initialAnswers ?? {});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const visible = useMemo(() => visibleIds(schema, answers), [schema, answers]);
+
+  /**
+   * Resolve seeded reference answers back to codings, once per mount.
+   *
+   * ⛔ WHY THIS EXISTS. A ValueSet-bound reference answer is a coding, but the column it is stored in
+   * is `text`, so `splitFacilityAnswers` flattens it to its display
+   * (packages/db/src/facility-answers.ts:134-141). Read back, the answer is a bare string — and
+   * `validate` (runtime.ts:47-51) requires `{system, code}`. The result was that Save issued NO
+   * request at all on EVERY facility, imported or hand-made, while the boxes looked correctly filled
+   * because `ReferencePicker` falls back to a value's string form for display. Measured 2026-08-13.
+   *
+   * Fixed HERE and not by relaxing `validate`: that check is what stops a capture form storing free
+   * text where a coded answer is required.
+   *
+   * Runs once per mount, which is the whole lifetime of a seeded form — callers remount on a record
+   * switch (see FacilityDialog's `key`). A failure is swallowed on purpose: the raw string stays, the
+   * field reports honestly that a value must be picked, and nothing the operator can see is lost.
+   */
+  useEffect(() => {
+    const pending = fieldsNeedingResolution(schema, initialAnswers ?? {});
+    if (pending.length === 0) return;
+    // Nothing to scope a search to — the same gate ReferencePicker applies before searching.
+    if (!preview && !formDefinitionId) return;
+
+    let cancelled = false;
+    void (async () => {
+      const resolved: Record<string, unknown> = {};
+      await Promise.all(pending.map(async ({ fieldId, raw }) => {
+        const field = schema.fields.find((f) => f.id === fieldId);
+        if (!field) return;
+        try {
+          const res = preview
+            ? await referenceSearchPreview(field, { q: raw })
+            : await referenceSearch(formDefinitionId!, fieldId, { q: raw });
+          const rows: ResolvableRow[] = res.kind === 'entity'
+            ? res.rows.map((r) => ({ value: { reference: r.reference, display: r.display }, display: r.display, code: null }))
+            : res.rows.map((r) => ({
+              value: { system: r.system, code: r.code, display: r.display },
+              display: r.display ?? r.code,
+              code: r.code,
+            }));
+          const match = pickSeededMatch(raw, rows);
+          if (match !== undefined) resolved[fieldId] = match;
+        } catch {
+          // Deliberately silent — see the docblock. The unresolved string survives untouched.
+        }
+      }));
+      if (cancelled || Object.keys(resolved).length === 0) return;
+      // Merge over CURRENT answers, never over the seed: an operator who edited a field while the
+      // lookup was in flight must not have their edit replaced by a resolution of the old value.
+      setAnswers((prev) => {
+        const next = { ...prev };
+        for (const [id, value] of Object.entries(resolved)) {
+          if (next[id] === (initialAnswers ?? {})[id]) next[id] = value;
+        }
+        return next;
+      });
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     onAnswersChange?.(answers);
