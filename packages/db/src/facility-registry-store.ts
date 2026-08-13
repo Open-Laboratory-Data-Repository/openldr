@@ -17,7 +17,12 @@ export type { FacilityAdminLevel };
 /** A curated facility. camelCase; the store translates to/from the snake_case row. */
 export interface FacilityRecord {
   id: string;
-  /** OURS — required at data entry, absent on a nationally-imported row. */
+  /** The register this facility is listed in, by canonical URI. With `facilityCode` it is the row's
+   *  identity. */
+  facilitySystem?: string | null;
+  /** The code that register carries for this facility. */
+  facilityCode?: string | null;
+  /** @deprecated Superseded by `facilityCode` — see migration 086. Written through the transition. */
   localCode?: string | null;
   nationalSystem?: string | null;
   /** THEIRS — the only code an imported row carries. */
@@ -193,6 +198,8 @@ type SelectRow = Selectable<Row>;
 export function toRecord(r: SelectRow): FacilityRecord {
   return {
     id: r.id,
+    facilitySystem: r.facility_system,
+    facilityCode: r.facility_code,
     localCode: r.local_code,
     nationalSystem: r.national_system,
     nationalCode: r.national_code,
@@ -243,6 +250,11 @@ export function toRecord(r: SelectRow): FacilityRecord {
 export function toRow(rec: FacilityRecord): Omit<Row, 'created_at' | 'updated_at' | 'register_state'> {
   return {
     id: rec.id,
+    // Dual-write through the transition (migration 086 expands, a later one contracts).
+    // `facility_code` is authoritative; the deprecated pair is kept in step so anything still reading
+    // it sees the same value. A local-only row keeps a NULL system on purpose — see 086.
+    facility_system: rec.facilitySystem ?? rec.nationalSystem ?? null,
+    facility_code: rec.facilityCode ?? rec.nationalCode ?? rec.localCode ?? null,
     local_code: rec.localCode ?? null,
     national_system: rec.nationalSystem ?? null,
     national_code: rec.nationalCode ?? null,
