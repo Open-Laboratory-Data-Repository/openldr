@@ -1003,17 +1003,24 @@ async function main(): Promise<void> {
   // 7. Build and push all five images.
   run('bash', ['scripts/build-and-push.sh', '--tag', 'latest']);
 
-  // 8. Make every package public, then READ IT BACK. One private image aborts the whole pull.
-  for (const image of IMAGE_NAMES) {
-    run('gh', ['api', '--method', 'PATCH', `orgs/${OWNER}/packages/container/${image}`,
-      '-f', 'visibility=public']);
-  }
+  // 8. CHECK every package is public. One private image aborts the whole pull.
+  //
+  // ⛔ There is NO API to set container package visibility. Measured 2026-08-17:
+  //   gh api --method PATCH orgs/<org>/packages/container/openldr-api -f visibility=public
+  //   -> 404 Not Found        (visibility unchanged; the endpoint does not exist)
+  // The plan originally scripted that PATCH. It cannot work. Visibility is changed only in the
+  // web UI, at the package's settings page — so this step VERIFIES and refuses, and the operator
+  // does the fixing. The read-back was always the load-bearing half; the PATCH never was.
   if (!DRY_RUN) {
     const stillPrivate = await findPrivatePackages(ghJson, OWNER, IMAGE_NAMES);
     if (stillPrivate.length > 0) {
-      console.error(`\nnot public after PATCH: ${stillPrivate.join(', ')}`);
+      console.error(`\nnot public: ${stillPrivate.join(', ')}`);
       console.error('a single private image 401s and aborts the entire docker compose pull.');
-      console.error('no tag was created — fix visibility and re-run.');
+      console.error('no tag was created. Make each one public at:');
+      for (const image of stillPrivate) {
+        console.error(`  https://github.com/orgs/${OWNER}/packages/container/${image}/settings`);
+      }
+      console.error('then re-run.');
       process.exit(1);
     }
     console.log('all five packages confirmed public');

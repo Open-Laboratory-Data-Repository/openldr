@@ -97,7 +97,8 @@ downgrades a real failure to a warning.
 ### Then, in this order
 
 7. Build and push the five images, tagged `:X.Y.Z` and `:latest`.
-8. Set all five packages public, **then read visibility back and verify**.
+8. **Verify** all five packages are public, and refuse if any is not, naming which.
+   ⛔ Measured 2026-08-17: there is **no API to set** container package visibility — `PATCH orgs/{org}/packages/container/{image}` returns **404**. It is a web-UI action only, so the release checks and refuses rather than fixing. The read-back was always the load-bearing half.
 9. Pull the published `:X.Y.Z` from a clean context; confirm the stack comes up healthy.
 10. `git tag vX.Y.Z`, push it, cut the GitHub release, upload `latest.json`.
 
@@ -107,8 +108,8 @@ the tag is step 10, a failure at step 9 leaves no tag — so no lab ever sees a 
 
 **Step 8 is not optional politeness.** New GHCR images default to private, and a single private
 image 401s and aborts the *entire* pull. A release that pushes five images and misses visibility
-on one is, from the lab's side, indistinguishable from a release that never happened. Setting
-visibility is not enough; the script reads it back.
+on one is, from the lab's side, indistinguishable from a release that never happened. The script
+cannot fix it — no API exists — so it must refuse loudly and point at the settings page.
 
 ## What changes for installs
 
