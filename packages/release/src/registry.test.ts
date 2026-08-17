@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { tagExistsInRegistry, findPrivatePackages, IMAGE_NAMES } from './registry';
+import { tagExistsInRegistry, findPrivatePackages, parseGhPages, IMAGE_NAMES } from './registry';
 
 function fakeFetch(routes: Record<string, unknown>) {
   return vi.fn(async (path: string) => {
@@ -15,6 +15,41 @@ describe('IMAGE_NAMES', () => {
     expect([...IMAGE_NAMES]).toEqual([
       'openldr-api', 'openldr-studio', 'openldr-web', 'openldr-gateway', 'openldr-keycloak',
     ]);
+  });
+});
+
+describe('parseGhPages', () => {
+  it('splices two pages older gh concatenated as ][ into one flat array', () => {
+    const out = '[{"id":1},{"id":2}][{"id":3}]';
+    expect(parseGhPages(out)).toEqual([{ id: 1 }, { id: 2 }, { id: 3 }]);
+  });
+
+  it('flattens an array of pages, the shape --slurp produces', () => {
+    const out = '[[{"id":1},{"id":2}],[{"id":3}]]';
+    expect(parseGhPages(out)).toEqual([{ id: 1 }, { id: 2 }, { id: 3 }]);
+  });
+
+  it('passes a single page through unchanged', () => {
+    const out = '[{"metadata":{"container":{"tags":["0.1.0"]}}}]';
+    expect(parseGhPages(out)).toEqual([{ metadata: { container: { tags: ['0.1.0'] } } }]);
+  });
+
+  it('passes a single object through — the package endpoint answers with one', () => {
+    expect(parseGhPages('{"visibility":"public"}')).toEqual({ visibility: 'public' });
+  });
+
+  // Empty stdout is not an empty registry. Reading it as [] tells tagExistsInRegistry every
+  // tag is free, which disarms the one guard that stops an overwrite.
+  it('throws on empty output rather than reporting an empty registry', () => {
+    expect(() => parseGhPages('')).toThrow(/empty/i);
+  });
+
+  it('throws on whitespace-only output', () => {
+    expect(() => parseGhPages('   \n  ')).toThrow(/empty/i);
+  });
+
+  it('throws on malformed JSON', () => {
+    expect(() => parseGhPages('{"visibility": ')).toThrow();
   });
 });
 

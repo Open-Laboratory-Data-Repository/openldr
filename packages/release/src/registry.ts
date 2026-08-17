@@ -13,6 +13,36 @@ export const IMAGE_NAMES = [
   'openldr-keycloak',
 ] as const;
 
+/** One flat array (or one object) out of however gh chose to print its pages.
+ *
+ *  gh 2.93.0 merges array pages into a single JSON array — verified by forcing three pages with
+ *  per_page=25 and parsing the result as one 59-element array with 59 unique ids. Older gh
+ *  concatenated them as `][`, which is not valid JSON, and --slurp produces an array of pages.
+ *  `tagExistsInRegistry` reads `.metadata.container.tags` off array ELEMENTS, so all three
+ *  shapes have to arrive as the same flat array.
+ *
+ *  Empty output THROWS. A gh that exits 0 printing nothing is a broken read, not an empty
+ *  registry — and `tagExistsInRegistry` turns an empty array into "this tag is free", which is
+ *  exactly the fail-open the overwrite guard exists to stop. */
+export function parseGhPages(out: string): unknown {
+  const text = out.trim();
+  if (text === '') {
+    throw new Error('gh returned empty output — cannot tell an empty registry from a failed read');
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    parsed = JSON.parse(text.replace(/\]\s*\[/g, ','));
+  }
+
+  if (Array.isArray(parsed) && parsed.length > 0 && parsed.every((page) => Array.isArray(page))) {
+    return parsed.flat();
+  }
+  return parsed;
+}
+
 function isNotFound(err: unknown): boolean {
   return /\b404\b|not found/i.test(err instanceof Error ? err.message : String(err));
 }

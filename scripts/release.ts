@@ -10,7 +10,7 @@
 // This file gathers facts and sequences commands. Every decision it appears to make lives in
 // @openldr/release, where it is unit-tested; nothing here decides anything on its own.
 
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { writeFileSync, mkdtempSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -21,9 +21,11 @@ import { evaluatePreconditions, type ReleaseFacts } from '../packages/release/sr
 import {
   tagExistsInRegistry,
   findPrivatePackages,
+  parseGhPages,
   IMAGE_NAMES,
   type FetchJson,
 } from '../packages/release/src/registry';
+import { parseFailedTasks, formatFailedTask } from '../packages/release/src/gate';
 
 const OWNER = 'Open-Laboratory-Data-Repository';
 const REPO = 'openldr';
@@ -51,16 +53,40 @@ function run(cmd: string, args: string[]): void {
   if (!DRY_RUN) execFileSync(cmd, args, { cwd: repoRoot, stdio: 'inherit' });
 }
 
-/** Runs pnpm with the output streamed, and throws on a non-zero exit.
+/** Runs pnpm, prints its output as it arrives, AND returns that output with the exit code.
+ *
+ *  The gate needs both: the operator has to watch a seven-minute run, and `gateGreen` has to
+ *  read which packages turbo said failed. Inheriting the streams gives the first and not the
+ *  second, so this tees them instead.
  *
  *  ⛔ Windows needs `shell: true`. pnpm is a .cmd shim, and measured 2026-08-17 on node v24.6.0:
  *  execFileSync('pnpm', …) fails ENOENT and execFileSync('pnpm.cmd', …) fails EINVAL — Node
  *  refuses to spawn a .cmd directly since the 2024 argument-injection fix. Without this the gate
  *  would "fail" instantly on every Windows run and the release would refuse for a reason that
- *  has nothing to do with the tests. Args are literals or a validated package name, never raw
- *  operator input, so the concatenation the shell option performs has nothing to inject. */
-function pnpm(args: string[]): void {
-  execFileSync('pnpm', args, { cwd: repoRoot, stdio: 'inherit', shell: process.platform === 'win32' });
+ *  has nothing to do with the tests. Args are literals or a package name `parseFailedTasks`
+ *  matched against a package-name pattern, never raw operator input, so the concatenation the
+ *  shell option performs has nothing to inject. */
+function pnpm(args: string[]): Promise<{ code: number; output: string }> {
+  return new Promise((resolve, reject) => {
+    const child = spawn('pnpm', args, {
+      cwd: repoRoot,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      shell: process.platform === 'win32',
+    });
+    let output = '';
+    for (const [stream, sink] of [
+      [child.stdout, process.stdout],
+      [child.stderr, process.stderr],
+    ] as const) {
+      stream.setEncoding('utf8');
+      stream.on('data', (chunk: string) => {
+        output += chunk;
+        sink.write(chunk);
+      });
+    }
+    child.on('error', reject);
+    child.on('close', (code) => resolve({ code: code ?? 1, output }));
+  });
 }
 
 /** A repo-root-relative path bash will accept.
@@ -90,66 +116,49 @@ const ghJson: FetchJson = async (path) => {
   return parseGhPages(sh('gh', ['api', '--paginate', url]));
 };
 
-/** One flat array (or one object) out of however gh chose to print its pages.
- *
- *  gh 2.93.0 merges array pages into a single JSON array — verified by forcing three pages with
- *  per_page=25 and parsing the result as one 59-element array with 59 unique ids. Older gh
- *  concatenated them as `][`, which is not valid JSON, and --slurp produces an array of pages.
- *  `tagExistsInRegistry` reads `.metadata.container.tags` off array ELEMENTS, so all three
- *  shapes have to arrive as the same flat array. */
-function parseGhPages(out: string): unknown {
-  const text = out.trim();
-  if (text === '') return [];
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(text);
-  } catch {
-    parsed = JSON.parse(text.replace(/\]\s*\[/g, ','));
-  }
-
-  if (Array.isArray(parsed) && parsed.length > 0 && parsed.every((page) => Array.isArray(page))) {
-    return parsed.flat();
-  }
-  return parsed;
-}
-
 /** The newest v* tag by semver, or null for the first release. */
 function newestTag(): string | null {
   const out = sh('git', ['tag', '--list', 'v*', '--sort=-v:refname']);
   return out ? out.split('\n')[0]!.trim() : null;
 }
 
-/** Green, or green on a lone re-run of the one package that failed.
+/** Green, or green on a lone re-run of exactly the tasks turbo said failed.
  *
  *  Gate failures here are usually timeouts under parallel load, not regressions — measured
  *  2026-08-17, @openldr/forms store.test.ts took 41672ms under turbo and 752ms alone. Refusing
  *  on the first non-zero exit would block releases at random. A real failure still refuses:
- *  the isolated re-run has to pass too. */
-function gateGreen(): boolean {
-  try {
-    pnpm(['turbo', 'run', 'test']);
-    return true;
-  } catch {
-    console.warn('\ngate failed — re-running the failing package alone to tell a timeout from a regression');
-    const failed = process.env.RELEASE_RETRY_PKG;
-    if (!failed) {
-      console.error('set RELEASE_RETRY_PKG=<package> and re-run, or fix the failure');
-      return false;
-    }
-    // A package name, nothing else. This value reaches a shell on Windows.
-    if (!/^[@a-zA-Z0-9._/-]+$/.test(failed)) {
-      console.error(`RELEASE_RETRY_PKG is not a package name: ${failed}`);
-      return false;
-    }
-    try {
-      pnpm(['--filter', failed, 'test']);
-      console.warn(`${failed} passes alone — treating the turbo failure as a load timeout`);
-      return true;
-    } catch {
+ *  every isolated re-run has to pass too.
+ *
+ *  ⛔ The operator does not name the package to retry, and never did have the right to. The
+ *  name is read out of turbo's own summary. The env var this replaced was never checked against
+ *  what actually failed, and `pnpm --filter <typo> test` EXITS 0 — measured 2026-08-17,
+ *  `pnpm --filter @openldr/does-not-exist test` -> exit 0 — so one mistyped character turned a
+ *  regression into "passes alone" and shipped five images off a red tree.
+ *
+ *  --fail-if-no-match makes that impossible a second way: measured on pnpm 11.13.0, the same
+ *  filter exits 1 with it and 0 without. */
+async function gateGreen(): Promise<boolean> {
+  const gate = await pnpm(['turbo', 'run', 'test']);
+  if (gate.code === 0) return true;
+
+  const failed = parseFailedTasks(gate.output);
+  if (failed.length === 0) {
+    console.error('\ngate failed and no "Failed:" line could be read from turbo’s output.');
+    console.error('an unreadable failure is not a timeout — refusing.');
+    return false;
+  }
+
+  const names = failed.map(formatFailedTask).join(', ');
+  console.warn(`\ngate failed — re-running ${names} alone to tell a timeout from a regression`);
+  for (const t of failed) {
+    const retry = await pnpm(['--filter', t.pkg, '--fail-if-no-match', 'run', t.task]);
+    if (retry.code !== 0) {
+      console.error(`\n${formatFailedTask(t)} fails alone too — that is a regression, not a load timeout`);
       return false;
     }
   }
+  console.warn(`\n${names} pass alone — treating the turbo failure as a load timeout`);
+  return true;
 }
 
 async function main(): Promise<void> {
@@ -160,6 +169,16 @@ async function main(): Promise<void> {
 
   console.log(`releasing ${version}${lastTag ? ` (last tag ${lastTag})` : ' (first release)'}`);
 
+  // `origin/main...main` reads a LOCAL tracking ref. Without a fetch it holds whatever the last
+  // fetch left there, so an operator who has not fetched gets 0<TAB>0 — "synced" — while origin
+  // is ahead.
+  //
+  // This runs under --dry-run too, and uses sh() rather than run() to make sure of it. Fetching
+  // is read-only — it moves no local branch and touches no working tree — and a dry run whose
+  // whole job is checking preconditions must not check this one against a stale ref.
+  console.log('+ git fetch origin');
+  sh('git', ['fetch', 'origin']);
+
   const facts: ReleaseFacts = {
     version,
     lastTag,
@@ -169,7 +188,7 @@ async function main(): Promise<void> {
     gitTagExists: sh('git', ['tag', '--list', `v${version}`]) !== '',
     registryTagExists: await tagExistsInRegistry(ghJson, OWNER, 'openldr-api', version),
     changelogCommitted: sh('git', ['status', '--porcelain', 'apps/web/src/landing/changelog.json']) === '',
-    gateGreen: gateGreen(),
+    gateGreen: await gateGreen(),
   };
 
   const refusals = evaluatePreconditions(facts);
