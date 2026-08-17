@@ -13,6 +13,7 @@ vi.mock('@/api', async (orig) => {
 });
 import * as api from '@/api';
 import { toast } from 'sonner';
+import { addFilterViaPopover, expectStandardTableToolbar } from '@/components/data-table/expectStandardTableToolbar';
 import { Connectors } from './Connectors';
 
 // Row actions live behind a kebab (DropdownMenu). Open it the way Radix expects in
@@ -59,6 +60,24 @@ describe('Connectors page', () => {
     render(<MemoryRouter><Connectors /></MemoryRouter>);
     expect(await screen.findByText('Prod DHIS2')).toBeTruthy();
     expect(screen.getByText('dhis2.example.org')).toBeTruthy();
+  });
+
+  it('renders the standard table toolbar with the chips row', async () => {
+    render(<MemoryRouter><Connectors /></MemoryRouter>);
+    await screen.findByText('Prod DHIS2');
+
+    await addFilterViaPopover('x');
+    expectStandardTableToolbar();
+  });
+
+  it('filters rows by the search box', async () => {
+    (api.listConnectors as any).mockResolvedValue([conn, dbConn]);
+    render(<MemoryRouter><Connectors /></MemoryRouter>);
+    await screen.findByText('Prod DHIS2');
+
+    fireEvent.change(screen.getByPlaceholderText(/search connectors/i), { target: { value: 'Prod PG' } });
+    expect(screen.queryByText('Prod DHIS2')).toBeNull();
+    expect(screen.getByText('Prod PG')).toBeTruthy();
   });
 
   it('"Add connector" menu item is always available even with no plugins', async () => {
