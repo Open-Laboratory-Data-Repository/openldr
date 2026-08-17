@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { MoreHorizontal, Plug } from 'lucide-react';
@@ -16,7 +16,11 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { EmptyState } from '@/components/ui/empty-state';
+import { StripedEmpty } from '@/components/ui/striped-empty';
 import { TablePagination } from '@/components/ui/table-pagination';
+import {
+  ActiveFilterChips, DataTableToolbar, applyTableState, useTableState, type ColumnDef,
+} from '@/components/data-table';
 import { SettingsHeader } from './SettingsHeader';
 import {
   listConnectors, listSinkPlugins, createConnector, updateConnector, deleteConnector, testConnector,
@@ -121,6 +125,13 @@ interface DraftState {
   enabled: boolean;
 }
 
+// Module level — stable, outside the component.
+const SEARCH_FIELDS = [
+  (c: Connector) => c.name,
+  (c: Connector) => c.type ?? c.pluginId ?? '',
+  (c: Connector) => c.allowedHost ?? '',
+];
+
 const emptyDraft = (): DraftState => ({
   id: null,
   category: 'plugin',
@@ -143,8 +154,7 @@ export function Connectors() {
   const [testResult, setTestResult] = useState<Record<string, string>>({});
   const [testing, setTesting] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [page, setPage] = useState(0);
-  const [pageSize, setPageSize] = useState(25);
+  const [search, setSearch] = useState('');
 
   const load = useCallback(async () => {
     try {
@@ -261,49 +271,108 @@ export function Connectors() {
     ? true
     : busy || !draft.name || (draft.category === 'plugin' ? !draft.pluginId : !draft.type);
 
-  const pageRows = rows.slice(page * pageSize, page * pageSize + pageSize);
+  // The type column mixes host types and plugin ids, so its options are whatever the rows
+  // actually carry — never a hardcoded list (AGENTS.md §8).
+  const typeOptions = useMemo(
+    () => Array.from(new Set(rows.map((c) => c.type ?? c.pluginId).filter((v): v is string => Boolean(v)))).sort(),
+    [rows],
+  );
+
+  const columns: ColumnDef<Connector>[] = useMemo(() => [
+    { id: 'name', labelKey: 'settings.connectors.colName', type: 'text', defaultVisible: true, cellClassName: 'font-medium', accessor: (c) => c.name },
+    {
+      id: 'type', labelKey: 'settings.connectors.colType', type: 'enum', defaultVisible: true, cellClassName: 'text-muted-foreground',
+      accessor: (c) => c.type ?? c.pluginId,
+      enumOptions: typeOptions.map((v) => ({ value: v, label: v })),
+    },
+    { id: 'host', labelKey: 'settings.connectors.colHost', type: 'text', defaultVisible: true, cellClassName: 'text-muted-foreground', accessor: (c) => c.allowedHost ?? '—' },
+    {
+      id: 'enabled', labelKey: 'settings.connectors.colEnabled', type: 'enum', defaultVisible: true,
+      accessor: (c) => <Switch checked={c.enabled} onCheckedChange={(v) => void onToggle(c, v)} aria-label={t('settings.connectors.enabledLabel')} />,
+      enumOptions: [
+        { value: 'true', label: t('settings.connectors.colEnabled') },
+        { value: 'false', label: t('settings.connectors.disabledLabel') },
+      ],
+    },
+  ], [typeOptions, onToggle, t]);
+
+  // The accessors render nodes (a Switch, an em dash placeholder); filtering and sorting must
+  // compare the underlying values, which is what these getters supply.
+  const valueGetters = useMemo(() => ({
+    name: (c: Connector) => c.name,
+    type: (c: Connector) => c.type ?? c.pluginId ?? '',
+    host: (c: Connector) => c.allowedHost ?? '',
+    enabled: (c: Connector) => String(c.enabled),
+  }), []);
+
+  const table = useTableState({ columns, defaultPageSize: 25 });
+
+  // Free-text search is applied BEFORE applyTableState, never as a filter rule.
+  // applyTableState folds rules flat, left-to-right (applyTableState.ts:80-92), so appending a
+  // multi-field OR search would discard an active popover filter for rows matching only the
+  // trailing OR term. Pre-filtering keeps the semantics `search AND (popover rules)`.
+  const searched = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter((r) => SEARCH_FIELDS.some((f) => f(r).toLowerCase().includes(q)));
+  }, [rows, search]);
+
+  const view = useMemo(
+    () => applyTableState(searched, { filters: table.filters, sorts: table.sorts, page: table.page, pageSize: table.pageSize }, columns, valueGetters),
+    [searched, table.filters, table.sorts, table.page, table.pageSize, columns, valueGetters],
+  );
 
   return (
     <div className="flex min-h-0 flex-1 flex-col" data-testid="connectors-page">
-      <SettingsHeader
-        description={t('settings.connectors.description')}
-        actions={
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-8 w-8" data-testid="connectors-menu-trigger" aria-label={t('settings.connectors.heading')}>
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem data-testid="add-connector" onSelect={openCreate}>
-                {t('settings.connectors.add')}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        }
-      />
+      <SettingsHeader description={t('settings.connectors.description')} />
+
+      <div className="flex flex-col gap-2 border-b border-border px-4 py-2">
+        <DataTableToolbar
+          columns={columns}
+          filters={table.filters}
+          onFiltersChange={table.setFilters}
+          sorts={table.sorts}
+          onSortsChange={table.setSorts}
+          visibleIds={table.visibleIds}
+          onVisibleIdsChange={table.setVisibleIds}
+          onResetColumns={table.resetColumns}
+          onResetAll={() => { table.resetAll(); setSearch(''); }}
+          searchValue={search}
+          onSearchChange={(v) => { setSearch(v); table.setPage(0); }}
+          searchPlaceholder={t('settings.connectors.searchPlaceholder')}
+          actions={
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8" data-testid="connectors-menu-trigger" aria-label={t('settings.connectors.heading')}>
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem data-testid="add-connector" onSelect={openCreate}>
+                  {t('settings.connectors.add')}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          }
+        />
+        <ActiveFilterChips columns={columns} filters={table.filters} onChange={table.setFilters} />
+      </div>
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <Table wrapperClassName={pageRows.length > 0 ? 'min-h-0 flex-1' : undefined}>
+        {/* Rendered only when populated: an empty table's five header cells force intrinsic
+            width and scroll the pane sideways on a phone (AGENTS.md §6). */}
+        {view.rows.length > 0 && (
+        <Table wrapperClassName="min-h-0 flex-1">
           <TableHeader className="sticky top-0 z-10 bg-background">
             <TableRow>
-              <TableHead>{t('settings.connectors.colName')}</TableHead>
-              <TableHead>{t('settings.connectors.colType')}</TableHead>
-              <TableHead>{t('settings.connectors.colHost')}</TableHead>
-              <TableHead>{t('settings.connectors.colEnabled')}</TableHead>
+              {table.visibleColumns.map((c) => <TableHead key={c.id} className={c.headClassName}>{t(c.labelKey)}</TableHead>)}
               <TableHead className="text-right">{t('settings.connectors.colActions')}</TableHead>
             </TableRow>
           </TableHeader>
-          {pageRows.length > 0 && (
           <TableBody className="[&_tr:last-child]:border-b">
-            {pageRows.map((c) => (
+            {view.rows.map((c) => (
               <TableRow key={c.id} data-testid={`connector-row-${c.id}`}>
-                <TableCell className="font-medium">{c.name}</TableCell>
-                <TableCell className="text-muted-foreground">{c.type ?? c.pluginId}</TableCell>
-                <TableCell className="text-muted-foreground">{c.allowedHost ?? '—'}</TableCell>
-                <TableCell>
-                  <Switch checked={c.enabled} onCheckedChange={(v) => void onToggle(c, v)} aria-label={t('settings.connectors.enabledLabel')} />
-                </TableCell>
+                {table.visibleColumns.map((col) => <TableCell key={col.id} className={col.cellClassName}>{col.accessor(c)}</TableCell>)}
                 <TableCell>
                   <div className="flex items-center justify-end">
                     <DropdownMenu>
@@ -342,24 +411,28 @@ export function Connectors() {
               </TableRow>
             ))}
           </TableBody>
-          )}
         </Table>
-        {rows.length === 0 && (
-          <EmptyState
-            icon={<Plug className="h-6 w-6" />}
-            title={t('settings.connectors.emptyTitle')}
-            action={<Button onClick={openCreate}>{t('settings.connectors.add')}</Button>}
-          />
+        )}
+        {view.rows.length === 0 && (
+          rows.length === 0 ? (
+            <EmptyState
+              icon={<Plug className="h-6 w-6" />}
+              title={t('settings.connectors.emptyTitle')}
+              action={<Button onClick={openCreate}>{t('settings.connectors.add')}</Button>}
+            />
+          ) : (
+            <StripedEmpty className="flex-1">{t('settings.connectors.noMatch')}</StripedEmpty>
+          )
         )}
       </div>
 
       <TablePagination
-        page={page}
-        pageSize={pageSize}
-        total={rows.length}
-        onPageChange={setPage}
-        onPageSizeChange={(n) => { setPageSize(n); setPage(0); }}
-        leftSlot={<span className="text-muted-foreground">{t('settings.connectors.count', { count: rows.length })}</span>}
+        page={table.page}
+        pageSize={table.pageSize}
+        total={view.total}
+        onPageChange={table.setPage}
+        onPageSizeChange={table.setPageSize}
+        leftSlot={<span className="text-muted-foreground">{t('settings.connectors.count', { count: view.total })}</span>}
       />
 
       <Sheet open={draft !== null} onOpenChange={(o) => { if (!o) setDraft(null); }}>

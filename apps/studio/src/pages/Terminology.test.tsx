@@ -4,6 +4,8 @@ import { MemoryRouter } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Terminology } from './Terminology';
 import * as api from '../api';
+import '@/i18n';
+import { addFilterViaPopover, expectStandardTableToolbar } from '@/components/data-table/expectStandardTableToolbar';
 
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() }, Toaster: () => null }));
 
@@ -115,6 +117,46 @@ describe('Terminology page', () => {
 
     await waitFor(() => expect(api.getValueSet).toHaveBeenCalledWith('vs-yn'));
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('renders the standard table toolbar on the value sets table', async () => {
+    vi.spyOn(api, 'listValueSets').mockResolvedValue([
+      {
+        id: 'vs-yn', url: 'urn:openldr:vs:yes-no', name: 'YesNo', title: 'Yes/No', version: null,
+        status: 'active', immutable: false, publisherId: 'pub-loinc', category: 'local',
+        codeCount: 2, primarySystem: 'http://LOINC.org',
+      },
+    ] as never);
+
+    render(<MemoryRouter><Terminology /></MemoryRouter>);
+    fireEvent.click(await screen.findByRole('button', { name: /value sets/i }));
+    await screen.findByText('urn:openldr:vs:yes-no');
+
+    await addFilterViaPopover('yes');
+    expectStandardTableToolbar();
+  });
+
+  it('filters the value sets table by the search box', async () => {
+    vi.spyOn(api, 'listValueSets').mockResolvedValue([
+      {
+        id: 'vs-yn', url: 'urn:openldr:vs:yes-no', name: 'YesNo', title: 'Yes/No', version: null,
+        status: 'active', immutable: false, publisherId: 'pub-loinc', category: 'local',
+        codeCount: 2, primarySystem: 'http://LOINC.org',
+      },
+      {
+        id: 'vs-sex', url: 'urn:openldr:vs:sex', name: 'Sex', title: 'Sex', version: null,
+        status: 'active', immutable: false, publisherId: 'pub-loinc', category: 'local',
+        codeCount: 3, primarySystem: 'http://LOINC.org',
+      },
+    ] as never);
+
+    render(<MemoryRouter><Terminology /></MemoryRouter>);
+    fireEvent.click(await screen.findByRole('button', { name: /value sets/i }));
+    await screen.findByText('urn:openldr:vs:yes-no');
+
+    fireEvent.change(screen.getByPlaceholderText(/search value sets/i), { target: { value: 'sex' } });
+    expect(screen.queryByText('urn:openldr:vs:yes-no')).toBeNull();
+    expect(screen.getByText('urn:openldr:vs:sex')).toBeInTheDocument();
   });
 
   it('opens ontology browse and distribution dialogs from a ready code-system row', async () => {

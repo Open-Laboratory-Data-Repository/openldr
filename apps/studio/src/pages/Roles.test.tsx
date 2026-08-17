@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import '@/i18n';
+import { addFilterViaPopover, expectStandardTableToolbar } from '@/components/data-table/expectStandardTableToolbar';
 
 let mockCanManage = true;
 vi.mock('@/auth/AuthProvider', () => ({ useAuth: () => ({ hasCapability: (cap: string) => (cap === 'roles.manage' ? mockCanManage : true) }) }));
@@ -135,5 +136,30 @@ describe('Roles page', () => {
 
     await waitFor(() => expect(api.createRole).toHaveBeenCalledWith(expect.objectContaining({ name: 'New Role' })));
     expect(await screen.findByText('New Role')).toBeTruthy();
+  });
+
+  it('renders the standard table toolbar and filters rows by name', async () => {
+    render(<MemoryRouter><Roles /></MemoryRouter>);
+    await screen.findByText('Administrator');            // wait for rows
+
+    const search = screen.getByPlaceholderText(/search roles/i);
+    fireEvent.change(search, { target: { value: 'zzz-no-such-role' } });
+    expect(screen.queryByText('Administrator')).not.toBeInTheDocument();
+
+    fireEvent.change(search, { target: { value: '' } });
+    expect(await screen.findByText('Administrator')).toBeInTheDocument();
+  });
+
+  it('adopts the standard table toolbar (filter/sort/columns + chips)', async () => {
+    render(<MemoryRouter><Roles /></MemoryRouter>);
+    await screen.findByText('Administrator');
+
+    await addFilterViaPopover('Reviewer');
+
+    // The applied filter's value also renders in the ActiveFilterChips row, so a bare
+    // `findByText('Reviewer')` matches both the chip and the table cell. Scope to the row.
+    expect(await screen.findByTestId('role-row-r3')).toBeInTheDocument();
+    expect(screen.queryByText('Administrator')).not.toBeInTheDocument();
+    expectStandardTableToolbar();
   });
 });

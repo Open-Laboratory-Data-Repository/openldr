@@ -74,16 +74,33 @@ And the body block:
 ```tsx
 const table = useTableState({ columns, defaultPageSize: 25 });
 
-const effectiveFilters = useMemo(() => {
-  if (!search.trim()) return table.filters;
-  return [...table.filters, { id: '__search__', column: '<SEARCH_COLUMN>', operator: 'like' as const, value: search.trim(), combine: 'and' as const }];
-}, [table.filters, search]);
+// Free-text search is applied BEFORE applyTableState, never as a filter rule.
+//
+// applyTableState folds rules flat, left-to-right (applyTableState.ts:80-92):
+// `A AND B OR C` evaluates as `(A AND B) OR C`. Appending a multi-field OR search
+// to the rule list therefore discards any active popover filter for rows that match
+// only the trailing OR term — a status filter plus a search would silently widen
+// the result set. Pre-filtering keeps the semantics `search AND (popover rules)`,
+// which is what the operator expects.
+const searched = useMemo(() => {
+  const q = search.trim().toLowerCase();
+  if (!q) return rows;
+  return rows.filter((r) => SEARCH_FIELDS.some((f) => (f(r) ?? '').toLowerCase().includes(q)));
+}, [rows, search]);
 
 const view = useMemo(
-  () => applyTableState(rows, { filters: effectiveFilters, sorts: table.sorts, page: table.page, pageSize: table.pageSize }, columns, valueGetters),
-  [rows, effectiveFilters, table.sorts, table.page, table.pageSize, columns, valueGetters],
+  () => applyTableState(searched, { filters: table.filters, sorts: table.sorts, page: table.page, pageSize: table.pageSize }, columns, valueGetters),
+  [searched, table.filters, table.sorts, table.page, table.pageSize, columns, valueGetters],
 );
 ```
+
+`SEARCH_FIELDS` is a module-level array of accessors naming the columns the page's search
+covers — for example `[(f) => f.name, (f) => f.fhirResourceType]`. Keep it outside the component
+so it is stable.
+
+**Single-field pages may keep the rule-list form.** `Users.tsx` and `Roles.tsx` append one
+`combine: 'and'` rule, which folds correctly. Only multi-field search needs the pre-filter. Use
+the pre-filter anyway on new pages — it is uniform and cannot fold wrong.
 
 And the table body block:
 
@@ -508,15 +525,11 @@ Use whatever that prints. Do not invent statuses — AGENTS.md §8 forbids inlin
 Delete the hardcoded `<TableHead>` list at `:240-247` and the bespoke search input at `:192`, then paste the canonical blocks with `<SEARCH_COLUMN>` = `'name'`. The existing `.filter()` at `:100` also matched `fhirResourceType`; to preserve that, keep two search rules:
 
 ```tsx
-const effectiveFilters = useMemo(() => {
-  const q = search.trim();
-  if (!q) return table.filters;
-  return [...table.filters,
-    { id: '__search__', column: 'name', operator: 'like' as const, value: q, combine: 'and' as const },
-    { id: '__search2__', column: 'fhirResourceType', operator: 'like' as const, value: q, combine: 'or' as const },
-  ];
-}, [table.filters, search]);
+const SEARCH_FIELDS = [(f: FormSummary) => f.name, (f: FormSummary) => f.fhirResourceType ?? ''];
 ```
+
+then use the canonical pre-filter block. Do NOT append search as OR rules — see the canonical
+block's comment for why that folds wrong against an active popover filter.
 
 - [ ] **Step 4: Run tests to verify they pass**
 

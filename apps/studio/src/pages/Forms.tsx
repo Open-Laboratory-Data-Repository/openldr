@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ClipboardList, FileInput, MoreHorizontal, RefreshCw } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { ClipboardList, FileInput, MoreHorizontal } from 'lucide-react';
 import { AppShell } from '@/shell/AppShell';
 import { Badge } from '@/components/ui/badge';
 import { StripedEmpty } from '@/components/ui/striped-empty';
@@ -9,9 +10,11 @@ import { LoadingState } from '@/components/ui/spinner';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { TablePagination } from '@/components/ui/table-pagination';
+import {
+  ActiveFilterChips, DataTableToolbar, applyTableState, useTableState, type ColumnDef,
+} from '@/components/data-table';
 import { createForm, deleteForm, duplicateForm, exportFormBundle, formQuestionnaireUrl, listForms, publishForm, setFormStatus, type FormDefinition, type FormStatus, type FormSummary } from '@/api';
 
 function formatDate(iso: string): string {
@@ -68,7 +71,11 @@ function isImportableSchema(value: unknown): value is { name: string; fhirResour
   return typeof schema.name === 'string';
 }
 
+// Module level — stable, outside the component.
+const SEARCH_FIELDS = [(f: FormSummary) => f.name, (f: FormSummary) => f.fhirResourceType ?? ''];
+
 export function Forms() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const fileRef = useRef<HTMLInputElement>(null);
   const [rows, setRows] = useState<FormSummary[]>([]);
@@ -76,8 +83,6 @@ export function Forms() {
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
-  const [page, setPage] = useState(0);
-  const [pageSize, setPageSize] = useState(25);
   const [deleting, setDeleting] = useState<FormSummary | null>(null);
 
   const load = useCallback(async () => {
@@ -94,14 +99,65 @@ export function Forms() {
 
   useEffect(() => { void load(); }, [load]);
 
-  const filtered = useMemo(() => {
+  const columns: ColumnDef<FormSummary>[] = useMemo(() => [
+    {
+      id: 'name', labelKey: 'forms.colName', type: 'text', defaultVisible: true,
+      accessor: (f) => (
+        <div className="flex items-center gap-2 font-medium">
+          <FileInput className="h-4 w-4 text-muted-foreground" />
+          {f.name}
+        </div>
+      ),
+    },
+    {
+      id: 'fhirResourceType', labelKey: 'forms.colFhirType', type: 'text', defaultVisible: true,
+      accessor: (f) => (f.fhirResourceType ? <Badge variant="outline">{f.fhirResourceType}</Badge> : <span className="text-muted-foreground">Custom</span>),
+    },
+    { id: 'fieldCount', labelKey: 'forms.colFields', type: 'number', defaultVisible: true, cellClassName: 'text-muted-foreground', accessor: (f) => f.fieldCount },
+    { id: 'versionLabel', labelKey: 'forms.colVersion', type: 'text', defaultVisible: true, cellClassName: 'text-muted-foreground', accessor: (f) => f.versionLabel || '-' },
+    {
+      id: 'status', labelKey: 'forms.colStatus', type: 'enum', defaultVisible: true,
+      accessor: (f) => <StatusBadge status={f.status} />,
+      enumOptions: [
+        { value: 'draft', label: 'Draft' },
+        { value: 'published', label: 'Published' },
+        { value: 'archived', label: 'Archived' },
+      ],
+    },
+    {
+      id: 'active', labelKey: 'forms.colActive', type: 'enum', defaultVisible: true,
+      accessor: (f) => (f.active ? <Badge variant="secondary">Active</Badge> : <span className="text-muted-foreground">Inactive</span>),
+      enumOptions: [{ value: 'true', label: 'Active' }, { value: 'false', label: 'Inactive' }],
+    },
+    { id: 'updatedAt', labelKey: 'forms.colUpdated', type: 'date', defaultVisible: true, cellClassName: 'text-xs text-muted-foreground', accessor: (f) => formatDate(f.updatedAt) },
+  ], []);
+
+  const valueGetters = useMemo(() => ({
+    name: (f: FormSummary) => f.name,
+    fhirResourceType: (f: FormSummary) => f.fhirResourceType ?? '',
+    fieldCount: (f: FormSummary) => f.fieldCount,
+    versionLabel: (f: FormSummary) => f.versionLabel ?? '',
+    status: (f: FormSummary) => f.status,
+    active: (f: FormSummary) => String(f.active),
+    updatedAt: (f: FormSummary) => f.updatedAt ?? '',
+  }), []);
+
+  const table = useTableState({ columns, defaultPageSize: 25 });
+
+  // Free-text search is applied BEFORE applyTableState, never as a filter rule.
+  // applyTableState folds rules flat, left-to-right (applyTableState.ts:80-92), so appending a
+  // multi-field OR search would discard an active popover filter for rows matching only the
+  // trailing OR term. Pre-filtering keeps the semantics `search AND (popover rules)`.
+  const searched = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return q
-      ? rows.filter((form) => form.name.toLowerCase().includes(q) || (form.fhirResourceType ?? '').toLowerCase().includes(q))
-      : rows;
+    if (!q) return rows;
+    return rows.filter((r) => SEARCH_FIELDS.some((f) => (f(r) ?? '').toLowerCase().includes(q)));
   }, [rows, search]);
 
-  const pageRows = filtered.slice(page * pageSize, page * pageSize + pageSize);
+  const view = useMemo(
+    () => applyTableState(searched, { filters: table.filters, sorts: table.sorts, page: table.page, pageSize: table.pageSize }, columns, valueGetters),
+    [searched, table.filters, table.sorts, table.page, table.pageSize, columns, valueGetters],
+  );
 
   const importJson = async (file: File | undefined) => {
     if (!file) return;
@@ -120,7 +176,7 @@ export function Forms() {
         schema: parsed,
       });
       setRows((prev) => upsertForm(prev, toSummary(created)));
-      setPage(0);
+      table.setPage(0);
     } catch (err) {
       setActionError(err instanceof Error ? err.message : String(err));
     }
@@ -151,7 +207,7 @@ export function Forms() {
     try {
       const copy = await duplicateForm(form.id);
       setRows((prev) => upsertForm(prev, toSummary(copy)));
-      setPage(0);
+      table.setPage(0);
     } catch (err) {
       setActionError(err instanceof Error ? err.message : String(err));
     }
@@ -182,89 +238,64 @@ export function Forms() {
     <AppShell title="Forms" fullBleed>
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="flex flex-col gap-2 border-b border-border px-3 py-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <Input
-              value={search}
-              onChange={(event) => {
-                setSearch(event.target.value);
-                setPage(0);
-              }}
-              placeholder="Search forms or FHIR type"
-              className="h-8 w-72 text-xs"
-              aria-label="Search forms"
-            />
-            <div className="flex-1" />
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-8 w-8 p-0 text-muted-foreground"
-              onClick={() => void load()}
-              disabled={loading}
-              aria-label="Refresh"
-              title="Refresh"
-            >
-              <RefreshCw className={loading ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />
-            </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button size="sm" variant="outline" className="h-8 w-8 p-0" aria-label="Form actions">
-                  <MoreHorizontal className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => navigate('/forms/new')}>New</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => fileRef.current?.click()}>Import</DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <input
-              ref={fileRef}
-              type="file"
-              accept="application/json,.json"
-              className="hidden"
-              aria-label="Import form JSON"
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                event.target.value = '';
-                void importJson(file);
-              }}
-            />
-          </div>
+          <DataTableToolbar
+            columns={columns}
+            filters={table.filters}
+            onFiltersChange={table.setFilters}
+            sorts={table.sorts}
+            onSortsChange={table.setSorts}
+            visibleIds={table.visibleIds}
+            onVisibleIdsChange={table.setVisibleIds}
+            onResetColumns={table.resetColumns}
+            onResetAll={() => { table.resetAll(); setSearch(''); }}
+            searchValue={search}
+            onSearchChange={(v) => { setSearch(v); table.setPage(0); }}
+            searchPlaceholder={t('forms.searchPlaceholder')}
+            actions={
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Form actions">
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => navigate('/forms/new')}>New</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => fileRef.current?.click()}>Import</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => { void load(); }}>{t('forms.refresh')}</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            }
+          />
+          <ActiveFilterChips columns={columns} filters={table.filters} onChange={table.setFilters} />
+          <input
+            ref={fileRef}
+            type="file"
+            accept="application/json,.json"
+            className="hidden"
+            aria-label="Import form JSON"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              event.target.value = '';
+              void importJson(file);
+            }}
+          />
           {actionError ? <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">{actionError}</div> : null}
           {error ? <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">{error}</div> : null}
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <Table wrapperClassName={pageRows.length > 0 ? 'min-h-0 flex-1' : undefined}>
+          <Table wrapperClassName={view.rows.length > 0 ? 'min-h-0 flex-1' : undefined}>
             <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>FHIR type</TableHead>
-                <TableHead>Fields</TableHead>
-                <TableHead>Version</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Active</TableHead>
-                <TableHead>Updated</TableHead>
+                {table.visibleColumns.map((c) => <TableHead key={c.id} className={c.headClassName}>{t(c.labelKey)}</TableHead>)}
                 <TableHead className="w-16" />
               </TableRow>
             </TableHeader>
-            {!loading && pageRows.length > 0 && (
+            {!loading && view.rows.length > 0 && (
             <TableBody className="[&_tr:last-child]:border-b">
-                {pageRows.map((form) => (
+                {view.rows.map((form) => (
                   <TableRow key={form.id} className="cursor-pointer transition-colors hover:bg-[rgba(70,130,180,0.08)]" onClick={() => navigate(rowHref(form))}>
-                    <TableCell>
-                      <div className="flex items-center gap-2 font-medium">
-                        <FileInput className="h-4 w-4 text-muted-foreground" />
-                        {form.name}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {form.fhirResourceType ? <Badge variant="outline">{form.fhirResourceType}</Badge> : <span className="text-muted-foreground">Custom</span>}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">{form.fieldCount}</TableCell>
-                    <TableCell className="text-muted-foreground">{form.versionLabel || '-'}</TableCell>
-                    <TableCell><StatusBadge status={form.status} /></TableCell>
-                    <TableCell>{form.active ? <Badge variant="secondary">Active</Badge> : <span className="text-muted-foreground">Inactive</span>}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{formatDate(form.updatedAt)}</TableCell>
+                    {table.visibleColumns.map((c) => <TableCell key={c.id} className={c.cellClassName}>{c.accessor(form)}</TableCell>)}
                     <TableCell onClick={(event) => event.stopPropagation()}>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -300,25 +331,22 @@ export function Forms() {
             )}
           </Table>
           {loading && <LoadingState className="flex-1" label="Loading…" />}
-          {!loading && pageRows.length === 0 && (
-            search ? (
-              <StripedEmpty className="flex-1">No forms match.</StripedEmpty>
+          {!loading && view.rows.length === 0 && (
+            rows.length === 0 ? (
+              <EmptyState icon={<ClipboardList className="h-6 w-6" />} title={t('forms.emptyTitle')} />
             ) : (
-              <EmptyState icon={<ClipboardList className="h-6 w-6" />} title="No forms yet" />
+              <StripedEmpty className="flex-1">{t('forms.noMatch')}</StripedEmpty>
             )
           )}
         </div>
 
         <TablePagination
-          page={page}
-          pageSize={pageSize}
-          total={filtered.length}
-          onPageChange={setPage}
-          onPageSizeChange={(size) => {
-            setPageSize(size);
-            setPage(0);
-          }}
-          leftSlot={<span className="text-muted-foreground">{filtered.length} forms</span>}
+          page={table.page}
+          pageSize={table.pageSize}
+          total={view.total}
+          onPageChange={table.setPage}
+          onPageSizeChange={table.setPageSize}
+          leftSlot={<span className="text-muted-foreground">{view.total} forms</span>}
         />
 
         <ConfirmDialog

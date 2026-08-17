@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Library, MoreHorizontal, ChevronRight, Plus, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { cn } from '../lib/cn';
 import { toast } from 'sonner';
@@ -48,9 +49,11 @@ import { Checkbox } from '../components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '../components/ui/dialog';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../components/ui/sheet';
 import { TruncatedText } from '../components/ui/truncated-text';
+import {
+  ActiveFilterChips, DataTableToolbar, applyTableState, useTableState, type ColumnDef,
+} from '../components/data-table';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -107,6 +110,9 @@ interface ConfirmState {
 // ── component ─────────────────────────────────────────────────────────────────
 
 export function Terminology(): JSX.Element {
+  // Only the value sets table is translated so far; the rest of this page is hardcoded English.
+  const { t } = useTranslation();
+
   // ── data ────────────────────────────────────────────────────────────────────
   const [publishers, setPublishers] = useState<Publisher[]>([]);
   const [codingSystems, setCodingSystems] = useState<CodingSystem[]>([]);
@@ -121,7 +127,7 @@ export function Terminology(): JSX.Element {
   const [selectedSystemId, setSelectedSystemId] = useState('');
   const [paneTab, setPaneTab] = useState<'systems' | 'valuesets'>('systems');
   const [vsSearch, setVsSearch] = useState('');
-  const [vsSystem, setVsSystem] = useState('__all__');
+  const vsResetAllRef = useRef<() => void>(() => {});
 
   // ── pagination ──────────────────────────────────────────────────────────────
   const [systemPage, setSystemPage] = useState(0);
@@ -197,7 +203,10 @@ export function Terminology(): JSX.Element {
     setSystemPage(0);
     setPaneTab('systems');
     setVsSearch('');
-    setVsSystem('__all__');
+    // Held in a ref because vsTable is declared further down, and because resetAll's identity
+    // changes whenever the code-system list reloads — depending on it directly would wipe an
+    // active filter on an unrelated refetch.
+    vsResetAllRef.current();
   }, [selectedPublisherId]);
 
   // ── derived ─────────────────────────────────────────────────────────────────
@@ -209,14 +218,87 @@ export function Terminology(): JSX.Element {
     ? activeSection.systems.slice(systemPage * systemPageSize, systemPage * systemPageSize + systemPageSize)
     : [];
   const bothKinds = !!activeSection && activeSection.systems.length > 0 && activeSection.valueSets.length > 0;
-  const filteredValueSets = (activeSection?.valueSets ?? []).filter((vs) => {
-    if (vsSystem !== '__all__' && vs.primarySystem !== vsSystem) return false;
+  const systemLabel = useCallback(
+    (url: string): string => codingSystems.find((s) => s.url === url)?.systemCode ?? url.split('/').pop() ?? url,
+    [codingSystems],
+  );
+
+  // ── value sets table ────────────────────────────────────────────────────────
+  const sectionValueSets = useMemo(() => activeSection?.valueSets ?? [], [activeSection]);
+
+  // The code-system options come from the rows in view, so they follow the selected publisher.
+  // `vsColumns` depends on them — miss that and the options go stale when the section changes.
+  const vsSystemOptions = useMemo(
+    () => Array.from(new Set(sectionValueSets.map((v) => v.primarySystem).filter((s): s is string => !!s))),
+    [sectionValueSets],
+  );
+
+  const vsColumns: ColumnDef<ValueSetSummary>[] = useMemo(() => [
+    {
+      id: 'title', labelKey: 'terminology.vsColTitle', type: 'text', defaultVisible: true,
+      headClassName: 'text-xs uppercase tracking-wide', cellClassName: 'text-foreground',
+      accessor: (vs) => vs.title ?? vs.name ?? '-',
+    },
+    {
+      id: 'url', labelKey: 'terminology.vsColUrl', type: 'text', defaultVisible: true,
+      headClassName: 'text-xs uppercase tracking-wide', cellClassName: 'font-mono text-[11px] text-muted-foreground',
+      accessor: (vs) => vs.url,
+    },
+    {
+      id: 'primarySystem', labelKey: 'terminology.vsColSystem', type: 'enum', defaultVisible: true,
+      headClassName: 'w-32 text-xs uppercase tracking-wide', cellClassName: 'font-mono text-xs text-muted-foreground',
+      accessor: (vs) => (vs.primarySystem ? systemLabel(vs.primarySystem) : '-'),
+      enumOptions: vsSystemOptions.map((u) => ({ value: u, label: systemLabel(u) })),
+    },
+    {
+      id: 'category', labelKey: 'terminology.vsColSource', type: 'text', defaultVisible: true,
+      headClassName: 'w-24 text-xs uppercase tracking-wide',
+      accessor: (vs) => (vs.category ? <Badge variant="secondary">{vs.category}</Badge> : <span className="text-muted-foreground">-</span>),
+    },
+    {
+      id: 'codeCount', labelKey: 'terminology.vsColCodes', type: 'number', defaultVisible: true,
+      headClassName: 'w-20 text-right text-xs uppercase tracking-wide', cellClassName: 'text-right font-mono text-xs',
+      accessor: (vs) => vs.codeCount,
+    },
+    {
+      id: 'status', labelKey: 'terminology.vsColStatus', type: 'text', defaultVisible: true,
+      headClassName: 'w-24 text-xs uppercase tracking-wide',
+      accessor: (vs) => <Badge variant="outline" className="text-[10px] uppercase">{vs.status}</Badge>,
+    },
+  ], [vsSystemOptions, systemLabel]);
+
+  // The accessors render badges and resolved system labels; filtering and sorting must compare
+  // the raw values, which is what these getters supply.
+  const vsValueGetters = useMemo(() => ({
+    title: (vs: ValueSetSummary) => vs.title ?? vs.name ?? '',
+    url: (vs: ValueSetSummary) => vs.url,
+    primarySystem: (vs: ValueSetSummary) => vs.primarySystem ?? '',
+    category: (vs: ValueSetSummary) => vs.category ?? '',
+    codeCount: (vs: ValueSetSummary) => vs.codeCount,
+    status: (vs: ValueSetSummary) => vs.status,
+  }), []);
+
+  const vsTable = useTableState({ columns: vsColumns, defaultPageSize: 25 });
+  vsResetAllRef.current = vsTable.resetAll;
+
+  // Free-text search is applied BEFORE applyTableState, never as a filter rule.
+  // applyTableState folds rules flat, left-to-right (applyTableState.ts:80-92), so appending a
+  // multi-field OR search would discard an active popover filter for rows matching only the
+  // trailing OR term. Pre-filtering keeps the semantics `search AND (popover rules)`.
+  const vsSearched = useMemo(() => {
     const q = vsSearch.trim().toLowerCase();
-    if (!q) return true;
-    return (vs.title ?? '').toLowerCase().includes(q) || vs.url.toLowerCase().includes(q) || (vs.name ?? '').toLowerCase().includes(q);
-  });
-  const vsSystemOptions = Array.from(new Set((activeSection?.valueSets ?? []).map((v) => v.primarySystem).filter((s): s is string => !!s)));
-  const systemLabel = (url: string): string => codingSystems.find((s) => s.url === url)?.systemCode ?? url.split('/').pop() ?? url;
+    if (!q) return sectionValueSets;
+    return sectionValueSets.filter((vs) =>
+      (vs.title ?? '').toLowerCase().includes(q) ||
+      vs.url.toLowerCase().includes(q) ||
+      (vs.name ?? '').toLowerCase().includes(q),
+    );
+  }, [sectionValueSets, vsSearch]);
+
+  const vsView = useMemo(
+    () => applyTableState(vsSearched, { filters: vsTable.filters, sorts: vsTable.sorts, page: vsTable.page, pageSize: vsTable.pageSize }, vsColumns, vsValueGetters),
+    [vsSearched, vsTable.filters, vsTable.sorts, vsTable.page, vsTable.pageSize, vsColumns, vsValueGetters],
+  );
 
   // ── delete flows ─────────────────────────────────────────────────────────────
   const handlePublisherDelete = async (pub: Publisher): Promise<void> => {
@@ -871,42 +953,40 @@ export function Terminology(): JSX.Element {
 
                 {activeSection.valueSets.length > 0 && !selectedSystemId && (!bothKinds || paneTab === 'valuesets') && (
                   <div className="flex flex-1 flex-col overflow-hidden">
-                    <div className="flex items-center gap-2 border-b border-border px-3 py-2">
-                      <Select value={vsSystem} onValueChange={setVsSystem}>
-                        <SelectTrigger className="h-8 w-56 text-sm" aria-label="Filter by code system"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="__all__">All systems</SelectItem>
-                          {vsSystemOptions.map((u) => <SelectItem key={u} value={u}><span className="font-mono text-xs">{systemLabel(u)}</span></SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                      <Input value={vsSearch} onChange={(e) => setVsSearch(e.target.value)} placeholder="Search value sets..." className="h-8 max-w-md text-sm" aria-label="Search value sets" />
+                    <div className="flex flex-col gap-2 border-b border-border px-3 py-2">
+                      <DataTableToolbar
+                        columns={vsColumns}
+                        filters={vsTable.filters}
+                        onFiltersChange={vsTable.setFilters}
+                        sorts={vsTable.sorts}
+                        onSortsChange={vsTable.setSorts}
+                        visibleIds={vsTable.visibleIds}
+                        onVisibleIdsChange={vsTable.setVisibleIds}
+                        onResetColumns={vsTable.resetColumns}
+                        onResetAll={() => { vsTable.resetAll(); setVsSearch(''); }}
+                        searchValue={vsSearch}
+                        onSearchChange={(v) => { setVsSearch(v); vsTable.setPage(0); }}
+                        searchPlaceholder={t('terminology.vsSearchPlaceholder')}
+                      />
+                      <ActiveFilterChips columns={vsColumns} filters={vsTable.filters} onChange={vsTable.setFilters} />
                     </div>
                     {/* The wrapper must fill, and this parent must be a FLEX column for that to
                         mean anything — as a plain block it left the table content-height. */}
                     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                      {/* Rendered only when populated: an empty table's seven header cells force
+                          intrinsic width and scroll the pane sideways on a phone. */}
+                      {vsView.rows.length > 0 && (
                       <Table wrapperClassName="min-h-0 flex-1">
                         <TableHeader className="sticky top-0 z-10 bg-background">
                           <TableRow>
-                            <TableHead className="text-xs uppercase tracking-wide">Title</TableHead>
-                            <TableHead className="text-xs uppercase tracking-wide">URL</TableHead>
-                            <TableHead className="w-32 text-xs uppercase tracking-wide">System</TableHead>
-                            <TableHead className="w-24 text-xs uppercase tracking-wide">Source</TableHead>
-                            <TableHead className="w-20 text-right text-xs uppercase tracking-wide">Codes</TableHead>
-                            <TableHead className="w-24 text-xs uppercase tracking-wide">Status</TableHead>
+                            {vsTable.visibleColumns.map((c) => <TableHead key={c.id} className={c.headClassName}>{t(c.labelKey)}</TableHead>)}
                             <TableHead className="w-12" />
                           </TableRow>
                         </TableHeader>
                         <TableBody className="[&_tr:last-child]:border-b">
-                          {filteredValueSets.length === 0 ? (
-                            <TableRow><TableCell colSpan={7} className="py-8 text-center text-muted-foreground">No value sets found.</TableCell></TableRow>
-                          ) : filteredValueSets.map((vs) => (
+                          {vsView.rows.map((vs) => (
                             <TableRow key={vs.id} className="cursor-pointer transition-colors hover:bg-[rgba(70,130,180,0.08)]" onClick={() => void openValueSet(vs.id)}>
-                              <TableCell className="text-foreground">{vs.title ?? vs.name ?? '-'}</TableCell>
-                              <TableCell className="font-mono text-[11px] text-muted-foreground">{vs.url}</TableCell>
-                              <TableCell className="font-mono text-xs text-muted-foreground">{vs.primarySystem ? systemLabel(vs.primarySystem) : '-'}</TableCell>
-                              <TableCell>{vs.category ? <Badge variant="secondary">{vs.category}</Badge> : <span className="text-muted-foreground">-</span>}</TableCell>
-                              <TableCell className="text-right font-mono text-xs">{vs.codeCount}</TableCell>
-                              <TableCell><Badge variant="outline" className="text-[10px] uppercase">{vs.status}</Badge></TableCell>
+                              {vsTable.visibleColumns.map((c) => <TableCell key={c.id} className={c.cellClassName}>{c.accessor(vs)}</TableCell>)}
                               <TableCell onClick={(e) => e.stopPropagation()}>
                                 <DropdownMenu>
                                   <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-7 w-7" aria-label="Actions"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
@@ -922,7 +1002,18 @@ export function Terminology(): JSX.Element {
                           ))}
                         </TableBody>
                       </Table>
+                      )}
+                      {vsView.rows.length === 0 && (
+                        <StripedEmpty className="flex-1">{t('terminology.vsNoMatch')}</StripedEmpty>
+                      )}
                     </div>
+                    <TablePagination
+                      page={vsTable.page}
+                      pageSize={vsTable.pageSize}
+                      total={vsView.total}
+                      onPageChange={vsTable.setPage}
+                      onPageSizeChange={vsTable.setPageSize}
+                    />
                   </div>
                 )}
 
