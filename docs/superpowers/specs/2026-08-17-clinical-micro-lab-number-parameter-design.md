@@ -143,7 +143,29 @@ unanchored S/I/R picks up HIV EQA panels.
 
 Two structural filters, no drug or panel code list — `AGENTS.md` §8:
 
-- the interpretation must be a code in the existing `vs-ast-interpretation` value set;
+- the interpretation must be a code in the AST interpretation value set, matched **by
+  `value_set_url = 'urn:openldr:valueset:ast-interpretation'`**;
+
+⛔ **Match the URL, never the id.** An earlier draft of this spec said `value_set_id =
+'vs-ast-interpretation'`. **That id does not exist.** `terminology-admin-store.ts:389` assigns
+`newId('vs')` on first creation, and `newId` is `` `${prefix}-${randomUUID()}` `` (`:103-105`); the
+projection copies that verbatim into `terminology_codes.value_set_id`
+(`packages/db/src/relational/value-set.ts:39,51`). Measured live 2026-08-17: the set is
+`vs-83c8e4af-a601-420e-96ae-cea468e8afe3`, and **0 rows** carry the literal. The seed itself treats
+the URL as the identity — it guards on `getByUrl(AST_INTERPRETATION_URL)`
+(`packages/bootstrap/src/seed.ts:471`, constant at `:490`).
+
+The consequence is not cosmetic. As a fail-open `LEFT JOIN` for display the wrong key merely meant
+`result` printed a raw `S` instead of `Susceptible`. Turned into a fail-closed `WHERE … in (…)` it
+returns **zero rows for every request**, emptying the susceptibility table on every report, PDF and
+CSV. Both sites — the display join and this filter — must key on the URL.
+
+⚠ Related, pre-existing, **not fixed here**: `vs-non-reportable` has **0 rows** in
+`terminology_codes` too, so the query's existing `not in (select code … 'vs-non-reportable')` filter
+has never excluded anything. It is fail-open, so nothing breaks — but `r-clinical-micro`'s
+description claims "Collection metadata is excluded by terminology, not by a hardcoded code list",
+and today that is not happening. Left alone deliberately: fixing it means either re-keying seeded
+value sets behind a migration or auditing every consumer, which is wider than this slice.
 - the lab number must carry an isolate — **as its own guard inside this query, not inherited from §2.**
 
 ⛔ The anchor cannot be delegated to the header's gate. `reporting.run(id, params)` executes the

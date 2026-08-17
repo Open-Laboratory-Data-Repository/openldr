@@ -60,6 +60,16 @@
 - Consumes: nothing from earlier tasks.
 - Produces: the AST query returns the same three columns as today — `test`, `result`, `status` — so `tbl`'s `boundColumns` and `summaryMetrics: [{ id: 'agents', type: 'count' }]` need no change. Task 2 depends on nothing here; the two tasks are independent.
 
+> ⛔ **CORRECTION, 2026-08-17, after Task 1's first review.** Every `value_set_id =
+> 'vs-ast-interpretation'` in this task's SQL below is **WRONG** — that id does not exist. Value-set
+> ids are `vs-${randomUUID()}` minted at seed time; the stable key is
+> `value_set_url = 'urn:openldr:valueset:ast-interpretation'`. Read the corrected §3 of the spec
+> before using the SQL in Steps 3–5. Two sites need the URL: the new `in (select …)` filter **and**
+> the pre-existing display `LEFT JOIN tc`. The live fixture in Step 7 must insert a **random** id
+> with the real URL, mirroring production — inserting the literal id makes all six tests pass against
+> a shape production never produces. Left in place below as the record of what was implemented first
+> and why the review caught it.
+
 **Why the isolate anchor lives in this query and is not inherited:** `reporting.run(id, params)` executes this query alone for the JSON preview and the CSV export (`apps/server/src/reports-routes.ts:54`), with no header and no `RP0005` gate. Without its own anchor, `GET /api/reports/r-clinical-micro.csv?request=TZDISATDS0010015` exports coded chemistry rows under susceptibility headings.
 
 - [ ] **Step 1: Write the failing SQL-shape tests**
