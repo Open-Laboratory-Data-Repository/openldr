@@ -6,6 +6,168 @@
       "version": null,
       "entries": [
         {
+          "hash": "f0b8ec62",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Right-align the update switch, and name it for what it does"
+        },
+        {
+          "hash": "8830b679",
+          "type": "fix",
+          "scope": "update-notice",
+          "title": "A failed check must not read as up to date"
+        },
+        {
+          "hash": "879cda2c",
+          "type": "fix",
+          "scope": "test",
+          "title": "The gate must not depend on GitHub being up"
+        },
+        {
+          "hash": "ebad4b24",
+          "type": "feat",
+          "scope": "cli",
+          "title": "Openldr update check"
+        },
+        {
+          "hash": "b50aacab",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Show the available version and how to upgrade"
+        },
+        {
+          "hash": "084b4a6a",
+          "type": "feat",
+          "scope": "server",
+          "title": "Poll for updates, expose the state, own the switch"
+        },
+        {
+          "hash": "23cff16f",
+          "type": "fix",
+          "scope": "bootstrap",
+          "title": "Re-sort notifications after appending the update entry"
+        },
+        {
+          "hash": "e13575d6",
+          "type": "feat",
+          "scope": "bootstrap",
+          "title": "A dismissible bell entry for an available update"
+        },
+        {
+          "hash": "8eb36e31",
+          "type": "feat",
+          "scope": "bootstrap",
+          "title": "Poll the published manifest, silently on failure"
+        },
+        {
+          "hash": "217fa7cb",
+          "type": "feat",
+          "scope": "bootstrap",
+          "title": "Cache and decide whether a newer version exists"
+        },
+        {
+          "hash": "0c28ca03",
+          "type": "fix",
+          "scope": "release",
+          "title": "Ask origin whether the tag is there, don't trust a local flag"
+        },
+        {
+          "hash": "2f5e5d19",
+          "type": "fix",
+          "scope": "release",
+          "title": "The verification install can fail, and a failed release leaves no tag"
+        },
+        {
+          "hash": "4cdfad1e",
+          "type": "fix",
+          "scope": "release",
+          "title": "Read the last tag after fetching, and never let a non-JSON body read as absent"
+        },
+        {
+          "hash": "de1ef53a",
+          "type": "fix",
+          "scope": "release",
+          "title": "The gate retry reads the failing package from turbo, not the operator"
+        },
+        {
+          "hash": "1fe8b411",
+          "type": "feat",
+          "scope": "release",
+          "title": "Pnpm release, with the git tag written last"
+        },
+        {
+          "hash": "2f546762",
+          "type": "feat",
+          "scope": "release",
+          "title": "GHCR tag-existence and visibility probes"
+        },
+        {
+          "hash": "2038c4f6",
+          "type": "fix",
+          "scope": "release",
+          "title": "Read the tag list with a herestring, not a pipe"
+        },
+        {
+          "hash": "fdc87368",
+          "type": "fix",
+          "scope": "install",
+          "title": "Default back to the latest tag, and load the resolver in memory"
+        },
+        {
+          "hash": "23a2db11",
+          "type": "fix",
+          "scope": "release",
+          "title": "The overwrite guard reads every version and distrusts a bare 404"
+        },
+        {
+          "hash": "d5a579cf",
+          "type": "fix",
+          "scope": "release",
+          "title": "Shell.test.ts resolves Git Bash instead of trusting PATH"
+        },
+        {
+          "hash": "16327e37",
+          "type": "feat",
+          "scope": "install",
+          "title": "Pin new installs to a resolved release instead of the moving latest tag"
+        },
+        {
+          "hash": "1604a467",
+          "type": "fix",
+          "scope": "release",
+          "title": "Overwrite guard fails closed on gh failures other than 404"
+        },
+        {
+          "hash": "ef7e78fd",
+          "type": "fix",
+          "scope": "release",
+          "title": "Refuse to overwrite an already-published version tag"
+        },
+        {
+          "hash": "b904a098",
+          "type": "fix",
+          "scope": "release",
+          "title": "Don't tell the operator to bump an unparseable version"
+        },
+        {
+          "hash": "2eaca3f8",
+          "type": "feat",
+          "scope": "release",
+          "title": "Precondition checks that refuse a broken release"
+        },
+        {
+          "hash": "bbad5849",
+          "type": "feat",
+          "scope": "release",
+          "title": "The latest.json manifest, with a parser for untrusted input"
+        },
+        {
+          "hash": "230b9ea3",
+          "type": "feat",
+          "scope": "core",
+          "title": "Shared semver comparison for the release process and update checks"
+        },
+        {
           "hash": "20c48dd1",
           "type": "fix",
           "scope": "studio",
@@ -1474,216 +1636,6 @@
           "type": "feat",
           "scope": "server",
           "title": "Add GET /api/facilities/mapping-target-systems"
-        },
-        {
-          "hash": "95dcfb74",
-          "type": "fix",
-          "scope": "bootstrap",
-          "title": "Stop misclassifying a self- or non-facility mapping as target missing"
-        },
-        {
-          "hash": "0db380ab",
-          "type": "fix",
-          "scope": "bootstrap",
-          "title": "Gate the term_mappings check on what deleteSupersededIdConcepts actually deletes"
-        },
-        {
-          "hash": "3f03e57c",
-          "type": "fix",
-          "scope": "db,bootstrap",
-          "title": "Delete a facility's superseded id-keyed registry concept"
-        },
-        {
-          "hash": "7dbe820f",
-          "type": "fix",
-          "scope": "studio",
-          "title": "Stop lowering ReferencePicker.test.tsx's async timeout, fix the real race"
-        },
-        {
-          "hash": "0518e7d3",
-          "type": "fix",
-          "scope": "db,bootstrap",
-          "title": "Key facility registry concepts on the operator's own code, not the row id"
-        },
-        {
-          "hash": "a61ef171",
-          "type": "fix",
-          "scope": "studio",
-          "title": "Distinguish \"index not built yet\" from \"this system can never be browsed\""
-        },
-        {
-          "hash": "e144c527",
-          "type": "fix",
-          "scope": "studio",
-          "title": "Relabel facilities.observed.publish now that it is no longer the only path to mapping"
-        },
-        {
-          "hash": "6ac3975e",
-          "type": "fix",
-          "scope": "bootstrap,server,cli",
-          "title": "Project a facility into FACILITY_REGISTRY_SYSTEM on write, not just on publish"
-        },
-        {
-          "hash": "874e7326",
-          "type": "fix",
-          "scope": "studio",
-          "title": "Don't let the re-auth guard latch a tab out of ever logging in again"
-        },
-        {
-          "hash": "34f7bb77",
-          "type": "fix",
-          "scope": "bootstrap",
-          "title": "Suppress auth.failed notifications for reasons that carry no security signal"
-        },
-        {
-          "hash": "d050123f",
-          "type": "fix",
-          "scope": "studio",
-          "title": "Answer credential-less API calls locally instead of asking the server to reject them"
-        },
-        {
-          "hash": "2a763924",
-          "type": "feat",
-          "scope": "db",
-          "title": "Seed the facility-registry coding_systems row on every install"
-        },
-        {
-          "hash": "fe7208bd",
-          "type": "fix",
-          "scope": "bootstrap",
-          "title": "Register coding_systems row on ingest-time facility capture"
-        },
-        {
-          "hash": "201359ab",
-          "type": "fix",
-          "scope": "bootstrap,server",
-          "title": "Sum reportCount in the fold, not a route-side join"
-        },
-        {
-          "hash": "18f3c933",
-          "type": "fix",
-          "scope": "bootstrap",
-          "title": "Dedupe resolveObservedFacilities to one row per (system, code)"
-        },
-        {
-          "hash": "80565ad8",
-          "type": "feat",
-          "scope": "server,studio",
-          "title": "Show the observed facility's name next to its code"
-        },
-        {
-          "hash": "32476e9e",
-          "type": "feat",
-          "scope": "bootstrap",
-          "title": "Reconcile facilities on performer_system/display, not display"
-        },
-        {
-          "hash": "fbada0d8",
-          "type": "feat",
-          "scope": "db",
-          "title": "Project performer as identifier.value, not display"
-        },
-        {
-          "hash": "e7399eb7",
-          "type": "feat",
-          "scope": "db",
-          "title": "Add performer_display/performer_system to diagnostic_reports"
-        },
-        {
-          "hash": "c575560d",
-          "type": "feat",
-          "scope": "fhir",
-          "title": "Model Reference.identifier for logical references"
-        }
-      ]
-    },
-    {
-      "date": "2026-08-05",
-      "version": null,
-      "entries": [
-        {
-          "hash": "169c9ad6",
-          "type": "fix",
-          "scope": "studio",
-          "title": "Give ReferencePicker's post-type findBy* assertions real headroom"
-        },
-        {
-          "hash": "bd3bf2a7",
-          "type": "fix",
-          "scope": "facility-reconcile",
-          "title": "Whole-branch review fixes for facility-reconciliation slice"
-        },
-        {
-          "hash": "a4e99790",
-          "type": "feat",
-          "scope": "cli",
-          "title": "Facilities scan-observed and publish commands"
-        },
-        {
-          "hash": "6d709a20",
-          "type": "fix",
-          "scope": "facility-reconcile",
-          "title": "Thread the feed system through live ingest and the mapping dialog"
-        },
-        {
-          "hash": "b35983c2",
-          "type": "fix",
-          "scope": "facilities",
-          "title": "Bind each ingest feed to its own observed-facility coding system"
-        },
-        {
-          "hash": "73a55254",
-          "type": "fix",
-          "scope": "studio",
-          "title": "Show local code in Observed detail line only when it differs from the observed code"
-        },
-        {
-          "hash": "43735bd4",
-          "type": "fix",
-          "scope": "studio",
-          "title": "Restore flex on Facilities TabsContent so height reaches Observed/Registry"
-        },
-        {
-          "hash": "f98858bc",
-          "type": "fix",
-          "scope": "studio",
-          "title": "Task 9 fix round — local code disambiguation, pagination, tab-primitive hardening"
-        },
-        {
-          "hash": "5fc72756",
-          "type": "fix",
-          "scope": "studio",
-          "title": "Keep display off TabsContent so the inactive Facilities tab collapses"
-        },
-        {
-          "hash": "b04939a6",
-          "type": "feat",
-          "scope": "studio",
-          "title": "Observed facilities tab on the Facilities page"
-        },
-        {
-          "hash": "07660f13",
-          "type": "fix",
-          "scope": "facilities",
-          "title": "Impact route ignores deactivated term_mappings"
-        },
-        {
-          "hash": "a0f141d2",
-          "type": "feat",
-          "scope": "server",
-          "title": "Facility deletion impact, mappings survive delete"
-        },
-        {
-          "hash": "17579a78",
-          "type": "feat",
-          "scope": "server",
-          "title": "Observed-facility list, scan and publish routes"
-        },
-        {
-          "hash": "7d911ca3",
-          "type": "fix",
-          "scope": "bootstrap",
-          "title": "Close facility-reconcile review findings (F1-F4)"
         }
       ]
     }
