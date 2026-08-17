@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { resolveGitBash } from './git-bash';
 import { execFileSync } from 'node:child_process';
 import { writeFileSync, readFileSync, mkdtempSync, chmodSync, existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -28,37 +29,6 @@ const VERSION = JSON.parse(readFileSync(join(REPO, 'package.json'), 'utf8')).ver
  * be installed. Git for Windows ships its own real bash; find that one explicitly instead of
  * trusting PATH order.
  */
-function resolveGitBash(): string {
-  if (platform() !== 'win32') return 'bash';
-
-  const isWslLauncher = (p: string) => /\\windows\\system32\\bash\.exe$/i.test(p);
-  const candidates: string[] = [];
-
-  try {
-    // Typically prints e.g. `C:/Program Files/Git/mingw64/libexec/git-core`.
-    const execPath = execFileSync('git', ['--exec-path'], { encoding: 'utf8' }).trim().replace(/\\/g, '/');
-    const installRoot = execPath.replace(/\/(mingw64|mingw32|usr)\/libexec\/git-core\/?$/, '');
-    if (installRoot && installRoot !== execPath) {
-      candidates.push(join(installRoot, 'bin', 'bash.exe'));
-    }
-  } catch {
-    // `git` not on PATH, or --exec-path failed: fall through to the fixed locations below.
-  }
-
-  candidates.push('C:\\Program Files\\Git\\bin\\bash.exe', 'C:\\Program Files (x86)\\Git\\bin\\bash.exe');
-
-  for (const candidate of candidates) {
-    if (isWslLauncher(candidate)) continue;
-    if (existsSync(candidate)) return candidate;
-  }
-
-  throw new Error(
-    'Could not find Git Bash. These tests shell out to a real bash and refuse to fall back ' +
-      'to C:\\WINDOWS\\system32\\bash.exe (the WSL launcher). Install Git for Windows, which ' +
-      'ships its own bash.exe alongside git.exe.',
-  );
-}
-
 const BASH = resolveGitBash();
 
 interface FakeGh {

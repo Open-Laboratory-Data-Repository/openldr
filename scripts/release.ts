@@ -21,6 +21,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
+import { resolveGitBash } from '../packages/release/src/git-bash';
 import { buildReleaseManifest } from '../packages/release/src/manifest';
 import { evaluatePreconditions, type ReleaseFacts } from '../packages/release/src/preconditions';
 import {
@@ -35,6 +36,11 @@ import { parseFailedTasks, formatFailedTask } from '../packages/release/src/gate
 const OWNER = 'Open-Laboratory-Data-Repository';
 const REPO = 'openldr';
 const DRY_RUN = process.argv.includes('--dry-run');
+
+// ⛔ Not the literal 'bash'. On Windows with WSL installed that is the WSL launcher,
+// which cannot run these scripts — it stopped a release dead at step 7 with every
+// precondition already green.
+const BASH = resolveGitBash();
 
 const repoRoot = fileURLToPath(new URL('../', import.meta.url));
 
@@ -214,7 +220,7 @@ async function main(): Promise<void> {
   console.log('preconditions clear\n');
 
   // 7. Build and push all five images. This also tags :<version> alongside :latest.
-  run('bash', ['scripts/build-and-push.sh', '--tag', 'latest']);
+  run(BASH, ['scripts/build-and-push.sh', '--tag', 'latest']);
 
   // 8. CHECK every package is public. One private image 401s and aborts the whole pull.
   //
@@ -254,7 +260,7 @@ async function main(): Promise<void> {
   // The stack it starts is left RUNNING on ports 80/443 (see RELEASE.md); nothing here tears it
   // down, because its logs are the evidence when the verification fails.
   const probe = mkdtempSync(join(tmpdir(), 'openldr-release-'));
-  run('bash', ['install/install.sh', '--dir', toBashPath(probe), '--version', version, '--require-ready']);
+  run(BASH, ['install/install.sh', '--dir', toBashPath(probe), '--version', version, '--require-ready']);
   console.log(`verification install completed in ${probe}`);
 
   // 10. Only now is the release real: tag, push, publish.
