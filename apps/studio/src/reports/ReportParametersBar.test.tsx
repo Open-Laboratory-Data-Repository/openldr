@@ -51,4 +51,22 @@ describe('ReportParametersBar', () => {
     );
     expect(screen.getByRole('button', { name: /run|exécuter|executar/i })).toBeDisabled();
   });
+
+  it('shows a help tooltip trigger for a parameter that carries help text', () => {
+    const withHelp: ReportSummary = {
+      ...report,
+      parameters: [{ id: 'request', label: 'Request ID', type: 'text', required: true, help: 'Accepts the lab number.' }],
+    };
+    render(<ReportParametersBar report={withHelp} params={{}} options={{}} onChange={() => {}} onRun={() => {}} running={false} canRun />);
+    expect(screen.getByRole('button', { name: /about request id/i })).toBeInTheDocument();
+  });
+
+  it('shows no help trigger when the parameter has none', () => {
+    const noHelp: ReportSummary = {
+      ...report,
+      parameters: [{ id: 'asOf', label: 'As of', type: 'text', required: false }],
+    };
+    render(<ReportParametersBar report={noHelp} params={{}} options={{}} onChange={() => {}} onRun={() => {}} running={false} canRun />);
+    expect(screen.queryByRole('button', { name: /about as of/i })).not.toBeInTheDocument();
+  });
 });

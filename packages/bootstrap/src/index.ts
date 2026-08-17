@@ -161,6 +161,7 @@ export function reportDefToSummary(def: ReportRecord, design: ReportDesign): Rep
     const type = (p.type ?? 'text') as ReportParamMeta['type'];
     const base: ReportParamMeta = { id: p.key, label: p.label, type, required: Boolean(p.required) };
     if (type === 'select' && def.paramOptions?.[p.key]) base.optionsKey = p.key;
+    if (p.help) base.help = p.help;
     return base;
   });
   return {

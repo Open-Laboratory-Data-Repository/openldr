@@ -15,6 +15,8 @@ export interface ReportParamMeta {
   required: boolean;
   /** Key into the report's options() result, for type 'select'. */
   optionsKey?: string;
+  /** Operator-facing note on what the field accepts. Rendered as a tooltip beside the label. */
+  help?: string;
 }
 
 export interface ReportMetricMeta {

@@ -112,6 +112,8 @@ export const TemplateParamSchema = z.object({
   type: z.enum(['text', 'select', 'daterange']).optional(),
   required: z.boolean().optional(),
   value: z.union([z.string(), DateRangeValueSchema]).optional(),
+  /** Operator-facing note on what the field accepts. Surfaced as ReportParamMeta.help. */
+  help: z.string().optional(),
 });
 export type TemplateParam = z.infer<typeof TemplateParamSchema>;
 

@@ -2366,7 +2366,8 @@ export const SEED_DESIGNS: ReportDesign[] = [
     paper: 'A4',
     orientation: 'portrait',
     margins: { top: 32, right: 32, bottom: 32, left: 32 },
-    parameters: [{ key: 'request', label: 'Request ID', type: 'text', required: true, value: '' }],
+    parameters: [{ key: 'request', label: 'Request ID', type: 'text', required: true, value: '',
+      help: 'The lab number, as the LIS sends it (for example TZDISATDS0013538). A single order id also works.' }],
     pages: [{ id: 'p1', elements: [
       // Band 1 — the letterhead. Every value comes from Settings ▸ Laboratory via `{{lab.*}}`;
       // an install that has not configured its identity renders these BLANK rather than printing
