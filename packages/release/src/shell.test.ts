@@ -6,6 +6,15 @@ import { tmpdir, platform } from 'node:os';
 import { pathToFileURL } from 'node:url';
 
 const REPO = resolve(__dirname, '../../..');
+
+/** `C:\tmp\bin` -> `/c/tmp/bin`.
+ *
+ *  bash splits PATH on ':'. A Windows path carries its own colon after the drive letter, so
+ *  prepending one raw yields the two useless entries `C` and `\tmp\bin` — every stub silently
+ *  misses and the real binary runs. On non-Windows this is a no-op. */
+function toPosix(p: string): string {
+  return p.replace(/\\/g, '/').replace(/^([A-Za-z]):/, (_m, d: string) => `/${d.toLowerCase()}`);
+}
 const RESOLVE_VERSION_LIB = join(REPO, 'install/lib/resolve-version.sh').replace(/\\/g, '/');
 /** The version the guard checks — the same one build-and-push.sh reads from package.json. */
 const VERSION = JSON.parse(readFileSync(join(REPO, 'package.json'), 'utf8')).version as string;
@@ -315,7 +324,19 @@ function installSh(args: string[]): { code: number; out: string } {
       {
         cwd: REPO,
         encoding: 'utf8',
-        env: { ...env, PATH: `${bin}:${process.env.PATH ?? ''}` },
+        env: {
+          ...env,
+          // ⛔ POSIX form, not `C:\...`. bash splits PATH on ':', and a Windows path splits at
+          // its own drive-letter colon — `C:\tmp\bin` becomes the two entries `C` and `\tmp\bin`,
+          // so the fake docker/curl are never found and the REAL ones run. Measured twice on this
+          // branch: once it started real containers, once it hit raw.githubusercontent.com and
+          // failed the gate on a 503 then a 429.
+          PATH: `${toPosix(bin)}:${process.env.PATH ?? ''}`,
+          // Belt and braces. Even if the PATH shim is defeated again, real curl then reads the
+          // scaffold from this checkout instead of the network, so the gate never depends on
+          // GitHub being up. install.sh defaults this to the public raw URL when unset.
+          OPENLDR_REPO_RAW: `file:///${REPO.replace(/\\/g, '/')}`,
+        },
         stdio: ['ignore', 'pipe', 'pipe'],
       },
     );

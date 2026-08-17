@@ -5,6 +5,7 @@ import {
   getNotificationPrefs, saveNotificationPrefs, type NotificationPreference, type NotificationPriority,
 } from '@openldr/bootstrap';
 import { requireCapability } from './rbac';
+import { readAppVersion } from './version';
 
 const VIEW = { preHandler: requireCapability('notifications.view') };
 
@@ -18,7 +19,13 @@ export function registerNotificationRoutes(app: FastifyInstance<any, any, any, a
     try {
       const limit = Math.min(Math.max(Number(q.limit ?? 50) || 50, 1), 200);
       const offset = Math.max(Number(q.offset ?? 0) || 0, 0);
-      return await listNotifications(ctx, userId(req), {
+      // The bell's update entry is synthesised from cached state — see updateStateToNotification.
+      // Its own catch: a failed update read must not blank the sync/audit rows the bell exists for.
+      const updateState = await ctx.updateCheck.read(readAppVersion()).catch((err: unknown) => {
+        ctx.logger.warn({ err }, 'update state read failed; notification feed continues without it');
+        return undefined;
+      });
+      return await listNotifications({ ...ctx, updateState }, userId(req), {
         limit,
         offset,
         unreadOnly: q.unreadOnly === 'true',

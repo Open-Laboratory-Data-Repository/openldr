@@ -28,7 +28,12 @@
 #        --mysql-ssl true|false (default false).
 set -eu
 
-REPO_RAW="https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main"
+# Overridable so the test suite can point at the local checkout with a file:// prefix. A real
+# install never sets OPENLDR_REPO_RAW and gets exactly the URL below. Without this the shell
+# tests download from raw.githubusercontent.com on every run — measured 2026-08-17, two
+# consecutive gate runs failed with HTTP 503 then 429 (rate-limited, earned by the hammering).
+# A test gate must not depend on GitHub being up.
+REPO_RAW="${OPENLDR_REPO_RAW:-https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main}"
 DIR="./openldr"
 # Default is the moving `latest` tag because no release has published latest.json yet — the
 # releases-latest asset URL below 404s today, and defaulting to `auto` would break the advertised

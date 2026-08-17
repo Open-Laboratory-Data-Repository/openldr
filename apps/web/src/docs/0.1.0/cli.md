@@ -42,6 +42,7 @@ admin/danger actions are also available in the Studio UI under Settings.
 | `artifact` | Author artifacts: `keygen`, `new`, `build`, `pack`, `sign`, `test`, `publish`. |
 | `sync` | Distributed (lab⇄central) sync: `status`, `now`, and central-side `enroll`, `list`, `rotate`, `revoke`. |
 | `errors` | List the error-code catalog. |
+| `update` | `check` whether a newer OpenLDR version has been published (exit 0 = up to date, 1 = an update is available, 2 = the check failed). |
 | `target-store` | Test the target warehouse connection. |
 
 Mutating CLI commands (`sync enroll/rotate/revoke`, `user create/set-role/activate/deactivate`,

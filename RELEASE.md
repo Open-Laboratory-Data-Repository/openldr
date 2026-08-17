@@ -154,6 +154,14 @@ cannot resolve, the installer stops rather than falling back to `latest`, so a l
 silently ends up on a moving tag. This default flips to `auto` once the first release publishes
 `latest.json` — it has not yet.
 
+### Installs learn about a release from `latest.json`
+
+The update check in **Settings → General** reads the `latest.json` attached to the newest
+release (`packages/bootstrap/src/update-check.ts`). It follows `releases/latest`, so cutting a
+release needs no extra step for this — the attach already happens in step 10. But it means an
+install only learns about versions published *after* the release that first shipped the update
+check.
+
 ## Verifying the installer end-to-end
 
 After the first push:

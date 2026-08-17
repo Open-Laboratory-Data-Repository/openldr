@@ -506,6 +506,18 @@ export function ctxWith(status: 'up' | 'down'): AppContext {
     // Empty identity: every {{lab.*}} resolves to '' — the same as an install that never
     // configured a letterhead, which is what most route tests should be exercising anyway.
     labIdentity: { all: async () => ({}), tokens: async () => ({}), set: async () => [] },
+    // Nothing cached and nothing polling: reads report the check ON with no update known, which is
+    // what a fresh install looks like. buildApp does NOT arm the poller (the server process entry
+    // does), so no test built on this context touches the network.
+    updateCheck: {
+      read: async (running: string) => ({
+        enabled: true, running, latestVersion: null, releasedAt: null, notesUrl: null,
+        firstSeenAt: null, lastCheckedAt: null, lastError: null, updateAvailable: false,
+      }),
+      setEnabled: async () => {},
+      record: async () => {},
+      recordFailure: async () => {},
+    },
     facilityRegistry: {} as never,
     // Same shape as `facilityRegistry` above: a bare `{}` has no `enqueue`, so any route this fake
     // context reaches that calls `ctx.facilityJobs.enqueue(...)` fails with a bare

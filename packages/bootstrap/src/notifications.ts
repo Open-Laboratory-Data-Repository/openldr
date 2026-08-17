@@ -2,12 +2,14 @@ import type { Kysely } from 'kysely';
 import type { SyncActivityRow, InternalSchema, SyncActivityStore } from '@openldr/db';
 import type { AuditEvent, AuditStore } from '@openldr/audit';
 import type { Logger } from '@openldr/core';
+import type { UpdateState } from './update-check';
 
 export type NotificationPriority = 'info' | 'warning' | 'critical';
 export type NotificationType =
   | 'sync_diverged' | 'sync_failed' | 'sync_quarantined'
   | 'plugin_crashed' | 'system_crashed' | 'auth_failed' | 'site_revoked'
-  | 'terminology_import_done' | 'terminology_import_failed';
+  | 'terminology_import_done' | 'terminology_import_failed'
+  | 'update_available';
 
 export interface Notification {
   id: string;
@@ -113,6 +115,37 @@ export function auditRowToNotification(row: AuditEvent): Notification | null {
   };
 }
 
+/** The bell entry for an available update. Synthetic — derived from the cached state, with no
+ *  source row and no table of its own.
+ *
+ *  ⛔ Three things this must get right, each of which produces a plausible but broken bell:
+ *   - `createdAt` is firstSeenAt, NEVER now. listNotifications marks anything with
+ *     createdAt <= the mark-all-read cursor as read; a `now` value always beats the cursor, so
+ *     the entry would reappear unread on every request and could never be dismissed.
+ *   - the id is keyed on the VERSION, so there is one entry per release rather than per poll.
+ *   - it is appended OUTSIDE gather()'s 30-day window (see listNotifications) — it is not a
+ *     source row, and an update still available after 30 days must not vanish from the bell. */
+export function updateStateToNotification(state: UpdateState): Notification | null {
+  if (!state.enabled || !state.updateAvailable) return null;
+  if (!state.latestVersion || !state.firstSeenAt) return null;
+  return {
+    id: `update:${state.latestVersion}`,
+    type: 'update_available',
+    priority: 'info',
+    title: `Version ${state.latestVersion} is available`,
+    body: `This install is running ${state.running}.`,
+    linkTo: '/settings/general',
+    createdAt: state.firstSeenAt,
+    readAt: null,
+    metadata: {
+      version: state.latestVersion,
+      running: state.running,
+      releasedAt: state.releasedAt,
+      notesUrl: state.notesUrl,
+    },
+  };
+}
+
 export function passesPrefs(n: Notification, disabled: Set<string>, minPriority: NotificationPriority): boolean {
   if (disabled.has(n.type)) return false;
   if (PRIORITY_RANK[n.priority] < PRIORITY_RANK[minPriority]) return false;
@@ -124,6 +157,9 @@ export interface NotificationCtx {
   syncActivity: SyncActivityStore;
   audit: AuditStore;
   logger: Logger;
+  /** Optional so every existing caller and test that builds this ctx keeps compiling. Absent
+   *  means the bell simply has no update entry. */
+  updateState?: UpdateState;
 }
 
 const AUDIT_ACTIONS = ['auth.failed', 'plugin.crash', 'system.crash', 'system.crash_loop', 'settings.sync.revoke', 'terminology.import.completed', 'terminology.import.failed'];
@@ -196,6 +232,17 @@ export async function listNotifications(
   const [all, prefs, reads] = await Promise.all([gather(ctx), getNotificationPrefs(ctx, userId), readState(ctx, userId)]);
   const disabled = new Set(prefs.disabled);
   const visible = all.filter((n) => passesPrefs(n, disabled, prefs.minPriority));
+  // Appended AFTER gather()'s window filter on purpose — see updateStateToNotification. Prefs
+  // still apply, so an operator can switch this type off like any other.
+  const update = ctx.updateState ? updateStateToNotification(ctx.updateState) : null;
+  if (update && passesPrefs(update, disabled, prefs.minPriority)) {
+    visible.push(update);
+    // Re-sort newest-first: `visible` was already sorted by gather(), but the update entry can
+    // land anywhere in real chronological order, not just at the end. Without this, an install
+    // with more than `limit` notifications can push the entry past the page boundary and hide it
+    // permanently (notifications.ts:listNotifications, see finding on push-without-resort).
+    visible.sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
+  }
   // apply read-state
   const withRead = visible.map((n) => {
     const readByIdAt = reads.ids.get(n.id);

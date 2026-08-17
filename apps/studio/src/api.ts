@@ -2633,13 +2633,42 @@ export const pluginBrokerCall = (id: string, op: PluginBrokerOp): Promise<Plugin
   authFetch(`/api/plugins/${encodeURIComponent(id)}/broker`, jbody({ op }, 'POST'))
     .then((r) => okJson<PluginRpcResult>(r, 'plugin broker call'));
 
+// ── Update check ────────────────────────────────────────────────────────────
+// Mirrors UpdateState in @openldr/bootstrap (update-check.ts). Nothing here starts
+// an upgrade — the studio only reads the cached state and owns the on/off switch.
+
+export interface UpdateState {
+  enabled: boolean;
+  running: string;
+  latestVersion: string | null;
+  releasedAt: string | null;
+  notesUrl: string | null;
+  firstSeenAt: string | null;
+  lastCheckedAt: string | null;
+  lastError: string | null;
+  updateAvailable: boolean;
+}
+
+export const fetchUpdateState = (): Promise<UpdateState> =>
+  apiGet<UpdateState>('/api/update', 'update state');
+
+export const setUpdateCheckEnabled = (enabled: boolean): Promise<{ enabled: boolean }> =>
+  authFetch('/api/settings/update', jbody({ enabled }, 'PUT'))
+    .then((r) => okJson<{ enabled: boolean }>(r, 'update check'));
+
 // ── Notifications (bell) ────────────────────────────────────────────────────
 
 export type NotificationPriority = 'info' | 'warning' | 'critical';
+// Mirrors NotificationType in @openldr/bootstrap (notifications.ts). Adding a type
+// here is only step 1 of 3: NOTIFICATION_TYPES in pages/Notifications.tsx drives the
+// Type filter, TRIGGER_TYPES in pages/settings/NotificationPreferences.tsx drives the
+// on/off rows AND the saved payload, and both need i18n
+// `notifications.triggers.<type>` + `notifications.body.<type>` keys in en/fr/pt.
 export type NotificationType =
   | 'sync_diverged' | 'sync_failed' | 'sync_quarantined'
   | 'plugin_crashed' | 'system_crashed' | 'auth_failed' | 'site_revoked'
-  | 'terminology_import_done' | 'terminology_import_failed';
+  | 'terminology_import_done' | 'terminology_import_failed'
+  | 'update_available';
 
 export interface Notification {
   id: string;

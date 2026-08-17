@@ -23,6 +23,7 @@ import { runRolesList, runRolesShow, runRolesCreate, runRolesEdit, runRolesDelet
 import { runDataExposureList, runDataExposureHide, runDataExposureShow } from './data-exposure';
 import { runSyncStatus, runSyncNow, runSyncEnroll, runSyncList, runSyncRotate, runSyncRevoke, runSyncAmend, runSyncMergePatient, runSyncExport, runSyncImport, runSyncQuarantineList, runSyncQuarantineRetry, runSyncDivergenceList, runSyncDivergenceShow, runSyncDivergenceClear } from './sync';
 import { runErrorsList } from './errors';
+import { runUpdateCheck, UPDATE_ERROR_EXIT } from './update';
 import {
   runFacilitiesImport, runFacilitiesScanObserved, runFacilitiesPublish, runFacilitiesConflicts, runFacilitiesJobs,
   runFacilitiesImportRuns, runFacilitiesImportRun, runFacilitiesImportRunCancel, runFacilitiesImportSources,
@@ -75,6 +76,22 @@ export function buildProgram(): Command {
     .description('List the OpenLDR CE error codes (code, http status, message)')
     .option('--json', 'emit machine-readable JSON', false)
     .action((opts: { json: boolean }) => { process.exitCode = runErrorsList(opts); });
+
+  const update = program.command('update').description('Version and update checks');
+  update
+    .command('check')
+    .description('Report whether a newer OpenLDR version has been published (exit 0 = up to date, 1 = an update is available, 2 = the check itself failed)')
+    .option('--json', 'emit raw JSON', false)
+    .action(async (opts: { json: boolean }) => {
+      try {
+        process.exitCode = await runUpdateCheck(opts);
+      } catch (err) {
+        // runUpdateCheck already handles its own failures; this is the belt-and-braces path.
+        // 2, not 1 — 1 means "an update is available" and a script acts on it.
+        process.stderr.write(`update check failed: ${redactError(err)}\n`);
+        process.exitCode = UPDATE_ERROR_EXIT;
+      }
+    });
 
   const fhir = program.command('fhir').description('FHIR R4 utilities');
   fhir
