@@ -36,6 +36,18 @@ You know where the web manual lives, how to search it by task, and how to follow
 - **A screenshot looks too small:** select it to open the lightbox, then close the lightbox to return to the guide.
 - **Search returns too many results:** search for the outcome, role, or error text, such as `lab_admin`, `permission denied`, or `create workflow`.
 
+## Filtering any table
+
+Most list pages — Users, Roles, Forms, Activity, Terminology value sets, Connectors, Sites, and the sync activity log — share one toolbar above the table. It works the same way everywhere:
+
+- **Search** matches as you type, across the columns that page names in its placeholder.
+- **Filter** opens a rule builder. Add a rule, pick a column, an operator, and a value, then select **Apply**. Rules combine with AND or OR.
+- **Sort** adds one or more sort rules, each ascending or descending.
+- **Columns** shows or hides columns, and **Reset to defaults** restores the original set.
+- **Reset** appears once a filter or sort is active and clears everything at once.
+
+Applied filters appear as chips beneath the toolbar. Select a chip's **×** to remove that one rule, or **Clear all** to remove them all. Search and filters combine: rows must match the search text *and* every filter rule.
+
 ## Advanced web usage
 
 This manual is intentionally web-first. It does not document installation, deployment, command-line tools, direct database administration, API automation, or plugin development. Those topics belong in a future advanced documentation web app because users who cannot install or operate the app will not see those features from inside the app.
