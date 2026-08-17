@@ -155,6 +155,8 @@ export const pt: EnShape = {
     enrolledAt: 'Inscrito',
     statusActive: 'Ativo',
     statusRevoked: 'Revogado',
+    searchPlaceholder: 'Pesquisar sites',
+    noMatch: 'Nenhum site corresponde aos filtros atuais.',
     loading: 'A carregar sites…',
     empty: 'Ainda não há sites inscritos.',
     emptyTitle: 'Nenhum site inscrito',

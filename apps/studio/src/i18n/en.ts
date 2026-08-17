@@ -151,6 +151,8 @@ export const en = {
     enrolledAt: 'Enrolled',
     statusActive: 'Active',
     statusRevoked: 'Revoked',
+    searchPlaceholder: 'Search sites',
+    noMatch: 'No sites match the current filters.',
     loading: 'Loading sites…',
     empty: 'No sites enrolled yet.',
     emptyTitle: 'No sites enrolled',

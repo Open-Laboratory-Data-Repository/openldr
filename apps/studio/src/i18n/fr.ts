@@ -155,6 +155,8 @@ export const fr: EnShape = {
     enrolledAt: 'Inscrit',
     statusActive: 'Actif',
     statusRevoked: 'Révoqué',
+    searchPlaceholder: 'Rechercher des sites',
+    noMatch: 'Aucun site ne correspond aux filtres actuels.',
     loading: 'Chargement des sites…',
     empty: 'Aucun site inscrit pour le moment.',
     emptyTitle: 'Aucun site inscrit',
