@@ -325,7 +325,7 @@ export const pt: EnShape = {
         released: 'publicada em {{date}}',
         releaseNotes: 'Notas da versão',
         upgradeHow: 'Para atualizar, execute isto na pasta de instalação:',
-        checkForUpdates: 'Procurar atualizações',
+        checkForUpdates: 'Verificação automática de atualizações',
         lastChecked: 'Última verificação {{when}}',
         neverChecked: 'Nunca verificado',
         checkFailed: 'A última verificação falhou: {{error}}. Esta instalação pode não estar atualizada.',

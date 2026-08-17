@@ -323,7 +323,7 @@ export const en = {
         released: 'released {{date}}',
         releaseNotes: 'Release notes',
         upgradeHow: 'To upgrade, run these in your install directory:',
-        checkForUpdates: 'Check for updates',
+        checkForUpdates: 'Auto update check',
         lastChecked: 'Last checked {{when}}',
         neverChecked: 'Never checked',
         checkFailed: 'The last check failed: {{error}}. This install may not be up to date.',

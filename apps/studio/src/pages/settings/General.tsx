@@ -5,6 +5,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { enUS, fr as frDate, pt as ptDate } from 'date-fns/locale';
 import { useAuth } from '@/auth/AuthProvider';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { Divider } from '@/components/ui/bleed';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -204,12 +205,20 @@ export function General() {
           )}
 
           {update && (
-            <div className="mt-4 flex flex-col gap-3">
+            <>
+            {/* Separates the static facts above (version, environment, licence) from the update
+                check's control and state below. CardContent is `p-4`, so Divider's default
+                `-mx-4` lands exactly on the card edges — the edge-to-edge rule in AGENTS.md §5. */}
+            <Divider className="my-4" />
+            <div className="flex flex-col gap-3">
               {/* Only the SWITCH is gated by settings.edit_general, matching the server's
                   EDIT_GENERAL gate on PUT /api/settings/update (settings-routes.ts). Whether the
                   install is current is not an admin question — everyone sees the state below. */}
+              {/* `justify-between`, matching the Feature Flags rows below — the switch belongs
+                  hard right, not tucked against its label. A grid of [auto_1fr] left it at the
+                  start of the second column, which is what this looked like before. */}
               {canEditGeneral && (
-                <div className="grid grid-cols-[auto_1fr] items-center gap-x-4">
+                <div className="flex items-center justify-between gap-4">
                   {/* No htmlFor: Switch renders a <button role="switch">, which a <label> cannot
                       be associated with. The accessible name comes from aria-label instead. */}
                   <Label className="whitespace-nowrap">
@@ -241,6 +250,7 @@ export function General() {
                 </span>
               )}
             </div>
+            </>
           )}
         </CardContent>
       </Card>
