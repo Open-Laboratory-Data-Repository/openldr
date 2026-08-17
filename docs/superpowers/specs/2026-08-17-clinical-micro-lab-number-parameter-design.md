@@ -144,7 +144,14 @@ unanchored S/I/R picks up HIV EQA panels.
 Two structural filters, no drug or panel code list — `AGENTS.md` §8:
 
 - the interpretation must be a code in the existing `vs-ast-interpretation` value set;
-- the lab number must carry an isolate (inherited from §2's guard).
+- the lab number must carry an isolate — **as its own guard inside this query, not inherited from §2.**
+
+⛔ The anchor cannot be delegated to the header's gate. `reporting.run(id, params)` executes the
+primary query — the AST query — on its own for the JSON preview and the CSV export
+(`apps/server/src/reports-routes.ts:54`), with no header involved and no `RP0005` check. Without its
+own anchor, `GET /api/reports/r-clinical-micro.csv?request=<a chemistry lab number>` would export
+coded chemistry rows under susceptibility column headings. The PDF path is gated; the export path is
+not.
 
 A susceptibility test exists *because* a culture grew something, so the isolate requirement excludes
 EQA and ARV panels by structure. This is the same anchor `q-amr-antibiogram`,
