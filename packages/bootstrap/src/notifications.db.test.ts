@@ -11,10 +11,18 @@ import {
   markNotificationsRead,
   markAllNotificationsRead,
   saveNotificationPrefs,
+  updateStateToNotification,
   type NotificationCtx,
 } from './notifications';
+import type { UpdateState } from './update-check';
 
 const nullLogger = { info() {}, warn() {}, error() {}, debug() {} } as unknown as Logger;
+
+const state = (over: Partial<UpdateState> = {}): UpdateState => ({
+  enabled: true, running: '0.1.1', latestVersion: '0.2.0', releasedAt: '2026-08-20',
+  notesUrl: 'https://example.org/x', firstSeenAt: '2026-08-20T10:00:00.000Z',
+  lastCheckedAt: '2026-08-20T10:00:00.000Z', lastError: null, updateAvailable: true, ...over,
+});
 
 async function buildCtx(): Promise<NotificationCtx> {
   const internalDb = (await makeMigratedDb()) as Kysely<InternalSchema>;
@@ -115,6 +123,30 @@ describe('notifications DB store', () => {
     expect(notifications.some((n) => n.type === 'sync_quarantined')).toBe(true);
   });
 
+  // Trap 3: gather() drops source rows older than WINDOW_DAYS=30. The update entry is NOT a
+  // source row, so it must survive past the window — the update is still available.
+  it('includes the update entry even when firstSeenAt is older than the source window', async () => {
+    const old = new Date(Date.now() - 60 * 86_400_000).toISOString();
+    const res = await listNotifications(
+      { ...ctx, updateState: state({ firstSeenAt: old }) } as never,
+      'u1',
+      {},
+    );
+    expect(res.notifications.some((n) => n.id === 'update:0.2.0')).toBe(true);
+  });
+
+  it('stays dismissed after mark-all-read', async () => {
+    // firstSeenAt must be in the PAST for this to mean anything: mark-all-read writes a cursor of
+    // now() and reads it back as `createdAt <= cursor`. The shared fixture's 2026-08-20 is a fixed
+    // literal that goes stale the moment the clock is behind it, so pin it relative to now.
+    const seen = new Date(Date.now() - 3_600_000).toISOString();
+    const c = { ...ctx, updateState: state({ firstSeenAt: seen }) } as never;
+    await markAllNotificationsRead(c, 'u1');
+    const res = await listNotifications(c, 'u1', {});
+    const n = res.notifications.find((x) => x.id === 'update:0.2.0');
+    expect(n?.readAt).toBeTruthy();
+  });
+
   it('markNotificationsRead sets readAt to the actual mark-read timestamp, not createdAt', async () => {
     const before = await listNotifications(ctx, 'user1', {});
     const failed = before.notifications.find((n) => n.type === 'sync_failed');
@@ -134,5 +166,42 @@ describe('notifications DB store', () => {
     const readAtMs = new Date(stillFailed!.readAt!).getTime();
     expect(readAtMs).toBeGreaterThanOrEqual(beforeMark - 1000);
     expect(readAtMs).toBeLessThanOrEqual(afterMark + 1000);
+  });
+});
+
+describe('updateStateToNotification', () => {
+  it('is null when no update is available', () => {
+    expect(updateStateToNotification(state({ updateAvailable: false }))).toBeNull();
+  });
+
+  it('is null when the check is disabled', () => {
+    expect(updateStateToNotification(state({ enabled: false, updateAvailable: false }))).toBeNull();
+  });
+
+  it('is null when firstSeenAt is missing — without it the entry cannot be dismissed', () => {
+    expect(updateStateToNotification(state({ firstSeenAt: null }))).toBeNull();
+  });
+
+  // Trap 2: one notification per VERSION, not per poll.
+  it('uses a stable id keyed on the version', () => {
+    expect(updateStateToNotification(state())!.id).toBe('update:0.2.0');
+    expect(updateStateToNotification(state({ latestVersion: '0.3.0' }))!.id).toBe('update:0.3.0');
+  });
+
+  // Trap 1: createdAt must be firstSeenAt. A `now` value always beats the mark-all-read cursor,
+  // so the entry would come back unread on every request.
+  it('uses firstSeenAt as createdAt, unchanged across calls', () => {
+    const a = updateStateToNotification(state())!;
+    const b = updateStateToNotification(state())!;
+    expect(a.createdAt).toBe('2026-08-20T10:00:00.000Z');
+    expect(b.createdAt).toBe(a.createdAt);
+  });
+
+  it('is an info notification pointing at the settings page', () => {
+    const n = updateStateToNotification(state())!;
+    expect(n.type).toBe('update_available');
+    expect(n.priority).toBe('info');
+    expect(n.linkTo).toBe('/settings/general');
+    expect(n.metadata).toMatchObject({ version: '0.2.0', running: '0.1.1' });
   });
 });
