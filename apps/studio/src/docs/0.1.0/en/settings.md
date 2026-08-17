@@ -14,6 +14,28 @@ See [Environment Variables](/docs/environment) for the deployment-level configur
 
 This manual documents supported settings areas only. If a settings page is not covered here, treat it as outside the current in-app documentation scope.
 
+## Update checks
+
+**Settings → General** shows the version this install is running, and — when one exists — the
+newer version that has been published, with the two commands to upgrade.
+
+The check is **on by default**. It fetches a small file from GitHub once a day, with a
+10-second timeout on that one request, and compares version numbers. It never downloads an
+image and never restarts anything; upgrading is always something you do yourself.
+
+**What the check sends:** nothing but an ordinary web request for a public file. No site name,
+no version, no identifier. As with any web request, the server that answers it can see your
+network's IP address and the time you asked.
+
+**To turn it off,** switch off *Check for updates* in **Settings → General**. The install then
+makes no outbound request at all, and the version line shows only what you are running. An
+air-gapped lab can leave it on — a failed check is silent, and the last known answer is kept.
+There is no command-line switch for this; it is a Studio-only setting.
+
+**From the command line:** `openldr update check` prints the same information. It exits 1 when
+an update is available and 0 otherwise — that means "an update exists", not an error, so a
+script can act on the exit code directly.
+
 ## Related guides
 
 - [Roles](/docs/roles)
