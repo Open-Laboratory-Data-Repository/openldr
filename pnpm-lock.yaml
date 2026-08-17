@@ -1117,6 +1117,19 @@ importers:
         specifier: 2.1.8
         version: 2.1.8(@types/node@25.9.3)(jsdom@25.0.1)(lightningcss@1.32.0)
 
+  packages/release:
+    dependencies:
+      '@openldr/core':
+        specifier: workspace:*
+        version: link:../core
+    devDependencies:
+      typescript:
+        specifier: ^5.7.2
+        version: 5.7.2
+      vitest:
+        specifier: 2.1.8
+        version: 2.1.8(@types/node@25.9.3)(jsdom@25.0.1)(lightningcss@1.32.0)
+
   packages/report-designer:
     dependencies:
       '@openldr/core':
