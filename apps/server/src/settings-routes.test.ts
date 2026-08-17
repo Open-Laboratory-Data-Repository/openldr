@@ -3,6 +3,7 @@ import Fastify from 'fastify';
 import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createUpdateCheck } from '@openldr/bootstrap';
 import { registerSettingsRoutes } from './settings-routes';
 
 const SYNC_STATUS = {
@@ -23,8 +24,15 @@ function fakeCtx(syncEnabled = true) {
   const reconcile = vi.fn(async () => {});
   let strictness: 'low' | 'medium' | 'high' = 'high';
   const validationStrictnessSet = vi.fn(async (level: 'low' | 'medium' | 'high', _actor: string | null) => { strictness = level; });
+  // The real thing over the fake app_settings map — the route only reads/writes those keys, so a
+  // stub would prove nothing about the switch actually landing in the store.
+  const appSettings = {
+    get: async (k: string) => (settings.has(k) ? { value: settings.get(k)! } : undefined),
+    set: async (k: string, v: string) => { settings.set(k, v); },
+  };
   return {
     ctx: {
+      updateCheck: createUpdateCheck(appSettings as any),
       validationStrictness: {
         get: async () => strictness,
         set: validationStrictnessSet,
@@ -51,10 +59,7 @@ function fakeCtx(syncEnabled = true) {
         invalidate: () => {},
       },
       // Minimal AppSettingStore for the sync config route.
-      appSettings: {
-        get: async (k: string) => (settings.has(k) ? { value: settings.get(k)! } : undefined),
-        set: async (k: string, v: string) => { settings.set(k, v); },
-      },
+      appSettings,
       // Fake seal: prefix so a test can assert the stored value is the ENCRYPTED form, never plaintext.
       encryptSecret: (plain: string) => `enc:${plain}`,
       decryptSecret: (blob: string) => blob.replace(/^enc:/, ''),
@@ -345,6 +350,60 @@ describe('settings routes', () => {
     const res = await app.inject({ method: 'PUT', url: '/api/settings/validation', payload: { strictness: 'bogus' } });
     expect(res.statusCode).toBe(400);
     expect((ctx as any).__validationStrictnessSet).not.toHaveBeenCalled();
+  });
+
+  describe('update check', () => {
+    it('GET /api/update reports the running version and whether an update exists', async () => {
+      const { ctx, deps } = fakeCtx();
+      const app = appWithUser(['lab_admin'], (a) => registerSettingsRoutes(a, ctx, deps));
+      const res = await app.inject({ method: 'GET', url: '/api/update' });
+      expect(res.statusCode).toBe(200);
+      const body = res.json() as { running: string; enabled: boolean; updateAvailable: boolean };
+      expect(typeof body.running).toBe('string');
+      expect(body.running).toMatch(/^\d+\.\d+\.\d+/);
+      // Default ON, and nothing cached yet, so no banner.
+      expect(body.enabled).toBe(true);
+      expect(body.updateAvailable).toBe(false);
+    });
+
+    // Read is deliberately ungated, like /api/config: the version banner and the bell entry are for
+    // every signed-in user, not only the admin who owns the switch.
+    it('GET /api/update is readable without any settings capability', async () => {
+      const { ctx, deps } = fakeCtx();
+      const app = appWithUser(['lab_technician'], (a) => registerSettingsRoutes(a, ctx, deps));
+      const res = await app.inject({ method: 'GET', url: '/api/update' });
+      expect(res.statusCode).toBe(200);
+    });
+
+    it('PUT /api/settings/update turns the check off and GET reflects it', async () => {
+      const { ctx, deps } = fakeCtx();
+      const app = appWithUser(['lab_admin'], (a) => registerSettingsRoutes(a, ctx, deps));
+      const put = await app.inject({ method: 'PUT', url: '/api/settings/update', payload: { enabled: false } });
+      expect(put.statusCode).toBe(200);
+      expect(put.json()).toEqual({ enabled: false });
+      const res = await app.inject({ method: 'GET', url: '/api/update' });
+      expect((res.json() as { enabled: boolean }).enabled).toBe(false);
+      // The switch lands in app_settings, not only in memory.
+      expect((ctx as any).__settings.get('update.enabled')).toBe('false');
+      const row = (ctx as any).__audit.find((e: any) => e.action === 'settings.update_check');
+      expect(row).toBeTruthy();
+      expect(row.after).toEqual({ enabled: false });
+    });
+
+    it('PUT /api/settings/update rejects a non-boolean', async () => {
+      const { ctx, deps } = fakeCtx();
+      const app = appWithUser(['lab_admin'], (a) => registerSettingsRoutes(a, ctx, deps));
+      const res = await app.inject({ method: 'PUT', url: '/api/settings/update', payload: { enabled: 'yes' } });
+      expect(res.statusCode).toBe(400);
+      expect((ctx as any).__settings.has('update.enabled')).toBe(false);
+    });
+
+    it('PUT /api/settings/update is 403 without settings.edit_general', async () => {
+      const { ctx, deps } = fakeCtx();
+      const app = appWithUser(['lab_technician'], (a) => registerSettingsRoutes(a, ctx, deps));
+      const res = await app.inject({ method: 'PUT', url: '/api/settings/update', payload: { enabled: false } });
+      expect(res.statusCode).toBe(403);
+    });
   });
 
   describe('GET /api/settings/sync/central-certificate', () => {

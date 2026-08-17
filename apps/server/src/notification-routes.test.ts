@@ -3,15 +3,23 @@ import Fastify from 'fastify';
 import { createSyncActivityStore } from '@openldr/db';
 import { makeMigratedDb } from '@openldr/db/testing';
 import { createAuditStore } from '@openldr/audit';
+import { createUpdateCheck, UPDATE_KEYS } from '@openldr/bootstrap';
 import { registerNotificationRoutes } from './notification-routes';
 
 const nullLogger = { info() {}, warn() {}, error() {}, debug() {} } as any;
 
-async function buildCtx() {
+async function buildCtx(update: Record<string, string> = {}) {
   const internalDb = await makeMigratedDb();
   const syncActivity = createSyncActivityStore(internalDb);
   const audit = createAuditStore(internalDb);
-  return { internalDb, syncActivity, audit, logger: nullLogger } as any;
+  // The route reads update state per request; the real check over an in-memory settings map keeps
+  // the key names honest (a stub would pass even if the route asked for the wrong thing).
+  const settings = new Map<string, string>(Object.entries(update));
+  const updateCheck = createUpdateCheck({
+    get: async (k: string) => (settings.has(k) ? { value: settings.get(k)! } : undefined),
+    set: async (k: string, v: string) => { settings.set(k, v); },
+  } as any);
+  return { internalDb, syncActivity, audit, updateCheck, logger: nullLogger } as any;
 }
 
 function appWithUser(roles: string[], ctx: any, capabilities: string[] = ['notifications.view']) {
@@ -69,6 +77,37 @@ describe('notification routes', () => {
     const body = res.json();
     expect(body.notifications).toHaveLength(1);
     expect(body.total).toBe(1);
+  });
+
+  // The route must actually hand the cached update state to listNotifications — without that the
+  // bell renders every other row correctly and silently omits the release.
+  it('GET /api/notifications includes the update entry when a newer version is cached', async () => {
+    const ctx = await buildCtx({
+      [UPDATE_KEYS.latestVersion]: '999.0.0',
+      [UPDATE_KEYS.releasedAt]: '2026-08-01',
+      [UPDATE_KEYS.notesUrl]: 'https://example.org/notes',
+      // PAST, never now: createdAt is compared against the mark-all-read cursor.
+      [UPDATE_KEYS.firstSeenAt]: '2026-08-01T00:00:00.000Z',
+    });
+    const app = appWithUser(['data_analyst'], ctx);
+
+    const res = await app.inject({ method: 'GET', url: '/api/notifications' });
+    expect(res.statusCode).toBe(200);
+    const entry = res.json().notifications.find((n: any) => n.type === 'update_available');
+    expect(entry).toBeTruthy();
+    expect(entry.id).toBe('update:999.0.0');
+    expect(entry.metadata.notesUrl).toBe('https://example.org/notes');
+  });
+
+  it('GET /api/notifications has no update entry when the check is off', async () => {
+    const ctx = await buildCtx({
+      [UPDATE_KEYS.enabled]: 'false',
+      [UPDATE_KEYS.latestVersion]: '999.0.0',
+      [UPDATE_KEYS.firstSeenAt]: '2026-08-01T00:00:00.000Z',
+    });
+    const app = appWithUser(['data_analyst'], ctx);
+    const res = await app.inject({ method: 'GET', url: '/api/notifications' });
+    expect(res.json().notifications.some((n: any) => n.type === 'update_available')).toBe(false);
   });
 
   it('POST /api/notifications/read marks an id read, dropping it from unreadOnly', async () => {

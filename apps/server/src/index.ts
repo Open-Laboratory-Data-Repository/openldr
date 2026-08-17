@@ -1,7 +1,8 @@
 import { loadConfig } from '@openldr/config';
-import { createAppContext, createIngestContext, createDbContext, seedDatabase, seedEssentials, drainCrashMarkersToAudit, guardAgainstCrashLoop } from '@openldr/bootstrap';
+import { createAppContext, createIngestContext, createDbContext, seedDatabase, seedEssentials, drainCrashMarkersToAudit, guardAgainstCrashLoop, startUpdateCheck } from '@openldr/bootstrap';
 import { createLogger, makeCrashHandler } from '@openldr/core';
 import { buildApp } from './app';
+import { createUpdateFetch } from './update-fetch';
 
 async function main(): Promise<void> {
   const cfg = loadConfig();
@@ -147,9 +148,22 @@ async function main(): Promise<void> {
     ctx.logger.warn({ err }, 'workflow trigger reconcile failed at startup (continuing)');
   }
 
+  // Is a newer OpenLDR published? Polled here — not in buildApp — because this is the process that
+  // arms every other background runner, and because buildApp is constructed by unit tests that must
+  // not reach the network. Fills the `update.*` keys the /api/update route reads; the operator's
+  // switch (PUT /api/settings/update) suppresses the request itself, so "off" means no traffic
+  // leaves the lab. It NEVER pulls an image or restarts anything.
+  const stopUpdateCheck = startUpdateCheck({
+    check: ctx.updateCheck,
+    fetchText: createUpdateFetch(),
+    now: () => new Date().toISOString(),
+    logger: ctx.logger,
+  });
+
   const worker = ingest.startWorker();
 
   const close = async () => {
+    stopUpdateCheck();
     await worker.stop();
     await app.close();
     await ingest.close();

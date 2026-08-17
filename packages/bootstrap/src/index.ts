@@ -57,6 +57,7 @@ import { createNumberSettings, type NumberSettings } from './number-settings';
 import { createValidationStrictness, type ValidationStrictness } from './validation-settings';
 import { createLabIdentity, type LabIdentityService } from './lab-identity';
 export { createValidationStrictness, VALIDATION_STRICTNESS_KEY, type ValidationStrictness } from './validation-settings';
+import { createUpdateCheck, type UpdateCheck } from './update-check';
 export * from './update-check';
 import { createReportCategoriesService, type ReportCategoriesService } from './report-categories';
 import { captureObservedFacilityFromProjection, publishFacilityMap, projectRegistryRows } from './facility-reconcile';
@@ -453,6 +454,9 @@ export interface AppContext {
   numberSettings: NumberSettings;
   /** The issuing lab's letterhead identity (Settings ▸ Laboratory). Read per render. */
   labIdentity: LabIdentityService;
+  /** Cached answer to "is a newer OpenLDR published?", plus the operator's on/off switch. Reads the
+   *  `update.*` app_settings keys; the poller that fills them is armed by the API server process. */
+  updateCheck: UpdateCheck;
   /** Curated facility records (slice 1's registry). Capture-aware: registry writes land in
    *  reference_change_log ready for the eventual central→lab down-sync. */
   facilityRegistry: FacilityRegistryStore;
@@ -973,6 +977,10 @@ const reporting: ReportingApi = {
   const numberSettings = createNumberSettings(appSettings);
   const validationStrictness: ValidationStrictness = createValidationStrictness(appSettings);
   const labIdentity = createLabIdentity(appSettings);
+  // Reads/writes the discrete `update.*` keys. Built on every context — the CLI reads the same
+  // state — but NOTHING polls from here; the API server process arms the timer (see
+  // apps/server/src/index.ts), the way every other background runner is armed.
+  const updateCheck = createUpdateCheck(appSettings);
   const facilityRegistry = createFacilityRegistryStore(internal.db, referenceCapture);
   const reportCategories = createReportCategoriesService(appSettings);
   const connectorSqlRunner = createConnectorSqlRunner({ connectors: connectorStore, secretsKey: cfg.SECRETS_ENCRYPTION_KEY });
@@ -1567,6 +1575,7 @@ const reporting: ReportingApi = {
     connectors: connectorStore,
     appSettings,
     labIdentity,
+    updateCheck,
     facilityRegistry,
     facilityJobs,
     featureFlags,

@@ -221,4 +221,34 @@ describe('startUpdateCheck', () => {
     expect(calls).toBe(2);
     vi.useRealTimers();
   });
+
+  it('warns once per distinct failure instead of on every poll, and re-arms after a success', async () => {
+    vi.useFakeTimers();
+    const warns: string[] = [];
+    let mode: 'fail' | 'ok' = 'fail';
+    const stop = startUpdateCheck({
+      check: createUpdateCheck(fakeStore()),
+      fetchText: async () => {
+        if (mode === 'fail') throw new Error('getaddrinfo ENOTFOUND github.com');
+        return MANIFEST;
+      },
+      now: () => '2026-08-20T10:00:00.000Z',
+      intervalMs: 1000,
+      logger: { warn: (o: any) => { warns.push(String(o.err)); } },
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(3000);
+    // Four polls, one line: the same outage must not fill the log.
+    expect(warns).toHaveLength(1);
+    expect(warns[0]).toMatch(/ENOTFOUND/);
+
+    mode = 'ok';
+    await vi.advanceTimersByTimeAsync(1000);
+    mode = 'fail';
+    await vi.advanceTimersByTimeAsync(1000);
+    // A success in between means the next outage is news again.
+    expect(warns).toHaveLength(2);
+    stop();
+    vi.useRealTimers();
+  });
 });

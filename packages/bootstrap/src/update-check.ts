@@ -162,13 +162,40 @@ export async function pollOnce(deps: PollDeps): Promise<void> {
   }
 }
 
+/** Log a failed poll ONCE per distinct message, re-arming after a success.
+ *
+ *  A daily check that cannot reach github writes the same line forever; at one a day that is slow
+ *  enough to look like a real event each time and noisy enough to bury one. The failure is already
+ *  durable in `update.lastError` and visible in the UI — the log line exists only so an operator
+ *  reading server logs sees it at all. Wrapping the check (rather than adding a callback to
+ *  pollOnce) keeps pollOnce's contract untouched: it still resolves to undefined, always. */
+function logFailuresOnce(check: UpdateCheck, logger: { warn(o: unknown, m: string): void }): UpdateCheck {
+  let lastLogged: string | null = null;
+  return {
+    read: (running) => check.read(running),
+    setEnabled: (on, actor) => check.setEnabled(on, actor),
+    async record(manifest, now) {
+      lastLogged = null; // a reachable server re-arms the warning for the next outage
+      await check.record(manifest, now);
+    },
+    async recordFailure(message, now) {
+      if (message !== lastLogged) {
+        lastLogged = message;
+        logger.warn({ err: message }, 'update check failed (retrying on the next interval)');
+      }
+      await check.recordFailure(message, now);
+    },
+  };
+}
+
 export function startUpdateCheck(deps: PollDeps & {
   intervalMs?: number;
   logger?: { warn(o: unknown, m: string): void };
 }): () => void {
   const interval = deps.intervalMs ?? DAY_MS;
-  void pollOnce(deps);
-  const timer = setInterval(() => { void pollOnce(deps); }, interval);
+  const pollDeps: PollDeps = deps.logger ? { ...deps, check: logFailuresOnce(deps.check, deps.logger) } : deps;
+  void pollOnce(pollDeps);
+  const timer = setInterval(() => { void pollOnce(pollDeps); }, interval);
   // Do not hold the process open for a background check.
   if (typeof timer.unref === 'function') timer.unref();
   return () => clearInterval(timer);

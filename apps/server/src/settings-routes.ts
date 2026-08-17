@@ -6,6 +6,7 @@ import { dangerResetDashboards, dangerFactoryReset, dangerClearAudit, getSyncCon
 import { LAB_IDENTITY_FIELDS, LAB_LOGO_MAX_BYTES, LAB_LOGO_MIME } from '@openldr/config';
 import { requireCapability } from './rbac';
 import { recordAudit } from './audit-helper';
+import { readAppVersion } from './version';
 
 // Sync routes: only status/activity/quarantine (read) map to sync.view per the mapping table;
 // everything else — including the bare sync-config GET/PUT, divergence list/detail (detail
@@ -442,6 +443,31 @@ export function registerSettingsRoutes(app: FastifyInstance<any, any, any, any>,
       before: { strictness: before }, after: { strictness: level },
     });
     return { strictness: level };
+  });
+
+  // ------------------------------------------------------------------
+  // Update notice. The READ sits at /api/update rather than under /api/settings/* and carries no
+  // capability guard, exactly like /api/config: the version line and the bell entry are for every
+  // signed-in user, and gating it on settings.edit_general would blank both for everyone else. It
+  // returns cached state only — nothing here fetches, pulls an image, or restarts anything.
+  app.get('/api/update', async () => ctx.updateCheck.read(readAppVersion()));
+
+  // The SWITCH is admin-only and audited, same shape as the validation/number settings above.
+  app.put('/api/settings/update', EDIT_GENERAL, async (req, reply) => {
+    const body = (req.body ?? {}) as { enabled?: unknown };
+    // Strict boolean: a string 'false' would otherwise be truthy and turn the check ON while the
+    // operator believed they had turned it off.
+    if (typeof body.enabled !== 'boolean') {
+      return reply.code(400).send({ error: 'enabled must be a boolean' });
+    }
+    const before = (await ctx.updateCheck.read(readAppVersion())).enabled;
+    await ctx.updateCheck.setEnabled(body.enabled, req.user?.id ?? null);
+    await recordAudit(ctx, req, {
+      action: 'settings.update_check', entityType: 'app_setting', entityId: 'update.enabled',
+      before: { enabled: before }, after: { enabled: body.enabled },
+    });
+    // The `return` on the send is load-bearing, not style — see the comment block in sync-routes.ts.
+    return reply.send({ enabled: body.enabled });
   });
 
   const DANGER: Record<string, keyof DangerDeps> = {
