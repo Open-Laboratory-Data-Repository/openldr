@@ -57,6 +57,7 @@ import { createNumberSettings, type NumberSettings } from './number-settings';
 import { createValidationStrictness, type ValidationStrictness } from './validation-settings';
 import { createLabIdentity, type LabIdentityService } from './lab-identity';
 export { createValidationStrictness, VALIDATION_STRICTNESS_KEY, type ValidationStrictness } from './validation-settings';
+export * from './update-check';
 import { createReportCategoriesService, type ReportCategoriesService } from './report-categories';
 import { captureObservedFacilityFromProjection, publishFacilityMap, projectRegistryRows } from './facility-reconcile';
 import { createFacilityJobWorker } from './facility-job-worker';
