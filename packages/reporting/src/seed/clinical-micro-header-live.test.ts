@@ -165,6 +165,32 @@ live('q-clinical-micro-header resolves the performing laboratory (live Postgres)
       { id: 'cu-org', request_id: 'cult-obr2', specimen_id: 'spec-cult', observation_code: 'ORGS', text_value: 'Escherichia coli' },
     ] as never).execute();
 
+    // POLYMICROBIAL — one lab number, two orders, two genuinely DIFFERENT organisms. The header
+    // folds `organism` with max() across the lab number, so without a guard this prints whichever
+    // sorts higher and the AST table merges both antibiograms beneath it, with no organism key
+    // anywhere. A clinician would read one isolate's susceptibilities and get two.
+    await db.insertInto('specimens' as never).values({ id: 'spec-poly', type_text: 'Wound swab' } as never).execute();
+    await db.insertInto('lab_requests' as never).values([
+      { id: 'poly-obr1', request_id: 'LAB-POLY', panel_desc: 'MICROBIOLOGY : WOUND' },
+      { id: 'poly-obr2', request_id: 'LAB-POLY', panel_desc: 'MICROBIOLOGY : WOUND 2' },
+    ] as never).execute();
+    await db.insertInto('lab_results' as never).values([
+      { id: 'po-org1', request_id: 'poly-obr1', specimen_id: 'spec-poly', observation_code: 'ORGS', text_value: 'Staphylococcus aureus' },
+      { id: 'po-org2', request_id: 'poly-obr2', specimen_id: 'spec-poly', observation_code: 'ORGS', text_value: 'Pseudomonas aeruginosa' },
+    ] as never).execute();
+
+    // AGREEING — two organism-bearing orders naming the SAME organism. 10 of 117 real lab numbers.
+    // This must still print: it is one isolate reported twice, not two isolates.
+    await db.insertInto('specimens' as never).values({ id: 'spec-agree', type_text: 'Blood' } as never).execute();
+    await db.insertInto('lab_requests' as never).values([
+      { id: 'agree-obr1', request_id: 'LAB-AGREE', panel_desc: 'MICROBIOLOGY : BLOOD' },
+      { id: 'agree-obr2', request_id: 'LAB-AGREE', panel_desc: 'Microbiology Sensitivity' },
+    ] as never).execute();
+    await db.insertInto('lab_results' as never).values([
+      { id: 'ag-org1', request_id: 'agree-obr1', specimen_id: 'spec-agree', observation_code: 'ORGS', text_value: 'Escherichia coli' },
+      { id: 'ag-org2', request_id: 'agree-obr2', specimen_id: 'spec-agree', observation_code: 'ORGS', text_value: 'Escherichia coli' },
+    ] as never).execute();
+
     // Chemistry — exists, but no isolate anywhere.
     await db.insertInto('lab_requests' as never).values([
       { id: 'chem-obr1', request_id: 'LAB-CHEM', panel_desc: 'Liver Function' },
@@ -264,6 +290,26 @@ live('q-clinical-micro-header resolves the performing laboratory (live Postgres)
     const row = await runFor('LAB-CULT');
     expect(row?.panel).toBe('MICROBIOLOGY : URINE');
     expect(row?.organism).toBe('Escherichia coli');
+  });
+
+  it('returns NO row for a lab number carrying TWO distinct organisms, so two isolates are never merged', async () => {
+    const raw = SEED_QUERIES.find((q) => q.id === 'q-clinical-micro-header')!.sql.postgres;
+    const res = await sql.raw<Record<string, unknown>>(
+      raw.replace(/\{\{\s*param\.request\s*\}\}/g, `'LAB-POLY'`)).execute(db);
+    expect(res.rows).toHaveLength(0);
+  });
+
+  it('still prints when two orders name the SAME organism — one isolate reported twice', async () => {
+    const row = await runFor('LAB-AGREE');
+    expect(row?.organism).toBe('Escherichia coli');
+  });
+
+  it('still prints when the isolate observation carries no value at all', async () => {
+    // ⛔ The reason the guard is `<= 1` and not `= 1`. count(distinct) ignores nulls, so `req-bare`
+    // — a real 634-6 row with no text_value — counts ZERO distinct organisms. `= 1` would refuse it.
+    const row = await runFor('req-bare');
+    expect(row).toBeDefined();
+    expect(row?.organism).toBeNull();
   });
 
   it('returns NO row for a lab number with no microbiology, so the PDF is refused', async () => {

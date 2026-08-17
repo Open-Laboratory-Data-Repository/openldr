@@ -1234,6 +1234,20 @@ describe('SEED_QUERIES — q-clinical-micro-header resolves a lab number', () =>
     }
   });
 
+  it('refuses a lab number carrying two distinct organisms, in every dialect', () => {
+    // `organism` is folded with max() across every order, so two genuinely different isolates would
+    // print as one, with both antibiograms merged beneath it. Refuse instead — the same
+    // refuse-rather-than-render path a chemistry request already takes.
+    // ⛔ `<= 1`, not `= 1`: count(distinct) ignores nulls and an isolate observation with no value
+    // is legitimate (the `req-bare` live fixture), so `= 1` would refuse a valid header.
+    for (const [dialect, sql] of Object.entries(q().sql)) {
+      expect(sql, `${dialect} lost the polymicrobial guard`)
+        .toMatch(/count\(distinct coalesce\(r\.text_value, r\.coded_value\)\)[\s\S]*?where r\.observation_code in \('634-6', 'ORGS'\)\) <= 1/);
+      expect(sql, `${dialect} used = 1, which refuses a valueless isolate observation`)
+        .not.toMatch(/count\(distinct[\s\S]*?\) = 1/);
+    }
+  });
+
   it('looks for the organism across every order under the lab number, not one order', () => {
     for (const [dialect, sql] of Object.entries(q().sql)) {
       expect(sql, `${dialect} still scopes the organism to a single order`)
@@ -1280,7 +1294,34 @@ describe('SEED_QUERIES — q-clinical-micro-ast resolves a lab number and gates 
     // time and differs per install, so a literal id can never match (RULE 0 finding, 2026-08-17).
     for (const [dialect, sql] of Object.entries(q().sql)) {
       expect(sql, `${dialect} does not gate on the value set`)
-        .toMatch(/value_set_url\s*=\s*'urn:openldr:valueset:ast-interpretation'[\s\S]*?coalesce\(r\.coded_value, r\.abnormal_flag\) in \(\s*select code from terminology_codes/);
+        .toMatch(/value_set_url\s*=\s*'urn:openldr:valueset:ast-interpretation'[\s\S]*?upper\(coalesce\(r\.coded_value, r\.abnormal_flag\)\) in \(\s*select upper\(code\) from terminology_codes/);
+    }
+  });
+
+  it('compares the interpretation case-insensitively at all three sites', () => {
+    // Measured live 2026-08-17: lab_results holds `R` x116, `S` x16 AND `s` x2. Each site fails
+    // differently, so all three are pinned. Without (1) the lowercase rows are dropped and a tested
+    // antibiotic vanishes from the printed table. Without (2) a lowercase row that now passes prints
+    // a raw `s` instead of `Susceptible`. Without (3) it renders with a blank status and the PDF
+    // loses its colour emphasis.
+    for (const [dialect, sql] of Object.entries(q().sql)) {
+      expect(sql, `${dialect} filters the interpretation case-SENSITIVELY`)
+        .toMatch(/upper\(coalesce\(r\.coded_value, r\.abnormal_flag\)\) in \(\s*select upper\(code\) from terminology_codes/);
+      expect(sql, `${dialect} resolves the DISPLAY case-SENSITIVELY`)
+        .toMatch(/and upper\(tc\.code\) = upper\(coalesce\(r\.coded_value, r\.abnormal_flag\)\)/);
+      expect(sql, `${dialect} derives the status token case-SENSITIVELY`)
+        .toMatch(/case upper\(coalesce\(r\.coded_value, r\.abnormal_flag\)\)/);
+    }
+  });
+
+  it('carries no dead vs-non-reportable filter', () => {
+    // `vs-non-reportable` exists under no key — measured live, terminology_codes holds exactly five
+    // value sets and none is non-reportable — and it keyed on `value_set_id`, which is minted as
+    // `vs-${randomUUID()}` per install. `not in` against an empty set is always true, so the filter
+    // never excluded anything. The AST interpretation gate excludes the collection-metadata rows it
+    // was meant to.
+    for (const [dialect, sql] of Object.entries(q().sql)) {
+      expect(sql, `${dialect} still carries the dead filter`).not.toContain('vs-non-reportable');
     }
   });
 

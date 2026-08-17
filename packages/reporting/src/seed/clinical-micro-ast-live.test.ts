@@ -58,6 +58,20 @@ live('q-clinical-micro-ast resolves a lab number across orders (live Postgres)',
       { id: 'm-pus', request_id: 'micro-obr1', specimen_id: 'spec-micro', observation_code: 'PUS', observation_desc: 'Pus cells', coded_value: '+++' },
     ] as never).execute();
 
+    // LAB-CASE — the interpretation arrives LOWERCASE. Measured live 2026-08-17: lab_results holds
+    // `R` x116, `S` x16 and `s` x2. The terminology entry is uppercase `S`, so a case-sensitive
+    // comparison drops the row from the filter, then prints a raw `s` for its display, then leaves
+    // its status blank — three separate half-broken behaviours from one mismatch.
+    await db.insertInto('specimens' as never).values({ id: 'spec-case', type_text: 'Urine' } as never).execute();
+    await db.insertInto('lab_requests' as never).values([
+      { id: 'case-obr1', request_id: 'LAB-CASE', panel_code: 'MURIN', panel_desc: 'MICROBIOLOGY : URINE' },
+    ] as never).execute();
+    await db.insertInto('lab_results' as never).values([
+      { id: 'k-org', request_id: 'case-obr1', specimen_id: 'spec-case', observation_code: 'ORGS', text_value: 'Escherichia coli' },
+      { id: 'k-gen', request_id: 'case-obr1', specimen_id: 'spec-case', observation_code: 'GENTA', observation_desc: 'Gentamicin', coded_value: 's' },
+      { id: 'k-cot', request_id: 'case-obr1', specimen_id: 'spec-case', observation_code: 'COTRI', observation_desc: 'Cotrimoxazole', coded_value: 'r' },
+    ] as never).execute();
+
     // LAB-CHEM — a chemistry lab number. No organism anywhere. abnormal_flag is set, which is what
     // the old `is not null` filter let through.
     await db.insertInto('lab_requests' as never).values([
@@ -117,6 +131,17 @@ live('q-clinical-micro-ast resolves a lab number across orders (live Postgres)',
     // in were it not for the value-set gate.
     const rows = await runFor('LAB-MICRO');
     expect(rows.map((r) => r.test)).not.toContain('Pus cells');
+  });
+
+  it('keeps a LOWERCASE interpretation, and resolves both its display and its status', async () => {
+    const rows = await runFor('LAB-CASE');
+    expect(rows.map((r) => r.test).sort()).toEqual(['Cotrimoxazole', 'Gentamicin']);
+    const gen = rows.find((r) => r.test === 'Gentamicin');
+    expect(gen?.result).toBe('Susceptible');
+    expect(gen?.status).toBe('normal');
+    const cot = rows.find((r) => r.test === 'Cotrimoxazole');
+    expect(cot?.result).toBe('Resistant');
+    expect(cot?.status).toBe('abnormal');
   });
 
   it('returns nothing for a chemistry lab number', async () => {
