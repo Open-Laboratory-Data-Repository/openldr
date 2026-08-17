@@ -90,6 +90,7 @@ export interface ReportParamMeta {
   type: 'daterange' | 'select' | 'text';
   required: boolean;
   optionsKey?: string;
+  help?: string;
 }
 export interface ReportMetricMeta {
   id: string;

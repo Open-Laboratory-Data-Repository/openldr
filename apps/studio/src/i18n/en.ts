@@ -615,6 +615,7 @@ export const en = {
     running: 'Running…',
     run: 'Run',
     parameters: 'Parameters',
+    aboutParam: 'About {{label}}',
     runHistory: 'Run History',
     schedules: 'Schedules',
     comingSoon: 'Coming soon',

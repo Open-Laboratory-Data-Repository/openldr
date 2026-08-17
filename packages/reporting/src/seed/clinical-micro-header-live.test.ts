@@ -127,6 +127,77 @@ live('q-clinical-micro-header resolves the performing laboratory (live Postgres)
     await db.insertInto('lab_results' as never).values({
       id: 'res-bare', request_id: 'req-bare', specimen_id: 'spec-bare', observation_code: '634-6',
     } as never).execute();
+
+    // The real DISA shape — organism on the culture order, susceptibilities on the sensitivity
+    // order, both under one lab number sharing one specimen.
+    // ⛔ `value_set_url` is what the query joins on, NOT `value_set_id`: the id is minted as
+    // `vs-${randomUUID()}` at seed time, so a literal id matches zero rows in a real deployment.
+    // Seeding only `value_set_id` here would leave `ast_source` empty and the panel would silently
+    // fall back to the culture order — the assertion below would fail for the wrong reason.
+    for (const [code, display] of [['S', 'Susceptible'], ['R', 'Resistant']]) {
+      await db.insertInto('terminology_codes' as never).values({
+        id: `vs-ast-${code}`,
+        value_set_id: 'vs-11111111-2222-3333-4444-555555555555',
+        value_set_url: 'urn:openldr:valueset:ast-interpretation',
+        code,
+        display,
+      } as never).execute();
+    }
+    await db.insertInto('specimens' as never).values({
+      id: 'spec-split', type_text: 'Stools', received_time: '2026-02-03T04:05:06Z',
+    } as never).execute();
+    await db.insertInto('lab_requests' as never).values([
+      { id: 'split-obr1', request_id: 'LAB-SPLIT', panel_desc: 'MICROBIOLOGY : STOOL' },
+      { id: 'split-obr2', request_id: 'LAB-SPLIT', panel_desc: 'Microbiology Sensitivity' },
+    ] as never).execute();
+    await db.insertInto('lab_results' as never).values([
+      { id: 'sp-org', request_id: 'split-obr1', specimen_id: 'spec-split', observation_code: 'ORGS', text_value: 'Shigella flexneri' },
+      { id: 'sp-amp', request_id: 'split-obr2', specimen_id: 'spec-split', observation_code: 'AMPIC', observation_desc: 'Ampicillin', coded_value: 'R' },
+    ] as never).execute();
+
+    // Culture only — an organism, no susceptibilities. 112 of 117 real micro lab numbers.
+    await db.insertInto('specimens' as never).values({ id: 'spec-cult', type_text: 'Urine' } as never).execute();
+    await db.insertInto('lab_requests' as never).values([
+      { id: 'cult-obr1', request_id: 'LAB-CULT', panel_desc: 'Specimen Collection' },
+      { id: 'cult-obr2', request_id: 'LAB-CULT', panel_desc: 'MICROBIOLOGY : URINE' },
+    ] as never).execute();
+    await db.insertInto('lab_results' as never).values([
+      { id: 'cu-org', request_id: 'cult-obr2', specimen_id: 'spec-cult', observation_code: 'ORGS', text_value: 'Escherichia coli' },
+    ] as never).execute();
+
+    // POLYMICROBIAL — one lab number, two orders, two genuinely DIFFERENT organisms. The header
+    // folds `organism` with max() across the lab number, so without a guard this prints whichever
+    // sorts higher and the AST table merges both antibiograms beneath it, with no organism key
+    // anywhere. A clinician would read one isolate's susceptibilities and get two.
+    await db.insertInto('specimens' as never).values({ id: 'spec-poly', type_text: 'Wound swab' } as never).execute();
+    await db.insertInto('lab_requests' as never).values([
+      { id: 'poly-obr1', request_id: 'LAB-POLY', panel_desc: 'MICROBIOLOGY : WOUND' },
+      { id: 'poly-obr2', request_id: 'LAB-POLY', panel_desc: 'MICROBIOLOGY : WOUND 2' },
+    ] as never).execute();
+    await db.insertInto('lab_results' as never).values([
+      { id: 'po-org1', request_id: 'poly-obr1', specimen_id: 'spec-poly', observation_code: 'ORGS', text_value: 'Staphylococcus aureus' },
+      { id: 'po-org2', request_id: 'poly-obr2', specimen_id: 'spec-poly', observation_code: 'ORGS', text_value: 'Pseudomonas aeruginosa' },
+    ] as never).execute();
+
+    // AGREEING — two organism-bearing orders naming the SAME organism. 10 of 117 real lab numbers.
+    // This must still print: it is one isolate reported twice, not two isolates.
+    await db.insertInto('specimens' as never).values({ id: 'spec-agree', type_text: 'Blood' } as never).execute();
+    await db.insertInto('lab_requests' as never).values([
+      { id: 'agree-obr1', request_id: 'LAB-AGREE', panel_desc: 'MICROBIOLOGY : BLOOD' },
+      { id: 'agree-obr2', request_id: 'LAB-AGREE', panel_desc: 'Microbiology Sensitivity' },
+    ] as never).execute();
+    await db.insertInto('lab_results' as never).values([
+      { id: 'ag-org1', request_id: 'agree-obr1', specimen_id: 'spec-agree', observation_code: 'ORGS', text_value: 'Escherichia coli' },
+      { id: 'ag-org2', request_id: 'agree-obr2', specimen_id: 'spec-agree', observation_code: 'ORGS', text_value: 'Escherichia coli' },
+    ] as never).execute();
+
+    // Chemistry — exists, but no isolate anywhere.
+    await db.insertInto('lab_requests' as never).values([
+      { id: 'chem-obr1', request_id: 'LAB-CHEM', panel_desc: 'Liver Function' },
+    ] as never).execute();
+    await db.insertInto('lab_results' as never).values([
+      { id: 'ch-alt', request_id: 'chem-obr1', observation_code: 'ALT', abnormal_flag: 'H' },
+    ] as never).execute();
   });
 
   afterAll(async () => {
@@ -194,5 +265,64 @@ live('q-clinical-micro-header resolves the performing laboratory (live Postgres)
     const raw = SEED_QUERIES.find((q) => q.id === 'q-clinical-micro-header')!.sql.postgres;
     const res = await sql.raw<Record<string, unknown>>(raw.replace(/\{\{\s*param\.request\s*\}\}/g, `'req-twinned'`)).execute(db);
     expect(res.rows).toHaveLength(1);
+  });
+
+  it('resolves the LAB NUMBER, returning one row across two orders', async () => {
+    const raw = SEED_QUERIES.find((q) => q.id === 'q-clinical-micro-header')!.sql.postgres;
+    const res = await sql.raw<Record<string, unknown>>(
+      raw.replace(/\{\{\s*param\.request\s*\}\}/g, `'LAB-SPLIT'`)).execute(db);
+    expect(res.rows).toHaveLength(1);
+  });
+
+  it('carries the organism even though it sits on the other order', async () => {
+    const row = await runFor('LAB-SPLIT');
+    expect(row?.organism).toBe('Shigella flexneri');
+    expect(row?.lab_number).toBe('LAB-SPLIT');
+    expect(row?.specimen).toBe('Stools');
+  });
+
+  it('names the panel that supplied the susceptibilities', async () => {
+    const row = await runFor('LAB-SPLIT');
+    expect(row?.panel).toBe('Microbiology Sensitivity');
+  });
+
+  it('falls back to an organism-bearing order for a culture with no susceptibilities', async () => {
+    const row = await runFor('LAB-CULT');
+    expect(row?.panel).toBe('MICROBIOLOGY : URINE');
+    expect(row?.organism).toBe('Escherichia coli');
+  });
+
+  it('returns NO row for a lab number carrying TWO distinct organisms, so two isolates are never merged', async () => {
+    const raw = SEED_QUERIES.find((q) => q.id === 'q-clinical-micro-header')!.sql.postgres;
+    const res = await sql.raw<Record<string, unknown>>(
+      raw.replace(/\{\{\s*param\.request\s*\}\}/g, `'LAB-POLY'`)).execute(db);
+    expect(res.rows).toHaveLength(0);
+  });
+
+  it('still prints when two orders name the SAME organism — one isolate reported twice', async () => {
+    const row = await runFor('LAB-AGREE');
+    expect(row?.organism).toBe('Escherichia coli');
+  });
+
+  it('still prints when the isolate observation carries no value at all', async () => {
+    // ⛔ The reason the guard is `<= 1` and not `= 1`. count(distinct) ignores nulls, so `req-bare`
+    // — a real 634-6 row with no text_value — counts ZERO distinct organisms. `= 1` would refuse it.
+    const row = await runFor('req-bare');
+    expect(row).toBeDefined();
+    expect(row?.organism).toBeNull();
+  });
+
+  it('returns NO row for a lab number with no microbiology, so the PDF is refused', async () => {
+    const raw = SEED_QUERIES.find((q) => q.id === 'q-clinical-micro-header')!.sql.postgres;
+    const res = await sql.raw<Record<string, unknown>>(
+      raw.replace(/\{\{\s*param\.request\s*\}\}/g, `'LAB-CHEM'`)).execute(db);
+    expect(res.rows).toHaveLength(0);
+  });
+
+  it('returns NO row for an unknown identifier', async () => {
+    const raw = SEED_QUERIES.find((q) => q.id === 'q-clinical-micro-header')!.sql.postgres;
+    const res = await sql.raw<Record<string, unknown>>(
+      raw.replace(/\{\{\s*param\.request\s*\}\}/g, `'NOPE'`)).execute(db);
+    expect(res.rows).toHaveLength(0);
   });
 });

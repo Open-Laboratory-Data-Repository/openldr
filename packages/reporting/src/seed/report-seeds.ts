@@ -1739,16 +1739,32 @@ order by pathogen_name`,
   },
 
   // ── Clinical microbiology report ────────────────────────────────────────────────────────────
-  // The one built-in aimed at a CLINICIAN rather than a programme analyst: a single request's
-  // culture & sensitivity result, for handing to the requesting ward.
+  // The one built-in aimed at a CLINICIAN rather than a programme analyst: a lab number's culture
+  // & sensitivity result, read across every order under it, for handing to the requesting ward.
   //
-  // ⚠ Two terminology joins do real work here, and neither hardcodes a vocabulary:
-  //   1. `vs-non-reportable` EXCLUDES collection metadata. Without it the report prints the
-  //      courier's phone number ("Collect By Contact Number") as a lab result — measured, 425 rows.
-  //   2. `vs-ast-interpretation` supplies the DISPLAY for S/I/R. DISA's dictionary describes code
-  //      `I` as "Invalid" (an upstream Tanzania typo for "Intermediate"); CE stores what the lab
-  //      published, verbatim, and renders the terminology display instead. `coalesce` keeps it
-  //      FAIL-OPEN: a code with no terminology entry still prints its raw text.
+  // ⛔ ONE terminology set does all the work, and it is BOTH the filter and the display.
+  // `urn:openldr:valueset:ast-interpretation` decides which rows are susceptibilities at all, and
+  // supplies the words printed for S/I/R. It is keyed by `value_set_url`, NOT by `value_set_id` —
+  // the id is minted as `vs-${randomUUID()}` at seed time (`terminology-admin-store.ts`) and is
+  // different on every install, so a literal id here can never match. DISA's dictionary describes
+  // code `I` as "Invalid" (an upstream Tanzania typo for "Intermediate"); CE stores what the lab
+  // published, verbatim, and renders the terminology display instead.
+  //
+  // ⛔ THIS QUERY IS FAIL-CLOSED, and that is a deployment risk worth stating plainly. The
+  // `in (select … from terminology_codes)` filter drops every row whose interpretation is not in
+  // that value set. So if the AST interpretation value set is missing or never seeded, EVERY
+  // susceptibility table on EVERY clinical microbiology report is empty — and an empty table is
+  // also what a genuine culture with no sensitivity testing looks like. The in-app Reports
+  // troubleshooting page tells the operator to check Terminology before reading an empty table as
+  // a clinical finding. `coalesce(tc.display, r.text_value, r.coded_value)` is a DISPLAY fallback
+  // only: it stops a row that passed the filter from printing blank. It cannot re-admit a row the
+  // filter rejected.
+  //
+  // ⚠ The interpretation match is CASE-INSENSITIVE on both sides (`upper()`), in the filter, the
+  // display join AND the status case. Measured live 2026-08-17: `lab_results` holds `R` ×116,
+  // `S` ×16 and `s` ×2. Those two lowercase rows were dropped outright, so a tested antibiotic
+  // silently vanished from a printed table. `upper()` is ANSI and identical in all three dialects.
+  //
   // The status token (`normal`/`abnormal`/`indeterminate`) stays in SQL deliberately — mapping a
   // clinical value to a presentational one is CE's choice, and the PDF renderer must never learn
   // what an antibiotic is.
@@ -1761,42 +1777,58 @@ order by pathogen_name`,
       postgres: `select
   r.observation_desc as test,
   coalesce(tc.display, r.text_value, r.coded_value) as result,
-  case coalesce(r.coded_value, r.abnormal_flag)
+  case upper(coalesce(r.coded_value, r.abnormal_flag))
     when 'S' then 'normal'
     when 'R' then 'abnormal'
     when 'I' then 'indeterminate'
     else '' end as status
 from lab_results r
+join lab_requests q on q.id = r.request_id
 left join terminology_codes tc
-  on tc.value_set_id = 'vs-ast-interpretation'
- and tc.code = coalesce(r.coded_value, r.abnormal_flag)
-where r.request_id = {{param.request}}
-  and r.observation_code not in (select code from terminology_codes where value_set_id = 'vs-non-reportable')
-  and coalesce(r.coded_value, r.abnormal_flag) is not null
+  on tc.value_set_url = 'urn:openldr:valueset:ast-interpretation'
+ and upper(tc.code) = upper(coalesce(r.coded_value, r.abnormal_flag))
+where q.request_id in (
+    select q1.request_id from lab_requests q1
+    where q1.request_id = {{param.request}} or q1.id = {{param.request}})
+  and upper(coalesce(r.coded_value, r.abnormal_flag)) in (
+    select upper(code) from terminology_codes where value_set_url = 'urn:openldr:valueset:ast-interpretation')
   and r.observation_code not in ('634-6', 'ORGS')
+  and exists (
+    select 1 from lab_results iso
+    join lab_requests iq on iq.id = iso.request_id
+    where iq.request_id = q.request_id
+      and iso.observation_code in ('634-6', 'ORGS'))
 group by 1, 2, 3
 order by 1`,
       // ⚠ MSSQL has no ordinal GROUP BY — the select expressions are repeated in full.
       mssql: `select
   r.observation_desc as test,
   coalesce(tc.display, r.text_value, r.coded_value) as result,
-  case coalesce(r.coded_value, r.abnormal_flag)
+  case upper(coalesce(r.coded_value, r.abnormal_flag))
     when 'S' then 'normal'
     when 'R' then 'abnormal'
     when 'I' then 'indeterminate'
     else '' end as status
 from lab_results r
+join lab_requests q on q.id = r.request_id
 left join terminology_codes tc
-  on tc.value_set_id = 'vs-ast-interpretation'
- and tc.code = coalesce(r.coded_value, r.abnormal_flag)
-where r.request_id = {{param.request}}
-  and r.observation_code not in (select code from terminology_codes where value_set_id = 'vs-non-reportable')
-  and coalesce(r.coded_value, r.abnormal_flag) is not null
+  on tc.value_set_url = 'urn:openldr:valueset:ast-interpretation'
+ and upper(tc.code) = upper(coalesce(r.coded_value, r.abnormal_flag))
+where q.request_id in (
+    select q1.request_id from lab_requests q1
+    where q1.request_id = {{param.request}} or q1.id = {{param.request}})
+  and upper(coalesce(r.coded_value, r.abnormal_flag)) in (
+    select upper(code) from terminology_codes where value_set_url = 'urn:openldr:valueset:ast-interpretation')
   and r.observation_code not in ('634-6', 'ORGS')
+  and exists (
+    select 1 from lab_results iso
+    join lab_requests iq on iq.id = iso.request_id
+    where iq.request_id = q.request_id
+      and iso.observation_code in ('634-6', 'ORGS'))
 group by
   r.observation_desc,
   coalesce(tc.display, r.text_value, r.coded_value),
-  case coalesce(r.coded_value, r.abnormal_flag)
+  case upper(coalesce(r.coded_value, r.abnormal_flag))
     when 'S' then 'normal'
     when 'R' then 'abnormal'
     when 'I' then 'indeterminate'
@@ -1805,19 +1837,27 @@ order by 1`,
       mysql: `select
   r.observation_desc as test,
   coalesce(tc.display, r.text_value, r.coded_value) as result,
-  case coalesce(r.coded_value, r.abnormal_flag)
+  case upper(coalesce(r.coded_value, r.abnormal_flag))
     when 'S' then 'normal'
     when 'R' then 'abnormal'
     when 'I' then 'indeterminate'
     else '' end as status
 from lab_results r
+join lab_requests q on q.id = r.request_id
 left join terminology_codes tc
-  on tc.value_set_id = 'vs-ast-interpretation'
- and tc.code = coalesce(r.coded_value, r.abnormal_flag)
-where r.request_id = {{param.request}}
-  and r.observation_code not in (select code from terminology_codes where value_set_id = 'vs-non-reportable')
-  and coalesce(r.coded_value, r.abnormal_flag) is not null
+  on tc.value_set_url = 'urn:openldr:valueset:ast-interpretation'
+ and upper(tc.code) = upper(coalesce(r.coded_value, r.abnormal_flag))
+where q.request_id in (
+    select q1.request_id from lab_requests q1
+    where q1.request_id = {{param.request}} or q1.id = {{param.request}})
+  and upper(coalesce(r.coded_value, r.abnormal_flag)) in (
+    select upper(code) from terminology_codes where value_set_url = 'urn:openldr:valueset:ast-interpretation')
   and r.observation_code not in ('634-6', 'ORGS')
+  and exists (
+    select 1 from lab_results iso
+    join lab_requests iq on iq.id = iso.request_id
+    where iq.request_id = q.request_id
+      and iso.observation_code in ('634-6', 'ORGS'))
 group by 1, 2, 3
 order by 1`,
     },
@@ -1869,6 +1909,41 @@ order by 1`,
   //    ⚠ `min(region)` and `min(district)` are taken independently, so two rows for one facility
   //    could contribute one field each. Deterministic and bounded (both describe the same facility),
   //    and the same tradeoff `facility_of` already documents — but it is a tradeoff, not a proof.
+  //
+  // ⛔ THE PARAMETER IS EITHER IDENTIFIER, AND IT RESOLVES UP. An LIS sends the lab number
+  // (`lab_requests.request_id`), not the ServiceRequest UUID, so `orders` takes whichever it was
+  // given, finds its lab number, and then reads EVERY order under that lab number. The narrow
+  // `(q.request_id = p or q.id = p)` form scopes an order id back to one order and hides its
+  // siblings — DISA puts the organism on the culture order and the susceptibilities on the
+  // sensitivity order, both under one lab number (2026-08-17 live-data finding). Same resolver as
+  // `q-clinical-micro-ast`.
+  //
+  // ⛔ ONE ROW, STRUCTURALLY. The design binds rows[0] into the keyvalue panel, the barcode and the
+  // QR, so the select drives off `spec` — one aggregate row by construction — not off
+  // `lab_requests`, which now matches several orders. No `GROUP BY` can fan that out.
+  // The `exists (select 1 from isolates)` guard turns the one row into ZERO when the lab number
+  // carries no organism, which is what `DESIGNS_REQUIRING_DATA` reads to refuse a chemistry request
+  // with `RP0005` rather than print a PDF titled "MICROBIOLOGY — CULTURE & SENSITIVITY" of nothing.
+  // Safe to widen the specimen lookup across the lab number: measured one specimen per lab number
+  // (240/240).
+  //
+  // ⛔ A POLYMICROBIAL LAB NUMBER IS REFUSED, NOT MERGED. `organism` is folded with `max()` across
+  // every order under the lab number. If a lab number carried two genuinely different isolates the
+  // header would print whichever sorts higher, and the AST table would merge both antibiograms
+  // beneath it with no organism key anywhere — a clinician would read one isolate's
+  // susceptibilities and get two. The `count(distinct …) <= 1` guard returns zero rows instead, so
+  // the same `RP0005` path refuses it. Measured 2026-08-17: 0 of 117 lab numbers do this today,
+  // but 10 carry two organism-bearing orders that happen to agree, so it is one data shape away.
+  // ⛔ `<= 1`, NOT `= 1`. `count(distinct …)` ignores nulls, and an isolate observation with no
+  // value is legitimate — the `req-bare` fixture inserts `634-6` with no `text_value` and must
+  // still return a header row. `= 1` would refuse it.
+  //
+  // ⚠ `panel` names the order that supplied the susceptibilities (`ast_source`), falling back to an
+  // organism-bearing order tie-broken on `min(id)`. That tiebreaker is STABLE BUT ARBITRARY — ten
+  // lab numbers have two organism-bearing orders and text ordering puts `-obr10` before `-obr2`.
+  // Naming "the culture panel" properly is impossible: `authored_at` is identical across a lab
+  // number's orders (2995/2995), and `created_at` tracks ingest, so keying on it would let a
+  // reprojection silently change a printed clinical field.
   {
     id: 'q-clinical-micro-header',
     name: 'Clinical — patient & specimen header',
@@ -1900,6 +1975,35 @@ facility as (
   from facility_of fo
   left join facility_map fm on fm.source_system = coalesce(fo.source_system, '') and fm.performer_system = coalesce(fo.performer_system, '') and fm.source_code = fo.performer
   left join facility_loc fa on fa.source_system = fo.source_system and fa.facility_code = fo.performer
+),
+orders as (
+  select q.id, q.request_id, q.panel_desc, q.patient_id
+  from lab_requests q
+  where q.request_id in (
+    select q1.request_id from lab_requests q1
+    where q1.request_id = {{param.request}} or q1.id = {{param.request}})
+),
+isolates as (
+  select o.id from orders o
+  join lab_results r on r.request_id = o.id
+  where r.observation_code in ('634-6', 'ORGS')
+),
+ast_source as (
+  select min(o.id) as id from orders o
+  join lab_results r on r.request_id = o.id
+  where upper(coalesce(r.coded_value, r.abnormal_flag)) in (
+      select upper(code) from terminology_codes
+      where value_set_url = 'urn:openldr:valueset:ast-interpretation')
+    and r.observation_code not in ('634-6', 'ORGS')
+),
+panel_order as (
+  select coalesce(
+    (select id from ast_source),
+    (select min(id) from isolates)) as id
+),
+spec as (
+  select max(l.specimen_id) as specimen_id
+  from lab_results l join orders o on o.id = l.request_id
 )
 select
   p.surname as patient_surname,
@@ -1908,19 +2012,23 @@ select
   p.date_of_birth as dob,
   s.type_text as specimen,
   left(s.received_time, 10) as received,
-  q.request_id as lab_number,
-  q.panel_desc as panel,
-  (select max(coalesce(o.text_value, o.coded_value)) from lab_results o
-     where o.request_id = q.id and o.observation_code in ('634-6', 'ORGS')) as organism,
+  (select min(request_id) from orders) as lab_number,
+  (select o.panel_desc from orders o join panel_order po on po.id = o.id) as panel,
+  (select max(coalesce(r.text_value, r.coded_value)) from lab_results r
+     join orders o on o.id = r.request_id
+     where r.observation_code in ('634-6', 'ORGS')) as organism,
   f.performing_lab as performing_lab,
   case when f.district is not null and f.region is not null
        then f.district || ', ' || f.region
        else coalesce(f.district, f.region) end as lab_location
-from lab_requests q
-left join patients p on p.id = q.patient_id
-left join specimens s on s.id = (select max(l.specimen_id) from lab_results l where l.request_id = q.id)
-left join facility f on f.specimen_id = (select max(l.specimen_id) from lab_results l where l.request_id = q.id)
-where q.id = {{param.request}}`, mssql: `with facility_of as (
+from spec
+left join patients p on p.id = (select min(patient_id) from orders)
+left join specimens s on s.id = spec.specimen_id
+left join facility f on f.specimen_id = spec.specimen_id
+where exists (select 1 from isolates)
+  and (select count(distinct coalesce(r.text_value, r.coded_value)) from lab_results r
+     join orders o on o.id = r.request_id
+     where r.observation_code in ('634-6', 'ORGS')) <= 1`, mssql: `with facility_of as (
   select specimen_id,
     min(performer) as performer,
     min(performer_display) as performer_display,
@@ -1946,6 +2054,35 @@ facility as (
   from facility_of fo
   left join facility_map fm on fm.source_system = coalesce(fo.source_system, '') and fm.performer_system = coalesce(fo.performer_system, '') and fm.source_code = fo.performer
   left join facility_loc fa on fa.source_system = fo.source_system and fa.facility_code = fo.performer
+),
+orders as (
+  select q.id, q.request_id, q.panel_desc, q.patient_id
+  from lab_requests q
+  where q.request_id in (
+    select q1.request_id from lab_requests q1
+    where q1.request_id = {{param.request}} or q1.id = {{param.request}})
+),
+isolates as (
+  select o.id from orders o
+  join lab_results r on r.request_id = o.id
+  where r.observation_code in ('634-6', 'ORGS')
+),
+ast_source as (
+  select min(o.id) as id from orders o
+  join lab_results r on r.request_id = o.id
+  where upper(coalesce(r.coded_value, r.abnormal_flag)) in (
+      select upper(code) from terminology_codes
+      where value_set_url = 'urn:openldr:valueset:ast-interpretation')
+    and r.observation_code not in ('634-6', 'ORGS')
+),
+panel_order as (
+  select coalesce(
+    (select id from ast_source),
+    (select min(id) from isolates)) as id
+),
+spec as (
+  select max(l.specimen_id) as specimen_id
+  from lab_results l join orders o on o.id = l.request_id
 )
 select
   p.surname as patient_surname,
@@ -1954,19 +2091,23 @@ select
   p.date_of_birth as dob,
   s.type_text as specimen,
   left(s.received_time, 10) as received,
-  q.request_id as lab_number,
-  q.panel_desc as panel,
-  (select max(coalesce(o.text_value, o.coded_value)) from lab_results o
-     where o.request_id = q.id and o.observation_code in ('634-6', 'ORGS')) as organism,
+  (select min(request_id) from orders) as lab_number,
+  (select o.panel_desc from orders o join panel_order po on po.id = o.id) as panel,
+  (select max(coalesce(r.text_value, r.coded_value)) from lab_results r
+     join orders o on o.id = r.request_id
+     where r.observation_code in ('634-6', 'ORGS')) as organism,
   f.performing_lab as performing_lab,
   case when f.district is not null and f.region is not null
        then f.district + ', ' + f.region
        else coalesce(f.district, f.region) end as lab_location
-from lab_requests q
-left join patients p on p.id = q.patient_id
-left join specimens s on s.id = (select max(l.specimen_id) from lab_results l where l.request_id = q.id)
-left join facility f on f.specimen_id = (select max(l.specimen_id) from lab_results l where l.request_id = q.id)
-where q.id = {{param.request}}`, mysql: `with facility_of as (
+from spec
+left join patients p on p.id = (select min(patient_id) from orders)
+left join specimens s on s.id = spec.specimen_id
+left join facility f on f.specimen_id = spec.specimen_id
+where exists (select 1 from isolates)
+  and (select count(distinct coalesce(r.text_value, r.coded_value)) from lab_results r
+     join orders o on o.id = r.request_id
+     where r.observation_code in ('634-6', 'ORGS')) <= 1`, mysql: `with facility_of as (
   select specimen_id,
     min(performer) as performer,
     min(performer_display) as performer_display,
@@ -1992,6 +2133,35 @@ facility as (
   from facility_of fo
   left join facility_map fm on fm.source_system = coalesce(fo.source_system, '') and fm.performer_system = coalesce(fo.performer_system, '') and fm.source_code = fo.performer
   left join facility_loc fa on fa.source_system = fo.source_system and fa.facility_code = fo.performer
+),
+orders as (
+  select q.id, q.request_id, q.panel_desc, q.patient_id
+  from lab_requests q
+  where q.request_id in (
+    select q1.request_id from lab_requests q1
+    where q1.request_id = {{param.request}} or q1.id = {{param.request}})
+),
+isolates as (
+  select o.id from orders o
+  join lab_results r on r.request_id = o.id
+  where r.observation_code in ('634-6', 'ORGS')
+),
+ast_source as (
+  select min(o.id) as id from orders o
+  join lab_results r on r.request_id = o.id
+  where upper(coalesce(r.coded_value, r.abnormal_flag)) in (
+      select upper(code) from terminology_codes
+      where value_set_url = 'urn:openldr:valueset:ast-interpretation')
+    and r.observation_code not in ('634-6', 'ORGS')
+),
+panel_order as (
+  select coalesce(
+    (select id from ast_source),
+    (select min(id) from isolates)) as id
+),
+spec as (
+  select max(l.specimen_id) as specimen_id
+  from lab_results l join orders o on o.id = l.request_id
 )
 select
   p.surname as patient_surname,
@@ -2000,19 +2170,23 @@ select
   p.date_of_birth as dob,
   s.type_text as specimen,
   left(s.received_time, 10) as received,
-  q.request_id as lab_number,
-  q.panel_desc as panel,
-  (select max(coalesce(o.text_value, o.coded_value)) from lab_results o
-     where o.request_id = q.id and o.observation_code in ('634-6', 'ORGS')) as organism,
+  (select min(request_id) from orders) as lab_number,
+  (select o.panel_desc from orders o join panel_order po on po.id = o.id) as panel,
+  (select max(coalesce(r.text_value, r.coded_value)) from lab_results r
+     join orders o on o.id = r.request_id
+     where r.observation_code in ('634-6', 'ORGS')) as organism,
   f.performing_lab as performing_lab,
   case when f.district is not null and f.region is not null
        then concat(f.district, ', ', f.region)
        else coalesce(f.district, f.region) end as lab_location
-from lab_requests q
-left join patients p on p.id = q.patient_id
-left join specimens s on s.id = (select max(l.specimen_id) from lab_results l where l.request_id = q.id)
-left join facility f on f.specimen_id = (select max(l.specimen_id) from lab_results l where l.request_id = q.id)
-where q.id = {{param.request}}` },
+from spec
+left join patients p on p.id = (select min(patient_id) from orders)
+left join specimens s on s.id = spec.specimen_id
+left join facility f on f.specimen_id = spec.specimen_id
+where exists (select 1 from isolates)
+  and (select count(distinct coalesce(r.text_value, r.coded_value)) from lab_results r
+     join orders o on o.id = r.request_id
+     where r.observation_code in ('634-6', 'ORGS')) <= 1` },
   },
 ];
 
@@ -2222,7 +2396,8 @@ export const SEED_DESIGNS: ReportDesign[] = [
     paper: 'A4',
     orientation: 'portrait',
     margins: { top: 32, right: 32, bottom: 32, left: 32 },
-    parameters: [{ key: 'request', label: 'Request ID', type: 'text', required: true, value: '' }],
+    parameters: [{ key: 'request', label: 'Request ID', type: 'text', required: true, value: '',
+      help: 'The lab number, as the LIS sends it (for example TZDISATDS0013538). A single order id also works.' }],
     pages: [{ id: 'p1', elements: [
       // Band 1 — the letterhead. Every value comes from Settings ▸ Laboratory via `{{lab.*}}`;
       // an install that has not configured its identity renders these BLANK rather than printing
@@ -2433,7 +2608,7 @@ export const SEED_REPORT_DEFS: ReportRecord[] = [
   {
     id: 'r-clinical-micro',
     name: 'Clinical Microbiology Report',
-    description: 'Culture & sensitivity result for a single request, for the requesting clinician. Collection metadata is excluded by terminology, not by a hardcoded code list.',
+    description: 'Culture & sensitivity result for one lab number, read across every order under it, for the requesting clinician. Susceptibilities are selected by terminology, not by a hardcoded code list, so collection metadata and microscopy stay off the table.',
     category: 'operational',
     designId: 'rt-clinical-micro',
     primaryQueryId: 'q-clinical-micro-ast',

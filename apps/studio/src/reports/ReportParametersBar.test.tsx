@@ -51,4 +51,28 @@ describe('ReportParametersBar', () => {
     );
     expect(screen.getByRole('button', { name: /run|exécuter|executar/i })).toBeDisabled();
   });
+
+  it('opens the parameter help on CLICK, so a phone can read it', async () => {
+    // ⛔ Click, not hover. Radix Tooltip ignores touch (its pointer handlers bail on
+    // `pointerType === 'touch'`), so the help was unreachable on a phone — the surface it exists
+    // for. A Popover opens on click, which is what both a mouse and a tap produce.
+    const withHelp: ReportSummary = {
+      ...report,
+      parameters: [{ id: 'request', label: 'Request ID', type: 'text', required: true, help: 'Accepts the lab number.' }],
+    };
+    render(<ReportParametersBar report={withHelp} params={{}} options={{}} onChange={() => {}} onRun={() => {}} running={false} canRun />);
+    const trigger = screen.getByRole('button', { name: /about request id/i });
+    expect(screen.queryByText('Accepts the lab number.')).not.toBeInTheDocument();
+    await userEvent.click(trigger);
+    expect(await screen.findByText('Accepts the lab number.')).toBeInTheDocument();
+  });
+
+  it('shows no help trigger when the parameter has none', () => {
+    const noHelp: ReportSummary = {
+      ...report,
+      parameters: [{ id: 'asOf', label: 'As of', type: 'text', required: false }],
+    };
+    render(<ReportParametersBar report={noHelp} params={{}} options={{}} onChange={() => {}} onRun={() => {}} running={false} canRun />);
+    expect(screen.queryByRole('button', { name: /about as of/i })).not.toBeInTheDocument();
+  });
 });

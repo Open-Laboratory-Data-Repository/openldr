@@ -91,7 +91,20 @@ const FACILITY_CTES_SQL = (() => {
       'the slice pattern in facility-map-namespace.e2e.test.ts (FACILITY_CTES_SQL) to match its new shape',
     );
   }
-  return CLINICAL_HEADER_SQL.slice(0, boundary.index);
+  // ⛔ The three facility CTEs are no longer ALL the CTEs. Since the lab-number slice the query also
+  // carries `orders`/`isolates`/`ast_source`/`panel_order`/`spec`, and `orders` holds the raw
+  // `{{param.request}}` placeholder — not valid SQL, so pg-mem's parser rejects the whole statement
+  // ("Syntax error at line 24 col 25", reproduced 2026-08-17). Cut at `orders` and re-close the
+  // `facility` CTE, so the slice is still the three CTEs read verbatim from the shipped string.
+  const ctes = CLINICAL_HEADER_SQL.slice(0, boundary.index);
+  const paramCte = ctes.indexOf('),\norders as (');
+  if (paramCte < 0) {
+    throw new Error(
+      'q-clinical-micro-header no longer opens its parameterised CTEs with `orders` — update the ' +
+      'slice pattern in facility-map-namespace.e2e.test.ts (FACILITY_CTES_SQL) to match its new shape',
+    );
+  }
+  return `${ctes.slice(0, paramCte)})`;
 })();
 
 /**

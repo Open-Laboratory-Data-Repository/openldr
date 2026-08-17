@@ -1163,12 +1163,17 @@ describe('SEED_QUERIES — q-clinical-micro-header names the performing laborato
     }
   });
 
-  it('reaches the facility through the same max(specimen_id) subselect, not through s.id', () => {
+  it('reaches the facility through the folded specimen id, not through s.id', () => {
     // `s` is LEFT joined, so a specimen_id present in lab_results but absent from `specimens`
-    // leaves s.id NULL and would silently drop the facility.
+    // leaves s.id NULL and would silently drop the facility. The specimen id now comes from the
+    // `spec` CTE (one aggregate row over every order under the lab number) rather than from a
+    // correlated `max(l.specimen_id) ... where l.request_id = q.id` subselect, but the guard is the
+    // same one: both joins read `spec.specimen_id`, and neither reads `s.id`.
     for (const [dialect, sql] of Object.entries(q().sql)) {
       expect(sql, `${dialect} hangs the facility off the specimens join`)
-        .toContain('left join facility f on f.specimen_id = (select max(l.specimen_id) from lab_results l where l.request_id = q.id)');
+        .toContain('left join facility f on f.specimen_id = spec.specimen_id');
+      expect(sql, `${dialect} reaches the facility through the LEFT-joined specimens row`)
+        .not.toMatch(/f\.specimen_id\s*=\s*s\.id/);
     }
   });
 
@@ -1193,6 +1198,147 @@ describe('SEED_QUERIES — q-clinical-micro-header names the performing laborato
         .toMatch(/from facilities[\s\S]*group by source_system, facility_code/);
       expect(sql, `${dialect} still joins the raw facilities table and can fan out`)
         .not.toMatch(/join facilities [a-z]+ on/);
+    }
+  });
+});
+
+describe('SEED_QUERIES — q-clinical-micro-header resolves a lab number', () => {
+  const q = () => SEED_QUERIES.find((x) => x.id === 'q-clinical-micro-header')!;
+
+  it('matches either the lab number or the order id, in every dialect', () => {
+    // ⚠ The resolver alias is `q1`, not `q` — `orders` reads EVERY order under the resolved lab
+    // number, so the equality lives in an inner subquery over `lab_requests q1`. Asserting on a
+    // bare `q.request_id = {{param.request}}` would pass only for the NARROW per-order form this
+    // slice exists to remove, so the negative assertion below is the one that keeps it out. Same
+    // shape as `q-clinical-micro-ast` (Task 1).
+    for (const [dialect, sql] of Object.entries(q().sql)) {
+      expect(sql, `${dialect} does not scope by request_id IN a resolved set of lab numbers`)
+        .toMatch(/where q\.request_id in \(\s*select q1\.request_id from lab_requests q1/);
+      expect(sql, `${dialect} must resolve from EITHER the lab number or the order id`)
+        .toMatch(/where q1\.request_id\s*=\s*\{\{param\.request\}\}\s+or\s+q1\.id\s*=\s*\{\{param\.request\}\}/);
+      expect(sql, `${dialect} regressed to the narrow per-order predicate`)
+        .not.toMatch(/where\s*\(\s*q\.request_id\s*=\s*\{\{param\.request\}\}\s+or\s+q\.id\s*=\s*\{\{param\.request\}\}\s*\)/);
+    }
+  });
+
+  it('requires an isolate, so a chemistry lab number renders no PDF', () => {
+    // Without this the widened predicate would find the chemistry request, return a row, and the
+    // DESIGNS_REQUIRING_DATA gate would pass — producing a MICROBIOLOGY-titled PDF of nothing.
+    // The guard reads the `isolates` CTE rather than spelling the organism codes out a second
+    // time, so both halves are pinned: the CTE must exist AND the outer select must gate on it.
+    for (const [dialect, sql] of Object.entries(q().sql)) {
+      expect(sql, `${dialect} lost the isolates CTE`)
+        .toMatch(/isolates as \(\s*select o\.id from orders o\s*join lab_results r on r\.request_id = o\.id\s*where r\.observation_code in \('634-6', 'ORGS'\)/);
+      expect(sql, `${dialect} lost the isolate guard`)
+        .toMatch(/where exists \(select 1 from isolates\)/);
+    }
+  });
+
+  it('refuses a lab number carrying two distinct organisms, in every dialect', () => {
+    // `organism` is folded with max() across every order, so two genuinely different isolates would
+    // print as one, with both antibiograms merged beneath it. Refuse instead — the same
+    // refuse-rather-than-render path a chemistry request already takes.
+    // ⛔ `<= 1`, not `= 1`: count(distinct) ignores nulls and an isolate observation with no value
+    // is legitimate (the `req-bare` live fixture), so `= 1` would refuse a valid header.
+    for (const [dialect, sql] of Object.entries(q().sql)) {
+      expect(sql, `${dialect} lost the polymicrobial guard`)
+        .toMatch(/count\(distinct coalesce\(r\.text_value, r\.coded_value\)\)[\s\S]*?where r\.observation_code in \('634-6', 'ORGS'\)\) <= 1/);
+      expect(sql, `${dialect} used = 1, which refuses a valueless isolate observation`)
+        .not.toMatch(/count\(distinct[\s\S]*?\) = 1/);
+    }
+  });
+
+  it('looks for the organism across every order under the lab number, not one order', () => {
+    for (const [dialect, sql] of Object.entries(q().sql)) {
+      expect(sql, `${dialect} still scopes the organism to a single order`)
+        .not.toMatch(/where o\.request_id\s*=\s*q\.id\b/);
+    }
+  });
+
+  it('still selects every column the design binds', () => {
+    for (const [dialect, sql] of Object.entries(q().sql)) {
+      for (const col of ['patient_surname', 'patient_firstname', 'sex', 'dob', 'specimen',
+        'received', 'lab_number', 'panel', 'organism', 'performing_lab', 'lab_location']) {
+        expect(sql, `${dialect} stopped selecting ${col}`).toMatch(new RegExp(`as ${col}\\b`));
+      }
+    }
+  });
+});
+
+describe('SEED_QUERIES — q-clinical-micro-ast resolves a lab number and gates on terminology', () => {
+  const q = () => SEED_QUERIES.find((x) => x.id === 'q-clinical-micro-ast')!;
+
+  it('resolves either identifier up to the lab number, then reads every order under it, in every dialect', () => {
+    // A per-order id must widen to every order sharing its lab number — a culture order and its
+    // sensitivity order are siblings under one q.request_id, not one order in isolation. The narrow
+    // `(q.request_id = {{param.request}} or q.id = {{param.request}})` form scoped to a single order
+    // and silently dropped the sibling's susceptibility rows (2026-08-17 live-data finding).
+    for (const [dialect, sql] of Object.entries(q().sql)) {
+      expect(sql, `${dialect} must join lab_requests to reach request_id`)
+        .toMatch(/join lab_requests q on q\.id\s*=\s*r\.request_id/);
+      expect(sql, `${dialect} must scope by request_id IN a resolved set of lab numbers, not a direct equality`)
+        .toMatch(/where\s+q\.request_id\s+in\s*\(\s*select q1\.request_id from lab_requests q1/);
+      expect(sql, `${dialect} must resolve the lab number from EITHER the lab number or the order id`)
+        .toMatch(/select q1\.request_id from lab_requests q1\s*where q1\.request_id\s*=\s*\{\{param\.request\}\}\s+or\s+q1\.id\s*=\s*\{\{param\.request\}\}/);
+      // The old narrow predicate scoped straight off `q`, the outer joined row, with no resolver
+      // subquery. Reverting to it must fail this assertion.
+      expect(sql, `${dialect} regressed to the narrow per-order predicate`)
+        .not.toMatch(/where\s*\(\s*q\.request_id\s*=\s*\{\{param\.request\}\}\s+or\s+q\.id\s*=\s*\{\{param\.request\}\}\s*\)/);
+    }
+  });
+
+  it('takes the interpretation from the AST interpretation value set, not a literal S/I/R list', () => {
+    // AGENTS.md §8. A hardcoded in ('S','I','R') also lets HIV Rapid EQA panels through — measured
+    // 2026-08-17: unanchored S/I/R selects EQA proficiency rows that are 100% R by design.
+    // Keyed on value_set_url, not value_set_id: the id is minted as `vs-${randomUUID()}` at seed
+    // time and differs per install, so a literal id can never match (RULE 0 finding, 2026-08-17).
+    for (const [dialect, sql] of Object.entries(q().sql)) {
+      expect(sql, `${dialect} does not gate on the value set`)
+        .toMatch(/value_set_url\s*=\s*'urn:openldr:valueset:ast-interpretation'[\s\S]*?upper\(coalesce\(r\.coded_value, r\.abnormal_flag\)\) in \(\s*select upper\(code\) from terminology_codes/);
+    }
+  });
+
+  it('compares the interpretation case-insensitively at all three sites', () => {
+    // Measured live 2026-08-17: lab_results holds `R` x116, `S` x16 AND `s` x2. Each site fails
+    // differently, so all three are pinned. Without (1) the lowercase rows are dropped and a tested
+    // antibiotic vanishes from the printed table. Without (2) a lowercase row that now passes prints
+    // a raw `s` instead of `Susceptible`. Without (3) it renders with a blank status and the PDF
+    // loses its colour emphasis.
+    for (const [dialect, sql] of Object.entries(q().sql)) {
+      expect(sql, `${dialect} filters the interpretation case-SENSITIVELY`)
+        .toMatch(/upper\(coalesce\(r\.coded_value, r\.abnormal_flag\)\) in \(\s*select upper\(code\) from terminology_codes/);
+      expect(sql, `${dialect} resolves the DISPLAY case-SENSITIVELY`)
+        .toMatch(/and upper\(tc\.code\) = upper\(coalesce\(r\.coded_value, r\.abnormal_flag\)\)/);
+      expect(sql, `${dialect} derives the status token case-SENSITIVELY`)
+        .toMatch(/case upper\(coalesce\(r\.coded_value, r\.abnormal_flag\)\)/);
+    }
+  });
+
+  it('carries no dead vs-non-reportable filter', () => {
+    // `vs-non-reportable` exists under no key — measured live, terminology_codes holds exactly five
+    // value sets and none is non-reportable — and it keyed on `value_set_id`, which is minted as
+    // `vs-${randomUUID()}` per install. `not in` against an empty set is always true, so the filter
+    // never excluded anything. The AST interpretation gate excludes the collection-metadata rows it
+    // was meant to.
+    for (const [dialect, sql] of Object.entries(q().sql)) {
+      expect(sql, `${dialect} still carries the dead filter`).not.toContain('vs-non-reportable');
+    }
+  });
+
+  it('anchors to an isolate, so the CSV export cannot return chemistry rows', () => {
+    for (const [dialect, sql] of Object.entries(q().sql)) {
+      expect(sql, `${dialect} lost the isolate anchor`)
+        .toMatch(/exists\s*\(\s*select 1 from lab_results/);
+      expect(sql, `${dialect} isolate anchor must look for the organism codes`)
+        .toMatch(/observation_code in \('634-6', 'ORGS'\)/);
+    }
+  });
+
+  it('still returns exactly test, result and status', () => {
+    for (const [dialect, sql] of Object.entries(q().sql)) {
+      for (const col of ['test', 'result', 'status']) {
+        expect(sql, `${dialect} stopped selecting ${col}`).toMatch(new RegExp(`as ${col}\\b`));
+      }
     }
   });
 });

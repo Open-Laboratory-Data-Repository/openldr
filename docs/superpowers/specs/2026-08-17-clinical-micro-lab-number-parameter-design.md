@@ -98,25 +98,34 @@ existing field contains.
 
 ### 1. Both queries accept either identifier
 
-Both queries resolve the parameter against both columns, but they have different driving tables, so
-the change is not the same edit twice.
-
-`q-clinical-micro-ast` drives off `lab_results` and currently filters `r.request_id = {{param.request}}`.
-It gains a join:
+**Any identifier resolves to its lab number, and then the whole lab number is read.** The parameter
+may be a lab number or a per-order id; either way both queries first resolve the lab number, then
+read every order under it:
 
 ```sql
-from lab_results r
-join lab_requests q on q.id = r.request_id
-where (q.request_id = {{param.request}} or q.id = {{param.request}})
+where q.request_id in (
+    select q1.request_id from lab_requests q1
+    where q1.request_id = {{param.request}} or q1.id = {{param.request}})
 ```
 
-`q-clinical-micro-header` already drives off `lab_requests q` and filters `where q.id = {{param.request}}`.
-Its predicate widens in place to `where (q.request_id = {{param.request}} or q.id = {{param.request}})`,
-and its two correlated subqueries (`organism`, and the `max(l.specimen_id)` lookups feeding the
-`specimens` and `facility` joins) widen from `l.request_id = q.id` to every order under the resolved
-lab number.
+⛔ **Resolve up, do not match in place.** An earlier draft matched
+`(q.request_id = … or q.id = …)` directly, which scopes an order id to that one order. Measured
+consequence: given `TZDISATDS0013538-obr1` — the culture order, whose susceptibilities live on
+`-obr2` — the report rendered the organism with an **empty** susceptibility table, silently omitting
+four real results. The two identifier forms produced different documents for one specimen. Since the
+whole premise of this change is that no single order is the complete answer, an order id must widen
+to its lab number too. Verified on live data: `TZDISATDS0013538`, `-obr1` and `-obr2` now each return
+the same four agents.
 
-A per-order id keeps working, so any saved schedule or deep link that passes one is unaffected.
+This supersedes an earlier line in this spec promising a per-order id was "unaffected". It is
+affected: it now returns *more*, and complete, data. Nothing returns less. Since the field was
+labelled "Request ID" and documented as a request identifier, no existing caller was deliberately
+passing an order id to get a partial report.
+
+`q-clinical-micro-ast` drives off `lab_results` and gains a join to `lab_requests` to reach
+`request_id`. `q-clinical-micro-header` already drives off `lab_requests` and resolves through an
+`orders` CTE, which its subqueries then read instead of a single `q.id`.
+
 Written for all three dialects — Postgres, MSSQL, MySQL — as the existing queries are. MSSQL has no
 ordinal `GROUP BY`, so the AST query's select expressions stay repeated in full, as they are today.
 
@@ -143,7 +152,29 @@ unanchored S/I/R picks up HIV EQA panels.
 
 Two structural filters, no drug or panel code list — `AGENTS.md` §8:
 
-- the interpretation must be a code in the existing `vs-ast-interpretation` value set;
+- the interpretation must be a code in the AST interpretation value set, matched **by
+  `value_set_url = 'urn:openldr:valueset:ast-interpretation'`**;
+
+⛔ **Match the URL, never the id.** An earlier draft of this spec said `value_set_id =
+'vs-ast-interpretation'`. **That id does not exist.** `terminology-admin-store.ts:389` assigns
+`newId('vs')` on first creation, and `newId` is `` `${prefix}-${randomUUID()}` `` (`:103-105`); the
+projection copies that verbatim into `terminology_codes.value_set_id`
+(`packages/db/src/relational/value-set.ts:39,51`). Measured live 2026-08-17: the set is
+`vs-83c8e4af-a601-420e-96ae-cea468e8afe3`, and **0 rows** carry the literal. The seed itself treats
+the URL as the identity — it guards on `getByUrl(AST_INTERPRETATION_URL)`
+(`packages/bootstrap/src/seed.ts:471`, constant at `:490`).
+
+The consequence is not cosmetic. As a fail-open `LEFT JOIN` for display the wrong key merely meant
+`result` printed a raw `S` instead of `Susceptible`. Turned into a fail-closed `WHERE … in (…)` it
+returns **zero rows for every request**, emptying the susceptibility table on every report, PDF and
+CSV. Both sites — the display join and this filter — must key on the URL.
+
+⚠ Related, pre-existing, **not fixed here**: `vs-non-reportable` has **0 rows** in
+`terminology_codes` too, so the query's existing `not in (select code … 'vs-non-reportable')` filter
+has never excluded anything. It is fail-open, so nothing breaks — but `r-clinical-micro`'s
+description claims "Collection metadata is excluded by terminology, not by a hardcoded code list",
+and today that is not happening. Left alone deliberately: fixing it means either re-keying seeded
+value sets behind a migration or auditing every consumer, which is wider than this slice.
 - the lab number must carry an isolate — **as its own guard inside this query, not inherited from §2.**
 
 ⛔ The anchor cannot be delegated to the header's gate. `reporting.run(id, params)` executes the

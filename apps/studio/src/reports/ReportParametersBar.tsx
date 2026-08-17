@@ -1,10 +1,12 @@
 import { useTranslation } from 'react-i18next';
+import { Info } from 'lucide-react';
 import type { ReportSummary, ReportParamMeta, ReportParamOption } from '../api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { DateRangePicker, defaultDateRangePresets } from '@/components/ui/date-range-picker';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
 interface Props {
   report: ReportSummary;
@@ -73,8 +75,31 @@ export function ReportParametersBar({ report, params, options, onChange, onRun, 
     <div className="flex flex-wrap items-end gap-3 border-b border-border px-4 py-3">
       {report.parameters.map((p) => (
         <div key={p.id} className="flex flex-col gap-1">
-          <Label className="text-[10.5px] uppercase tracking-wide text-muted-foreground">
+          <Label className="flex items-center gap-1 text-[10.5px] uppercase tracking-wide text-muted-foreground">
             {p.label}{p.required && <span className="text-destructive"> *</span>}
+            {/* ⛔ Popover, NOT Tooltip. Radix Tooltip ignores touch by design — its
+                `onPointerMove` returns early for `pointerType === 'touch'` and its `onPointerDown`
+                suppresses the focus path — so on a phone the ⓘ never opens. This help text exists
+                to prevent an error the operator hits on exactly that surface (studio is used on
+                phones over Tailscale), so it has to open on tap. The trigger is `size-6` = 24px,
+                the WCAG 2.2 AA minimum target; `size-4` was 16px. */}
+            {p.help && (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-6 text-muted-foreground hover:text-foreground"
+                    aria-label={t('reports.aboutParam', { label: p.label })}
+                  >
+                    <Info className="size-3.5" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent align="start" className="w-64 p-3 text-xs font-normal normal-case tracking-normal">
+                  {p.help}
+                </PopoverContent>
+              </Popover>
+            )}
           </Label>
           {renderControl(p)}
         </div>
