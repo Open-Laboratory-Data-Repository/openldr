@@ -1,12 +1,54 @@
 import { describe, it, expect } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { writeFileSync, mkdtempSync, chmodSync } from 'node:fs';
+import { writeFileSync, mkdtempSync, chmodSync, existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { tmpdir } from 'node:os';
+import { tmpdir, platform } from 'node:os';
 import { pathToFileURL } from 'node:url';
 
 const REPO = resolve(__dirname, '../../..');
 const RESOLVE_VERSION_LIB = join(REPO, 'install/lib/resolve-version.sh').replace(/\\/g, '/');
+
+/**
+ * Resolve a real `bash` binary to shell out to.
+ *
+ * On Windows, `bash` on PATH can resolve to `C:\WINDOWS\system32\bash.exe` — the WSL
+ * launcher, not a POSIX shell you can pass `-c` scripts or shebang'd fixtures to. It fails
+ * with `execvpe(/bin/bash) failed: No such file or directory` unless a WSL distro happens to
+ * be installed. Git for Windows ships its own real bash; find that one explicitly instead of
+ * trusting PATH order.
+ */
+function resolveGitBash(): string {
+  if (platform() !== 'win32') return 'bash';
+
+  const isWslLauncher = (p: string) => /\\windows\\system32\\bash\.exe$/i.test(p);
+  const candidates: string[] = [];
+
+  try {
+    // Typically prints e.g. `C:/Program Files/Git/mingw64/libexec/git-core`.
+    const execPath = execFileSync('git', ['--exec-path'], { encoding: 'utf8' }).trim().replace(/\\/g, '/');
+    const installRoot = execPath.replace(/\/(mingw64|mingw32|usr)\/libexec\/git-core\/?$/, '');
+    if (installRoot && installRoot !== execPath) {
+      candidates.push(join(installRoot, 'bin', 'bash.exe'));
+    }
+  } catch {
+    // `git` not on PATH, or --exec-path failed: fall through to the fixed locations below.
+  }
+
+  candidates.push('C:\\Program Files\\Git\\bin\\bash.exe', 'C:\\Program Files (x86)\\Git\\bin\\bash.exe');
+
+  for (const candidate of candidates) {
+    if (isWslLauncher(candidate)) continue;
+    if (existsSync(candidate)) return candidate;
+  }
+
+  throw new Error(
+    'Could not find Git Bash. These tests shell out to a real bash and refuse to fall back ' +
+      'to C:\\WINDOWS\\system32\\bash.exe (the WSL launcher). Install Git for Windows, which ' +
+      'ships its own bash.exe alongside git.exe.',
+  );
+}
+
+const BASH = resolveGitBash();
 
 interface FakeGh {
   /** Text printed to stdout, e.g. the jq result on a successful call. */
@@ -39,7 +81,7 @@ function buildAndPush(args: string[], gh: string | FakeGh): { code: number; out:
   chmodSync(dockerPath, 0o755);
 
   try {
-    const out = execFileSync('bash', [join(REPO, 'scripts/build-and-push.sh').replace(/\\/g, '/'), ...args], {
+    const out = execFileSync(BASH, [join(REPO, 'scripts/build-and-push.sh').replace(/\\/g, '/'), ...args], {
       cwd: REPO,
       encoding: 'utf8',
       env: { ...process.env, PATH: `${bin}:${process.env.PATH ?? ''}` },
@@ -112,7 +154,7 @@ describe('build-and-push.sh overwrite guard — gh failure handling', () => {
 function resolveVersion(url: string): { code: number; stdout: string; stderr: string } {
   try {
     const stdout = execFileSync(
-      'bash',
+      BASH,
       ['-c', `source "${RESOLVE_VERSION_LIB}"; resolve_version "${url}"`],
       { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
     );
