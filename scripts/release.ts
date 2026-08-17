@@ -295,7 +295,22 @@ async function main(): Promise<void> {
     console.error(`\nrelease of v${version} failed: ${err instanceof Error ? err.message : String(err)}`);
     const rolledBack: string[] = [];
     const stuck: string[] = [];
-    if (pushedToOrigin) {
+    // ⛔ Ask the REMOTE, do not trust `pushedToOrigin`. `git push` can update the ref
+    // server-side and then die reading the response (RPC failed / early EOF), leaving the flag
+    // false while a public tag exists. Ctrl-C between the push and `gh release create` does the
+    // same — execFileSync inherits the signal, so this catch may not even run. A stale `false`
+    // there would skip the remote delete AND print "no tag survives", which is the opposite of
+    // the truth. Asking costs one network round-trip on a path that has already failed.
+    let onOrigin = pushedToOrigin;
+    if (!DRY_RUN) {
+      try {
+        onOrigin = sh('git', ['ls-remote', '--tags', 'origin', `refs/tags/v${version}`]) !== '';
+      } catch {
+        // Cannot reach origin to ask. Assume the worst — a tag we cannot see is still a tag.
+        onOrigin = true;
+      }
+    }
+    if (onOrigin) {
       try {
         run('git', ['push', 'origin', '--delete', `v${version}`]);
         rolledBack.push('the tag on origin');

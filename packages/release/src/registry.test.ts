@@ -201,3 +201,20 @@ describe('parseGhPages — a non-JSON body must not read as "package absent"', (
     expect(msg).not.toMatch(/\b404\b|not found/i);
   });
 });
+
+describe('tagExistsInRegistry — a version number must not smuggle 404 into the error', () => {
+  // 1.404.0 is a legal version. If the thrown message interpolated the tag, it would contain
+  // "404", and any caller classifying the throw with isNotFound would read a broken read as
+  // "package absent" — the same fail-open, arriving through the version number.
+  it('throws a message free of 404 even when the tag contains 404', async () => {
+    const f = async () => ({ not: 'an array' });
+    let msg = '';
+    try {
+      await tagExistsInRegistry(f, 'acme', 'openldr-api', '1.404.0');
+    } catch (e) {
+      msg = (e as Error).message;
+    }
+    expect(msg).toMatch(/non-list body/);
+    expect(msg).not.toMatch(/404|not found/i);
+  });
+});

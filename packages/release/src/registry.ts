@@ -82,9 +82,10 @@ export async function tagExistsInRegistry(
   // those, and a caller that wraps this call would then reclassify the throw as "package
   // absent" and reintroduce the same fail-open one layer up.
   if (!Array.isArray(versions)) {
-    throw new Error(
-      `registry returned a non-list body for ${image} — cannot tell whether ${tag} is published`,
-    );
+    // ⛔ Do NOT interpolate `tag` here. A version like 1.404.0 would put "404" in the message,
+    // and any caller that classified this throw with isNotFound would read it as "package
+    // absent" — the same fail-open, smuggled in through the version number.
+    throw new Error(`registry returned a non-list body for ${image} — cannot tell what is published`);
   }
   return versions.some((v) => {
     const tags = (v as { metadata?: { container?: { tags?: unknown } } })?.metadata?.container?.tags;

@@ -43,11 +43,20 @@ then creates the git tag, pushes it, and cuts the GitHub release with `latest.js
 verified — so a failure part-way through leaves no tag, and no lab ever sees a half-release.
 
 That last step is three commands, not one: `git tag`, `git push origin vX.Y.Z`, then
-`gh release create`. If either of the last two fails, the script **deletes the tag from origin
-and from your clone** before exiting non-zero, and prints what it rolled back. So the rule holds
-even in that window. If a rollback command itself fails, the script prints the exact
-`git push origin --delete` / `git tag --delete` to run by hand — do that before retrying, or the
-next run refuses on "tag already exists".
+`gh release create`. If either of the last two fails, the script asks origin whether the tag is
+actually there and **deletes it from origin and from your clone** before exiting non-zero,
+printing what it rolled back. It asks rather than assuming, because a push can update the ref
+server-side and still fail on the way back. If a rollback command itself fails, the script
+prints the exact `git push origin --delete` / `git tag --delete` to run by hand — do that before
+retrying, or the next run refuses on "tag already exists".
+
+**Two windows the rollback cannot cover.** If you Ctrl-C between the push and
+`gh release create`, the signal reaches the child process and the cleanup may never run. And if
+`gh release create` fails partway through uploading assets, it can leave a draft release behind,
+which nothing checks for. In both cases: check
+`https://github.com/Open-Laboratory-Data-Repository/openldr/releases` and `git ls-remote --tags
+origin` before re-running. **This rollback path has never executed** — see "What is NOT proven
+by tests".
 
 ### The verification install leaves a stack running
 
