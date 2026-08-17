@@ -747,7 +747,13 @@ In `listNotifications`, immediately after `const visible = all.filter(...)`, ins
   // Appended AFTER gather()'s window filter on purpose — see updateStateToNotification. Prefs
   // still apply, so an operator can switch this type off like any other.
   const update = ctx.updateState ? updateStateToNotification(ctx.updateState) : null;
-  if (update && passesPrefs(update, disabled, prefs.minPriority)) visible.push(update);
+  if (update && passesPrefs(update, disabled, prefs.minPriority)) {
+    visible.push(update);
+    // ⛔ Re-sort. gather() returns newest-first and this push lands at the END, so without this
+    // the entry renders as the oldest thing in the list — and on an install with more than
+    // `limit` notifications it is sliced off entirely and the operator never sees it at all.
+    visible.sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
+  }
 ```
 
 - [ ] **Step 4: Run tests to verify they pass**
