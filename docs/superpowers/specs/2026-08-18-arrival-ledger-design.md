@@ -169,9 +169,19 @@ this design depends on.
   - read the version and `recorded_at` from `fhir.resource_history` at apply time — leaves
     `ProjectionTask` alone at the cost of a read per projected resource.
 
-  The spec does not pick one. It names both so the plan chooses deliberately rather than the first
-  implementer picking by accident. The first is cleaner and touches more; the second is contained
-  and slower.
+  **RESOLVED 2026-08-18 — read from `fhir.resource_history` at apply time.** `ProjectionTask` is
+  left alone. It is a shared type that `planProjection`, the gap logic and the cursor all depend on,
+  and that logic exists because of real ordering bugs around gaps and snapshot boundaries; widening
+  it to carry two more fields puts that correctness at risk to save one indexed read. The lookup is
+  on `resource_history`'s primary key `(resource_type, id, version)` — or, since apply time knows
+  only the resource, on `(resource_type, id)` taking the greatest version.
+
+  ⚠ That "greatest version at apply time" is a real subtlety the plan must handle: if two versions
+  of one resource arrive between projection cycles, the live path sees one task and would record
+  only the newest arrival. The rebuild path records both. So live and rebuild can legitimately
+  disagree until the next rebuild. Either record every version not yet in `ingest_events` for that
+  resource rather than only the newest, or accept and document the divergence. The plan must pick
+  one; recording every missing version is the one that makes live and rebuild agree.
 - **Rebuild path — the one genuinely new piece of machinery.** `reprojectAll` scans
   `fhir_resources`, which holds only **current** versions. It structurally cannot rebuild an arrival
   ledger from that source. It needs a second scan, over `fhir.resource_history`, filtered to the
@@ -215,20 +225,34 @@ registration-only submission — is a question about the ingest path, and it is 
 
 1. **UI** — none. This slice adds no user-facing surface; it is a warehouse table and a projector.
    Stated explicitly so its absence is not read as an omission.
-2. **CLI parity — needs an operator decision, and rests on a pre-existing gap.**
-   ⚠ An earlier draft of this spec said `reprojectAll` is reachable from the CLI. **It is not.** The
-   only reproject command is `openldr terminology reproject`
-   (`packages/cli/src/program.ts:530-532`), and its own description scopes it: "Rebuild
-   terminology_codes (the warehouse ValueSet dimension) from canonical FHIR". The general clinical
-   read-model rebuild has **no CLI surface at all** today.
+2. **CLI parity — the capability exists but is misnamed. Rename, do not duplicate.**
 
-   That is a pre-existing `AGENTS.md` §6 item-2 gap, not one this slice creates — but this slice
-   adds a rebuild that labs will need to run headless, which makes the gap newly load-bearing. Two
-   honest options, for the operator to choose in the plan:
-   - add a general `openldr db reproject` covering the read model including the ledger, closing the
-     pre-existing gap as part of this slice; or
-   - ship the ledger rebuild reachable only where the existing general reprojection is, and record
-     the gap rather than widen the slice.
+   ⚠ Two earlier drafts of this section were wrong, in opposite directions. The first said
+   `reprojectAll` is reachable from the CLI; the second said it is not. **The accurate position:
+   `openldr terminology reproject` already calls the general `reprojectAll` and rebuilds the ENTIRE
+   read model** — patients, lab_requests, lab_results and the rest, not only `terminology_codes`.
+   Its own code comment says so (`packages/cli/src/terminology.ts:163-167`), written after someone
+   read its count as "8692 terminology rows" when the dimension held 2,025. But its registered
+   description (`packages/cli/src/program.ts:530`) reads "Rebuild terminology_codes (the warehouse
+   ValueSet dimension) from canonical FHIR", so the command is filed and documented as
+   terminology-scoped while behaving globally.
+
+   So this is a naming defect, not a missing capability. Adding a second command that calls the same
+   function would be the duplication `AGENTS.md` §6 explicitly forbids.
+
+   **RESOLVED 2026-08-18 — one implementation, correctly named.**
+   - `openldr db reproject` becomes the real command: rebuilds the whole read model from the
+     canonical store, including the new arrival ledger.
+   - It is **destructive-shaped** — it rewrites the read model and every warehouse `created_at`
+     moves — so per §6 it refuses without `--force`, and audits as `actorName: 'cli'`.
+   - `openldr terminology reproject` becomes a thin **deprecated alias** so existing runbooks and
+     scripts keep working, and its description is corrected to say what it actually does.
+   - Shared logic stays in `@openldr/bootstrap` so the command and any route call identical code.
+
+   ⚠ The existing command has **no `--force` guard today** despite already rebuilding everything.
+   Adding one to the alias is a behaviour change for anyone scripting it. The plan must decide
+   whether the alias inherits the guard or keeps its current unguarded behaviour until removal;
+   inheriting it is safer and is the recommendation, but it will break an unattended script.
 3. **Docs** — the in-app docs tree is English-only (`apps/studio/src/docs/0.1.0/en/`), so the
    translated surface for this slice is any new i18n string, of which there should be none. Document
    the table and the rebuild where reprojection is already documented.
