@@ -321,6 +321,12 @@ export const pt: EnShape = {
         environment: 'Ambiente',
         license: 'Licença',
         services: 'Serviços',
+        updateAvailable: '{{version}} disponível',
+        releaseNotes: 'Notas da versão',
+        upgradeHow: 'Para atualizar, execute isto na pasta de instalação:',
+        checkForUpdates: 'Procurar atualizações',
+        lastChecked: 'Última verificação {{when}}',
+        neverChecked: 'Nunca verificado',
       },
       flags: {
         title: 'Indicadores de funcionalidades',
@@ -733,6 +739,7 @@ export const pt: EnShape = {
       site_revoked: 'Acesso do site revogado',
       terminology_import_done: 'Importação de terminologia concluída',
       terminology_import_failed: 'Falha na importação de terminologia',
+      update_available: 'Atualização disponível',
     },
     body: {
       sync_diverged: 'Sincronização divergente para {{entityId}}',
@@ -744,6 +751,7 @@ export const pt: EnShape = {
       site_revoked: 'O acesso do site {{entityId}} foi revogado',
       terminology_import_done: '{{systemType}} importado ({{conceptsLoaded}} conceitos).',
       terminology_import_failed: 'Falha na importação de {{systemType}}: {{error}}',
+      update_available: 'A versão {{version}} está disponível. Esta instalação utiliza {{running}}.',
     },
     history: {
       viewAll: 'Ver tudo',

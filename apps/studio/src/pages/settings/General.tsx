@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
+import { formatDistanceToNow } from 'date-fns';
 import { useAuth } from '@/auth/AuthProvider';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
@@ -15,8 +17,9 @@ import {
   fetchClientConfig, fetchFeatureFlags, setFeatureFlag, runDangerAction,
   fetchNumberSettings, setNumberSetting,
   getValidation, setValidation,
+  fetchUpdateState, setUpdateCheckEnabled,
   type ClientConfig, type FeatureFlag, type DangerAction,
-  type NumberSetting, type ValidationStrictness,
+  type NumberSetting, type ValidationStrictness, type UpdateState,
 } from '@/api';
 
 type PendingDanger = null | 'reset-dashboards' | 'clear-audit' | 'factory-reset';
@@ -40,8 +43,17 @@ export function General() {
   const [validationLevel, setValidationLevel] = useState<ValidationStrictness | null>(null);
   const [pendingValidation, setPendingValidation] = useState<ValidationStrictness | null>(null);
   const [validationBusy, setValidationBusy] = useState(false);
+  const [update, setUpdate] = useState<UpdateState | null>(null);
+  const [updateBusy, setUpdateBusy] = useState(false);
 
   const load = useCallback(async () => {
+    // The update state is loaded on its own so an older server without /api/update
+    // (or a network blip) leaves the rest of the About card intact.
+    try {
+      setUpdate(await fetchUpdateState());
+    } catch {
+      setUpdate(null);
+    }
     try {
       const cfg = await fetchClientConfig();
       setConfig(cfg);
@@ -54,6 +66,23 @@ export function General() {
       toast.error(String(e instanceof Error ? e.message : e));
     }
   }, [canFeatureFlags, canEditGeneral]);
+
+  const toggleUpdateCheck = useCallback(async (value: boolean) => {
+    const prev = update;
+    setUpdateBusy(true);
+    setUpdate((u) => (u ? { ...u, enabled: value } : u));
+    try {
+      // The server returns the STORED value; reflect that rather than what was asked for.
+      const { enabled } = await setUpdateCheckEnabled(value);
+      setUpdate((u) => (u ? { ...u, enabled } : u));
+      toast.success(t('settings.general.flags.saved'));
+    } catch (e) {
+      setUpdate(prev);
+      toast.error(t('settings.general.flags.saveFailed', { error: e instanceof Error ? e.message : String(e) }));
+    } finally {
+      setUpdateBusy(false);
+    }
+  }, [update, t]);
 
   const commitNumber = useCallback(async (setting: NumberSetting) => {
     setBusyNumber(setting.id);
@@ -134,12 +163,61 @@ export function General() {
         <CardContent className="text-sm">
           <dl className="grid grid-cols-[8rem_1fr] gap-y-1">
             <dt className="text-muted-foreground">{t('settings.general.about.version')}</dt>
-            <dd className="font-mono">{config?.version || '—'}</dd>
+            <dd className="font-mono">
+              {config?.version || '—'}
+              {update?.updateAvailable && (
+                <span className="ml-2 font-sans text-xs text-muted-foreground">
+                  — {t('settings.general.about.updateAvailable', { version: update.latestVersion })}
+                  {update.notesUrl && (
+                    <a href={update.notesUrl} target="_blank" rel="noreferrer" className="ml-1 underline">
+                      {t('settings.general.about.releaseNotes')}
+                    </a>
+                  )}
+                </span>
+              )}
+            </dd>
             <dt className="text-muted-foreground">{t('settings.general.about.environment')}</dt>
             <dd className="font-mono">{config?.environment || '—'}</dd>
             <dt className="text-muted-foreground">{t('settings.general.about.license')}</dt>
             <dd>Apache-2.0</dd>
           </dl>
+
+          {/* Nothing here upgrades anything — these are the two commands for the
+              operator to run themselves, shown only when there is something to upgrade to. */}
+          {update?.updateAvailable && (
+            <div className="mt-3 rounded-md border border-border bg-muted/40 p-3">
+              <p className="mb-2 text-xs text-muted-foreground">{t('settings.general.about.upgradeHow')}</p>
+              <pre className="overflow-x-auto font-mono text-xs">docker compose pull{'\n'}docker compose up -d</pre>
+            </div>
+          )}
+
+          {/* The switch is gated by settings.edit_general, matching the server's
+              EDIT_GENERAL gate on PUT /api/settings/update (settings-routes.ts). */}
+          {canEditGeneral && update && (
+            <div className="mt-4 grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-3">
+              {/* No htmlFor: Switch renders a <button role="switch">, which a <label> cannot
+                  be associated with. The accessible name comes from aria-label instead. */}
+              <Label className="whitespace-nowrap">
+                {t('settings.general.about.checkForUpdates')}
+              </Label>
+              <div className="flex items-center gap-3">
+                <Switch
+                  data-testid="update-check-enabled"
+                  checked={update.enabled}
+                  disabled={updateBusy}
+                  onCheckedChange={(v) => void toggleUpdateCheck(v)}
+                  aria-label={t('settings.general.about.checkForUpdates')}
+                />
+                <span className="text-xs text-muted-foreground">
+                  {update.lastCheckedAt
+                    ? t('settings.general.about.lastChecked', {
+                      when: formatDistanceToNow(new Date(update.lastCheckedAt), { addSuffix: true }),
+                    })
+                    : t('settings.general.about.neverChecked')}
+                </span>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 

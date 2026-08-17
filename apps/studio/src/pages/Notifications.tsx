@@ -21,10 +21,14 @@ import {
 } from '@/api';
 import { notifTitle, notifBody } from '@/shell/notif-text';
 
-const NOTIFICATION_TYPES: NotificationType[] = [
+/** The Type column's filter options. A type missing here cannot be filtered for on
+ *  this page even though the server sends it — keep it in step with the
+ *  NotificationType union in api.ts and TRIGGER_TYPES in NotificationPreferences.tsx. */
+export const NOTIFICATION_TYPES: NotificationType[] = [
   'sync_diverged', 'sync_failed', 'sync_quarantined',
   'plugin_crashed', 'system_crashed', 'auth_failed', 'site_revoked',
   'terminology_import_done', 'terminology_import_failed',
+  'update_available',
 ];
 
 const PRIORITIES: NotificationPriority[] = ['info', 'warning', 'critical'];

@@ -29,6 +29,14 @@ describe('NotificationPreferences page', () => {
     expect(syncFailed.getAttribute('aria-checked')).toBe('true');
   });
 
+  it('offers a switch for every type the server can emit, including update_available', async () => {
+    render(<MemoryRouter><NotificationPreferences /></MemoryRouter>);
+    const row = await screen.findByTestId('notif-enabled-update_available');
+    expect(row.getAttribute('aria-checked')).toBe('true');
+    // The row label must be localized, not the raw type string.
+    expect(row.getAttribute('aria-label')).not.toBe('update_available');
+  });
+
   it('toggling a switch auto-applies immediately, calling saveNotificationPrefs with every type + minPriority', async () => {
     (api.saveNotificationPrefs as any).mockResolvedValue(undefined);
     render(<MemoryRouter><NotificationPreferences /></MemoryRouter>);
@@ -50,6 +58,7 @@ describe('NotificationPreferences page', () => {
         { type: 'site_revoked', enabled: true },
         { type: 'terminology_import_done', enabled: true },
         { type: 'terminology_import_failed', enabled: true },
+        { type: 'update_available', enabled: true },
       ],
       'info',
     ));

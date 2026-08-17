@@ -14,10 +14,13 @@ import {
 
 // The trigger types the server emits. New triggers land here + a matching
 // `notifications.triggers.<type>` i18n key (Task 11).
+// This array is not just the row list: toggle()/changeMinPriority() rebuild the whole
+// saved payload from it, so a type missing here is silently dropped from every save.
 const TRIGGER_TYPES: NotificationType[] = [
   'sync_diverged', 'sync_failed', 'sync_quarantined',
   'plugin_crashed', 'system_crashed', 'auth_failed', 'site_revoked',
   'terminology_import_done', 'terminology_import_failed',
+  'update_available',
 ];
 
 const PRIORITIES: NotificationPriority[] = ['info', 'warning', 'critical'];

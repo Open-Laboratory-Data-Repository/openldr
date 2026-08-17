@@ -39,7 +39,7 @@ vi.mock('@/auth/AuthProvider', () => ({
 }));
 
 import { listNotifications, markNotificationsRead } from '@/api';
-import { Notifications } from './Notifications';
+import { Notifications, NOTIFICATION_TYPES } from './Notifications';
 
 describe('Notifications page', () => {
   beforeEach(() => {
@@ -47,6 +47,30 @@ describe('Notifications page', () => {
     (listNotifications as ReturnType<typeof vi.fn>).mockImplementation(async (params: NotificationListParams = {}) =>
       (params.unreadOnly ? EMPTY_RESULT : { notifications: [SYNC_FAILED_NOTIFICATION], unreadCount: 1, total: 1 }));
   });
+
+  // NOTIFICATION_TYPES is the only source of the Type column's filter options, so a
+  // type missing here cannot be filtered for on this page even though the server sends it.
+  it('offers every server-emitted type as a Type filter option, including update_available', () => {
+    expect(NOTIFICATION_TYPES).toContain('update_available');
+  });
+
+  it('shows a localized label for an update_available row rather than the raw type', async () => {
+    (listNotifications as ReturnType<typeof vi.fn>).mockImplementation(async (params: NotificationListParams = {}) =>
+      (params.unreadOnly ? EMPTY_RESULT : {
+        notifications: [{
+          id: 'u1', type: 'update_available', priority: 'info',
+          title: 'Version 0.2.0 is available', body: 'This install is running 0.1.1.',
+          linkTo: '/settings/general', createdAt: '2026-08-20T10:00:00Z', readAt: null,
+          metadata: { version: '0.2.0', running: '0.1.1' },
+        }],
+        unreadCount: 1,
+        total: 1,
+      }));
+    render(<MemoryRouter><Notifications /></MemoryRouter>);
+    const cells = await screen.findAllByText('Update available', {}, { timeout: 5000 });
+    expect(cells.length).toBeGreaterThan(0);
+    expect(screen.queryByText('update_available')).toBeNull();
+  }, 20000);
 
   it('renders the empty state when there are no notifications', async () => {
     (listNotifications as ReturnType<typeof vi.fn>).mockImplementation(async () => EMPTY_RESULT);

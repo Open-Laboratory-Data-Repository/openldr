@@ -319,6 +319,12 @@ export const en = {
         environment: 'Environment',
         license: 'License',
         services: 'Services',
+        updateAvailable: '{{version}} available',
+        releaseNotes: 'Release notes',
+        upgradeHow: 'To upgrade, run these in your install directory:',
+        checkForUpdates: 'Check for updates',
+        lastChecked: 'Last checked {{when}}',
+        neverChecked: 'Never checked',
       },
       flags: {
         title: 'Feature Flags',
@@ -739,6 +745,7 @@ export const en = {
       site_revoked: 'Site access revoked',
       terminology_import_done: 'Terminology import complete',
       terminology_import_failed: 'Terminology import failed',
+      update_available: 'Update available',
     },
     body: {
       sync_diverged: 'Sync diverged for {{entityId}}',
@@ -750,6 +757,7 @@ export const en = {
       site_revoked: 'Site {{entityId}} access was revoked',
       terminology_import_done: '{{systemType}} imported ({{conceptsLoaded}} concepts).',
       terminology_import_failed: '{{systemType}} import failed: {{error}}',
+      update_available: 'Version {{version}} is available. This install is running {{running}}.',
     },
     history: {
       viewAll: 'View all',
