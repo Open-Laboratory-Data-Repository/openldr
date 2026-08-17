@@ -33,7 +33,10 @@ export function evaluatePreconditions(f: ReleaseFacts): string[] {
   if (!f.syncedWithOrigin) {
     refusals.push('local main and origin/main differ — push or pull before releasing');
   }
-  if (f.lastTag !== null && !isNewerVersion(f.version, f.lastTag)) {
+  // Only meaningful once the version parses. Without this guard an unparseable version also
+  // trips the bump check, telling the operator to "bump it first" when the real problem is
+  // that the string is not a version at all.
+  if (parseSemver(f.version) && f.lastTag !== null && !isNewerVersion(f.version, f.lastTag)) {
     refusals.push(
       `package.json version ${f.version} is not newer than the last tag ${f.lastTag} — bump it first`,
     );

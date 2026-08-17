@@ -73,4 +73,10 @@ describe('evaluatePreconditions', () => {
   it('refuses a version string it cannot parse', () => {
     expect(evaluatePreconditions({ ...clean, version: 'latest' })[0]).toMatch(/latest/);
   });
+
+  it('gives exactly one refusal for an unparseable version, not a misleading "bump it first" as well', () => {
+    const r = evaluatePreconditions({ ...clean, version: 'latest', lastTag: 'v0.1.0' });
+    expect(r).toHaveLength(1);
+    expect(r[0]).toMatch(/not a X\.Y\.Z version/);
+  });
 });
