@@ -2,7 +2,7 @@
 #   irm https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main/install/install.ps1 | iex
 # Flags (download the script first to pass these  -  see bottom of this file):
 #   -Dir <path>        install dir (default ./openldr)
-#   -Version <tag>      image tag (default auto - resolves the newest release; "latest" tracks the moving tag)
+#   -Version <tag>      image tag (default latest - the moving tag; "auto" resolves the newest release)
 #   -ServerName <host>  public hostname (default localhost)
 #   -HttpPort <n>       gateway HTTP port (default 80)
 #   -HttpsPort <n>      gateway HTTPS port (default 443)
@@ -23,7 +23,11 @@
 #   -MysqlSsl true|false (default false)
 param(
   [string]$Dir = "./openldr",
-  [string]$Version = "auto",
+  # Default is the moving `latest` tag because no release has published latest.json yet - the
+  # releases-latest asset URL below 404s today, and defaulting to `auto` would break the
+  # advertised one-line install for everyone. Flip this default to "auto" once the first release
+  # publishes latest.json. `-Version auto` already works and resolves a concrete version.
+  [string]$Version = "latest",
   [string]$ServerName = "localhost",
   [string]$Letsencrypt = "",
   [int]$HttpPort = 80,
@@ -71,15 +75,18 @@ if ($Version -eq "auto") {
     . $libLocal
   } else {
     $repoRawForLib = "https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main"
-    $libTmp = Join-Path ([System.IO.Path]::GetTempPath()) ("openldr-resolve-version-{0}.ps1" -f ([guid]::NewGuid()))
+    $libUrl = "$repoRawForLib/install/lib/Resolve-Version.ps1"
     try {
-      Invoke-WebRequest -UseBasicParsing "$repoRawForLib/install/lib/Resolve-Version.ps1" -OutFile $libTmp
-      . $libTmp
+      # Run the downloaded content IN MEMORY. Saving it to a .ps1 and dot-sourcing it is blocked
+      # under the LocalMachine default execution policy (Restricted) with "running scripts is
+      # disabled on this system" - and the catch here would have reported that as a download
+      # failure, which the operator cannot act on. Invoke-Expression on the response body is the
+      # same mechanism that makes the advertised `irm | iex` one-liner work at all. It also
+      # removes the temp file, so there is nothing left behind if this run dies mid-way.
+      Invoke-Expression ((Invoke-WebRequest -Uri $libUrl -UseBasicParsing).Content)
     } catch {
-      Write-Error "Could not download Resolve-Version.ps1 from $repoRawForLib"
+      Write-Error "Could not load Resolve-Version.ps1 from $libUrl : $($_.Exception.Message)"
       exit 1
-    } finally {
-      Remove-Item -LiteralPath $libTmp -Force -ErrorAction SilentlyContinue
     }
   }
   $resolved = Resolve-OpenLdrVersion -Url $latestUrl

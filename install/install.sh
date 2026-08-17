@@ -2,7 +2,7 @@
 # OpenLDR CE one-line installer (Linux/macOS).
 #   curl -fsSL https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main/install/install.sh | bash
 # Flags: --dir <path> (default ./openldr),
-#        --version <tag> (default auto - resolves the newest release; "latest" tracks the moving tag),
+#        --version <tag> (default latest - the moving tag; "auto" resolves the newest release),
 #        --server-name <host> (default localhost — the public hostname/domain),
 #        --http-port <n> (default 80), --https-port <n> (default 443 — gateway ports),
 #        --letsencrypt <email> (issue a trusted Let's Encrypt cert for --server-name),
@@ -26,7 +26,11 @@ set -eu
 
 REPO_RAW="https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main"
 DIR="./openldr"
-VERSION="auto"   # resolved from latest.json; --version pins, --version latest opts into the moving tag
+# Default is the moving `latest` tag because no release has published latest.json yet — the
+# releases-latest asset URL below 404s today, and defaulting to `auto` would break the advertised
+# one-line install for everyone. Flip this default to "auto" once the first release publishes
+# latest.json. `--version auto` already works and resolves a concrete version.
+VERSION="latest"
 LATEST_URL="https://github.com/Open-Laboratory-Data-Repository/openldr/releases/latest/download/latest.json"
 HOST="localhost"
 HTTP_PORT="80"
