@@ -11,6 +11,9 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Badge, type BadgeProps } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { TablePagination } from '@/components/ui/table-pagination';
+import {
+  ActiveFilterChips, DataTableToolbar, applyTableState, useTableState, type ColumnDef,
+} from '@/components/data-table';
 import { StripedEmpty } from '@/components/ui/striped-empty';
 import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/spinner';
@@ -89,6 +92,13 @@ function ActivitySheet({ row, onOpenChange }: { row: SyncActivityRow | null; onO
   );
 }
 
+// Module level — stable, outside the component. Mirrors the fields the old search box matched.
+const SEARCH_FIELDS = [
+  (a: SyncActivityRow) => a.direction,
+  (a: SyncActivityRow) => a.event,
+  (a: SyncActivityRow) => a.error ?? '',
+];
+
 type SyncTab = 'settings' | 'activity';
 
 export function DistributedSync() {
@@ -105,8 +115,6 @@ export function DistributedSync() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
-  const [page, setPage] = useState(0);
-  const [pageSize, setPageSize] = useState(25);
   const [selected, setSelected] = useState<SyncActivityRow | null>(null);
 
   // Sync status + activity are best-effort telemetry: a transient failure shouldn't surface a toast.
@@ -193,17 +201,70 @@ export function DistributedSync() {
     return parts.join(' · ');
   };
 
-  const filtered = useMemo(() => {
+  const columns: ColumnDef<SyncActivityRow>[] = useMemo(() => [
+    {
+      id: 'direction', labelKey: 'settings.sync.cols.direction', type: 'enum', defaultVisible: true,
+      headClassName: 'w-24 text-xs uppercase', cellClassName: 'font-mono text-xs text-muted-foreground',
+      accessor: (a) => a.direction,
+      // The three values SyncActivityRow declares (api.ts:547) — not an invented vocabulary.
+      enumOptions: [
+        { value: 'push', label: 'push' },
+        { value: 'pull', label: 'pull' },
+        { value: 'amend', label: 'amend' },
+      ],
+    },
+    {
+      id: 'event', labelKey: 'settings.sync.cols.event', type: 'enum', defaultVisible: true,
+      headClassName: 'w-32 text-xs uppercase',
+      accessor: (a) => <EventBadge event={a.event} />,
+      // The four values SyncActivityRow declares (api.ts:548).
+      enumOptions: (['synced', 'failed', 'quarantined', 'diverged'] as const).map((e) => ({
+        value: e, labelKey: `settings.general.sync.event.${e}`,
+      })),
+    },
+    {
+      id: 'records', labelKey: 'settings.sync.cols.records', type: 'number', defaultVisible: true,
+      headClassName: 'w-24 text-right text-xs uppercase', cellClassName: 'text-right font-mono text-xs text-muted-foreground',
+      accessor: (a) => a.records.toLocaleString(),
+    },
+    {
+      id: 'detail', labelKey: 'settings.sync.cols.detail', type: 'text', defaultVisible: true,
+      headClassName: 'text-xs uppercase', cellClassName: 'max-w-0 truncate text-xs text-muted-foreground',
+      accessor: (a) => a.error ?? '—',
+    },
+    {
+      id: 'time', labelKey: 'settings.sync.cols.time', type: 'date', defaultVisible: true,
+      headClassName: 'w-44 text-xs uppercase',
+      accessor: (a) => <span className="whitespace-nowrap font-mono text-xs text-muted-foreground">{formatTimestamp(a.occurredAt)}</span>,
+    },
+  ], []);
+
+  // The accessors render badges and locale-formatted numbers/dates; filtering and sorting must
+  // compare the raw values, which is what these getters supply.
+  const valueGetters = useMemo(() => ({
+    direction: (a: SyncActivityRow) => a.direction,
+    event: (a: SyncActivityRow) => a.event,
+    records: (a: SyncActivityRow) => a.records,
+    detail: (a: SyncActivityRow) => a.error ?? '',
+    time: (a: SyncActivityRow) => a.occurredAt,
+  }), []);
+
+  const table = useTableState({ columns, defaultPageSize: 25 });
+
+  // Free-text search is applied BEFORE applyTableState, never as a filter rule.
+  // applyTableState folds rules flat, left-to-right (applyTableState.ts:80-92), so appending a
+  // multi-field OR search would discard an active popover filter for rows matching only the
+  // trailing OR term. Pre-filtering keeps the semantics `search AND (popover rules)`.
+  const searched = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return syncActivity;
-    return syncActivity.filter((a) =>
-      a.direction.toLowerCase().includes(q) ||
-      a.event.toLowerCase().includes(q) ||
-      (a.error ?? '').toLowerCase().includes(q),
-    );
+    return syncActivity.filter((a) => SEARCH_FIELDS.some((f) => f(a).toLowerCase().includes(q)));
   }, [syncActivity, query]);
-  useEffect(() => { setPage(0); }, [query]);
-  const pageRows = filtered.slice(page * pageSize, page * pageSize + pageSize);
+
+  const view = useMemo(
+    () => applyTableState(searched, { filters: table.filters, sorts: table.sorts, page: table.page, pageSize: table.pageSize }, columns, valueGetters),
+    [searched, table.filters, table.sorts, table.page, table.pageSize, columns, valueGetters],
+  );
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden" data-testid="distributed-sync-page">
@@ -369,36 +430,38 @@ export function DistributedSync() {
               </span>
             </div>
 
-            {/* Recent activity toolbar */}
-            <div className="flex items-center gap-2 border-b border-border px-4 py-2">
-              <Input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder={t('settings.sync.searchPlaceholder')}
-                className="h-8 min-w-0 max-w-xs text-xs"
-                aria-label={t('settings.sync.searchPlaceholder')}
+            {/* Recent activity toolbar. Sync now / Refresh live on the tab row's ⋯ menu, which
+                serves both tabs, so the toolbar's actions slot carries the ordering note instead. */}
+            <div className="flex flex-col gap-2 border-b border-border px-4 py-2">
+              <DataTableToolbar
+                columns={columns}
+                filters={table.filters}
+                onFiltersChange={table.setFilters}
+                sorts={table.sorts}
+                onSortsChange={table.setSorts}
+                visibleIds={table.visibleIds}
+                onVisibleIdsChange={table.setVisibleIds}
+                onResetColumns={table.resetColumns}
+                onResetAll={() => { table.resetAll(); setQuery(''); }}
+                searchValue={query}
+                onSearchChange={(v) => { setQuery(v); table.setPage(0); }}
+                searchPlaceholder={t('settings.sync.searchPlaceholder')}
+                actions={<span className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">{t('settings.sync.newestFirst')}</span>}
               />
-              <div className="flex-1" />
-              {/* Sync now / Refresh moved to the tab row's ⋯ menu. `min-w-0` above lets the
-                  search field shrink so this label keeps to one line on a phone. */}
-              <span className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">{t('settings.sync.newestFirst')}</span>
+              <ActiveFilterChips columns={columns} filters={table.filters} onChange={table.setFilters} />
             </div>
 
             {/* Recent activity table */}
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-              <Table wrapperClassName={pageRows.length > 0 ? 'min-h-0 flex-1' : undefined}>
+              <Table wrapperClassName={view.rows.length > 0 ? 'min-h-0 flex-1' : undefined}>
                 <TableHeader className="sticky top-0 z-10 bg-background">
                   <TableRow>
-                    <TableHead className="w-24 text-xs uppercase">{t('settings.sync.cols.direction')}</TableHead>
-                    <TableHead className="w-32 text-xs uppercase">{t('settings.sync.cols.event')}</TableHead>
-                    <TableHead className="w-24 text-right text-xs uppercase">{t('settings.sync.cols.records')}</TableHead>
-                    <TableHead className="text-xs uppercase">{t('settings.sync.cols.detail')}</TableHead>
-                    <TableHead className="w-44 text-xs uppercase">{t('settings.sync.cols.time')}</TableHead>
+                    {table.visibleColumns.map((c) => <TableHead key={c.id} className={c.headClassName}>{t(c.labelKey)}</TableHead>)}
                   </TableRow>
                 </TableHeader>
-                {filtered.length > 0 && (
+                {view.rows.length > 0 && (
                   <TableBody className="[&_tr:last-child]:border-b">
-                    {pageRows.map((a) => (
+                    {view.rows.map((a) => (
                       <TableRow
                         key={a.id}
                         role="button"
@@ -415,30 +478,32 @@ export function DistributedSync() {
                         }}
                         title={t('settings.sync.openDetail')}
                       >
-                        <TableCell className="font-mono text-xs text-muted-foreground">{a.direction}</TableCell>
-                        <TableCell><EventBadge event={a.event} /></TableCell>
-                        <TableCell className="text-right font-mono text-xs text-muted-foreground">{a.records.toLocaleString()}</TableCell>
-                        <TableCell className="max-w-0 truncate text-xs text-muted-foreground" title={a.error ?? undefined}>
-                          {a.error ?? '—'}
-                        </TableCell>
-                        <TableCell><span className="whitespace-nowrap font-mono text-xs text-muted-foreground">{formatTimestamp(a.occurredAt)}</span></TableCell>
+                        {table.visibleColumns.map((c) => (
+                          <TableCell key={c.id} className={c.cellClassName} title={c.id === 'detail' ? a.error ?? undefined : undefined}>
+                            {c.accessor(a)}
+                          </TableCell>
+                        ))}
                       </TableRow>
                     ))}
                   </TableBody>
                 )}
               </Table>
-              {filtered.length === 0 && (
-                <EmptyState icon={<RefreshCw className="h-6 w-6" />} title={t('settings.sync.empty')} />
+              {view.rows.length === 0 && (
+                syncActivity.length === 0 ? (
+                  <EmptyState icon={<RefreshCw className="h-6 w-6" />} title={t('settings.sync.empty')} />
+                ) : (
+                  <StripedEmpty className="flex-1">{t('settings.sync.noMatch')}</StripedEmpty>
+                )
               )}
             </div>
 
             <TablePagination
-              page={page}
-              pageSize={pageSize}
-              total={filtered.length}
-              onPageChange={setPage}
-              onPageSizeChange={(size) => { setPageSize(size); setPage(0); }}
-              leftSlot={<span className="text-muted-foreground">{t('settings.sync.count', { count: filtered.length })}</span>}
+              page={table.page}
+              pageSize={table.pageSize}
+              total={view.total}
+              onPageChange={table.setPage}
+              onPageSizeChange={table.setPageSize}
+              leftSlot={<span className="text-muted-foreground">{t('settings.sync.count', { count: view.total })}</span>}
             />
           </TabsContent>
         </Tabs>

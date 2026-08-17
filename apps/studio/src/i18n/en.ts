@@ -288,6 +288,7 @@ export const en = {
     sync: {
       tabs: { settings: 'Settings', activity: 'Activity' },
       searchPlaceholder: 'Search activity…',
+      noMatch: 'No activity matches the current filters.',
       newestFirst: 'Newest first.',
       refresh: 'Refresh',
       openDetail: 'Open sync event',

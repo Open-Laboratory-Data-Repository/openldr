@@ -292,6 +292,7 @@ export const fr: EnShape = {
     sync: {
       tabs: { settings: 'Paramètres', activity: 'Activité' },
       searchPlaceholder: 'Rechercher…',
+      noMatch: 'Aucune activité ne correspond aux filtres actuels.',
       newestFirst: 'Plus récent d’abord.',
       refresh: 'Actualiser',
       openDetail: 'Ouvrir l’événement de synchronisation',
