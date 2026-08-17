@@ -37,11 +37,28 @@ VERSION="$(node -p "require('./package.json').version")"
 # this same number in the studio's About card.
 if [ "$PUSH" = true ] && [ "$ALLOW_OVERWRITE" = false ] && [ "$DRY_RUN" = false ]; then
   ORG="$(basename "$REGISTRY")"
-  # `index()` yields the position or null; `// "absent"` turns null into a word, and the `|| echo
-  # absent` covers a package that does not exist yet (the first release of a new image).
-  FOUND="$(gh api "orgs/$ORG/packages/container/openldr-api/versions" \
-             --jq '[.[].metadata.container.tags[]] | index("'"$VERSION"'") // "absent"' 2>/dev/null \
-           || echo absent)"
+  # `index()` yields the position or null; `// "absent"` turns null into a word.
+  set +e
+  GH_OUT="$(gh api "orgs/$ORG/packages/container/openldr-api/versions" \
+              --jq '[.[].metadata.container.tags[]] | index("'"$VERSION"'") // "absent"' 2>&1)"
+  GH_RC=$?
+  set -e
+  if [ "$GH_RC" -ne 0 ]; then
+    # A missing package means the tag is free — the first release of a new image. Anything
+    # else (403, network, rate limit) means we DO NOT KNOW, and an unknown must never read as
+    # "free": that is how an overwrite guard silently disarms.
+    if printf '%s' "$GH_OUT" | grep -qiE '(^|[^0-9])404([^0-9]|$)|not found'; then
+      FOUND=absent
+    else
+      echo "ERROR: cannot check whether $VERSION is already published." >&2
+      echo "  $GH_OUT" >&2
+      echo "The guard needs a token with read:packages. Fix the token, or pass --allow-overwrite" >&2
+      echo "if you have confirmed by hand that this tag was never announced." >&2
+      exit 1
+    fi
+  else
+    FOUND="$GH_OUT"
+  fi
   if [ "$FOUND" != "absent" ]; then
     echo "ERROR: $REGISTRY/openldr-api:$VERSION is already published." >&2
     echo "Bump the version in package.json, or pass --allow-overwrite if that tag was never announced." >&2

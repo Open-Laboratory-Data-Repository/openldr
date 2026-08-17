@@ -6,12 +6,36 @@ import { tmpdir } from 'node:os';
 
 const REPO = resolve(__dirname, '../../..');
 
-/** Run build-and-push.sh with a fake `gh` first on PATH, so no network or token is involved. */
-function buildAndPush(args: string[], ghStdout: string): { code: number; out: string } {
+interface FakeGh {
+  /** Text printed to stdout, e.g. the jq result on a successful call. */
+  stdout?: string;
+  /** Text printed to stderr, e.g. what `gh api` prints when it fails. */
+  stderr?: string;
+  /** Exit code for the fake `gh`. Defaults to 0 (success). */
+  exitCode?: number;
+}
+
+/**
+ * Run build-and-push.sh with a fake `gh` AND a fake `docker` first on PATH, so no network,
+ * token, or real image build is ever involved — even in push-mode tests that get past the
+ * overwrite guard. The fake `docker` just echoes its argv and exits 0.
+ */
+function buildAndPush(args: string[], gh: string | FakeGh): { code: number; out: string } {
+  const opts: FakeGh = typeof gh === 'string' ? { stdout: gh } : gh;
   const bin = mkdtempSync(join(tmpdir(), 'openldr-fakebin-'));
-  const gh = join(bin, 'gh');
-  writeFileSync(gh, `#!/usr/bin/env bash\nprintf '%s\\n' '${ghStdout}'\n`);
-  chmodSync(gh, 0o755);
+
+  const ghPath = join(bin, 'gh');
+  const ghLines = ['#!/usr/bin/env bash'];
+  if (opts.stdout !== undefined) ghLines.push(`printf '%s\\n' '${opts.stdout}'`);
+  if (opts.stderr !== undefined) ghLines.push(`printf '%s\\n' '${opts.stderr}' >&2`);
+  ghLines.push(`exit ${opts.exitCode ?? 0}`);
+  writeFileSync(ghPath, ghLines.join('\n') + '\n');
+  chmodSync(ghPath, 0o755);
+
+  const dockerPath = join(bin, 'docker');
+  writeFileSync(dockerPath, `#!/usr/bin/env bash\necho "FAKE-DOCKER-CALLED-WITH: $*"\nexit 0\n`);
+  chmodSync(dockerPath, 0o755);
+
   try {
     const out = execFileSync('bash', [join(REPO, 'scripts/build-and-push.sh').replace(/\\/g, '/'), ...args], {
       cwd: REPO,
@@ -51,5 +75,33 @@ describe('build-and-push.sh overwrite guard', () => {
 
   it('does not fire with --no-push, since nothing can be overwritten', () => {
     expect(buildAndPush(['--no-push', '--dry-run'], '0').code).toBe(0);
+  });
+});
+
+describe('build-and-push.sh overwrite guard — gh failure handling', () => {
+  // A 404 means the package does not exist yet: the tag is genuinely free (first release of a
+  // new image). This must be a real push-mode run (not --dry-run, which skips the guard
+  // entirely) so we can prove the script gets PAST the guard and reaches `docker buildx build`.
+  // The fake `docker` on PATH makes that safe: no real image is ever built.
+  it('treats a 404 from gh as "package does not exist yet" and proceeds', () => {
+    const r = buildAndPush(['--platform', 'linux/amd64'], {
+      exitCode: 1,
+      stderr: 'gh: Not Found (HTTP 404)',
+    });
+    expect(r.code).toBe(0);
+    expect(r.out).not.toMatch(/already published/i);
+    expect(r.out).toMatch(/FAKE-DOCKER-CALLED-WITH/);
+  });
+
+  // A 403 means we do not know whether the tag is published — the token just lacks
+  // read:packages. An unknown must never be treated as "free": that is a silent guard disarm.
+  it('fails closed on a 403 from gh, and names read:packages in the error', () => {
+    const r = buildAndPush(['--platform', 'linux/amd64'], {
+      exitCode: 1,
+      stderr: 'gh: You need at least read:packages scope (HTTP 403)',
+    });
+    expect(r.code).not.toBe(0);
+    expect(r.out).toMatch(/read:packages/);
+    expect(r.out).not.toMatch(/FAKE-DOCKER-CALLED-WITH/);
   });
 });
