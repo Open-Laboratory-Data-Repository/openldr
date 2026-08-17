@@ -396,11 +396,10 @@ say in your report that you did this.
 
 - [ ] **Step 1: Write the failing test**
 
-Append to `packages/bootstrap/src/update-check.test.ts`:
+Extend the EXISTING import at the top of `packages/bootstrap/src/update-check.test.ts` to add
+`pollOnce`, `startUpdateCheck` and `LATEST_JSON_URL`, then append these blocks:
 
 ```ts
-import { pollOnce, startUpdateCheck, LATEST_JSON_URL } from './update-check';
-
 const MANIFEST = JSON.stringify({ version: '0.2.0', releasedAt: '2026-08-20', notesUrl: 'https://example.org/x' });
 
 describe('pollOnce', () => {
@@ -1137,16 +1136,44 @@ Register in `packages/cli/src/program.ts`, following the `errors` block at line 
     .description('Report whether a newer OpenLDR version has been published')
     .option('--json', 'emit raw JSON', false)
     .action(async (opts: { json: boolean }) => {
-      const ctx = await buildCtx();
-      const state = await createUpdateCheck(ctx.appSettings).read(readAppVersion());
-      const { text, code } = renderUpdateCheck(state, opts);
-      process.stdout.write(text + '\n');
-      process.exitCode = code;
+      try {
+        process.exitCode = await runUpdateCheck(opts);
+      } catch (err) {
+        process.stderr.write(`update check failed: ${redactError(err)}\n`);
+        process.exitCode = 1;
+      }
     });
 ```
 
-Match `buildCtx()` and the version helper to whatever the neighbouring commands in this file
-already use — do not invent a new bootstrapping path.
+`program.ts` only registers commands; the work lives in the module. So `update.ts` also exports:
+
+```ts
+import { createAppContext, createUpdateCheck } from '@openldr/bootstrap';
+import { loadConfig } from '@openldr/config';
+
+export async function runUpdateCheck(opts: { json: boolean }): Promise<number> {
+  const ctx = await createAppContext(loadConfig());
+  try {
+    const state = await createUpdateCheck(ctx.appSettings).read(runningVersion());
+    const { text, code } = renderUpdateCheck(state, opts);
+    process.stdout.write(text + '\n');
+    return code;
+  } finally {
+    await ctx.close();
+  }
+}
+```
+
+This mirrors `runSettingsFlagsList` (`packages/cli/src/settings.ts:11`) exactly —
+`createAppContext(loadConfig())`, do the work, `ctx.close()` in a `finally`.
+
+⚠ **Two things I did NOT verify — confirm them before relying on them.** First, that
+`createAppContext`'s returned ctx exposes the app-settings store as `ctx.appSettings`; read
+`settings.ts` and use whatever name is actually there. Second, that a version helper is reachable
+from `packages/cli` — the server's `readAppVersion` lives at `apps/server/src/version.ts` and is
+**not** importable here. If there is no equivalent, write a local `runningVersion()` that reads
+`version` from the repo's `package.json` the same way `readAppVersion` does, and say so in your
+report.
 
 - [ ] **Step 4: Run tests to verify they pass**
 
