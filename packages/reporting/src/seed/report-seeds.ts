@@ -1767,13 +1767,20 @@ order by pathogen_name`,
     when 'I' then 'indeterminate'
     else '' end as status
 from lab_results r
+join lab_requests q on q.id = r.request_id
 left join terminology_codes tc
   on tc.value_set_id = 'vs-ast-interpretation'
  and tc.code = coalesce(r.coded_value, r.abnormal_flag)
-where r.request_id = {{param.request}}
+where (q.request_id = {{param.request}} or q.id = {{param.request}})
   and r.observation_code not in (select code from terminology_codes where value_set_id = 'vs-non-reportable')
-  and coalesce(r.coded_value, r.abnormal_flag) is not null
+  and coalesce(r.coded_value, r.abnormal_flag) in (
+    select code from terminology_codes where value_set_id = 'vs-ast-interpretation')
   and r.observation_code not in ('634-6', 'ORGS')
+  and exists (
+    select 1 from lab_results iso
+    join lab_requests iq on iq.id = iso.request_id
+    where iq.request_id = q.request_id
+      and iso.observation_code in ('634-6', 'ORGS'))
 group by 1, 2, 3
 order by 1`,
       // ⚠ MSSQL has no ordinal GROUP BY — the select expressions are repeated in full.
@@ -1786,13 +1793,20 @@ order by 1`,
     when 'I' then 'indeterminate'
     else '' end as status
 from lab_results r
+join lab_requests q on q.id = r.request_id
 left join terminology_codes tc
   on tc.value_set_id = 'vs-ast-interpretation'
  and tc.code = coalesce(r.coded_value, r.abnormal_flag)
-where r.request_id = {{param.request}}
+where (q.request_id = {{param.request}} or q.id = {{param.request}})
   and r.observation_code not in (select code from terminology_codes where value_set_id = 'vs-non-reportable')
-  and coalesce(r.coded_value, r.abnormal_flag) is not null
+  and coalesce(r.coded_value, r.abnormal_flag) in (
+    select code from terminology_codes where value_set_id = 'vs-ast-interpretation')
   and r.observation_code not in ('634-6', 'ORGS')
+  and exists (
+    select 1 from lab_results iso
+    join lab_requests iq on iq.id = iso.request_id
+    where iq.request_id = q.request_id
+      and iso.observation_code in ('634-6', 'ORGS'))
 group by
   r.observation_desc,
   coalesce(tc.display, r.text_value, r.coded_value),
@@ -1811,13 +1825,20 @@ order by 1`,
     when 'I' then 'indeterminate'
     else '' end as status
 from lab_results r
+join lab_requests q on q.id = r.request_id
 left join terminology_codes tc
   on tc.value_set_id = 'vs-ast-interpretation'
  and tc.code = coalesce(r.coded_value, r.abnormal_flag)
-where r.request_id = {{param.request}}
+where (q.request_id = {{param.request}} or q.id = {{param.request}})
   and r.observation_code not in (select code from terminology_codes where value_set_id = 'vs-non-reportable')
-  and coalesce(r.coded_value, r.abnormal_flag) is not null
+  and coalesce(r.coded_value, r.abnormal_flag) in (
+    select code from terminology_codes where value_set_id = 'vs-ast-interpretation')
   and r.observation_code not in ('634-6', 'ORGS')
+  and exists (
+    select 1 from lab_results iso
+    join lab_requests iq on iq.id = iso.request_id
+    where iq.request_id = q.request_id
+      and iso.observation_code in ('634-6', 'ORGS'))
 group by 1, 2, 3
 order by 1`,
     },

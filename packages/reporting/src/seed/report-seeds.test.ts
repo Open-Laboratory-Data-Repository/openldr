@@ -1197,6 +1197,45 @@ describe('SEED_QUERIES — q-clinical-micro-header names the performing laborato
   });
 });
 
+describe('SEED_QUERIES — q-clinical-micro-ast resolves a lab number and gates on terminology', () => {
+  const q = () => SEED_QUERIES.find((x) => x.id === 'q-clinical-micro-ast')!;
+
+  it('matches either the lab number or the order id, in every dialect', () => {
+    for (const [dialect, sql] of Object.entries(q().sql)) {
+      expect(sql, `${dialect} does not match the lab number`).toMatch(/q\.request_id\s*=\s*\{\{param\.request\}\}/);
+      expect(sql, `${dialect} dropped the order-id path`).toMatch(/q\.id\s*=\s*\{\{param\.request\}\}/);
+      expect(sql, `${dialect} must join lab_requests to reach request_id`)
+        .toMatch(/join lab_requests q on q\.id\s*=\s*r\.request_id/);
+    }
+  });
+
+  it('takes the interpretation from the vs-ast-interpretation value set, not a literal S/I/R list', () => {
+    // AGENTS.md §8. A hardcoded in ('S','I','R') also lets HIV Rapid EQA panels through — measured
+    // 2026-08-17: unanchored S/I/R selects EQA proficiency rows that are 100% R by design.
+    for (const [dialect, sql] of Object.entries(q().sql)) {
+      expect(sql, `${dialect} does not gate on the value set`)
+        .toMatch(/value_set_id\s*=\s*'vs-ast-interpretation'[\s\S]*?coalesce\(r\.coded_value, r\.abnormal_flag\) in \(\s*select code from terminology_codes/);
+    }
+  });
+
+  it('anchors to an isolate, so the CSV export cannot return chemistry rows', () => {
+    for (const [dialect, sql] of Object.entries(q().sql)) {
+      expect(sql, `${dialect} lost the isolate anchor`)
+        .toMatch(/exists\s*\(\s*select 1 from lab_results/);
+      expect(sql, `${dialect} isolate anchor must look for the organism codes`)
+        .toMatch(/observation_code in \('634-6', 'ORGS'\)/);
+    }
+  });
+
+  it('still returns exactly test, result and status', () => {
+    for (const [dialect, sql] of Object.entries(q().sql)) {
+      for (const col of ['test', 'result', 'status']) {
+        expect(sql, `${dialect} stopped selecting ${col}`).toMatch(new RegExp(`as ${col}\\b`));
+      }
+    }
+  });
+});
+
 describe('SEED_QUERIES — the facility filter filters on the report performer', () => {
   const ids = ['q-amr-resistance', 'q-test-volume', 'q-turnaround-time', 'q-patient-demographics'] as const;
 
