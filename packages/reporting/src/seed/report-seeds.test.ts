@@ -1200,12 +1200,22 @@ describe('SEED_QUERIES — q-clinical-micro-header names the performing laborato
 describe('SEED_QUERIES — q-clinical-micro-ast resolves a lab number and gates on terminology', () => {
   const q = () => SEED_QUERIES.find((x) => x.id === 'q-clinical-micro-ast')!;
 
-  it('matches either the lab number or the order id, in every dialect', () => {
+  it('resolves either identifier up to the lab number, then reads every order under it, in every dialect', () => {
+    // A per-order id must widen to every order sharing its lab number — a culture order and its
+    // sensitivity order are siblings under one q.request_id, not one order in isolation. The narrow
+    // `(q.request_id = {{param.request}} or q.id = {{param.request}})` form scoped to a single order
+    // and silently dropped the sibling's susceptibility rows (2026-08-17 live-data finding).
     for (const [dialect, sql] of Object.entries(q().sql)) {
-      expect(sql, `${dialect} does not match the lab number`).toMatch(/q\.request_id\s*=\s*\{\{param\.request\}\}/);
-      expect(sql, `${dialect} dropped the order-id path`).toMatch(/q\.id\s*=\s*\{\{param\.request\}\}/);
       expect(sql, `${dialect} must join lab_requests to reach request_id`)
         .toMatch(/join lab_requests q on q\.id\s*=\s*r\.request_id/);
+      expect(sql, `${dialect} must scope by request_id IN a resolved set of lab numbers, not a direct equality`)
+        .toMatch(/where\s+q\.request_id\s+in\s*\(\s*select q1\.request_id from lab_requests q1/);
+      expect(sql, `${dialect} must resolve the lab number from EITHER the lab number or the order id`)
+        .toMatch(/select q1\.request_id from lab_requests q1\s*where q1\.request_id\s*=\s*\{\{param\.request\}\}\s+or\s+q1\.id\s*=\s*\{\{param\.request\}\}/);
+      // The old narrow predicate scoped straight off `q`, the outer joined row, with no resolver
+      // subquery. Reverting to it must fail this assertion.
+      expect(sql, `${dialect} regressed to the narrow per-order predicate`)
+        .not.toMatch(/where\s*\(\s*q\.request_id\s*=\s*\{\{param\.request\}\}\s+or\s+q\.id\s*=\s*\{\{param\.request\}\}\s*\)/);
     }
   });
 

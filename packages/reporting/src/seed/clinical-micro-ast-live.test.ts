@@ -96,6 +96,15 @@ live('q-clinical-micro-ast resolves a lab number across orders (live Postgres)',
     expect(rows.map((r) => r.test).sort()).toEqual(['Ampicillin', 'Ciprofloxacin']);
   });
 
+  it('resolves up to the lab number when given the CULTURE order id, which carries the organism but no susceptibilities of its own', async () => {
+    // micro-obr1 is the culture order: it has the organism (ORGS) and microscopy (PUS), but neither
+    // AMPIC nor CIPRO lives on it — those are rows on the sibling sensitivity order, micro-obr2.
+    // Before the fix, `q.request_id = {{param.request}} or q.id = {{param.request}}` scoped to
+    // micro-obr1 alone and this returned zero rows.
+    const rows = await runFor('micro-obr1');
+    expect(rows.map((r) => r.test).sort()).toEqual(['Ampicillin', 'Ciprofloxacin']);
+  });
+
   it('resolves the interpretation display from terminology', async () => {
     const rows = await runFor('LAB-MICRO');
     const amp = rows.find((r) => r.test === 'Ampicillin');

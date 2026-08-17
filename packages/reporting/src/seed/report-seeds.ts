@@ -1774,7 +1774,9 @@ join lab_requests q on q.id = r.request_id
 left join terminology_codes tc
   on tc.value_set_url = 'urn:openldr:valueset:ast-interpretation'
  and tc.code = coalesce(r.coded_value, r.abnormal_flag)
-where (q.request_id = {{param.request}} or q.id = {{param.request}})
+where q.request_id in (
+    select q1.request_id from lab_requests q1
+    where q1.request_id = {{param.request}} or q1.id = {{param.request}})
   and r.observation_code not in (select code from terminology_codes where value_set_id = 'vs-non-reportable')
   and coalesce(r.coded_value, r.abnormal_flag) in (
     select code from terminology_codes where value_set_url = 'urn:openldr:valueset:ast-interpretation')
@@ -1800,7 +1802,9 @@ join lab_requests q on q.id = r.request_id
 left join terminology_codes tc
   on tc.value_set_url = 'urn:openldr:valueset:ast-interpretation'
  and tc.code = coalesce(r.coded_value, r.abnormal_flag)
-where (q.request_id = {{param.request}} or q.id = {{param.request}})
+where q.request_id in (
+    select q1.request_id from lab_requests q1
+    where q1.request_id = {{param.request}} or q1.id = {{param.request}})
   and r.observation_code not in (select code from terminology_codes where value_set_id = 'vs-non-reportable')
   and coalesce(r.coded_value, r.abnormal_flag) in (
     select code from terminology_codes where value_set_url = 'urn:openldr:valueset:ast-interpretation')
@@ -1832,7 +1836,9 @@ join lab_requests q on q.id = r.request_id
 left join terminology_codes tc
   on tc.value_set_url = 'urn:openldr:valueset:ast-interpretation'
  and tc.code = coalesce(r.coded_value, r.abnormal_flag)
-where (q.request_id = {{param.request}} or q.id = {{param.request}})
+where q.request_id in (
+    select q1.request_id from lab_requests q1
+    where q1.request_id = {{param.request}} or q1.id = {{param.request}})
   and r.observation_code not in (select code from terminology_codes where value_set_id = 'vs-non-reportable')
   and coalesce(r.coded_value, r.abnormal_flag) in (
     select code from terminology_codes where value_set_url = 'urn:openldr:valueset:ast-interpretation')
