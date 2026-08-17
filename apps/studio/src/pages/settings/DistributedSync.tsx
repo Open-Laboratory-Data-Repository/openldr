@@ -453,13 +453,15 @@ export function DistributedSync() {
 
             {/* Recent activity table */}
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-              <Table wrapperClassName={view.rows.length > 0 ? 'min-h-0 flex-1' : undefined}>
+              {/* Rendered only when populated: an empty table's five header cells force intrinsic
+                  width and scroll the pane sideways on a phone (AGENTS.md §6). */}
+              {view.rows.length > 0 && (
+              <Table wrapperClassName="min-h-0 flex-1">
                 <TableHeader className="sticky top-0 z-10 bg-background">
                   <TableRow>
                     {table.visibleColumns.map((c) => <TableHead key={c.id} className={c.headClassName}>{t(c.labelKey)}</TableHead>)}
                   </TableRow>
                 </TableHeader>
-                {view.rows.length > 0 && (
                   <TableBody className="[&_tr:last-child]:border-b">
                     {view.rows.map((a) => (
                       <TableRow
@@ -486,8 +488,8 @@ export function DistributedSync() {
                       </TableRow>
                     ))}
                   </TableBody>
-                )}
               </Table>
+              )}
               {view.rows.length === 0 && (
                 syncActivity.length === 0 ? (
                   <EmptyState icon={<RefreshCw className="h-6 w-6" />} title={t('settings.sync.empty')} />
