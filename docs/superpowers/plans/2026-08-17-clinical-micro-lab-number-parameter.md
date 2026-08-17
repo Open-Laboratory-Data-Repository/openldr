@@ -60,6 +60,18 @@
 - Consumes: nothing from earlier tasks.
 - Produces: the AST query returns the same three columns as today — `test`, `result`, `status` — so `tbl`'s `boundColumns` and `summaryMetrics: [{ id: 'agents', type: 'count' }]` need no change. Task 2 depends on nothing here; the two tasks are independent.
 
+> ⛔ **SECOND CORRECTION, 2026-08-17, operator decision after Task 1 shipped.** The predicate
+> `(q.request_id = … or q.id = …)` below **scopes an order id to that one order**, which hides
+> susceptibilities that live on a sibling order. Both queries must instead **resolve up to the lab
+> number**:
+> ```sql
+> where q.request_id in (
+>     select q1.request_id from lab_requests q1
+>     where q1.request_id = {{param.request}} or q1.id = {{param.request}})
+> ```
+> Verified live: `TZDISATDS0013538`, `-obr1` and `-obr2` then all return the same four agents.
+> Task 1 shipped with the narrow form and was corrected in a follow-up fix round.
+>
 > ⛔ **CORRECTION, 2026-08-17, after Task 1's first review.** Every `value_set_id =
 > 'vs-ast-interpretation'` in this task's SQL below is **WRONG** — that id does not exist. Value-set
 > ids are `vs-${randomUUID()}` minted at seed time; the stable key is
@@ -425,7 +437,9 @@ Keep the three existing CTEs (`facility_of`, `facility_loc`, `facility`) **byte-
 orders as (
   select q.id, q.request_id, q.panel_desc, q.patient_id
   from lab_requests q
-  where (q.request_id = {{param.request}} or q.id = {{param.request}})
+  where q.request_id in (
+    select q1.request_id from lab_requests q1
+    where q1.request_id = {{param.request}} or q1.id = {{param.request}})
 ),
 isolates as (
   select o.id from orders o
@@ -436,7 +450,8 @@ ast_source as (
   select min(o.id) as id from orders o
   join lab_results r on r.request_id = o.id
   where coalesce(r.coded_value, r.abnormal_flag) in (
-      select code from terminology_codes where value_set_id = 'vs-ast-interpretation')
+      select code from terminology_codes
+      where value_set_url = 'urn:openldr:valueset:ast-interpretation')
     and r.observation_code not in ('634-6', 'ORGS')
 ),
 panel_order as (

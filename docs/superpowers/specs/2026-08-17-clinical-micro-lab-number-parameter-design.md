@@ -98,25 +98,34 @@ existing field contains.
 
 ### 1. Both queries accept either identifier
 
-Both queries resolve the parameter against both columns, but they have different driving tables, so
-the change is not the same edit twice.
-
-`q-clinical-micro-ast` drives off `lab_results` and currently filters `r.request_id = {{param.request}}`.
-It gains a join:
+**Any identifier resolves to its lab number, and then the whole lab number is read.** The parameter
+may be a lab number or a per-order id; either way both queries first resolve the lab number, then
+read every order under it:
 
 ```sql
-from lab_results r
-join lab_requests q on q.id = r.request_id
-where (q.request_id = {{param.request}} or q.id = {{param.request}})
+where q.request_id in (
+    select q1.request_id from lab_requests q1
+    where q1.request_id = {{param.request}} or q1.id = {{param.request}})
 ```
 
-`q-clinical-micro-header` already drives off `lab_requests q` and filters `where q.id = {{param.request}}`.
-Its predicate widens in place to `where (q.request_id = {{param.request}} or q.id = {{param.request}})`,
-and its two correlated subqueries (`organism`, and the `max(l.specimen_id)` lookups feeding the
-`specimens` and `facility` joins) widen from `l.request_id = q.id` to every order under the resolved
-lab number.
+⛔ **Resolve up, do not match in place.** An earlier draft matched
+`(q.request_id = … or q.id = …)` directly, which scopes an order id to that one order. Measured
+consequence: given `TZDISATDS0013538-obr1` — the culture order, whose susceptibilities live on
+`-obr2` — the report rendered the organism with an **empty** susceptibility table, silently omitting
+four real results. The two identifier forms produced different documents for one specimen. Since the
+whole premise of this change is that no single order is the complete answer, an order id must widen
+to its lab number too. Verified on live data: `TZDISATDS0013538`, `-obr1` and `-obr2` now each return
+the same four agents.
 
-A per-order id keeps working, so any saved schedule or deep link that passes one is unaffected.
+This supersedes an earlier line in this spec promising a per-order id was "unaffected". It is
+affected: it now returns *more*, and complete, data. Nothing returns less. Since the field was
+labelled "Request ID" and documented as a request identifier, no existing caller was deliberately
+passing an order id to get a partial report.
+
+`q-clinical-micro-ast` drives off `lab_results` and gains a join to `lab_requests` to reach
+`request_id`. `q-clinical-micro-header` already drives off `lab_requests` and resolves through an
+`orders` CTE, which its subqueries then read instead of a single `q.id`.
+
 Written for all three dialects — Postgres, MSSQL, MySQL — as the existing queries are. MSSQL has no
 ordinal `GROUP BY`, so the AST query's select expressions stay repeated in full, as they are today.
 
