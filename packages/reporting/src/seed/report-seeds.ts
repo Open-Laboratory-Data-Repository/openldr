@@ -1899,6 +1899,30 @@ order by 1`,
   //    ⚠ `min(region)` and `min(district)` are taken independently, so two rows for one facility
   //    could contribute one field each. Deterministic and bounded (both describe the same facility),
   //    and the same tradeoff `facility_of` already documents — but it is a tradeoff, not a proof.
+  //
+  // ⛔ THE PARAMETER IS EITHER IDENTIFIER, AND IT RESOLVES UP. An LIS sends the lab number
+  // (`lab_requests.request_id`), not the ServiceRequest UUID, so `orders` takes whichever it was
+  // given, finds its lab number, and then reads EVERY order under that lab number. The narrow
+  // `(q.request_id = p or q.id = p)` form scopes an order id back to one order and hides its
+  // siblings — DISA puts the organism on the culture order and the susceptibilities on the
+  // sensitivity order, both under one lab number (2026-08-17 live-data finding). Same resolver as
+  // `q-clinical-micro-ast`.
+  //
+  // ⛔ ONE ROW, STRUCTURALLY. The design binds rows[0] into the keyvalue panel, the barcode and the
+  // QR, so the select drives off `spec` — one aggregate row by construction — not off
+  // `lab_requests`, which now matches several orders. No `GROUP BY` can fan that out.
+  // `where exists (select 1 from isolates)` turns the one row into ZERO when the lab number carries
+  // no organism, which is what `DESIGNS_REQUIRING_DATA` reads to refuse a chemistry request with
+  // `RP0005` rather than print a PDF titled "MICROBIOLOGY — CULTURE & SENSITIVITY" of nothing.
+  // Safe to widen the organism and specimen lookups across the lab number: measured one specimen
+  // per lab number (240/240) and zero lab numbers carrying two distinct organisms (0/117).
+  //
+  // ⚠ `panel` names the order that supplied the susceptibilities (`ast_source`), falling back to an
+  // organism-bearing order tie-broken on `min(id)`. That tiebreaker is STABLE BUT ARBITRARY — ten
+  // lab numbers have two organism-bearing orders and text ordering puts `-obr10` before `-obr2`.
+  // Naming "the culture panel" properly is impossible: `authored_at` is identical across a lab
+  // number's orders (2995/2995), and `created_at` tracks ingest, so keying on it would let a
+  // reprojection silently change a printed clinical field.
   {
     id: 'q-clinical-micro-header',
     name: 'Clinical — patient & specimen header',
@@ -1930,6 +1954,35 @@ facility as (
   from facility_of fo
   left join facility_map fm on fm.source_system = coalesce(fo.source_system, '') and fm.performer_system = coalesce(fo.performer_system, '') and fm.source_code = fo.performer
   left join facility_loc fa on fa.source_system = fo.source_system and fa.facility_code = fo.performer
+),
+orders as (
+  select q.id, q.request_id, q.panel_desc, q.patient_id
+  from lab_requests q
+  where q.request_id in (
+    select q1.request_id from lab_requests q1
+    where q1.request_id = {{param.request}} or q1.id = {{param.request}})
+),
+isolates as (
+  select o.id from orders o
+  join lab_results r on r.request_id = o.id
+  where r.observation_code in ('634-6', 'ORGS')
+),
+ast_source as (
+  select min(o.id) as id from orders o
+  join lab_results r on r.request_id = o.id
+  where coalesce(r.coded_value, r.abnormal_flag) in (
+      select code from terminology_codes
+      where value_set_url = 'urn:openldr:valueset:ast-interpretation')
+    and r.observation_code not in ('634-6', 'ORGS')
+),
+panel_order as (
+  select coalesce(
+    (select id from ast_source),
+    (select min(id) from isolates)) as id
+),
+spec as (
+  select max(l.specimen_id) as specimen_id
+  from lab_results l join orders o on o.id = l.request_id
 )
 select
   p.surname as patient_surname,
@@ -1938,19 +1991,20 @@ select
   p.date_of_birth as dob,
   s.type_text as specimen,
   left(s.received_time, 10) as received,
-  q.request_id as lab_number,
-  q.panel_desc as panel,
-  (select max(coalesce(o.text_value, o.coded_value)) from lab_results o
-     where o.request_id = q.id and o.observation_code in ('634-6', 'ORGS')) as organism,
+  (select min(request_id) from orders) as lab_number,
+  (select o.panel_desc from orders o join panel_order po on po.id = o.id) as panel,
+  (select max(coalesce(r.text_value, r.coded_value)) from lab_results r
+     join orders o on o.id = r.request_id
+     where r.observation_code in ('634-6', 'ORGS')) as organism,
   f.performing_lab as performing_lab,
   case when f.district is not null and f.region is not null
        then f.district || ', ' || f.region
        else coalesce(f.district, f.region) end as lab_location
-from lab_requests q
-left join patients p on p.id = q.patient_id
-left join specimens s on s.id = (select max(l.specimen_id) from lab_results l where l.request_id = q.id)
-left join facility f on f.specimen_id = (select max(l.specimen_id) from lab_results l where l.request_id = q.id)
-where q.id = {{param.request}}`, mssql: `with facility_of as (
+from spec
+left join patients p on p.id = (select min(patient_id) from orders)
+left join specimens s on s.id = spec.specimen_id
+left join facility f on f.specimen_id = spec.specimen_id
+where exists (select 1 from isolates)`, mssql: `with facility_of as (
   select specimen_id,
     min(performer) as performer,
     min(performer_display) as performer_display,
@@ -1976,6 +2030,35 @@ facility as (
   from facility_of fo
   left join facility_map fm on fm.source_system = coalesce(fo.source_system, '') and fm.performer_system = coalesce(fo.performer_system, '') and fm.source_code = fo.performer
   left join facility_loc fa on fa.source_system = fo.source_system and fa.facility_code = fo.performer
+),
+orders as (
+  select q.id, q.request_id, q.panel_desc, q.patient_id
+  from lab_requests q
+  where q.request_id in (
+    select q1.request_id from lab_requests q1
+    where q1.request_id = {{param.request}} or q1.id = {{param.request}})
+),
+isolates as (
+  select o.id from orders o
+  join lab_results r on r.request_id = o.id
+  where r.observation_code in ('634-6', 'ORGS')
+),
+ast_source as (
+  select min(o.id) as id from orders o
+  join lab_results r on r.request_id = o.id
+  where coalesce(r.coded_value, r.abnormal_flag) in (
+      select code from terminology_codes
+      where value_set_url = 'urn:openldr:valueset:ast-interpretation')
+    and r.observation_code not in ('634-6', 'ORGS')
+),
+panel_order as (
+  select coalesce(
+    (select id from ast_source),
+    (select min(id) from isolates)) as id
+),
+spec as (
+  select max(l.specimen_id) as specimen_id
+  from lab_results l join orders o on o.id = l.request_id
 )
 select
   p.surname as patient_surname,
@@ -1984,19 +2067,20 @@ select
   p.date_of_birth as dob,
   s.type_text as specimen,
   left(s.received_time, 10) as received,
-  q.request_id as lab_number,
-  q.panel_desc as panel,
-  (select max(coalesce(o.text_value, o.coded_value)) from lab_results o
-     where o.request_id = q.id and o.observation_code in ('634-6', 'ORGS')) as organism,
+  (select min(request_id) from orders) as lab_number,
+  (select o.panel_desc from orders o join panel_order po on po.id = o.id) as panel,
+  (select max(coalesce(r.text_value, r.coded_value)) from lab_results r
+     join orders o on o.id = r.request_id
+     where r.observation_code in ('634-6', 'ORGS')) as organism,
   f.performing_lab as performing_lab,
   case when f.district is not null and f.region is not null
        then f.district + ', ' + f.region
        else coalesce(f.district, f.region) end as lab_location
-from lab_requests q
-left join patients p on p.id = q.patient_id
-left join specimens s on s.id = (select max(l.specimen_id) from lab_results l where l.request_id = q.id)
-left join facility f on f.specimen_id = (select max(l.specimen_id) from lab_results l where l.request_id = q.id)
-where q.id = {{param.request}}`, mysql: `with facility_of as (
+from spec
+left join patients p on p.id = (select min(patient_id) from orders)
+left join specimens s on s.id = spec.specimen_id
+left join facility f on f.specimen_id = spec.specimen_id
+where exists (select 1 from isolates)`, mysql: `with facility_of as (
   select specimen_id,
     min(performer) as performer,
     min(performer_display) as performer_display,
@@ -2022,6 +2106,35 @@ facility as (
   from facility_of fo
   left join facility_map fm on fm.source_system = coalesce(fo.source_system, '') and fm.performer_system = coalesce(fo.performer_system, '') and fm.source_code = fo.performer
   left join facility_loc fa on fa.source_system = fo.source_system and fa.facility_code = fo.performer
+),
+orders as (
+  select q.id, q.request_id, q.panel_desc, q.patient_id
+  from lab_requests q
+  where q.request_id in (
+    select q1.request_id from lab_requests q1
+    where q1.request_id = {{param.request}} or q1.id = {{param.request}})
+),
+isolates as (
+  select o.id from orders o
+  join lab_results r on r.request_id = o.id
+  where r.observation_code in ('634-6', 'ORGS')
+),
+ast_source as (
+  select min(o.id) as id from orders o
+  join lab_results r on r.request_id = o.id
+  where coalesce(r.coded_value, r.abnormal_flag) in (
+      select code from terminology_codes
+      where value_set_url = 'urn:openldr:valueset:ast-interpretation')
+    and r.observation_code not in ('634-6', 'ORGS')
+),
+panel_order as (
+  select coalesce(
+    (select id from ast_source),
+    (select min(id) from isolates)) as id
+),
+spec as (
+  select max(l.specimen_id) as specimen_id
+  from lab_results l join orders o on o.id = l.request_id
 )
 select
   p.surname as patient_surname,
@@ -2030,19 +2143,20 @@ select
   p.date_of_birth as dob,
   s.type_text as specimen,
   left(s.received_time, 10) as received,
-  q.request_id as lab_number,
-  q.panel_desc as panel,
-  (select max(coalesce(o.text_value, o.coded_value)) from lab_results o
-     where o.request_id = q.id and o.observation_code in ('634-6', 'ORGS')) as organism,
+  (select min(request_id) from orders) as lab_number,
+  (select o.panel_desc from orders o join panel_order po on po.id = o.id) as panel,
+  (select max(coalesce(r.text_value, r.coded_value)) from lab_results r
+     join orders o on o.id = r.request_id
+     where r.observation_code in ('634-6', 'ORGS')) as organism,
   f.performing_lab as performing_lab,
   case when f.district is not null and f.region is not null
        then concat(f.district, ', ', f.region)
        else coalesce(f.district, f.region) end as lab_location
-from lab_requests q
-left join patients p on p.id = q.patient_id
-left join specimens s on s.id = (select max(l.specimen_id) from lab_results l where l.request_id = q.id)
-left join facility f on f.specimen_id = (select max(l.specimen_id) from lab_results l where l.request_id = q.id)
-where q.id = {{param.request}}` },
+from spec
+left join patients p on p.id = (select min(patient_id) from orders)
+left join specimens s on s.id = spec.specimen_id
+left join facility f on f.specimen_id = spec.specimen_id
+where exists (select 1 from isolates)` },
   },
 ];
 
