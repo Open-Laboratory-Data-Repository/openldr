@@ -124,7 +124,7 @@ Only omit pagination when the operator says so for that specific table.
 
 ---
 
-## 6. Definition of done — a feature is four surfaces, not one
+## 6. Definition of done — a feature is five surfaces, not one
 
 A user-facing feature is **not done** when the studio UI works. Every one of these is part
 of the same task, not follow-up work. If you cannot finish one, say which and why.
@@ -141,6 +141,19 @@ code — never duplicate. Destructive commands refuse without `--force`. Audit a
 as literal braces, so a partial translation ships visibly broken.
 
 **4. Mobile view** — `apps/studio` is used on phones over Tailscale.
+
+**5. Landing changelog** — run `pnpm make:changelog` and commit
+`apps/web/src/landing/changelog.json` in the same slice that lands the work.
+It is **generated and committed**, not build output, and nothing regenerates it — the public
+`/changelog` page shows whatever was last committed. It reads a rolling window of the last 400
+commits, so waiting until release day silently drops the oldest entries off the tail. Only
+`feat`/`fix`/`perf` are published, so a slice of `chore`/`docs`/`test` commits changes nothing
+and the run is cheap either way. Run it after merging to `main`, not before — the generator
+reads git history, so it cannot see commits that are not there yet.
+
+The landing's **other** generated artefact, `pnpm gallery:screenshots`, is NOT part of this —
+it is a heavy Playwright capture needing `PORT=3100`, and belongs to a release pass.
+See the [[landing-site-generated-content]] memory note for its traps.
 
 ### Mobile testing — know what your tool cannot see
 
