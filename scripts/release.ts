@@ -165,10 +165,12 @@ async function main(): Promise<void> {
   const version = String(
     (JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8')) as { version?: unknown }).version,
   );
-  const lastTag = newestTag();
-
-  console.log(`releasing ${version}${lastTag ? ` (last tag ${lastTag})` : ' (first release)'}`);
-
+  // ⛔ `newestTag()` must be read AFTER the fetch below, not before. It reads local tags, and the
+  // "version is not newer than the last tag" refusal depends on it. Unfetched, an operator whose
+  // origin already carries v0.2.0 sees only v0.1.0 locally, the refusal never fires, and 0.1.5
+  // publishes on top of 0.2.0. `gitTagExists` and the registry check do not cover this — both
+  // test equality, not ordering.
+  //
   // `origin/main...main` reads a LOCAL tracking ref. Without a fetch it holds whatever the last
   // fetch left there, so an operator who has not fetched gets 0<TAB>0 — "synced" — while origin
   // is ahead.
@@ -177,7 +179,10 @@ async function main(): Promise<void> {
   // is read-only — it moves no local branch and touches no working tree — and a dry run whose
   // whole job is checking preconditions must not check this one against a stale ref.
   console.log('+ git fetch origin');
-  sh('git', ['fetch', 'origin']);
+  sh('git', ['fetch', 'origin', '--tags']);
+
+  const lastTag = newestTag();
+  console.log(`releasing ${version}${lastTag ? ` (last tag ${lastTag})` : ' (first release)'}`);
 
   const facts: ReleaseFacts = {
     version,

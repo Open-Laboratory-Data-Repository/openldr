@@ -107,3 +107,21 @@ describe('findPrivatePackages', () => {
     expect(await findPrivatePackages(f, 'acme', ['a'])).toEqual(['a']);
   });
 });
+
+describe('parseGhPages — a non-JSON body must not read as "package absent"', () => {
+  // Node embeds the input in the SyntaxError: JSON.parse('Not Found') yields
+  // `Unexpected token 'N', "Not Found" is not valid JSON`. isNotFound matches /not found/i, so
+  // letting that message escape would classify a broken read as "the tag is free".
+  it('throws a message that isNotFound cannot match', () => {
+    expect(() => parseGhPages('Not Found')).toThrow(/not JSON/);
+    let msg = '';
+    try { parseGhPages('Not Found'); } catch (e) { msg = (e as Error).message; }
+    expect(msg).not.toMatch(/\b404\b|not found/i);
+  });
+
+  it('still throws on empty input, with a message isNotFound cannot match', () => {
+    let msg = '';
+    try { parseGhPages(''); } catch (e) { msg = (e as Error).message; }
+    expect(msg).not.toMatch(/\b404\b|not found/i);
+  });
+});

@@ -34,7 +34,15 @@ export function parseGhPages(out: string): unknown {
   try {
     parsed = JSON.parse(text);
   } catch {
-    parsed = JSON.parse(text.replace(/\]\s*\[/g, ','));
+    try {
+      parsed = JSON.parse(text.replace(/\]\s*\[/g, ','));
+    } catch {
+      // ⛔ Never let the raw text reach the caller's error message. Node embeds the input in a
+      // SyntaxError — `JSON.parse('Not Found')` yields `Unexpected token 'N', "Not Found" is not
+      // valid JSON` — and `isNotFound` below matches on the words "not found". A body that is not
+      // JSON would then be classified as "package absent", disarming the overwrite guard.
+      throw new Error('gh returned output that is not JSON — cannot read the registry');
+    }
   }
 
   if (Array.isArray(parsed) && parsed.length > 0 && parsed.every((page) => Array.isArray(page))) {
