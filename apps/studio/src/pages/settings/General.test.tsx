@@ -4,8 +4,10 @@ import { MemoryRouter } from 'react-router-dom';
 import '@/i18n';
 
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() }, Toaster: () => null }));
+// Mutable so a test can drop the caller to a signed-in user with no settings capability.
+const caps = { granted: true };
 vi.mock('@/auth/AuthProvider', () => ({
-  useAuth: () => ({ user: { id: 'me', username: 'admin', roles: ['lab_admin'] }, hasCapability: () => true }),
+  useAuth: () => ({ user: { id: 'me', username: 'admin', roles: ['lab_admin'] }, hasCapability: () => caps.granted }),
 }));
 vi.mock('@/api', async (orig) => {
   const actual = await orig<typeof import('@/api')>();
@@ -28,8 +30,17 @@ const AVAILABLE = {
   lastCheckedAt: '2026-08-20T10:00:00.000Z', lastError: null, updateAvailable: true,
 };
 
+/** A check that has been failing for a year: it keeps stamping lastCheckedAt, so the card would
+ *  otherwise read "Last checked 4 minutes ago" and nothing else. */
+const FAILING = {
+  enabled: true, running: '0.1.1', latestVersion: null, releasedAt: null, notesUrl: null,
+  firstSeenAt: null, lastCheckedAt: '2026-08-20T10:00:00.000Z',
+  lastError: 'update check timed out after 10000ms', updateAvailable: false,
+};
+
 beforeEach(() => {
   vi.clearAllMocks();
+  caps.granted = true;
   (api.fetchClientConfig as any).mockResolvedValue({
     dashboardSqlEnabled: false, authEnforced: false, version: '0.1.1', environment: 'test', oidc: null,
   });
@@ -105,5 +116,36 @@ describe('General settings — About card update notice', () => {
     render(<MemoryRouter><General /></MemoryRouter>);
     expect(await screen.findByText('0.1.1')).toBeInTheDocument();
     expect(screen.queryByText(/docker compose pull/)).toBeNull();
+  });
+
+  // A check that never succeeds is the dangerous case: lastCheckedAt still moves, so a silent card
+  // reads as "up to date" forever.
+  it('shows why the check failed instead of only when it last ran', async () => {
+    (api.fetchUpdateState as any).mockResolvedValue(FAILING);
+    render(<MemoryRouter><General /></MemoryRouter>);
+    const line = await screen.findByTestId('update-last-error');
+    expect(line.textContent).toMatch(/timed out after 10000ms/);
+  });
+
+  it('shows the check state to a user with no settings capability, without the switch', async () => {
+    caps.granted = false;
+    (api.fetchUpdateState as any).mockResolvedValue(FAILING);
+    render(<MemoryRouter><General /></MemoryRouter>);
+    expect(await screen.findByTestId('update-last-error')).toBeInTheDocument();
+    expect(screen.getByTestId('update-last-checked')).toBeInTheDocument();
+    expect(screen.queryByTestId('update-check-enabled')).toBeNull();
+  });
+
+  it('shows the release date beside the available version', async () => {
+    (api.fetchUpdateState as any).mockResolvedValue(AVAILABLE);
+    render(<MemoryRouter><General /></MemoryRouter>);
+    expect(await screen.findByText(/2026-08-20/)).toBeInTheDocument();
+  });
+
+  it('shows the running version from the update state when /api/config fails', async () => {
+    (api.fetchClientConfig as any).mockRejectedValue(new Error('boom'));
+    (api.fetchUpdateState as any).mockResolvedValue(AVAILABLE);
+    render(<MemoryRouter><General /></MemoryRouter>);
+    expect(await screen.findByText('0.1.1')).toBeInTheDocument();
   });
 });

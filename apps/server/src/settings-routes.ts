@@ -450,7 +450,32 @@ export function registerSettingsRoutes(app: FastifyInstance<any, any, any, any>,
   // capability guard, exactly like /api/config: the version line and the bell entry are for every
   // signed-in user, and gating it on settings.edit_general would blank both for everyone else. It
   // returns cached state only — nothing here fetches, pulls an image, or restarts anything.
-  app.get('/api/update', async () => ctx.updateCheck.read(readAppVersion()));
+  //
+  // Its own catch, same shape as the bell's in notification-routes.ts: a store blip must degrade
+  // to "cannot tell" rather than 500. The studio's catch turns a 500 into `update = null`, which
+  // silently omits the whole check-state block — the operator would see nothing at all.
+  app.get('/api/update', async () => {
+    const running = readAppVersion();
+    try {
+      return await ctx.updateCheck.read(running);
+    } catch (err) {
+      ctx.logger.error({ err }, 'update state read failed');
+      return {
+        // `enabled: true` is what the store itself defaults to when the key is absent; the switch
+        // stays visible so an admin can still act. Everything else says "unknown", and lastError
+        // is what makes the card admit that rather than imply the install is current.
+        enabled: true,
+        running,
+        latestVersion: null,
+        releasedAt: null,
+        notesUrl: null,
+        firstSeenAt: null,
+        lastCheckedAt: null,
+        lastError: 'update state could not be read',
+        updateAvailable: false,
+      };
+    }
+  });
 
   // The SWITCH is admin-only and audited, same shape as the validation/number settings above.
   app.put('/api/settings/update', EDIT_GENERAL, async (req, reply) => {

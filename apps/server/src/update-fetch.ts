@@ -14,9 +14,13 @@
 /** 10s. This is a once-a-day background check, so waiting longer buys nothing an operator wants. */
 export const UPDATE_FETCH_TIMEOUT_MS = 10_000;
 
-/** latest.json is a few hundred bytes. A response this far past that is not the manifest, and
- *  reading it into memory is the only thing left that could hurt after the timeout. */
-const MAX_BYTES = 64 * 1024;
+/** latest.json is a few hundred bytes; anything this far past that is not the manifest.
+ *
+ *  ⚠ This does NOT guard the read. It is applied AFTER `res.text()` has already buffered the whole
+ *  body into memory, and `.length` counts UTF-16 code units, not bytes — a multi-byte body is
+ *  larger than this number says. The only thing actually bounding an oversized or endless body is
+ *  the abort timer above. What this check buys is refusing to hand an absurd string to JSON.parse. */
+const MAX_CHARS = 64 * 1024;
 
 export function createUpdateFetch(
   opts: { fetchImpl?: typeof fetch; timeoutMs?: number } = {},
@@ -33,7 +37,7 @@ export function createUpdateFetch(
       const res = await fetchImpl(url, { redirect: 'follow', signal: ac.signal });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const text = await res.text();
-      if (text.length > MAX_BYTES) throw new Error(`update manifest is too large (${text.length} bytes)`);
+      if (text.length > MAX_CHARS) throw new Error(`update manifest is too large (${text.length} characters)`);
       return text;
     } catch (err) {
       // The raw abort reads "This operation was aborted", which lands verbatim in `update.lastError`

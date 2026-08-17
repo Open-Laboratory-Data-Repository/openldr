@@ -375,6 +375,21 @@ describe('settings routes', () => {
       expect(res.statusCode).toBe(200);
     });
 
+    // A 500 here is worse than it looks: the studio's own catch turns it into `update = null`,
+    // which silently omits the entire check-state block from the About card.
+    it('GET /api/update degrades to a stated failure instead of 500 when the store is unreadable', async () => {
+      const { ctx, deps } = fakeCtx();
+      ctx.updateCheck = { read: async () => { throw new Error('app_settings unavailable'); } };
+      const app = appWithUser(['lab_admin'], (a) => registerSettingsRoutes(a, ctx, deps));
+      const res = await app.inject({ method: 'GET', url: '/api/update' });
+      expect(res.statusCode).toBe(200);
+      const body = res.json() as { running: string; lastError: string | null; updateAvailable: boolean };
+      expect(body.running).toMatch(/^\d+\.\d+\.\d+/);
+      expect(body.updateAvailable).toBe(false);
+      // The card must be able to say "cannot tell", not render as "no update".
+      expect(body.lastError).toBeTruthy();
+    });
+
     it('PUT /api/settings/update turns the check off and GET reflects it', async () => {
       const { ctx, deps } = fakeCtx();
       const app = appWithUser(['lab_admin'], (a) => registerSettingsRoutes(a, ctx, deps));

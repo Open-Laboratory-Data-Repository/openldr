@@ -322,11 +322,13 @@ export const pt: EnShape = {
         license: 'Licença',
         services: 'Serviços',
         updateAvailable: '{{version}} disponível',
+        released: 'publicada em {{date}}',
         releaseNotes: 'Notas da versão',
         upgradeHow: 'Para atualizar, execute isto na pasta de instalação:',
         checkForUpdates: 'Procurar atualizações',
         lastChecked: 'Última verificação {{when}}',
         neverChecked: 'Nunca verificado',
+        checkFailed: 'A última verificação falhou: {{error}}. Esta instalação pode não estar atualizada.',
       },
       flags: {
         title: 'Indicadores de funcionalidades',

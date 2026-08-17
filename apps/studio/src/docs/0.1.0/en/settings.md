@@ -32,9 +32,10 @@ makes no outbound request at all, and the version line shows only what you are r
 air-gapped lab can leave it on — a failed check is silent, and the last known answer is kept.
 There is no command-line switch for this; it is a Studio-only setting.
 
-**From the command line:** `openldr update check` prints the same information. It exits 1 when
-an update is available and 0 otherwise — that means "an update exists", not an error, so a
-script can act on the exit code directly.
+**From the command line:** `openldr update check` prints the same information. It exits **0** when
+the install is up to date, **1** when an update is available, and **2** when the check itself
+failed. Exit 1 means "an update exists", not an error, so a script can act on it directly — and a
+failed run exits 2, so a broken check never looks like a new release.
 
 ## Related guides
 

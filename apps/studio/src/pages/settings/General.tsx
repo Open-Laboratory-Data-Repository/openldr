@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
+import { enUS, fr as frDate, pt as ptDate } from 'date-fns/locale';
 import { useAuth } from '@/auth/AuthProvider';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
@@ -24,8 +25,15 @@ import {
 
 type PendingDanger = null | 'reset-dashboards' | 'clear-audit' | 'factory-reset';
 
+/** date-fns has no notion of the app language, so "4 minutes ago" comes out English in every
+ *  locale unless it is handed one of these. There is no existing resolver in this app — the other
+ *  two formatDistanceToNow callers have the same bug — so this is the local, minimal fix. */
+const DATE_LOCALES = { en: enUS, fr: frDate, pt: ptDate } as const;
+
 export function General() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  // `resolvedLanguage` can be a region tag ('en-US'); the app only ships the base languages.
+  const dateLocale = DATE_LOCALES[(i18n.resolvedLanguage ?? i18n.language ?? 'en').slice(0, 2) as keyof typeof DATE_LOCALES] ?? enUS;
   const { hasCapability } = useAuth();
   // Split per-control, matching the server's route-level gates (settings-routes.ts):
   // feature flags, numbers/validation ("general edits"), and the destructive danger-zone
@@ -164,10 +172,14 @@ export function General() {
           <dl className="grid grid-cols-[8rem_1fr] gap-y-1">
             <dt className="text-muted-foreground">{t('settings.general.about.version')}</dt>
             <dd className="font-mono">
-              {config?.version || '—'}
+              {/* `update.running` is the server's own answer and survives a failed /api/config;
+                  falling back to config keeps an older server (no /api/update) working. */}
+              {update?.running || config?.version || '—'}
               {update?.updateAvailable && (
                 <span className="ml-2 font-sans text-xs text-muted-foreground">
                   — {t('settings.general.about.updateAvailable', { version: update.latestVersion })}
+                  {/* The manifest carries a full ISO timestamp; the operator only needs the day. */}
+                  {update.releasedAt && ` · ${t('settings.general.about.released', { date: update.releasedAt.slice(0, 10) })}`}
                   {update.notesUrl && (
                     <a href={update.notesUrl} target="_blank" rel="noreferrer" className="ml-1 underline">
                       {t('settings.general.about.releaseNotes')}
@@ -191,31 +203,43 @@ export function General() {
             </div>
           )}
 
-          {/* The switch is gated by settings.edit_general, matching the server's
-              EDIT_GENERAL gate on PUT /api/settings/update (settings-routes.ts). */}
-          {canEditGeneral && update && (
-            <div className="mt-4 grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-3">
-              {/* No htmlFor: Switch renders a <button role="switch">, which a <label> cannot
-                  be associated with. The accessible name comes from aria-label instead. */}
-              <Label className="whitespace-nowrap">
-                {t('settings.general.about.checkForUpdates')}
-              </Label>
-              <div className="flex items-center gap-3">
-                <Switch
-                  data-testid="update-check-enabled"
-                  checked={update.enabled}
-                  disabled={updateBusy}
-                  onCheckedChange={(v) => void toggleUpdateCheck(v)}
-                  aria-label={t('settings.general.about.checkForUpdates')}
-                />
-                <span className="text-xs text-muted-foreground">
-                  {update.lastCheckedAt
-                    ? t('settings.general.about.lastChecked', {
-                      when: formatDistanceToNow(new Date(update.lastCheckedAt), { addSuffix: true }),
-                    })
-                    : t('settings.general.about.neverChecked')}
+          {update && (
+            <div className="mt-4 flex flex-col gap-3">
+              {/* Only the SWITCH is gated by settings.edit_general, matching the server's
+                  EDIT_GENERAL gate on PUT /api/settings/update (settings-routes.ts). Whether the
+                  install is current is not an admin question — everyone sees the state below. */}
+              {canEditGeneral && (
+                <div className="grid grid-cols-[auto_1fr] items-center gap-x-4">
+                  {/* No htmlFor: Switch renders a <button role="switch">, which a <label> cannot
+                      be associated with. The accessible name comes from aria-label instead. */}
+                  <Label className="whitespace-nowrap">
+                    {t('settings.general.about.checkForUpdates')}
+                  </Label>
+                  <Switch
+                    data-testid="update-check-enabled"
+                    checked={update.enabled}
+                    disabled={updateBusy}
+                    onCheckedChange={(v) => void toggleUpdateCheck(v)}
+                    aria-label={t('settings.general.about.checkForUpdates')}
+                  />
+                </div>
+              )}
+              <span data-testid="update-last-checked" className="text-xs text-muted-foreground">
+                {update.lastCheckedAt
+                  ? t('settings.general.about.lastChecked', {
+                    when: formatDistanceToNow(new Date(update.lastCheckedAt), { addSuffix: true, locale: dateLocale }),
+                  })
+                  : t('settings.general.about.neverChecked')}
+              </span>
+              {/* ⛔ Without this, a check that has failed every day for a year still shows a fresh
+                  "Last checked 4 minutes ago" — recordFailure stamps lastCheckedAt on every failed
+                  poll (bootstrap/update-check.ts). The operator must be able to tell "no update"
+                  from "cannot tell". */}
+              {update.lastError && (
+                <span data-testid="update-last-error" role="status" className="text-xs text-amber-600 dark:text-amber-500">
+                  {t('settings.general.about.checkFailed', { error: update.lastError })}
                 </span>
-              </div>
+              )}
             </div>
           )}
         </CardContent>

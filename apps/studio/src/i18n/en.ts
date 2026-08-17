@@ -320,11 +320,13 @@ export const en = {
         license: 'License',
         services: 'Services',
         updateAvailable: '{{version}} available',
+        released: 'released {{date}}',
         releaseNotes: 'Release notes',
         upgradeHow: 'To upgrade, run these in your install directory:',
         checkForUpdates: 'Check for updates',
         lastChecked: 'Last checked {{when}}',
         neverChecked: 'Never checked',
+        checkFailed: 'The last check failed: {{error}}. This install may not be up to date.',
       },
       flags: {
         title: 'Feature Flags',
