@@ -40,6 +40,8 @@ The report run completes, the result appears in both the Document and Spreadshee
 - **Run is disabled:** a required filter is missing. Open **⋯ → Parameters** and fill in every filter marked required — most reports require a date range.
 - **"date range not selected", or a message naming a parameter:** the report ran without a value it needs. Open **⋯ → Parameters**, set it, and run again. The message names the parameter at fault.
 - **The result is empty:** widen the date range, remove optional filters, or confirm that the relevant data has been ingested.
+- **"no data for this report request" on the Clinical Microbiology Report:** the lab number carries no microbiology. A chemistry or serology request has no organism, and the report is refused rather than printed empty — a microbiology report with no organism reads like a negative culture. Check the request's panels in **Query** before assuming a fault.
+- **A microbiology report prints an organism but no susceptibilities:** that is a valid result. The culture grew something and no sensitivity testing was done on it. The organism band is the finding.
 - **An antibiogram shows an `(unmapped)` column:** those are susceptibility results the report could not attribute to a specific antibiotic — commonly a panel-level summary row, a single result reporting two drugs, or a microscopy finding recorded as S/I/R. They are shown rather than dropped so the count is visible; treat a large number as a data-quality signal worth raising with whoever configures the analyser.
 - **Permission denied:** your account can view reports but may not have permission to manage schedules, edit templates, or unpublish/delete.
 - **A previous run failed:** open **Run History**, inspect the error, adjust filters, and run again.
@@ -51,6 +53,7 @@ The report run completes, the result appears in both the Document and Spreadshee
 - Use **Run History** to compare repeated runs and confirm whether a result changed after new data arrived.
 - Use **Schedules** for recurring operational reports when the same filters should run on a predictable cadence.
 - The filters on this page come straight from the template's parameters — to add, remove, or rename a filter, edit the template's parameters in [Report Designer](/docs/report-designer), not this page.
+- The **Clinical Microbiology Report** takes the **lab number** as its Request ID — the number on the request form and the specimen label, as the LIS sends it (for example `TZDISATDS0013538`). A laboratory system usually splits one microbiology result into several orders under that one lab number: the culture that grew the organism is one order, the susceptibility panel another. The report reads all of them, so the organism and its susceptibilities print on one page. A single order id also works if you have one.
 - Pair reports with [Audit](/docs/audit) when investigating who changed report settings or schedules.
 
 ## Related guides
