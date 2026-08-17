@@ -139,6 +139,16 @@ export const pt: EnShape = {
       system_auditor: 'Auditor do sistema',
     },
   },
+  terminology: {
+    vsSearchPlaceholder: 'Pesquisar conjuntos de valores',
+    vsNoMatch: 'Nenhum conjunto de valores corresponde aos filtros atuais.',
+    vsColTitle: 'Título',
+    vsColUrl: 'URL',
+    vsColSystem: 'Sistema',
+    vsColSource: 'Origem',
+    vsColCodes: 'Códigos',
+    vsColStatus: 'Estado',
+  },
   sites: {
     count_one: '{{count}} site',
     count_other: '{{count}} sites',

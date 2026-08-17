@@ -135,6 +135,18 @@ export const en = {
       system_auditor: 'System Auditor',
     },
   },
+  // Only the value sets table is translated so far — the rest of the Terminology page is still
+  // hardcoded English.
+  terminology: {
+    vsSearchPlaceholder: 'Search value sets',
+    vsNoMatch: 'No value sets match the current filters.',
+    vsColTitle: 'Title',
+    vsColUrl: 'URL',
+    vsColSystem: 'System',
+    vsColSource: 'Source',
+    vsColCodes: 'Codes',
+    vsColStatus: 'Status',
+  },
   sites: {
     count_one: '{{count}} site',
     count_other: '{{count}} sites',

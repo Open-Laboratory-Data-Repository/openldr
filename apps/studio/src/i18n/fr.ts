@@ -139,6 +139,16 @@ export const fr: EnShape = {
       system_auditor: 'Auditeur système',
     },
   },
+  terminology: {
+    vsSearchPlaceholder: 'Rechercher des jeux de valeurs',
+    vsNoMatch: 'Aucun jeu de valeurs ne correspond aux filtres actuels.',
+    vsColTitle: 'Titre',
+    vsColUrl: 'URL',
+    vsColSystem: 'Système',
+    vsColSource: 'Source',
+    vsColCodes: 'Codes',
+    vsColStatus: 'Statut',
+  },
   sites: {
     count_one: '{{count}} site',
     count_other: '{{count}} sites',
