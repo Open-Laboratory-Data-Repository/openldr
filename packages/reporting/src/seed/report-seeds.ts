@@ -1760,6 +1760,24 @@ order by pathogen_name`,
   // only: it stops a row that passed the filter from printing blank. It cannot re-admit a row the
   // filter rejected.
   //
+  // ⚠ `urn:openldr:valueset:non-reportable` excludes collection metadata, and it currently excludes
+  // NOTHING — that is a known upstream defect, not a reason to delete the filter. This filter was
+  // removed on 2026-08-17 on the mistaken finding that the value set did not exist, and restored on
+  // 2026-08-18. The accurate picture:
+  //   - It DOES exist: `value_sets` in the INTERNAL db holds `vs-non-reportable`, status active.
+  //     ⛔ The internal `value_sets` table (10 sets) and the warehouse `terminology_codes`
+  //     projection (5 sets) DISAGREE. Checking one is not checking the other.
+  //   - It is INTENSIONAL: `compose.include` is a filter, `result_role = 'metadata'` / `'admin'`
+  //     over `urn:openldr:default_result` — not a concept list. So it expands to whatever carries
+  //     that property, and **0 of 4580 `terminology_concepts` rows carry `result_role` at all**.
+  //     That is almost certainly the open `terms.update`-destroys-unknown-properties bug.
+  //   - So it is FAIL-OPEN and inert today. `not in` against an empty set is always true. Restoring
+  //     it changes no output; it puts the intended mechanism back so a fix to `result_role` reaches
+  //     this query instead of silently not reaching it.
+  //   - Keyed by `value_set_url` like its neighbour, for exactly the same reason.
+  // An intensional value set expanding to nothing looks IDENTICAL to a wrong key. Check
+  // `value_sets.compose` before concluding the key is wrong — that is the mistake made here.
+  //
   // ⚠ The interpretation match is CASE-INSENSITIVE on both sides (`upper()`), in the filter, the
   // display join AND the status case. Measured live 2026-08-17: `lab_results` holds `R` ×116,
   // `S` ×16 and `s` ×2. Those two lowercase rows were dropped outright, so a tested antibiotic
@@ -1792,6 +1810,8 @@ where q.request_id in (
     where q1.request_id = {{param.request}} or q1.id = {{param.request}})
   and upper(coalesce(r.coded_value, r.abnormal_flag)) in (
     select upper(code) from terminology_codes where value_set_url = 'urn:openldr:valueset:ast-interpretation')
+  and r.observation_code not in (
+    select code from terminology_codes where value_set_url = 'urn:openldr:valueset:non-reportable')
   and r.observation_code not in ('634-6', 'ORGS')
   and exists (
     select 1 from lab_results iso
@@ -1819,6 +1839,8 @@ where q.request_id in (
     where q1.request_id = {{param.request}} or q1.id = {{param.request}})
   and upper(coalesce(r.coded_value, r.abnormal_flag)) in (
     select upper(code) from terminology_codes where value_set_url = 'urn:openldr:valueset:ast-interpretation')
+  and r.observation_code not in (
+    select code from terminology_codes where value_set_url = 'urn:openldr:valueset:non-reportable')
   and r.observation_code not in ('634-6', 'ORGS')
   and exists (
     select 1 from lab_results iso
@@ -1852,6 +1874,8 @@ where q.request_id in (
     where q1.request_id = {{param.request}} or q1.id = {{param.request}})
   and upper(coalesce(r.coded_value, r.abnormal_flag)) in (
     select upper(code) from terminology_codes where value_set_url = 'urn:openldr:valueset:ast-interpretation')
+  and r.observation_code not in (
+    select code from terminology_codes where value_set_url = 'urn:openldr:valueset:non-reportable')
   and r.observation_code not in ('634-6', 'ORGS')
   and exists (
     select 1 from lab_results iso
