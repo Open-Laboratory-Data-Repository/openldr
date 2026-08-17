@@ -6,6 +6,48 @@
       "version": null,
       "entries": [
         {
+          "hash": "cbe959da",
+          "type": "fix",
+          "scope": "reports",
+          "title": "Clinical micro help opens on touch, and terminology matching is case-insensitive"
+        },
+        {
+          "hash": "c4ebd89c",
+          "type": "feat",
+          "scope": "reports",
+          "title": "Report parameters can carry operator help text"
+        },
+        {
+          "hash": "e63c51bc",
+          "type": "fix",
+          "scope": "reports",
+          "title": "Clinical micro header resolves the lab number and requires an isolate"
+        },
+        {
+          "hash": "4a030ce5",
+          "type": "fix",
+          "scope": "reports",
+          "title": "AST susceptibilities resolve up to the lab number"
+        },
+        {
+          "hash": "51b9f933",
+          "type": "fix",
+          "scope": "reports",
+          "title": "Key the AST value set by URL, not the random seeded id"
+        },
+        {
+          "hash": "ff4fb6e4",
+          "type": "fix",
+          "scope": "reports",
+          "title": "Clinical micro susceptibilities resolve from the lab number"
+        },
+        {
+          "hash": "9926c2b0",
+          "type": "fix",
+          "scope": "release",
+          "title": "The release script must not call the WSL bash either"
+        },
+        {
           "hash": "f0b8ec62",
           "type": "fix",
           "scope": "studio",
@@ -1558,84 +1600,6 @@
           "type": "feat",
           "scope": "reporting",
           "title": "Resolve the performing laboratory in the clinical header query"
-        },
-        {
-          "hash": "0b1d0f2a",
-          "type": "feat",
-          "scope": "studio",
-          "title": "Show observed-facility location on the Observed tab"
-        },
-        {
-          "hash": "63f24261",
-          "type": "feat",
-          "scope": "bootstrap",
-          "title": "Join facilities.region/district onto resolveObservedFacilities"
-        },
-        {
-          "hash": "90c6a5ec",
-          "type": "feat",
-          "scope": "db",
-          "title": "ProjectFacility reads Organization.address into region/district"
-        },
-        {
-          "hash": "90c465b5",
-          "type": "feat",
-          "scope": "db",
-          "title": "Add facilities.region/district for the CDR Organization.address"
-        },
-        {
-          "hash": "b3113a86",
-          "type": "feat",
-          "scope": "studio",
-          "title": "Add Remove mapping to the Observed tab's row menu"
-        },
-        {
-          "hash": "3c6ba1e6",
-          "type": "fix",
-          "scope": "studio",
-          "title": "Stop TermMappingDialog silently retargeting a locked mapping's stored toSystem"
-        },
-        {
-          "hash": "492d22ac",
-          "type": "fix",
-          "scope": "studio,bootstrap",
-          "title": "Close review findings on facility-mapping-targets"
-        },
-        {
-          "hash": "ea008f0b",
-          "type": "fix",
-          "scope": "studio",
-          "title": "Drop the Observed tab's mapping-target System selector entirely"
-        },
-        {
-          "hash": "10fd1e07",
-          "type": "feat",
-          "scope": "studio",
-          "title": "Add TermMappingDialog.lockedTargetSystem for a fixed mapping target"
-        },
-        {
-          "hash": "0460e92f",
-          "type": "fix",
-          "scope": "server",
-          "title": "Remove GET /api/facilities/mapping-target-systems"
-        },
-        {
-          "hash": "e960a741",
-          "type": "fix",
-          "scope": "bootstrap",
-          "title": "Drop facilityMappingTargetSystems — facility mapping targets only the registry"
-        },
-        {
-          "hash": "44e539a8",
-          "type": "fix",
-          "scope": "studio",
-          "title": "Restrict the Observed tab's mapping dialog to real facility targets"
-        },
-        {
-          "hash": "b102054e",
-          "type": "feat",
-          "scope": "server",
-          "title": "Add GET /api/facilities/mapping-target-systems"
         }
       ]
     }
