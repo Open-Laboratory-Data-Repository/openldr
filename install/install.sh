@@ -11,6 +11,10 @@
 #        --seedless (empty first run — skips the seeded sample dashboard + demo data; the
 #          default seeds them so a fresh install comes up populated. Fresh install only.),
 #        --ready-timeout <seconds> (default 180; 0 disables the post-start readiness wait),
+#        --require-ready (make a readiness timeout FATAL — exit 1 instead of warning. Off by
+#          default: a real lab install leaves the stack up and lets a slow service finish
+#          starting. `pnpm release` passes it so the verification install cannot pass by
+#          printing warnings.),
 #        --target-db postgres|mssql|mysql (default postgres — selects the external analytics/target DB),
 #        --mssql-demo (spin up a bundled MSSQL container for evaluation; implies --target-db mssql),
 #        --mssql-host/--mssql-port/--mssql-database/--mssql-user/--mssql-password (BYO MSSQL
@@ -41,6 +45,7 @@ NO_START=0
 NO_PULL=0
 SEED=1
 READY_TIMEOUT=180
+REQUIRE_READY=0
 TARGET_DB="postgres"
 MSSQL_DEMO=0
 MSSQL_HOST=""
@@ -71,6 +76,7 @@ while [ $# -gt 0 ]; do
     --no-pull) NO_PULL=1; shift ;;
     --seedless|--no-seed) SEED=0; shift ;;
     --ready-timeout) READY_TIMEOUT="$2"; shift 2 ;;
+    --require-ready) REQUIRE_READY=1; shift ;;
     --target-db) TARGET_DB="$2"; shift 2 ;;
     --mssql-demo) MSSQL_DEMO=1; TARGET_DB="mssql"; shift ;;
     --mssql-host) MSSQL_HOST="$2"; shift 2 ;;
@@ -166,6 +172,14 @@ fi
 case "$READY_TIMEOUT" in
   ''|*[!0-9]*) echo "✗ --ready-timeout must be a non-negative integer (got '$READY_TIMEOUT')" >&2; exit 2 ;;
 esac
+
+# --require-ready asks for readiness to be PROVEN. Both of these skip the readiness gate
+# entirely, so the flag would exit 0 having checked nothing — the exact silence it exists to
+# break. Refuse the combination instead of passing vacuously.
+if [ "$REQUIRE_READY" -eq 1 ]; then
+  [ "$READY_TIMEOUT" -gt 0 ] || { echo "✗ --require-ready needs a --ready-timeout above 0; there is nothing to wait for" >&2; exit 2; }
+  [ "$NO_START" -eq 0 ] || { echo "✗ --require-ready cannot be used with --no-start; nothing is started to become ready" >&2; exit 2; }
+fi
 
 for bv in "mssql-encrypt=$MSSQL_ENCRYPT" "mssql-trust-cert=$MSSQL_TRUST_CERT" "mysql-ssl=$MYSQL_SSL"; do
   bname="${bv%%=*}"; bval="${bv#*=}"
@@ -461,7 +475,13 @@ docker compose $COMPOSE_FILES up -d
 # Readiness gate: poll the full user path over the local gateway until every service a first
 # visit touches is serving, so we only hand over a URL that actually works. Probes loopback
 # (127.0.0.1) so external DNS / a not-yet-resolving --server-name can't cause a false timeout.
-# Non-fatal: on timeout we warn and leave the stack up (exit 0), like the Let's Encrypt path.
+# Non-fatal BY DEFAULT: on timeout we warn and leave the stack up (exit 0), like the Let's
+# Encrypt path. Real labs depend on that — a slow first boot must not tear anything down.
+#
+# ⛔ That default made this script useless as a verification: `pnpm release` ran it against the
+# just-published tag and read only the exit code, so an API that crash-loops on a bad migration
+# scrolled 180s of warnings past and still exited 0, and the release tagged and published. Pass
+# --require-ready to make the timeout fatal. Nothing else in the tree passes it.
 ready_check() { curl -fsSk -o /dev/null "https://127.0.0.1:$HTTPS_PORT$1" 2>/dev/null; }
 READY_OK=0
 if [ "$READY_TIMEOUT" -gt 0 ]; then
@@ -493,6 +513,12 @@ if [ "$READY_TIMEOUT" -gt 0 ]; then
     [ "$ok_api" -eq 0 ] && echo "  ! api still starting"
     [ "$ok_kc" -eq 0 ] && echo "  ! keycloak realm still starting"
     echo "  Give it another minute, or inspect: docker compose logs -f keycloak"
+    if [ "$REQUIRE_READY" -eq 1 ]; then
+      echo ""
+      echo "✗ --require-ready: the stack did not become ready within ${READY_TIMEOUT}s." >&2
+      echo "  The containers are still running in $(pwd) — inspect them with: docker compose logs" >&2
+      exit 1
+    fi
   fi
 fi
 

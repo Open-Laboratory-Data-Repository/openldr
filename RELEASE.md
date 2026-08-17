@@ -23,8 +23,13 @@ pushed, and reports every problem at once:
 2. `package.json` version parses as `X.Y.Z` and is newer than the last `v*` tag (the first
    release has no tag to compare against, so this check is skipped).
 3. No `vX.Y.Z` tag exists yet.
-4. `:X.Y.Z` is not already published for any of the five images.
-5. Landing changelog regenerated and committed.
+4. `:X.Y.Z` is not already published for **any** of the five images. All five are read, and the
+   refusal names the ones that already carry the tag — a run that pushed some images and died
+   before the rest leaves exactly that state.
+5. `apps/web/src/landing/changelog.json` has no uncommitted changes. That is all this checks;
+   it does **not** re-run the generator or compare its output, so it cannot tell a stale
+   changelog from a fresh one. Precondition 1's clean-tree check already implies it. Run
+   `pnpm make:changelog` and commit the result yourself before releasing.
 6. Test gate green. A first failure is re-run alone, package by package, before it counts as a
    regression — this is usually a timeout under parallel load, not a real break (AGENTS.md
    `test-gate-flakiness-timeouts`). Which packages to retry is read out of turbo's own
@@ -36,6 +41,37 @@ then creates the git tag, pushes it, and cuts the GitHub release with `latest.js
 
 **The tag is last on purpose.** A `vX.Y.Z` tag exists only if that release is complete and
 verified — so a failure part-way through leaves no tag, and no lab ever sees a half-release.
+
+That last step is three commands, not one: `git tag`, `git push origin vX.Y.Z`, then
+`gh release create`. If either of the last two fails, the script **deletes the tag from origin
+and from your clone** before exiting non-zero, and prints what it rolled back. So the rule holds
+even in that window. If a rollback command itself fails, the script prints the exact
+`git push origin --delete` / `git tag --delete` to run by hand — do that before retrying, or the
+next run refuses on "tag already exists".
+
+### The verification install leaves a stack running
+
+Step 9 installs the published tag into a fresh temporary directory and starts it, on **ports 80
+and 443**. Nothing tears it down — its logs are the evidence when a release fails verification.
+Free the ports before releasing, and stop the stack afterwards with
+`docker compose down` in the directory the script prints.
+
+It is run with `--require-ready`, which makes install.sh's readiness timeout **fatal**. Without
+that flag install.sh warns and exits 0 on a timeout — deliberate, because a real lab install must
+leave a slow stack up — and the release step read only the exit code, so a crash-looping API
+would have been tagged and published behind a wall of warnings. The default is unchanged;
+`pnpm release` is the only caller that passes the flag.
+
+### A failed push can leave some images published
+
+`scripts/build-and-push.sh` builds and pushes the five images in a loop. A failure in the middle
+leaves the earlier ones pushed at `:X.Y.Z`. Precondition 4 then refuses the retry and names them.
+
+`pnpm release` has no `--allow-overwrite`; it will keep refusing that version. Two ways out:
+
+- **Bump the version** in `package.json` and release the new number. This is the safe one.
+- Only if that tag was never announced: re-push by hand with
+  `bash scripts/build-and-push.sh --allow-overwrite`, then release that version by hand.
 
 ### Package visibility is not something the API can set
 
@@ -75,20 +111,31 @@ expected, not a bug.
 
 ### Releasing by hand
 
-`scripts/build-and-push.sh` still works standalone and carries the same overwrite guard. Pass
-`--allow-overwrite` only to republish a version that was never announced.
+`scripts/build-and-push.sh` still works standalone and carries an overwrite guard of its own.
+It is **not** the same one: it probes `openldr-api` only, where `pnpm release`'s precondition 4
+reads all five images. Pass `--allow-overwrite` only to republish a version that was never
+announced.
 
 ### What is NOT proven by tests
 
-Nothing in the suite touches a real registry, so two steps are proven only by running a real
-release: the package-visibility read-back, and the verification install. The gate-retry loop is
-also unproven against a genuinely red turbo run — the tests exercise `parseFailedTasks` against
-captured output, not a live failing suite.
+`scripts/release.ts` **has no unit tests, by design** — it only gathers facts and sequences
+commands, and every decision it appears to make lives in `packages/release`, which is tested.
+So nothing in the suite covers the code in that file: the `pnpm`/`gh` spawn helpers and their
+Windows `shell: true` guard, the `gh api --paginate` wiring, the step-10 tag/push/release
+sequence, or its rollback. Those are proven only by running a real release.
 
-Everything else is unit-tested with injected inputs: semver comparison, each precondition's
-refusal, the manifest shape, the registry probes (`tagExistsInRegistry`, `findPrivatePackages`),
-pagination across `gh api --paginate` pages (`parseGhPages`), and the Windows/shell guards
-around spawning `pnpm` and `gh`.
+Nothing in the suite touches a real registry either, so the package-visibility read-back is
+also real-release-only. The gate-retry loop is unproven against a genuinely red turbo run — the
+tests exercise `parseFailedTasks` against captured output, not a live failing suite.
+
+What *is* unit-tested, with injected inputs: semver comparison, each precondition's refusal,
+the manifest shape, the registry probes (`tagExistsInRegistry`, `imagesWithTag`,
+`findPrivatePackages`) including their fail-closed behaviour on an unreadable body, pagination
+across `gh api --paginate` pages (`parseGhPages`), `build-and-push.sh`'s overwrite guard against
+a fake `gh`, `install/lib/resolve-version.sh`, and `install.sh`'s readiness gate — that a
+timeout warns and exits 0 by default, and exits non-zero under `--require-ready`. Those shell
+tests run the real scripts against fake `gh`/`docker`/`curl` binaries on `PATH`; they are in
+`packages/release/src/shell.test.ts` and take about 35s.
 
 The installer's `--version` flag defaults to `latest`, the moving tag — no release has
 published `latest.json` yet, so defaulting to `auto` would break the one-line install today.

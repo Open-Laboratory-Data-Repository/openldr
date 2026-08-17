@@ -73,11 +73,42 @@ export async function tagExistsInRegistry(
     if (isNotFound(err)) return false;
     throw err;
   }
-  if (!Array.isArray(versions)) return false;
+  // ⛔ A body that is not an array is an UNKNOWN, not an empty registry. Returning false here
+  // said "this tag is free" for any object-shaped reply — an error envelope, a rate-limit
+  // message, a schema change — and that is the one fail-open direction this function exists to
+  // block. Every other unknown in this file throws; so does this one.
+  //
+  // The message must not contain "404" or the words "not found": `isNotFound` above matches
+  // those, and a caller that wraps this call would then reclassify the throw as "package
+  // absent" and reintroduce the same fail-open one layer up.
+  if (!Array.isArray(versions)) {
+    throw new Error(
+      `registry returned a non-list body for ${image} — cannot tell whether ${tag} is published`,
+    );
+  }
   return versions.some((v) => {
     const tags = (v as { metadata?: { container?: { tags?: unknown } } })?.metadata?.container?.tags;
     return Array.isArray(tags) && tags.includes(tag);
   });
+}
+
+/** The images that already carry `tag`, in the order given.
+ *
+ *  Probing one image of five was a hole in the overwrite guard: a previous run that pushed
+ *  gateway and keycloak and died before api, or a hand push, leaves those tags in place while a
+ *  probe of api alone reports the version free — and the next run overwrites them. All five are
+ *  read so the refusal can name exactly which ones are already published. */
+export async function imagesWithTag(
+  fetchJson: FetchJson,
+  org: string,
+  images: readonly string[],
+  tag: string,
+): Promise<string[]> {
+  const found: string[] = [];
+  for (const image of images) {
+    if (await tagExistsInRegistry(fetchJson, org, image, tag)) found.push(image);
+  }
+  return found;
 }
 
 /** The images that are NOT confirmed public.

@@ -8,7 +8,7 @@ const clean: ReleaseFacts = {
   branch: 'main',
   syncedWithOrigin: true,
   gitTagExists: false,
-  registryTagExists: false,
+  registryTagImages: [],
   changelogCommitted: true,
   gateGreen: true,
 };
@@ -52,9 +52,25 @@ describe('evaluatePreconditions', () => {
 
   // The overwrite guard — the reason this task exists.
   it('refuses when the version tag is already in the registry', () => {
-    const r = evaluatePreconditions({ ...clean, registryTagExists: true });
+    const r = evaluatePreconditions({ ...clean, registryTagImages: ['openldr-api'] });
     expect(r[0]).toMatch(/registry/i);
     expect(r[0]).toMatch(/0\.2\.0/);
+  });
+
+  // A half-finished previous run leaves the tag on some images and not others. The operator
+  // cannot act on "the tag exists somewhere" — the refusal has to say which.
+  it('names every image that already carries the tag', () => {
+    const r = evaluatePreconditions({
+      ...clean,
+      registryTagImages: ['openldr-gateway', 'openldr-keycloak'],
+    });
+    expect(r).toHaveLength(1);
+    expect(r[0]).toMatch(/openldr-gateway/);
+    expect(r[0]).toMatch(/openldr-keycloak/);
+  });
+
+  it('does not refuse when no image carries the tag', () => {
+    expect(evaluatePreconditions({ ...clean, registryTagImages: [] })).toEqual([]);
   });
 
   it('refuses when the changelog was not regenerated', () => {

@@ -2,13 +2,18 @@
 //
 // The value of this script is what it refuses to do. Every precondition is checked before
 // anything is pushed, and the git tag is created LAST — so a failure during verification leaves
-// no tag behind, and no lab ever sees a half-release.
+// no tag behind, and no lab ever sees a half-release. The tag/push/release sequence at the end
+// is three commands, so it unwinds the tag itself if a later one fails (see step 10).
 //
 //   pnpm release            # publish
 //   pnpm release --dry-run  # check preconditions, print commands, change nothing
 //
 // This file gathers facts and sequences commands. Every decision it appears to make lives in
 // @openldr/release, where it is unit-tested; nothing here decides anything on its own.
+//
+// The consequence: this file has NO tests. The sequencing, the spawn helpers, and the step-10
+// rollback are proven only by a real release. RELEASE.md says so under "What is NOT proven by
+// tests" — keep that list honest when editing here.
 
 import { execFileSync, spawn } from 'node:child_process';
 import { writeFileSync, mkdtempSync, readFileSync } from 'node:fs';
@@ -19,7 +24,7 @@ import { fileURLToPath } from 'node:url';
 import { buildReleaseManifest } from '../packages/release/src/manifest';
 import { evaluatePreconditions, type ReleaseFacts } from '../packages/release/src/preconditions';
 import {
-  tagExistsInRegistry,
+  imagesWithTag,
   findPrivatePackages,
   parseGhPages,
   IMAGE_NAMES,
@@ -191,7 +196,11 @@ async function main(): Promise<void> {
     branch: sh('git', ['rev-parse', '--abbrev-ref', 'HEAD']),
     syncedWithOrigin: sh('git', ['rev-list', '--left-right', '--count', 'origin/main...main']) === '0\t0',
     gitTagExists: sh('git', ['tag', '--list', `v${version}`]) !== '',
-    registryTagExists: await tagExistsInRegistry(ghJson, OWNER, 'openldr-api', version),
+    // ⛔ All FIVE images, not openldr-api alone. build-and-push.sh pushes them in a loop, so a
+    // run that died part-way — or a hand push — leaves the tag on some images and not others.
+    // Probing one of them reported the version free and the next run silently overwrote the
+    // rest. The refusal names which images are already published so the operator can act.
+    registryTagImages: await imagesWithTag(ghJson, OWNER, IMAGE_NAMES, version),
     changelogCommitted: sh('git', ['status', '--porcelain', 'apps/web/src/landing/changelog.json']) === '',
     gateGreen: await gateGreen(),
   };
@@ -236,8 +245,16 @@ async function main(): Promise<void> {
   }
 
   // 9. Verify by pulling the published tag into a clean directory.
+  //
+  // ⛔ --require-ready is what makes this step a check at all. install.sh's readiness wait is
+  // non-fatal by default — it prints `! api still starting` and exits 0 — so without the flag
+  // this step read the exit code of a script that cannot fail, and an API that crash-loops on a
+  // bad migration would have been tagged and published behind a wall of warnings.
+  //
+  // The stack it starts is left RUNNING on ports 80/443 (see RELEASE.md); nothing here tears it
+  // down, because its logs are the evidence when the verification fails.
   const probe = mkdtempSync(join(tmpdir(), 'openldr-release-'));
-  run('bash', ['install/install.sh', '--dir', toBashPath(probe), '--version', version]);
+  run('bash', ['install/install.sh', '--dir', toBashPath(probe), '--version', version, '--require-ready']);
   console.log(`verification install completed in ${probe}`);
 
   // 10. Only now is the release real: tag, push, publish.
@@ -251,16 +268,65 @@ async function main(): Promise<void> {
   console.log(`+ write ${manifestPath}`);
   if (!DRY_RUN) writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
 
-  run('git', ['tag', `v${version}`]);
-  run('git', ['push', 'origin', `v${version}`]);
-  run('gh', [
-    'release',
-    'create',
-    `v${version}`,
-    '--generate-notes',
-    manifestPath,
-    'deploy/install/docker-compose.yml',
-  ]);
+  // ⛔ Three irreversible commands, not one. `git tag` then `git push` then `gh release create`:
+  // if the last one fails — asset upload, network, rate limit — a PUBLIC tag exists with no
+  // release and no latest.json, and every re-run then refuses forever on gitTagExists. That is
+  // exactly the half-release the "tag last" design exists to prevent, so the tag is unwound.
+  //
+  // Deletion is ordered remote-then-local: the remote tag is the one labs and the releases page
+  // can see. If a rollback step itself fails the operator is told the exact commands, because at
+  // that point only a human can finish it.
+  let taggedLocally = false;
+  let pushedToOrigin = false;
+  try {
+    run('git', ['tag', `v${version}`]);
+    taggedLocally = !DRY_RUN;
+    run('git', ['push', 'origin', `v${version}`]);
+    pushedToOrigin = !DRY_RUN;
+    run('gh', [
+      'release',
+      'create',
+      `v${version}`,
+      '--generate-notes',
+      manifestPath,
+      'deploy/install/docker-compose.yml',
+    ]);
+  } catch (err) {
+    console.error(`\nrelease of v${version} failed: ${err instanceof Error ? err.message : String(err)}`);
+    const rolledBack: string[] = [];
+    const stuck: string[] = [];
+    if (pushedToOrigin) {
+      try {
+        run('git', ['push', 'origin', '--delete', `v${version}`]);
+        rolledBack.push('the tag on origin');
+      } catch {
+        stuck.push(`git push origin --delete v${version}`);
+      }
+    }
+    if (taggedLocally) {
+      try {
+        run('git', ['tag', '--delete', `v${version}`]);
+        rolledBack.push('the local tag');
+      } catch {
+        stuck.push(`git tag --delete v${version}`);
+      }
+    }
+    console.error(
+      rolledBack.length > 0 ? `rolled back: ${rolledBack.join(' and ')}` : 'nothing to roll back — no tag was created',
+    );
+    if (stuck.length > 0) {
+      console.error('⛔ rollback did not finish. Run these by hand before retrying:');
+      for (const cmd of stuck) console.error(`  ${cmd}`);
+    } else {
+      console.error(`no v${version} tag survives, so this release can be re-run once the cause is fixed.`);
+    }
+    // The images ARE pushed by this point — step 7 ran. So the registry precondition will now
+    // refuse this same version on the next run, and `pnpm release` has no way past it.
+    console.error(`the five images at :${version} were already pushed, so a re-run refuses on the registry check.`);
+    console.error('bump the version, or — only if this tag was never announced — re-push by hand with');
+    console.error('  bash scripts/build-and-push.sh --allow-overwrite');
+    process.exit(1);
+  }
 
   console.log(`\nreleased ${version}`);
 }

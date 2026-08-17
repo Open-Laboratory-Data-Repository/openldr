@@ -258,6 +258,112 @@ describe('build-and-push.sh overwrite guard — gh failure handling', () => {
   });
 });
 
+/**
+ * Run install/install.sh with fake `docker`, `curl` and `openssl` on PATH, so nothing is
+ * downloaded, no container starts, and the readiness probe can never succeed.
+ *
+ * The fake `curl` is the whole point: it SERVES the scaffold downloads (creating whatever `-o`
+ * names) and FAILS every https://127.0.0.1 readiness probe. That is a stack that came up and
+ * never became ready — the crash-looping-api case — without any container involved.
+ *
+ * Ports are deliberately high: install.sh refuses a fresh install when 80/443 are already
+ * bound, and this test must not depend on what the machine is running.
+ */
+function installSh(args: string[]): { code: number; out: string } {
+  const bin = mkdtempSync(join(tmpdir(), 'openldr-fakebin-'));
+  const dir = join(mkdtempSync(join(tmpdir(), 'openldr-install-')), 'openldr');
+
+  writeFileSync(
+    join(bin, 'docker'),
+    ['#!/usr/bin/env bash', 'echo "FAKE-DOCKER: $*"', 'exit 0', ''].join('\n'),
+  );
+  // ⛔ Second line of defence. If the fake `docker` ever stops being found on PATH — measured
+  // once, an MSYS PATH entry starting `C:/` splits at the drive-letter colon and the real
+  // docker wins — this test would quietly `compose up` a real stack on the host. An
+  // unreachable DOCKER_HOST turns that into install.sh's "Docker daemon is not running"
+  // refusal instead: loud, immediate, and nothing started. The fake ignores it.
+  const env = { ...process.env, DOCKER_HOST: 'tcp://127.0.0.1:1' };
+  writeFileSync(
+    join(bin, 'curl'),
+    [
+      '#!/usr/bin/env bash',
+      '# Readiness probes hit the loopback gateway. Fail them: services never come up.',
+      'for a in "$@"; do case "$a" in *127.0.0.1*) exit 7 ;; esac; done',
+      '# Everything else is a scaffold download. Create whatever -o names and succeed.',
+      'out=""',
+      'prev=""',
+      'for a in "$@"; do if [ "$prev" = "-o" ]; then out="$a"; fi; prev="$a"; done',
+      'if [ -n "$out" ]; then mkdir -p "$(dirname "$out")"; : > "$out"; fi',
+      'exit 0',
+      '',
+    ].join('\n'),
+  );
+  // Cert generation is best-effort in install.sh (`|| true`); a failing openssl just warns.
+  writeFileSync(join(bin, 'openssl'), '#!/usr/bin/env bash\nexit 1\n');
+  for (const f of ['docker', 'curl', 'openssl']) chmodSync(join(bin, f), 0o755);
+
+  try {
+    const out = execFileSync(
+      BASH,
+      [
+        join(REPO, 'install/install.sh').replace(/\\/g, '/'),
+        '--dir', dir.replace(/\\/g, '/'),
+        '--http-port', '18080',
+        '--https-port', '18443',
+        ...args,
+      ],
+      {
+        cwd: REPO,
+        encoding: 'utf8',
+        env: { ...env, PATH: `${bin}:${process.env.PATH ?? ''}` },
+        stdio: ['ignore', 'pipe', 'pipe'],
+      },
+    );
+    return { code: 0, out };
+  } catch (err) {
+    const e = err as { status?: number; stdout?: string; stderr?: string };
+    return { code: e.status ?? 1, out: `${e.stdout ?? ''}${e.stderr ?? ''}` };
+  }
+}
+
+describe('install.sh readiness gate', () => {
+  // ⛔ The default MUST stay non-fatal. Real labs rely on a slow first boot leaving the stack
+  // up. This is also the exact behaviour that made `pnpm release` step 9 a no-op, which is why
+  // the flag below exists rather than a change of default.
+  it('warns and exits 0 when readiness times out, with no flag', () => {
+    const r = installSh(['--ready-timeout', '1']);
+    // Proves the fake docker was the one called, so nothing real was started.
+    expect(r.out).toMatch(/FAKE-DOCKER: compose .* up -d/);
+    expect(r.code).toBe(0);
+    expect(r.out).toMatch(/api still starting/);
+    expect(r.out).toMatch(/OpenLDR is starting/);
+  }, 60_000);
+
+  it('exits non-zero on the same timeout with --require-ready', () => {
+    const r = installSh(['--ready-timeout', '1', '--require-ready']);
+    expect(r.out).toMatch(/FAKE-DOCKER: compose .* up -d/);
+    expect(r.code).not.toBe(0);
+    expect(r.out).toMatch(/--require-ready/);
+    expect(r.out).toMatch(/did not become ready/i);
+    // The containers stay up on purpose — their logs are the evidence.
+    expect(r.out).toMatch(/still running/i);
+  }, 60_000);
+
+  // Both of these skip the readiness gate entirely, so --require-ready would exit 0 having
+  // proven nothing — a vacuous pass is the failure mode this flag exists to remove.
+  it('refuses --require-ready with a disabled readiness wait', () => {
+    const r = installSh(['--ready-timeout', '0', '--require-ready']);
+    expect(r.code).toBe(2);
+    expect(r.out).toMatch(/nothing to wait for/i);
+  }, 60_000);
+
+  it('refuses --require-ready with --no-start', () => {
+    const r = installSh(['--require-ready', '--no-start']);
+    expect(r.code).toBe(2);
+    expect(r.out).toMatch(/--no-start/);
+  }, 60_000);
+});
+
 /** Source install/lib/resolve-version.sh and call resolve_version with `url`. */
 function resolveVersion(url: string): { code: number; stdout: string; stderr: string } {
   try {

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { tagExistsInRegistry, findPrivatePackages, parseGhPages, IMAGE_NAMES } from './registry';
+import { tagExistsInRegistry, imagesWithTag, findPrivatePackages, parseGhPages, IMAGE_NAMES } from './registry';
 
 function fakeFetch(routes: Record<string, unknown>) {
   return vi.fn(async (path: string) => {
@@ -80,6 +80,82 @@ describe('tagExistsInRegistry', () => {
   it('tolerates a version entry with no tags array', async () => {
     const f = fakeFetch({ [path]: [{ metadata: {} }, { metadata: { container: { tags: ['0.1.0'] } } }] });
     expect(await tagExistsInRegistry(f, 'acme', 'openldr-api', '0.1.0')).toBe(true);
+  });
+
+  // An object-shaped body is an unknown. Reading it as "no versions, tag is free" is the same
+  // fail-open as an empty read — it just arrives through a different door.
+  it('throws on an object body instead of reporting the tag as free', async () => {
+    const f = fakeFetch({ [path]: { message: 'API rate limit exceeded' } });
+    await expect(tagExistsInRegistry(f, 'acme', 'openldr-api', '0.1.0')).rejects.toThrow(/non-list body/i);
+  });
+
+  it('throws on a null body', async () => {
+    const f = fakeFetch({ [path]: null });
+    await expect(tagExistsInRegistry(f, 'acme', 'openldr-api', '0.1.0')).rejects.toThrow();
+  });
+
+  // ⛔ If the throw reads as "package absent" to a caller that catches it, the guard is disarmed
+  // one layer up and the fix is worthless. isNotFound matches /\b404\b|not found/i.
+  it('throws a message isNotFound cannot match', async () => {
+    const f = fakeFetch({ [path]: { message: 'nope' } });
+    let msg = '';
+    try {
+      await tagExistsInRegistry(f, 'acme', 'openldr-api', '0.1.0');
+    } catch (e) {
+      msg = (e as Error).message;
+    }
+    expect(msg).not.toBe('');
+    expect(msg).not.toMatch(/\b404\b|not found/i);
+  });
+
+  // The throw must survive the wrapper it is most likely to be caught by.
+  it('is not swallowed by imagesWithTag, which is the caller that catches 404s', async () => {
+    const f = fakeFetch({ [path]: { message: 'nope' } });
+    await expect(imagesWithTag(f, 'acme', ['openldr-api'], '0.1.0')).rejects.toThrow(/non-list body/i);
+  });
+});
+
+describe('imagesWithTag', () => {
+  const versions = (tags: string[]) => [{ metadata: { container: { tags } } }];
+  const routes = (byImage: Record<string, string[]>) =>
+    Object.fromEntries(
+      Object.entries(byImage).map(([img, tags]) => [
+        `orgs/acme/packages/container/${img}/versions`,
+        versions(tags),
+      ]),
+    );
+
+  it('is empty when no image carries the tag', async () => {
+    const f = fakeFetch(routes({ a: ['0.1.0'], b: ['latest'], c: [] }));
+    expect(await imagesWithTag(f, 'acme', ['a', 'b', 'c'], '0.2.0')).toEqual([]);
+  });
+
+  // The hole this closes: a probe of the FIRST image alone reports the version free while two
+  // later images already carry it.
+  it('finds a tag carried by images other than the first', async () => {
+    const f = fakeFetch(routes({ a: ['0.1.0'], b: ['0.2.0'], c: ['0.2.0'] }));
+    expect(await imagesWithTag(f, 'acme', ['a', 'b', 'c'], '0.2.0')).toEqual(['b', 'c']);
+  });
+
+  it('names every image that carries the tag, in the order given', async () => {
+    const f = fakeFetch(routes({ a: ['0.2.0'], b: ['0.2.0'], c: ['0.2.0'] }));
+    expect(await imagesWithTag(f, 'acme', ['a', 'b', 'c'], '0.2.0')).toEqual(['a', 'b', 'c']);
+  });
+
+  // A package that does not exist yet is a genuine "free" — the first release of a new image.
+  it('treats a missing package as free', async () => {
+    const f = vi.fn(async (path: string) => {
+      if (path.includes('/b/')) throw new Error('HTTP 404: Not Found');
+      return versions(['0.2.0']);
+    });
+    expect(await imagesWithTag(f, 'acme', ['a', 'b'], '0.2.0')).toEqual(['a']);
+  });
+
+  it('rethrows a permission error rather than reporting the tags as free', async () => {
+    const f = vi.fn(async () => {
+      throw new Error('You need at least read:packages scope (HTTP 403)');
+    });
+    await expect(imagesWithTag(f, 'acme', ['a', 'b'], '0.2.0')).rejects.toThrow(/read:packages/);
   });
 });
 
