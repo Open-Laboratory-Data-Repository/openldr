@@ -192,6 +192,20 @@ describe('build-and-push.sh overwrite guard', () => {
     expect(r.out).not.toMatch(/FAKE-DOCKER-CALLED-WITH/);
   });
 
+  // ⛔ The tag list must not be piped into grep. `set -o pipefail` is on, and `grep -q` exits on
+  // the first match, killing the writer with SIGPIPE; pipefail then reports the whole pipeline
+  // as failed, a found tag reads as absent, and the guard permits the overwrite. It only bites
+  // once the list exceeds the 64 KB pipe buffer, so 35 tags cannot catch it — this needs enough
+  // output to fill the buffer, with the match early so grep exits while the writer still has
+  // plenty left to write.
+  it('still refuses with a tag list larger than the pipe buffer, matched early', () => {
+    const many = Array.from({ length: 20000 }, (_, i) => `0.0.${i + 1}`);
+    const r = buildAndPush(['--platform', 'linux/amd64'], { tags: [VERSION, ...many] });
+    expect(r.code).not.toBe(0);
+    expect(r.out).toMatch(/already published/i);
+    expect(r.out).not.toMatch(/FAKE-DOCKER-CALLED-WITH/);
+  });
+
   // Whole-line match: 0.1.0 is a substring of 0.1.10, and a substring match would refuse to
   // publish 0.1.0 because some later 0.1.10 exists.
   it('does not treat a longer tag that contains this version as a match', () => {

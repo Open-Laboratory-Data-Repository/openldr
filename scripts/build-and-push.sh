@@ -70,7 +70,14 @@ if [ "$PUSH" = true ] && [ "$ALLOW_OVERWRITE" = false ] && [ "$DRY_RUN" = false 
     fi
   else
     # Fixed-string, whole-line: a substring match would read 0.1.10 as 0.1.0.
-    if printf '%s\n' "$GH_OUT" | grep -Fxq "$VERSION"; then
+    #
+    # ⛔ Herestring, NOT a pipe. `set -o pipefail` is on. `grep -q` exits the moment it matches,
+    # which closes the pipe and kills the writer with SIGPIPE (141); pipefail then reports the
+    # WHOLE pipeline as failed even though grep succeeded, so a found tag reads as absent and the
+    # guard permits the overwrite it exists to prevent. It only bites once the tag list exceeds
+    # the 64 KB pipe buffer, so it would have shipped green and failed years later, on the
+    # busiest package, in the direction that does damage.
+    if grep -Fxq "$VERSION" <<<"$GH_OUT"; then
       FOUND="$VERSION"
     else
       FOUND=absent
