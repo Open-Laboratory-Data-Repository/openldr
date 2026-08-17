@@ -9,7 +9,11 @@ export interface ReleaseFacts {
   branch: string;
   syncedWithOrigin: boolean;
   gitTagExists: boolean;
-  registryTagExists: boolean;
+  /** The images that ALREADY carry `:version` in the registry. Empty means the version is free.
+   *
+   *  A boolean here used to be filled from a probe of openldr-api alone, so a run that pushed
+   *  gateway and keycloak and then died left those tags overwritable and unnamed. */
+  registryTagImages: string[];
   changelogCommitted: boolean;
   gateGreen: boolean;
 }
@@ -44,10 +48,10 @@ export function evaluatePreconditions(f: ReleaseFacts): string[] {
   if (f.gitTagExists) {
     refusals.push(`tag v${f.version} already exists — a released version is never re-cut`);
   }
-  if (f.registryTagExists) {
+  if (f.registryTagImages.length > 0) {
     refusals.push(
-      `image tag ${f.version} is already in the registry — overwriting it would change what ` +
-        `that version means for every install already running it`,
+      `image tag ${f.version} is already in the registry for ${f.registryTagImages.join(', ')} — ` +
+        `overwriting it would change what that version means for every install already running it`,
     );
   }
   if (!f.changelogCommitted) {

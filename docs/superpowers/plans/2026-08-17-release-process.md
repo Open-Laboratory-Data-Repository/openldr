@@ -947,32 +947,23 @@ function newestTag(): string | null {
   return out ? out.split('\n')[0]!.trim() : null;
 }
 
-/** Green, or green on a lone re-run of the one package that failed.
+/** ⛔ REPLACED — see `scripts/release.ts` and `packages/release/src/gate.ts` (unit-tested).
+ *  Do not re-derive this from the sketch that used to sit here.
  *
  *  Gate failures here are usually timeouts under parallel load, not regressions — measured
  *  2026-08-17, @openldr/forms store.test.ts took 41672ms under turbo and 752ms alone. Refusing
- *  on the first non-zero exit would block releases at random. A real failure still refuses:
- *  the isolated re-run has to pass too. */
-function gateGreen(): boolean {
-  try {
-    execFileSync('pnpm', ['turbo', 'run', 'test'], { stdio: 'inherit' });
-    return true;
-  } catch {
-    console.warn('\ngate failed — re-running the failing package alone to tell a timeout from a regression');
-    const failed = process.env.RELEASE_RETRY_PKG;
-    if (!failed) {
-      console.error('set RELEASE_RETRY_PKG=<package> and re-run, or fix the failure');
-      return false;
-    }
-    try {
-      execFileSync('pnpm', ['--filter', failed, 'test'], { stdio: 'inherit' });
-      console.warn(`${failed} passes alone — treating the turbo failure as a load timeout`);
-      return true;
-    } catch {
-      return false;
-    }
-  }
-}
+ *  on the first non-zero exit would block releases at random. But the earlier sketch took the
+ *  retry target from an operator-set RELEASE_RETRY_PKG and never checked it, and
+ *  `pnpm --filter <nonexistent> test` EXITS 0 — so one typo turned a genuinely red gate into
+ *  "passes alone, treating it as a load timeout" and published five images from a regressed
+ *  tree. **Never let a human name the thing being re-verified.**
+ *
+ *  Two things the real turbo output does that a first guess gets wrong, both measured:
+ *    - EVERY failure lands on ONE comma-separated `Failed:` line, not one line each.
+ *    - The failed task is not always `test` — e.g. `@openldr/db#typecheck`.
+ *  So parse the `<pkg>#<task>` pairs out of turbo's own output and re-run `--filter <pkg> run
+ *  <task>` with `--fail-if-no-match` (present in pnpm 11.13.0: a bogus filter exits 0 without
+ *  it, 1 with it). Refuse when nothing parses — an unparseable failure is not a timeout. */
 
 async function main(): Promise<void> {
   const version = String(JSON.parse(sh('node', ['-p', 'JSON.stringify(require("./package.json"))'])).version);
