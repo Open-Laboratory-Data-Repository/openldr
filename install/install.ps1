@@ -2,7 +2,7 @@
 #   irm https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main/install/install.ps1 | iex
 # Flags (download the script first to pass these  -  see bottom of this file):
 #   -Dir <path>        install dir (default ./openldr)
-#   -Version <tag>      image tag (default latest)
+#   -Version <tag>      image tag (default auto - resolves the newest release; "latest" tracks the moving tag)
 #   -ServerName <host>  public hostname (default localhost)
 #   -HttpPort <n>       gateway HTTP port (default 80)
 #   -HttpsPort <n>      gateway HTTPS port (default 443)
@@ -23,7 +23,7 @@
 #   -MysqlSsl true|false (default false)
 param(
   [string]$Dir = "./openldr",
-  [string]$Version = "latest",
+  [string]$Version = "auto",
   [string]$ServerName = "localhost",
   [string]$Letsencrypt = "",
   [int]$HttpPort = 80,
@@ -53,6 +53,47 @@ param(
   [ValidateSet('true','false')]
   [string]$MysqlSsl = 'false'
 )
+
+# Resolve `auto` to a concrete published version, so .env records exactly what this lab runs.
+if ($Version -eq "auto") {
+  $latestUrl = "https://github.com/Open-Laboratory-Data-Repository/openldr/releases/latest/download/latest.json"
+  Write-Host "Resolving the newest release..."
+  # `irm | iex` runs this as a script BLOCK, not a file, so $PSScriptRoot is empty and a local
+  # sibling file cannot be dot-sourced. Reuse the same raw-GitHub source everything else in this
+  # installer downloads from, falling back to it only when the local file isn't there -- so a
+  # downloaded/cloned copy still dot-sources the sibling file directly, with no network round-trip.
+  $libLocal = $null
+  if ($PSScriptRoot) {
+    $candidate = Join-Path $PSScriptRoot "lib/Resolve-Version.ps1"
+    if (Test-Path $candidate) { $libLocal = $candidate }
+  }
+  if ($libLocal) {
+    . $libLocal
+  } else {
+    $repoRawForLib = "https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main"
+    $libTmp = Join-Path ([System.IO.Path]::GetTempPath()) ("openldr-resolve-version-{0}.ps1" -f ([guid]::NewGuid()))
+    try {
+      Invoke-WebRequest -UseBasicParsing "$repoRawForLib/install/lib/Resolve-Version.ps1" -OutFile $libTmp
+      . $libTmp
+    } catch {
+      Write-Error "Could not download Resolve-Version.ps1 from $repoRawForLib"
+      exit 1
+    } finally {
+      Remove-Item -LiteralPath $libTmp -Force -ErrorAction SilentlyContinue
+    }
+  }
+  $resolved = Resolve-OpenLdrVersion -Url $latestUrl
+  if (-not $resolved) {
+    Write-Error "Could not resolve the newest release from $latestUrl"
+    Write-Host  "Pass a version explicitly, e.g.:  -Version 0.1.0"
+    Write-Host  "(-Version latest tracks the moving tag instead, which is fine for a demo but"
+    Write-Host  " means an upgrade is unbounded.)"
+    exit 1
+  }
+  $Version = $resolved
+  Write-Host "Newest release: $Version"
+}
+
 $ErrorActionPreference = "Stop"
 $RepoRaw = "https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main"
 $envPath = "$Dir/.env"

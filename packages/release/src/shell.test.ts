@@ -3,8 +3,10 @@ import { execFileSync } from 'node:child_process';
 import { writeFileSync, mkdtempSync, chmodSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
+import { pathToFileURL } from 'node:url';
 
 const REPO = resolve(__dirname, '../../..');
+const RESOLVE_VERSION_LIB = join(REPO, 'install/lib/resolve-version.sh').replace(/\\/g, '/');
 
 interface FakeGh {
   /** Text printed to stdout, e.g. the jq result on a successful call. */
@@ -103,5 +105,77 @@ describe('build-and-push.sh overwrite guard — gh failure handling', () => {
     expect(r.code).not.toBe(0);
     expect(r.out).toMatch(/read:packages/);
     expect(r.out).not.toMatch(/FAKE-DOCKER-CALLED-WITH/);
+  });
+});
+
+/** Source install/lib/resolve-version.sh and call resolve_version with `url`. */
+function resolveVersion(url: string): { code: number; stdout: string; stderr: string } {
+  try {
+    const stdout = execFileSync(
+      'bash',
+      ['-c', `source "${RESOLVE_VERSION_LIB}"; resolve_version "${url}"`],
+      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
+    );
+    return { code: 0, stdout: stdout.trim(), stderr: '' };
+  } catch (err) {
+    const e = err as { status?: number; stdout?: string; stderr?: string };
+    return { code: e.status ?? 1, stdout: (e.stdout ?? '').trim(), stderr: (e.stderr ?? '').trim() };
+  }
+}
+
+/** Write a latest.json fixture and return a file:// URL curl can fetch with no network. */
+function fixture(body: string): string {
+  const dir = mkdtempSync(join(tmpdir(), 'openldr-fixture-'));
+  const file = join(dir, 'latest.json');
+  writeFileSync(file, body);
+  return pathToFileURL(file).href;
+}
+
+describe('resolve_version', () => {
+  it('extracts the version from a well-formed manifest', () => {
+    const url = fixture(
+      '{\n  "version": "0.2.0",\n  "releasedAt": "2026-08-20",\n  "notesUrl": "https://example.org/x"\n}\n',
+    );
+    const r = resolveVersion(url);
+    expect(r.code).toBe(0);
+    expect(r.stdout).toBe('0.2.0');
+  });
+
+  it('handles a single-line manifest with no spaces', () => {
+    const url = fixture('{"version":"1.10.3","releasedAt":"2026-08-20","notesUrl":"https://example.org/x"}');
+    expect(resolveVersion(url).stdout).toBe('1.10.3');
+  });
+
+  // The version field is not always first; a naive grep of the first quoted value would take
+  // releasedAt.
+  it('takes the version field, not whichever field comes first', () => {
+    const url = fixture('{"releasedAt":"2026-08-20","version":"0.3.1","notesUrl":"https://example.org/x"}');
+    expect(resolveVersion(url).stdout).toBe('0.3.1');
+  });
+
+  it('fails when the URL cannot be fetched', () => {
+    const r = resolveVersion('file:///definitely/not/here/latest.json');
+    expect(r.code).not.toBe(0);
+    expect(r.stdout).toBe('');
+  });
+
+  it('fails on a manifest with no version field', () => {
+    const url = fixture('{"releasedAt":"2026-08-20"}');
+    const r = resolveVersion(url);
+    expect(r.code).not.toBe(0);
+    expect(r.stdout).toBe('');
+  });
+
+  // The moving tag must never satisfy the resolve — that is the whole point of the change.
+  it('rejects a version that is not X.Y.Z', () => {
+    const url = fixture('{"version":"latest","releasedAt":"2026-08-20","notesUrl":"https://example.org/x"}');
+    const r = resolveVersion(url);
+    expect(r.code).not.toBe(0);
+    expect(r.stdout).toBe('');
+  });
+
+  it('rejects an empty version', () => {
+    const url = fixture('{"version":"","releasedAt":"2026-08-20","notesUrl":"https://example.org/x"}');
+    expect(resolveVersion(url).code).not.toBe(0);
   });
 });
