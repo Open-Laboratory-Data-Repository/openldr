@@ -135,6 +135,25 @@ describe('notifications DB store', () => {
     expect(res.notifications.some((n) => n.id === 'update:0.2.0')).toBe(true);
   });
 
+  // The push must not just tack the entry onto the end of the already-sorted list — it has to be
+  // re-sorted into its true chronological position, or an install with > limit notifications can
+  // push it past the page boundary and hide it forever (see notifications.ts:listNotifications).
+  it('sorts the update entry to the top when its firstSeenAt is the newest', async () => {
+    // "now", captured after beforeEach's seed rows were written, so it is strictly newer than them
+    // and still in the past by the time listNotifications runs below.
+    const newest = new Date().toISOString();
+    const c = { ...ctx, updateState: state({ firstSeenAt: newest }) } as never;
+    const { notifications } = await listNotifications(c, 'user1', {});
+    expect(notifications[0].id).toBe('update:0.2.0');
+  });
+
+  it('sorts the update entry to the bottom when its firstSeenAt is older than the rest', async () => {
+    const older = new Date(Date.now() - 3_600_000).toISOString(); // 1 hour before the seeded rows
+    const c = { ...ctx, updateState: state({ firstSeenAt: older }) } as never;
+    const { notifications } = await listNotifications(c, 'user1', {});
+    expect(notifications[notifications.length - 1].id).toBe('update:0.2.0');
+  });
+
   it('stays dismissed after mark-all-read', async () => {
     // firstSeenAt must be in the PAST for this to mean anything: mark-all-read writes a cursor of
     // now() and reads it back as `createdAt <= cursor`. The shared fixture's 2026-08-20 is a fixed

@@ -235,7 +235,14 @@ export async function listNotifications(
   // Appended AFTER gather()'s window filter on purpose — see updateStateToNotification. Prefs
   // still apply, so an operator can switch this type off like any other.
   const update = ctx.updateState ? updateStateToNotification(ctx.updateState) : null;
-  if (update && passesPrefs(update, disabled, prefs.minPriority)) visible.push(update);
+  if (update && passesPrefs(update, disabled, prefs.minPriority)) {
+    visible.push(update);
+    // Re-sort newest-first: `visible` was already sorted by gather(), but the update entry can
+    // land anywhere in real chronological order, not just at the end. Without this, an install
+    // with more than `limit` notifications can push the entry past the page boundary and hide it
+    // permanently (notifications.ts:listNotifications, see finding on push-without-resort).
+    visible.sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
+  }
   // apply read-state
   const withRead = visible.map((n) => {
     const readByIdAt = reads.ids.get(n.id);
