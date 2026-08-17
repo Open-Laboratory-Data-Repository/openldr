@@ -1,7 +1,8 @@
 #!/usr/bin/env sh
 # OpenLDR CE one-line installer (Linux/macOS).
 #   curl -fsSL https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main/install/install.sh | bash
-# Flags: --dir <path> (default ./openldr), --version <tag> (default latest),
+# Flags: --dir <path> (default ./openldr),
+#        --version <tag> (default latest - the moving tag; "auto" resolves the newest release),
 #        --server-name <host> (default localhost — the public hostname/domain),
 #        --http-port <n> (default 80), --https-port <n> (default 443 — gateway ports),
 #        --letsencrypt <email> (issue a trusted Let's Encrypt cert for --server-name),
@@ -25,7 +26,12 @@ set -eu
 
 REPO_RAW="https://raw.githubusercontent.com/Open-Laboratory-Data-Repository/openldr/main"
 DIR="./openldr"
+# Default is the moving `latest` tag because no release has published latest.json yet — the
+# releases-latest asset URL below 404s today, and defaulting to `auto` would break the advertised
+# one-line install for everyone. Flip this default to "auto" once the first release publishes
+# latest.json. `--version auto` already works and resolves a concrete version.
 VERSION="latest"
+LATEST_URL="https://github.com/Open-Laboratory-Data-Repository/openldr/releases/latest/download/latest.json"
 HOST="localhost"
 HTTP_PORT="80"
 HTTPS_PORT="443"
@@ -84,6 +90,39 @@ while [ $# -gt 0 ]; do
     *) echo "unknown flag: $1" >&2; exit 2 ;;
   esac
 done
+
+# Resolve `auto` to a concrete published version, so .env records exactly what this lab runs.
+# Two installs on the same day then get the same stack, and a rollback has something to name.
+if [ "$VERSION" = "auto" ]; then
+  echo "Resolving the newest release..."
+  # `curl | bash` runs this script with no real path in $0, so a local sibling file cannot be
+  # sourced (the repo isn't on disk). Reuse the same $REPO_RAW source everything else in this
+  # installer downloads from, falling back to it only when the local file isn't there — so a
+  # git checkout still sources the sibling file directly, with no network round-trip.
+  LIB_LOCAL="$(dirname "$0")/lib/resolve-version.sh"
+  if [ -f "$LIB_LOCAL" ]; then
+    # shellcheck source=install/lib/resolve-version.sh
+    . "$LIB_LOCAL"
+  else
+    LIB_TMP="$(mktemp)"
+    if ! curl -fsSL --retry 3 --retry-delay 2 "$REPO_RAW/install/lib/resolve-version.sh" -o "$LIB_TMP" 2>/dev/null; then
+      echo "ERROR: could not download resolve-version.sh from $REPO_RAW" >&2
+      rm -f "$LIB_TMP"
+      exit 1
+    fi
+    # shellcheck source=install/lib/resolve-version.sh
+    . "$LIB_TMP"
+    rm -f "$LIB_TMP"
+  fi
+  if ! VERSION="$(resolve_version "$LATEST_URL")"; then
+    echo "ERROR: could not resolve the newest release from $LATEST_URL" >&2
+    echo "Pass a version explicitly, e.g.:  $0 --version 0.1.0" >&2
+    echo "(Passing --version latest tracks the moving tag instead, which is fine for a demo" >&2
+    echo " but means an upgrade is unbounded.)" >&2
+    exit 1
+  fi
+  echo "Newest release: $VERSION"
+fi
 
 # An existing .env (from a prior run in this dir) is never overwritten below, so its
 # GATEWAY_*_PORT/SERVER_NAME are what will actually be used — adopt them instead of

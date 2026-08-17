@@ -57,7 +57,10 @@ like protection.
   - `src/preconditions.ts` + `src/preconditions.test.ts` — pure refusal logic.
   - `src/registry.ts` + `src/registry.test.ts` — GHCR tag existence and visibility, injected fetch.
   - `src/index.ts`
+  - `src/shell.test.ts` — the shell harness. Shells out to the real scripts.
 - `scripts/release.ts` — the orchestrator. Thin.
+- `install/lib/resolve-version.sh` — `resolve_version <url>`, sourceable and therefore testable.
+- `install/lib/Resolve-Version.ps1` — the PowerShell twin.
 
 **Modified:**
 - `packages/core/src/index.ts`, `packages/core/src/pure.ts` — export `./semver`.
@@ -71,6 +74,23 @@ tested (`find scripts -name "*.test.ts"` → empty). The spec requires each prec
 to be tested, and a package is the smallest thing that gives vitest a place to run. This mirrors
 the changelog precedent — logic in `apps/web/src/landing/changelog-model.ts`, thin wrapper in
 `scripts/make-changelog.ts`.
+
+**Shell harness (operator decision, 2026-08-17).** The spec left Tasks 6 and 7 with manual
+verification only. The operator overrode that: the shell paths get real assertions, because the
+installer's fail-loud path is the behaviour most likely to regress silently and be noticed only
+by a lab.
+
+No new tool — `src/shell.test.ts` is vitest shelling out with `execFileSync`, using the
+`git-bash` already required to run these scripts. Two things make the scripts testable:
+
+- The installer's resolve logic moves into `install/lib/resolve-version.sh` (and its PowerShell
+  twin), which `install.sh` sources. A sourceable function can be called directly; an inline
+  block inside a 400-line installer cannot.
+- The fixture is served over `file://`, which `curl` handles natively, so no test needs a
+  network or a published `latest.json`.
+
+`bats` was considered and rejected — it is a second test runner for two files, and the repo
+already standardises on vitest everywhere.
 
 ---
 
@@ -603,7 +623,10 @@ export function evaluatePreconditions(f: ReleaseFacts): string[] {
   if (!f.syncedWithOrigin) {
     refusals.push('local main and origin/main differ — push or pull before releasing');
   }
-  if (f.lastTag !== null && !isNewerVersion(f.version, f.lastTag)) {
+  // Only meaningful once the version parses. Without this guard an unparseable version also
+  // trips the bump check, telling the operator to "bump it first" when the real problem is
+  // that the string is not a version at all.
+  if (parseSemver(f.version) && f.lastTag !== null && !isNewerVersion(f.version, f.lastTag)) {
     refusals.push(
       `package.json version ${f.version} is not newer than the last tag ${f.lastTag} — bump it first`,
     );
@@ -1106,11 +1129,26 @@ Then, immediately after the existing `VERSION="$(node -p ...)"` line, insert:
 # this same number in the studio's About card.
 if [ "$PUSH" = true ] && [ "$ALLOW_OVERWRITE" = false ] && [ "$DRY_RUN" = false ]; then
   ORG="$(basename "$REGISTRY")"
-  # `index()` yields the position or null; `// "absent"` turns null into a word, and the `|| echo
-  # absent` covers a package that does not exist yet (the first release of a new image).
-  FOUND="$(gh api "orgs/$ORG/packages/container/openldr-api/versions" \
-             --jq '[.[].metadata.container.tags[]] | index("'"$VERSION"'") // "absent"' 2>/dev/null \
-           || echo absent)"
+  set +e
+  GH_OUT="$(gh api "orgs/$ORG/packages/container/openldr-api/versions"               --jq '[.[].metadata.container.tags[]] | index("'"$VERSION"'") // "absent"' 2>&1)"
+  GH_RC=$?
+  set -e
+  if [ "$GH_RC" -ne 0 ]; then
+    # A missing package means the tag is free - the first release of a new image. Anything else
+    # (403, network, rate limit) means we DO NOT KNOW, and an unknown must never read as "free":
+    # that is how an overwrite guard silently disarms.
+    if printf '%s' "$GH_OUT" | grep -qiE '(^|[^0-9])404([^0-9]|$)|not found'; then
+      FOUND=absent
+    else
+      echo "ERROR: cannot check whether $VERSION is already published." >&2
+      echo "  $GH_OUT" >&2
+      echo "The guard needs a token with read:packages. Fix the token, or pass --allow-overwrite" >&2
+      echo "if you have confirmed by hand that this tag was never announced." >&2
+      exit 1
+    fi
+  else
+    FOUND="$GH_OUT"
+  fi
   if [ "$FOUND" != "absent" ]; then
     echo "ERROR: $REGISTRY/openldr-api:$VERSION is already published." >&2
     echo "Bump the version in package.json, or pass --allow-overwrite if that tag was never announced." >&2
@@ -1119,21 +1157,73 @@ if [ "$PUSH" = true ] && [ "$ALLOW_OVERWRITE" = false ] && [ "$DRY_RUN" = false 
 fi
 ```
 
-- [ ] **Step 2: Verify the guard does not fire on a dry run**
+- [ ] **Step 2: Add the guard's tests to the shell harness**
 
-Run: `bash scripts/build-and-push.sh --dry-run`
-Expected: prints the `Registry=... Tag=latest(+0.1.0) ...` line and the `+ docker buildx build`
-commands, and exits 0. The guard is skipped for dry runs.
+Append to `packages/release/src/shell.test.ts` (created in Task 7 — if Task 7 has not run yet,
+create the file with just this block and its imports):
 
-- [ ] **Step 3: Verify the guard does not fire with `--no-push`**
+```ts
+import { chmodSync } from 'node:fs';
 
-Run: `bash scripts/build-and-push.sh --no-push --dry-run`
-Expected: same, exit 0.
+/** Run build-and-push.sh with a fake `gh` first on PATH, so no network or token is involved. */
+function buildAndPush(args: string[], ghStdout: string): { code: number; out: string } {
+  const bin = mkdtempSync(join(tmpdir(), 'openldr-fakebin-'));
+  const gh = join(bin, 'gh');
+  writeFileSync(gh, `#!/usr/bin/env bash\nprintf '%s\\n' '${ghStdout}'\n`);
+  chmodSync(gh, 0o755);
+  try {
+    const out = execFileSync('bash', [join(REPO, 'scripts/build-and-push.sh').replace(/\\/g, '/'), ...args], {
+      cwd: REPO,
+      encoding: 'utf8',
+      env: { ...process.env, PATH: `${bin}:${process.env.PATH ?? ''}` },
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    return { code: 0, out };
+  } catch (err) {
+    const e = err as { status?: number; stdout?: string; stderr?: string };
+    return { code: e.status ?? 1, out: `${e.stdout ?? ''}${e.stderr ?? ''}` };
+  }
+}
+
+describe('build-and-push.sh overwrite guard', () => {
+  // The guard is the reason this change exists: a published version tag is immutable.
+  it('refuses when the version tag is already published', () => {
+    const r = buildAndPush(['--platform', 'linux/amd64'], '0');
+    expect(r.code).not.toBe(0);
+    expect(r.out).toMatch(/already published/i);
+  });
+
+  it('names --allow-overwrite in the refusal, so the escape hatch is discoverable', () => {
+    expect(buildAndPush(['--platform', 'linux/amd64'], '0').out).toMatch(/--allow-overwrite/);
+  });
+
+  it('does not fire on a dry run', () => {
+    const r = buildAndPush(['--dry-run'], '0');
+    expect(r.code).toBe(0);
+    expect(r.out).toMatch(/docker buildx build/);
+  });
+
+  // "absent" is what the jq `// "absent"` fallback yields when the tag is not in the list.
+  it('proceeds when the tag is absent', () => {
+    expect(buildAndPush(['--dry-run'], 'absent').code).toBe(0);
+  });
+
+  it('does not fire with --no-push, since nothing can be overwritten', () => {
+    expect(buildAndPush(['--no-push', '--dry-run'], '0').code).toBe(0);
+  });
+});
+```
+
+- [ ] **Step 3: Run the tests**
+
+Run: `pnpm --filter @openldr/release exec vitest run src/shell.test.ts`
+Expected: PASS. The guard cases fail before the edit in Step 1 and pass after — run them both
+ways to confirm the test actually exercises the guard rather than passing vacuously.
 
 - [ ] **Step 4: Commit**
 
 ```bash
-git add scripts/build-and-push.sh
+git add scripts/build-and-push.sh packages/release/src/shell.test.ts
 git commit -m "fix(release): refuse to overwrite an already-published version tag"
 ```
 
@@ -1161,9 +1251,130 @@ three-field JSON with `grep`/`sed`. `install.ps1` has `ConvertFrom-Json` built i
 **On a failed resolve, stop.** Falling back to `latest` would reintroduce the moving tag at
 exactly the moment the operator cannot see it happening.
 
-- [ ] **Step 1: Change `install/install.sh`**
+- [ ] **Step 1: Write the failing shell test**
 
-Replace line 28, `VERSION="latest"`, with:
+The resolve logic is extracted into a sourceable function so it can be called directly. Write
+the test first — it defines the contract.
+
+Create `packages/release/src/shell.test.ts`:
+
+```ts
+import { describe, it, expect } from 'vitest';
+import { execFileSync } from 'node:child_process';
+import { writeFileSync, mkdtempSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+import { tmpdir } from 'node:os';
+import { pathToFileURL } from 'node:url';
+
+const REPO = resolve(__dirname, '../../..');
+const LIB = join(REPO, 'install/lib/resolve-version.sh').replace(/\\/g, '/');
+
+/** Source the lib and call resolve_version with `url`. Returns { code, stdout, stderr }. */
+function resolveVersion(url: string): { code: number; stdout: string; stderr: string } {
+  try {
+    const stdout = execFileSync('bash', ['-c', `source "${LIB}"; resolve_version "${url}"`], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    return { code: 0, stdout: stdout.trim(), stderr: '' };
+  } catch (err) {
+    const e = err as { status?: number; stdout?: string; stderr?: string };
+    return { code: e.status ?? 1, stdout: (e.stdout ?? '').trim(), stderr: (e.stderr ?? '').trim() };
+  }
+}
+
+function fixture(body: string): string {
+  const dir = mkdtempSync(join(tmpdir(), 'openldr-fixture-'));
+  const file = join(dir, 'latest.json');
+  writeFileSync(file, body);
+  return pathToFileURL(file).href;
+}
+
+describe('resolve_version', () => {
+  it('extracts the version from a well-formed manifest', () => {
+    const url = fixture('{\n  "version": "0.2.0",\n  "releasedAt": "2026-08-20",\n  "notesUrl": "https://example.org/x"\n}\n');
+    const r = resolveVersion(url);
+    expect(r.code).toBe(0);
+    expect(r.stdout).toBe('0.2.0');
+  });
+
+  it('handles a single-line manifest with no spaces', () => {
+    const url = fixture('{"version":"1.10.3","releasedAt":"2026-08-20","notesUrl":"https://example.org/x"}');
+    expect(resolveVersion(url).stdout).toBe('1.10.3');
+  });
+
+  // The version field is not always first; a naive grep of the first quoted value would take
+  // releasedAt.
+  it('takes the version field, not whichever field comes first', () => {
+    const url = fixture('{"releasedAt":"2026-08-20","version":"0.3.1","notesUrl":"https://example.org/x"}');
+    expect(resolveVersion(url).stdout).toBe('0.3.1');
+  });
+
+  it('fails when the URL cannot be fetched', () => {
+    const r = resolveVersion('file:///definitely/not/here/latest.json');
+    expect(r.code).not.toBe(0);
+    expect(r.stdout).toBe('');
+  });
+
+  it('fails on a manifest with no version field', () => {
+    const url = fixture('{"releasedAt":"2026-08-20"}');
+    const r = resolveVersion(url);
+    expect(r.code).not.toBe(0);
+    expect(r.stdout).toBe('');
+  });
+
+  // The moving tag must never satisfy the resolve — that is the whole point of the change.
+  it('rejects a version that is not X.Y.Z', () => {
+    const url = fixture('{"version":"latest","releasedAt":"2026-08-20","notesUrl":"https://example.org/x"}');
+    const r = resolveVersion(url);
+    expect(r.code).not.toBe(0);
+    expect(r.stdout).toBe('');
+  });
+
+  it('rejects an empty version', () => {
+    const url = fixture('{"version":"","releasedAt":"2026-08-20","notesUrl":"https://example.org/x"}');
+    expect(resolveVersion(url).code).not.toBe(0);
+  });
+});
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `pnpm --filter @openldr/release exec vitest run src/shell.test.ts`
+Expected: FAIL — every case fails because `install/lib/resolve-version.sh` does not exist.
+
+- [ ] **Step 3: Write the lib, then wire the installer to it**
+
+Create `install/lib/resolve-version.sh`:
+
+```bash
+#!/usr/bin/env bash
+# resolve_version <url> — print the version from a latest.json, or fail.
+#
+# Sourced by install/install.sh, and called directly by packages/release/src/shell.test.ts.
+# It lives in its own file precisely so it can be tested: a block inlined in the installer
+# cannot be invoked without running the whole installer.
+#
+# Prints nothing and returns non-zero on any failure. The caller decides what to say —
+# and it must NOT fall back to `latest`.
+
+resolve_version() {
+  url="$1"
+  body="$(curl -fsSL --retry 3 --retry-delay 2 "$url" 2>/dev/null)" || return 1
+  # Match the `version` KEY specifically. A naive first-quoted-value grep would return
+  # releasedAt whenever a future manifest orders the fields differently.
+  version="$(printf '%s' "$body" \
+    | tr ',{}' '\n\n\n' \
+    | grep -E '"version"[[:space:]]*:' \
+    | head -1 \
+    | sed -E 's/.*"version"[[:space:]]*:[[:space:]]*"([^"]*)".*/\1/')"
+  # Only a plain X.Y.Z resolves. `latest` must never satisfy this.
+  printf '%s' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || return 1
+  printf '%s\n' "$version"
+}
+```
+
+In `install/install.sh`, replace line 28, `VERSION="latest"`, with:
 
 ```bash
 VERSION="auto"   # resolved from latest.json; --version pins, --version latest opts into the moving tag
@@ -1177,47 +1388,62 @@ Then, immediately after the `while` flag loop ends, insert:
 # Two installs on the same day then get the same stack, and a rollback has something to name.
 if [ "$VERSION" = "auto" ]; then
   echo "Resolving the newest release..."
-  RESOLVED="$(curl -fsSL --retry 3 --retry-delay 2 "$LATEST_URL" 2>/dev/null \
-    | grep -o '"version"[[:space:]]*:[[:space:]]*"[^"]*"' \
-    | head -1 \
-    | sed 's/.*"\([^"]*\)"[[:space:]]*$/\1/')" || RESOLVED=""
-  if [ -z "$RESOLVED" ]; then
+  # shellcheck source=install/lib/resolve-version.sh
+  . "$(dirname "$0")/lib/resolve-version.sh"
+  if ! VERSION="$(resolve_version "$LATEST_URL")"; then
     echo "ERROR: could not resolve the newest release from $LATEST_URL" >&2
     echo "Pass a version explicitly, e.g.:  $0 --version 0.1.0" >&2
     echo "(Passing --version latest tracks the moving tag instead, which is fine for a demo" >&2
     echo " but means an upgrade is unbounded.)" >&2
     exit 1
   fi
-  VERSION="$RESOLVED"
   echo "Newest release: $VERSION"
 fi
 ```
 
-- [ ] **Step 2: Verify the resolution against a real file**
+⚠ **`install.sh` is also run by `curl | sh`**, where `$(dirname "$0")` is not the repo. The
+installer already downloads files from `$REPO_RAW`; if sourcing locally fails, fetch the lib the
+same way it fetches everything else. Verify which path applies before assuming.
 
-`latest.json` is not published yet, so test the parser against a local fixture:
+- [ ] **Step 4: Run test to verify it passes**
+
+Run: `pnpm --filter @openldr/release exec vitest run src/shell.test.ts`
+Expected: PASS, 7 tests.
+
+- [ ] **Step 5: Verify the installer stops rather than falling back**
+
+Point `LATEST_URL` at an unreachable URL and run the installer:
 
 ```bash
-printf '{\n  "version": "0.2.0",\n  "releasedAt": "2026-08-20",\n  "notesUrl": "https://example.org/x"\n}\n' > /tmp/latest.json
-cat /tmp/latest.json | grep -o '"version"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"[[:space:]]*$/\1/'
+bash install/install.sh --dir /tmp/openldr-resolve-probe
 ```
 
-Expected output: `0.2.0`
-
-- [ ] **Step 3: Verify the installer stops rather than falling back**
-
-Run: `bash install/install.sh --dir /tmp/openldr-resolve-probe` with no network route to GitHub,
-or temporarily point `LATEST_URL` at `https://127.0.0.1:1/nope.json`.
-
 Expected: exits non-zero, prints `could not resolve the newest release`, and prints the
-`--version` command. **It must not create the directory or write a `.env` containing
-`OPENLDR_VERSION=latest`.** Confirm with:
+`--version` command. **It must not write a `.env` containing `OPENLDR_VERSION=latest`.**
 
 ```bash
 grep -r OPENLDR_VERSION /tmp/openldr-resolve-probe 2>/dev/null || echo "no .env written - correct"
 ```
 
-- [ ] **Step 4: Change `install/install.ps1`**
+- [ ] **Step 6: Change `install/install.ps1`**
+
+Create `install/lib/Resolve-Version.ps1`, the PowerShell twin — same contract, same refusals:
+
+```powershell
+# Resolve-OpenLdrVersion <url> - return the version from a latest.json, or $null.
+# Dot-sourced by install/install.ps1. Returns $null on every failure; the caller decides
+# what to say, and it must NOT fall back to `latest`.
+function Resolve-OpenLdrVersion {
+  param([Parameter(Mandatory = $true)][string]$Url)
+  try {
+    $manifest = Invoke-RestMethod -Uri $Url -TimeoutSec 20
+  } catch {
+    return $null
+  }
+  if ($manifest.version -match '^\d+\.\d+\.\d+$') { return $manifest.version }
+  return $null
+}
+```
 
 Replace line 26, `[string]$Version = "latest",`, with:
 
@@ -1238,13 +1464,8 @@ Then, immediately after the `param(...)` block closes, insert:
 if ($Version -eq "auto") {
   $latestUrl = "https://github.com/Open-Laboratory-Data-Repository/openldr/releases/latest/download/latest.json"
   Write-Host "Resolving the newest release..."
-  $resolved = $null
-  try {
-    $manifest = Invoke-RestMethod -Uri $latestUrl -TimeoutSec 20
-    if ($manifest.version -match '^\d+\.\d+\.\d+$') { $resolved = $manifest.version }
-  } catch {
-    $resolved = $null
-  }
+  . (Join-Path $PSScriptRoot "lib/Resolve-Version.ps1")
+  $resolved = Resolve-OpenLdrVersion -Url $latestUrl
   if (-not $resolved) {
     Write-Error "Could not resolve the newest release from $latestUrl"
     Write-Host  "Pass a version explicitly, e.g.:  -Version 0.1.0"
@@ -1257,26 +1478,31 @@ if ($Version -eq "auto") {
 }
 ```
 
-- [ ] **Step 5: Verify the PowerShell resolution and its refusal**
+- [ ] **Step 7: Verify the PowerShell twin, including its refusal**
 
 ```powershell
-$m = '{"version":"0.2.0","releasedAt":"2026-08-20","notesUrl":"https://example.org/x"}' | ConvertFrom-Json
-if ($m.version -match '^\d+\.\d+\.\d+$') { $m.version } else { "REJECTED" }
+. install/lib/Resolve-Version.ps1
+$f = Join-Path $env:TEMP 'latest.json'
+'{"version":"0.2.0","releasedAt":"2026-08-20","notesUrl":"https://example.org/x"}' | Set-Content $f -Encoding utf8
+Resolve-OpenLdrVersion -Url ([uri]::new($f).AbsoluteUri)
 ```
 
 Expected output: `0.2.0`
 
 ```powershell
-$m = '{"version":"latest","releasedAt":"2026-08-20","notesUrl":"https://example.org/x"}' | ConvertFrom-Json
-if ($m.version -match '^\d+\.\d+\.\d+$') { $m.version } else { "REJECTED" }
+. install/lib/Resolve-Version.ps1
+$f = Join-Path $env:TEMP 'latest-bad.json'
+'{"version":"latest","releasedAt":"2026-08-20","notesUrl":"https://example.org/x"}' | Set-Content $f -Encoding utf8
+$r = Resolve-OpenLdrVersion -Url ([uri]::new($f).AbsoluteUri)
+if ($null -eq $r) { "REJECTED" } else { $r }
 ```
 
 Expected output: `REJECTED` — the moving tag must never satisfy the resolve.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
-git add install/install.sh install/install.ps1
+git add install/install.sh install/install.ps1 install/lib packages/release/src/shell.test.ts
 git commit -m "feat(install): pin new installs to a resolved release instead of the moving latest tag"
 ```
 
