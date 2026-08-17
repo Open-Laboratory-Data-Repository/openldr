@@ -1,15 +1,309 @@
 {
-  "generatedAt": "2026-08-12",
+  "generatedAt": "2026-08-17",
   "days": [
+    {
+      "date": "2026-08-17",
+      "version": null,
+      "entries": [
+        {
+          "hash": "20c48dd1",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Empty Connectors and sync activity tables no longer render a header"
+        },
+        {
+          "hash": "1b99f54b",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Terminology value sets adopt the standard table toolbar"
+        },
+        {
+          "hash": "5a306c89",
+          "type": "feat",
+          "scope": "studio",
+          "title": "DistributedSync activity table adopts the standard table toolbar"
+        },
+        {
+          "hash": "e3e00fef",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Sites adopts the standard table toolbar"
+        },
+        {
+          "hash": "f8aba352",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Connectors adopts the standard table toolbar"
+        }
+      ]
+    },
+    {
+      "date": "2026-08-13",
+      "version": null,
+      "entries": [
+        {
+          "hash": "2c20256b",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Activity adopts the standard table toolbar"
+        },
+        {
+          "hash": "60a8b87e",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Forms search no longer discards an active popover filter"
+        },
+        {
+          "hash": "798db5ea",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Forms adopts the standard table toolbar and translates its headers"
+        },
+        {
+          "hash": "508fe2b2",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Roles adopts the standard table toolbar"
+        },
+        {
+          "hash": "faa7d56f",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "The register-source placeholders translate"
+        },
+        {
+          "hash": "4fcdd0cd",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "The register refusal speaks to an edit, and the picker shows register names"
+        },
+        {
+          "hash": "ad60a76d",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "One code on the form, and the register default lives in Settings"
+        },
+        {
+          "hash": "518a3ff2",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Writers set facility_code/facility_system, and the importer matches on the pair"
+        },
+        {
+          "hash": "f1caa835",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Add facility_code and facility_system alongside the pair they replace"
+        },
+        {
+          "hash": "af7a236d",
+          "type": "fix",
+          "scope": "forms",
+          "title": "An untouched seeded reference value does not block a save"
+        },
+        {
+          "hash": "781f48d1",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "A canonical display is canonical"
+        },
+        {
+          "hash": "4e5dfdbc",
+          "type": "fix",
+          "scope": "forms",
+          "title": "A seeded reference answer is resolved before validation sees it"
+        },
+        {
+          "hash": "f5c1af92",
+          "type": "feat",
+          "scope": "forms",
+          "title": "The rule for matching a stored string back to a concept"
+        },
+        {
+          "hash": "7c8d1803",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "The sheet suggests this install's registered facility registers"
+        },
+        {
+          "hash": "d4eb580f",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "The route enforces required — fully on create, on what changed on edit"
+        },
+        {
+          "hash": "43dab14b",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "A manual create keys on the register and national code"
+        },
+        {
+          "hash": "bac3f5cf",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "An edit cannot move a facility's national code or register"
+        },
+        {
+          "hash": "a2e1d29b",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "The Facility form carries the national code, and stops requiring what an import cannot supply"
+        },
+        {
+          "hash": "e9aad25b",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "The vocabulary guard checks only what an edit changed"
+        },
+        {
+          "hash": "ffac0725",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Column-map extras, refusal visibility, and two guards"
+        },
+        {
+          "hash": "49e44b81",
+          "type": "fix",
+          "scope": "cli",
+          "title": "Facility import mapping — close three review findings"
+        },
+        {
+          "hash": "b0030c41",
+          "type": "feat",
+          "scope": "cli",
+          "title": "Suggest and apply facility import mappings headlessly"
+        },
+        {
+          "hash": "28f7932e",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Map source columns and vocabulary during an import"
+        }
+      ]
+    },
     {
       "date": "2026-08-12",
       "version": null,
       "entries": [
         {
+          "hash": "394ceeb1",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "The import doors accept a column map"
+        },
+        {
+          "hash": "bcf4e563",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "A declined column-map suggestion now stays declined"
+        },
+        {
+          "hash": "3f657fff",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Map file columns to the contract in the import sheet"
+        },
+        {
+          "hash": "20472d9b",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Write value mappings through a gated route"
+        },
+        {
+          "hash": "e3eceb56",
+          "type": "fix",
+          "scope": "bootstrap",
+          "title": "Facility value mappings file under the code's own system"
+        },
+        {
+          "hash": "554d9fc6",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Write controlled-field value mappings under one pinned map type"
+        },
+        {
+          "hash": "d87f1c15",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Serve column and value mapping suggestions"
+        },
+        {
+          "hash": "a5c9fb66",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Accept a column map on an import and block on a bad one"
+        },
+        {
+          "hash": "6aee4230",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Rank column and value mapping suggestions offline"
+        },
+        {
+          "hash": "5ac1fe50",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "A passthrough header could silently collide with a mapped column"
+        },
+        {
+          "hash": "0514191e",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Apply a column map while parsing an import file"
+        },
+        {
+          "hash": "c6ed4d58",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Observed facilities were named after their own code"
+        },
+        {
+          "hash": "a55bec15",
+          "type": "fix",
+          "scope": "docs",
+          "title": "The reports capture clicks Parameters before Run"
+        },
+        {
+          "hash": "8f06ed68",
+          "type": "feat",
+          "scope": "web",
+          "title": "Three new landing sections, and screenshots of the real app"
+        },
+        {
+          "hash": "e9a05808",
+          "type": "feat",
+          "scope": "e2e",
+          "title": "Capture the landing gallery separately from the docs shots"
+        },
+        {
+          "hash": "54393884",
+          "type": "fix",
+          "scope": "web",
+          "title": "The docs page named itself three times and kept its scroll"
+        },
+        {
+          "hash": "88f56e6b",
+          "type": "feat",
+          "scope": "web",
+          "title": "Changelog page, GitHub mark and a brand mark in the navbar"
+        },
+        {
+          "hash": "2be3f0b1",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Show why a report refused to render, not just that it failed"
+        },
+        {
           "hash": "fbfe0f70",
           "type": "fix",
           "scope": "terminology",
           "title": "Escape shuts the term picker's panel, not the whole sheet"
+        },
+        {
+          "hash": "f020f22b",
+          "type": "feat",
+          "scope": "reporting",
+          "title": "Refuse to render a report whose subject does not exist"
         },
         {
           "hash": "42f38ea6",
@@ -1390,354 +1684,6 @@
           "type": "fix",
           "scope": "bootstrap",
           "title": "Close facility-reconcile review findings (F1-F4)"
-        },
-        {
-          "hash": "87bc933a",
-          "type": "feat",
-          "scope": "bootstrap",
-          "title": "Capture observed facilities at ingest time"
-        },
-        {
-          "hash": "c932a0f3",
-          "type": "feat",
-          "scope": "bootstrap",
-          "title": "Project facility_registry into a pickable coding system"
-        },
-        {
-          "hash": "8340ff71",
-          "type": "feat",
-          "scope": "bootstrap",
-          "title": "Resolve observed facilities and publish facility_map"
-        },
-        {
-          "hash": "f44ad172",
-          "type": "fix",
-          "scope": "bootstrap",
-          "title": "Address facility-reconcile review findings F1-F3"
-        },
-        {
-          "hash": "761fe420",
-          "type": "feat",
-          "scope": "bootstrap",
-          "title": "Re-runnable observed-facility discovery scan"
-        },
-        {
-          "hash": "17accee3",
-          "type": "feat",
-          "scope": "db",
-          "title": "Observed-facility constants and pure concept shaping"
-        },
-        {
-          "hash": "1dd25c39",
-          "type": "fix",
-          "scope": "db",
-          "title": "Enforce NOT NULL on facility_map join keys, add unmapped-row test"
-        },
-        {
-          "hash": "657a6987",
-          "type": "feat",
-          "scope": "db",
-          "title": "Add facility_map warehouse dimension (external 012)"
-        },
-        {
-          "hash": "b4d40c3e",
-          "type": "fix",
-          "scope": "cli",
-          "title": "Hoist ./program import out of facilities-import test bodies"
-        },
-        {
-          "hash": "8da3b43f",
-          "type": "fix",
-          "scope": "studio",
-          "title": "Repair Facilities CSV import review findings (F1-F6)"
-        },
-        {
-          "hash": "42ed37fb",
-          "type": "feat",
-          "scope": "studio",
-          "title": "Import facilities from a CSV on the Facilities page"
-        },
-        {
-          "hash": "e0d5a108",
-          "type": "fix",
-          "scope": "facilities",
-          "title": "Malformed CSV import is a 400 with the parser's message, not a 500"
-        },
-        {
-          "hash": "40ed0407",
-          "type": "feat",
-          "scope": "server",
-          "title": "Facility CSV import endpoint"
-        },
-        {
-          "hash": "72729cd2",
-          "type": "fix",
-          "scope": "cli",
-          "title": "Remove is-main guard, extract buildProgram() factory"
-        },
-        {
-          "hash": "2a9ae559",
-          "type": "feat",
-          "scope": "cli",
-          "title": "Openldr facilities import"
-        },
-        {
-          "hash": "c97e443f",
-          "type": "fix",
-          "scope": "facility-import",
-          "title": "Always report duplicates, correct two docblock claims"
-        },
-        {
-          "hash": "e891a168",
-          "type": "fix",
-          "scope": "facility-import",
-          "title": "Dedupe by id, preserve local_code/extras, pin hash parity"
-        },
-        {
-          "hash": "c3ca9abf",
-          "type": "feat",
-          "scope": "bootstrap",
-          "title": "Shared facility CSV import (parse, report, apply)"
-        },
-        {
-          "hash": "3e0daa92",
-          "type": "fix",
-          "scope": "server",
-          "title": "Keep importer-written facility extras through an edit"
-        },
-        {
-          "hash": "90b35a36",
-          "type": "fix",
-          "scope": "forms-builder",
-          "title": "Derive Field Type picklist from FieldType enum"
-        },
-        {
-          "hash": "3045d5e8",
-          "type": "fix",
-          "scope": "facility-registry",
-          "title": "Scope admin suggestions to ancestors, retry on failure, gate debounce, i18n copy"
-        },
-        {
-          "hash": "ac121cc5",
-          "type": "feat",
-          "scope": "studio",
-          "title": "Drive the admin-area fields from registry suggestions"
-        },
-        {
-          "hash": "79e7fc9e",
-          "type": "feat",
-          "scope": "db",
-          "title": "Seed Country ValueSet, bind admin-hierarchy fields on the Facility form"
-        },
-        {
-          "hash": "893d9bb7",
-          "type": "fix",
-          "scope": "facility-registry",
-          "title": "Remove pg-mem clause-order dependency from admin-values NULL guard"
-        },
-        {
-          "hash": "f2a45227",
-          "type": "feat",
-          "scope": "server",
-          "title": "Distinct admin-area values scoped by the chosen parent"
-        },
-        {
-          "hash": "166edd27",
-          "type": "fix",
-          "scope": "db",
-          "title": "Commit the lockfile entry for csv-parse"
-        },
-        {
-          "hash": "30182d11",
-          "type": "feat",
-          "scope": "db",
-          "title": "Add ISO 3166-1 country literals + drift guard against the fixture"
-        },
-        {
-          "hash": "ec554b18",
-          "type": "feat",
-          "scope": "forms",
-          "title": "Add a suggest field type that proposes without constraining"
-        }
-      ]
-    },
-    {
-      "date": "2026-08-04",
-      "version": null,
-      "entries": [
-        {
-          "hash": "8877013d",
-          "type": "fix",
-          "scope": "bootstrap",
-          "title": "Rebaseline sync-handle pendingPush tests for migration 072"
-        },
-        {
-          "hash": "968d87b8",
-          "type": "fix",
-          "scope": "facility-registry",
-          "title": "072 writes resource_history, drops concept marker"
-        },
-        {
-          "hash": "0b5a77bd",
-          "type": "fix",
-          "scope": "facility-registry",
-          "title": "072 writes change_log, down() respects concept ownership"
-        },
-        {
-          "hash": "46b9d37f",
-          "type": "feat",
-          "scope": "db",
-          "title": "Seed facility-type and location-status ValueSets and bind the form"
-        },
-        {
-          "hash": "41f5cb8d",
-          "type": "feat",
-          "scope": "forms",
-          "title": "Bind facility Level and Status to ValueSets"
-        },
-        {
-          "hash": "cde14f45",
-          "type": "fix",
-          "scope": "db",
-          "title": "Fall back to code when a coding answer's display is blank"
-        },
-        {
-          "hash": "d5881f64",
-          "type": "feat",
-          "scope": "db",
-          "title": "Flatten a picked coding answer onto its facility column"
-        },
-        {
-          "hash": "2bef484c",
-          "type": "fix",
-          "scope": "studio",
-          "title": "Let the Facilities empty state bleed to the pane edges"
-        },
-        {
-          "hash": "82facd5e",
-          "type": "fix",
-          "scope": "facilities",
-          "title": "Drop false-justified cast, pin hasCoreField's reject branch, fix stale rename refs"
-        },
-        {
-          "hash": "0a9113e1",
-          "type": "fix",
-          "scope": "facilities",
-          "title": "Guard the limit/region contract and repoint hasCoreField at targetPages"
-        },
-        {
-          "hash": "a034091d",
-          "type": "fix",
-          "scope": "studio",
-          "title": "Close round-2 facility-registry review findings"
-        },
-        {
-          "hash": "1befc58a",
-          "type": "fix",
-          "scope": "studio",
-          "title": "Close facility-registry review findings (I1-I5, Minor 1/3/4)"
-        },
-        {
-          "hash": "3ae6fc2c",
-          "type": "feat",
-          "scope": "studio",
-          "title": "Facilities page driven by the Facility form"
-        },
-        {
-          "hash": "6eae082d",
-          "type": "fix",
-          "scope": "db",
-          "title": "Recognise all three historical Facility form shapes, not just one"
-        },
-        {
-          "hash": "345ef3ae",
-          "type": "fix",
-          "scope": "facility-registry",
-          "title": "Rewrite the form schema on repoint, make down() a real inverse"
-        },
-        {
-          "hash": "4b7b181f",
-          "type": "feat",
-          "scope": "forms",
-          "title": "Point the Facility form at the Facilities page and make it essential"
-        },
-        {
-          "hash": "8325aa0b",
-          "type": "fix",
-          "scope": "server",
-          "title": "Facilities wrong-form guard, name-type agreement, honest query-param tests"
-        },
-        {
-          "hash": "68c9e62e",
-          "type": "fix",
-          "scope": "server",
-          "title": "Facilities routes clear-on-blank, unresolved-form guard, DB error mapping"
-        },
-        {
-          "hash": "c02861ed",
-          "type": "feat",
-          "scope": "server",
-          "title": "Facilities CRUD routes with a server-side answer split"
-        },
-        {
-          "hash": "d16be868",
-          "type": "feat",
-          "scope": "rbac",
-          "title": "Add facilities.view and facilities.manage capabilities"
-        },
-        {
-          "hash": "239c6fb5",
-          "type": "feat",
-          "scope": "bootstrap",
-          "title": "Expose the facility registry store on AppContext"
-        },
-        {
-          "hash": "f58ba75c",
-          "type": "feat",
-          "scope": "db",
-          "title": "Split facility form answers into columns and extras"
-        },
-        {
-          "hash": "fd359a64",
-          "type": "fix",
-          "scope": "facility-registry",
-          "title": "Stop the parser stamping managed_origin, harden CSV parsing"
-        },
-        {
-          "hash": "d03f6f88",
-          "type": "fix",
-          "scope": "db",
-          "title": "Update migration-list assertion for 070_facility_registry"
-        },
-        {
-          "hash": "d7b2c862",
-          "type": "feat",
-          "scope": "terminology",
-          "title": "Facility CSV import contract that refuses to drop columns"
-        },
-        {
-          "hash": "0cefe637",
-          "type": "fix",
-          "scope": "db",
-          "title": "Hash facility_registry content with canonicalHash, not JSON.stringify"
-        },
-        {
-          "hash": "ceeed63d",
-          "type": "feat",
-          "scope": "db",
-          "title": "Facility registry store with lab-local aliases"
-        },
-        {
-          "hash": "99c76043",
-          "type": "feat",
-          "scope": "db",
-          "title": "Type the facility registry tables"
-        },
-        {
-          "hash": "07c3f8e9",
-          "type": "feat",
-          "scope": "db",
-          "title": "Add facility_registry and facility_aliases tables"
         }
       ]
     }
