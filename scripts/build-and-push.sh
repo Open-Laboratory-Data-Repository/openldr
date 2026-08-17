@@ -14,6 +14,7 @@ TAG="${IMAGE_TAG:-latest}"
 PLATFORM="${PLATFORM:-linux/amd64}"
 DRY_RUN=false
 PUSH=true
+ALLOW_OVERWRITE=false
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -22,13 +23,31 @@ while [ $# -gt 0 ]; do
     --platform) PLATFORM="$2"; shift 2 ;;
     --no-push)  PUSH=false; shift ;;
     --dry-run)  DRY_RUN=true; shift ;;
-    -h|--help)  echo "Usage: $0 [--registry <org>] [--tag <tag>] [--platform <p>] [--no-push] [--dry-run]"; exit 0 ;;
+    --allow-overwrite) ALLOW_OVERWRITE=true; shift ;;
+    -h|--help)  echo "Usage: $0 [--registry <org>] [--tag <tag>] [--platform <p>] [--no-push] [--dry-run] [--allow-overwrite]"; exit 0 ;;
     *) echo "Unknown option: $1" >&2; exit 1 ;;
   esac
 done
 
 [ -f package.json ] && [ -d apps ] || { echo "ERROR: run from the repo root" >&2; exit 1; }
 VERSION="$(node -p "require('./package.json').version")"
+
+# Refuse to overwrite a published version tag. A version tag that silently changes content is
+# worse than :latest — :latest at least advertises that it moves, and readAppVersion() reports
+# this same number in the studio's About card.
+if [ "$PUSH" = true ] && [ "$ALLOW_OVERWRITE" = false ] && [ "$DRY_RUN" = false ]; then
+  ORG="$(basename "$REGISTRY")"
+  # `index()` yields the position or null; `// "absent"` turns null into a word, and the `|| echo
+  # absent` covers a package that does not exist yet (the first release of a new image).
+  FOUND="$(gh api "orgs/$ORG/packages/container/openldr-api/versions" \
+             --jq '[.[].metadata.container.tags[]] | index("'"$VERSION"'") // "absent"' 2>/dev/null \
+           || echo absent)"
+  if [ "$FOUND" != "absent" ]; then
+    echo "ERROR: $REGISTRY/openldr-api:$VERSION is already published." >&2
+    echo "Bump the version in package.json, or pass --allow-overwrite if that tag was never announced." >&2
+    exit 1
+  fi
+fi
 
 OUT="--push"
 [ "$PUSH" = true ] || OUT="--load"
