@@ -625,10 +625,15 @@ import { updateStateToNotification } from './notifications';
 import type { UpdateState } from './update-check';
 
 const state = (over: Partial<UpdateState> = {}): UpdateState => ({
-  enabled: true, running: '0.1.1', latestVersion: '0.2.0', releasedAt: '2026-08-20',
-  notesUrl: 'https://example.org/x', firstSeenAt: '2026-08-20T10:00:00.000Z',
-  lastCheckedAt: '2026-08-20T10:00:00.000Z', lastError: null, updateAvailable: true, ...over,
+  enabled: true, running: '0.1.1', latestVersion: '0.2.0', releasedAt: '2026-08-01',
+  notesUrl: 'https://example.org/x', firstSeenAt: '2026-08-01T10:00:00.000Z',
+  lastCheckedAt: '2026-08-01T10:00:00.000Z', lastError: null, updateAvailable: true, ...over,
 });
+// ⛔ These timestamps must be in the PAST relative to when the suite runs. mark-all-read writes
+// a cursor of now(), and listNotifications marks an entry read when createdAt <= cursor — a
+// future firstSeenAt can never be covered by that cursor, so the dismissal test would fail
+// against a CORRECT implementation. An earlier draft of this plan used a future date and did
+// exactly that.
 
 describe('updateStateToNotification', () => {
   it('is null when no update is available', () => {
