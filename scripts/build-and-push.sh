@@ -37,17 +37,29 @@ VERSION="$(node -p "require('./package.json').version")"
 # this same number in the studio's About card.
 if [ "$PUSH" = true ] && [ "$ALLOW_OVERWRITE" = false ] && [ "$DRY_RUN" = false ]; then
   ORG="$(basename "$REGISTRY")"
-  # `index()` yields the position or null; `// "absent"` turns null into a word.
+  # Read EVERY version, not just the first page. A response holds 30 items by default, and
+  # openldr-api gains a version per pushed manifest plus buildx's untagged per-arch and
+  # attestation manifests — so a published tag drops off page 1 within a few releases. Without
+  # --paginate the lookup then misses it and the guard permits the overwrite, silently.
+  # --paginate applies --jq per page and concatenates, so the filter must emit one tag per
+  # line rather than build a single array to index into.
   set +e
-  GH_OUT="$(gh api "orgs/$ORG/packages/container/openldr-api/versions" \
-              --jq '[.[].metadata.container.tags[]] | index("'"$VERSION"'") // "absent"' 2>&1)"
+  GH_OUT="$(gh api --paginate "orgs/$ORG/packages/container/openldr-api/versions?per_page=100" \
+              --jq '.[].metadata.container.tags[]' 2>&1)"
   GH_RC=$?
   set -e
   if [ "$GH_RC" -ne 0 ]; then
     # A missing package means the tag is free — the first release of a new image. Anything
     # else (403, network, rate limit) means we DO NOT KNOW, and an unknown must never read as
     # "free": that is how an overwrite guard silently disarms.
-    if printf '%s' "$GH_OUT" | grep -qiE '(^|[^0-9])404([^0-9]|$)|not found'; then
+    #
+    # 404 is not proof of absence either: GitHub answers 404 for a package that exists but is
+    # invisible to an under-scoped token, so "absent" and "hidden from you" arrive as the same
+    # reply. Before believing it, prove the token can see the org's container packages at all.
+    # If that probe fails we cannot tell the two apart — fail closed. Message text is not
+    # evidence, so do not try to separate 403 from 404 by reading it.
+    if printf '%s' "$GH_OUT" | grep -qiE '(^|[^0-9])404([^0-9]|$)|not found' \
+       && gh api "orgs/$ORG/packages?package_type=container&per_page=1" >/dev/null 2>&1; then
       FOUND=absent
     else
       echo "ERROR: cannot check whether $VERSION is already published." >&2
@@ -57,7 +69,12 @@ if [ "$PUSH" = true ] && [ "$ALLOW_OVERWRITE" = false ] && [ "$DRY_RUN" = false 
       exit 1
     fi
   else
-    FOUND="$GH_OUT"
+    # Fixed-string, whole-line: a substring match would read 0.1.10 as 0.1.0.
+    if printf '%s\n' "$GH_OUT" | grep -Fxq "$VERSION"; then
+      FOUND="$VERSION"
+    else
+      FOUND=absent
+    fi
   fi
   if [ "$FOUND" != "absent" ]; then
     echo "ERROR: $REGISTRY/openldr-api:$VERSION is already published." >&2

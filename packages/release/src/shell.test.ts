@@ -1,12 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { writeFileSync, mkdtempSync, chmodSync, existsSync } from 'node:fs';
+import { writeFileSync, readFileSync, mkdtempSync, chmodSync, existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { tmpdir, platform } from 'node:os';
 import { pathToFileURL } from 'node:url';
 
 const REPO = resolve(__dirname, '../../..');
 const RESOLVE_VERSION_LIB = join(REPO, 'install/lib/resolve-version.sh').replace(/\\/g, '/');
+/** The version the guard checks — the same one build-and-push.sh reads from package.json. */
+const VERSION = JSON.parse(readFileSync(join(REPO, 'package.json'), 'utf8')).version as string;
 
 /**
  * Resolve a real `bash` binary to shell out to.
@@ -51,28 +53,74 @@ function resolveGitBash(): string {
 const BASH = resolveGitBash();
 
 interface FakeGh {
-  /** Text printed to stdout, e.g. the jq result on a successful call. */
+  /**
+   * Tags this fake package has published. The fake `gh` serves them the way the real one
+   * does: 30 per page unless the caller pages, and shaped by whichever `--jq` it was given.
+   */
+  tags?: string[];
+  /** Canned stdout, for the failure-mode tests that do not care about tags. */
   stdout?: string;
   /** Text printed to stderr, e.g. what `gh api` prints when it fails. */
   stderr?: string;
   /** Exit code for the fake `gh`. Defaults to 0 (success). */
   exitCode?: number;
+  /**
+   * Exit code for the "can this token see the org's container packages at all" probe.
+   * 0 (default) means yes, so a per-package 404 really does mean absent.
+   */
+  probeExitCode?: number;
+}
+
+/** Single-quote a string for embedding in the generated bash fake. */
+function sq(s: string): string {
+  return `'${s.replace(/'/g, `'\\''`)}'`;
 }
 
 /**
  * Run build-and-push.sh with a fake `gh` AND a fake `docker` first on PATH, so no network,
  * token, or real image build is ever involved — even in push-mode tests that get past the
  * overwrite guard. The fake `docker` just echoes its argv and exits 0.
+ *
+ * The fake `gh` reproduces the two behaviours of the real one the guard depends on:
+ *   1. a page holds 30 items — the rest are only reachable with `--paginate`
+ *   2. `--jq` decides the output shape: a tag-per-line stream, or an `index()` scalar
+ * Without (1) a fake would answer a single-page request as if it had seen every version,
+ * which is exactly the bug the guard had.
  */
 function buildAndPush(args: string[], gh: string | FakeGh): { code: number; out: string } {
   const opts: FakeGh = typeof gh === 'string' ? { stdout: gh } : gh;
   const bin = mkdtempSync(join(tmpdir(), 'openldr-fakebin-'));
 
   const ghPath = join(bin, 'gh');
-  const ghLines = ['#!/usr/bin/env bash'];
-  if (opts.stdout !== undefined) ghLines.push(`printf '%s\\n' '${opts.stdout}'`);
-  if (opts.stderr !== undefined) ghLines.push(`printf '%s\\n' '${opts.stderr}' >&2`);
-  ghLines.push(`exit ${opts.exitCode ?? 0}`);
+  const ghLines = [
+    '#!/usr/bin/env bash',
+    'args="$*"',
+    '# The read:packages visibility probe is a different endpoint — answer it separately.',
+    'case "$args" in',
+    `  *package_type=container*) exit ${opts.probeExitCode ?? 0} ;;`,
+    'esac',
+  ];
+  if (opts.stdout !== undefined) ghLines.push(`printf '%s\\n' ${sq(opts.stdout)}`);
+  if (opts.stderr !== undefined) ghLines.push(`printf '%s\\n' ${sq(opts.stderr)} >&2`);
+  if (opts.stdout !== undefined || opts.stderr !== undefined || opts.exitCode !== undefined) {
+    ghLines.push(`exit ${opts.exitCode ?? 0}`);
+  } else {
+    ghLines.push(
+      `TAGS=(${(opts.tags ?? []).map(sq).join(' ')})`,
+      '# GitHub returns 30 items per response; only --paginate walks past the first page.',
+      'case "$args" in',
+      '  *--paginate*) ;;',
+      '  *) TAGS=("${TAGS[@]:0:30}") ;;',
+      'esac',
+      'case "$args" in',
+      "  *'index('*)",
+      `    for t in "\${TAGS[@]}"; do if [ "$t" = ${sq(VERSION)} ]; then echo 0; exit 0; fi; done`,
+      '    echo absent; exit 0 ;;',
+      'esac',
+      'for t in "${TAGS[@]}"; do echo "$t"; done',
+      'exit 0',
+    );
+  }
   writeFileSync(ghPath, ghLines.join('\n') + '\n');
   chmodSync(ghPath, 0o755);
 
@@ -97,28 +145,59 @@ function buildAndPush(args: string[], gh: string | FakeGh): { code: number; out:
 describe('build-and-push.sh overwrite guard', () => {
   // The guard is the reason this change exists: a published version tag is immutable.
   it('refuses when the version tag is already published', () => {
-    const r = buildAndPush(['--platform', 'linux/amd64'], '0');
+    const r = buildAndPush(['--platform', 'linux/amd64'], { tags: [VERSION] });
     expect(r.code).not.toBe(0);
     expect(r.out).toMatch(/already published/i);
+    expect(r.out).not.toMatch(/FAKE-DOCKER-CALLED-WITH/);
   });
 
   it('names --allow-overwrite in the refusal, so the escape hatch is discoverable', () => {
-    expect(buildAndPush(['--platform', 'linux/amd64'], '0').out).toMatch(/--allow-overwrite/);
+    expect(buildAndPush(['--platform', 'linux/amd64'], { tags: [VERSION] }).out).toMatch(/--allow-overwrite/);
   });
 
   it('does not fire on a dry run', () => {
-    const r = buildAndPush(['--dry-run'], '0');
+    const r = buildAndPush(['--dry-run'], { tags: [VERSION] });
     expect(r.code).toBe(0);
     expect(r.out).toMatch(/docker buildx build/);
   });
 
-  // "absent" is what the jq `// "absent"` fallback yields when the tag is not in the list.
+  // A published package that simply does not carry this version. This runs in real push mode:
+  // --dry-run skips the whole guard block, so a dry run proves nothing about it. Reaching the
+  // fake `docker` is the assertion that separates "the guard let it through" from "the script
+  // died somewhere else and happened to exit 0".
   it('proceeds when the tag is absent', () => {
-    expect(buildAndPush(['--dry-run'], 'absent').code).toBe(0);
+    const r = buildAndPush(['--platform', 'linux/amd64'], { tags: ['0.0.9', '0.0.8'] });
+    expect(r.code).toBe(0);
+    expect(r.out).not.toMatch(/already published/i);
+    expect(r.out).toMatch(/FAKE-DOCKER-CALLED-WITH/);
   });
 
+  // --no-push builds locally, so there is nothing to overwrite. The fake `gh` here WOULD report
+  // the tag as published, so a guard that ran anyway would refuse.
   it('does not fire with --no-push, since nothing can be overwritten', () => {
-    expect(buildAndPush(['--no-push', '--dry-run'], '0').code).toBe(0);
+    const r = buildAndPush(['--no-push'], { tags: [VERSION] });
+    expect(r.code).toBe(0);
+    expect(r.out).not.toMatch(/already published/i);
+    expect(r.out).toMatch(/FAKE-DOCKER-CALLED-WITH/);
+  });
+
+  // The lookup must page. openldr-api gains a version per pushed manifest, plus buildx's
+  // untagged per-arch and attestation manifests, so a published tag leaves page 1 within a few
+  // releases. A single-page lookup then reports "absent" and the guard permits the overwrite.
+  it('still refuses when the published tag is past the first page of versions', () => {
+    const older = Array.from({ length: 35 }, (_, i) => `0.0.${i + 1}`);
+    const r = buildAndPush(['--platform', 'linux/amd64'], { tags: [...older, VERSION, '0.0.99'] });
+    expect(r.code).not.toBe(0);
+    expect(r.out).toMatch(/already published/i);
+    expect(r.out).not.toMatch(/FAKE-DOCKER-CALLED-WITH/);
+  });
+
+  // Whole-line match: 0.1.0 is a substring of 0.1.10, and a substring match would refuse to
+  // publish 0.1.0 because some later 0.1.10 exists.
+  it('does not treat a longer tag that contains this version as a match', () => {
+    const r = buildAndPush(['--platform', 'linux/amd64'], { tags: [`${VERSION}1`, `x${VERSION}`] });
+    expect(r.code).toBe(0);
+    expect(r.out).toMatch(/FAKE-DOCKER-CALLED-WITH/);
   });
 });
 
@@ -131,10 +210,25 @@ describe('build-and-push.sh overwrite guard — gh failure handling', () => {
     const r = buildAndPush(['--platform', 'linux/amd64'], {
       exitCode: 1,
       stderr: 'gh: Not Found (HTTP 404)',
+      probeExitCode: 0,
     });
     expect(r.code).toBe(0);
     expect(r.out).not.toMatch(/already published/i);
     expect(r.out).toMatch(/FAKE-DOCKER-CALLED-WITH/);
+  });
+
+  // GitHub also answers 404 for a package that EXISTS but is invisible to an under-scoped
+  // token. "Absent" and "invisible" are then the same reply, so believing the 404 fails open.
+  // Only a token that can list the org's container packages at all can be believed.
+  it('fails closed when a 404 arrives and the token cannot list the org\'s packages', () => {
+    const r = buildAndPush(['--platform', 'linux/amd64'], {
+      exitCode: 1,
+      stderr: 'gh: Not Found (HTTP 404)',
+      probeExitCode: 1,
+    });
+    expect(r.code).not.toBe(0);
+    expect(r.out).toMatch(/read:packages/);
+    expect(r.out).not.toMatch(/FAKE-DOCKER-CALLED-WITH/);
   });
 
   // A 403 means we do not know whether the tag is published — the token just lacks
