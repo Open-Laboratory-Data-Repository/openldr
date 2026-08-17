@@ -1209,12 +1209,14 @@ describe('SEED_QUERIES — q-clinical-micro-ast resolves a lab number and gates 
     }
   });
 
-  it('takes the interpretation from the vs-ast-interpretation value set, not a literal S/I/R list', () => {
+  it('takes the interpretation from the AST interpretation value set, not a literal S/I/R list', () => {
     // AGENTS.md §8. A hardcoded in ('S','I','R') also lets HIV Rapid EQA panels through — measured
     // 2026-08-17: unanchored S/I/R selects EQA proficiency rows that are 100% R by design.
+    // Keyed on value_set_url, not value_set_id: the id is minted as `vs-${randomUUID()}` at seed
+    // time and differs per install, so a literal id can never match (RULE 0 finding, 2026-08-17).
     for (const [dialect, sql] of Object.entries(q().sql)) {
       expect(sql, `${dialect} does not gate on the value set`)
-        .toMatch(/value_set_id\s*=\s*'vs-ast-interpretation'[\s\S]*?coalesce\(r\.coded_value, r\.abnormal_flag\) in \(\s*select code from terminology_codes/);
+        .toMatch(/value_set_url\s*=\s*'urn:openldr:valueset:ast-interpretation'[\s\S]*?coalesce\(r\.coded_value, r\.abnormal_flag\) in \(\s*select code from terminology_codes/);
     }
   });
 

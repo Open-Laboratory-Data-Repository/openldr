@@ -1745,10 +1745,13 @@ order by pathogen_name`,
   // ⚠ Two terminology joins do real work here, and neither hardcodes a vocabulary:
   //   1. `vs-non-reportable` EXCLUDES collection metadata. Without it the report prints the
   //      courier's phone number ("Collect By Contact Number") as a lab result — measured, 425 rows.
-  //   2. `vs-ast-interpretation` supplies the DISPLAY for S/I/R. DISA's dictionary describes code
-  //      `I` as "Invalid" (an upstream Tanzania typo for "Intermediate"); CE stores what the lab
-  //      published, verbatim, and renders the terminology display instead. `coalesce` keeps it
-  //      FAIL-OPEN: a code with no terminology entry still prints its raw text.
+  //   2. the AST interpretation set supplies the DISPLAY for S/I/R. It is keyed by
+  //      `value_set_url = 'urn:openldr:valueset:ast-interpretation'`, NOT by `value_set_id` — the id
+  //      is minted as `vs-${randomUUID()}` at seed time (`terminology-admin-store.ts`) and is
+  //      different on every install, so a literal id here can never match. DISA's dictionary
+  //      describes code `I` as "Invalid" (an upstream Tanzania typo for "Intermediate"); CE stores
+  //      what the lab published, verbatim, and renders the terminology display instead. `coalesce`
+  //      keeps it FAIL-OPEN: a code with no terminology entry still prints its raw text.
   // The status token (`normal`/`abnormal`/`indeterminate`) stays in SQL deliberately — mapping a
   // clinical value to a presentational one is CE's choice, and the PDF renderer must never learn
   // what an antibiotic is.
@@ -1769,12 +1772,12 @@ order by pathogen_name`,
 from lab_results r
 join lab_requests q on q.id = r.request_id
 left join terminology_codes tc
-  on tc.value_set_id = 'vs-ast-interpretation'
+  on tc.value_set_url = 'urn:openldr:valueset:ast-interpretation'
  and tc.code = coalesce(r.coded_value, r.abnormal_flag)
 where (q.request_id = {{param.request}} or q.id = {{param.request}})
   and r.observation_code not in (select code from terminology_codes where value_set_id = 'vs-non-reportable')
   and coalesce(r.coded_value, r.abnormal_flag) in (
-    select code from terminology_codes where value_set_id = 'vs-ast-interpretation')
+    select code from terminology_codes where value_set_url = 'urn:openldr:valueset:ast-interpretation')
   and r.observation_code not in ('634-6', 'ORGS')
   and exists (
     select 1 from lab_results iso
@@ -1795,12 +1798,12 @@ order by 1`,
 from lab_results r
 join lab_requests q on q.id = r.request_id
 left join terminology_codes tc
-  on tc.value_set_id = 'vs-ast-interpretation'
+  on tc.value_set_url = 'urn:openldr:valueset:ast-interpretation'
  and tc.code = coalesce(r.coded_value, r.abnormal_flag)
 where (q.request_id = {{param.request}} or q.id = {{param.request}})
   and r.observation_code not in (select code from terminology_codes where value_set_id = 'vs-non-reportable')
   and coalesce(r.coded_value, r.abnormal_flag) in (
-    select code from terminology_codes where value_set_id = 'vs-ast-interpretation')
+    select code from terminology_codes where value_set_url = 'urn:openldr:valueset:ast-interpretation')
   and r.observation_code not in ('634-6', 'ORGS')
   and exists (
     select 1 from lab_results iso
@@ -1827,12 +1830,12 @@ order by 1`,
 from lab_results r
 join lab_requests q on q.id = r.request_id
 left join terminology_codes tc
-  on tc.value_set_id = 'vs-ast-interpretation'
+  on tc.value_set_url = 'urn:openldr:valueset:ast-interpretation'
  and tc.code = coalesce(r.coded_value, r.abnormal_flag)
 where (q.request_id = {{param.request}} or q.id = {{param.request}})
   and r.observation_code not in (select code from terminology_codes where value_set_id = 'vs-non-reportable')
   and coalesce(r.coded_value, r.abnormal_flag) in (
-    select code from terminology_codes where value_set_id = 'vs-ast-interpretation')
+    select code from terminology_codes where value_set_url = 'urn:openldr:valueset:ast-interpretation')
   and r.observation_code not in ('634-6', 'ORGS')
   and exists (
     select 1 from lab_results iso

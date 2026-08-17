@@ -31,10 +31,16 @@ live('q-clinical-micro-ast resolves a lab number across orders (live Postgres)',
     const up = await createMigrator(db, externalMigrations('postgres')).migrateToLatest();
     expect(up.error).toBeUndefined();
 
-    // The interpretation value set the query now gates on.
+    // The interpretation value set the query now gates on. `value_set_id` is a random-looking UUID
+    // here on purpose — mirrors production, where the seed mints `vs-${randomUUID()}` and only the
+    // URL is a stable, known key (RULE 0 finding, 2026-08-17: the query must not key on the id).
     for (const [code, display] of [['S', 'Susceptible'], ['I', 'Intermediate'], ['R', 'Resistant']]) {
       await db.insertInto('terminology_codes' as never).values({
-        id: `vs-ast-${code}`, value_set_id: 'vs-ast-interpretation', code, display,
+        id: `vs-ast-${code}`,
+        value_set_id: 'vs-11111111-2222-3333-4444-555555555555',
+        value_set_url: 'urn:openldr:valueset:ast-interpretation',
+        code,
+        display,
       } as never).execute();
     }
 
