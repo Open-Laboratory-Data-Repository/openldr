@@ -16,7 +16,8 @@
 - **Stage named paths only. Never `git add -A`** — the repository directory is shared with concurrent sessions.
 - **Gate command:** `pnpm turbo run typecheck test --force --continue`. **Never pipe turbo through `tail`** — it truncates the failure list and hides which package failed.
 - A gate failure is usually a **timeout, not a regression.** Grep the output for `Test timed out` and re-run that package alone before blaming a change.
-- **Every SQL change must be made in all three dialects** — `postgres`, `mssql`, `mysql`. MSSQL has no ordinal `GROUP BY`, so its select expressions stay repeated in full. MSSQL concatenates with `+`, Postgres and MySQL with `||`.
+- **Every SQL change must be made in all three dialects** — `postgres`, `mssql`, `mysql`. MSSQL has no ordinal `GROUP BY`, so its select expressions stay repeated in full.
+- ⛔ **String concatenation differs in all three, and getting it wrong is silent.** Postgres uses `||`; MSSQL uses `+`; **MySQL uses `concat(a, b, c)`**. In MySQL `||` is *logical OR* unless `sql_mode` includes `PIPES_AS_CONCAT`, so a `||` there yields `0`/`1` where a location string belongs — no error, just a wrong value on a clinical report. Copy each dialect's existing operator from the string you are replacing; never carry one dialect's expression into another.
 - **Never hardcode clinical vocabulary** (`AGENTS.md` §8). Codes come from `terminology_codes`. No drug, panel, or organism code list may be added to SQL. The two LOINC/local observation codes `'634-6'` and `'ORGS'` are already present in both queries and are the structural isolate marker, not a vocabulary list — do not extend them.
 - **`{{param.request}}` may appear more than once in one query.** `substituteParams` replaces with a global regex and inlines an escaped quoted string literal (`packages/dashboards/src/custom-query-run.ts:37`). It does **not** bind a placeholder — any test must mirror that or it proves something the runtime never executes.
 - **Do not touch** the `facility_of` / `facility_loc` / `facility` CTEs, their join guards, the design's element rects, or the barcode/QR bindings.
@@ -476,7 +477,19 @@ Same CTEs and select, with two dialect differences. Concatenation uses `+`, matc
 
 - [ ] **Step 5: Replace the MySQL SQL**
 
-Identical to the Postgres string, including `||` — the existing MySQL string already uses `||`, so do not change it to `concat()`; that would be an unrelated fix. If the gate later shows MySQL failing on `||`, raise it rather than folding it in.
+Same CTEs and select as Postgres, with one difference: **`lab_location` keeps `concat()`**, exactly as
+the string you are replacing already has it (`report-seeds.ts:2009`):
+
+```sql
+  case when f.district is not null and f.region is not null
+       then concat(f.district, ', ', f.region)
+       else coalesce(f.district, f.region) end as lab_location
+```
+
+⛔ Do **not** carry the Postgres `||` into this string. MySQL reads `||` as logical OR unless
+`PIPES_AS_CONCAT` is set, so `lab_location` would come back `0` or `1` with no error raised.
+`left(...)` and `min(...)` are the same in MySQL, and MySQL supports ordinal `GROUP BY` — but this
+rewrite has no `GROUP BY`, so that does not arise.
 
 - [ ] **Step 6: Run the shape tests to verify they pass**
 
