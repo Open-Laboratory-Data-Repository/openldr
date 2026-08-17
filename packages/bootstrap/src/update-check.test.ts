@@ -1,5 +1,12 @@
 import { describe, it, expect, vi } from 'vitest';
-import { createUpdateCheck, decideUpdate, UPDATE_KEYS } from './update-check';
+import {
+  createUpdateCheck,
+  decideUpdate,
+  UPDATE_KEYS,
+  pollOnce,
+  startUpdateCheck,
+  LATEST_JSON_URL,
+} from './update-check';
 import type { AppSettingStore } from '@openldr/db';
 
 function fakeStore(initial: Record<string, string> = {}): AppSettingStore & { data: Record<string, string> } {
@@ -113,5 +120,105 @@ describe('createUpdateCheck', () => {
     expect(s.updateAvailable).toBe(true);
     expect(s.lastError).toBe('getaddrinfo ENOTFOUND');
     expect(s.lastCheckedAt).toBe('2026-08-26T10:00:00.000Z');
+  });
+});
+
+const MANIFEST = JSON.stringify({ version: '0.2.0', releasedAt: '2026-08-20', notesUrl: 'https://example.org/x' });
+
+describe('pollOnce', () => {
+  it('caches a good manifest', async () => {
+    const store = fakeStore();
+    const check = createUpdateCheck(store);
+    await pollOnce({ check, fetchText: async () => MANIFEST, now: () => '2026-08-20T10:00:00.000Z' });
+    const s = await check.read('0.1.1');
+    expect(s.latestVersion).toBe('0.2.0');
+    expect(s.updateAvailable).toBe(true);
+    expect(s.lastError).toBeNull();
+  });
+
+  it('fetches the published release asset URL by default', async () => {
+    const seen: string[] = [];
+    await pollOnce({
+      check: createUpdateCheck(fakeStore()),
+      fetchText: async (u) => { seen.push(u); return MANIFEST; },
+      now: () => '2026-08-20T10:00:00.000Z',
+    });
+    expect(seen).toEqual([LATEST_JSON_URL]);
+    expect(LATEST_JSON_URL).toBe(
+      'https://github.com/Open-Laboratory-Data-Repository/openldr/releases/latest/download/latest.json',
+    );
+  });
+
+  // An air-gapped lab must not be nagged, and must not lose what it knew.
+  it('records a network failure without discarding the cached answer', async () => {
+    const store = fakeStore();
+    const check = createUpdateCheck(store);
+    await pollOnce({ check, fetchText: async () => MANIFEST, now: () => '2026-08-20T10:00:00.000Z' });
+    await pollOnce({
+      check,
+      fetchText: async () => { throw new Error('getaddrinfo ENOTFOUND github.com'); },
+      now: () => '2026-08-26T10:00:00.000Z',
+    });
+    const s = await check.read('0.1.1');
+    expect(s.latestVersion).toBe('0.2.0');
+    expect(s.lastError).toMatch(/ENOTFOUND/);
+  });
+
+  it('records a malformed manifest as a failure, not as an update', async () => {
+    const store = fakeStore();
+    const check = createUpdateCheck(store);
+    await pollOnce({ check, fetchText: async () => '{"version":"latest"}', now: () => '2026-08-20T10:00:00.000Z' });
+    const s = await check.read('0.1.1');
+    expect(s.latestVersion).toBeNull();
+    expect(s.updateAvailable).toBe(false);
+    expect(s.lastError).toMatch(/manifest/i);
+  });
+
+  it('records non-JSON as a failure', async () => {
+    const store = fakeStore();
+    const check = createUpdateCheck(store);
+    await pollOnce({ check, fetchText: async () => '<html>404</html>', now: () => '2026-08-20T10:00:00.000Z' });
+    expect((await check.read('0.1.1')).lastError).toBeTruthy();
+  });
+
+  // The switch suppresses the request itself. "Off" must mean no traffic leaves the lab.
+  it('does not fetch at all when the check is disabled', async () => {
+    const store = fakeStore({ [UPDATE_KEYS.enabled]: 'false' });
+    let called = 0;
+    await pollOnce({
+      check: createUpdateCheck(store),
+      fetchText: async () => { called += 1; return MANIFEST; },
+      now: () => '2026-08-20T10:00:00.000Z',
+    });
+    expect(called).toBe(0);
+  });
+
+  it('never throws — a poll failure must not take down the caller', async () => {
+    await expect(pollOnce({
+      check: createUpdateCheck(fakeStore()),
+      fetchText: async () => { throw new Error('boom'); },
+      now: () => '2026-08-20T10:00:00.000Z',
+    })).resolves.toBeUndefined();
+  });
+});
+
+describe('startUpdateCheck', () => {
+  it('polls immediately and returns a stop function that stops further polls', async () => {
+    vi.useFakeTimers();
+    let calls = 0;
+    const stop = startUpdateCheck({
+      check: createUpdateCheck(fakeStore()),
+      fetchText: async () => { calls += 1; return MANIFEST; },
+      now: () => '2026-08-20T10:00:00.000Z',
+      intervalMs: 1000,
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(calls).toBe(1);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(calls).toBe(2);
+    stop();
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(calls).toBe(2);
+    vi.useRealTimers();
   });
 });

@@ -1,5 +1,5 @@
 import type { AppSettingStore } from '@openldr/db';
-import { isNewerVersion } from '@openldr/core/pure';
+import { isNewerVersion, parseReleaseManifest } from '@openldr/core/pure';
 
 /** Discrete keys, deliberately not one JSON blob. A blob written by one surface and never read
  *  by another is a failure mode this repo has already shipped once — see the sync config
@@ -115,4 +115,61 @@ export function createUpdateCheck(store: AppSettingStore): UpdateCheck {
       await store.set(UPDATE_KEYS.lastError, message, 'update-check');
     },
   };
+}
+
+export const LATEST_JSON_URL =
+  'https://github.com/Open-Laboratory-Data-Repository/openldr/releases/latest/download/latest.json';
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+export interface PollDeps {
+  check: UpdateCheck;
+  fetchText: (url: string) => Promise<string>;
+  now: () => string;
+  url?: string;
+}
+
+/** One poll. NEVER throws: a background check that can crash its caller is worse than one that
+ *  silently misses a release. */
+export async function pollOnce(deps: PollDeps): Promise<void> {
+  const { check, fetchText, now } = deps;
+  try {
+    // "Off" means no traffic leaves the lab, not merely a hidden answer.
+    const state = await check.read('0.0.0');
+    if (!state.enabled) return;
+
+    const text = await fetchText(deps.url ?? LATEST_JSON_URL);
+    let raw: unknown;
+    try {
+      raw = JSON.parse(text);
+    } catch {
+      await check.recordFailure('response was not JSON', now());
+      return;
+    }
+    const manifest = parseReleaseManifest(raw);
+    if (!manifest) {
+      await check.recordFailure('manifest did not match the expected shape', now());
+      return;
+    }
+    await check.record(manifest, now());
+  } catch (err) {
+    try {
+      await deps.check.recordFailure(err instanceof Error ? err.message : String(err), deps.now());
+    } catch {
+      // The store itself is unavailable. Nothing useful left to do, and throwing here would
+      // defeat the whole point of this catch.
+    }
+  }
+}
+
+export function startUpdateCheck(deps: PollDeps & {
+  intervalMs?: number;
+  logger?: { warn(o: unknown, m: string): void };
+}): () => void {
+  const interval = deps.intervalMs ?? DAY_MS;
+  void pollOnce(deps);
+  const timer = setInterval(() => { void pollOnce(deps); }, interval);
+  // Do not hold the process open for a background check.
+  if (typeof timer.unref === 'function') timer.unref();
+  return () => clearInterval(timer);
 }

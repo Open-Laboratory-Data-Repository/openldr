@@ -9,3 +9,4 @@ export * from './crash-log';
 export * from './canonical-json';
 export * from './canonical-hash';
 export * from './semver';
+export * from './release-manifest';
