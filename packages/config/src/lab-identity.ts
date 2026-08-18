@@ -123,6 +123,12 @@ const DATA_URI = /^data:([a-z]+\/[a-z0-9.+-]+);base64,([A-Za-z0-9+/]+={0,2})$/;
  * ⛔ `lab.timezone` is rejected at write time for the same reason: a bad zone does not error at
  * query time (Postgres `AT TIME ZONE` raises, but only when a report actually runs), so a typo
  * would only surface a month later as a whole day bucketed on the wrong side of midnight.
+ *
+ * ⛔ A FIXED OFFSET is refused here in every spelling, including `Etc/GMT+3`, which the runtime's
+ * own zone database resolves. That name means UTC−3 by IANA's POSIX-inherited definition, so it is
+ * the one value that is both accepted-looking and backwards. Unlike a typo it never errors at
+ * query time — the report comes out complete, plausible and hours off. `isValidIanaZone` owns that
+ * decision; see its comment in `packages/core/src/param-format.ts` for the measurements.
  */
 export function validateLabIdentityValue(key: string, value: string): LabIdentityValidationError | null {
   const def = LAB_IDENTITY_FIELDS.find((f) => f.id === key);

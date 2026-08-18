@@ -239,8 +239,9 @@ export interface LabSetOpts extends JsonOpt {
   address?: string;
   contact?: string;
   /** IANA zone name, e.g. "Africa/Dar_es_Salaam"; empty string clears it. Validated by
-   *  `ctx.labIdentity.set` against the runtime's own zone database — a fixed offset like
-   *  "+03:00" is rejected because it cannot express daylight saving. */
+   *  `ctx.labIdentity.set` against the runtime's own zone database. A fixed offset is rejected in
+   *  every spelling — "+03:00" because it cannot express daylight saving, and "Etc/GMT+3" because
+   *  it resolves fine and means UTC−3, the opposite of how it reads. */
   timezone?: string;
   /** Path to a PNG/JPEG file; read and stored as a data URI. */
   logoFile?: string;
@@ -283,7 +284,17 @@ export async function runSettingsLabSet(opts: LabSetOpts): Promise<number> {
   try {
     const errors = await ctx.labIdentity.set(patch, 'cli');
     if (errors.length) {
-      for (const e of errors) process.stderr.write(`${e.key}: ${e.reason}\n`);
+      for (const e of errors) {
+        process.stderr.write(`${e.key}: ${e.reason}\n`);
+        // `invalid-timezone` is the one reason code that does not explain itself. `too-long` and
+        // `unsupported-image-type` say what is wrong; `invalid-timezone` leaves an operator who
+        // typed "Etc/GMT+3" — a zone name the runtime resolves — with no idea why it was refused.
+        if (e.reason === 'invalid-timezone') {
+          process.stderr.write(
+            '  use a named zone such as Africa/Dar_es_Salaam. A fixed offset is refused in every '
+            + 'spelling: Etc/GMT+3 means UTC-3, the opposite of how it reads.\n');
+        }
+      }
       return 1;
     }
     const after = await ctx.labIdentity.all();

@@ -288,7 +288,7 @@ export const fr: EnShape = {
         'not-a-data-uri': "Le logo doit être un fichier image téléversé, et non une adresse web — une image liée ne s'affiche pas dans le PDF.",
         'unsupported-image-type': 'Le logo doit être une image PNG, JPEG ou WebP.',
         'unknown-key': 'Paramètre non reconnu.',
-        'invalid-timezone': 'Doit être un nom de fuseau IANA (ex. Africa/Dar_es_Salaam), pas un décalage fixe.',
+        'invalid-timezone': "Doit être un fuseau nommé tel que Africa/Dar_es_Salaam, pas un décalage fixe. +03:00 et Etc/GMT+3 sont refusés tous les deux — Etc/GMT+3 signifie UTC−3, l'inverse de ce qu'il semble.",
       },
     },
     subNav: {

@@ -38,6 +38,26 @@ describe('isValidIanaZone', () => {
     expect(isValidIanaZone('+03:00')).toBe(false);
   });
 
+  it('⛔ rejects the Etc/GMT spelling of a fixed offset, which Intl resolves', () => {
+    // The gap this rule used to have, and its own doc comment used to admit. `Intl` resolves
+    // `Etc/GMT+3` — measured, `new Intl.DateTimeFormat('en-US', { timeZone: 'Etc/GMT+3' })` does
+    // not throw — so an Intl-only check stored it happily. IANA defines that name as UTC−3, the
+    // opposite of what almost everyone typing it means, and a SETTING is reused unseen on every
+    // later run. It is also the last spelling of a FIXED OFFSET the setting still accepted, so
+    // refusing it makes the existing "no fixed offset" rule consistent rather than newly strict.
+    expect(isValidIanaZone('Etc/GMT+3')).toBe(false);
+    expect(isValidIanaZone('Etc/GMT-3')).toBe(false);
+    expect(isValidIanaZone('etc/gmt+3')).toBe(false);
+    expect(isValidIanaZone('Etc/GMT+0')).toBe(false);
+  });
+
+  it('still accepts Etc/UTC, which carries no sign', () => {
+    // The rejection above must be the SIGN, not the `Etc/` prefix. `Etc/UTC` and `Etc/Greenwich`
+    // are ordinary named zones and stay usable.
+    expect(isValidIanaZone('Etc/UTC')).toBe(true);
+    expect(isValidIanaZone('Etc/Greenwich')).toBe(true);
+  });
+
   it('rejects a typo in a real zone name', () => {
     expect(isValidIanaZone('Africa/Dar-es-Salaam')).toBe(false);
   });

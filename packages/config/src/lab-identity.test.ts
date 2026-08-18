@@ -108,6 +108,20 @@ describe('lab.timezone validation', () => {
     expect(validateLabIdentityValue('lab.timezone', '+03:00')).not.toBeNull();
     expect(validateLabIdentityValue('lab.timezone', 'Not A Zone')).not.toBeNull();
   });
+
+  it('⛔ rejects Etc/GMT+3, which the runtime resolves but which means UTC−3', () => {
+    // The setting used to store this. `Intl` resolves it, so the IANA check waved it through, and
+    // the run parameter had already been narrowed to refuse it. A stored value is the WORSE place
+    // for that gap: it is reused silently on every later run, by people who did not type it.
+    expect(validateLabIdentityValue('lab.timezone', 'Etc/GMT+3'))
+      .toEqual({ key: 'lab.timezone', reason: 'invalid-timezone' });
+    expect(validateLabIdentityValue('lab.timezone', 'Etc/GMT-3')).not.toBeNull();
+    expect(validateLabIdentityValue('lab.timezone', 'etc/gmt+3')).not.toBeNull();
+  });
+
+  it('keeps accepting Etc/UTC, so the refusal is the SIGN and not the Etc/ prefix', () => {
+    expect(validateLabIdentityValue('lab.timezone', 'Etc/UTC')).toBeNull();
+  });
 });
 
 describe('toIdentityTokens', () => {
