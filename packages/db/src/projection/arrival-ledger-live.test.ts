@@ -11,8 +11,11 @@ import { createFhirStore, type FhirStore } from '../fhir-store';
 import { createRelationalWriter, type RelationalWriter } from '../relational-writer';
 import type { Provenance } from '../provenance';
 import type { FhirResource } from '@openldr/fhir';
-import { reprojectAll } from './cycle';
+import { createProjectionRunner, reprojectAll, type ProjectionRunner } from './cycle';
+import { fetchSafeChangeRows } from './fetch';
 import { readArrivals } from './ledger';
+
+const logger = { info() {}, error() {}, warn() {}, debug() {} };
 
 // The contrast this file exists to prove: `ingest_events` records WHEN a resource arrived, and that
 // record survives a reprojection even though `created_at` cannot answer the same question.
@@ -52,6 +55,7 @@ live('arrival ledger rebuild from resource_history (live Postgres)', () => {
   let internal: InternalDb;
   let fhirStore: FhirStore;
   let relationalWriter: RelationalWriter;
+  let runner: ProjectionRunner;
   const provenance: Provenance = {};
 
   beforeAll(async () => {
@@ -72,6 +76,9 @@ live('arrival ledger rebuild from resource_history (live Postgres)', () => {
 
     fhirStore = createFhirStore(internal.db);
     relationalWriter = createRelationalWriter(db, 'postgres');
+    runner = createProjectionRunner({
+      internalDb: internal.db, fhirStore, relationalWriter, logger, fetch: fetchSafeChangeRows,
+    });
   }, 120_000);
 
   afterAll(async () => {
@@ -222,5 +229,30 @@ live('arrival ledger rebuild from resource_history (live Postgres)', () => {
     for (let i = 1; i < arrivals.length; i++) {
       expect(arrivals[i].recorded_at.getTime()).toBeGreaterThanOrEqual(arrivals[i - 1].recorded_at.getTime());
     }
+  });
+
+  it('records the arrival on the LIVE path, without a rebuild', async () => {
+    // The rebuild is not run in this test at all. If ingest_events is populated, it is because the
+    // projection cycle wrote it.
+    await fhirStore.save(makeServiceRequest('live-1'), provenance);
+    await runner.runCycle();
+
+    const rows = await db.selectFrom('ingest_events')
+      .select(['resource_type', 'resource_id', 'version'])
+      .where('resource_id', '=', 'live-1').execute();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].resource_type).toBe('ServiceRequest');
+  });
+
+  it('live and rebuild agree when two versions arrive between cycles', async () => {
+    // The cycle sees ONE task for the resource. Recording only the newest version would lose the
+    // first arrival, and a later rebuild would then disagree with the live path.
+    await fhirStore.save(makeServiceRequest('live-2'), provenance);
+    await fhirStore.save(makeServiceRequest('live-2'), provenance); // second version, same cycle
+    await runner.runCycle();
+
+    const live = await db.selectFrom('ingest_events').select(['version'])
+      .where('resource_id', '=', 'live-2').orderBy('version').execute();
+    expect(live.map((r) => Number(r.version))).toEqual([1, 2]);
   });
 });

@@ -6,7 +6,7 @@ import { planProjection, type ProjectionTask, type Gap } from './plan';
 import { readCursor, advanceCursor } from './cursor';
 import type { SafeFetchResult } from './fetch';
 import { provenanceFromRow, type Provenance } from '../provenance';
-import { LEDGER_RESOURCE_TYPES, toArrivalEvent } from './ledger';
+import { LEDGER_RESOURCE_TYPES, isLedgerResourceType, readArrivals, toArrivalEvent } from './ledger';
 
 export type FetchSafeRows = (db: Kysely<InternalSchema>, cursor: number, limit: number) => Promise<SafeFetchResult>;
 
@@ -52,6 +52,26 @@ async function applyProjection(task: ProjectionTask, deps: ProjectionDeps): Prom
         // per-task catch): the clinical projection already succeeded, so this must never be
         // reported or treated as an apply failure — only the ancillary hook failed.
         deps.logger.error({ err, task }, 'onProjected hook failed; ignoring (clinical projection already applied)');
+      }
+    }
+
+    // Record every arrival of this resource, not only the newest.
+    //
+    // ⛔ WHY ALL VERSIONS. A cycle receives ONE task per changed resource, however many versions
+    // arrived since the last cycle. Recording only the newest would silently lose the intermediate
+    // arrival — and a later `reprojectAll`, which reads every history row, would then DISAGREE with
+    // the live path. Upsert is idempotent on the composite PK, so re-writing versions already
+    // recorded costs nothing and makes the two paths converge by construction.
+    //
+    // Guarded like the existing onProjected hook: a ledger failure must never abort a cycle or be
+    // mistaken for a failed clinical write, which has already landed by this point.
+    if (isLedgerResourceType(task.resourceType)) {
+      try {
+        await deps.relationalWriter.writeIngestEvents(
+          await readArrivals(deps.internalDb, task.resourceType, task.id),
+        );
+      } catch (err) {
+        deps.logger.error({ err, task }, 'arrival ledger write failed; skipping (reprojectAll can heal)');
       }
     }
   } else {
