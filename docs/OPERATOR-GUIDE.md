@@ -128,12 +128,12 @@ Key configuration:
 - `MARKETPLACE_DEV_ALLOW_UNSIGNED=true` only for local unsigned development bundles.
 - `MARKETPLACE_PUBLISH_*` for GitHub publish flows.
 
-Worked example:
+Worked example. The bundle is built from repository files, so this is a source checkout:
 
 ```bash
 pnpm make:marketplace-bundle
-./openldr market verify reference-plugins/whonet-sqlite --json
-./openldr market list --json
+pnpm openldr market verify reference-plugins/whonet-sqlite --json
+pnpm openldr market list --json
 ```
 
 Troubleshooting:
@@ -145,11 +145,11 @@ Troubleshooting:
 
 Use Forms for FHIR Questionnaire authoring, publishing, runtime capture, response extraction, export, lifecycle state, and marketplace form-template bundles.
 
-Worked example:
+Worked example. The two files are repository fixtures, so this is a source checkout:
 
 ```bash
-./openldr forms list --json
-./openldr forms extract packages/cli/src/__fixtures__/sample-questionnaire.json packages/cli/src/__fixtures__/sample-response.json --subject Patient/123 --json
+pnpm openldr forms list --json
+pnpm openldr forms extract packages/cli/src/__fixtures__/sample-questionnaire.json packages/cli/src/__fixtures__/sample-response.json --subject Patient/123 --json
 ```
 
 Troubleshooting:
@@ -168,18 +168,23 @@ Troubleshooting:
 - `--converter fhir-bundle` (default) — the file is a FHIR **transaction/collection Bundle** (a JSON object with `resourceType: "Bundle"` and an `entry` array). A bare JSON array is **not** a Bundle and will not persist clinical rows.
 - `--plugin <id>` — parse with an installed WASM converter plugin, e.g. `whonet-sqlite` (WHONET AMR databases), `hl7v2` (HL7 v2 messages), or `tabular` (CSV/TSV with a `--config` column mapping). Install the plugin first with `openldr plugin install`.
 
+The plugin and the sample file below are repository files, so this example is a source checkout:
+
 ```bash
 # A FHIR transaction Bundle
-./openldr ingest bundle.json --json
+pnpm openldr ingest bundle.json --json
 
 # A WHONET SQLite export via a converter plugin
-./openldr plugin install reference-plugins/whonet-sqlite/plugin.wasm
-./openldr ingest samples/whonet-sample.sqlite --plugin whonet-sqlite --json
+pnpm openldr plugin install reference-plugins/whonet-sqlite/plugin.wasm
+pnpm openldr ingest samples/whonet-sample.sqlite --plugin whonet-sqlite --json
 
 # Inspect / retry the batch it created
-./openldr pipeline status --json
-./openldr pipeline retry <batchId>
+pnpm openldr pipeline status --json
+pnpm openldr pipeline retry <batchId>
 ```
+
+On an installed stack the same commands are `./openldr …`, and each file must be copied into
+`./data` and named with the `data/` prefix.
 
 A successful run prints `batch <id>: done (<n> resources)`. Zero resources means the converter did not recognise the input — check the file shape against the converter, not the pipeline.
 

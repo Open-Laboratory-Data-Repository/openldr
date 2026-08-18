@@ -119,7 +119,6 @@ store. The **converter** decides how the file is parsed:
 ./openldr ingest data/bundle.json
 
 # A WHONET SQLite export, via a converter plugin (install the plugin first)
-./openldr plugin install data/whonet-sqlite.wasm
 ./openldr ingest data/whonet.sqlite --plugin whonet-sqlite
 
 # A CSV with a column mapping
@@ -127,11 +126,13 @@ store. The **converter** decides how the file is parsed:
 ```
 
 Those are the installed-stack forms, so every file sits in `./data` and carries the `data/`
-prefix. From a source checkout, use `pnpm openldr` and ordinary host paths:
+prefix. From a source checkout, use `pnpm openldr` and ordinary host paths. The bundled
+converter plugins are repository files, so installing one is a source-checkout command:
 
 ```bash
 pnpm openldr ingest bundle.json
 pnpm openldr plugin install reference-plugins/whonet-sqlite/plugin.wasm
+pnpm openldr ingest whonet.sqlite --plugin whonet-sqlite
 pnpm openldr ingest results.csv --plugin tabular --config mapping.json
 ```
 

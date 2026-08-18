@@ -60,7 +60,6 @@ PowerShell and bash use the same `./openldr` command forms. Use PowerShell line 
 ./openldr db migrate --json
 ./openldr target-store test --engine pg --json
 ./openldr report list --json
-./openldr ingest samples/whonet-sample.sqlite --plugin whonet-sqlite --json
 ```
 
 ```bash
@@ -68,7 +67,12 @@ PowerShell and bash use the same `./openldr` command forms. Use PowerShell line 
 ./openldr db migrate --json
 ./openldr target-store test --engine pg --json
 ./openldr report list --json
-./openldr ingest samples/whonet-sample.sqlite --plugin whonet-sqlite --json
+```
+
+The WHONET sample is a repository file, so ingesting it is a source-checkout command:
+
+```bash
+pnpm openldr ingest samples/whonet-sample.sqlite --plugin whonet-sqlite --json
 ```
 
 ## Ingesting data — `openldr ingest`
@@ -83,16 +87,21 @@ PowerShell and bash use the same `./openldr` command forms. Use PowerShell line 
 | `--source <s>` | `cli` | Source-system identifier recorded on the batch/provenance. |
 | `--json` | off | Emit the batch result as JSON. |
 
+The plugin and the sample file below are repository files, so this example is a source checkout:
+
 ```bash
 # FHIR Bundle (default converter)
-./openldr ingest bundle.json --json
+pnpm openldr ingest bundle.json --json
 # WHONET SQLite via a converter plugin (must be installed first)
-./openldr plugin install reference-plugins/whonet-sqlite/plugin.wasm
-./openldr ingest samples/whonet-sample.sqlite --plugin whonet-sqlite --json
+pnpm openldr plugin install reference-plugins/whonet-sqlite/plugin.wasm
+pnpm openldr ingest samples/whonet-sample.sqlite --plugin whonet-sqlite --json
 # Inspect / retry the resulting batch
-./openldr pipeline status --json
-./openldr pipeline retry <batchId>
+pnpm openldr pipeline status --json
+pnpm openldr pipeline retry <batchId>
 ```
+
+On an installed stack the same commands are `./openldr …`, and each file must be copied into
+`./data` and named with the `data/` prefix.
 
 ## Sync
 
