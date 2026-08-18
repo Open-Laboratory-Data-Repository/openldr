@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { buildReportingForTest } from './index';
+import { SEED_REPORT_DEFS } from '@openldr/reporting';
 
 const design = { id: 'd1', name: 'AMR', paper: 'A4', orientation: 'portrait',
   parameters: [{ key: 'facility', label: 'Facility', type: 'select', value: '' }],
@@ -148,5 +149,53 @@ describe('reporting data-driven branch', () => {
     // Keeps the widening additive — a single-column options query is still valid.
     const opts = await reporting.options('r-with-single-column-options');
     expect(opts.facility).toEqual([{ value: 'Only', label: 'Only' }]);
+  });
+});
+
+/**
+ * ⛔ The transmission grid must not publish a row count as a headline statistic.
+ *
+ * `runDataDriven` does `def.chart ?? { type: 'stat', value: String(rows.length), label: 'rows' }`
+ * (packages/bootstrap/src/index.ts:236). `??` falls through on `null`, and the grid's result
+ * carries a SYNTHETIC first row holding the column dates — so a null `chart` published one more
+ * than the number of laboratories, on every run, on GET /api/reports/r-transmission-grid and its
+ * `.csv`. The seed record's `summaryMetrics: null` covers the metrics strip only; `chart` was a
+ * second surface with the same off-by-one.
+ *
+ * Bound to the REAL seeded record, not a fixture copy: a future edit that sets `chart: null` again
+ * must fail here.
+ */
+describe('r-transmission-grid declares its chart, so the row-count fallback never runs', () => {
+  const def = SEED_REPORT_DEFS.find((d) => d.id === 'r-transmission-grid')!;
+  const design = { id: def.designId, name: 'G', paper: 'A4', orientation: 'landscape', parameters: [], pages: [] } as any;
+  // Two laboratories plus the synthetic '(dates)' row — the exact shape that produced the miscount.
+  const rows = [
+    { ord: 0, lab: '(dates)', d01: '2\nMar' },
+    { ord: 1, lab: 'Lab A', d01: 'Y' },
+    { ord: 1, lab: 'Lab B', d01: '' },
+  ];
+  const gridReporting = buildReportingForTest({
+    reportDefs: { list: async () => [def], get: async () => def },
+    reportDesigns: { get: async () => design },
+    runStoredQuery: async () => ({ columns: [{ key: 'lab', label: 'lab' }], rows }),
+    resolveDesignTables: async () => new Map(),
+    renderReportDesignPdf: async () => Buffer.from('%PDF'),
+  } as any);
+
+  it('publishes the declared chart, not a count of the returned rows', async () => {
+    const r = await gridReporting.run('r-transmission-grid', { month: '2026-03', panels: 'X', tz: 'UTC' });
+    expect(r.chart).toEqual(def.chart);
+    expect(r.chart).not.toBeNull();
+  });
+
+  it('does not publish "3 rows" for a two-laboratory month', async () => {
+    // THE assertion. 3 rows are returned; 2 laboratories exist. Neither number may be published
+    // as a statistic by the fallback, and the label must not be the fallback's 'rows'.
+    const r = await gridReporting.run('r-transmission-grid', { month: '2026-03', panels: 'X', tz: 'UTC' });
+    expect(r.chart).not.toEqual({ type: 'stat', value: '3', label: 'rows' });
+    expect((r.chart as { label?: string }).label).not.toBe('rows');
+    // rowCount is deliberately untouched: it says "rows" and means it. The chart is the surface
+    // that read as a laboratory count.
+    expect(r.meta.rowCount).toBe(3);
   });
 });

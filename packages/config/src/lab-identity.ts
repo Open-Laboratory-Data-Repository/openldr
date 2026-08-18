@@ -78,6 +78,15 @@ export const LAB_IDENTITY_FIELDS: readonly LabIdentityFieldDefinition[] = [
    * transmission grid asks "did data arrive on this day", and an arrival at 21:00Z is 00:00 the
    * NEXT day at +03. Bucketing in UTC moves a whole evening's arrivals to the previous day — an
    * off-by-one-day on every cell, with nothing on the page to show it happened.
+   *
+   * ⛔ IANA ONLY, and that makes this setting UNUSABLE on a SQL Server warehouse. `AT TIME ZONE`
+   * there takes a WINDOWS zone name ('E. Africa Standard Time'), which `isValidIanaZone` rejects,
+   * so no single value can be right on all three engines. Deliberately NOT loosened: accepting a
+   * Windows name would break the Postgres and MySQL warehouses, which are the common case, and a
+   * validator that took both could not tell the operator which one they had typed. On SQL Server
+   * the operator leaves this empty and types the Windows zone into the report run's own Time zone
+   * filter, which is a free-text parameter and passes whatever it is given straight through.
+   * The field's help text and docs/reports.md say so; see `settings.laboratory.timezoneHint`.
    */
   { id: 'lab.timezone', labelKey: 'settings.laboratory.timezone', maxLength: 100 },
 ];

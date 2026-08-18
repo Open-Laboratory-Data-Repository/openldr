@@ -273,6 +273,7 @@ export const pt: EnShape = {
       facilitySystem: 'Registo de unidades',
       facilitySystemPlaceholder: 'Selecionar um registo…',
       timezone: 'Fuso horário',
+      timezoneHint: 'Um nome de fuso IANA, ex.: Africa/Dar_es_Salaam. Um armazém SQL Server aceita antes nomes de fuso do Windows, que este campo rejeita — em SQL Server deixe vazio e escreva o fuso no filtro Fuso horário em cada execução do relatório.',
       chooseLogo: 'Escolher ficheiro…',
       clearLogo: 'Limpar',
       save: 'Guardar',

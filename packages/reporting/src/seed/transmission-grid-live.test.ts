@@ -365,13 +365,17 @@ live('the transmission grid queries (live Postgres)', () => {
     expect(drawn.map((r) => r.text)).not.toContain('ord');
   });
 
-  it('returns an EMPTY HVL/EID grid and a FULL Other grid when the panel list is empty', async () => {
-    // Deliberate, and stated in the query comment: an unconfigured panel list must not silently
-    // report every test as HVL/EID.
-    const hv = await runFor({ month: '2026-03', panels: '', tz: 'UTC' });
-    const ot = await runForOther({ month: '2026-03', panels: '', tz: 'UTC' });
-    expect(hv.filter((r) => r.lab !== '(dates)')).toHaveLength(0);
-    expect(ot.some((r) => r.lab === 'Registration Only Lab')).toBe(true);
-    expect(ot.some((r) => r.lab === 'Chemistry Lab')).toBe(true);
-  });
+  // ⛔ DELETED: 'returns an EMPTY HVL/EID grid and a FULL Other grid when the panel list is empty'.
+  //
+  // It asserted a state the product cannot be in. Both queries declare `panels` as
+  // `required: true`, and `substituteParams` throws `required parameter: panels` on '' or null
+  // before any SQL is built (packages/dashboards/src/custom-query-run.ts:33). A blank panel list
+  // is an ERROR on every real run, never an empty grid.
+  //
+  // It passed only because `runQuery` above mirrors the SUBSTITUTION and not the guard — it does
+  // a regex replace and never calls the required-param check. So the test proved a branch of SQL
+  // that no run reaches, using a substitution path no run takes.
+  //
+  // The guard itself is asserted where the guard actually lives, hermetically:
+  // packages/bootstrap/src/seed-queries-select-gate.test.ts.
 });

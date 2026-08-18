@@ -2278,12 +2278,12 @@ arrivals as (
     and (e.recorded_at at time zone {{param.tz}})::date >= m.d
     and (e.recorded_at at time zone {{param.tz}})::date < m.d + interval '1 month'
     -- The panel list is a RUN-TIME parameter (AGENTS.md §8) — no code is written here.
-    -- ⚠ EMPTY panels parameter: postgres string_to_array('', ',') returns an EMPTY ARRAY — zero
-    -- elements, NOT one empty string (that is what T-SQL and the MySQL split below do). So 'in
-    -- (empty)' is false for every row and THIS grid, the HVL/EID one, comes out COMPLETELY EMPTY
-    -- while the Other grid gets everything.
-    -- Deliberate either way: an unconfigured panel list must not silently report every test as
-    -- belonging to the HVL/EID grid.
+    -- ⛔ An EMPTY panels value NEVER REACHES THIS SQL. 'panels' is declared required, and
+    -- substituteParams throws 'required parameter: panels' on '' or null before any SQL is built
+    -- (packages/dashboards/src/custom-query-run.ts:33). A run with a blank filter is an ERROR the
+    -- operator sees, not an empty grid. What postgres would do with string_to_array('', ',') is
+    -- therefore irrelevant here — do not reason from it. An HVL/EID grid that comes out empty
+    -- means the codes supplied do not match the codes this laboratory actually sends.
     -- coalesce(panel_code, '') so a NULL panel is a real value on both sides: without it
     -- 'null not in (...)' is NULL and a request with no panel would vanish from BOTH grids.
     and coalesce(q.panel_code, '') in (select trim(value) from unnest(string_to_array({{param.panels}}, ',')) as value)
@@ -2378,7 +2378,16 @@ arrivals as (
     -- UTC first and then converted.
     -- ⛔ HONEST NON-PROOF: SQL Server takes WINDOWS zone names ('E. Africa Standard Time') where
     -- Postgres and MySQL take IANA ('Africa/Dar_es_Salaam'). ONE lab.timezone value therefore
-    -- cannot be valid on all three engines. No MSSQL warehouse was executed for this query.
+    -- cannot be valid on all three engines. lab.timezone accepts IANA only
+    -- (packages/config/src/lab-identity.ts isValidIanaZone), so on a SQL Server warehouse the
+    -- setting cannot supply this value — the zone must be typed into the run's own Time zone box.
+    -- ⛔ HONEST NON-PROOF, LARGER: this SQL HAS NEVER BEEN PARSED BY SQL SERVER. No MSSQL
+    -- warehouse was executed for this query, and the only checks on it are regexes over the SQL
+    -- TEXT, which by construction cannot see a syntax error. A syntax error would ship undetected.
+    -- Two constructs here are new to this repo's seeded SQL and are where such an error would sit:
+    -- the recursive 'all_days' CTE, and that CTE running under 'set rowcount N'
+    -- (packages/dashboards/src/sql-runner.ts:54) — a combination no seeded query has used before.
+    -- What would prove it: submitting both variants to a real SQL Server, even just to parse.
     cast(e.recorded_at at time zone 'UTC' at time zone {{param.tz}} as date) as cal_day
   from ingest_events e
   join lab_requests q on q.id = e.resource_id
@@ -2399,11 +2408,10 @@ arrivals as (
     and cast(e.recorded_at at time zone 'UTC' at time zone {{param.tz}} as date) >= m.d
     and cast(e.recorded_at at time zone 'UTC' at time zone {{param.tz}} as date) < dateadd(month, 1, m.d)
     -- The panel list is a RUN-TIME parameter (AGENTS.md §8) — no code is written here.
-    -- ⚠ EMPTY panels parameter: T-SQL string_split('', ',') returns ONE row holding an empty string —
-    -- NOT postgres's empty array. So THIS grid, the HVL/EID one, comes out empty EXCEPT for
-    -- requests whose own panel_code is null or empty, and the Other grid gets all the rest.
-    -- Deliberate either way: an unconfigured panel list must not silently report every test as
-    -- belonging to the HVL/EID grid.
+    -- ⛔ An EMPTY panels value NEVER REACHES THIS SQL — 'panels' is required and substituteParams
+    -- throws first (packages/dashboards/src/custom-query-run.ts:33). T-SQL's string_split('', ',')
+    -- behaviour is not a branch this query has. An empty HVL/EID grid means the codes supplied do
+    -- not match the codes this laboratory sends.
     -- coalesce(panel_code, '') so a NULL panel is a real value on both sides: without it
     -- 'null not in (...)' is NULL and a request with no panel would vanish from BOTH grids.
     and coalesce(q.panel_code, '') in (select ltrim(rtrim(value)) from string_split({{param.panels}}, ','))
@@ -2523,7 +2531,16 @@ arrivals as (
     -- ⛔ Bucket in the CIVIL timezone. recorded_at is a naive datetime holding UTC.
     -- ⛔ HONEST NON-PROOF: convert_tz returns NULL unless the server's zone tables are loaded
     -- (mysql_tzinfo_to_sql). An offset like '+03:00' works without them, an IANA name does not.
-    -- A NULL bucket drops the row silently rather than erroring. No MySQL warehouse was executed.
+    -- ⛔ The blast radius is the WHOLE REPORT, not one row. Both civil-zone bounds below are
+    -- convert_tz calls, so with no zone tables every comparison is NULL for every row: 'arrivals'
+    -- comes out empty, 'labs' comes out empty, and the grid draws its date header with ZERO
+    -- laboratories — indistinguishable from a month in which nothing arrived. Nothing errors.
+    -- ⛔ HONEST NON-PROOF, LARGER: this SQL HAS NEVER BEEN PARSED BY MySQL. No MySQL warehouse
+    -- was executed for this query, and the only checks on it are regexes over the SQL TEXT, which
+    -- by construction cannot see a syntax error. A syntax error would ship undetected. The two
+    -- recursive CTEs here ('all_days' and 'panel_list') are new to this repo's seeded SQL and are
+    -- where such an error would sit. What would prove it: submitting both variants to a real
+    -- MySQL/MariaDB, even just to parse.
     cast(convert_tz(e.recorded_at, '+00:00', {{param.tz}}) as date) as cal_day
   from ingest_events e
   join lab_requests q on q.id = e.resource_id
@@ -2544,11 +2561,10 @@ arrivals as (
     and cast(convert_tz(e.recorded_at, '+00:00', {{param.tz}}) as date) >= m.d
     and cast(convert_tz(e.recorded_at, '+00:00', {{param.tz}}) as date) < date_add(m.d, interval 1 month)
     -- The panel list is a RUN-TIME parameter (AGENTS.md §8) — no code is written here.
-    -- ⚠ EMPTY panels parameter: the panel_list split above yields ONE empty element —
-    -- NOT postgres's empty array. So THIS grid, the HVL/EID one, comes out empty EXCEPT for
-    -- requests whose own panel_code is null or empty, and the Other grid gets all the rest.
-    -- Deliberate either way: an unconfigured panel list must not silently report every test as
-    -- belonging to the HVL/EID grid.
+    -- ⛔ An EMPTY panels value NEVER REACHES THIS SQL — 'panels' is required and substituteParams
+    -- throws first (packages/dashboards/src/custom-query-run.ts:33). What the panel_list split
+    -- would make of '' is not a branch this query has. An empty HVL/EID grid means the codes
+    -- supplied do not match the codes this laboratory sends.
     -- coalesce(panel_code, '') so a NULL panel is a real value on both sides: without it
     -- 'null not in (...)' is NULL and a request with no panel would vanish from BOTH grids.
     and coalesce(q.panel_code, '') in (select code from panel_list)
@@ -2685,12 +2701,10 @@ arrivals as (
     and (e.recorded_at at time zone {{param.tz}})::date >= m.d
     and (e.recorded_at at time zone {{param.tz}})::date < m.d + interval '1 month'
     -- The panel list is a RUN-TIME parameter (AGENTS.md §8) — no code is written here.
-    -- ⚠ EMPTY panels parameter: postgres string_to_array('', ',') returns an EMPTY ARRAY — zero
-    -- elements, NOT one empty string (that is what T-SQL and the MySQL split below do). So 'not in
-    -- (empty)' is true for every row and THIS grid, the Other one, gets EVERYTHING while the
-    -- HVL/EID grid comes out completely empty.
-    -- Deliberate either way: an unconfigured panel list must not silently report every test as
-    -- belonging to the HVL/EID grid.
+    -- ⛔ An EMPTY panels value NEVER REACHES THIS SQL. 'panels' is declared required, and
+    -- substituteParams throws 'required parameter: panels' on '' or null before any SQL is built
+    -- (packages/dashboards/src/custom-query-run.ts:33). So "the Other grid gets everything because
+    -- the list was blank" is not a state this report can be in — do not reason from it.
     -- coalesce(panel_code, '') so a NULL panel is a real value on both sides: without it
     -- 'null not in (...)' is NULL and a request with no panel would vanish from BOTH grids.
     and coalesce(q.panel_code, '') not in (select trim(value) from unnest(string_to_array({{param.panels}}, ',')) as value)
@@ -2785,7 +2799,16 @@ arrivals as (
     -- UTC first and then converted.
     -- ⛔ HONEST NON-PROOF: SQL Server takes WINDOWS zone names ('E. Africa Standard Time') where
     -- Postgres and MySQL take IANA ('Africa/Dar_es_Salaam'). ONE lab.timezone value therefore
-    -- cannot be valid on all three engines. No MSSQL warehouse was executed for this query.
+    -- cannot be valid on all three engines. lab.timezone accepts IANA only
+    -- (packages/config/src/lab-identity.ts isValidIanaZone), so on a SQL Server warehouse the
+    -- setting cannot supply this value — the zone must be typed into the run's own Time zone box.
+    -- ⛔ HONEST NON-PROOF, LARGER: this SQL HAS NEVER BEEN PARSED BY SQL SERVER. No MSSQL
+    -- warehouse was executed for this query, and the only checks on it are regexes over the SQL
+    -- TEXT, which by construction cannot see a syntax error. A syntax error would ship undetected.
+    -- Two constructs here are new to this repo's seeded SQL and are where such an error would sit:
+    -- the recursive 'all_days' CTE, and that CTE running under 'set rowcount N'
+    -- (packages/dashboards/src/sql-runner.ts:54) — a combination no seeded query has used before.
+    -- What would prove it: submitting both variants to a real SQL Server, even just to parse.
     cast(e.recorded_at at time zone 'UTC' at time zone {{param.tz}} as date) as cal_day
   from ingest_events e
   join lab_requests q on q.id = e.resource_id
@@ -2806,11 +2829,9 @@ arrivals as (
     and cast(e.recorded_at at time zone 'UTC' at time zone {{param.tz}} as date) >= m.d
     and cast(e.recorded_at at time zone 'UTC' at time zone {{param.tz}} as date) < dateadd(month, 1, m.d)
     -- The panel list is a RUN-TIME parameter (AGENTS.md §8) — no code is written here.
-    -- ⚠ EMPTY panels parameter: T-SQL string_split('', ',') returns ONE row holding an empty string —
-    -- NOT postgres's empty array. So THIS grid, the Other one, gets EVERYTHING except requests
-    -- whose own panel_code is null or empty, and those land in the HVL/EID grid instead.
-    -- Deliberate either way: an unconfigured panel list must not silently report every test as
-    -- belonging to the HVL/EID grid.
+    -- ⛔ An EMPTY panels value NEVER REACHES THIS SQL — 'panels' is required and substituteParams
+    -- throws first (packages/dashboards/src/custom-query-run.ts:33). T-SQL's string_split('', ',')
+    -- behaviour is not a branch this query has.
     -- coalesce(panel_code, '') so a NULL panel is a real value on both sides: without it
     -- 'null not in (...)' is NULL and a request with no panel would vanish from BOTH grids.
     and coalesce(q.panel_code, '') not in (select ltrim(rtrim(value)) from string_split({{param.panels}}, ','))
@@ -2930,7 +2951,16 @@ arrivals as (
     -- ⛔ Bucket in the CIVIL timezone. recorded_at is a naive datetime holding UTC.
     -- ⛔ HONEST NON-PROOF: convert_tz returns NULL unless the server's zone tables are loaded
     -- (mysql_tzinfo_to_sql). An offset like '+03:00' works without them, an IANA name does not.
-    -- A NULL bucket drops the row silently rather than erroring. No MySQL warehouse was executed.
+    -- ⛔ The blast radius is the WHOLE REPORT, not one row. Both civil-zone bounds below are
+    -- convert_tz calls, so with no zone tables every comparison is NULL for every row: 'arrivals'
+    -- comes out empty, 'labs' comes out empty, and the grid draws its date header with ZERO
+    -- laboratories — indistinguishable from a month in which nothing arrived. Nothing errors.
+    -- ⛔ HONEST NON-PROOF, LARGER: this SQL HAS NEVER BEEN PARSED BY MySQL. No MySQL warehouse
+    -- was executed for this query, and the only checks on it are regexes over the SQL TEXT, which
+    -- by construction cannot see a syntax error. A syntax error would ship undetected. The two
+    -- recursive CTEs here ('all_days' and 'panel_list') are new to this repo's seeded SQL and are
+    -- where such an error would sit. What would prove it: submitting both variants to a real
+    -- MySQL/MariaDB, even just to parse.
     cast(convert_tz(e.recorded_at, '+00:00', {{param.tz}}) as date) as cal_day
   from ingest_events e
   join lab_requests q on q.id = e.resource_id
@@ -2951,11 +2981,9 @@ arrivals as (
     and cast(convert_tz(e.recorded_at, '+00:00', {{param.tz}}) as date) >= m.d
     and cast(convert_tz(e.recorded_at, '+00:00', {{param.tz}}) as date) < date_add(m.d, interval 1 month)
     -- The panel list is a RUN-TIME parameter (AGENTS.md §8) — no code is written here.
-    -- ⚠ EMPTY panels parameter: the panel_list split above yields ONE empty element —
-    -- NOT postgres's empty array. So THIS grid, the Other one, gets EVERYTHING except requests
-    -- whose own panel_code is null or empty, and those land in the HVL/EID grid instead.
-    -- Deliberate either way: an unconfigured panel list must not silently report every test as
-    -- belonging to the HVL/EID grid.
+    -- ⛔ An EMPTY panels value NEVER REACHES THIS SQL — 'panels' is required and substituteParams
+    -- throws first (packages/dashboards/src/custom-query-run.ts:33). What the panel_list split
+    -- would make of '' is not a branch this query has.
     -- coalesce(panel_code, '') so a NULL panel is a real value on both sides: without it
     -- 'null not in (...)' is NULL and a request with no panel would vanish from BOTH grids.
     and coalesce(q.panel_code, '') not in (select code from panel_list)
@@ -3624,11 +3652,19 @@ export const SEED_REPORT_DEFS: ReportRecord[] = [
     designId: 'rt-transmission-grid',
     primaryQueryId: 'q-transmission-hvleid',
     // ⛔ No count metric. The HVL/EID result carries a synthetic first row holding the dates, so a
-    // row count would report one laboratory more than exist, on every run.
+    // row count would report one laboratory more than exist, on every run. That covers the metrics
+    // strip only — the `chart` field below is a SECOND surface with the same off-by-one.
     summaryMetrics: null,
-    // No chart: a presence/absence grid is not a series. No param options: month, panel list and
-    // time zone are all typed, not picked from a lookup query.
-    chart: null,
+    // ⛔ DECLARED, not left null — and not because a presence/absence grid wants a chart. A null
+    // `chart` falls through to `def.chart ?? { type: 'stat', value: String(rows.length), label:
+    // 'rows' }` (packages/bootstrap/src/index.ts:236), and `rows` here includes the synthetic
+    // '(dates)' row, so GET /api/reports/r-transmission-grid published "24" for a 23-laboratory
+    // month. Declaring the field stops that fallback ever running.
+    // The value is a static placeholder, exactly as on r-turnaround-time / r-amr-glass-ris /
+    // r-amr-antibiogram: a report record's `chart` is stored, never recomputed per run, and the
+    // Reports page does not render `chart` at all. Read it as "this report declares no live
+    // statistic", not as a count of anything.
+    chart: { type: 'stat', value: '0', label: 'laboratories' },
     paramOptions: null,
     status: 'published',
   },

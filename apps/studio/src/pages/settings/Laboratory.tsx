@@ -11,6 +11,7 @@ import {
 } from '@/api';
 
 const LOGO_KEY = 'lab.logo';
+const TIMEZONE_KEY = 'lab.timezone';
 
 /**
  * Settings ▸ Laboratory — the identity printed on every report letterhead.
@@ -139,9 +140,20 @@ export function Laboratory(): JSX.Element {
                 onChange={(e) => set(f.id, e.target.value)} className="min-h-[64px] text-xs" />
             </FieldRow>
           ) : (
-            <FieldRow key={f.id} id={f.id} label={t(f.labelKey)}>
-              <Input id={f.id} aria-label={t(f.labelKey)} value={values[f.id] ?? ''}
-                onChange={(e) => set(f.id, e.target.value)} className="h-8 text-xs" />
+            <FieldRow key={f.id} id={f.id} label={t(f.labelKey)} alignTop={f.id === TIMEZONE_KEY}>
+              <div className="flex flex-col gap-1">
+                <Input id={f.id} aria-label={t(f.labelKey)} value={values[f.id] ?? ''}
+                  onChange={(e) => set(f.id, e.target.value)} className="h-8 text-xs" />
+                {/* ⛔ The validator takes IANA names ONLY (packages/config/src/lab-identity.ts).
+                    SQL Server's `AT TIME ZONE` takes Windows names, so on that warehouse this
+                    setting cannot hold a usable value and the operator must supply the zone on
+                    the report run instead. Said here because nothing else on the page would. */}
+                {f.id === TIMEZONE_KEY && (
+                  <p className="text-[11px] leading-snug text-muted-foreground">
+                    {t('settings.laboratory.timezoneHint')}
+                  </p>
+                )}
+              </div>
             </FieldRow>
           )
         ))}
