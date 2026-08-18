@@ -13,7 +13,7 @@ import {
   type SeedDataDrivenReportsDeps,
 } from './report-seeds';
 import { pairRects, toPt, paperSizePt, type ReportDesign } from '@openldr/report-designer';
-import { findInvalidImageSources } from '@openldr/report-designer/pure';
+import { findInvalidImageSources, findUnsortedHeaderRows } from '@openldr/report-designer/pure';
 
 // In-memory fakes — no real Kysely instance needed (unlike `packages/bootstrap/src/seed.ts`,
 // which builds `customQueries` from a real DB handle; here we inject fakes directly to unit-test
@@ -1866,6 +1866,15 @@ describe('SEED_DESIGNS — rt-transmission-grid keeps ord off the page', () => {
     // renderer consumes the rows removes the dependency on the engine keeping that order.
     for (const id of ['hvleid', 'other']) {
       expect(el(id).sortBy, `${id} trusts the SQL row order`).toBe('ord');
+    }
+  });
+
+  it('⛔ pairs headerRow with sortBy — and the boot seed does NOT go through the API gate', () => {
+    // `findUnsortedHeaderRows` is enforced at POST/PUT /api/report-designs. The seeded designs are
+    // installed by the boot seed, which writes them without that route, so the gate cannot see
+    // them. This is where the same rule is checked for the designs that ship.
+    for (const d of SEED_DESIGNS) {
+      expect(findUnsortedHeaderRows(d), `${d.id} lifts a header row with no sortBy`).toEqual([]);
     }
   });
 

@@ -113,6 +113,12 @@ export const DesignElementSchema = z.object({
    *  from the row. The design states what it can know, the run supplies the rest, and query data
    *  can never overwrite an authored header.
    *
+   *  ⛔ REQUIRES `sortBy` on a bound table, and the API refuses the pair being broken
+   *  (`findUnsortedHeaderRows` in `header-row.ts`, called by POST/PUT `/api/report-designs`).
+   *  This lifts row 0 of whatever the renderer was handed; only `sortBy` makes row 0 a KNOWN row.
+   *  Set this alone and the page prints a laboratory's name as its date header, with no error.
+   *  It is a write-time gate rather than a refinement here on purpose — see that file.
+   *
    *  ⛔ Opt-in, and inert when unset — a design without it renders byte-for-byte as before
    *  (`render/golden.test.ts`). */
   headerRow: z.boolean().optional(),

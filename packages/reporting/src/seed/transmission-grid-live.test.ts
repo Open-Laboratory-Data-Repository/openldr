@@ -3,7 +3,43 @@ import { randomUUID } from 'node:crypto';
 import pg from 'pg';
 import { Kysely, PostgresDialect, sql } from 'kysely';
 import { createMigrator, externalMigrations } from '@openldr/db';
-import { SEED_QUERIES } from './report-seeds';
+import zlib from 'node:zlib';
+import { renderReportDesignPdf, type ResolvedTable } from '@openldr/report-designer';
+import { SEED_DESIGNS, SEED_QUERIES } from './report-seeds';
+
+/** Each physical page's decompressed content stream, found via `/Kids` so page order is the PDF's
+ *  own and not an assumption about object emission order.
+ *
+ *  ⚠ Objects are located with an indexOf scan, NOT a RegExp built from a template literal: a
+ *  lone `\s` inside a template literal is only the letter `s`, so the obvious
+ *  ``new RegExp(`${id} 0 obj([\s\S]*?)endobj`)`` compiles to `[sS]` and matches almost
+ *  nothing. Same class of trap as the `\\b` note in report-seeds.test.ts. */
+function pageStreams(pdf: Buffer): string[] {
+  const raw = pdf.toString('latin1');
+  const kids = raw.match(/\/Type\s*\/Pages[\s\S]*?\/Kids\s*\[([^\]]*)\]/)!;
+  const objBody = (id: string): string => {
+    const at = raw.indexOf(`\n${id} 0 obj`);
+    const from = at >= 0 ? at : raw.indexOf(`${id} 0 obj`);
+    return raw.slice(from, raw.indexOf('endobj', from));
+  };
+  return [...kids[1].matchAll(/(\d+) 0 R/g)].map((k) => {
+    const cid = objBody(k[1]).match(/\/Contents (\d+) 0 R/)![1];
+    const stream = objBody(cid).match(/stream\r?\n([\s\S]*?)\r?\nendstream/)![1];
+    return zlib.inflateSync(Buffer.from(stream, 'latin1')).toString('latin1');
+  });
+}
+
+/** Every text run on one page, with the user-space position pdfkit drew it at.
+ *  ⚠ pdfkit splits a run at every kerning pair, so the `<...>` chunks WITHIN one `TJ` array
+ *  must be rejoined before comparing — searching for the hex of a whole word silently misses. */
+function textRuns(content: string): { x: number; y: number; text: string }[] {
+  const runs = /1 0 0 1 (-?[\d.]+) (-?[\d.]+) Tm\n\/F\d+ [\d.]+ Tf\n\[(.*?)\]\s*TJ/g;
+  return [...content.matchAll(runs)].map((m) => ({
+    x: parseFloat(m[1]),
+    y: parseFloat(m[2]),
+    text: [...m[3].matchAll(/<([0-9a-fA-F]*)>/g)].map((h) => Buffer.from(h[1], 'hex').toString('latin1')).join(''),
+  }));
+}
 
 // The transmission grid is SEMANTIC — an attribution path, a civil-timezone day bucket and a
 // cross join that must leave gaps in place. The shape tests in report-seeds.test.ts are regexes
@@ -256,6 +292,63 @@ live('the transmission grid queries (live Postgres)', () => {
     const ot = await runForOther({ month: '2026-03', panels: 'HIVPC', tz: 'UTC' });
     expect(hv.some((r) => r.lab === 'No Panel Lab')).toBe(false);
     expect(ot.some((r) => r.lab === 'No Panel Lab')).toBe(true);
+  });
+
+  // ------------------------------------------------------------------------------------------
+  // The whole round trip: live SQL -> sortBy -> renderer -> PDF
+  // ------------------------------------------------------------------------------------------
+
+  it('⛔ carries the two-line date from live Postgres all the way onto the page', async () => {
+    // Every other test in this file stops at the query, and every test in report-seeds.test.ts is
+    // a regex over SQL text. Neither can see the join this task actually rests on: that `chr(10)`
+    // survives the pg driver, that `headerRow` splits it back into two lines, and that
+    // `columnWidths` then measures the WIDER LINE rather than the concatenation. If any link
+    // breaks, the dates draw on one line and every laboratory name goes back under an ellipsis —
+    // with the entire hermetic suite green.
+    const rows = await runFor({ month: '2026-03', panels: 'HIVPC', tz: 'UTC' });
+
+    // Exactly what `resolveDesignTables` does before the renderer sees the rows.
+    const design = SEED_DESIGNS.find((d) => d.id === 'rt-transmission-grid')!;
+    const el = design.pages[0].elements.find((e) => e.id === 'hvleid')!;
+    const ordered = [...rows].sort((a, b) => Number(a.ord) - Number(b.ord));
+    const columns = Object.keys(rows[0]).map((k) => ({ key: k, label: k }));
+    const table: ResolvedTable = { columns, rows: ordered };
+    const buf = await renderReportDesignPdf(design, new Map([['hvleid', table], ['other', table]]), {
+      now: new Date('2026-03-31T09:00:00Z'),
+      values: { month: '2026-03', panels: 'HIVPC', tz: 'UTC' },
+    });
+
+    const page1 = pageStreams(buf)[0];
+    const drawn = textRuns(page1);
+    const headY = drawn.find((r) => r.text === 'Laboratory')!.y;
+    const line1 = drawn.filter((r) => r.y === headY).sort((a, b) => a.x - b.x);
+    const line2 = drawn.filter((r) => r.y === headY - 8).sort((a, b) => a.x - b.x);
+
+    // March 2026 starts on a Sunday: 22 working days, so d23 is blank and draws nothing. These are
+    // CALENDAR day numbers with the weekends missing, not 1..22 — which is the point of the first
+    // header line, and something a `String(i + 1)` slot label could never say.
+    expect(line1.map((r) => r.text)).toEqual(['Laboratory',
+      '2', '3', '4', '5', '6', '9', '10', '11', '12', '13', '16', '17', '18', '19', '20',
+      '23', '24', '25', '26', '27', '30', '31']);
+    expect(line2.map((r) => r.text)).toEqual(Array(22).fill('Mar'));
+
+    // ⛔ The measurement, taken off the real page. The gain lands in the LABORATORY column, and
+    // that is the number to assert. Measured on this fixture by running it both ways:
+    //
+    //   one-line `2 Mar` header : laboratory column  76.02pt, day column 27.77pt
+    //   stacked  `2` / `Mar`    : laboratory column 102.95pt, day column 29.33pt
+    //
+    // ⚠ The day columns come out slightly WIDER stacked, not narrower. These fixture laboratory
+    // names are short, so the day columns were never the starved ones here and the proportional
+    // allocation simply hands the freed width around. Asserting "the day column shrank" would be
+    // wrong on this data and would have failed for the right reason on the wrong claim.
+    const xs = line1.map((r) => r.x);
+    expect(xs[1] - xs[0]).toBeGreaterThan(90);
+
+    // Nothing on the page was ellipsized, and the sort discriminator never printed.
+    expect(drawn.map((r) => r.text).join('')).not.toContain('…');
+    expect(drawn.map((r) => r.text)).not.toContain('(dates)');
+    expect(drawn.map((r) => r.text)).not.toContain('ord');
   });
 
   it('returns an EMPTY HVL/EID grid and a FULL Other grid when the panel list is empty', async () => {
