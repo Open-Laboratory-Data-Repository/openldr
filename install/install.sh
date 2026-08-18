@@ -277,7 +277,7 @@ fi
 
 # 2. Scaffold
 echo "→ Scaffolding $DIR"
-mkdir -p "$DIR/config/nginx/certs" "$DIR/config/nginx/certs/central" "$DIR/config/keycloak"
+mkdir -p "$DIR/config/nginx/certs" "$DIR/config/nginx/certs/central" "$DIR/config/keycloak" "$DIR/data"
 
 # Placeholder for a CENTRAL's certificate, so a lab can trust one without hand-editing compose.
 # It must EXIST before `docker compose up`: Docker bind-mounting a missing file silently creates a
@@ -293,6 +293,20 @@ fetch "scripts/init-target-db.sql" "$DIR/config/init-target-db.sql"
 fetch "scripts/init-keycloak-db.sql" "$DIR/config/init-keycloak-db.sql"
 fetch "deploy/install/renew-cert.sh" "$DIR/renew-cert.sh"
 chmod +x "$DIR/renew-cert.sh" 2>/dev/null || true
+
+# The `openldr` operator CLI. It ships inside the api image (apps/server/Dockerfile), so the
+# wrapper is a one-line shim rather than a downloaded binary. `-T` disables TTY allocation so
+# `./openldr report list --json | jq` works in a pipeline. `-w /data` makes the container's
+# working directory the ./data bind mount, so `./openldr ingest data/x.json` resolves on both
+# sides. The path /app/cli/dist/index.js is fixed by the image — see the COPY in
+# apps/server/Dockerfile.
+cat > "$DIR/openldr" <<'WRAPPER'
+#!/bin/sh
+# OpenLDR operator CLI. Runs inside the api container.
+# Files must live under ./data (mounted at /data) — e.g. ./openldr ingest data/bundle.json
+exec docker compose exec -T -w /data api node /app/cli/dist/index.js "$@"
+WRAPPER
+chmod +x "$DIR/openldr" 2>/dev/null || true
 if [ "$MSSQL_DEMO" -eq 1 ]; then
   fetch "deploy/install/docker-compose.mssql.yml" "$DIR/docker-compose.mssql.yml"
   fetch "scripts/init-target-db-mssql.sql" "$DIR/config/init-target-db-mssql.sql"

@@ -251,7 +251,7 @@ if (-not $envExists) {
 
 # 2. Scaffold
 Write-Host "-> Scaffolding $Dir"
-New-Item -ItemType Directory -Force -Path "$Dir/config/nginx/certs","$Dir/config/nginx/certs/central","$Dir/config/keycloak" | Out-Null
+New-Item -ItemType Directory -Force -Path "$Dir/config/nginx/certs","$Dir/config/nginx/certs/central","$Dir/config/keycloak","$Dir/data" | Out-Null
 
 # Placeholder for a CENTRAL's certificate, so a lab can trust one without hand-editing compose.
 # It must EXIST before `docker compose up`: Docker bind-mounting a missing file silently creates a
@@ -267,6 +267,17 @@ Fetch "deploy/install/docker-compose.yml" "$Dir/docker-compose.yml"
 Fetch "infra/keycloak/openldr-realm.json" "$Dir/config/keycloak/openldr-realm.json"
 Fetch "scripts/init-target-db.sql" "$Dir/config/init-target-db.sql"
 Fetch "scripts/init-keycloak-db.sql" "$Dir/config/init-keycloak-db.sql"
+
+# The `openldr` operator CLI wrapper — see the matching block in install/install.sh.
+# Single-quoted here-string so $args is written literally, not expanded at install time.
+# The closing '@ must be at column 0.
+$wrapper = @'
+# OpenLDR operator CLI. Runs inside the api container.
+# Files must live under .\data (mounted at /data) - e.g. .\openldr.ps1 ingest data/bundle.json
+docker compose exec -T -w /data api node /app/cli/dist/index.js $args
+'@
+Set-Content -Path "$Dir/openldr.ps1" -Value $wrapper -Encoding utf8
+
 if ($MssqlDemo) {
   Fetch "deploy/install/docker-compose.mssql.yml" "$Dir/docker-compose.mssql.yml"
   Fetch "scripts/init-target-db-mssql.sql" "$Dir/config/init-target-db-mssql.sql"

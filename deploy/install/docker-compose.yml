@@ -14,6 +14,13 @@ services:
       # and restart the api. The file MUST exist — Docker turns a missing bind-mount source into a
       # directory and the api then fails to start.
       - ./config/nginx/certs/central/fullchain.pem:/etc/ssl/central-ca.pem:ro
+      # Shared working directory for the `openldr` CLI wrapper, which runs
+      # `docker compose exec -w /data api …`. File-taking commands (`ingest <file>`,
+      # `sync export --out`, `artifact keygen --out`) then name paths that exist on BOTH
+      # sides: the operator drops a file in ./data next to the wrapper and refers to it as
+      # `data/bundle.json`. Without this, an --out path writes into the container layer and
+      # is lost on the next restart.
+      - ./data:/data
     depends_on:
       postgres: { condition: service_healthy }
       minio: { condition: service_started }
