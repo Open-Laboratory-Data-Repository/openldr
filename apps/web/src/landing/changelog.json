@@ -6,6 +6,60 @@
       "version": null,
       "entries": [
         {
+          "hash": "06b0116f",
+          "type": "fix",
+          "scope": "db",
+          "title": "Match applyTableState's null-sort order and add default sorts"
+        },
+        {
+          "hash": "b84084e4",
+          "type": "fix",
+          "scope": "table-query",
+          "title": "Reject bad number/date values at parse time"
+        },
+        {
+          "hash": "621856db",
+          "type": "fix",
+          "scope": "table-query",
+          "title": "Offer is_null/is_not_null on date columns"
+        },
+        {
+          "hash": "32e3447e",
+          "type": "fix",
+          "scope": "db",
+          "title": "Fail loud on an unknown sort/tiebreaker column in applySorts"
+        },
+        {
+          "hash": "73f5e321",
+          "type": "feat",
+          "scope": "db",
+          "title": "Translate parsed table filters and sorts into Kysely"
+        },
+        {
+          "hash": "0753251f",
+          "type": "fix",
+          "scope": "table-query",
+          "title": "Stop the parser from throwing on hostile input"
+        },
+        {
+          "hash": "967d0490",
+          "type": "feat",
+          "scope": "table-query",
+          "title": "Validating parser for wire filters and sorts"
+        },
+        {
+          "hash": "8f43e414",
+          "type": "feat",
+          "scope": "table-query",
+          "title": "Column maps for audit and facility list queries"
+        },
+        {
+          "hash": "687dcf56",
+          "type": "feat",
+          "scope": "table-query",
+          "title": "Shared rule types for client and server filtering"
+        },
+        {
           "hash": "93662fcd",
           "type": "fix",
           "scope": "settings",
@@ -1444,84 +1498,6 @@
           "type": "feat",
           "scope": "facilities",
           "title": "Expose report-dimension health and job retry"
-        },
-        {
-          "hash": "dbf32bf7",
-          "type": "feat",
-          "scope": "facilities",
-          "title": "Resolve the report-dimension health state"
-        },
-        {
-          "hash": "532ee596",
-          "type": "fix",
-          "scope": "facilities",
-          "title": "Report the projection outcome of THIS call, not \"ever projected\""
-        },
-        {
-          "hash": "4c3dd660",
-          "type": "feat",
-          "scope": "facilities",
-          "title": "Make a failed projection durable and the response truthful"
-        },
-        {
-          "hash": "e2cb5608",
-          "type": "feat",
-          "scope": "facilities",
-          "title": "Enqueue a dimension rebuild when a facility mapping changes"
-        },
-        {
-          "hash": "6b0a1f49",
-          "type": "fix",
-          "scope": "facilities",
-          "title": "Pin the import route's job-store wiring and contain enqueue failures"
-        },
-        {
-          "hash": "08397cda",
-          "type": "feat",
-          "scope": "facilities",
-          "title": "Enqueue a dimension rebuild after every facility mutation"
-        },
-        {
-          "hash": "d3630d19",
-          "type": "fix",
-          "scope": "bootstrap",
-          "title": "Extract facility job runners so apply:true and the missing-row path are testable"
-        },
-        {
-          "hash": "018e75f1",
-          "type": "feat",
-          "scope": "bootstrap",
-          "title": "Run the facility job worker in the app context"
-        },
-        {
-          "hash": "627e7ef4",
-          "type": "feat",
-          "scope": "bootstrap",
-          "title": "Add the facility job worker"
-        },
-        {
-          "hash": "6ff91167",
-          "type": "fix",
-          "scope": "db",
-          "title": "Stage claimNext race+tiebreak tests, tighten facility-job-store comments"
-        },
-        {
-          "hash": "7cddf6e7",
-          "type": "fix",
-          "scope": "db",
-          "title": "Scope facility job coalescing per identity, not per kind"
-        },
-        {
-          "hash": "27be919b",
-          "type": "feat",
-          "scope": "db",
-          "title": "Add createFacilityJobStore"
-        },
-        {
-          "hash": "d44e7eb4",
-          "type": "feat",
-          "scope": "db",
-          "title": "Add facility_jobs for durable facility work"
         }
       ]
     }
