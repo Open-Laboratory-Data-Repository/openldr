@@ -2,6 +2,11 @@
 
 This guide documents the repository as it exists now. It complements the in-app docs, which are limited to the current bundled page order.
 
+> Commands below are written for an installed stack, where the installer provides an `openldr`
+> wrapper in the install directory (`.\openldr.ps1` on Windows). From a source checkout, use
+> `pnpm openldr` instead — the arguments are identical. File arguments on an installed stack
+> must live under `./data`; see the CLI doc's "Running it" section.
+
 ## Setup
 
 Prerequisites:
@@ -16,7 +21,7 @@ PowerShell:
 pnpm install --frozen-lockfile
 Copy-Item .env.example .env
 docker compose up -d
-pnpm openldr db migrate
+./openldr db migrate
 pnpm -C apps/server dev
 ```
 
@@ -32,7 +37,7 @@ Bash:
 pnpm install --frozen-lockfile
 cp .env.example .env
 docker compose up -d
-pnpm openldr db migrate
+./openldr db migrate
 pnpm -C apps/server dev
 ```
 
@@ -55,14 +60,14 @@ Use dashboards when users need repeatable operational views over warehouse data.
 Worked example:
 
 ```bash
-pnpm openldr db migrate
-pnpm openldr target-store test --json
+./openldr db migrate
+./openldr target-store test --json
 ```
 
 Troubleshooting:
 
 - If SQL widgets are not visible, enable the `dashboard.raw_sql` feature flag in **Settings → General → Feature Flags** (admin-only) and ensure `TARGET_STORE_ADAPTER=pg`.
-- If widgets time out or return too much data, tune the `dashboard.sql_timeout_ms` and `dashboard.sql_row_cap` **number settings** under **Settings → General → Limits & tuning** (or `pnpm openldr settings numbers set …`). These are no longer environment variables.
+- If widgets time out or return too much data, tune the `dashboard.sql_timeout_ms` and `dashboard.sql_row_cap` **number settings** under **Settings → General → Limits & tuning** (or `./openldr settings numbers set …`). These are no longer environment variables.
 
 ## Reports
 
@@ -71,9 +76,9 @@ Use reports for parameterized AMR/GLASS outputs, CSV/PDF exports, run history, a
 Worked example:
 
 ```bash
-pnpm openldr report list --json
-pnpm openldr report run amr-resistance --param from=2026-01-01 --param to=2026-03-31 --json
-pnpm openldr report glass-export --country ZMB --year 2026 --from 2026-01-01 --to 2026-03-31 --out glass-ris.csv
+./openldr report list --json
+./openldr report run amr-resistance --param from=2026-01-01 --param to=2026-03-31 --json
+./openldr report glass-export --country ZMB --year 2026 --from 2026-01-01 --to 2026-03-31 --out glass-ris.csv
 ```
 
 Troubleshooting:
@@ -94,8 +99,8 @@ Key configuration:
 Worked example:
 
 ```bash
-pnpm openldr db migrate
-pnpm openldr target-store test --json
+./openldr db migrate
+./openldr target-store test --json
 ```
 
 Then in the app, create a workflow with Manual Trigger -> SQL Query -> Materialize Dataset. If dataset publishing is enabled, query it from PostgreSQL as:
@@ -125,8 +130,8 @@ Worked example:
 
 ```bash
 pnpm make:marketplace-bundle
-pnpm openldr market verify reference-plugins/whonet-sqlite --json
-pnpm openldr market list --json
+./openldr market verify reference-plugins/whonet-sqlite --json
+./openldr market list --json
 ```
 
 Troubleshooting:
@@ -141,8 +146,8 @@ Use Forms for FHIR Questionnaire authoring, publishing, runtime capture, respons
 Worked example:
 
 ```bash
-pnpm openldr forms list --json
-pnpm openldr forms extract packages/cli/src/__fixtures__/sample-questionnaire.json packages/cli/src/__fixtures__/sample-response.json --subject Patient/123 --json
+./openldr forms list --json
+./openldr forms extract packages/cli/src/__fixtures__/sample-questionnaire.json packages/cli/src/__fixtures__/sample-response.json --subject Patient/123 --json
 ```
 
 Troubleshooting:
@@ -163,15 +168,15 @@ Troubleshooting:
 
 ```bash
 # A FHIR transaction Bundle
-pnpm openldr ingest bundle.json --json
+./openldr ingest bundle.json --json
 
 # A WHONET SQLite export via a converter plugin
-pnpm openldr plugin install reference-plugins/whonet-sqlite/plugin.wasm
-pnpm openldr ingest samples/whonet-sample.sqlite --plugin whonet-sqlite --json
+./openldr plugin install reference-plugins/whonet-sqlite/plugin.wasm
+./openldr ingest samples/whonet-sample.sqlite --plugin whonet-sqlite --json
 
 # Inspect / retry the batch it created
-pnpm openldr pipeline status --json
-pnpm openldr pipeline retry <batchId>
+./openldr pipeline status --json
+./openldr pipeline retry <batchId>
 ```
 
 A successful run prints `batch <id>: done (<n> resources)`. Zero resources means the converter did not recognise the input — check the file shape against the converter, not the pipeline.
@@ -203,8 +208,8 @@ Use Users for local profile and role management; Keycloak admin actions are avai
 Worked example:
 
 ```bash
-pnpm openldr user list --json
-pnpm openldr audit list --json
+./openldr user list --json
+./openldr audit list --json
 ```
 
 Troubleshooting:
@@ -223,15 +228,15 @@ Flow:
 1. **On central**, enroll each lab. This mints a confidential `sync-<siteId>` client with a `site_id` mapper, generates a secret shown once, and records a registry row. Use **Sites** in the app (admin-only) or the CLI:
 
    ```bash
-   pnpm openldr sync enroll lab-site-01 --name "Regional Reference Lab" --central-url https://central.example.org
-   pnpm openldr sync list
+   ./openldr sync enroll lab-site-01 --name "Regional Reference Lab" --central-url https://central.example.org
+   ./openldr sync list
    ```
 
-   Hand the printed client id, client secret, site id, central URL, and OIDC issuer to the lab operator. Lost secrets are unrecoverable — `pnpm openldr sync rotate <siteId>` issues a new one; `pnpm openldr sync revoke <siteId>` deletes the client.
+   Hand the printed client id, client secret, site id, central URL, and OIDC issuer to the lab operator. Lost secrets are unrecoverable — `./openldr sync rotate <siteId>` issues a new one; `./openldr sync revoke <siteId>` deletes the client.
 
-2. **On each lab**, enter those values under **Settings → General → Distributed Sync** (or `pnpm openldr settings sync set …`), choose a **mode** — `push`, `pull`, or `bidirectional` — set the interval, and enable. Monitor with the card's live status panel or `pnpm openldr sync status`, and force a pass with **Sync now** / `pnpm openldr sync now`.
+2. **On each lab**, enter those values under **Settings → General → Distributed Sync** (or `./openldr settings sync set …`), choose a **mode** — `push`, `pull`, or `bidirectional` — set the interval, and enable. Monitor with the card's live status panel or `./openldr sync status`, and force a pass with **Sync now** / `./openldr sync now`.
 
-Result amendments (co-edit): a central operator can correct a lab-owned result without breaking ownership. `POST /api/settings/sync/amend` (admin, `lab_admin`) or `pnpm openldr sync amend --resource-type <t> --id <id> --status <s> [--reason …] [--patch <json>]` writes a new FHIR version on central and queues it. The owning lab drains those amendments on its next `pull`/`bidirectional` pass through the `'sync-amend-pull'` cursor, applying the higher versionId back into its own store. Order status/metadata co-edit uses this same amend surface against the `ServiceRequest` (e.g. `activity: update`). Intra-lab MPI merge: `POST /api/settings/sync/merge-patient` (admin, `lab_admin`) or `pnpm openldr sync merge-patient --survivor <id> --duplicate <id> [--reason …]` keeps the survivor, marks the duplicate `replaced-by` the survivor, and re-attributes the duplicate's lab history to it — the superseded duplicate then shows `active=false` in the patient list.
+Result amendments (co-edit): a central operator can correct a lab-owned result without breaking ownership. `POST /api/settings/sync/amend` (admin, `lab_admin`) or `./openldr sync amend --resource-type <t> --id <id> --status <s> [--reason …] [--patch <json>]` writes a new FHIR version on central and queues it. The owning lab drains those amendments on its next `pull`/`bidirectional` pass through the `'sync-amend-pull'` cursor, applying the higher versionId back into its own store. Order status/metadata co-edit uses this same amend surface against the `ServiceRequest` (e.g. `activity: update`). Intra-lab MPI merge: `POST /api/settings/sync/merge-patient` (admin, `lab_admin`) or `./openldr sync merge-patient --survivor <id> --duplicate <id> [--reason …]` keeps the survivor, marks the duplicate `replaced-by` the survivor, and re-attributes the duplicate's lab history to it — the superseded duplicate then shows `active=false` in the patient list.
 
 Transport compression: sync traffic is gzip-compressed both ways, with no configuration. Responses — including the large terminology bulk drains and pull pages — compress automatically once they exceed ~1KB. Push bodies compress only after central advertises support (an `Accept-Encoding: gzip` response header, RFC 7694), so a lab on a newer build talking to an older central simply keeps sending uncompressed and keeps working: there is **no upgrade-order requirement** and no operator action.
 
@@ -239,7 +244,7 @@ Troubleshooting:
 
 - `415` from a machine endpoint: the request body used a `Content-Encoding` central does not accept — only `gzip` is supported. The coded response is `SY0415`.
 
-- One bad record blocks the pull: the pull stream is ordered, so a terminology system/concept map (or other bulk record) that keeps failing to apply used to silently wedge **all** config and terminology sync behind it. Such a record is now quarantined after 3 failed attempts and the stream moves on. Inspect the held/quarantined records with `pnpm openldr sync quarantine list` or `GET /api/settings/sync/quarantine` (admin, `lab_admin`); once the cause is fixed, re-apply it with `pnpm openldr sync quarantine retry <entityType> <entityId>` or `POST /api/settings/sync/quarantine/retry`.
+- One bad record blocks the pull: the pull stream is ordered, so a terminology system/concept map (or other bulk record) that keeps failing to apply used to silently wedge **all** config and terminology sync behind it. Such a record is now quarantined after 3 failed attempts and the stream moves on. Inspect the held/quarantined records with `./openldr sync quarantine list` or `GET /api/settings/sync/quarantine` (admin, `lab_admin`); once the cause is fixed, re-apply it with `./openldr sync quarantine retry <entityType> <entityId>` or `POST /api/settings/sync/quarantine/retry`.
 
 - Sync does nothing: confirm it is enabled and the mode is what you expect; re-check the central URL, site id, OIDC issuer, client id, and (if blanked) the secret.
 - `403`/`503` when enrolling on central: the admin service account lacks `manage-clients`/`view-clients` or Keycloak admin is not configured — re-import the realm and retry.

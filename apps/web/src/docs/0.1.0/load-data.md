@@ -5,7 +5,7 @@ ingest endpoint** — there is no `POST /fhir` you can send resources to. Data c
 one of the paths below. Which one you use depends mostly on how you installed.
 
 > **Where's the `openldr` CLI?** The `openldr` command is part of the **source checkout** — you
-> run it as `pnpm openldr …` from a clone of the repository. The **one-line Docker installer
+> run it as `./openldr …` from a clone of the repository. The **one-line Docker installer
 > does not install a CLI**, and it doesn't need to: it sets `MIGRATE_ON_START=true` and
 > `SEED_ON_START=true`, so the stack migrates and seeds itself on first boot. On a Docker
 > deployment, use the **HTTP webhook** below. The CLI paths apply when you run OpenLDR from
@@ -107,25 +107,25 @@ turnkey path — it applies the same converter + strictness gate without buildin
 
 ## 2. Load a file with the CLI (source / developer installs)
 
-If you run OpenLDR from a source checkout, `pnpm openldr ingest <file>` reads a file, converts
+If you run OpenLDR from a source checkout, `./openldr ingest <file>` reads a file, converts
 it, and writes the results into the FHIR store. The **converter** decides how the file is
 parsed:
 
 ```bash
 # A FHIR Bundle (the default converter)
-pnpm openldr ingest bundle.json
+./openldr ingest bundle.json
 
 # A WHONET SQLite export, via a converter plugin (install the plugin first)
-pnpm openldr plugin install reference-plugins/whonet-sqlite/plugin.wasm
-pnpm openldr ingest whonet.sqlite --plugin whonet-sqlite
+./openldr plugin install reference-plugins/whonet-sqlite/plugin.wasm
+./openldr ingest whonet.sqlite --plugin whonet-sqlite
 
 # A CSV with a column mapping
-pnpm openldr ingest results.csv --plugin tabular --config mapping.json
+./openldr ingest results.csv --plugin tabular --config mapping.json
 ```
 
 A successful run prints `batch <id>: done (<n> resources)`. **0 resources** means the converter
-did not recognise the file. Inspect or retry a batch with `pnpm openldr pipeline status` and
-`pnpm openldr pipeline retry <batchId>`. Converters that ship with OpenLDR: `fhir-bundle`
+did not recognise the file. Inspect or retry a batch with `./openldr pipeline status` and
+`./openldr pipeline retry <batchId>`. Converters that ship with OpenLDR: `fhir-bundle`
 (default), `whonet-sqlite`, `hl7v2`, and `tabular`; more can be added as marketplace plugins.
 
 ### Example payloads

@@ -7,17 +7,36 @@ lower-level operations.
 
 ## Running it
 
-From a source checkout, run it through the workspace:
+**On an installed stack**, the installer puts an `openldr` wrapper in your install directory.
+Run it from there:
+
+```
+./openldr <command>
+./openldr --help           # list every command group
+./openldr db --help        # drill into a group
+```
+
+On Windows, use `.\openldr.ps1` instead.
+
+The wrapper runs the CLI inside the `api` container. That has one consequence worth knowing:
+**commands that read or write files only see the `data` directory.** Put a file in `./data`
+next to the wrapper and name it with the `data/` prefix:
+
+```
+./openldr ingest data/bundle.json
+./openldr sync export --out data/export.ndjson
+```
+
+A path outside `data/` will not be found, and an `--out` path outside it is written inside the
+container and lost when the container restarts.
+
+**From a source checkout**, run it through the workspace instead:
 
 ```
 pnpm openldr <command>
-pnpm openldr --help          # list every command group
-pnpm openldr db --help       # drill into a group
 ```
 
-Most read commands accept `--json` for machine-readable output. In a deployed stack the
-common lifecycle steps (schema migration and seeding) run automatically on startup, and
-admin/danger actions are also available in the Studio UI under Settings.
+Most read commands accept `--json` for machine-readable output.
 
 ## Command groups
 
@@ -55,14 +74,14 @@ event with actor type **`cli`** and actor name = the OS user (override with the 
 Bring a database up to date after pulling new migrations (non-destructive, keeps data):
 
 ```
-pnpm openldr db migrate
+./openldr db migrate
 ```
 
 Reset and seed a development database (`db reset` **drops and recreates** the schema):
 
 ```
-pnpm openldr db reset
-pnpm openldr db seed
+./openldr db reset
+./openldr db seed
 ```
 
 `db seed` refuses to run when migrations are pending, naming what is outstanding — run
@@ -72,7 +91,7 @@ Rebuild the warehouse read model from the canonical FHIR store (`db reproject` *
 projected row**, so it refuses without `--force`):
 
 ```
-pnpm openldr db reproject --force
+./openldr db reproject --force
 ```
 
 It prints two separate counts: the canonical resources it rewrote, and the arrivals it recorded in
@@ -87,42 +106,42 @@ it inherits the `--force` guard. Use `db reproject` instead.
 Install and run an ingest plugin, then ingest a file with it:
 
 ```
-pnpm openldr plugin install path/to/plugin.wasm
-pnpm openldr ingest data.sqlite --plugin whonet-sqlite
+./openldr plugin install path/to/plugin.wasm
+./openldr ingest data.sqlite --plugin whonet-sqlite
 ```
 
 Create a local user and assign roles:
 
 ```
-pnpm openldr user create --username alice --name "Alice" --email alice@example.org --role lab_technician
-pnpm openldr user set-role <id> lab_admin
+./openldr user create --username alice --name "Alice" --email alice@example.org --role lab_technician
+./openldr user set-role <id> lab_admin
 ```
 
 Toggle a feature flag:
 
 ```
-pnpm openldr settings flags list
-pnpm openldr settings flags set dashboard.raw_sql true
+./openldr settings flags list
+./openldr settings flags set dashboard.raw_sql true
 ```
 
 Run a report:
 
 ```
-pnpm openldr report list
-pnpm openldr report run <id>
+./openldr report list
+./openldr report run <id>
 ```
 
 Enroll a lab on the central server, then connect a lab to it:
 
 ```
 # On central: mint the lab's client + secret (printed once)
-pnpm openldr sync enroll lab-site-01 --central-url https://central.example.org
+./openldr sync enroll lab-site-01 --central-url https://central.example.org
 
 # On the lab: apply the credentials, then check status
-pnpm openldr settings sync set clientId sync-lab-site-01
-pnpm openldr settings sync set mode bidirectional
-pnpm openldr settings sync set enabled true
-pnpm openldr sync status
+./openldr settings sync set clientId sync-lab-site-01
+./openldr settings sync set mode bidirectional
+./openldr settings sync set enabled true
+./openldr sync status
 ```
 
 > Distributed sync links labs to a central server: operational data pushes up to a

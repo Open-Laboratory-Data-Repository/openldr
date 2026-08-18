@@ -2,10 +2,15 @@
 
 Source of truth: `packages/cli/src/index.ts`. Captured help output for every command and subcommand is committed at `docs/audit/2026-06-23/cli-help-output.md`.
 
+> Commands below are written for an installed stack, where the installer provides an `openldr`
+> wrapper in the install directory (`.\openldr.ps1` on Windows). From a source checkout, use
+> `pnpm openldr` instead — the arguments are identical. File arguments on an installed stack
+> must live under `./data`; see the CLI doc's "Running it" section.
+
 Run commands from the repository root:
 
 ```console
-PS D:\Projects\Repositories\openldr_ce> pnpm openldr --help
+PS D:\Projects\Repositories\openldr_ce> ./openldr --help
 ```
 
 ## Exit Codes
@@ -44,22 +49,22 @@ Most commands return `0` on success and `1` on validation/runtime failure. Comma
 
 ## Copy-Paste Examples
 
-PowerShell and bash use the same `pnpm openldr` command forms. Use PowerShell line continuations with backticks and bash continuations with backslashes.
+PowerShell and bash use the same `./openldr` command forms. Use PowerShell line continuations with backticks and bash continuations with backslashes.
 
 ```powershell
-pnpm openldr health --json
-pnpm openldr db migrate --json
-pnpm openldr target-store test --engine pg --json
-pnpm openldr report list --json
-pnpm openldr ingest samples/whonet-sample.sqlite --plugin whonet-sqlite --json
+./openldr health --json
+./openldr db migrate --json
+./openldr target-store test --engine pg --json
+./openldr report list --json
+./openldr ingest samples/whonet-sample.sqlite --plugin whonet-sqlite --json
 ```
 
 ```bash
-pnpm openldr health --json
-pnpm openldr db migrate --json
-pnpm openldr target-store test --engine pg --json
-pnpm openldr report list --json
-pnpm openldr ingest samples/whonet-sample.sqlite --plugin whonet-sqlite --json
+./openldr health --json
+./openldr db migrate --json
+./openldr target-store test --engine pg --json
+./openldr report list --json
+./openldr ingest samples/whonet-sample.sqlite --plugin whonet-sqlite --json
 ```
 
 ## Ingesting data — `openldr ingest`
@@ -76,13 +81,13 @@ pnpm openldr ingest samples/whonet-sample.sqlite --plugin whonet-sqlite --json
 
 ```bash
 # FHIR Bundle (default converter)
-pnpm openldr ingest bundle.json --json
+./openldr ingest bundle.json --json
 # WHONET SQLite via a converter plugin (must be installed first)
-pnpm openldr plugin install reference-plugins/whonet-sqlite/plugin.wasm
-pnpm openldr ingest samples/whonet-sample.sqlite --plugin whonet-sqlite --json
+./openldr plugin install reference-plugins/whonet-sqlite/plugin.wasm
+./openldr ingest samples/whonet-sample.sqlite --plugin whonet-sqlite --json
 # Inspect / retry the resulting batch
-pnpm openldr pipeline status --json
-pnpm openldr pipeline retry <batchId>
+./openldr pipeline status --json
+./openldr pipeline retry <batchId>
 ```
 
 ## Sync
@@ -149,13 +154,13 @@ Enrollment requires the central Keycloak realm to grant the admin service accoun
 Enroll a lab on central, then hand the printed credentials to the lab operator:
 
 ```bash
-pnpm openldr sync enroll lab-site-01 --name "Regional Reference Lab" --central-url https://central.example.org --json
-pnpm openldr sync list --json
+./openldr sync enroll lab-site-01 --name "Regional Reference Lab" --central-url https://central.example.org --json
+./openldr sync list --json
 ```
 
 ## Captured Terminal Output
 
-`docs/audit/2026-06-23/cli-help-output.md` is a captured terminal-output appendix (dated 2026-06-23 — it predates the `errors`, `ingest`, `report-def`, `report-design`, and `sync divergence/export/import` additions, and still shows the removed `dhis2` group, so treat it as a snapshot, not the current surface; run `pnpm openldr <group> --help` for the live help). It contains fenced `console` blocks with the prompt, command, real output, and `EXIT_CODE` for each command, including:
+`docs/audit/2026-06-23/cli-help-output.md` is a captured terminal-output appendix (dated 2026-06-23 — it predates the `errors`, `ingest`, `report-def`, `report-design`, and `sync divergence/export/import` additions, and still shows the removed `dhis2` group, so treat it as a snapshot, not the current surface; run `./openldr <group> --help` for the live help). It contains fenced `console` blocks with the prompt, command, real output, and `EXIT_CODE` for each command, including:
 
 - top-level `openldr --help`;
 - every command family help page;
