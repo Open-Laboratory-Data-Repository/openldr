@@ -103,10 +103,17 @@ export function applySorts<QB extends { orderBy: (c: any, d: "asc" | "desc") => 
   let out = qb;
   for (const s of sorts) {
     const spec = columns[s.column];
-    if (!spec) continue;
+    // Unreachable via parseTableQuery, which rejects unknown/non-sortable columns first. Kept as
+    // a defensive backstop: silently dropping a sort here would look like the query succeeded
+    // while quietly ignoring part of what the caller asked for.
+    if (!spec) throw new Error(`unknown column "${s.column}"`);
     out = out.orderBy(sql.ref(spec.sql), s.ascending ? "asc" : "desc");
   }
   const tb = columns[tiebreaker];
-  if (tb) out = out.orderBy(sql.ref(tb.sql), "asc");
+  // A silently-skipped tiebreaker is worse than a missing sort: it reintroduces the exact
+  // ORDER BY + OFFSET instability this function exists to prevent, without any visible symptom
+  // until pages start repeating or skipping rows. Fail loud instead.
+  if (!tb) throw new Error(`unknown tiebreaker column "${tiebreaker}"`);
+  out = out.orderBy(sql.ref(tb.sql), "asc");
   return out;
 }
