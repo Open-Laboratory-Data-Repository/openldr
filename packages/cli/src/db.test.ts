@@ -1,12 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  dbCtx: { pendingMigrations: vi.fn(), migrateAll: vi.fn(), reset: vi.fn(), close: vi.fn() },
+  dbCtx: { pendingMigrations: vi.fn(), migrateAll: vi.fn(), reset: vi.fn(), close: vi.fn(), internalDb: { marker: 'internalDb' }, relationalWriter: { marker: 'relationalWriter' } },
   appCtx: { close: vi.fn() },
   createDbContext: vi.fn(),
   createAppContext: vi.fn(),
   seedDatabase: vi.fn(),
   recordAuditEvent: vi.fn(),
+  reprojectAll: vi.fn(),
 }));
 
 vi.mock('@openldr/config', () => ({
@@ -20,7 +21,11 @@ vi.mock('@openldr/bootstrap', () => ({
   recordAuditEvent: mocks.recordAuditEvent,
 }));
 
-import { runDbSeed, runDbMigrate, runDbReset } from './db';
+vi.mock('@openldr/db', () => ({
+  reprojectAll: mocks.reprojectAll,
+}));
+
+import { runDbSeed, runDbMigrate, runDbReset, runDbReproject } from './db';
 
 const SEED_RESULT = {
   resources: ['a', 'b', 'c'],
@@ -242,5 +247,48 @@ describe('db reset audit', () => {
 
     expect(code).toBe(0);
     expect(out).toContain('database reset complete');
+  });
+});
+
+describe('db reproject', () => {
+  let out: string;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    out = '';
+    vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
+      out += String(chunk);
+      return true;
+    });
+    mocks.createDbContext.mockResolvedValue(mocks.dbCtx);
+    mocks.createAppContext.mockResolvedValue(mocks.appCtx);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('refuses without --force, and rebuilds nothing', async () => {
+    // It rewrites the whole read model and every warehouse created_at moves. AGENTS.md §6:
+    // destructive commands refuse without --force.
+    const code = await runDbReproject({ json: false, force: false });
+    expect(code).toBe(1);
+    expect(mocks.reprojectAll).not.toHaveBeenCalled();
+  });
+
+  it('rebuilds with --force and reports the resource count', async () => {
+    mocks.reprojectAll.mockResolvedValueOnce(8692);
+    const code = await runDbReproject({ json: false, force: true });
+    expect(code).toBe(0);
+    expect(mocks.reprojectAll).toHaveBeenCalledTimes(1);
+  });
+
+  it('audits as the cli actor', async () => {
+    mocks.reprojectAll.mockResolvedValueOnce(1);
+    await runDbReproject({ json: false, force: true });
+    expect(mocks.recordAuditEvent).toHaveBeenCalledWith(
+      expect.anything(), expect.anything(),
+      expect.objectContaining({ action: 'db.reproject' }),
+    );
   });
 });

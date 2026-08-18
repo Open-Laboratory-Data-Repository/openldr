@@ -4,7 +4,7 @@ import { createAppContext } from '@openldr/bootstrap';
 import { exitCodeFor, formatHealthTable } from './format';
 import { redactError } from './redact-error';
 import { runFhirValidate, formatFhirValidate } from './fhir';
-import { runDbMigrate, runDbReset, runDbSeed } from './db';
+import { runDbMigrate, runDbReset, runDbSeed, runDbReproject } from './db';
 import { runFormsExtract, runFormsList } from './forms';
 import { runList as runReportDesignList, runDelete as runReportDesignDelete, runPublish as runReportDesignPublish, runVersions as runReportDesignVersions } from './report-design';
 import { runList as runReportDefList, runDelete as runReportDefDelete } from './report-def';
@@ -149,6 +149,18 @@ export function buildProgram(): Command {
         process.exitCode = await runDbSeed(opts);
       } catch (err) {
         process.stderr.write(`db seed failed: ${redactError(err)}\n`);
+        process.exitCode = 1;
+      }
+    });
+  db.command('reproject')
+    .description('Rebuild the warehouse read model from canonical FHIR, including the arrival ledger (refuses without --force)')
+    .option('--json', 'emit JSON', false)
+    .option('--force', 'confirm the rebuild — it rewrites every projected warehouse row', false)
+    .action(async (opts: { json: boolean; force: boolean }) => {
+      try {
+        process.exitCode = await runDbReproject(opts);
+      } catch (err) {
+        process.stderr.write(`db reproject failed: ${redactError(err)}\n`);
         process.exitCode = 1;
       }
     });
@@ -527,8 +539,8 @@ export function buildProgram(): Command {
       try { process.exitCode = await runValueSetList(opts); } catch (err) { process.stderr.write(`terminology valueset list failed: ${redactError(err)}\n`); process.exitCode = 1; }
     });
 
-  term.command('reproject').description('Rebuild terminology_codes (the warehouse ValueSet dimension) from canonical FHIR — backfill/recovery').option('--json', 'emit JSON', false)
-    .action(async (opts: { json: boolean }) => {
+  term.command('reproject').description('DEPRECATED — use `openldr db reproject`. Rebuilds the ENTIRE read model, not only terminology_codes').option('--json', 'emit JSON', false).option('--force', 'confirm the rebuild — it rewrites every projected warehouse row', false)
+    .action(async (opts: { json: boolean; force: boolean }) => {
       try { process.exitCode = await runTerminologyReproject(opts); } catch (err) { process.stderr.write(`terminology reproject failed: ${redactError(err)}\n`); process.exitCode = 1; }
     });
 

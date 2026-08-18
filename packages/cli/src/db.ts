@@ -1,5 +1,6 @@
 import { createDbContext, createAppContext, seedDatabase, recordAuditEvent } from '@openldr/bootstrap';
 import { loadConfig } from '@openldr/config';
+import { reprojectAll } from '@openldr/db';
 import { redactError } from './redact-error';
 import { cliActor } from './cli-actor';
 
@@ -77,6 +78,41 @@ function pendingMigrationsMessage(pending: { internal: string[]; external: strin
   if (pending.external.length) lines.push(`  external: ${pending.external.join(', ')}`);
   lines.push('', 'Run `openldr db migrate` first, then re-run `openldr db seed`.');
   return lines.join('\n');
+}
+
+/** Rebuild the whole warehouse read model from the canonical FHIR store, including the
+ *  `ingest_events` arrival ledger.
+ *
+ *  ⛔ DESTRUCTIVE-SHAPED, which is why it refuses without --force: it rewrites every projected row
+ *  in the warehouse from the canonical store. `created_at` on a row that has to be re-inserted is
+ *  reset to the rebuild time — it is a first-written stamp, not an arrival time, which is precisely
+ *  why the arrival ledger exists and is rebuilt here rather than derived from it. */
+export async function runDbReproject(opts: JsonOpt & { force: boolean }): Promise<number> {
+  if (!opts.force) {
+    process.stderr.write(
+      'db reproject refused: this rebuilds the entire warehouse read model from canonical FHIR.\n'
+      + 'Re-run with --force if that is what you intend.\n',
+    );
+    return 1;
+  }
+  const ctx = await createDbContext(loadConfig());
+  try {
+    const projected = await reprojectAll({ internalDb: ctx.internalDb, relationalWriter: ctx.relationalWriter });
+    try {
+      const appCtx = await createAppContext(loadConfig());
+      try {
+        await recordAuditEvent(appCtx, cliActor(), { action: 'db.reproject', entityType: 'database', entityId: 'external', metadata: { projected } });
+      } finally {
+        await appCtx.close();
+      }
+    } catch {
+      // audit is best-effort, exactly as db.reset treats it
+    }
+    emit(opts.json, { projected }, `rebuilt the read model from ${projected} canonical resource${projected === 1 ? '' : 's'}`);
+    return 0;
+  } finally {
+    await ctx.close();
+  }
 }
 
 export async function runDbSeed(opts: JsonOpt): Promise<number> {
