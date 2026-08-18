@@ -782,8 +782,11 @@ describe('a table whose header is its first data row', () => {
     // Two tables on one page: the page runs as long as the longer one.
     const design = baseDesign({ orientation: 'landscape', pages: [{ id: 'p1', elements: [
       ...gridDesign().pages[0].elements,
+      // `sortBy` is set because `headerRow` WITHOUT it is exactly what `findUnsortedHeaderRows`
+      // refuses at the API. Nothing here would fail either way, but a fixture that contradicts the
+      // rule its own commit adds reads as a counterexample to it.
       { id: 'long', kind: 'table', name: 'L', rect: { x: 10, y: 200, w: 400, h: 100 },
-        dataSource: { kind: 'custom-query', queryId: 'q2' }, headerRow: true,
+        dataSource: { kind: 'custom-query', queryId: 'q2' }, headerRow: true, sortBy: 'lab',
         boundColumns: [{ key: 'lab', label: 'Other laboratory' }] as BoundColumn[] },
     ] }] });
     const resolved = new Map<string, ResolvedTable>([
@@ -807,3 +810,108 @@ describe('a table whose header is its first data row', () => {
     expect(texts[1]).toContain('Other 4');
   });
 });
+
+describe('truncation, and the byte it is written as', () => {
+  // ⛔ MEASURED, and it is not the character you would guess. pdfkit writes the ellipsis in
+  // WinAnsiEncoding, where U+2026 is the single byte 0x85; a latin1 decode of the content stream
+  // therefore yields U+0085. An assertion written against U+2026 can NEVER fire — which is exactly
+  // what shipped in the live test's no-ellipsis check until review caught it, so a page with every
+  // laboratory name cut passed it. This test exists so the detector is pinned by something that
+  // actually truncates. Measured run: codes 97,32,118,101,114,121,133 for a cut "a very long ...".
+  const narrow = (w: number, value: string): ReportDesign => baseDesign({
+    pages: [{ id: 'p1', elements: [
+      { id: 't', kind: 'table', name: 'T', rect: { x: 0, y: 0, w, h: 100 }, columns: ['A'], rows: [[value]] },
+    ] }],
+  });
+
+  it('writes a cut cell with the WinAnsi ellipsis byte 0x85, never U+2026', async () => {
+    const texts = pdfTexts(await renderReportDesignPdf(narrow(60, 'a very long value that cannot possibly fit'), new Map(), { now: NOW }));
+    const cell = texts.find((t) => t.startsWith('a very'))!;
+    expect(cell.endsWith(String.fromCharCode(0x85))).toBe(true);
+    expect(cell).not.toContain('\u2026');
+    expect(texts.join('')).toContain(String.fromCharCode(0x85));
+  });
+
+  it('leaves a value that fits untouched', async () => {
+    const texts = pdfTexts(await renderReportDesignPdf(narrow(400, 'short enough'), new Map(), { now: NOW }));
+    expect(texts).toContain('short enough');
+    expect(texts.join('')).not.toContain(String.fromCharCode(0x85));
+  });
+});
+
+describe('headerRow keeps the per-cell statuses in lockstep with the rows', () => {
+  // ⛔ `drawTable` slices `cellStatusesFor`'s output by one when it lifts a header row. Without that
+  // slice the statuses stay indexed against the RESOLVED rows while the body is indexed against the
+  // LIFTED ones, so every chip shifts by exactly one row and colours the wrong subject — silently.
+  // No shipped design combines `headerRow` with a `statusKey` today, which is the only reason this
+  // is not already a live defect.
+  const design = (headerRow: boolean): ReportDesign => baseDesign({
+    pages: [{ id: 'p1', elements: [
+      { id: 't', kind: 'table', name: 'T', rect: { x: 0, y: 0, w: 400, h: 200 },
+        dataSource: { kind: 'custom-query', queryId: 'q' }, sortBy: 'ord', headerRow,
+        boundColumns: [
+          { key: 'lab', label: 'Laboratory' },
+          { key: 'v', label: '', statusKey: 'st', emphasis: 'fill' },
+        ] as BoundColumn[] },
+    ] }],
+  });
+
+  // Row 0 is the header row and carries no status. Exactly one BODY row is critical.
+  const resolved = (): Map<string, ResolvedTable> => new Map<string, ResolvedTable>([['t', {
+    columns: [{ key: 'ord', label: 'ord' }, { key: 'lab', label: 'lab' }, { key: 'v', label: 'v' }, { key: 'st', label: 'st' }],
+    rows: [
+      { ord: 0, lab: '(dates)', v: '1\nFeb', st: '' },
+      { ord: 1, lab: 'Lab A', v: 'Y', st: '' },
+      { ord: 1, lab: 'Lab B', v: 'Y', st: 'critical' },
+      { ord: 1, lab: 'Lab C', v: 'Y', st: '' },
+    ],
+  }]]);
+
+  /** Top y of every `critical` chip drawn, read off the fill operator that paints it. The content
+   *  stream runs under `1 0 0 -1 0 H cm`, so this y measures DOWN from the page top — the same
+   *  direction a design rect does. */
+  const chipYs = (content: string): number[] => {
+    const CHIP = /([\d.]+) ([\d.]+) ([\d.]+) ([\d.]+) re\n\/DeviceRGB cs\n([\d.]+ [\d.]+ [\d.]+) scn\nf/g;
+    return [...content.matchAll(CHIP)]
+      .filter((m) => `${m[5]} scn` === fillOp('#9f1239'))
+      .map((m) => parseFloat(m[2]));
+  };
+
+  /** The first-column text drawn in the row the chip is painted on. */
+  const labelOnChipRow = (content: string): string => {
+    const top = chipYs(content)[0] - 1.5;  // CHIP_INSET_Y — the chip is inset inside its row
+    const H = 841.89;                      // baseDesign is A4 PORTRAIT; text y is measured UP
+    return textRunsOf(content)
+      .filter((r) => { const d = H - r.y; return d >= top && d < top + ROW_H; })
+      .sort((a, b) => a.x - b.x)[0].text;
+  };
+
+  it('⛔ paints the chip on the row it belongs to, not the one above it', async () => {
+    const page = pageContents(await renderReportDesignPdf(design(true), resolved(), { now: NOW }))[0];
+    expect(chipYs(page)).toHaveLength(1);
+    expect(labelOnChipRow(page)).toBe('Lab B');
+  });
+
+  it('puts it at the row pitch the lifted band implies, in literal points', async () => {
+    // Lab B is BODY row 1 under a 24pt band: 24 + 1*16 + 1.5 (CHIP_INSET_Y) = 41.5. Unlifted, the
+    // date row is still a body row, so Lab B is body row 2 under a 16pt band: 16 + 2*16 + 1.5 = 49.5.
+    // Literals, not expressions built from the same constants the drawing reads.
+    const lifted = pageContents(await renderReportDesignPdf(design(true), resolved(), { now: NOW }))[0];
+    const plain = pageContents(await renderReportDesignPdf(design(false), resolved(), { now: NOW }))[0];
+    expect(chipYs(lifted)[0]).toBeCloseTo(41.5, 6);
+    expect(chipYs(plain)[0]).toBeCloseTo(49.5, 6);
+    // ...and both name the same laboratory, which is the property that actually matters.
+    expect(labelOnChipRow(lifted)).toBe('Lab B');
+    expect(labelOnChipRow(plain)).toBe('Lab B');
+  });
+});
+
+/** Text runs with their positions, for one already-decompressed page. */
+function textRunsOf(content: string): { x: number; y: number; text: string }[] {
+  const runs = /1 0 0 1 (-?[\d.]+) (-?[\d.]+) Tm\n\/F\d+ [\d.]+ Tf\n\[(.*?)\]\s*TJ/g;
+  return [...content.matchAll(runs)].map((m) => ({
+    x: parseFloat(m[1]),
+    y: parseFloat(m[2]),
+    text: [...m[3].matchAll(/<([0-9a-fA-F]*)>/g)].map((h) => Buffer.from(h[1], 'hex').toString('latin1')).join(''),
+  }));
+}

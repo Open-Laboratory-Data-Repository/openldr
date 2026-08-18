@@ -1693,7 +1693,10 @@ describe('SEED_QUERIES — the transmission grids', () => {
     const NEWLINE: Record<string, RegExp> = {
       postgres: /to_char\(cal_day, 'FMDD'\) \|\| chr\(10\) \|\| to_char\(cal_day, 'Mon'\)/,
       mssql: /concat\(format\(cal_day, '%d', 'en-US'\), char\(10\), format\(cal_day, 'MMM', 'en-US'\)\)/,
-      mysql: /concat\(date_format\(cal_day, '%e'\), char\(10\), date_format\(cal_day, '%b'\)\)/,
+      // ⛔ `using utf8mb4` is asserted, not just `char(10)`. Bare CHAR(10) is a BINARY string in
+      // MySQL and CONCAT turns the whole cell binary, so mysql2 (built with no `typeCast`) hands the
+      // date row back as Buffers and the JSON/CSV export of that row stops being text.
+      mysql: /concat\(date_format\(cal_day, '%e'\), char\(10 using utf8mb4\), date_format\(cal_day, '%b'\)\)/,
     };
     for (const id of ['q-transmission-hvleid', 'q-transmission-other']) {
       for (const [dialect, sql] of Object.entries(q(id).sql)) {

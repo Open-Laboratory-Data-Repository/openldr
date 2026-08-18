@@ -4,7 +4,7 @@ import pg from 'pg';
 import { Kysely, PostgresDialect, sql } from 'kysely';
 import { createMigrator, externalMigrations } from '@openldr/db';
 import zlib from 'node:zlib';
-import { renderReportDesignPdf, type ResolvedTable } from '@openldr/report-designer';
+import { renderReportDesignPdf, resolveDesignTables } from '@openldr/report-designer';
 import { SEED_DESIGNS, SEED_QUERIES } from './report-seeds';
 
 /** Each physical page's decompressed content stream, found via `/Kids` so page order is the PDF's
@@ -305,15 +305,25 @@ live('the transmission grid queries (live Postgres)', () => {
     // `columnWidths` then measures the WIDER LINE rather than the concatenation. If any link
     // breaks, the dates draw on one line and every laboratory name goes back under an ellipsis —
     // with the entire hermetic suite green.
-    const rows = await runFor({ month: '2026-03', panels: 'HIVPC', tz: 'UTC' });
-
-    // Exactly what `resolveDesignTables` does before the renderer sees the rows.
     const design = SEED_DESIGNS.find((d) => d.id === 'rt-transmission-grid')!;
-    const el = design.pages[0].elements.find((e) => e.id === 'hvleid')!;
-    const ordered = [...rows].sort((a, b) => Number(a.ord) - Number(b.ord));
-    const columns = Object.keys(rows[0]).map((k) => ({ key: k, label: k }));
-    const table: ResolvedTable = { columns, rows: ordered };
-    const buf = await renderReportDesignPdf(design, new Map([['hvleid', table], ['other', table]]), {
+
+    // ⛔ Through the REAL `resolveDesignTables`, not a hand-rolled sort. Re-implementing
+    // `[...rows].sort(byOrd)` here would never read the element's own `sortBy`, so deleting it from
+    // the seeded design would leave this test green while the page it renders was wrong — the exact
+    // shape of blindness this whole task keeps finding.
+    const runForDesign = async (queryId: string, values: Record<string, unknown>) => {
+      const rows = await runQuery(queryId)(values as { month: string; panels: string; tz: string });
+      // ⛔ REVERSED on the way in. Postgres happens to return the union's ord=0 row first, so a
+      // faithful pass-through leaves `sortBy` with nothing to do and this test stays green with it
+      // deleted - measured. Handing the rows back in the wrong order is what makes the element's
+      // own `sortBy: 'ord'` load-bearing here, which is the whole reason it exists: the runner wraps
+      // every query in a derived table and MySQL may discard the inner ORDER BY.
+      return { columns: Object.keys(rows[0]).map((k) => ({ key: k, label: k })), rows: [...rows].reverse() };
+    };
+    const resolved = await resolveDesignTables(
+      design, { month: '2026-03', panels: 'HIVPC', tz: 'UTC' }, runForDesign);
+
+    const buf = await renderReportDesignPdf(design, resolved, {
       now: new Date('2026-03-31T09:00:00Z'),
       values: { month: '2026-03', panels: 'HIVPC', tz: 'UTC' },
     });
@@ -345,8 +355,12 @@ live('the transmission grid queries (live Postgres)', () => {
     const xs = line1.map((r) => r.x);
     expect(xs[1] - xs[0]).toBeGreaterThan(90);
 
-    // Nothing on the page was ellipsized, and the sort discriminator never printed.
-    expect(drawn.map((r) => r.text).join('')).not.toContain('…');
+    // ⛔ Nothing on the page was ellipsized. The comparison is against BYTE 0x85, not U+2026:
+    // pdfkit writes the ellipsis in WinAnsiEncoding, where it is 0x85, and the latin1 decode in
+    // `textRuns` turns that into U+0085. Measured - a run cut at width 60pt comes back as
+    // codes 97,32,118,101,114,121,133. An assertion against U+2026 can NEVER fire, which is what
+    // this one did before review: a page with every laboratory name cut still passed it.
+    expect(drawn.map((r) => r.text).join('')).not.toContain(String.fromCharCode(0x85));
     expect(drawn.map((r) => r.text)).not.toContain('(dates)');
     expect(drawn.map((r) => r.text)).not.toContain('ord');
   });

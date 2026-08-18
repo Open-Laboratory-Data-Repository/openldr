@@ -2562,30 +2562,41 @@ grid as (
   cross join days dy
   left join arrivals a on a.lab = l.lab and a.cal_day = dy.cal_day
 )
+-- The day and the month are TWO LINES: the design's 'headerRow' stacks a header cell's newlines,
+-- which is what keeps a day column the width of 'Feb' rather than '2 Feb'.
+--
+-- ⛔ 'using utf8mb4' is LOAD-BEARING, not decoration. Bare CHAR(10) returns a BINARY string,
+-- and CONCAT returns binary if ANY argument is binary — so d01..d23 on this row come back
+-- as VARBINARY. The mysql2 pool is built with no 'typeCast'
+-- (packages/bootstrap/src/connector-db.ts:63), and mysql2 hands a binary column back as a Buffer:
+-- the PDF would survive ('rowsFor' does String(...)), but the JSON and CSV export of this row
+-- would carry a serialized Buffer and the value would stop equalling the day-over-month string.
+-- utf8mb4 is a superset of the connection's default utf8mb3, so the CONCAT coerces cleanly rather
+-- than raising an illegal mix of collations.
 select 0 as ord, '(dates)' as lab,
-  max(case when n = 1 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d01,
-  max(case when n = 2 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d02,
-  max(case when n = 3 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d03,
-  max(case when n = 4 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d04,
-  max(case when n = 5 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d05,
-  max(case when n = 6 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d06,
-  max(case when n = 7 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d07,
-  max(case when n = 8 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d08,
-  max(case when n = 9 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d09,
-  max(case when n = 10 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d10,
-  max(case when n = 11 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d11,
-  max(case when n = 12 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d12,
-  max(case when n = 13 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d13,
-  max(case when n = 14 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d14,
-  max(case when n = 15 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d15,
-  max(case when n = 16 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d16,
-  max(case when n = 17 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d17,
-  max(case when n = 18 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d18,
-  max(case when n = 19 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d19,
-  max(case when n = 20 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d20,
-  max(case when n = 21 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d21,
-  max(case when n = 22 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d22,
-  max(case when n = 23 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d23
+  max(case when n = 1 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d01,
+  max(case when n = 2 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d02,
+  max(case when n = 3 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d03,
+  max(case when n = 4 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d04,
+  max(case when n = 5 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d05,
+  max(case when n = 6 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d06,
+  max(case when n = 7 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d07,
+  max(case when n = 8 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d08,
+  max(case when n = 9 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d09,
+  max(case when n = 10 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d10,
+  max(case when n = 11 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d11,
+  max(case when n = 12 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d12,
+  max(case when n = 13 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d13,
+  max(case when n = 14 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d14,
+  max(case when n = 15 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d15,
+  max(case when n = 16 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d16,
+  max(case when n = 17 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d17,
+  max(case when n = 18 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d18,
+  max(case when n = 19 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d19,
+  max(case when n = 20 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d20,
+  max(case when n = 21 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d21,
+  max(case when n = 22 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d22,
+  max(case when n = 23 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d23
 from days
 union all
 select 1 as ord, lab,
@@ -2958,30 +2969,41 @@ grid as (
   cross join days dy
   left join arrivals a on a.lab = l.lab and a.cal_day = dy.cal_day
 )
+-- The day and the month are TWO LINES: the design's 'headerRow' stacks a header cell's newlines,
+-- which is what keeps a day column the width of 'Feb' rather than '2 Feb'.
+--
+-- ⛔ 'using utf8mb4' is LOAD-BEARING, not decoration. Bare CHAR(10) returns a BINARY string,
+-- and CONCAT returns binary if ANY argument is binary — so d01..d23 on this row come back
+-- as VARBINARY. The mysql2 pool is built with no 'typeCast'
+-- (packages/bootstrap/src/connector-db.ts:63), and mysql2 hands a binary column back as a Buffer:
+-- the PDF would survive ('rowsFor' does String(...)), but the JSON and CSV export of this row
+-- would carry a serialized Buffer and the value would stop equalling the day-over-month string.
+-- utf8mb4 is a superset of the connection's default utf8mb3, so the CONCAT coerces cleanly rather
+-- than raising an illegal mix of collations.
 select 0 as ord, '(dates)' as lab,
-  max(case when n = 1 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d01,
-  max(case when n = 2 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d02,
-  max(case when n = 3 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d03,
-  max(case when n = 4 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d04,
-  max(case when n = 5 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d05,
-  max(case when n = 6 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d06,
-  max(case when n = 7 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d07,
-  max(case when n = 8 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d08,
-  max(case when n = 9 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d09,
-  max(case when n = 10 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d10,
-  max(case when n = 11 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d11,
-  max(case when n = 12 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d12,
-  max(case when n = 13 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d13,
-  max(case when n = 14 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d14,
-  max(case when n = 15 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d15,
-  max(case when n = 16 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d16,
-  max(case when n = 17 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d17,
-  max(case when n = 18 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d18,
-  max(case when n = 19 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d19,
-  max(case when n = 20 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d20,
-  max(case when n = 21 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d21,
-  max(case when n = 22 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d22,
-  max(case when n = 23 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d23
+  max(case when n = 1 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d01,
+  max(case when n = 2 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d02,
+  max(case when n = 3 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d03,
+  max(case when n = 4 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d04,
+  max(case when n = 5 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d05,
+  max(case when n = 6 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d06,
+  max(case when n = 7 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d07,
+  max(case when n = 8 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d08,
+  max(case when n = 9 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d09,
+  max(case when n = 10 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d10,
+  max(case when n = 11 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d11,
+  max(case when n = 12 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d12,
+  max(case when n = 13 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d13,
+  max(case when n = 14 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d14,
+  max(case when n = 15 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d15,
+  max(case when n = 16 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d16,
+  max(case when n = 17 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d17,
+  max(case when n = 18 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d18,
+  max(case when n = 19 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d19,
+  max(case when n = 20 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d20,
+  max(case when n = 21 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d21,
+  max(case when n = 22 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d22,
+  max(case when n = 23 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d23
 from days
 union all
 select 1 as ord, lab,
