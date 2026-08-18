@@ -13,7 +13,9 @@ export type TableColumnMap = Record<string, TableColumnSpec>;
 
 const TEXT_OPS: FilterOperator[] = ["eq", "ne", "like", "in", "is_null", "is_not_null"];
 const ENUM_OPS: FilterOperator[] = ["eq", "ne", "in", "is_null", "is_not_null"];
-const DATE_OPS: FilterOperator[] = ["eq", "ne", "gt", "gte", "lt", "lte", "between"];
+// Must match apps/studio/src/components/data-table/types.ts:52-53's validOperators("date") —
+// that is what the UI actually offers, and this map must run no less and no more.
+export const DATE_OPS: FilterOperator[] = ["eq", "ne", "gt", "gte", "lt", "lte", "between", "is_null", "is_not_null"];
 
 // Mirrors AuditEventsTable, packages/db/src/schema/internal.ts:147-159.
 export const AUDIT_COLUMNS: TableColumnMap = {
