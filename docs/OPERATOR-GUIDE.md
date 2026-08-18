@@ -80,7 +80,7 @@ Worked example:
 ```bash
 ./openldr report list --json
 ./openldr report run amr-resistance --param from=2026-01-01 --param to=2026-03-31 --json
-./openldr report glass-export --country ZMB --year 2026 --from 2026-01-01 --to 2026-03-31 --out glass-ris.csv
+./openldr report glass-export --country ZMB --year 2026 --from 2026-01-01 --to 2026-03-31 --out data/glass-ris.csv
 ```
 
 Troubleshooting:

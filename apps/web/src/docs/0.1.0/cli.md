@@ -108,8 +108,8 @@ it inherits the `--force` guard. Use `db reproject` instead.
 Install and run an ingest plugin, then ingest a file with it:
 
 ```
-./openldr plugin install path/to/plugin.wasm
-./openldr ingest data.sqlite --plugin whonet-sqlite
+./openldr plugin install data/plugin.wasm
+./openldr ingest data/results.sqlite --plugin whonet-sqlite
 ```
 
 Create a local user and assign roles:

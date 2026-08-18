@@ -58,7 +58,7 @@ Both surfaces can propose a map from a file's headers offline, with no server ro
 
   ```bash
   ./openldr facilities import data/national-facilities.csv \
-    --national-system urn:zm:mfl --column-map mapped.json
+    --national-system urn:zm:mfl --column-map data/mapped.json
   ```
 
 `import` without `--apply` is always a dry run: it parses, validates, and reports — it writes
