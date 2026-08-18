@@ -128,6 +128,32 @@ describe('report routes', () => {
     expect(res.json().error).toContain('08/02/2026');
   });
 
+  // A parameter that declares a `format` (packages/core/src/param-format.ts) is checked before the
+  // query is built, and reports the violation the same way — a plain Error with an anchored
+  // prefix. A `+3` time zone is the case that matters: Postgres reads it POSIX-style as UTC−3, so
+  // it is silently six hours out in the WRONG direction, and a 500 would tell the operator nothing
+  // about which box to fix.
+  it('400 + RP0004 on a value that violates its declared format', async () => {
+    const msg = 'invalid parameter: tz (expected a named time zone, for example Africa/Nairobi or UTC. '
+      + 'A signed offset such as +3, +03:00 or Etc/GMT+3 is not accepted: the database reads its sign '
+      + 'the other way round, so the report comes out shifted with no error to show it; got "+3")';
+    const app = appWith({ list: vi.fn(), run: vi.fn(async () => { throw new Error(msg); }) });
+    const res = await app.inject({ method: 'GET', url: '/api/reports/r-transmission-grid?tz=%2B3' });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('RP0004');
+    expect(res.json().error).toContain('tz');
+    expect(res.json().error).toContain('Africa/Nairobi');
+  });
+
+  it('400 + RP0004 on a malformed month, not the 500 the engine used to raise', async () => {
+    const msg = 'invalid parameter: month (expected a calendar month as YYYY-MM, for example 2026-08; got "1")';
+    const app = appWith({ list: vi.fn(), run: vi.fn(async () => { throw new Error(msg); }) });
+    const res = await app.inject({ method: 'GET', url: '/api/reports/r-transmission-grid?month=1' });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().code).toBe('RP0004');
+    expect(res.json().error).toContain('YYYY-MM');
+  });
+
   // Guard against over-matching: a genuine server fault whose message merely mentions a parameter
   // must stay a 500, not get downgraded to a client error.
   it('does not downgrade an unrelated failure that mentions parameters', async () => {

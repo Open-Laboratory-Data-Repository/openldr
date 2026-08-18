@@ -3438,7 +3438,11 @@ export const SEED_DESIGNS: ReportDesign[] = [
     // constants with no design-level lever, and the laboratory names come from the data.
     orientation: 'landscape',
     parameters: [
+      // ⚠ `format` and `placeholder` are the run-time guard and the on-page hint for the two
+      // parameters that were measured to go wrong. An operator typed `1` here and `+3` below,
+      // with both formats stated only inside the ⓘ popover, which has to be opened to be read.
       { key: 'month', label: 'Month', type: 'text', required: true, value: '',
+        format: 'year-month', placeholder: '2021-01',
         help: 'The reporting month as YYYY-MM, for example 2021-01.' },
       // ⛔ AGENTS.md §8 — the help text names no code either. This design ships worldwide and one
       // country's panel codes are not another's.
@@ -3447,10 +3451,23 @@ export const SEED_DESIGNS: ReportDesign[] = [
       // ⚠ The prefill is a DEFAULT, not a binding. The studio fills this box from the setting; a
       // schedule or a CLI run does not read the setting and buckets on whatever it was given, with
       // no warning if that is wrong or missing.
+      // ⛔ The format refuses a SIGNED OFFSET and nothing else. Measured on live Postgres: `+3` is
+      // read with the POSIX sign convention, so it means UTC−3. An arrival at 2026-08-06 03:48Z
+      // bucketed to 2026-08-06 00:48 — six hours out, in the WRONG direction, and SILENT. Near
+      // midnight that puts a mark on the wrong day of the grid. `Etc/GMT+3` does the same thing
+      // under an IANA-shaped name.
+      // ⛔ It does NOT require a valid IANA name. A SQL Server warehouse needs a WINDOWS zone name
+      // here (docs/reports.md), and an unrecognised name is the LOUD case — the engine refuses it
+      // with a clear message, so nothing wrong is ever printed. Only the silent case is guarded.
+      // The placeholder is an example zone, not a default: the studio prefills this box from
+      // Settings, and a placeholder only shows while the box is empty.
       { key: 'tz', label: 'Time zone', type: 'text', required: true, value: '',
-        help: 'IANA zone the days are bucketed in. The studio fills this from Settings, Laboratory, '
-          + 'Time zone as a default you can overwrite. A scheduled or CLI run does not read that '
-          + 'setting and must pass the zone itself.' },
+        format: 'timezone-no-signed-offset', placeholder: 'Africa/Nairobi',
+        help: 'The zone the days are bucketed in — a named zone such as Africa/Nairobi, or on a '
+          + 'SQL Server warehouse the Windows zone name. A signed offset such as +3 or Etc/GMT+3 '
+          + 'is refused: the database reads its sign the other way round. The studio fills this '
+          + 'from Settings, Laboratory, Time zone as a default you can overwrite. A scheduled or '
+          + 'CLI run does not read that setting and must pass the zone itself.' },
     ],
     pages: [{ id: 'rt-transmission-grid-p1', elements: [
       // Band 1 — the letterhead, ids and rects byte-identical to `simpleTableDesign`'s.

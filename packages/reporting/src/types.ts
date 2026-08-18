@@ -1,3 +1,5 @@
+import type { ReportParamFormat } from '@openldr/core/pure';
+
 export type ChartHint =
   | { type: 'bar'; x: string; y: string; series?: string }
   | { type: 'line'; x: string; y: string; series?: string }
@@ -17,6 +19,13 @@ export interface ReportParamMeta {
   optionsKey?: string;
   /** Operator-facing note on what the field accepts. Rendered as a tooltip beside the label. */
   help?: string;
+  /** The shape the run value must have. Enforced SERVER-side before the query is built (see
+   *  `createDataDrivenReporting` in `packages/bootstrap/src/index.ts`); published here only so a
+   *  client can say the same thing sooner. Absent ⇒ the value is not checked. */
+  format?: ReportParamFormat;
+  /** Example text for the empty input. Absent ⇒ the box falls back to showing the label, exactly
+   *  as it did before this field existed. */
+  placeholder?: string;
 }
 
 export interface ReportMetricMeta {

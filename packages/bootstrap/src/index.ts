@@ -8,7 +8,7 @@ import { createEventBus } from '@openldr/adapter-event-bus';
 import { createS3Bucket } from '@openldr/adapter-s3-bucket';
 import { toS3BucketConfig } from './s3-config';
 import type { Config } from '@openldr/config';
-import { createLogger, HealthRegistry, open, seal, parseSecretKey, redact, appError, type Logger } from '@openldr/core';
+import { createLogger, HealthRegistry, open, seal, parseSecretKey, redact, appError, paramFormatMessage, type Logger } from '@openldr/core';
 import { createInternalDb, createFhirStore, createRelationalWriter, persistResources, createTerminologyStore, createTerminologyAdminStore, createOntologyStore, createReportRunStore, createReportScheduleStore, createMarketplaceInstallStore, createRegistryStore, createAppSettingsStore, deriveSystemCode, resolveSeedPublisherId, createProjectionRunner, fetchSafeChangeRows, readCursor as readChangeCursor, advanceCursor as advanceChangeCursor, createReferenceApplier, referenceCapture, markTerminologyChanged, createRoleStore, createFacilityRegistryStore, type TerminologyAdminStore, type OntologyStore, type FhirStore, type ReportRunStore, type ReportScheduleStore, type AppSettingStore, type RoleStore, type FacilityRegistryStore } from '@openldr/db';
 import type { ExternalSchema, InternalSchema, Provenance, SyncActivityStore, TargetEngine, CapabilityReconciliation } from '@openldr/db';
 import type { AuthPort, BlobStoragePort, EventingPort, TargetStorePort } from '@openldr/ports';
@@ -162,6 +162,11 @@ export function reportDefToSummary(def: ReportRecord, design: ReportDesign): Rep
     const base: ReportParamMeta = { id: p.key, label: p.label, type, required: Boolean(p.required) };
     if (type === 'select' && def.paramOptions?.[p.key]) base.optionsKey = p.key;
     if (p.help) base.help = p.help;
+    // Only SET when declared. A parameter authored before these existed must publish the exact
+    // same object it published before — an explicit `format: undefined` key would still change the
+    // wire shape for every client that enumerates keys.
+    if (p.format) base.format = p.format;
+    if (p.placeholder) base.placeholder = p.placeholder;
     return base;
   });
   return {
@@ -221,6 +226,36 @@ export function designBoundColumns(design: ReportDesign, queryId: string): { key
   return [];
 }
 
+/**
+ * Reject a run value that violates the format its parameter DECLARES, before any SQL is built.
+ *
+ * ⛔ Here, not in the studio's filter bar. `reporting.run`/`reporting.renderPdf` is also what the
+ * report scheduler (`./report-scheduler.ts:60,62`) and the CLI (`packages/cli/src/report.ts:40,46`)
+ * call, and neither opens a browser. The transmission grid's `tz` help text says in so many words
+ * that a scheduled run supplies the zone itself, so the headless path is the one that can be wrong
+ * for a month before anyone notices.
+ *
+ * Shaped after `substituteParams`'s existing `required parameter: <id>` throw
+ * (`packages/dashboards/src/custom-query-run.ts:33`) — a plain Error with an anchored message —
+ * because `apps/server/src/reports-routes.ts` already turns that shape into a 400 that names the
+ * field, and a second error style would just need a second mapping.
+ *
+ * A parameter with no `format` is untouched, which is every parameter of every design stored
+ * before this existed.
+ */
+function assertParamFormats(design: ReportDesign, values: Record<string, unknown>): void {
+  for (const p of design.parameters) {
+    if (!p.format) continue;
+    const raw = values[p.key];
+    // Only a scalar the operator could have typed is judged. A daterange's `{from,to}` object has
+    // no format to violate, and `null`/`undefined` is the required check's business, not this one.
+    const value = typeof raw === 'string' ? raw : typeof raw === 'number' ? String(raw) : null;
+    if (value === null) continue;
+    const message = paramFormatMessage(p.key, p.format, value);
+    if (message) throw new Error(message);
+  }
+}
+
 function createDataDrivenReporting(deps: ReportingDataDrivenDeps) {
   const valuesOf = (rawParams: unknown) => (rawParams ?? {}) as Record<string, unknown>;
 
@@ -229,6 +264,7 @@ function createDataDrivenReporting(deps: ReportingDataDrivenDeps) {
     const design = await deps.reportDesigns.get(def.designId);
     if (!design) throw new ReportNotFoundError(def.designId);
     const values = { ...designDefaults(design), ...valuesOf(rawParams) };
+    assertParamFormats(design, values);
     const { columns, rows } = await deps.runStoredQuery(def.primaryQueryId, values);
     // An empty result set carries no column metadata (see `designBoundColumns`), so fall back to
     // the design's declared shape rather than reporting a report with no columns at all.
@@ -243,6 +279,7 @@ function createDataDrivenReporting(deps: ReportingDataDrivenDeps) {
     const design = await deps.reportDesigns.get(def.designId);
     if (!design) throw new ReportNotFoundError(def.designId);
     const values = { ...designDefaults(design), ...valuesOf(rawParams) };
+    assertParamFormats(design, values);
     // ⛔ resolveDesignTables MUST see the RAW (coded) values — the design's bound queries filter
     // on the code (e.g. `dr.performer = {{param.facility}}`). If a resolved display label ever
     // reached this call instead, the filter would match nothing and the report would silently

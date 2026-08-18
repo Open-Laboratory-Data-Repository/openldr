@@ -14,6 +14,7 @@ import {
 } from './report-seeds';
 import { pairRects, toPt, paperSizePt, type ReportDesign } from '@openldr/report-designer';
 import { findInvalidImageSources, findUnsortedHeaderRows } from '@openldr/report-designer/pure';
+import { isValidIanaZone, paramFormatMessage } from '@openldr/core/pure';
 
 // In-memory fakes — no real Kysely instance needed (unlike `packages/bootstrap/src/seed.ts`,
 // which builds `customQueries` from a real DB handle; here we inject fakes directly to unit-test
@@ -1858,6 +1859,57 @@ describe('SEED_DESIGNS — rt-transmission-grid', () => {
       // boundary, so the pattern silently never matches.
       expect(new RegExp(`as ${c.key}\\b`).test(sql), `${c.key} is not selected`).toBe(true);
     }
+  });
+});
+
+describe('SEED_DESIGNS — rt-transmission-grid run parameters are checked and shown', () => {
+  const params = () => SEED_DESIGNS.find((d) => d.id === 'rt-transmission-grid')!.parameters;
+  const param = (key: string) => params().find((p) => p.key === key)!;
+
+  it('declares the time zone rule that refuses a signed offset, so a bare +3 is caught', () => {
+    // ⛔ The defect. Postgres reads `+3` with the POSIX sign convention, so it means UTC−3.
+    // Measured: an arrival at 2026-08-06 03:48Z bucketed to 2026-08-06 00:48 — six hours out, in
+    // the wrong direction, with no error. Near midnight that is a mark on the wrong day.
+    expect(param('tz').format).toBe('timezone-no-signed-offset');
+  });
+
+  it('⛔ does NOT demand a valid IANA name — the SQL Server workflow depends on that', () => {
+    // `apps/studio/src/docs/0.1.0/en/reports.md:51` tells a SQL Server operator to leave the
+    // Settings zone empty and type the WINDOWS zone name into this filter, because SQL Server's
+    // `AT TIME ZONE` takes Windows names. An IANA-validity rule here would break that documented
+    // path, while still waving through `Etc/GMT+3`, which is inverted. The rule guards the silent
+    // failure only; an unrecognised name is refused loudly by the engine itself.
+    expect(paramFormatMessage('tz', param('tz').format!, 'E. Africa Standard Time')).toBeNull();
+    expect(paramFormatMessage('tz', param('tz').format!, 'Etc/GMT+3')).not.toBeNull();
+    expect(paramFormatMessage('tz', param('tz').format!, '+3')).not.toBeNull();
+  });
+
+  it('declares the month as YYYY-MM', () => {
+    expect(param('month').format).toBe('year-month');
+  });
+
+  it('shows the month format in the box, not only in the ⓘ popover', () => {
+    // The operator typed `1`. The format was stated only in the help popover, which has to be
+    // opened to be read.
+    expect(param('month').placeholder).toMatch(/^\d{4}-\d{2}$/);
+  });
+
+  it('shows an example zone in the time zone box', () => {
+    const ph = param('tz').placeholder!;
+    expect(ph).toContain('/');
+    // The example must be a real zone AND pass the run-parameter rule, or the box teaches the
+    // wrong thing. Both checks, because they are now genuinely different rules: `Etc/GMT+3` would
+    // pass the first and fail the second.
+    expect(isValidIanaZone(ph)).toBe(true);
+    expect(paramFormatMessage('tz', 'timezone-no-signed-offset', ph)).toBeNull();
+  });
+
+  it('⚠ AGENTS.md §8 — leaves the panel-codes box without a placeholder', () => {
+    // A placeholder is example text on the page. One country's HVL/EID panel codes are not
+    // another's, and this design ships worldwide, so an example here would hardcode clinical
+    // vocabulary into a seeded design. The ⓘ help already explains the field without naming a code.
+    expect(param('panels').placeholder).toBeUndefined();
+    expect(param('panels').format).toBeUndefined();
   });
 });
 
