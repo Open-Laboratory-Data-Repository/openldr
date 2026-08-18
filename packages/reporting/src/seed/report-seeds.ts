@@ -2278,9 +2278,12 @@ arrivals as (
     and (e.recorded_at at time zone {{param.tz}})::date >= m.d
     and (e.recorded_at at time zone {{param.tz}})::date < m.d + interval '1 month'
     -- The panel list is a RUN-TIME parameter (AGENTS.md §8) — no code is written here.
-    -- ⚠ An EMPTY panels parameter splits as a single empty string, so this grid comes out EMPTY and
-    -- the Other grid gets everything. Deliberate: an unconfigured panel list must not silently
-    -- report every test as HVL/EID.
+    -- ⚠ EMPTY panels parameter: postgres string_to_array('', ',') returns an EMPTY ARRAY — zero
+    -- elements, NOT one empty string (that is what T-SQL and the MySQL split below do). So 'in
+    -- (empty)' is false for every row and THIS grid, the HVL/EID one, comes out COMPLETELY EMPTY
+    -- while the Other grid gets everything.
+    -- Deliberate either way: an unconfigured panel list must not silently report every test as
+    -- belonging to the HVL/EID grid.
     -- coalesce(panel_code, '') so a NULL panel is a real value on both sides: without it
     -- 'null not in (...)' is NULL and a request with no panel would vanish from BOTH grids.
     and coalesce(q.panel_code, '') in (select trim(value) from unnest(string_to_array({{param.panels}}, ',')) as value)
@@ -2396,9 +2399,11 @@ arrivals as (
     and cast(e.recorded_at at time zone 'UTC' at time zone {{param.tz}} as date) >= m.d
     and cast(e.recorded_at at time zone 'UTC' at time zone {{param.tz}} as date) < dateadd(month, 1, m.d)
     -- The panel list is a RUN-TIME parameter (AGENTS.md §8) — no code is written here.
-    -- ⚠ An EMPTY panels parameter splits as a single empty string, so this grid comes out EMPTY and
-    -- the Other grid gets everything. Deliberate: an unconfigured panel list must not silently
-    -- report every test as HVL/EID.
+    -- ⚠ EMPTY panels parameter: T-SQL string_split('', ',') returns ONE row holding an empty string —
+    -- NOT postgres's empty array. So THIS grid, the HVL/EID one, comes out empty EXCEPT for
+    -- requests whose own panel_code is null or empty, and the Other grid gets all the rest.
+    -- Deliberate either way: an unconfigured panel list must not silently report every test as
+    -- belonging to the HVL/EID grid.
     -- coalesce(panel_code, '') so a NULL panel is a real value on both sides: without it
     -- 'null not in (...)' is NULL and a request with no panel would vanish from BOTH grids.
     and coalesce(q.panel_code, '') in (select ltrim(rtrim(value)) from string_split({{param.panels}}, ','))
@@ -2468,6 +2473,27 @@ order by ord, lab`,
       mysql: `with recursive month_start as (
   select cast(concat({{param.month}}, '-01') as date) as d
 ),
+panel_list as (
+  -- ⛔ NOT find_in_set(). MySQL has no string_split/unnest, and find_in_set over the raw parameter
+  -- would need every space stripped from the WHOLE list to imitate a per-element trim — which
+  -- turns an element like 'AB C' into 'ABC' and quietly moves that request to the other grid.
+  -- find_in_set is also documented not to work when its first argument contains a comma, which
+  -- 'in (...)' handles fine. This peels one element at a time and trims EACH one, giving the same
+  -- semantics postgres gets from trim(unnest(...)) and T-SQL from ltrim(rtrim(string_split(...))).
+  -- ⛔ The casts are not decoration. MySQL types a recursive CTE column from its ANCHOR row, so
+  -- without them an element longer than the FIRST one is silently truncated.
+  select cast(trim(substring_index({{param.panels}}, ',', 1)) as char(255)) as code,
+         cast(case when locate(',', {{param.panels}}) > 0
+                   then substring({{param.panels}}, locate(',', {{param.panels}}) + 1)
+                   else null end as char(4000)) as rest
+  union all
+  select cast(trim(substring_index(p.rest, ',', 1)) as char(255)),
+         cast(case when locate(',', p.rest) > 0
+                   then substring(p.rest, locate(',', p.rest) + 1)
+                   else null end as char(4000))
+  from panel_list p
+  where p.rest is not null
+),
 all_days as (
   -- MySQL 8 has no generate_series. Recursive CTE, carrying the month's first day so the recursive
   -- member never has to re-join month_start. At most 31 iterations, well under cte_max_recursion_depth.
@@ -2490,7 +2516,7 @@ arrivals as (
     -- ⛔ Bucket in the CIVIL timezone. recorded_at is a naive datetime holding UTC.
     -- ⛔ HONEST NON-PROOF: convert_tz returns NULL unless the server's zone tables are loaded
     -- (mysql_tzinfo_to_sql). An offset like '+03:00' works without them, an IANA name does not.
-    -- No MySQL warehouse was executed for this query.
+    -- A NULL bucket drops the row silently rather than erroring. No MySQL warehouse was executed.
     cast(convert_tz(e.recorded_at, '+00:00', {{param.tz}}) as date) as cal_day
   from ingest_events e
   join lab_requests q on q.id = e.resource_id
@@ -2511,12 +2537,14 @@ arrivals as (
     and cast(convert_tz(e.recorded_at, '+00:00', {{param.tz}}) as date) >= m.d
     and cast(convert_tz(e.recorded_at, '+00:00', {{param.tz}}) as date) < date_add(m.d, interval 1 month)
     -- The panel list is a RUN-TIME parameter (AGENTS.md §8) — no code is written here.
-    -- ⚠ An EMPTY panels parameter splits as a single empty string, so this grid comes out EMPTY and
-    -- the Other grid gets everything. Deliberate: an unconfigured panel list must not silently
-    -- report every test as HVL/EID.
+    -- ⚠ EMPTY panels parameter: the panel_list split above yields ONE empty element —
+    -- NOT postgres's empty array. So THIS grid, the HVL/EID one, comes out empty EXCEPT for
+    -- requests whose own panel_code is null or empty, and the Other grid gets all the rest.
+    -- Deliberate either way: an unconfigured panel list must not silently report every test as
+    -- belonging to the HVL/EID grid.
     -- coalesce(panel_code, '') so a NULL panel is a real value on both sides: without it
     -- 'null not in (...)' is NULL and a request with no panel would vanish from BOTH grids.
-    and find_in_set(coalesce(q.panel_code, ''), replace({{param.panels}}, ' ', '')) > 0
+    and coalesce(q.panel_code, '') in (select code from panel_list)
 ),
 labs as (select distinct lab from arrivals),
 -- The CROSS JOIN makes a silent day render blank IN PLACE rather than shifting later days left.
@@ -2639,9 +2667,12 @@ arrivals as (
     and (e.recorded_at at time zone {{param.tz}})::date >= m.d
     and (e.recorded_at at time zone {{param.tz}})::date < m.d + interval '1 month'
     -- The panel list is a RUN-TIME parameter (AGENTS.md §8) — no code is written here.
-    -- ⚠ An EMPTY panels parameter splits as a single empty string, so this grid comes out EMPTY and
-    -- the Other grid gets everything. Deliberate: an unconfigured panel list must not silently
-    -- report every test as HVL/EID.
+    -- ⚠ EMPTY panels parameter: postgres string_to_array('', ',') returns an EMPTY ARRAY — zero
+    -- elements, NOT one empty string (that is what T-SQL and the MySQL split below do). So 'not in
+    -- (empty)' is true for every row and THIS grid, the Other one, gets EVERYTHING while the
+    -- HVL/EID grid comes out completely empty.
+    -- Deliberate either way: an unconfigured panel list must not silently report every test as
+    -- belonging to the HVL/EID grid.
     -- coalesce(panel_code, '') so a NULL panel is a real value on both sides: without it
     -- 'null not in (...)' is NULL and a request with no panel would vanish from BOTH grids.
     and coalesce(q.panel_code, '') not in (select trim(value) from unnest(string_to_array({{param.panels}}, ',')) as value)
@@ -2757,9 +2788,11 @@ arrivals as (
     and cast(e.recorded_at at time zone 'UTC' at time zone {{param.tz}} as date) >= m.d
     and cast(e.recorded_at at time zone 'UTC' at time zone {{param.tz}} as date) < dateadd(month, 1, m.d)
     -- The panel list is a RUN-TIME parameter (AGENTS.md §8) — no code is written here.
-    -- ⚠ An EMPTY panels parameter splits as a single empty string, so this grid comes out EMPTY and
-    -- the Other grid gets everything. Deliberate: an unconfigured panel list must not silently
-    -- report every test as HVL/EID.
+    -- ⚠ EMPTY panels parameter: T-SQL string_split('', ',') returns ONE row holding an empty string —
+    -- NOT postgres's empty array. So THIS grid, the Other one, gets EVERYTHING except requests
+    -- whose own panel_code is null or empty, and those land in the HVL/EID grid instead.
+    -- Deliberate either way: an unconfigured panel list must not silently report every test as
+    -- belonging to the HVL/EID grid.
     -- coalesce(panel_code, '') so a NULL panel is a real value on both sides: without it
     -- 'null not in (...)' is NULL and a request with no panel would vanish from BOTH grids.
     and coalesce(q.panel_code, '') not in (select ltrim(rtrim(value)) from string_split({{param.panels}}, ','))
@@ -2829,6 +2862,27 @@ order by ord, lab`,
       mysql: `with recursive month_start as (
   select cast(concat({{param.month}}, '-01') as date) as d
 ),
+panel_list as (
+  -- ⛔ NOT find_in_set(). MySQL has no string_split/unnest, and find_in_set over the raw parameter
+  -- would need every space stripped from the WHOLE list to imitate a per-element trim — which
+  -- turns an element like 'AB C' into 'ABC' and quietly moves that request to the other grid.
+  -- find_in_set is also documented not to work when its first argument contains a comma, which
+  -- 'in (...)' handles fine. This peels one element at a time and trims EACH one, giving the same
+  -- semantics postgres gets from trim(unnest(...)) and T-SQL from ltrim(rtrim(string_split(...))).
+  -- ⛔ The casts are not decoration. MySQL types a recursive CTE column from its ANCHOR row, so
+  -- without them an element longer than the FIRST one is silently truncated.
+  select cast(trim(substring_index({{param.panels}}, ',', 1)) as char(255)) as code,
+         cast(case when locate(',', {{param.panels}}) > 0
+                   then substring({{param.panels}}, locate(',', {{param.panels}}) + 1)
+                   else null end as char(4000)) as rest
+  union all
+  select cast(trim(substring_index(p.rest, ',', 1)) as char(255)),
+         cast(case when locate(',', p.rest) > 0
+                   then substring(p.rest, locate(',', p.rest) + 1)
+                   else null end as char(4000))
+  from panel_list p
+  where p.rest is not null
+),
 all_days as (
   -- MySQL 8 has no generate_series. Recursive CTE, carrying the month's first day so the recursive
   -- member never has to re-join month_start. At most 31 iterations, well under cte_max_recursion_depth.
@@ -2851,7 +2905,7 @@ arrivals as (
     -- ⛔ Bucket in the CIVIL timezone. recorded_at is a naive datetime holding UTC.
     -- ⛔ HONEST NON-PROOF: convert_tz returns NULL unless the server's zone tables are loaded
     -- (mysql_tzinfo_to_sql). An offset like '+03:00' works without them, an IANA name does not.
-    -- No MySQL warehouse was executed for this query.
+    -- A NULL bucket drops the row silently rather than erroring. No MySQL warehouse was executed.
     cast(convert_tz(e.recorded_at, '+00:00', {{param.tz}}) as date) as cal_day
   from ingest_events e
   join lab_requests q on q.id = e.resource_id
@@ -2872,12 +2926,14 @@ arrivals as (
     and cast(convert_tz(e.recorded_at, '+00:00', {{param.tz}}) as date) >= m.d
     and cast(convert_tz(e.recorded_at, '+00:00', {{param.tz}}) as date) < date_add(m.d, interval 1 month)
     -- The panel list is a RUN-TIME parameter (AGENTS.md §8) — no code is written here.
-    -- ⚠ An EMPTY panels parameter splits as a single empty string, so this grid comes out EMPTY and
-    -- the Other grid gets everything. Deliberate: an unconfigured panel list must not silently
-    -- report every test as HVL/EID.
+    -- ⚠ EMPTY panels parameter: the panel_list split above yields ONE empty element —
+    -- NOT postgres's empty array. So THIS grid, the Other one, gets EVERYTHING except requests
+    -- whose own panel_code is null or empty, and those land in the HVL/EID grid instead.
+    -- Deliberate either way: an unconfigured panel list must not silently report every test as
+    -- belonging to the HVL/EID grid.
     -- coalesce(panel_code, '') so a NULL panel is a real value on both sides: without it
     -- 'null not in (...)' is NULL and a request with no panel would vanish from BOTH grids.
-    and find_in_set(coalesce(q.panel_code, ''), replace({{param.panels}}, ' ', '')) = 0
+    and coalesce(q.panel_code, '') not in (select code from panel_list)
 ),
 labs as (select distinct lab from arrivals),
 -- The CROSS JOIN makes a silent day render blank IN PLACE rather than shifting later days left.

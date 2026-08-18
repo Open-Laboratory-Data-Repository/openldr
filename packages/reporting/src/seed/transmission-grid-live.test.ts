@@ -53,15 +53,19 @@ live('the transmission grid queries (live Postgres)', () => {
   //
   // The panel codes below are TEST FIXTURE DATA, not product vocabulary: the queries themselves
   // carry no code at all (AGENTS.md §8), the list arrives as {{param.panels}}.
+  //
+  // `labName`, `panelCode` and `performer` are nullable so the two fallback branches added beyond
+  // the brief — the '(unknown)' lab name and the coalesced NULL panel — can actually be reached.
   const seedSubmission = async (
-    key: string, labName: string, panelCode: string, recordedAt: string,
+    key: string, labName: string | null, panelCode: string | null, recordedAt: string,
+    performer: string | null = `CODE-${key}`,
   ): Promise<void> => {
     const batchId = `batch-${key}`;
     await db.insertInto('lab_requests' as never).values({
       id: `req-${key}`, request_id: `LAB-${key}`, panel_code: panelCode, batch_id: batchId,
     } as never).execute();
     await db.insertInto('diagnostic_reports' as never).values({
-      id: `dr-${key}`, batch_id: batchId, performer: `CODE-${key}`, performer_display: labName,
+      id: `dr-${key}`, batch_id: batchId, performer, performer_display: labName,
     } as never).execute();
     await db.insertInto('ingest_events' as never).values({
       resource_type: 'ServiceRequest', resource_id: `req-${key}`, version: 1, recorded_at: recordedAt,
@@ -101,6 +105,15 @@ live('the transmission grid queries (live Postgres)', () => {
       name: 'Mapped Registry Lab',
     } as never).execute();
     await seedSubmission('mapped', 'Wire Name Nobody Wants', 'HIVPC', '2026-03-02T08:00:00Z');
+
+    // No registry row, no display name, no performer code — every source of a laboratory name is
+    // null. Without the '(unknown)' fallback this row's `lab` is NULL, the grid join never matches
+    // it, and it renders as a blank name with 23 blank cells. 3 Mar 2026 = n2 = d02.
+    await seedSubmission('noname', null, 'HIVPC', '2026-03-03T08:00:00Z', null);
+
+    // A request with NO panel code. Without coalesce(panel_code, '') the `not in` predicate is NULL
+    // for this row and it vanishes from BOTH grids — the partition would silently lose it.
+    await seedSubmission('nopanel', 'No Panel Lab', null, '2026-03-03T08:00:00Z');
 
     // The 15x fan-out C1's `distinct` collapses: one batch, several diagnostic_reports rows, one
     // performer. Without `distinct` the grid still reads right (max() folds duplicates) — this
@@ -185,21 +198,43 @@ live('the transmission grid queries (live Postgres)', () => {
     expect(rows.some((r) => r.lab === 'Wire Name Nobody Wants')).toBe(false);
   });
 
-  it('marks one cell per laboratory-day however many reports the batch carries', async () => {
-    // C1: the batch join fans out (up to 15x on real data). One batch = one performer, so the
-    // fan-out must not leak into the grid as anything other than a single Y.
+  it("writes exactly 'Y' in an arrival cell and leaves a silent day empty", async () => {
+    // NOT a test of the `distinct` in `arrivals`: max() folds duplicates, so this passes with or
+    // without it. What it does pin is the cell VALUE — a mark, never a count, and never a run of
+    // marks from the batch's several diagnostic_reports rows.
     const rows = await runFor({ month: '2026-03', panels: 'HIVPC', tz: 'UTC' });
     const lab = rows.find((r) => r.lab === 'Registration Only Lab')!;
     expect(lab.d02).toBe('Y');
     expect(lab.d01).toBe('');
   });
 
-  it('renders 23 day columns and no more, for every row', async () => {
+  it('renders 23 day columns and no more, on every row', async () => {
     const rows = await runFor({ month: '2026-03', panels: 'HIVPC', tz: 'UTC' });
-    const keys = Object.keys(rows[0]).filter((k) => /^d\d\d$/.test(k));
-    expect(keys).toHaveLength(23);
-    expect(keys).toContain('d23');
-    expect(keys).not.toContain('d24');
+    expect(rows.length).toBeGreaterThan(1);
+    for (const row of rows) {
+      const keys = Object.keys(row).filter((k) => /^d\d\d$/.test(k));
+      expect(keys, `row ${row.lab}`).toHaveLength(23);
+      expect(keys, `row ${row.lab}`).toContain('d23');
+      expect(keys, `row ${row.lab}`).not.toContain('d24');
+    }
+  });
+
+  it("names a laboratory '(unknown)' when the registry, the display name and the code are all null", async () => {
+    // Beyond the brief, so it needs its own fixture: without the fallback `lab` is NULL, the grid
+    // join never matches, and the laboratory renders as a blank name with 23 blank cells.
+    const rows = await runFor({ month: '2026-03', panels: 'HIVPC', tz: 'UTC' });
+    const unknown = rows.find((r) => r.lab === '(unknown)');
+    expect(unknown, 'a nameless laboratory must still get a row').toBeDefined();
+    expect(unknown!.d02).toBe('Y');
+  });
+
+  it('puts a request with NO panel code in the Other grid, not in neither', async () => {
+    // Beyond the brief, so it needs its own fixture. `null not in (...)` is NULL, so without
+    // coalesce(panel_code, '') this laboratory disappears from both grids and the partition leaks.
+    const hv = await runFor({ month: '2026-03', panels: 'HIVPC', tz: 'UTC' });
+    const ot = await runForOther({ month: '2026-03', panels: 'HIVPC', tz: 'UTC' });
+    expect(hv.some((r) => r.lab === 'No Panel Lab')).toBe(false);
+    expect(ot.some((r) => r.lab === 'No Panel Lab')).toBe(true);
   });
 
   it('returns an EMPTY HVL/EID grid and a FULL Other grid when the panel list is empty', async () => {

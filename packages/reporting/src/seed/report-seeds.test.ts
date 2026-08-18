@@ -1695,4 +1695,45 @@ describe('SEED_QUERIES — the transmission grids', () => {
       }
     }
   });
+
+  // ⛔ The assertion above matches only the WIDENED sargable bound, which is two days looser than
+  // the month on each side. Deleting the exact civil-zone bound — the mutation that proved the
+  // live test bites — leaves it green, and a hermetic CI run skips the live file entirely. These
+  // regexes pin the exact bound, per dialect, because the expression differs in all three.
+  const CIVIL_LOWER: Record<string, RegExp> = {
+    postgres: /and \(e\.recorded_at at time zone \{\{param\.tz\}\}\)::date >= m\.d/,
+    mssql: /and cast\(e\.recorded_at at time zone 'UTC' at time zone \{\{param\.tz\}\} as date\) >= m\.d/,
+    mysql: /and cast\(convert_tz\(e\.recorded_at, '\+00:00', \{\{param\.tz\}\}\) as date\) >= m\.d/,
+  };
+  const CIVIL_UPPER: Record<string, RegExp> = {
+    postgres: /and \(e\.recorded_at at time zone \{\{param\.tz\}\}\)::date < m\.d \+ interval '1 month'/,
+    mssql: /and cast\(e\.recorded_at at time zone 'UTC' at time zone \{\{param\.tz\}\} as date\) < dateadd\(month, 1, m\.d\)/,
+    mysql: /and cast\(convert_tz\(e\.recorded_at, '\+00:00', \{\{param\.tz\}\}\) as date\) < date_add\(m\.d, interval 1 month\)/,
+  };
+
+  it('pins the EXACT civil-zone month bound, in every dialect', () => {
+    for (const id of ['q-transmission-hvleid', 'q-transmission-other']) {
+      for (const [dialect, sql] of Object.entries(q(id).sql)) {
+        expect(sql, `${id}/${dialect} lost the exact civil-zone lower bound`)
+          .toMatch(CIVIL_LOWER[dialect]);
+        expect(sql, `${id}/${dialect} lost the exact civil-zone upper bound`)
+          .toMatch(CIVIL_UPPER[dialect]);
+      }
+    }
+  });
+
+  // ⛔ MySQL's find_in_set strips spaces from the WHOLE parameter to fake a per-element trim, so
+  // an element like 'AB C' becomes 'ABC' and that request lands in the wrong grid. It is also
+  // documented not to work when its first argument contains a comma. Panel codes are
+  // operator-configured run-time vocabulary (AGENTS.md §8) — this file cannot assume their shape.
+  it('splits the panel list per element on MySQL, never with find_in_set', () => {
+    for (const id of ['q-transmission-hvleid', 'q-transmission-other']) {
+      const sql = q(id).sql.mysql;
+      // Only the explanatory comment may name it; no predicate may call it.
+      const code = sql.replace(/--[^\n]*/g, '');
+      expect(code, `${id}/mysql matches panels with find_in_set`).not.toMatch(/find_in_set/);
+      expect(code, `${id}/mysql has no per-element split`).toMatch(/panel_list/);
+      expect(code, `${id}/mysql never trims an element`).toMatch(/trim\(substring_index\(/);
+    }
+  });
 });
