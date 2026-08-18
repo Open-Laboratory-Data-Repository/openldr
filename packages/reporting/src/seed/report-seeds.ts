@@ -2482,15 +2482,22 @@ panel_list as (
   -- semantics postgres gets from trim(unnest(...)) and T-SQL from ltrim(rtrim(string_split(...))).
   -- ⛔ The casts are not decoration. MySQL types a recursive CTE column from its ANCHOR row, so
   -- without them an element longer than the FIRST one is silently truncated.
+  -- ⚠ Two MySQL-only limits, disclosed rather than hidden. char(16000) on 'rest' caps the whole
+  -- panel LIST at 16000 characters and would truncate the tail SILENTLY; postgres and T-SQL have
+  -- no such cap. 16000 is the widest length safe under utf8mb4 (4 bytes x 16000 < the 65535-byte
+  -- row limit). char(255) on 'code' caps one ELEMENT, which is a different bet: a code is a code,
+  -- so 255 is far beyond any plausible one, while the list grows with the panel count.
+  -- Separately, cte_max_recursion_depth (default 1000) caps the list at 1000 elements — that one
+  -- ERRORS rather than truncating, so it needs disclosure, not a fix.
   select cast(trim(substring_index({{param.panels}}, ',', 1)) as char(255)) as code,
          cast(case when locate(',', {{param.panels}}) > 0
                    then substring({{param.panels}}, locate(',', {{param.panels}}) + 1)
-                   else null end as char(4000)) as rest
+                   else null end as char(16000)) as rest
   union all
   select cast(trim(substring_index(p.rest, ',', 1)) as char(255)),
          cast(case when locate(',', p.rest) > 0
                    then substring(p.rest, locate(',', p.rest) + 1)
-                   else null end as char(4000))
+                   else null end as char(16000))
   from panel_list p
   where p.rest is not null
 ),
@@ -2871,15 +2878,22 @@ panel_list as (
   -- semantics postgres gets from trim(unnest(...)) and T-SQL from ltrim(rtrim(string_split(...))).
   -- ⛔ The casts are not decoration. MySQL types a recursive CTE column from its ANCHOR row, so
   -- without them an element longer than the FIRST one is silently truncated.
+  -- ⚠ Two MySQL-only limits, disclosed rather than hidden. char(16000) on 'rest' caps the whole
+  -- panel LIST at 16000 characters and would truncate the tail SILENTLY; postgres and T-SQL have
+  -- no such cap. 16000 is the widest length safe under utf8mb4 (4 bytes x 16000 < the 65535-byte
+  -- row limit). char(255) on 'code' caps one ELEMENT, which is a different bet: a code is a code,
+  -- so 255 is far beyond any plausible one, while the list grows with the panel count.
+  -- Separately, cte_max_recursion_depth (default 1000) caps the list at 1000 elements — that one
+  -- ERRORS rather than truncating, so it needs disclosure, not a fix.
   select cast(trim(substring_index({{param.panels}}, ',', 1)) as char(255)) as code,
          cast(case when locate(',', {{param.panels}}) > 0
                    then substring({{param.panels}}, locate(',', {{param.panels}}) + 1)
-                   else null end as char(4000)) as rest
+                   else null end as char(16000)) as rest
   union all
   select cast(trim(substring_index(p.rest, ',', 1)) as char(255)),
          cast(case when locate(',', p.rest) > 0
                    then substring(p.rest, locate(',', p.rest) + 1)
-                   else null end as char(4000))
+                   else null end as char(16000))
   from panel_list p
   where p.rest is not null
 ),

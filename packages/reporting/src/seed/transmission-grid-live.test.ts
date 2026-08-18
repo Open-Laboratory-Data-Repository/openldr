@@ -115,9 +115,17 @@ live('the transmission grid queries (live Postgres)', () => {
     // for this row and it vanishes from BOTH grids — the partition would silently lose it.
     await seedSubmission('nopanel', 'No Panel Lab', null, '2026-03-03T08:00:00Z');
 
-    // The 15x fan-out C1's `distinct` collapses: one batch, several diagnostic_reports rows, one
-    // performer. Without `distinct` the grid still reads right (max() folds duplicates) — this
-    // fixture is here so a future edit that changes the FOLD is caught, not just the row count.
+    // A panel code with an INNER SPACE. This is the Postgres half of the case that separates a
+    // per-element trim from a whole-parameter space strip: called with panels 'A, BB CC', a correct
+    // split yields the element 'BB CC' and matches, while stripping every space from the list first
+    // yields 'BBCC' and silently sends this request to the other grid.
+    await seedSubmission('spacecode', 'Inner Space Lab', 'BB CC', '2026-03-03T08:00:00Z');
+
+    // The 15x fan-out `distinct` collapses: one batch, several diagnostic_reports rows, one
+    // performer. ⚠ No test here can catch a lost `distinct` — max() folds the duplicates, so the
+    // grid reads identically either way, which is why the test below was renamed off that claim.
+    // The fixture stays because it makes every other assertion run against the FANNED-OUT shape
+    // real data has, instead of the one-report-per-batch shape none of it has.
     for (let i = 2; i <= 4; i++) {
       await db.insertInto('diagnostic_reports' as never).values({
         id: `dr-regonly-${i}`, batch_id: 'batch-regonly',
@@ -226,6 +234,16 @@ live('the transmission grid queries (live Postgres)', () => {
     const unknown = rows.find((r) => r.lab === '(unknown)');
     expect(unknown, 'a nameless laboratory must still get a row').toBeDefined();
     expect(unknown!.d02).toBe('Y');
+  });
+
+  it('trims each panel element on its own, so a code with an inner space still matches', async () => {
+    // The Postgres half of the case that motivated replacing MySQL's find_in_set. The list has a
+    // space after the comma AND a space inside the second code, so only a per-element trim can get
+    // both right. Proves the semantics on the one engine that runs here; MySQL stays unproven.
+    const hv = await runFor({ month: '2026-03', panels: 'A, BB CC', tz: 'UTC' });
+    const ot = await runForOther({ month: '2026-03', panels: 'A, BB CC', tz: 'UTC' });
+    expect(hv.some((r) => r.lab === 'Inner Space Lab')).toBe(true);
+    expect(ot.some((r) => r.lab === 'Inner Space Lab')).toBe(false);
   });
 
   it('puts a request with NO panel code in the Other grid, not in neither', async () => {
