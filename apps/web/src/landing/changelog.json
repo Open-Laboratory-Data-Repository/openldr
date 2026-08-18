@@ -6,6 +6,36 @@
       "version": null,
       "entries": [
         {
+          "hash": "dd5d5a0c",
+          "type": "fix",
+          "scope": "install",
+          "title": "Run the CLI wrapper as the invoking user, and propagate the Windows exit code"
+        },
+        {
+          "hash": "9e4fbc6d",
+          "type": "fix",
+          "scope": "install",
+          "title": "Run the CLI wrapper from the container root, not the data mount"
+        },
+        {
+          "hash": "058a992d",
+          "type": "feat",
+          "scope": "install",
+          "title": "Write an openldr wrapper and mount ./data for the CLI"
+        },
+        {
+          "hash": "77458115",
+          "type": "feat",
+          "scope": "deploy",
+          "title": "Ship the operator CLI inside the api image"
+        },
+        {
+          "hash": "231a99d1",
+          "type": "fix",
+          "scope": "cli",
+          "title": "Externalise the deps that resolve files from disk at runtime"
+        },
+        {
           "hash": "512130d3",
           "type": "fix",
           "scope": "db",
@@ -1516,84 +1546,6 @@
           "type": "feat",
           "scope": "facilities",
           "title": "Migrate term_mappings when a facility's projected code moves"
-        },
-        {
-          "hash": "cb8370f0",
-          "type": "feat",
-          "scope": "db",
-          "title": "Add facility_concept_projection link table"
-        },
-        {
-          "hash": "8677e76a",
-          "type": "feat",
-          "scope": "facilities",
-          "title": "Surface quarantined CSV rows in route, CLI, and import sheet"
-        },
-        {
-          "hash": "53411516",
-          "type": "feat",
-          "scope": "bootstrap",
-          "title": "Block facility import apply while rows are quarantined"
-        },
-        {
-          "hash": "068ad21a",
-          "type": "fix",
-          "scope": "terminology",
-          "title": "Quarantine ragged facility CSV rows instead of shifting columns"
-        },
-        {
-          "hash": "b5fd236c",
-          "type": "fix",
-          "scope": "sync",
-          "title": "Purge logged facility_registry change rows"
-        },
-        {
-          "hash": "432b825e",
-          "type": "fix",
-          "scope": "facilities",
-          "title": "Remove dead hash helpers, correct stale apply-cap rationale"
-        },
-        {
-          "hash": "d062852d",
-          "type": "fix",
-          "scope": "sync",
-          "title": "Suspend facility_registry capture, serve, and apply"
-        },
-        {
-          "hash": "155103a8",
-          "type": "fix",
-          "scope": "reporting",
-          "title": "Transpose the antibiogram so its columns are readable"
-        },
-        {
-          "hash": "4dffcf02",
-          "type": "fix",
-          "scope": "reporting,bootstrap,server",
-          "title": "Dedupe facility picker, resolve names in scope panel, pin predicates"
-        },
-        {
-          "hash": "c752da89",
-          "type": "feat",
-          "scope": "bootstrap",
-          "title": "Seed the OpenLDR mark and a default laboratory name"
-        },
-        {
-          "hash": "263185ed",
-          "type": "fix",
-          "scope": "reporting",
-          "title": "Derive seeded-report footer/table geometry from the design's own page size"
-        },
-        {
-          "hash": "f9c9a16c",
-          "type": "feat",
-          "scope": "reporting",
-          "title": "Letterhead and scope panel on every seeded report"
-        },
-        {
-          "hash": "93f9eace",
-          "type": "fix",
-          "scope": "report-designer",
-          "title": "Render run parameters, and interpolate authored keyvalue pairs"
         }
       ]
     }
