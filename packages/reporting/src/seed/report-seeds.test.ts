@@ -1677,10 +1677,14 @@ describe('SEED_QUERIES — the transmission grids', () => {
   // falls back to the untrusted SQL row order — and every existing test stays green while the date
   // row lands in the middle of the grid. Nothing else in this file would notice.
   it('selects the ord discriminator sortBy depends on, in every dialect', () => {
+    // Two rows carry `ord` per dialect string: the dates row (`0 as ord`) and the lab rows
+    // (`1 as ord`). A match-anywhere assertion passes even if one of the two regresses, so this
+    // pins the count.
+    const ORD = /\bas ord\b/g;
     for (const id of ['q-transmission-hvleid', 'q-transmission-other']) {
       for (const [dialect, sql] of Object.entries(q(id).sql)) {
-        expect(sql, `${id}/${dialect} dropped 'as ord' — sortBy silently degrades to no sort`)
-          .toMatch(/\bas ord\b/);
+        expect(sql.match(ORD) ?? [], `${id}/${dialect} dropped 'as ord' — sortBy silently degrades to no sort`)
+          .toHaveLength(2);
       }
     }
   });
@@ -1690,18 +1694,23 @@ describe('SEED_QUERIES — the transmission grids', () => {
   // (14.22pt) instead of "2 Feb" (20.90pt) — measured with real pdfkit metrics. Collapsing these
   // back to one line puts every laboratory name back under the ellipsis.
   it('emits the date row as two lines, in every dialect', () => {
+    // Each dialect string carries this expression once per day column — 23 sites. A match-anywhere
+    // assertion (`toMatch`) is satisfied by 1 of 23, so 22 columns could regress to a bare
+    // `char(10)`/single-line expression and this test would stay green. Mutation-tested: flipping
+    // one of the 23 sites back to the un-stacked form fails the count, confirming this discriminates
+    // where `toMatch` could not — see git history for the reviewer's own proof on the mysql case.
     const NEWLINE: Record<string, RegExp> = {
-      postgres: /to_char\(cal_day, 'FMDD'\) \|\| chr\(10\) \|\| to_char\(cal_day, 'Mon'\)/,
-      mssql: /concat\(format\(cal_day, '%d', 'en-US'\), char\(10\), format\(cal_day, 'MMM', 'en-US'\)\)/,
+      postgres: /to_char\(cal_day, 'FMDD'\) \|\| chr\(10\) \|\| to_char\(cal_day, 'Mon'\)/g,
+      mssql: /concat\(format\(cal_day, '%d', 'en-US'\), char\(10\), format\(cal_day, 'MMM', 'en-US'\)\)/g,
       // ⛔ `using utf8mb4` is asserted, not just `char(10)`. Bare CHAR(10) is a BINARY string in
       // MySQL and CONCAT turns the whole cell binary, so mysql2 (built with no `typeCast`) hands the
       // date row back as Buffers and the JSON/CSV export of that row stops being text.
-      mysql: /concat\(date_format\(cal_day, '%e'\), char\(10 using utf8mb4\), date_format\(cal_day, '%b'\)\)/,
+      mysql: /concat\(date_format\(cal_day, '%e'\), char\(10 using utf8mb4\), date_format\(cal_day, '%b'\)\)/g,
     };
     for (const id of ['q-transmission-hvleid', 'q-transmission-other']) {
       for (const [dialect, sql] of Object.entries(q(id).sql)) {
-        expect(sql, `${id}/${dialect} no longer stacks the day over the month`)
-          .toMatch(NEWLINE[dialect]);
+        expect(sql.match(NEWLINE[dialect]) ?? [], `${id}/${dialect} no longer stacks the day over the month on all 23 columns`)
+          .toHaveLength(23);
       }
     }
   });

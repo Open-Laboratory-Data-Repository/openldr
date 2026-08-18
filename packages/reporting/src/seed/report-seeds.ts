@@ -2568,7 +2568,7 @@ grid as (
 -- ⛔ 'using utf8mb4' is LOAD-BEARING, not decoration. Bare CHAR(10) returns a BINARY string,
 -- and CONCAT returns binary if ANY argument is binary — so d01..d23 on this row come back
 -- as VARBINARY. The mysql2 pool is built with no 'typeCast'
--- (packages/bootstrap/src/connector-db.ts:63), and mysql2 hands a binary column back as a Buffer:
+-- (packages/bootstrap/src/connector-db.ts:64-67), and mysql2 hands a binary column back as a Buffer:
 -- the PDF would survive ('rowsFor' does String(...)), but the JSON and CSV export of this row
 -- would carry a serialized Buffer and the value would stop equalling the day-over-month string.
 -- utf8mb4 is a superset of the connection's default utf8mb3, so the CONCAT coerces cleanly rather
@@ -2975,7 +2975,7 @@ grid as (
 -- ⛔ 'using utf8mb4' is LOAD-BEARING, not decoration. Bare CHAR(10) returns a BINARY string,
 -- and CONCAT returns binary if ANY argument is binary — so d01..d23 on this row come back
 -- as VARBINARY. The mysql2 pool is built with no 'typeCast'
--- (packages/bootstrap/src/connector-db.ts:63), and mysql2 hands a binary column back as a Buffer:
+-- (packages/bootstrap/src/connector-db.ts:64-67), and mysql2 hands a binary column back as a Buffer:
 -- the PDF would survive ('rowsFor' does String(...)), but the JSON and CSV export of this row
 -- would carry a serialized Buffer and the value would stop equalling the day-over-month string.
 -- utf8mb4 is a superset of the connection's default utf8mb3, so the CONCAT coerces cleanly rather
