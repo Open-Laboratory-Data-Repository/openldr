@@ -6,6 +6,7 @@ import { planProjection, type ProjectionTask, type Gap } from './plan';
 import { readCursor, advanceCursor } from './cursor';
 import type { SafeFetchResult } from './fetch';
 import { provenanceFromRow, type Provenance } from '../provenance';
+import { LEDGER_RESOURCE_TYPES } from './ledger';
 
 export type FetchSafeRows = (db: Kysely<InternalSchema>, cursor: number, limit: number) => Promise<SafeFetchResult>;
 
@@ -109,6 +110,36 @@ export async function reprojectAll(deps: Pick<ProjectionDeps, 'internalDb' | 're
     offset += rows.length;
     if (rows.length < page) break;
   }
+
+  // ⛔ A SECOND scan, over a DIFFERENT table, and it cannot be folded into the loop above.
+  // The loop above pages `fhir.fhir_resources`, which holds only the CURRENT version of each
+  // resource. An arrival ledger is a record of every version, so rebuilding it from that table is
+  // structurally impossible — it would record one arrival per resource and lose the history.
+  let arrivals = 0;
+  let histOffset = 0;
+  for (;;) {
+    const rows = await deps.internalDb
+      .selectFrom('fhir.resource_history')
+      .select(['resource_type', 'id', 'version', 'recorded_at'])
+      .where('resource_type', 'in', [...LEDGER_RESOURCE_TYPES])
+      // (resource_type, id, version) is this table's PRIMARY KEY, so the ordering is unique and the
+      // OFFSET paging is deterministic. AGENTS.md §7: an ORDER BY + OFFSET without a unique
+      // tiebreaker can skip or repeat rows, and pg-mem's stable scan order would never reveal it.
+      .orderBy('resource_type').orderBy('id').orderBy('version')
+      .limit(page).offset(histOffset)
+      .execute();
+    if (rows.length === 0) break;
+    await deps.relationalWriter.writeIngestEvents(rows.map((r) => ({
+      resource_type: r.resource_type as string,
+      resource_id: r.id as string,
+      version: Number(r.version),
+      recorded_at: r.recorded_at as Date,
+    })));
+    arrivals += rows.length;
+    histOffset += rows.length;
+    if (rows.length < page) break;
+  }
+
   await advanceCursor(deps.internalDb, 'projection', maxSeq);
   return projected;
 }

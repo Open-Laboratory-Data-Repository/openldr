@@ -4,6 +4,7 @@ import type { Provenance } from './provenance';
 import type { TargetEngine } from './engine';
 import { insertBatchPg, mergeBatchMssql, insertBatchMysql, type WriteResult } from './batch-upsert';
 import { projectResource, tableForResourceType, scopeColumnFor, type RelationalResult } from './relational/index';
+import type { ArrivalEvent } from './projection/ledger';
 
 export type { WriteResult };
 /** `provenance` is REQUIRED, deliberately. It used to default to `{}`, which made a
@@ -16,15 +17,21 @@ export interface RelationalWriter {
   write(resource: unknown, provenance: Provenance): Promise<WriteResult>;
   writeMany(items: RelationalWriteItem[]): Promise<WriteResult[]>;
   deleteById(resourceType: string, id: string): Promise<void>;
+  writeIngestEvents(events: ArrivalEvent[]): Promise<void>;
 }
 
 export function createRelationalWriter(db: Kysely<ExternalSchema>, engine: TargetEngine = 'postgres'): RelationalWriter {
   const anyDb = db as unknown as Kysely<any>;
-  async function upsertOn(exec: Kysely<any>, table: string, rows: Record<string, unknown>[]): Promise<void> {
+  // `conflictCols` defaults to the single `id` PK every other warehouse table has. `ingest_events`
+  // is the one table whose natural key IS its primary key, three columns wide with no `id` at all —
+  // see batch-upsert.ts's comment on why a hardcoded 'id' target broke it outright on real Postgres.
+  async function upsertOn(
+    exec: Kysely<any>, table: string, rows: Record<string, unknown>[], conflictCols: string[] = ['id'],
+  ): Promise<void> {
     if (rows.length === 0) return;
-    if (engine === 'mssql') await mergeBatchMssql(exec, table, rows);
-    else if (engine === 'mysql') await insertBatchMysql(exec, table, rows);
-    else await insertBatchPg(exec, table, rows);
+    if (engine === 'mssql') await mergeBatchMssql(exec, table, rows, conflictCols);
+    else if (engine === 'mysql') await insertBatchMysql(exec, table, rows, conflictCols);
+    else await insertBatchPg(exec, table, rows, conflictCols);
   }
 
   /** Replace everything a fan-out resource owns. DELETE-then-INSERT, not upsert-then-prune: a
@@ -78,6 +85,16 @@ export function createRelationalWriter(db: Kysely<ExternalSchema>, engine: Targe
         return;
       }
       await anyDb.deleteFrom(table).where('id', '=', id).execute();
+    },
+    async writeIngestEvents(events) {
+      // Idempotent by construction: the table's PK is (resource_type, resource_id, version), the
+      // same natural key as fhir.resource_history, so re-writing an arrival is a no-op. That is
+      // what lets the live path and the rebuild path write without coordinating.
+      if (events.length === 0) return;
+      await upsertOn(
+        anyDb, 'ingest_events', events as unknown as Record<string, unknown>[],
+        ['resource_type', 'resource_id', 'version'],
+      );
     },
   };
 }
