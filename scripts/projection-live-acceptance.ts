@@ -214,7 +214,7 @@ async function main() {
     assert(!(await observationExists(obsId)), `canonical lab_results row ${obsId} removed pre-reproject`);
     assert(!(await patientExists(heldId)), `canonical patients row ${heldId} removed pre-reproject`);
     const rebuilt = await reprojectAll({ internalDb, relationalWriter });
-    ok(`reprojectAll rebuilt ${rebuilt} canonical resource(s)`);
+    ok(`reprojectAll rebuilt ${rebuilt.projected} canonical resource(s), ${rebuilt.arrivals} arrival(s)`);
     assert(await observationExists(obsId), `Observation ${obsId} rebuilt from canonical`);
     assert(await patientExists(heldId), `Patient ${heldId} rebuilt from canonical`);
     assert(await patientExists(laterId), `Patient ${laterId} rebuilt from canonical`);

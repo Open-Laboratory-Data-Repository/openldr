@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import pg from 'pg';
-import { Kysely, PostgresDialect } from 'kysely';
+import { Kysely, PostgresDialect, sql } from 'kysely';
 import { createInternalDb, type InternalDb } from '../internal-db';
 import { createMigrator } from '../migrator';
 import { internalMigrations } from '../migrations/internal/index';
@@ -65,8 +65,17 @@ const makeServiceRequest = (id: string): FhirResource => ({
 // So: poll `runCycle()` until the expected rows land, bounded by wall-clock time, and fail loudly
 // (never silently) if they never do — a timeout here must still read as a failure, not let the
 // caller's assertion run against an empty result and report a confusing, unrelated mismatch.
+const POLL_MAX_WAIT_MS = 250_000; // > the ~240s 082 bulk-insert transaction observed pinning xmin
+
+// The per-test vitest timeout must be comfortably LARGER than the poll bound, not a hair over it.
+// It was 260s against a 250s bound, leaving 10s for one final runCycle(); a slow last iteration made
+// vitest kill the test with its own generic timeout instead of letting the helper throw its named
+// message, turning a clear "did not land" into an opaque one. The helper must always win the race,
+// so the margin has to cover a whole slow iteration, not a fraction of one.
+const POLL_TEST_TIMEOUT_MS = POLL_MAX_WAIT_MS + 60_000;
+
 async function pollUntilProjected(runner: ProjectionRunner, check: () => Promise<boolean>, what: string): Promise<void> {
-  const maxWaitMs = 250_000; // > the ~240s 082 bulk-insert transaction observed pinning xmin
+  const maxWaitMs = POLL_MAX_WAIT_MS;
   const intervalMs = 2_000;
   const deadline = Date.now() + maxWaitMs;
   for (;;) {
@@ -280,7 +289,7 @@ live('arrival ledger rebuild from resource_history (live Postgres)', () => {
       .where('resource_id', '=', 'live-1').execute();
     expect(rows).toHaveLength(1);
     expect(rows[0].resource_type).toBe('ServiceRequest');
-  }, 260_000);
+  }, POLL_TEST_TIMEOUT_MS);
 
   it('live and rebuild agree when two versions arrive between cycles', async () => {
     // The cycle sees ONE task for the resource. Recording only the newest version would lose the
@@ -297,5 +306,87 @@ live('arrival ledger rebuild from resource_history (live Postgres)', () => {
     const live = await db.selectFrom('ingest_events').select(['version'])
       .where('resource_id', '=', 'live-2').orderBy('version').execute();
     expect(live.map((r) => Number(r.version))).toEqual([1, 2]);
-  }, 260_000);
+  }, POLL_TEST_TIMEOUT_MS);
+
+  it('records a late older upsert that arrives after a newer delete — no canonical row to find', async () => {
+    // THE case the live path used to drop, and it needs no race at all.
+    //
+    // `applyRemote` (the sync mirror path) appends the op='upsert' history row UNCONDITIONALLY
+    // (fhir-store.ts:424) and writes fhir_resources only when the incoming version is the newest
+    // ever seen (:444-446). So an older upsert arriving after a newer delete — a lab re-draining a
+    // backlog after a central-side delete — is a REAL arrival that leaves fhir_resources empty. The
+    // cycle's getWithProvenance then returns null and applyProjection takes the deleteById branch.
+    // With the ledger write confined to the `found` branch, that arrival was never recorded live,
+    // while reprojectAll (which reads history, not fhir_resources) recorded it — the live ledger and
+    // a rebuild gave different answers for the same warehouse.
+    const id = 'stale-upsert-1';
+    const site = 'site-lab-1';
+    expect(await fhirStore.applyRemote({
+      resourceType: 'ServiceRequest', id, version: 1, op: 'upsert', siteId: site,
+      resource: makeServiceRequest(id),
+    })).toBe('applied');
+    expect(await fhirStore.applyRemote({
+      resourceType: 'ServiceRequest', id, version: 3, op: 'delete', siteId: site,
+    })).toBe('applied');
+    // Version 2 < 3, so `isNewest` is false: history gets the upsert, fhir_resources does not.
+    expect(await fhirStore.applyRemote({
+      resourceType: 'ServiceRequest', id, version: 2, op: 'upsert', siteId: site,
+      resource: makeServiceRequest(id),
+    })).toBe('applied');
+
+    // Pin the precondition, or this test could pass for the wrong reason (e.g. if the canonical row
+    // were in fact present and the ordinary `found` branch had recorded the arrival).
+    expect(await fhirStore.getWithProvenance('ServiceRequest', id)).toBeNull();
+
+    // No reprojectAll in this test. Anything in ingest_events was written by the projection cycle.
+    await pollUntilProjected(runner, async () => {
+      const rows = await db.selectFrom('ingest_events').select(['version'])
+        .where('resource_id', '=', id).where('version', '=', 2).execute();
+      return rows.length >= 1;
+    }, `${id} version 2 arrival on the live path`);
+
+    const rows = await db.selectFrom('ingest_events').select(['version'])
+      .where('resource_type', '=', 'ServiceRequest').where('resource_id', '=', id)
+      .orderBy('version').execute();
+    // Both real upserts, and NOT the version-3 tombstone: readArrivals filters op='upsert'.
+    expect(rows.map((r) => Number(r.version))).toEqual([1, 2]);
+  }, POLL_TEST_TIMEOUT_MS);
+
+  // LAST on purpose: it adds >1,000 history rows, which would change the totals the snapshot
+  // comparisons above rely on.
+  it('pages past the 1,000-row limit — the keyset predicate reaches every arrival', async () => {
+    // The rebuild scan reads `fhir.resource_history` 1,000 rows at a time and asks for rows strictly
+    // after the last key it saw, using a Postgres row comparison. Nothing else in this repo exercises
+    // that predicate: every other fixture here is a handful of rows, so the scan always breaks after
+    // its FIRST page and the second-page SQL never runs. A syntax or type error in it would surface
+    // only on a warehouse with more than 1,000 clinical history rows — which is every real one.
+    //
+    // DEVIATION from this file's rule that fixtures go through save()/delete(): 1,005 real saves take
+    // minutes. These rows are inserted directly because what is under test is the SCAN's paging, not
+    // the write path — the shape is copied from what save() writes (op='upsert', jsonb resource).
+    const N = 1005; // > one page (1,000), so the keyset predicate must run at least once
+    await sql`
+      insert into fhir.resource_history (resource_type, id, version, op, resource)
+      select 'Observation', 'keyset-' || lpad(g::text, 5, '0'), 1, 'upsert',
+             jsonb_build_object('resourceType', 'Observation', 'id', 'keyset-' || lpad(g::text, 5, '0'))
+      from generate_series(1, ${sql.lit(N)}) as g
+    `.execute(internal.db);
+
+    await reprojectAll({ internalDb: internal.db, relationalWriter });
+
+    const [{ n }] = await db.selectFrom('ingest_events')
+      .select((eb) => eb.fn.countAll<number>().as('n'))
+      .where('resource_id', 'like', 'keyset-%')
+      .execute();
+    // Every one of them, not just the first page. A regression to OFFSET would still pass this
+    // (nothing is inserted mid-scan here) — this test pins that the predicate RUNS and is correct,
+    // not that it is concurrency-safe, which no in-process test can show.
+    expect(Number(n)).toBe(N);
+
+    // And the paging must not duplicate or drop at the page boundary: ids 1000/1001 straddle it.
+    const boundary = await db.selectFrom('ingest_events').select(['resource_id'])
+      .where('resource_id', 'in', ['keyset-01000', 'keyset-01001'])
+      .orderBy('resource_id').execute();
+    expect(boundary.map((r) => r.resource_id)).toEqual(['keyset-01000', 'keyset-01001']);
+  }, 120_000);
 });

@@ -70,13 +70,15 @@ export async function runDbReset(opts: JsonOpt & { force: boolean }): Promise<nu
   }
 }
 
-/** Human-readable refusal naming what is outstanding and the (non-destructive) remedy. */
-function pendingMigrationsMessage(pending: { internal: string[]; external: string[] }): string {
+/** Human-readable refusal naming what is outstanding and the (non-destructive) remedy.
+ *  `command` is the refusing command's name, so `db seed` and `db reproject` share one message
+ *  rather than drifting into two that word the same refusal differently. */
+function pendingMigrationsMessage(command: string, pending: { internal: string[]; external: string[] }): string {
   const count = pending.internal.length + pending.external.length;
-  const lines = [`db seed refused: the database schema is behind the code (${count} pending migration(s)).`];
+  const lines = [`${command} refused: the database schema is behind the code (${count} pending migration(s)).`];
   if (pending.internal.length) lines.push(`  internal: ${pending.internal.join(', ')}`);
   if (pending.external.length) lines.push(`  external: ${pending.external.join(', ')}`);
-  lines.push('', 'Run `openldr db migrate` first, then re-run `openldr db seed`.');
+  lines.push('', `Run \`openldr db migrate\` first, then re-run \`openldr ${command}\`.`);
   return lines.join('\n');
 }
 
@@ -97,18 +99,39 @@ export async function runDbReproject(opts: JsonOpt & { force: boolean }): Promis
   }
   const ctx = await createDbContext(loadConfig());
   try {
-    const projected = await reprojectAll({ internalDb: ctx.internalDb, relationalWriter: ctx.relationalWriter });
+    // Refuse BEFORE rebuilding anything, for the same reason `db seed` does: on a stale schema
+    // `reprojectAll` completes the ENTIRE clinical rewrite and only then throws
+    // `relation "ingest_events" does not exist`, having advanced no cursor and recorded no audit
+    // event. Post-upgrade backfill is this command's stated purpose, so a schema one migration
+    // behind is its likely FIRST invocation. Naming the cause up front costs one query.
+    const pending = await ctx.pendingMigrations();
+    if (pending.internal.length || pending.external.length) {
+      emit(opts.json, { ok: false, error: 'pending_migrations', pending }, pendingMigrationsMessage('db reproject', pending));
+      return 1;
+    }
+
+    const { projected, arrivals } = await reprojectAll({ internalDb: ctx.internalDb, relationalWriter: ctx.relationalWriter });
     try {
       const appCtx = await createAppContext(loadConfig());
       try {
-        await recordAuditEvent(appCtx, cliActor(), { action: 'db.reproject', entityType: 'database', entityId: 'external', metadata: { projected } });
+        await recordAuditEvent(appCtx, cliActor(), { action: 'db.reproject', entityType: 'database', entityId: 'external', metadata: { projected, arrivals } });
       } finally {
         await appCtx.close();
       }
     } catch {
       // audit is best-effort, exactly as db.reset treats it
     }
-    emit(opts.json, { projected }, `rebuilt the read model from ${projected} canonical resource${projected === 1 ? '' : 's'}`);
+    // TWO numbers, named separately and never added together: `projected` counts canonical
+    // RESOURCES, `arrivals` counts arrival-ledger ROWS (one per version). Reporting one as the
+    // other is the mistake `terminology.ts:152-166` records — a rebuild count was read as a
+    // dimension count. The ledger is this command's headline new capability, so a run that wrote
+    // zero ledger rows must be visible without querying the warehouse.
+    emit(
+      opts.json,
+      { projected, arrivals },
+      `rebuilt the read model from ${projected} canonical resource${projected === 1 ? '' : 's'}; `
+      + `recorded ${arrivals} arrival${arrivals === 1 ? '' : 's'} in the ingest ledger`,
+    );
     return 0;
   } finally {
     await ctx.close();
@@ -124,7 +147,7 @@ export async function runDbSeed(opts: JsonOpt): Promise<number> {
     // then continues. Checking first means the operator sees the cause, not the symptom.
     const pending = await ctx.pendingMigrations();
     if (pending.internal.length || pending.external.length) {
-      emit(opts.json, { ok: false, error: 'pending_migrations', pending }, pendingMigrationsMessage(pending));
+      emit(opts.json, { ok: false, error: 'pending_migrations', pending }, pendingMigrationsMessage('db seed', pending));
       return 1;
     }
 

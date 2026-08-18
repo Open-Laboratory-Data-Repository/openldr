@@ -12,7 +12,7 @@ import { keyType, shortKeyType, timestampType } from './dialect';
 // untouched; it only moves on a fresh INSERT (e.g. after a warehouse-side wipe). Either way it holds
 // exactly one timestamp per row, for ever, so it cannot answer "did anything arrive on day X" for a
 // resource that also arrived, or was corrected, on some other day. Measured 2026-08-17: all 7,520
-// requests carried created_at 2026-08-06 (the day they were last (re)projected) while their
+// requests carried created_at 2026-08-06 (the day they were first (re)projected) while their
 // authored_at spanned 2013-03-01..2013-11-07. A transmission report built on that column shows a
 // wall of green on the projection date and nothing anywhere else.
 //

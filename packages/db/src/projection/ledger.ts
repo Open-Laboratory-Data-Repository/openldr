@@ -54,9 +54,15 @@ export function toArrivalEvent(row: ResourceHistoryRow): ArrivalEvent {
 /** Every arrival recorded for one resource, oldest first.
  *
  *  Returns ALL versions, not the newest. The live path upserts the whole set so that it agrees with
- *  a rebuild even when two versions arrive between projection cycles — the cycle sees one task for
+ *  a rebuild when two versions arrive between projection cycles — the cycle sees one task for
  *  the resource, and recording only the newest would silently lose the intermediate arrival while
  *  the rebuild kept it. Idempotent upsert on the composite key makes re-writing the set free.
+ *
+ *  This does not make the live path and a rebuild identical by construction; they run different
+ *  queries over the same table, and a failed live ledger write is logged and skipped (`cycle.ts`).
+ *  It makes them agree on the multi-version case. `applyProjection` calls this on BOTH the found and
+ *  the deleted branch for the same reason — see its comment for the two ways a real arrival exists
+ *  with no canonical row. A rebuild stays the repair path.
  *
  *  Filtered to `op = 'upsert'`: a `delete()` tombstone (`fhir-store.ts`'s `op: 'delete'`, `resource:
  *  null`) is data going AWAY, not an arrival. `ingest_events` has no `op` column to record a

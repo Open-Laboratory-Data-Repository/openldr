@@ -24,7 +24,7 @@ admin/danger actions are also available in the Studio UI under Settings.
 | Group | What it does |
 | --- | --- |
 | `health` | Report service health (auth, storage, eventing, target store). |
-| `db` | `migrate`, `reset`, `seed` the database. |
+| `db` | `migrate`, `reset`, `seed` the database; `reproject` the warehouse read model. |
 | `settings` | Feature `flags list` / `flags set`, `danger <action>`, and `sync show` / `sync set` (lab⇄central sync config). |
 | `terminology` | Import and query CodeSystems, ValueSets, ConceptMaps, ontologies. |
 | `fhir` | Validate FHIR R4 resources. |
@@ -46,7 +46,7 @@ admin/danger actions are also available in the Studio UI under Settings.
 | `target-store` | Test the target warehouse connection. |
 
 Mutating CLI commands (`sync enroll/rotate/revoke`, `user create/set-role/activate/deactivate`,
-`settings … set`, `settings danger …`, `db reset`, `terminology import/create`) record an audit
+`settings … set`, `settings danger …`, `db reset`, `db reproject`, `terminology import/create`) record an audit
 event with actor type **`cli`** and actor name = the OS user (override with the global
 `--actor <name>`). They appear on the Audit page alongside UI actions.
 
@@ -67,6 +67,22 @@ pnpm openldr db seed
 
 `db seed` refuses to run when migrations are pending, naming what is outstanding — run
 `db migrate` first.
+
+Rebuild the warehouse read model from the canonical FHIR store (`db reproject` **rewrites every
+projected row**, so it refuses without `--force`):
+
+```
+pnpm openldr db reproject --force
+```
+
+It prints two separate counts: the canonical resources it rewrote, and the arrivals it recorded in
+the ingest ledger (one per version of a clinical resource — they are different units, not the same
+number). Like `db seed`, it refuses when migrations are pending rather than running to completion
+against a schema that is behind. Use it to backfill after an upgrade adds a warehouse table.
+
+`terminology reproject` is **deprecated** — it has always called the same whole-read-model rebuild,
+never a terminology-only one. It still works as an alias, it now prints a deprecation warning, and
+it inherits the `--force` guard. Use `db reproject` instead.
 
 Install and run an ingest plugin, then ingest a file with it:
 
