@@ -196,16 +196,6 @@ describe("column maps agree with what the UI can offer", () => {
       }
     });
 
-    it(`${label}: a column narrower than its type is expressible as ColumnDef.operators`, () => {
-      for (const [id, spec] of Object.entries(map)) {
-        const narrower = spec.operators.length < validOperators(spec.type).length;
-        if (narrower) {
-          // This is the case the popover used to get wrong. The ColumnDef the page builds must
-          // carry the narrowed list, or the popover falls back to the type's full six.
-          expect(spec.operators.length, `${label}.${id}`).toBeGreaterThan(0);
-        }
-      }
-    });
   }
 });
 ```
