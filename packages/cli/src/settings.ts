@@ -238,6 +238,10 @@ export interface LabSetOpts extends JsonOpt {
   name?: string;
   address?: string;
   contact?: string;
+  /** IANA zone name, e.g. "Africa/Dar_es_Salaam"; empty string clears it. Validated by
+   *  `ctx.labIdentity.set` against the runtime's own zone database — a fixed offset like
+   *  "+03:00" is rejected because it cannot express daylight saving. */
+  timezone?: string;
   /** Path to a PNG/JPEG file; read and stored as a data URI. */
   logoFile?: string;
 }
@@ -247,6 +251,7 @@ export async function runSettingsLabSet(opts: LabSetOpts): Promise<number> {
   if (opts.name !== undefined) patch['lab.name'] = opts.name;
   if (opts.address !== undefined) patch['lab.address'] = opts.address;
   if (opts.contact !== undefined) patch['lab.contact'] = opts.contact;
+  if (opts.timezone !== undefined) patch['lab.timezone'] = opts.timezone;
 
   if (opts.logoFile !== undefined) {
     if (opts.logoFile === '') {
@@ -270,7 +275,7 @@ export async function runSettingsLabSet(opts: LabSetOpts): Promise<number> {
   }
 
   if (Object.keys(patch).length === 0) {
-    process.stderr.write('nothing to set — pass at least one of --name, --address, --contact, --logo-file\n');
+    process.stderr.write('nothing to set — pass at least one of --name, --address, --contact, --timezone, --logo-file\n');
     return 1;
   }
 

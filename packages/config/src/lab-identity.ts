@@ -73,6 +73,13 @@ export const LAB_IDENTITY_FIELDS: readonly LabIdentityFieldDefinition[] = [
    * A URI is well under this bound; the length exists only so a paste cannot store something absurd.
    */
   { id: 'lab.facilitySystem', labelKey: 'settings.laboratory.facilitySystem', maxLength: 500, source: 'facility-registers' },
+  /**
+   * The civil timezone this installation's days are bucketed in. NOT decoration: the monthly
+   * transmission grid asks "did data arrive on this day", and an arrival at 21:00Z is 00:00 the
+   * NEXT day at +03. Bucketing in UTC moves a whole evening's arrivals to the previous day — an
+   * off-by-one-day on every cell, with nothing on the page to show it happened.
+   */
+  { id: 'lab.timezone', labelKey: 'settings.laboratory.timezone', maxLength: 100 },
 ];
 
 export const LAB_IDENTITY_KEYS = LAB_IDENTITY_FIELDS.map((f) => f.id);
@@ -82,10 +89,31 @@ export type LabIdentity = Record<string, string>;
 
 export interface LabIdentityValidationError {
   key: string;
-  reason: 'too-long' | 'not-a-data-uri' | 'unsupported-image-type' | 'unknown-key';
+  reason: 'too-long' | 'not-a-data-uri' | 'unsupported-image-type' | 'unknown-key' | 'invalid-timezone';
 }
 
 const DATA_URI = /^data:([a-z]+\/[a-z0-9.+-]+);base64,([A-Za-z0-9+/]+={0,2})$/;
+
+/**
+ * True for a zone name the runtime's own IANA database resolves. Deliberately NOT a hand-written
+ * list, so it stays correct as zones are added or renamed.
+ *
+ * ⛔ A fixed offset like "+03:00" is rejected too: it cannot express daylight saving, so a report
+ * spanning a DST boundary would bucket half its days an hour out.
+ */
+function isValidIanaZone(value: string): boolean {
+  // Reject a fixed offset explicitly. Measured: this runtime's ICU resolves "+03:00" as a
+  // legal `timeZone` for Intl.DateTimeFormat (it did not throw), but an offset cannot express
+  // daylight saving, so a report spanning a DST boundary would bucket half its days an hour out.
+  // No real IANA zone id starts with a sign.
+  if (/^[+-]/.test(value)) return false;
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: value });
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Validate one identity value. Returns `null` when acceptable.
@@ -95,11 +123,21 @@ const DATA_URI = /^data:([a-z]+\/[a-z0-9.+-]+);base64,([A-Za-z0-9+/]+={0,2})$/;
  * ENOENT, so a URL logo renders fine in the designer canvas (`<img>` is happy) and silently becomes
  * a dashed placeholder in the PDF — a failure nobody sees until they open a printed report. Failing
  * at write is the only point where the operator can still do something about it.
+ *
+ * ⛔ `lab.timezone` is rejected at write time for the same reason: a bad zone does not error at
+ * query time (Postgres `AT TIME ZONE` raises, but only when a report actually runs), so a typo
+ * would only surface a month later as a whole day bucketed on the wrong side of midnight.
  */
 export function validateLabIdentityValue(key: string, value: string): LabIdentityValidationError | null {
   const def = LAB_IDENTITY_FIELDS.find((f) => f.id === key);
   if (!def) return { key, reason: 'unknown-key' };
   if (value.length > def.maxLength) return { key, reason: 'too-long' };
+
+  if (key === 'lab.timezone') {
+    if (value === '') return null;
+    return isValidIanaZone(value) ? null : { key, reason: 'invalid-timezone' };
+  }
+
   if (key !== 'lab.logo' || value === '') return null;
 
   const m = DATA_URI.exec(value);

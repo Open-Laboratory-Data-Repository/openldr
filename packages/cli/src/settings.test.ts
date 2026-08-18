@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
     validationStrictness: { get: vi.fn(), set: vi.fn() },
     featureFlags: { get: vi.fn(), set: vi.fn() },
     numberSettings: { get: vi.fn(), set: vi.fn() },
+    labIdentity: { all: vi.fn(), set: vi.fn() },
     appSettings: {},
     encryptSecret: vi.fn(),
     close: vi.fn(),
@@ -39,6 +40,7 @@ import {
   runSettingsNumbersSet,
   runSettingsSyncSet,
   runSettingsDanger,
+  runSettingsLabSet,
 } from './settings';
 
 describe('settings validation — show', () => {
@@ -247,6 +249,50 @@ describe('settings sync — set audit parity', () => {
         metadata: { before: current, after: saved },
       }),
     );
+  });
+});
+
+describe('settings lab — set (timezone parity with --name/--address/--contact)', () => {
+  let err: string;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    err = '';
+    vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    vi.spyOn(process.stderr, 'write').mockImplementation((chunk) => {
+      err += String(chunk);
+      return true;
+    });
+    mocks.createAppContext.mockResolvedValue(mocks.appCtx);
+    mocks.appCtx.labIdentity.set.mockResolvedValue([]);
+    mocks.appCtx.labIdentity.all.mockResolvedValue({ 'lab.timezone': 'Africa/Dar_es_Salaam' });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('passes --timezone through as the lab.timezone key, same as --name does for lab.name', async () => {
+    const code = await runSettingsLabSet({ timezone: 'Africa/Dar_es_Salaam', json: false });
+
+    expect(code).toBe(0);
+    expect(mocks.appCtx.labIdentity.set).toHaveBeenCalledWith({ 'lab.timezone': 'Africa/Dar_es_Salaam' }, 'cli');
+  });
+
+  it('surfaces a validation rejection (e.g. an unresolvable zone) without a 0 exit code', async () => {
+    mocks.appCtx.labIdentity.set.mockResolvedValue([{ key: 'lab.timezone', reason: 'invalid-timezone' }]);
+
+    const code = await runSettingsLabSet({ timezone: 'Not A Zone', json: false });
+
+    expect(code).not.toBe(0);
+    expect(err).toContain('invalid-timezone');
+  });
+
+  it('rejects an empty options object — --timezone now appears in the "nothing to set" hint', async () => {
+    const code = await runSettingsLabSet({ json: false });
+
+    expect(code).not.toBe(0);
+    expect(err).toContain('--timezone');
   });
 });
 

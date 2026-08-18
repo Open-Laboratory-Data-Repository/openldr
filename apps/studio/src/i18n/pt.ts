@@ -272,6 +272,7 @@ export const pt: EnShape = {
       logo: 'Logótipo',
       facilitySystem: 'Registo de unidades',
       facilitySystemPlaceholder: 'Selecionar um registo…',
+      timezone: 'Fuso horário',
       chooseLogo: 'Escolher ficheiro…',
       clearLogo: 'Limpar',
       save: 'Guardar',
@@ -286,6 +287,7 @@ export const pt: EnShape = {
         'not-a-data-uri': 'O logótipo tem de ser um ficheiro de imagem carregado, não um endereço web — uma imagem ligada não aparece no PDF.',
         'unsupported-image-type': 'O logótipo tem de ser uma imagem PNG, JPEG ou WebP.',
         'unknown-key': 'Definição não reconhecida.',
+        'invalid-timezone': 'Tem de ser um nome de fuso IANA (ex.: Africa/Dar_es_Salaam), não um desvio fixo.',
       },
     },
     subNav: {
