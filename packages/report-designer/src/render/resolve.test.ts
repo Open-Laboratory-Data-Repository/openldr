@@ -41,3 +41,50 @@ describe('resolveDesignTables — non-table bound elements', () => {
     expect(runQuery).not.toHaveBeenCalled();
   });
 });
+
+describe('resolveDesignTables — sortBy', () => {
+  // ⛔ Why an element-level sort exists at all: `planPagination` wraps a stored query as
+  // `select * from (<inner>) as _q limit N offset 0` (packages/dashboards/src/sql-runner.ts:56).
+  // MySQL's optimizer is free to discard an ORDER BY inside a derived table, so a query whose
+  // FIRST row is meaningful (the transmission grid's date row) cannot rely on the engine keeping
+  // it first. Sorting here — where the rows enter the renderer — makes every downstream consumer
+  // (rows, cell statuses, keyvalue pairs) see one order.
+  it('orders the resolved rows by the named column, numerically when it holds numbers', async () => {
+    const runQuery = async () => ({
+      columns: [{ key: 'ord', label: 'ord' }, { key: 'lab', label: 'lab' }],
+      rows: [{ ord: 1, lab: 'B' }, { ord: 0, lab: '(dates)' }, { ord: 1, lab: 'A' }],
+    });
+    const design = { parameters: [], pages: [{ id: 'p', elements: [
+      { id: 't', kind: 'table', name: 'T', rect: { x: 0, y: 0, w: 1, h: 1 }, sortBy: 'ord',
+        dataSource: { kind: 'custom-query', queryId: 'q' } },
+    ] }] } as any;
+    const resolved = await resolveDesignTables(design, {}, runQuery);
+    expect((resolved.get('t') as any).rows.map((r: any) => r.lab)).toEqual(['(dates)', 'B', 'A']);
+  });
+
+  it('is stable — rows sharing a sort value keep the order the query returned them in', async () => {
+    const runQuery = async () => ({
+      columns: [{ key: 'ord', label: 'ord' }],
+      rows: [{ ord: 1, lab: 'A' }, { ord: 1, lab: 'B' }, { ord: 1, lab: 'C' }],
+    });
+    const design = { parameters: [], pages: [{ id: 'p', elements: [
+      { id: 't', kind: 'table', name: 'T', rect: { x: 0, y: 0, w: 1, h: 1 }, sortBy: 'ord',
+        dataSource: { kind: 'custom-query', queryId: 'q' } },
+    ] }] } as any;
+    const resolved = await resolveDesignTables(design, {}, runQuery);
+    expect((resolved.get('t') as any).rows.map((r: any) => r.lab)).toEqual(['A', 'B', 'C']);
+  });
+
+  it('leaves the rows exactly as the query returned them when no sortBy is set', async () => {
+    const runQuery = async () => ({
+      columns: [{ key: 'ord', label: 'ord' }],
+      rows: [{ ord: 9 }, { ord: 2 }],
+    });
+    const design = { parameters: [], pages: [{ id: 'p', elements: [
+      { id: 't', kind: 'table', name: 'T', rect: { x: 0, y: 0, w: 1, h: 1 },
+        dataSource: { kind: 'custom-query', queryId: 'q' } },
+    ] }] } as any;
+    const resolved = await resolveDesignTables(design, {}, runQuery);
+    expect((resolved.get('t') as any).rows.map((r: any) => r.ord)).toEqual([9, 2]);
+  });
+});

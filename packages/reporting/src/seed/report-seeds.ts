@@ -3034,6 +3034,48 @@ export const DESIGNS_REQUIRING_DATA: Readonly<Record<string, string>> = {
   'rt-clinical-micro': 'hdr',
 };
 
+/** Body width of the transmission grid's A4-LANDSCAPE page, px@96. Same arithmetic
+ *  `simpleTableDesign` uses: `round(pageWpt / 0.75) - 96`, i.e. 1123 - 96 for A4 landscape. */
+const TG_CONTENT_W = 1027;
+/** Height of each of the two grids, px@96 = 160.5pt. `maxRowsFor` is `floor((h - ROW_H) / ROW_H)`
+ *  at ROW_H = 16pt, so each grid shows 9 body rows per page: the date row plus eight laboratories.
+ *  It is already the most the page can give — the two grids, their headings and the footer rule
+ *  fill the landscape sheet — so this is a page-size limit, not a chosen number.
+ *
+ *  ⚠ A month with more laboratories chunks onto further pages, and the date row is a DATA row, so
+ *  it appears on the first chunk ONLY. Page 2 onward shows marks under blank day headers. Nothing
+ *  a design can set fixes that: repeating a data row per chunk is a renderer behaviour, and the
+ *  day headers are blank because a static design cannot know a run-time month's dates. */
+const TG_GRID_H = 214;
+
+/**
+ * The 24 columns each transmission grid prints: the laboratory, then the 23 working-day slots.
+ *
+ * ⛔ Bound EXPLICITLY, and it has to be. An empty `boundColumns` makes the renderer take its
+ * headers from the query's own result columns (packages/report-designer/src/render/draw.ts:271),
+ * which would print `ord`, `d01`, `d02` … as the header row. The real dates are DATA — they travel
+ * in the query's first row, because the month is a run-time parameter and no static design can
+ * know them — so the day headers here are deliberately blank.
+ *
+ * ⛔ `ord` is excluded. It exists only to sort the date row to the top and is not a column of the
+ * report; the element's `sortBy` reads it, the page never prints it.
+ *
+ * ⚠ MEASURED, and short. 24 columns over the 770.25pt landscape body leaves a day cell 18.0pt of
+ * text where `23 Feb` needs 24.7pt, and the laboratory column 111.8pt where a name the length of
+ * "Kilimanjaro Christian Medical Centre" needs 129.5pt. Both ellipsize. `columnWidths` allocates
+ * from measured content at a fixed 8pt, so the only levers are fewer columns, shorter date text or
+ * a smaller font — none of which a design can set. Widening the table cannot close it either: the
+ * natural demand is 937.6pt against a 841.89pt sheet.
+ */
+function transmissionGridColumns(): { key: string; label: string; kind: 'label' }[] {
+  return [
+    { key: 'lab', label: 'Laboratory', kind: 'label' },
+    ...Array.from({ length: 23 }, (_, i) => ({
+      key: `d${String(i + 1).padStart(2, '0')}`, label: '', kind: 'label' as const,
+    })),
+  ];
+}
+
 /** Report-designer page designs, one table bound to a `SEED_QUERIES` entry (via `simpleTableDesign`). */
 export const SEED_DESIGNS: ReportDesign[] = [
   simpleTableDesign({
@@ -3308,6 +3350,80 @@ export const SEED_DESIGNS: ReportDesign[] = [
       { id: 'sig', kind: 'text', name: 'sig', rect: { x: 500, y: 1030, w: 240, h: 16 }, text: 'Authorised by ______________________', style: { fontSize: 8, color: '#475569' } },
     ] }],
   },
+
+  // The monthly LIS transmission grid. Authored as a literal, not via `simpleTableDesign`, for one
+  // reason: it is TWO tables on one page. Everything else — the letterhead ids, the scope panel,
+  // the footer rule, the geometry constants — is copied from `simple-design.ts` on purpose, so the
+  // shared "every report carries a letterhead and a scope panel" tests cover this design too.
+  //
+  // ⚠ Coordinates are px@96 (the renderer multiplies by 0.75 to reach pt).
+  {
+    id: 'rt-transmission-grid',
+    name: 'LIS Stakeholders Update',
+    status: 'published',
+    paper: 'A4',
+    // ⛔ 24 columns do not fit A4 portrait. Portrait leaves 698px of body for a `lab` column plus 23
+    // day columns; the day columns alone cannot go below MIN_COL_W (22pt = 29px each, 675px), which
+    // leaves the laboratory name 23px. Landscape gives 1027px and the names print.
+    orientation: 'landscape',
+    parameters: [
+      { key: 'month', label: 'Month', type: 'text', required: true, value: '',
+        help: 'The reporting month as YYYY-MM, for example 2021-01.' },
+      // ⛔ AGENTS.md §8 — the help text names no code either. This design ships worldwide and one
+      // country's panel codes are not another's.
+      { key: 'panels', label: 'HVL/EID panel codes', type: 'text', required: true, value: '',
+        help: 'Comma-separated panel codes counted as HVL/EID. Everything else appears in the Other grid.' },
+      // ⚠ The prefill is a DEFAULT, not a binding. The studio fills this box from the setting; a
+      // schedule or a CLI run does not read the setting and buckets on whatever it was given, with
+      // no warning if that is wrong or missing.
+      { key: 'tz', label: 'Time zone', type: 'text', required: true, value: '',
+        help: 'IANA zone the days are bucketed in. The studio fills this from Settings, Laboratory, '
+          + 'Time zone as a default you can overwrite. A scheduled or CLI run does not read that '
+          + 'setting and must pass the zone itself.' },
+    ],
+    pages: [{ id: 'rt-transmission-grid-p1', elements: [
+      // Band 1 — the letterhead, ids and rects byte-identical to `simpleTableDesign`'s.
+      { id: 'rt-transmission-grid-logo', kind: 'image', name: 'Lab logo', rect: { x: 48, y: 28, w: 54, h: 54 }, src: '{{lab.logo}}' },
+      { id: 'rt-transmission-grid-labname', kind: 'text', name: 'Lab name', rect: { x: 112, y: 30, w: 430, h: 18 }, text: '{{lab.name}}', style: { fontSize: 13, bold: true, color: '#0f172a' } },
+      { id: 'rt-transmission-grid-labaddr', kind: 'text', name: 'Lab address', rect: { x: 112, y: 48, w: 430, h: 22 }, text: '{{lab.address}}', style: { fontSize: 7.5, color: '#64748b' } },
+      { id: 'rt-transmission-grid-labcontact', kind: 'text', name: 'Lab contact', rect: { x: 112, y: 71, w: 430, h: 13 }, text: '{{lab.contact}}', style: { fontSize: 7.5, color: '#64748b' } },
+      { id: 'rt-transmission-grid-rule1', kind: 'line', name: 'rule1', rect: { x: 48, y: 92, w: TG_CONTENT_W, h: 0 }, style: { strokeColor: '#cbd5e1', strokeWidth: 0.75 } },
+      { id: 'rt-transmission-grid-title', kind: 'text', name: 'Title', rect: { x: 48, y: 102, w: 600, h: 28 }, text: 'LIS STAKEHOLDERS UPDATE', style: { fontSize: 18, bold: true } },
+      // Band 2 — the scope panel. UNBOUND (`rows`, not `dataSource`): only an unbound pair's value
+      // is interpolated, so only this form can carry `{{param.*}}`/`{{date}}`.
+      // Height computed the same way `simpleTableDesign` computes it: 4 pairs at 2 per line is
+      // 2 rows, and (KV_PAD_Y*2 + 2*KV_INLINE_H) POINTS = 36pt = 48px@96.
+      { id: 'rt-transmission-grid-meta', kind: 'keyvalue', name: 'Scope', rect: { x: 48, y: 138, w: TG_CONTENT_W, h: 48 },
+        layout: 'inline', panelColumns: 2,
+        rows: [
+          ['Month', '{{param.month}}'],
+          ['HVL/EID panel codes', '{{param.panels}}'],
+          ['Time zone', '{{param.tz}}'],
+          ['Generated', '{{date}}'],
+        ] },
+
+      { id: 'rt-transmission-grid-hvleid-title', kind: 'text', name: 'HVL/EID heading', rect: { x: 48, y: 194, w: 600, h: 14 },
+        text: 'Any HVL/EID Data Submission by Testing Laboratory', style: { fontSize: 10, bold: true, color: '#334155' } },
+      { id: 'hvleid', kind: 'table', name: 'HVL/EID submission', rect: { x: 48, y: 210, w: TG_CONTENT_W, h: TG_GRID_H },
+        dataSource: { kind: 'custom-query', queryId: 'q-transmission-hvleid' },
+        sortBy: 'ord',
+        boundColumns: transmissionGridColumns() },
+
+      { id: 'rt-transmission-grid-other-title', kind: 'text', name: 'Other heading', rect: { x: 48, y: 428, w: 600, h: 14 },
+        text: 'Any Other Test Data Submission by Testing Laboratory', style: { fontSize: 10, bold: true, color: '#334155' } },
+      { id: 'other', kind: 'table', name: 'Other submission', rect: { x: 48, y: 446, w: TG_CONTENT_W, h: TG_GRID_H },
+        dataSource: { kind: 'custom-query', queryId: 'q-transmission-other' },
+        sortBy: 'ord',
+        boundColumns: transmissionGridColumns() },
+
+      { id: 'rt-transmission-grid-rule2', kind: 'line', name: 'rule2', rect: { x: 48, y: 671, w: TG_CONTENT_W, h: 0 }, style: { strokeColor: '#cbd5e1', strokeWidth: 0.75 } },
+      { id: 'rt-transmission-grid-foot', kind: 'text', name: 'Footer', rect: { x: 48, y: 683, w: 500, h: 16 },
+        text: 'Generated by OpenLDR — a filled cell means data arrived from that laboratory that day.', style: { fontSize: 7, color: '#94a3b8' } },
+      { id: 'rt-transmission-grid-sig', kind: 'text', name: 'Signature', rect: { x: 700, y: 683, w: 375, h: 16 },
+        text: 'Reviewed by ______________________', style: { fontSize: 8, color: '#475569' } },
+    ] }],
+    pageNumbers: true,
+  },
 ];
 
 /** `reports` records linking a `SEED_DESIGNS` design to its `SEED_QUERIES` primary query. */
@@ -3440,6 +3556,26 @@ export const SEED_REPORT_DEFS: ReportRecord[] = [
     summaryMetrics: [{ id: 'agents', label: 'Agents tested', type: 'count' }],
     // No chart: a per-patient clinical result is not a series, and no param options: `request` is
     // typed by the clinician, not picked from a lookup query.
+    chart: null,
+    paramOptions: null,
+    status: 'published',
+  },
+
+  {
+    id: 'r-transmission-grid',
+    name: 'LIS Stakeholders Update',
+    description: 'Which laboratories sent data on which working day of a month: one grid for the '
+      + 'HVL/EID panels named in the parameter, one for every other test. A filled cell means data '
+      + 'arrived from that laboratory on that day; a blank cell means nothing did. Days are bucketed '
+      + 'in the supplied time zone, so an evening arrival stays on the day it was sent.',
+    category: 'operational',
+    designId: 'rt-transmission-grid',
+    primaryQueryId: 'q-transmission-hvleid',
+    // ⛔ No count metric. The HVL/EID result carries a synthetic first row holding the dates, so a
+    // row count would report one laboratory more than exist, on every run.
+    summaryMetrics: null,
+    // No chart: a presence/absence grid is not a series. No param options: month, panel list and
+    // time zone are all typed, not picked from a lookup query.
     chart: null,
     paramOptions: null,
     status: 'published',

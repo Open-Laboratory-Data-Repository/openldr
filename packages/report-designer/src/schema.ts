@@ -82,6 +82,19 @@ export const DesignElementSchema = z.object({
    *  (default `''`). The original header of that column describes the values that are now the
    *  headers, so it cannot be reused. */
   transposeLabel: z.string().optional(),
+  /** Result column the bound rows are ordered by before anything draws them (ascending; numeric
+   *  when every value parses as a number, otherwise a string compare; stable, so rows sharing a
+   *  value keep the order the query returned them in).
+   *
+   *  ⛔ Exists because a stored query's own ORDER BY is not guaranteed to survive the runner.
+   *  `planPagination` wraps every query as `select * from (<inner>) as _q limit N offset 0`
+   *  (packages/dashboards/src/sql-runner.ts:56) and MySQL's optimizer may discard an ORDER BY
+   *  inside a derived table. A design whose FIRST row is meaningful — the transmission grid's
+   *  date row — would then print that row somewhere in the middle of the grid, with no error.
+   *
+   *  The column named here does NOT have to be bound: a sort discriminator is usually not a
+   *  column of the report. */
+  sortBy: z.string().optional(),
   /** `keyvalue` pair arrangement (default `inline`) */
   layout: z.enum(['inline', 'stacked']).optional(),
   /** `keyvalue` pairs side by side per line (default 1). Capped at 4 — beyond that a pair's share of

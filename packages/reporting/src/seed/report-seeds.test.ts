@@ -1737,3 +1737,114 @@ describe('SEED_QUERIES — the transmission grids', () => {
     }
   });
 });
+
+describe('SEED_DESIGNS — rt-transmission-grid', () => {
+  const design = () => SEED_DESIGNS.find((d) => d.id === 'rt-transmission-grid')!;
+  const el = (id: string) => design().pages[0].elements.find((e) => e.id === id)!;
+
+  it('is landscape — 24 columns do not fit portrait', () => {
+    expect(design().orientation).toBe('landscape');
+  });
+
+  it('draws BOTH grids on one page, as the reference does', () => {
+    expect(el('hvleid').dataSource).toEqual({ kind: 'custom-query', queryId: 'q-transmission-hvleid' });
+    expect(el('other').dataSource).toEqual({ kind: 'custom-query', queryId: 'q-transmission-other' });
+  });
+
+  it('binds the lab column and all 23 day columns explicitly', () => {
+    for (const id of ['hvleid', 'other']) {
+      const keys = (el(id).boundColumns ?? []).map((c) => c.key);
+      expect(keys[0]).toBe('lab');
+      expect(keys).toHaveLength(24);
+      expect(keys).toContain('d23');
+    }
+  });
+
+  it('projects only keys the queries actually select', () => {
+    const sql = SEED_QUERIES.find((q) => q.id === 'q-transmission-hvleid')!.sql.postgres;
+    for (const c of el('hvleid').boundColumns ?? []) {
+      // ⚠ `\\b` — inside a TEMPLATE LITERAL a lone `\b` is the backspace character, not a word
+      // boundary, so the pattern silently never matches.
+      expect(new RegExp(`as ${c.key}\\b`).test(sql), `${c.key} is not selected`).toBe(true);
+    }
+  });
+});
+
+describe('SEED_DESIGNS — rt-transmission-grid keeps ord off the page', () => {
+  const design = () => SEED_DESIGNS.find((d) => d.id === 'rt-transmission-grid')!;
+  const el = (id: string) => design().pages[0].elements.find((e) => e.id === id)!;
+
+  it('never binds ord — it sorts the rows, it is not a column of the report', () => {
+    for (const id of ['hvleid', 'other']) {
+      expect((el(id).boundColumns ?? []).map((c) => c.key), `${id} prints ord`).not.toContain('ord');
+    }
+  });
+
+  it('sorts its own rows on ord instead of trusting the SQL row order', () => {
+    // planPagination wraps the query as `select * from (<inner>) as _q limit N`
+    // (packages/dashboards/src/sql-runner.ts:56). MySQL may discard an ORDER BY inside a derived
+    // table; if it does, the '(dates)' row lands in the middle of the grid. Sorting where the
+    // renderer consumes the rows removes the dependency on the engine keeping that order.
+    for (const id of ['hvleid', 'other']) {
+      expect(el(id).sortBy, `${id} trusts the SQL row order`).toBe('ord');
+    }
+  });
+
+  it('names no panel code anywhere in the design — the list is a run-time parameter', () => {
+    // AGENTS.md §8. HIVVL/HIVPC are Tanzania's codes; this design ships worldwide.
+    expect(JSON.stringify(design())).not.toMatch(/HIVVL|HIVPC|HIVEL|HIVDR/);
+  });
+
+  it('says in the tz help that the prefill is a studio default, not a binding', () => {
+    // A CLI or scheduled run passes tz explicitly and never reads the setting. An operator who
+    // reads "defaults to Settings" and nothing else will assume a schedule inherits it.
+    const tz = design().parameters.find((p) => p.key === 'tz')!;
+    expect(tz.required).toBe(true);
+    expect(tz.help ?? '').toMatch(/schedul|CLI/i);
+  });
+});
+
+describe('SEED_REPORT_DEFS — r-transmission-grid', () => {
+  const def = () => SEED_REPORT_DEFS.find((r) => r.id === 'r-transmission-grid')!;
+
+  it('links the grid design to the HVL/EID query, published and operational', () => {
+    expect(def()).toMatchObject({
+      category: 'operational',
+      designId: 'rt-transmission-grid',
+      primaryQueryId: 'q-transmission-hvleid',
+      status: 'published',
+    });
+    expect(def().description).toMatch(/laborator/i);
+  });
+
+  it('⛔ is NOT gated on having data — a month in which nothing arrived is the answer', () => {
+    // DESIGNS_REQUIRING_DATA refuses to render when the named element has no rows. Right for a
+    // per-patient clinical report; here it would hide exactly the outage the report exists to show.
+    expect(DESIGNS_REQUIRING_DATA['rt-transmission-grid']).toBeUndefined();
+  });
+});
+
+describe('SEED_DESIGNS — rt-transmission-grid geometry', () => {
+  const design = () => SEED_DESIGNS.find((d) => d.id === 'rt-transmission-grid')!;
+  const el = (id: string) => design().pages[0].elements.find((e) => e.id === id)!;
+
+  it('gives both grids the FULL landscape body width', () => {
+    // ⚠ 24 columns are already short of what they need at the renderer's fixed 8pt: a day cell gets
+    // 18.0pt of text where "23 Feb" measures 24.7, and the laboratory column 111.8pt where a long
+    // name measures 129.5. Both ellipsize. Narrowing these rects makes a legibility problem that is
+    // already at its limit worse, and nothing in a rendering test would say so.
+    const [wPt] = paperSizePt(design().paper, design().orientation);
+    const body = Math.round(wPt / 0.75) - 96; // simpleTableDesign's own arithmetic
+    for (const id of ['hvleid', 'other']) {
+      expect(el(id).rect.w, `${id} is narrower than the page allows`).toBe(body);
+    }
+  });
+
+  it('gives both grids the same width and the same height', () => {
+    // Two readings of the same month, one above the other. Different column widths between them
+    // would make a lab's row in the top grid not line up with its row in the bottom one.
+    expect(el('hvleid').rect.w).toBe(el('other').rect.w);
+    expect(el('hvleid').rect.h).toBe(el('other').rect.h);
+    expect(el('hvleid').rect.x).toBe(el('other').rect.x);
+  });
+});
