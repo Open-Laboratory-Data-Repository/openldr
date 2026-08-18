@@ -6,6 +6,18 @@
       "version": null,
       "entries": [
         {
+          "hash": "271c34d9",
+          "type": "fix",
+          "scope": "reports",
+          "title": "Refuse only a time zone that is silently inverted"
+        },
+        {
+          "hash": "f95762e4",
+          "type": "fix",
+          "scope": "reports",
+          "title": "Check a run parameter's declared format before the query runs"
+        },
+        {
           "hash": "0803c6ff",
           "type": "fix",
           "scope": "reports",
@@ -1516,12 +1528,6 @@
           "type": "fix",
           "scope": "facilities",
           "title": "State what 077 actually guarantees, and let the import override work both ways"
-        },
-        {
-          "hash": "0ec3cda4",
-          "type": "fix",
-          "scope": "facilities",
-          "title": "Stop a facility mapping being re-pointed at the wrong lab"
         }
       ]
     }
