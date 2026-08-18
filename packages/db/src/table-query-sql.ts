@@ -131,7 +131,16 @@ export function applySorts<QB extends { orderBy: (c: any, d: any) => QB }>(
     // non-null value, and descending negates that comparison — so ascending keeps null first,
     // descending pushes it last. Postgres defaults to the opposite in both directions
     // (ASC -> NULLS LAST, DESC -> NULLS FIRST), so it must be overridden explicitly here.
-    out = out.orderBy(sql.ref(spec.sql), (ob: OrderByItemBuilder) =>
+    //
+    // Text ordering must not depend on the database's default collation. postgres:16-alpine is
+    // musl-based, so `en_US.utf8` silently falls back to byte order and 'BETA' sorts before
+    // 'alpha'; a glibc or managed-cloud Postgres would order it differently again. An explicit
+    // ICU collation makes the order a property of the query, and matches applyTableState's
+    // String.localeCompare. Only text-ish columns are collatable — COLLATE on an integer or
+    // timestamp is a Postgres error.
+    const collatable = spec.type === "text" || spec.type === "enum";
+    const target = collatable ? sql`${sql.ref(spec.sql)} collate "en-US-x-icu"` : sql.ref(spec.sql);
+    out = out.orderBy(target, (ob: OrderByItemBuilder) =>
       s.ascending ? ob.asc().nullsFirst() : ob.desc().nullsLast(),
     );
   }
@@ -140,6 +149,8 @@ export function applySorts<QB extends { orderBy: (c: any, d: any) => QB }>(
   // ORDER BY + OFFSET instability this function exists to prevent, without any visible symptom
   // until pages start repeating or skipping rows. Fail loud instead.
   if (!tb) throw new Error(`unknown tiebreaker column "${tiebreaker}"`);
-  out = out.orderBy(sql.ref(tb.sql), "asc");
+  const tbCollatable = tb.type === "text" || tb.type === "enum";
+  const tbTarget = tbCollatable ? sql`${sql.ref(tb.sql)} collate "en-US-x-icu"` : sql.ref(tb.sql);
+  out = out.orderBy(tbTarget, "asc");
   return out;
 }
