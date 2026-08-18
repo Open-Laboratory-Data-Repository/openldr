@@ -6,6 +6,24 @@
       "version": null,
       "entries": [
         {
+          "hash": "0803c6ff",
+          "type": "fix",
+          "scope": "reports",
+          "title": "The transmission grid stops describing states it cannot be in"
+        },
+        {
+          "hash": "6bf5fa68",
+          "type": "fix",
+          "scope": "report-designer",
+          "title": "A table that did not opt into a stacked header draws one line"
+        },
+        {
+          "hash": "78df58b6",
+          "type": "fix",
+          "scope": "reports",
+          "title": "Keep the MySQL date row as text, and make two assertions able to fail"
+        },
+        {
           "hash": "dd5d5a0c",
           "type": "fix",
           "scope": "install",
@@ -34,6 +52,42 @@
           "type": "fix",
           "scope": "cli",
           "title": "Externalise the deps that resolve files from disk at runtime"
+        },
+        {
+          "hash": "dd62dafd",
+          "type": "fix",
+          "scope": "reports",
+          "title": "Prove the two-line date on live Postgres, and pair headerRow with sortBy"
+        },
+        {
+          "hash": "98bc0022",
+          "type": "feat",
+          "scope": "reports",
+          "title": "Take the transmission grid's header from its date row"
+        },
+        {
+          "hash": "428a7766",
+          "type": "feat",
+          "scope": "reports",
+          "title": "Seed the transmission grid design and report"
+        },
+        {
+          "hash": "2c5fb395",
+          "type": "fix",
+          "scope": "reports",
+          "title": "Split the MySQL panel list per element, and correct the empty-list comments"
+        },
+        {
+          "hash": "04723c34",
+          "type": "feat",
+          "scope": "reports",
+          "title": "Transmission grid queries, attributed through the submission batch"
+        },
+        {
+          "hash": "ad088df3",
+          "type": "feat",
+          "scope": "settings",
+          "title": "Add the lab.timezone identity field"
         },
         {
           "hash": "512130d3",
@@ -1468,84 +1522,6 @@
           "type": "fix",
           "scope": "facilities",
           "title": "Stop a facility mapping being re-pointed at the wrong lab"
-        },
-        {
-          "hash": "1a38e31b",
-          "type": "feat",
-          "scope": "facilities",
-          "title": "Expose the mapping-conflict review queue"
-        },
-        {
-          "hash": "807d4397",
-          "type": "fix",
-          "scope": "db",
-          "title": "Replace migration 078's literal NUL byte with an escape"
-        },
-        {
-          "hash": "352d6c03",
-          "type": "fix",
-          "scope": "facilities",
-          "title": "A superseded mapping takes its mirror element and its audit record with it"
-        },
-        {
-          "hash": "08fa6f28",
-          "type": "feat",
-          "scope": "db",
-          "title": "Enforce one active SAME-AS facility resolution per observed key"
-        },
-        {
-          "hash": "995207e3",
-          "type": "fix",
-          "scope": "facilities",
-          "title": "A mapping edit retargets, it never moves the source term"
-        },
-        {
-          "hash": "dbd00c2a",
-          "type": "feat",
-          "scope": "facilities",
-          "title": "Enforce SAME-AS and single active resolution at the API boundary"
-        },
-        {
-          "hash": "6afddf3b",
-          "type": "fix",
-          "scope": "facilities",
-          "title": "Duplicate mappings to the same facility are not a conflict"
-        },
-        {
-          "hash": "c75d9825",
-          "type": "fix",
-          "scope": "facilities",
-          "title": "Only SAME-AS resolves, and competing mappings resolve to nothing"
-        },
-        {
-          "hash": "0e05ffa7",
-          "type": "feat",
-          "scope": "facilities",
-          "title": "Retire a deleted facility's concept, and reproject what the delete frees"
-        },
-        {
-          "hash": "5258c4fe",
-          "type": "fix",
-          "scope": "facilities",
-          "title": "Reproject the incumbent when a batch RELEASES a contested code"
-        },
-        {
-          "hash": "adc4b29f",
-          "type": "fix",
-          "scope": "facilities",
-          "title": "Make both projection paths agree on a colliding code"
-        },
-        {
-          "hash": "b4ec42db",
-          "type": "fix",
-          "scope": "facilities",
-          "title": "Collide on projected codes, and pin the reprojection contract"
-        },
-        {
-          "hash": "c3da93ab",
-          "type": "feat",
-          "scope": "facilities",
-          "title": "Migrate term_mappings when a facility's projected code moves"
         }
       ]
     }
