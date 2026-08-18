@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "ba12d22d",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Marketplace registries adopt the standard table toolbar"
+        },
+        {
           "hash": "06b0116f",
           "type": "fix",
           "scope": "db",
@@ -1486,18 +1492,6 @@
           "type": "feat",
           "scope": "facilities",
           "title": "Show report-dimension freshness on the Facilities page"
-        },
-        {
-          "hash": "8b791b6d",
-          "type": "fix",
-          "scope": "facilities",
-          "title": "Audit facility job retries and pin the attempts-reset test"
-        },
-        {
-          "hash": "0a97cbe8",
-          "type": "feat",
-          "scope": "facilities",
-          "title": "Expose report-dimension health and job retry"
         }
       ]
     }
