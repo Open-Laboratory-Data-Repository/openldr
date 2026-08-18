@@ -141,7 +141,7 @@ export function FilterPopover<T>({ columns, filters, onApply }: FilterPopoverPro
   const addFilter = () => {
     const col = filterable[0];
     if (!col) return;
-    const ops = validOperators(col.type);
+    const ops = col.operators ?? validOperators(col.type);
     setDraft([
       ...draft,
       { id: newId("f"), column: col.id, operator: ops[0]!, value: "", combine: "and" },
@@ -191,7 +191,7 @@ export function FilterPopover<T>({ columns, filters, onApply }: FilterPopoverPro
               {draft.map((rule, idx) => {
                 const col = filterable.find((c) => c.id === rule.column) ?? filterable[0];
                 if (!col) return null;
-                const ops = validOperators(col.type);
+                const ops = col.operators ?? validOperators(col.type);
                 return (
                   <li key={rule.id} className="flex flex-wrap items-center gap-1.5">
                     <div className="w-14">
@@ -223,7 +223,7 @@ export function FilterPopover<T>({ columns, filters, onApply }: FilterPopoverPro
                       onValueChange={(v) => {
                         const next = filterable.find((c) => c.id === v);
                         if (!next) return;
-                        const nextOps = validOperators(next.type);
+                        const nextOps = next.operators ?? validOperators(next.type);
                         const nextOp = nextOps.includes(rule.operator) ? rule.operator : nextOps[0]!;
                         updateFilter(rule.id, { column: v, operator: nextOp, value: "" });
                       }}

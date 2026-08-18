@@ -22,6 +22,12 @@ export interface ColumnDef<T> {
   cellClassName?: string;
   /** Optional Tailwind className for <TableHead>. */
   headClassName?: string;
+  /**
+   * Operators this column actually accepts, overriding the type's default list. Server-backed
+   * pages set this from their column map so the popover cannot offer something the endpoint
+   * rejects with a 400. Omit it and the column falls back to validOperators(type).
+   */
+  operators?: FilterOperator[];
 }
 
 export const FILTER_OPERATORS: {
