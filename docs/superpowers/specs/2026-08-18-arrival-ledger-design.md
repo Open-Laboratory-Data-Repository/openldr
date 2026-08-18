@@ -18,7 +18,30 @@ three-state cells.
 The operator chose **ingest date** semantics: a cell asks "did anything reach OpenLDR from this lab
 that day", not "is there data stamped that day".
 
-**CE cannot answer that today, and the obvious column is a trap.**
+> ⛔ **CORRECTION, 2026-08-18, found during Task 2.** The section below originally said
+> "`reprojectAll` rewrites every one of them". **That is FALSE and it was the headline justification
+> for this whole slice.** All three upsert paths in `packages/db/src/batch-upsert.ts` exclude
+> `created_at` from their update set (`filter(c => ... && c !== 'created_at')`), and that exclusion
+> **pre-dates this branch** — verified against `main`. So `created_at` is a *first written* stamp: it
+> is set on insert and never updated, and a reprojection over rows that already exist leaves it
+> alone.
+>
+> **The slice still stands, but for different reasons.** What `created_at` genuinely cannot do:
+> 1. **Hold more than one arrival.** One row, one timestamp, forever. A resource that arrives, is
+>    corrected, and corrected again has a single `created_at`. A grid asking "did anything arrive on
+>    day D" cannot see the corrections. This is decisive on its own, and it is the reason the
+>    operator chose a ledger over first/last timestamp columns.
+> 2. **Distinguish arrival from projection.** It records when the *projection* ran, not when the
+>    resource arrived. Those diverge whenever projection lags or is paused.
+> 3. **Survive a warehouse wipe.** `db reset` then reproject inserts fresh rows, so every
+>    `created_at` becomes the rebuild time. Real, but rarer than the two above.
+>
+> Reason 1 alone justifies the ledger. Reason 3 is what the original text overstated into "every
+> reprojection". The measured 2013-vs-2026 gap below is still real — it just demonstrates that
+> `created_at` is projection time rather than data time, not that it is unstable.
+
+**CE cannot answer that today, and the obvious column is a trap — though not the trap I first
+described.**
 
 `lab_requests.created_at` looks like an arrival time. It is not. The projection never writes it —
 `projectServiceRequest` (`packages/db/src/relational/service-request.ts:6-21`) writes `id`,
@@ -28,14 +51,16 @@ that day", not "is there data stamped that day".
 `Provenance` interface carries no timestamp at all
 (`packages/db/src/provenance.ts:1-6`).
 
-So `created_at` falls to its column default `now()`: the moment the warehouse row was written.
-**`reprojectAll` rewrites every one of them.** Measured on the dev warehouse 2026-08-17: all 7,520
-requests carry `created_at` of 2026-08-06 while their `authored_at` values span 2013-03-01 to
-2013-11-07 — thirteen years apart.
+So `created_at` falls to its column default `now()`: the moment the warehouse row was first written
+by the projection. Measured on the dev warehouse 2026-08-17: all 7,520 requests carry `created_at`
+of 2026-08-06 while their `authored_at` values span 2013-03-01 to 2013-11-07 — thirteen years apart.
+That gap is the point: the column records **projection time**, which is not the data's date and is
+not, in general, the arrival time either.
 
-A transmission report built on that column would show a wall of green on the reprojection date and
-nothing anywhere else. Reprojection is routine here; it is the documented fix for adding warehouse
-columns. A silently-wrong operational report is worse than no report.
+And it holds exactly one timestamp per row, for ever. A transmission grid asks "did anything arrive
+from this lab on day D". A resource that arrived on the 5th and was corrected on the 12th answers
+that question twice; `created_at` can only answer it once, and it answers for the 5th. Every
+correction-only day reads as silence.
 
 **The durable record already exists.** `fhir.resource_history` holds one row per write to the
 canonical store, with `recorded_at`, `version` and `op`. It is written in the same transaction as
