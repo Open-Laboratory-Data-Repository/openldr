@@ -1,14 +1,21 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
+import { MoreHorizontal, Boxes } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Bleed } from '@/components/ui/bleed';
+import { TablePagination } from '@/components/ui/table-pagination';
+import { StripedEmpty } from '@/components/ui/striped-empty';
+import { EmptyState } from '@/components/ui/empty-state';
+import {
+  ActiveFilterChips, DataTableToolbar, applyTableState, useTableState, type ColumnDef,
+} from '@/components/data-table';
 import {
   listRegistries, createRegistry, updateRegistry, deleteRegistry,
   type MarketplaceRegistry,
@@ -24,12 +31,19 @@ interface DraftState {
 
 const emptyDraft = (): DraftState => ({ id: null, name: '', kind: 'http', location: '', enabled: true });
 
+// Module level — stable, outside the component.
+const SEARCH_FIELDS = [
+  (r: MarketplaceRegistry) => r.name,
+  (r: MarketplaceRegistry) => r.location,
+];
+
 export function RegistriesTab({ onChanged }: { onChanged: () => void }) {
   const { t } = useTranslation();
   const [rows, setRows] = useState<MarketplaceRegistry[]>([]);
   const [draft, setDraft] = useState<DraftState | null>(null);
   const [pendingRemove, setPendingRemove] = useState<MarketplaceRegistry | null>(null);
   const [busy, setBusy] = useState(false);
+  const [search, setSearch] = useState('');
 
   const err = useCallback((e: unknown) =>
     toast.error(t('settings.marketplace.registryErrorToast', { error: e instanceof Error ? e.message : String(e) })), [t]);
@@ -73,57 +87,151 @@ export function RegistriesTab({ onChanged }: { onChanged: () => void }) {
     catch (e) { err(e); }
   }, [pendingRemove, load, onChanged, err]);
 
+  const columns: ColumnDef<MarketplaceRegistry>[] = useMemo(() => [
+    { id: 'name', labelKey: 'settings.marketplace.registryName', accessor: (r) => r.name, type: 'text', defaultVisible: true, cellClassName: 'font-medium' },
+    {
+      id: 'kind', labelKey: 'settings.marketplace.registryKind', type: 'enum', defaultVisible: true,
+      accessor: (r) => (r.kind === 'http' ? t('settings.marketplace.kindHttp') : t('settings.marketplace.kindLocal')),
+      enumOptions: [
+        { value: 'http', labelKey: 'settings.marketplace.kindHttp' },
+        { value: 'local', labelKey: 'settings.marketplace.kindLocal' },
+      ],
+      cellClassName: 'text-muted-foreground',
+    },
+    { id: 'location', labelKey: 'settings.marketplace.registryLocation', accessor: (r) => r.location, type: 'text', defaultVisible: true, cellClassName: 'text-muted-foreground' },
+    {
+      id: 'enabled', labelKey: 'settings.marketplace.registryEnabled', type: 'enum', defaultVisible: true,
+      accessor: (r) => (
+        <span data-testid={`toggle-${r.id}`}>
+          <Switch checked={r.enabled} onCheckedChange={(v) => void onToggle(r, v)} aria-label={t('settings.marketplace.registryEnabled')} />
+        </span>
+      ),
+      enumOptions: [{ value: 'true', label: 'true' }, { value: 'false', label: 'false' }],
+    },
+  ], [t, onToggle]);
+
+  // `kind` and `enabled` render translated text and a Switch, so the filter needs the raw
+  // values behind them — otherwise filtering `enabled` would compare against a React element.
+  const valueGetters = useMemo(() => ({
+    name: (r: MarketplaceRegistry) => r.name,
+    kind: (r: MarketplaceRegistry) => r.kind,
+    location: (r: MarketplaceRegistry) => r.location,
+    enabled: (r: MarketplaceRegistry) => String(r.enabled),
+  }), []);
+
+  const table = useTableState({ columns, defaultPageSize: 25 });
+
+  // Free-text search pre-filters the rows; it is never appended to the filter rule list.
+  // applyTableState folds rules flat, left to right, so a multi-field search added as OR rules
+  // would discard an active popover filter for rows matching only the trailing term.
+  const searched = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter((r) => SEARCH_FIELDS.some((f) => (f(r) ?? '').toLowerCase().includes(q)));
+  }, [rows, search]);
+
+  const view = useMemo(
+    () => applyTableState(searched, { filters: table.filters, sorts: table.sorts, page: table.page, pageSize: table.pageSize }, columns, valueGetters),
+    [searched, table.filters, table.sorts, table.page, table.pageSize, columns, valueGetters],
+  );
+
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4" data-testid="registries-tab">
-      <div className="flex items-center justify-end">
-        <Button data-testid="add-registry" onClick={openCreate}>
-          {t('settings.marketplace.registryAddBtn')}
-        </Button>
+    <div className="flex min-h-0 flex-1 flex-col" data-testid="registries-tab">
+      <div className="flex flex-col gap-2 border-b border-border px-4 py-2">
+        <DataTableToolbar
+          columns={columns}
+          filters={table.filters}
+          onFiltersChange={table.setFilters}
+          sorts={table.sorts}
+          onSortsChange={table.setSorts}
+          visibleIds={table.visibleIds}
+          onVisibleIdsChange={table.setVisibleIds}
+          onResetColumns={table.resetColumns}
+          onResetAll={() => { table.resetAll(); setSearch(''); }}
+          searchValue={search}
+          onSearchChange={(v) => { setSearch(v); table.setPage(0); }}
+          searchPlaceholder={t('settings.marketplace.registrySearchPlaceholder')}
+          actions={
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8" aria-label={t('settings.marketplace.registryActions')}>
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem data-testid="add-registry" onClick={openCreate}>
+                  {t('settings.marketplace.registryAddBtn')}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          }
+        />
+        <ActiveFilterChips columns={columns} filters={table.filters} onChange={table.setFilters} />
       </div>
 
-      {rows.length === 0 ? (
-        <div className="text-sm text-muted-foreground">{t('settings.marketplace.noRegistries')}</div>
-      ) : (
-        <Bleed>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>{t('settings.marketplace.registryName')}</TableHead>
-              <TableHead>{t('settings.marketplace.registryKind')}</TableHead>
-              <TableHead>{t('settings.marketplace.registryLocation')}</TableHead>
-              <TableHead>{t('settings.marketplace.registryEnabled')}</TableHead>
-              <TableHead className="text-right" />
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {rows.map((r) => (
-              <TableRow key={r.id} data-testid={`registry-row-${r.id}`}>
-                <TableCell className="font-medium">{r.name}</TableCell>
-                <TableCell className="text-muted-foreground">
-                  {r.kind === 'http' ? t('settings.marketplace.kindHttp') : t('settings.marketplace.kindLocal')}
-                </TableCell>
-                <TableCell className="text-muted-foreground">{r.location}</TableCell>
-                <TableCell>
-                  <span data-testid={`toggle-${r.id}`}>
-                    <Switch checked={r.enabled} onCheckedChange={(v) => void onToggle(r, v)} aria-label={t('settings.marketplace.registryEnabled')} />
-                  </span>
-                </TableCell>
-                <TableCell>
-                  <div className="flex items-center justify-end gap-2">
-                    <Button variant="outline" size="sm" data-testid={`edit-${r.id}`} onClick={() => openEdit(r)}>
-                      {t('settings.marketplace.registryEditBtn')}
-                    </Button>
-                    <Button variant="ghost" size="sm" data-testid={`remove-${r.id}`} onClick={() => setPendingRemove(r)}>
-                      {t('settings.marketplace.registryRemoveBtn')}
-                    </Button>
-                  </div>
-                </TableCell>
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        {/* The table renders ONLY when populated. An empty table's header still forces its
+            intrinsic width, so keeping it around for an empty list scrolls sideways on a phone. */}
+        {view.rows.length > 0 && (
+          <Table wrapperClassName="min-h-0 flex-1">
+            <TableHeader className="sticky top-0 z-10 bg-background">
+              <TableRow>
+                {table.visibleColumns.map((c) => <TableHead key={c.id} className={c.headClassName}>{t(c.labelKey)}</TableHead>)}
+                <TableHead className="w-16" />
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-        </Bleed>
-      )}
+            </TableHeader>
+            <TableBody className="[&_tr:last-child]:border-b">
+              {view.rows.map((r) => (
+                <TableRow key={r.id} data-testid={`registry-row-${r.id}`}>
+                  {table.visibleColumns.map((c) => <TableCell key={c.id} className={c.cellClassName}>{c.accessor(r)}</TableCell>)}
+                  <TableCell>
+                    <div className="flex items-center justify-end">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" aria-label={t('settings.marketplace.registryActionsFor', { name: r.name })}>
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem data-testid={`edit-${r.id}`} onClick={() => openEdit(r)}>
+                            {t('settings.marketplace.registryEditBtn')}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            data-testid={`remove-${r.id}`}
+                            className="text-destructive focus:text-destructive"
+                            onClick={() => setPendingRemove(r)}
+                          >
+                            {t('settings.marketplace.registryRemoveBtn')}
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+        {view.rows.length === 0 && (
+          rows.length === 0 ? (
+            <EmptyState
+              icon={<Boxes className="h-6 w-6" />}
+              title={t('settings.marketplace.noRegistries')}
+              body={t('settings.marketplace.noRegistries')}
+            />
+          ) : (
+            <StripedEmpty className="flex-1">{t('settings.marketplace.noMatchRegistries')}</StripedEmpty>
+          )
+        )}
+      </div>
+
+      <TablePagination
+        page={table.page}
+        pageSize={table.pageSize}
+        total={view.total}
+        onPageChange={table.setPage}
+        onPageSizeChange={table.setPageSize}
+      />
 
       <Dialog open={draft !== null} onOpenChange={(o) => { if (!o) setDraft(null); }}>
         <DialogContent className="sm:max-w-lg">

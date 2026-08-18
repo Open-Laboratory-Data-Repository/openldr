@@ -13,6 +13,22 @@ vi.mock('@/api', async (orig) => {
 });
 import * as api from '@/api';
 import { RegistriesTab } from './RegistriesTab';
+import { addFilterViaPopover, expectStandardTableToolbar } from '@/components/data-table/expectStandardTableToolbar';
+
+// Radix opens on pointerdown, not click; keyboard Enter is the fallback when jsdom
+// swallows the pointer event. Same helper as Users.test.tsx / Roles.test.tsx.
+function openDropdown(trigger: HTMLElement) {
+  fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+  if (!document.querySelector('[role="menu"]')) fireEvent.keyDown(trigger, { key: 'Enter' });
+}
+
+async function openHeaderMenu() {
+  openDropdown(await screen.findByRole('button', { name: 'Registry actions' }));
+}
+
+async function openRowMenu(name: string) {
+  openDropdown(await screen.findByRole('button', { name: `Actions for ${name}` }));
+}
 
 const reg = { id: 'r1', name: 'Official', kind: 'http' as const, location: 'https://reg.example.org', enabled: true, createdAt: '2026-06-24T00:00:00Z', updatedAt: '2026-06-24T00:00:00Z' };
 
@@ -31,6 +47,7 @@ describe('RegistriesTab', () => {
   it('creates a registry via the dialog', async () => {
     (api.createRegistry as any).mockResolvedValue({ ...reg, id: 'r2', name: 'New' });
     render(<MemoryRouter><RegistriesTab onChanged={() => {}} /></MemoryRouter>);
+    await openHeaderMenu();
     fireEvent.click(await screen.findByTestId('add-registry'));
     fireEvent.change(await screen.findByTestId('registry-name'), { target: { value: 'New' } });
     // Radix Select inside a Radix Dialog: open with ArrowDown then click the rendered option.
@@ -46,6 +63,7 @@ describe('RegistriesTab', () => {
   it('removes a registry after confirm', async () => {
     (api.deleteRegistry as any).mockResolvedValue(undefined);
     render(<MemoryRouter><RegistriesTab onChanged={() => {}} /></MemoryRouter>);
+    await openRowMenu('Official');
     fireEvent.click(await screen.findByTestId('remove-r1'));
     fireEvent.click(await screen.findByRole('button', { name: 'Remove' }));
     await waitFor(() => expect(api.deleteRegistry).toHaveBeenCalledWith('r1'));
@@ -57,5 +75,34 @@ describe('RegistriesTab', () => {
     // The Switch primitive renders role="switch"; one per row.
     fireEvent.click(await screen.findByRole('switch'));
     await waitFor(() => expect(api.updateRegistry).toHaveBeenCalledWith('r1', { enabled: false }));
+  });
+
+  it('renders the standard table toolbar with the chips row', async () => {
+    render(<MemoryRouter><RegistriesTab onChanged={() => {}} /></MemoryRouter>);
+    await screen.findByText('Official');
+
+    await addFilterViaPopover('Official');
+    expectStandardTableToolbar();
+  });
+
+  it('filters rows by the search box, over name and location', async () => {
+    (api.listRegistries as any).mockResolvedValue([
+      reg,
+      { ...reg, id: 'r2', name: 'Community', location: 'https://community.example.org' },
+    ]);
+    render(<MemoryRouter><RegistriesTab onChanged={() => {}} /></MemoryRouter>);
+    await screen.findByText('Official');
+
+    // matches r2 on location only, proving the search covers more than name
+    fireEvent.change(screen.getByPlaceholderText('Search registries'), { target: { value: 'community.example' } });
+    await waitFor(() => expect(screen.queryByText('Official')).toBeNull());
+    expect(screen.getByText('Community')).toBeTruthy();
+  });
+
+  it('paginates, which AGENTS.md requires on every table including short config lists', async () => {
+    render(<MemoryRouter><RegistriesTab onChanged={() => {}} /></MemoryRouter>);
+    await screen.findByText('Official');
+    expect(screen.getByRole('combobox', { name: 'Rows per page' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Next page' })).toBeTruthy();
   });
 });
