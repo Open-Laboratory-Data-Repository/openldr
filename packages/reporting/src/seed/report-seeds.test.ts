@@ -1628,3 +1628,71 @@ describe('SEED_DESIGNS — no built-in id can collide with a designer-minted id'
     expect(SEED_DESIGNS.filter((d) => /^rt-\d+$/.test(d.id))).toEqual([]);
   });
 });
+
+describe('SEED_QUERIES — the transmission grids', () => {
+  const q = (id: string) => SEED_QUERIES.find((x) => x.id === id)!;
+
+  it('reads ServiceRequest arrivals, in every dialect', () => {
+    for (const id of ['q-transmission-hvleid', 'q-transmission-other']) {
+      for (const [dialect, sql] of Object.entries(q(id).sql)) {
+        expect(sql, `${id}/${dialect}`).toMatch(/resource_type\s*=\s*'ServiceRequest'/);
+      }
+    }
+  });
+
+  it('⛔ attributes through batch_id, never through the specimen', () => {
+    // The specimen route drops 868 requests, 548 of them EID — 99.6% of all EID here.
+    for (const id of ['q-transmission-hvleid', 'q-transmission-other']) {
+      for (const [dialect, sql] of Object.entries(q(id).sql)) {
+        expect(sql, `${id}/${dialect} lost the batch join`)
+          .toMatch(/d\.batch_id\s*=\s*q\.batch_id/);
+        expect(sql, `${id}/${dialect} attributes through the specimen`)
+          .not.toMatch(/specimen_id\s*=\s*.*diagnostic_reports/);
+      }
+    }
+  });
+
+  it('buckets days in the supplied timezone, not UTC', () => {
+    for (const id of ['q-transmission-hvleid', 'q-transmission-other']) {
+      for (const [dialect, sql] of Object.entries(q(id).sql)) {
+        expect(sql, `${id}/${dialect} ignores the tz parameter`).toContain('{{param.tz}}');
+      }
+    }
+  });
+
+  it('returns exactly the lab column and 23 day columns', () => {
+    for (const id of ['q-transmission-hvleid', 'q-transmission-other']) {
+      const sql = q(id).sql.postgres;
+      expect(sql).toMatch(/as lab\b/);
+      for (let i = 1; i <= 23; i++) {
+        const col = `d${String(i).padStart(2, '0')}`;
+        expect(sql, `${id} is missing ${col}`).toMatch(new RegExp(`as ${col}\\b`));
+      }
+      expect(sql, `${id} has a d24`).not.toMatch(/as d24\b/);
+    }
+  });
+
+  it('carries no panel code in SQL — the list is a run-time parameter', () => {
+    // AGENTS.md §8. HIVVL/HIVPC are Tanzania's codes; another country's differ.
+    for (const id of ['q-transmission-hvleid', 'q-transmission-other']) {
+      for (const [dialect, sql] of Object.entries(q(id).sql)) {
+        expect(sql, `${id}/${dialect}`).not.toMatch(/HIVVL|HIVPC|HIVEL|HIVDR/);
+        expect(sql, `${id}/${dialect} ignores the panel parameter`).toContain('{{param.panels}}');
+      }
+    }
+  });
+
+  // C2: `arrivals` must carry its own month bound. Without one, `labs` is "every laboratory that
+  // ever submitted" and a lab absent from the window still gets a blank row — and the only index
+  // on ingest_events leads with recorded_at, so an unbounded scan reads the whole table.
+  it('bounds recorded_at inside the arrivals CTE, in every dialect', () => {
+    for (const id of ['q-transmission-hvleid', 'q-transmission-other']) {
+      for (const [dialect, sql] of Object.entries(q(id).sql)) {
+        expect(sql, `${id}/${dialect} never bounds recorded_at`)
+          .toMatch(/e\.recorded_at\s*>=/);
+        expect(sql, `${id}/${dialect} never caps recorded_at`)
+          .toMatch(/e\.recorded_at\s*</);
+      }
+    }
+  });
+});
