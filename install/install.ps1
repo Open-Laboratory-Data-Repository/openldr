@@ -274,7 +274,7 @@ Fetch "scripts/init-keycloak-db.sql" "$Dir/config/init-keycloak-db.sql"
 $wrapper = @'
 # OpenLDR operator CLI. Runs inside the api container.
 # Files must live under .\data (mounted at /data) - e.g. .\openldr.ps1 ingest data/bundle.json
-docker compose exec -T -w /data api node /app/cli/dist/index.js $args
+docker compose exec -T -w / api node /app/cli/dist/index.js $args
 '@
 Set-Content -Path "$Dir/openldr.ps1" -Value $wrapper -Encoding utf8
 

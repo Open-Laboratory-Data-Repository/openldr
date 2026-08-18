@@ -296,15 +296,15 @@ chmod +x "$DIR/renew-cert.sh" 2>/dev/null || true
 
 # The `openldr` operator CLI. It ships inside the api image (apps/server/Dockerfile), so the
 # wrapper is a one-line shim rather than a downloaded binary. `-T` disables TTY allocation so
-# `./openldr report list --json | jq` works in a pipeline. `-w /data` makes the container's
-# working directory the ./data bind mount, so `./openldr ingest data/x.json` resolves on both
-# sides. The path /app/cli/dist/index.js is fixed by the image — see the COPY in
-# apps/server/Dockerfile.
+# `./openldr report list --json | jq` works in a pipeline. `-w /` sets the container's working
+# directory to root, so a `data/`-prefixed argument, like `./openldr ingest data/x.json`,
+# resolves to the /data bind mount — the same path the operator sees on the host. The path
+# /app/cli/dist/index.js is fixed by the image — see the COPY in apps/server/Dockerfile.
 cat > "$DIR/openldr" <<'WRAPPER'
 #!/bin/sh
 # OpenLDR operator CLI. Runs inside the api container.
 # Files must live under ./data (mounted at /data) — e.g. ./openldr ingest data/bundle.json
-exec docker compose exec -T -w /data api node /app/cli/dist/index.js "$@"
+exec docker compose exec -T -w / api node /app/cli/dist/index.js "$@"
 WRAPPER
 chmod +x "$DIR/openldr" 2>/dev/null || true
 if [ "$MSSQL_DEMO" -eq 1 ]; then
