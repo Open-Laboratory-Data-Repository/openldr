@@ -4,12 +4,16 @@ Once OpenLDR is running, you need to get lab data into it. OpenLDR has **no gene
 ingest endpoint** — there is no `POST /fhir` you can send resources to. Data comes in through
 one of the paths below. Which one you use depends mostly on how you installed.
 
-> **Where's the `openldr` CLI?** The `openldr` command is part of the **source checkout** — you
-> run it as `./openldr …` from a clone of the repository. The **one-line Docker installer
-> does not install a CLI**, and it doesn't need to: it sets `MIGRATE_ON_START=true` and
-> `SEED_ON_START=true`, so the stack migrates and seeds itself on first boot. On a Docker
-> deployment, use the **HTTP webhook** below. The CLI paths apply when you run OpenLDR from
-> source (or run a source checkout whose `.env` points at your deployment's databases).
+> **Where's the `openldr` CLI?** Both install types have it. The one-line Docker installer
+> writes an `openldr` wrapper into the install directory — run it there as `./openldr …`
+> (`.\openldr.ps1` on Windows). From a clone of the repository, run `pnpm openldr …` instead.
+> You do not need the CLI to get started either way: the installer sets `MIGRATE_ON_START=true`
+> and `SEED_ON_START=true`, so the stack migrates and seeds itself on first boot, and the
+> **HTTP webhook** below works on any install.
+>
+> One difference matters for file arguments. The wrapper runs the CLI inside the `api`
+> container, which only sees the `data` directory, so put files in `./data` and name them with
+> the `data/` prefix. A source checkout uses ordinary host paths. See [the CLI page](/docs/cli).
 
 ## 1. Push over HTTP with a workflow webhook (works on any install)
 
@@ -102,30 +106,38 @@ deployment's country (Tanzania `+03:00`; Mozambique/Zambia `+02:00`).
 > `openldr ingest` **CLI** below is narrower: it takes a FHIR **Bundle** (or one bare resource),
 > not an array. Send each payload to the path that matches its shape.
 
-If you just have a Bundle file and a source checkout, `openldr ingest bundle.json` (below) is the
+If you just have a Bundle file, `openldr ingest bundle.json` (below) is the
 turnkey path — it applies the same converter + strictness gate without building a workflow.
 
-## 2. Load a file with the CLI (source / developer installs)
+## 2. Load a file with the CLI (any install)
 
-If you run OpenLDR from a source checkout, `./openldr ingest <file>` reads a file, converts
-it, and writes the results into the FHIR store. The **converter** decides how the file is
-parsed:
+`openldr ingest <file>` reads a file, converts it, and writes the results into the FHIR
+store. The **converter** decides how the file is parsed:
 
 ```bash
 # A FHIR Bundle (the default converter)
-./openldr ingest bundle.json
+./openldr ingest data/bundle.json
 
 # A WHONET SQLite export, via a converter plugin (install the plugin first)
-./openldr plugin install reference-plugins/whonet-sqlite/plugin.wasm
-./openldr ingest whonet.sqlite --plugin whonet-sqlite
+./openldr plugin install data/whonet-sqlite.wasm
+./openldr ingest data/whonet.sqlite --plugin whonet-sqlite
 
 # A CSV with a column mapping
-./openldr ingest results.csv --plugin tabular --config mapping.json
+./openldr ingest data/results.csv --plugin tabular --config data/mapping.json
+```
+
+Those are the installed-stack forms, so every file sits in `./data` and carries the `data/`
+prefix. From a source checkout, use `pnpm openldr` and ordinary host paths:
+
+```bash
+pnpm openldr ingest bundle.json
+pnpm openldr plugin install reference-plugins/whonet-sqlite/plugin.wasm
+pnpm openldr ingest results.csv --plugin tabular --config mapping.json
 ```
 
 A successful run prints `batch <id>: done (<n> resources)`. **0 resources** means the converter
-did not recognise the file. Inspect or retry a batch with `./openldr pipeline status` and
-`./openldr pipeline retry <batchId>`. Converters that ship with OpenLDR: `fhir-bundle`
+did not recognise the file. Inspect or retry a batch with the `pipeline status` and
+`pipeline retry <batchId>` commands. Converters that ship with OpenLDR: `fhir-bundle`
 (default), `whonet-sqlite`, `hl7v2`, and `tabular`; more can be added as marketplace plugins.
 
 ### Example payloads

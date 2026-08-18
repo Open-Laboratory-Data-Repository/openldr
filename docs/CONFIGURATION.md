@@ -198,7 +198,7 @@ PowerShell:
 Copy-Item .env.example .env
 docker compose up -d
 pnpm install --frozen-lockfile
-./openldr db migrate
+pnpm openldr db migrate
 pnpm -C apps/server dev
 ```
 
@@ -208,7 +208,7 @@ Bash:
 cp .env.example .env
 docker compose up -d
 pnpm install --frozen-lockfile
-./openldr db migrate
+pnpm openldr db migrate
 pnpm -C apps/server dev
 ```
 

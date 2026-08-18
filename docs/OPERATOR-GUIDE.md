@@ -9,6 +9,8 @@ This guide documents the repository as it exists now. It complements the in-app 
 
 ## Setup
 
+This section builds a source checkout, not an installed stack. Its commands use `pnpm openldr`.
+
 Prerequisites:
 
 - Node.js 20 or newer.
@@ -21,7 +23,7 @@ PowerShell:
 pnpm install --frozen-lockfile
 Copy-Item .env.example .env
 docker compose up -d
-./openldr db migrate
+pnpm openldr db migrate
 pnpm -C apps/server dev
 ```
 
@@ -37,7 +39,7 @@ Bash:
 pnpm install --frozen-lockfile
 cp .env.example .env
 docker compose up -d
-./openldr db migrate
+pnpm openldr db migrate
 pnpm -C apps/server dev
 ```
 

@@ -7,10 +7,14 @@ Source of truth: `packages/cli/src/index.ts`. Captured help output for every com
 > `pnpm openldr` instead — the arguments are identical. File arguments on an installed stack
 > must live under `./data`; see the CLI doc's "Running it" section.
 
-Run commands from the repository root:
+There are two ways to invoke it:
 
-```console
-PS D:\Projects\Repositories\openldr_ce> ./openldr --help
+```bash
+# Installed stack — from the install directory (`.\openldr.ps1` on Windows)
+./openldr --help
+
+# Source checkout — from the repository root
+pnpm openldr --help
 ```
 
 ## Exit Codes
