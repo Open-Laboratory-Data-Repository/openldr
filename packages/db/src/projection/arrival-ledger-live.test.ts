@@ -46,6 +46,39 @@ const makeServiceRequest = (id: string): FhirResource => ({
   subject: { reference: 'Patient/p-1' },
 }) as unknown as FhirResource;
 
+// WHY THIS EXISTS — do not "simplify" back to a single `runner.runCycle()` call.
+//
+// `fetchSafeChangeRows` (fetch.ts:20-23) reads `pg_snapshot_xmin`/`xmax` for the WHOLE Postgres
+// INSTANCE, not scoped to this test's own throwaway database, and `planProjection` (plan.ts:66,82)
+// deliberately DEFERS any row at or past that boundary to a later cycle — that is correct
+// production gap-safety logic, not a bug, so one `runCycle()` is not a guarantee a just-saved
+// row projects on that tick.
+//
+// Reproduced concretely, twice: when the full @openldr/db suite runs with both live URLs set,
+// `082_facility_canonical_identity.live.test.ts` holds a ~240s bulk-insert transaction open
+// against the SAME Postgres instance, pinning the cluster-wide xmin low enough that a
+// freshly-committed row in this file's unrelated throwaway database still reads as unsafe. A
+// single `runCycle()` then sees zero tasks for it — not because live projection is broken, but
+// because the deferral is doing its job and this test didn't wait for it to clear. That read as a
+// flaky test failure until traced back to this cause.
+//
+// So: poll `runCycle()` until the expected rows land, bounded by wall-clock time, and fail loudly
+// (never silently) if they never do — a timeout here must still read as a failure, not let the
+// caller's assertion run against an empty result and report a confusing, unrelated mismatch.
+async function pollUntilProjected(runner: ProjectionRunner, check: () => Promise<boolean>, what: string): Promise<void> {
+  const maxWaitMs = 250_000; // > the ~240s 082 bulk-insert transaction observed pinning xmin
+  const intervalMs = 2_000;
+  const deadline = Date.now() + maxWaitMs;
+  for (;;) {
+    await runner.runCycle();
+    if (await check()) return;
+    if (Date.now() >= deadline) {
+      throw new Error(`pollUntilProjected: "${what}" did not land within ${maxWaitMs}ms across repeated runCycle() calls`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+}
+
 live('arrival ledger rebuild from resource_history (live Postgres)', () => {
   const targetAdmin = new pg.Pool({ connectionString: targetUrl });
   const internalAdmin = new pg.Pool({ connectionString: internalUrl });
@@ -235,24 +268,34 @@ live('arrival ledger rebuild from resource_history (live Postgres)', () => {
     // The rebuild is not run in this test at all. If ingest_events is populated, it is because the
     // projection cycle wrote it.
     await fhirStore.save(makeServiceRequest('live-1'), provenance);
-    await runner.runCycle();
+    // Not a single runCycle() — see pollUntilProjected's comment above.
+    await pollUntilProjected(runner, async () => {
+      const rows = await db.selectFrom('ingest_events').select(['resource_id'])
+        .where('resource_id', '=', 'live-1').execute();
+      return rows.length >= 1;
+    }, 'live-1 arrival');
 
     const rows = await db.selectFrom('ingest_events')
       .select(['resource_type', 'resource_id', 'version'])
       .where('resource_id', '=', 'live-1').execute();
     expect(rows).toHaveLength(1);
     expect(rows[0].resource_type).toBe('ServiceRequest');
-  });
+  }, 260_000);
 
   it('live and rebuild agree when two versions arrive between cycles', async () => {
     // The cycle sees ONE task for the resource. Recording only the newest version would lose the
     // first arrival, and a later rebuild would then disagree with the live path.
     await fhirStore.save(makeServiceRequest('live-2'), provenance);
     await fhirStore.save(makeServiceRequest('live-2'), provenance); // second version, same cycle
-    await runner.runCycle();
+    // Not a single runCycle() — see pollUntilProjected's comment above.
+    await pollUntilProjected(runner, async () => {
+      const rows = await db.selectFrom('ingest_events').select(['version'])
+        .where('resource_id', '=', 'live-2').execute();
+      return rows.length >= 2;
+    }, 'live-2 both versions');
 
     const live = await db.selectFrom('ingest_events').select(['version'])
       .where('resource_id', '=', 'live-2').orderBy('version').execute();
     expect(live.map((r) => Number(r.version))).toEqual([1, 2]);
-  });
+  }, 260_000);
 });
