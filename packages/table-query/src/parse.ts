@@ -1,5 +1,5 @@
 import type { FilterCombine, FilterOperator, FilterRule, SortRule } from "./types";
-import type { TableColumnMap } from "./columns";
+import type { TableColumnMap, TableColumnSpec } from "./columns";
 
 export type ParsedFilter = Omit<FilterRule, "id">;
 export type ParsedSort = Omit<SortRule, "id">;
@@ -16,11 +16,19 @@ const NO_VALUE: FilterOperator[] = ["is_null", "is_not_null"];
 
 function fail(error: string): ParseResult { return { ok: false, error }; }
 
+/** Looks up a column spec without falling through the prototype chain (`__proto__`, `constructor`, ...). */
+function getColumn(columns: TableColumnMap, name: string): TableColumnSpec | undefined {
+  if (!Object.prototype.hasOwnProperty.call(columns, name)) return undefined;
+  return columns[name];
+}
+
+/** A filter/sort rule entry must be a plain, non-null, non-array object before any field is read off it. */
+function isRuleObject(entry: unknown): entry is Record<string, unknown> {
+  return typeof entry === "object" && entry !== null && !Array.isArray(entry);
+}
+
 function decode(raw: string | undefined, what: string): { ok: true; value: unknown[] } | { ok: false; error: string } {
   if (raw === undefined || raw === "") return { ok: true, value: [] };
-  if (raw.length > MAX_QUERY_CHARS) {
-    return { ok: false, error: `${what} is too large (${raw.length} chars, max ${MAX_QUERY_CHARS})` };
-  }
   let parsed: unknown;
   try { parsed = JSON.parse(raw); } catch { return { ok: false, error: `${what} is not valid JSON` }; }
   if (!Array.isArray(parsed)) return { ok: false, error: `${what} must be a JSON array` };
@@ -31,6 +39,13 @@ export function parseTableQuery(
   raw: { filters?: string; sorts?: string },
   columns: TableColumnMap,
 ): ParseResult {
+  const filtersRaw = raw.filters ?? "";
+  const sortsRaw = raw.sorts ?? "";
+  const totalChars = filtersRaw.length + sortsRaw.length;
+  if (totalChars > MAX_QUERY_CHARS) {
+    return fail(`filters and sorts together are too large (${totalChars} chars, max ${MAX_QUERY_CHARS})`);
+  }
+
   const f = decode(raw.filters, "filters");
   if (!f.ok) return fail(f.error);
   const s = decode(raw.sorts, "sorts");
@@ -45,15 +60,23 @@ export function parseTableQuery(
 
   const filters: ParsedFilter[] = [];
   for (const entry of f.value) {
+    if (!isRuleObject(entry)) return fail("a filter rule must be an object");
     const r = entry as Partial<FilterRule>;
     if (typeof r.column !== "string") return fail("a filter rule is missing its column");
-    const spec = columns[r.column];
+    const spec = getColumn(columns, r.column);
     if (!spec) return fail(`unknown filter column "${r.column}"`);
     if (typeof r.operator !== "string" || !spec.operators.includes(r.operator as FilterOperator)) {
       return fail(`operator "${String(r.operator)}" is not allowed on column "${r.column}"`);
     }
     const operator = r.operator as FilterOperator;
-    const combine: FilterCombine = r.combine === "or" ? "or" : "and";
+    let combine: FilterCombine;
+    if (r.combine === undefined) {
+      combine = "and";
+    } else if (r.combine === "and" || r.combine === "or") {
+      combine = r.combine;
+    } else {
+      return fail(`combine "${String(r.combine)}" on column "${r.column}" must be "and" or "or"`);
+    }
 
     if (NO_VALUE.includes(operator)) {
       filters.push({ column: r.column, operator, value: "", combine });
@@ -77,9 +100,10 @@ export function parseTableQuery(
 
   const sorts: ParsedSort[] = [];
   for (const entry of s.value) {
+    if (!isRuleObject(entry)) return fail("a sort rule must be an object");
     const r = entry as Partial<SortRule>;
     if (typeof r.column !== "string") return fail("a sort rule is missing its column");
-    const spec = columns[r.column];
+    const spec = getColumn(columns, r.column);
     if (!spec) return fail(`unknown sort column "${r.column}"`);
     if (!spec.sortable) return fail(`column "${r.column}" is not sortable`);
     sorts.push({ column: r.column, ascending: r.ascending !== false });
