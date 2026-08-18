@@ -211,4 +211,22 @@ describe("parseTableQuery", () => {
       { column: "action", operator: "like", value: "", combine: "and" },
     ]);
   });
+
+  it("rejects a date Postgres cannot parse, even though Date.parse accepts it", () => {
+    // Date.parse("2026") is valid; `select '2026'::timestamptz` is an error. Accepting it here
+    // turns a user's bad input into a 500 instead of a 400.
+    for (const bad of ["2026", "2026-08"]) {
+      const raw = { filters: JSON.stringify([{ column: "occurredAt", operator: "gte", value: bad, combine: "and" }]) };
+      const r = parseTableQuery(raw, AUDIT_COLUMNS);
+      expect(r.ok, `expected "${bad}" to be rejected`).toBe(false);
+      if (!r.ok) expect(r.error).toContain(bad);
+    }
+  });
+
+  it("accepts the date forms Postgres does parse", () => {
+    for (const good of ["2026-08-18", "2026-08-18T12:00:00Z", "2026-08-18 12:00:00+03"]) {
+      const raw = { filters: JSON.stringify([{ column: "occurredAt", operator: "gte", value: good, combine: "and" }]) };
+      expect(parseTableQuery(raw, AUDIT_COLUMNS).ok, `expected "${good}" to be accepted`).toBe(true);
+    }
+  });
 });
