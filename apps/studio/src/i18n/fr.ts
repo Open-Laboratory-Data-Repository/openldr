@@ -272,6 +272,8 @@ export const fr: EnShape = {
       logo: 'Logo',
       facilitySystem: 'Registre des établissements',
       facilitySystemPlaceholder: 'Sélectionner un registre…',
+      timezone: 'Fuseau horaire',
+      timezoneHint: "Un nom de fuseau IANA, ex. Africa/Dar_es_Salaam. Un entrepôt SQL Server attend plutôt un nom de fuseau Windows, que ce champ refuse — sur SQL Server, laissez-le vide et saisissez le fuseau dans le filtre Fuseau horaire à chaque exécution du rapport.",
       chooseLogo: 'Choisir un fichier…',
       clearLogo: 'Effacer',
       save: 'Enregistrer',
@@ -286,6 +288,7 @@ export const fr: EnShape = {
         'not-a-data-uri': "Le logo doit être un fichier image téléversé, et non une adresse web — une image liée ne s'affiche pas dans le PDF.",
         'unsupported-image-type': 'Le logo doit être une image PNG, JPEG ou WebP.',
         'unknown-key': 'Paramètre non reconnu.',
+        'invalid-timezone': 'Doit être un nom de fuseau IANA (ex. Africa/Dar_es_Salaam), pas un décalage fixe.',
       },
     },
     subNav: {

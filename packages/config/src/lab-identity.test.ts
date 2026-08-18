@@ -12,7 +12,7 @@ describe('LAB_IDENTITY_FIELDS', () => {
     // `lab.facilitySystem` joined the four letterhead keys: it is the same kind of fact — something
     // stated once about this installation rather than re-entered per record.
     expect(LAB_IDENTITY_KEYS).toEqual([
-      'lab.name', 'lab.address', 'lab.contact', 'lab.logo', 'lab.facilitySystem',
+      'lab.name', 'lab.address', 'lab.contact', 'lab.logo', 'lab.facilitySystem', 'lab.timezone',
     ]);
     expect(LAB_IDENTITY_FIELDS.every((f) => f.id.startsWith('lab.'))).toBe(true);
   });
@@ -88,6 +88,25 @@ describe('validateLabIdentityValue', () => {
 
   it('sizes the character cap above the byte cap, since base64 inflates by 4/3', () => {
     expect(LAB_LOGO_MAX_CHARS).toBeGreaterThan(LAB_LOGO_MAX_BYTES);
+  });
+});
+
+describe('lab.timezone validation', () => {
+  it('accepts an IANA zone', () => {
+    expect(validateLabIdentityValue('lab.timezone', 'Africa/Dar_es_Salaam')).toBeNull();
+  });
+
+  it('accepts empty, which means the setting is unset', () => {
+    expect(validateLabIdentityValue('lab.timezone', '')).toBeNull();
+  });
+
+  it('⛔ rejects a value the database cannot resolve, rather than storing it and silently bucketing wrong', () => {
+    // A bad zone does not error at query time — Postgres AT TIME ZONE raises, but a typo like
+    // "Africa/Dar-es-Salaam" would only surface when someone runs the report a month later and
+    // reads a whole day on the wrong side of midnight. Reject at WRITE time, like lab.logo does.
+    expect(validateLabIdentityValue('lab.timezone', 'Africa/Dar-es-Salaam')).not.toBeNull();
+    expect(validateLabIdentityValue('lab.timezone', '+03:00')).not.toBeNull();
+    expect(validateLabIdentityValue('lab.timezone', 'Not A Zone')).not.toBeNull();
   });
 });
 

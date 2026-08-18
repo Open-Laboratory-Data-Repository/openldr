@@ -96,3 +96,18 @@ describe('BoundColumnSchema', () => {
     expect(CELL_STATUSES).toEqual(['normal', 'abnormal', 'critical', 'indeterminate', 'none']);
   });
 });
+
+describe('ReportDesignSchema — sortBy', () => {
+  it('keeps an element sortBy through a parse', () => {
+    // ⛔ Unknown keys are STRIPPED (see the round-trip test above). An element-level sort that is
+    // not declared here survives in the seed literal and vanishes the moment the design is stored
+    // or re-read — the report would still render, just in whatever order the engine returned.
+    const out = ReportDesignSchema.parse({
+      id: 'd', name: 'N',
+      pages: [{ id: 'p1', elements: [
+        { id: 't', kind: 'table', name: 'T', rect: { x: 0, y: 0, w: 1, h: 1 }, sortBy: 'ord' },
+      ] }],
+    });
+    expect(out.pages[0].elements[0].sortBy).toBe('ord');
+  });
+});

@@ -22,6 +22,9 @@ const LabIdentityPatchSchema = z.object({
   // The install's default facility register (canonical URI). See LAB_IDENTITY_FIELDS' entry for why
   // the studio renders it as a picker and never a text box.
   'lab.facilitySystem': z.string().optional(),
+  // The civil timezone days are bucketed in for the monthly transmission grid. Rejected at write
+  // time by validateLabIdentityValue when the runtime can't resolve it as an IANA zone.
+  'lab.timezone': z.string().optional(),
 }).strict();
 
 const FEATURE_FLAGS = { preHandler: requireCapability('settings.feature_flags') };

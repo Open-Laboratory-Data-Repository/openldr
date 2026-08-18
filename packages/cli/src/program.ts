@@ -191,6 +191,7 @@ export function buildProgram(): Command {
     .option('--name <name>', 'laboratory name')
     .option('--address <address>', 'postal address (use \n for line breaks)')
     .option('--contact <contact>', 'phone / email / accreditation line')
+    .option('--timezone <tz>', 'IANA zone, e.g. Africa/Dar_es_Salaam — days are bucketed in this zone (empty string clears)')
     .option('--logo-file <path>', 'PNG, JPEG or WebP file to store as the logo (empty string clears)')
     .option('--json', 'emit JSON', false)
     .action(async (o) => { process.exitCode = await runSettingsLabSet(o); });

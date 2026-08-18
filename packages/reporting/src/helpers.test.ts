@@ -51,6 +51,31 @@ describe('endOfDay', () => {
   });
 });
 
+describe('toCsv — a cell containing a newline', () => {
+  // ⛔ The transmission grid's date row carries `2\nFeb`: the design's `headerRow` stacks a header
+  // cell's newlines, which is what keeps a day column the width of "Feb" instead of "2 Feb". That
+  // value reaches this exporter unchanged, because a report's CSV is its QUERY RESULT and not a
+  // transcript of the drawn page.
+  //
+  // It needs no stripping and gets none. RFC 4180 §2.6 allows a line break inside a quoted field,
+  // and `esc` already quotes on /[",\n]/. Removing it here would make the CSV disagree with
+  // `GET /api/reports/:id`, which hands the same rows back as JSON, and would do it for every
+  // report rather than this one.
+  it('quotes it, so the record survives a conforming parser', () => {
+    const csv = toCsv([{ key: 'lab', label: 'Laboratory' }, { key: 'd01', label: 'd01' }],
+      [{ lab: '(dates)', d01: '2\nFeb' }]);
+    expect(csv).toBe('Laboratory,d01\n(dates),"2\nFeb"\n');
+    // Two physical lines in the body, ONE logical record — the break is inside the quotes.
+    expect(csv.split('"')[1]).toBe('2\nFeb');
+  });
+
+  it('is not mistaken for a formula, and is not silently flattened', () => {
+    const csv = toCsv([{ key: 'd01', label: 'd01' }], [{ d01: '2\nFeb' }]);
+    expect(csv).not.toContain("'2");    // the injection guard keys on ^[=@\t\r], never on \n
+    expect(csv).toContain('2\nFeb');    // and nothing turned it into "2 Feb" or "2Feb"
+  });
+});
+
 describe('toCsv formula-injection', () => {
   it('neutralizes leading = @ and non-numeric +/-, leaves negative numbers intact', () => {
     const cols = [{ key: 'a', label: 'A' }];

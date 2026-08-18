@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import type { AppContext } from '@openldr/bootstrap';
-import { ReportDesignSchema, findInvalidImageSources } from '@openldr/report-designer/pure';
+import { ReportDesignSchema, findInvalidImageSources, findUnsortedHeaderRows } from '@openldr/report-designer/pure';
 import { renderReportDesignPdf, resolveDesignTables } from '@openldr/report-designer';
 import { runStoredQuery, type RunStoredQueryDeps } from './run-stored-query';
 import { recordAudit } from './audit-helper';
@@ -31,6 +31,15 @@ export function registerReportDesignRoutes(
   app.post('/api/report-designs', MANAGE, async (req, reply) => {
     const p = ReportDesignSchema.safeParse(req.body);
     if (!p.success) { reply.code(400); return { error: p.error.message }; }
+    // Same shape as the image gate, and for the same reason it is here rather than in the schema:
+    // a table that lifts its first data row into the header prints whatever row the query happened
+    // to return first unless `sortBy` says which row that is.
+    const unsorted = findUnsortedHeaderRows(p.data);
+    if (unsorted.length > 0) {
+      reply.code(400);
+      const error = `headerRow needs sortBy: ${unsorted.map((u) => u.elementId).join(', ')}`;
+      return { error, unsortedHeaderRows: unsorted };
+    }
     const invalidImages = findInvalidImageSources(p.data);
     if (invalidImages.length > 0) {
       reply.code(400);
@@ -52,6 +61,15 @@ export function registerReportDesignRoutes(
     const { id } = req.params as { id: string };
     const p = ReportDesignSchema.safeParse(req.body);
     if (!p.success) { reply.code(400); return { error: p.error.message }; }
+    // Same shape as the image gate, and for the same reason it is here rather than in the schema:
+    // a table that lifts its first data row into the header prints whatever row the query happened
+    // to return first unless `sortBy` says which row that is.
+    const unsorted = findUnsortedHeaderRows(p.data);
+    if (unsorted.length > 0) {
+      reply.code(400);
+      const error = `headerRow needs sortBy: ${unsorted.map((u) => u.elementId).join(', ')}`;
+      return { error, unsortedHeaderRows: unsorted };
+    }
     const invalidImages = findInvalidImageSources(p.data);
     if (invalidImages.length > 0) {
       reply.code(400);

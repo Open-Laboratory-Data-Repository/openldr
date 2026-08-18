@@ -5,7 +5,7 @@ import { AppShell } from '../shell/AppShell';
 import { isNarrowViewport } from '@/lib/viewport';
 import { FileText } from 'lucide-react';
 import {
-  fetchReports, fetchReport, fetchReportOptions, logReportRun,
+  fetchReports, fetchReport, fetchReportOptions, logReportRun, fetchLabIdentity,
   type ReportSummary, type ReportResult, type ReportParamOption,
 } from '../api';
 import { ReportLibrary } from '../reports/ReportLibrary';
@@ -29,6 +29,10 @@ import {
 import { deleteReportDef, setReportStatus } from '../reports/reportDefsApi';
 
 type Tab = 'document' | 'spreadsheet';
+
+/** Parameter key a report declares when its results depend on which civil day an arrival falls in.
+ *  The stored `lab.timezone` setting is offered as its starting value — see `labTz` below. */
+const TZ_PARAM = 'tz';
 
 export function Reports() {
   const { t } = useTranslation();
@@ -64,10 +68,17 @@ export function Reports() {
     listReportCategories().then(setCategories).catch(() => setCategories([]));
   }, []);
 
+  // The laboratory's configured time zone, offered as the starting value of a `tz` parameter.
+  // Best-effort — a failure just means no prefill, never a blocked page.
+  const [labTz, setLabTz] = useState('');
+
   useEffect(() => {
     fetchReports().then(setReports).catch((e) => toast.error(String(e)));
     setPinnedIds(loadPinned());
     refreshCategories();
+    fetchLabIdentity()
+      .then((r) => setLabTz(r.values['lab.timezone'] ?? ''))
+      .catch(() => setLabTz(''));
   }, [refreshCategories]);
 
   const handleSelect = useCallback((id: string) => {
@@ -79,6 +90,30 @@ export function Reports() {
     setOptions({});
     fetchReportOptions(id).then(setOptions).catch(() => setOptions({}));
   }, []);
+
+  const declaresTz = selected?.parameters.some((p) => p.id === TZ_PARAM) ?? false;
+  // Fill the `tz` box from the laboratory setting, but only where it is still empty.
+  //
+  // ⛔ The setting goes UNDER the remembered value, never over it. A zone the operator already ran
+  // this report with is a deliberate choice and must survive; the setting only fills the box the
+  // first time. Without the setting at all, an operator retypes the zone on every run and two
+  // people running the same month can bucket it differently — the failure a stored setting was
+  // chosen over a bare parameter to avoid.
+  //
+  // ⚠ An effect rather than a line in `handleSelect`, because the settings call and the reports
+  // call are fired together and the page does not control which lands first: on a slow link the
+  // operator can pick a report before the zone arrives, and seeding only at pick time drops the
+  // prefill with no sign it was meant to happen.
+  //
+  // Keyed on `selectedId` and the BOOLEAN `declaresTz`, never on the `selected` object. `selected`
+  // is a `find` over `reports`, so re-fetching the list hands back a different object for the same
+  // report; keying on it would re-run this effect on a refresh and re-fill a box the operator had
+  // deliberately cleared. Today both refresh paths also clear the selection, so that cannot yet
+  // happen — the id key is what keeps it from starting to.
+  useEffect(() => {
+    if (!labTz || !declaresTz) return;
+    setParams((prev) => (prev[TZ_PARAM] ? prev : { ...prev, [TZ_PARAM]: labTz }));
+  }, [labTz, declaresTz, selectedId]);
 
   const handleTogglePin = useCallback((id: string) => {
     setPinnedIds((prev) => {

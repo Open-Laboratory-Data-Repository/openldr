@@ -47,13 +47,24 @@ const STATUS_TEXT_COLOR: Record<CellStatus, string> = {
  * and the count. The horizontal inset does the same job between a chip and its neighbouring column.
  *
  * ⚠ The inset must stay strictly inside `ROW_H`: pagination (`maxRowsFor`, `tableChunkCount`) and
- * the fixed `y = r.y + ROW_H + ri * ROW_H` advance all assume a chip can never affect row pitch.
+ * the fixed `y = r.y + headH + ri * ROW_H` advance all assume a chip can never affect row pitch.
  */
 const CHIP_INSET_X = 1;
 const CHIP_INSET_Y = 1.5;
 export const ROW_H = 16; // pt
-/** Body rows that fit in a box of height `hPt` (pt), reserving one row for the header. */
-const maxRowsFor = (hPt: number): number => Math.floor((hPt - ROW_H) / ROW_H);
+/**
+ * Baseline-to-baseline pitch of the SECOND line of a stacked header.
+ *
+ * 8pt, measured off the reference document this grid copies: its day number sits at y=744 and its
+ * month at y=736. Tighter than `ROW_H` on purpose — at the row pitch the two lines read as two
+ * separate headers rather than one two-line label.
+ */
+export const HEAD_LINE_H = 8;
+/** Header band height when the table stacks a second header line. `CELL_PAD` above the first line,
+ *  `HEAD_LINE_H` to the second, and one 8pt line (9.25pt of advance) below it. */
+export const STACKED_HEAD_H = ROW_H + HEAD_LINE_H; // 24pt
+/** Body rows that fit in a box of height `hPt` (pt), reserving `headH` for the header band. */
+const maxRowsFor = (hPt: number, headH: number = ROW_H): number => Math.floor((hPt - headH) / ROW_H);
 
 /** Vertical padding above the text inside a row; also the space left below it. */
 const CELL_PAD = 4;
@@ -65,7 +76,7 @@ export const CELL_TEXT_H = ROW_H - CELL_PAD; // 12pt — one 8pt line (9.25pt), 
  *
  * ⛔ `height` is the load-bearing option. Cells passed `width` + `ellipsis: true` but NO `height`,
  * and pdfkit only ellipsizes text it has constrained VERTICALLY — so `ellipsis` was inert and a
- * long value simply WRAPPED. Every row is drawn at a fixed `y = r.y + ROW_H + ri * ROW_H`, so the
+ * long value simply WRAPPED. Every row is drawn at a fixed `y = r.y + headH + ri * ROW_H`, so the
  * wrapped second line landed on top of the next row: "Chloramphenicol" and
  * "Trimethoprim/Sulfamethoxazole" overprinted the rows beneath them in AMR GLASS RIS.
  *
@@ -86,6 +97,26 @@ export const CELL_TEXT_H = ROW_H - CELL_PAD; // 12pt — one 8pt line (9.25pt), 
  */
 export function cellTextOptions(width: number): { width: number; height: number; ellipsis: true } {
   return { width, height: CELL_TEXT_H, ellipsis: true };
+}
+
+/** Lines a header cell may stack. Two, because `STACKED_HEAD_H` reserves room for exactly two —
+ *  a third would be drawn over the first body row. */
+export const MAX_HEAD_LINES = 2;
+
+/**
+ * One header cell split into the lines it draws as. Always at least one entry, so callers never
+ * have to special-case an empty header.
+ *
+ * ⛔ `max` is NOT decoration — it must be what the band actually reserves. A table that did not
+ * opt into `headerRow` gets a `ROW_H` (16pt) band, and a second line drawn at `y + CELL_PAD +
+ * HEAD_LINE_H` = y+12 with 12pt of height runs to y+24, over the first body row at y+16. The
+ * newline does not have to be authored: `transposeResolved` builds header labels out of
+ * first-column DATA, so an organism or drug name carrying a newline would overprint — where
+ * pdfkit previously just clipped it to one line. Passing 1 keeps that table byte-identical to
+ * before stacking existed.
+ */
+export function headerLines(text: string, max: number = MAX_HEAD_LINES): string[] {
+  return text.split('\n').slice(0, Math.max(1, max));
 }
 
 /** Narrowest a column may be squeezed to — below this even a short header is unreadable. */
@@ -112,11 +143,19 @@ const WIDTH_SAMPLE_ROWS = 400;
 export function columnWidths(
   headers: string[], rows: string[][], totalW: number,
   measure: (text: string, bold: boolean) => number,
+  maxHeadLines: number = MAX_HEAD_LINES,
 ): number[] {
   const n = Math.max(headers.length, 1);
   const sample = rows.slice(0, WIDTH_SAMPLE_ROWS);
   const natural = Array.from({ length: n }, (_, i) => {
-    let w = measure(headers[i] ?? '', true);
+    // ⛔ The WIDEST LINE, not the whole string. A stacked header is drawn as separate lines, so
+    // measuring `"2\nFeb"` as one run would reserve the width of `2 Feb` for a column that never
+    // draws `2 Feb` — which is the entire reason stacking buys the neighbouring column any room.
+    // Inert for a header with no newline: `split` yields one line and this is the old call.
+    // ⛔ `maxHeadLines` must match what the band draws. A one-line band that measured the widest
+    // of two lines would size the column for text it then clips — the mis-measure half of the
+    // same defect as the overprint.
+    let w = Math.max(...headerLines(headers[i] ?? '', maxHeadLines).map((line) => measure(line, true)));
     for (const row of sample) w = Math.max(w, measure(row[i] ?? '', false));
     return Math.min(w + CELL_PAD * 2 + 2, MAX_NATURAL_W); // +2 so text never touches the next column
   });
@@ -272,6 +311,77 @@ export function rowsFor(el: DesignElement, resolved: ResolvedTable | undefined):
     return rt.rows.map((row) => cols.map((c) => String(row[c.key] ?? '')));
   }
   return el.rows ?? [];
+}
+
+/** True when this element declares its first data row to be the header (`headerRow`). */
+function liftsHeaderRow(el: DesignElement): boolean {
+  return el.kind === 'table' && el.headerRow === true;
+}
+
+/** The data row this table draws as its header, or `undefined` when it does not declare one.
+ *
+ *  Row 0 of the ALREADY-SORTED rows: `resolveDesignTables` applies `sortBy` before anything here
+ *  reads them, so "row 0" means the same thing to every reader. */
+export function headerRowFor(el: DesignElement, resolved: ResolvedTable | undefined): string[] | undefined {
+  if (!liftsHeaderRow(el)) return undefined;
+  return rowsFor(el, resolved)[0];
+}
+
+/** The rows this table draws in its BODY — every row for a normal table, everything after row 0
+ *  for one that lifts its header out of the data. */
+export function bodyRowsFor(el: DesignElement, resolved: ResolvedTable | undefined): string[][] {
+  const rows = rowsFor(el, resolved);
+  return liftsHeaderRow(el) ? rows.slice(1) : rows;
+}
+
+/** Height of this table's header band, in pt. */
+export function headerBandHeight(el: DesignElement): number {
+  return liftsHeaderRow(el) ? STACKED_HEAD_H : ROW_H;
+}
+
+/**
+ * The text drawn in each header cell.
+ *
+ * The declared label wins wherever it is non-blank; only a blank one is filled from the header row.
+ * That is what lets one design mix "Laboratory" — knowable when the design was authored — with 23
+ * day columns whose labels only exist once a month has been chosen, and it means a query cell can
+ * never relabel a column somebody published.
+ *
+ * Padded to the label count, so a short header row leaves the remaining headers blank rather than
+ * `undefined` (which would print the string "undefined").
+ */
+export function headerTexts(labels: string[], headerRow: string[] | undefined): string[] {
+  return labels.map((label, i) => (label.trim() !== '' ? label : (headerRow?.[i] ?? '')));
+}
+
+/**
+ * Whether `el` draws anything on physical chunk `chunk` of its page.
+ *
+ * A page is as many physical pages as its LONGEST table needs (`pageChunkCount`), so on the last
+ * pages the shorter tables have nothing left. Before this, such a table still drew its header band,
+ * its rules and its box — an empty framed grid under a heading, which a reader takes as "nothing
+ * was submitted" rather than "this grid ended two pages ago".
+ *
+ * `showWithTable` extends the same answer to the heading or note that belongs to a table. It fails
+ * OPEN on a name that is not on the page: a dangling reference is a design defect and deleting its
+ * companion from every page would hide the evidence.
+ */
+export function drawsOnChunk(
+  el: DesignElement, page: DesignPage, resolved: Map<string, ResolvedTable>, chunk: number,
+): boolean {
+  if (el.kind === 'table') return tableDrawsOnChunk(el, resolved.get(el.id), chunk);
+  if (!el.showWithTable) return true;
+  const target = page.elements.find((e) => e.id === el.showWithTable && e.kind === 'table');
+  if (!target) return true;
+  return tableDrawsOnChunk(target, resolved.get(target.id), chunk);
+}
+
+/** ⛔ A FAILED table keeps drawing on every chunk. Running out of rows and failing to run are not
+ *  the same condition: the first is finished, the second is a defect that is just as true on page 3
+ *  as on page 1, and a reader who is handed only the last page must still see it. */
+function tableDrawsOnChunk(el: DesignElement, resolved: ResolvedTable | undefined, chunk: number): boolean {
+  if (el.dataSource && resolved && 'error' in resolved) return true;
+  return chunk < tableChunkCount(el, resolved);
 }
 
 /** Parse a status token from a query cell. Unrecognised values become `undefined` — a report must
@@ -599,9 +709,9 @@ function drawUnencodable(doc: Doc, r: Box): void {
 /** How many physical pages this one table needs (repeat-page model). 1 for non-tables/errors/degenerate boxes. */
 export function tableChunkCount(el: DesignElement, resolved: ResolvedTable | undefined): number {
   if (el.kind !== 'table') return 1;
-  const maxRows = maxRowsFor(toPt(el.rect).h);
+  const maxRows = maxRowsFor(toPt(el.rect).h, headerBandHeight(el));
   if (maxRows < 1) return 1;
-  const rowCount = rowsFor(el, resolved).length;
+  const rowCount = bodyRowsFor(el, resolved).length;
   return Math.max(1, Math.ceil(rowCount / maxRows));
 }
 
@@ -699,13 +809,17 @@ function drawText(doc: Doc, str: string, r: Box, s: DesignElement['style']): voi
 
 function drawTable(doc: Doc, el: DesignElement, r: Box, resolved: ResolvedTable | undefined, chunk: number): void {
   if (el.dataSource && resolved && 'error' in resolved) { drawErrorPlaceholder(doc, r, resolved.error); return; }
-  const headers = tableHeaders(el, resolved);
-  const allRows = rowsFor(el, resolved);
-  const statuses = cellStatusesFor(el, resolved);
+  const lift = liftsHeaderRow(el);
+  const headers = headerTexts(tableHeaders(el, resolved), headerRowFor(el, resolved));
+  const allRows = bodyRowsFor(el, resolved);
+  // Statuses are indexed in lockstep with the rows, so the lift has to shift them too — otherwise
+  // every chip moves up one row and colours the wrong laboratory.
+  const allStatuses = cellStatusesFor(el, resolved);
+  const statuses = lift ? allStatuses.slice(1) : allStatuses;
   const cols = el.boundColumns ?? [];
   const emphasis = cols.map((c) => c.emphasis ?? 'text');
   const kinds = cols.map((c) => c.kind);
-  drawGrid(doc, r, headers, allRows, chunk, statuses, emphasis, kinds);
+  drawGrid(doc, r, headers, allRows, chunk, statuses, emphasis, kinds, headerBandHeight(el));
 }
 
 export function tableHeaders(el: DesignElement, resolved: ResolvedTable | undefined): string[] {
@@ -720,10 +834,15 @@ export function tableHeaders(el: DesignElement, resolved: ResolvedTable | undefi
 function drawGrid(
   doc: Doc, r: Box, headers: string[], allRows: string[][], chunk: number,
   allStatuses: (CellStatus | undefined)[][] = [], emphasis: CellEmphasis[] = [],
-  kinds: (ColumnKind | undefined)[] = [],
+  kinds: (ColumnKind | undefined)[] = [], headH: number = ROW_H,
 ): void {
   const n = Math.max(headers.length, 1);
-  const maxRows = maxRowsFor(r.h);
+  // ⛔ Derived from the band this table actually reserves, never a constant. `headerBandHeight`
+  // gives STACKED_HEAD_H only to a table that declared `headerRow`; every other table gets ROW_H
+  // and may draw exactly one header line. Tying the two together here is what makes it impossible
+  // for a caller to reserve one line's worth of band and then draw two.
+  const maxHeadLines = headH >= STACKED_HEAD_H ? MAX_HEAD_LINES : 1;
+  const maxRows = maxRowsFor(r.h, headH);
   const lo = chunk * maxRows;
   const rows = maxRows >= 1 ? allRows.slice(lo, lo + maxRows) : [];
   const statuses = maxRows >= 1 ? allStatuses.slice(lo, lo + maxRows) : [];
@@ -732,7 +851,7 @@ function drawGrid(
   const widths = columnWidths(headers, allRows, r.w, (text, bold) => {
     doc.font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(8);
     return doc.widthOfString(text);
-  });
+  }, maxHeadLines);
   const xOf = (ci: number): number => r.x + widths.slice(0, ci).reduce((a, b) => a + b, 0);
   const numeric = headers.map((_, ci) => isRightAligned(allRows, ci, kinds[ci]));
 
@@ -740,13 +859,17 @@ function drawGrid(
 
   // Header: a tinted band closed by a rule. The rule is what separates "a table" from "rows of
   // text" — the old fill alone left the header floating.
-  doc.rect(r.x, r.y, r.w, ROW_H).fill(HEAD_FILL);
+  doc.rect(r.x, r.y, r.w, headH).fill(HEAD_FILL);
   doc.font('Helvetica-Bold').fontSize(8).fillColor(HEAD_TEXT);
-  headers.forEach((h, i) => doc.text(h, xOf(i) + CELL_PAD, r.y + CELL_PAD, {
-    ...cellTextOptions(widths[i] - CELL_PAD * 2), align: numeric[i] ? 'right' : 'left',
-  }));
+  // Each line is its own `doc.text` at a fixed y, for the same reason body cells are: pdfkit only
+  // ellipsizes text it has constrained VERTICALLY, and a wrapped header would land on the row
+  // beneath it. `cellTextOptions`' height fits exactly one line, so each call draws one.
+  headers.forEach((h, i) => headerLines(h, maxHeadLines).forEach((line, li) => doc.text(
+    line, xOf(i) + CELL_PAD, r.y + CELL_PAD + li * HEAD_LINE_H,
+    { ...cellTextOptions(widths[i] - CELL_PAD * 2), align: numeric[i] ? 'right' : 'left' },
+  )));
   doc.save().lineWidth(0.75).strokeColor(HEAD_RULE)
-    .moveTo(r.x, r.y + ROW_H).lineTo(r.x + r.w, r.y + ROW_H).stroke().restore();
+    .moveTo(r.x, r.y + headH).lineTo(r.x + r.w, r.y + headH).stroke().restore();
 
   doc.font('Helvetica').fontSize(8);
   // pdfkit emits `fillColor` unconditionally — it does not cache the current colour — so calling it
@@ -762,7 +885,7 @@ function drawGrid(
     if (color !== lastFill) { doc.fillColor(color); lastFill = color; }
   };
   rows.forEach((row, ri) => {
-    const y = r.y + ROW_H + ri * ROW_H;
+    const y = r.y + headH + ri * ROW_H;
     if (ri % 2 === 1) { doc.rect(r.x, y, r.w, ROW_H).fill(ZEBRA_FILL); lastFill = ZEBRA_FILL; }
     row.forEach((cell, ci) => {
       const st = statuses[ri]?.[ci];
@@ -783,7 +906,7 @@ function drawGrid(
 
   // Close the body with the same rule weight as the header, so the block reads as one object
   // rather than trailing off into the page.
-  const bodyEnd = r.y + ROW_H + rows.length * ROW_H;
+  const bodyEnd = r.y + headH + rows.length * ROW_H;
   doc.save().lineWidth(0.5).strokeColor(GRID_RULE)
     .moveTo(r.x, bodyEnd).lineTo(r.x + r.w, bodyEnd).stroke().restore();
 

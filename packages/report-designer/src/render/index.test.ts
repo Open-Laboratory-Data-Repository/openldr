@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import zlib from 'node:zlib';
 import PDFDocument from 'pdfkit';
 import { renderReportDesignPdf, type ResolvedTable } from './index';
-import { columnWidths } from './draw';
+import { columnWidths, HEAD_LINE_H, STACKED_HEAD_H, ROW_H } from './draw';
 import { encodeCode128, encodeQr, QR_QUIET_ZONE } from '../encode';
 import type { ReportDesign, BoundColumn } from '../schema';
 
@@ -165,7 +165,13 @@ function pageContents(pdf: Buffer): string[] {
  * that happens to contain a kerning pair.
  */
 function pdfTexts(pdf: Buffer): string[] {
-  return [...decodedContent(pdf).matchAll(/\[(.*?)\]\s*TJ/g)].map((m) =>
+  return textsOf(decodedContent(pdf));
+}
+
+/** The same decoding applied to ONE already-decompressed content stream, so a per-page assertion
+ *  can say what that page draws rather than what the document draws somewhere. */
+function textsOf(content: string): string[] {
+  return [...content.matchAll(/\[(.*?)\]\s*TJ/g)].map((m) =>
     [...m[1].matchAll(/<([0-9a-fA-F]*)>/g)]
       .map((h) => Buffer.from(h[1], 'hex').toString('latin1')).join(''));
 }
@@ -700,3 +706,259 @@ describe('letterhead identity rendering', () => {
     expect(content).toContain('[3 2] 0 d');
   });
 });
+
+// ---------------------------------------------------------------------------------------------
+// `headerRow` and `showWithTable`, end to end through a real PDF
+// ---------------------------------------------------------------------------------------------
+
+describe('a table whose header is its first data row', () => {
+  /** 3 day columns; box h = 100px = 75pt → floor((75-24)/16) = 3 body rows per chunk. */
+  const gridDesign = (): ReportDesign => baseDesign({
+    orientation: 'landscape',
+    pages: [{ id: 'p1', elements: [
+      { id: 'head', kind: 'text', name: 'H', rect: { x: 10, y: 10, w: 400, h: 14 }, text: 'Submission by laboratory', showWithTable: 'g' },
+      { id: 'g', kind: 'table', name: 'G', rect: { x: 10, y: 30, w: 400, h: 100 },
+        dataSource: { kind: 'custom-query', queryId: 'q' }, sortBy: 'ord', headerRow: true,
+        boundColumns: [
+          { key: 'lab', label: 'Laboratory' }, { key: 'd01', label: '' },
+          { key: 'd02', label: '' }, { key: 'd03', label: '' },
+        ] as BoundColumn[] },
+    ] }],
+  });
+
+  const gridRows = (n: number): ResolvedTable => ({
+    columns: [{ key: 'ord', label: 'ord' }, { key: 'lab', label: 'lab' },
+      { key: 'd01', label: 'd01' }, { key: 'd02', label: 'd02' }, { key: 'd03', label: 'd03' }],
+    // ⚠ The dates come FIRST here because `sortBy` has ALREADY run: the renderer is handed rows
+    // that `resolveDesignTables` ordered, and `headerRow` lifts row 0 of what it is given. An
+    // unsorted fixture would be testing the sort, which lives in `resolve.ts` and is tested there.
+    rows: [
+      { ord: 0, lab: '(dates)', d01: '1\nFeb', d02: '2\nFeb', d03: '3\nFeb' },
+      ...Array.from({ length: n }, (_, i) => ({ ord: 1, lab: `Laboratory ${i}`, d01: 'Y', d02: '', d03: 'Y' })),
+    ],
+  });
+
+  it('⛔ repeats the dates on EVERY page, and never prints them as a body row', async () => {
+    // The defect this pins: the dates were an ordinary row, so page 2 showed marks under blank
+    // columns and a reader could not tell which day any mark belonged to.
+    const buf = await renderReportDesignPdf(gridDesign(), new Map([['g', gridRows(7)]]), { now: NOW });
+    const pages = pageContents(buf).map(textsOf);
+    expect(pages).toHaveLength(3); // ceil(7/3)
+    for (const texts of pages) {
+      expect(texts).toContain('Feb');           // the month, stacked under its day number
+      expect(texts).toContain('Laboratory');    // the declared label survives the lift
+      expect(texts).not.toContain('(dates)');   // the header row's own lab value never prints
+    }
+  });
+
+  it('puts the laboratories of chunk 2 on page 2 and none of chunk 1', async () => {
+    const buf = await renderReportDesignPdf(gridDesign(), new Map([['g', gridRows(7)]]), { now: NOW });
+    const pages = pageContents(buf).map(textsOf);
+    expect(pages[0]).toEqual(expect.arrayContaining(['Laboratory 0', 'Laboratory 1', 'Laboratory 2']));
+    expect(pages[1]).toEqual(expect.arrayContaining(['Laboratory 3', 'Laboratory 4', 'Laboratory 5']));
+    expect(pages[1]).not.toContain('Laboratory 0');
+    expect(pages[2]).toEqual(['Submission by laboratory', 'Laboratory', '1', 'Feb', '2', 'Feb', '3', 'Feb', 'Laboratory 6', 'Y', 'Y']);
+  });
+
+  it('stacks the two header lines HEAD_LINE_H apart, and drops the body by the taller band', async () => {
+    // Baselines, not absolute positions: what this must pin is the PITCH between the two header
+    // lines and between the band and the first row. An absolute y would additionally encode
+    // pdfkit's ascender, which is a font fact and not this renderer's decision.
+    const buf = await renderReportDesignPdf(gridDesign(), new Map([['g', gridRows(2)]]), { now: NOW });
+    const ys = [...new Set(textYs(buf))].sort((a, b) => b - a);
+    // ⛔ LITERAL POINTS, not the constants the drawing reads. Asserting `HEAD_LINE_H` against a
+    // pitch computed from `HEAD_LINE_H` passes for every value of it — measured: changing the
+    // constant to 9 left this test green until the literals went in.
+    // 8pt is the reference document's own day-to-month gap (y=744 and y=736); 24 = 16 + 8.
+    // [0] is the heading above the box; [1] header line 1; [2] header line 2; [3] first body row.
+    expect(ys[1] - ys[2]).toBeCloseTo(8, 6);
+    expect(ys[1] - ys[3]).toBeCloseTo(24, 6);
+    expect(ys[3] - ys[4]).toBeCloseTo(16, 6);
+    // ...and the constants themselves are those numbers, so the two can never drift apart.
+    expect([HEAD_LINE_H, STACKED_HEAD_H, ROW_H]).toEqual([8, 24, 16]);
+  });
+
+  it('drops the whole grid AND its heading from a page the grid does not reach', async () => {
+    // Two tables on one page: the page runs as long as the longer one.
+    const design = baseDesign({ orientation: 'landscape', pages: [{ id: 'p1', elements: [
+      ...gridDesign().pages[0].elements,
+      // `sortBy` is set because `headerRow` WITHOUT it is exactly what `findUnsortedHeaderRows`
+      // refuses at the API. Nothing here would fail either way, but a fixture that contradicts the
+      // rule its own commit adds reads as a counterexample to it.
+      { id: 'long', kind: 'table', name: 'L', rect: { x: 10, y: 200, w: 400, h: 100 },
+        dataSource: { kind: 'custom-query', queryId: 'q2' }, headerRow: true, sortBy: 'lab',
+        boundColumns: [{ key: 'lab', label: 'Other laboratory' }] as BoundColumn[] },
+    ] }] });
+    const resolved = new Map<string, ResolvedTable>([
+      ['g', gridRows(2)], // 1 chunk
+      ['long', { columns: [{ key: 'lab', label: 'lab' }], rows: Array.from({ length: 8 }, (_, i) => ({ lab: `Other ${i}` })) }], // 3 chunks
+    ]);
+    const buf = await renderReportDesignPdf(design, resolved, { now: NOW });
+    const pages = pageContents(buf);
+    const texts = pages.map(textsOf);
+    expect(pages).toHaveLength(3);
+    expect(texts[0]).toContain('Submission by laboratory');
+    // Pages 2 and 3 carry neither the heading nor an empty framed box under it.
+    expect(texts[1]).not.toContain('Submission by laboratory');
+    expect(texts[2]).not.toContain('Submission by laboratory');
+    expect(texts[1]).not.toContain('Laboratory');
+    // ⛔ Not just the text — the BOX is gone too. The header band is the only `#eef2f6` fill on the
+    // page, so counting it counts grids drawn.
+    expect(pages[0].split(fillOp('#eef2f6')).length - 1).toBe(2); // both grids
+    expect(pages[1].split(fillOp('#eef2f6')).length - 1).toBe(1); // only the long one
+    // ...while the longer table is still drawing.
+    expect(texts[1]).toContain('Other 4');
+  });
+});
+
+describe('truncation, and the byte it is written as', () => {
+  // ⛔ MEASURED, and it is not the character you would guess. pdfkit writes the ellipsis in
+  // WinAnsiEncoding, where U+2026 is the single byte 0x85; a latin1 decode of the content stream
+  // therefore yields U+0085. An assertion written against U+2026 can NEVER fire — which is exactly
+  // what shipped in the live test's no-ellipsis check until review caught it, so a page with every
+  // laboratory name cut passed it. This test exists so the detector is pinned by something that
+  // actually truncates. Measured run: codes 97,32,118,101,114,121,133 for a cut "a very long ...".
+  const narrow = (w: number, value: string): ReportDesign => baseDesign({
+    pages: [{ id: 'p1', elements: [
+      { id: 't', kind: 'table', name: 'T', rect: { x: 0, y: 0, w, h: 100 }, columns: ['A'], rows: [[value]] },
+    ] }],
+  });
+
+  it('writes a cut cell with the WinAnsi ellipsis byte 0x85, never U+2026', async () => {
+    const texts = pdfTexts(await renderReportDesignPdf(narrow(60, 'a very long value that cannot possibly fit'), new Map(), { now: NOW }));
+    const cell = texts.find((t) => t.startsWith('a very'))!;
+    expect(cell.endsWith(String.fromCharCode(0x85))).toBe(true);
+    expect(cell).not.toContain('\u2026');
+    expect(texts.join('')).toContain(String.fromCharCode(0x85));
+  });
+
+  it('leaves a value that fits untouched', async () => {
+    const texts = pdfTexts(await renderReportDesignPdf(narrow(400, 'short enough'), new Map(), { now: NOW }));
+    expect(texts).toContain('short enough');
+    expect(texts.join('')).not.toContain(String.fromCharCode(0x85));
+  });
+});
+
+describe('headerRow keeps the per-cell statuses in lockstep with the rows', () => {
+  // ⛔ `drawTable` slices `cellStatusesFor`'s output by one when it lifts a header row. Without that
+  // slice the statuses stay indexed against the RESOLVED rows while the body is indexed against the
+  // LIFTED ones, so every chip shifts by exactly one row and colours the wrong subject — silently.
+  // No shipped design combines `headerRow` with a `statusKey` today, which is the only reason this
+  // is not already a live defect.
+  const design = (headerRow: boolean): ReportDesign => baseDesign({
+    pages: [{ id: 'p1', elements: [
+      { id: 't', kind: 'table', name: 'T', rect: { x: 0, y: 0, w: 400, h: 200 },
+        dataSource: { kind: 'custom-query', queryId: 'q' }, sortBy: 'ord', headerRow,
+        boundColumns: [
+          { key: 'lab', label: 'Laboratory' },
+          { key: 'v', label: '', statusKey: 'st', emphasis: 'fill' },
+        ] as BoundColumn[] },
+    ] }],
+  });
+
+  // Row 0 is the header row and carries no status. Exactly one BODY row is critical.
+  const resolved = (): Map<string, ResolvedTable> => new Map<string, ResolvedTable>([['t', {
+    columns: [{ key: 'ord', label: 'ord' }, { key: 'lab', label: 'lab' }, { key: 'v', label: 'v' }, { key: 'st', label: 'st' }],
+    rows: [
+      { ord: 0, lab: '(dates)', v: '1\nFeb', st: '' },
+      { ord: 1, lab: 'Lab A', v: 'Y', st: '' },
+      { ord: 1, lab: 'Lab B', v: 'Y', st: 'critical' },
+      { ord: 1, lab: 'Lab C', v: 'Y', st: '' },
+    ],
+  }]]);
+
+  /** Top y of every `critical` chip drawn, read off the fill operator that paints it. The content
+   *  stream runs under `1 0 0 -1 0 H cm`, so this y measures DOWN from the page top — the same
+   *  direction a design rect does. */
+  const chipYs = (content: string): number[] => {
+    const CHIP = /([\d.]+) ([\d.]+) ([\d.]+) ([\d.]+) re\n\/DeviceRGB cs\n([\d.]+ [\d.]+ [\d.]+) scn\nf/g;
+    return [...content.matchAll(CHIP)]
+      .filter((m) => `${m[5]} scn` === fillOp('#9f1239'))
+      .map((m) => parseFloat(m[2]));
+  };
+
+  /** The first-column text drawn in the row the chip is painted on. */
+  const labelOnChipRow = (content: string): string => {
+    const top = chipYs(content)[0] - 1.5;  // CHIP_INSET_Y — the chip is inset inside its row
+    const H = 841.89;                      // baseDesign is A4 PORTRAIT; text y is measured UP
+    return textRunsOf(content)
+      .filter((r) => { const d = H - r.y; return d >= top && d < top + ROW_H; })
+      .sort((a, b) => a.x - b.x)[0].text;
+  };
+
+  it('⛔ paints the chip on the row it belongs to, not the one above it', async () => {
+    const page = pageContents(await renderReportDesignPdf(design(true), resolved(), { now: NOW }))[0];
+    expect(chipYs(page)).toHaveLength(1);
+    expect(labelOnChipRow(page)).toBe('Lab B');
+  });
+
+  it('puts it at the row pitch the lifted band implies, in literal points', async () => {
+    // Lab B is BODY row 1 under a 24pt band: 24 + 1*16 + 1.5 (CHIP_INSET_Y) = 41.5. Unlifted, the
+    // date row is still a body row, so Lab B is body row 2 under a 16pt band: 16 + 2*16 + 1.5 = 49.5.
+    // Literals, not expressions built from the same constants the drawing reads.
+    const lifted = pageContents(await renderReportDesignPdf(design(true), resolved(), { now: NOW }))[0];
+    const plain = pageContents(await renderReportDesignPdf(design(false), resolved(), { now: NOW }))[0];
+    expect(chipYs(lifted)[0]).toBeCloseTo(41.5, 6);
+    expect(chipYs(plain)[0]).toBeCloseTo(49.5, 6);
+    // ...and both name the same laboratory, which is the property that actually matters.
+    expect(labelOnChipRow(lifted)).toBe('Lab B');
+    expect(labelOnChipRow(plain)).toBe('Lab B');
+  });
+});
+
+/**
+ * ⛔ A table that did NOT opt into `headerRow` gets a ROW_H (16pt) header band and may draw
+ * exactly ONE header line. Its second line would be drawn at r.y + CELL_PAD + HEAD_LINE_H = y+12
+ * with CELL_TEXT_H (12pt) of height, running to y+24 over a first body row that starts at y+16.
+ *
+ * This is reachable from DATA, not only from authoring: `transposeResolved` builds header labels
+ * out of first-column data values, so a value carrying a newline becomes a two-line header on a
+ * table that never asked for one. pdfkit used to clip such a value to one line.
+ */
+describe('a table that did not opt into a stacked header draws ONE header line', () => {
+  // Neutral fixture strings, not vocabulary: what matters is the newline, not the words.
+  const transposedDesign = (): ReportDesign => baseDesign({ pages: [{ id: 'p1', elements: [
+    { id: 't', kind: 'table', name: 'T', rect: { x: 0, y: 0, w: 400, h: 200 },
+      dataSource: { kind: 'custom-query', queryId: 'q' }, transpose: true, transposeLabel: 'Metric' },
+  ] }] } as Partial<ReportDesign>);
+
+  // Transposed: the first column's VALUES become the headers. 'Alpha\nBeta' is one such value.
+  const resolved = (): Map<string, ResolvedTable> => new Map<string, ResolvedTable>([['t', {
+    columns: [{ key: 'subject', label: 'Subject' }, { key: 'count', label: 'Count' }],
+    rows: [{ subject: 'Alpha\nBeta', count: '7' }, { subject: 'Gamma', count: '9' }],
+  }]]);
+
+  it('clips the second line away rather than drawing it over the first body row', async () => {
+    const pdf = await renderReportDesignPdf(transposedDesign(), resolved(), { now: NOW });
+    const drawn = textRunsOf(pageContents(pdf)[0]).map((r) => r.text);
+    expect(drawn, 'the first header line must still be drawn').toContain('Alpha');
+    // ⛔ THE assertion. Before the fix 'Beta' was drawn 12pt down a 16pt band, landing on the
+    // body row. It must not appear anywhere on the page.
+    expect(drawn, 'the second header line must not be drawn into the body row').not.toContain('Beta');
+    // The body row this would have collided with is still there and still legible.
+    expect(drawn).toContain('Count');
+    expect(drawn).toContain('7');
+  });
+
+  it('draws exactly one text run per header cell in the band', async () => {
+    const pdf = await renderReportDesignPdf(transposedDesign(), resolved(), { now: NOW });
+    const runs = textRunsOf(pageContents(pdf)[0]);
+    // Header baseline = the highest y on the page (PDF space grows upward, the table sits at
+    // rect.y 0). No run may sit HEAD_LINE_H below it: that is where a second header line goes.
+    const headY = Math.max(...runs.map((r) => r.y));
+    expect(runs.filter((r) => Math.abs(r.y - (headY - HEAD_LINE_H)) < 0.001)).toHaveLength(0);
+    // ...and the header band still holds one run per column: 'Metric', 'Alpha', 'Gamma'.
+    expect(runs.filter((r) => r.y === headY).map((r) => r.text).sort())
+      .toEqual(['Alpha', 'Gamma', 'Metric']);
+  });
+});
+
+/** Text runs with their positions, for one already-decompressed page. */
+function textRunsOf(content: string): { x: number; y: number; text: string }[] {
+  const runs = /1 0 0 1 (-?[\d.]+) (-?[\d.]+) Tm\n\/F\d+ [\d.]+ Tf\n\[(.*?)\]\s*TJ/g;
+  return [...content.matchAll(runs)].map((m) => ({
+    x: parseFloat(m[1]),
+    y: parseFloat(m[2]),
+    text: [...m[3].matchAll(/<([0-9a-fA-F]*)>/g)].map((h) => Buffer.from(h[1], 'hex').toString('latin1')).join(''),
+  }));
+}

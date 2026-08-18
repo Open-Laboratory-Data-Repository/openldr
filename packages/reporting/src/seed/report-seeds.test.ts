@@ -13,7 +13,7 @@ import {
   type SeedDataDrivenReportsDeps,
 } from './report-seeds';
 import { pairRects, toPt, paperSizePt, type ReportDesign } from '@openldr/report-designer';
-import { findInvalidImageSources } from '@openldr/report-designer/pure';
+import { findInvalidImageSources, findUnsortedHeaderRows } from '@openldr/report-designer/pure';
 
 // In-memory fakes — no real Kysely instance needed (unlike `packages/bootstrap/src/seed.ts`,
 // which builds `customQueries` from a real DB handle; here we inject fakes directly to unit-test
@@ -1626,5 +1626,327 @@ describe('SEED_DESIGNS — no built-in id can collide with a designer-minted id'
     // only holds while the minted id lands OUTSIDE the ids this loop iterates. A built-in named
     // `rt-<digits>` would silently break that guarantee.
     expect(SEED_DESIGNS.filter((d) => /^rt-\d+$/.test(d.id))).toEqual([]);
+  });
+});
+
+describe('SEED_QUERIES — the transmission grids', () => {
+  const q = (id: string) => SEED_QUERIES.find((x) => x.id === id)!;
+
+  it('reads ServiceRequest arrivals, in every dialect', () => {
+    for (const id of ['q-transmission-hvleid', 'q-transmission-other']) {
+      for (const [dialect, sql] of Object.entries(q(id).sql)) {
+        expect(sql, `${id}/${dialect}`).toMatch(/resource_type\s*=\s*'ServiceRequest'/);
+      }
+    }
+  });
+
+  it('⛔ attributes through batch_id, never through the specimen', () => {
+    // The specimen route drops 868 requests, 548 of them EID — 99.6% of all EID here.
+    for (const id of ['q-transmission-hvleid', 'q-transmission-other']) {
+      for (const [dialect, sql] of Object.entries(q(id).sql)) {
+        expect(sql, `${id}/${dialect} lost the batch join`)
+          .toMatch(/d\.batch_id\s*=\s*q\.batch_id/);
+        expect(sql, `${id}/${dialect} attributes through the specimen`)
+          .not.toMatch(/specimen_id\s*=\s*.*diagnostic_reports/);
+      }
+    }
+  });
+
+  it('buckets days in the supplied timezone, not UTC', () => {
+    for (const id of ['q-transmission-hvleid', 'q-transmission-other']) {
+      for (const [dialect, sql] of Object.entries(q(id).sql)) {
+        expect(sql, `${id}/${dialect} ignores the tz parameter`).toContain('{{param.tz}}');
+      }
+    }
+  });
+
+  it('returns exactly the lab column and 23 day columns', () => {
+    for (const id of ['q-transmission-hvleid', 'q-transmission-other']) {
+      const sql = q(id).sql.postgres;
+      expect(sql).toMatch(/as lab\b/);
+      for (let i = 1; i <= 23; i++) {
+        const col = `d${String(i).padStart(2, '0')}`;
+        expect(sql, `${id} is missing ${col}`).toMatch(new RegExp(`as ${col}\\b`));
+      }
+      expect(sql, `${id} has a d24`).not.toMatch(/as d24\b/);
+    }
+  });
+
+  // ⛔ `sortBy: 'ord'` is set on both grids, and it FAILS SILENTLY. Drop `ord` from the select and
+  // the comparator reads `undefined` on every row, the sort becomes a stable no-op, the renderer
+  // falls back to the untrusted SQL row order — and every existing test stays green while the date
+  // row lands in the middle of the grid. Nothing else in this file would notice.
+  it('selects the ord discriminator sortBy depends on, in every dialect', () => {
+    // Two rows carry `ord` per dialect string: the dates row (`0 as ord`) and the lab rows
+    // (`1 as ord`). A match-anywhere assertion passes even if one of the two regresses, so this
+    // pins the count.
+    const ORD = /\bas ord\b/g;
+    for (const id of ['q-transmission-hvleid', 'q-transmission-other']) {
+      for (const [dialect, sql] of Object.entries(q(id).sql)) {
+        expect(sql.match(ORD) ?? [], `${id}/${dialect} dropped 'as ord' — sortBy silently degrades to no sort`)
+          .toHaveLength(2);
+      }
+    }
+  });
+
+  // ⛔ The date row carries the day and the month as TWO LINES. `headerRow` draws a header cell's
+  // newlines stacked and `columnWidths` measures the widest LINE, so a day column costs "Feb"
+  // (14.22pt) instead of "2 Feb" (20.90pt) — measured with real pdfkit metrics. Collapsing these
+  // back to one line puts every laboratory name back under the ellipsis.
+  it('emits the date row as two lines, in every dialect', () => {
+    // Each dialect string carries this expression once per day column — 23 sites. A match-anywhere
+    // assertion (`toMatch`) is satisfied by 1 of 23, so 22 columns could regress to a bare
+    // `char(10)`/single-line expression and this test would stay green. Mutation-tested: flipping
+    // one of the 23 sites back to the un-stacked form fails the count, confirming this discriminates
+    // where `toMatch` could not — see git history for the reviewer's own proof on the mysql case.
+    const NEWLINE: Record<string, RegExp> = {
+      postgres: /to_char\(cal_day, 'FMDD'\) \|\| chr\(10\) \|\| to_char\(cal_day, 'Mon'\)/g,
+      mssql: /concat\(format\(cal_day, '%d', 'en-US'\), char\(10\), format\(cal_day, 'MMM', 'en-US'\)\)/g,
+      // ⛔ `using utf8mb4` is asserted, not just `char(10)`. Bare CHAR(10) is a BINARY string in
+      // MySQL and CONCAT turns the whole cell binary, so mysql2 (built with no `typeCast`) hands the
+      // date row back as Buffers and the JSON/CSV export of that row stops being text.
+      mysql: /concat\(date_format\(cal_day, '%e'\), char\(10 using utf8mb4\), date_format\(cal_day, '%b'\)\)/g,
+    };
+    for (const id of ['q-transmission-hvleid', 'q-transmission-other']) {
+      for (const [dialect, sql] of Object.entries(q(id).sql)) {
+        expect(sql.match(NEWLINE[dialect]) ?? [], `${id}/${dialect} no longer stacks the day over the month on all 23 columns`)
+          .toHaveLength(23);
+      }
+    }
+  });
+
+  it('carries no panel code in SQL — the list is a run-time parameter', () => {
+    // AGENTS.md §8. HIVVL/HIVPC are Tanzania's codes; another country's differ.
+    for (const id of ['q-transmission-hvleid', 'q-transmission-other']) {
+      for (const [dialect, sql] of Object.entries(q(id).sql)) {
+        expect(sql, `${id}/${dialect}`).not.toMatch(/HIVVL|HIVPC|HIVEL|HIVDR/);
+        expect(sql, `${id}/${dialect} ignores the panel parameter`).toContain('{{param.panels}}');
+      }
+    }
+  });
+
+  // C2: `arrivals` must carry its own month bound. Without one, `labs` is "every laboratory that
+  // ever submitted" and a lab absent from the window still gets a blank row — and the only index
+  // on ingest_events leads with recorded_at, so an unbounded scan reads the whole table.
+  it('bounds recorded_at inside the arrivals CTE, in every dialect', () => {
+    for (const id of ['q-transmission-hvleid', 'q-transmission-other']) {
+      for (const [dialect, sql] of Object.entries(q(id).sql)) {
+        expect(sql, `${id}/${dialect} never bounds recorded_at`)
+          .toMatch(/e\.recorded_at\s*>=/);
+        expect(sql, `${id}/${dialect} never caps recorded_at`)
+          .toMatch(/e\.recorded_at\s*</);
+      }
+    }
+  });
+
+  // ⛔ The assertion above matches only the WIDENED sargable bound, which is two days looser than
+  // the month on each side. Deleting the exact civil-zone bound — the mutation that proved the
+  // live test bites — leaves it green, and a hermetic CI run skips the live file entirely. These
+  // regexes pin the exact bound, per dialect, because the expression differs in all three.
+  const CIVIL_LOWER: Record<string, RegExp> = {
+    postgres: /and \(e\.recorded_at at time zone \{\{param\.tz\}\}\)::date >= m\.d/,
+    mssql: /and cast\(e\.recorded_at at time zone 'UTC' at time zone \{\{param\.tz\}\} as date\) >= m\.d/,
+    mysql: /and cast\(convert_tz\(e\.recorded_at, '\+00:00', \{\{param\.tz\}\}\) as date\) >= m\.d/,
+  };
+  const CIVIL_UPPER: Record<string, RegExp> = {
+    postgres: /and \(e\.recorded_at at time zone \{\{param\.tz\}\}\)::date < m\.d \+ interval '1 month'/,
+    mssql: /and cast\(e\.recorded_at at time zone 'UTC' at time zone \{\{param\.tz\}\} as date\) < dateadd\(month, 1, m\.d\)/,
+    mysql: /and cast\(convert_tz\(e\.recorded_at, '\+00:00', \{\{param\.tz\}\}\) as date\) < date_add\(m\.d, interval 1 month\)/,
+  };
+
+  it('pins the EXACT civil-zone month bound, in every dialect', () => {
+    for (const id of ['q-transmission-hvleid', 'q-transmission-other']) {
+      for (const [dialect, sql] of Object.entries(q(id).sql)) {
+        expect(sql, `${id}/${dialect} lost the exact civil-zone lower bound`)
+          .toMatch(CIVIL_LOWER[dialect]);
+        expect(sql, `${id}/${dialect} lost the exact civil-zone upper bound`)
+          .toMatch(CIVIL_UPPER[dialect]);
+      }
+    }
+  });
+
+  // ⛔ MySQL's find_in_set strips spaces from the WHOLE parameter to fake a per-element trim, so
+  // an element like 'AB C' becomes 'ABC' and that request lands in the wrong grid. It is also
+  // documented not to work when its first argument contains a comma. Panel codes are
+  // operator-configured run-time vocabulary (AGENTS.md §8) — this file cannot assume their shape.
+  it('splits the panel list per element on MySQL, never with find_in_set', () => {
+    for (const id of ['q-transmission-hvleid', 'q-transmission-other']) {
+      const sql = q(id).sql.mysql;
+      // Only the explanatory comment may name it; no predicate may call it.
+      const code = sql.replace(/--[^\n]*/g, '');
+      expect(code, `${id}/mysql matches panels with find_in_set`).not.toMatch(/find_in_set/);
+      expect(code, `${id}/mysql has no per-element split`).toMatch(/panel_list/);
+      expect(code, `${id}/mysql never trims an element`).toMatch(/trim\(substring_index\(/);
+    }
+  });
+});
+
+describe('SEED_DESIGNS — rt-transmission-grid', () => {
+  const design = () => SEED_DESIGNS.find((d) => d.id === 'rt-transmission-grid')!;
+  const el = (id: string) => design().pages[0].elements.find((e) => e.id === id)!;
+
+  it('is landscape — MEASURED: 24 columns cannot fit portrait', () => {
+    // The reference document is portrait, and this design is not. The reason is arithmetic, not
+    // taste, and it is worth pinning because "make it portrait like the reference" is an obvious
+    // and wrong instruction to give this file.
+    //
+    // Measured with real pdfkit metrics at the renderer's fixed 8pt, WITH the stacked header:
+    //   day column natural   = max("23" 8.90, "Feb" 14.22) + CELL_PAD*2 + 2 = 24.22pt
+    //   portrait body, 36pt margins                                          = 523.28pt
+    //   floor applied by columnWidths = min(MIN_COL_W 22, 523.28/24 = 21.80) = 21.80pt
+    // 23 day columns cannot go below that floor, so they take 501.4pt of 523.28 and the
+    // laboratory column is left 21.8pt — about three characters. Landscape gives it 171.85pt.
+    // Tighter margins do not rescue it: at 16pt margins the name column is 57.3pt.
+    expect(design().orientation).toBe('landscape');
+  });
+
+  it('lifts the query date row into the header so it repeats on every page', () => {
+    // Without `headerRow` the dates are an ordinary body row: they print on chunk 0 only, and page
+    // 2 shows marks under blank columns with nothing to say which day is which.
+    for (const id of ['hvleid', 'other']) {
+      expect(el(id).headerRow, `${id} leaves the dates as a body row`).toBe(true);
+    }
+  });
+
+  it('⛔ leaves the 23 day labels BLANK, because a declared label wins over the header row', () => {
+    // `headerTexts` keeps a non-blank declared label and fills only a blank one from the header
+    // row. Labelling the day columns `1`..`23` would therefore print slot numbers OVER the dates —
+    // which is exactly the mitigation an earlier review proposed before the lift existed.
+    for (const id of ['hvleid', 'other']) {
+      const labels = (el(id).boundColumns ?? []).map((c) => c.label);
+      expect(labels[0]).toBe('Laboratory');
+      expect(labels.slice(1), `${id} labels its day columns`).toEqual(Array(23).fill(''));
+    }
+  });
+
+  it('ties each heading to its own grid, so neither survives onto a page the grid does not reach', () => {
+    expect(el('rt-transmission-grid-hvleid-title').showWithTable).toBe('hvleid');
+    expect(el('rt-transmission-grid-other-title').showWithTable).toBe('other');
+  });
+
+  it('fits 8 laboratories per grid per page — computed in POINTS, not px@96', () => {
+    // ⛔ UNITS. The rect is px@96 and the renderer multiplies by 0.75; ROW_H and the header band are
+    // already points. Doing this in px@96 gives floor((214-24)/16) = 11 and overstates the capacity
+    // by a third, in the direction that says "it fits".
+    const ROW_H_PT = 16;
+    const STACKED_HEAD_PT = 24; // ROW_H + HEAD_LINE_H, and HEAD_LINE_H is the reference's 8pt
+    for (const id of ['hvleid', 'other']) {
+      const hPt = toPt(el(id).rect).h;
+      expect(hPt).toBeCloseTo(160.5, 6);
+      expect(Math.floor((hPt - STACKED_HEAD_PT) / ROW_H_PT)).toBe(8);
+    }
+  });
+
+  it('draws BOTH grids on one page, as the reference does', () => {
+    expect(el('hvleid').dataSource).toEqual({ kind: 'custom-query', queryId: 'q-transmission-hvleid' });
+    expect(el('other').dataSource).toEqual({ kind: 'custom-query', queryId: 'q-transmission-other' });
+  });
+
+  it('binds the lab column and all 23 day columns explicitly', () => {
+    for (const id of ['hvleid', 'other']) {
+      const keys = (el(id).boundColumns ?? []).map((c) => c.key);
+      expect(keys[0]).toBe('lab');
+      expect(keys).toHaveLength(24);
+      expect(keys).toContain('d23');
+    }
+  });
+
+  it('projects only keys the queries actually select', () => {
+    const sql = SEED_QUERIES.find((q) => q.id === 'q-transmission-hvleid')!.sql.postgres;
+    for (const c of el('hvleid').boundColumns ?? []) {
+      // ⚠ `\\b` — inside a TEMPLATE LITERAL a lone `\b` is the backspace character, not a word
+      // boundary, so the pattern silently never matches.
+      expect(new RegExp(`as ${c.key}\\b`).test(sql), `${c.key} is not selected`).toBe(true);
+    }
+  });
+});
+
+describe('SEED_DESIGNS — rt-transmission-grid keeps ord off the page', () => {
+  const design = () => SEED_DESIGNS.find((d) => d.id === 'rt-transmission-grid')!;
+  const el = (id: string) => design().pages[0].elements.find((e) => e.id === id)!;
+
+  it('never binds ord — it sorts the rows, it is not a column of the report', () => {
+    for (const id of ['hvleid', 'other']) {
+      expect((el(id).boundColumns ?? []).map((c) => c.key), `${id} prints ord`).not.toContain('ord');
+    }
+  });
+
+  it('sorts its own rows on ord instead of trusting the SQL row order', () => {
+    // planPagination wraps the query as `select * from (<inner>) as _q limit N`
+    // (packages/dashboards/src/sql-runner.ts:56). MySQL may discard an ORDER BY inside a derived
+    // table; if it does, the '(dates)' row lands in the middle of the grid. Sorting where the
+    // renderer consumes the rows removes the dependency on the engine keeping that order.
+    for (const id of ['hvleid', 'other']) {
+      expect(el(id).sortBy, `${id} trusts the SQL row order`).toBe('ord');
+    }
+  });
+
+  it('⛔ pairs headerRow with sortBy — and the boot seed does NOT go through the API gate', () => {
+    // `findUnsortedHeaderRows` is enforced at POST/PUT /api/report-designs. The seeded designs are
+    // installed by the boot seed, which writes them without that route, so the gate cannot see
+    // them. This is where the same rule is checked for the designs that ship.
+    for (const d of SEED_DESIGNS) {
+      expect(findUnsortedHeaderRows(d), `${d.id} lifts a header row with no sortBy`).toEqual([]);
+    }
+  });
+
+  it('names no panel code anywhere in the design — the list is a run-time parameter', () => {
+    // AGENTS.md §8. HIVVL/HIVPC are Tanzania's codes; this design ships worldwide.
+    expect(JSON.stringify(design())).not.toMatch(/HIVVL|HIVPC|HIVEL|HIVDR/);
+  });
+
+  it('says in the tz help that the prefill is a studio default, not a binding', () => {
+    // A CLI or scheduled run passes tz explicitly and never reads the setting. An operator who
+    // reads "defaults to Settings" and nothing else will assume a schedule inherits it.
+    const tz = design().parameters.find((p) => p.key === 'tz')!;
+    expect(tz.required).toBe(true);
+    expect(tz.help ?? '').toMatch(/schedul|CLI/i);
+  });
+});
+
+describe('SEED_REPORT_DEFS — r-transmission-grid', () => {
+  const def = () => SEED_REPORT_DEFS.find((r) => r.id === 'r-transmission-grid')!;
+
+  it('links the grid design to the HVL/EID query, published and operational', () => {
+    expect(def()).toMatchObject({
+      category: 'operational',
+      designId: 'rt-transmission-grid',
+      primaryQueryId: 'q-transmission-hvleid',
+      status: 'published',
+    });
+    expect(def().description).toMatch(/laborator/i);
+  });
+
+  it('⛔ is NOT gated on having data — a month in which nothing arrived is the answer', () => {
+    // DESIGNS_REQUIRING_DATA refuses to render when the named element has no rows. Right for a
+    // per-patient clinical report; here it would hide exactly the outage the report exists to show.
+    expect(DESIGNS_REQUIRING_DATA['rt-transmission-grid']).toBeUndefined();
+  });
+});
+
+describe('SEED_DESIGNS — rt-transmission-grid geometry', () => {
+  const design = () => SEED_DESIGNS.find((d) => d.id === 'rt-transmission-grid')!;
+  const el = (id: string) => design().pages[0].elements.find((e) => e.id === id)!;
+
+  it('gives both grids the FULL landscape body width', () => {
+    // ⚠ MEASURED off a real render at the renderer's fixed 8pt, with the stacked header: the day
+    // columns draw at 26.02pt and the laboratory column at 171.85pt (163.85pt of text). That is
+    // enough for "Kilimanjaro Christian Medical Centre" (129.5pt) but NOT for
+    // "Mtwara (Ligula) Regional Referral Hospital - EVLIMS" (186.6pt), which still ellipsizes.
+    // Narrowing these rects makes a legibility problem that is already at its limit worse, and
+    // nothing in a rendering test would say so.
+    const [wPt] = paperSizePt(design().paper, design().orientation);
+    const body = Math.round(wPt / 0.75) - 96; // simpleTableDesign's own arithmetic
+    for (const id of ['hvleid', 'other']) {
+      expect(el(id).rect.w, `${id} is narrower than the page allows`).toBe(body);
+    }
+  });
+
+  it('gives both grids the same width and the same height', () => {
+    // Two readings of the same month, one above the other. Different column widths between them
+    // would make a lab's row in the top grid not line up with its row in the bottom one.
+    expect(el('hvleid').rect.w).toBe(el('other').rect.w);
+    expect(el('hvleid').rect.h).toBe(el('other').rect.h);
+    expect(el('hvleid').rect.x).toBe(el('other').rect.x);
   });
 });

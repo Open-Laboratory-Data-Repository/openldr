@@ -270,6 +270,8 @@ export const en = {
       logo: 'Logo',
       facilitySystem: 'Facility register',
       facilitySystemPlaceholder: 'Select a register…',
+      timezone: 'Time zone',
+      timezoneHint: 'An IANA zone name, e.g. Africa/Dar_es_Salaam. A SQL Server warehouse takes Windows zone names instead, which this field rejects — on SQL Server leave this empty and type the zone into the Time zone filter on each report run.',
       chooseLogo: 'Choose file…',
       clearLogo: 'Clear',
       save: 'Save',
@@ -284,6 +286,7 @@ export const en = {
         'not-a-data-uri': 'The logo must be an uploaded image file, not a web address — a linked image does not render in the PDF.',
         'unsupported-image-type': 'Logo must be a PNG, JPEG or WebP image.',
         'unknown-key': 'Unrecognised setting.',
+        'invalid-timezone': 'Must be an IANA zone name (e.g. Africa/Dar_es_Salaam), not a fixed offset.',
       },
     },
     subNav: {

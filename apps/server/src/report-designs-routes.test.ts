@@ -261,6 +261,37 @@ describe('report-design routes', () => {
     expect(res.json().error).toBe('invalid image source: logo (not-a-data-uri)');
   });
 
+  const withGrid = (over: Record<string, unknown>) => ({
+    ...minimal,
+    pages: [{ id: 'p1', elements: [{
+      id: 'hvleid', kind: 'table', name: 'Grid', rect: { x: 0, y: 0, w: 400, h: 200 },
+      dataSource: { kind: 'custom-query', queryId: 'q' }, headerRow: true, ...over,
+    }] }],
+  });
+
+  it('⛔ refuses headerRow without sortBy, on create and on update', async () => {
+    // `headerRow` lifts row 0 of whatever the query returned. Only `sortBy` makes row 0 a KNOWN
+    // row — `planPagination` wraps every query in a derived table and MySQL may discard the inner
+    // ORDER BY. Without the pair the page prints a laboratory's name as its date header, looking
+    // finished and being wrong. Refused at write, where the author can still fix it.
+    const app = appWith(fakeCtx());
+    const res = await app.inject({ method: 'POST', url: '/api/report-designs', payload: withGrid({}) });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().unsortedHeaderRows).toEqual([{ elementId: 'hvleid' }]);
+    expect(res.json().error).toBe('headerRow needs sortBy: hvleid');
+
+    await app.inject({ method: 'POST', url: '/api/report-designs', payload: minimal });
+    const put = await app.inject({ method: 'PUT', url: '/api/report-designs/rd1', payload: withGrid({}) });
+    expect(put.statusCode).toBe(400);
+    expect(put.json().error).toBe('headerRow needs sortBy: hvleid');
+  });
+
+  it('accepts the pair', async () => {
+    const app = appWith(fakeCtx());
+    const res = await app.inject({ method: 'POST', url: '/api/report-designs', payload: withGrid({ sortBy: 'ord' }) });
+    expect(res.statusCode).toBe(201);
+  });
+
   it('accepts a seeded {{lab.logo}} token — every built-in design ships one', async () => {
     const app = appWith(fakeCtx());
     const res = await app.inject({ method: 'POST', url: '/api/report-designs', payload: withImage('{{lab.logo}}') });

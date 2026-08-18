@@ -3,7 +3,7 @@ import Fastify from 'fastify';
 import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createUpdateCheck } from '@openldr/bootstrap';
+import { createUpdateCheck, createLabIdentity } from '@openldr/bootstrap';
 import { registerSettingsRoutes } from './settings-routes';
 
 const SYNC_STATUS = {
@@ -60,6 +60,9 @@ function fakeCtx(syncEnabled = true) {
       },
       // Minimal AppSettingStore for the sync config route.
       appSettings,
+      // The REAL service over the same fake store, so a route test proves the whole pipeline
+      // (zod schema → labIdentity.set → validateLabIdentityValue), not a stub that always agrees.
+      labIdentity: createLabIdentity(appSettings as any),
       // Fake seal: prefix so a test can assert the stored value is the ENCRYPTED form, never plaintext.
       encryptSecret: (plain: string) => `enc:${plain}`,
       decryptSecret: (blob: string) => blob.replace(/^enc:/, ''),
@@ -134,6 +137,33 @@ describe('settings routes', () => {
     const app = appWithUser(['lab_admin'], (a) => registerSettingsRoutes(a, ctx, deps));
     const res = await app.inject({ method: 'POST', url: '/api/settings/danger/nuke-everything' });
     expect(res.statusCode).toBe(404);
+  });
+
+  // ⛔ The studio Laboratory page's save() always sends EVERY field the GET route listed
+  // (`for (const f of meta.fields) patch[f.id] = ...`), and `meta.fields` is `LAB_IDENTITY_FIELDS`
+  // straight from @openldr/config. So the moment `lab.timezone` joins that list, every save —
+  // not just a timezone edit — carries it. `LabIdentityPatchSchema` is `.strict()`; missing the
+  // key here 400s the WHOLE save, breaking the page for name/address/contact/logo too.
+  it('PUT /api/settings/lab accepts lab.timezone alongside the existing keys', async () => {
+    const { ctx, deps } = fakeCtx();
+    const app = appWithUser(['lab_admin'], (a) => registerSettingsRoutes(a, ctx, deps));
+    const res = await app.inject({
+      method: 'PUT', url: '/api/settings/lab',
+      payload: { 'lab.name': 'Muhimbili', 'lab.timezone': 'Africa/Dar_es_Salaam' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()['lab.timezone']).toBe('Africa/Dar_es_Salaam');
+  });
+
+  it('PUT /api/settings/lab rejects an unresolvable timezone without writing it', async () => {
+    const { ctx, deps } = fakeCtx();
+    const app = appWithUser(['lab_admin'], (a) => registerSettingsRoutes(a, ctx, deps));
+    const res = await app.inject({
+      method: 'PUT', url: '/api/settings/lab',
+      payload: { 'lab.timezone': 'Not A Zone' },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().details).toEqual([{ key: 'lab.timezone', reason: 'invalid-timezone' }]);
   });
 
   it('PUT /api/settings/sync persists discrete keys, encrypts the secret, returns a secret-free view', async () => {
