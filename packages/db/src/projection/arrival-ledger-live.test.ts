@@ -65,7 +65,16 @@ const makeServiceRequest = (id: string): FhirResource => ({
 // So: poll `runCycle()` until the expected rows land, bounded by wall-clock time, and fail loudly
 // (never silently) if they never do — a timeout here must still read as a failure, not let the
 // caller's assertion run against an empty result and report a confusing, unrelated mismatch.
-const POLL_MAX_WAIT_MS = 250_000; // > the ~240s 082 bulk-insert transaction observed pinning xmin
+// ⛔ THIS NUMBER IS COUPLED TO ANOTHER TEST'S RUNTIME, and that coupling is the fragile part —
+// not the polling. It must exceed however long the longest concurrent transaction on this Postgres
+// INSTANCE holds xmin down. Today that is
+// `packages/db/src/migrations/internal/082_facility_canonical_identity.live.test.ts`, which migrates
+// 22 000 facilities inside one transaction.
+//   measured 2026-08-17: ~240s   →   measured 2026-08-18: 392s
+// It grew by 60% in a day, which is exactly why this carries a measurement and a date rather than a
+// bare constant. If these tests start timing out again, re-measure 082 before touching anything
+// here — the bound is almost certainly stale, not the polling wrong.
+const POLL_MAX_WAIT_MS = 480_000;
 
 // The per-test vitest timeout must be comfortably LARGER than the poll bound, not a hair over it.
 // It was 260s against a 250s bound, leaving 10s for one final runCycle(); a slow last iteration made
