@@ -199,6 +199,18 @@ docker compose down          # stop
 docker compose up -d         # start
 ```
 
+The installer also drops an `openldr` wrapper in the install directory, next to
+`docker-compose.yml`. It runs the operator CLI inside the `api` container:
+
+```
+./openldr --help
+```
+
+On Windows, use `.\openldr.ps1` instead. The wrapper only sees files under `./data`,
+also created next to it — put a file there and name it with the `data/` prefix, for
+example `./openldr ingest data/bundle.json`. See [CLI reference](/docs/cli) for the
+full command list.
+
 See [Environment variables](/docs/environment) for the values in the generated `.env`,
 or [Windows Server (WSL2)](/docs/windows-server) to deploy on Windows Server.
 

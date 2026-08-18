@@ -20,7 +20,9 @@ services:
       # sides: the operator drops a file in ./data next to the wrapper and refers to it as
       # `data/bundle.json`, which resolves inside the container to /data/bundle.json. Without
       # this mount, an --out path writes into the container layer and is lost on the next
-      # restart.
+      # restart. On Linux the mount also carries host ownership through, so the sh wrapper
+      # additionally runs with `-u "$(id -u):$(id -g)"` — otherwise the image's default uid
+      # (10001) can't write into a ./data directory owned by the installing user.
       - ./data:/data
     depends_on:
       postgres: { condition: service_healthy }

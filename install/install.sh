@@ -298,13 +298,19 @@ chmod +x "$DIR/renew-cert.sh" 2>/dev/null || true
 # wrapper is a one-line shim rather than a downloaded binary. `-T` disables TTY allocation so
 # `./openldr report list --json | jq` works in a pipeline. `-w /` sets the container's working
 # directory to root, so a `data/`-prefixed argument, like `./openldr ingest data/x.json`,
-# resolves to the /data bind mount — the same path the operator sees on the host. The path
-# /app/cli/dist/index.js is fixed by the image — see the COPY in apps/server/Dockerfile.
+# resolves to the /data bind mount — the same path the operator sees on the host. `-u
+# "$(id -u):$(id -g)"` runs the CLI as the invoking user rather than the image's default
+# `USER openldr` (uid 10001): on Linux a bind mount carries host ownership through, and `./data`
+# is created owned by the installing user, so uid 10001 gets EACCES on every write (`--out`,
+# `ingest`, `artifact keygen`). Running as the host uid, which already owns ./data, fixes this
+# with no root needed at install time. The path /app/cli/dist/index.js is fixed by the image —
+# see the COPY in apps/server/Dockerfile. The heredoc is quoted (`<<'WRAPPER'`) so `$(id -u)` is
+# written literally and evaluated when the wrapper RUNS, not when this installer writes it.
 cat > "$DIR/openldr" <<'WRAPPER'
 #!/bin/sh
 # OpenLDR operator CLI. Runs inside the api container.
 # Files must live under ./data (mounted at /data) — e.g. ./openldr ingest data/bundle.json
-exec docker compose exec -T -w / api node /app/cli/dist/index.js "$@"
+exec docker compose exec -T -u "$(id -u):$(id -g)" -w / api node /app/cli/dist/index.js "$@"
 WRAPPER
 chmod +x "$DIR/openldr" 2>/dev/null || true
 if [ "$MSSQL_DEMO" -eq 1 ]; then

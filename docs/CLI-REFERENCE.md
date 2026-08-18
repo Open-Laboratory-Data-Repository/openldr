@@ -53,13 +53,13 @@ Most commands return `0` on success and `1` on validation/runtime failure. Comma
 
 ## Copy-Paste Examples
 
-PowerShell and bash use the same `./openldr` command forms. Use PowerShell line continuations with backticks and bash continuations with backslashes.
+The command forms are `.\openldr.ps1` on PowerShell and `./openldr` on bash. Use PowerShell line continuations with backticks and bash continuations with backslashes.
 
 ```powershell
-./openldr health --json
-./openldr db migrate --json
-./openldr target-store test --engine pg --json
-./openldr report list --json
+.\openldr.ps1 health --json
+.\openldr.ps1 db migrate --json
+.\openldr.ps1 target-store test --engine pg --json
+.\openldr.ps1 report list --json
 ```
 
 ```bash

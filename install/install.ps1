@@ -269,12 +269,17 @@ Fetch "scripts/init-target-db.sql" "$Dir/config/init-target-db.sql"
 Fetch "scripts/init-keycloak-db.sql" "$Dir/config/init-keycloak-db.sql"
 
 # The `openldr` operator CLI wrapper — see the matching block in install/install.sh.
-# Single-quoted here-string so $args is written literally, not expanded at install time.
-# The closing '@ must be at column 0.
+# Single-quoted here-string so $args and $LASTEXITCODE are written literally, not expanded at
+# install time. The closing '@ must be at column 0.
+# No -u here on purpose: the sh wrapper adds `-u "$(id -u):$(id -g)"` because a Linux bind mount
+# carries host ownership through and the image's default uid (10001) can't write to ./data.
+# Windows does not enforce that ownership check on bind mounts, and there is no `id` command to
+# resolve the flag's value — adding -u here would just break the wrapper. Leave it out.
 $wrapper = @'
 # OpenLDR operator CLI. Runs inside the api container.
 # Files must live under .\data (mounted at /data) - e.g. .\openldr.ps1 ingest data/bundle.json
 docker compose exec -T -w / api node /app/cli/dist/index.js $args
+exit $LASTEXITCODE
 '@
 Set-Content -Path "$Dir/openldr.ps1" -Value $wrapper -Encoding utf8
 
