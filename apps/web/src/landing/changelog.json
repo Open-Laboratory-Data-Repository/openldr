@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "93662fcd",
+          "type": "fix",
+          "scope": "settings",
+          "title": "Refuse a signed-offset zone in lab.timezone, in every spelling"
+        },
+        {
           "hash": "271c34d9",
           "type": "fix",
           "scope": "reports",
@@ -1516,18 +1522,6 @@
           "type": "feat",
           "scope": "db",
           "title": "Add facility_jobs for durable facility work"
-        }
-      ]
-    },
-    {
-      "date": "2026-08-07",
-      "version": null,
-      "entries": [
-        {
-          "hash": "9ee8344e",
-          "type": "fix",
-          "scope": "facilities",
-          "title": "State what 077 actually guarantees, and let the import override work both ways"
         }
       ]
     }
