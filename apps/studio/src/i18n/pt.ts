@@ -288,7 +288,7 @@ export const pt: EnShape = {
         'not-a-data-uri': 'O logótipo tem de ser um ficheiro de imagem carregado, não um endereço web — uma imagem ligada não aparece no PDF.',
         'unsupported-image-type': 'O logótipo tem de ser uma imagem PNG, JPEG ou WebP.',
         'unknown-key': 'Definição não reconhecida.',
-        'invalid-timezone': 'Tem de ser um nome de fuso IANA (ex.: Africa/Dar_es_Salaam), não um desvio fixo.',
+        'invalid-timezone': 'Tem de ser um fuso com nome, como Africa/Dar_es_Salaam, não um desvio fixo. +03:00 e Etc/GMT+3 são ambos recusados — Etc/GMT+3 significa UTC−3, o oposto do que parece.',
       },
     },
     subNav: {

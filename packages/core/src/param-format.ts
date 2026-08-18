@@ -30,36 +30,56 @@ export const REPORT_PARAM_FORMATS: readonly ReportParamFormat[] = ['timezone-no-
 
 /**
  * ⚠ TWO rules live in this file, and the difference between them is deliberate. Do not "unify"
- * them.
+ * them, and do not "simplify" the setting into calling only `isSignedOffsetZone`.
  *
  *   `isValidIanaZone`     — strict. Guards the `lab.timezone` SETTING.
  *   `isSignedOffsetZone`  — narrow. Guards a report's `tz` RUN PARAMETER.
  *
- * A stored SETTING is reused silently on every future run, across every engine, by people who did
- * not type it. Strictness there is cheap and right, and `lab-identity.ts` explains it further.
+ * They now SHARE a floor: both refuse a signed offset in every spelling, so that half can never
+ * drift. What differs is what each adds on top, and why:
  *
- * A RUN PARAMETER is typed for one run by someone watching the result. The only failure worth
- * blocking there is the one that is WRONG WITHOUT SAYING SO — see `isSignedOffsetZone`.
+ *   The SETTING adds "and the runtime must resolve it". A stored value is reused silently on every
+ *   future run, across every engine, by people who did not type it and cannot see it. Nobody is
+ *   watching when it is used, so a typo has to be caught at the moment it is written.
+ *
+ *   The RUN PARAMETER adds NOTHING on top. It is typed for one run by someone watching the result
+ *   come back, so an unrecognised name is harmless — the engine refuses it at once, loudly, and no
+ *   wrong number is produced. Requiring IANA validity there would also break the documented SQL
+ *   Server workflow (`apps/studio/src/docs/0.1.0/en/reports.md:51`), where the operator is told to
+ *   type a WINDOWS zone name into this very filter.
+ *
+ * So the setting is stricter because it is STORED AND REUSED UNSEEN; the run parameter is narrow
+ * because it is TYPED AND WATCHED. Neither rule is a worse version of the other.
  */
 
 /**
- * True for a zone name the runtime's own IANA database resolves. Deliberately NOT a hand-written
- * list, so it stays correct as zones are added or renamed.
+ * True for a zone name the runtime's own IANA database resolves AND that carries no offset sign.
+ * Deliberately NOT a hand-written list, so it stays correct as zones are added or renamed.
  *
- * ⛔ A fixed offset is rejected. An offset cannot express daylight saving, so a report spanning a
- * DST boundary buckets half its days an hour out — and see `isSignedOffsetZone` for the sharper
- * problem with its sign.
+ * ⛔ A fixed offset is rejected in EVERY spelling, which is what `isSignedOffsetZone` decides — it
+ * is called here rather than repeated, so the two rules cannot disagree about what an offset is.
+ * Two independent reasons to refuse one:
  *
- * The explicit sign test is not redundant with the `Intl` call. Measured on this runtime: bare
- * `+3` makes `Intl.DateTimeFormat` throw, but `+03:00` does NOT — ICU resolves it as a legal
- * `timeZone`. No real IANA zone id starts with a sign, so the test costs nothing correct.
+ *   1. An offset cannot express daylight saving, so a report spanning a DST boundary buckets half
+ *      its days an hour out.
+ *   2. Its sign reads backwards to almost everyone who types it. `Etc/GMT+3` is UTC−3, by IANA's
+ *      own POSIX-inherited definition — Postgres is not misreading it. Measured on live Postgres,
+ *      `2026-08-06 03:48:00+00 AT TIME ZONE 'Etc/GMT+3'` → `2026-08-06 00:48`, identical to `+3`
+ *      and three hours the wrong way from `Africa/Dar_es_Salaam`'s `06:48`.
  *
- * ⚠ Used ONLY by the `lab.timezone` setting. It is NOT the run-parameter rule: it refuses a
- * Windows zone name, which SQL Server installs are documented to need
- * (`apps/studio/src/docs/0.1.0/en/reports.md:51`), and it ACCEPTS `Etc/GMT+3`, which is inverted.
+ * ⛔ Neither test is redundant with the `Intl` call, and that is the whole point of the sign check.
+ * Measured on this runtime: bare `+3` makes `Intl.DateTimeFormat` throw, but `+03:00` and
+ * `Etc/GMT+3` do NOT — ICU resolves both as legal `timeZone` values. An Intl-only rule therefore
+ * stored the single most misleading zone spelling there is. `Etc/UTC` and `Etc/Greenwich` carry no
+ * sign and stay accepted, so what is refused is the SIGN, never the `Etc/` prefix.
+ *
+ * ⚠ Used ONLY by the `lab.timezone` setting. It is NOT the run-parameter rule: it refuses a Windows
+ * zone name, which SQL Server installs are documented to need
+ * (`apps/studio/src/docs/0.1.0/en/reports.md:51`). See the block comment above for why that
+ * asymmetry is deliberate.
  */
 export function isValidIanaZone(value: string): boolean {
-  if (/^[+-]/.test(value)) return false;
+  if (isSignedOffsetZone(value)) return false;
   try {
     new Intl.DateTimeFormat('en-US', { timeZone: value });
     return true;
@@ -85,8 +105,8 @@ export function isValidIanaZone(value: string): boolean {
  * Postgres reads the sign with the POSIX convention, so `+3` means UTC−3. The report still comes
  * out complete and plausible, six hours off, with an arrival near midnight marked on the wrong
  * day and nothing on the page to show it. `Etc/GMT+3` is that same defect wearing an IANA-shaped
- * name — which is exactly why an IANA-validity check is the WRONG guard here: it waves `Etc/GMT+3`
- * through and blocks the Windows names a SQL Server install needs.
+ * name, and `isValidIanaZone` now calls THIS function to refuse it too — so both the setting and
+ * the run parameter agree on what an offset is, and only what they add on top differs.
  *
  * ⛔ Do NOT widen this to "everything the runtime cannot resolve". An unrecognised zone is the
  * LOUD case: the engine refuses it immediately with a clear message, so the operator finds out at

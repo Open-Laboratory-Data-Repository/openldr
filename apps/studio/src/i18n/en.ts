@@ -286,7 +286,7 @@ export const en = {
         'not-a-data-uri': 'The logo must be an uploaded image file, not a web address — a linked image does not render in the PDF.',
         'unsupported-image-type': 'Logo must be a PNG, JPEG or WebP image.',
         'unknown-key': 'Unrecognised setting.',
-        'invalid-timezone': 'Must be an IANA zone name (e.g. Africa/Dar_es_Salaam), not a fixed offset.',
+        'invalid-timezone': 'Must be a named zone such as Africa/Dar_es_Salaam, not a fixed offset. +03:00 and Etc/GMT+3 are both refused — Etc/GMT+3 means UTC−3, the opposite of how it reads.',
       },
     },
     subNav: {
