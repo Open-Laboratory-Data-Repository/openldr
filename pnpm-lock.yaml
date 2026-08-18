@@ -813,6 +813,18 @@ importers:
       commander:
         specifier: ^12.1.0
         version: 12.1.0
+      cpu-features:
+        specifier: ^0.0.10
+        version: 0.0.10
+      pdfkit:
+        specifier: ^0.15.0
+        version: 0.15.2
+      quickjs-emscripten:
+        specifier: 0.32.0
+        version: 0.32.0
+      ssh2:
+        specifier: ^1.17.0
+        version: 1.17.0
     devDependencies:
       kysely:
         specifier: ^0.28.17
