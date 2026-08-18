@@ -104,6 +104,8 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const PKG_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+// Module scope, not inside the test — `it.skipIf` is evaluated at collection time.
+const BUNDLE = join(PKG_ROOT, 'dist', 'index.js');
 
 /** The four packages the SERVER externalises. Each resolves a data file or a native addon from
  *  disk at runtime, so bundling it breaks that lookup in the built image only. The CLI reaches
@@ -132,13 +134,14 @@ describe('cli build config', () => {
     }
   });
 
-  it('does not inline pdfkit into the bundle', () => {
+  // `skipIf`, not an early `return`. The plain test gate runs without a prior build, so an
+  // early return would report GREEN having checked nothing — a test that silently asserts
+  // nothing in its most common execution. Skipped is the honest signal.
+  it.skipIf(!existsSync(BUNDLE))('does not inline pdfkit into the bundle', () => {
     // `AFMFont` is a pdfkit-internal identifier that appears nowhere else. Present in the
     // bundle ⇒ pdfkit was inlined ⇒ its .afm font metric files will not travel and every
-    // PDF-producing command dies in the image. Skipped when dist/ has not been built.
-    const bundle = join(PKG_ROOT, 'dist', 'index.js');
-    if (!existsSync(bundle)) return;
-    expect(readFileSync(bundle, 'utf8')).not.toContain('AFMFont');
+    // PDF-producing command dies in the image.
+    expect(readFileSync(BUNDLE, 'utf8')).not.toContain('AFMFont');
   });
 });
 ```
@@ -152,8 +155,9 @@ pnpm --filter @openldr/cli exec vitest run src/build-config.test.ts
 Expected: the first two tests FAIL. The first reports the received array as `undefined` or
 missing `ssh2`. The second reports `ssh2 missing from packages/cli dependencies`.
 
-The third test passes vacuously if `packages/cli/dist/` does not exist yet. That is intended —
-Step 5 builds it and gives that test something to check.
+The third test reports **skipped**, not passed, because `packages/cli/dist/` does not exist yet.
+That is intended — Step 5 builds it and gives that test something to check. If it reports
+*passed* here, `it.skipIf` was written as an early `return` instead; go back and fix it.
 
 - [ ] **Step 3: Add the external list**
 
@@ -597,10 +601,11 @@ git commit -m "docs(cli): document the deployed openldr wrapper and the data dir
 
 ---
 
-### Task 5: Gate, manual acceptance, and changelog
+### Task 5: Gate and manual acceptance
 
-**Files:**
-- Modify: `apps/web/src/landing/changelog.json` (generated, not hand-edited)
+**Files:** none. This task runs commands and reports; it does not edit source.
+
+The changelog (`apps/web/src/landing/changelog.json`) is **not** part of this task — see Step 6.
 
 **Interfaces:**
 - Consumes: everything above.
@@ -629,11 +634,25 @@ Expected: PASS.
 This is the only step that proves the slice works. `docker compose exec` needs a running stack,
 so none of it can run in CI.
 
-Scaffold a throwaway install against the locally built image:
+**First, make compose actually use the image you built.** `deploy/install/docker-compose.yml:6`
+pins the api service to `ghcr.io/open-laboratory-data-repository/openldr-api:${OPENLDR_VERSION:-latest}`.
+Task 2 built the local tag `openldr-api:cli-test`, which compose will never look at. Without this
+tag step the acceptance run comes up on whatever published image is already in the local Docker
+cache — an image with no CLI in it — and every check below fails, or worse, appears to pass
+against something you did not build.
+
+```bash
+docker tag openldr-api:cli-test ghcr.io/open-laboratory-data-repository/openldr-api:latest
+```
+
+Then scaffold a throwaway install, with `--no-pull` so that tag is not overwritten:
 
 ```bash
 sh install/install.sh --dir /tmp/openldr-cli-test --no-pull
 ```
+
+`install.sh` still fetches config files over the network (`REPO_RAW`), so this step needs
+internet even with `--no-pull`.
 
 Then, from `/tmp/openldr-cli-test`, work through this list and record the actual output of each:
 
@@ -668,10 +687,27 @@ cd /tmp/openldr-cli-test && docker compose down -v && cd - && rm -rf /tmp/openld
 
 Look at the directory before removing it. `-v` deletes its volumes.
 
-- [ ] **Step 6: Changelog — after merging to main, not before**
+Then remove the tag from Step 3. Leaving it in place means the operator's next real
+`docker compose pull` is shadowed by a local build that looks official:
 
-`pnpm make:changelog` reads git history, so it cannot see commits that are not there yet
-(`AGENTS.md` §6 item 5). Merge to local `main` first, then:
+```bash
+docker rmi ghcr.io/open-laboratory-data-repository/openldr-api:latest
+```
+
+That removes the tag, not the underlying image — `openldr-api:cli-test` still points at it.
+
+- [ ] **Step 6: Stop, and hand the merge and changelog back to the operator**
+
+**Do not merge. Do not push. Do not run `pnpm make:changelog`.** This task ends here.
+
+`AGENTS.md` §9 says commit only when asked, and merging to local `main` is the operator's
+decision, not an implementer's. The changelog depends on that merge: `pnpm make:changelog` reads
+git history and cannot see commits that are not on `main` yet (`AGENTS.md` §6 item 5).
+
+Report to the operator that the slice is complete and that two steps remain for them:
+
+1. Merge this branch to local `main`.
+2. Then run, from `main`:
 
 ```bash
 pnpm make:changelog
@@ -679,8 +715,8 @@ git add apps/web/src/landing/changelog.json
 git commit -m "chore(web): regenerate the landing changelog"
 ```
 
-Do **not** run `pnpm gallery:screenshots`. That is a heavy Playwright capture belonging to a
-release pass, not to this slice.
+Do **not** run `pnpm gallery:screenshots` at any point. That is a heavy Playwright capture
+belonging to a release pass, not to this slice.
 
 ---
 
