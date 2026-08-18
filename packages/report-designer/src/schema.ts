@@ -6,7 +6,7 @@ import type { ReportParamFormat } from '@openldr/core/pure';
  *  `satisfies` is the guard that matters: it fails to compile if this list names a format
  *  `paramFormatMessage` does not implement. That direction is the dangerous one — an unimplemented
  *  format would fall off the validator's switch and reject every value the operator typed. */
-const PARAM_FORMATS = ['iana-timezone', 'year-month'] as const satisfies readonly ReportParamFormat[];
+const PARAM_FORMATS = ['timezone-no-signed-offset', 'year-month'] as const satisfies readonly ReportParamFormat[];
 
 export type ElementKind = 'text' | 'table' | 'image' | 'line' | 'rect' | 'datetime' | 'keyvalue' | 'barcode' | 'qrcode';
 export type Paper = 'A4' | 'Letter';
@@ -185,8 +185,17 @@ export const TemplateParamSchema = z.object({
    *
    * A parameter that omits it is not checked at all, which is every parameter authored before this
    * existed.
+   *
+   * ⛔ `.catch(undefined)` is not decoration — it is the read-time escape hatch, and it was added
+   * because the hazard was MEASURED, not imagined. A dev install's `report_designs` row already
+   * held the earlier spelling of a format name (`iana-timezone`, renamed once the rule behind it
+   * changed). Without this, `fromRow` parsing that stored row throws and the design becomes
+   * permanently unopenable — the exact failure `image-src.ts` documents. With it, an unrecognised
+   * format silently becomes "no declared format", which FAILS OPEN to the pre-existing behaviour
+   * (the value simply is not checked) and is corrected on the next seed. It generalises: any
+   * future rename of a format is survivable, not just this one.
    */
-  format: z.enum(PARAM_FORMATS).optional(),
+  format: z.enum(PARAM_FORMATS).optional().catch(undefined),
   /** Example text shown INSIDE the empty box (`ReportParametersBar`). Distinct from `help`, which
    *  lives in a ⓘ popover the operator has to open. The transmission grid's month was typed as `1`
    *  and its time zone as `+3` while both formats sat unread in that popover. */

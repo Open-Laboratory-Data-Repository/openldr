@@ -14,7 +14,7 @@ import {
 } from './report-seeds';
 import { pairRects, toPt, paperSizePt, type ReportDesign } from '@openldr/report-designer';
 import { findInvalidImageSources, findUnsortedHeaderRows } from '@openldr/report-designer/pure';
-import { isValidIanaZone } from '@openldr/core/pure';
+import { isValidIanaZone, paramFormatMessage } from '@openldr/core/pure';
 
 // In-memory fakes — no real Kysely instance needed (unlike `packages/bootstrap/src/seed.ts`,
 // which builds `customQueries` from a real DB handle; here we inject fakes directly to unit-test
@@ -1866,11 +1866,22 @@ describe('SEED_DESIGNS — rt-transmission-grid run parameters are checked and s
   const params = () => SEED_DESIGNS.find((d) => d.id === 'rt-transmission-grid')!.parameters;
   const param = (key: string) => params().find((p) => p.key === key)!;
 
-  it('declares the time zone as an IANA zone, so a bare +3 is refused at run time', () => {
+  it('declares the time zone rule that refuses a signed offset, so a bare +3 is caught', () => {
     // ⛔ The defect. Postgres reads `+3` with the POSIX sign convention, so it means UTC−3.
     // Measured: an arrival at 2026-08-06 03:48Z bucketed to 2026-08-06 00:48 — six hours out, in
     // the wrong direction, with no error. Near midnight that is a mark on the wrong day.
-    expect(param('tz').format).toBe('iana-timezone');
+    expect(param('tz').format).toBe('timezone-no-signed-offset');
+  });
+
+  it('⛔ does NOT demand a valid IANA name — the SQL Server workflow depends on that', () => {
+    // `apps/studio/src/docs/0.1.0/en/reports.md:51` tells a SQL Server operator to leave the
+    // Settings zone empty and type the WINDOWS zone name into this filter, because SQL Server's
+    // `AT TIME ZONE` takes Windows names. An IANA-validity rule here would break that documented
+    // path, while still waving through `Etc/GMT+3`, which is inverted. The rule guards the silent
+    // failure only; an unrecognised name is refused loudly by the engine itself.
+    expect(paramFormatMessage('tz', param('tz').format!, 'E. Africa Standard Time')).toBeNull();
+    expect(paramFormatMessage('tz', param('tz').format!, 'Etc/GMT+3')).not.toBeNull();
+    expect(paramFormatMessage('tz', param('tz').format!, '+3')).not.toBeNull();
   });
 
   it('declares the month as YYYY-MM', () => {
@@ -1886,8 +1897,11 @@ describe('SEED_DESIGNS — rt-transmission-grid run parameters are checked and s
   it('shows an example zone in the time zone box', () => {
     const ph = param('tz').placeholder!;
     expect(ph).toContain('/');
-    // The example must itself be a zone the validator accepts, or the box teaches the wrong thing.
+    // The example must be a real zone AND pass the run-parameter rule, or the box teaches the
+    // wrong thing. Both checks, because they are now genuinely different rules: `Etc/GMT+3` would
+    // pass the first and fail the second.
     expect(isValidIanaZone(ph)).toBe(true);
+    expect(paramFormatMessage('tz', 'timezone-no-signed-offset', ph)).toBeNull();
   });
 
   it('⚠ AGENTS.md §8 — leaves the panel-codes box without a placeholder', () => {

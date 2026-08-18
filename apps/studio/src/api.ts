@@ -93,7 +93,7 @@ export interface ReportParamMeta {
   help?: string;
   /** Declared shape of the run value. Enforced SERVER-side (a violation comes back as a 400 with
    *  code RP0004 naming the field); published here so a client can echo the same rule. */
-  format?: 'iana-timezone' | 'year-month';
+  format?: 'timezone-no-signed-offset' | 'year-month';
   /** Example text for the empty box. Absent ⇒ falls back to the label, as before. */
   placeholder?: string;
 }

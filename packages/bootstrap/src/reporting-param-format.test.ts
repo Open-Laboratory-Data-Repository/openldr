@@ -18,7 +18,7 @@ const gridPages = [{ id: 'p', elements: [{ id: 't', kind: 'table', name: 'T',
 const declared = { id: 'd-declared', name: 'Grid', paper: 'A4', orientation: 'landscape',
   parameters: [
     { key: 'month', label: 'Month', type: 'text', required: true, value: '', format: 'year-month' },
-    { key: 'tz', label: 'Time zone', type: 'text', required: true, value: '', format: 'iana-timezone' },
+    { key: 'tz', label: 'Time zone', type: 'text', required: true, value: '', format: 'timezone-no-signed-offset' },
   ],
   pages: gridPages } as any;
 
@@ -84,9 +84,27 @@ describe('a declared format is enforced on run', () => {
     await expect(reporting.run('r-d-declared', { ...GOOD, tz: 'UTC' })).resolves.toBeTruthy();
   });
 
-  it('refuses a typo in a real zone name', async () => {
-    await expect(reporting.run('r-d-declared', { ...GOOD, tz: 'Africa/Dar-es-Salaam' }))
+  it('refuses Etc/GMT+3, the same inversion wearing an IANA-shaped name', async () => {
+    // Measured: `Etc/GMT+3` buckets 03:48Z to 00:48, identically to `+3`. `Intl.DateTimeFormat`
+    // resolves it happily, so an IANA-validity check — which is what this rule was FIRST built as —
+    // waves through the very defect it exists to stop.
+    await expect(reporting.run('r-d-declared', { ...GOOD, tz: 'Etc/GMT+3' }))
       .rejects.toThrow(/^invalid parameter: tz \(/);
+    expect(ranWith).toEqual([]);
+  });
+
+  it('⛔ ACCEPTS a typo, leaving the engine to refuse it loudly', async () => {
+    // Deliberate asymmetry. `Africa/Dar-es-Salaam` is not a zone, and Postgres says so immediately:
+    // `time zone "…" not recognized`. Nothing wrong is ever printed, so there is nothing to guard.
+    // Blocking it here would buy nothing and cost the SQL Server workflow below.
+    await expect(reporting.run('r-d-declared', { ...GOOD, tz: 'Africa/Dar-es-Salaam' })).resolves.toBeTruthy();
+  });
+
+  it('⛔ ACCEPTS a Windows zone name, which a SQL Server warehouse needs', async () => {
+    // `apps/studio/src/docs/0.1.0/en/reports.md:51` instructs SQL Server operators to type exactly
+    // this into this filter. An IANA-validity rule broke that documented path.
+    await expect(reporting.run('r-d-declared', { ...GOOD, tz: 'E. Africa Standard Time' })).resolves.toBeTruthy();
+    expect(ranWith[0]).toMatchObject({ tz: 'E. Africa Standard Time' });
   });
 
   it('lets an EMPTY value through, so the existing required check still owns that error', async () => {
@@ -133,10 +151,10 @@ describe('the summary carries the new fields to the client', () => {
   it('publishes format and placeholder when the design declares them', async () => {
     const withPlaceholder = { ...declared, id: 'd-declared',
       parameters: [{ key: 'tz', label: 'Time zone', type: 'text', required: true, value: '',
-        format: 'iana-timezone', placeholder: 'Africa/Nairobi' }] };
+        format: 'timezone-no-signed-offset', placeholder: 'Africa/Nairobi' }] };
     const local = buildReportingForTest({ ...deps,
       reportDesigns: { get: async () => withPlaceholder } } as any);
     const summary = await local.findSummary('r-d-declared');
-    expect(summary!.parameters[0]).toMatchObject({ id: 'tz', format: 'iana-timezone', placeholder: 'Africa/Nairobi' });
+    expect(summary!.parameters[0]).toMatchObject({ id: 'tz', format: 'timezone-no-signed-offset', placeholder: 'Africa/Nairobi' });
   });
 });

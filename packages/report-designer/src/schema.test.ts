@@ -111,3 +111,34 @@ describe('ReportDesignSchema — sortBy', () => {
     expect(out.pages[0].elements[0].sortBy).toBe('ord');
   });
 });
+
+describe('TemplateParamSchema — format and placeholder', () => {
+  const parseParam = (p: Record<string, unknown>) =>
+    ReportDesignSchema.parse({ id: 'd', name: 'N', parameters: [{ key: 'tz', label: 'TZ', ...p }] }).parameters[0];
+
+  it('keeps a declared format and placeholder through a parse', () => {
+    const out = parseParam({ format: 'timezone-no-signed-offset', placeholder: 'Africa/Nairobi' });
+    expect(out.format).toBe('timezone-no-signed-offset');
+    expect(out.placeholder).toBe('Africa/Nairobi');
+  });
+
+  it('leaves a parameter that declares neither exactly as it was', () => {
+    // Every parameter authored before these fields existed. It must parse, and must not acquire
+    // keys it never had.
+    expect(parseParam({ value: 'v' })).toEqual({ key: 'tz', label: 'TZ', value: 'v' });
+  });
+
+  it('⛔ an UNRECOGNISED format does not make a stored design unopenable', () => {
+    // Measured, not hypothetical: a dev install's `report_designs` row held `iana-timezone` — the
+    // earlier name of a format, renamed once the rule behind it changed. `fromRow` (./store.ts)
+    // parses every stored design on READ, so a strict enum would throw there and the design could
+    // never be opened again. That is the failure `image-src.ts` documents, and this is the reason
+    // `format` carries `.catch(undefined)`.
+    //
+    // It FAILS OPEN — the unknown format is dropped, so the value simply is not checked, which is
+    // exactly the behaviour before any of this existed. The next seed writes the current name.
+    const out = parseParam({ format: 'iana-timezone', placeholder: 'Africa/Nairobi' });
+    expect(out.format).toBeUndefined();
+    expect(out.placeholder).toBe('Africa/Nairobi');
+  });
+});

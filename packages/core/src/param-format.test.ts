@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isValidIanaZone, paramFormatMessage } from './param-format';
+import { isValidIanaZone, isSignedOffsetZone, paramFormatMessage } from './param-format';
 
 /**
  * The measured defect this module exists for.
@@ -49,21 +49,92 @@ describe('isValidIanaZone', () => {
   });
 });
 
-describe('paramFormatMessage — iana-timezone', () => {
-  const check = (v: string) => paramFormatMessage('tz', 'iana-timezone', v);
+/**
+ * The RUN-parameter rule is DELIBERATELY narrower than the setting's rule above.
+ *
+ * It rejects only the values that are wrong WITHOUT SAYING SO. Measured on live Postgres, for
+ * `2026-08-06 03:48Z`:
+ *
+ *   +3          → 00:48   silent, inverted (POSIX sign convention: `+3` means UTC−3)
+ *   +03:00      → 00:48   silent, inverted — and `Intl.DateTimeFormat` ACCEPTS this one
+ *   Etc/GMT+3   → 00:48   silent, inverted — an IANA-shaped name for the same defect
+ *   Etc/GMT-3   → 06:48   silent, inverted
+ *   Africa/Dar_es_Salaam → 06:48   correct
+ *   UTC                  → 03:48   correct
+ *   E. Africa Standard Time → ERROR: time zone "…" not recognized   LOUD
+ *
+ * An unrecognised zone name is not the defect being guarded. Postgres refuses it immediately with
+ * a clear message, so the operator learns at once. A sign-inverted offset produces a COMPLETE,
+ * PLAUSIBLE, six-hours-wrong report with nothing on the page to show it happened.
+ *
+ * Guarding the loud case as well would cost a documented workflow: `apps/studio/src/docs/0.1.0/en/
+ * reports.md:51` tells SQL Server operators to leave the setting empty and type the WINDOWS zone
+ * name into this very filter, because `AT TIME ZONE` on SQL Server takes Windows names.
+ */
+describe('isSignedOffsetZone', () => {
+  it('catches a bare and a colon-padded offset', () => {
+    expect(isSignedOffsetZone('+3')).toBe(true);
+    expect(isSignedOffsetZone('-3')).toBe(true);
+    expect(isSignedOffsetZone('+03:00')).toBe(true);
+  });
 
-  it.each(['UTC', 'Africa/Dar_es_Salaam'])('accepts %s', (v) => {
+  it('⛔ catches the Etc/GMT spelling, which wears an IANA-shaped name', () => {
+    // The case the first version of this rule MISSED: `Intl.DateTimeFormat` resolves `Etc/GMT+3`
+    // happily, so an IANA-validity check waves through exactly the same inversion it was written
+    // to stop.
+    expect(isSignedOffsetZone('Etc/GMT+3')).toBe(true);
+    expect(isSignedOffsetZone('Etc/GMT-3')).toBe(true);
+  });
+
+  it('matches the Etc/GMT spelling case-insensitively', () => {
+    expect(isSignedOffsetZone('etc/gmt+3')).toBe(true);
+    expect(isSignedOffsetZone('ETC/GMT-5')).toBe(true);
+  });
+
+  it('catches Etc/GMT+0 and Etc/GMT-0, which are pointless rather than inverted', () => {
+    // Zero does not invert, so these are harmless — and still refused. Keeping the rule to one
+    // regex with no exception is worth more than accepting a spelling of `UTC` that carries a sign
+    // a reader has to know not to trust.
+    expect(isSignedOffsetZone('Etc/GMT+0')).toBe(true);
+    expect(isSignedOffsetZone('Etc/GMT-0')).toBe(true);
+  });
+
+  it('leaves real zone names, Windows zone names and plain nonsense alone', () => {
+    expect(isSignedOffsetZone('Africa/Dar_es_Salaam')).toBe(false);
+    expect(isSignedOffsetZone('UTC')).toBe(false);
+    expect(isSignedOffsetZone('Etc/UTC')).toBe(false);
+    expect(isSignedOffsetZone('E. Africa Standard Time')).toBe(false);
+    expect(isSignedOffsetZone('Africa/Dar-es-Salaam')).toBe(false);
+  });
+});
+
+describe('paramFormatMessage — timezone-no-signed-offset', () => {
+  const check = (v: string) => paramFormatMessage('tz', 'timezone-no-signed-offset', v);
+
+  it.each(['UTC', 'Africa/Dar_es_Salaam', 'Africa/Nairobi', 'Etc/UTC'])('accepts %s', (v) => {
     expect(check(v)).toBeNull();
   });
 
-  it.each(['+3', '1', 'March 2026', 'Africa/Dar-es-Salaam', '2026-08'])('rejects %s', (v) => {
+  it('accepts a Windows zone name, so the SQL Server workflow keeps working', () => {
+    // ⛔ This is the value the docs tell a SQL Server operator to type. It is NOT valid IANA, and
+    // the first version of this rule refused it. Postgres will refuse it loudly if it ever reaches
+    // a Postgres warehouse, which is the correct place for that argument to happen.
+    expect(check('E. Africa Standard Time')).toBeNull();
+  });
+
+  it('accepts an unrecognised name, leaving the engine to refuse it loudly', () => {
+    expect(check('Africa/Dar-es-Salaam')).toBeNull();
+    expect(check('March 2026')).toBeNull();
+  });
+
+  it.each(['+3', '-3', '+03:00', 'Etc/GMT+3', 'Etc/GMT-3', 'etc/gmt+3'])('rejects %s', (v) => {
     expect(check(v)).not.toBeNull();
   });
 
-  it('names the parameter, says what is accepted, and echoes what was typed', () => {
+  it('names the parameter, says what is refused, and echoes what was typed', () => {
     const msg = check('+3')!;
     expect(msg).toContain('tz');
-    expect(msg).toContain('IANA');
+    expect(msg).toContain('offset');
     expect(msg).toContain('+3');
   });
 
@@ -100,12 +171,12 @@ describe('paramFormatMessage — empty and undeclared', () => {
     // `substituteParams` (packages/dashboards/src/custom-query-run.ts:33) already throws
     // `required parameter: <id>` for an empty required value, and the route maps it. Reporting a
     // FORMAT complaint for an untouched box would replace a precise error with a vaguer one.
-    expect(paramFormatMessage('tz', 'iana-timezone', '')).toBeNull();
+    expect(paramFormatMessage('tz', 'timezone-no-signed-offset', '')).toBeNull();
     expect(paramFormatMessage('month', 'year-month', '')).toBeNull();
   });
 
   it('truncates a long value rather than echoing it whole', () => {
-    const msg = paramFormatMessage('tz', 'iana-timezone', 'x'.repeat(500))!;
-    expect(msg.length).toBeLessThan(300);
+    const msg = paramFormatMessage('tz', 'timezone-no-signed-offset', `+${'9'.repeat(500)}`)!;
+    expect(msg.length).toBeLessThan(400);
   });
 });

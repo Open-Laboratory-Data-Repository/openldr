@@ -134,7 +134,9 @@ describe('report routes', () => {
   // it is silently six hours out in the WRONG direction, and a 500 would tell the operator nothing
   // about which box to fix.
   it('400 + RP0004 on a value that violates its declared format', async () => {
-    const msg = 'invalid parameter: tz (expected an IANA time zone name, for example Africa/Nairobi or UTC; got "+3")';
+    const msg = 'invalid parameter: tz (expected a named time zone, for example Africa/Nairobi or UTC. '
+      + 'A signed offset such as +3, +03:00 or Etc/GMT+3 is not accepted: the database reads its sign '
+      + 'the other way round, so the report comes out shifted with no error to show it; got "+3")';
     const app = appWith({ list: vi.fn(), run: vi.fn(async () => { throw new Error(msg); }) });
     const res = await app.inject({ method: 'GET', url: '/api/reports/r-transmission-grid?tz=%2B3' });
     expect(res.statusCode).toBe(400);
