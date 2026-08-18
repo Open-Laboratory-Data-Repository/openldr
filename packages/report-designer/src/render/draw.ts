@@ -101,12 +101,22 @@ export function cellTextOptions(width: number): { width: number; height: number;
 
 /** Lines a header cell may stack. Two, because `STACKED_HEAD_H` reserves room for exactly two —
  *  a third would be drawn over the first body row. */
-const MAX_HEAD_LINES = 2;
+export const MAX_HEAD_LINES = 2;
 
-/** One header cell split into the lines it draws as. Always at least one entry, so callers never
- *  have to special-case an empty header. */
-export function headerLines(text: string): string[] {
-  return text.split('\n').slice(0, MAX_HEAD_LINES);
+/**
+ * One header cell split into the lines it draws as. Always at least one entry, so callers never
+ * have to special-case an empty header.
+ *
+ * ⛔ `max` is NOT decoration — it must be what the band actually reserves. A table that did not
+ * opt into `headerRow` gets a `ROW_H` (16pt) band, and a second line drawn at `y + CELL_PAD +
+ * HEAD_LINE_H` = y+12 with 12pt of height runs to y+24, over the first body row at y+16. The
+ * newline does not have to be authored: `transposeResolved` builds header labels out of
+ * first-column DATA, so an organism or drug name carrying a newline would overprint — where
+ * pdfkit previously just clipped it to one line. Passing 1 keeps that table byte-identical to
+ * before stacking existed.
+ */
+export function headerLines(text: string, max: number = MAX_HEAD_LINES): string[] {
+  return text.split('\n').slice(0, Math.max(1, max));
 }
 
 /** Narrowest a column may be squeezed to — below this even a short header is unreadable. */
@@ -133,6 +143,7 @@ const WIDTH_SAMPLE_ROWS = 400;
 export function columnWidths(
   headers: string[], rows: string[][], totalW: number,
   measure: (text: string, bold: boolean) => number,
+  maxHeadLines: number = MAX_HEAD_LINES,
 ): number[] {
   const n = Math.max(headers.length, 1);
   const sample = rows.slice(0, WIDTH_SAMPLE_ROWS);
@@ -141,7 +152,10 @@ export function columnWidths(
     // measuring `"2\nFeb"` as one run would reserve the width of `2 Feb` for a column that never
     // draws `2 Feb` — which is the entire reason stacking buys the neighbouring column any room.
     // Inert for a header with no newline: `split` yields one line and this is the old call.
-    let w = Math.max(...headerLines(headers[i] ?? '').map((line) => measure(line, true)));
+    // ⛔ `maxHeadLines` must match what the band draws. A one-line band that measured the widest
+    // of two lines would size the column for text it then clips — the mis-measure half of the
+    // same defect as the overprint.
+    let w = Math.max(...headerLines(headers[i] ?? '', maxHeadLines).map((line) => measure(line, true)));
     for (const row of sample) w = Math.max(w, measure(row[i] ?? '', false));
     return Math.min(w + CELL_PAD * 2 + 2, MAX_NATURAL_W); // +2 so text never touches the next column
   });
@@ -823,6 +837,11 @@ function drawGrid(
   kinds: (ColumnKind | undefined)[] = [], headH: number = ROW_H,
 ): void {
   const n = Math.max(headers.length, 1);
+  // ⛔ Derived from the band this table actually reserves, never a constant. `headerBandHeight`
+  // gives STACKED_HEAD_H only to a table that declared `headerRow`; every other table gets ROW_H
+  // and may draw exactly one header line. Tying the two together here is what makes it impossible
+  // for a caller to reserve one line's worth of band and then draw two.
+  const maxHeadLines = headH >= STACKED_HEAD_H ? MAX_HEAD_LINES : 1;
   const maxRows = maxRowsFor(r.h, headH);
   const lo = chunk * maxRows;
   const rows = maxRows >= 1 ? allRows.slice(lo, lo + maxRows) : [];
@@ -832,7 +851,7 @@ function drawGrid(
   const widths = columnWidths(headers, allRows, r.w, (text, bold) => {
     doc.font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(8);
     return doc.widthOfString(text);
-  });
+  }, maxHeadLines);
   const xOf = (ci: number): number => r.x + widths.slice(0, ci).reduce((a, b) => a + b, 0);
   const numeric = headers.map((_, ci) => isRightAligned(allRows, ci, kinds[ci]));
 
@@ -845,7 +864,7 @@ function drawGrid(
   // Each line is its own `doc.text` at a fixed y, for the same reason body cells are: pdfkit only
   // ellipsizes text it has constrained VERTICALLY, and a wrapped header would land on the row
   // beneath it. `cellTextOptions`' height fits exactly one line, so each call draws one.
-  headers.forEach((h, i) => headerLines(h).forEach((line, li) => doc.text(
+  headers.forEach((h, i) => headerLines(h, maxHeadLines).forEach((line, li) => doc.text(
     line, xOf(i) + CELL_PAD, r.y + CELL_PAD + li * HEAD_LINE_H,
     { ...cellTextOptions(widths[i] - CELL_PAD * 2), align: numeric[i] ? 'right' : 'left' },
   )));

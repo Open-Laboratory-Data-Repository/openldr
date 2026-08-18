@@ -906,6 +906,53 @@ describe('headerRow keeps the per-cell statuses in lockstep with the rows', () =
   });
 });
 
+/**
+ * ⛔ A table that did NOT opt into `headerRow` gets a ROW_H (16pt) header band and may draw
+ * exactly ONE header line. Its second line would be drawn at r.y + CELL_PAD + HEAD_LINE_H = y+12
+ * with CELL_TEXT_H (12pt) of height, running to y+24 over a first body row that starts at y+16.
+ *
+ * This is reachable from DATA, not only from authoring: `transposeResolved` builds header labels
+ * out of first-column data values, so a value carrying a newline becomes a two-line header on a
+ * table that never asked for one. pdfkit used to clip such a value to one line.
+ */
+describe('a table that did not opt into a stacked header draws ONE header line', () => {
+  // Neutral fixture strings, not vocabulary: what matters is the newline, not the words.
+  const transposedDesign = (): ReportDesign => baseDesign({ pages: [{ id: 'p1', elements: [
+    { id: 't', kind: 'table', name: 'T', rect: { x: 0, y: 0, w: 400, h: 200 },
+      dataSource: { kind: 'custom-query', queryId: 'q' }, transpose: true, transposeLabel: 'Metric' },
+  ] }] } as Partial<ReportDesign>);
+
+  // Transposed: the first column's VALUES become the headers. 'Alpha\nBeta' is one such value.
+  const resolved = (): Map<string, ResolvedTable> => new Map<string, ResolvedTable>([['t', {
+    columns: [{ key: 'subject', label: 'Subject' }, { key: 'count', label: 'Count' }],
+    rows: [{ subject: 'Alpha\nBeta', count: '7' }, { subject: 'Gamma', count: '9' }],
+  }]]);
+
+  it('clips the second line away rather than drawing it over the first body row', async () => {
+    const pdf = await renderReportDesignPdf(transposedDesign(), resolved(), { now: NOW });
+    const drawn = textRunsOf(pageContents(pdf)[0]).map((r) => r.text);
+    expect(drawn, 'the first header line must still be drawn').toContain('Alpha');
+    // ⛔ THE assertion. Before the fix 'Beta' was drawn 12pt down a 16pt band, landing on the
+    // body row. It must not appear anywhere on the page.
+    expect(drawn, 'the second header line must not be drawn into the body row').not.toContain('Beta');
+    // The body row this would have collided with is still there and still legible.
+    expect(drawn).toContain('Count');
+    expect(drawn).toContain('7');
+  });
+
+  it('draws exactly one text run per header cell in the band', async () => {
+    const pdf = await renderReportDesignPdf(transposedDesign(), resolved(), { now: NOW });
+    const runs = textRunsOf(pageContents(pdf)[0]);
+    // Header baseline = the highest y on the page (PDF space grows upward, the table sits at
+    // rect.y 0). No run may sit HEAD_LINE_H below it: that is where a second header line goes.
+    const headY = Math.max(...runs.map((r) => r.y));
+    expect(runs.filter((r) => Math.abs(r.y - (headY - HEAD_LINE_H)) < 0.001)).toHaveLength(0);
+    // ...and the header band still holds one run per column: 'Metric', 'Alpha', 'Gamma'.
+    expect(runs.filter((r) => r.y === headY).map((r) => r.text).sort())
+      .toEqual(['Alpha', 'Gamma', 'Metric']);
+  });
+});
+
 /** Text runs with their positions, for one already-decompressed page. */
 function textRunsOf(content: string): { x: number; y: number; text: string }[] {
   const runs = /1 0 0 1 (-?[\d.]+) (-?[\d.]+) Tm\n\/F\d+ [\d.]+ Tf\n\[(.*?)\]\s*TJ/g;

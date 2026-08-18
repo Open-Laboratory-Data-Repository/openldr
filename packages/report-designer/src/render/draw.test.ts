@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { interpolate, paramMap, tableChunkCount, pageChunkCount, rowsFor, totalPhysicalPages, pageFooterLabel, cellTextOptions, columnWidths, isNumericColumn, CELL_TEXT_H, ROW_H, asCellStatus, cellStatusesFor, isRightAligned, keyValuePairs, pairRects, elementValue, interpolatedPairValues, transposeResolved, tableHeaders, headerBandHeight, headerRowFor, bodyRowsFor, headerTexts, drawsOnChunk, STACKED_HEAD_H } from './draw';
+import { interpolate, paramMap, tableChunkCount, pageChunkCount, rowsFor, totalPhysicalPages, pageFooterLabel, cellTextOptions, columnWidths, isNumericColumn, CELL_TEXT_H, ROW_H, asCellStatus, cellStatusesFor, isRightAligned, keyValuePairs, pairRects, elementValue, interpolatedPairValues, transposeResolved, tableHeaders, headerBandHeight, headerRowFor, bodyRowsFor, headerTexts, drawsOnChunk, STACKED_HEAD_H, headerLines } from './draw';
 import type { ReportDesign, DesignElement, DesignPage } from '../schema';
 import type { ResolvedTable } from './index';
 
@@ -728,6 +728,36 @@ describe('columnWidths measures a stacked header line by line', () => {
     const w = columnWidths(['Head', 'Other'], rows, 500, measure);
     expect(w[0]).toBeCloseTo(500 * 50 / 110, 10);
     expect(w[1]).toBeCloseTo(500 * 60 / 110, 10);
+  });
+
+  // ⛔ The line budget is the band's, not a constant. A table that did NOT declare `headerRow`
+  // reserves ROW_H and may draw exactly ONE header line; only a table that did reserves
+  // STACKED_HEAD_H and may draw two. Measuring two lines for a one-line band sizes the column
+  // for text it then clips — the mis-measure half of the overprint defect.
+  it('measures ONE line when only one was reserved, and two when two were', () => {
+    expect(columnWidths(['name', '1\nFebruary'], [], 1000, measure, 1))
+      .toEqual(columnWidths(['name', '1'], [], 1000, measure, 1));
+    expect(columnWidths(['name', '1\nFebruary'], [], 1000, measure, 1))
+      .not.toEqual(columnWidths(['name', '1\nFebruary'], [], 1000, measure, 2));
+  });
+});
+
+describe('headerLines — the line budget', () => {
+  it('stacks two lines by default, because STACKED_HEAD_H reserves room for two', () => {
+    expect(headerLines('1\nFeb')).toEqual(['1', 'Feb']);
+    expect(headerLines('1\nFeb\nExtra')).toEqual(['1', 'Feb']);
+  });
+
+  it('clips to the FIRST line when the caller reserved only one', () => {
+    // The pre-fix behaviour for every table that did not opt into `headerRow`: the second line
+    // was drawn at r.y + CELL_PAD + HEAD_LINE_H = y+12, 12pt tall, over a first body row that
+    // starts at y+16.
+    expect(headerLines('1\nFeb', 1)).toEqual(['1']);
+  });
+
+  it('never returns zero lines, so a caller never has to special-case an empty header', () => {
+    expect(headerLines('x', 0)).toEqual(['x']);
+    expect(headerLines('')).toEqual(['']);
   });
 });
 
