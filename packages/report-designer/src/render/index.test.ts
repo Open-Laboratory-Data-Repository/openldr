@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import zlib from 'node:zlib';
 import PDFDocument from 'pdfkit';
 import { renderReportDesignPdf, type ResolvedTable } from './index';
-import { columnWidths } from './draw';
+import { columnWidths, HEAD_LINE_H, STACKED_HEAD_H, ROW_H } from './draw';
 import { encodeCode128, encodeQr, QR_QUIET_ZONE } from '../encode';
 import type { ReportDesign, BoundColumn } from '../schema';
 
@@ -165,7 +165,13 @@ function pageContents(pdf: Buffer): string[] {
  * that happens to contain a kerning pair.
  */
 function pdfTexts(pdf: Buffer): string[] {
-  return [...decodedContent(pdf).matchAll(/\[(.*?)\]\s*TJ/g)].map((m) =>
+  return textsOf(decodedContent(pdf));
+}
+
+/** The same decoding applied to ONE already-decompressed content stream, so a per-page assertion
+ *  can say what that page draws rather than what the document draws somewhere. */
+function textsOf(content: string): string[] {
+  return [...content.matchAll(/\[(.*?)\]\s*TJ/g)].map((m) =>
     [...m[1].matchAll(/<([0-9a-fA-F]*)>/g)]
       .map((h) => Buffer.from(h[1], 'hex').toString('latin1')).join(''));
 }
@@ -698,5 +704,106 @@ describe('letterhead identity rendering', () => {
       now: NOW, identity: { logo: 'https://example.org/logo.png' },
     }));
     expect(content).toContain('[3 2] 0 d');
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// `headerRow` and `showWithTable`, end to end through a real PDF
+// ---------------------------------------------------------------------------------------------
+
+describe('a table whose header is its first data row', () => {
+  /** 3 day columns; box h = 100px = 75pt → floor((75-24)/16) = 3 body rows per chunk. */
+  const gridDesign = (): ReportDesign => baseDesign({
+    orientation: 'landscape',
+    pages: [{ id: 'p1', elements: [
+      { id: 'head', kind: 'text', name: 'H', rect: { x: 10, y: 10, w: 400, h: 14 }, text: 'Submission by laboratory', showWithTable: 'g' },
+      { id: 'g', kind: 'table', name: 'G', rect: { x: 10, y: 30, w: 400, h: 100 },
+        dataSource: { kind: 'custom-query', queryId: 'q' }, sortBy: 'ord', headerRow: true,
+        boundColumns: [
+          { key: 'lab', label: 'Laboratory' }, { key: 'd01', label: '' },
+          { key: 'd02', label: '' }, { key: 'd03', label: '' },
+        ] as BoundColumn[] },
+    ] }],
+  });
+
+  const gridRows = (n: number): ResolvedTable => ({
+    columns: [{ key: 'ord', label: 'ord' }, { key: 'lab', label: 'lab' },
+      { key: 'd01', label: 'd01' }, { key: 'd02', label: 'd02' }, { key: 'd03', label: 'd03' }],
+    // ⚠ The dates come FIRST here because `sortBy` has ALREADY run: the renderer is handed rows
+    // that `resolveDesignTables` ordered, and `headerRow` lifts row 0 of what it is given. An
+    // unsorted fixture would be testing the sort, which lives in `resolve.ts` and is tested there.
+    rows: [
+      { ord: 0, lab: '(dates)', d01: '1\nFeb', d02: '2\nFeb', d03: '3\nFeb' },
+      ...Array.from({ length: n }, (_, i) => ({ ord: 1, lab: `Laboratory ${i}`, d01: 'Y', d02: '', d03: 'Y' })),
+    ],
+  });
+
+  it('⛔ repeats the dates on EVERY page, and never prints them as a body row', async () => {
+    // The defect this pins: the dates were an ordinary row, so page 2 showed marks under blank
+    // columns and a reader could not tell which day any mark belonged to.
+    const buf = await renderReportDesignPdf(gridDesign(), new Map([['g', gridRows(7)]]), { now: NOW });
+    const pages = pageContents(buf).map(textsOf);
+    expect(pages).toHaveLength(3); // ceil(7/3)
+    for (const texts of pages) {
+      expect(texts).toContain('Feb');           // the month, stacked under its day number
+      expect(texts).toContain('Laboratory');    // the declared label survives the lift
+      expect(texts).not.toContain('(dates)');   // the header row's own lab value never prints
+    }
+  });
+
+  it('puts the laboratories of chunk 2 on page 2 and none of chunk 1', async () => {
+    const buf = await renderReportDesignPdf(gridDesign(), new Map([['g', gridRows(7)]]), { now: NOW });
+    const pages = pageContents(buf).map(textsOf);
+    expect(pages[0]).toEqual(expect.arrayContaining(['Laboratory 0', 'Laboratory 1', 'Laboratory 2']));
+    expect(pages[1]).toEqual(expect.arrayContaining(['Laboratory 3', 'Laboratory 4', 'Laboratory 5']));
+    expect(pages[1]).not.toContain('Laboratory 0');
+    expect(pages[2]).toEqual(['Submission by laboratory', 'Laboratory', '1', 'Feb', '2', 'Feb', '3', 'Feb', 'Laboratory 6', 'Y', 'Y']);
+  });
+
+  it('stacks the two header lines HEAD_LINE_H apart, and drops the body by the taller band', async () => {
+    // Baselines, not absolute positions: what this must pin is the PITCH between the two header
+    // lines and between the band and the first row. An absolute y would additionally encode
+    // pdfkit's ascender, which is a font fact and not this renderer's decision.
+    const buf = await renderReportDesignPdf(gridDesign(), new Map([['g', gridRows(2)]]), { now: NOW });
+    const ys = [...new Set(textYs(buf))].sort((a, b) => b - a);
+    // ⛔ LITERAL POINTS, not the constants the drawing reads. Asserting `HEAD_LINE_H` against a
+    // pitch computed from `HEAD_LINE_H` passes for every value of it — measured: changing the
+    // constant to 9 left this test green until the literals went in.
+    // 8pt is the reference document's own day-to-month gap (y=744 and y=736); 24 = 16 + 8.
+    // [0] is the heading above the box; [1] header line 1; [2] header line 2; [3] first body row.
+    expect(ys[1] - ys[2]).toBeCloseTo(8, 6);
+    expect(ys[1] - ys[3]).toBeCloseTo(24, 6);
+    expect(ys[3] - ys[4]).toBeCloseTo(16, 6);
+    // ...and the constants themselves are those numbers, so the two can never drift apart.
+    expect([HEAD_LINE_H, STACKED_HEAD_H, ROW_H]).toEqual([8, 24, 16]);
+  });
+
+  it('drops the whole grid AND its heading from a page the grid does not reach', async () => {
+    // Two tables on one page: the page runs as long as the longer one.
+    const design = baseDesign({ orientation: 'landscape', pages: [{ id: 'p1', elements: [
+      ...gridDesign().pages[0].elements,
+      { id: 'long', kind: 'table', name: 'L', rect: { x: 10, y: 200, w: 400, h: 100 },
+        dataSource: { kind: 'custom-query', queryId: 'q2' }, headerRow: true,
+        boundColumns: [{ key: 'lab', label: 'Other laboratory' }] as BoundColumn[] },
+    ] }] });
+    const resolved = new Map<string, ResolvedTable>([
+      ['g', gridRows(2)], // 1 chunk
+      ['long', { columns: [{ key: 'lab', label: 'lab' }], rows: Array.from({ length: 8 }, (_, i) => ({ lab: `Other ${i}` })) }], // 3 chunks
+    ]);
+    const buf = await renderReportDesignPdf(design, resolved, { now: NOW });
+    const pages = pageContents(buf);
+    const texts = pages.map(textsOf);
+    expect(pages).toHaveLength(3);
+    expect(texts[0]).toContain('Submission by laboratory');
+    // Pages 2 and 3 carry neither the heading nor an empty framed box under it.
+    expect(texts[1]).not.toContain('Submission by laboratory');
+    expect(texts[2]).not.toContain('Submission by laboratory');
+    expect(texts[1]).not.toContain('Laboratory');
+    // ⛔ Not just the text — the BOX is gone too. The header band is the only `#eef2f6` fill on the
+    // page, so counting it counts grids drawn.
+    expect(pages[0].split(fillOp('#eef2f6')).length - 1).toBe(2); // both grids
+    expect(pages[1].split(fillOp('#eef2f6')).length - 1).toBe(1); // only the long one
+    // ...while the longer table is still drawing.
+    expect(texts[1]).toContain('Other 4');
   });
 });

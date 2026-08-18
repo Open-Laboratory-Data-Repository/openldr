@@ -167,7 +167,10 @@ live('the transmission grid queries (live Postgres)', () => {
     expect(dates.d21).toBe('');
     expect(dates.d22).toBe('');
     expect(dates.d23).toBe('');
-    expect(dates.d01).toBe('2 Feb');
+    // TWO LINES, day over month: the design's `headerRow` draws a header cell's newlines stacked,
+    // and `columnWidths` then measures "Feb" rather than "2 Feb" — which is what leaves the
+    // laboratory column enough width to print a real name.
+    expect(dates.d01).toBe('2\nFeb');
   });
 
   it('puts the date row first, whatever the laboratory names sort like', async () => {

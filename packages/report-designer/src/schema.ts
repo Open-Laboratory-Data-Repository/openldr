@@ -95,6 +95,39 @@ export const DesignElementSchema = z.object({
    *  The column named here does NOT have to be bound: a sort discriminator is usually not a
    *  column of the report. */
   sortBy: z.string().optional(),
+  /** `table`: the FIRST data row is this table's HEADER, not a body row.
+   *
+   *  For a grid whose columns are only known at RUN time — one column per working day of a
+   *  requested month — the labels cannot be authored. They arrive as data, in a leading row the
+   *  query emits and `sortBy` puts first. Without this flag that row is an ordinary body row: it
+   *  prints once, on the first chunk, so page 2 onward shows marks under blank columns.
+   *
+   *  What it changes, all three because of one lift:
+   *  - the row is drawn in the header band and REPEATS on every chunk, like any header;
+   *  - it stops consuming a body slot, so the chunk arithmetic counts real rows;
+   *  - a cell's NEWLINES become stacked header lines, and `columnWidths` measures the widest LINE
+   *    rather than the whole string — which is what keeps a `2`/`Feb` column near the width of
+   *    `Feb` instead of the width of `2 Feb`.
+   *
+   *  A column whose `boundColumns` label is non-blank KEEPS that label; only a blank one is filled
+   *  from the row. The design states what it can know, the run supplies the rest, and query data
+   *  can never overwrite an authored header.
+   *
+   *  ⛔ Opt-in, and inert when unset — a design without it renders byte-for-byte as before
+   *  (`render/golden.test.ts`). */
+  headerRow: z.boolean().optional(),
+  /** Draw this element only on the physical chunks the NAMED table element on the same page
+   *  actually fills.
+   *
+   *  A page with two tables is as long as the LONGER one (`pageChunkCount`). Without this, the
+   *  shorter table's heading keeps printing on pages where that table has no rows left — a bold
+   *  "…Data Submission by Testing Laboratory" over nothing, which reads as "no laboratory
+   *  submitted", the opposite of the truth. The table itself is guarded without any declaration;
+   *  this exists for the heading, rule or note that BELONGS to it.
+   *
+   *  Fails OPEN: naming an element that is not on the page draws normally. A dangling reference is
+   *  a design defect, and silently deleting a heading everywhere would hide it. */
+  showWithTable: z.string().optional(),
   /** `keyvalue` pair arrangement (default `inline`) */
   layout: z.enum(['inline', 'stacked']).optional(),
   /** `keyvalue` pairs side by side per line (default 1). Capped at 4 — beyond that a pair's share of

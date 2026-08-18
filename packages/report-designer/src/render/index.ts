@@ -1,7 +1,7 @@
 import PDFDocument from 'pdfkit';
 import type { ReportDesign } from '../schema';
 import { paperSizePt } from './units';
-import { drawElement, paramMap, pageChunkCount, totalPhysicalPages, drawPageFooter } from './draw';
+import { drawElement, paramMap, pageChunkCount, totalPhysicalPages, drawPageFooter, drawsOnChunk } from './draw';
 
 export type ResolvedTable =
   | { columns: { key: string; label: string }[]; rows: Record<string, unknown>[] }
@@ -69,7 +69,14 @@ export function renderReportDesignPdf(
     for (let c = 0; c < pageCount; c += 1) {
       doc.addPage({ size: [w, h], margin: 0 });
       physical += 1;
-      for (const el of page.elements) drawElement(doc, el, tokens, resolved.get(el.id), c);
+      // ⛔ `drawsOnChunk` FIRST. A page runs as long as its longest table, so on the last pages the
+      // shorter tables have no rows left — and a table drawn with an empty slice still paints its
+      // header band, its rules and its box. Under a heading, that empty frame reads as "nothing was
+      // submitted" rather than "this grid finished earlier".
+      for (const el of page.elements) {
+        if (!drawsOnChunk(el, page, resolved, c)) continue;
+        drawElement(doc, el, tokens, resolved.get(el.id), c);
+      }
       if (design.pageNumbers) drawPageFooter(doc, w, h, physical, total);
     }
   }

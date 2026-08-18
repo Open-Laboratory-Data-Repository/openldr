@@ -50,9 +50,13 @@ describe('resolveDesignTables — sortBy', () => {
   // it first. Sorting here — where the rows enter the renderer — makes every downstream consumer
   // (rows, cell statuses, keyvalue pairs) see one order.
   it('orders the resolved rows by the named column, numerically when it holds numbers', async () => {
+    // ⛔ The fixture is 2 and 10, NOT 0 and 1. Under a pure string comparator '0' still sorts
+    // before '1', so the old {0,1} fixture passed with the numeric branch of `compareOn` deleted —
+    // it claimed to test numeric ordering and could not see its absence. '10' < '2' as text, so
+    // this ordering is only reachable numerically.
     const runQuery = async () => ({
       columns: [{ key: 'ord', label: 'ord' }, { key: 'lab', label: 'lab' }],
-      rows: [{ ord: 1, lab: 'B' }, { ord: 0, lab: '(dates)' }, { ord: 1, lab: 'A' }],
+      rows: [{ ord: 10, lab: 'B' }, { ord: 2, lab: '(dates)' }, { ord: 10, lab: 'A' }],
     });
     const design = { parameters: [], pages: [{ id: 'p', elements: [
       { id: 't', kind: 'table', name: 'T', rect: { x: 0, y: 0, w: 1, h: 1 }, sortBy: 'ord',

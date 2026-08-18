@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { interpolate, paramMap, tableChunkCount, pageChunkCount, rowsFor, totalPhysicalPages, pageFooterLabel, cellTextOptions, columnWidths, isNumericColumn, CELL_TEXT_H, ROW_H, asCellStatus, cellStatusesFor, isRightAligned, keyValuePairs, pairRects, elementValue, interpolatedPairValues, transposeResolved, tableHeaders } from './draw';
+import { interpolate, paramMap, tableChunkCount, pageChunkCount, rowsFor, totalPhysicalPages, pageFooterLabel, cellTextOptions, columnWidths, isNumericColumn, CELL_TEXT_H, ROW_H, asCellStatus, cellStatusesFor, isRightAligned, keyValuePairs, pairRects, elementValue, interpolatedPairValues, transposeResolved, tableHeaders, headerBandHeight, headerRowFor, bodyRowsFor, headerTexts, drawsOnChunk, STACKED_HEAD_H } from './draw';
 import type { ReportDesign, DesignElement, DesignPage } from '../schema';
 import type { ResolvedTable } from './index';
 
@@ -624,5 +624,155 @@ describe('a transposed table element flows through headers, rows and pagination'
     const flat = { ...short, transpose: false } as unknown as DesignElement;
     expect(rowsFor(short, wide)).toHaveLength(29);
     expect(tableChunkCount(short, wide)).toBeGreaterThan(tableChunkCount(flat, wide));
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// `headerRow` — the first data row IS the header
+// ---------------------------------------------------------------------------------------------
+
+/** A bound table whose query returns a leading row carrying run-time column labels. */
+const gridEl = (over: Partial<DesignElement> = {}): DesignElement => tbl({
+  id: 'g',
+  rect: { x: 0, y: 0, w: 400, h: 200 },
+  dataSource: { kind: 'custom-query', queryId: 'q' },
+  headerRow: true,
+  boundColumns: [
+    { key: 'lab', label: 'Laboratory' },
+    { key: 'd01', label: '' },
+    { key: 'd02', label: '' },
+  ],
+  ...over,
+} as Partial<DesignElement>);
+
+const gridResolved = (bodyCount = 4): ResolvedTable => ({
+  columns: [{ key: 'lab', label: 'lab' }, { key: 'd01', label: 'd01' }, { key: 'd02', label: 'd02' }],
+  rows: [
+    { lab: '(dates)', d01: '1\nFeb', d02: '2\nFeb' },
+    ...Array.from({ length: bodyCount }, (_, i) => ({ lab: `Lab ${i}`, d01: 'Y', d02: '' })),
+  ],
+});
+
+describe('headerRow — lifting the first data row out of the body', () => {
+  it('is inert without the flag: the header row stays a body row and the band is one row tall', () => {
+    const el = gridEl({ headerRow: undefined });
+    expect(headerRowFor(el, gridResolved())).toBeUndefined();
+    expect(bodyRowsFor(el, gridResolved())).toEqual(rowsFor(el, gridResolved()));
+    expect(bodyRowsFor(el, gridResolved())).toHaveLength(5);
+    expect(headerBandHeight(el)).toBe(ROW_H);
+  });
+
+  it('lifts row 0 out of the body and gives the band a second line', () => {
+    const el = gridEl();
+    expect(headerRowFor(el, gridResolved())).toEqual(['(dates)', '1\nFeb', '2\nFeb']);
+    expect(bodyRowsFor(el, gridResolved())).toEqual([
+      ['Lab 0', 'Y', ''], ['Lab 1', 'Y', ''], ['Lab 2', 'Y', ''], ['Lab 3', 'Y', ''],
+    ]);
+    expect(headerBandHeight(el)).toBe(STACKED_HEAD_H);
+    expect(STACKED_HEAD_H).toBeGreaterThan(ROW_H);
+  });
+
+  it('keeps a declared label and fills only the blank ones from the header row', () => {
+    // The design knows "Laboratory" at design time and the run knows the dates. Neither may
+    // overwrite the other: a data cell that could replace an authored header would let a query
+    // relabel a column of a published report.
+    expect(headerTexts(['Laboratory', '', ''], ['(dates)', '1\nFeb', '2\nFeb']))
+      .toEqual(['Laboratory', '1\nFeb', '2\nFeb']);
+    expect(headerTexts(['Laboratory', '', ''], undefined)).toEqual(['Laboratory', '', '']);
+    // A header row shorter than the column list leaves the remaining headers blank, never undefined.
+    expect(headerTexts(['A', '', ''], ['x'])).toEqual(['A', '', '']);
+  });
+
+  it('excludes the lifted row from the chunk arithmetic and pays for the taller band', () => {
+    // h = 200px = 150pt. Without the flag: floor((150-16)/16) = 8 rows over 5 rows = 1 chunk.
+    // With it: floor((150-24)/16) = 7 body rows over 20 body rows = 3 chunks.
+    const plain = gridEl({ headerRow: undefined });
+    expect(tableChunkCount(plain, gridResolved(20))).toBe(3); // ceil(21/8)
+    expect(tableChunkCount(gridEl(), gridResolved(20))).toBe(3); // ceil(20/7)
+    expect(tableChunkCount(gridEl(), gridResolved(7))).toBe(1);
+    expect(tableChunkCount(gridEl(), gridResolved(8))).toBe(2);
+  });
+
+  it('is 1 chunk when the query returned only the header row', () => {
+    expect(tableChunkCount(gridEl(), gridResolved(0))).toBe(1);
+  });
+});
+
+describe('columnWidths measures a stacked header line by line', () => {
+  // A fake metric: 10 per character. Enough to prove WHICH string is measured, which is the whole
+  // question — the real pdfkit numbers live in the seed test that owns the design.
+  const measure = (t: string): number => t.length * 10;
+
+  it('takes the widest LINE of a multi-line header, never the concatenation', () => {
+    // TWO columns, so the proportion is observable — with one column every input scales to
+    // `totalW` and the assertion would pass whatever was measured.
+    // "1\nFeb" must measure as "Feb" (3 chars = 30), not as the 5-character run "1Feb"/"1 Feb".
+    expect(columnWidths(['name', '1\nFeb'], [], 1000, measure))
+      .toEqual(columnWidths(['name', 'Feb'], [], 1000, measure));
+    expect(columnWidths(['name', '1\nFeb'], [], 1000, measure))
+      .not.toEqual(columnWidths(['name', '1 Feb'], [], 1000, measure));
+  });
+
+  it('gives the wide column the room the stacking frees', () => {
+    const rows = [['Kilimanjaro Christian Medical Centre', 'Y', 'Y']];
+    const inline = columnWidths(['Laboratory', '23 Feb', '23 Feb'], rows, 600, measure);
+    const stacked = columnWidths(['Laboratory', '23\nFeb', '23\nFeb'], rows, 600, measure);
+    expect(stacked[0]).toBeGreaterThan(inline[0]);
+    expect(stacked[1]).toBeLessThan(inline[1]);
+  });
+
+  it('is unchanged for a header with no newline', () => {
+    // natural = widest of (header, sampled cells) + CELL_PAD*2 + 2 → 40+10=50 and 50+10=60,
+    // scaled to 500 in proportion. Nothing here is above MIN_COL_W, so no floor is applied.
+    const rows = [['a', 'bb'], ['ccc', 'd']];
+    const w = columnWidths(['Head', 'Other'], rows, 500, measure);
+    expect(w[0]).toBeCloseTo(500 * 50 / 110, 10);
+    expect(w[1]).toBeCloseTo(500 * 60 / 110, 10);
+  });
+});
+
+describe('drawsOnChunk — nothing is drawn for a chunk a table does not reach', () => {
+  const short = tbl({ id: 'short', columns: ['A'], rows: [['1']] });                  // 1 chunk
+  const long = tbl({ id: 'long', columns: ['A'], rows: [['1'], ['2'], ['3'], ['4'], ['5'], ['6'], ['7']] }); // 3
+  const heading = { id: 'h', kind: 'text', name: 'H', rect: { x: 0, y: 0, w: 10, h: 10 }, text: 'Short grid', showWithTable: 'short' } as DesignElement;
+  const plainText = { id: 'p', kind: 'text', name: 'P', rect: { x: 0, y: 0, w: 10, h: 10 }, text: 'Footer' } as DesignElement;
+  const page: DesignPage = { id: 'p', elements: [short, long, heading, plainText] };
+  const resolved = new Map<string, ResolvedTable>();
+
+  it('draws a table only on the chunks it actually fills', () => {
+    expect(drawsOnChunk(short, page, resolved, 0)).toBe(true);
+    expect(drawsOnChunk(short, page, resolved, 1)).toBe(false);
+    expect(drawsOnChunk(long, page, resolved, 2)).toBe(true);
+  });
+
+  it('hides an element tied to that table on the same chunks', () => {
+    expect(drawsOnChunk(heading, page, resolved, 0)).toBe(true);
+    expect(drawsOnChunk(heading, page, resolved, 1)).toBe(false);
+  });
+
+  it('leaves every other element on every chunk', () => {
+    expect(drawsOnChunk(plainText, page, resolved, 0)).toBe(true);
+    expect(drawsOnChunk(plainText, page, resolved, 2)).toBe(true);
+  });
+
+  it('⛔ keeps drawing a FAILED table, and its heading, on every chunk', () => {
+    // Out of rows and failed to run are different conditions. A reader handed only the last page
+    // must still see that the query failed, so the error placeholder repeats where an exhausted
+    // grid disappears.
+    const broken = tbl({ id: 'broken', dataSource: { kind: 'custom-query', queryId: 'q' } });
+    const brokenHead = { id: 'bh', kind: 'text', name: 'BH', rect: { x: 0, y: 0, w: 10, h: 10 }, text: 'Broken grid', showWithTable: 'broken' } as DesignElement;
+    const p: DesignPage = { id: 'p', elements: [broken, long, brokenHead] };
+    const errored = new Map<string, ResolvedTable>([['broken', { error: 'boom' }]]);
+    expect(drawsOnChunk(broken, p, errored, 0)).toBe(true);
+    expect(drawsOnChunk(broken, p, errored, 2)).toBe(true);
+    expect(drawsOnChunk(brokenHead, p, errored, 2)).toBe(true);
+  });
+
+  it('draws an element whose showWithTable names something that is not on the page', () => {
+    // Fail OPEN. A dangling reference must not silently delete a heading from every page; the
+    // missing element is a design defect and hiding its companion would hide the evidence.
+    const dangling = { ...heading, id: 'd', showWithTable: 'nope' } as DesignElement;
+    expect(drawsOnChunk(dangling, page, resolved, 0)).toBe(true);
+    expect(drawsOnChunk(dangling, page, resolved, 5)).toBe(true);
   });
 });

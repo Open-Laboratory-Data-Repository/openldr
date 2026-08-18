@@ -1672,6 +1672,37 @@ describe('SEED_QUERIES — the transmission grids', () => {
     }
   });
 
+  // ⛔ `sortBy: 'ord'` is set on both grids, and it FAILS SILENTLY. Drop `ord` from the select and
+  // the comparator reads `undefined` on every row, the sort becomes a stable no-op, the renderer
+  // falls back to the untrusted SQL row order — and every existing test stays green while the date
+  // row lands in the middle of the grid. Nothing else in this file would notice.
+  it('selects the ord discriminator sortBy depends on, in every dialect', () => {
+    for (const id of ['q-transmission-hvleid', 'q-transmission-other']) {
+      for (const [dialect, sql] of Object.entries(q(id).sql)) {
+        expect(sql, `${id}/${dialect} dropped 'as ord' — sortBy silently degrades to no sort`)
+          .toMatch(/\bas ord\b/);
+      }
+    }
+  });
+
+  // ⛔ The date row carries the day and the month as TWO LINES. `headerRow` draws a header cell's
+  // newlines stacked and `columnWidths` measures the widest LINE, so a day column costs "Feb"
+  // (14.22pt) instead of "2 Feb" (20.90pt) — measured with real pdfkit metrics. Collapsing these
+  // back to one line puts every laboratory name back under the ellipsis.
+  it('emits the date row as two lines, in every dialect', () => {
+    const NEWLINE: Record<string, RegExp> = {
+      postgres: /to_char\(cal_day, 'FMDD'\) \|\| chr\(10\) \|\| to_char\(cal_day, 'Mon'\)/,
+      mssql: /concat\(format\(cal_day, '%d', 'en-US'\), char\(10\), format\(cal_day, 'MMM', 'en-US'\)\)/,
+      mysql: /concat\(date_format\(cal_day, '%e'\), char\(10\), date_format\(cal_day, '%b'\)\)/,
+    };
+    for (const id of ['q-transmission-hvleid', 'q-transmission-other']) {
+      for (const [dialect, sql] of Object.entries(q(id).sql)) {
+        expect(sql, `${id}/${dialect} no longer stacks the day over the month`)
+          .toMatch(NEWLINE[dialect]);
+      }
+    }
+  });
+
   it('carries no panel code in SQL — the list is a run-time parameter', () => {
     // AGENTS.md §8. HIVVL/HIVPC are Tanzania's codes; another country's differ.
     for (const id of ['q-transmission-hvleid', 'q-transmission-other']) {
@@ -1742,8 +1773,56 @@ describe('SEED_DESIGNS — rt-transmission-grid', () => {
   const design = () => SEED_DESIGNS.find((d) => d.id === 'rt-transmission-grid')!;
   const el = (id: string) => design().pages[0].elements.find((e) => e.id === id)!;
 
-  it('is landscape — 24 columns do not fit portrait', () => {
+  it('is landscape — MEASURED: 24 columns cannot fit portrait', () => {
+    // The reference document is portrait, and this design is not. The reason is arithmetic, not
+    // taste, and it is worth pinning because "make it portrait like the reference" is an obvious
+    // and wrong instruction to give this file.
+    //
+    // Measured with real pdfkit metrics at the renderer's fixed 8pt, WITH the stacked header:
+    //   day column natural   = max("23" 8.90, "Feb" 14.22) + CELL_PAD*2 + 2 = 24.22pt
+    //   portrait body, 36pt margins                                          = 523.28pt
+    //   floor applied by columnWidths = min(MIN_COL_W 22, 523.28/24 = 21.80) = 21.80pt
+    // 23 day columns cannot go below that floor, so they take 501.4pt of 523.28 and the
+    // laboratory column is left 21.8pt — about three characters. Landscape gives it 171.85pt.
+    // Tighter margins do not rescue it: at 16pt margins the name column is 57.3pt.
     expect(design().orientation).toBe('landscape');
+  });
+
+  it('lifts the query date row into the header so it repeats on every page', () => {
+    // Without `headerRow` the dates are an ordinary body row: they print on chunk 0 only, and page
+    // 2 shows marks under blank columns with nothing to say which day is which.
+    for (const id of ['hvleid', 'other']) {
+      expect(el(id).headerRow, `${id} leaves the dates as a body row`).toBe(true);
+    }
+  });
+
+  it('⛔ leaves the 23 day labels BLANK, because a declared label wins over the header row', () => {
+    // `headerTexts` keeps a non-blank declared label and fills only a blank one from the header
+    // row. Labelling the day columns `1`..`23` would therefore print slot numbers OVER the dates —
+    // which is exactly the mitigation an earlier review proposed before the lift existed.
+    for (const id of ['hvleid', 'other']) {
+      const labels = (el(id).boundColumns ?? []).map((c) => c.label);
+      expect(labels[0]).toBe('Laboratory');
+      expect(labels.slice(1), `${id} labels its day columns`).toEqual(Array(23).fill(''));
+    }
+  });
+
+  it('ties each heading to its own grid, so neither survives onto a page the grid does not reach', () => {
+    expect(el('rt-transmission-grid-hvleid-title').showWithTable).toBe('hvleid');
+    expect(el('rt-transmission-grid-other-title').showWithTable).toBe('other');
+  });
+
+  it('fits 8 laboratories per grid per page — computed in POINTS, not px@96', () => {
+    // ⛔ UNITS. The rect is px@96 and the renderer multiplies by 0.75; ROW_H and the header band are
+    // already points. Doing this in px@96 gives floor((214-24)/16) = 11 and overstates the capacity
+    // by a third, in the direction that says "it fits".
+    const ROW_H_PT = 16;
+    const STACKED_HEAD_PT = 24; // ROW_H + HEAD_LINE_H, and HEAD_LINE_H is the reference's 8pt
+    for (const id of ['hvleid', 'other']) {
+      const hPt = toPt(el(id).rect).h;
+      expect(hPt).toBeCloseTo(160.5, 6);
+      expect(Math.floor((hPt - STACKED_HEAD_PT) / ROW_H_PT)).toBe(8);
+    }
   });
 
   it('draws BOTH grids on one page, as the reference does', () => {
@@ -1829,10 +1908,12 @@ describe('SEED_DESIGNS — rt-transmission-grid geometry', () => {
   const el = (id: string) => design().pages[0].elements.find((e) => e.id === id)!;
 
   it('gives both grids the FULL landscape body width', () => {
-    // ⚠ 24 columns are already short of what they need at the renderer's fixed 8pt: a day cell gets
-    // 18.0pt of text where "23 Feb" measures 24.7, and the laboratory column 111.8pt where a long
-    // name measures 129.5. Both ellipsize. Narrowing these rects makes a legibility problem that is
-    // already at its limit worse, and nothing in a rendering test would say so.
+    // ⚠ MEASURED off a real render at the renderer's fixed 8pt, with the stacked header: the day
+    // columns draw at 26.02pt and the laboratory column at 171.85pt (163.85pt of text). That is
+    // enough for "Kilimanjaro Christian Medical Centre" (129.5pt) but NOT for
+    // "Mtwara (Ligula) Regional Referral Hospital - EVLIMS" (186.6pt), which still ellipsizes.
+    // Narrowing these rects makes a legibility problem that is already at its limit worse, and
+    // nothing in a rendering test would say so.
     const [wPt] = paperSizePt(design().paper, design().orientation);
     const body = Math.round(wPt / 0.75) - 96; // simpleTableDesign's own arithmetic
     for (const id of ['hvleid', 'other']) {

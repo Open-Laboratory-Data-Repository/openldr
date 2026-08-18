@@ -2299,29 +2299,29 @@ grid as (
   left join arrivals a on a.lab = l.lab and a.cal_day = dy.cal_day
 )
 select 0 as ord, '(dates)' as lab,
-  max(case when n = 1 then to_char(cal_day, 'FMDD Mon') else '' end) as d01,
-  max(case when n = 2 then to_char(cal_day, 'FMDD Mon') else '' end) as d02,
-  max(case when n = 3 then to_char(cal_day, 'FMDD Mon') else '' end) as d03,
-  max(case when n = 4 then to_char(cal_day, 'FMDD Mon') else '' end) as d04,
-  max(case when n = 5 then to_char(cal_day, 'FMDD Mon') else '' end) as d05,
-  max(case when n = 6 then to_char(cal_day, 'FMDD Mon') else '' end) as d06,
-  max(case when n = 7 then to_char(cal_day, 'FMDD Mon') else '' end) as d07,
-  max(case when n = 8 then to_char(cal_day, 'FMDD Mon') else '' end) as d08,
-  max(case when n = 9 then to_char(cal_day, 'FMDD Mon') else '' end) as d09,
-  max(case when n = 10 then to_char(cal_day, 'FMDD Mon') else '' end) as d10,
-  max(case when n = 11 then to_char(cal_day, 'FMDD Mon') else '' end) as d11,
-  max(case when n = 12 then to_char(cal_day, 'FMDD Mon') else '' end) as d12,
-  max(case when n = 13 then to_char(cal_day, 'FMDD Mon') else '' end) as d13,
-  max(case when n = 14 then to_char(cal_day, 'FMDD Mon') else '' end) as d14,
-  max(case when n = 15 then to_char(cal_day, 'FMDD Mon') else '' end) as d15,
-  max(case when n = 16 then to_char(cal_day, 'FMDD Mon') else '' end) as d16,
-  max(case when n = 17 then to_char(cal_day, 'FMDD Mon') else '' end) as d17,
-  max(case when n = 18 then to_char(cal_day, 'FMDD Mon') else '' end) as d18,
-  max(case when n = 19 then to_char(cal_day, 'FMDD Mon') else '' end) as d19,
-  max(case when n = 20 then to_char(cal_day, 'FMDD Mon') else '' end) as d20,
-  max(case when n = 21 then to_char(cal_day, 'FMDD Mon') else '' end) as d21,
-  max(case when n = 22 then to_char(cal_day, 'FMDD Mon') else '' end) as d22,
-  max(case when n = 23 then to_char(cal_day, 'FMDD Mon') else '' end) as d23
+  max(case when n = 1 then to_char(cal_day, 'FMDD') || chr(10) || to_char(cal_day, 'Mon') else '' end) as d01,
+  max(case when n = 2 then to_char(cal_day, 'FMDD') || chr(10) || to_char(cal_day, 'Mon') else '' end) as d02,
+  max(case when n = 3 then to_char(cal_day, 'FMDD') || chr(10) || to_char(cal_day, 'Mon') else '' end) as d03,
+  max(case when n = 4 then to_char(cal_day, 'FMDD') || chr(10) || to_char(cal_day, 'Mon') else '' end) as d04,
+  max(case when n = 5 then to_char(cal_day, 'FMDD') || chr(10) || to_char(cal_day, 'Mon') else '' end) as d05,
+  max(case when n = 6 then to_char(cal_day, 'FMDD') || chr(10) || to_char(cal_day, 'Mon') else '' end) as d06,
+  max(case when n = 7 then to_char(cal_day, 'FMDD') || chr(10) || to_char(cal_day, 'Mon') else '' end) as d07,
+  max(case when n = 8 then to_char(cal_day, 'FMDD') || chr(10) || to_char(cal_day, 'Mon') else '' end) as d08,
+  max(case when n = 9 then to_char(cal_day, 'FMDD') || chr(10) || to_char(cal_day, 'Mon') else '' end) as d09,
+  max(case when n = 10 then to_char(cal_day, 'FMDD') || chr(10) || to_char(cal_day, 'Mon') else '' end) as d10,
+  max(case when n = 11 then to_char(cal_day, 'FMDD') || chr(10) || to_char(cal_day, 'Mon') else '' end) as d11,
+  max(case when n = 12 then to_char(cal_day, 'FMDD') || chr(10) || to_char(cal_day, 'Mon') else '' end) as d12,
+  max(case when n = 13 then to_char(cal_day, 'FMDD') || chr(10) || to_char(cal_day, 'Mon') else '' end) as d13,
+  max(case when n = 14 then to_char(cal_day, 'FMDD') || chr(10) || to_char(cal_day, 'Mon') else '' end) as d14,
+  max(case when n = 15 then to_char(cal_day, 'FMDD') || chr(10) || to_char(cal_day, 'Mon') else '' end) as d15,
+  max(case when n = 16 then to_char(cal_day, 'FMDD') || chr(10) || to_char(cal_day, 'Mon') else '' end) as d16,
+  max(case when n = 17 then to_char(cal_day, 'FMDD') || chr(10) || to_char(cal_day, 'Mon') else '' end) as d17,
+  max(case when n = 18 then to_char(cal_day, 'FMDD') || chr(10) || to_char(cal_day, 'Mon') else '' end) as d18,
+  max(case when n = 19 then to_char(cal_day, 'FMDD') || chr(10) || to_char(cal_day, 'Mon') else '' end) as d19,
+  max(case when n = 20 then to_char(cal_day, 'FMDD') || chr(10) || to_char(cal_day, 'Mon') else '' end) as d20,
+  max(case when n = 21 then to_char(cal_day, 'FMDD') || chr(10) || to_char(cal_day, 'Mon') else '' end) as d21,
+  max(case when n = 22 then to_char(cal_day, 'FMDD') || chr(10) || to_char(cal_day, 'Mon') else '' end) as d22,
+  max(case when n = 23 then to_char(cal_day, 'FMDD') || chr(10) || to_char(cal_day, 'Mon') else '' end) as d23
 from days
 union all
 select 1 as ord, lab,
@@ -2418,29 +2418,29 @@ grid as (
   left join arrivals a on a.lab = l.lab and a.cal_day = dy.cal_day
 )
 select 0 as ord, '(dates)' as lab,
-  max(case when n = 1 then format(cal_day, 'd MMM', 'en-US') else '' end) as d01,
-  max(case when n = 2 then format(cal_day, 'd MMM', 'en-US') else '' end) as d02,
-  max(case when n = 3 then format(cal_day, 'd MMM', 'en-US') else '' end) as d03,
-  max(case when n = 4 then format(cal_day, 'd MMM', 'en-US') else '' end) as d04,
-  max(case when n = 5 then format(cal_day, 'd MMM', 'en-US') else '' end) as d05,
-  max(case when n = 6 then format(cal_day, 'd MMM', 'en-US') else '' end) as d06,
-  max(case when n = 7 then format(cal_day, 'd MMM', 'en-US') else '' end) as d07,
-  max(case when n = 8 then format(cal_day, 'd MMM', 'en-US') else '' end) as d08,
-  max(case when n = 9 then format(cal_day, 'd MMM', 'en-US') else '' end) as d09,
-  max(case when n = 10 then format(cal_day, 'd MMM', 'en-US') else '' end) as d10,
-  max(case when n = 11 then format(cal_day, 'd MMM', 'en-US') else '' end) as d11,
-  max(case when n = 12 then format(cal_day, 'd MMM', 'en-US') else '' end) as d12,
-  max(case when n = 13 then format(cal_day, 'd MMM', 'en-US') else '' end) as d13,
-  max(case when n = 14 then format(cal_day, 'd MMM', 'en-US') else '' end) as d14,
-  max(case when n = 15 then format(cal_day, 'd MMM', 'en-US') else '' end) as d15,
-  max(case when n = 16 then format(cal_day, 'd MMM', 'en-US') else '' end) as d16,
-  max(case when n = 17 then format(cal_day, 'd MMM', 'en-US') else '' end) as d17,
-  max(case when n = 18 then format(cal_day, 'd MMM', 'en-US') else '' end) as d18,
-  max(case when n = 19 then format(cal_day, 'd MMM', 'en-US') else '' end) as d19,
-  max(case when n = 20 then format(cal_day, 'd MMM', 'en-US') else '' end) as d20,
-  max(case when n = 21 then format(cal_day, 'd MMM', 'en-US') else '' end) as d21,
-  max(case when n = 22 then format(cal_day, 'd MMM', 'en-US') else '' end) as d22,
-  max(case when n = 23 then format(cal_day, 'd MMM', 'en-US') else '' end) as d23
+  max(case when n = 1 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d01,
+  max(case when n = 2 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d02,
+  max(case when n = 3 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d03,
+  max(case when n = 4 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d04,
+  max(case when n = 5 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d05,
+  max(case when n = 6 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d06,
+  max(case when n = 7 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d07,
+  max(case when n = 8 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d08,
+  max(case when n = 9 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d09,
+  max(case when n = 10 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d10,
+  max(case when n = 11 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d11,
+  max(case when n = 12 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d12,
+  max(case when n = 13 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d13,
+  max(case when n = 14 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d14,
+  max(case when n = 15 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d15,
+  max(case when n = 16 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d16,
+  max(case when n = 17 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d17,
+  max(case when n = 18 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d18,
+  max(case when n = 19 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d19,
+  max(case when n = 20 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d20,
+  max(case when n = 21 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d21,
+  max(case when n = 22 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d22,
+  max(case when n = 23 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d23
 from days
 union all
 select 1 as ord, lab,
@@ -2563,29 +2563,29 @@ grid as (
   left join arrivals a on a.lab = l.lab and a.cal_day = dy.cal_day
 )
 select 0 as ord, '(dates)' as lab,
-  max(case when n = 1 then date_format(cal_day, '%e %b') else '' end) as d01,
-  max(case when n = 2 then date_format(cal_day, '%e %b') else '' end) as d02,
-  max(case when n = 3 then date_format(cal_day, '%e %b') else '' end) as d03,
-  max(case when n = 4 then date_format(cal_day, '%e %b') else '' end) as d04,
-  max(case when n = 5 then date_format(cal_day, '%e %b') else '' end) as d05,
-  max(case when n = 6 then date_format(cal_day, '%e %b') else '' end) as d06,
-  max(case when n = 7 then date_format(cal_day, '%e %b') else '' end) as d07,
-  max(case when n = 8 then date_format(cal_day, '%e %b') else '' end) as d08,
-  max(case when n = 9 then date_format(cal_day, '%e %b') else '' end) as d09,
-  max(case when n = 10 then date_format(cal_day, '%e %b') else '' end) as d10,
-  max(case when n = 11 then date_format(cal_day, '%e %b') else '' end) as d11,
-  max(case when n = 12 then date_format(cal_day, '%e %b') else '' end) as d12,
-  max(case when n = 13 then date_format(cal_day, '%e %b') else '' end) as d13,
-  max(case when n = 14 then date_format(cal_day, '%e %b') else '' end) as d14,
-  max(case when n = 15 then date_format(cal_day, '%e %b') else '' end) as d15,
-  max(case when n = 16 then date_format(cal_day, '%e %b') else '' end) as d16,
-  max(case when n = 17 then date_format(cal_day, '%e %b') else '' end) as d17,
-  max(case when n = 18 then date_format(cal_day, '%e %b') else '' end) as d18,
-  max(case when n = 19 then date_format(cal_day, '%e %b') else '' end) as d19,
-  max(case when n = 20 then date_format(cal_day, '%e %b') else '' end) as d20,
-  max(case when n = 21 then date_format(cal_day, '%e %b') else '' end) as d21,
-  max(case when n = 22 then date_format(cal_day, '%e %b') else '' end) as d22,
-  max(case when n = 23 then date_format(cal_day, '%e %b') else '' end) as d23
+  max(case when n = 1 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d01,
+  max(case when n = 2 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d02,
+  max(case when n = 3 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d03,
+  max(case when n = 4 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d04,
+  max(case when n = 5 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d05,
+  max(case when n = 6 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d06,
+  max(case when n = 7 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d07,
+  max(case when n = 8 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d08,
+  max(case when n = 9 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d09,
+  max(case when n = 10 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d10,
+  max(case when n = 11 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d11,
+  max(case when n = 12 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d12,
+  max(case when n = 13 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d13,
+  max(case when n = 14 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d14,
+  max(case when n = 15 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d15,
+  max(case when n = 16 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d16,
+  max(case when n = 17 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d17,
+  max(case when n = 18 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d18,
+  max(case when n = 19 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d19,
+  max(case when n = 20 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d20,
+  max(case when n = 21 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d21,
+  max(case when n = 22 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d22,
+  max(case when n = 23 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d23
 from days
 union all
 select 1 as ord, lab,
@@ -2695,29 +2695,29 @@ grid as (
   left join arrivals a on a.lab = l.lab and a.cal_day = dy.cal_day
 )
 select 0 as ord, '(dates)' as lab,
-  max(case when n = 1 then to_char(cal_day, 'FMDD Mon') else '' end) as d01,
-  max(case when n = 2 then to_char(cal_day, 'FMDD Mon') else '' end) as d02,
-  max(case when n = 3 then to_char(cal_day, 'FMDD Mon') else '' end) as d03,
-  max(case when n = 4 then to_char(cal_day, 'FMDD Mon') else '' end) as d04,
-  max(case when n = 5 then to_char(cal_day, 'FMDD Mon') else '' end) as d05,
-  max(case when n = 6 then to_char(cal_day, 'FMDD Mon') else '' end) as d06,
-  max(case when n = 7 then to_char(cal_day, 'FMDD Mon') else '' end) as d07,
-  max(case when n = 8 then to_char(cal_day, 'FMDD Mon') else '' end) as d08,
-  max(case when n = 9 then to_char(cal_day, 'FMDD Mon') else '' end) as d09,
-  max(case when n = 10 then to_char(cal_day, 'FMDD Mon') else '' end) as d10,
-  max(case when n = 11 then to_char(cal_day, 'FMDD Mon') else '' end) as d11,
-  max(case when n = 12 then to_char(cal_day, 'FMDD Mon') else '' end) as d12,
-  max(case when n = 13 then to_char(cal_day, 'FMDD Mon') else '' end) as d13,
-  max(case when n = 14 then to_char(cal_day, 'FMDD Mon') else '' end) as d14,
-  max(case when n = 15 then to_char(cal_day, 'FMDD Mon') else '' end) as d15,
-  max(case when n = 16 then to_char(cal_day, 'FMDD Mon') else '' end) as d16,
-  max(case when n = 17 then to_char(cal_day, 'FMDD Mon') else '' end) as d17,
-  max(case when n = 18 then to_char(cal_day, 'FMDD Mon') else '' end) as d18,
-  max(case when n = 19 then to_char(cal_day, 'FMDD Mon') else '' end) as d19,
-  max(case when n = 20 then to_char(cal_day, 'FMDD Mon') else '' end) as d20,
-  max(case when n = 21 then to_char(cal_day, 'FMDD Mon') else '' end) as d21,
-  max(case when n = 22 then to_char(cal_day, 'FMDD Mon') else '' end) as d22,
-  max(case when n = 23 then to_char(cal_day, 'FMDD Mon') else '' end) as d23
+  max(case when n = 1 then to_char(cal_day, 'FMDD') || chr(10) || to_char(cal_day, 'Mon') else '' end) as d01,
+  max(case when n = 2 then to_char(cal_day, 'FMDD') || chr(10) || to_char(cal_day, 'Mon') else '' end) as d02,
+  max(case when n = 3 then to_char(cal_day, 'FMDD') || chr(10) || to_char(cal_day, 'Mon') else '' end) as d03,
+  max(case when n = 4 then to_char(cal_day, 'FMDD') || chr(10) || to_char(cal_day, 'Mon') else '' end) as d04,
+  max(case when n = 5 then to_char(cal_day, 'FMDD') || chr(10) || to_char(cal_day, 'Mon') else '' end) as d05,
+  max(case when n = 6 then to_char(cal_day, 'FMDD') || chr(10) || to_char(cal_day, 'Mon') else '' end) as d06,
+  max(case when n = 7 then to_char(cal_day, 'FMDD') || chr(10) || to_char(cal_day, 'Mon') else '' end) as d07,
+  max(case when n = 8 then to_char(cal_day, 'FMDD') || chr(10) || to_char(cal_day, 'Mon') else '' end) as d08,
+  max(case when n = 9 then to_char(cal_day, 'FMDD') || chr(10) || to_char(cal_day, 'Mon') else '' end) as d09,
+  max(case when n = 10 then to_char(cal_day, 'FMDD') || chr(10) || to_char(cal_day, 'Mon') else '' end) as d10,
+  max(case when n = 11 then to_char(cal_day, 'FMDD') || chr(10) || to_char(cal_day, 'Mon') else '' end) as d11,
+  max(case when n = 12 then to_char(cal_day, 'FMDD') || chr(10) || to_char(cal_day, 'Mon') else '' end) as d12,
+  max(case when n = 13 then to_char(cal_day, 'FMDD') || chr(10) || to_char(cal_day, 'Mon') else '' end) as d13,
+  max(case when n = 14 then to_char(cal_day, 'FMDD') || chr(10) || to_char(cal_day, 'Mon') else '' end) as d14,
+  max(case when n = 15 then to_char(cal_day, 'FMDD') || chr(10) || to_char(cal_day, 'Mon') else '' end) as d15,
+  max(case when n = 16 then to_char(cal_day, 'FMDD') || chr(10) || to_char(cal_day, 'Mon') else '' end) as d16,
+  max(case when n = 17 then to_char(cal_day, 'FMDD') || chr(10) || to_char(cal_day, 'Mon') else '' end) as d17,
+  max(case when n = 18 then to_char(cal_day, 'FMDD') || chr(10) || to_char(cal_day, 'Mon') else '' end) as d18,
+  max(case when n = 19 then to_char(cal_day, 'FMDD') || chr(10) || to_char(cal_day, 'Mon') else '' end) as d19,
+  max(case when n = 20 then to_char(cal_day, 'FMDD') || chr(10) || to_char(cal_day, 'Mon') else '' end) as d20,
+  max(case when n = 21 then to_char(cal_day, 'FMDD') || chr(10) || to_char(cal_day, 'Mon') else '' end) as d21,
+  max(case when n = 22 then to_char(cal_day, 'FMDD') || chr(10) || to_char(cal_day, 'Mon') else '' end) as d22,
+  max(case when n = 23 then to_char(cal_day, 'FMDD') || chr(10) || to_char(cal_day, 'Mon') else '' end) as d23
 from days
 union all
 select 1 as ord, lab,
@@ -2814,29 +2814,29 @@ grid as (
   left join arrivals a on a.lab = l.lab and a.cal_day = dy.cal_day
 )
 select 0 as ord, '(dates)' as lab,
-  max(case when n = 1 then format(cal_day, 'd MMM', 'en-US') else '' end) as d01,
-  max(case when n = 2 then format(cal_day, 'd MMM', 'en-US') else '' end) as d02,
-  max(case when n = 3 then format(cal_day, 'd MMM', 'en-US') else '' end) as d03,
-  max(case when n = 4 then format(cal_day, 'd MMM', 'en-US') else '' end) as d04,
-  max(case when n = 5 then format(cal_day, 'd MMM', 'en-US') else '' end) as d05,
-  max(case when n = 6 then format(cal_day, 'd MMM', 'en-US') else '' end) as d06,
-  max(case when n = 7 then format(cal_day, 'd MMM', 'en-US') else '' end) as d07,
-  max(case when n = 8 then format(cal_day, 'd MMM', 'en-US') else '' end) as d08,
-  max(case when n = 9 then format(cal_day, 'd MMM', 'en-US') else '' end) as d09,
-  max(case when n = 10 then format(cal_day, 'd MMM', 'en-US') else '' end) as d10,
-  max(case when n = 11 then format(cal_day, 'd MMM', 'en-US') else '' end) as d11,
-  max(case when n = 12 then format(cal_day, 'd MMM', 'en-US') else '' end) as d12,
-  max(case when n = 13 then format(cal_day, 'd MMM', 'en-US') else '' end) as d13,
-  max(case when n = 14 then format(cal_day, 'd MMM', 'en-US') else '' end) as d14,
-  max(case when n = 15 then format(cal_day, 'd MMM', 'en-US') else '' end) as d15,
-  max(case when n = 16 then format(cal_day, 'd MMM', 'en-US') else '' end) as d16,
-  max(case when n = 17 then format(cal_day, 'd MMM', 'en-US') else '' end) as d17,
-  max(case when n = 18 then format(cal_day, 'd MMM', 'en-US') else '' end) as d18,
-  max(case when n = 19 then format(cal_day, 'd MMM', 'en-US') else '' end) as d19,
-  max(case when n = 20 then format(cal_day, 'd MMM', 'en-US') else '' end) as d20,
-  max(case when n = 21 then format(cal_day, 'd MMM', 'en-US') else '' end) as d21,
-  max(case when n = 22 then format(cal_day, 'd MMM', 'en-US') else '' end) as d22,
-  max(case when n = 23 then format(cal_day, 'd MMM', 'en-US') else '' end) as d23
+  max(case when n = 1 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d01,
+  max(case when n = 2 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d02,
+  max(case when n = 3 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d03,
+  max(case when n = 4 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d04,
+  max(case when n = 5 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d05,
+  max(case when n = 6 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d06,
+  max(case when n = 7 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d07,
+  max(case when n = 8 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d08,
+  max(case when n = 9 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d09,
+  max(case when n = 10 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d10,
+  max(case when n = 11 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d11,
+  max(case when n = 12 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d12,
+  max(case when n = 13 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d13,
+  max(case when n = 14 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d14,
+  max(case when n = 15 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d15,
+  max(case when n = 16 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d16,
+  max(case when n = 17 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d17,
+  max(case when n = 18 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d18,
+  max(case when n = 19 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d19,
+  max(case when n = 20 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d20,
+  max(case when n = 21 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d21,
+  max(case when n = 22 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d22,
+  max(case when n = 23 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d23
 from days
 union all
 select 1 as ord, lab,
@@ -2959,29 +2959,29 @@ grid as (
   left join arrivals a on a.lab = l.lab and a.cal_day = dy.cal_day
 )
 select 0 as ord, '(dates)' as lab,
-  max(case when n = 1 then date_format(cal_day, '%e %b') else '' end) as d01,
-  max(case when n = 2 then date_format(cal_day, '%e %b') else '' end) as d02,
-  max(case when n = 3 then date_format(cal_day, '%e %b') else '' end) as d03,
-  max(case when n = 4 then date_format(cal_day, '%e %b') else '' end) as d04,
-  max(case when n = 5 then date_format(cal_day, '%e %b') else '' end) as d05,
-  max(case when n = 6 then date_format(cal_day, '%e %b') else '' end) as d06,
-  max(case when n = 7 then date_format(cal_day, '%e %b') else '' end) as d07,
-  max(case when n = 8 then date_format(cal_day, '%e %b') else '' end) as d08,
-  max(case when n = 9 then date_format(cal_day, '%e %b') else '' end) as d09,
-  max(case when n = 10 then date_format(cal_day, '%e %b') else '' end) as d10,
-  max(case when n = 11 then date_format(cal_day, '%e %b') else '' end) as d11,
-  max(case when n = 12 then date_format(cal_day, '%e %b') else '' end) as d12,
-  max(case when n = 13 then date_format(cal_day, '%e %b') else '' end) as d13,
-  max(case when n = 14 then date_format(cal_day, '%e %b') else '' end) as d14,
-  max(case when n = 15 then date_format(cal_day, '%e %b') else '' end) as d15,
-  max(case when n = 16 then date_format(cal_day, '%e %b') else '' end) as d16,
-  max(case when n = 17 then date_format(cal_day, '%e %b') else '' end) as d17,
-  max(case when n = 18 then date_format(cal_day, '%e %b') else '' end) as d18,
-  max(case when n = 19 then date_format(cal_day, '%e %b') else '' end) as d19,
-  max(case when n = 20 then date_format(cal_day, '%e %b') else '' end) as d20,
-  max(case when n = 21 then date_format(cal_day, '%e %b') else '' end) as d21,
-  max(case when n = 22 then date_format(cal_day, '%e %b') else '' end) as d22,
-  max(case when n = 23 then date_format(cal_day, '%e %b') else '' end) as d23
+  max(case when n = 1 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d01,
+  max(case when n = 2 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d02,
+  max(case when n = 3 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d03,
+  max(case when n = 4 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d04,
+  max(case when n = 5 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d05,
+  max(case when n = 6 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d06,
+  max(case when n = 7 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d07,
+  max(case when n = 8 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d08,
+  max(case when n = 9 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d09,
+  max(case when n = 10 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d10,
+  max(case when n = 11 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d11,
+  max(case when n = 12 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d12,
+  max(case when n = 13 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d13,
+  max(case when n = 14 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d14,
+  max(case when n = 15 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d15,
+  max(case when n = 16 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d16,
+  max(case when n = 17 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d17,
+  max(case when n = 18 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d18,
+  max(case when n = 19 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d19,
+  max(case when n = 20 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d20,
+  max(case when n = 21 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d21,
+  max(case when n = 22 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d22,
+  max(case when n = 23 then concat(date_format(cal_day, '%e'), char(10), date_format(cal_day, '%b')) else '' end) as d23
 from days
 union all
 select 1 as ord, lab,
@@ -3037,35 +3037,44 @@ export const DESIGNS_REQUIRING_DATA: Readonly<Record<string, string>> = {
 /** Body width of the transmission grid's A4-LANDSCAPE page, px@96. Same arithmetic
  *  `simpleTableDesign` uses: `round(pageWpt / 0.75) - 96`, i.e. 1123 - 96 for A4 landscape. */
 const TG_CONTENT_W = 1027;
-/** Height of each of the two grids, px@96 = 160.5pt. `maxRowsFor` is `floor((h - ROW_H) / ROW_H)`
- *  at ROW_H = 16pt, so each grid shows 9 body rows per page: the date row plus eight laboratories.
- *  It is already the most the page can give — the two grids, their headings and the footer rule
- *  fill the landscape sheet — so this is a page-size limit, not a chosen number.
+/** Height of each of the two grids, px@96 = 160.5pt. Both grids set `headerRow`, so the header band
+ *  is `STACKED_HEAD_H` (24pt) rather than one 16pt row, and `maxRowsFor` is
+ *  `floor((160.5 - 24) / 16)` = **8 laboratories per page, on EVERY page**.
  *
- *  ⚠ A month with more laboratories chunks onto further pages, and the date row is a DATA row, so
- *  it appears on the first chunk ONLY. Page 2 onward shows marks under blank day headers. Nothing
- *  a design can set fixes that: repeating a data row per chunk is a renderer behaviour, and the
- *  day headers are blank because a static design cannot know a run-time month's dates. */
+ *  ⚠ UNITS. 214 is px@96; the renderer multiplies a design rect by 0.75 to reach points, while
+ *  `ROW_H`/`STACKED_HEAD_H` are already points. Doing this arithmetic in px@96 overstates the
+ *  capacity by a third, in the direction that says "it fits".
+ *
+ *  It is already the most the landscape sheet can give — the two grids, their headings and the
+ *  footer rule fill it — so this is a page-size limit, not a chosen number. The date row is no
+ *  longer a body row: `headerRow` lifts it into the header band, which every chunk redraws, so
+ *  page 2 onward carries the dates too. */
 const TG_GRID_H = 214;
 
 /**
  * The 24 columns each transmission grid prints: the laboratory, then the 23 working-day slots.
  *
  * ⛔ Bound EXPLICITLY, and it has to be. An empty `boundColumns` makes the renderer take its
- * headers from the query's own result columns (packages/report-designer/src/render/draw.ts:271),
- * which would print `ord`, `d01`, `d02` … as the header row. The real dates are DATA — they travel
- * in the query's first row, because the month is a run-time parameter and no static design can
- * know them — so the day headers here are deliberately blank.
+ * headers from the query's own result columns, which would print `ord`, `d01`, `d02` … as the
+ * header row. The real dates are DATA — they travel in the query's first row, because the month is
+ * a run-time parameter and no static design can know them.
+ *
+ * ⛔ The 23 day labels are blank ON PURPOSE, and that blankness is now load-bearing. With
+ * `headerRow` set, `headerTexts` keeps a non-blank declared label and fills only a BLANK one from
+ * the header row — so "Laboratory" survives and each day column takes its date. Giving the day
+ * columns labels (`1`..`23`, say) would print slot numbers OVER the real dates.
  *
  * ⛔ `ord` is excluded. It exists only to sort the date row to the top and is not a column of the
  * report; the element's `sortBy` reads it, the page never prints it.
  *
- * ⚠ MEASURED, and short. 24 columns over the 770.25pt landscape body leaves a day cell 18.0pt of
- * text where `23 Feb` needs 24.7pt, and the laboratory column 111.8pt where a name the length of
- * "Kilimanjaro Christian Medical Centre" needs 129.5pt. Both ellipsize. `columnWidths` allocates
- * from measured content at a fixed 8pt, so the only levers are fewer columns, shorter date text or
- * a smaller font — none of which a design can set. Widening the table cannot close it either: the
- * natural demand is 937.6pt against a 841.89pt sheet.
+ * ⚠ MEASURED, with real pdfkit metrics at the renderer's fixed 8pt (see the Task 3b report).
+ * The query emits each date as two lines (`2` over `Feb`) and `columnWidths` measures the WIDER
+ * LINE, so a day column costs `Feb` (14.22pt) rather than `2 Feb` (20.90pt). Over the 770.25pt
+ * landscape body that leaves the laboratory column 171.9pt of box — 163.9pt of text — against
+ * 129.5pt for "Kilimanjaro Christian Medical Centre" (fits) and 186.6pt for
+ * "Mtwara (Ligula) Regional Referral Hospital - EVLIMS" (still ellipsizes, by 22.7pt).
+ * The residual is `MAX_NATURAL_W = 160`, which caps how much natural width one column may claim
+ * before the proportional scale runs. A curated short-name list is the fix, not a design constant.
  */
 function transmissionGridColumns(): { key: string; label: string; kind: 'label' }[] {
   return [
@@ -3362,9 +3371,21 @@ export const SEED_DESIGNS: ReportDesign[] = [
     name: 'LIS Stakeholders Update',
     status: 'published',
     paper: 'A4',
-    // ⛔ 24 columns do not fit A4 portrait. Portrait leaves 698px of body for a `lab` column plus 23
-    // day columns; the day columns alone cannot go below MIN_COL_W (22pt = 29px each, 675px), which
-    // leaves the laboratory name 23px. Landscape gives 1027px and the names print.
+    // ⛔ LANDSCAPE, though the reference document is PORTRAIT. Measured, at the renderer's fixed
+    // 8pt table font and WITH the stacked two-line header:
+    //
+    //   a day column needs max("23" 8.90pt, "Feb" 14.22pt) + CELL_PAD*2 + 2 = 24.22pt
+    //   A4 portrait body at 36pt margins                                    = 523.28pt
+    //   `columnWidths`'s floor = min(MIN_COL_W 22, 523.28 / 24 columns)      = 21.80pt
+    //
+    // 23 day columns cannot be squeezed below that floor, so they claim 501.4pt of the 523.28 and
+    // the laboratory column is left 21.8pt — three characters. Tightening the margins to the
+    // reference's ~16pt only lifts it to 57.3pt. Landscape gives it 171.85pt, and every name but
+    // the single longest prints in full.
+    //
+    // The reference achieves 156pt in portrait with a ~6pt header font, 21 day columns and a
+    // curated short-name list. CE has none of those: the 8pt cell font and MIN_COL_W are renderer
+    // constants with no design-level lever, and the laboratory names come from the data.
     orientation: 'landscape',
     parameters: [
       { key: 'month', label: 'Month', type: 'text', required: true, value: '',
@@ -3402,18 +3423,27 @@ export const SEED_DESIGNS: ReportDesign[] = [
           ['Generated', '{{date}}'],
         ] },
 
+      // ⛔ `showWithTable` on each heading. The page is as long as the LONGER grid, so when "Other"
+      // runs to page 3 and HVL/EID does not, page 3 used to print the HVL/EID heading over an empty
+      // framed box — which a reader takes as "no laboratory submitted HVL/EID data", the opposite
+      // of the truth. The grid itself is guarded by the renderer without any declaration; this ties
+      // the heading to it so the two appear and disappear together.
       { id: 'rt-transmission-grid-hvleid-title', kind: 'text', name: 'HVL/EID heading', rect: { x: 48, y: 194, w: 600, h: 14 },
-        text: 'Any HVL/EID Data Submission by Testing Laboratory', style: { fontSize: 10, bold: true, color: '#334155' } },
+        text: 'Any HVL/EID Data Submission by Testing Laboratory', style: { fontSize: 10, bold: true, color: '#334155' },
+        showWithTable: 'hvleid' },
       { id: 'hvleid', kind: 'table', name: 'HVL/EID submission', rect: { x: 48, y: 210, w: TG_CONTENT_W, h: TG_GRID_H },
         dataSource: { kind: 'custom-query', queryId: 'q-transmission-hvleid' },
         sortBy: 'ord',
+        headerRow: true,
         boundColumns: transmissionGridColumns() },
 
       { id: 'rt-transmission-grid-other-title', kind: 'text', name: 'Other heading', rect: { x: 48, y: 428, w: 600, h: 14 },
-        text: 'Any Other Test Data Submission by Testing Laboratory', style: { fontSize: 10, bold: true, color: '#334155' } },
+        text: 'Any Other Test Data Submission by Testing Laboratory', style: { fontSize: 10, bold: true, color: '#334155' },
+        showWithTable: 'other' },
       { id: 'other', kind: 'table', name: 'Other submission', rect: { x: 48, y: 446, w: TG_CONTENT_W, h: TG_GRID_H },
         dataSource: { kind: 'custom-query', queryId: 'q-transmission-other' },
         sortBy: 'ord',
+        headerRow: true,
         boundColumns: transmissionGridColumns() },
 
       { id: 'rt-transmission-grid-rule2', kind: 'line', name: 'rule2', rect: { x: 48, y: 671, w: TG_CONTENT_W, h: 0 }, style: { strokeColor: '#cbd5e1', strokeWidth: 0.75 } },
