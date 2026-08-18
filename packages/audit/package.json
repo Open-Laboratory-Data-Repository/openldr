@@ -12,6 +12,7 @@
   "dependencies": {
     "@openldr/core": "workspace:*",
     "@openldr/db": "workspace:*",
+    "@openldr/table-query": "workspace:*",
     "kysely": "^0.28.17"
   },
   "devDependencies": { "pg-mem": "^3.0.14", "typescript": "^5.7.2", "vitest": "^2.1.8" }

@@ -616,6 +616,9 @@ importers:
       '@openldr/db':
         specifier: workspace:*
         version: link:../db
+      '@openldr/table-query':
+        specifier: workspace:*
+        version: link:../table-query
       kysely:
         specifier: ^0.28.17
         version: 0.28.17
