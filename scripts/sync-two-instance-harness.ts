@@ -340,7 +340,7 @@ async function main(): Promise<void> {
     const centralTargetDb = centralTarget.db as unknown as Kysely<ExternalSchema>;
     const relationalWriter = createRelationalWriter(centralTargetDb, 'postgres');
     const rebuilt = await reprojectAll({ internalDb: centralCtx.internalDb, relationalWriter });
-    ok(`central reprojectAll rebuilt ${rebuilt} canonical resource(s)`);
+    ok(`central reprojectAll rebuilt ${rebuilt.projected} canonical resource(s), ${rebuilt.arrivals} arrival(s)`);
     const rowExists = async (table: keyof ExternalSchema, id: string): Promise<boolean> =>
       !!(await centralTargetDb.selectFrom(table).select('id' as never).where('id' as never, '=', id as never).executeTakeFirst());
     assert(await rowExists('patients', patId), `central read-model patients has ${patId}`);

@@ -27,16 +27,10 @@ const mocks = vi.hoisted(() => ({
     logger: {},
     close: vi.fn(),
   },
-  dbCtx: {
-    internalDb: { marker: 'internalDb' },
-    relationalWriter: { marker: 'relationalWriter' },
-    close: vi.fn(),
-  },
   createTerminologyContext: vi.fn(),
-  createDbContext: vi.fn(),
-  reprojectAll: vi.fn(),
   recordAuditEvent: vi.fn(),
   readFileSync: vi.fn(),
+  runDbReproject: vi.fn(),
 }));
 
 vi.mock('@openldr/config', () => ({
@@ -45,16 +39,15 @@ vi.mock('@openldr/config', () => ({
 
 vi.mock('@openldr/bootstrap', () => ({
   createTerminologyContext: mocks.createTerminologyContext,
-  createDbContext: mocks.createDbContext,
   recordAuditEvent: mocks.recordAuditEvent,
-}));
-
-vi.mock('@openldr/db', () => ({
-  reprojectAll: mocks.reprojectAll,
 }));
 
 vi.mock('node:fs', () => ({
   readFileSync: mocks.readFileSync,
+}));
+
+vi.mock('./db', () => ({
+  runDbReproject: mocks.runDbReproject,
 }));
 
 import {
@@ -245,59 +238,47 @@ describe('terminology CLI audit', () => {
   });
 });
 
-describe('terminology reproject', () => {
-  let out: string;
+describe('terminology reproject (deprecated alias)', () => {
   let err: string;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    out = '';
     err = '';
-    vi.spyOn(process.stdout, 'write').mockImplementation((chunk) => {
-      out += String(chunk);
-      return true;
-    });
+    vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
     vi.spyOn(process.stderr, 'write').mockImplementation((chunk) => {
       err += String(chunk);
       return true;
     });
-    mocks.createDbContext.mockResolvedValue(mocks.dbCtx);
-    mocks.dbCtx.close.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  it('invokes reprojectAll with the db context internals and reports the count', async () => {
-    mocks.reprojectAll.mockResolvedValue(42);
+  it('delegates to runDbReproject with the same options', async () => {
+    mocks.runDbReproject.mockResolvedValue(0);
 
-    const code = await runTerminologyReproject({ json: false });
+    const code = await runTerminologyReproject({ json: false, force: true });
 
     expect(code).toBe(0);
-    expect(mocks.reprojectAll).toHaveBeenCalledWith({
-      internalDb: mocks.dbCtx.internalDb,
-      relationalWriter: mocks.dbCtx.relationalWriter,
-    });
-    expect(out).toContain('42');
-    expect(mocks.dbCtx.close).toHaveBeenCalled();
+    expect(mocks.runDbReproject).toHaveBeenCalledWith({ json: false, force: true });
   });
 
-  it('emits JSON with the projected count when --json is passed', async () => {
-    mocks.reprojectAll.mockResolvedValue(7);
+  it('prints a deprecation notice naming the replacement command', async () => {
+    mocks.runDbReproject.mockResolvedValue(0);
 
-    await runTerminologyReproject({ json: true });
+    await runTerminologyReproject({ json: false, force: true });
 
-    expect(JSON.parse(out)).toEqual({ projected: 7 });
+    expect(err).toContain('deprecated');
+    expect(err).toContain('openldr db reproject');
   });
 
-  it('returns a non-zero exit code and closes the context when reprojectAll rejects', async () => {
-    mocks.reprojectAll.mockRejectedValue(new Error('connection refused'));
+  it('passes through the exit code runDbReproject returns, including the --force refusal', async () => {
+    mocks.runDbReproject.mockResolvedValue(1);
 
-    const code = await runTerminologyReproject({ json: false });
+    const code = await runTerminologyReproject({ json: false, force: false });
 
     expect(code).toBe(1);
-    expect(err).toContain('connection refused');
-    expect(mocks.dbCtx.close).toHaveBeenCalled();
+    expect(mocks.runDbReproject).toHaveBeenCalledWith({ json: false, force: false });
   });
 });

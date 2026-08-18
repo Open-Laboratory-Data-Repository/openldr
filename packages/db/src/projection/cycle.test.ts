@@ -267,7 +267,11 @@ describe('reprojectAll', () => {
     await fhirStore.save({ resourceType: 'Observation', id: 'o1', status: 'final', code: { text: 'x' } } as never);
 
     const n = await reprojectAll({ internalDb: internalDb as never, relationalWriter });
-    expect(n).toBeGreaterThanOrEqual(2);
+    expect(n.projected).toBeGreaterThanOrEqual(2);
+    // The ledger count is reported separately and is NOT the resource count: Patient and Observation
+    // are both ledger types and each was saved once, so exactly two arrivals — while `projected`
+    // also counts the ValueSets the internal migrations seed. Two different units.
+    expect(n.arrivals).toBe(2);
     expect(await externalDb.selectFrom('patients').selectAll().execute()).toHaveLength(1);
     expect(await externalDb.selectFrom('lab_results').selectAll().execute()).toHaveLength(1);
 

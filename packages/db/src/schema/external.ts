@@ -168,6 +168,16 @@ export interface FacilityMapTable {
   updated_at: Generated<Date>;
 }
 
+/** One row per arrival of a clinical resource — the warehouse mirror of `fhir.resource_history`.
+ *  Deliberately NOT ProvenanceColumns: resource_history carries no provenance, and fhir_resources'
+ *  provenance describes the current version, not the one that arrived. */
+export interface IngestEventsTable {
+  resource_type: string;
+  resource_id: string;
+  version: number;
+  recorded_at: Date;
+}
+
 export interface ExternalSchema {
   patients: PatientsTable;
   lab_requests: LabRequestsTable;
@@ -178,6 +188,7 @@ export interface ExternalSchema {
   questionnaire_responses: QuestionnaireResponsesTable;
   terminology_codes: TerminologyCodesTable;
   facility_map: FacilityMapTable;
+  ingest_events: IngestEventsTable;
 }
 
 /**
@@ -196,4 +207,5 @@ export const EXTERNAL_TABLE_COLUMNS: Record<keyof ExternalSchema, string[]> = {
   questionnaire_responses: ['id', 'questionnaire', 'form_code', 'subject_id', 'authored', 'based_on_id', 'items', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at'],
   terminology_codes: ['id', 'value_set_id', 'value_set_url', 'system', 'code', 'display', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at'],
   facility_map: ['id', 'source_system', 'performer_system', 'source_code', 'registry_id', 'local_code', 'name', 'level', 'status', 'region', 'district', 'council', 'national_system', 'national_code', 'resolved_via', 'updated_at'],
+  ingest_events: ['resource_type', 'resource_id', 'version', 'recorded_at'],
 };

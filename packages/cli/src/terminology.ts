@@ -1,11 +1,11 @@
 import { readFileSync, createReadStream } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { loadConfig } from '@openldr/config';
-import { createTerminologyContext, createDbContext, resolveCodingSystemId, createRunIngest, runIngestJob, recordAuditEvent } from '@openldr/bootstrap';
-import { reprojectAll } from '@openldr/db';
+import { createTerminologyContext, resolveCodingSystemId, createRunIngest, runIngestJob, recordAuditEvent } from '@openldr/bootstrap';
 import { cliActor } from './cli-actor';
 import { redactError } from './redact-error';
 import { validateDistributionImportArgs, isActiveJobConflict } from './distribution-args';
+import { runDbReproject } from './db';
 
 function out(json: boolean, obj: unknown, human: string): void {
   process.stdout.write((json ? JSON.stringify(obj, null, 2) : human) + '\n');
@@ -149,29 +149,20 @@ export async function runValueSetList(opts: { publisher?: string; json?: boolean
   finally { await ctx.close(); }
 }
 
-// Backfill/recovery for terminology_codes (the warehouse dimension projected from a ValueSet's
-// expansion.contains[]). Nothing in production populates it on its own today (seed migrations write
-// straight into fhir.fhir_resources with no change_log row, importFhirCatalog never projects, and an
-// upgrade's pre-existing change_log rows sit below the projection cursor) — so this rebuilds the read
-// model from the canonical fhir.fhir_resources rows and re-arms the cursor at the current max seq.
-// Uses createDbContext (not createTerminologyContext): reprojectAll needs both internalDb AND
-// relationalWriter (the external/warehouse writer), and TerminologyContext exposes neither.
-export async function runTerminologyReproject(opts: { json: boolean }): Promise<number> {
-  const ctx = await createDbContext(loadConfig());
-  try {
-    const projected = await reprojectAll({ internalDb: ctx.internalDb, relationalWriter: ctx.relationalWriter });
-    // ⚠ `projected` counts EVERY canonical resource rebuilt, not terminology rows — reprojectAll
-    // rebuilds the whole read model (patients, lab_results, … as well as terminology_codes). Saying
-    // "into the terminology_codes read model" read as "8692 terminology rows" on the first live run,
-    // when the dimension actually held 2025. Name what the number is.
-    out(opts.json, { projected }, `rebuilt the read model from ${projected} canonical resource${projected === 1 ? '' : 's'} (includes the terminology_codes dimension)`);
-    return 0;
-  } catch (err) {
-    process.stderr.write(`terminology reproject failed: ${redactError(err)}\n`);
-    return 1;
-  } finally {
-    await ctx.close();
-  }
+/** DEPRECATED — `openldr db reproject` is the same operation under an honest name.
+ *
+ *  This command has ALWAYS rebuilt the entire read model, not just terminology_codes: it calls the
+ *  general `reprojectAll`. The old description said otherwise, and someone read its count as "8692
+ *  terminology rows" when the dimension held 2,025. Kept as a thin alias so existing runbooks and
+ *  scripts keep working.
+ *
+ *  ⚠ It inherits the --force guard. That IS a behaviour change for an unattended script calling the
+ *  old name, and it is deliberate: an unguarded command that silently rewrites every projected row
+ *  in the warehouse is the hazard, and a loud refusal is better than a silent rebuild. The
+ *  deprecation notice names the replacement so the fix is one line. */
+export async function runTerminologyReproject(opts: { json: boolean; force: boolean }): Promise<number> {
+  process.stderr.write('warning: `terminology reproject` is deprecated — use `openldr db reproject`.\n');
+  return runDbReproject(opts);
 }
 
 export async function runOntologyBuild(systemId: string, dir: string, opts: { json?: boolean }): Promise<number> {

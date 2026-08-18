@@ -15,6 +15,16 @@ export function keyType(engine: TargetEngine): string {
   if (engine === 'mysql') return 'varchar(255)';
   return 'text';
 }
+// A key column that is short by nature — a FHIR resource type name ("QuestionnaireResponse" is the
+// longest at 21 chars). Narrow on purpose: MSSQL clusters primary keys and caps the KEY at 900
+// bytes, and two `keyType` columns already land on exactly 900 (see 012_facility_map.ts). Any
+// composite key with three or more parts needs at least one narrow column or the table cannot be
+// created on SQL Server.
+export function shortKeyType(engine: TargetEngine): string {
+  if (engine === 'mssql') return 'varchar(64)';
+  if (engine === 'mysql') return 'varchar(64)';
+  return 'text';
+}
 export function floatType(engine: TargetEngine): string {
   if (engine === 'mssql') return 'float';
   if (engine === 'mysql') return 'double';

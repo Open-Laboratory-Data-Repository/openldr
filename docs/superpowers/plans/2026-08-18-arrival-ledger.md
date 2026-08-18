@@ -664,14 +664,14 @@ In `packages/cli/src/db.ts`, following `runDbReset` at `:51-70` for the force gu
 /** Rebuild the whole warehouse read model from the canonical FHIR store, including the
  *  `ingest_events` arrival ledger.
  *
- *  ⛔ DESTRUCTIVE-SHAPED, which is why it refuses without --force: it rewrites every projected row,
- *  so every warehouse `created_at` moves to the moment of the rebuild. Anything that treated that
- *  column as an arrival time silently loses its history — which is precisely why the arrival ledger
- *  exists and is rebuilt here rather than derived from it. */
+ *  ⛔ DESTRUCTIVE-SHAPED, which is why it refuses without --force: it rewrites every projected row
+ *  in the warehouse from the canonical store. `created_at` on a row that has to be re-inserted is
+ *  reset to the rebuild time — it is a first-written stamp, not an arrival time, which is precisely
+ *  why the arrival ledger exists and is rebuilt here rather than derived from it. */
 export async function runDbReproject(opts: JsonOpt & { force: boolean }): Promise<number> {
   if (!opts.force) {
     process.stderr.write(
-      'db reproject refused: this rebuilds the entire read model and moves every warehouse created_at.\n'
+      'db reproject refused: this rebuilds the entire warehouse read model from canonical FHIR.\n'
       + 'Re-run with --force if that is what you intend.\n',
     );
     return 1;
@@ -707,7 +707,7 @@ In `packages/cli/src/program.ts`, in the `db` group at `:120-160`, after `db.com
   db.command('reproject')
     .description('Rebuild the warehouse read model from canonical FHIR, including the arrival ledger (refuses without --force)')
     .option('--json', 'emit JSON', false)
-    .option('--force', 'confirm the rebuild — it moves every warehouse created_at', false)
+    .option('--force', 'confirm the rebuild — it rewrites every projected warehouse row', false)
     .action(async (opts: { json: boolean; force: boolean }) => {
       try {
         process.exitCode = await runDbReproject(opts);
@@ -737,9 +737,9 @@ In `packages/cli/src/terminology.ts`, make `runTerminologyReproject` delegate ra
  *  scripts keep working.
  *
  *  ⚠ It inherits the --force guard. That IS a behaviour change for an unattended script calling the
- *  old name, and it is deliberate: an unguarded command that silently moves every warehouse
- *  created_at is the hazard, and a loud refusal is better than a silent rewrite. The deprecation
- *  notice names the replacement so the fix is one line. */
+ *  old name, and it is deliberate: an unguarded command that silently rewrites every projected row
+ *  in the warehouse is the hazard, and a loud refusal is better than a silent rebuild. The
+ *  deprecation notice names the replacement so the fix is one line. */
 export async function runTerminologyReproject(opts: { json: boolean; force: boolean }): Promise<number> {
   process.stderr.write('warning: `terminology reproject` is deprecated — use `openldr db reproject`.\n');
   return runDbReproject(opts);
@@ -784,9 +784,9 @@ grep -rln "terminology reproject\|db reset\|db migrate" apps/studio/src/docs/0.1
 Add to the existing maintenance section of whichever page that grep names — as bullets, not a new heading:
 
 ```markdown
-- **`openldr db reproject --force`** rebuilds the entire warehouse read model from the canonical FHIR store, including the `ingest_events` arrival ledger. It refuses without `--force` because it rewrites every projected row: each table's `created_at` moves to the moment of the rebuild.
+- **`openldr db reproject --force`** rebuilds the entire warehouse read model from the canonical FHIR store, including the `ingest_events` arrival ledger. It refuses without `--force` because it rewrites every projected row.
 - **`openldr terminology reproject` is deprecated** and does exactly the same thing. It always did — despite its name it never rebuilt only `terminology_codes`. Use `db reproject`.
-- **`ingest_events` is the record of when data reached OpenLDR.** One row per arrival of each clinical resource, keyed on resource and version, rebuilt from the canonical store. The `created_at` column on `lab_requests`, `specimens` and the other projected tables is **not** an arrival time — it is when the warehouse row was last written, and a reproject resets it. Anything asking "when did this reach us" must read `ingest_events`.
+- **`ingest_events` is the record of when data reached OpenLDR.** One row per arrival of each clinical resource, keyed on resource and version, rebuilt from the canonical store. The `created_at` column on `lab_requests`, `specimens` and the other projected tables is **not** an arrival time: it records when the projection first wrote that row, it holds exactly one timestamp however many times the resource is later corrected, and it is reset for any row that has to be re-inserted. Anything asking "when did this reach us" must read `ingest_events`.
 ```
 
 - [ ] **Step 2: Verify the docs still validate**

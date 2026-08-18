@@ -300,7 +300,7 @@ async function main(): Promise<void> {
     step('5. assert (c) central projection → canonical read model (all 5 tables)');
     const relationalWriter = createRelationalWriter(centralTargetDb, 'postgres');
     const rebuilt = await reprojectAll({ internalDb: centralDb, relationalWriter });
-    ok(`central reprojectAll rebuilt ${rebuilt} canonical resource(s)`);
+    ok(`central reprojectAll rebuilt ${rebuilt.projected} canonical resource(s), ${rebuilt.arrivals} arrival(s)`);
     const rowExists = async (table: keyof ExternalSchema, id: string): Promise<boolean> =>
       !!(await centralTargetDb.selectFrom(table).select('id' as never).where('id' as never, '=', id as never).executeTakeFirst());
     assert(await rowExists('patients', patId), `patients has ${patId}`);

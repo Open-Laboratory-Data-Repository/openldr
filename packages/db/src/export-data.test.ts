@@ -10,9 +10,13 @@ describe('EXTERNAL_TABLE_COLUMNS', () => {
   // names and admin geography, rebuilt by publishFacilityMap. It carries no patient data, and
   // it is exposed so reports, the query builder and custom SQL can join a canonical facility
   // name to diagnostic_reports.performer.
-  it('covers the 7 canonical fact tables, the terminology dimension, and the facility_map dimension', () => {
+  //
+  // ingest_events is included deliberately too: it is the durable per-arrival ledger (migration
+  // 016), keyed on (resource_type, resource_id, version) rather than a synthetic id, and carries
+  // no ProvenanceColumns -- see IngestEventsTable's doc comment in schema/external.ts for why.
+  it('covers the 7 canonical fact tables, the terminology dimension, the facility_map dimension, and the ingest_events ledger', () => {
     expect(Object.keys(EXTERNAL_TABLE_COLUMNS).sort()).toEqual(
-      ['diagnostic_reports', 'facilities', 'facility_map', 'lab_requests', 'lab_results', 'patients', 'questionnaire_responses', 'specimens', 'terminology_codes'],
+      ['diagnostic_reports', 'facilities', 'facility_map', 'ingest_events', 'lab_requests', 'lab_results', 'patients', 'questionnaire_responses', 'specimens', 'terminology_codes'],
     );
   });
   it('every table includes id + provenance columns', () => {
@@ -22,7 +26,13 @@ describe('EXTERNAL_TABLE_COLUMNS', () => {
     // observed facility code came from -- a different meaning from the ingest provenance the
     // other tables carry. Name it explicitly rather than exempting "any table without
     // batch_id", so the next table that forgets its provenance columns still fails this test.
+    //
+    // ingest_events has no synthetic id and no provenance columns at all: its primary key is the
+    // three-part natural key (resource_type, resource_id, version), and it deliberately does not
+    // extend ProvenanceColumns (see the migration's doc comment). Named explicitly, same reasoning
+    // as facility_map above.
     for (const [table, cols] of Object.entries(EXTERNAL_TABLE_COLUMNS)) {
+      if (table === 'ingest_events') continue;
       expect(cols).toContain('id');
       expect(cols).toContain('source_system');
       if (table === 'facility_map') continue;

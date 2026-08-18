@@ -89,7 +89,12 @@ live('082 against real Postgres at national-register scale', () => {
     const [state] = (await sql<any>`
       select
         (select count(*)::int from facility_registry) as registry_rows,
-        (select count(*)::int from facility_registry where national_system = ${REGISTER_URI}) as uri_rows,
+        -- WARNING: facility_system, NOT national_system. This assertion runs AFTER the
+        -- migrateToLatest above, and migration 088 DROPS national_system/national_code --
+        -- facility_code + facility_system are the facility's identity now (088's own header says
+        -- so). The seed insert further up still writes the OLD columns on purpose: it runs at 081,
+        -- before 088 removes them. No backticks in here: this comment is inside a template literal.
+        (select count(*)::int from facility_registry where facility_system = ${REGISTER_URI}) as uri_rows,
         (select count(*)::int from facility_registry where id like 'fac-seed-%') as unmoved_rows,
         (select count(*)::int from facility_concept_projection) as link_rows,
         (select count(*)::int from facility_concept_projection p

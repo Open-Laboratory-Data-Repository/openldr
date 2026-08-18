@@ -17,19 +17,31 @@ const MYSQL_PARAM_BUDGET = 60000;
 const chunkSize = (budget: number, cols: number, cap = Infinity): number =>
   Math.min(cap, Math.max(1, Math.floor(budget / Math.max(1, cols))));
 
-export async function insertBatchPg(db: Kysely<any>, table: string, rows: Record<string, unknown>[]): Promise<void> {
+// `conflictCols` names the row's natural key. Defaults to the single `id` column every OTHER
+// warehouse table uses (facility_map's composite key is folded into one synthetic `id` at write
+// time — see relational/facility.ts). `ingest_events` is the first table with a genuine
+// multi-column primary key (resource_type, resource_id, version) and no `id` column at all, so a
+// hardcoded `'id'` conflict target does not merely mis-upsert there — Postgres refuses the
+// statement outright ("column \"id\" does not exist"), which pg-mem's `cycle.test.ts` reprojectAll
+// coverage caught immediately once the new ledger scan started calling this path.
+export async function insertBatchPg(
+  db: Kysely<any>, table: string, rows: Record<string, unknown>[], conflictCols: string[] = ['id'],
+): Promise<void> {
   if (rows.length === 0) return;
   const step = chunkSize(PG_PARAM_BUDGET, Object.keys(rows[0]).length);
   for (let i = 0; i < rows.length; i += step) {
     const chunk = rows.slice(i, i + step);
-    const updateCols = Object.keys(chunk[0]).filter((c) => c !== 'id' && c !== 'created_at');
+    const updateCols = Object.keys(chunk[0]).filter((c) => !conflictCols.includes(c) && c !== 'created_at');
     await db.insertInto(table).values(chunk).onConflict((oc: any) =>
-      oc.column('id').doUpdateSet(Object.fromEntries(updateCols.map((c) => [c, (eb: any) => eb.ref(`excluded.${c}`)])))
+      (conflictCols.length === 1 ? oc.column(conflictCols[0]) : oc.columns(conflictCols))
+        .doUpdateSet(Object.fromEntries(updateCols.map((c) => [c, (eb: any) => eb.ref(`excluded.${c}`)])))
     ).execute();
   }
 }
 
-export async function mergeBatchMssql(db: Kysely<any>, table: string, rows: Record<string, unknown>[]): Promise<void> {
+export async function mergeBatchMssql(
+  db: Kysely<any>, table: string, rows: Record<string, unknown>[], conflictCols: string[] = ['id'],
+): Promise<void> {
   if (rows.length === 0) return;
   const step = chunkSize(MSSQL_PARAM_BUDGET, Object.keys(rows[0]).length, MSSQL_MAX_VALUES_ROWS);
   for (let i = 0; i < rows.length; i += step) {
@@ -37,26 +49,34 @@ export async function mergeBatchMssql(db: Kysely<any>, table: string, rows: Reco
     const cols = Object.keys(chunk[0]);
     const sourceCols = sql.raw(cols.join(', '));
     const valuesRows = sql.join(chunk.map((r) => sql`(${sql.join(cols.map((c) => sql`${r[c]}`))})`));
-    const updateCols = cols.filter((c) => c !== 'id' && c !== 'created_at');
+    const updateCols = cols.filter((c) => !conflictCols.includes(c) && c !== 'created_at');
     const set = Object.fromEntries(updateCols.map((c) => [c, sql.ref(`src.${c}`)]));
     const insertValues = Object.fromEntries(cols.map((c) => [c, sql.ref(`src.${c}`)]));
     await db
       .mergeInto(`${table} as tgt`)
-      .using(sql`(values ${valuesRows})`.as(sql`src(${sourceCols})`), (j: any) => j.onRef('tgt.id', '=', 'src.id'))
+      .using(sql`(values ${valuesRows})`.as(sql`src(${sourceCols})`), (j: any) =>
+        // Successive onRef() calls AND together (same as a where-builder chain), so a composite
+        // key ANDs each column pair — degrades to the old single `tgt.id = src.id` when
+        // conflictCols is the default one-column array.
+        conflictCols.reduce((b, c) => b.onRef(`tgt.${c}`, '=', `src.${c}`), j))
       .whenMatched().thenUpdateSet(set)
       .whenNotMatched().thenInsertValues(insertValues)
       .execute();
   }
 }
 
-export async function insertBatchMysql(db: Kysely<any>, table: string, rows: Record<string, unknown>[]): Promise<void> {
+export async function insertBatchMysql(
+  db: Kysely<any>, table: string, rows: Record<string, unknown>[], conflictCols: string[] = ['id'],
+): Promise<void> {
   if (rows.length === 0) return;
   const step = chunkSize(MYSQL_PARAM_BUDGET, Object.keys(rows[0]).length);
   for (let i = 0; i < rows.length; i += step) {
     const chunk = rows.slice(i, i + step);
-    const updateCols = Object.keys(chunk[0]).filter((c) => c !== 'id' && c !== 'created_at');
-    // ON DUPLICATE KEY UPDATE col = VALUES(col): references the incoming per-row value.
-    // VALUES() works on MySQL 8.4 and MariaDB 11.4 (deprecated-but-present on MySQL; canonical on MariaDB).
+    const updateCols = Object.keys(chunk[0]).filter((c) => !conflictCols.includes(c) && c !== 'created_at');
+    // ON DUPLICATE KEY UPDATE col = VALUES(col): references the incoming per-row value. No explicit
+    // conflict target needed — MySQL detects the violated unique/primary key itself, composite or
+    // not. VALUES() works on MySQL 8.4 and MariaDB 11.4 (deprecated-but-present on MySQL; canonical
+    // on MariaDB).
     const set = Object.fromEntries(updateCols.map((c) => [c, sql`values(${sql.ref(c)})`]));
     await db.insertInto(table).values(chunk).onDuplicateKeyUpdate(set).execute();
   }
