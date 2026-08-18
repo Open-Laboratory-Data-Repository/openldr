@@ -1,0 +1,8 @@
+{
+  "//": "Replaces `node --watch`. On NTFS with last-access-time updates enabled (the Windows default), READING a file rewrites its access timestamp, which ReadDirectoryChangesW reports as a change. `node --watch` cannot tell that from an edit, so merely loading the module graph restarted the server ~13-20 times per boot until every timestamp went stale (NTFS refreshes atime at most hourly, which is why a reboot or an idle hour brought the storm back). nodemon watches via chokidar and compares mtime, so a read alone does not trigger it. It also spawns a plain `node dev.mjs`, keeping process.execArgv free of loader flags -- the whole reason dev.mjs exists.",
+  "watch": ["src", "../../packages"],
+  "ext": "ts,mjs,json",
+  "ignore": ["**/*.test.ts", "**/dist/**", "**/node_modules/**", "**/.turbo/**"],
+  "exec": "node dev.mjs",
+  "delay": 250
+}

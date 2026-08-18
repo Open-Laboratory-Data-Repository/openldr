@@ -9,7 +9,7 @@
   "scripts": {
     "build": "tsup",
     "build:check": "tsup && node scripts/smoke.mjs",
-    "dev": "node --watch dev.mjs",
+    "dev": "nodemon",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --testTimeout 30000 --hookTimeout 30000",
@@ -48,6 +48,7 @@
     "@types/adm-zip": "^0.5.7",
     "@typescript-eslint/parser": "^8.64.0",
     "eslint": "^10.7.0",
+    "nodemon": "^3.1.14",
     "tsup": "^8.3.5",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
