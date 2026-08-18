@@ -112,14 +112,21 @@ against the **bundle's** directory.
 
 ```sh
 #!/bin/sh
-exec docker compose exec -T -w /data api node <cli-path> "$@"
+exec docker compose exec -T -w / api node <cli-path> "$@"
 ```
 
 `<cli-path>` is the CLI's location inside the image. The exact path falls out of what
 `pnpm deploy` produces once `@openldr/cli` is added to the filter, so it is fixed during
 implementation and then hardcoded in the wrapper. It is not a runtime lookup.
 
-`-w /data` sets the container working directory, which section "File arguments" below depends on.
+`-w /` sets the container working directory to root, which section "File arguments" below depends
+on. A `data/`-prefixed argument then resolves to `/data`, the bind mount — so the path the
+operator types matches the path they see on the host.
+
+`-w /data` was tried first and is wrong: it makes `data/x.json` resolve to `/data/data/x.json`.
+A live acceptance run caught it. Reads failed with `ENOENT`, which is survivable, but writes were
+worse — `artifact keygen --out data/keys` reported success at `data/keys` while actually writing
+one level deeper, where the operator would not look. A read fails loudly; a write lied.
 
 `install/install.ps1` writes `openldr.ps1` beside it, mirroring how the two installers already
 pair.
