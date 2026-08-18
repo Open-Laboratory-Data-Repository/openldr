@@ -68,6 +68,44 @@ The added weight is small. Every workspace package the CLI depends on is already
 server's — are both direct dependencies of `@openldr/bootstrap`, which the server already has.
 The genuine addition is `commander` plus the CLI's own compiled output.
 
+### The built CLI has never been exercised
+
+Found while planning, after this spec's first draft. It is a prerequisite for shipping the image,
+not an optional improvement.
+
+`packages/cli/tsup.config.ts` sets `noExternal: [/^@openldr\//]`, so the CLI bundle inlines every
+workspace package — the same as the server's. But the server's config also carries
+`external: ['ssh2', 'cpu-features', 'pdfkit', 'quickjs-emscripten']`
+(`apps/server/tsup.config.ts:22`), with a comment explaining that each of those four resolves a
+file from disk at runtime: native `.node` addons, pdfkit's `.afm` font metrics, and quickjs's
+`emscripten-module.wasm`. Bundling any of them breaks that lookup **in the built image only**,
+never from a source checkout.
+
+**The CLI config has no `external` list.** It reaches all four through `@openldr/bootstrap`.
+
+Nothing caught this because nothing runs the built CLI. `pnpm openldr` executes the TypeScript
+source through tsx (`packages/cli/dev.mjs`), never `dist/`. The CLI's `build:check` runs
+`node dist/index.js --help`, which loads none of those code paths.
+
+So shipping the image without fixing this produces a CLI that prints `--help` correctly and then
+fails the first time an operator runs a report or a workflow.
+
+The fix mirrors the server exactly: the same `external` list in `packages/cli/tsup.config.ts`,
+and the same four packages declared as direct dependencies in `packages/cli/package.json` so
+`pnpm deploy` installs them. A test guards the two lists against drift and asserts the built
+bundle does not inline pdfkit.
+
+### Fixture paths follow the bundle, not the package
+
+`@openldr/db` resolves its bundled terminology fixtures relative to its own module URL —
+`packages/db/src/bundled-terminology.ts:14` computes `dirname(import.meta.url)/../fixtures/fhir`.
+Because `noExternal` inlines `@openldr/db` into whichever bundle imports it, that path resolves
+against the **bundle's** directory.
+
+`apps/server/Dockerfile` already stages a copy at `/app/fixtures` for the server bundle at
+`/app/dist`. The CLI bundle sits elsewhere, so it needs its own copy. Without it,
+`openldr db seed` and the terminology commands come up with no terminology inside the container.
+
 ### The wrapper
 
 `install/install.sh` writes an `openldr` script into the install directory:
