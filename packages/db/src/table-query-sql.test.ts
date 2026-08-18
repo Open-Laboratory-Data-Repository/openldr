@@ -130,9 +130,98 @@ describe("buildFilterExpression", () => {
   // });
 });
 
-// The "applySorts" and "applySorts default sorts" describe blocks that used to live here moved
-// to table-query-collation.live.test.ts. applySorts now emits `collate "en-US-x-icu"` for every
-// text-typed sort/tiebreaker column, and every case below sorted or tie-broke on "name" or "id"
-// (both text) — pg-mem's SQL parser (pgsql-ast-parser) does not implement the COLLATE clause at
-// all (a hard syntax error, not a semantic gap, confirmed by running this file after adding the
-// collation). Only real Postgres can parse and run these, so they need INTERNAL_DATABASE_URL.
+// The original "applySorts" and "applySorts default sorts" blocks that lived here moved to
+// table-query-collation.live.test.ts: applySorts emits `collate "en-US-x-icu"` for every
+// text-typed sort/tiebreaker column (table-query-sql.ts:141), and every case in those blocks
+// sorted or tie-broke on "name" or "id" (both text) — pg-mem's SQL parser (pgsql-ast-parser)
+// does not implement the COLLATE clause at all (a hard syntax error, not a semantic gap).
+//
+// That move left applySorts with zero coverage on a machine without INTERNAL_DATABASE_URL. The
+// collation branch only fires for `type === "text" || type === "enum"` (table-query-sql.ts:141),
+// so a `number` column never emits COLLATE and parses fine under pg-mem. These tests mirror the
+// same behaviour — explicit sort direction, tiebreaker append/determinism, defaultSorts
+// fallback/override, NULLS FIRST/LAST placement — on a numeric sort column and a numeric
+// tiebreaker so both run everywhere. Do not add a text-column sort assertion here; that
+// genuinely needs live Postgres.
+describe("applySorts (offline, numeric columns only — no COLLATE)", () => {
+  const SORT_COLUMNS: TableColumnMap = {
+    rank:   { sql: "rank",   type: "number", operators: ["eq"], sortable: true },
+    weight: { sql: "weight", type: "number", operators: ["gt", "gte", "lt", "lte", "between"], sortable: true },
+  };
+
+  async function makeSortDb(rows: { rank: number; weight: number | null }[]): Promise<Kysely<any>> {
+    const db = makeDb();
+    await db.schema.createTable("s").addColumn("rank", "integer").addColumn("weight", "integer").execute();
+    await db.insertInto("s").values(rows).execute();
+    return db;
+  }
+
+  it("applies an explicit sort in the requested direction", async () => {
+    const db = await makeSortDb([{ rank: 1, weight: 10 }, { rank: 2, weight: 5 }, { rank: 3, weight: 1 }]);
+    const rows = await applySorts(
+      db.selectFrom("s").select(["rank"]),
+      [{ column: "weight", ascending: true }],
+      SORT_COLUMNS,
+      "rank",
+    ).execute();
+    expect(rows.map((r: any) => r.rank)).toEqual([3, 2, 1]);
+  });
+
+  it("appends the tiebreaker: rows with an equal sort key come back in id order", async () => {
+    const db = await makeSortDb([{ rank: 3, weight: 1 }, { rank: 1, weight: 1 }, { rank: 2, weight: 1 }]);
+    const rows = await applySorts(
+      db.selectFrom("s").select(["rank"]),
+      [{ column: "weight", ascending: true }],
+      SORT_COLUMNS,
+      "rank",
+    ).execute();
+    // All three rows tie on weight=1; without the tiebreaker append this order is undefined.
+    expect(rows.map((r: any) => r.rank)).toEqual([1, 2, 3]);
+  });
+
+  it("uses defaultSorts when the caller sends no sort at all", async () => {
+    const db = await makeSortDb([{ rank: 1, weight: 10 }, { rank: 2, weight: 5 }, { rank: 3, weight: 1 }]);
+    const rows = await applySorts(
+      db.selectFrom("s").select(["rank"]),
+      [], // caller sent no sort
+      SORT_COLUMNS,
+      "rank",
+      [{ column: "weight", ascending: true }], // default: weight asc
+    ).execute();
+    expect(rows.map((r: any) => r.rank)).toEqual([3, 2, 1]);
+  });
+
+  it("ignores defaultSorts once the caller supplies any sort of its own", async () => {
+    const db = await makeSortDb([{ rank: 1, weight: 10 }, { rank: 2, weight: 5 }, { rank: 3, weight: 1 }]);
+    const rows = await applySorts(
+      db.selectFrom("s").select(["rank"]),
+      [{ column: "weight", ascending: false }], // explicit: weight desc
+      SORT_COLUMNS,
+      "rank",
+      [{ column: "weight", ascending: true }], // would-be default: weight asc — must be ignored
+    ).execute();
+    expect(rows.map((r: any) => r.rank)).toEqual([1, 2, 3]);
+  });
+
+  it("sorts NULLS FIRST ascending, matching applyTableState's comparator", async () => {
+    const db = await makeSortDb([{ rank: 1, weight: 10 }, { rank: 2, weight: 5 }, { rank: 3, weight: null }]);
+    const rows = await applySorts(
+      db.selectFrom("s").select(["rank"]),
+      [{ column: "weight", ascending: true }],
+      SORT_COLUMNS,
+      "rank",
+    ).execute();
+    expect(rows[0]!.rank).toBe(3);
+  });
+
+  it("sorts NULLS LAST descending, matching applyTableState's comparator", async () => {
+    const db = await makeSortDb([{ rank: 1, weight: 10 }, { rank: 2, weight: 5 }, { rank: 3, weight: null }]);
+    const rows = await applySorts(
+      db.selectFrom("s").select(["rank"]),
+      [{ column: "weight", ascending: false }],
+      SORT_COLUMNS,
+      "rank",
+    ).execute();
+    expect(rows[rows.length - 1]!.rank).toBe(3);
+  });
+});
