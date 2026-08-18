@@ -1,3 +1,4 @@
+export * from './table-query-sql';
 export * from './provenance';
 export * from './schema/internal';
 export * from './schema/external';

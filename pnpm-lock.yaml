@@ -928,6 +928,9 @@ importers:
       '@openldr/rbac':
         specifier: workspace:*
         version: link:../rbac
+      '@openldr/table-query':
+        specifier: workspace:*
+        version: link:../table-query
       kysely:
         specifier: ^0.28.17
         version: 0.28.17

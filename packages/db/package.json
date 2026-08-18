@@ -21,6 +21,7 @@
     "@openldr/fhir": "workspace:*",
     "@openldr/ports": "workspace:*",
     "@openldr/rbac": "workspace:*",
+    "@openldr/table-query": "workspace:*",
     "kysely": "^0.28.17",
     "pg": "^8.13.1"
   },
