@@ -1,6 +1,60 @@
 {
-  "generatedAt": "2026-08-17",
+  "generatedAt": "2026-08-18",
   "days": [
+    {
+      "date": "2026-08-18",
+      "version": null,
+      "entries": [
+        {
+          "hash": "512130d3",
+          "type": "fix",
+          "scope": "db",
+          "title": "082 asserts on facility_system, and widen the arrival-ledger poll bound"
+        },
+        {
+          "hash": "25e5dc5a",
+          "type": "fix",
+          "scope": "projection",
+          "title": "Record arrivals when the canonical row is gone, and page the rebuild by key"
+        },
+        {
+          "hash": "23cfb34a",
+          "type": "feat",
+          "scope": "cli",
+          "title": "Add db reproject and deprecate the misnamed terminology alias"
+        },
+        {
+          "hash": "c95c72f2",
+          "type": "feat",
+          "scope": "db",
+          "title": "Record arrivals on the live projection path"
+        },
+        {
+          "hash": "7472ac32",
+          "type": "fix",
+          "scope": "db",
+          "title": "Filter tombstones from the arrival ledger, dedupe the row mapper, correct created_at claim"
+        },
+        {
+          "hash": "091a37c5",
+          "type": "feat",
+          "scope": "db",
+          "title": "Rebuild the arrival ledger from resource_history"
+        },
+        {
+          "hash": "7244df20",
+          "type": "feat",
+          "scope": "db",
+          "title": "Add the ingest_events arrival ledger table"
+        },
+        {
+          "hash": "bb931288",
+          "type": "fix",
+          "scope": "reports",
+          "title": "Restore the non-reportable filter, keyed by url"
+        }
+      ]
+    },
     {
       "date": "2026-08-17",
       "version": null,
@@ -1540,66 +1594,6 @@
           "type": "fix",
           "scope": "report-designer",
           "title": "Render run parameters, and interpolate authored keyvalue pairs"
-        },
-        {
-          "hash": "3e19a46b",
-          "type": "fix",
-          "scope": "reporting",
-          "title": "The facility filter filters on the report performer"
-        },
-        {
-          "hash": "750edcdb",
-          "type": "fix",
-          "scope": "reporting",
-          "title": "Q-amr-facility-summary label rejected by MySQL ONLY_FULL_GROUP_BY"
-        }
-      ]
-    },
-    {
-      "date": "2026-08-06",
-      "version": null,
-      "entries": [
-        {
-          "hash": "db932117",
-          "type": "fix",
-          "scope": "reporting",
-          "title": "Q-amr-facility-summary no longer forks one lab across rows"
-        },
-        {
-          "hash": "49772e53",
-          "type": "feat",
-          "scope": "reporting",
-          "title": "Resolve facility names in the picker and the AMR facility report"
-        },
-        {
-          "hash": "8440cece",
-          "type": "feat",
-          "scope": "reports",
-          "title": "Param options carry a value and a label"
-        },
-        {
-          "hash": "14d7983c",
-          "type": "fix",
-          "scope": "reporting",
-          "title": "Keyvalue capacity computed in px@96 vs pt was the clipped-row bug"
-        },
-        {
-          "hash": "6bfbab93",
-          "type": "feat",
-          "scope": "reporting",
-          "title": "Print the performing laboratory on the clinical micro report"
-        },
-        {
-          "hash": "e4df8b9f",
-          "type": "fix",
-          "scope": "reporting",
-          "title": "Fold facilities to one row before joining the clinical header"
-        },
-        {
-          "hash": "c9388e8f",
-          "type": "feat",
-          "scope": "reporting",
-          "title": "Resolve the performing laboratory in the clinical header query"
         }
       ]
     }
