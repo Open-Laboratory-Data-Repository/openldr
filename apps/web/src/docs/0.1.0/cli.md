@@ -36,7 +36,9 @@ container and lost when the container restarts.
 pnpm openldr <command>
 ```
 
-Most read commands accept `--json` for machine-readable output.
+Most read commands accept `--json` for machine-readable output. In a deployed stack the
+common lifecycle steps (schema migration and seeding) run automatically on startup, and
+admin/danger actions are also available in the Studio UI under Settings.
 
 ## Command groups
 

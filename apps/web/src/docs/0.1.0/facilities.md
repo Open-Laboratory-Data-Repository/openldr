@@ -46,17 +46,18 @@ Both surfaces can propose a map from a file's headers offline, with no server ro
 - **Studio wizard:** open **Facilities → Import**, choose the file, and the column-mapping step
   opens with a suggestion already filled in. A **Check this** badge marks a row worth reviewing
   before you continue.
-- **CLI:**
+- **CLI:** put the CSV in the install directory's `data/` folder first, so the wrapper can
+  see it.
 
   ```bash
-  pnpm openldr facilities suggest-map national-facilities.csv
+  ./openldr facilities suggest-map data/national-facilities.csv
   ```
 
   This prints the suggested map as a table, flags any collision the suggestion itself would
   cause, and tells you how to feed the result back in:
 
   ```bash
-  pnpm openldr facilities import national-facilities.csv \
+  ./openldr facilities import data/national-facilities.csv \
     --national-system urn:zm:mfl --column-map mapped.json
   ```
 
