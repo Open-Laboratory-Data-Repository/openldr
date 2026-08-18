@@ -47,6 +47,9 @@ The report run completes, the result appears in both the Document and Spreadshee
 - **Permission denied:** your account can view reports but may not have permission to manage schedules, edit templates, or unpublish/delete.
 - **A previous run failed:** open **Run History**, inspect the error, adjust filters, and run again.
 - **A report you expect isn't in the library:** it may have been unpublished, or it hasn't been created yet — see [Report Designer](/docs/report-designer) to publish it.
+- **The LIS Stakeholders Update shows no data for a day you know a laboratory transmitted:** check **Settings ▸ Laboratory ▸ Time zone** first, or the **Time zone** filter on the run itself. Arrivals are bucketed by civil day, so a zone set to UTC on an installation running ahead of UTC can push a late-evening arrival to the previous day.
+- **A laboratory is missing from the LIS Stakeholders Update grid entirely:** it sent nothing that month. The grid lists only laboratories that appear in the window, not every known laboratory.
+- **The HVL/EID grid is empty but the Other grid is not:** the **HVL/EID panel codes** filter was left blank for this run. With nothing in that list, every result falls into the Other grid instead.
 
 ## Advanced web usage
 
@@ -56,6 +59,7 @@ The report run completes, the result appears in both the Document and Spreadshee
 - The filters on this page come straight from the template's parameters — to add, remove, or rename a filter, edit the template's parameters in [Report Designer](/docs/report-designer), not this page.
 - The **Clinical Microbiology Report** takes the **lab number** as its Request ID — the number on the request form and the specimen label, as the LIS sends it (for example `TZDISATDS0013538`). A laboratory system usually splits one microbiology result into several orders under that one lab number: the culture that grew the organism is one order, the susceptibility panel another. The report reads every order under the lab number and prints one isolate with its susceptibilities on one page. A specimen that grew more than one organism is refused rather than merged, because merging two antibiograms under one organism name would read as a single isolate. A single order id also works if you have one.
 - Pair reports with [Audit](/docs/audit) when investigating who changed report settings or schedules.
+- The **LIS Stakeholders Update** shows, per testing laboratory, whether any data reached OpenLDR on each working day of a month. Dates sit in the column header, day number stacked over month, and repeat on every page, so a long run stays readable without scrolling back to page one. A filled cell means data arrived that day; an empty cell means none did. Weekends are left off the grid, and no public-holiday calendar applies, so a holiday still counts as a working day. Days are bucketed in the timezone set at **Settings ▸ Laboratory ▸ Time zone**. The run's own **Time zone** filter starts from that setting as a convenience default, but you can overwrite it, and a scheduled or CLI run does not read the setting at all — it must be given the zone directly. The **HVL/EID panel codes** filter takes the codes your programme counts as HVL/EID, entered fresh on each run; everything else falls into the Other grid. A laboratory that sent nothing that month does not appear on the grid at all.
 
 ## Related guides
 
