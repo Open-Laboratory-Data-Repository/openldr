@@ -6,7 +6,7 @@ import { planProjection, type ProjectionTask, type Gap } from './plan';
 import { readCursor, advanceCursor } from './cursor';
 import type { SafeFetchResult } from './fetch';
 import { provenanceFromRow, type Provenance } from '../provenance';
-import { LEDGER_RESOURCE_TYPES } from './ledger';
+import { LEDGER_RESOURCE_TYPES, toArrivalEvent } from './ledger';
 
 export type FetchSafeRows = (db: Kysely<InternalSchema>, cursor: number, limit: number) => Promise<SafeFetchResult>;
 
@@ -122,6 +122,11 @@ export async function reprojectAll(deps: Pick<ProjectionDeps, 'internalDb' | 're
       .selectFrom('fhir.resource_history')
       .select(['resource_type', 'id', 'version', 'recorded_at'])
       .where('resource_type', 'in', [...LEDGER_RESOURCE_TYPES])
+      // op = 'upsert' only: a delete() tombstone (fhir-store.ts, op: 'delete', resource: null) is
+      // data going AWAY, not an arrival. ingest_events has no op column, so an unfiltered scan would
+      // record a deletion as a permanent, indistinguishable false arrival — resource_history is
+      // append-only and a later rebuild never self-heals it.
+      .where('op', '=', 'upsert')
       // (resource_type, id, version) is this table's PRIMARY KEY, so the ordering is unique and the
       // OFFSET paging is deterministic. AGENTS.md §7: an ORDER BY + OFFSET without a unique
       // tiebreaker can skip or repeat rows, and pg-mem's stable scan order would never reveal it.
@@ -129,12 +134,7 @@ export async function reprojectAll(deps: Pick<ProjectionDeps, 'internalDb' | 're
       .limit(page).offset(histOffset)
       .execute();
     if (rows.length === 0) break;
-    await deps.relationalWriter.writeIngestEvents(rows.map((r) => ({
-      resource_type: r.resource_type as string,
-      resource_id: r.id as string,
-      version: Number(r.version),
-      recorded_at: r.recorded_at as Date,
-    })));
+    await deps.relationalWriter.writeIngestEvents(rows.map(toArrivalEvent));
     arrivals += rows.length;
     histOffset += rows.length;
     if (rows.length < page) break;

@@ -7,10 +7,14 @@ import { keyType, shortKeyType, timestampType } from './dialect';
 // ⛔ WHY THIS TABLE EXISTS AT ALL. `lab_requests.created_at` looks like an arrival time and is not:
 // the projection never writes it (`relational/service-request.ts` writes nine columns plus
 // `provColumns`, which is four provenance columns and no timestamp), so it falls to the column
-// default `now()` — the moment the WAREHOUSE row was written. `reprojectAll` rewrites every one of
-// them. Measured 2026-08-17: all 7,520 requests carried created_at 2026-08-06 while their
+// default `now()` — the moment the WAREHOUSE row was FIRST written. `batch-upsert.ts` deliberately
+// excludes `created_at` from every UPDATE SET, so a reprojection over an existing row leaves it
+// untouched; it only moves on a fresh INSERT (e.g. after a warehouse-side wipe). Either way it holds
+// exactly one timestamp per row, for ever, so it cannot answer "did anything arrive on day X" for a
+// resource that also arrived, or was corrected, on some other day. Measured 2026-08-17: all 7,520
+// requests carried created_at 2026-08-06 (the day they were last (re)projected) while their
 // authored_at spanned 2013-03-01..2013-11-07. A transmission report built on that column shows a
-// wall of green on the reprojection date and nothing anywhere else.
+// wall of green on the projection date and nothing anywhere else.
 //
 // ⛔ The primary key is the SAME natural key as `fhir.resource_history`'s, so both write paths can
 // upsert without coordinating and a rebuild is idempotent.

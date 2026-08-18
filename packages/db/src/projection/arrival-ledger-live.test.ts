@@ -12,13 +12,19 @@ import { createRelationalWriter, type RelationalWriter } from '../relational-wri
 import type { Provenance } from '../provenance';
 import type { FhirResource } from '@openldr/fhir';
 import { reprojectAll } from './cycle';
+import { readArrivals } from './ledger';
 
 // The contrast this file exists to prove: `ingest_events` records WHEN a resource arrived, and that
-// record survives a reprojection even though reprojection rewrites every warehouse `created_at`.
+// record survives a reprojection even though `created_at` cannot answer the same question.
 // `lab_requests.created_at` looks like an arrival time and is not — the projection never writes it,
-// so it falls to the column default `now()`, the moment the WAREHOUSE row was written, and
-// `reprojectAll` rewrites every one of them (016_ingest_events.ts's own comment: all 7,520 real
-// requests carried created_at 2026-08-06 while their authored_at spanned 2013-03-01..2013-11-07).
+// so it falls to the column default `now()`, the moment the WAREHOUSE row was FIRST written. It is
+// a "first written" stamp, not a "last written" one: `batch-upsert.ts`'s `ON CONFLICT` deliberately
+// excludes `created_at` from its UPDATE SET, so an ordinary reprojection over rows that already
+// exist leaves it untouched, and it only moves on a fresh INSERT (e.g. after a warehouse-side wipe).
+// Either way it holds exactly one timestamp per row, for ever, so a resource that arrives on the 5th
+// and is corrected on the 12th answers "did anything arrive that day" twice and `created_at` can
+// only answer once (016_ingest_events.ts's own comment: all 7,520 real requests carried created_at
+// 2026-08-06 while their authored_at spanned 2013-03-01..2013-11-07).
 //
 // This needs REAL Postgres on both sides — pg-mem cannot prove a rebuild (AGENTS.md §7: no
 // correlated-subquery support, stable scan order) — and it needs BOTH an internal database (where
@@ -133,7 +139,7 @@ live('arrival ledger rebuild from resource_history (live Postgres)', () => {
     expect(rows).toHaveLength(0);
   });
 
-  it('survives a reprojection that rewrites every warehouse created_at', async () => {
+  it('survives a rebuild that re-inserts the projected rows', async () => {
     const before = await db.selectFrom('ingest_events')
       .select(['resource_type', 'resource_id', 'version', 'recorded_at'])
       .orderBy('resource_type').orderBy('resource_id').orderBy('version').execute();
@@ -142,16 +148,15 @@ live('arrival ledger rebuild from resource_history (live Postgres)', () => {
     expect(before.length, 'fixture must produce arrivals or this test proves nothing').toBeGreaterThan(0);
     expect(createdBefore.length, 'fixture must have already-projected warehouse rows or this test proves nothing').toBeGreaterThan(0);
 
-    // DEVIATION FROM THE BRIEF, explained in the Task 2 report: `insertBatchPg`'s ON CONFLICT
-    // deliberately EXCLUDES `created_at` from its UPDATE SET (verified: packages/db/src/batch-upsert.ts,
-    // `updateCols = ... filter(c => !conflictCols.includes(c) && c !== 'created_at')`), so a plain
-    // second reprojectAll call over rows that already exist leaves every created_at untouched — the
-    // literal brief test body proved nothing here because the three tests above already reprojected
-    // these same resources once, so this call would only ever UPDATE, never INSERT.
-    // `created_at` is a "first written" stamp, not a "last written" one, and it only moves when the
-    // warehouse row does not exist yet — exactly the situation after a warehouse-side wipe (e.g. a
-    // real `db reset` on the target schema before `db reproject`). Deleting the projected rows here,
-    // without touching `fhir.resource_history` or `ingest_events`, reproduces that scenario honestly.
+    // `insertBatchPg`'s ON CONFLICT deliberately EXCLUDES `created_at` from its UPDATE SET (verified:
+    // packages/db/src/batch-upsert.ts, `updateCols = ... filter(c => !conflictCols.includes(c) &&
+    // c !== 'created_at')`), so a plain second `reprojectAll` call over rows that already exist would
+    // leave every `created_at` untouched and prove nothing — the three tests above already
+    // reprojected these same resources once, so that call would only ever UPDATE, never INSERT.
+    // Deleting the projected rows here, without touching `fhir.resource_history` or `ingest_events`,
+    // forces the next `reprojectAll` down the INSERT path instead — reproducing a real warehouse-side
+    // wipe (e.g. `db reset` on the target schema followed by `db reproject`), the one case where
+    // `created_at` genuinely moves.
     await db.deleteFrom('lab_requests').execute();
 
     await reprojectAll({ internalDb: internal.db, relationalWriter });
@@ -167,5 +172,55 @@ live('arrival ledger rebuild from resource_history (live Postgres)', () => {
     // ...while the column someone might have used instead has moved under it. This half is not
     // decoration: it is the demonstration that created_at was never usable as an arrival time.
     expect(createdAfter).not.toEqual(createdBefore);
+  });
+
+  it('records no arrival for a deleted version, permanently', async () => {
+    // Two real upserts, then a real delete(). fhirStore.delete() writes its OWN resource_history
+    // row: { op: 'delete', resource: null } (fhir-store.ts:347) at the next version number — so this
+    // resource has THREE history rows (v1 upsert, v2 upsert, v3 delete tombstone) by the time we
+    // reproject. Fixtures go through the real save()/delete() paths, never a hand-inserted row, so
+    // resource_history is populated by the code under test.
+    await fhirStore.save(makeServiceRequest('deleted-1'), provenance);
+    await fhirStore.save(makeServiceRequest('deleted-1'), provenance);
+    const del = await fhirStore.delete('ServiceRequest', 'deleted-1');
+    expect(del).toEqual({ deleted: true, version: 3 });
+
+    await reprojectAll({ internalDb: internal.db, relationalWriter });
+
+    const rows = await db.selectFrom('ingest_events').select(['version'])
+      .where('resource_type', '=', 'ServiceRequest').where('resource_id', '=', 'deleted-1')
+      .orderBy('version').execute();
+    // The two real upserts are recorded...
+    expect(rows.map((r) => Number(r.version))).toEqual([1, 2]);
+    // ...and the tombstone (version 3) is not, and never becomes one on a later rebuild:
+    // resource_history is append-only, so an unfiltered scan would make this false arrival permanent.
+    await reprojectAll({ internalDb: internal.db, relationalWriter });
+    const afterSecondRebuild = await db.selectFrom('ingest_events').select(['version'])
+      .where('resource_type', '=', 'ServiceRequest').where('resource_id', '=', 'deleted-1')
+      .orderBy('version').execute();
+    expect(afterSecondRebuild.map((r) => Number(r.version))).toEqual([1, 2]);
+  });
+
+  it('readArrivals returns exactly the upsert versions, oldest first, correctly mapped', async () => {
+    // Exercises readArrivals directly (Task 3's live path depends on it) rather than only the
+    // rebuild scan's own inline mapping — this is the only test that calls it against real Postgres.
+    await fhirStore.save(makeServiceRequest('read-arrivals-1'), provenance);
+    await fhirStore.save(makeServiceRequest('read-arrivals-1'), provenance);
+    await fhirStore.save(makeServiceRequest('read-arrivals-1'), provenance);
+    await fhirStore.delete('ServiceRequest', 'read-arrivals-1');
+
+    const arrivals = await readArrivals(internal.db, 'ServiceRequest', 'read-arrivals-1');
+
+    expect(arrivals).toHaveLength(3);
+    expect(arrivals.map((a) => a.version)).toEqual([1, 2, 3]);
+    for (const a of arrivals) {
+      expect(a.resource_type).toBe('ServiceRequest');
+      expect(a.resource_id).toBe('read-arrivals-1');
+      expect(a.recorded_at).toBeInstanceOf(Date);
+    }
+    // Strictly increasing recorded_at, oldest first — not just three distinct values in any order.
+    for (let i = 1; i < arrivals.length; i++) {
+      expect(arrivals[i].recorded_at.getTime()).toBeGreaterThanOrEqual(arrivals[i - 1].recorded_at.getTime());
+    }
   });
 });

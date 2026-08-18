@@ -29,12 +29,39 @@ export function isLedgerResourceType(resourceType: string): boolean {
   return TYPE_SET.has(resourceType);
 }
 
+/** A `fhir.resource_history` row, as selected by both `readArrivals` and `reprojectAll`'s rebuild
+ *  scan — same table, same four columns, same shape. `version`'s type varies by driver (number here,
+ *  string/bigint over some Postgres bigint decoders), which is why `toArrivalEvent` re-normalizes it. */
+export interface ResourceHistoryRow {
+  resource_type: string;
+  id: string;
+  version: number | string | bigint;
+  recorded_at: unknown;
+}
+
+/** Map one `fhir.resource_history` row to the `ArrivalEvent` shape `writeIngestEvents` accepts.
+ *  Extracted so the rebuild scan (`cycle.ts`) and the live path (`readArrivals`, below) cannot drift
+ *  apart on column mapping — this used to be copy-pasted in both places. */
+export function toArrivalEvent(row: ResourceHistoryRow): ArrivalEvent {
+  return {
+    resource_type: row.resource_type,
+    resource_id: row.id,
+    version: Number(row.version),
+    recorded_at: row.recorded_at as Date,
+  };
+}
+
 /** Every arrival recorded for one resource, oldest first.
  *
  *  Returns ALL versions, not the newest. The live path upserts the whole set so that it agrees with
  *  a rebuild even when two versions arrive between projection cycles — the cycle sees one task for
  *  the resource, and recording only the newest would silently lose the intermediate arrival while
- *  the rebuild kept it. Idempotent upsert on the composite key makes re-writing the set free. */
+ *  the rebuild kept it. Idempotent upsert on the composite key makes re-writing the set free.
+ *
+ *  Filtered to `op = 'upsert'`: a `delete()` tombstone (`fhir-store.ts`'s `op: 'delete'`, `resource:
+ *  null`) is data going AWAY, not an arrival. `ingest_events` has no `op` column to record a
+ *  retraction separately — if that is ever needed it is a deliberate design change with its own
+ *  migration, not a filter tweak here. */
 export async function readArrivals(
   internalDb: Kysely<InternalSchema>, resourceType: string, id: string,
 ): Promise<ArrivalEvent[]> {
@@ -43,12 +70,8 @@ export async function readArrivals(
     .select(['resource_type', 'id', 'version', 'recorded_at'])
     .where('resource_type', '=', resourceType)
     .where('id', '=', id)
+    .where('op', '=', 'upsert')
     .orderBy('version')
     .execute();
-  return rows.map((r) => ({
-    resource_type: r.resource_type as string,
-    resource_id: r.id as string,
-    version: Number(r.version),
-    recorded_at: r.recorded_at as Date,
-  }));
+  return rows.map(toArrivalEvent);
 }
