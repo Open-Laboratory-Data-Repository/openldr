@@ -112,7 +112,7 @@ against the **bundle's** directory.
 
 ```sh
 #!/bin/sh
-exec docker compose exec -T -w / api node <cli-path> "$@"
+exec docker compose exec -T -u "$(id -u):$(id -g)" -w / api node <cli-path> "$@"
 ```
 
 `<cli-path>` is the CLI's location inside the image. The exact path falls out of what
@@ -127,6 +127,21 @@ operator types matches the path they see on the host.
 A live acceptance run caught it. Reads failed with `ENOENT`, which is survivable, but writes were
 worse — `artifact keygen --out data/keys` reported success at `data/keys` while actually writing
 one level deeper, where the operator would not look. A read fails loudly; a write lied.
+
+The wrapper also shipped once without `-u`. The runtime image runs as uid 10001
+(`apps/server/Dockerfile:40`). A Linux bind mount passes the host directory's ownership straight
+through, so `./data`, owned by the invoking host user, was unwritable by uid 10001. Reads still
+worked — the container can read files it does not own — but every `--out` command failed. The
+live acceptance run above missed it because it ran on Docker Desktop for Windows, which does not
+enforce Unix file ownership on the bind mount. Fixed by adding `-u "$(id -u):$(id -g)"`, so the
+container process runs as the invoking host user instead of the fixed image user.
+
+That fix also changes the audit actor this document's identity section describes. `cliActor()`
+(`packages/cli/src/cli-actor.ts:16`) reads the OS username **inside the container**. Before this
+fix that was always the image's own `openldr` user. After it, the name follows whichever host uid
+ran the wrapper — `node` for the common uid 1000, and the `cli` fallback for a uid with no
+container passwd entry. Either way it is not the operator's real username; `--actor <name>` is
+still how a real name gets recorded.
 
 `install/install.ps1` writes `openldr.ps1` beside it, mirroring how the two installers already
 pair.

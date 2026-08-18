@@ -27,8 +27,18 @@ next to the wrapper and name it with the `data/` prefix:
 ./openldr sync export --out data/export.ndjson
 ```
 
-A path outside `data/` will not be found, and an `--out` path outside it is written inside the
-container and lost when the container restarts.
+A path outside `data/` will not be found. An `--out` path outside it now usually fails with a
+permission error, rather than writing into the container and disappearing on restart.
+
+The wrapper runs as the user who invokes it, so that user must be able to write to `./data`.
+If the install ran under `sudo`, `./data` ends up owned by root, and a later non-root
+`./openldr sync export --out data/x.ndjson` fails with `EACCES`. Fix it by changing the
+directory's owner to the invoking user, or by running the wrapper as the user that owns it.
+
+An operator without `docker` group access must run `sudo ./openldr`, which makes the container
+process root. Root can write anywhere in the container, so an unprefixed `--out` then writes
+silently and is lost on restart — the exact failure the `data/` rule exists to prevent. Always
+prefix output paths with `data/`.
 
 **From a source checkout**, run it through the workspace instead:
 
@@ -68,8 +78,11 @@ admin/danger actions are also available in the Studio UI under Settings.
 
 Mutating CLI commands (`sync enroll/rotate/revoke`, `user create/set-role/activate/deactivate`,
 `settings … set`, `settings danger …`, `db reset`, `db reproject`, `terminology import/create`) record an audit
-event with actor type **`cli`** and actor name = the OS user (override with the global
-`--actor <name>`). They appear on the Audit page alongside UI actions.
+event with actor type **`cli`** and actor name looked up **inside the container**, not the
+operator's own username. On a Docker install that name follows the host uid running the
+wrapper: uid 1000 resolves to `node`, and most other uids have no container username at all,
+so the fallback `cli` is recorded instead. Use the global `--actor <name>` to record the
+operator's real name. They appear on the Audit page alongside UI actions.
 
 ## Common tasks
 
