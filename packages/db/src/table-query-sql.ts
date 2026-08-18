@@ -1,5 +1,5 @@
-import { sql, type ExpressionBuilder, type Expression, type SqlBool } from "kysely";
-import type { ParsedFilter, ParsedSort, TableColumnMap } from "@openldr/table-query";
+import { sql, type ExpressionBuilder, type Expression, type SqlBool, type OrderByItemBuilder } from "kysely";
+import { getColumn, type ParsedFilter, type ParsedSort, type TableColumnMap } from "@openldr/table-query";
 
 /** Escape the LIKE metacharacters so a user's `%` or `_` matches a literal character. */
 function escapeLike(input: string): string {
@@ -11,9 +11,12 @@ function ruleExpression(
   rule: ParsedFilter,
   columns: TableColumnMap,
 ): Expression<SqlBool> {
-  const spec = columns[rule.column];
-  // Unreachable via parseTableQuery, which rejects unknown columns first. Kept as a
-  // defensive backstop for any other caller that builds a ParsedFilter directly.
+  // getColumn — not a plain `columns[rule.column]` index — so this backstop actually catches a
+  // caller that builds a ParsedFilter by hand with a prototype-chain name like "constructor":
+  // `columns["constructor"]` returns `Object` (truthy), which would sail past a plain `!spec`
+  // check and hand `undefined` `spec.sql` to sql.ref below. Unreachable via parseTableQuery,
+  // which rejects unknown columns first (including those); this is the backstop for anyone else.
+  const spec = getColumn(columns, rule.column);
   if (!spec) throw new Error(`unknown column "${rule.column}"`);
   const col = sql.ref(spec.sql);
   const asText = sql<string>`coalesce(${col}::text, '')`;
@@ -43,9 +46,15 @@ function ruleExpression(
     case "gte":
       return sql<SqlBool>`${col} >= ${rule.value}`;
     case "lt":
-      return sql<SqlBool>`${col} < ${rule.value}`;
+      // compareValues (applyTableState.ts:17-27) treats a null column value as sorting before
+      // any non-null target, so the client's matchesRule counts a NULL row as matching "lt".
+      // A plain `col < value` evaluates NULL (excluded) instead — add the null case explicitly.
+      // gt/gte need no such fix: compareValues(null, target) is always -1, which is never > 0
+      // or >= 0, so both sides already agree those are false for a null row.
+      return sql<SqlBool>`(${col} is null or ${col} < ${rule.value})`;
     case "lte":
-      return sql<SqlBool>`${col} <= ${rule.value}`;
+      // Same null-handling gap as "lt" above.
+      return sql<SqlBool>`(${col} is null or ${col} <= ${rule.value})`;
     case "between": {
       const [lo, hi] = rule.value as [string, string];
       // Parenthesized so this stays atomic if a later fold step ORs it with something else —
@@ -54,7 +63,10 @@ function ruleExpression(
       return sql<SqlBool>`(${col} >= ${lo} and ${col} <= ${hi})`;
     }
     case "in": {
-      const list = rule.value as string[];
+      // `value` is typed as an array for "in", but that's compile-time only — a caller building
+      // a ParsedFilter by hand (or a future parser bug) could still hand this a bare string. Wrap
+      // it into a single-element list rather than let `.length`/`any(...)` misbehave on a string.
+      const list = Array.isArray(rule.value) ? rule.value.map(String) : [String(rule.value)];
       if (list.length === 0) return sql<SqlBool>`false`;
       return sql<SqlBool>`${asText} = any(${list})`;
     }
@@ -93,23 +105,37 @@ export function buildFilterExpression(
  * Apply sorts, always appending the resource's unique tiebreaker. Without it,
  * ORDER BY + OFFSET can repeat or skip rows between pages when the sort key
  * has duplicates — and pg-mem's stable scan order can never demonstrate that.
+ *
+ * `defaultSorts` is used only when the caller sends no sort at all (`sorts.length === 0`).
+ * A caller that supplies any sort of its own overrides the defaults entirely — the two never
+ * merge. Without a default, an unsorted request would fall through to "tiebreaker only", which
+ * silently replaces a resource's normal order (e.g. audit's newest-first) with UUID order.
  */
-export function applySorts<QB extends { orderBy: (c: any, d: "asc" | "desc") => QB }>(
+export function applySorts<QB extends { orderBy: (c: any, d: any) => QB }>(
   qb: QB,
   sorts: ParsedSort[],
   columns: TableColumnMap,
   tiebreaker: string,
+  defaultSorts: ParsedSort[] = [],
 ): QB {
   let out = qb;
-  for (const s of sorts) {
-    const spec = columns[s.column];
+  const effective = sorts.length > 0 ? sorts : defaultSorts;
+  for (const s of effective) {
+    const spec = getColumn(columns, s.column);
     // Unreachable via parseTableQuery, which rejects unknown/non-sortable columns first. Kept as
     // a defensive backstop: silently dropping a sort here would look like the query succeeded
     // while quietly ignoring part of what the caller asked for.
     if (!spec) throw new Error(`unknown column "${s.column}"`);
-    out = out.orderBy(sql.ref(spec.sql), s.ascending ? "asc" : "desc");
+    // Nulls placement must mirror applyTableState.ts's comparator (apps/studio/src/components/
+    // data-table/applyTableState.ts:17-27): a null value always compares as "less than" any
+    // non-null value, and descending negates that comparison — so ascending keeps null first,
+    // descending pushes it last. Postgres defaults to the opposite in both directions
+    // (ASC -> NULLS LAST, DESC -> NULLS FIRST), so it must be overridden explicitly here.
+    out = out.orderBy(sql.ref(spec.sql), (ob: OrderByItemBuilder) =>
+      s.ascending ? ob.asc().nullsFirst() : ob.desc().nullsLast(),
+    );
   }
-  const tb = columns[tiebreaker];
+  const tb = getColumn(columns, tiebreaker);
   // A silently-skipped tiebreaker is worse than a missing sort: it reintroduces the exact
   // ORDER BY + OFFSET instability this function exists to prevent, without any visible symptom
   // until pages start repeating or skipping rows. Fail loud instead.

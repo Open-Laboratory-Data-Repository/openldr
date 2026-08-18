@@ -118,9 +118,10 @@ describe("buildFilterExpression", () => {
     expect(await idsMatching(db, [{ column: "weight", operator: "between", value: ["5", "10"], combine: "and" }])).toEqual(["1", "2"]);
   });
 
-  // DEFERRED to Task 6's live-Postgres test: pg-mem's SQL parser does not support the ILIKE
-  // ... ESCAPE clause at all (a hard syntax error, not a semantic mismatch — see the report),
-  // and this is the one case that must emit it, so pg-mem can never run this assertion.
+  // The LIKE-wildcard-escaping assertion lives in table-query-pagination.live.test.ts's
+  // "LIKE wildcard escaping (live Postgres)" block, not here: pg-mem's SQL parser does not
+  // support the ESCAPE clause at all (a hard syntax error, not a semantic mismatch), and this
+  // is the one case that must emit it, so pg-mem can never run this assertion.
   // it("escapes LIKE wildcards so they match literally", async () => {
   //   const db = makeDb();
   //   await db.schema.createTable("t").addColumn("id", "text").addColumn("name", "text").addColumn("weight", "integer").execute();
@@ -158,5 +159,71 @@ describe("applySorts", () => {
       "id",
     ).execute();
     expect(rows.map((r: any) => r.id)).toEqual(["a", "m", "z"]);
+  });
+
+  // applyTableState.ts:18's compareValues puts a null value first regardless of anything else,
+  // then applyTableState.ts:112 negates the comparator on descending — so ascending keeps null
+  // first, and descending flips it to last. Postgres defaults to the exact opposite in both
+  // directions (ASC -> NULLS LAST, DESC -> NULLS FIRST), so applySorts must override that default
+  // to match the client, or a nullable column sorts one page in the opposite row order from the
+  // other implementation of the same filter set.
+  it("sorts NULLS FIRST ascending, matching applyTableState's comparator", async () => {
+    const db = makeDb(); await seed(db); // row "3" has name === null
+    const rows = await applySorts(
+      db.selectFrom("t").select(["id"]),
+      [{ column: "name", ascending: true }],
+      COLUMNS,
+      "id",
+    ).execute();
+    expect(rows[0]!.id).toBe("3");
+  });
+
+  it("sorts NULLS LAST descending, matching applyTableState's comparator", async () => {
+    const db = makeDb(); await seed(db); // row "3" has name === null
+    const rows = await applySorts(
+      db.selectFrom("t").select(["id"]),
+      [{ column: "name", ascending: false }],
+      COLUMNS,
+      "id",
+    ).execute();
+    expect(rows[rows.length - 1]!.id).toBe("3");
+  });
+});
+
+describe("applySorts default sorts", () => {
+  it("uses defaultSorts when the caller sends no sort at all", async () => {
+    const db = makeDb();
+    await db.schema.createTable("t").addColumn("id", "text").addColumn("name", "text").addColumn("weight", "integer").execute();
+    await db.insertInto("t").values([
+      { id: "1", name: "alpha", weight: 10 },
+      { id: "2", name: "beta",  weight: 5 },
+      { id: "3", name: "gamma", weight: 1 },
+    ]).execute();
+    const rows = await applySorts(
+      db.selectFrom("t").select(["id"]),
+      [], // caller sent no sort
+      COLUMNS,
+      "id",
+      [{ column: "weight", ascending: true }], // default: weight asc
+    ).execute();
+    expect(rows.map((r: any) => r.id)).toEqual(["3", "2", "1"]);
+  });
+
+  it("ignores defaultSorts once the caller supplies any sort of its own", async () => {
+    const db = makeDb();
+    await db.schema.createTable("t").addColumn("id", "text").addColumn("name", "text").addColumn("weight", "integer").execute();
+    await db.insertInto("t").values([
+      { id: "1", name: "alpha", weight: 10 },
+      { id: "2", name: "beta",  weight: 5 },
+      { id: "3", name: "gamma", weight: 1 },
+    ]).execute();
+    const rows = await applySorts(
+      db.selectFrom("t").select(["id"]),
+      [{ column: "weight", ascending: false }], // explicit: weight desc
+      COLUMNS,
+      "id",
+      [{ column: "weight", ascending: true }], // would-be default: weight asc — must be ignored
+    ).execute();
+    expect(rows.map((r: any) => r.id)).toEqual(["1", "2", "3"]);
   });
 });
