@@ -8,5 +8,6 @@ export * from './health-registry';
 export * from './crash-log';
 export * from './canonical-json';
 export * from './canonical-hash';
+export * from './param-format';
 export * from './semver';
 export * from './release-manifest';

@@ -91,6 +91,11 @@ export interface ReportParamMeta {
   required: boolean;
   optionsKey?: string;
   help?: string;
+  /** Declared shape of the run value. Enforced SERVER-side (a violation comes back as a 400 with
+   *  code RP0004 naming the field); published here so a client can echo the same rule. */
+  format?: 'iana-timezone' | 'year-month';
+  /** Example text for the empty box. Absent ⇒ falls back to the label, as before. */
+  placeholder?: string;
 }
 export interface ReportMetricMeta {
   id: string;

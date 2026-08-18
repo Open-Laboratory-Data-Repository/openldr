@@ -228,6 +228,12 @@ const PARAM_ERRORS = [
   { re: /^required parameter: (.+)$/, code: 'RP0004' as const },
   { re: /^unbound parameter: (.+)$/, code: 'RP0004' as const },
   { re: /^invalid date: (.+)$/, code: 'RP0004' as const },
+  // A value that violates the format its parameter DECLARES — thrown by `assertParamFormats`
+  // (packages/bootstrap/src/index.ts) from `paramFormatMessage` (packages/core/src/param-format.ts).
+  // Same anchoring discipline as the three above: the prefix is fixed by that function and nothing
+  // else emits it, so a server fault that merely mentions a parameter cannot be caught here.
+  // The message already names the field and what it accepts, so it is forwarded verbatim.
+  { re: /^invalid parameter: (.+)$/, code: 'RP0004' as const },
 ];
 // The query declares its date bounds as two separate params (`from`/`to`), so a missing one arrives
 // as `required parameter: from`. That is the catalog's RP0001 ("date range not selected") — a more

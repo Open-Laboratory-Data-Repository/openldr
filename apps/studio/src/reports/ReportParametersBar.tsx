@@ -65,7 +65,11 @@ export function ReportParametersBar({ report, params, options, onChange, onRun, 
       <Input
         value={params[p.id] ?? ''}
         onChange={(e) => set({ [p.id]: e.target.value })}
-        placeholder={p.label}
+        // The declared example when there is one, the label otherwise — which is what every
+        // parameter authored before `placeholder` existed still shows. The two boxes that got
+        // this wrong (a month typed as `1`, a time zone typed as `+3`) stated their format only
+        // in the ⓘ popover beside the label, and a popover has to be opened to be read.
+        placeholder={p.placeholder ?? p.label}
         className="h-9 w-40 text-xs"
       />
     );

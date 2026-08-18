@@ -67,6 +67,28 @@ describe('ReportParametersBar', () => {
     expect(await screen.findByText('Accepts the lab number.')).toBeInTheDocument();
   });
 
+  it('shows the parameter placeholder in the box', async () => {
+    // The operator typed `1` for a month and `+3` for a time zone. Both formats were stated only
+    // inside the ⓘ popover, which has to be opened to be read. A placeholder is on the page.
+    const withPlaceholder: ReportSummary = {
+      ...report,
+      parameters: [{ id: 'tz', label: 'Time zone', type: 'text', required: true, placeholder: 'Africa/Nairobi' }],
+    };
+    render(<ReportParametersBar report={withPlaceholder} params={{}} options={{}} onChange={() => {}} onRun={() => {}} running={false} canRun />);
+    expect(screen.getByPlaceholderText('Africa/Nairobi')).toBeInTheDocument();
+  });
+
+  it('falls back to the label when the parameter declares no placeholder', () => {
+    // Every design stored before this change omits `placeholder`; the box must look exactly as it
+    // did rather than going blank.
+    const noPlaceholder: ReportSummary = {
+      ...report,
+      parameters: [{ id: 'asOf', label: 'As of', type: 'text', required: false }],
+    };
+    render(<ReportParametersBar report={noPlaceholder} params={{}} options={{}} onChange={() => {}} onRun={() => {}} running={false} canRun />);
+    expect(screen.getByPlaceholderText('As of')).toBeInTheDocument();
+  });
+
   it('shows no help trigger when the parameter has none', () => {
     const noHelp: ReportSummary = {
       ...report,

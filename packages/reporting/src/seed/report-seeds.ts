@@ -3438,7 +3438,11 @@ export const SEED_DESIGNS: ReportDesign[] = [
     // constants with no design-level lever, and the laboratory names come from the data.
     orientation: 'landscape',
     parameters: [
+      // ⚠ `format` and `placeholder` are the run-time guard and the on-page hint for the two
+      // parameters that were measured to go wrong. An operator typed `1` here and `+3` below,
+      // with both formats stated only inside the ⓘ popover, which has to be opened to be read.
       { key: 'month', label: 'Month', type: 'text', required: true, value: '',
+        format: 'year-month', placeholder: '2021-01',
         help: 'The reporting month as YYYY-MM, for example 2021-01.' },
       // ⛔ AGENTS.md §8 — the help text names no code either. This design ships worldwide and one
       // country's panel codes are not another's.
@@ -3447,7 +3451,14 @@ export const SEED_DESIGNS: ReportDesign[] = [
       // ⚠ The prefill is a DEFAULT, not a binding. The studio fills this box from the setting; a
       // schedule or a CLI run does not read the setting and buckets on whatever it was given, with
       // no warning if that is wrong or missing.
+      // ⛔ `format: 'iana-timezone'` is the whole point. Measured on live Postgres: a bare `+3` is
+      // read with the POSIX sign convention, so it means UTC−3. An arrival at 2026-08-06 03:48Z
+      // bucketed to 2026-08-06 00:48 — six hours out, in the WRONG direction, and SILENT. Near
+      // midnight that puts a mark on the wrong day of the grid.
+      // The placeholder is an example zone, not a default: the studio prefills this box from
+      // Settings, and a placeholder only shows while the box is empty.
       { key: 'tz', label: 'Time zone', type: 'text', required: true, value: '',
+        format: 'iana-timezone', placeholder: 'Africa/Nairobi',
         help: 'IANA zone the days are bucketed in. The studio fills this from Settings, Laboratory, '
           + 'Time zone as a default you can overwrite. A scheduled or CLI run does not read that '
           + 'setting and must pass the zone itself.' },

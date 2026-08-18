@@ -14,6 +14,7 @@ import {
 } from './report-seeds';
 import { pairRects, toPt, paperSizePt, type ReportDesign } from '@openldr/report-designer';
 import { findInvalidImageSources, findUnsortedHeaderRows } from '@openldr/report-designer/pure';
+import { isValidIanaZone } from '@openldr/core/pure';
 
 // In-memory fakes — no real Kysely instance needed (unlike `packages/bootstrap/src/seed.ts`,
 // which builds `customQueries` from a real DB handle; here we inject fakes directly to unit-test
@@ -1858,6 +1859,43 @@ describe('SEED_DESIGNS — rt-transmission-grid', () => {
       // boundary, so the pattern silently never matches.
       expect(new RegExp(`as ${c.key}\\b`).test(sql), `${c.key} is not selected`).toBe(true);
     }
+  });
+});
+
+describe('SEED_DESIGNS — rt-transmission-grid run parameters are checked and shown', () => {
+  const params = () => SEED_DESIGNS.find((d) => d.id === 'rt-transmission-grid')!.parameters;
+  const param = (key: string) => params().find((p) => p.key === key)!;
+
+  it('declares the time zone as an IANA zone, so a bare +3 is refused at run time', () => {
+    // ⛔ The defect. Postgres reads `+3` with the POSIX sign convention, so it means UTC−3.
+    // Measured: an arrival at 2026-08-06 03:48Z bucketed to 2026-08-06 00:48 — six hours out, in
+    // the wrong direction, with no error. Near midnight that is a mark on the wrong day.
+    expect(param('tz').format).toBe('iana-timezone');
+  });
+
+  it('declares the month as YYYY-MM', () => {
+    expect(param('month').format).toBe('year-month');
+  });
+
+  it('shows the month format in the box, not only in the ⓘ popover', () => {
+    // The operator typed `1`. The format was stated only in the help popover, which has to be
+    // opened to be read.
+    expect(param('month').placeholder).toMatch(/^\d{4}-\d{2}$/);
+  });
+
+  it('shows an example zone in the time zone box', () => {
+    const ph = param('tz').placeholder!;
+    expect(ph).toContain('/');
+    // The example must itself be a zone the validator accepts, or the box teaches the wrong thing.
+    expect(isValidIanaZone(ph)).toBe(true);
+  });
+
+  it('⚠ AGENTS.md §8 — leaves the panel-codes box without a placeholder', () => {
+    // A placeholder is example text on the page. One country's HVL/EID panel codes are not
+    // another's, and this design ships worldwide, so an example here would hardcode clinical
+    // vocabulary into a seeded design. The ⓘ help already explains the field without naming a code.
+    expect(param('panels').placeholder).toBeUndefined();
+    expect(param('panels').format).toBeUndefined();
   });
 });
 

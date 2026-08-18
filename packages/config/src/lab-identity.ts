@@ -10,6 +10,14 @@
  * the neighbouring `sync.*` keys they are neither encrypted nor masked on read.
  */
 
+// ⛔ ONE copy of the IANA rule, not two. It used to be a private `isValidIanaZone` in this file,
+// guarding the lab.timezone SETTING. The monthly transmission grid's `tz` RUN PARAMETER asks the
+// same question at a different moment — and, per that report's own help text, a scheduled run does
+// NOT read this setting, so the run parameter is the path that can go wrong unattended. The rule
+// moved to `@openldr/core/pure` so both sides judge a zone identically; the reasoning that shapes
+// it (the `/^[+-]/` guard, and what Postgres does with a bare `+3`) travelled with it.
+import { isValidIanaZone } from '@openldr/core/pure';
+
 export interface LabIdentityFieldDefinition {
   /** Stable key stored in app_settings.key. */
   id: string;
@@ -102,27 +110,6 @@ export interface LabIdentityValidationError {
 }
 
 const DATA_URI = /^data:([a-z]+\/[a-z0-9.+-]+);base64,([A-Za-z0-9+/]+={0,2})$/;
-
-/**
- * True for a zone name the runtime's own IANA database resolves. Deliberately NOT a hand-written
- * list, so it stays correct as zones are added or renamed.
- *
- * ⛔ A fixed offset like "+03:00" is rejected too: it cannot express daylight saving, so a report
- * spanning a DST boundary would bucket half its days an hour out.
- */
-function isValidIanaZone(value: string): boolean {
-  // Reject a fixed offset explicitly. Measured: this runtime's ICU resolves "+03:00" as a
-  // legal `timeZone` for Intl.DateTimeFormat (it did not throw), but an offset cannot express
-  // daylight saving, so a report spanning a DST boundary would bucket half its days an hour out.
-  // No real IANA zone id starts with a sign.
-  if (/^[+-]/.test(value)) return false;
-  try {
-    new Intl.DateTimeFormat('en-US', { timeZone: value });
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 /**
  * Validate one identity value. Returns `null` when acceptable.

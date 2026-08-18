@@ -1,4 +1,12 @@
 import { z } from 'zod';
+import type { ReportParamFormat } from '@openldr/core/pure';
+
+/** The formats a run parameter may declare, as a zod-usable tuple.
+ *
+ *  `satisfies` is the guard that matters: it fails to compile if this list names a format
+ *  `paramFormatMessage` does not implement. That direction is the dangerous one — an unimplemented
+ *  format would fall off the validator's switch and reject every value the operator typed. */
+const PARAM_FORMATS = ['iana-timezone', 'year-month'] as const satisfies readonly ReportParamFormat[];
 
 export type ElementKind = 'text' | 'table' | 'image' | 'line' | 'rect' | 'datetime' | 'keyvalue' | 'barcode' | 'qrcode';
 export type Paper = 'A4' | 'Letter';
@@ -166,6 +174,23 @@ export const TemplateParamSchema = z.object({
   value: z.union([z.string(), DateRangeValueSchema]).optional(),
   /** Operator-facing note on what the field accepts. Surfaced as ReportParamMeta.help. */
   help: z.string().optional(),
+  /**
+   * The shape the RUN value must have, checked when the report runs — see
+   * `paramFormatMessage` (`packages/core/src/param-format.ts`).
+   *
+   * ⛔ Optional, and NOT a refinement. `fromRow` (`./store.ts`) parses every stored design through
+   * `ReportDesignSchema` on READ, so a refinement here would run on read too and make an existing
+   * design permanently unopenable — the same trap `image-src.ts` documents. This field only
+   * DECLARES the format; the check happens at run time on the value, never on the design.
+   *
+   * A parameter that omits it is not checked at all, which is every parameter authored before this
+   * existed.
+   */
+  format: z.enum(PARAM_FORMATS).optional(),
+  /** Example text shown INSIDE the empty box (`ReportParametersBar`). Distinct from `help`, which
+   *  lives in a ⓘ popover the operator has to open. The transmission grid's month was typed as `1`
+   *  and its time zone as `+3` while both formats sat unread in that popover. */
+  placeholder: z.string().optional(),
 });
 export type TemplateParam = z.infer<typeof TemplateParamSchema>;
 
