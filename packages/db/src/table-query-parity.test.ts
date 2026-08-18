@@ -19,9 +19,9 @@ import type { ParsedFilter, TableColumnMap } from "@openldr/table-query";
 // the same change made here, or this test stops meaning anything.
 //
 // NOT covered here: LIKE-wildcard escaping. pg-mem's SQL parser has no support at all
-// for the `ESCAPE` keyword (a hard parse error, not a semantic gap — see Task 4's
-// table-query-sql.test.ts, same deferral), and escaping is the one case that must emit
-// it. Deferred to Task 6's live-Postgres test.
+// for the `ESCAPE` keyword (a hard parse error, not a semantic gap — see table-query-sql.test.ts,
+// same deferral), and escaping is the one case that must emit it. That proof lives in
+// table-query-pagination.live.test.ts's "LIKE wildcard escaping (live Postgres)" block.
 
 const COLUMNS: TableColumnMap = {
   name: { sql: "name", type: "text", operators: ["eq", "ne", "like", "in", "is_null", "is_not_null"], sortable: true },
@@ -33,6 +33,11 @@ const ROWS = [
   { id: "2", name: "BETA", weight: 5 },
   { id: "3", name: null as string | null, weight: 1 },
   { id: "4", name: "", weight: 7 },
+  // NULL weight: exercises compareValues' null-handling branch for gt/gte/lt/lte, which none of
+  // the rows above did. This is the same fixture gap that hid Fix 2 (NULLS ordering) — a filter
+  // or sort that never sees a null in its test data can look correct while disagreeing on real
+  // nullable columns (eight nullable facility columns, audit's actorId).
+  { id: "5", name: "epsilon", weight: null as number | null },
 ];
 
 // --- copied from applyTableState.ts:17-27 ---
