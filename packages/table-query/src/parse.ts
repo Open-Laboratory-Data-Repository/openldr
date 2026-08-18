@@ -16,8 +16,31 @@ const NO_VALUE: FilterOperator[] = ["is_null", "is_not_null"];
 
 function fail(error: string): ParseResult { return { ok: false, error }; }
 
+/**
+ * Reject a value that would reach Postgres and throw a type error instead of a clean 400 —
+ * verified live: `gte "abc"` against a timestamptz column throws "invalid input syntax for
+ * type timestamp with time zone", and a `between` pair with one empty box throws the same for
+ * `""`. Validation belongs here, at the parse boundary, not in the SQL translator.
+ *
+ * A no-op for "text"/"enum" columns — an empty string there is legitimate (e.g. `like` with an
+ * empty needle deliberately matches everything, per matchesRule in applyTableState.ts).
+ */
+function typedValueError(type: "text" | "number" | "date" | "enum", column: string, value: string): string | undefined {
+  if (type === "number") {
+    if (value.trim() === "" || !Number.isFinite(Number(value))) {
+      return `value "${value}" for column "${column}" is not a valid number`;
+    }
+  }
+  if (type === "date") {
+    if (value.trim() === "" || Number.isNaN(Date.parse(value))) {
+      return `value "${value}" for column "${column}" is not a valid date`;
+    }
+  }
+  return undefined;
+}
+
 /** Looks up a column spec without falling through the prototype chain (`__proto__`, `constructor`, ...). */
-function getColumn(columns: TableColumnMap, name: string): TableColumnSpec | undefined {
+export function getColumn(columns: TableColumnMap, name: string): TableColumnSpec | undefined {
   if (!Object.prototype.hasOwnProperty.call(columns, name)) return undefined;
   return columns[name];
 }
@@ -86,16 +109,31 @@ export function parseTableQuery(
       if (!Array.isArray(r.value) || r.value.length !== 2) {
         return fail(`operator "between" on column "${r.column}" needs exactly two values`);
       }
-      filters.push({ column: r.column, operator, value: [String(r.value[0]), String(r.value[1])], combine });
+      const lo = String(r.value[0]);
+      const hi = String(r.value[1]);
+      const loError = typedValueError(spec.type, r.column, lo);
+      if (loError) return fail(loError);
+      const hiError = typedValueError(spec.type, r.column, hi);
+      if (hiError) return fail(hiError);
+      filters.push({ column: r.column, operator, value: [lo, hi], combine });
       continue;
     }
     if (operator === "in") {
       const list = Array.isArray(r.value) ? r.value.map(String) : String(r.value ?? "").split(",").map((x) => x.trim()).filter(Boolean);
+      for (const item of list) {
+        const itemError = typedValueError(spec.type, r.column, item);
+        if (itemError) return fail(itemError);
+      }
       filters.push({ column: r.column, operator, value: list, combine });
       continue;
     }
     if (Array.isArray(r.value)) return fail(`operator "${operator}" on column "${r.column}" takes a single value`);
-    filters.push({ column: r.column, operator, value: String(r.value ?? ""), combine });
+    const single = String(r.value ?? "");
+    // "like" deliberately allows an empty needle (matches everything), and is never permitted on
+    // a number/date column's operator list — so this validation never fires for it in practice.
+    const singleError = operator === "like" ? undefined : typedValueError(spec.type, r.column, single);
+    if (singleError) return fail(singleError);
+    filters.push({ column: r.column, operator, value: single, combine });
   }
 
   const sorts: ParsedSort[] = [];

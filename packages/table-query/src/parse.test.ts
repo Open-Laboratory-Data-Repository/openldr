@@ -138,4 +138,77 @@ describe("parseTableQuery", () => {
       { column: "action", operator: "eq", value: "x", combine: "and" },
     ]);
   });
+
+  // --- Important 5: a bad value on a typed column is a 400 from the parser, not a Postgres
+  // 500. Verified live: gte "abc" against a timestamptz column throws "invalid input syntax
+  // for type timestamp with time zone"; a between pair with one empty box throws the same for
+  // "". Validation belongs at the parse boundary, not the SQL translator. ---
+
+  const NUMBER_COLUMNS = {
+    ...AUDIT_COLUMNS,
+    weight: { sql: "weight", type: "number" as const, operators: ["eq", "ne", "gt", "gte", "lt", "lte", "between", "is_null", "is_not_null"] as const, sortable: true },
+  };
+
+  it("rejects a non-numeric value on a number column, naming the column and the value", () => {
+    const raw = { filters: JSON.stringify([{ column: "weight", operator: "gte", value: "abc", combine: "and" }]) };
+    const r = parseTableQuery(raw, NUMBER_COLUMNS as never);
+    expect(r.ok).toBe(false);
+    if (!r.ok) { expect(r.error).toContain("weight"); expect(r.error).toContain("abc"); }
+  });
+
+  it("rejects an empty string on a number column", () => {
+    const raw = { filters: JSON.stringify([{ column: "weight", operator: "eq", value: "", combine: "and" }]) };
+    const r = parseTableQuery(raw, NUMBER_COLUMNS as never);
+    expect(r.ok).toBe(false);
+  });
+
+  it("accepts a finite number value on a number column", () => {
+    const raw = { filters: JSON.stringify([{ column: "weight", operator: "gte", value: "42", combine: "and" }]) };
+    expect(ok(parseTableQuery(raw, NUMBER_COLUMNS as never)).filters).toEqual([
+      { column: "weight", operator: "gte", value: "42", combine: "and" },
+    ]);
+  });
+
+  it("rejects a non-numeric element inside a between pair on a number column", () => {
+    const raw = { filters: JSON.stringify([{ column: "weight", operator: "between", value: ["1", "abc"], combine: "and" }]) };
+    const r = parseTableQuery(raw, NUMBER_COLUMNS as never);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toContain("weight");
+  });
+
+  it("rejects an unparseable date value on a date column", () => {
+    const raw = { filters: JSON.stringify([{ column: "occurredAt", operator: "gte", value: "abc", combine: "and" }]) };
+    const r = parseTableQuery(raw, AUDIT_COLUMNS);
+    expect(r.ok).toBe(false);
+    if (!r.ok) { expect(r.error).toContain("occurredAt"); expect(r.error).toContain("abc"); }
+  });
+
+  it("rejects a between pair on a date column when one box is empty", () => {
+    // Reachable straight from the UI: a between widget with only the first box filled.
+    const raw = { filters: JSON.stringify([{ column: "occurredAt", operator: "between", value: ["2026-08-18", ""], combine: "and" }]) };
+    const r = parseTableQuery(raw, AUDIT_COLUMNS);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.error).toContain("occurredAt");
+  });
+
+  it("accepts a parseable date value on a date column", () => {
+    const raw = { filters: JSON.stringify([{ column: "occurredAt", operator: "gte", value: "2026-08-18", combine: "and" }]) };
+    expect(ok(parseTableQuery(raw, AUDIT_COLUMNS)).filters).toEqual([
+      { column: "occurredAt", operator: "gte", value: "2026-08-18", combine: "and" },
+    ]);
+  });
+
+  it("does not require a value for is_null on a date column", () => {
+    const raw = { filters: JSON.stringify([{ column: "occurredAt", operator: "is_null", value: "", combine: "and" }]) };
+    expect(ok(parseTableQuery(raw, AUDIT_COLUMNS)).filters).toEqual([
+      { column: "occurredAt", operator: "is_null", value: "", combine: "and" },
+    ]);
+  });
+
+  it("still lets like with an empty needle through on a text column (deliberate match-everything)", () => {
+    const raw = { filters: JSON.stringify([{ column: "action", operator: "like", value: "", combine: "and" }]) };
+    expect(ok(parseTableQuery(raw, AUDIT_COLUMNS)).filters).toEqual([
+      { column: "action", operator: "like", value: "", combine: "and" },
+    ]);
+  });
 });
