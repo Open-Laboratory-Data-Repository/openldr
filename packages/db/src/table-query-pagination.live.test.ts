@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { sql } from 'kysely';
 import { createInternalDb, type InternalDb } from './internal-db';
-import { applySorts } from './table-query-sql';
+import { applySorts, buildFilterExpression } from './table-query-sql';
 import type { TableColumnMap } from '@openldr/table-query';
 
 // pg-mem has a stable scan order and cannot demonstrate ORDER BY tie non-determinism: a pg-mem
@@ -86,5 +86,71 @@ live('pagination is stable when the sort key ties (live Postgres)', () => {
 
     expect(seen.length).toBe(40);
     expect(new Set(seen).size).toBe(40); // no repeats, nothing skipped
+  });
+});
+
+// The proof that escapeLike + the conditional `escape '\\'` clause (table-query-sql.ts:4-6,
+// 36-42) actually neutralise a user's literal `%`/`_` lives HERE, not in table-query-sql.test.ts
+// or table-query-parity.test.ts — both of those defer it to this file because pg-mem's SQL
+// parser (pgsql-ast-parser) cannot parse the ESCAPE keyword at all (a hard syntax error, not a
+// semantic gap). Only real Postgres can run it.
+const LIKE_COLUMNS: TableColumnMap = {
+  id: { sql: 'id', type: 'text', operators: ['eq'], sortable: true },
+  name: { sql: 'name', type: 'text', operators: ['like'], sortable: false },
+};
+const LIKE_TABLE = 'tq_like_scratch';
+
+live('LIKE wildcard escaping (live Postgres)', () => {
+  let internal: InternalDb;
+
+  beforeAll(async () => {
+    internal = createInternalDb(url!);
+    await sql`drop table if exists ${sql.ref(LIKE_TABLE)}`.execute(internal.db as never);
+    await sql`
+      create table ${sql.ref(LIKE_TABLE)} (
+        id text primary key,
+        name text
+      )
+    `.execute(internal.db as never);
+    await (internal.db as never as import('kysely').Kysely<any>)
+      .insertInto(LIKE_TABLE)
+      .values([
+        { id: '1', name: '50%' },
+        { id: '2', name: '5000' },
+        { id: '3', name: 'a_b' },
+        { id: '4', name: 'axb' },
+      ])
+      .execute();
+  });
+
+  afterAll(async () => {
+    await sql`drop table if exists ${sql.ref(LIKE_TABLE)}`.execute(internal.db as never).catch(() => undefined);
+    await internal?.close().catch(() => undefined);
+  });
+
+  const idsMatching = async (needle: string) => {
+    const db = internal.db as never as import('kysely').Kysely<any>;
+    const rows = await db
+      .selectFrom(LIKE_TABLE)
+      .select('id')
+      .where((eb: any) =>
+        buildFilterExpression(eb, [{ column: 'name', operator: 'like', value: needle, combine: 'and' }], LIKE_COLUMNS) ??
+        eb.val(true),
+      )
+      .orderBy('id')
+      .execute();
+    return rows.map((r: { id: string }) => r.id);
+  };
+
+  it('escapes a literal % so it does not act as a wildcard', async () => {
+    // Without escaping, "%50%%" would match every row (LIKE's own wildcard). With escaping it
+    // matches only the row whose name literally contains "50%".
+    expect(await idsMatching('50%')).toEqual(['1']);
+  });
+
+  it('escapes a literal _ so it does not act as a single-character wildcard', async () => {
+    // Without escaping, "%a_b%" would also match "axb" (LIKE's _ matches any one character).
+    // With escaping it matches only the row whose name literally contains "a_b".
+    expect(await idsMatching('a_b')).toEqual(['3']);
   });
 });
