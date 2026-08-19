@@ -2,10 +2,10 @@ import { Kysely, sql } from 'kysely';
 import { newDb } from 'pg-mem';
 import { externalMigrations } from './migrations/external/index';
 
-// pg-mem does not support the regex operator (!~) used by Kysely's Migrator introspection.
-// We run each external migration's up() function directly in order — same approach as
+// pg-mem does not support the regex operator (!~) used by Kysely's Migrator introspection. We run
+// each external migration's up() function directly in order, the same approach as
 // migrations/internal/test-helpers.ts:makeMigratedDb.
-export async function makeMigratedExternalDb(): Promise<Kysely<any>> {
+async function migrateExternal(): Promise<{ db: Kysely<any>; mem: ReturnType<typeof newDb> }> {
   const mem = newDb();
   const db = mem.adapters.createKysely() as Kysely<any>;
   for (const [name, migration] of Object.entries(externalMigrations('postgres'))) {
@@ -34,5 +34,21 @@ export async function makeMigratedExternalDb(): Promise<Kysely<any>> {
       throw err;
     }
   }
+  return { db, mem };
+}
+
+/** The fully migrated external warehouse, on pg-mem. Most tests only run SQL against the migrated
+ *  schema and never need pg-mem's own JS API, so this is the one to call in the common case. */
+export async function makeMigratedExternalDb(): Promise<Kysely<any>> {
+  const { db } = await migrateExternal();
   return db;
+}
+
+/** Same migrated database, plus the underlying pg-mem instance. Needed by a test that inspects
+ *  schema state pg-mem exposes only through its own API, not SQL: pg-mem has no `pg_indexes` view,
+ *  and its `information_schema.columns.is_nullable` is unreliable (measured: a plain nullable
+ *  column reports 'NO'). `mem.public.getTable(name).listIndices()` is the reliable path for index
+ *  checks; see 017_diagnostic_report_based_on_and_lab_results_index.test.ts for how it is used. */
+export async function makeMigratedExternalDbWithMem(): Promise<{ db: Kysely<any>; mem: ReturnType<typeof newDb> }> {
+  return migrateExternal();
 }
