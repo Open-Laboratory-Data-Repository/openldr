@@ -34,8 +34,8 @@ A request with none of the three inside the month does not appear. One mark per 
 
 | File | Responsibility | Action |
 |---|---|---|
-| `packages/db/src/migrations/external/017_diagnostic_report_based_on.ts` | Add `based_on_id` plus the indexes the new query needs | Create |
-| `packages/db/src/migrations/external/017_diagnostic_report_based_on.test.ts` | Prove `up` adds column and indexes, `down` reverses it | Create |
+| `packages/db/src/migrations/external/017_diagnostic_report_based_on_and_lab_results_index.ts` | Add `based_on_id` plus the indexes the new query needs | Create |
+| `packages/db/src/migrations/external/017_diagnostic_report_based_on_and_lab_results_index.test.ts` | Prove `up` adds column and indexes, `down` reverses it | Create |
 | `packages/db/src/migrations/external/index.ts` | Register migration 017 | Modify |
 | `packages/db/src/schema/external.ts:81-` | `DiagnosticReportsTable` gains `based_on_id` | Modify |
 | `packages/db/src/relational/diagnostic-report.ts:13-` | Project `basedOn[0]` into `based_on_id` | Modify |
@@ -53,8 +53,8 @@ CE already projects `basedOn` for two resources and not for this one. `packages/
 ⛔ Do not join step 3 on `diagnostic_reports.id = lab_requests.id`. That equality holds on all 23,285 rows of the current warehouse only because the CDR toolchain mints one `obrId` for both resources. `diagnostic-report.ts:13` sets `id: String(r['id'])`, the wire id, so the projection guarantees nothing.
 
 **Files:**
-- Create: `packages/db/src/migrations/external/017_diagnostic_report_based_on.ts`
-- Create: `packages/db/src/migrations/external/017_diagnostic_report_based_on.test.ts`
+- Create: `packages/db/src/migrations/external/017_diagnostic_report_based_on_and_lab_results_index.ts`
+- Create: `packages/db/src/migrations/external/017_diagnostic_report_based_on_and_lab_results_index.test.ts`
 - Modify: `packages/db/src/migrations/external/index.ts`
 - Modify: `packages/db/src/schema/external.ts`
 - Modify: `packages/db/src/relational/diagnostic-report.ts`
@@ -133,7 +133,7 @@ Expected: PASS.
 
 - [ ] **Step 7: Write the migration**
 
-Create `packages/db/src/migrations/external/017_diagnostic_report_based_on.ts`:
+Create `packages/db/src/migrations/external/017_diagnostic_report_based_on_and_lab_results_index.ts`:
 
 ```typescript
 import { type Kysely, sql } from 'kysely';
@@ -192,15 +192,15 @@ So `up()` must widen `lab_results.request_id` to `keyType(engine)` engine-condit
 In `packages/db/src/migrations/external/index.ts`, beside the line 18 import and the line 37 entry:
 
 ```typescript
-import * as m017 from './017_diagnostic_report_based_on';
+import * as m017 from './017_diagnostic_report_based_on_and_lab_results_index';
 ```
 ```typescript
-    '017_diagnostic_report_based_on': { up: (db) => m017.up(db, engine), down: m017.down },
+    '017_diagnostic_report_based_on_and_lab_results_index': { up: (db) => m017.up(db, engine), down: m017.down },
 ```
 
 - [ ] **Step 9: Write the migration test**
 
-Create `packages/db/src/migrations/external/017_diagnostic_report_based_on.test.ts`, modelled on `016_ingest_events.test.ts`. Read that file first and copy its harness rather than inventing one. It must assert:
+Create `packages/db/src/migrations/external/017_diagnostic_report_based_on_and_lab_results_index.test.ts`, modelled on `016_ingest_events.test.ts`. Read that file first and copy its harness rather than inventing one. It must assert:
 
 - after `up`, `diagnostic_reports` has a nullable `based_on_id`
 - after `up`, both indexes exist
@@ -221,8 +221,8 @@ Expected: 017 applied, no ordering error.
 - [ ] **Step 12: Commit**
 
 ```bash
-git add packages/db/src/migrations/external/017_diagnostic_report_based_on.ts \
-        packages/db/src/migrations/external/017_diagnostic_report_based_on.test.ts \
+git add packages/db/src/migrations/external/017_diagnostic_report_based_on_and_lab_results_index.ts \
+        packages/db/src/migrations/external/017_diagnostic_report_based_on_and_lab_results_index.test.ts \
         packages/db/src/migrations/external/index.ts \
         packages/db/src/schema/external.ts \
         packages/db/src/relational/diagnostic-report.ts \
@@ -682,7 +682,9 @@ Run: `pnpm turbo run test`
 
 ⛔ Never pipe this through `tail`. It truncates the failure list and hides which package failed.
 
-Expected: PASS. A failure here is usually a timeout, not a regression. Grep the output for `Test timed out` and re-run that package alone before blaming a change.
+Expected: PASS, except for one known pre-existing failure named below. A failure here is usually a timeout, not a regression. Grep the output for `Test timed out` and re-run that package alone before blaming a change.
+
+⛔ **Known failure, not from this slice.** `apps/studio/src/api.reports.test.ts > fetchReportPdf returns a Blob` fails with a cross-realm `Blob` identity problem. Found during Task 1's code-quality review on 2026-08-19. It reproduces standalone, sits in a file no task in this plan touches, and was last changed by an unrelated refactor. Nobody has bisected it to an origin commit. Do not fix it here and do not let it block this slice. Add it to the list instead.
 
 - [ ] **Step 2: Reseed so the running install picks up the new SQL**
 
