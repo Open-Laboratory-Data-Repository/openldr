@@ -831,7 +831,55 @@ describe('facilities routes', () => {
         health: 'unmapped',
         limit: 7,
         offset: 3,
+        // Task 3: parseTableQuery always returns arrays, never undefined, even when the client
+        // sent neither ?filters nor ?sorts — an empty query string decodes to `[]` (parse.ts's
+        // `decode`), not to "absent". A toEqual against a bare object without these two keys
+        // would fail the moment the route starts forwarding them.
+        filters: [],
+        sorts: [],
       });
+    });
+
+    it('passes parsed filters through to the store', async () => {
+      const ctx = fakeCtx();
+      const app = await appWith(ctx);
+      const filters = [{ column: 'level', operator: 'eq', value: 'hospital', combine: 'and' }];
+      const res = await app.inject({
+        method: 'GET',
+        url: `/api/facilities?filters=${encodeURIComponent(JSON.stringify(filters))}`,
+      });
+      expect(res.statusCode).toBe(200);
+      // Prove it REACHED the store, not merely that the route did not crash. `fakeCtx()` records
+      // every options object `list()` was called with on `__lastListOptions` (see its doc comment
+      // above) — this file's established substitute for a `vi.fn()` spy.
+      expect(ctx.__lastListOptions.filters).toEqual(filters);
+    });
+
+    it('400s on an unknown filter column, naming it', async () => {
+      const ctx = fakeCtx();
+      const app = await appWith(ctx);
+      const filters = [{ column: 'password', operator: 'eq', value: 'x', combine: 'and' }];
+      const res = await app.inject({
+        method: 'GET',
+        url: `/api/facilities?filters=${encodeURIComponent(JSON.stringify(filters))}`,
+      });
+      expect(res.statusCode).toBe(400);
+      expect(res.body).toContain('password');
+    });
+
+    it('400s on malformed JSON rather than treating it as no filter', async () => {
+      const ctx = fakeCtx();
+      const app = await appWith(ctx);
+      const res = await app.inject({ method: 'GET', url: '/api/facilities?filters=%7Bnot-json' });
+      expect(res.statusCode).toBe(400);
+    });
+
+    it('still honours the existing named params alongside the grammar', async () => {
+      const ctx = fakeCtx();
+      const app = await appWith(ctx);
+      const res = await app.inject({ method: 'GET', url: '/api/facilities?status=active&health=mapped' });
+      expect(res.statusCode).toBe(200);
+      expect(ctx.__lastListOptions).toMatchObject({ status: 'active', health: 'mapped' });
     });
 
     it('ignores an unknown health value rather than passing it to the store', async () => {

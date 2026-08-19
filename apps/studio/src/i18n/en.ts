@@ -843,10 +843,8 @@ export const en = {
       healthUnmapped: 'Unmapped',
       healthUnprojected: 'Unprojected',
       sourceLabel: 'Source',
-      sourceAll: 'All sources',
       sourceManual: 'Manual entry',
       sourceImport: 'Imported',
-      moreFiltersToggle: 'More filters',
       nationalSystemLabel: 'National system',
       // ⛔ A CANONICAL REGISTER URI, not a short code. This filter is an EXACT match on
       // `facility_registry.national_system` (facility-registry-store.ts's `list`), and migration 082
@@ -854,27 +852,17 @@ export const en = {
       // 'e.g. HFR, MFL' told the operator to type a string that now matches nothing at all.
       nationalSystemPlaceholder: 'e.g. urn:openldr:cs:facility-register:hfr',
       managedOriginLabel: 'Managed origin',
-      managedOriginPlaceholder: 'e.g. central-sync, local',
       ownershipLabel: 'Ownership',
-      ownershipPlaceholder: 'e.g. public, private',
       statusLabel: 'Status',
-      statusPlaceholder: 'e.g. Operating',
       levelLabel: 'Level',
-      levelPlaceholder: 'e.g. Hospital',
       countryLabel: 'Country',
-      countryPlaceholder: 'e.g. TZ',
       zoneLabel: 'Zone',
-      zoneAll: 'All zones',
       regionLabel: 'Region',
-      regionAll: 'All regions',
       districtLabel: 'District',
-      districtAll: 'All districts',
       councilLabel: 'Council',
-      councilAll: 'All councils',
       // Task 10: registry MEMBERSHIP (migration 081's `register_state`) — distinct from the plain
-      // `statusLabel`/`statusPlaceholder` free-text filter above, which is operational status.
+      // `statusLabel` filter above, which is operational status.
       registerStateLabel: 'Register state',
-      registerStateAll: 'All register states',
       registerStateInRegister: 'In register',
       registerStateDropped: 'Dropped by register',
       registerStateNotRegistered: 'Not from a register',

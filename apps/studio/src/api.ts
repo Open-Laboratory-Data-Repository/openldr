@@ -836,6 +836,11 @@ export interface FacilityListQuery {
   registerState?: string;
   health?: FacilityRowHealth;
   limit?: number; offset?: number;
+  /** Task 5: the shared table-query grammar (`@openldr/table-query`), validated server-side
+   *  against `FACILITY_COLUMNS`. ANDed with the named params above, never a replacement for them —
+   *  `q`, `health` and `nationalSystem` have no grammar column and still travel by name. */
+  filters?: ParsedFilter[];
+  sorts?: ParsedSort[];
 }
 /** Mirrors the route's own return shape (facilities-routes.ts's `GET /api/facilities`): `limit`
  *  echoes the store's own default (`DEFAULT_LIST_LIMIT`) when the caller sent none, never the
@@ -847,7 +852,16 @@ export interface FacilityPage { rows: Facility[]; total: number; limit: number; 
 export const listFacilities = (query: FacilityListQuery = {}): Promise<FacilityPage> => {
   const p = new URLSearchParams();
   for (const [k, v] of Object.entries(query)) {
-    if (v !== undefined && v !== null && v !== '') p.set(k, String(v));
+    if (v === undefined || v === null || v === '') continue;
+    if (k === 'filters' || k === 'sorts') {
+      // JSON, not `String(v)` — an array of rule objects stringifies to "[object Object]"
+      // otherwise. An EMPTY array is skipped rather than sent as "[]": the route parses "[]"
+      // fine, but it would put noise in every request and every shareable link.
+      if (!Array.isArray(v) || v.length === 0) continue;
+      p.set(k, JSON.stringify(v));
+      continue;
+    }
+    p.set(k, String(v));
   }
   const qs = p.toString();
   return apiGet(`/api/facilities${qs ? `?${qs}` : ''}`, 'list facilities');

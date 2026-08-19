@@ -130,6 +130,90 @@ there — Zambia's list has nothing between Province and District). When you edi
 only the fields you actually change are re-checked, so an imported facility with a gap in it stays
 editable.
 
+## Filtering, sorting, and search
+
+The Facilities table uses the same toolbar as Audit: a search box, and Filter, Sort, Columns, and
+Reset buttons.
+
+- Search checks name, code, region, district, and council, on the server, in one request. It
+  matches text in any of those five columns, even ones the table is not currently showing.
+- Filter adds a rule: pick a column, an operator, and a value. You can add more than one rule.
+- Sort orders the table by any sortable column, ascending or descending.
+- Columns shows or hides columns.
+- Reset clears every filter, sort, search term, and column choice, and returns the table to its
+  defaults. It only appears once you have applied a filter or a sort. Each control also clears on
+  its own, so you can undo one thing without undoing the rest.
+
+Active filters show as removable chips under the toolbar.
+
+Two controls sit on their own row below the toolbar, because they are not ordinary columns:
+
+- **Mapping health.** Whether a facility can be a mapping target, and whether anything maps to it
+  yet. Mapped means at least one observed code already resolves to it. Unmapped means the facility
+  is ready to be a target but nothing points to it yet. Unprojected means the facility has not
+  reached the report-facing table yet, so it cannot be a mapping target at all. This state comes
+  from a join across two other tables, not a stored column, so it keeps its own dropdown instead of
+  joining the Filter list.
+- **National system.** A free-text box matching the register a facility was imported from. Free
+  text, because a facility can carry a register code your install no longer lists as an active
+  source.
+
+A filtered, sorted view is shareable. Filters and sorts show up in the page's own URL, so copying
+the link and sending it to someone reopens the same view. Older links that used a single query
+parameter, such as `?zone=Central`, still work.
+
+In the studio, Filter and Sort can use these columns: code, name, region, district, status, source,
+zone, council, country, level, ownership, managed origin, and register state.
+
+### Two things worth knowing
+
+Search checks every row directly instead of using an index. On a large national register this can
+take longer than filtering by an exact column value. If a search feels slow, narrow first with
+Filter, then search within the smaller result.
+
+The table's default order and an explicit sort by name can put names in a different order. They
+compare case and accented letters by different rules. If a report depends on a specific order,
+apply an explicit sort instead of relying on the default view.
+
+## Command line: listing facilities
+
+`openldr facilities list` supports the same filter and sort grammar as the toolbar, so a script can
+reproduce any view built in the browser.
+
+- `--where column:operator:value`. Repeatable. Only the first two colons are delimiters, so a value
+  can itself contain a colon.
+- `--sort column` sorts ascending. `--sort -column`, with a leading dash, sorts descending.
+  Repeatable.
+- `--limit <n>` caps how many rows come back. Without it, the command returns at most 200 rows. The
+  table view's last line says how many of the total you are seeing. With `--json`, the total
+  travels in the payload instead, and no such line prints.
+- `--json` prints machine-readable output instead of a table.
+
+```bash
+openldr facilities list --sort -name --limit 10
+```
+
+This lists the last ten facilities by name, Z to A. It applies no filter, so it returns rows
+wherever the register has any.
+
+```bash
+openldr facilities list --where level:eq:hospital --sort -name
+```
+
+This lists facilities whose level column matches "hospital" exactly, sorted by name from Z to A.
+`eq` needs an exact match, and it is case sensitive, so check your own register's actual level
+values first. Registers often store values like "Health Post", "Health Centre" or "1st Level
+Hospital", and a value that does not match exactly returns nothing.
+
+The CLI can also filter and sort by `id` and `facilitySystem` (the national system code), two
+columns the studio toolbar leaves out because `facilitySystem` already has its own text box there.
+`health` has no `--where` form: it is worked out, not stored, so filter by it in the studio's
+Mapping health dropdown instead.
+
+An unknown column, or an operator that column does not allow, is rejected with a message naming
+what was wrong, the same validation the toolbar uses. A mistyped flag fails the same way a
+mistyped filter would in the browser.
+
 ## Related guides
 
 - [Terminology](/docs/terminology)

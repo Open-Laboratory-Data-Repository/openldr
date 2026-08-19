@@ -33,4 +33,15 @@ describe("column maps", () => {
       }
     }
   });
+
+  it("carries every filter the facility list route already accepts", () => {
+    // These three are named params on FacilityListOptions and filters on the page today.
+    // Omitting them from the map means the toolbar cannot offer what the page already does.
+    for (const id of ["source", "managedOrigin", "registerState"]) {
+      expect(FACILITY_COLUMNS[id], `FACILITY_COLUMNS is missing "${id}"`).toBeDefined();
+    }
+    expect(FACILITY_COLUMNS.source!.sql).toBe("source");
+    expect(FACILITY_COLUMNS.managedOrigin!.sql).toBe("managed_origin");
+    expect(FACILITY_COLUMNS.registerState!.sql).toBe("register_state");
+  });
 });

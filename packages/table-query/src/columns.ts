@@ -43,6 +43,9 @@ export const FACILITY_COLUMNS: TableColumnMap = {
   level:         { sql: "level",           type: "enum", operators: ENUM_OPS,     sortable: true },
   ownership:     { sql: "ownership",       type: "enum", operators: ENUM_OPS,     sortable: true },
   facilitySystem:{ sql: "facility_system", type: "text", operators: TEXT_OPS,     sortable: true },
+  source:        { sql: "source",         type: "enum", operators: ENUM_OPS,     sortable: true },
+  managedOrigin: { sql: "managed_origin", type: "enum", operators: ENUM_OPS,     sortable: true },
+  registerState: { sql: "register_state", type: "enum", operators: ENUM_OPS,     sortable: true },
 };
 
 /** Appended to every sort so ORDER BY + OFFSET is stable across pages. */

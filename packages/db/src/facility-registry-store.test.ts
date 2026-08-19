@@ -254,6 +254,150 @@ describe('createFacilityRegistryStore', () => {
     expect(r.rows.every((x) => x.region === 'Dodoma' && x.status === 'Closed')).toBe(true);
   });
 
+
+  // --- Task 2: the shared table-query grammar --------------------------------------------------
+
+  // `list()` now also accepts validated `filters`/`sorts` from `parseTableQuery`
+  // (`@openldr/table-query`), ANDed with the fourteen named params above rather than replacing
+  // them. Every column in `FACILITY_COLUMNS` is `text` or `enum`, and `applySorts` collates both,
+  // so NO explicit-sort assertion can run here: pg-mem's parser rejects `COLLATE` outright. The
+  // sort proofs live in `facility-registry-live.test.ts`. What CAN run offline is the filter
+  // translation and the no-sort default, and both are below.
+  describe('grammar filters and sorts', () => {
+    it('applies a grammar filter that no named param sent', async () => {
+      const s = await seedMany(25);
+      // `country: 'KE'` is 5 of the 25 rows (i % 5 === 0). Deliberately a value that selects a
+      // SUBSET: a filter that were silently dropped would return all 25 and fail this, whereas
+      // filtering on `level = 'dispensary'` (all 25 rows) would pass either way.
+      const r = await s.list({
+        filters: [{ column: 'country', operator: 'eq', value: 'KE', combine: 'and' }],
+        limit: 1000,
+      });
+      expect(r.total).toBe(5);
+      expect(r.rows).toHaveLength(5);
+      expect(r.rows.every((x) => x.country === 'KE')).toBe(true);
+    });
+
+    it('applies an operator the named params cannot express (like)', async () => {
+      const s = await seedMany(25);
+      // `q` searches five columns at once; the grammar can target ONE. 'Facility 01' matches
+      // 010..019 — ten rows — and nothing else in the fixture.
+      const r = await s.list({
+        filters: [{ column: 'name', operator: 'like', value: 'Facility 01', combine: 'and' }],
+        limit: 1000,
+      });
+      expect(r.total).toBe(10);
+      expect(r.rows.every((x) => x.name.startsWith('Facility 01'))).toBe(true);
+    });
+
+    it('ANDs a grammar filter with the existing named params', async () => {
+      const s = await seedMany(25);
+      // Named `status: 'Active'` is 17 rows; grammar `country = 'KE'` is 5; the intersection is 4
+      // (row 15 is the KE row that is also Closed). Every number here differs from every other, so
+      // dropping either half of the conjunction changes the count.
+      const r = await s.list({
+        status: 'Active',
+        filters: [{ column: 'country', operator: 'eq', value: 'KE', combine: 'and' }],
+        limit: 1000,
+      });
+      expect(r.total).toBe(4);
+      expect(r.rows.every((x) => x.status === 'Active' && x.country === 'KE')).toBe(true);
+    });
+
+    // Minor 7 (review remediation): the earlier tests above all use a single `eq` rule, so nothing
+    // here pinned how a MULTI-rule grammar filter groups against a named param. `buildFilterExpression`
+    // folds rule 0 and rule 1 together first (`country = 'KE' OR ownership = 'faith-based'`), and
+    // `applyFilters` then ANDs that whole group onto the named `status = 'Active'` clause as one
+    // `.where(callback)` call — Kysely parenthesizes the callback's result, giving
+    // `status = 'Active' AND (country = 'KE' OR ownership = 'faith-based')`. The wrong grouping this
+    // guards against is the OR leaking past the callback boundary, e.g. built as chained
+    // `.where()`/`.orWhere()` calls instead: `(status = 'Active' AND country = 'KE') OR
+    // ownership = 'faith-based'`.
+    //
+    // Fixture (seedMany, n=25): Active∩KE = {5,10,20,25} (4), Active∩faith-based = {7,14} (2, since
+    // 21 is faith-based but Closed) — correct grouping is their union, 6 rows. The wrong grouping
+    // adds every faith-based row regardless of status, including Closed row 21, for 7 rows. The two
+    // groupings disagree (6 vs 7), so this fails if the grouping were ever flattened.
+    it('groups a multi-rule OR grammar filter correctly against a named param, not flattened across it', async () => {
+      const s = await seedMany(25);
+      const r = await s.list({
+        status: 'Active',
+        filters: [
+          { column: 'country', operator: 'eq', value: 'KE', combine: 'and' },
+          { column: 'ownership', operator: 'eq', value: 'faith-based', combine: 'or' },
+        ],
+        limit: 1000,
+      });
+      expect(r.total).toBe(6);
+      expect(r.rows.map((x) => x.id).sort()).toEqual(['f005', 'f007', 'f010', 'f014', 'f020', 'f025']);
+    });
+
+    it('counts with the same grammar filters as the page it describes', async () => {
+      const s = await seedMany(25);
+      // The rows query and the count query share ONE predicate builder. Asserting the VALUE (5),
+      // not just `total === rows.length`, is what catches a count query that skipped the grammar:
+      // that would report 25 against a 5-row page.
+      const r = await s.list({
+        filters: [{ column: 'country', operator: 'eq', value: 'KE', combine: 'and' }],
+        limit: 1000,
+      });
+      expect(r.total).toBe(5);
+      expect(r.total).toBe(r.rows.length);
+    });
+
+    it('keeps the registry alphabetical when the caller sends no sort', async () => {
+      // The regression guard for the literal `orderBy(name, id)` pair. That default is deliberately
+      // NOT routed through `applySorts` as `defaultSorts`: `name` is a text column, `applySorts`
+      // collates text, and pg-mem cannot parse COLLATE — routing it there takes this whole file
+      // (and two other packages) offline. Without this test someone could delete the literal
+      // branch and only the live suite would notice.
+      const { s } = await store();
+      // Inserted in an order that is NOT alphabetical, so pg-mem's stable scan order cannot pass
+      // this by accident if the ordering were dropped altogether. The ids ASCEND with insertion
+      // order and therefore DISAGREE with the alphabetical order of the names — without that, the
+      // `id` tiebreaker alone reproduces alphabetical order and seeding ids that agree with
+      // alphabetical name order would make this test unable to fail even with `name` ordering
+      // deleted.
+      const seeded = [['f1', 'Zanzibar Clinic'], ['f2', 'Arusha Clinic'], ['f3', 'Mbeya Clinic']];
+      for (const [id, name] of seeded) {
+        await s.upsert({ id: id!, name: name!, facilityCode: `LC-${id}`, source: 'manual' as const });
+      }
+      const names = (await s.list({ limit: 1000 })).rows.map((r) => r.name);
+      expect(names).toEqual(['Arusha Clinic', 'Mbeya Clinic', 'Zanzibar Clinic']);
+    });
+
+    // Important 1 (review remediation): `health` is a POST-join predicate (`joinHealth`, over
+    // `facility_concept_projection`/`term_mappings`) and a grammar `filters` rule is a PRE-join
+    // predicate (`applyFilters`, over `facility_registry` columns) — this task is what first put
+    // both predicates on the same query. The existing health tests near the bottom of this file
+    // (`filters by health, with a total that matches`) only ever send `health` alone; nothing sent
+    // both together until this test. No sort needed, so it runs offline on pg-mem like the rest of
+    // this describe block. Uses the same `project()` fixture helper as the health tests below.
+    //
+    // Fixture: four facilities split so health and the grammar filter each select an overlapping
+    // but different subset — health=mapped is {a, c}, grammar country=KE is {a, b, d} — and only
+    // their intersection, {a}, satisfies both. Dropping either predicate changes the count: health
+    // alone gives 2, the grammar filter alone gives 3, only the combination gives 1.
+    it('combines health (post-join) with a grammar filter (pre-join) on the same list() call', async () => {
+      const { db, s } = await store();
+      await s.upsert({ id: 'a', name: 'Alpha', facilityCode: 'L-A', source: 'manual' as const, country: 'KE' });
+      await s.upsert({ id: 'b', name: 'Beta', facilityCode: 'L-B', source: 'manual' as const, country: 'KE' });
+      await s.upsert({ id: 'c', name: 'Gamma', facilityCode: 'L-C', source: 'manual' as const, country: 'TZ' });
+      await s.upsert({ id: 'd', name: 'Delta', facilityCode: 'L-D', source: 'manual' as const, country: 'KE' });
+      await project(db, 'a', 'L-A', 1); // mapped, country KE — the only row satisfying both
+      await project(db, 'b', 'L-B', 0); // unmapped, country KE
+      await project(db, 'c', 'L-C', 1); // mapped, country TZ
+      // 'd' is never projected — unprojected, country KE
+
+      const r = await s.list({
+        health: 'mapped',
+        filters: [{ column: 'country', operator: 'eq', value: 'KE', combine: 'and' }],
+      });
+      expect(r.total).toBe(1);
+      expect(r.rows.map((x) => x.id)).toEqual(['a']);
+    });
+  });
+
   it('handles a realistically long facility name without truncating or erroring', async () => {
     const { s } = await store();
     const long = `Mwananyamala Regional Referral Hospital ${'and Community Outreach Annexe '.repeat(6)}`.trim();

@@ -4,6 +4,9 @@ import { render, screen, fireEvent, waitFor, within } from '@testing-library/rea
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import '@/i18n';
+// ⛔ Direct path, never the `@/components/data-table` barrel: this helper imports vitest (a
+// devDependency) and production pages import that barrel.
+import { addFilterViaPopover, expectStandardTableToolbar } from '@/components/data-table/expectStandardTableToolbar';
 
 // Mirrors Users.test.tsx's mocking pattern: spread the real module so AppShell's own API calls
 // (listPluginUis, etc.) keep working, and only stub the facilities/forms surface this page uses.
@@ -229,8 +232,12 @@ describe('Facilities page', () => {
 
     clickMenuItem('Facility actions', /import facilities/i);
     expect(await screen.findByText(/^import facilities$/i)).toBeInTheDocument();
-    expect(await screen.findByLabelText('File')).toBeInTheDocument();
-    expect(screen.getByLabelText('National system')).toBeInTheDocument();
+    // Task 5: the page's OWN 'National system' filter is always visible now (it used to sit behind
+    // the removed "More filters" disclosure), so both fields carry that label while the sheet is
+    // open. Scoped to the sheet rather than relaxed — this test is about the SHEET's field.
+    const sheet = await screen.findByRole('dialog');
+    expect(within(sheet).getByLabelText('File')).toBeInTheDocument();
+    expect(within(sheet).getByLabelText('National system')).toBeInTheDocument();
   });
 
   it('offers Import facilities even without a published form — importing writes core columns directly, not through the form', async () => {
@@ -853,72 +860,81 @@ describe('Facilities page', () => {
       await waitFor(() => expect(window.location.search).toContain('q=dodoma'));
     });
 
-    // Fix wave 1 / Finding 1: the ten open-vocabulary filters added behind the "More filters"
-    // disclosure — pins that the toggle reveals them, that a Select among them (zone, backed by
-    // `listFacilityAdminValues`) round-trips through the URL exactly like `health`/`source`
-    // already did, and that a free-text one among them (nationalSystem — deliberately the audit's
-    // actual "registry source", see the design's provenance table) goes through the same debounce
-    // as search rather than firing on every keystroke.
-    it('Fix wave 1 / Finding 1: reveals the open-vocabulary filters behind "More filters" and round-trips them through the URL', async () => {
+    // Fix wave 1 / Finding 1 (rewritten for Task 5): the ten open-vocabulary filters no longer live
+    // behind a "More filters" disclosure — the ones with a grammar column moved into the shared
+    // toolbar's Filter popover, and the one without (`nationalSystem`) keeps its own debounced
+    // input. Same two capabilities the original test pinned, driven through the new surface: an
+    // admin-area value comes from `listFacilityAdminValues` (not a hardcoded list) and reaches the
+    // server, and a free-text named filter still debounces into the URL rather than firing per
+    // keystroke.
+    it('Fix wave 1 / Finding 1: the admin-area filters moved into the toolbar, and nationalSystem keeps its own debounced input', async () => {
+      window.history.replaceState({}, '', '/facilities');
       listFacilitiesMock.mockResolvedValue(makePage(makeRows(1), { total: 1 }));
       (listFacilityAdminValues as ReturnType<typeof vi.fn>).mockImplementation((level: string) =>
         level === 'zone' ? Promise.resolve([{ value: 'Central', count: 3 }]) : Promise.resolve([]));
       show();
       await screen.findByText('Facility 0');
 
-      // Collapsed by default — none of the ten extra filters are visible yet.
-      expect(screen.queryByLabelText('National system')).not.toBeInTheDocument();
-
-      fireEvent.click(screen.getByRole('button', { name: /more filters/i }));
-      expect(await screen.findByLabelText('National system')).toBeInTheDocument();
-
-      // The zone Select is populated from `listFacilityAdminValues('zone', {})` — the same
-      // mechanism `useFacilityAdminSuggestions` uses, called directly rather than through that
-      // hook (which requires a FormSchema this toolbar doesn't have).
+      // The zone options are fetched for the Filter popover's value picker — the same mechanism
+      // `useFacilityAdminSuggestions` uses, called directly rather than through that hook.
       await waitFor(() => expect(listFacilityAdminValues).toHaveBeenCalledWith('zone'));
-      fireEvent.click(screen.getByRole('combobox', { name: 'Zone' }));
-      fireEvent.click(await screen.findByRole('option', { name: 'Central' }));
-      await waitFor(() => expect(window.location.search).toContain('zone=Central'));
-      await waitFor(() => expect(listFacilitiesMock).toHaveBeenCalledWith(
-        expect.objectContaining({ zone: 'Central' }),
-      ));
 
-      // A free-text filter from the same panel debounces into the URL exactly like search does.
+      fireEvent.click(screen.getByRole('button', { name: /^filter$/i }));
+      fireEvent.click(await screen.findByRole('button', { name: /add filter/i }));
+      fireEvent.click(screen.getByRole('combobox', { name: /columns/i }));
+      fireEvent.click(await screen.findByRole('option', { name: 'Zone' }));
+      fireEvent.click(screen.getByRole('combobox', { name: 'Pick value' }));
+      fireEvent.click(await screen.findByRole('option', { name: 'Central' }));
+      fireEvent.click(screen.getByRole('button', { name: /^apply$/i }));
+
+      await waitFor(() => expect(listFacilitiesMock).toHaveBeenCalledWith(expect.objectContaining({
+        filters: [expect.objectContaining({ column: 'zone', operator: 'eq', value: 'Central' })],
+      })));
+      await waitFor(() => {
+        const raw = new URLSearchParams(window.location.search).get('filters');
+        expect(JSON.parse(raw ?? '[]')).toEqual([expect.objectContaining({ column: 'zone', value: 'Central' })]);
+      });
+
+      // `nationalSystem` has no column in FACILITY_COLUMNS, so it stays a named param with its own
+      // input — and still debounces into the URL exactly like search does.
       fireEvent.change(screen.getByLabelText('National system'), { target: { value: 'HFR' } });
       await waitFor(() => expect(window.location.search).toContain('nationalSystem=HFR'));
       await waitFor(() => expect(listFacilitiesMock).toHaveBeenCalledWith(
         expect.objectContaining({ nationalSystem: 'HFR' }),
       ));
+      window.history.replaceState({}, '', '/facilities');
     });
 
-    // Task 10: registerState — a CLOSED-vocabulary filter (unlike nationalSystem above), so it
-    // gets a Select rather than an Input, but round-trips through the URL the exact same way. Lives
-    // in THIS describe block (not the standalone Task 10 one further up), same as every other
-    // "Task 4" test: this whole block deliberately runs LAST and shares `window.location` between
-    // its own tests without resetting it (see the block's own doc comment) — a test that mutates
-    // the URL and lives OUTSIDE this block would leak that mutation into whichever test in here
-    // happens to run next (this was measured: it broke "Fix wave 1 / Finding 1" when this test
-    // briefly lived in the standalone Task 10 describe block instead).
-    it('Task 10: the list gains a register_state filter that round-trips through the URL and the store call', async () => {
+    // Task 10 (rewritten for Task 5): registerState is a grammar column now, so it is filtered
+    // through the toolbar's Filter popover rather than its own Select — but it must still reach the
+    // store and still round-trip through the URL. Lives in THIS describe block, same as every other
+    // "Task 4" test: this block deliberately runs LAST and shares `window.location` between its own
+    // tests, so a URL-mutating test outside it would leak into whichever test in here runs next
+    // (measured — it broke "Fix wave 1 / Finding 1" when this briefly lived elsewhere).
+    it('Task 10: register_state is a grammar filter that round-trips through the URL and the store call', async () => {
       window.history.replaceState({}, '', '/facilities');
       (listPublishedForms as ReturnType<typeof vi.fn>).mockResolvedValue([publishedFacilityForm]);
       listFacilitiesMock.mockResolvedValue(makePage([sampleFacility]));
       show();
       await waitFor(() => expect(screen.getByText('Dodoma Regional Referral')).toBeInTheDocument());
 
-      expect(screen.queryByRole('combobox', { name: 'Register state' })).not.toBeInTheDocument();
-      fireEvent.click(screen.getByRole('button', { name: /more filters/i }));
-      const trigger = await screen.findByRole('combobox', { name: 'Register state' });
-
-      fireEvent.click(trigger);
+      fireEvent.click(screen.getByRole('button', { name: /^filter$/i }));
+      fireEvent.click(await screen.findByRole('button', { name: /add filter/i }));
+      fireEvent.click(screen.getByRole('combobox', { name: /columns/i }));
+      fireEvent.click(await screen.findByRole('option', { name: 'Register state' }));
+      fireEvent.click(screen.getByRole('combobox', { name: 'Pick value' }));
       fireEvent.click(await screen.findByRole('option', { name: 'In register' }));
+      fireEvent.click(screen.getByRole('button', { name: /^apply$/i }));
 
-      await waitFor(() => expect(window.location.search).toContain('registerState=in_register'));
-      await waitFor(() => expect(listFacilitiesMock).toHaveBeenCalledWith(
-        expect.objectContaining({ registerState: 'in_register' }),
-      ));
-      // Cleans up after itself — the next test in this block (and StrictMode's later re-mount test,
-      // further down the file) must not inherit `registerState=in_register` left in the URL.
+      await waitFor(() => expect(listFacilitiesMock).toHaveBeenCalledWith(expect.objectContaining({
+        filters: [expect.objectContaining({ column: 'registerState', operator: 'eq', value: 'in_register' })],
+      })));
+      await waitFor(() => {
+        const raw = new URLSearchParams(window.location.search).get('filters');
+        expect(JSON.parse(raw ?? '[]')).toEqual([expect.objectContaining({ column: 'registerState', value: 'in_register' })]);
+      });
+      // Cleans up after itself — the next test in this block (and the StrictMode re-mount test
+      // further down the file) must not inherit this filter from the URL.
       window.history.replaceState({}, '', '/facilities');
     });
 
@@ -1042,5 +1058,309 @@ describe('Facilities page', () => {
 
     expect(await screen.findByText('Facility 0')).toBeInTheDocument();
     expect(screen.queryByText(/loading/i)).not.toBeInTheDocument();
+  });
+
+  /** Task 5 (shared table-query grammar): the registry's filter surface is now the shared
+   *  DataTableToolbar, and every grammar filter/sort travels to the server as JSON. `health` is NOT
+   *  a grammar column (it is not in FACILITY_COLUMNS) so it keeps its own Select and its own named
+   *  param, and `nationalSystem` keeps its own debounced Input for the same reason.
+   *
+   *  These tests run after the "Task 4" block, which deliberately shares `window.location` between
+   *  its own tests, so each one resets the URL first — a grammar filter now lands in the query
+   *  string too, and leaking one into a later test would change what that test's page fetches. */
+  describe('Task 5: the shared table toolbar', () => {
+    beforeEach(() => {
+      window.history.replaceState({}, '', '/facilities');
+      (listPublishedForms as ReturnType<typeof vi.fn>).mockResolvedValue([publishedFacilityForm]);
+      listFacilitiesMock.mockResolvedValue(makePage([sampleFacility]));
+    });
+
+    it('renders the standard toolbar and sends filters to the server', async () => {
+      show();
+      await screen.findByRole('table');
+
+      // Level, explicitly: the leading column (`code`) would also work, but naming a column proves
+      // the popover's own column Select is populated from FACILITY_COLUMNS rather than from one
+      // hand-written entry. Level renders the "Enter value" text input the helper needs — the
+      // registry has no value set for it (see the ColumnDef's own comment in Facilities.tsx).
+      await addFilterViaPopover('hospital', 'Level');
+      expectStandardTableToolbar();
+
+      await waitFor(() => {
+        const last = listFacilitiesMock.mock.calls.at(-1)![0];
+        expect(last.filters).toEqual([
+          expect.objectContaining({ column: 'level', operator: expect.any(String), value: 'hospital' }),
+        ]);
+      });
+    });
+
+    /** ⛔ CONTROLLER OVERRIDE (2026-08-19) replaces the plan's own second test, which asserted
+     *  `expect(last.filters ?? []).not.toContainEqual(...{ column: 'health' })`. That could never
+     *  fail: `health` is not in FACILITY_COLUMNS, the page builds its columns from that map, and
+     *  `parseTableQuery` rejects unknown columns — no production change could put a `health` rule in
+     *  `filters`. This drives the health control to a REAL value instead, asserts the outgoing
+     *  request carried that value, and asserts the grammar filters still went out beside it. */
+    it('keeps health as a named param carrying its own value, alongside the grammar filters', async () => {
+      show();
+      await screen.findByRole('table');
+
+      await addFilterViaPopover('hospital', 'Level');
+      await waitFor(() => expect(listFacilitiesMock.mock.calls.at(-1)![0].filters).toHaveLength(1));
+
+      fireEvent.click(screen.getByRole('combobox', { name: 'Mapping health' }));
+      fireEvent.click(await screen.findByRole('option', { name: 'Unmapped' }));
+
+      await waitFor(() => {
+        const last = listFacilitiesMock.mock.calls.at(-1)![0];
+        expect(last.health).toBe('unmapped');
+        // The grammar filter is still there, unchanged — picking a health value must not clear,
+        // rewrite or absorb it.
+        expect(last.filters).toEqual([
+          expect.objectContaining({ column: 'level', value: 'hospital' }),
+        ]);
+      });
+    });
+
+    it('puts the grammar filters in the URL, so a filtered view is still shareable', async () => {
+      show();
+      await screen.findByRole('table');
+
+      await addFilterViaPopover('hospital', 'Level');
+
+      await waitFor(() => {
+        const raw = new URLSearchParams(window.location.search).get('filters');
+        expect(raw).toBeTruthy();
+        expect(JSON.parse(raw!)).toEqual([
+          expect.objectContaining({ column: 'level', value: 'hospital' }),
+        ]);
+      });
+    });
+
+    it('restores grammar filters and sorts from the URL on mount', async () => {
+      const filters = [{ column: 'region', operator: 'eq', value: 'Dodoma Region', combine: 'and' }];
+      const sorts = [{ column: 'name', ascending: false }];
+      window.history.replaceState({}, '', `/facilities?filters=${encodeURIComponent(JSON.stringify(filters))}&sorts=${encodeURIComponent(JSON.stringify(sorts))}`);
+
+      show();
+
+      await waitFor(() => expect(listFacilitiesMock).toHaveBeenCalledWith(expect.objectContaining({
+        filters: [expect.objectContaining({ column: 'region', operator: 'eq', value: 'Dodoma Region' })],
+        sorts: [expect.objectContaining({ column: 'name', ascending: false })],
+      })));
+      // And the restored rule is visible as a chip, not just replayed into the request.
+      expect(await screen.findByText(/clear all/i)).toBeInTheDocument();
+    });
+
+    /** Important 2 (Task 5 review): `readUrlState` stopped reading the eleven named filter params
+     *  this page used to accept, and `writeUrlState` stopped writing them — so a saved
+     *  `/facilities?zone=Central` silently loaded the whole register with nothing on screen saying a
+     *  filter had been dropped. The read-side shim maps each surviving legacy param onto its
+     *  `FACILITY_COLUMNS` column as an `eq` rule. Mutation-checked by deleting
+     *  `readLegacyFiltersFromUrl`'s call site. */
+    it('Important 2: a legacy named filter param in the URL still reaches the server, as a grammar rule', async () => {
+      window.history.replaceState({}, '', '/facilities?zone=Central&registerState=in_register');
+
+      show();
+      await screen.findByRole('table');
+
+      await waitFor(() => expect(listFacilitiesMock).toHaveBeenCalled());
+      // Bare expect on the shape once the call has ARRIVED — a broken shim must print a diff on
+      // `filters`, not a 5s timeout that could equally mean the page threw.
+      expect(listFacilitiesMock.mock.calls.at(-1)![0].filters).toEqual([
+        { column: 'zone', operator: 'eq', value: 'Central', combine: 'and' },
+        { column: 'registerState', operator: 'eq', value: 'in_register', combine: 'and' },
+      ]);
+      // And it is visible as a chip, not just replayed into the request.
+      expect(screen.getByText(/clear all/i)).toBeInTheDocument();
+    });
+
+    /** The other half of the same finding: the legacy form is READ, never written back. The URL a
+     *  restored link rewrites itself to must be the new JSON form only, so there is exactly one
+     *  going-forward format. */
+    it('Important 2: does not write the legacy params back out — the JSON form is what a restored link becomes', async () => {
+      window.history.replaceState({}, '', '/facilities?zone=Central');
+
+      show();
+      await screen.findByRole('table');
+
+      // `writeUrlState`'s effect commits with the same mount render that fires the request, so the
+      // URL is already rewritten by the time the table paints. Bare expects, not a `waitFor` on the
+      // param appearing — that would turn a missing shim into a 5s timeout instead of a diff.
+      const params = new URLSearchParams(window.location.search);
+      expect(params.get('zone')).toBeNull();
+      expect(params.get('filters')).toBe('[{"column":"zone","operator":"eq","value":"Central","combine":"and"}]');
+    });
+
+    /** Minor 5 (Task 5 review): `FilterRule.id` is a client-only React key. `FacilityListQuery`
+     *  declares `ParsedFilter[]` (`Omit<FilterRule, 'id'>`), but TS's excess-property check does not
+     *  fire on a non-literal, so the id rode along into every request and every shared link.
+     *  `toEqual` with an exact object (not `objectContaining`) is what pins its absence. */
+    it('Minor 5: the client-only rule id never reaches the wire or the URL', async () => {
+      show();
+      await screen.findByRole('table');
+
+      await addFilterViaPopover('hospital', 'Level');
+
+      await waitFor(() => expect(listFacilitiesMock.mock.calls.at(-1)![0].filters).toHaveLength(1));
+      expect(listFacilitiesMock.mock.calls.at(-1)![0].filters![0]).not.toHaveProperty('id');
+      expect(JSON.parse(new URLSearchParams(window.location.search).get('filters')!)[0])
+        .not.toHaveProperty('id');
+    });
+
+    /** ⛔ C1 (whole-branch review): the Status filter is a TEXT box, always — including when the
+     *  terminology expansion succeeded.
+     *
+     *  Task 5's Minor 4 made the type conditional (`statusOptions.length > 0 ? 'enum' : 'text'`),
+     *  which had it backwards. Measured on the live 3 789-row register: stored statuses are
+     *  `Functional` (3 771), `Permanent closure` (11), `Closed` (5), `Active` (1) and
+     *  `Temporarily closure` (1), while `vs-location-status` expands to `active`/`suspended`/
+     *  `inactive`. `status` is an `enum` column server-side (packages/table-query/src/columns.ts),
+     *  so it has no `like` and the SQL is a case-sensitive `coalesce(status::text,'') = $1`. Every
+     *  value the picker could offer therefore returned zero rows, on a column whose cells said
+     *  `Functional`.
+     *
+     *  ⚠ The `findByText('Active')` below is load-bearing, not decoration. It gates on the
+     *  expansion having RESOLVED — the display label only renders once `statusDisplayMap` is
+     *  filled, which is the exact state that used to flip the column to `enum`. Without it the
+     *  first paint has an empty option list and this test would pass against the old code too. */
+    it('C1: status filters as free text even when the terminology expansion IS available', async () => {
+      listFacilitiesMock.mockResolvedValue(makePage([{ ...sampleFacility, status: 'active' }]));
+
+      show();
+      await screen.findByRole('table');
+      expect(await screen.findByText('Active')).toBeInTheDocument();
+
+      // Driven by hand rather than through `addFilterViaPopover`, for the reason spelled out in the
+      // Minor 4 test below: a `findBy` that never resolves reports a 5s timeout, which is equally
+      // what a page that threw looks like.
+      fireEvent.click(screen.getByRole('button', { name: /^filter$/i }));
+      fireEvent.click(await screen.findByRole('button', { name: /add filter/i }));
+      fireEvent.click(screen.getByRole('combobox', { name: /columns/i }));
+      fireEvent.click(await screen.findByRole('option', { name: 'Status' }));
+
+      expect(screen.queryByLabelText(/enter value/i)).not.toBeNull();
+      expect(screen.queryByRole('combobox', { name: /pick value/i })).toBeNull();
+    });
+
+    /** The seam the whole-branch review said no test in this branch covered: not which widget
+     *  renders, but whether a value an operator would actually type — one that exists in the
+     *  register and in no value set — survives the trip to `listFacilities`. */
+    it('C1: the Status value widget forwards a stored value the value set does not contain', async () => {
+      listFacilitiesMock.mockResolvedValue(makePage([{ ...sampleFacility, status: 'active' }]));
+
+      show();
+      await screen.findByRole('table');
+      expect(await screen.findByText('Active')).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: /^filter$/i }));
+      fireEvent.click(await screen.findByRole('button', { name: /add filter/i }));
+      fireEvent.click(screen.getByRole('combobox', { name: /columns/i }));
+      fireEvent.click(await screen.findByRole('option', { name: 'Status' }));
+      fireEvent.change(screen.getByLabelText(/enter value/i), { target: { value: 'Functional' } });
+      fireEvent.click(screen.getByRole('button', { name: /^apply$/i }));
+
+      // Wait for the ARRIVAL of the filtered request, then assert its shape bare.
+      await waitFor(() => expect(listFacilitiesMock.mock.calls.at(-1)![0].filters).toHaveLength(1));
+      expect(listFacilitiesMock.mock.calls.at(-1)![0].filters![0]).toEqual({
+        column: 'status', operator: 'eq', value: 'Functional', combine: 'and',
+      });
+    });
+
+    /** C4 (whole-branch review): `zone`/`region`/`district`/`council` take their options from the
+     *  register's own distinct values, so `enum` is right for them once populated. But each effect
+     *  `.catch`es into `[]`, so a failed `GET /api/facilities/admin-values` left all four rendering
+     *  an empty Select — the same dead end C1 was about, on two default-visible columns. */
+    it('C4: Region falls back to free text when the admin-values fetch fails', async () => {
+      (listFacilityAdminValues as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('admin values unavailable'));
+
+      show();
+      await screen.findByRole('table');
+
+      fireEvent.click(screen.getByRole('button', { name: /^filter$/i }));
+      fireEvent.click(await screen.findByRole('button', { name: /add filter/i }));
+      fireEvent.click(screen.getByRole('combobox', { name: /columns/i }));
+      fireEvent.click(await screen.findByRole('option', { name: 'Region' }));
+
+      expect(screen.queryByLabelText(/enter value/i)).not.toBeNull();
+      expect(screen.queryByRole('combobox', { name: /pick value/i })).toBeNull();
+    });
+
+    /** Minor 4 (Task 5 review), kept as the other half of C1 above: with terminology DOWN the
+     *  column must still filter, which it did before this branch as a plain text box. The type is
+     *  no longer conditional — this pins that the down case did not regress while C1 fixed the up
+     *  case. */
+    it('Minor 4: status still filters as free text when the terminology expansion is unavailable', async () => {
+      (expandValueSet as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('terminology unavailable'));
+
+      show();
+      await screen.findByRole('table');
+
+      // ⚠ Driven by hand rather than through `addFilterViaPopover`. That helper's own
+      // `findByLabelText(/enter value/i)` is the step a regression breaks, and a `findBy` that never
+      // resolves surfaces as "Test timed out in 5000ms" — which is equally what a page that threw
+      // looks like, so it proves nothing about WHICH widget rendered. Opening the popover here and
+      // asserting bare makes the broken run print "expected null not to be null" instead.
+      fireEvent.click(screen.getByRole('button', { name: /^filter$/i }));
+      fireEvent.click(await screen.findByRole('button', { name: /add filter/i }));
+      fireEvent.click(screen.getByRole('combobox', { name: /columns/i }));
+      fireEvent.click(await screen.findByRole('option', { name: 'Status' }));
+
+      // The value widget itself: a text Input ("Enter value"), never the enum Select ("Pick value")
+      // that an `enum` ColumnDef with no `enumOptions` would render empty and unusable.
+      expect(screen.queryByLabelText(/enter value/i)).not.toBeNull();
+      expect(screen.queryByRole('combobox', { name: /pick value/i })).toBeNull();
+
+      // And it filters end to end, not just renders.
+      fireEvent.change(screen.getByLabelText(/enter value/i), { target: { value: 'Operating' } });
+      fireEvent.click(screen.getByRole('button', { name: /^apply$/i }));
+
+      await waitFor(() => expect(listFacilitiesMock.mock.calls.at(-1)![0].filters).toHaveLength(1));
+      expect(listFacilitiesMock.mock.calls.at(-1)![0].filters![0]).toEqual({
+        column: 'status', operator: 'eq', value: 'Operating', combine: 'and',
+      });
+    });
+
+    /** Minor 3 (Task 5 review): Reset used `table.resetAll()`, which restores `defaultFilters` —
+     *  on this page that is the URL's own grammar, so on a page opened from a filtered link Reset
+     *  put that link's filters straight back. It also left `q`, `health` and `nationalSystem`
+     *  applied, which is three filters surviving a button labelled Reset. */
+    it('Minor 3: Reset clears everything the page filters on, including a filter restored from the URL', async () => {
+      window.history.replaceState({}, '', '/facilities?filters=%5B%7B%22column%22%3A%22zone%22%2C%22operator%22%3A%22eq%22%2C%22value%22%3A%22Central%22%2C%22combine%22%3A%22and%22%7D%5D&q=dodoma&health=unmapped&nationalSystem=HFR');
+
+      show();
+      await screen.findByRole('table');
+      await waitFor(() => expect(listFacilitiesMock.mock.calls.at(-1)![0].filters).toHaveLength(1));
+
+      const before = listFacilitiesMock.mock.calls.length;
+      fireEvent.click(screen.getByRole('button', { name: /^reset$/i }));
+
+      // Wait for the ARRIVAL of the post-Reset request, then assert its shape bare — a `waitFor`
+      // wrapped around the shape assertion turns any failure into a 5s timeout, which is also what
+      // a page that threw looks like.
+      await waitFor(() => expect(listFacilitiesMock.mock.calls.length).toBeGreaterThan(before));
+      const last = listFacilitiesMock.mock.calls.at(-1)![0];
+      expect(last.filters).toEqual([]);
+      expect(last.sorts).toEqual([]);
+      expect(last.q).toBeUndefined();
+      expect(last.health).toBeUndefined();
+      expect(last.nationalSystem).toBeUndefined();
+      // The URL follows: nothing left in the query string for anyone to re-share.
+      expect(window.location.search).toBe('');
+    });
+
+    it('sends a sort to the server rather than reordering the fetched page in the browser', async () => {
+      show();
+      await screen.findByRole('table');
+
+      fireEvent.click(screen.getByRole('button', { name: /^sort$/i }));
+      fireEvent.click(await screen.findByRole('combobox', { name: /add sort/i }));
+      fireEvent.click(await screen.findByRole('option', { name: 'Name' }));
+      fireEvent.click(screen.getByRole('button', { name: /^apply$/i }));
+
+      await waitFor(() => {
+        const last = listFacilitiesMock.mock.calls.at(-1)![0];
+        expect(last.sorts).toEqual([expect.objectContaining({ column: 'name', ascending: true })]);
+      });
+    });
   });
 });
