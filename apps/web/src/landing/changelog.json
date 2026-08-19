@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "86488e52",
+          "type": "fix",
+          "scope": "config",
+          "title": "TRUST_PROXY and TLS_CERT_PATH reach the prod template, drop a dead var"
+        },
+        {
           "hash": "fecf603f",
           "type": "fix",
           "scope": "facilities",
