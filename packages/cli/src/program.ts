@@ -27,7 +27,7 @@ import { runUpdateCheck, UPDATE_ERROR_EXIT } from './update';
 import {
   runFacilitiesImport, runFacilitiesScanObserved, runFacilitiesPublish, runFacilitiesConflicts, runFacilitiesJobs,
   runFacilitiesImportRuns, runFacilitiesImportRun, runFacilitiesImportRunCancel, runFacilitiesImportSources,
-  runFacilitiesSuggestMap, runFacilitiesSuggestValues,
+  runFacilitiesSuggestMap, runFacilitiesSuggestValues, runFacilitiesList,
 } from './facilities';
 import { setActorOverride } from './cli-actor';
 
@@ -279,6 +279,22 @@ export function buildProgram(): Command {
     });
 
   const facilities = program.command('facilities').description('Facility registry (facility_registry)');
+  // Task 4: CLI parity for Task 3's `GET /api/facilities` — the same `parseWhereFlags`/
+  // `FACILITY_COLUMNS` grammar `audit list` (above) registers `--where`/`--sort` through, so a
+  // bad column fails identically whether the operator used the studio or a headless shell.
+  // `runFacilitiesList` catches its own errors and returns a code (see facilities.ts), so this
+  // action needs no try/catch wrapper — matching every other read command in this group
+  // (`conflicts`, `jobs`, `import-runs` below).
+  facilities
+    .command('list')
+    .description('List facilities from the registry')
+    .option('--where <rule...>', 'filter as column:operator:value (repeatable)')
+    .option('--sort <column...>', 'sort by column; prefix with - for descending (repeatable)')
+    .option('--limit <n>', 'maximum rows to return')
+    .option('--json', 'emit JSON', false)
+    .action(async (opts: { where?: string[]; sort?: string[]; limit?: string; json: boolean }) => {
+      process.exitCode = await runFacilitiesList(opts);
+    });
   facilities
     .command('import <path>')
     .description('Import a national facility register CSV/JSONL. DRY RUN BY DEFAULT — pass --apply to write.')

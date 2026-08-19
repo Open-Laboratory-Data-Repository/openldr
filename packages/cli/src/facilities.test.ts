@@ -23,6 +23,9 @@ const mocks = vi.hoisted(() => ({
     // (the OPERATOR's action, never `retryPreservingAttempts` — see facility-job-store.ts).
     // `enqueue` is here for the import command, which must hand this store to `importFacilities`.
     facilityJobs: { retry: vi.fn(), enqueue: vi.fn() },
+    // Task 4: `openldr facilities list` calls `ctx.facilityRegistry.list` directly — the same
+    // store method Task 3's HTTP route reads (apps/server/src/facilities-routes.ts).
+    facilityRegistry: { list: vi.fn() },
     close: vi.fn(),
   },
   createAppContext: vi.fn(),
@@ -118,7 +121,7 @@ vi.mock('node:fs', () => ({
 import {
   runFacilitiesImport, runFacilitiesScanObserved, runFacilitiesPublish, runFacilitiesConflicts, runFacilitiesJobs,
   runFacilitiesImportRuns, runFacilitiesImportRun, runFacilitiesImportRunCancel, runFacilitiesImportSources,
-  runFacilitiesSuggestMap, runFacilitiesSuggestValues,
+  runFacilitiesSuggestMap, runFacilitiesSuggestValues, runFacilitiesList,
 } from './facilities';
 // Task 9: real, PURE constant — see the `@openldr/bootstrap` mock factory above for why it is not
 // faked. Used to tell `mocks.ctx.terminology.admin.valueSets.getByUrl` which url each controlled
@@ -2441,5 +2444,127 @@ describe('facilities jobs CLI', () => {
     expect(mocks.ctx.close).toHaveBeenCalledTimes(1);
     const err = stderrSpy.mock.calls.map((c) => String(c[0])).join('');
     expect(err).toMatch(/job not found/);
+  });
+});
+
+// ── Task 4: `openldr facilities list [--where <rule...>] [--sort <column...>] [--limit <n>]` ───
+//
+// CLI parity for Task 3's `GET /api/facilities` (apps/server/src/facilities-routes.ts), which
+// terminates at the SAME `parseWhereFlags`/`FACILITY_COLUMNS` this command uses — an unknown
+// column or a disallowed operator must fail identically on both surfaces (AGENTS.md §6). Real
+// commander argv parsing (a leading `-` in `--sort`) is covered separately in
+// facilities-list-cli-parsing.test.ts, mirroring audit-cli-parsing.test.ts — this file only
+// exercises runFacilitiesList() called directly, per the pattern every other describe block here
+// follows.
+const LIST_ROW = {
+  id: 'fac-1',
+  facilityCode: 'BALAB',
+  name: 'Bagamoyo District Hospital',
+  region: 'Coast',
+  status: 'active',
+  source: 'import' as const,
+  health: 'mapped' as const,
+  mappingCount: 1,
+};
+
+describe('facilities list CLI', () => {
+  let stdoutSpy: ReturnType<typeof vi.fn>;
+  let stderrSpy: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    stdoutSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true) as unknown as ReturnType<typeof vi.fn>;
+    stderrSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true) as unknown as ReturnType<typeof vi.fn>;
+    mocks.createAppContext.mockResolvedValue(mocks.ctx);
+    mocks.ctx.close.mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('passes parsed where/sort flags to the store', async () => {
+    mocks.ctx.facilityRegistry.list.mockResolvedValue({ rows: [], total: 0 });
+
+    const code = await runFacilitiesList({ where: ['level:eq:hospital'], sort: ['-name'], json: true });
+
+    expect(code).toBe(0);
+    expect(mocks.ctx.facilityRegistry.list).toHaveBeenCalledWith(expect.objectContaining({
+      filters: [{ column: 'level', operator: 'eq', value: 'hospital', combine: 'and' }],
+      sorts: [{ column: 'name', ascending: false }],
+    }));
+  });
+
+  it('exits non-zero and names the column on a bad --where, without ever opening the app context', async () => {
+    const code = await runFacilitiesList({ where: ['password:eq:x'], sort: [], json: true });
+
+    expect(code).toBe(1);
+    expect(mocks.createAppContext).not.toHaveBeenCalled();
+    const err = stderrSpy.mock.calls.map((c) => String(c[0])).join('');
+    // Same wording as the route's `parsed.error` (facilities-routes.ts) — the two surfaces must
+    // agree, not merely both fail.
+    expect(err).toMatch(/password/);
+  });
+
+  it('--limit is forwarded to the store as a number', async () => {
+    mocks.ctx.facilityRegistry.list.mockResolvedValue({ rows: [], total: 0 });
+
+    await runFacilitiesList({ where: [], sort: [], limit: '25', json: true });
+
+    expect(mocks.ctx.facilityRegistry.list).toHaveBeenCalledWith(expect.objectContaining({ limit: 25 }));
+  });
+
+  it('omits filters/sorts entirely when no --where/--sort were given', async () => {
+    mocks.ctx.facilityRegistry.list.mockResolvedValue({ rows: [], total: 0 });
+
+    await runFacilitiesList({ where: [], sort: [], json: true });
+
+    expect(mocks.ctx.facilityRegistry.list).toHaveBeenCalledWith(expect.objectContaining({
+      filters: undefined,
+      sorts: undefined,
+    }));
+  });
+
+  it('--json emits the whole rows/total result', async () => {
+    mocks.ctx.facilityRegistry.list.mockResolvedValue({ rows: [LIST_ROW], total: 1 });
+
+    const code = await runFacilitiesList({ where: [], sort: [], json: true });
+
+    expect(code).toBe(0);
+    expect(stdoutSpy).toHaveBeenCalledWith(JSON.stringify({ rows: [LIST_ROW], total: 1 }, null, 2) + '\n');
+  });
+
+  it('human output prints facility code, name, region and status per row', async () => {
+    mocks.ctx.facilityRegistry.list.mockResolvedValue({ rows: [LIST_ROW], total: 1 });
+
+    const code = await runFacilitiesList({ where: [], sort: [], json: false });
+
+    expect(code).toBe(0);
+    const human = stdoutSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(human).toMatch(/BALAB/);
+    expect(human).toMatch(/Bagamoyo District Hospital/);
+    expect(human).toMatch(/Coast/);
+    expect(human).toMatch(/active/);
+  });
+
+  it('says so plainly on an empty result, rather than printing a bare header', async () => {
+    mocks.ctx.facilityRegistry.list.mockResolvedValue({ rows: [], total: 0 });
+
+    const code = await runFacilitiesList({ where: [], sort: [], json: false });
+
+    expect(code).toBe(0);
+    const human = stdoutSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(human).toMatch(/no facilities/i);
+  });
+
+  it('closes the app context even when the store throws, and reports a redacted message', async () => {
+    mocks.ctx.facilityRegistry.list.mockRejectedValue(new Error('db exploded'));
+
+    const code = await runFacilitiesList({ where: [], sort: [], json: false });
+
+    expect(code).toBe(1);
+    expect(mocks.ctx.close).toHaveBeenCalledTimes(1);
+    const err = stderrSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(err).toMatch(/db exploded/);
   });
 });

@@ -29,6 +29,13 @@ import {
   parseFacilityCsv, validateColumnMap, FACILITY_CONTRACT_FIELDS,
   type FacilityColumnMap, type ColumnMapError,
 } from '@openldr/terminology';
+// Task 4: the SAME grammar the HTTP route (Task 3, apps/server/src/facilities-routes.ts) parses
+// `?where=`/`?sort=` through — both terminate at `parseTableQuery`, so an unknown column or a
+// disallowed operator fails identically on both surfaces. `FACILITY_COLUMNS` is reused verbatim,
+// never redeclared here; `parseWhereFlags` is the same CLI-argv adapter `audit list` already uses
+// (packages/cli/src/audit.ts) — unchanged, per the plan's constraint.
+import { FACILITY_COLUMNS } from '@openldr/table-query';
+import { parseWhereFlags } from './table-query-flags';
 import { cliActor } from './cli-actor';
 import { redactError } from './redact-error';
 
@@ -1384,6 +1391,60 @@ function formatConflictsHuman(conflicts: FacilityMappingConflict[]): string {
   const line = (cells: string[]) => cells.map((c, i) => (i === cells.length - 1 ? c : c.padEnd(widths[i]))).join('  ');
 
   return [line(header), ...rows.map(line)].join('\n');
+}
+
+// ── Task 4: `openldr facilities list [--where <rule...>] [--sort <column...>] [--limit <n>]` ───
+//
+// CLI parity for Task 3's `GET /api/facilities` route (apps/server/src/facilities-routes.ts),
+// which terminates at `parseTableQuery` with the same `FACILITY_COLUMNS` and 400s naming the
+// failed column on `parsed.error`. `parseWhereFlags` is reused UNCHANGED (same adapter
+// `audit list` already uses, audit.ts) so a bad `--where` fails with the identical wording the
+// route would 400 with — the two surfaces agree on more than just the exit status.
+//
+// Shape (context creation, output, exit codes) copied from `runFacilitiesConflicts` above: a read
+// command, so a query failure is caught here and reported with a redacted message rather than
+// left to crash the process — matching every other read command in this file. `health` has no
+// `--where` form (it is a join predicate, not a `facility_registry` column — see
+// `FacilityListOptions.filters`'s doc comment, packages/db/src/facility-registry-store.ts) and is
+// therefore not offered as a flag on this command.
+export interface FacilitiesListOpts {
+  where?: string[];
+  sort?: string[];
+  limit?: string;
+  json: boolean;
+}
+
+export async function runFacilitiesList(opts: FacilitiesListOpts): Promise<number> {
+  const parsed = parseWhereFlags(opts.where ?? [], opts.sort ?? [], FACILITY_COLUMNS);
+  if (!parsed.ok) {
+    // Same wording the route 400s with (`parsed.error`) — the CLI and the HTTP door must agree,
+    // not merely both refuse. Exits non-zero rather than printing an empty list: a silently
+    // empty result is indistinguishable from a registry with no matches.
+    process.stderr.write(`facilities list failed: ${parsed.error}\n`);
+    return 1;
+  }
+  const ctx = await createAppContext(loadConfig());
+  try {
+    const { rows, total } = await ctx.facilityRegistry.list({
+      filters: parsed.query.filters.length ? parsed.query.filters : undefined,
+      sorts: parsed.query.sorts.length ? parsed.query.sorts : undefined,
+      limit: opts.limit ? Number(opts.limit) : undefined,
+    });
+    if (opts.json) {
+      process.stdout.write(JSON.stringify({ rows, total }, null, 2) + '\n');
+    } else {
+      const lines = rows.map((r) => `${r.facilityCode ?? '-'}\t${r.name}\t${r.region ?? '-'}\t${r.status ?? '-'}`);
+      process.stdout.write((lines.length ? lines.join('\n') : '(no facilities)') + '\n');
+    }
+    return 0;
+  } catch (err) {
+    const msg = redactError(err);
+    if (opts.json) process.stdout.write(JSON.stringify({ error: msg }) + '\n');
+    else process.stderr.write(`facilities list failed: ${msg}\n`);
+    return 1;
+  } finally {
+    await ctx.close();
+  }
 }
 
 // ── Task 10: report-dimension health + job retry CLI parity ───────────────────────────────────
