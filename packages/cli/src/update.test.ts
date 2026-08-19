@@ -57,6 +57,20 @@ describe('renderUpdateCheck', () => {
     expect(text).toMatch(/up to date/);
   });
 
+  // The regression this guards: recordFailure (bootstrap/update-check.ts) leaves latestVersion
+  // untouched, so a cache from last week's good check plus today's failed poll produces
+  // update_available with a real error underneath it. Both must show.
+  it('shows the failure line alongside the upgrade commands when an update is available and the last check failed', () => {
+    const { text, code } = renderUpdateCheck(
+      state({ lastError: 'update check timed out after 10000ms' }),
+      { json: false },
+    );
+    expect(text).toMatch(/docker compose pull/);
+    expect(text).toMatch(/docker compose up -d/);
+    expect(text).toMatch(/last check failed: update check timed out after 10000ms/);
+    expect(code).toBe(1);
+  });
+
   it('emits the raw state as JSON when asked', () => {
     const { text } = renderUpdateCheck(state(), { json: true });
     expect(JSON.parse(text)).toMatchObject({ running: '0.1.1', latestVersion: '0.2.0' });

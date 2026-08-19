@@ -38,6 +38,8 @@ export function runningVersion(): string {
   return '0.0.0';
 }
 
+/** Pure: state in, text and exit code out. Exit 1 means "an update exists", so this can be
+ *  scripted; it is not an error. Errors exit 2, see UPDATE_ERROR_EXIT below. */
 export function renderUpdateCheck(state: UpdateState, opts: { json: boolean }): { text: string; code: number } {
   const verdict = updateVerdict(state);
   // Exit 1 means "an update exists" so this can be scripted; it is not an error. Errors exit 2,
@@ -55,11 +57,13 @@ export function renderUpdateCheck(state: UpdateState, opts: { json: boolean }): 
   }
   lines.push(`published: ${state.latestVersion ?? 'unknown'}`);
 
-  // ⛔ Only a real check failure prints this. The bad_running_version cause fires with lastError
-  // null, and naming a failure that never happened points the operator at the network when the
-  // problem is the build's own version string.
-  if (verdict.kind === 'cannot_confirm' && verdict.cause === 'check_failed') {
-    lines.push(`last check failed: ${verdict.error}`);
+  // ⛔ Gate on state.lastError, not on the verdict kind. A failed poll leaves latestVersion
+  // alone (recordFailure in bootstrap/update-check.ts), so the verdict can be update_available
+  // with a real error sitting underneath it, and this line must still print. bad_running_version
+  // never prints here for a different reason: lastError is null in that case, not because the
+  // kind is excluded.
+  if (state.lastError) {
+    lines.push(`last check failed: ${state.lastError}`);
   }
 
   switch (verdict.kind) {

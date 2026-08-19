@@ -8,6 +8,7 @@ import {
   LATEST_JSON_URL,
 } from './update-check';
 import type { AppSettingStore } from '@openldr/db';
+import { updateVerdict } from '@openldr/core/pure';
 
 function fakeStore(initial: Record<string, string> = {}): AppSettingStore & { data: Record<string, string> } {
   const data = { ...initial };
@@ -63,6 +64,40 @@ describe('decideUpdate', () => {
     const s = decideUpdate({ enabled: true, running: '0.1.1', cached: cached(), lastCheckedAt: '2026-08-21T00:00:00.000Z', lastError: 'getaddrinfo ENOTFOUND' });
     expect(s.lastCheckedAt).toBe('2026-08-21T00:00:00.000Z');
     expect(s.lastError).toBe('getaddrinfo ENOTFOUND');
+  });
+
+  // The invariant that keeps the About card and the notification bell from contradicting each
+  // other. This calls decideUpdate itself, not a copy of its rule, so a future edit to
+  // decideUpdate's logic that updateVerdict does not follow fails this test instead of passing
+  // it silently. @openldr/core cannot import this module the other way round (core has no
+  // dependency on bootstrap), so the check lives here, where both sides are reachable.
+  it('agrees with decideUpdate about when an update is available', () => {
+    const cases: Array<{ enabled: boolean; running: string; latestVersion: string | null }> = [
+      { enabled: true, running: '0.1.2', latestVersion: '0.1.3' },
+      { enabled: true, running: '0.1.3', latestVersion: '0.1.3' },
+      { enabled: true, running: '0.2.0', latestVersion: '0.1.3' },
+      { enabled: false, running: '0.1.2', latestVersion: '0.1.3' },
+      { enabled: true, running: '0.1.2', latestVersion: null },
+      { enabled: true, running: 'dev', latestVersion: '0.1.3' },
+    ];
+    for (const c of cases) {
+      const decided = decideUpdate({
+        enabled: c.enabled,
+        running: c.running,
+        cached: { version: c.latestVersion, releasedAt: null, notesUrl: null, firstSeenAt: null },
+        lastCheckedAt: null,
+        lastError: null,
+      });
+      const verdict = updateVerdict({
+        enabled: c.enabled,
+        running: c.running,
+        latestVersion: c.latestVersion,
+        releasedAt: null,
+        notesUrl: null,
+        lastError: null,
+      });
+      expect(verdict.kind === 'update_available').toBe(decided.updateAvailable);
+    }
   });
 });
 

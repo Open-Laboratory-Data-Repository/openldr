@@ -1,5 +1,4 @@
 import { describe, it, expect } from 'vitest';
-import { isNewerVersion } from './semver';
 import { updateVerdict, BAD_RUNNING_VERSION } from './update-verdict';
 
 /** Every field the function reads. Tests override only what they are about. */
@@ -69,25 +68,5 @@ describe('updateVerdict', () => {
     const v = updateVerdict(input({ running: 'dev', lastError: null }));
     expect(v).toMatchObject({ cause: 'bad_running_version' });
     expect(v.kind === 'cannot_confirm' && v.error).toBe(BAD_RUNNING_VERSION);
-  });
-
-  // The invariant that keeps the card and the notification bell from contradicting each other.
-  // The right-hand side is decideUpdate's rule copied literally from bootstrap/update-check.ts:
-  //   enabled && cached.version !== null && isNewerVersion(cached.version, running)
-  // If these two ever diverge, one surface shows a banner while the other says nothing.
-  it('agrees with decideUpdate about when an update is available', () => {
-    const cases = [
-      { enabled: true, running: '0.1.2', latestVersion: '0.1.3' },
-      { enabled: true, running: '0.1.3', latestVersion: '0.1.3' },
-      { enabled: true, running: '0.2.0', latestVersion: '0.1.3' },
-      { enabled: false, running: '0.1.2', latestVersion: '0.1.3' },
-      { enabled: true, running: '0.1.2', latestVersion: null },
-      { enabled: true, running: 'dev', latestVersion: '0.1.3' },
-    ];
-    for (const c of cases) {
-      const decideUpdateSays =
-        c.enabled && c.latestVersion !== null && isNewerVersion(c.latestVersion, c.running);
-      expect(updateVerdict(input(c)).kind === 'update_available').toBe(decideUpdateSays);
-    }
   });
 });

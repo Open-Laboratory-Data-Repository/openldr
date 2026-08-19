@@ -183,6 +183,18 @@ describe('General settings — About card update notice', () => {
     expect(await screen.findByTestId('update-latest')).toHaveTextContent(/cannot confirm/i);
   });
 
+  // The case the verdict exists for: a cache that MATCHES the running version, plus a failed
+  // check. A naive card reads a matching cache as "up to date" even though today's poll never
+  // confirmed it. FAILING above does not cover this, since its latestVersion is null.
+  it('says it cannot confirm when the cache matches the running version but the check failed', async () => {
+    (api.fetchUpdateState as any).mockResolvedValue({
+      ...AVAILABLE, latestVersion: '0.1.1', running: '0.1.1', updateAvailable: false,
+      lastError: 'update check timed out after 10000ms',
+    });
+    render(<MemoryRouter><General /></MemoryRouter>);
+    expect(await screen.findByTestId('update-latest')).toHaveTextContent(/cannot confirm/i);
+  });
+
   it('says not checked yet when nothing has ever been cached', async () => {
     (api.fetchUpdateState as any).mockResolvedValue({
       ...AVAILABLE, latestVersion: null, releasedAt: null, notesUrl: null,
