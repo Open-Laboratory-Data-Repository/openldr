@@ -127,4 +127,39 @@ describe("applyTableState", () => {
     });
     expect(res.rows.map((r) => r.name)).toEqual(["Kimaro"]);
   });
+
+  it("breaks ties by id, matching the server's appended tiebreaker", () => {
+    const tieRows = [
+      { id: "c", name: "same" },
+      { id: "a", name: "same" },
+      { id: "b", name: "same" },
+    ];
+    const tieCols: ColumnDef<{ id: string; name: string }>[] = [
+      { id: "name", labelKey: "name", accessor: (r) => r.name, type: "text", defaultVisible: true },
+    ];
+    const res = applyTableState(
+      tieRows,
+      { filters: [], sorts: [{ id: "s", column: "name", ascending: true }], page: 0, pageSize: 10 },
+      tieCols,
+    );
+    expect(res.rows.map((r) => r.id)).toEqual(["a", "b", "c"]);
+  });
+
+  it("leaves tie order untouched when rows have no id field", () => {
+    const noIdRows = [
+      { name: "same", tag: "c" },
+      { name: "same", tag: "a" },
+      { name: "same", tag: "b" },
+    ];
+    const noIdCols: ColumnDef<{ name: string; tag: string }>[] = [
+      { id: "name", labelKey: "name", accessor: (r) => r.name, type: "text", defaultVisible: true },
+    ];
+    const res = applyTableState(
+      noIdRows,
+      { filters: [], sorts: [{ id: "s", column: "name", ascending: true }], page: 0, pageSize: 10 },
+      noIdCols,
+    );
+    // No `id` field to break the tie on: stable sort keeps original input order.
+    expect(res.rows.map((r) => r.tag)).toEqual(["c", "a", "b"]);
+  });
 });

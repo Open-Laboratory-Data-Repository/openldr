@@ -111,6 +111,18 @@ export function applyTableState<T>(
           : compareValues(av, bv);
         if (num !== 0) return s.ascending ? num : -num;
       }
+      // The server appends `id asc` to every sort as a tiebreaker (table-query-sql.ts
+      // applySorts), and deliberately does so without COLLATE — plain byte order, not an
+      // ICU-aware order. Mirror that with `<`/`>` rather than String.localeCompare, which is
+      // locale-aware and can disagree with byte order outside plain ASCII. Rows without a
+      // string `id` field fall through to 0 (no tiebreak), so id-less row sets keep today's
+      // stable-sort behavior instead of throwing or reordering arbitrarily.
+      const aId = (a as Record<string, unknown>).id;
+      const bId = (b as Record<string, unknown>).id;
+      if (typeof aId === "string" && typeof bId === "string") {
+        if (aId < bId) return -1;
+        if (aId > bId) return 1;
+      }
       return 0;
     });
     filtered = sorted;
