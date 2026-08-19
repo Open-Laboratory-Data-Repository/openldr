@@ -218,6 +218,18 @@ Run the web app separately:
 pnpm -C apps/studio dev
 ```
 
+### Dev-server variables
+
+These are read by `apps/studio/vite.config.ts` from the repo-root `.env`, not by the config
+schema. They affect the Vite dev server only and have no effect on a built or deployed app.
+
+| Variable | Type | Default | Effect |
+|---|---:|---:|---|
+| `DEV_HOST` | address | unset | Bind address for the Studio dev server. Unset means Vite's localhost-only default, so another device on the network cannot reach it. Set it to `127.0.0.1` or `0.0.0.0` to expose it over a tailnet. Only `DEV_*` names are read, which keeps the rest of `.env` out of the Vite config. |
+
+Studio's dev port is pinned to 5173 and the landing site's to 5174, both with `strictPort`,
+so a clash fails loudly instead of moving an app to a port you did not expect.
+
 ## Troubleshooting
 
 | Symptom | Likely cause | Fix |

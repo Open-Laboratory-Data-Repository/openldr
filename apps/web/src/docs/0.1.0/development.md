@@ -67,15 +67,29 @@ pnpm openldr db seed
 Each app runs in its own terminal from the repo root:
 
 ```
-pnpm -C apps/server dev             # API        → http://localhost:3000
-pnpm -C apps/studio dev             # Studio app → http://localhost:5173/studio
-pnpm -C apps/web dev -- --port 5174 # This site  → http://localhost:5174
+pnpm -C apps/server dev   # API        → http://localhost:3000
+pnpm -C apps/studio dev   # Studio app → http://localhost:5173/studio
+pnpm -C apps/web dev      # This site  → http://localhost:5174
 ```
 
-Studio proxies `/api` to the server on port 3000. The landing site needs an explicit
-`--port` because it defaults to the same port as Studio (5173). With `AUTH_DEV_BYPASS`
-on, Studio loads straight in as a dev admin — no sign-in required. Remove it from `.env`
-to exercise the real Keycloak flow.
+Studio proxies `/api` to the server on port 3000. Both Vite ports are pinned in each app's
+`vite.config.ts` with `strictPort`, so a port clash fails loudly instead of silently moving
+one app to another port. With `AUTH_DEV_BYPASS` on, Studio loads straight in as a dev
+admin, with no sign-in required. Remove it from `.env` to exercise the real Keycloak flow.
+
+### Reaching the dev server from another device
+
+Vite binds to localhost, so a phone on the same network cannot load Studio. Set `DEV_HOST`
+in the repo-root `.env` to the address you want it to bind instead:
+
+```
+DEV_HOST=127.0.0.1
+```
+
+`apps/studio/vite.config.ts` reads it from that file. `.env` is gitignored, so no
+machine-specific address lands in a tracked file. Leave it unset for the localhost-only
+default. Only variables named `DEV_*` are read, which keeps the rest of `.env` out of the
+Vite config.
 
 > `AUTH_DEV_BYPASS` is **off unless you set it explicitly** — it is not implied by
 > `NODE_ENV=development`. If Studio asks you to sign in on an existing checkout, add
