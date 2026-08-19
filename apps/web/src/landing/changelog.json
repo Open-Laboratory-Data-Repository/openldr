@@ -6,6 +6,66 @@
       "version": null,
       "entries": [
         {
+          "hash": "fecf603f",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Close four minor findings from the final re-review"
+        },
+        {
+          "hash": "17d5e328",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "The status filter takes a stored value, and list says how many it dropped"
+        },
+        {
+          "hash": "09c4a230",
+          "type": "fix",
+          "scope": "studio",
+          "title": "The facilities page restores legacy filter links and clears fully on reset"
+        },
+        {
+          "hash": "da1391f4",
+          "type": "feat",
+          "scope": "studio",
+          "title": "The facilities page filters and sorts on the server"
+        },
+        {
+          "hash": "8a2407c1",
+          "type": "feat",
+          "scope": "cli",
+          "title": "Facilities list with --where and --sort"
+        },
+        {
+          "hash": "eface95e",
+          "type": "feat",
+          "scope": "server",
+          "title": "The facilities route accepts grammar filters and sorts"
+        },
+        {
+          "hash": "70fbabfb",
+          "type": "fix",
+          "scope": "db",
+          "title": "Apply Task 2 review findings to the facility grammar store"
+        },
+        {
+          "hash": "7efba6e7",
+          "type": "feat",
+          "scope": "db",
+          "title": "The facility store takes grammar filters and sorts"
+        },
+        {
+          "hash": "43c6ba70",
+          "type": "feat",
+          "scope": "table-query",
+          "title": "Facility map carries source, managedOrigin and registerState"
+        },
+        {
+          "hash": "b93a3fe0",
+          "type": "fix",
+          "scope": "web",
+          "title": "Publish the full changelog history instead of the last 400 commits"
+        },
+        {
           "hash": "190271d9",
           "type": "fix",
           "scope": "db",
