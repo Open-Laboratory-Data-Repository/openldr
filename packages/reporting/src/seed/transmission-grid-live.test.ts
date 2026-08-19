@@ -69,12 +69,12 @@ live('the transmission grid queries (live Postgres)', () => {
   // bind a placeholder (packages/dashboards/src/custom-query-run.ts:37). Mirror that exactly, or
   // this test proves something the runtime never executes. Global, because {{param.tz}} and
   // {{param.month}} each appear several times in one query.
-  const runQuery = (queryId: string) => async (p: { month: string; panels: string; tz: string }) => {
+  const runQuery = (queryId: string) => async (p: { month: string; panels: string; tz?: string }) => {
     const raw = SEED_QUERIES.find((q) => q.id === queryId)!.sql.postgres;
     const text = raw
       .replace(/\{\{\s*param\.month\s*\}\}/g, `'${p.month.replace(/'/g, "''")}'`)
       .replace(/\{\{\s*param\.panels\s*\}\}/g, `'${p.panels.replace(/'/g, "''")}'`)
-      .replace(/\{\{\s*param\.tz\s*\}\}/g, `'${p.tz.replace(/'/g, "''")}'`);
+      .replace(/\{\{\s*param\.tz\s*\}\}/g, `'${(p.tz ?? 'UTC').replace(/'/g, "''")}'`);
     // `sql.raw` is itself generic; the `sql<T>.raw(...)` shape parses as an instantiation
     // expression followed by a property access, which TS 5.x rejects (TS1477).
     const res = await sql.raw<Record<string, string>>(text).execute(db);
@@ -105,6 +105,39 @@ live('the transmission grid queries (live Postgres)', () => {
     } as never).execute();
     await db.insertInto('ingest_events' as never).values({
       resource_type: 'ServiceRequest', resource_id: `req-${key}`, version: 1, recorded_at: recordedAt,
+    } as never).execute();
+  };
+
+  // The three CLINICAL timestamps the grid now buckets on, seeded one row at a time. A submission
+  // is not one shape any more: a request may be registered in one month and resulted in the next,
+  // so each test builds exactly the rows its case needs.
+  //
+  // ⛔ ISO 8601 text CARRYING THE SOURCE OFFSET, the shape the warehouse actually holds. The query
+  // compares left(ts, 7) to the month and slices left(ts, 10) for the day, so an offset-free
+  // fixture would prove a string the real data never contains.
+  const seedRequest = async (r: {
+    id: string; batchId: string; panel: string | null; authoredAt: string | null;
+  }): Promise<void> => {
+    await db.insertInto('lab_requests' as never).values({
+      id: r.id, request_id: r.id, panel_code: r.panel, batch_id: r.batchId, authored_at: r.authoredAt,
+    } as never).execute();
+  };
+
+  // `performer` with no `performer_display` and no facility_map row, so `lab` falls through to the
+  // performer code and the test can name the laboratory it asserts on.
+  const seedReport = async (r: {
+    id: string; basedOnId: string; batchId: string; performer: string; issued: string | null;
+  }): Promise<void> => {
+    await db.insertInto('diagnostic_reports' as never).values({
+      id: r.id, based_on_id: r.basedOnId, batch_id: r.batchId, performer: r.performer, issued: r.issued,
+    } as never).execute();
+  };
+
+  const seedResult = async (r: {
+    id: string; requestId: string; resultTimestamp: string;
+  }): Promise<void> => {
+    await db.insertInto('lab_results' as never).values({
+      id: r.id, request_id: r.requestId, result_timestamp: r.resultTimestamp,
     } as never).execute();
   };
 
@@ -292,6 +325,59 @@ live('the transmission grid queries (live Postgres)', () => {
     const ot = await runForOther({ month: '2026-03', panels: 'HIVPC', tz: 'UTC' });
     expect(hv.some((r) => r.lab === 'No Panel Lab')).toBe(false);
     expect(ot.some((r) => r.lab === 'No Panel Lab')).toBe(true);
+  });
+
+  // ------------------------------------------------------------------------------------------
+  // Clinical-date bucketing: registered, then tested, then authorised
+  // ------------------------------------------------------------------------------------------
+  //
+  // 1 April 2013 was a Monday, so the working days run d01 = Mon 1, d02 = Tue 2, d03 = Wed 3,
+  // d04 = Thu 4, d05 = Fri 5, d06 = Mon 8, d07 = Tue 9. Confirmed against the calendar.
+
+  it('falls through to the result date when registration sits outside the month', async () => {
+    // Registered in March, resulted in April. The April grid must mark 2 April.
+    await seedRequest({ id: 'r1-obr1', batchId: 'b1', panel: 'HIVVL',
+      authoredAt: '2013-03-28T09:00:00+03:00' });
+    await seedReport({ id: 'dr1', basedOnId: 'r1-obr1', batchId: 'b1', performer: 'LAB-A',
+      issued: null });
+    await seedResult({ id: 'o1', requestId: 'r1-obr1',
+      resultTimestamp: '2013-04-02T11:00:00+03:00' });
+
+    const rows = await runFor({ month: '2013-04', panels: 'HIVVL' });
+
+    const lab = rows.find((r) => r.lab === 'LAB-A')!;
+    expect(lab.d02).toBe('Y');
+    expect(lab.d01).toBe('');
+  });
+
+  it('marks one day per request per month, at the highest-priority in-month date', async () => {
+    // Registered AND authorised inside the same month. Only registration marks.
+    await seedRequest({ id: 'r2-obr1', batchId: 'b2', panel: 'HIVVL',
+      authoredAt: '2013-04-03T09:00:00+03:00' });
+    await seedReport({ id: 'dr2', basedOnId: 'r2-obr1', batchId: 'b2', performer: 'LAB-B',
+      issued: '2013-04-09T16:00:00+03:00' });
+
+    const rows = await runFor({ month: '2013-04', panels: 'HIVVL' });
+
+    const lab = rows.find((r) => r.lab === 'LAB-B')!;
+    expect(lab.d03).toBe('Y');
+    expect(lab.d07).toBe('');
+  });
+
+  it('falls all the way through to the authorisation date', async () => {
+    // Registered in March, never resulted, authorised on 4 April. The third step is the only one
+    // left, and nothing else in this file reaches it: the query plan shows the based_on_id
+    // subquery as 'never executed' on every other case here.
+    await seedRequest({ id: 'r3-obr1', batchId: 'b3', panel: 'HIVVL',
+      authoredAt: '2013-03-29T09:00:00+03:00' });
+    await seedReport({ id: 'dr3', basedOnId: 'r3-obr1', batchId: 'b3', performer: 'LAB-C',
+      issued: '2013-04-04T16:00:00+03:00' });
+
+    const rows = await runFor({ month: '2013-04', panels: 'HIVVL' });
+
+    const lab = rows.find((r) => r.lab === 'LAB-C')!;
+    expect(lab.d04).toBe('Y');
+    expect(lab.d01).toBe('');
   });
 
   // ------------------------------------------------------------------------------------------

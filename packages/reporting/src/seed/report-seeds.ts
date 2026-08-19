@@ -2247,46 +2247,67 @@ days as (
   where extract(isodow from g) between 1 and 5
 ),
 arrivals as (
-  -- ⛔ 'distinct' is LOAD-BEARING, not decoration. One batch holds up to 15 diagnostic_reports
-  -- rows (measured 2026-08-18), so this join fans out 15x. 0 batches carry more than one distinct
-  -- performer, so collapsing the fan-out here is lossless. Deleting 'distinct' would not change
-  -- the marks (max() folds them) but would multiply the rows the cross join below has to chew.
-  select distinct
-    coalesce(fm.name, d.performer_display, d.performer, '(unknown)') as lab,
-    -- ⛔ Bucket in the CIVIL timezone. recorded_at is an instant; 21:00Z is the NEXT day at +03.
-    -- Bucketing in UTC moves a whole evening's arrivals to the previous day, on every cell.
-    (e.recorded_at at time zone {{param.tz}})::date as cal_day
-  from ingest_events e
-  join lab_requests q on q.id = e.resource_id
-  -- ⛔ Attribute through the SUBMISSION BATCH, never through lab_results.specimen_id. The specimen
-  -- route reaches 6,652 of 7,520 requests; the 868 it drops have no results at all and 548 of them
-  -- are EID, so that grid would print almost empty while those laboratories were transmitting.
-  join diagnostic_reports d on d.batch_id = q.batch_id
-  left join facility_map fm
-    on fm.source_system = coalesce(d.source_system, '')
-   and fm.performer_system = coalesce(d.performer_system, '')
-   and fm.source_code = d.performer
-  cross join month_start m
-  where e.resource_type = 'ServiceRequest'
-    -- Sargable bound so the (recorded_at, resource_type) index is usable, widened by two days on
-    -- each side. Two, not one: this raw comparison casts a date to timestamptz at the SESSION zone,
-    -- and session-vs-civil zone can differ by up to 26 hours.
-    and e.recorded_at >= m.d - interval '2 days'
-    and e.recorded_at < m.d + interval '1 month' + interval '2 days'
-    -- ...and the EXACT month bound, in the civil zone. Without it 'labs' below is "every
-    -- laboratory that ever submitted" and a lab absent from this month still gets a blank row.
-    and (e.recorded_at at time zone {{param.tz}})::date >= m.d
-    and (e.recorded_at at time zone {{param.tz}})::date < m.d + interval '1 month'
-    -- The panel list is a RUN-TIME parameter (AGENTS.md §8) — no code is written here.
+  -- One row per (laboratory, day) that laboratory showed activity on, for the requested month.
+  --
+  -- The DAY is the first clinical timestamp falling inside the month: registered, then tested,
+  -- then authorised. One mark per request per month, NOT one per event. A request registered on
+  -- the 3rd and authorised on the 7th marks the 3rd only, because coalesce stops at its first
+  -- non-null. Deliberate, and mirrors the prior system's CASE.
+  --
+  -- ⛔ Do NOT bucket on ingest arrival. A bulk backfill lands months of clinical work on one
+  -- calendar day, and the grid then reports laboratories as transmitting in a month they were not.
+  -- Measured: 13,193 DISA rows loaded on 2026-08-19 carry clinical dates from 2013 to 2019.
+  --
+  -- ⛔ The month test is a STRING comparison on 'YYYY-MM'. These columns hold ISO 8601 text
+  -- carrying the source's own offset, so left(ts, 10) is the laboratory's local day and needs no
+  -- conversion. Converting into a viewer's zone would make one historical cell render as two
+  -- different days for two readers.
+  select distinct x.lab, cast(left(x.ts, 10) as date) as cal_day
+  from (
+    select
+      coalesce(fm.name, d.performer_display, d.performer, '(unknown)') as lab,
+      coalesce(
+        case when left(q.authored_at, 7) = {{param.month}} then q.authored_at end,
+        (select min(r.result_timestamp) from lab_results r
+          where r.request_id = q.id and left(r.result_timestamp, 7) = {{param.month}}),
+        (select min(dr.issued) from diagnostic_reports dr
+          where dr.based_on_id = q.id and left(dr.issued, 7) = {{param.month}})
+      ) as ts
+    from lab_requests q
+    -- ⛔ Attribute the LABORATORY through the SUBMISSION BATCH, never through
+    -- lab_results.specimen_id. The specimen route reaches 6,652 of 7,520 requests; the 868 it
+    -- drops have no results at all and 548 of them are EID, so that grid would print almost empty
+    -- while those laboratories were transmitting.
+    -- ⛔ 'distinct' above is LOAD-BEARING, not decoration. One batch holds up to 18
+    -- diagnostic_reports rows (measured 2026-08-19), so this join fans out 18x. 0 batches carry
+    -- more than one distinct performer, so collapsing the fan-out here is lossless.
+    join diagnostic_reports d on d.batch_id = q.batch_id
+    left join facility_map fm
+      on fm.source_system = coalesce(d.source_system, '')
+     and fm.performer_system = coalesce(d.performer_system, '')
+     and fm.source_code = d.performer
+    -- Cheap month gate before the coalesce, mirroring the prior system's three-way OR. Without it
+    -- the batch join runs over every request ever loaded rather than over the month's.
+    where (
+         left(q.authored_at, 7) = {{param.month}}
+      or exists (select 1 from lab_results r
+                  where r.request_id = q.id and left(r.result_timestamp, 7) = {{param.month}})
+      or exists (select 1 from diagnostic_reports dr
+                  where dr.based_on_id = q.id and left(dr.issued, 7) = {{param.month}})
+    )
+    -- The panel list is a RUN-TIME parameter (AGENTS.md §8), no code is written here.
     -- ⛔ An EMPTY panels value NEVER REACHES THIS SQL. 'panels' is declared required, and
     -- substituteParams throws 'required parameter: panels' on '' or null before any SQL is built
     -- (packages/dashboards/src/custom-query-run.ts:33). A run with a blank filter is an ERROR the
-    -- operator sees, not an empty grid. What postgres would do with string_to_array('', ',') is
-    -- therefore irrelevant here — do not reason from it. An HVL/EID grid that comes out empty
-    -- means the codes supplied do not match the codes this laboratory actually sends.
+    -- operator sees, not an empty grid. An HVL/EID grid that comes out empty means the codes
+    -- supplied do not match the codes this laboratory actually sends.
     -- coalesce(panel_code, '') so a NULL panel is a real value on both sides: without it
     -- 'null not in (...)' is NULL and a request with no panel would vanish from BOTH grids.
-    and coalesce(q.panel_code, '') in (select trim(value) from unnest(string_to_array({{param.panels}}, ',')) as value)
+      and coalesce(q.panel_code, '') in (select trim(value) from unnest(string_to_array({{param.panels}}, ',')) as value)
+  ) x
+  -- Defensive only. The three-way gate above guarantees one branch of the coalesce is in-month,
+  -- so ts cannot be null here. Kept so a future edit to the gate cannot cast a null into a date.
+  where x.ts is not null
 ),
 labs as (select distinct lab from arrivals),
 -- Every laboratory crossed with every working day, then left-joined to what actually arrived. The
