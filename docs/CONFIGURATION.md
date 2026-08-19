@@ -18,14 +18,19 @@ writes all of them into `.env.prod`; you can also set them manually.
 
 ### App-side settings the gateway makes necessary
 
-These two are read by the app, not by nginx, but only matter once a gateway fronts it. Unlike
-the table above, `pnpm run init` does not write them. They come from `.env.prod.example`, or
-from `install/install.sh` and `install.ps1`, which write both.
+These are read by the app, not by nginx, but only matter once a gateway fronts it. Unlike the
+table above, `pnpm run init` does not write them. They come from `.env.prod.example`, or from
+`install/install.sh` and `install.ps1`, which write all three.
+
+The two certificate settings point in opposite directions. `TLS_CERT_PATH` hands **this**
+server's certificate out, so a remote lab can trust this central. `NODE_EXTRA_CA_CERTS` takes a
+central's certificate **in**, so this lab can reach that central.
 
 | Variable | Type | Default | Effect |
 |---|---:|---:|---|
 | `TRUST_PROXY` | hop count, `true`, or an IP/subnet list | unset | How much of `X-Forwarded-For` to trust, passed to Fastify's `trustProxy`. Unset means trust none, so `req.ip` is the direct socket peer. Behind the single gateway that peer is the gateway's own container IP, which makes the `auth.failed` audit useless for tracing a real client. Set `1` for one hop. SECURITY: only set it when a trusted proxy really does front the app, or a client can spoof its own IP through the header. |
 | `TLS_CERT_PATH` | path | unset | Path, inside the API container, to this server's public TLS certificate. When set and readable, `GET /api/settings/sync/central-certificate` serves it so a remote lab can trust a self-signed central. It needs a matching volume mount: `deploy/install/docker-compose.yml` has one, `docker-compose.prod.yml` does not. Unset and unreadable both return 404. |
+| `NODE_EXTRA_CA_CERTS` | path | unset | Read by Node itself, not by our code. Extra trusted CAs, so sync to a self-signed central works instead of failing with a bare `fetch failed`. Same mount situation as `TLS_CERT_PATH`. Create the host file before `docker compose up` even if empty: bind-mounting a path that does not exist makes Docker create a **directory** there, and the api then fails to start. An empty file is valid and means no extra CAs are trusted yet. |
 
 ### OIDC and Keycloak gateway vars
 
@@ -52,6 +57,7 @@ Keycloak is proxied by nginx at `/auth`. The application accesses it two ways:
 | `TARGET_STORE_ADAPTER` | `pg\|mssql\|mysql` | `pg` | Analytics warehouse adapter. |
 | `TARGET_DATABASE_URL` | URL | required when `TARGET_STORE_ADAPTER=pg` | PostgreSQL analytics warehouse. |
 | `WEB_DIST_DIR` | path | `apps/studio/dist` relative to built server | Overrides where the server serves the built SPA from. This is read directly by `apps/server/src/app.ts`. |
+| `OPENLDR_VERSION` | image tag | `latest` | GHCR tag the stack pulls. Read by compose, not by the app. In `deploy/install/docker-compose.yml` it pins all five images, so it sets the whole stack's version. In `docker-compose.prod.yml` it pins only Keycloak, because api, studio and web are built from source there. |
 
 ## Startup Flags
 
