@@ -87,6 +87,13 @@ export interface DiagnosticReportsTable extends ProvenanceColumns {
   issued: string | null;
   effective: string | null;
   conclusion: string | null;
+  /** `DiagnosticReport.basedOn[0]`, the ServiceRequest this report answers. Attributes a report's
+   *  `issued` to one request instead of to a whole submission batch. Mirrors
+   *  `observations.request_id` and `questionnaire_responses.based_on_id`, which project the same
+   *  field. Null when the sender omits `basedOn`. ⛔ NOT interchangeable with `id`. Those two
+   *  coincide for the CDR/DISA source, which mints one obrId for both resources, and for no other
+   *  reason. */
+  based_on_id: string | null;
   /** The facility MATCH KEY, from `DiagnosticReport.performer[0]` — the only facility dimension the
    *  CDR/DISA source actually supplies (`patients.managing_organization` is never set by it).
    *  Prefers `performer[0].identifier.value` (a FHIR logical reference — the correct match key for
@@ -203,7 +210,7 @@ export const EXTERNAL_TABLE_COLUMNS: Record<keyof ExternalSchema, string[]> = {
   lab_results: ['id', 'request_id', 'observation_code', 'observation_system', 'observation_desc', 'result_type', 'numeric_value', 'numeric_units', 'coded_value', 'text_value', 'abnormal_flag', 'result_timestamp', 'patient_id', 'specimen_id', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at'],
   facilities: ['id', 'facility_code', 'facility_name', 'facility_type', 'source_resource', 'region', 'district', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at'],
   specimens: ['id', 'patient_id', 'received_time', 'accession', 'status', 'type_code', 'type_text', 'origin', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at'],
-  diagnostic_reports: ['id', 'patient_id', 'status', 'code_code', 'code_text', 'issued', 'effective', 'conclusion', 'performer', 'performer_display', 'performer_system', 'specimen_id', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at'],
+  diagnostic_reports: ['id', 'patient_id', 'status', 'code_code', 'code_text', 'issued', 'effective', 'conclusion', 'based_on_id', 'performer', 'performer_display', 'performer_system', 'specimen_id', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at'],
   questionnaire_responses: ['id', 'questionnaire', 'form_code', 'subject_id', 'authored', 'based_on_id', 'items', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at'],
   terminology_codes: ['id', 'value_set_id', 'value_set_url', 'system', 'code', 'display', 'source_system', 'plugin_id', 'plugin_version', 'batch_id', 'created_at'],
   facility_map: ['id', 'source_system', 'performer_system', 'source_code', 'registry_id', 'local_code', 'name', 'level', 'status', 'region', 'district', 'council', 'national_system', 'national_code', 'resolved_via', 'updated_at'],

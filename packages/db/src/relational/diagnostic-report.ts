@@ -18,6 +18,7 @@ export function projectDiagnosticReport(r: Record<string, unknown>, prov: Proven
     issued: str(r['issued']),
     effective: str(r['effectiveDateTime']),
     conclusion: str(r['conclusion']),
+    based_on_id: referenceId((r['basedOn'] as unknown[] | undefined)?.[0]),
     // The facility MATCH KEY. `performer` is a FHIR logical reference for the CDR/DISA source —
     // `identifier.value` is the correct match key (`identifier` exists precisely for a target with
     // no resource to point at), and MUST be preferred over `display`: multiple distinct facilities

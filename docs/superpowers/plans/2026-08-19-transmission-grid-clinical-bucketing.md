@@ -34,8 +34,8 @@ A request with none of the three inside the month does not appear. One mark per 
 
 | File | Responsibility | Action |
 |---|---|---|
-| `packages/db/src/migrations/external/017_diagnostic_report_based_on.ts` | Add `based_on_id` plus the indexes the new query needs | Create |
-| `packages/db/src/migrations/external/017_diagnostic_report_based_on.test.ts` | Prove `up` adds column and indexes, `down` reverses it | Create |
+| `packages/db/src/migrations/external/017_diagnostic_report_based_on_and_lab_results_index.ts` | Add `based_on_id` plus the indexes the new query needs | Create |
+| `packages/db/src/migrations/external/017_diagnostic_report_based_on_and_lab_results_index.test.ts` | Prove `up` adds column and indexes, `down` reverses it | Create |
 | `packages/db/src/migrations/external/index.ts` | Register migration 017 | Modify |
 | `packages/db/src/schema/external.ts:81-` | `DiagnosticReportsTable` gains `based_on_id` | Modify |
 | `packages/db/src/relational/diagnostic-report.ts:13-` | Project `basedOn[0]` into `based_on_id` | Modify |
@@ -43,6 +43,16 @@ A request with none of the three inside the month does not appear. One mark per 
 | `packages/reporting/src/seed/transmission-grid-tz-live.test.ts` | Rewritten: the stored offset governs the day | Rewrite |
 | `packages/reporting/src/seed/transmission-grid-live.test.ts` | Fixtures move to clinical timestamps; new ladder cases | Modify |
 | `apps/studio/src/docs/0.1.0/{en,fr,pt}/reports.md` | Arrival wording, and the timezone bullet that loses its subject | Modify |
+| `packages/reporting/src/seed/report-seeds.test.ts` | Four hermetic shape tests that pin the OLD arrival SQL | Modify, in Task 5 |
+
+⛔ **The reporting package stays RED from Task 3 until Task 5 lands.** Found during Task 3 on 2026-08-19; the plan originally missed this file. `report-seeds.test.ts` has four regex tests that loop over both queries and all three dialects and assert the SQL still contains `resource_type = 'ServiceRequest'`, `{{param.tz}}` and `e.recorded_at >=`:
+
+- `reads ServiceRequest arrivals, in every dialect`
+- `buckets days in the supplied timezone, not UTC`
+- `bounds recorded_at inside the arrivals CTE, in every dialect`
+- `pins the EXACT civil-zone month bound, in every dialect`
+
+They are hermetic, so they run in the ordinary gate rather than only under `TARGET_DATABASE_URL`. Because the assertions are per-dialect loops, they cannot go green until every variant is rewritten and `tz` is gone. Do not try to fix them in Tasks 3 or 4, and do not read them as a regression. Task 5 rewrites them to pin the NEW shape: no `ingest_events`, no `{{param.tz}}`, and a `left(ts, 7) = {{param.month}}` gate present in all six variants.
 
 ---
 
@@ -53,8 +63,8 @@ CE already projects `basedOn` for two resources and not for this one. `packages/
 ⛔ Do not join step 3 on `diagnostic_reports.id = lab_requests.id`. That equality holds on all 23,285 rows of the current warehouse only because the CDR toolchain mints one `obrId` for both resources. `diagnostic-report.ts:13` sets `id: String(r['id'])`, the wire id, so the projection guarantees nothing.
 
 **Files:**
-- Create: `packages/db/src/migrations/external/017_diagnostic_report_based_on.ts`
-- Create: `packages/db/src/migrations/external/017_diagnostic_report_based_on.test.ts`
+- Create: `packages/db/src/migrations/external/017_diagnostic_report_based_on_and_lab_results_index.ts`
+- Create: `packages/db/src/migrations/external/017_diagnostic_report_based_on_and_lab_results_index.test.ts`
 - Modify: `packages/db/src/migrations/external/index.ts`
 - Modify: `packages/db/src/schema/external.ts`
 - Modify: `packages/db/src/relational/diagnostic-report.ts`
@@ -133,7 +143,7 @@ Expected: PASS.
 
 - [ ] **Step 7: Write the migration**
 
-Create `packages/db/src/migrations/external/017_diagnostic_report_based_on.ts`:
+Create `packages/db/src/migrations/external/017_diagnostic_report_based_on_and_lab_results_index.ts`:
 
 ```typescript
 import { type Kysely, sql } from 'kysely';
@@ -177,20 +187,30 @@ export async function down(db: Kysely<unknown>): Promise<void> {
 
 ⚠ Open `015_facility_map_performer_system.ts` and `016_ingest_events.ts` before writing this. If either spells `createIndex` or `dropIndex` differently for cross-engine reasons, match them rather than the sketch above.
 
+⛔ **CORRECTION, found in code-quality review on 2026-08-19. The sketch above is wrong twice.**
+
+First, `dropIndex(...).on(table)` compiles to `drop index x on t` on every dialect in Kysely 0.28.17. There is no dialect override; `visitDropIndex` exists only at `dist/cjs/query-compiler/default-query-compiler.js:685`. Postgres has no `ON` clause there, so `down()` needs an `engine` parameter and must skip `.on()` for Postgres. Register it as `down: (db) => m017.down(db, engine)`, the pattern `007_drop_thin_rename_v2.ts` already uses.
+
+Second, and worse, `lab_results.request_id` is declared `textType(engine)` at `003_v2_core.ts:52`. That is `longtext` on MySQL and `nvarchar(max)` on SQL Server, and neither can be an index key column. MySQL raises error 1170 and SQL Server raises Msg 1919, so the migration as sketched blocks boot on two of three supported targets. MySQL DDL is not transactional either, so a failure there leaves the column committed while the migration stays unrecorded, and a re-run then fails on a duplicate column.
+
+The rule is already written down in this repo, at `011_terminology_codes.ts:23-28`. Indexed columns use `keyType`, never `textType`.
+
+So `up()` must widen `lab_results.request_id` to `keyType(engine)` engine-conditionally before creating its index. Measure the longest existing value first and refuse rather than truncate. `based_on_id` is unaffected because it already uses `keyType`.
+
 - [ ] **Step 8: Register it**
 
 In `packages/db/src/migrations/external/index.ts`, beside the line 18 import and the line 37 entry:
 
 ```typescript
-import * as m017 from './017_diagnostic_report_based_on';
+import * as m017 from './017_diagnostic_report_based_on_and_lab_results_index';
 ```
 ```typescript
-    '017_diagnostic_report_based_on': { up: (db) => m017.up(db, engine), down: m017.down },
+    '017_diagnostic_report_based_on_and_lab_results_index': { up: (db) => m017.up(db, engine), down: m017.down },
 ```
 
 - [ ] **Step 9: Write the migration test**
 
-Create `packages/db/src/migrations/external/017_diagnostic_report_based_on.test.ts`, modelled on `016_ingest_events.test.ts`. Read that file first and copy its harness rather than inventing one. It must assert:
+Create `packages/db/src/migrations/external/017_diagnostic_report_based_on_and_lab_results_index.test.ts`, modelled on `016_ingest_events.test.ts`. Read that file first and copy its harness rather than inventing one. It must assert:
 
 - after `up`, `diagnostic_reports` has a nullable `based_on_id`
 - after `up`, both indexes exist
@@ -211,8 +231,8 @@ Expected: 017 applied, no ordering error.
 - [ ] **Step 12: Commit**
 
 ```bash
-git add packages/db/src/migrations/external/017_diagnostic_report_based_on.ts \
-        packages/db/src/migrations/external/017_diagnostic_report_based_on.test.ts \
+git add packages/db/src/migrations/external/017_diagnostic_report_based_on_and_lab_results_index.ts \
+        packages/db/src/migrations/external/017_diagnostic_report_based_on_and_lab_results_index.test.ts \
         packages/db/src/migrations/external/index.ts \
         packages/db/src/schema/external.ts \
         packages/db/src/relational/diagnostic-report.ts \
@@ -378,7 +398,17 @@ Run `explain analyze` over the rewritten CTE with `month` set to `2013-06` and t
 docker exec openldr_ce-postgres-1 psql -U openldr -d openldr_target
 ```
 
-Expected: index scans on `lab_results_request_idx` and `diagnostic_reports_based_on_idx`, and no sequential scan on `lab_results`. If `diagnostic_reports` is sequentially scanned for the `batch_id` join and dominates the runtime, add `create index diagnostic_reports_batch_idx on diagnostic_reports (batch_id);` to migration 017 and its `down`, then re-run Task 1 steps 10 and 11. Decide from the plan output, not from expectation.
+Expected: index scans on `lab_results_request_idx` and `diagnostic_reports_based_on_idx`.
+
+⚠ **CORRECTION, measured during Task 3 on 2026-08-19. "No sequential scan on `lab_results`" was the wrong expectation.** Postgres flattens the month gate's `EXISTS` into a hashed subplan and scans `lab_results` once, 80,141 rows keeping 793 in about 16ms, rather than probing the index 23,285 times. That is cheaper than the index route, not a defect. The correlated `min()` subqueries do use `lab_results_request_idx`, measured at 89 loops. `diagnostic_reports_based_on_idx` can legitimately show `never executed` on a given month because `coalesce` short-circuits before step 3.
+
+Measured totals for the CTE at `month='2013-06'`: 38.658 ms with `jit=off`, 46.786 ms for the full grid query. `diagnostic_reports` is scanned once for the `batch_id` join at 4.65 ms of that, so it does not dominate and needs no index.
+
+⛔ **Separate problem, do not fix here.** With JIT on, the same CTE takes 782 ms and the full query 1279 ms, so JIT is roughly 733 ms of pure overhead. It fires because the planner costs the correlated subplans as per-row over 23,285 requests and estimates 997,687, not knowing `coalesce` short-circuits. Real work is about 40 ms. Record it, do not chase it in this slice.
+
+If `diagnostic_reports` is sequentially scanned for the `batch_id` join and dominates the runtime, an index on `batch_id` is the fix. ⛔ It is not a one-liner. `diagnostic_reports.batch_id` is `textType` like `lab_results.request_id` was, so it cannot be indexed without the same `keyType` widening described in Task 1's correction, and for the same reason on MySQL and SQL Server. Do the widening and the index together in a new migration, not by appending to 017 once 017 has been applied anywhere.
+
+Decide from the plan output, not from expectation. A sequential scan of 23,285 rows may well be cheap enough to leave alone, and widening an index without measurement is what `015` explicitly refuses to do.
 
 - [ ] **Step 6: Commit**
 
@@ -609,12 +639,16 @@ git commit -m "docs(reports): say the transmission grid marks clinical work, not
 
 ### Task 9: Documentation in en, fr and pt
 
-AGENTS.md §6.3. All three ship together. A missing key renders as literal braces and the user sees it.
+⛔ **CORRECTION, measured 2026-08-19. This task is English-only, and the plan was wrong to name three files.**
+
+`reports.md` exists ONLY in English. `apps/studio/src/docs/0.1.0/en/` holds 19 files; `fr/` and `pt/` hold 2 each, `audit.md` and `facilities.md`. There is no fr or pt `reports.md` to modify.
+
+That is safe, not broken. The docs registry falls back to English per section: `apps/studio/src/pages/Docs.tsx:83-85` narrows the locale, and `Docs.test.tsx:179` pins the behaviour with a test named "uses English fallback when app language is fr". A missing locale FILE degrades to English. The AGENTS.md §6.3 warning about literal braces applies to a missing i18n KEY in the app shell, which is a different mechanism.
+
+Do NOT translate `reports.md` into fr and pt as part of this slice. Seventeen other files are equally untranslated, so doing one here would be an inconsistent partial fix and a large piece of writing unrelated to clinical-date bucketing. Record it, do not build it.
 
 **Files:**
 - Modify: `apps/studio/src/docs/0.1.0/en/reports.md`
-- Modify: `apps/studio/src/docs/0.1.0/fr/reports.md`
-- Modify: `apps/studio/src/docs/0.1.0/pt/reports.md`
 
 - [ ] **Step 1: Find every affected passage**
 
@@ -668,7 +702,9 @@ Run: `pnpm turbo run test`
 
 ⛔ Never pipe this through `tail`. It truncates the failure list and hides which package failed.
 
-Expected: PASS. A failure here is usually a timeout, not a regression. Grep the output for `Test timed out` and re-run that package alone before blaming a change.
+Expected: PASS, except for one known pre-existing failure named below. A failure here is usually a timeout, not a regression. Grep the output for `Test timed out` and re-run that package alone before blaming a change.
+
+⛔ **Known failure, not from this slice.** `apps/studio/src/api.reports.test.ts > fetchReportPdf returns a Blob` fails with a cross-realm `Blob` identity problem. Found during Task 1's code-quality review on 2026-08-19. It reproduces standalone, sits in a file no task in this plan touches, and was last changed by an unrelated refactor. Nobody has bisected it to an origin commit. Do not fix it here and do not let it block this slice. Add it to the list instead.
 
 - [ ] **Step 2: Reseed so the running install picks up the new SQL**
 

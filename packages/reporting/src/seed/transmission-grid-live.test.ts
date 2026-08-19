@@ -69,12 +69,12 @@ live('the transmission grid queries (live Postgres)', () => {
   // bind a placeholder (packages/dashboards/src/custom-query-run.ts:37). Mirror that exactly, or
   // this test proves something the runtime never executes. Global, because {{param.tz}} and
   // {{param.month}} each appear several times in one query.
-  const runQuery = (queryId: string) => async (p: { month: string; panels: string; tz: string }) => {
+  const runQuery = (queryId: string) => async (p: { month: string; panels: string; tz?: string }) => {
     const raw = SEED_QUERIES.find((q) => q.id === queryId)!.sql.postgres;
     const text = raw
       .replace(/\{\{\s*param\.month\s*\}\}/g, `'${p.month.replace(/'/g, "''")}'`)
       .replace(/\{\{\s*param\.panels\s*\}\}/g, `'${p.panels.replace(/'/g, "''")}'`)
-      .replace(/\{\{\s*param\.tz\s*\}\}/g, `'${p.tz.replace(/'/g, "''")}'`);
+      .replace(/\{\{\s*param\.tz\s*\}\}/g, `'${(p.tz ?? 'UTC').replace(/'/g, "''")}'`);
     // `sql.raw` is itself generic; the `sql<T>.raw(...)` shape parses as an instantiation
     // expression followed by a property access, which TS 5.x rejects (TS1477).
     const res = await sql.raw<Record<string, string>>(text).execute(db);
@@ -106,6 +106,51 @@ live('the transmission grid queries (live Postgres)', () => {
     await db.insertInto('ingest_events' as never).values({
       resource_type: 'ServiceRequest', resource_id: `req-${key}`, version: 1, recorded_at: recordedAt,
     } as never).execute();
+  };
+
+  // The three CLINICAL timestamps the grid now buckets on, seeded one row at a time. A submission
+  // is not one shape any more: a request may be registered in one month and resulted in the next,
+  // so each test builds exactly the rows its case needs.
+  //
+  // ⛔ ISO 8601 text CARRYING THE SOURCE OFFSET, the shape the warehouse actually holds. The query
+  // compares left(ts, 7) to the month and slices left(ts, 10) for the day, so an offset-free
+  // fixture would prove a string the real data never contains.
+  const seedRequest = async (r: {
+    id: string; batchId: string; panel: string | null; authoredAt: string | null;
+  }): Promise<void> => {
+    await db.insertInto('lab_requests' as never).values({
+      id: r.id, request_id: r.id, panel_code: r.panel, batch_id: r.batchId, authored_at: r.authoredAt,
+    } as never).execute();
+  };
+
+  // `performer` with no `performer_display` and no facility_map row, so `lab` falls through to the
+  // performer code and the test can name the laboratory it asserts on.
+  const seedReport = async (r: {
+    id: string; basedOnId: string; batchId: string; performer: string; issued: string | null;
+  }): Promise<void> => {
+    await db.insertInto('diagnostic_reports' as never).values({
+      id: r.id, based_on_id: r.basedOnId, batch_id: r.batchId, performer: r.performer, issued: r.issued,
+    } as never).execute();
+  };
+
+  const seedResult = async (r: {
+    id: string; requestId: string; resultTimestamp: string;
+  }): Promise<void> => {
+    await db.insertInto('lab_results' as never).values({
+      id: r.id, request_id: r.requestId, result_timestamp: r.resultTimestamp,
+    } as never).execute();
+  };
+
+  /** Every day cell on one row, d01..d23, in column order. */
+  const dayCells = (row: Record<string, string>): string[] =>
+    Object.keys(row).filter((k) => /^d\d\d$/.test(k)).sort().map((k) => row[k]);
+
+  /** The invariant the clinical-date ladder actually establishes: a request marks ONE day in the
+   *  month, at its highest-priority in-month timestamp. Asserting a single adjacent blank cell
+   *  only pins an off-by-one; this pins the whole row, so a second mark anywhere fails. */
+  const marksExactlyOneDay = (row: Record<string, string>, day: string): void => {
+    expect(row[day], `expected the mark on ${day}`).toBe('Y');
+    expect(dayCells(row).filter((c) => c === 'Y'), `${row.lab} marked more than one day`).toEqual(['Y']);
   };
 
   beforeAll(async () => {
@@ -157,7 +202,7 @@ live('the transmission grid queries (live Postgres)', () => {
     // yields 'BBCC' and silently sends this request to the other grid.
     await seedSubmission('spacecode', 'Inner Space Lab', 'BB CC', '2026-03-03T08:00:00Z');
 
-    // The 15x fan-out `distinct` collapses: one batch, several diagnostic_reports rows, one
+    // The 18x fan-out `distinct` collapses: one batch, several diagnostic_reports rows, one
     // performer. ⚠ No test here can catch a lost `distinct` — max() folds the duplicates, so the
     // grid reads identically either way, which is why the test below was renamed off that claim.
     // The fixture stays because it makes every other assertion run against the FANNED-OUT shape
@@ -292,6 +337,126 @@ live('the transmission grid queries (live Postgres)', () => {
     const ot = await runForOther({ month: '2026-03', panels: 'HIVPC', tz: 'UTC' });
     expect(hv.some((r) => r.lab === 'No Panel Lab')).toBe(false);
     expect(ot.some((r) => r.lab === 'No Panel Lab')).toBe(true);
+  });
+
+  // ------------------------------------------------------------------------------------------
+  // Clinical-date bucketing: registered, then tested, then authorised
+  // ------------------------------------------------------------------------------------------
+  //
+  // 1 April 2013 was a Monday, so the working days run d01 = Mon 1, d02 = Tue 2, d03 = Wed 3,
+  // d04 = Thu 4, d05 = Fri 5, d06 = Mon 8, d07 = Tue 9. Confirmed against the calendar.
+
+  it('falls through to the result date when registration sits outside the month', async () => {
+    // Registered in March, resulted in April. The April grid must mark 2 April.
+    await seedRequest({ id: 'r1-obr1', batchId: 'b1', panel: 'HIVVL',
+      authoredAt: '2013-03-28T09:00:00+03:00' });
+    await seedReport({ id: 'dr1', basedOnId: 'r1-obr1', batchId: 'b1', performer: 'LAB-A',
+      issued: null });
+    await seedResult({ id: 'o1', requestId: 'r1-obr1',
+      resultTimestamp: '2013-04-02T11:00:00+03:00' });
+
+    const rows = await runFor({ month: '2013-04', panels: 'HIVVL' });
+
+    const lab = rows.find((r) => r.lab === 'LAB-A')!;
+    marksExactlyOneDay(lab, 'd02');
+    expect(lab.d01).toBe('');
+  });
+
+  it('marks one day per request per month, at the highest-priority in-month date', async () => {
+    // Registered AND authorised inside the same month. Only registration marks.
+    await seedRequest({ id: 'r2-obr1', batchId: 'b2', panel: 'HIVVL',
+      authoredAt: '2013-04-03T09:00:00+03:00' });
+    await seedReport({ id: 'dr2', basedOnId: 'r2-obr1', batchId: 'b2', performer: 'LAB-B',
+      issued: '2013-04-09T16:00:00+03:00' });
+
+    const rows = await runFor({ month: '2013-04', panels: 'HIVVL' });
+
+    const lab = rows.find((r) => r.lab === 'LAB-B')!;
+    marksExactlyOneDay(lab, 'd03');
+    expect(lab.d07, 'the authorisation date must not mark a second day').toBe('');
+  });
+
+  it('falls all the way through to the authorisation date', async () => {
+    // Registered in March, never resulted, authorised on 4 April. The third step is the only one
+    // left. It is not a rare path: for 2017-08 it resolves 194 of 2,376 in-gate requests across
+    // all panels, and 118 of 905 for a four-code HVL/EID list. Measured 2026-08-19.
+    await seedRequest({ id: 'r3-obr1', batchId: 'b3', panel: 'HIVVL',
+      authoredAt: '2013-03-29T09:00:00+03:00' });
+    await seedReport({ id: 'dr3', basedOnId: 'r3-obr1', batchId: 'b3', performer: 'LAB-C',
+      issued: '2013-04-04T16:00:00+03:00' });
+
+    const rows = await runFor({ month: '2013-04', panels: 'HIVVL' });
+
+    const lab = rows.find((r) => r.lab === 'LAB-C')!;
+    marksExactlyOneDay(lab, 'd04');
+  });
+
+  it('⛔ answers a loose month exactly like a strict one, rather than emptying the grid', async () => {
+    // 'month' is free text: custom-query-run.ts:14 validates only daterange, and
+    // RunParamsSheet.tsx:53 renders a plain input. So '2013-4' reaches the SQL.
+    //
+    // ⛔ This is the failure mode the string comparison introduced. cast('2013-4' || '-01') still
+    // parses to 2013-04-01, so `days` builds a correct April header and the date row renders
+    // perfectly, but a raw left(ts, 7) = '2013-4' matches nothing. The report then prints a right
+    // header above ZERO laboratories and a reader concludes nobody transmitted all month. Silent,
+    // and the same class of wrong answer this whole slice exists to remove.
+    const strict = await runFor({ month: '2013-04', panels: 'HIVVL' });
+    const loose = await runFor({ month: '2013-4', panels: 'HIVVL' });
+
+    expect(loose).toEqual(strict);
+    // ...and not vacuously equal because both came back empty.
+    expect(loose.some((r) => r.lab === 'LAB-A')).toBe(true);
+  });
+
+  it('⛔ partitions the month between the two grids, on every rung of the ladder', async () => {
+    // The two grids must DIVIDE the month's requests: one grid each, never both, never neither.
+    //
+    // ⛔ Every rung is tested, not just registration. A request reaches `arrivals` through a
+    // different branch of the coalesce depending on which timestamp is the first one in the month,
+    // so a panel predicate that only bit on the registration branch would still pass a one-rung
+    // test. Each rung gets a matching pair: same dates, one panel inside the list and one outside.
+    //
+    // 3 June 2013 was a Monday, so the working days run d01 = Mon 3, d02 = Tue 4, d03 = Wed 5.
+    // Confirmed against the calendar. Nothing else in this file seeds June 2013.
+    const rungs = [
+      // Registered in June. The first rung answers and the other two are never consulted.
+      { key: 'reg', authored: '2013-06-03T09:00:00+03:00', result: null, issued: null, day: 'd01' },
+      // Registered in May, resulted in June. The second rung answers.
+      { key: 'res', authored: '2013-05-29T09:00:00+03:00', result: '2013-06-04T11:00:00+03:00', issued: null, day: 'd02' },
+      // Registered in May, never resulted, authorised in June. The third rung answers.
+      { key: 'iss', authored: '2013-05-29T09:00:00+03:00', result: null, issued: '2013-06-05T16:00:00+03:00', day: 'd03' },
+    ] as const;
+
+    for (const r of rungs) {
+      for (const side of ['in', 'out'] as const) {
+        const id = `p-${r.key}-${side}`;
+        const batchId = `pb-${r.key}-${side}`;
+        // Fixture panel codes, not product vocabulary (AGENTS.md §8): the SQL carries none, the
+        // list arrives as {{param.panels}}. 'in' is on the list below, 'out' is not.
+        await seedRequest({ id, batchId, panel: side === 'in' ? 'HIVVL' : 'CHEM', authoredAt: r.authored });
+        await seedReport({ id: `pdr-${r.key}-${side}`, basedOnId: id, batchId,
+          performer: `PLAB-${r.key}-${side}`, issued: r.issued });
+        if (r.result) await seedResult({ id: `po-${r.key}-${side}`, requestId: id, resultTimestamp: r.result });
+      }
+    }
+
+    const hv = await runFor({ month: '2013-06', panels: 'HIVVL' });
+    const ot = await runForOther({ month: '2013-06', panels: 'HIVVL' });
+
+    for (const r of rungs) {
+      const inLab = `PLAB-${r.key}-in`;
+      const outLab = `PLAB-${r.key}-out`;
+
+      const onList = hv.find((x) => x.lab === inLab);
+      expect(onList, `${inLab} is missing from the HVL/EID grid`).toBeDefined();
+      marksExactlyOneDay(onList!, r.day);
+      expect(ot.some((x) => x.lab === inLab), `${inLab} leaked into the Other grid too`).toBe(false);
+
+      const offList = ot.find((x) => x.lab === outLab);
+      expect(offList, `${outLab} fell out of BOTH grids`).toBeDefined();
+      marksExactlyOneDay(offList!, r.day);
+      expect(hv.some((x) => x.lab === outLab), `${outLab} leaked into the HVL/EID grid too`).toBe(false);
+    }
   });
 
   // ------------------------------------------------------------------------------------------

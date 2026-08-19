@@ -112,6 +112,19 @@ describe('relational projectResource', () => {
     expect(out?.rows[0]).toMatchObject({ performer: null, specimen_id: null });
   });
 
+  it('projects DiagnosticReport.basedOn into based_on_id', () => {
+    const out = projectResource({
+      resourceType: 'DiagnosticReport', id: 'req1-obr1', basedOn: [{ reference: 'ServiceRequest/req1-obr1' }],
+      subject: { reference: 'Patient/pt-1' }, issued: '2013-06-05T10:30:00+03:00',
+    });
+    expect(out?.rows[0]).toMatchObject({ id: 'req1-obr1', based_on_id: 'req1-obr1' });
+  });
+
+  it('leaves based_on_id null when DiagnosticReport has no basedOn', () => {
+    const out = projectResource({ resourceType: 'DiagnosticReport', id: 'req2-obr1', subject: { reference: 'Patient/pt-2' } });
+    expect(out?.rows[0].based_on_id).toBeNull();
+  });
+
   it('returns null for non-projected types', () => {
     expect(projectResource({ resourceType: 'Bundle' })).toBeNull();
     expect(tableForResourceType('Bundle')).toBeNull();
