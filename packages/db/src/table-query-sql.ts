@@ -1,9 +1,14 @@
 import { sql, type ExpressionBuilder, type Expression, type SqlBool, type OrderByItemBuilder } from "kysely";
-import { getColumn, type ParsedFilter, type ParsedSort, type TableColumnMap } from "@openldr/table-query";
+import { DATE_ONLY, getColumn, type ParsedFilter, type ParsedSort, type TableColumnMap } from "@openldr/table-query";
 
 /** Escape the LIKE metacharacters so a user's `%` or `_` matches a literal character. */
 function escapeLike(input: string): string {
   return input.replace(/([\\%_])/g, "\\$1");
+}
+
+/** True when `value` is a bare calendar date (`YYYY-MM-DD`) rather than a full timestamp. */
+function isDateOnly(value: string): boolean {
+  return DATE_ONLY.test(value.trim());
 }
 
 function ruleExpression(
@@ -22,12 +27,30 @@ function ruleExpression(
   const asText = sql<string>`coalesce(${col}::text, '')`;
 
   switch (rule.operator) {
-    case "eq":
-      return sql<SqlBool>`${asText} = ${String(rule.value)}`;
-    case "ne":
+    case "eq": {
+      // A date column's "eq 2026-08-06" means the whole day, not the single midnight instant a
+      // literal comparison would match — the value renders as `2026-08-06 01:18:19.491521+00`,
+      // which is never equal to the bare date the DatePicker sends (0 rows, measured live). Only
+      // expand when the value itself is date-only: a caller that sent a full timestamp means
+      // that exact instant and gets it, honoured via the plain `asText` comparison below.
+      const value = String(rule.value);
+      if (spec.type === "date" && isDateOnly(value)) {
+        const day = value.trim();
+        return sql<SqlBool>`(${col} >= ${day}::timestamptz and ${col} < (${day}::timestamptz + interval '1 day'))`;
+      }
+      return sql<SqlBool>`${asText} = ${value}`;
+    }
+    case "ne": {
       // Coalesce-to-'' matches the client's `String(value ?? "") !== target`, which counts a
       // NULL row as a mismatch (and therefore included by `ne`). A plain `<> value` would drop it.
-      return sql<SqlBool>`${asText} <> ${String(rule.value)}`;
+      const value = String(rule.value);
+      if (spec.type === "date" && isDateOnly(value)) {
+        const day = value.trim();
+        // Negation of the eq day-range above, with the same NULL-is-a-mismatch rule.
+        return sql<SqlBool>`(${col} is null or ${col} < ${day}::timestamptz or ${col} >= (${day}::timestamptz + interval '1 day'))`;
+      }
+      return sql<SqlBool>`${asText} <> ${value}`;
+    }
     case "like": {
       const needle = String(rule.value ?? "");
       if (needle === "") return sql<SqlBool>`true`;
@@ -60,6 +83,16 @@ function ruleExpression(
       // Parenthesized so this stays atomic if a later fold step ORs it with something else —
       // AND happens to be associative with OR's precedence here, but don't rely on that holding
       // for every future operator that reuses this shape.
+      //
+      // Date columns: the lower bound already works unmodified — a date-only `lo` compared with
+      // `>=` already means "from the start of that day". Only the upper bound needs adjusting:
+      // a plain `<= hi` on a date-only `hi` stops at that day's midnight, excluding almost all of
+      // the end day. Expand a date-only `hi` to "less than the start of the following day" so the
+      // end day is included in full. A full-timestamp `hi` is honoured exactly, unchanged.
+      if (spec.type === "date" && isDateOnly(hi)) {
+        const hiDay = hi.trim();
+        return sql<SqlBool>`(${col} >= ${lo} and ${col} < (${hiDay}::timestamptz + interval '1 day'))`;
+      }
       return sql<SqlBool>`(${col} >= ${lo} and ${col} <= ${hi})`;
     }
     case "in": {

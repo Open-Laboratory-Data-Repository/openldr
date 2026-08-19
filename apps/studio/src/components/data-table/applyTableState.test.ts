@@ -9,6 +9,9 @@ interface Row {
   sex: "m" | "f";
   dob: string; // ISO date
   email: string | null;
+  // Full ISO timestamp, unlike dob — mirrors audit's occurredAt, which is what exposed C1: a
+  // date-only filter value against a row value that carries a time-of-day component.
+  occurredAt: string | null;
 }
 
 const cols: ColumnDef<Row>[] = [
@@ -18,14 +21,15 @@ const cols: ColumnDef<Row>[] = [
     enumOptions: [{ value: "m", label: "m" }, { value: "f", label: "f" }] },
   { id: "dob",  labelKey: "dob",  accessor: (r) => r.dob,  type: "date", defaultVisible: true },
   { id: "email", labelKey: "email", accessor: (r) => r.email ?? "", type: "text", defaultVisible: false },
+  { id: "occurredAt", labelKey: "occurredAt", accessor: (r) => r.occurredAt ?? "", type: "date", defaultVisible: false },
 ];
 
 const rows: Row[] = [
-  { id: "1", name: "Achieng",  age: 36, sex: "f", dob: "1990-05-12", email: "a@x.com" },
-  { id: "2", name: "Kimaro",   age: 41, sex: "m", dob: "1985-07-22", email: null },
-  { id: "3", name: "Mwangi",   age: 48, sex: "f", dob: "1978-03-10", email: "m@x.com" },
-  { id: "4", name: "Noor",     age: 25, sex: "m", dob: "2001-11-05", email: null },
-  { id: "5", name: "Santos",   age: 31, sex: "f", dob: "1995-06-30", email: "s@x.com" },
+  { id: "1", name: "Achieng",  age: 36, sex: "f", dob: "1990-05-12", email: "a@x.com", occurredAt: "2026-08-06T01:18:19.491Z" },
+  { id: "2", name: "Kimaro",   age: 41, sex: "m", dob: "1985-07-22", email: null,      occurredAt: "2026-08-06T23:59:59.999Z" },
+  { id: "3", name: "Mwangi",   age: 48, sex: "f", dob: "1978-03-10", email: "m@x.com", occurredAt: null },
+  { id: "4", name: "Noor",     age: 25, sex: "m", dob: "2001-11-05", email: null,      occurredAt: "2026-08-07T00:00:00.000Z" },
+  { id: "5", name: "Santos",   age: 31, sex: "f", dob: "1995-06-30", email: "s@x.com", occurredAt: "2026-08-05T12:00:00.000Z" },
 ];
 
 describe("applyTableState", () => {
@@ -67,6 +71,33 @@ describe("applyTableState", () => {
       sorts: [], page: 0, pageSize: 10,
     }, cols);
     expect(res.rows.map((r) => r.name).sort()).toEqual(["Achieng", "Santos"]);
+  });
+
+  // C1: a date-only "eq"/"ne"/"between" filter on a column whose row values carry a
+  // time-of-day (occurredAt, unlike dob) must select the whole day, not just literal midnight —
+  // this is the client-side half of the server SQL fix in table-query-sql.ts.
+  it("eq on a date-only value matches every row on that day, not just literal midnight", () => {
+    const res = applyTableState(rows, {
+      filters: [{ id: "x", column: "occurredAt", operator: "eq", value: "2026-08-06", combine: "and" }],
+      sorts: [], page: 0, pageSize: 10,
+    }, cols);
+    expect(res.rows.map((r) => r.name).sort()).toEqual(["Achieng", "Kimaro"]);
+  });
+
+  it("ne on a date-only value excludes that whole day but keeps a null row", () => {
+    const res = applyTableState(rows, {
+      filters: [{ id: "x", column: "occurredAt", operator: "ne", value: "2026-08-06", combine: "and" }],
+      sorts: [], page: 0, pageSize: 10,
+    }, cols);
+    expect(res.rows.map((r) => r.name).sort()).toEqual(["Mwangi", "Noor", "Santos"]);
+  });
+
+  it("between with date-only bounds includes the end day in full", () => {
+    const res = applyTableState(rows, {
+      filters: [{ id: "x", column: "occurredAt", operator: "between", value: ["2026-08-06", "2026-08-06"], combine: "and" }],
+      sorts: [], page: 0, pageSize: 10,
+    }, cols);
+    expect(res.rows.map((r) => r.name).sort()).toEqual(["Achieng", "Kimaro"]);
   });
 
   it("is_null matches null and empty string", () => {

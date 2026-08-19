@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { newDb } from "pg-mem";
 import type { Kysely } from "kysely";
 import { buildFilterExpression } from "./table-query-sql";
-import type { ParsedFilter, TableColumnMap } from "@openldr/table-query";
+import { DATE_ONLY, type ParsedFilter, type TableColumnMap } from "@openldr/table-query";
 
 // Cross-implementation parity test. Tasks 3/4 built a SQL translator that is supposed
 // to select the same rows a server-paginated page's SQL WHERE clause would, as the
@@ -26,18 +26,22 @@ import type { ParsedFilter, TableColumnMap } from "@openldr/table-query";
 const COLUMNS: TableColumnMap = {
   name: { sql: "name", type: "text", operators: ["eq", "ne", "like", "in", "is_null", "is_not_null"], sortable: true },
   weight: { sql: "weight", type: "number", operators: ["gt", "gte", "lt", "lte", "between"], sortable: true },
+  // Mirrors audit's occurredAt: a timestamptz-shaped column, so eq/ne/between get the day-aware
+  // expansion (C1) instead of the plain string/compareValues path the other columns use.
+  occurredAt: { sql: "occurredAt", type: "date", operators: ["eq", "ne", "gt", "gte", "lt", "lte", "between", "is_null", "is_not_null"], sortable: true },
 };
 
 const ROWS = [
-  { id: "1", name: "alpha", weight: 10 },
-  { id: "2", name: "BETA", weight: 5 },
-  { id: "3", name: null as string | null, weight: 1 },
-  { id: "4", name: "", weight: 7 },
+  // occurredAt: day A early, day A late, null, day B exact midnight, day C (before A).
+  { id: "1", name: "alpha", weight: 10, occurredAt: "2026-08-06T01:18:19.491Z" as string | null },
+  { id: "2", name: "BETA", weight: 5, occurredAt: "2026-08-06T23:59:59.999Z" as string | null },
+  { id: "3", name: null as string | null, weight: 1, occurredAt: null as string | null },
+  { id: "4", name: "", weight: 7, occurredAt: "2026-08-07T00:00:00.000Z" as string | null },
   // NULL weight: exercises compareValues' null-handling branch for gt/gte/lt/lte, which none of
   // the rows above did. This is the same fixture gap that hid Fix 2 (NULLS ordering) — a filter
   // or sort that never sees a null in its test data can look correct while disagreeing on real
   // nullable columns (eight nullable facility columns, audit's actorId).
-  { id: "5", name: "epsilon", weight: null as number | null },
+  { id: "5", name: "epsilon", weight: null as number | null, occurredAt: "2026-08-05T12:00:00.000Z" as string | null },
 ];
 
 // --- copied from applyTableState.ts:17-27 ---
@@ -50,13 +54,41 @@ function compareValues(a: unknown, b: unknown): number {
   return String(a).localeCompare(String(b));
 }
 
-// --- copied from applyTableState.ts:29-56 ---
-function matchesRule(value: unknown, operator: string, target: unknown): boolean {
+// --- copied from applyTableState.ts:35-70 (parseDateMs, dayBoundsMs, matchesRule) ---
+function parseDateMs(v: unknown): number | null {
+  if (typeof v !== "string") return null;
+  const ms = Date.parse(v);
+  return Number.isNaN(ms) ? null : ms;
+}
+
+function dayBoundsMs(day: string): [number, number] {
+  const start = Date.parse(day);
+  return [start, start + 24 * 60 * 60 * 1000];
+}
+
+function matchesRule(value: unknown, operator: string, target: unknown, columnType?: string): boolean {
   switch (operator) {
-    case "eq":
+    case "eq": {
+      if (columnType === "date" && typeof target === "string" && DATE_ONLY.test(target.trim())) {
+        const valueMs = parseDateMs(value);
+        if (valueMs !== null) {
+          const [start, end] = dayBoundsMs(target.trim());
+          return valueMs >= start && valueMs < end;
+        }
+      }
       return String(value ?? "") === String(target);
-    case "ne":
+    }
+    case "ne": {
+      if (columnType === "date" && typeof target === "string" && DATE_ONLY.test(target.trim())) {
+        if (value === null || value === undefined || value === "") return true;
+        const valueMs = parseDateMs(value);
+        if (valueMs !== null) {
+          const [start, end] = dayBoundsMs(target.trim());
+          return !(valueMs >= start && valueMs < end);
+        }
+      }
       return String(value ?? "") !== String(target);
+    }
     case "like": {
       const needle = (Array.isArray(target) ? target.join(",") : String(target ?? "")).toLowerCase();
       if (!needle) return true;
@@ -72,6 +104,15 @@ function matchesRule(value: unknown, operator: string, target: unknown): boolean
       return compareValues(value, Array.isArray(target) ? target[0] : target) <= 0;
     case "between": {
       if (!Array.isArray(target) || target.length !== 2) return false;
+      if (columnType === "date") {
+        const [lo, hi] = target;
+        const valueMs = parseDateMs(value);
+        const loMs = parseDateMs(lo);
+        if (valueMs !== null && loMs !== null && typeof hi === "string" && DATE_ONLY.test(hi.trim())) {
+          const [, hiEnd] = dayBoundsMs(hi.trim());
+          return valueMs >= loMs && valueMs < hiEnd;
+        }
+      }
       return compareValues(value, target[0]) >= 0 && compareValues(value, target[1]) <= 0;
     }
     case "in": {
@@ -98,7 +139,7 @@ function clientIds(filters: ParsedFilter[]): string[] {
     for (let i = 0; i < filters.length; i++) {
       const rule = filters[i]!;
       const value = (row as Record<string, unknown>)[rule.column];
-      const match = matchesRule(value, rule.operator, rule.value);
+      const match = matchesRule(value, rule.operator, rule.value, COLUMNS[rule.column]?.type);
       if (i === 0) result = match;
       else if (rule.combine === "or") result = result || match;
       else result = result && match;
@@ -115,8 +156,14 @@ function makeDb(): Kysely<any> {
 
 async function sqlIds(filters: ParsedFilter[]): Promise<string[]> {
   const db = makeDb();
-  await db.schema.createTable("t").addColumn("id", "text").addColumn("name", "text").addColumn("weight", "integer").execute();
-  await db.insertInto("t").values(ROWS).execute();
+  await db.schema.createTable("t")
+    .addColumn("id", "text")
+    .addColumn("name", "text")
+    .addColumn("weight", "integer")
+    .addColumn("occurredAt", "timestamptz")
+    .execute();
+  // pg-mem's timestamptz column needs a Date, not the ISO string ROWS carries for the client side.
+  await db.insertInto("t").values(ROWS.map((r) => ({ ...r, occurredAt: r.occurredAt === null ? null : new Date(r.occurredAt) }))).execute();
   const rows = await db
     .selectFrom("t")
     .select("id")
@@ -164,6 +211,21 @@ const CASES: { label: string; filters: ParsedFilter[] }[] = [
       { column: "weight", operator: "gt", value: "100", combine: "and" },
     ],
   },
+  // C1: date-only eq/ne/between must select the whole day, not the single midnight instant a
+  // bare comparison would. Rows 1+2 fall on 2026-08-06, row 4 is the very next midnight, row 5 is
+  // the day before, and row 3 has a null occurredAt (exercises ne's null-still-included rule).
+  //
+  // NOT covered here: eq/ne with a *full timestamp* value on a date column. That falls through to
+  // the plain `coalesce(col::text, '')` comparison, unchanged by this fix and out of scope for
+  // it — the studio DatePicker only ever emits a date-only value, so no caller reaches that path
+  // today. It is also a separate, pre-existing bug: `timestamptz::text` on live Postgres renders
+  // as `2026-08-06 01:18:19.491+00` (space, `+00`, no `Z`), which a client ISO string can never
+  // equal either — measured live, not fixed here, and pg-mem cannot even run that comparison
+  // ("cannot cast type timestamp with time zone to text"), so it cannot be asserted in this file.
+  { label: "date eq on a date-only value matches the whole day", filters: [{ column: "occurredAt", operator: "eq", value: "2026-08-06", combine: "and" }] },
+  { label: "date ne on a date-only value excludes the whole day but keeps null", filters: [{ column: "occurredAt", operator: "ne", value: "2026-08-06", combine: "and" }] },
+  { label: "date between with date-only bounds includes the end day in full", filters: [{ column: "occurredAt", operator: "between", value: ["2026-08-06", "2026-08-06"], combine: "and" }] },
+  { label: "date between spanning multiple date-only days", filters: [{ column: "occurredAt", operator: "between", value: ["2026-08-05", "2026-08-06"], combine: "and" }] },
 ];
 
 describe("client and SQL filters select the same rows", () => {
