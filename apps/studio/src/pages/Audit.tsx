@@ -124,21 +124,19 @@ export function Audit() {
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<AuditEvent | null>(null);
 
-  // actorName leads the column list (not occurredAt) so the Filter popover's "add filter"
-  // default — first filterable column, first operator (FilterPopover.tsx:141-149) — lands on a
-  // plain text input. A date column there defaults to `eq`, which renders a DatePicker button
-  // with no "Enter value" labeled input, breaking addFilterViaPopover in every test that follows
-  // this page as a model. See date-picker.tsx: it exposes no text input at all.
+  // occurredAt leads the column list — the natural first column for an audit log. Filter
+  // popover tests that need a text input target a column explicitly via addFilterViaPopover's
+  // columnLabel argument instead of relying on column order.
   const columns: ColumnDef<AuditEvent>[] = useMemo(() => ([
-    {
-      id: 'actorName', labelKey: 'audit.colActor', type: 'text', defaultVisible: true, headClassName: 'w-40 text-xs uppercase',
-      accessor: (e) => <span className="text-sm">{e.actorName}</span>,
-      operators: AUDIT_COLUMNS.actorName!.operators,
-    },
     {
       id: 'occurredAt', labelKey: 'audit.colOccurred', type: 'date', defaultVisible: true, headClassName: 'w-48 text-xs uppercase',
       accessor: (e) => <span className="whitespace-nowrap font-mono text-xs text-muted-foreground">{formatTimestamp(e.occurredAt)}</span>,
       operators: AUDIT_COLUMNS.occurredAt!.operators,
+    },
+    {
+      id: 'actorName', labelKey: 'audit.colActor', type: 'text', defaultVisible: true, headClassName: 'w-40 text-xs uppercase',
+      accessor: (e) => <span className="text-sm">{e.actorName}</span>,
+      operators: AUDIT_COLUMNS.actorName!.operators,
     },
     {
       id: 'action', labelKey: 'audit.colAction', type: 'text', defaultVisible: true, headClassName: 'w-48 text-xs uppercase',

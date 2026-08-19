@@ -51,7 +51,9 @@ describe('Audit page', () => {
     render(<MemoryRouter><Audit /></MemoryRouter>);
     await screen.findByRole('table');
 
-    await addFilterViaPopover('form.create');
+    // occurredAt (type: 'date') now leads the column list, so target the Action column
+    // explicitly — its default operator renders the "Enter value" text input the helper needs.
+    await addFilterViaPopover('form.create', 'Action');
     expectStandardTableToolbar();
 
     // Server-paginated: the filter must reach queryAudit, not be applied in the browser.
