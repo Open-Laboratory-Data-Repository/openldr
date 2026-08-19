@@ -88,6 +88,19 @@ openldr terminology import loinc <dir> --accept-license
 openldr terminology import resource <codesystem.json>
 ```
 
+### Scratch space for a distribution upload
+
+| Variable | Type | Default | Effect |
+|---|---:|---:|---|
+| `TERMINOLOGY_WORK_DIR` | path | the OS temp dir (`os.tmpdir()`) | Base directory the terminology ingest worker streams and unzips an uploaded distribution into. Each job gets a fresh subdirectory under it, removed when the job ends including on a mid-extract failure. |
+
+Set this when the OS temp dir is small, which is the usual case in a container where `/tmp`
+is a modest tmpfs held in RAM. A full SNOMED CT release needs room for the zip and the
+extracted tree at the same time, so an import can fail on disk space while the database has
+plenty. It is read in two places, `packages/bootstrap/src/index.ts` for the server's ingest
+worker and `packages/cli/src/terminology.ts` for the CLI, so set it for both if you run
+imports from the CLI as well as the app.
+
 ## Auth And OIDC
 
 | Variable | Type | Default | Effect |
