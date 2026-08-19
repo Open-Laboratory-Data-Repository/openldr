@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { MoreHorizontal, Building2, CheckCircle2, Loader2, XCircle, AlertTriangle, SlidersHorizontal } from 'lucide-react';
+import { MoreHorizontal, Building2, CheckCircle2, Loader2, XCircle, AlertTriangle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { AppShell } from '@/shell/AppShell';
@@ -14,6 +14,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/spinner';
+import {
+  ActiveFilterChips, DataTableToolbar, newId, useTableState,
+  type ColumnDef, type FilterOperator, type FilterRule, type SortRule,
+} from '@/components/data-table';
+import { FACILITY_COLUMNS } from '@openldr/table-query';
 import { useAuth } from '@/auth/AuthProvider';
 import {
   listFacilities, deleteFacility, listPublishedForms, getFacilityHealth, retryFacilityJob,
@@ -27,32 +32,20 @@ import { ObservedTab } from '@/facilities/ObservedTab';
 import { FacilityHistory } from '@/facilities/FacilityHistory';
 import { FACILITY_STATUS_VALUESET_ID, useCodeDisplayMap, displayFor } from '@/facilities/facility-code-labels';
 
-/** Fix wave 1 / Finding 1: every filter dimension `GET /api/facilities` accepts (Task 3), minus
- *  paging — held as page state (below) and read from/written to the URL so a filtered view is
- *  linkable and survives reload. Previously only `q`/`health`/`source` were represented here; the
- *  rest of `FacilityListQuery` (country/zone/region/district/council/status/level/ownership/
- *  nationalSystem/managedOrigin) is now included too — see the toolbar JSX below for how each is
- *  presented and why. */
-type FacilitiesUrlState = Pick<FacilityListQuery,
-  | 'q' | 'health' | 'source' | 'country' | 'zone' | 'region' | 'district' | 'council'
-  | 'status' | 'level' | 'ownership' | 'nationalSystem' | 'managedOrigin' | 'registerState'
-> & { offset: number };
+/** Task 5: the filters `GET /api/facilities` accepts that have NO column in `FACILITY_COLUMNS`,
+ *  so they cannot be expressed as grammar rules and keep their own named params and their own
+ *  controls: `q` (a multi-column search the store spells out itself), `health` (a DERIVED mapping
+ *  state, not a stored column) and `nationalSystem` (`national_system` is not on the grammar
+ *  whitelist). Everything this type used to also carry - country/zone/region/district/council/
+ *  status/level/ownership/source/managedOrigin/registerState - is a grammar column now and travels
+ *  in `filters`/`sorts` instead, serialised into the URL as the same JSON the wire format uses, so
+ *  a filtered view stays linkable exactly as it was before.
+ *
+ *  `offset` stays here too: this page keeps its own pager rather than `useTableState`'s `page`,
+ *  because `useTableState` has no way to START on a page restored from a link. */
+type FacilitiesUrlState = Pick<FacilityListQuery, 'q' | 'health' | 'nationalSystem'> & { offset: number };
 
-/** Fix wave 1: the open-vocabulary filter keys — everything on `FacilitiesUrlState` besides `q`,
- *  the two closed-union fields (`health`/`source`, which keep their own dedicated
- *  `isHealthValue`/`isSourceValue` predicates), and `offset`. Declared once so `readUrlState`,
- *  `writeUrlState` and the "how many extra filters are active" badge count all iterate the exact
- *  same list instead of three hand-kept ones that could drift out of sync. `registerState` (Task
- *  10) IS a fixed three-value vocabulary and gets a `Select`, same as `zone`/`region`/`district`/
- *  `council` already do — "open-vocabulary" names the URL-restore/passthrough TREATMENT this array
- *  gives every key on it (no compile-time union to validate against, unlike health/source), not a
- *  claim that every key's own UI control is free text. */
-const OPEN_VOCAB_FILTER_KEYS = [
-  'country', 'zone', 'region', 'district', 'council', 'status', 'level', 'ownership',
-  'nationalSystem', 'managedOrigin', 'registerState',
-] as const satisfies readonly (keyof FacilitiesUrlState)[];
-
-/** The three values `health` accepts on the wire — used to validate whatever `?health=` a restored
+/** The three values `health` accepts on the wire - used to validate whatever `?health=` a restored
  *  URL carries, the same closed-whitelist reasoning as the server's own `isFacilityHealth`
  *  (facilities-routes.ts): an arbitrary query string must never reach `listFacilities` as a `health`
  *  value the store doesn't understand. */
@@ -60,21 +53,24 @@ const HEALTH_VALUES: readonly NonNullable<FacilityListQuery['health']>[] = ['map
 function isHealthValue(v: string): v is NonNullable<FacilityListQuery['health']> {
   return (HEALTH_VALUES as readonly string[]).includes(v);
 }
+
+/** `Facility.source`'s two values, backing the Source column's filter picker. Not clinical
+ *  vocabulary (AGENTS.md section 8): this is the application's own record of how a row entered the
+ *  registry, owned by `Facility['source']` in api.ts, not by the terminology service. */
 const SOURCE_VALUES: readonly NonNullable<Facility['source']>[] = ['manual', 'import'];
-function isSourceValue(v: string): v is NonNullable<Facility['source']> {
-  return (SOURCE_VALUES as readonly string[]).includes(v);
-}
+const SOURCE_LABEL_KEYS: Record<NonNullable<Facility['source']>, string> = {
+  manual: 'facilities.filters.sourceManual',
+  import: 'facilities.filters.sourceImport',
+};
 
 /** Task 10: `facility_registry.register_state`'s three codes (migration 081's
- *  `FACILITY_REGISTER_STATE_*` constants, `@openldr/db`) — hand-duplicated here rather than
- *  imported, the same "closed vocabulary the client mirrors, not shares" reasoning `SOURCE_VALUES`/
- *  `HEALTH_VALUES` above already follow: `@openldr/db`'s root export pulls in `kysely`/`pg`, which
- *  this browser bundle must not depend on. Unlike `health`/`source`, this list backs a `Select`
- *  inside `OPEN_VOCAB_FILTER_KEYS`'s generic passthrough (no dedicated `isRegisterStateValue`
- *  predicate) — see that array's own doc comment for why an unvalidated value there is harmless. */
+ *  `FACILITY_REGISTER_STATE_*` constants, `@openldr/db`) - hand-duplicated here rather than
+ *  imported, the same "closed vocabulary the client mirrors, not shares" reasoning `SOURCE_VALUES`
+ *  above already follows: `@openldr/db`'s root export pulls in `kysely`/`pg`, which this browser
+ *  bundle must not depend on. */
 const REGISTER_STATE_VALUES = ['in_register', 'dropped', 'not_registered'] as const;
 
-/** Each register-state code's i18n key, in the SAME fixed order the Select's options render in —
+/** Each register-state code's i18n key, in the SAME fixed order the picker's options render in -
  *  a `Record` over `REGISTER_STATE_VALUES`'s own type (not a second hand-typed list) so the two
  *  cannot drift: dropping a value from `REGISTER_STATE_VALUES` makes this object's now-extra key
  *  fail to compile, and adding one there without a matching entry here does too. */
@@ -84,47 +80,104 @@ const REGISTER_STATE_LABEL_KEYS: Record<(typeof REGISTER_STATE_VALUES)[number], 
   not_registered: 'facilities.filters.registerStateNotRegistered',
 };
 
-/** Read `q`/`health`/`source`/the open-vocabulary filters/`offset` back out of the current URL —
- *  the mirror of `writeUrlState` below. Used once, on mount, so a linked/reloaded filtered view
- *  restores exactly what it showed when it was shared. An invalid/absent `offset` (non-numeric,
- *  negative) falls back to 0 rather than throwing or passing NaN through to `listFacilities`. The
- *  open-vocabulary keys (country/zone/.../managedOrigin) have no compile-time union to validate
- *  against the way `health`/`source` do — unlike those two, an arbitrary `?zone=` value is not a
- *  security or correctness concern here: it is passed straight through as an exact-match `where`
- *  filter server-side (facility-registry-store.ts), so a value the registry has never seen simply
- *  matches zero rows rather than doing anything unsafe. */
+/** One `?filters=`/`?sorts=` parameter, decoded to a plain array. Anything malformed - not JSON,
+ *  not an array, truncated by a mail client - yields an empty list rather than throwing: a
+ *  hand-edited or mangled link must degrade to "no filter", never to a blank page. */
+function decodeRuleArray(raw: string | null): unknown[] {
+  if (!raw) return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function isRuleValue(v: unknown): v is FilterRule['value'] {
+  return typeof v === 'string' || (Array.isArray(v) && v.every((x) => typeof x === 'string'));
+}
+
+/** Rebuild the grammar filters a URL carries into `FilterRule`s. Validated against
+ *  `FACILITY_COLUMNS` - the server's OWN whitelist, so this rejects exactly what the route's
+ *  `parseTableQuery` would 400 on, and a link nobody can act on never reaches the network. The
+ *  wire shape has no `id` (`ParsedFilter` is `Omit<FilterRule, 'id'>`), so one is minted here for
+ *  React keys when the URL does not already carry it. */
+function readFiltersFromUrl(raw: string | null): FilterRule[] {
+  const out: FilterRule[] = [];
+  for (const entry of decodeRuleArray(raw)) {
+    if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) continue;
+    const r = entry as Record<string, unknown>;
+    if (typeof r.column !== 'string' || !Object.prototype.hasOwnProperty.call(FACILITY_COLUMNS, r.column)) continue;
+    const spec = FACILITY_COLUMNS[r.column]!;
+    if (typeof r.operator !== 'string' || !spec.operators.includes(r.operator as FilterOperator)) continue;
+    if (!isRuleValue(r.value)) continue;
+    out.push({
+      id: typeof r.id === 'string' ? r.id : newId('f'),
+      column: r.column,
+      operator: r.operator as FilterOperator,
+      value: r.value,
+      combine: r.combine === 'or' ? 'or' : 'and',
+    });
+  }
+  return out;
+}
+
+/** The sort half of the same restore. A rule naming a column the server will not sort on is
+ *  dropped for the same reason a bad filter is. */
+function readSortsFromUrl(raw: string | null): SortRule[] {
+  const out: SortRule[] = [];
+  for (const entry of decodeRuleArray(raw)) {
+    if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) continue;
+    const r = entry as Record<string, unknown>;
+    if (typeof r.column !== 'string' || !Object.prototype.hasOwnProperty.call(FACILITY_COLUMNS, r.column)) continue;
+    if (!FACILITY_COLUMNS[r.column]!.sortable) continue;
+    out.push({ id: typeof r.id === 'string' ? r.id : newId('s'), column: r.column, ascending: r.ascending !== false });
+  }
+  return out;
+}
+
+/** Read the named params back out of the current URL - the mirror of `writeUrlState` below. Used
+ *  once, on mount, so a linked/reloaded filtered view restores exactly what it showed when it was
+ *  shared. An invalid/absent `offset` (non-numeric, negative) falls back to 0 rather than throwing
+ *  or passing NaN through to `listFacilities`. */
 function readUrlState(): FacilitiesUrlState {
   const params = new URLSearchParams(window.location.search);
   const q = params.get('q');
   const health = params.get('health');
-  const source = params.get('source');
+  const nationalSystem = params.get('nationalSystem');
   const offsetRaw = Number(params.get('offset'));
-  const state: FacilitiesUrlState = {
+  return {
     q: q ?? '',
     health: health != null && isHealthValue(health) ? health : undefined,
-    source: source != null && isSourceValue(source) ? source : undefined,
+    // No compile-time union to validate against, and none needed: this is passed straight through
+    // as an exact-match `where` server-side (facility-registry-store.ts), so a value the registry
+    // has never seen simply matches zero rows rather than doing anything unsafe.
+    nationalSystem: nationalSystem || undefined,
     offset: Number.isFinite(offsetRaw) && offsetRaw > 0 ? Math.floor(offsetRaw) : 0,
   };
-  for (const key of OPEN_VOCAB_FILTER_KEYS) {
-    const raw = params.get(key);
-    if (raw) state[key] = raw;
-  }
-  return state;
 }
 
-/** Write `state` back to the URL via `history.replaceState` — a REPLACE, not a push, so paging
- *  through the registry does not fill the browser's back-button history with one entry per page. No
- *  key is ever written for an empty/default value (blank search, "All", offset 0), so the URL for
- *  the default view stays plain `/facilities` rather than `/facilities?q=&health=&offset=0`. */
-function writeUrlState(state: FacilitiesUrlState): void {
+/** The grammar half of the same mount-time restore. */
+function readUrlGrammar(): { filters: FilterRule[]; sorts: SortRule[] } {
+  const params = new URLSearchParams(window.location.search);
+  return { filters: readFiltersFromUrl(params.get('filters')), sorts: readSortsFromUrl(params.get('sorts')) };
+}
+
+/** Write the named params AND the grammar rules back to the URL via `history.replaceState` - a
+ *  REPLACE, not a push, so paging through the registry does not fill the browser's back-button
+ *  history with one entry per page. No key is ever written for an empty/default value (blank
+ *  search, "All", offset 0, no rules), so the URL for the default view stays plain `/facilities`.
+ *
+ *  `filters`/`sorts` carry the SAME JSON `listFacilities` puts on the wire (api.ts), so a shared
+ *  link is reproducible: what the URL says is exactly what the request sends. Empty arrays are
+ *  omitted rather than written as `[]`, same reasoning as the client. */
+function writeUrlState(state: FacilitiesUrlState, filters: FilterRule[], sorts: SortRule[]): void {
   const params = new URLSearchParams();
   if (state.q) params.set('q', state.q);
   if (state.health) params.set('health', state.health);
-  if (state.source) params.set('source', state.source);
-  for (const key of OPEN_VOCAB_FILTER_KEYS) {
-    const v = state[key];
-    if (v) params.set(key, v);
-  }
+  if (state.nationalSystem) params.set('nationalSystem', state.nationalSystem);
+  if (filters.length > 0) params.set('filters', JSON.stringify(filters));
+  if (sorts.length > 0) params.set('sorts', JSON.stringify(sorts));
   if (state.offset > 0) params.set('offset', String(state.offset));
   const qs = params.toString();
   window.history.replaceState({}, '', `${window.location.pathname}${qs ? `?${qs}` : ''}`);
@@ -298,15 +351,6 @@ export function Facilities() {
   // render) and written back to it whenever it changes (see the effect below `reload`). This is what
   // makes a filtered, paged view linkable and reload-safe.
   const [urlState, setUrlState] = useState<FacilitiesUrlState>(() => readUrlState());
-  // Fix wave 1 / Finding 1: whether the disclosure panel holding the ten open-vocabulary filters
-  // (country/zone/region/district/council/status/level/ownership/nationalSystem/managedOrigin) is
-  // expanded. Initialised open when a restored URL already carries one of them — a shared link with
-  // `?zone=Dodoma` should show the filter that produced it, not hide it behind a closed toggle the
-  // operator has to know to open. Otherwise collapsed by default: twelve always-visible controls
-  // (the two closed-vocabulary selects plus these ten) would be its own usability defect.
-  const [showMoreFilters, setShowMoreFilters] = useState(
-    () => OPEN_VOCAB_FILTER_KEYS.some((key) => !!readUrlState()[key]),
-  );
   const [loading, setLoading] = useState(true);
   const [hasForm, setHasForm] = useState<boolean | null>(null);
   const [editing, setEditing] = useState<Facility | null | undefined>(undefined); // undefined = closed
@@ -380,6 +424,193 @@ export function Facilities() {
     }
   }, [reloadHealth]);
 
+  // Option values for the four administrative-area filter pickers. Declared here, above the column
+  // defs that consume them; the effects that fill them live further down, next to their own
+  // explanation.
+  const [zoneOptions, setZoneOptions] = useState<string[]>([]);
+  const [regionOptions, setRegionOptions] = useState<string[]>([]);
+  const [districtOptions, setDistrictOptions] = useState<string[]>([]);
+  const [councilOptions, setCouncilOptions] = useState<string[]>([]);
+
+  // The Status picker's options are the terminology ValueSet's own concepts, reusing the display
+  // map the Status COLUMN already renders through — not a second, hand-written status list
+  // (AGENTS.md section 8). Empty until the expansion resolves, and empty for good if terminology is
+  // down, which is the same degradation `displayFor` already accepts for the column itself.
+  const statusOptions = useMemo(
+    () => Array.from(statusDisplayMap, ([value, label]) => ({ value, label })),
+    [statusDisplayMap],
+  );
+
+  /** Task 5: the registry's columns, for BOTH the table and the shared toolbar.
+   *
+   *  ⛔ `operators` comes from `FACILITY_COLUMNS`, never from `validOperators(type)`. That map is
+   *  the server's own whitelist, so the Filter popover cannot offer an operator the route would
+   *  400 on. `column-map-agreement.test.ts` pins that the map never exceeds what a type allows;
+   *  taking `operators` from the map here is what makes that guarantee reach this page.
+   *
+   *  The six `defaultVisible` ones are exactly the table's previous `<TableHead>` list, so the
+   *  visible table does not change shape. The rest are hidden by default but filterable and
+   *  sortable — they are the dimensions the old "More filters" disclosure held, now reachable
+   *  through the Filter popover and the Columns picker instead of a bespoke panel.
+   *
+   *  ⚠ `country`/`level`/`ownership`/`managedOrigin` are `type: 'text'` here while
+   *  `FACILITY_COLUMNS` types them `enum`. Deliberate, and it changes nothing the server sees: the
+   *  ColumnDef `type` only decides which VALUE WIDGET the popover renders, and `operators` is
+   *  pinned to the map's enum list regardless. These four have no value set anywhere in this app —
+   *  the panel they replace used a free-text `Input` for each — and an `enum` ColumnDef with no
+   *  `enumOptions` renders an empty picker with nothing to choose. Inventing an option list for
+   *  them would be hardcoding vocabulary this registry cannot promise is complete. */
+  const columns: ColumnDef<Facility>[] = useMemo(() => ([
+    {
+      id: 'code', labelKey: 'facilities.code', type: 'text', defaultVisible: true, cellClassName: 'text-xs',
+      // One code, no fallback. `localCode ?? nationalCode` lived here, and it is what let this
+      // column show a code the Edit sheet could not bind — the defect this whole arc started from.
+      accessor: (f) => f.facilityCode ?? '—',
+      operators: FACILITY_COLUMNS.code!.operators,
+    },
+    {
+      id: 'name', labelKey: 'facilities.name', type: 'text', defaultVisible: true, cellClassName: 'text-xs',
+      accessor: (f) => f.name,
+      operators: FACILITY_COLUMNS.name!.operators,
+    },
+    {
+      id: 'region', labelKey: 'facilities.region', type: 'enum', defaultVisible: true, cellClassName: 'text-xs',
+      accessor: (f) => f.region ?? '—',
+      enumOptions: regionOptions.map((value) => ({ value, label: value })),
+      operators: FACILITY_COLUMNS.region!.operators,
+    },
+    {
+      id: 'district', labelKey: 'facilities.district', type: 'enum', defaultVisible: true, cellClassName: 'text-xs',
+      accessor: (f) => f.district ?? '—',
+      enumOptions: districtOptions.map((value) => ({ value, label: value })),
+      operators: FACILITY_COLUMNS.district!.operators,
+    },
+    {
+      // Task 10: the terminology DISPLAY LABEL, never the stored code — `f.status` (e.g. 'active')
+      // is a `location-status`-bound code, not something an operator scanning this list should have
+      // to decode.
+      id: 'status', labelKey: 'facilities.status', type: 'enum', defaultVisible: true, cellClassName: 'text-xs',
+      accessor: (f) => displayFor(statusDisplayMap, f.status),
+      enumOptions: statusOptions,
+      operators: FACILITY_COLUMNS.status!.operators,
+    },
+    {
+      // Task 10: "where a facility came from" — Manual/Imported, at a glance in the list.
+      id: 'source', labelKey: 'facilities.filters.sourceLabel', type: 'enum', defaultVisible: true, cellClassName: 'text-xs',
+      accessor: (f) => (
+        <Badge variant={f.source === 'import' ? 'default' : 'secondary'}>
+          {f.source === 'import' ? t('facilities.filters.sourceImport') : t('facilities.filters.sourceManual')}
+        </Badge>
+      ),
+      enumOptions: SOURCE_VALUES.map((value) => ({ value, labelKey: SOURCE_LABEL_KEYS[value] })),
+      operators: FACILITY_COLUMNS.source!.operators,
+    },
+    {
+      id: 'zone', labelKey: 'facilities.filters.zoneLabel', type: 'enum', defaultVisible: false, cellClassName: 'text-xs',
+      accessor: (f) => f.zone ?? '—',
+      enumOptions: zoneOptions.map((value) => ({ value, label: value })),
+      operators: FACILITY_COLUMNS.zone!.operators,
+    },
+    {
+      id: 'council', labelKey: 'facilities.filters.councilLabel', type: 'enum', defaultVisible: false, cellClassName: 'text-xs',
+      accessor: (f) => f.council ?? '—',
+      enumOptions: councilOptions.map((value) => ({ value, label: value })),
+      operators: FACILITY_COLUMNS.council!.operators,
+    },
+    {
+      id: 'country', labelKey: 'facilities.filters.countryLabel', type: 'text', defaultVisible: false, cellClassName: 'text-xs',
+      accessor: (f) => f.country ?? '—',
+      operators: FACILITY_COLUMNS.country!.operators,
+    },
+    {
+      id: 'level', labelKey: 'facilities.filters.levelLabel', type: 'text', defaultVisible: false, cellClassName: 'text-xs',
+      accessor: (f) => f.level ?? '—',
+      operators: FACILITY_COLUMNS.level!.operators,
+    },
+    {
+      id: 'ownership', labelKey: 'facilities.filters.ownershipLabel', type: 'text', defaultVisible: false, cellClassName: 'text-xs',
+      accessor: (f) => f.ownership ?? '—',
+      operators: FACILITY_COLUMNS.ownership!.operators,
+    },
+    {
+      id: 'managedOrigin', labelKey: 'facilities.filters.managedOriginLabel', type: 'text', defaultVisible: false, cellClassName: 'text-xs',
+      accessor: (f) => f.managedOrigin ?? '—',
+      operators: FACILITY_COLUMNS.managedOrigin!.operators,
+    },
+    {
+      // Task 10: registry MEMBERSHIP — a closed, three-value vocabulary this app owns, so it keeps
+      // a real picker.
+      id: 'registerState', labelKey: 'facilities.filters.registerStateLabel', type: 'enum', defaultVisible: false, cellClassName: 'text-xs',
+      accessor: (f) => {
+        const key = REGISTER_STATE_LABEL_KEYS[f.registerState as (typeof REGISTER_STATE_VALUES)[number]];
+        return key ? t(key) : f.registerState ?? '—';
+      },
+      enumOptions: REGISTER_STATE_VALUES.map((value) => ({ value, labelKey: REGISTER_STATE_LABEL_KEYS[value] })),
+      operators: FACILITY_COLUMNS.registerState!.operators,
+    },
+    {
+      // The per-row ⋯ menu. A `__`-prefixed id, which `useTableState`/`ColumnPickerPopover` treat as
+      // always visible and never offer to hide, and neither filterable nor sortable — it is not a
+      // column of the registry, it is the row's actions.
+      //
+      // Task 10: this menu is ALWAYS rendered, unlike Add/Import (still hard-gated on canManage) —
+      // History rides it too, and `GET /api/facilities/:id/history` only requires `facilities.view`,
+      // which every viewer reaching this page already holds. Edit/Delete stay inside their own
+      // `canManage` guard, unchanged.
+      id: '__actions', labelKey: 'facilities.actions', type: 'text', defaultVisible: true,
+      filterable: false, sortable: false, headClassName: 'w-12',
+      accessor: (f) => (
+        // stopPropagation so opening the menu does not also fire the row's click-to-edit handler.
+        <div onClick={(e) => e.stopPropagation()}>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" aria-label={`${t('facilities.actions')} ${f.name}`}>
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => setViewingHistory(f)}>{t('facilities.history.menuItem')}</DropdownMenuItem>
+              {canManage && (
+                <>
+                  <DropdownMenuItem disabled={!hasForm} onClick={() => setEditing(f)}>{t('common.edit')}</DropdownMenuItem>
+                  <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setConfirming(f)}>
+                    {t('common.delete')}
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      ),
+    },
+  ]), [t, statusDisplayMap, statusOptions, zoneOptions, regionOptions, districtOptions, councilOptions, canManage, hasForm]);
+
+  // Task 5: the shared table state. `defaultFilters`/`defaultSorts` come from the URL exactly once,
+  // on mount, which is what makes a shared grammar-filtered link restore — and what `resetAll`
+  // restores back to. Paging is NOT taken from here (see `FacilitiesUrlState`).
+  const [initialGrammar] = useState(readUrlGrammar);
+  const table = useTableState({
+    columns, defaultPageSize: PAGE_SIZE,
+    defaultFilters: initialGrammar.filters,
+    defaultSorts: initialGrammar.sorts,
+  });
+
+  /** The value an `eq` grammar rule currently pins `column` to, or undefined. Only `eq` narrows a
+   *  scope: `in`/`ne`/`is_null` do not name one value to cascade the next level's options by. */
+  const eqFilterValue = (column: string): string | undefined => {
+    const rule = table.filters.find((f) => f.column === column && f.operator === 'eq');
+    return typeof rule?.value === 'string' && rule.value !== '' ? rule.value : undefined;
+  };
+  const zoneFilter = eqFilterValue('zone');
+  const regionFilter = eqFilterValue('region');
+  const districtFilter = eqFilterValue('district');
+
+  // Applying a filter or a sort invalidates whatever page of the OLD result set the operator was
+  // on — the same `offset` reset every named filter on this page already does.
+  const applyFilters = (next: FilterRule[]) => { table.setFilters(next); setUrlState((s) => ({ ...s, offset: 0 })); };
+  const applySorts = (next: SortRule[]) => { table.setSorts(next); setUrlState((s) => ({ ...s, offset: 0 })); };
+  const resetTable = () => { table.resetAll(); setUrlState((s) => ({ ...s, offset: 0 })); };
+
   // F1 fix: a plain `reload()` flips `loading` to true, which the render below turns into a
   // full-page `LoadingState` that UNMOUNTS everything else on the page — including a currently-open
   // ImportFacilitiesSheet. That's fine (desirable, even) for the very first load, but the sheet's
@@ -415,20 +646,16 @@ export function Facilities() {
     void reloadHealth();
     try {
       const page = await listFacilities({
+        // The three named params with no grammar column (see `FacilitiesUrlState`). They are ANDed
+        // with the grammar rules server-side, never replaced by them.
         q: urlState.q || undefined,
         health: urlState.health,
-        source: urlState.source,
-        country: urlState.country,
-        zone: urlState.zone,
-        region: urlState.region,
-        district: urlState.district,
-        council: urlState.council,
-        status: urlState.status,
-        level: urlState.level,
-        ownership: urlState.ownership,
         nationalSystem: urlState.nationalSystem,
-        managedOrigin: urlState.managedOrigin,
-        registerState: urlState.registerState,
+        // Task 5: the shared grammar. Sent as-is and applied by the server — this page is
+        // server-paginated, so it must never filter or sort the fetched page in the browser: that
+        // would filter one page while `total` kept claiming the unfiltered count.
+        filters: table.filters,
+        sorts: table.sorts,
         limit: PAGE_SIZE,
         offset: urlState.offset,
       });
@@ -466,7 +693,7 @@ export function Facilities() {
       // spinner a fresher blocking call is legitimately still showing.
       if (reloadGenerationRef.current === myGeneration) setLoading(false);
     }
-  }, [reloadHealth, urlState]);
+  }, [reloadHealth, urlState, table.filters, table.sorts]);
 
   // `reload` changes identity on every `urlState` change (search keystroke, filter pick, page
   // click), and this effect re-fires accordingly — but only the VERY FIRST call (the initial page
@@ -487,14 +714,13 @@ export function Facilities() {
   // `writeUrlState`'s own doc comment for why this is a `replaceState`, not a `pushState`. Separate
   // from the `reload()` effect above (which ALSO depends on `urlState` and re-fetches) so the two
   // stay independently readable: this one owns the URL, that one owns the network call.
-  useEffect(() => { writeUrlState(urlState); }, [urlState]);
+  useEffect(() => { writeUrlState(urlState, table.filters, table.sorts); }, [urlState, table.filters, table.sorts]);
 
-  // Fix wave 1 / Finding 3: one `useDebouncedFilterField` per free-text filter — `q` plus the six
-  // open-vocabulary fields that have no fixed vocabulary to back a Select (see the toolbar JSX
-  // below for `zone`/`region`/`district`/`council`, which DO get one, populated from
-  // `listFacilityAdminValues`). Each commit resets `offset` to 0: changing what's being searched
-  // for invalidates whatever page of the OLD result set the operator was on, same as every other
-  // filter on this page already does.
+  // Fix wave 1 / Finding 3: one `useDebouncedFilterField` per free-text NAMED filter. Only two are
+  // left — `q` and `nationalSystem`, the ones with no grammar column. Everything else that used to
+  // need one now commits through the Filter popover's own Apply button, which fires once instead of
+  // per keystroke. Each commit resets `offset` to 0: changing what is being searched for
+  // invalidates whatever page of the OLD result set the operator was on.
   const [searchDraft, onSearchDraftChange] = useDebouncedFilterField(
     urlState.q ?? '',
     (v) => setUrlState((s) => ({ ...s, q: v, offset: 0 })),
@@ -503,98 +729,63 @@ export function Facilities() {
     urlState.nationalSystem ?? '',
     (v) => setUrlState((s) => ({ ...s, nationalSystem: v || undefined, offset: 0 })),
   );
-  const [managedOriginDraft, onManagedOriginDraftChange] = useDebouncedFilterField(
-    urlState.managedOrigin ?? '',
-    (v) => setUrlState((s) => ({ ...s, managedOrigin: v || undefined, offset: 0 })),
-  );
-  const [ownershipDraft, onOwnershipDraftChange] = useDebouncedFilterField(
-    urlState.ownership ?? '',
-    (v) => setUrlState((s) => ({ ...s, ownership: v || undefined, offset: 0 })),
-  );
-  const [statusDraft, onStatusDraftChange] = useDebouncedFilterField(
-    urlState.status ?? '',
-    (v) => setUrlState((s) => ({ ...s, status: v || undefined, offset: 0 })),
-  );
-  const [levelDraft, onLevelDraftChange] = useDebouncedFilterField(
-    urlState.level ?? '',
-    (v) => setUrlState((s) => ({ ...s, level: v || undefined, offset: 0 })),
-  );
-  const [countryDraft, onCountryDraftChange] = useDebouncedFilterField(
-    urlState.country ?? '',
-    (v) => setUrlState((s) => ({ ...s, country: v || undefined, offset: 0 })),
-  );
 
   // Fix wave 1 / Finding 1: option values for the four administrative-area filters come from the
   // existing `distinctAdminValues` store helper (via `listFacilityAdminValues`, already used by
-  // `FacilityDialog` through `useFacilityAdminSuggestions`) — the mechanism §5 of the design names
+  // `FacilityDialog` through `useFacilityAdminSuggestions`) — the mechanism the design names
   // explicitly, reused here rather than a second one. Not the hook itself: that hook cascades
   // options against a `FormSchema`'s `suggest` fields and an `onAnswersChange` callback, neither of
-  // which exists on this page — reusing `listFacilityAdminValues` (the primitive the hook itself
-  // calls) is what "reuse the mechanism" means here, without forcing a filter toolbar to pretend to
-  // be a form. Cascading follows the same fixed hierarchy (zone < region < district < council) as
-  // the form's own suggestions: a level's scope is every level ABOVE it, never itself or below —
-  // Region is scoped by Zone alone, District by Zone+Region, Council by Zone+Region+District.
+  // which exists on this page. Cascading follows the same fixed hierarchy (zone < region < district
+  // < council) as the form's own suggestions: a level's scope is every level ABOVE it, never itself
+  // or below.
   //
-  // Gated on `showMoreFilters`: these four fetches only run once the disclosure panel that shows
-  // them has actually been opened, so the common case (panel collapsed, no admin-area filter in
-  // play) never issues four requests a national-scale register would rather not pay for on every
-  // page load. Re-opening the panel re-fetches (this does not cache "already open once") — a small,
-  // accepted redundancy in exchange for not having to invent separate fetched-once bookkeeping for
-  // four short, cheap lists.
-  const [zoneOptions, setZoneOptions] = useState<string[]>([]);
-  const [regionOptions, setRegionOptions] = useState<string[]>([]);
-  const [districtOptions, setDistrictOptions] = useState<string[]>([]);
-  const [councilOptions, setCouncilOptions] = useState<string[]>([]);
-
+  // ⚠ Task 5 CHANGED WHEN THESE RUN. They used to be gated on the "More filters" disclosure being
+  // open, so a page load with the panel collapsed paid nothing. The disclosure is gone, and
+  // `DataTableToolbar` exposes no "the Filter popover opened" signal, so the options have to exist
+  // BEFORE the popover renders its value picker or it renders an empty, unusable Select. So these
+  // four now run on mount. That is four `SELECT DISTINCT` queries per page load against a
+  // national-scale register — a real, deliberate cost, traded for the panel-open refetch the
+  // previous arrangement paid every time the panel was reopened.
   useEffect(() => {
-    if (!showMoreFilters) return;
     let cancelled = false;
     listFacilityAdminValues('zone')
       .then((rows) => { if (!cancelled) setZoneOptions(rows.map((r) => r.value)); })
       .catch(() => { if (!cancelled) setZoneOptions([]); });
     return () => { cancelled = true; };
-  }, [showMoreFilters]);
+  }, []);
 
   useEffect(() => {
-    if (!showMoreFilters) return;
     let cancelled = false;
     const scope: Partial<Record<FacilityAdminLevel, string>> = {};
-    if (urlState.zone) scope.zone = urlState.zone;
+    if (zoneFilter) scope.zone = zoneFilter;
     listFacilityAdminValues('region', scope)
       .then((rows) => { if (!cancelled) setRegionOptions(rows.map((r) => r.value)); })
       .catch(() => { if (!cancelled) setRegionOptions([]); });
     return () => { cancelled = true; };
-  }, [showMoreFilters, urlState.zone]);
+  }, [zoneFilter]);
 
   useEffect(() => {
-    if (!showMoreFilters) return;
     let cancelled = false;
     const scope: Partial<Record<FacilityAdminLevel, string>> = {};
-    if (urlState.zone) scope.zone = urlState.zone;
-    if (urlState.region) scope.region = urlState.region;
+    if (zoneFilter) scope.zone = zoneFilter;
+    if (regionFilter) scope.region = regionFilter;
     listFacilityAdminValues('district', scope)
       .then((rows) => { if (!cancelled) setDistrictOptions(rows.map((r) => r.value)); })
       .catch(() => { if (!cancelled) setDistrictOptions([]); });
     return () => { cancelled = true; };
-  }, [showMoreFilters, urlState.zone, urlState.region]);
+  }, [zoneFilter, regionFilter]);
 
   useEffect(() => {
-    if (!showMoreFilters) return;
     let cancelled = false;
     const scope: Partial<Record<FacilityAdminLevel, string>> = {};
-    if (urlState.zone) scope.zone = urlState.zone;
-    if (urlState.region) scope.region = urlState.region;
-    if (urlState.district) scope.district = urlState.district;
+    if (zoneFilter) scope.zone = zoneFilter;
+    if (regionFilter) scope.region = regionFilter;
+    if (districtFilter) scope.district = districtFilter;
     listFacilityAdminValues('council', scope)
       .then((rows) => { if (!cancelled) setCouncilOptions(rows.map((r) => r.value)); })
       .catch(() => { if (!cancelled) setCouncilOptions([]); });
     return () => { cancelled = true; };
-  }, [showMoreFilters, urlState.zone, urlState.region, urlState.district]);
-
-  // How many of the ten open-vocabulary filters are currently active — shown as a badge on the
-  // disclosure toggle so an operator who collapses the panel doesn't lose visibility that a filter
-  // from it is still in effect.
-  const extraFilterCount = OPEN_VOCAB_FILTER_KEYS.filter((key) => !!urlState[key]).length;
+  }, [zoneFilter, regionFilter, districtFilter]);
 
   // Whether a published facilities form exists is a DIFFERENT empty state from having no
   // facilities. Three independent gates can each leave a lab with no usable form (page target
@@ -715,206 +906,66 @@ export function Facilities() {
           actionsEl,
         )}
 
-        {/* Fix wave 1 / Finding 1: search plus the two closed-vocabulary filters (`health`
-            'mapped'/'unmapped'/'unprojected', a fixed union owned by facility-registry-store.ts,
-            and `source` 'manual'/'import', `Facility.source`) stay on this always-visible row —
-            they are the two most-used filters and the only ones with a real TypeScript union to
-            drive a `Select` with zero extra fetch. Every other spec-named dimension
-            (nationalSystem/managedOrigin/ownership/status/level/country/zone/region/district/
-            council) now lives behind the disclosure toggle below rather than nowhere: twelve
-            always-visible controls would be its own usability defect (per review), but zero of the
-            other ten was worse — every one of them is reachable and round-trips through the URL
-            exactly like these two already did. Every input resets `offset` to 0 on commit —
-            changing what's being searched for invalidates whatever page of the OLD result set the
-            operator was on. */}
-        <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-2">
-          <Input
-            type="search"
-            value={searchDraft}
-            onChange={(e) => onSearchDraftChange(e.target.value)}
-            placeholder={t('facilities.searchPlaceholder')}
-            aria-label={t('facilities.searchPlaceholder')}
-            className="h-8 w-60 text-xs"
+        {/* Task 5: one shared toolbar — search, Filter, Sort, Columns, Reset — in place of this
+            page's own twelve-control panel. Every dimension with a column in `FACILITY_COLUMNS`
+            reaches the server as a grammar rule through the Filter popover; the two that have no
+            such column keep their own controls on the row below it. The toolbar's `actions` slot is
+            left empty on purpose: this page's ⋯ is portalled to the tab strip above (see
+            `actionsEl`), so putting a second one here would give the Registry tab two. */}
+        <div className="flex flex-col gap-2 border-b border-border px-4 py-2">
+          <DataTableToolbar
+            columns={columns}
+            filters={table.filters}
+            onFiltersChange={applyFilters}
+            sorts={table.sorts}
+            onSortsChange={applySorts}
+            visibleIds={table.visibleIds}
+            onVisibleIdsChange={table.setVisibleIds}
+            onResetColumns={table.resetColumns}
+            onResetAll={resetTable}
+            searchValue={searchDraft}
+            onSearchChange={onSearchDraftChange}
+            searchPlaceholder={t('facilities.searchPlaceholder')}
           />
-          <Select
-            value={urlState.health ?? 'all'}
-            // `isHealthValue` (not a cast): Radix types `onValueChange` as `(value: string) => void`
-            // regardless of what the mounted `SelectItem`s actually offer, so TS cannot narrow `v` on
-            // its own — the same closed-whitelist predicate `readUrlState` uses above narrows it for
-            // real instead of asserting it.
-            onValueChange={(v) => setUrlState((s) => ({ ...s, health: v !== 'all' && isHealthValue(v) ? v : undefined, offset: 0 }))}
-          >
-            <SelectTrigger aria-label={t('facilities.filters.healthLabel')} className="h-8 w-40 text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{t('facilities.filters.healthAll')}</SelectItem>
-              <SelectItem value="mapped">{t('facilities.filters.healthMapped')}</SelectItem>
-              <SelectItem value="unmapped">{t('facilities.filters.healthUnmapped')}</SelectItem>
-              <SelectItem value="unprojected">{t('facilities.filters.healthUnprojected')}</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select
-            value={urlState.source ?? 'all'}
-            // Same reasoning as the health Select's `onValueChange` above.
-            onValueChange={(v) => setUrlState((s) => ({ ...s, source: v !== 'all' && isSourceValue(v) ? v : undefined, offset: 0 }))}
-          >
-            <SelectTrigger aria-label={t('facilities.filters.sourceLabel')} className="h-8 w-40 text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{t('facilities.filters.sourceAll')}</SelectItem>
-              <SelectItem value="manual">{t('facilities.filters.sourceManual')}</SelectItem>
-              <SelectItem value="import">{t('facilities.filters.sourceImport')}</SelectItem>
-            </SelectContent>
-          </Select>
-          {/* A disclosure toggle, not an action — it changes nothing about the data, only what's
-              visible, the same category as the pager buttons beside it further down. Badge count
-              (Finding 1) is what keeps an active filter from that panel visible even while the
-              panel itself is collapsed. */}
-          <Button
-            type="button" variant="outline" size="sm" className="h-8 gap-1.5 text-xs"
-            onClick={() => setShowMoreFilters((v) => !v)}
-            aria-expanded={showMoreFilters}
-          >
-            <SlidersHorizontal className="h-3.5 w-3.5" />
-            {t('facilities.filters.moreFiltersToggle')}
-            {extraFilterCount > 0 && (
-              <Badge variant="secondary" className="ml-0.5 px-1.5 py-0 text-[10px]">{extraFilterCount}</Badge>
-            )}
-          </Button>
-        </div>
-
-        {/* Fix wave 1 / Finding 1: the ten open-vocabulary filters, behind the disclosure toggle
-            above. `nationalSystem` — the audit's actual "registry source" per the design's own
-            provenance table, distinct from `source` above ("how did this row get into OUR
-            registry") — is deliberately NOT promoted to the always-visible row alongside it: unlike
-            ImportFacilitiesSheet's own National system field (a B1 Task 9 `Select` restricted to
-            REGISTERED sources — see that component's own comment), a FILTER over already-stored
-            rows must still match values written before this slice's picklist existed, or by a
-            register since deactivated (`registerSources.list()`'s own default excludes it from the
-            picklist, but a row imported under it is still in the registry and still filterable), so
-            it stays an open `Input` here rather than a closed `Select` — restricting it to the
-            CURRENT active-source list would hide rows this registry genuinely holds. A free-text
-            control on the primary row would read as a second search box, which is why it stays
-            behind the disclosure toggle rather than promoted alongside it. `zone`/`region`/
-            `district`/`council` get a `Select` because they DO have a source of real values —
-            `listFacilityAdminValues`, fetched above once this panel is open. The rest
-            (`status`/`level`/`ownership`/`country`/`managedOrigin`) have no vocabulary at all (same
-            reasoning the store's own `FacilityListOptions.q` doc comment gives for the admin
-            columns) and stay free text — a `Select` for any of them would mean hardcoding an option
-            list this registry cannot promise is complete. */}
-        {showMoreFilters && (
-          <div className="flex flex-wrap items-center gap-2 border-b border-border bg-muted/20 px-4 py-2">
+          {/* ⛔ The two filters with NO grammar column. `health` is a DERIVED mapping state, not a
+              stored column, and `nationalSystem` is not on the grammar whitelist — both stay named
+              params and keep their own controls beside the toolbar rather than being faked into the
+              popover, where the server would reject them. */}
+          <div className="flex flex-wrap items-center gap-2">
+            <Select
+              value={urlState.health ?? 'all'}
+              // `isHealthValue` (not a cast): Radix types `onValueChange` as `(value: string) =>
+              // void` regardless of what the mounted `SelectItem`s actually offer, so TS cannot
+              // narrow `v` on its own — the same closed-whitelist predicate `readUrlState` uses.
+              onValueChange={(v) => setUrlState((s) => ({ ...s, health: v !== 'all' && isHealthValue(v) ? v : undefined, offset: 0 }))}
+            >
+              <SelectTrigger aria-label={t('facilities.filters.healthLabel')} className="h-8 w-40 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{t('facilities.filters.healthAll')}</SelectItem>
+                <SelectItem value="mapped">{t('facilities.filters.healthMapped')}</SelectItem>
+                <SelectItem value="unmapped">{t('facilities.filters.healthUnmapped')}</SelectItem>
+                <SelectItem value="unprojected">{t('facilities.filters.healthUnprojected')}</SelectItem>
+              </SelectContent>
+            </Select>
+            {/* An open `Input`, not a `Select`: a FILTER over already-stored rows must still match
+                values written before the register picklist existed, or by a register since
+                deactivated, so restricting it to the CURRENT active-source list would hide rows this
+                registry genuinely holds. */}
             <Input
               value={nationalSystemDraft}
               onChange={(e) => onNationalSystemDraftChange(e.target.value)}
               placeholder={t('facilities.filters.nationalSystemPlaceholder')}
               aria-label={t('facilities.filters.nationalSystemLabel')}
-              className="h-8 w-36 text-xs"
+              className="h-8 w-56 text-xs"
             />
-            <Input
-              value={managedOriginDraft}
-              onChange={(e) => onManagedOriginDraftChange(e.target.value)}
-              placeholder={t('facilities.filters.managedOriginPlaceholder')}
-              aria-label={t('facilities.filters.managedOriginLabel')}
-              className="h-8 w-36 text-xs"
-            />
-            <Input
-              value={ownershipDraft}
-              onChange={(e) => onOwnershipDraftChange(e.target.value)}
-              placeholder={t('facilities.filters.ownershipPlaceholder')}
-              aria-label={t('facilities.filters.ownershipLabel')}
-              className="h-8 w-32 text-xs"
-            />
-            <Input
-              value={statusDraft}
-              onChange={(e) => onStatusDraftChange(e.target.value)}
-              placeholder={t('facilities.filters.statusPlaceholder')}
-              aria-label={t('facilities.filters.statusLabel')}
-              className="h-8 w-32 text-xs"
-            />
-            <Input
-              value={levelDraft}
-              onChange={(e) => onLevelDraftChange(e.target.value)}
-              placeholder={t('facilities.filters.levelPlaceholder')}
-              aria-label={t('facilities.filters.levelLabel')}
-              className="h-8 w-32 text-xs"
-            />
-            <Input
-              value={countryDraft}
-              onChange={(e) => onCountryDraftChange(e.target.value)}
-              placeholder={t('facilities.filters.countryPlaceholder')}
-              aria-label={t('facilities.filters.countryLabel')}
-              className="h-8 w-24 text-xs"
-            />
-            <Select
-              value={urlState.zone ?? 'all'}
-              onValueChange={(v) => setUrlState((s) => ({ ...s, zone: v !== 'all' ? v : undefined, offset: 0 }))}
-            >
-              <SelectTrigger aria-label={t('facilities.filters.zoneLabel')} className="h-8 w-32 text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">{t('facilities.filters.zoneAll')}</SelectItem>
-                {zoneOptions.map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Select
-              value={urlState.region ?? 'all'}
-              onValueChange={(v) => setUrlState((s) => ({ ...s, region: v !== 'all' ? v : undefined, offset: 0 }))}
-            >
-              <SelectTrigger aria-label={t('facilities.filters.regionLabel')} className="h-8 w-32 text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">{t('facilities.filters.regionAll')}</SelectItem>
-                {regionOptions.map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Select
-              value={urlState.district ?? 'all'}
-              onValueChange={(v) => setUrlState((s) => ({ ...s, district: v !== 'all' ? v : undefined, offset: 0 }))}
-            >
-              <SelectTrigger aria-label={t('facilities.filters.districtLabel')} className="h-8 w-32 text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">{t('facilities.filters.districtAll')}</SelectItem>
-                {districtOptions.map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Select
-              value={urlState.council ?? 'all'}
-              onValueChange={(v) => setUrlState((s) => ({ ...s, council: v !== 'all' ? v : undefined, offset: 0 }))}
-            >
-              <SelectTrigger aria-label={t('facilities.filters.councilLabel')} className="h-8 w-32 text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">{t('facilities.filters.councilAll')}</SelectItem>
-                {councilOptions.map((v) => <SelectItem key={v} value={v}>{v}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            {/* Task 10: registry MEMBERSHIP (`in_register`/`dropped`/`not_registered`) — a closed,
-                three-value vocabulary, so this gets a `Select` (like zone/region/district/council
-                above) rather than the free-text `Input` the truly open-vocabulary filters use. */}
-            <Select
-              value={urlState.registerState ?? 'all'}
-              onValueChange={(v) => setUrlState((s) => ({ ...s, registerState: v !== 'all' ? v : undefined, offset: 0 }))}
-            >
-              <SelectTrigger aria-label={t('facilities.filters.registerStateLabel')} className="h-8 w-40 text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">{t('facilities.filters.registerStateAll')}</SelectItem>
-                {REGISTER_STATE_VALUES.map((v) => (
-                  <SelectItem key={v} value={v}>{t(REGISTER_STATE_LABEL_KEYS[v])}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
           </div>
-        )}
+          {/* A sibling of the toolbar, not part of it — a page can render the toolbar and silently
+              omit the chips, which is what `expectStandardTableToolbar` guards against. Renders
+              nothing at all when no filter is set. */}
+          <ActiveFilterChips columns={columns} filters={table.filters} onChange={applyFilters} />
+        </div>
 
         {error && (
           <div className="mx-4 mt-2 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
@@ -943,18 +994,13 @@ export function Facilities() {
             <Table wrapperClassName="min-h-0 flex-1">
               <TableHeader className="sticky top-0 z-10 bg-background">
                 <TableRow>
-                  <TableHead>{t('facilities.code')}</TableHead>
-                  <TableHead>{t('facilities.name')}</TableHead>
-                  <TableHead>{t('facilities.region')}</TableHead>
-                  <TableHead>{t('facilities.district')}</TableHead>
-                  <TableHead>{t('facilities.status')}</TableHead>
-                  {/* Task 10: "where a facility came from" — Manual/Imported, at a glance in the
-                      list (the detail sheet, FacilityDialog, repeats it alongside the rest of the
-                      provenance panel). Reuses the existing Source filter's own copy — see this
-                      column's test in Facilities.test.tsx for why that isn't a second, driftable
-                      set of labels. */}
-                  <TableHead>{t('facilities.filters.sourceLabel')}</TableHead>
-                  <TableHead className="w-12" />
+                  {table.visibleColumns.map((c) => (
+                    // `__actions` carries a label for the Columns picker's sake but shows no header
+                    // text — same as the bare <TableHead className="w-12" /> it replaces.
+                    <TableHead key={c.id} className={c.headClassName}>
+                      {c.id.startsWith('__') ? null : t(c.labelKey)}
+                    </TableHead>
+                  ))}
                 </TableRow>
               </TableHeader>
               <TableBody className="[&_tr:last-child]:border-b">
@@ -964,47 +1010,9 @@ export function Facilities() {
                     className={canEdit ? 'cursor-pointer transition-colors hover:bg-[rgba(70,130,180,0.08)]' : undefined}
                     onClick={canEdit ? () => setEditing(f) : undefined}
                   >
-                    {/* One code, no fallback. `localCode ?? nationalCode` lived here, and it is what
-                        let this column show a code the Edit sheet could not bind — the defect this
-                        whole arc started from. */}
-                    <TableCell className="text-xs">{f.facilityCode ?? '—'}</TableCell>
-                    <TableCell className="text-xs">{f.name}</TableCell>
-                    <TableCell className="text-xs">{f.region ?? '—'}</TableCell>
-                    <TableCell className="text-xs">{f.district ?? '—'}</TableCell>
-                    {/* Task 10: the terminology DISPLAY LABEL, never the stored code — `f.status`
-                        (e.g. 'active') is a `location-status`/`facility-type`-bound code, not
-                        something an operator scanning this list should have to decode. */}
-                    <TableCell className="text-xs">{displayFor(statusDisplayMap, f.status)}</TableCell>
-                    <TableCell className="text-xs">
-                      <Badge variant={f.source === 'import' ? 'default' : 'secondary'}>
-                        {f.source === 'import' ? t('facilities.filters.sourceImport') : t('facilities.filters.sourceManual')}
-                      </Badge>
-                    </TableCell>
-                    <TableCell onClick={(e) => e.stopPropagation()}>
-                      {/* Task 10: this menu is now ALWAYS rendered, unlike Add/Import above (still
-                          hard-gated on canManage) — History rides it too, and
-                          `GET /api/facilities/:id/history` only requires `facilities.view`, which
-                          every viewer reaching this page already holds (route/nav gate). Edit/
-                          Delete stay inside their own `canManage` guard, unchanged. */}
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" aria-label={`${t('facilities.actions')} ${f.name}`}>
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => setViewingHistory(f)}>{t('facilities.history.menuItem')}</DropdownMenuItem>
-                          {canManage && (
-                            <>
-                              <DropdownMenuItem disabled={!hasForm} onClick={() => setEditing(f)}>{t('common.edit')}</DropdownMenuItem>
-                              <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setConfirming(f)}>
-                                {t('common.delete')}
-                              </DropdownMenuItem>
-                            </>
-                          )}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
+                    {table.visibleColumns.map((c) => (
+                      <TableCell key={c.id} className={c.cellClassName}>{c.accessor(f)}</TableCell>
+                    ))}
                   </TableRow>
                 ))}
               </TableBody>
