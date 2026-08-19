@@ -2433,16 +2433,18 @@ arrivals as (
   -- way whatever SET LANGUAGE and SET DATEFORMAT say; into a datetime it does not. Swapping the
   -- type here would make the day a server setting on some languages, silently.
   --
-  -- ⛔ WHAT IS PROVEN HERE, AND WHAT IS NOT. Both mssql variants were run by hand on 2026-08-19
-  -- against SQL Server 2022 (RTM-CU22), on a database built by the real external migrations, with
-  -- a six-request fixture covering all three rungs. They parsed, bound and marked the right days,
-  -- each grid took the requests the other did not, and the loose month '2013-6' answered exactly
-  -- like '2013-06'. So the old claim that this had never reached a SQL Server no longer holds.
-  -- ⚠ NOTHING IN THE SUITE RE-CHECKS ANY OF IT. There is no mssql test harness, and the automated
-  -- checks are regexes over the SQL TEXT, which by construction cannot see a syntax error. The
-  -- next edit to this variant ships unproven unless somebody runs it the same way.
-  -- Still the places an error would sit: the recursive 'all_days' CTE, that CTE under
-  -- 'set rowcount N' (packages/dashboards/src/sql-runner.ts:54), and the derived table 'clinical'.
+  -- ⛔ WHAT IS PROVEN HERE. Both mssql variants were run by hand on 2026-08-19 against SQL Server
+  -- 2022 (RTM-CU22), on a database built by the real external migrations, with a six-request
+  -- fixture covering all three rungs. They parsed, bound and marked the right days, each grid took
+  -- the requests the other did not, and the loose month '2013-6' answered exactly like '2013-06'.
+  -- So the old claim that this had never reached a SQL Server no longer holds.
+  -- ⛔ HONEST NON-PROOF, for everything past that one run. It was one-off and left no artifact,
+  -- and NOTHING IN THE SUITE RE-CHECKS ANY OF IT. There is no mssql harness, and the automated
+  -- checks are regexes over the SQL TEXT, which by construction cannot see a syntax error, so the
+  -- next edit to this variant ships unverified. What would prove it: a CI harness that runs both
+  -- dialects against a real server on every change. Still the places an error would sit: the
+  -- recursive 'all_days' CTE, that CTE under 'set rowcount N'
+  -- (packages/dashboards/src/sql-runner.ts:54), and the derived table 'clinical'.
   select distinct clinical.lab, cast(left(clinical.ts, 10) as date) as cal_day
   from (
     select
@@ -2621,18 +2623,22 @@ arrivals as (
   -- So a laboratory that did transmit can read as silent here where postgres would have stopped
   -- the run. Fixing it means a shape test on the column, which is a separate decision.
   --
-  -- ⛔ WHAT IS PROVEN HERE, AND WHAT IS NOT. Both mysql variants were run by hand on 2026-08-19
-  -- against MySQL 8.4.11, on a database built by the real external migrations, with a six-request
-  -- fixture covering all three rungs. They parsed and marked the right days, each grid took the
-  -- requests the other did not, and the loose month '2013-6' answered exactly like '2013-06'.
+  -- ⛔ WHAT IS PROVEN HERE. Both mysql variants were run by hand on 2026-08-19 against MySQL
+  -- 8.4.11, on a database built by the real external migrations, with a six-request fixture
+  -- covering all three rungs. They parsed and marked the right days, each grid took the requests
+  -- the other did not, and the loose month '2013-6' answered exactly like '2013-06'.
   -- ⛔ That run went through the mysql CLI, NOT through the product's own pool. Through the pool
   -- BOTH GRIDS FAIL OUTRIGHT with error 1267, illegal mix of collations, on the max() over
   -- char(10 using utf8mb4) in the date row at the bottom of this query: adapter-mysql-store pins
   -- collation_connection to utf8mb4_unicode_ci, and MAX rejects that combination. The fault
   -- PREDATES this change and reproduces on the previous commit's SQL, so it is logged separately
   -- rather than fixed here. Until it is fixed, no MySQL warehouse can render either grid.
-  -- ⚠ NOTHING IN THE SUITE RE-CHECKS ANY OF IT. The automated checks are regexes over the SQL
-  -- TEXT, which cannot see a syntax error. The next edit ships unproven unless somebody runs it.
+  -- ⛔ HONEST NON-PROOF, for the pool path and for every later edit. A CLI run says nothing about
+  -- the path a real report takes, and that path is blocked by 1267 today. The run was one-off and
+  -- left no artifact, and NOTHING IN THE SUITE RE-CHECKS ANY OF IT: the automated checks are
+  -- regexes over the SQL TEXT, which cannot see a syntax error. What would prove it: a CI harness
+  -- running both dialects, and for MySQL a warehouse reached through createMysqlStore rather than
+  -- the CLI, which needs 1267 fixed first.
   select distinct clinical.lab, cast(left(clinical.ts, 10) as date) as cal_day
   from (
     select
@@ -2956,16 +2962,18 @@ arrivals as (
   -- way whatever SET LANGUAGE and SET DATEFORMAT say; into a datetime it does not. Swapping the
   -- type here would make the day a server setting on some languages, silently.
   --
-  -- ⛔ WHAT IS PROVEN HERE, AND WHAT IS NOT. Both mssql variants were run by hand on 2026-08-19
-  -- against SQL Server 2022 (RTM-CU22), on a database built by the real external migrations, with
-  -- a six-request fixture covering all three rungs. They parsed, bound and marked the right days,
-  -- each grid took the requests the other did not, and the loose month '2013-6' answered exactly
-  -- like '2013-06'. So the old claim that this had never reached a SQL Server no longer holds.
-  -- ⚠ NOTHING IN THE SUITE RE-CHECKS ANY OF IT. There is no mssql test harness, and the automated
-  -- checks are regexes over the SQL TEXT, which by construction cannot see a syntax error. The
-  -- next edit to this variant ships unproven unless somebody runs it the same way.
-  -- Still the places an error would sit: the recursive 'all_days' CTE, that CTE under
-  -- 'set rowcount N' (packages/dashboards/src/sql-runner.ts:54), and the derived table 'clinical'.
+  -- ⛔ WHAT IS PROVEN HERE. Both mssql variants were run by hand on 2026-08-19 against SQL Server
+  -- 2022 (RTM-CU22), on a database built by the real external migrations, with a six-request
+  -- fixture covering all three rungs. They parsed, bound and marked the right days, each grid took
+  -- the requests the other did not, and the loose month '2013-6' answered exactly like '2013-06'.
+  -- So the old claim that this had never reached a SQL Server no longer holds.
+  -- ⛔ HONEST NON-PROOF, for everything past that one run. It was one-off and left no artifact,
+  -- and NOTHING IN THE SUITE RE-CHECKS ANY OF IT. There is no mssql harness, and the automated
+  -- checks are regexes over the SQL TEXT, which by construction cannot see a syntax error, so the
+  -- next edit to this variant ships unverified. What would prove it: a CI harness that runs both
+  -- dialects against a real server on every change. Still the places an error would sit: the
+  -- recursive 'all_days' CTE, that CTE under 'set rowcount N'
+  -- (packages/dashboards/src/sql-runner.ts:54), and the derived table 'clinical'.
   select distinct clinical.lab, cast(left(clinical.ts, 10) as date) as cal_day
   from (
     select
@@ -3143,18 +3151,22 @@ arrivals as (
   -- So a laboratory that did transmit can read as silent here where postgres would have stopped
   -- the run. Fixing it means a shape test on the column, which is a separate decision.
   --
-  -- ⛔ WHAT IS PROVEN HERE, AND WHAT IS NOT. Both mysql variants were run by hand on 2026-08-19
-  -- against MySQL 8.4.11, on a database built by the real external migrations, with a six-request
-  -- fixture covering all three rungs. They parsed and marked the right days, each grid took the
-  -- requests the other did not, and the loose month '2013-6' answered exactly like '2013-06'.
+  -- ⛔ WHAT IS PROVEN HERE. Both mysql variants were run by hand on 2026-08-19 against MySQL
+  -- 8.4.11, on a database built by the real external migrations, with a six-request fixture
+  -- covering all three rungs. They parsed and marked the right days, each grid took the requests
+  -- the other did not, and the loose month '2013-6' answered exactly like '2013-06'.
   -- ⛔ That run went through the mysql CLI, NOT through the product's own pool. Through the pool
   -- BOTH GRIDS FAIL OUTRIGHT with error 1267, illegal mix of collations, on the max() over
   -- char(10 using utf8mb4) in the date row at the bottom of this query: adapter-mysql-store pins
   -- collation_connection to utf8mb4_unicode_ci, and MAX rejects that combination. The fault
   -- PREDATES this change and reproduces on the previous commit's SQL, so it is logged separately
   -- rather than fixed here. Until it is fixed, no MySQL warehouse can render either grid.
-  -- ⚠ NOTHING IN THE SUITE RE-CHECKS ANY OF IT. The automated checks are regexes over the SQL
-  -- TEXT, which cannot see a syntax error. The next edit ships unproven unless somebody runs it.
+  -- ⛔ HONEST NON-PROOF, for the pool path and for every later edit. A CLI run says nothing about
+  -- the path a real report takes, and that path is blocked by 1267 today. The run was one-off and
+  -- left no artifact, and NOTHING IN THE SUITE RE-CHECKS ANY OF IT: the automated checks are
+  -- regexes over the SQL TEXT, which cannot see a syntax error. What would prove it: a CI harness
+  -- running both dialects, and for MySQL a warehouse reached through createMysqlStore rather than
+  -- the CLI, which needs 1267 fixed first.
   select distinct clinical.lab, cast(left(clinical.ts, 10) as date) as cal_day
   from (
     select
