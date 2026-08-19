@@ -30,6 +30,14 @@ FROM node:22-bookworm-slim AS runtime
 LABEL org.opencontainers.image.source="https://github.com/Open-Laboratory-Data-Repository/openldr"
 ENV NODE_ENV=production
 ENV PORT=3000
+# ⛔ The version this install reports — the About card, /api/update, and `openldr update check`
+# all read it via readAppVersion(). Without it that function falls back to the nearest
+# package.json, which inside this image is /app/package.json: @openldr/server's OWN version, not
+# the release. Measured on the published 0.1.1 image: it reported 0.1.0. build-and-push.sh passes
+# the root package.json version here. Left empty the fallback still applies, so a plain
+# `docker build` with no --build-arg behaves exactly as it did before.
+ARG APP_VERSION=""
+ENV APP_VERSION=${APP_VERSION}
 WORKDIR /app
 COPY --from=build /deploy /app
 # The operator CLI at a fixed path. install/install.sh's `openldr` wrapper hardcodes

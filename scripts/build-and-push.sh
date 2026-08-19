@@ -99,7 +99,10 @@ run() { echo "+ $*"; [ "$DRY_RUN" = true ] || "$@"; }
 build_one() {
   name="$1"; dockerfile="$2"; context="$3"
   echo "--- $name ---"
+  # APP_VERSION makes the running install report $VERSION. Only apps/server/Dockerfile declares
+  # the ARG; the other four ignore an undeclared build-arg (buildx warns, does not fail).
   run docker buildx build --platform "$PLATFORM" \
+    --build-arg APP_VERSION="$VERSION" \
     -t "$REGISTRY/$name:$TAG" -t "$REGISTRY/$name:$VERSION" \
     -f "$dockerfile" $OUT "$context"
 }
