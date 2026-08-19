@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/select';
 import { DangerConfirmDialog } from '@/terminology/DangerConfirmDialog';
 import { TypeToConfirmDialog } from '@/components/ui/type-to-confirm-dialog';
+import { updateVerdict } from '@openldr/core/pure';
 import {
   fetchClientConfig, fetchFeatureFlags, setFeatureFlag, runDangerAction,
   fetchNumberSettings, setNumberSetting,
@@ -92,6 +93,10 @@ export function General() {
       setUpdateBusy(false);
     }
   }, [update, t]);
+
+  // Derived, not state. `update` is the only input, so recomputing on render is cheaper than
+  // keeping a second copy in sync with it.
+  const verdict = update ? updateVerdict(update) : null;
 
   const commitNumber = useCallback(async (setting: NumberSetting) => {
     setBusyNumber(setting.id);
@@ -176,19 +181,47 @@ export function General() {
               {/* `update.running` is the server's own answer and survives a failed /api/config;
                   falling back to config keeps an older server (no /api/update) working. */}
               {update?.running || config?.version || '—'}
-              {update?.updateAvailable && (
-                <span className="ml-2 font-sans text-xs text-muted-foreground">
-                  — {t('settings.general.about.updateAvailable', { version: update.latestVersion })}
-                  {/* The manifest carries a full ISO timestamp; the operator only needs the day. */}
-                  {update.releasedAt && ` · ${t('settings.general.about.released', { date: update.releasedAt.slice(0, 10) })}`}
-                  {update.notesUrl && (
-                    <a href={update.notesUrl} target="_blank" rel="noreferrer" className="ml-1 underline">
-                      {t('settings.general.about.releaseNotes')}
-                    </a>
-                  )}
-                </span>
-              )}
             </dd>
+            {/* The whole point of this row: the card used to speak only when an update existed, so
+                "current", "check turned off" and "never checked" all rendered as silence. When
+                there is no update state at all (older server, or the 500 path) the row is omitted
+                rather than showing a dash, which keeps the card exactly as it was. */}
+            {verdict && (
+              <>
+                <dt className="text-muted-foreground">{t('settings.general.about.latest')}</dt>
+                <dd className="font-mono" data-testid="update-latest">
+                  {verdict.kind === 'update_available' && (
+                    <span className="font-sans text-xs text-muted-foreground">
+                      {t('settings.general.about.updateAvailable', { version: verdict.latest })}
+                      {/* The manifest carries a full ISO timestamp; the operator only needs the day. */}
+                      {verdict.releasedAt && ` · ${t('settings.general.about.released', { date: verdict.releasedAt.slice(0, 10) })}`}
+                      {verdict.notesUrl && (
+                        <a href={verdict.notesUrl} target="_blank" rel="noreferrer" className="ml-1 underline">
+                          {t('settings.general.about.releaseNotes')}
+                        </a>
+                      )}
+                    </span>
+                  )}
+                  {verdict.kind === 'up_to_date' && (
+                    <>
+                      {verdict.latest}
+                      <span className="ml-1 font-sans text-xs text-muted-foreground">
+                        · {t('settings.general.about.upToDate')}
+                      </span>
+                    </>
+                  )}
+                  {verdict.kind === 'check_off' && (
+                    <span className="font-sans text-xs text-muted-foreground">{t('settings.general.about.checkOff')}</span>
+                  )}
+                  {verdict.kind === 'cannot_confirm' && (
+                    <span className="font-sans text-xs text-muted-foreground">{t('settings.general.about.cannotConfirm')}</span>
+                  )}
+                  {verdict.kind === 'never_checked' && (
+                    <span className="font-sans text-xs text-muted-foreground">{t('settings.general.about.notCheckedYet')}</span>
+                  )}
+                </dd>
+              </>
+            )}
             <dt className="text-muted-foreground">{t('settings.general.about.environment')}</dt>
             <dd className="font-mono">{config?.environment || '—'}</dd>
             <dt className="text-muted-foreground">{t('settings.general.about.license')}</dt>
@@ -197,7 +230,7 @@ export function General() {
 
           {/* Nothing here upgrades anything — these are the two commands for the
               operator to run themselves, shown only when there is something to upgrade to. */}
-          {update?.updateAvailable && (
+          {verdict?.kind === 'update_available' && (
             <div className="mt-3 rounded-md border border-border bg-muted/40 p-3">
               <p className="mb-2 text-xs text-muted-foreground">{t('settings.general.about.upgradeHow')}</p>
               <pre className="overflow-x-auto font-mono text-xs">docker compose pull{'\n'}docker compose up -d</pre>
