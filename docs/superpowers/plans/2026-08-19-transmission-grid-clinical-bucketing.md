@@ -43,6 +43,16 @@ A request with none of the three inside the month does not appear. One mark per 
 | `packages/reporting/src/seed/transmission-grid-tz-live.test.ts` | Rewritten: the stored offset governs the day | Rewrite |
 | `packages/reporting/src/seed/transmission-grid-live.test.ts` | Fixtures move to clinical timestamps; new ladder cases | Modify |
 | `apps/studio/src/docs/0.1.0/{en,fr,pt}/reports.md` | Arrival wording, and the timezone bullet that loses its subject | Modify |
+| `packages/reporting/src/seed/report-seeds.test.ts` | Four hermetic shape tests that pin the OLD arrival SQL | Modify, in Task 5 |
+
+⛔ **The reporting package stays RED from Task 3 until Task 5 lands.** Found during Task 3 on 2026-08-19; the plan originally missed this file. `report-seeds.test.ts` has four regex tests that loop over both queries and all three dialects and assert the SQL still contains `resource_type = 'ServiceRequest'`, `{{param.tz}}` and `e.recorded_at >=`:
+
+- `reads ServiceRequest arrivals, in every dialect`
+- `buckets days in the supplied timezone, not UTC`
+- `bounds recorded_at inside the arrivals CTE, in every dialect`
+- `pins the EXACT civil-zone month bound, in every dialect`
+
+They are hermetic, so they run in the ordinary gate rather than only under `TARGET_DATABASE_URL`. Because the assertions are per-dialect loops, they cannot go green until every variant is rewritten and `tz` is gone. Do not try to fix them in Tasks 3 or 4, and do not read them as a regression. Task 5 rewrites them to pin the NEW shape: no `ingest_events`, no `{{param.tz}}`, and a `left(ts, 7) = {{param.month}}` gate present in all six variants.
 
 ---
 
@@ -388,7 +398,13 @@ Run `explain analyze` over the rewritten CTE with `month` set to `2013-06` and t
 docker exec openldr_ce-postgres-1 psql -U openldr -d openldr_target
 ```
 
-Expected: index scans on `lab_results_request_idx` and `diagnostic_reports_based_on_idx`, and no sequential scan on `lab_results`.
+Expected: index scans on `lab_results_request_idx` and `diagnostic_reports_based_on_idx`.
+
+⚠ **CORRECTION, measured during Task 3 on 2026-08-19. "No sequential scan on `lab_results`" was the wrong expectation.** Postgres flattens the month gate's `EXISTS` into a hashed subplan and scans `lab_results` once, 80,141 rows keeping 793 in about 16ms, rather than probing the index 23,285 times. That is cheaper than the index route, not a defect. The correlated `min()` subqueries do use `lab_results_request_idx`, measured at 89 loops. `diagnostic_reports_based_on_idx` can legitimately show `never executed` on a given month because `coalesce` short-circuits before step 3.
+
+Measured totals for the CTE at `month='2013-06'`: 38.658 ms with `jit=off`, 46.786 ms for the full grid query. `diagnostic_reports` is scanned once for the `batch_id` join at 4.65 ms of that, so it does not dominate and needs no index.
+
+⛔ **Separate problem, do not fix here.** With JIT on, the same CTE takes 782 ms and the full query 1279 ms, so JIT is roughly 733 ms of pure overhead. It fires because the planner costs the correlated subplans as per-row over 23,285 requests and estimates 997,687, not knowing `coalesce` short-circuits. Real work is about 40 ms. Record it, do not chase it in this slice.
 
 If `diagnostic_reports` is sequentially scanned for the `batch_id` join and dominates the runtime, an index on `batch_id` is the fix. ⛔ It is not a one-liner. `diagnostic_reports.batch_id` is `textType` like `lab_results.request_id` was, so it cannot be indexed without the same `keyType` widening described in Task 1's correction, and for the same reason on MySQL and SQL Server. Do the widening and the index together in a new migration, not by appending to 017 once 017 has been applied anywhere.
 
