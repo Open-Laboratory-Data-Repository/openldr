@@ -81,10 +81,26 @@ while changing something else.
 
 Step 3 of the ladder needs `diagnostic_reports.issued` per request rather than per batch.
 
-**Open item, verify before building.** `diagnostic_reports.id` equals `lab_requests.id` for all
-23,285 rows in the loaded warehouse, which would allow a clean 1:1 join. It is not confirmed
-whether that holds structurally or is an artefact of the DISA parser's id scheme. Check
-`packages/db/src/projection/` first. If it is not structural, use `min(issued)` over the batch.
+**Resolved 2026-08-19. The id match is an artefact, not a guarantee.**
+`packages/db/src/relational/diagnostic-report.ts:13` sets `id: String(r['id'])`, the wire id. It
+equals `lab_requests.id` on all 23,285 rows only because the CDR toolchain mints one `obrId` for
+both resources (`fhir-transform.ts:225` and `:242`). Another source need not.
+
+`min(issued)` over the batch is not a usable fallback either. A batch carries up to 15
+`diagnostic_reports`, so it would attribute one report's authorisation date to a different request.
+
+The real link is on the wire and simply is not projected. `fhir-transform.ts:250` emits
+`basedOn: [{ reference: 'ServiceRequest/<obrId>' }]`, and CE already projects `basedOn` for
+Observation (`observation.ts:16`, as `request_id`) and QuestionnaireResponse
+(`questionnaire-response.ts:26`, as `based_on_id`). DiagnosticReport is the gap.
+
+So this slice adds `based_on_id` to `diagnostic_reports`, following that established pattern, and
+joins step 3 through it. That brings a migration (next free number is 017, no unmerged branch
+claims it), a schema type change, a projection change, and a reprojection of existing warehouses.
+
+Step 3 is not droppable to avoid that work. Measured on the loaded warehouse, `issued` falls in a
+month where neither registration nor any result falls for **6,950 of 21,309** requests. A two-step
+ladder would silently lose a third of the authorised-month activity.
 
 `ingest_events` leaves both queries entirely. The month window comes from the clinical dates.
 
@@ -97,6 +113,11 @@ that path, so the classification gap it described no longer exists.
 Two queries in `packages/reporting/src/seed/report-seeds.ts`: `q-transmission-hvleid` and
 `q-transmission-other`. They stay a partition of the month, so no request-day lands in both grids
 or in neither.
+
+Plus the warehouse change the ladder's third step needs: migration `017`, the
+`DiagnosticReportsTable` type in `packages/db/src/schema/external.ts`, and
+`packages/db/src/relational/diagnostic-report.ts`. Existing installs need
+`openldr db reproject --force` to populate the new column, since a migration adds it empty.
 
 Unchanged: the 23 fixed working-day columns, Mon to Fri, no holiday calendar, the leading
 `(dates)` row, the `ord` sort column, and the printed page layout.
