@@ -465,23 +465,40 @@ if [ ! -f "$DIR/config/nginx/certs/fullchain.pem" ]; then
   # sync failed TLS hostname validation and surfaced as a bare `fetch failed`, indistinguishable
   # from "central is down". Harmless on a stack that never becomes a central.
   SAN="subjectAltName=DNS:$HOST,DNS:localhost,DNS:host.docker.internal,IP:127.0.0.1"
+  # ⛔ MSYS2_ARG_CONV_EXCL. Git Bash rewrites any argument that looks like a POSIX path into a
+  # Windows one, so `-subj /CN=localhost` reached openssl as `C:/Program Files/Git/CN=localhost`.
+  # openssl wrote privkey.pem, died on the subject, and `|| true` swallowed it — leaving a key
+  # with no certificate. docker compose then turned the missing fullchain.pem into a DIRECTORY
+  # (that is what a missing bind-mount source becomes) and the gateway crash-looped on
+  # "PEM_read_bio_X509_AUX() failed", 180s later, as an opaque readiness timeout.
+  # Excluding only `/CN=` leaves the file paths converted, which they must be — openssl here is a
+  # native Windows binary and cannot open /tmp/… . Non-MSYS shells ignore the variable entirely.
+  CERT_ERR=""
   if command -v openssl >/dev/null 2>&1; then
-    openssl req -x509 -newkey rsa:2048 -nodes -days 825 \
+    CERT_ERR="$(MSYS2_ARG_CONV_EXCL='/CN=' openssl req -x509 -newkey rsa:2048 -nodes -days 825 \
       -keyout "$CERT_DIR/privkey.pem" -out "$CERT_DIR/fullchain.pem" \
-      -subj "$SUBJ" -addext "$SAN" 2>/dev/null || true
+      -subj "$SUBJ" -addext "$SAN" 2>&1)" || true
   else
     # No local openssl — Docker is a prereq, so generate the cert via a throwaway container.
     echo "→ openssl not on PATH; generating cert via Docker (alpine/openssl)"
     CERT_DIR_ABS="$(cd "$CERT_DIR" && pwd)"
-    docker run --rm -v "$CERT_DIR_ABS:/certs" alpine/openssl \
+    # ⚠ UNVERIFIED on Windows. This branch has the same `-subj` conversion trap, but excluding
+    # arguments here is not a one-liner: `-v` and the two `/certs/…` paths need opposite
+    # treatment, and MSYS2_ARG_CONV_EXCL='*' would break the mount. Left as it was rather than
+    # guessing — it is only reached without openssl on PATH, which no machine here has. The
+    # error print below is what makes a failure here legible instead of silent.
+    CERT_ERR="$(docker run --rm -v "$CERT_DIR_ABS:/certs" alpine/openssl \
       req -x509 -newkey rsa:2048 -nodes -days 825 \
       -keyout /certs/privkey.pem -out /certs/fullchain.pem \
-      -subj "$SUBJ" -addext "$SAN" >/dev/null 2>&1 || true
+      -subj "$SUBJ" -addext "$SAN" 2>&1)" || true
   fi
   if [ -f "$CERT_DIR/fullchain.pem" ] && [ -f "$CERT_DIR/privkey.pem" ]; then
     echo "→ Generated self-signed cert"
   else
+    # Print why. Hiding this cost a whole release round-trip: the only visible symptom was the
+    # gateway failing to start three minutes later, which reads as a slow machine.
     echo "! Could not generate a self-signed cert — provide certs in $CERT_DIR/ (fullchain.pem + privkey.pem)."
+    [ -n "$CERT_ERR" ] && printf '%s\n' "$CERT_ERR" | tail -5 | sed 's/^/    /'
   fi
 fi
 
