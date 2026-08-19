@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "95e1b276",
+          "type": "fix",
+          "scope": "config",
+          "title": "Document TERMINOLOGY_WORK_DIR and give it a prod template entry"
+        },
+        {
           "hash": "66af17dd",
           "type": "fix",
           "scope": "config",
