@@ -5,6 +5,7 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 import type { Kysely } from 'kysely';
 import { z } from 'zod';
 import { appError } from '@openldr/core';
+import { FACILITY_COLUMNS, parseTableQuery } from '@openldr/table-query';
 import type { FacilityColumnMap } from '@openldr/terminology';
 // The SAME id derivation the CSV importer uses. Imported rather than re-implemented: two spellings
 // of `fac-` + sha256(`system|code`) is exactly how the manual and import doors drifted apart.
@@ -878,10 +879,18 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
     return { freed: false, error: registerHeldError(nationalSystem, moved.id, moved.status) };
   }
 
-  app.get('/api/facilities', VIEW, async (req) => {
+  app.get('/api/facilities', VIEW, async (req, reply) => {
     const q = req.query as Record<string, unknown>;
     const limit = parseLimit(q.limit);
     const offset = parseOffset(q.offset) ?? 0;
+    // Task 3 (facilities-table-query slice): the shared grammar layers on top of the fourteen named
+    // params below, not instead of them — same shape as audit-routes.ts's list handler.
+    const parsed = parseTableQuery(
+      { filters: ownFirstString(q, 'filters'), sorts: ownFirstString(q, 'sorts') },
+      FACILITY_COLUMNS,
+    );
+    // Never silently drop: a dropped filter gives a table that disagrees with its own chips row.
+    if (!parsed.ok) return reply.code(400).send({ error: parsed.error });
     // A repeated query param (`?region=A&region=B`) arrives as an array; only a plain string is a
     // valid filter value, so anything else is treated as "not specified" rather than reaching
     // Kysely as `where(col, '=', [...])`. `ownFirstString` (not `firstString(q.region)` directly)
@@ -905,6 +914,8 @@ export function registerFacilitiesRoutes(app: FastifyInstance<any, any, any, any
       health: parseHealth(ownFirstString(q, 'health')),
       limit,
       offset,
+      filters: parsed.query.filters,
+      sorts: parsed.query.sorts,
     });
     // `limit` echoed as `DEFAULT_LIST_LIMIT` (the store's own default, @openldr/db) when the client
     // sent none — NOT `rows.length`, which is wrong on a short last page (a 12-row result with no
