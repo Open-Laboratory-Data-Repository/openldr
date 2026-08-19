@@ -70,4 +70,35 @@ describe('audit routes', () => {
     expect((await app.inject({ method: 'GET', url: '/api/audit' })).statusCode).toBe(403);
     expect((await app.inject({ method: 'GET', url: '/api/audit/a1' })).statusCode).toBe(403);
   });
+
+  it('passes parsed filters through to the store', async () => {
+    const app = appWith();
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/audit?filters=${encodeURIComponent(JSON.stringify([{ column: 'action', operator: 'eq', value: 'form.create', combine: 'and' }]))}`,
+    });
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('400s on an unknown filter column, naming it', async () => {
+    const app = appWith();
+    const res = await app.inject({
+      method: 'GET',
+      url: `/api/audit?filters=${encodeURIComponent(JSON.stringify([{ column: 'password', operator: 'eq', value: 'x', combine: 'and' }]))}`,
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toContain('password');
+  });
+
+  it('400s on malformed JSON rather than treating it as no filter', async () => {
+    const app = appWith();
+    const res = await app.inject({ method: 'GET', url: '/api/audit?filters=%7Bnot-json' });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('still honours the existing named params', async () => {
+    const app = appWith();
+    const res = await app.inject({ method: 'GET', url: '/api/audit?action=form.create' });
+    expect(res.statusCode).toBe(200);
+  });
 });

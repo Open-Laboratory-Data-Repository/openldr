@@ -31,6 +31,7 @@
     "@openldr/report-designer": "workspace:*",
     "@openldr/reporting": "workspace:*",
     "@openldr/sync": "workspace:*",
+    "@openldr/table-query": "workspace:*",
     "@openldr/terminology": "workspace:*",
     "@openldr/workflows": "workspace:*",
     "adm-zip": "^0.5.16",
