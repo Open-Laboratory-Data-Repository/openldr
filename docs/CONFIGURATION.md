@@ -111,7 +111,7 @@ imports from the CLI as well as the app.
 | `OIDC_AUDIENCE` | string | unset | Optional API audience. |
 | `KEYCLOAK_ADMIN_CLIENT_ID` | string | unset | Enables admin user actions against Keycloak when paired with the secret. |
 | `KEYCLOAK_ADMIN_CLIENT_SECRET` | string | unset | Secret for Keycloak admin client. |
-| `AUTH_DEV_BYPASS` | boolean string | `true` outside production, `false` in production | Injects a dev admin when no bearer token is present. Production rejects `true`. |
+| `AUTH_DEV_BYPASS` | boolean string | `false` everywhere | Injects a dev admin when no bearer token is present, which means the API is unauthenticated. Off unless you set it explicitly: `NODE_ENV` never turns it on, so a development checkout still requires a real sign-in until you add it to `.env`. Production rejects `true` outright. |
 | `AUTH_DEV_USERNAME` | string | `dev-admin` | Dev-bypass username. |
 | `AUTH_DEV_ROLES` | comma string | `lab_admin` | Dev-bypass roles. |
 
