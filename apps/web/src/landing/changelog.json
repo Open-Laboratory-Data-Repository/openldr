@@ -1,6 +1,84 @@
 {
-  "generatedAt": "2026-08-18",
+  "generatedAt": "2026-08-19",
   "days": [
+    {
+      "date": "2026-08-19",
+      "version": null,
+      "entries": [
+        {
+          "hash": "190271d9",
+          "type": "fix",
+          "scope": "db",
+          "title": "Date eq/ne honour a full timestamp, not just a whole day"
+        },
+        {
+          "hash": "0a8afdf6",
+          "type": "fix",
+          "scope": "db,studio",
+          "title": "Make date eq/ne/between day-aware on client and SQL"
+        },
+        {
+          "hash": "613add3a",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Client sorter breaks ties by id like the server does"
+        },
+        {
+          "hash": "b2e71859",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Give addFilterViaPopover a target column, restore Audit order"
+        },
+        {
+          "hash": "db5c5d2d",
+          "type": "feat",
+          "scope": "studio",
+          "title": "The audit page filters and sorts on the server"
+        },
+        {
+          "hash": "125d13a9",
+          "type": "feat",
+          "scope": "cli",
+          "title": "Audit list gains --where and --sort, validated like the route"
+        },
+        {
+          "hash": "60168177",
+          "type": "feat",
+          "scope": "server",
+          "title": "The audit route accepts grammar filters and sorts"
+        },
+        {
+          "hash": "7253eb0d",
+          "type": "fix",
+          "scope": "db",
+          "title": "Drop COLLATE from applySorts' tiebreaker, remove the audit pg-mem shim"
+        },
+        {
+          "hash": "c58a0e24",
+          "type": "feat",
+          "scope": "audit",
+          "title": "The store takes grammar filters and sorts, with a stable tiebreaker"
+        },
+        {
+          "hash": "f45cb0c2",
+          "type": "fix",
+          "scope": "table-query",
+          "title": "Reject dates Postgres cannot parse, as 400 not 500"
+        },
+        {
+          "hash": "429d2781",
+          "type": "fix",
+          "scope": "studio",
+          "title": "The filter popover offers only operators a column declares"
+        },
+        {
+          "hash": "8cf87a97",
+          "type": "fix",
+          "scope": "db",
+          "title": "Text sorts use an explicit ICU collation, not the image's libc"
+        }
+      ]
+    },
     {
       "date": "2026-08-18",
       "version": null,
@@ -1420,78 +1498,6 @@
           "type": "feat",
           "scope": "facilities",
           "title": "Page, search and filter the registry with an exact total"
-        },
-        {
-          "hash": "68480efc",
-          "type": "fix",
-          "scope": "db",
-          "title": "Drop 015's narrowing cast — MSSQL MIN(nvarchar(max)) is not broken"
-        },
-        {
-          "hash": "827bcd1d",
-          "type": "fix",
-          "scope": "facilities",
-          "title": "Close the NULL/'' seam that made resolvedObservedSystem's own invariant false"
-        },
-        {
-          "hash": "e6f7484a",
-          "type": "fix",
-          "scope": "bootstrap",
-          "title": "Update facility-durable-updates.e2e regression pin for Task 3's join"
-        },
-        {
-          "hash": "cba10752",
-          "type": "feat",
-          "scope": "facilities",
-          "title": "Enqueue a facility-map rebuild on every boot"
-        },
-        {
-          "hash": "fd769a5a",
-          "type": "feat",
-          "scope": "reports",
-          "title": "Join facility_map on the observed namespace as well as the feed"
-        },
-        {
-          "hash": "bf4b96cf",
-          "type": "feat",
-          "scope": "facilities",
-          "title": "Publish one facility_map row per raw observed wire tuple"
-        },
-        {
-          "hash": "bc7e4544",
-          "type": "fix",
-          "scope": "db,bootstrap",
-          "title": "Enforce, not assume, the pg-mem 015 rescue's safety claim"
-        },
-        {
-          "hash": "262de7a4",
-          "type": "feat",
-          "scope": "facilities",
-          "title": "Add facility_map.performer_system and backfill it"
-        }
-      ]
-    },
-    {
-      "date": "2026-08-08",
-      "version": null,
-      "entries": [
-        {
-          "hash": "50a3ec0b",
-          "type": "fix",
-          "scope": "facilities",
-          "title": "Make failed projections retryable, the chip live, and two enqueues correct"
-        },
-        {
-          "hash": "99e10383",
-          "type": "fix",
-          "scope": "facilities",
-          "title": "Stop Retry wedging the job mechanism, and enqueue on the CLI import path"
-        },
-        {
-          "hash": "c317f473",
-          "type": "feat",
-          "scope": "facilities",
-          "title": "Show report-dimension freshness on the Facilities page"
         }
       ]
     }
