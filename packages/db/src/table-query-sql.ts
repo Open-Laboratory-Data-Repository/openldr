@@ -149,8 +149,12 @@ export function applySorts<QB extends { orderBy: (c: any, d: any) => QB }>(
   // ORDER BY + OFFSET instability this function exists to prevent, without any visible symptom
   // until pages start repeating or skipping rows. Fail loud instead.
   if (!tb) throw new Error(`unknown tiebreaker column "${tiebreaker}"`);
-  const tbCollatable = tb.type === "text" || tb.type === "enum";
-  const tbTarget = tbCollatable ? sql`${sql.ref(tb.sql)} collate "en-US-x-icu"` : sql.ref(tb.sql);
-  out = out.orderBy(tbTarget, "asc");
+  // Deliberately no COLLATE here, unlike the user-facing sort columns above. The tiebreaker only
+  // exists to make row order deterministic across pages — nobody reads its order, so a
+  // locale-aware order buys nothing. Collating it would cost something real: it forces
+  // COLLATE onto every text-typed tiebreaker (id columns are almost always text), which pg-mem's
+  // parser cannot parse at all (hard syntax error, not a semantic gap), breaking offline coverage
+  // for every current and future consumer. Plain byte order is enough for determinism.
+  out = out.orderBy(sql.ref(tb.sql), "asc");
   return out;
 }

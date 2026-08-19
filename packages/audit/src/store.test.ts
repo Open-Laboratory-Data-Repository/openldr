@@ -1,11 +1,22 @@
 import { describe, it, expect, vi } from 'vitest';
+import { type Kysely } from 'kysely';
+import { newDb } from 'pg-mem';
 import type { Logger } from '@openldr/core';
+import { internalMigrations, type InternalSchema } from '@openldr/db';
 import { createAuditStore, safeRecord, type AuditStore, type AuditEvent } from './store';
-import { makeMigratedDb } from './test-db';
 
 const logger = { error: vi.fn(), info: vi.fn() } as unknown as Logger;
 const ev = { id: 'a', occurredAt: 'x' } as AuditEvent;
 const input = { actorType: 'system' as const, actorName: 'system', action: 'x.y', entityType: 'e', entityId: '1' };
+
+async function makeMigratedDb(): Promise<Kysely<InternalSchema>> {
+  const mem = newDb();
+  const db = mem.adapters.createKysely() as Kysely<InternalSchema>;
+  for (const migration of Object.values(internalMigrations)) {
+    await migration.up(db);
+  }
+  return db;
+}
 
 describe('safeRecord', () => {
   it('forwards to store.record', async () => {
