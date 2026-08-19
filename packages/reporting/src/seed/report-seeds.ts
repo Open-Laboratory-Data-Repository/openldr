@@ -2227,8 +2227,8 @@ where exists (select 1 from isolates)
     // trailing columns EMPTY rather than shifting cells left — 'days' is the left side of the
     // cross join, so a short month simply produces fewer 'n' values.
     //
-    // ⛔ The day bucket is computed in {{param.tz}}, supplied from the lab.timezone setting
-    // (Task 1). Bucketing in UTC moves every evening arrival to the previous day.
+    // ⛔ The postgres variant buckets on the source's own local date. The mssql and mysql
+    // variants still bucket ingest arrival in {{param.tz}} until Task 4 ports them.
     params: [
       { id: 'month', label: 'Month (YYYY-MM)', type: 'text', required: true },
       { id: 'panels', label: 'HVL/EID panel codes (comma separated)', type: 'text', required: true },
@@ -2236,7 +2236,14 @@ where exists (select 1 from isolates)
     ],
     sql: {
       postgres: `with month_start as (
-  select cast({{param.month}} || '-01' as date) as d
+  -- ⛔ 'ym' is the NORMALISED month. Every string test below compares against it, never against
+  -- the raw parameter. 'month' is free text with no shape check: custom-query-run.ts:14 validates
+  -- only daterange, and RunParamsSheet.tsx:53 renders a plain input. Typed '2017-8' the cast still
+  -- yields 2017-08-01, so 'days' builds a correct August header, but a raw left(ts, 7) = '2017-8'
+  -- matches nothing and the grid prints that header above ZERO laboratories. A reader concludes no
+  -- laboratory transmitted all month. Normalising makes a loose month answer like a strict one.
+  select cast({{param.month}} || '-01' as date) as d,
+         to_char(cast({{param.month}} || '-01' as date), 'YYYY-MM') as ym
 ),
 days as (
   -- Working days only, Mon-Fri. NO holiday calendar: the reference report shows 1 January 2021, a
@@ -2256,28 +2263,36 @@ arrivals as (
   --
   -- ⛔ Do NOT bucket on ingest arrival. A bulk backfill lands months of clinical work on one
   -- calendar day, and the grid then reports laboratories as transmitting in a month they were not.
-  -- Measured: 13,193 DISA rows loaded on 2026-08-19 carry clinical dates from 2013 to 2019.
+  -- Measured on this warehouse: all 23,517 ServiceRequest ingest events recorded 2026-08-19,
+  -- against 13,192 patients and 13,191 batches whose authored_at spans 2013 to 2019.
   --
   -- ⛔ The month test is a STRING comparison on 'YYYY-MM'. These columns hold ISO 8601 text
   -- carrying the source's own offset, so left(ts, 10) is the laboratory's local day and needs no
   -- conversion. Converting into a viewer's zone would make one historical cell render as two
   -- different days for two readers.
-  select distinct x.lab, cast(left(x.ts, 10) as date) as cal_day
+  --
+  -- ⛔ cast(left(ts, 10) as date) RAISES on anything shorter than a full date, and that is the
+  -- wanted behaviour. to_date is lenient and would read '2017-08' as a silently wrong 1 August. A
+  -- length gate would drop the row and print a blank cell for a laboratory that did transmit,
+  -- the exact false negative this report exists to prevent. A loud error beats both.
+  -- ⚠ There is NO headroom. Measured minimum lengths 2026-08-19: authored_at 25, issued 25,
+  -- result_timestamp 10, with 12,416 result_timestamp values at exactly 10 characters.
+  select distinct clinical.lab, cast(left(clinical.ts, 10) as date) as cal_day
   from (
     select
       coalesce(fm.name, d.performer_display, d.performer, '(unknown)') as lab,
       coalesce(
-        case when left(q.authored_at, 7) = {{param.month}} then q.authored_at end,
+        case when left(q.authored_at, 7) = (select ym from month_start) then q.authored_at end,
         (select min(r.result_timestamp) from lab_results r
-          where r.request_id = q.id and left(r.result_timestamp, 7) = {{param.month}}),
+          where r.request_id = q.id and left(r.result_timestamp, 7) = (select ym from month_start)),
         (select min(dr.issued) from diagnostic_reports dr
-          where dr.based_on_id = q.id and left(dr.issued, 7) = {{param.month}})
+          where dr.based_on_id = q.id and left(dr.issued, 7) = (select ym from month_start))
       ) as ts
     from lab_requests q
     -- ⛔ Attribute the LABORATORY through the SUBMISSION BATCH, never through
-    -- lab_results.specimen_id. The specimen route reaches 6,652 of 7,520 requests; the 868 it
-    -- drops have no results at all and 548 of them are EID, so that grid would print almost empty
-    -- while those laboratories were transmitting.
+    -- lab_results.specimen_id. Re-measured 2026-08-19: the specimen route reaches 17,407 of
+    -- 23,285 requests, so it drops 5,878 that have no results at all. Those include EID, which is
+    -- thin here (374 EIDID), and that grid would print almost empty while those labs transmitted.
     -- ⛔ 'distinct' above is LOAD-BEARING, not decoration. One batch holds up to 18
     -- diagnostic_reports rows (measured 2026-08-19), so this join fans out 18x. 0 batches carry
     -- more than one distinct performer, so collapsing the fan-out here is lossless.
@@ -2289,11 +2304,11 @@ arrivals as (
     -- Cheap month gate before the coalesce, mirroring the prior system's three-way OR. Without it
     -- the batch join runs over every request ever loaded rather than over the month's.
     where (
-         left(q.authored_at, 7) = {{param.month}}
+         left(q.authored_at, 7) = (select ym from month_start)
       or exists (select 1 from lab_results r
-                  where r.request_id = q.id and left(r.result_timestamp, 7) = {{param.month}})
+                  where r.request_id = q.id and left(r.result_timestamp, 7) = (select ym from month_start))
       or exists (select 1 from diagnostic_reports dr
-                  where dr.based_on_id = q.id and left(dr.issued, 7) = {{param.month}})
+                  where dr.based_on_id = q.id and left(dr.issued, 7) = (select ym from month_start))
     )
     -- The panel list is a RUN-TIME parameter (AGENTS.md §8), no code is written here.
     -- ⛔ An EMPTY panels value NEVER REACHES THIS SQL. 'panels' is declared required, and
@@ -2304,10 +2319,7 @@ arrivals as (
     -- coalesce(panel_code, '') so a NULL panel is a real value on both sides: without it
     -- 'null not in (...)' is NULL and a request with no panel would vanish from BOTH grids.
       and coalesce(q.panel_code, '') in (select trim(value) from unnest(string_to_array({{param.panels}}, ',')) as value)
-  ) x
-  -- Defensive only. The three-way gate above guarantees one branch of the coalesce is in-month,
-  -- so ts cannot be null here. Kept so a future edit to the gate cannot cast a null into a date.
-  where x.ts is not null
+  ) clinical
 ),
 labs as (select distinct lab from arrivals),
 -- Every laboratory crossed with every working day, then left-joined to what actually arrived. The

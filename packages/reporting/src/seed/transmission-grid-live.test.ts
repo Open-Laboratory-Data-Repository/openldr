@@ -141,6 +141,18 @@ live('the transmission grid queries (live Postgres)', () => {
     } as never).execute();
   };
 
+  /** Every day cell on one row, d01..d23, in column order. */
+  const dayCells = (row: Record<string, string>): string[] =>
+    Object.keys(row).filter((k) => /^d\d\d$/.test(k)).sort().map((k) => row[k]);
+
+  /** The invariant the clinical-date ladder actually establishes: a request marks ONE day in the
+   *  month, at its highest-priority in-month timestamp. Asserting a single adjacent blank cell
+   *  only pins an off-by-one; this pins the whole row, so a second mark anywhere fails. */
+  const marksExactlyOneDay = (row: Record<string, string>, day: string): void => {
+    expect(row[day], `expected the mark on ${day}`).toBe('Y');
+    expect(dayCells(row).filter((c) => c === 'Y'), `${row.lab} marked more than one day`).toEqual(['Y']);
+  };
+
   beforeAll(async () => {
     await admin.query(`create database "${dbName}"`);
     const target = new URL(url!);
@@ -190,7 +202,7 @@ live('the transmission grid queries (live Postgres)', () => {
     // yields 'BBCC' and silently sends this request to the other grid.
     await seedSubmission('spacecode', 'Inner Space Lab', 'BB CC', '2026-03-03T08:00:00Z');
 
-    // The 15x fan-out `distinct` collapses: one batch, several diagnostic_reports rows, one
+    // The 18x fan-out `distinct` collapses: one batch, several diagnostic_reports rows, one
     // performer. ⚠ No test here can catch a lost `distinct` — max() folds the duplicates, so the
     // grid reads identically either way, which is why the test below was renamed off that claim.
     // The fixture stays because it makes every other assertion run against the FANNED-OUT shape
@@ -346,7 +358,7 @@ live('the transmission grid queries (live Postgres)', () => {
     const rows = await runFor({ month: '2013-04', panels: 'HIVVL' });
 
     const lab = rows.find((r) => r.lab === 'LAB-A')!;
-    expect(lab.d02).toBe('Y');
+    marksExactlyOneDay(lab, 'd02');
     expect(lab.d01).toBe('');
   });
 
@@ -360,14 +372,14 @@ live('the transmission grid queries (live Postgres)', () => {
     const rows = await runFor({ month: '2013-04', panels: 'HIVVL' });
 
     const lab = rows.find((r) => r.lab === 'LAB-B')!;
-    expect(lab.d03).toBe('Y');
-    expect(lab.d07).toBe('');
+    marksExactlyOneDay(lab, 'd03');
+    expect(lab.d07, 'the authorisation date must not mark a second day').toBe('');
   });
 
   it('falls all the way through to the authorisation date', async () => {
     // Registered in March, never resulted, authorised on 4 April. The third step is the only one
-    // left, and nothing else in this file reaches it: the query plan shows the based_on_id
-    // subquery as 'never executed' on every other case here.
+    // left. It is not a rare path: for 2017-08 it resolves 194 of 2,376 in-gate requests across
+    // all panels, and 118 of 905 for a four-code HVL/EID list. Measured 2026-08-19.
     await seedRequest({ id: 'r3-obr1', batchId: 'b3', panel: 'HIVVL',
       authoredAt: '2013-03-29T09:00:00+03:00' });
     await seedReport({ id: 'dr3', basedOnId: 'r3-obr1', batchId: 'b3', performer: 'LAB-C',
@@ -376,8 +388,24 @@ live('the transmission grid queries (live Postgres)', () => {
     const rows = await runFor({ month: '2013-04', panels: 'HIVVL' });
 
     const lab = rows.find((r) => r.lab === 'LAB-C')!;
-    expect(lab.d04).toBe('Y');
-    expect(lab.d01).toBe('');
+    marksExactlyOneDay(lab, 'd04');
+  });
+
+  it('⛔ answers a loose month exactly like a strict one, rather than emptying the grid', async () => {
+    // 'month' is free text: custom-query-run.ts:14 validates only daterange, and
+    // RunParamsSheet.tsx:53 renders a plain input. So '2013-4' reaches the SQL.
+    //
+    // ⛔ This is the failure mode the string comparison introduced. cast('2013-4' || '-01') still
+    // parses to 2013-04-01, so `days` builds a correct April header and the date row renders
+    // perfectly, but a raw left(ts, 7) = '2013-4' matches nothing. The report then prints a right
+    // header above ZERO laboratories and a reader concludes nobody transmitted all month. Silent,
+    // and the same class of wrong answer this whole slice exists to remove.
+    const strict = await runFor({ month: '2013-04', panels: 'HIVVL' });
+    const loose = await runFor({ month: '2013-4', panels: 'HIVVL' });
+
+    expect(loose).toEqual(strict);
+    // ...and not vacuously equal because both came back empty.
+    expect(loose.some((r) => r.lab === 'LAB-A')).toBe(true);
   });
 
   // ------------------------------------------------------------------------------------------
