@@ -7,3 +7,4 @@ export * from './canonical-json';
 export * from './param-format';
 export * from './semver';
 export * from './release-manifest';
+export * from './update-verdict';

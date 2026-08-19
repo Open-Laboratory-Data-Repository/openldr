@@ -57,9 +57,61 @@ describe('renderUpdateCheck', () => {
     expect(text).toMatch(/up to date/);
   });
 
+  // The regression this guards: recordFailure (bootstrap/update-check.ts) leaves latestVersion
+  // untouched, so a cache from last week's good check plus today's failed poll produces
+  // update_available with a real error underneath it. Both must show.
+  it('shows the failure line alongside the upgrade commands when an update is available and the last check failed', () => {
+    const { text, code } = renderUpdateCheck(
+      state({ lastError: 'update check timed out after 10000ms' }),
+      { json: false },
+    );
+    expect(text).toMatch(/docker compose pull/);
+    expect(text).toMatch(/docker compose up -d/);
+    expect(text).toMatch(/last check failed: update check timed out after 10000ms/);
+    expect(code).toBe(1);
+  });
+
   it('emits the raw state as JSON when asked', () => {
     const { text } = renderUpdateCheck(state(), { json: true });
     expect(JSON.parse(text)).toMatchObject({ running: '0.1.1', latestVersion: '0.2.0' });
+  });
+
+  it('says it cannot confirm when the cache matches but the check failed', () => {
+    const { text, code } = renderUpdateCheck(
+      state({ running: '0.2.0', updateAvailable: false, lastError: 'HTTP 404' }),
+      { json: false },
+    );
+    expect(text).toMatch(/last check failed: HTTP 404/);
+    expect(text).toMatch(/cannot confirm this is the latest/);
+    expect(code).toBe(0);
+  });
+
+  it('says not checked yet rather than stopping at "published: unknown"', () => {
+    const { text, code } = renderUpdateCheck(
+      state({ updateAvailable: false, latestVersion: null, lastError: null }),
+      { json: false },
+    );
+    expect(text).toMatch(/published: unknown/);
+    expect(text).toMatch(/not checked yet/);
+    expect(code).toBe(0);
+  });
+
+  // ⛔ There was no check failure here. Printing "last check failed: unrecognised running
+  // version" would send the operator to look at the network.
+  it('prints no failure line when the running version is the thing that is wrong', () => {
+    const { text, code } = renderUpdateCheck(
+      state({ running: 'dev', updateAvailable: false, lastError: null }),
+      { json: false },
+    );
+    expect(text).toMatch(/cannot confirm this is the latest/);
+    expect(text).not.toMatch(/last check failed/);
+    expect(code).toBe(0);
+  });
+
+  it('includes the verdict in JSON without dropping any existing field', () => {
+    const parsed = JSON.parse(renderUpdateCheck(state(), { json: true }).text);
+    expect(parsed).toMatchObject({ running: '0.1.1', latestVersion: '0.2.0', updateAvailable: true });
+    expect(parsed.verdict).toMatchObject({ kind: 'update_available', latest: '0.2.0' });
   });
 });
 

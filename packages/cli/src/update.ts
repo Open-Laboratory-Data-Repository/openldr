@@ -4,6 +4,7 @@ import { dirname, resolve } from 'node:path';
 import { createAppContext } from '@openldr/bootstrap';
 import type { UpdateState } from '@openldr/bootstrap';
 import { loadConfig } from '@openldr/config';
+import { updateVerdict } from '@openldr/core/pure';
 import { redactError } from './redact-error';
 
 /**
@@ -37,27 +38,55 @@ export function runningVersion(): string {
   return '0.0.0';
 }
 
-/** Pure: state in, text and exit code out. Exit 1 means "an update exists" so this can be
- *  scripted; it is not an error. Errors exit 2 — see UPDATE_ERROR_EXIT below. */
+/** Pure: state in, text and exit code out. Exit 1 means "an update exists", so this can be
+ *  scripted; it is not an error. Errors exit 2, see UPDATE_ERROR_EXIT below. */
 export function renderUpdateCheck(state: UpdateState, opts: { json: boolean }): { text: string; code: number } {
-  if (opts.json) return { text: JSON.stringify(state, null, 2), code: state.updateAvailable ? 1 : 0 };
+  const verdict = updateVerdict(state);
+  // Exit 1 means "an update exists" so this can be scripted; it is not an error. Errors exit 2,
+  // see UPDATE_ERROR_EXIT below.
+  const code = verdict.kind === 'update_available' ? 1 : 0;
+
+  // Every pre-existing field is kept. Adding `verdict` is safe for a script reading this;
+  // removing anything would not be.
+  if (opts.json) return { text: JSON.stringify({ ...state, verdict }, null, 2), code };
 
   const lines = [`running:   ${state.running}`];
-  if (!state.enabled) {
+  if (verdict.kind === 'check_off') {
     lines.push('update check is disabled (Studio: Settings → General)');
-    return { text: lines.join('\n'), code: 0 };
+    return { text: lines.join('\n'), code };
   }
   lines.push(`published: ${state.latestVersion ?? 'unknown'}`);
-  if (state.lastError) lines.push(`last check failed: ${state.lastError}`);
-  if (state.updateAvailable) {
-    lines.push('', `${state.latestVersion} is available. To upgrade, run these in your install directory:`, '', '  docker compose pull', '  docker compose up -d');
-    if (state.notesUrl) lines.push('', `release notes: ${state.notesUrl}`);
-    return { text: lines.join('\n'), code: 1 };
+
+  // ⛔ Gate on state.lastError, not on the verdict kind. A failed poll leaves latestVersion
+  // alone (recordFailure in bootstrap/update-check.ts), so the verdict can be update_available
+  // with a real error sitting underneath it, and this line must still print. bad_running_version
+  // never prints here for a different reason: lastError is null in that case, not because the
+  // kind is excluded.
+  if (state.lastError) {
+    lines.push(`last check failed: ${state.lastError}`);
   }
-  // Only when the last check actually SUCCEEDED. A stale cache that happens to match the running
-  // version would otherwise print "last check failed: …" and "this install is up to date." together.
-  if (state.latestVersion && !state.lastError) lines.push('', 'this install is up to date.');
-  return { text: lines.join('\n'), code: 0 };
+
+  switch (verdict.kind) {
+    case 'update_available':
+      lines.push(
+        '',
+        `${verdict.latest} is available. To upgrade, run these in your install directory:`,
+        '', '  docker compose pull', '  docker compose up -d',
+      );
+      if (verdict.notesUrl) lines.push('', `release notes: ${verdict.notesUrl}`);
+      return { text: lines.join('\n'), code };
+    case 'cannot_confirm':
+      lines.push('', verdict.cause === 'bad_running_version'
+        ? `cannot confirm this is the latest: ${verdict.error}.`
+        : 'cannot confirm this is the latest.');
+      return { text: lines.join('\n'), code };
+    case 'never_checked':
+      lines.push('', 'not checked yet.');
+      return { text: lines.join('\n'), code };
+    case 'up_to_date':
+      lines.push('', 'this install is up to date.');
+      return { text: lines.join('\n'), code };
+  }
 }
 
 /** Errors exit 2, never 1. Exit 1 already means "an update is available" and the Settings doc

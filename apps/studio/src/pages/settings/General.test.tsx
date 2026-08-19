@@ -74,7 +74,7 @@ describe('General settings — About card update notice', () => {
       lastCheckedAt: '2026-08-20T10:00:00.000Z', lastError: null, updateAvailable: false,
     });
     render(<MemoryRouter><General /></MemoryRouter>);
-    await screen.findByText('0.2.0');
+    await screen.findByTestId('update-latest');
     expect(screen.queryByText(/docker compose pull/)).toBeNull();
   });
 
@@ -147,5 +147,69 @@ describe('General settings — About card update notice', () => {
     (api.fetchUpdateState as any).mockResolvedValue(AVAILABLE);
     render(<MemoryRouter><General /></MemoryRouter>);
     expect(await screen.findByText('0.1.1')).toBeInTheDocument();
+  });
+
+  it('states the install is up to date, naming the version', async () => {
+    (api.fetchUpdateState as any).mockResolvedValue({
+      ...AVAILABLE, running: '0.1.3', latestVersion: '0.1.3', updateAvailable: false, lastError: null,
+    });
+    render(<MemoryRouter><General /></MemoryRouter>);
+    const row = await screen.findByTestId('update-latest');
+    expect(row).toHaveTextContent('0.1.3');
+    expect(row).toHaveTextContent(/up to date/i);
+  });
+
+  it('names the newer version and its notes in the Latest row', async () => {
+    (api.fetchUpdateState as any).mockResolvedValue(AVAILABLE);
+    render(<MemoryRouter><General /></MemoryRouter>);
+    const row = await screen.findByTestId('update-latest');
+    expect(row).toHaveTextContent('0.2.0');
+    expect(row).toHaveTextContent(/Release notes/i);
+  });
+
+  // ⛔ Without this row, "check is off" and "you are current" look identical on screen, and the
+  // switch that would tell them apart is hidden from anyone without settings.edit_general.
+  it('says the check is off rather than implying the install is current', async () => {
+    (api.fetchUpdateState as any).mockResolvedValue({
+      ...AVAILABLE, enabled: false, updateAvailable: false,
+    });
+    render(<MemoryRouter><General /></MemoryRouter>);
+    expect(await screen.findByTestId('update-latest')).toHaveTextContent(/off/i);
+  });
+
+  it('says it cannot confirm when the last check failed', async () => {
+    (api.fetchUpdateState as any).mockResolvedValue(FAILING);
+    render(<MemoryRouter><General /></MemoryRouter>);
+    expect(await screen.findByTestId('update-latest')).toHaveTextContent(/cannot confirm/i);
+  });
+
+  // The case the verdict exists for: a cache that MATCHES the running version, plus a failed
+  // check. A naive card reads a matching cache as "up to date" even though today's poll never
+  // confirmed it. FAILING above does not cover this, since its latestVersion is null.
+  it('says it cannot confirm when the cache matches the running version but the check failed', async () => {
+    (api.fetchUpdateState as any).mockResolvedValue({
+      ...AVAILABLE, latestVersion: '0.1.1', running: '0.1.1', updateAvailable: false,
+      lastError: 'update check timed out after 10000ms',
+    });
+    render(<MemoryRouter><General /></MemoryRouter>);
+    expect(await screen.findByTestId('update-latest')).toHaveTextContent(/cannot confirm/i);
+  });
+
+  it('says not checked yet when nothing has ever been cached', async () => {
+    (api.fetchUpdateState as any).mockResolvedValue({
+      ...AVAILABLE, latestVersion: null, releasedAt: null, notesUrl: null,
+      lastCheckedAt: null, lastError: null, updateAvailable: false,
+    });
+    render(<MemoryRouter><General /></MemoryRouter>);
+    expect(await screen.findByTestId('update-latest')).toHaveTextContent(/not checked yet/i);
+  });
+
+  // An older server has no /api/update, so the studio sets update to null. The card must fall
+  // back to today's behaviour rather than showing a Latest row with a dash in it.
+  it('omits the Latest row entirely when the update state cannot be loaded', async () => {
+    (api.fetchUpdateState as any).mockRejectedValue(new Error('404'));
+    render(<MemoryRouter><General /></MemoryRouter>);
+    await screen.findByText('About');
+    expect(screen.queryByTestId('update-latest')).toBeNull();
   });
 });
