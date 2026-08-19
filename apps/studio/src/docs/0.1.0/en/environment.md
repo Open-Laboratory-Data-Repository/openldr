@@ -64,7 +64,9 @@ bundled containers; change them only when pointing at external infrastructure.
 | `BLOB_ADAPTER` | `minio` | Object-storage backend for uploads and artifacts. |
 | `EVENTING_ADAPTER` | `pg` | Event store used by workflow triggers. |
 | `TARGET_STORE_ADAPTER` | `pg` | Analytics warehouse engine (`pg` or `mssql`). |
-| `REPORTING_TARGET_ADAPTER` | `none` | Optional external reporting target. |
+
+An external reporting target is no longer an adapter chosen here. Create a connector under
+**Settings > Connectors** instead, and the sink plugin is resolved from that connector.
 
 ## Object storage (S3 / MinIO)
 

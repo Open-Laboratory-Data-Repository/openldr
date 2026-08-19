@@ -16,6 +16,17 @@ writes all of them into `.env.prod`; you can also set them manually.
 | `TLS_MODE` | `self-signed\|letsencrypt\|bring-your-own` | `self-signed` | TLS provisioning mode. `self-signed` generates a cert via `gen-selfsigned.sh`; `letsencrypt` uses Certbot (requires a public DNS record); `bring-your-own` reads pre-placed certs from `deploy/nginx/certs/`. |
 | `LETSENCRYPT_EMAIL` | email | unset | Required when `TLS_MODE=letsencrypt`. Passed to `certbot certonly` for expiry notifications. |
 
+### App-side settings the gateway makes necessary
+
+These two are read by the app, not by nginx, but only matter once a gateway fronts it. Unlike
+the table above, `pnpm run init` does not write them. They come from `.env.prod.example`, or
+from `install/install.sh` and `install.ps1`, which write both.
+
+| Variable | Type | Default | Effect |
+|---|---:|---:|---|
+| `TRUST_PROXY` | hop count, `true`, or an IP/subnet list | unset | How much of `X-Forwarded-For` to trust, passed to Fastify's `trustProxy`. Unset means trust none, so `req.ip` is the direct socket peer. Behind the single gateway that peer is the gateway's own container IP, which makes the `auth.failed` audit useless for tracing a real client. Set `1` for one hop. SECURITY: only set it when a trusted proxy really does front the app, or a client can spoof its own IP through the header. |
+| `TLS_CERT_PATH` | path | unset | Path, inside the API container, to this server's public TLS certificate. When set and readable, `GET /api/settings/sync/central-certificate` serves it so a remote lab can trust a self-signed central. It needs a matching volume mount: `deploy/install/docker-compose.yml` has one, `docker-compose.prod.yml` does not. Unset and unreadable both return 404. |
+
 ### OIDC and Keycloak gateway vars
 
 Keycloak is proxied by nginx at `/auth`. The application accesses it two ways:

@@ -13,8 +13,9 @@ live in the host's configuration.
   - `docker compose --profile dhis2 up -d` → DHIS2 at `http://localhost:8085` (login `admin` / `district`)
 - `SECRETS_ENCRYPTION_KEY` set on the OpenLDR server (`openssl rand -base64 32`). Connector
   secrets are AES-256-GCM encrypted at rest with this key.
-- `REPORTING_TARGET_ADAPTER=dhis2` in the OpenLDR environment (enables the reporting-target wiring).
 - The `dhis2-sink` plugin installed (from the Marketplace, or `openldr plugin install`).
+  No environment variable turns the reporting target on. The connector you create in step 1
+  is what enables it.
 
 ## 1. Create a connector
 
