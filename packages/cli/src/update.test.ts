@@ -61,6 +61,44 @@ describe('renderUpdateCheck', () => {
     const { text } = renderUpdateCheck(state(), { json: true });
     expect(JSON.parse(text)).toMatchObject({ running: '0.1.1', latestVersion: '0.2.0' });
   });
+
+  it('says it cannot confirm when the cache matches but the check failed', () => {
+    const { text, code } = renderUpdateCheck(
+      state({ running: '0.2.0', updateAvailable: false, lastError: 'HTTP 404' }),
+      { json: false },
+    );
+    expect(text).toMatch(/last check failed: HTTP 404/);
+    expect(text).toMatch(/cannot confirm this is the latest/);
+    expect(code).toBe(0);
+  });
+
+  it('says not checked yet rather than stopping at "published: unknown"', () => {
+    const { text, code } = renderUpdateCheck(
+      state({ updateAvailable: false, latestVersion: null, lastError: null }),
+      { json: false },
+    );
+    expect(text).toMatch(/published: unknown/);
+    expect(text).toMatch(/not checked yet/);
+    expect(code).toBe(0);
+  });
+
+  // ⛔ There was no check failure here. Printing "last check failed: unrecognised running
+  // version" would send the operator to look at the network.
+  it('prints no failure line when the running version is the thing that is wrong', () => {
+    const { text, code } = renderUpdateCheck(
+      state({ running: 'dev', updateAvailable: false, lastError: null }),
+      { json: false },
+    );
+    expect(text).toMatch(/cannot confirm this is the latest/);
+    expect(text).not.toMatch(/last check failed/);
+    expect(code).toBe(0);
+  });
+
+  it('includes the verdict in JSON without dropping any existing field', () => {
+    const parsed = JSON.parse(renderUpdateCheck(state(), { json: true }).text);
+    expect(parsed).toMatchObject({ running: '0.1.1', latestVersion: '0.2.0', updateAvailable: true });
+    expect(parsed.verdict).toMatchObject({ kind: 'update_available', latest: '0.2.0' });
+  });
 });
 
 describe('runUpdateCheck exit codes', () => {
