@@ -15,6 +15,7 @@ import type { FacilityAdminLevel } from '@openldr/db/facility-answers';
 // app, so the newcomer is the one that takes the alias rather than forcing a rename through every
 // existing caller.
 import type { FacilityHealth as FacilityRowHealth } from '@openldr/db';
+import type { ParsedFilter, ParsedSort } from '@openldr/table-query';
 
 /** Routes the server answers WITHOUT a bearer token. Mirrors the public-path checks at the top of
  *  the `onRequest` hook in `apps/server/src/auth-plugin.ts` — keep the two in step.
@@ -673,11 +674,14 @@ export interface AuditQuery {
   to?: string;
   limit?: number;
   offset?: number;
+  filters?: ParsedFilter[];
+  sorts?: ParsedSort[];
 }
 export const queryAudit = (q: AuditQuery): Promise<{ events: AuditEvent[]; total: number }> => {
   const p = new URLSearchParams();
   for (const [k, v] of Object.entries(q)) {
-    if (v != null && v !== '') p.set(k, String(v));
+    if (v == null || v === '') continue;
+    p.set(k, k === 'filters' || k === 'sorts' ? JSON.stringify(v) : String(v));
   }
   return apiGet(`/api/audit?${p.toString()}`, 'query audit');
 };

@@ -732,8 +732,10 @@ export function buildProgram(): Command {
     .option('--action <a>', 'filter by action')
     .option('--from <iso>', 'occurred at or after (ISO)')
     .option('--to <iso>', 'occurred at or before (ISO)')
+    .option('--where <rule...>', 'filter as column:operator:value (repeatable)')
+    .option('--sort <column...>', 'sort by column; prefix with - for descending (repeatable)')
     .option('--json', 'emit JSON', false)
-    .action(async (opts: { actor?: string; entity?: string; entityType?: string; entityId?: string; action?: string; from?: string; to?: string; json: boolean }) => {
+    .action(async (opts: { actor?: string; entity?: string; entityType?: string; entityId?: string; action?: string; from?: string; to?: string; where?: string[]; sort?: string[]; json: boolean }) => {
       try { process.exitCode = await runAuditList(opts); } catch (err) { process.stderr.write(`audit list failed: ${redactError(err)}\n`); process.exitCode = 1; }
     });
 

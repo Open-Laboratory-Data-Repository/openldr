@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { type Kysely, type ExpressionBuilder } from 'kysely';
 import type { Logger } from '@openldr/core';
 import type { InternalSchema } from '@openldr/db';
+import { applySorts, buildFilterExpression } from '@openldr/db';
+import { AUDIT_COLUMNS, AUDIT_TIEBREAKER, type ParsedFilter, type ParsedSort } from '@openldr/table-query';
 
 export interface AuditEventInput {
   actorType: 'user' | 'system' | 'cli';
@@ -29,6 +31,9 @@ export interface AuditFilter {
   to?: string;
   limit?: number;
   offset?: number;
+  /** Validated grammar rules from parseTableQuery. ANDed with the named fields above. */
+  filters?: ParsedFilter[];
+  sorts?: ParsedSort[];
 }
 
 export interface AuditStore {
@@ -79,6 +84,8 @@ export function createAuditStore(db: Kysely<InternalSchema>): AuditStore {
     const to = filter.to ? new Date(filter.to) : undefined;
     if (from && !Number.isNaN(from.getTime())) expressions.push(eb('occurred_at', '>=', from));
     if (to && !Number.isNaN(to.getTime())) expressions.push(eb('occurred_at', '<=', to));
+    const grammar = buildFilterExpression(eb, filter.filters ?? [], AUDIT_COLUMNS);
+    if (grammar) expressions.push(grammar);
     return expressions;
   }
 
@@ -104,14 +111,20 @@ export function createAuditStore(db: Kysely<InternalSchema>): AuditStore {
       return toEvent(row as unknown as Row);
     },
     async list(filter = {}) {
-      const rows = await db
+      const base = db
         .selectFrom('audit_events')
         .selectAll()
-        .where((eb) => eb.and(filterExpressions(eb, filter)))
-        .orderBy('occurred_at', 'desc')
-        .limit(filter.limit ?? 100)
-        .offset(filter.offset ?? 0)
-        .execute();
+        .where((eb) => eb.and(filterExpressions(eb, filter)));
+      const sorted = applySorts(
+        base,
+        filter.sorts ?? [],
+        AUDIT_COLUMNS,
+        AUDIT_TIEBREAKER,
+        // Audit's own newest-first order. Passed as the default so an unsorted request keeps
+        // today's behaviour instead of falling through to tiebreaker-only (UUID) order.
+        [{ column: 'occurredAt', ascending: false }],
+      );
+      const rows = await sorted.limit(filter.limit ?? 100).offset(filter.offset ?? 0).execute();
       return rows.map((r) => toEvent(r as unknown as Row));
     },
     async count(filter = {}) {

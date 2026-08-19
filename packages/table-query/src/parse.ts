@@ -14,6 +14,19 @@ export const MAX_SORT_RULES = 5;
 
 const NO_VALUE: FilterOperator[] = ["is_null", "is_not_null"];
 
+// Postgres needs at least YYYY-MM-DD. Date.parse is far looser — it accepts "2026" and
+// "2026-08", which then fail as `invalid input syntax for type timestamp with time zone`
+// and surface as a 500. Measured: '2026'::timestamptz and '2026-08'::timestamptz both error;
+// '2026-08-18', '2026-08-18T12:00:00Z' and '2026-08-18 12:00:00+03' all parse.
+const PG_DATE = /^\d{4}-\d{2}-\d{2}([T ]\d{2}:\d{2}(:\d{2}(\.\d+)?)?\s*(Z|[+-]\d{2}(:?\d{2})?)?)?$/;
+
+// A bare calendar date with no time-of-day part. Distinguishes "eq 2026-08-06" (means the whole
+// day — the DatePicker only ever emits this shape) from "eq 2026-08-06T01:18:19Z" (means that
+// exact instant). Exported so both the server SQL translator (table-query-sql.ts) and the client
+// matcher (apps/studio/.../applyTableState.ts) expand date-only values into the same day range,
+// instead of each guessing the shape independently.
+export const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+
 function fail(error: string): ParseResult { return { ok: false, error }; }
 
 /**
@@ -32,7 +45,7 @@ function typedValueError(type: "text" | "number" | "date" | "enum", column: stri
     }
   }
   if (type === "date") {
-    if (value.trim() === "" || Number.isNaN(Date.parse(value))) {
+    if (value.trim() === "" || !PG_DATE.test(value.trim()) || Number.isNaN(Date.parse(value))) {
       return `value "${value}" for column "${column}" is not a valid date`;
     }
   }

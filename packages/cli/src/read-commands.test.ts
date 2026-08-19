@@ -78,6 +78,49 @@ describe('read-only list commands', () => {
     expect(mockCtx.close).toHaveBeenCalledTimes(1);
   });
 
+  // Finding 2 (Task 6 review): the two-line pass-through in audit.ts — parseWhereFlags' output
+  // reaching ctx.audit.list as `filters`/`sorts` — was unproven. table-query-flags.test.ts only
+  // proves the parser in isolation; the test above only proves the empty-where/-sort case.
+  it('passes non-empty --where/--sort through to ctx.audit.list as filters/sorts', async () => {
+    mockCtx.audit.list.mockResolvedValueOnce([]);
+
+    await expect(
+      runAuditList({
+        where: ['action:eq:form.create'],
+        sort: ['-occurredAt'],
+        json: false,
+      }),
+    ).resolves.toBe(0);
+
+    expect(mockCtx.audit.list).toHaveBeenCalledWith({
+      actorId: undefined,
+      entityType: undefined,
+      entityId: undefined,
+      action: undefined,
+      from: undefined,
+      to: undefined,
+      filters: [{ column: 'action', operator: 'eq', value: 'form.create', combine: 'and' }],
+      sorts: [{ column: 'occurredAt', ascending: false }],
+    });
+    expect(mockCtx.close).toHaveBeenCalledTimes(1);
+  });
+
+  // Confirms the declared behaviour the test above (and the pre-existing empty-options test)
+  // both depend on: an empty --where/--sort must resolve to `undefined`, not `[]`, on the call
+  // to ctx.audit.list. `toHaveBeenCalledWith` uses toEqual semantics, which treat a key with an
+  // `undefined` value as equivalent to the key being absent, but does NOT treat `[]` that way —
+  // so if audit.ts ever passed the raw (always-array) parseTableQuery output straight through,
+  // this would go red where the untouched pre-existing test above would not.
+  it('empty --where/--sort resolve to undefined filters/sorts, not empty arrays', async () => {
+    mockCtx.audit.list.mockResolvedValueOnce([]);
+
+    await runAuditList({ json: false });
+
+    const call = mockCtx.audit.list.mock.calls[0]![0] as { filters?: unknown; sorts?: unknown };
+    expect(call.filters).toBeUndefined();
+    expect(call.sorts).toBeUndefined();
+  });
+
   it('lists forms as tab-separated rows', async () => {
     mockCtx.forms.list.mockResolvedValueOnce([
       {

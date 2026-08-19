@@ -728,6 +728,17 @@ export const en = {
       failed: 'Failed',
     },
   },
+  audit: {
+    colOccurred: 'When',
+    colActor: 'Actor',
+    colAction: 'Action',
+    colEntityType: 'Entity type',
+    colEntityId: 'Entity ID',
+    searchPlaceholder: 'Search audit events',
+    noMatch: 'No audit events match.',
+    actions: 'Actions',
+    refresh: 'Refresh',
+  },
   notifications: {
     title: 'Notifications',
     unread: 'unread',
