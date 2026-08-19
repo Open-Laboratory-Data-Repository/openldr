@@ -2237,11 +2237,15 @@ where exists (select 1 from isolates)
     sql: {
       postgres: `with month_start as (
   -- ⛔ 'ym' is the NORMALISED month. Every string test below compares against it, never against
-  -- the raw parameter. 'month' is free text with no shape check: custom-query-run.ts:14 validates
-  -- only daterange, and RunParamsSheet.tsx:53 renders a plain input. Typed '2017-8' the cast still
-  -- yields 2017-08-01, so 'days' builds a correct August header, but a raw left(ts, 7) = '2017-8'
-  -- matches nothing and the grid prints that header above ZERO laboratories. A reader concludes no
+  -- the raw parameter. 'month' is free text with no shape check: substituteParams inlines a text
+  -- param with no validation at all (custom-query-run.ts:34), and only daterange gets a shape
+  -- check, via assertDate at :30-31. The studio renders a plain input for it
+  -- (apps/studio/src/query/params/RunParamsSheet.tsx:53). Typed '2017-8' the cast still yields
+  -- 2017-08-01, so 'days' builds a correct August header, but a raw left(ts, 7) = '2017-8' matches
+  -- nothing and the grid prints that header above ZERO laboratories. A reader concludes no
   -- laboratory transmitted all month. Normalising makes a loose month answer like a strict one.
+  -- ⛔ THE FULL TEXT LIVES HERE ONLY. The other five variants point at this one, so a line move
+  -- rots one citation rather than six.
   select cast({{param.month}} || '-01' as date) as d,
          to_char(cast({{param.month}} || '-01' as date), 'YYYY-MM') as ym
 ),
@@ -2386,11 +2390,8 @@ group by lab
 order by ord, lab`,
       mssql: `with month_start as (
   -- ⛔ 'ym' is the NORMALISED month. Every string test below compares against it, never against
-  -- the raw parameter. 'month' is free text with no shape check: custom-query-run.ts:14 validates
-  -- only daterange, and RunParamsSheet.tsx:53 renders a plain input. Typed '2017-8' the cast still
-  -- yields 2017-08-01, so 'days' builds a correct August header, but a raw left(ts, 7) = '2017-8'
-  -- matches nothing and the grid prints that header above ZERO laboratories. A reader concludes no
-  -- laboratory transmitted all month. Normalising makes a loose month answer like a strict one.
+  -- the raw parameter, so a loose '2017-8' answers exactly like '2017-08' instead of emptying the
+  -- grid. See q-transmission-hvleid postgres for why that happens and for the citations.
   -- ⛔ format(..., 'en-US') is the T-SQL stand-in for postgres to_char(..., 'YYYY-MM'). Pinning the
   -- culture keeps 'yyyy-MM' Gregorian ASCII digits whatever the server language is set to. It is
   -- the same call and the same culture the date header row at the bottom of this query uses.
@@ -2437,7 +2438,6 @@ arrivals as (
   -- 2022 (RTM-CU22), on a database built by the real external migrations, with a six-request
   -- fixture covering all three rungs. They parsed, bound and marked the right days, each grid took
   -- the requests the other did not, and the loose month '2013-6' answered exactly like '2013-06'.
-  -- So the old claim that this had never reached a SQL Server no longer holds.
   -- ⛔ HONEST NON-PROOF, for everything past that one run. It was one-off and left no artifact,
   -- and NOTHING IN THE SUITE RE-CHECKS ANY OF IT. There is no mssql harness, and the automated
   -- checks are regexes over the SQL TEXT, which by construction cannot see a syntax error, so the
@@ -2548,13 +2548,13 @@ select 1 as ord, lab,
 from grid
 group by lab
 order by ord, lab`,
-      mysql: `with recursive month_start as (
+      mysql: `-- ⛔ READ FIRST: this query CANNOT RUN on a MySQL warehouse today. max() over the
+-- date row's concat raises error 1267 through the connector pool. See the disclosure in
+-- 'arrivals' below for the path, the measurement and why it predates the clinical-date port.
+with recursive month_start as (
   -- ⛔ 'ym' is the NORMALISED month. Every string test below compares against it, never against
-  -- the raw parameter. 'month' is free text with no shape check: custom-query-run.ts:14 validates
-  -- only daterange, and RunParamsSheet.tsx:53 renders a plain input. Typed '2017-8' the cast still
-  -- yields 2017-08-01, so 'days' builds a correct August header, but a raw left(ts, 7) = '2017-8'
-  -- matches nothing and the grid prints that header above ZERO laboratories. A reader concludes no
-  -- laboratory transmitted all month. Normalising makes a loose month answer like a strict one.
+  -- the raw parameter, so a loose '2017-8' answers exactly like '2017-08' instead of emptying the
+  -- grid. See q-transmission-hvleid postgres for why that happens and for the citations.
   -- ⛔ '%m' is the ZERO-PADDED NUMERIC month, NOT '%M' the month name, and '%Y' is the four-digit
   -- year. Neither reads lc_time_names, so this returns the same string on every server. That is
   -- the MySQL stand-in for postgres to_char(..., 'YYYY-MM').
@@ -2627,18 +2627,26 @@ arrivals as (
   -- 8.4.11, on a database built by the real external migrations, with a six-request fixture
   -- covering all three rungs. They parsed and marked the right days, each grid took the requests
   -- the other did not, and the loose month '2013-6' answered exactly like '2013-06'.
-  -- ⛔ That run went through the mysql CLI, NOT through the product's own pool. Through the pool
-  -- BOTH GRIDS FAIL OUTRIGHT with error 1267, illegal mix of collations, on the max() over
-  -- char(10 using utf8mb4) in the date row at the bottom of this query: adapter-mysql-store pins
-  -- collation_connection to utf8mb4_unicode_ci, and MAX rejects that combination. The fault
-  -- PREDATES this change and reproduces on the previous commit's SQL, so it is logged separately
-  -- rather than fixed here. Until it is fixed, no MySQL warehouse can render either grid.
+  -- ⛔ That run went through the mysql CLI, NOT through the pool a report actually gets. Through
+  -- that pool BOTH GRIDS FAIL OUTRIGHT with error 1267, illegal mix of collations, on the max()
+  -- over char(10 using utf8mb4) in the date row at the bottom of this query. Until that is fixed,
+  -- no MySQL warehouse can render either grid.
+  -- The path is custom-query-run.ts:65, then createConnectorSqlRunner
+  -- (packages/bootstrap/src/connector-sql-service.ts:38), then createConnectorDb
+  -- (packages/bootstrap/src/connector-db.ts:43), whose mysql arm at :64-67 passes NO charset.
+  -- ⛔ NOT adapter-mysql-store. That package is the TARGET STORE and is not on the report path,
+  -- so a harness built against it would prove the wrong pool.
+  -- Measured 2026-08-19 on MySQL 8.4.11: the unconfigured connector pool still reports
+  -- collation_connection utf8mb4_unicode_ci, because that is mysql2's own default, and MAX is
+  -- rejected under it. The CLI escapes it only by negotiating utf8mb4_0900_ai_ci instead.
+  -- The fault PREDATES this change and reproduces on the previous commit's SQL. It is tracked
+  -- OUT OF BAND, not in this repo, so there is no in-repo record to grep for.
   -- ⛔ HONEST NON-PROOF, for the pool path and for every later edit. A CLI run says nothing about
   -- the path a real report takes, and that path is blocked by 1267 today. The run was one-off and
   -- left no artifact, and NOTHING IN THE SUITE RE-CHECKS ANY OF IT: the automated checks are
   -- regexes over the SQL TEXT, which cannot see a syntax error. What would prove it: a CI harness
-  -- running both dialects, and for MySQL a warehouse reached through createMysqlStore rather than
-  -- the CLI, which needs 1267 fixed first.
+  -- running both dialects, and for MySQL a warehouse reached through createConnectorDb rather
+  -- than the CLI, which needs 1267 fixed first.
   select distinct clinical.lab, cast(left(clinical.ts, 10) as date) as cal_day
   from (
     select
@@ -2698,8 +2706,10 @@ grid as (
 -- (packages/bootstrap/src/connector-db.ts:64-67), and mysql2 hands a binary column back as a Buffer:
 -- the PDF would survive ('rowsFor' does String(...)), but the JSON and CSV export of this row
 -- would carry a serialized Buffer and the value would stop equalling the day-over-month string.
--- utf8mb4 is a superset of the connection's default utf8mb3, so the CONCAT coerces cleanly rather
--- than raising an illegal mix of collations.
+-- ⛔ MEASURED 2026-08-19, and it does NOT coerce cleanly. Under the connection collation a report
+-- actually gets, max() over this concat raises error 1267, illegal mix of collations, and neither
+-- grid returns a row. The disclosure in 'arrivals' above has the path and the numbers. The
+-- sentence that stood here reasoned from a utf8mb3 default; no pool on this path runs utf8mb3.
 select 0 as ord, '(dates)' as lab,
   max(case when n = 1 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d01,
   max(case when n = 2 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d02,
@@ -2771,11 +2781,8 @@ order by ord, lab`,
     sql: {
       postgres: `with month_start as (
   -- ⛔ 'ym' is the NORMALISED month. Every string test below compares against it, never against
-  -- the raw parameter. 'month' is free text with no shape check: custom-query-run.ts:14 validates
-  -- only daterange, and RunParamsSheet.tsx:53 renders a plain input. Typed '2017-8' the cast still
-  -- yields 2017-08-01, so 'days' builds a correct August header, but a raw left(ts, 7) = '2017-8'
-  -- matches nothing and the grid prints that header above ZERO laboratories. A reader concludes no
-  -- laboratory transmitted all month. Normalising makes a loose month answer like a strict one.
+  -- the raw parameter, so a loose '2017-8' answers exactly like '2017-08' instead of emptying the
+  -- grid. See q-transmission-hvleid postgres for why that happens and for the citations.
   select cast({{param.month}} || '-01' as date) as d,
          to_char(cast({{param.month}} || '-01' as date), 'YYYY-MM') as ym
 ),
@@ -2915,11 +2922,8 @@ group by lab
 order by ord, lab`,
       mssql: `with month_start as (
   -- ⛔ 'ym' is the NORMALISED month. Every string test below compares against it, never against
-  -- the raw parameter. 'month' is free text with no shape check: custom-query-run.ts:14 validates
-  -- only daterange, and RunParamsSheet.tsx:53 renders a plain input. Typed '2017-8' the cast still
-  -- yields 2017-08-01, so 'days' builds a correct August header, but a raw left(ts, 7) = '2017-8'
-  -- matches nothing and the grid prints that header above ZERO laboratories. A reader concludes no
-  -- laboratory transmitted all month. Normalising makes a loose month answer like a strict one.
+  -- the raw parameter, so a loose '2017-8' answers exactly like '2017-08' instead of emptying the
+  -- grid. See q-transmission-hvleid postgres for why that happens and for the citations.
   -- ⛔ format(..., 'en-US') is the T-SQL stand-in for postgres to_char(..., 'YYYY-MM'). Pinning the
   -- culture keeps 'yyyy-MM' Gregorian ASCII digits whatever the server language is set to. It is
   -- the same call and the same culture the date header row at the bottom of this query uses.
@@ -2966,7 +2970,6 @@ arrivals as (
   -- 2022 (RTM-CU22), on a database built by the real external migrations, with a six-request
   -- fixture covering all three rungs. They parsed, bound and marked the right days, each grid took
   -- the requests the other did not, and the loose month '2013-6' answered exactly like '2013-06'.
-  -- So the old claim that this had never reached a SQL Server no longer holds.
   -- ⛔ HONEST NON-PROOF, for everything past that one run. It was one-off and left no artifact,
   -- and NOTHING IN THE SUITE RE-CHECKS ANY OF IT. There is no mssql harness, and the automated
   -- checks are regexes over the SQL TEXT, which by construction cannot see a syntax error, so the
@@ -3076,13 +3079,13 @@ select 1 as ord, lab,
 from grid
 group by lab
 order by ord, lab`,
-      mysql: `with recursive month_start as (
+      mysql: `-- ⛔ READ FIRST: this query CANNOT RUN on a MySQL warehouse today. max() over the
+-- date row's concat raises error 1267 through the connector pool. See the disclosure in
+-- 'arrivals' below for the path, the measurement and why it predates the clinical-date port.
+with recursive month_start as (
   -- ⛔ 'ym' is the NORMALISED month. Every string test below compares against it, never against
-  -- the raw parameter. 'month' is free text with no shape check: custom-query-run.ts:14 validates
-  -- only daterange, and RunParamsSheet.tsx:53 renders a plain input. Typed '2017-8' the cast still
-  -- yields 2017-08-01, so 'days' builds a correct August header, but a raw left(ts, 7) = '2017-8'
-  -- matches nothing and the grid prints that header above ZERO laboratories. A reader concludes no
-  -- laboratory transmitted all month. Normalising makes a loose month answer like a strict one.
+  -- the raw parameter, so a loose '2017-8' answers exactly like '2017-08' instead of emptying the
+  -- grid. See q-transmission-hvleid postgres for why that happens and for the citations.
   -- ⛔ '%m' is the ZERO-PADDED NUMERIC month, NOT '%M' the month name, and '%Y' is the four-digit
   -- year. Neither reads lc_time_names, so this returns the same string on every server. That is
   -- the MySQL stand-in for postgres to_char(..., 'YYYY-MM').
@@ -3155,18 +3158,26 @@ arrivals as (
   -- 8.4.11, on a database built by the real external migrations, with a six-request fixture
   -- covering all three rungs. They parsed and marked the right days, each grid took the requests
   -- the other did not, and the loose month '2013-6' answered exactly like '2013-06'.
-  -- ⛔ That run went through the mysql CLI, NOT through the product's own pool. Through the pool
-  -- BOTH GRIDS FAIL OUTRIGHT with error 1267, illegal mix of collations, on the max() over
-  -- char(10 using utf8mb4) in the date row at the bottom of this query: adapter-mysql-store pins
-  -- collation_connection to utf8mb4_unicode_ci, and MAX rejects that combination. The fault
-  -- PREDATES this change and reproduces on the previous commit's SQL, so it is logged separately
-  -- rather than fixed here. Until it is fixed, no MySQL warehouse can render either grid.
+  -- ⛔ That run went through the mysql CLI, NOT through the pool a report actually gets. Through
+  -- that pool BOTH GRIDS FAIL OUTRIGHT with error 1267, illegal mix of collations, on the max()
+  -- over char(10 using utf8mb4) in the date row at the bottom of this query. Until that is fixed,
+  -- no MySQL warehouse can render either grid.
+  -- The path is custom-query-run.ts:65, then createConnectorSqlRunner
+  -- (packages/bootstrap/src/connector-sql-service.ts:38), then createConnectorDb
+  -- (packages/bootstrap/src/connector-db.ts:43), whose mysql arm at :64-67 passes NO charset.
+  -- ⛔ NOT adapter-mysql-store. That package is the TARGET STORE and is not on the report path,
+  -- so a harness built against it would prove the wrong pool.
+  -- Measured 2026-08-19 on MySQL 8.4.11: the unconfigured connector pool still reports
+  -- collation_connection utf8mb4_unicode_ci, because that is mysql2's own default, and MAX is
+  -- rejected under it. The CLI escapes it only by negotiating utf8mb4_0900_ai_ci instead.
+  -- The fault PREDATES this change and reproduces on the previous commit's SQL. It is tracked
+  -- OUT OF BAND, not in this repo, so there is no in-repo record to grep for.
   -- ⛔ HONEST NON-PROOF, for the pool path and for every later edit. A CLI run says nothing about
   -- the path a real report takes, and that path is blocked by 1267 today. The run was one-off and
   -- left no artifact, and NOTHING IN THE SUITE RE-CHECKS ANY OF IT: the automated checks are
   -- regexes over the SQL TEXT, which cannot see a syntax error. What would prove it: a CI harness
-  -- running both dialects, and for MySQL a warehouse reached through createMysqlStore rather than
-  -- the CLI, which needs 1267 fixed first.
+  -- running both dialects, and for MySQL a warehouse reached through createConnectorDb rather
+  -- than the CLI, which needs 1267 fixed first.
   select distinct clinical.lab, cast(left(clinical.ts, 10) as date) as cal_day
   from (
     select
@@ -3225,8 +3236,10 @@ grid as (
 -- (packages/bootstrap/src/connector-db.ts:64-67), and mysql2 hands a binary column back as a Buffer:
 -- the PDF would survive ('rowsFor' does String(...)), but the JSON and CSV export of this row
 -- would carry a serialized Buffer and the value would stop equalling the day-over-month string.
--- utf8mb4 is a superset of the connection's default utf8mb3, so the CONCAT coerces cleanly rather
--- than raising an illegal mix of collations.
+-- ⛔ MEASURED 2026-08-19, and it does NOT coerce cleanly. Under the connection collation a report
+-- actually gets, max() over this concat raises error 1267, illegal mix of collations, and neither
+-- grid returns a row. The disclosure in 'arrivals' above has the path and the numbers. The
+-- sentence that stood here reasoned from a utf8mb3 default; no pool on this path runs utf8mb3.
 select 0 as ord, '(dates)' as lab,
   max(case when n = 1 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d01,
   max(case when n = 2 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d02,
