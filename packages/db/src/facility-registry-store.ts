@@ -470,9 +470,10 @@ export function createFacilityRegistryStore(
       // `collate "en-US-x-icu"` on EVERY facility list query — and pg-mem's parser cannot parse
       // COLLATE at all (a hard syntax error, not a semantic gap). Measured on this branch: doing it
       // that way fails 21 of the 34 tests in facility-registry-store.test.ts, every one of them on
-      // `Unexpected kw_collate token`. The same change was separately measured to take 2 tests
-      // offline in apps/server's facilities-routes.test.ts and 1 in packages/bootstrap. Known and
-      // accepted cost, disclosed rather than worked around: the
+      // `Unexpected kw_collate token`. Before this branch existed, the controller for this task
+      // separately measured the same change taking 2 tests offline in apps/server's
+      // facilities-routes.test.ts and 1 in packages/bootstrap — not re-measured here, carried over
+      // as a reported fact. Known and accepted cost, disclosed rather than worked around: the
       // default view orders on the database's own collation while an explicit name-ascending sort
       // orders by ICU, and on the shipped musl-based image those differ ('BETA' before 'alpha' by
       // byte order, after it by ICU).

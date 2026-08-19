@@ -19,8 +19,17 @@ const live = describe.skipIf(!url);
 // This file writes into the REAL `facility_registry` table (the store is bound to it by name; there
 // is no scratch-table option the way there is for table-query-pagination.live.test.ts). Every row
 // it inserts carries one of these markers in `facility_system`, and each block deletes its own
-// marker before and after itself, so a run that dies mid-way cannot poison the next one or leave
-// rows behind in a developer's database.
+// marker before and after itself, so a run that dies mid-way and is later re-run gets cleaned up by
+// that re-run's own `beforeAll` delete.
+//
+// Same shared-table property as table-query-pagination.live.test.ts, with the same two costs, not
+// redesigned here:
+//  - A concurrent run of this file breaks both tests below. One run's `beforeAll` marker delete can
+//    wipe a peer run's fixture mid-flight, and the exact-count assertions here (`toEqual([...])`,
+//    `seen.length`) would then see the peer run's rows mixed in or missing.
+//  - A run that dies and is never repeated leaves its marker-scoped rows sitting in
+//    `facility_registry` — nothing else ever deletes them — and they stay visible in the studio
+//    Facilities list until this file runs again or someone removes them by hand.
 const COLLATE_MARKER = 'urn:openldr:test:facility-live-collate';
 const PAGE_MARKER = 'urn:openldr:test:facility-live-page';
 
@@ -44,10 +53,11 @@ live('facility list ordering (live Postgres — pg-mem cannot parse COLLATE)', (
   });
 
   afterAll(async () => {
+    if (!internal) return;
     await sql`delete from facility_registry where facility_system = ${COLLATE_MARKER}`
       .execute(internal.db)
       .catch(() => undefined);
-    await internal?.close().catch(() => undefined);
+    await internal.close().catch(() => undefined);
   });
 
   it('sorts names by ICU collation, not the database\'s own byte order', async () => {
@@ -96,10 +106,11 @@ live('facility paging over duplicate names (live Postgres — pg-mem has a stabl
   });
 
   afterAll(async () => {
+    if (!internal) return;
     await sql`delete from facility_registry where facility_system = ${PAGE_MARKER}`
       .execute(internal.db)
       .catch(() => undefined);
-    await internal?.close().catch(() => undefined);
+    await internal.close().catch(() => undefined);
   });
 
   it('walks every row exactly once across pages, even when a tied row is rewritten mid-pagination', async () => {
