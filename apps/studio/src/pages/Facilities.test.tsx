@@ -1151,6 +1151,125 @@ describe('Facilities page', () => {
       expect(await screen.findByText(/clear all/i)).toBeInTheDocument();
     });
 
+    /** Important 2 (Task 5 review): `readUrlState` stopped reading the eleven named filter params
+     *  this page used to accept, and `writeUrlState` stopped writing them — so a saved
+     *  `/facilities?zone=Central` silently loaded the whole register with nothing on screen saying a
+     *  filter had been dropped. The read-side shim maps each surviving legacy param onto its
+     *  `FACILITY_COLUMNS` column as an `eq` rule. Mutation-checked by deleting
+     *  `readLegacyFiltersFromUrl`'s call site. */
+    it('Important 2: a legacy named filter param in the URL still reaches the server, as a grammar rule', async () => {
+      window.history.replaceState({}, '', '/facilities?zone=Central&registerState=in_register');
+
+      show();
+      await screen.findByRole('table');
+
+      await waitFor(() => expect(listFacilitiesMock).toHaveBeenCalled());
+      // Bare expect on the shape once the call has ARRIVED — a broken shim must print a diff on
+      // `filters`, not a 5s timeout that could equally mean the page threw.
+      expect(listFacilitiesMock.mock.calls.at(-1)![0].filters).toEqual([
+        { column: 'zone', operator: 'eq', value: 'Central', combine: 'and' },
+        { column: 'registerState', operator: 'eq', value: 'in_register', combine: 'and' },
+      ]);
+      // And it is visible as a chip, not just replayed into the request.
+      expect(screen.getByText(/clear all/i)).toBeInTheDocument();
+    });
+
+    /** The other half of the same finding: the legacy form is READ, never written back. The URL a
+     *  restored link rewrites itself to must be the new JSON form only, so there is exactly one
+     *  going-forward format. */
+    it('Important 2: does not write the legacy params back out — the JSON form is what a restored link becomes', async () => {
+      window.history.replaceState({}, '', '/facilities?zone=Central');
+
+      show();
+      await screen.findByRole('table');
+
+      // `writeUrlState`'s effect commits with the same mount render that fires the request, so the
+      // URL is already rewritten by the time the table paints. Bare expects, not a `waitFor` on the
+      // param appearing — that would turn a missing shim into a 5s timeout instead of a diff.
+      const params = new URLSearchParams(window.location.search);
+      expect(params.get('zone')).toBeNull();
+      expect(params.get('filters')).toBe('[{"column":"zone","operator":"eq","value":"Central","combine":"and"}]');
+    });
+
+    /** Minor 5 (Task 5 review): `FilterRule.id` is a client-only React key. `FacilityListQuery`
+     *  declares `ParsedFilter[]` (`Omit<FilterRule, 'id'>`), but TS's excess-property check does not
+     *  fire on a non-literal, so the id rode along into every request and every shared link.
+     *  `toEqual` with an exact object (not `objectContaining`) is what pins its absence. */
+    it('Minor 5: the client-only rule id never reaches the wire or the URL', async () => {
+      show();
+      await screen.findByRole('table');
+
+      await addFilterViaPopover('hospital', 'Level');
+
+      await waitFor(() => expect(listFacilitiesMock.mock.calls.at(-1)![0].filters).toHaveLength(1));
+      expect(listFacilitiesMock.mock.calls.at(-1)![0].filters![0]).not.toHaveProperty('id');
+      expect(JSON.parse(new URLSearchParams(window.location.search).get('filters')!)[0])
+        .not.toHaveProperty('id');
+    });
+
+    /** Minor 4 (Task 5 review): `statusOptions` comes from `expandValueSet` and is empty whenever
+     *  terminology is down. An `enum` ColumnDef with no `enumOptions` renders an empty, unusable
+     *  Select (FilterPopover.tsx) — and status filtering was a plain text box before Task 5, so an
+     *  empty picker is a regression. The column falls back to a `text` widget instead. */
+    it('Minor 4: status still filters as free text when the terminology expansion is unavailable', async () => {
+      (expandValueSet as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('terminology unavailable'));
+
+      show();
+      await screen.findByRole('table');
+
+      // ⚠ Driven by hand rather than through `addFilterViaPopover`. That helper's own
+      // `findByLabelText(/enter value/i)` is the step a regression breaks, and a `findBy` that never
+      // resolves surfaces as "Test timed out in 5000ms" — which is equally what a page that threw
+      // looks like, so it proves nothing about WHICH widget rendered. Opening the popover here and
+      // asserting bare makes the broken run print "expected null not to be null" instead.
+      fireEvent.click(screen.getByRole('button', { name: /^filter$/i }));
+      fireEvent.click(await screen.findByRole('button', { name: /add filter/i }));
+      fireEvent.click(screen.getByRole('combobox', { name: /columns/i }));
+      fireEvent.click(await screen.findByRole('option', { name: 'Status' }));
+
+      // The value widget itself: a text Input ("Enter value"), never the enum Select ("Pick value")
+      // that an `enum` ColumnDef with no `enumOptions` would render empty and unusable.
+      expect(screen.queryByLabelText(/enter value/i)).not.toBeNull();
+      expect(screen.queryByRole('combobox', { name: /pick value/i })).toBeNull();
+
+      // And it filters end to end, not just renders.
+      fireEvent.change(screen.getByLabelText(/enter value/i), { target: { value: 'Operating' } });
+      fireEvent.click(screen.getByRole('button', { name: /^apply$/i }));
+
+      await waitFor(() => expect(listFacilitiesMock.mock.calls.at(-1)![0].filters).toHaveLength(1));
+      expect(listFacilitiesMock.mock.calls.at(-1)![0].filters![0]).toEqual({
+        column: 'status', operator: 'eq', value: 'Operating', combine: 'and',
+      });
+    });
+
+    /** Minor 3 (Task 5 review): Reset used `table.resetAll()`, which restores `defaultFilters` —
+     *  on this page that is the URL's own grammar, so on a page opened from a filtered link Reset
+     *  put that link's filters straight back. It also left `q`, `health` and `nationalSystem`
+     *  applied, which is three filters surviving a button labelled Reset. */
+    it('Minor 3: Reset clears everything the page filters on, including a filter restored from the URL', async () => {
+      window.history.replaceState({}, '', '/facilities?filters=%5B%7B%22column%22%3A%22zone%22%2C%22operator%22%3A%22eq%22%2C%22value%22%3A%22Central%22%2C%22combine%22%3A%22and%22%7D%5D&q=dodoma&health=unmapped&nationalSystem=HFR');
+
+      show();
+      await screen.findByRole('table');
+      await waitFor(() => expect(listFacilitiesMock.mock.calls.at(-1)![0].filters).toHaveLength(1));
+
+      const before = listFacilitiesMock.mock.calls.length;
+      fireEvent.click(screen.getByRole('button', { name: /^reset$/i }));
+
+      // Wait for the ARRIVAL of the post-Reset request, then assert its shape bare — a `waitFor`
+      // wrapped around the shape assertion turns any failure into a 5s timeout, which is also what
+      // a page that threw looks like.
+      await waitFor(() => expect(listFacilitiesMock.mock.calls.length).toBeGreaterThan(before));
+      const last = listFacilitiesMock.mock.calls.at(-1)![0];
+      expect(last.filters).toEqual([]);
+      expect(last.sorts).toEqual([]);
+      expect(last.q).toBeUndefined();
+      expect(last.health).toBeUndefined();
+      expect(last.nationalSystem).toBeUndefined();
+      // The URL follows: nothing left in the query string for anyone to re-share.
+      expect(window.location.search).toBe('');
+    });
+
     it('sends a sort to the server rather than reordering the fetched page in the browser', async () => {
       show();
       await screen.findByRole('table');

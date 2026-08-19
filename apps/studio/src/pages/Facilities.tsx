@@ -18,7 +18,7 @@ import {
   ActiveFilterChips, DataTableToolbar, newId, useTableState,
   type ColumnDef, type FilterOperator, type FilterRule, type SortRule,
 } from '@/components/data-table';
-import { FACILITY_COLUMNS } from '@openldr/table-query';
+import { FACILITY_COLUMNS, type ParsedFilter, type ParsedSort } from '@openldr/table-query';
 import { useAuth } from '@/auth/AuthProvider';
 import {
   listFacilities, deleteFacility, listPublishedForms, getFacilityHealth, retryFacilityJob,
@@ -157,11 +157,58 @@ function readUrlState(): FacilitiesUrlState {
   };
 }
 
+/** Important 2 (Task 5 review): the named params this page USED to accept, each of which is a
+ *  `FACILITY_COLUMNS` column now. Every param name here is also its column id, so this list IS the
+ *  mapping.
+ *
+ *  ⛔ READ-SIDE ONLY. Nothing writes these back out: the JSON `filters` form is the going-forward
+ *  format, and this is a compatibility shim so a link saved or bookmarked before Task 5 —
+ *  `/facilities?zone=Central` — still opens filtered. Without it that link loads the entire
+ *  register with nothing on screen saying a filter was dropped.
+ *
+ *  `q`, `health`, `nationalSystem` and `offset` are deliberately NOT in this list. They never
+ *  became grammar columns; `readUrlState` above still reads them as named params, unchanged. */
+const LEGACY_FILTER_PARAMS = [
+  'source', 'country', 'zone', 'region', 'district', 'council',
+  'status', 'level', 'ownership', 'managedOrigin', 'registerState',
+] as const;
+
+/** Turn any surviving legacy named param into the `eq` grammar rule it always meant — the named
+ *  params were exact matches server-side (facility-registry-store.ts's `list`), so `eq` is what
+ *  they translate to and nothing else. Validated against `FACILITY_COLUMNS` for the same reason
+ *  `readFiltersFromUrl` is: a rule the route would 400 on must never reach the network. */
+function readLegacyFiltersFromUrl(params: URLSearchParams, already: FilterRule[]): FilterRule[] {
+  const out: FilterRule[] = [];
+  for (const name of LEGACY_FILTER_PARAMS) {
+    const raw = params.get(name);
+    if (!raw) continue;
+    const spec = FACILITY_COLUMNS[name];
+    if (!spec || !spec.operators.includes('eq')) continue;
+    // A URL carrying BOTH forms for one column can only be hand-assembled — nothing generates it.
+    // The grammar rule wins: it is the newer and the more expressive of the two.
+    if (already.some((f) => f.column === name)) continue;
+    out.push({ id: newId('f'), column: name, operator: 'eq', value: raw, combine: 'and' });
+  }
+  return out;
+}
+
 /** The grammar half of the same mount-time restore. */
 function readUrlGrammar(): { filters: FilterRule[]; sorts: SortRule[] } {
   const params = new URLSearchParams(window.location.search);
-  return { filters: readFiltersFromUrl(params.get('filters')), sorts: readSortsFromUrl(params.get('sorts')) };
+  const filters = readFiltersFromUrl(params.get('filters'));
+  return {
+    filters: [...filters, ...readLegacyFiltersFromUrl(params, filters)],
+    sorts: readSortsFromUrl(params.get('sorts')),
+  };
 }
+
+/** Minor 5 (Task 5 review): `FilterRule.id`/`SortRule.id` are CLIENT-ONLY React keys. The wire
+ *  types are `ParsedFilter`/`ParsedSort` (`Omit<…, 'id'>`), but TypeScript's excess-property check
+ *  does not fire on a non-literal, so passing `FilterRule[]` straight through compiled fine and put
+ *  a `f_1755…_abc123` token in every request and every shared link. Stripped once, here, for both
+ *  the request and the URL. */
+const toWireFilters = (rules: FilterRule[]): ParsedFilter[] => rules.map(({ id: _id, ...rest }) => rest);
+const toWireSorts = (rules: SortRule[]): ParsedSort[] => rules.map(({ id: _id, ...rest }) => rest);
 
 /** Write the named params AND the grammar rules back to the URL via `history.replaceState` - a
  *  REPLACE, not a push, so paging through the registry does not fill the browser's back-button
@@ -169,15 +216,16 @@ function readUrlGrammar(): { filters: FilterRule[]; sorts: SortRule[] } {
  *  search, "All", offset 0, no rules), so the URL for the default view stays plain `/facilities`.
  *
  *  `filters`/`sorts` carry the SAME JSON `listFacilities` puts on the wire (api.ts), so a shared
- *  link is reproducible: what the URL says is exactly what the request sends. Empty arrays are
- *  omitted rather than written as `[]`, same reasoning as the client. */
+ *  link is reproducible: what the URL says is exactly what the request sends — including Minor 5's
+ *  id strip, so a link never carries a client-only React key either. Empty arrays are omitted
+ *  rather than written as `[]`, same reasoning as the client. */
 function writeUrlState(state: FacilitiesUrlState, filters: FilterRule[], sorts: SortRule[]): void {
   const params = new URLSearchParams();
   if (state.q) params.set('q', state.q);
   if (state.health) params.set('health', state.health);
   if (state.nationalSystem) params.set('nationalSystem', state.nationalSystem);
-  if (filters.length > 0) params.set('filters', JSON.stringify(filters));
-  if (sorts.length > 0) params.set('sorts', JSON.stringify(sorts));
+  if (filters.length > 0) params.set('filters', JSON.stringify(toWireFilters(filters)));
+  if (sorts.length > 0) params.set('sorts', JSON.stringify(toWireSorts(sorts)));
   if (state.offset > 0) params.set('offset', String(state.offset));
   const qs = params.toString();
   window.history.replaceState({}, '', `${window.location.pathname}${qs ? `?${qs}` : ''}`);
@@ -489,7 +537,17 @@ export function Facilities() {
       // Task 10: the terminology DISPLAY LABEL, never the stored code — `f.status` (e.g. 'active')
       // is a `location-status`-bound code, not something an operator scanning this list should have
       // to decode.
-      id: 'status', labelKey: 'facilities.status', type: 'enum', defaultVisible: true, cellClassName: 'text-xs',
+      //
+      // Minor 4 (Task 5 review): `enum` ONLY while the ValueSet expansion actually produced
+      // options. `statusOptions` comes from `expandValueSet` and is empty when terminology is down
+      // or the value set is missing, and an `enum` ColumnDef with no `enumOptions` renders an empty,
+      // unusable Select (FilterPopover.tsx) — status filtering was a free-text box before Task 5,
+      // so that would be a regression. Falling back to `text` keeps the filter working; no status
+      // value is invented here either way (AGENTS.md section 8), and `operators` stays pinned to
+      // `FACILITY_COLUMNS` in both cases, so the server sees the same whitelist regardless.
+      id: 'status', labelKey: 'facilities.status',
+      type: statusOptions.length > 0 ? 'enum' : 'text',
+      defaultVisible: true, cellClassName: 'text-xs',
       accessor: (f) => displayFor(statusDisplayMap, f.status),
       enumOptions: statusOptions,
       operators: FACILITY_COLUMNS.status!.operators,
@@ -609,7 +667,22 @@ export function Facilities() {
   // on — the same `offset` reset every named filter on this page already does.
   const applyFilters = (next: FilterRule[]) => { table.setFilters(next); setUrlState((s) => ({ ...s, offset: 0 })); };
   const applySorts = (next: SortRule[]) => { table.setSorts(next); setUrlState((s) => ({ ...s, offset: 0 })); };
-  const resetTable = () => { table.resetAll(); setUrlState((s) => ({ ...s, offset: 0 })); };
+  /** Minor 3 (Task 5 review): Reset clears EVERYTHING this page filters on, not just the grammar.
+   *
+   *  Deliberately not `table.resetAll()`. That restores `defaultFilters`, which on this page is
+   *  whatever grammar the URL carried on mount (`useTableState.ts`) — so on a page opened from a
+   *  filtered link, Reset put that link's filters back instead of clearing them. `setFilters([])`
+   *  and `setSorts([])` clear outright; `resetColumns()` covers the visibility half that
+   *  `resetAll` also did.
+   *
+   *  `q`, `health` and `nationalSystem` go with them. They are three more filters the operator can
+   *  see applied, and a button labelled Reset that leaves them in effect reads as a bug. */
+  const resetTable = () => {
+    table.setFilters([]);
+    table.setSorts([]);
+    table.resetColumns();
+    setUrlState({ q: '', health: undefined, nationalSystem: undefined, offset: 0 });
+  };
 
   // F1 fix: a plain `reload()` flips `loading` to true, which the render below turns into a
   // full-page `LoadingState` that UNMOUNTS everything else on the page — including a currently-open
@@ -651,11 +724,12 @@ export function Facilities() {
         q: urlState.q || undefined,
         health: urlState.health,
         nationalSystem: urlState.nationalSystem,
-        // Task 5: the shared grammar. Sent as-is and applied by the server — this page is
-        // server-paginated, so it must never filter or sort the fetched page in the browser: that
-        // would filter one page while `total` kept claiming the unfiltered count.
-        filters: table.filters,
-        sorts: table.sorts,
+        // Task 5: the shared grammar. Applied by the server — this page is server-paginated, so it
+        // must never filter or sort the fetched page in the browser: that would filter one page
+        // while `total` kept claiming the unfiltered count. Minor 5: `toWireFilters`/`toWireSorts`
+        // drop the client-only `id`, so what goes out matches the declared `ParsedFilter[]` type.
+        filters: toWireFilters(table.filters),
+        sorts: toWireSorts(table.sorts),
         limit: PAGE_SIZE,
         offset: urlState.offset,
       });
@@ -739,13 +813,17 @@ export function Facilities() {
   // < council) as the form's own suggestions: a level's scope is every level ABOVE it, never itself
   // or below.
   //
-  // ⚠ Task 5 CHANGED WHEN THESE RUN. They used to be gated on the "More filters" disclosure being
-  // open, so a page load with the panel collapsed paid nothing. The disclosure is gone, and
+  // ⚠ WHEN THESE RUN, AND WHAT THAT COSTS. They used to be gated on the "More filters" disclosure
+  // being open, so a page load with the panel collapsed paid nothing. That disclosure is gone, and
   // `DataTableToolbar` exposes no "the Filter popover opened" signal, so the options have to exist
   // BEFORE the popover renders its value picker or it renders an empty, unusable Select. So these
-  // four now run on mount. That is four `SELECT DISTINCT` queries per page load against a
-  // national-scale register — a real, deliberate cost, traded for the panel-open refetch the
-  // previous arrangement paid every time the panel was reopened.
+  // four run on MOUNT: four `SELECT DISTINCT` queries per page load against a national-scale
+  // register, for a popover most page loads never open.
+  //
+  // ⛔ THAT COST IS A DECISION, NOT AN OVERSIGHT. The Task 5 review proposed re-gating them behind
+  // an arming flag latched on the first pointer-down in the toolbar row. The operator declined it
+  // and chose to keep the mount-time fetches. Do not add a gate here, do not add a prop to
+  // `DataTableToolbar` (Audit shares it), and do not reopen the case without the operator.
   useEffect(() => {
     let cancelled = false;
     listFacilityAdminValues('zone')
