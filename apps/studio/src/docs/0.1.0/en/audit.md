@@ -52,6 +52,7 @@ Combine filters to follow multi-step activity: start with the entity, add the ac
 
 - `--where column:operator:value` — repeatable. Only the first two colons are delimiters, so a value may itself contain a colon (an entity ID or a URL, for example).
 - `--sort column` — ascending. `--sort -column` — descending (leading `-`). Repeatable.
+- On the timestamp column, `eq` with a bare date (`2026-08-06`, no time) matches the whole day, not one instant. `between` with two bare dates includes the end day in full.
 
 ```bash
 openldr audit list --where action:like:form. --sort -occurredAt

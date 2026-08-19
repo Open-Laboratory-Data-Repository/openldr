@@ -202,11 +202,12 @@ cloud/hosted database, for the data-sovereignty reasons set out below.
 
 Text sorts (e.g. Audit → Sort by Actor/Action) run with an explicit `COLLATE "en-US-x-icu"`, so
 row order does not depend on the server's locale — the bundled `postgres:16-alpine` image ships
-ICU support out of the box. A Postgres build **without** ICU (rare — some minimal or custom-compiled images omit it) rejects
-that collation and every text sort 500s, with a server error along the lines of `collation
-"en-US-x-icu" for encoding "UTF8" does not exist`. If you see that shape of error on a sort
-request, the internal Postgres instance is missing ICU support; switch to an image that includes
-it (`postgres:16` or `postgres:16-alpine` both do — this is what ships by default).
+ICU support out of the box. A Postgres build **without** ICU (rare — some minimal or
+custom-compiled images omit it) rejects that collation and every text sort 500s, with a
+server error along the lines of `collation "en-US-x-icu" for encoding "UTF8" does not
+exist`. If you see that shape of error on a sort request, the internal Postgres instance
+is missing ICU support; switch to an image that includes it (`postgres:16` or
+`postgres:16-alpine` both do — this is what ships by default).
 
 ### Microsoft SQL Server support matrix
 

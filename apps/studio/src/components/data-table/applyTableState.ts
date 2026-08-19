@@ -27,6 +27,14 @@ function parseDateMs(v: unknown): number | null {
  * rather than the single midnight instant a bare comparison would. Mirrors table-query-sql.ts's
  * `col >= day::timestamptz and col < day::timestamptz + interval '1 day'`. `Date.parse` reads a
  * bare `YYYY-MM-DD` as UTC midnight per the ECMA-262 date-time string spec.
+ *
+ * ASSUMPTION, not enforced here: this resolves the day boundary in UTC, always. The SQL side
+ * resolves `day::timestamptz` in the database connection's `TimeZone`, which `createInternalDb`
+ * leaves unset. The two agree only because the shipped compose sets no `TZ` (session default is
+ * UTC) — an externally provisioned Postgres with a non-UTC default shifts the whole day window,
+ * and this function and the SQL side would then select different rows for the same filter. No
+ * test can catch that: pg-mem has no timezone support. Do not "fix" this without checking with
+ * the operator first — it needs a coordinated change on both sides, not a silent one here.
  */
 function dayBoundsMs(day: string): [number, number] {
   const start = Date.parse(day);
@@ -56,13 +64,23 @@ function matchesRule(
       // A date column's "eq 2026-08-06" means the whole day, not the single midnight instant a
       // string comparison would match — `value` is a full timestamp string once it round-trips
       // through the server, so a plain `String(value) === "2026-08-06"` never matches. Only
-      // expand when the target is date-only; a caller-supplied full timestamp is honoured as an
-      // exact match via the plain string comparison below. Mirrors table-query-sql.ts's "eq".
-      if (columnType === "date" && typeof target === "string" && DATE_ONLY.test(target.trim())) {
-        const valueMs = parseDateMs(value);
-        if (valueMs !== null) {
-          const [start, end] = dayBoundsMs(target.trim());
-          return valueMs >= start && valueMs < end;
+      // expand when the target is date-only. Mirrors table-query-sql.ts's "eq".
+      if (columnType === "date" && typeof target === "string") {
+        if (DATE_ONLY.test(target.trim())) {
+          const valueMs = parseDateMs(value);
+          if (valueMs !== null) {
+            const [start, end] = dayBoundsMs(target.trim());
+            return valueMs >= start && valueMs < end;
+          }
+        } else {
+          // A full-timestamp target: compare as instants, not strings — `value` and `target` can
+          // both be valid ISO representations of the same instant with different text (e.g.
+          // differing millisecond precision), which a plain `String(value) === String(target)`
+          // would wrongly call a mismatch. Falls through to the string comparison below only
+          // when either side isn't Date.parse-able.
+          const valueMs = parseDateMs(value);
+          const targetMs = parseDateMs(target);
+          if (valueMs !== null && targetMs !== null) return valueMs === targetMs;
         }
       }
       return String(value ?? "") === String(target);
@@ -70,12 +88,19 @@ function matchesRule(
     case "ne": {
       // Negation of "eq" above, with the same NULL/empty-is-a-mismatch rule the plain string
       // comparison already gives every other "ne": a null/undefined/"" value stays included.
-      if (columnType === "date" && typeof target === "string" && DATE_ONLY.test(target.trim())) {
+      if (columnType === "date" && typeof target === "string") {
         if (value === null || value === undefined || value === "") return true;
-        const valueMs = parseDateMs(value);
-        if (valueMs !== null) {
-          const [start, end] = dayBoundsMs(target.trim());
-          return !(valueMs >= start && valueMs < end);
+        if (DATE_ONLY.test(target.trim())) {
+          const valueMs = parseDateMs(value);
+          if (valueMs !== null) {
+            const [start, end] = dayBoundsMs(target.trim());
+            return !(valueMs >= start && valueMs < end);
+          }
+        } else {
+          // Same full-timestamp reasoning as "eq" above, negated.
+          const valueMs = parseDateMs(value);
+          const targetMs = parseDateMs(target);
+          if (valueMs !== null && targetMs !== null) return valueMs !== targetMs;
         }
       }
       return String(value ?? "") !== String(target);

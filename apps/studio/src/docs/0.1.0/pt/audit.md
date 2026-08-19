@@ -52,6 +52,7 @@ Combine filtros para seguir atividade em várias etapas: comece pela entidade, a
 
 - `--where column:operator:value` — repetível. Apenas os dois primeiros dois-pontos são delimitadores, pelo que um valor pode conter um dois-pontos (um identificador de entidade ou um URL, por exemplo).
 - `--sort column` — crescente. `--sort -column` — decrescente (traço à frente). Repetível.
+- Na coluna de data/hora, `eq` com uma data simples (`2026-08-06`, sem hora) corresponde ao dia inteiro, não a um único instante. `between` com duas datas simples inclui o dia final por completo.
 
 ```bash
 openldr audit list --where action:like:form. --sort -occurredAt

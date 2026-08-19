@@ -52,6 +52,7 @@ Combiner les filtres pour suivre une activité en plusieurs étapes : commencer 
 
 - `--where column:operator:value` — répétable. Seuls les deux premiers deux-points sont des délimiteurs, une valeur peut donc elle-même contenir un deux-points (un identifiant d'entité ou une URL, par exemple).
 - `--sort column` — croissant. `--sort -column` — décroissant (tiret en préfixe). Répétable.
+- Sur la colonne d'horodatage, `eq` avec une date seule (`2026-08-06`, sans heure) correspond à toute la journée, pas à un seul instant. `between` avec deux dates seules inclut le dernier jour en entier.
 
 ```bash
 openldr audit list --where action:like:form. --sort -occurredAt

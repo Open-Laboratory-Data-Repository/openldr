@@ -31,12 +31,28 @@ function ruleExpression(
       // A date column's "eq 2026-08-06" means the whole day, not the single midnight instant a
       // literal comparison would match — the value renders as `2026-08-06 01:18:19.491521+00`,
       // which is never equal to the bare date the DatePicker sends (0 rows, measured live). Only
-      // expand when the value itself is date-only: a caller that sent a full timestamp means
-      // that exact instant and gets it, honoured via the plain `asText` comparison below.
+      // expand when the value itself is date-only.
       const value = String(rule.value);
-      if (spec.type === "date" && isDateOnly(value)) {
-        const day = value.trim();
-        return sql<SqlBool>`(${col} >= ${day}::timestamptz and ${col} < (${day}::timestamptz + interval '1 day'))`;
+      if (spec.type === "date") {
+        if (isDateOnly(value)) {
+          const day = value.trim();
+          // ASSUMPTION, not enforced here: `day::timestamptz` resolves midnight in the database
+          // connection's `TimeZone`, which createInternalDb leaves unset (session default). The
+          // client's dayBoundsMs (applyTableState.ts) resolves the same boundary in UTC, always.
+          // The two agree only because the shipped compose sets no TZ — an externally provisioned
+          // Postgres with a non-UTC default shifts this whole-day window, and the client and SQL
+          // would then select different rows for the same filter. pg-mem has no timezone support,
+          // so no test catches that. See applyTableState.ts's dayBoundsMs for the matching note.
+          return sql<SqlBool>`(${col} >= ${day}::timestamptz and ${col} < (${day}::timestamptz + interval '1 day'))`;
+        }
+        // A full-timestamp value on a date column: parseTableQuery already validated it against
+        // PG_DATE, so this is reachable — the CLI's `--where col:eq:<ISO timestamp>` passes one
+        // straight through (packages/cli/src/table-query-flags.ts), it's not studio-DatePicker-only.
+        // Cast to timestamptz and compare directly rather than falling through to `asText`:
+        // `timestamptz::text` renders as `2026-08-06 01:18:19.491+00` (space, `+00`, no `Z`), which
+        // an ISO string can never equal — measured live, 0 rows with no error. Comparing as
+        // timestamptz instead makes both sides parse the same instant.
+        return sql<SqlBool>`${col} = ${value}::timestamptz`;
       }
       return sql<SqlBool>`${asText} = ${value}`;
     }
@@ -44,10 +60,14 @@ function ruleExpression(
       // Coalesce-to-'' matches the client's `String(value ?? "") !== target`, which counts a
       // NULL row as a mismatch (and therefore included by `ne`). A plain `<> value` would drop it.
       const value = String(rule.value);
-      if (spec.type === "date" && isDateOnly(value)) {
-        const day = value.trim();
-        // Negation of the eq day-range above, with the same NULL-is-a-mismatch rule.
-        return sql<SqlBool>`(${col} is null or ${col} < ${day}::timestamptz or ${col} >= (${day}::timestamptz + interval '1 day'))`;
+      if (spec.type === "date") {
+        if (isDateOnly(value)) {
+          const day = value.trim();
+          // Negation of the eq day-range above, with the same NULL-is-a-mismatch rule.
+          return sql<SqlBool>`(${col} is null or ${col} < ${day}::timestamptz or ${col} >= (${day}::timestamptz + interval '1 day'))`;
+        }
+        // Same full-timestamp reasoning as "eq" above, negated with the NULL-is-a-mismatch rule.
+        return sql<SqlBool>`(${col} is null or ${col} <> ${value}::timestamptz)`;
       }
       return sql<SqlBool>`${asText} <> ${value}`;
     }
@@ -89,6 +109,9 @@ function ruleExpression(
       // a plain `<= hi` on a date-only `hi` stops at that day's midnight, excluding almost all of
       // the end day. Expand a date-only `hi` to "less than the start of the following day" so the
       // end day is included in full. A full-timestamp `hi` is honoured exactly, unchanged.
+      //
+      // Same TimeZone-resolution ASSUMPTION as "eq"'s day-range branch above: `hiDay::timestamptz`
+      // resolves in the connection's TimeZone, not necessarily UTC. See that comment.
       if (spec.type === "date" && isDateOnly(hi)) {
         const hiDay = hi.trim();
         return sql<SqlBool>`(${col} >= ${lo} and ${col} < (${hiDay}::timestamptz + interval '1 day'))`;

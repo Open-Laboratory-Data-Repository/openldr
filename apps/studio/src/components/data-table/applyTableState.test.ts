@@ -100,6 +100,26 @@ describe("applyTableState", () => {
     expect(res.rows.map((r) => r.name).sort()).toEqual(["Achieng", "Kimaro"]);
   });
 
+  // C1 (fix-wave 2): a *full-timestamp* eq/ne value on a date column is reachable — the CLI's
+  // `--where` flag passes one straight through (packages/cli/src/table-query-flags.ts). It must
+  // compare as an instant (parseDateMs), not the plain string equality every other eq/ne uses:
+  // two ISO strings can name the same instant with different text.
+  it("eq on a full-timestamp value matches only that exact instant", () => {
+    const res = applyTableState(rows, {
+      filters: [{ id: "x", column: "occurredAt", operator: "eq", value: "2026-08-06T01:18:19.491Z", combine: "and" }],
+      sorts: [], page: 0, pageSize: 10,
+    }, cols);
+    expect(res.rows.map((r) => r.name)).toEqual(["Achieng"]);
+  });
+
+  it("ne on a full-timestamp value excludes only that exact instant but keeps a null row", () => {
+    const res = applyTableState(rows, {
+      filters: [{ id: "x", column: "occurredAt", operator: "ne", value: "2026-08-06T01:18:19.491Z", combine: "and" }],
+      sorts: [], page: 0, pageSize: 10,
+    }, cols);
+    expect(res.rows.map((r) => r.name).sort()).toEqual(["Kimaro", "Mwangi", "Noor", "Santos"]);
+  });
+
   it("is_null matches null and empty string", () => {
     const res = applyTableState(rows, {
       filters: [{ id: "x", column: "email", operator: "is_null", value: "", combine: "and" }],

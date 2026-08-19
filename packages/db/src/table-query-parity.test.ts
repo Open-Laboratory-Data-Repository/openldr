@@ -22,6 +22,14 @@ import { DATE_ONLY, type ParsedFilter, type TableColumnMap } from "@openldr/tabl
 // for the `ESCAPE` keyword (a hard parse error, not a semantic gap — see table-query-sql.test.ts,
 // same deferral), and escaping is the one case that must emit it. That proof lives in
 // table-query-pagination.live.test.ts's "LIKE wildcard escaping (live Postgres)" block.
+//
+// NOT covered here: timezone-dependent day-boundary resolution. The day-aware eq/ne/between
+// cases below all assume the SQL side's `day::timestamptz` and the client's dayBoundsMs (UTC,
+// per ECMA-262) resolve the same midnight — true only when the database connection's TimeZone
+// is UTC, which the shipped compose gives by default but nothing enforces. pg-mem has no
+// timezone support at all, so it can never demonstrate the two sides disagreeing under a
+// non-UTC connection TimeZone. See the ASSUMPTION comments at table-query-sql.ts's day-range
+// branches (eq/ne/between) and applyTableState.ts's dayBoundsMs.
 
 const COLUMNS: TableColumnMap = {
   name: { sql: "name", type: "text", operators: ["eq", "ne", "like", "in", "is_null", "is_not_null"], sortable: true },
@@ -69,22 +77,34 @@ function dayBoundsMs(day: string): [number, number] {
 function matchesRule(value: unknown, operator: string, target: unknown, columnType?: string): boolean {
   switch (operator) {
     case "eq": {
-      if (columnType === "date" && typeof target === "string" && DATE_ONLY.test(target.trim())) {
-        const valueMs = parseDateMs(value);
-        if (valueMs !== null) {
-          const [start, end] = dayBoundsMs(target.trim());
-          return valueMs >= start && valueMs < end;
+      if (columnType === "date" && typeof target === "string") {
+        if (DATE_ONLY.test(target.trim())) {
+          const valueMs = parseDateMs(value);
+          if (valueMs !== null) {
+            const [start, end] = dayBoundsMs(target.trim());
+            return valueMs >= start && valueMs < end;
+          }
+        } else {
+          const valueMs = parseDateMs(value);
+          const targetMs = parseDateMs(target);
+          if (valueMs !== null && targetMs !== null) return valueMs === targetMs;
         }
       }
       return String(value ?? "") === String(target);
     }
     case "ne": {
-      if (columnType === "date" && typeof target === "string" && DATE_ONLY.test(target.trim())) {
+      if (columnType === "date" && typeof target === "string") {
         if (value === null || value === undefined || value === "") return true;
-        const valueMs = parseDateMs(value);
-        if (valueMs !== null) {
-          const [start, end] = dayBoundsMs(target.trim());
-          return !(valueMs >= start && valueMs < end);
+        if (DATE_ONLY.test(target.trim())) {
+          const valueMs = parseDateMs(value);
+          if (valueMs !== null) {
+            const [start, end] = dayBoundsMs(target.trim());
+            return !(valueMs >= start && valueMs < end);
+          }
+        } else {
+          const valueMs = parseDateMs(value);
+          const targetMs = parseDateMs(target);
+          if (valueMs !== null && targetMs !== null) return valueMs !== targetMs;
         }
       }
       return String(value ?? "") !== String(target);
@@ -214,18 +234,15 @@ const CASES: { label: string; filters: ParsedFilter[] }[] = [
   // C1: date-only eq/ne/between must select the whole day, not the single midnight instant a
   // bare comparison would. Rows 1+2 fall on 2026-08-06, row 4 is the very next midnight, row 5 is
   // the day before, and row 3 has a null occurredAt (exercises ne's null-still-included rule).
-  //
-  // NOT covered here: eq/ne with a *full timestamp* value on a date column. That falls through to
-  // the plain `coalesce(col::text, '')` comparison, unchanged by this fix and out of scope for
-  // it — the studio DatePicker only ever emits a date-only value, so no caller reaches that path
-  // today. It is also a separate, pre-existing bug: `timestamptz::text` on live Postgres renders
-  // as `2026-08-06 01:18:19.491+00` (space, `+00`, no `Z`), which a client ISO string can never
-  // equal either — measured live, not fixed here, and pg-mem cannot even run that comparison
-  // ("cannot cast type timestamp with time zone to text"), so it cannot be asserted in this file.
   { label: "date eq on a date-only value matches the whole day", filters: [{ column: "occurredAt", operator: "eq", value: "2026-08-06", combine: "and" }] },
   { label: "date ne on a date-only value excludes the whole day but keeps null", filters: [{ column: "occurredAt", operator: "ne", value: "2026-08-06", combine: "and" }] },
   { label: "date between with date-only bounds includes the end day in full", filters: [{ column: "occurredAt", operator: "between", value: ["2026-08-06", "2026-08-06"], combine: "and" }] },
   { label: "date between spanning multiple date-only days", filters: [{ column: "occurredAt", operator: "between", value: ["2026-08-05", "2026-08-06"], combine: "and" }] },
+  // C1 fix: eq/ne with a *full timestamp* value on a date column is reachable — the CLI's
+  // `--where` flag passes a raw value straight through parseTableQuery, which accepts any
+  // PG_DATE-shaped string, not just DATE_ONLY. Row 1 is the only row at this exact instant.
+  { label: "date eq on a full-timestamp value matches only that instant", filters: [{ column: "occurredAt", operator: "eq", value: "2026-08-06T01:18:19.491Z", combine: "and" }] },
+  { label: "date ne on a full-timestamp value excludes only that instant but keeps null", filters: [{ column: "occurredAt", operator: "ne", value: "2026-08-06T01:18:19.491Z", combine: "and" }] },
 ];
 
 describe("client and SQL filters select the same rows", () => {
