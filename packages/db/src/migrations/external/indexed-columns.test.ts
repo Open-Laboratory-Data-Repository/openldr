@@ -16,6 +16,11 @@ import { collectCompiledSql } from './compile-test-helpers';
 // (`longtext` on MySQL, `nvarchar(max)` on MSSQL). It does not parse TypeScript source: the
 // compiled SQL is a small, uniform grammar Kysely itself generates, so it is far less fragile than
 // guessing at each migration file's local variable names.
+//
+// Boundary: this only recognises `create index`, including its `unique` and `if not exists`
+// forms. `addPrimaryKeyConstraint` and a `primaryKey()` column modifier also create an index on
+// most engines, and neither is covered. A migration relying on either for a LOB column gets no
+// protection from this test.
 const IDENT = '["`]';
 const TYPE_TOKEN = '[a-zA-Z][a-zA-Z0-9]*(?:\\([a-zA-Z0-9]+\\))?';
 const LOB_TYPE = /^(n?var)?(long)?text$|max\)$/i;
@@ -62,7 +67,7 @@ function indexedColumnTypes(compiledSql: string[]): { table: string; column: str
       ))
     ) {
       columnsOf(m[1]).set(m[2], m[3]);
-    } else if ((m = stmt.match(new RegExp(`^create index ${IDENT}\\w+${IDENT} on ${IDENT}(\\w+)${IDENT}\\s*\\(`)))) {
+    } else if ((m = stmt.match(new RegExp(`^create (?:unique )?index (?:if not exists )?${IDENT}\\w+${IDENT} on ${IDENT}(\\w+)${IDENT}\\s*\\(`)))) {
       const table = m[1];
       const openIndex = stmt.indexOf('(', m.index! + m[0].length - 1);
       const body = parenBody(stmt, openIndex);

@@ -10,7 +10,7 @@ import {
   PostgresIntrospector,
   PostgresQueryCompiler,
 } from 'kysely';
-import type { CompiledQuery, DatabaseConnection, QueryResult } from 'kysely';
+import type { CompiledQuery, DatabaseConnection, Driver, QueryResult } from 'kysely';
 import type { TargetEngine } from '../../engine';
 
 // Kysely's own DummyDriver pattern (see its JSDoc: "build a query and compile it to SQL... trying
@@ -30,7 +30,7 @@ class RecordingConnection implements DatabaseConnection {
   }
 }
 
-class RecordingDriver {
+class RecordingDriver implements Driver {
   constructor(private readonly log: string[]) {}
   async init(): Promise<void> {}
   async acquireConnection(): Promise<RecordingConnection> {
@@ -41,9 +41,6 @@ class RecordingDriver {
   async rollbackTransaction(): Promise<void> {}
   async releaseConnection(): Promise<void> {}
   async destroy(): Promise<void> {}
-  async releaseSavepoint(): Promise<void> {}
-  async rollbackToSavepoint(): Promise<void> {}
-  async savepoint(): Promise<void> {}
 }
 
 function dialectFor(engine: TargetEngine) {

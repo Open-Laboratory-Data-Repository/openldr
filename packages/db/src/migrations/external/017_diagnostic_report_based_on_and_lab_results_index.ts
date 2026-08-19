@@ -28,9 +28,14 @@ import { keyType } from './dialect';
 // and the same 255/450-char widths, before indexing. Postgres needs no widening; `keyType` and
 // `textType` are both `text` there.
 //
-// This widening only ADDS room, so it cannot truncate or reject an existing value. Measured
-// 2026-08-19 on the current warehouse: the longest existing `lab_results.request_id` is 22
-// characters, well inside keyType's narrowest width (255 on MySQL).
+// This widening only ADDS room, so it cannot truncate or reject an existing value. The argument
+// holds on every install, not just the one measured: `lab_results.request_id` stores a
+// ServiceRequest **id**, not the site's own request_id column (see report-seeds.ts's own warning
+// on this), and that id is `lab_requests.id`, already `keyType` (003_v2_core.ts:38). A
+// `request_id` longer than keyType's width could only be an orphan, referencing a `lab_requests.id`
+// that cannot exist at that width on that same engine. Measured 2026-08-19 on the current
+// warehouse as supporting evidence, not the whole argument: the longest existing
+// `lab_results.request_id` is 22 characters, well inside keyType's narrowest width (255 on MySQL).
 //
 // MySQL and MSSQL need different Kysely calls for "change a column's type", not just different
 // dialect strings. MySQL only supports `MODIFY COLUMN`; `ALTER COLUMN ... TYPE` is not valid MySQL
