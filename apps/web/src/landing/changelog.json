@@ -6,6 +6,54 @@
       "version": null,
       "entries": [
         {
+          "hash": "7975cdc5",
+          "type": "fix",
+          "scope": "reports",
+          "title": "Drop the now-dead Time zone filter from the transmission grids"
+        },
+        {
+          "hash": "658d2897",
+          "type": "fix",
+          "scope": "reports",
+          "title": "Bucket both transmission grids by clinical date on all three dialects"
+        },
+        {
+          "hash": "ea82cedd",
+          "type": "fix",
+          "scope": "reports",
+          "title": "Normalise the month, drop the redundant null filter (postgres grid)"
+        },
+        {
+          "hash": "2fd6cf30",
+          "type": "fix",
+          "scope": "reports",
+          "title": "Bucket the HVL/EID transmission grid by clinical date (postgres)"
+        },
+        {
+          "hash": "3defbf1e",
+          "type": "fix",
+          "scope": "db",
+          "title": "Widen the index guard's regex, strengthen the width argument, trim the recording driver"
+        },
+        {
+          "hash": "b99a979a",
+          "type": "fix",
+          "scope": "db",
+          "title": "Widen lab_results.request_id before indexing it, rename migration, guard the rule"
+        },
+        {
+          "hash": "64003949",
+          "type": "fix",
+          "scope": "db",
+          "title": "Close review findings on the DiagnosticReport.basedOn slice"
+        },
+        {
+          "hash": "fb03f33f",
+          "type": "feat",
+          "scope": "db",
+          "title": "Project DiagnosticReport.basedOn so a report attributes to one request"
+        },
+        {
           "hash": "5cc58a40",
           "type": "fix",
           "scope": "config",
