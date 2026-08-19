@@ -28,6 +28,7 @@
     "@openldr/reporting": "workspace:*",
     "@openldr/forms": "workspace:*",
     "@openldr/report-designer": "workspace:*",
+    "@openldr/table-query": "workspace:*",
     "commander": "^12.1.0",
     "cpu-features": "^0.0.10",
     "pdfkit": "^0.15.0",
