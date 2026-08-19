@@ -6,6 +6,30 @@
       "version": "v0.1.2",
       "entries": [
         {
+          "hash": "ae95079d",
+          "type": "fix",
+          "scope": "update-verdict",
+          "title": "Restore CLI failure line, pin the verdict agreement test, close two test gaps"
+        },
+        {
+          "hash": "99e4ca24",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Say whether this install is the latest, not only when it is not"
+        },
+        {
+          "hash": "221b8a72",
+          "type": "feat",
+          "scope": "cli",
+          "title": "Name the state when the check cannot confirm or never ran"
+        },
+        {
+          "hash": "7a5d0d32",
+          "type": "feat",
+          "scope": "core",
+          "title": "One shared verdict for where an install stands"
+        },
+        {
           "hash": "0c9afa82",
           "type": "fix",
           "scope": "cli",
