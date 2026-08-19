@@ -177,6 +177,16 @@ export async function down(db: Kysely<unknown>): Promise<void> {
 
 ⚠ Open `015_facility_map_performer_system.ts` and `016_ingest_events.ts` before writing this. If either spells `createIndex` or `dropIndex` differently for cross-engine reasons, match them rather than the sketch above.
 
+⛔ **CORRECTION, found in code-quality review on 2026-08-19. The sketch above is wrong twice.**
+
+First, `dropIndex(...).on(table)` compiles to `drop index x on t` on every dialect in Kysely 0.28.17. There is no dialect override; `visitDropIndex` exists only at `dist/cjs/query-compiler/default-query-compiler.js:685`. Postgres has no `ON` clause there, so `down()` needs an `engine` parameter and must skip `.on()` for Postgres. Register it as `down: (db) => m017.down(db, engine)`, the pattern `007_drop_thin_rename_v2.ts` already uses.
+
+Second, and worse, `lab_results.request_id` is declared `textType(engine)` at `003_v2_core.ts:52`. That is `longtext` on MySQL and `nvarchar(max)` on SQL Server, and neither can be an index key column. MySQL raises error 1170 and SQL Server raises Msg 1919, so the migration as sketched blocks boot on two of three supported targets. MySQL DDL is not transactional either, so a failure there leaves the column committed while the migration stays unrecorded, and a re-run then fails on a duplicate column.
+
+The rule is already written down in this repo, at `011_terminology_codes.ts:23-28`. Indexed columns use `keyType`, never `textType`.
+
+So `up()` must widen `lab_results.request_id` to `keyType(engine)` engine-conditionally before creating its index. Measure the longest existing value first and refuse rather than truncate. `based_on_id` is unaffected because it already uses `keyType`.
+
 - [ ] **Step 8: Register it**
 
 In `packages/db/src/migrations/external/index.ts`, beside the line 18 import and the line 37 entry:
@@ -378,7 +388,11 @@ Run `explain analyze` over the rewritten CTE with `month` set to `2013-06` and t
 docker exec openldr_ce-postgres-1 psql -U openldr -d openldr_target
 ```
 
-Expected: index scans on `lab_results_request_idx` and `diagnostic_reports_based_on_idx`, and no sequential scan on `lab_results`. If `diagnostic_reports` is sequentially scanned for the `batch_id` join and dominates the runtime, add `create index diagnostic_reports_batch_idx on diagnostic_reports (batch_id);` to migration 017 and its `down`, then re-run Task 1 steps 10 and 11. Decide from the plan output, not from expectation.
+Expected: index scans on `lab_results_request_idx` and `diagnostic_reports_based_on_idx`, and no sequential scan on `lab_results`.
+
+If `diagnostic_reports` is sequentially scanned for the `batch_id` join and dominates the runtime, an index on `batch_id` is the fix. ⛔ It is not a one-liner. `diagnostic_reports.batch_id` is `textType` like `lab_results.request_id` was, so it cannot be indexed without the same `keyType` widening described in Task 1's correction, and for the same reason on MySQL and SQL Server. Do the widening and the index together in a new migration, not by appending to 017 once 017 has been applied anywhere.
+
+Decide from the plan output, not from expectation. A sequential scan of 23,285 rows may well be cheap enough to leave alone, and widening an index without measurement is what `015` explicitly refuses to do.
 
 - [ ] **Step 6: Commit**
 
