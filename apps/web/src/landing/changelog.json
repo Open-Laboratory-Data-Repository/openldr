@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "c311698c",
+          "type": "fix",
+          "scope": "docs",
+          "title": "AUTH_DEV_BYPASS defaults to off everywhere, not on outside production"
+        },
+        {
           "hash": "95e1b276",
           "type": "fix",
           "scope": "config",
