@@ -8,11 +8,18 @@ import { redactError } from './redact-error';
 
 /**
  * What version is this CLI running? There is no `readAppVersion` reachable from `packages/cli`
- * (the one at `apps/server/src/version.ts` is app-local and not exported), so this reads the
- * repo root `package.json` the same way that one does: walk up from this module looking for a
- * `version` field, working in both dev (`packages/cli/src`) and the bundled CLI (`dist`).
+ * (the one at `apps/server/src/version.ts` is app-local and not exported), so this mirrors it:
+ * prefer `APP_VERSION`, else walk up from this module looking for a `version` field, working in
+ * both dev (`packages/cli/src`) and the bundled CLI (`dist`).
+ *
+ * ⛔ The env check is not optional, and it must stay FIRST. Inside the image the walk finds
+ * /app/cli/package.json — @openldr/cli's OWN version, not the release. Measured on a live 0.1.2
+ * install with APP_VERSION=0.1.0: the server reported 0.1.0 and this reported 0.1.2, so
+ * `openldr update check` and the studio About card disagreed about the same install. Both read
+ * the same cached manifest, so the running number is the only thing that can drift.
  */
 export function runningVersion(): string {
+  if (process.env.APP_VERSION) return process.env.APP_VERSION;
   const here = dirname(fileURLToPath(import.meta.url));
   const candidates = [
     resolve(here, '../../../package.json'), // dev: packages/cli/src -> repo root

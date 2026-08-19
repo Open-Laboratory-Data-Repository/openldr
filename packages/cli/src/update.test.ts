@@ -4,7 +4,7 @@ const mocks = vi.hoisted(() => ({ createAppContext: vi.fn(), loadConfig: vi.fn((
 vi.mock('@openldr/config', () => ({ loadConfig: mocks.loadConfig }));
 vi.mock('@openldr/bootstrap', () => ({ createAppContext: mocks.createAppContext }));
 
-import { renderUpdateCheck, runUpdateCheck, UPDATE_ERROR_EXIT } from './update';
+import { renderUpdateCheck, runUpdateCheck, runningVersion, UPDATE_ERROR_EXIT } from './update';
 import type { UpdateState } from '@openldr/bootstrap';
 
 const state = (over: Partial<UpdateState> = {}): UpdateState => ({
@@ -100,5 +100,26 @@ describe('runUpdateCheck exit codes', () => {
     });
     await expect(runUpdateCheck({ json: false })).resolves.toBe(1);
     expect(close).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('runningVersion', () => {
+  afterEach(() => { delete process.env.APP_VERSION; });
+
+  it('prefers APP_VERSION over any package.json it can find', () => {
+    process.env.APP_VERSION = '9.9.9-test';
+    expect(runningVersion()).toBe('9.9.9-test');
+  });
+
+  // Inside the image the walk lands on @openldr/cli's own package.json, which is NOT the release.
+  // Without the env override this reported 0.1.2 on an install the server called 0.1.0.
+  it('falls back to a walked-up package.json when APP_VERSION is unset', () => {
+    delete process.env.APP_VERSION;
+    expect(runningVersion()).toMatch(/^\d+\.\d+\.\d+/);
+  });
+
+  it('ignores an empty APP_VERSION rather than reporting an empty version', () => {
+    process.env.APP_VERSION = '';
+    expect(runningVersion()).toMatch(/^\d+\.\d+\.\d+/);
   });
 });
