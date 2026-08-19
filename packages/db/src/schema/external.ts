@@ -87,6 +87,13 @@ export interface DiagnosticReportsTable extends ProvenanceColumns {
   issued: string | null;
   effective: string | null;
   conclusion: string | null;
+  /** `DiagnosticReport.basedOn[0]`, the ServiceRequest this report answers. Attributes a report's
+   *  `issued` to one request instead of to a whole submission batch. Mirrors
+   *  `observations.request_id` and `questionnaire_responses.based_on_id`, which project the same
+   *  field. Null when the sender omits `basedOn`. ⛔ NOT interchangeable with `id`. Those two
+   *  coincide for the CDR/DISA source, which mints one obrId for both resources, and for no other
+   *  reason. */
+  based_on_id: string | null;
   /** The facility MATCH KEY, from `DiagnosticReport.performer[0]` — the only facility dimension the
    *  CDR/DISA source actually supplies (`patients.managing_organization` is never set by it).
    *  Prefers `performer[0].identifier.value` (a FHIR logical reference — the correct match key for

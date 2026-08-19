@@ -16,6 +16,7 @@ import * as m013 from './013_diagnostic_report_performer_identity';
 import * as m014 from './014_facility_location';
 import * as m015 from './015_facility_map_performer_system';
 import * as m016 from './016_ingest_events';
+import * as m017 from './017_diagnostic_report_based_on';
 
 export function externalMigrations(engine: TargetEngine): Record<string, Migration> {
   return {
@@ -35,5 +36,6 @@ export function externalMigrations(engine: TargetEngine): Record<string, Migrati
     '014_facility_location': { up: (db) => m014.up(db, engine), down: m014.down },
     '015_facility_map_performer_system': { up: (db) => m015.up(db, engine), down: m015.down },
     '016_ingest_events': { up: (db) => m016.up(db, engine), down: m016.down },
+    '017_diagnostic_report_based_on': { up: (db) => m017.up(db, engine), down: (db) => m017.down(db, engine) },
   };
 }
