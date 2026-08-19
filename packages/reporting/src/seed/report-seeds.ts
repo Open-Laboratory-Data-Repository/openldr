@@ -2227,8 +2227,8 @@ where exists (select 1 from isolates)
     // trailing columns EMPTY rather than shifting cells left — 'days' is the left side of the
     // cross join, so a short month simply produces fewer 'n' values.
     //
-    // ⛔ The postgres variant buckets on the source's own local date. The mssql and mysql
-    // variants still bucket ingest arrival in {{param.tz}} until Task 4 ports them.
+    // ⛔ All three variants bucket on the source's own local CLINICAL date: registered, then
+    // tested, then authorised. None reads ingest arrival and none converts a timezone.
     params: [
       { id: 'month', label: 'Month (YYYY-MM)', type: 'text', required: true },
       { id: 'panels', label: 'HVL/EID panel codes (comma separated)', type: 'text', required: true },
@@ -2385,7 +2385,17 @@ from grid
 group by lab
 order by ord, lab`,
       mssql: `with month_start as (
-  select cast({{param.month}} + '-01' as date) as d
+  -- ⛔ 'ym' is the NORMALISED month. Every string test below compares against it, never against
+  -- the raw parameter. 'month' is free text with no shape check: custom-query-run.ts:14 validates
+  -- only daterange, and RunParamsSheet.tsx:53 renders a plain input. Typed '2017-8' the cast still
+  -- yields 2017-08-01, so 'days' builds a correct August header, but a raw left(ts, 7) = '2017-8'
+  -- matches nothing and the grid prints that header above ZERO laboratories. A reader concludes no
+  -- laboratory transmitted all month. Normalising makes a loose month answer like a strict one.
+  -- ⛔ format(..., 'en-US') is the T-SQL stand-in for postgres to_char(..., 'YYYY-MM'). Pinning the
+  -- culture keeps 'yyyy-MM' Gregorian ASCII digits whatever the server language is set to. It is
+  -- the same call and the same culture the date header row at the bottom of this query uses.
+  select cast({{param.month}} + '-01' as date) as d,
+         format(cast({{param.month}} + '-01' as date), 'yyyy-MM', 'en-US') as ym
 ),
 all_days as (
   -- T-SQL has no generate_series. Recursive CTE, carrying the month's first day so the recursive
@@ -2404,50 +2414,73 @@ days as (
   where datediff(day, '19000101', cal_day) % 7 between 0 and 4
 ),
 arrivals as (
-  -- ⛔ 'distinct' is LOAD-BEARING — see the postgres variant. The batch join fans out up to 15x.
-  select distinct
-    coalesce(fm.name, d.performer_display, d.performer, '(unknown)') as lab,
-    -- ⛔ Bucket in the CIVIL timezone. recorded_at is datetime2 holding UTC, so it is anchored to
-    -- UTC first and then converted.
-    -- ⛔ HONEST NON-PROOF: SQL Server takes WINDOWS zone names ('E. Africa Standard Time') where
-    -- Postgres and MySQL take IANA ('Africa/Dar_es_Salaam'). ONE lab.timezone value therefore
-    -- cannot be valid on all three engines. lab.timezone accepts IANA only
-    -- (packages/config/src/lab-identity.ts isValidIanaZone), so on a SQL Server warehouse the
-    -- setting cannot supply this value — the zone must be typed into the run's own Time zone box.
-    -- ⛔ HONEST NON-PROOF, LARGER: this SQL HAS NEVER BEEN PARSED BY SQL SERVER. No MSSQL
-    -- warehouse was executed for this query, and the only checks on it are regexes over the SQL
-    -- TEXT, which by construction cannot see a syntax error. A syntax error would ship undetected.
-    -- Two constructs here are new to this repo's seeded SQL and are where such an error would sit:
-    -- the recursive 'all_days' CTE, and that CTE running under 'set rowcount N'
-    -- (packages/dashboards/src/sql-runner.ts:54) — a combination no seeded query has used before.
-    -- What would prove it: submitting both variants to a real SQL Server, even just to parse.
-    cast(e.recorded_at at time zone 'UTC' at time zone {{param.tz}} as date) as cal_day
-  from ingest_events e
-  join lab_requests q on q.id = e.resource_id
-  -- ⛔ Attribute through the SUBMISSION BATCH, never through lab_results.specimen_id — see the
-  -- postgres variant for the 868 requests the specimen route drops.
-  join diagnostic_reports d on d.batch_id = q.batch_id
-  left join facility_map fm
-    on fm.source_system = coalesce(d.source_system, '')
-   and fm.performer_system = coalesce(d.performer_system, '')
-   and fm.source_code = d.performer
-  cross join month_start m
-  where e.resource_type = 'ServiceRequest'
-    -- Sargable bound so the (recorded_at, resource_type) index is usable, widened by two days.
-    and e.recorded_at >= dateadd(day, -2, m.d)
-    and e.recorded_at < dateadd(day, 2, dateadd(month, 1, m.d))
-    -- ...and the EXACT month bound in the civil zone, so a lab absent from the month is absent
-    -- from the grid rather than drawn as a blank row.
-    and cast(e.recorded_at at time zone 'UTC' at time zone {{param.tz}} as date) >= m.d
-    and cast(e.recorded_at at time zone 'UTC' at time zone {{param.tz}} as date) < dateadd(month, 1, m.d)
-    -- The panel list is a RUN-TIME parameter (AGENTS.md §8) — no code is written here.
-    -- ⛔ An EMPTY panels value NEVER REACHES THIS SQL — 'panels' is required and substituteParams
-    -- throws first (packages/dashboards/src/custom-query-run.ts:33). T-SQL's string_split('', ',')
-    -- behaviour is not a branch this query has. An empty HVL/EID grid means the codes supplied do
-    -- not match the codes this laboratory sends.
+  -- One row per (laboratory, day) that laboratory showed activity on, for the requested month.
+  -- Same ladder as the postgres variant: registered, then tested, then authorised. One mark per
+  -- request per month, NOT one per event, because coalesce stops at its first non-null.
+  --
+  -- ⛔ Do NOT bucket on ingest arrival. A bulk backfill lands months of clinical work on one
+  -- calendar day, and the grid then reports laboratories as transmitting in a month they were not.
+  --
+  -- ⛔ The month test is a STRING comparison on 'YYYY-MM'. These columns hold ISO 8601 text
+  -- carrying the source's own offset, so left(ts, 10) is the laboratory's local day and needs no
+  -- conversion. There is no timezone conversion left in this query, and none should come back: a
+  -- historical cell must read as the same day for every reader.
+  --
+  -- ⛔ cast(left(ts, 10) as date) RAISES on anything shorter than a full date, which matches
+  -- postgres and is the wanted behaviour. A silent NULL would print a blank cell for a laboratory
+  -- that did transmit, the exact false negative this report exists to prevent.
+  -- ⛔ The target type is 'date', NOT 'datetime'. T-SQL reads 'YYYY-MM-DD' into a date the same
+  -- way whatever SET LANGUAGE and SET DATEFORMAT say; into a datetime it does not. Swapping the
+  -- type here would make the day a server setting on some languages, silently.
+  --
+  -- ⛔ HONEST NON-PROOF: this SQL HAS NEVER BEEN PARSED BY SQL SERVER. No MSSQL warehouse was
+  -- executed for this query, and the only checks on it are regexes over the SQL TEXT, which by
+  -- construction cannot see a syntax error. The ladder below is a fresh rewrite, so it is newly
+  -- unproven on top of that. Three constructs are where such an error would sit: the recursive
+  -- 'all_days' CTE, that CTE running under 'set rowcount N'
+  -- (packages/dashboards/src/sql-runner.ts:54), and the derived table 'clinical' feeding a
+  -- select distinct. What would prove it: submitting both variants to a real SQL Server, even
+  -- just to parse.
+  select distinct clinical.lab, cast(left(clinical.ts, 10) as date) as cal_day
+  from (
+    select
+      coalesce(fm.name, d.performer_display, d.performer, '(unknown)') as lab,
+      coalesce(
+        case when left(q.authored_at, 7) = (select ym from month_start) then q.authored_at end,
+        (select min(r.result_timestamp) from lab_results r
+          where r.request_id = q.id and left(r.result_timestamp, 7) = (select ym from month_start)),
+        (select min(dr.issued) from diagnostic_reports dr
+          where dr.based_on_id = q.id and left(dr.issued, 7) = (select ym from month_start))
+      ) as ts
+    from lab_requests q
+    -- ⛔ Attribute the LABORATORY through the SUBMISSION BATCH, never through
+    -- lab_results.specimen_id. See the postgres variant for the requests the specimen route drops.
+    -- ⛔ 'distinct' above is LOAD-BEARING, not decoration. The batch join fans out once per
+    -- diagnostic_reports row on the batch, up to 18x.
+    join diagnostic_reports d on d.batch_id = q.batch_id
+    left join facility_map fm
+      on fm.source_system = coalesce(d.source_system, '')
+     and fm.performer_system = coalesce(d.performer_system, '')
+     and fm.source_code = d.performer
+    -- Cheap month gate before the coalesce, mirroring the prior system's three-way OR. Without it
+    -- the batch join runs over every request ever loaded rather than over the month's.
+    where (
+         left(q.authored_at, 7) = (select ym from month_start)
+      or exists (select 1 from lab_results r
+                  where r.request_id = q.id and left(r.result_timestamp, 7) = (select ym from month_start))
+      or exists (select 1 from diagnostic_reports dr
+                  where dr.based_on_id = q.id and left(dr.issued, 7) = (select ym from month_start))
+    )
+    -- The panel list is a RUN-TIME parameter (AGENTS.md §8), no code is written here.
+    -- ⛔ An EMPTY panels value NEVER REACHES THIS SQL. 'panels' is declared required, and
+    -- substituteParams throws 'required parameter: panels' on '' or null before any SQL is built
+    -- (packages/dashboards/src/custom-query-run.ts:33). A run with a blank filter is an ERROR the
+    -- operator sees, not an empty grid. An HVL/EID grid that comes out empty means the codes
+    -- supplied do not match the codes this laboratory actually sends.
     -- coalesce(panel_code, '') so a NULL panel is a real value on both sides: without it
     -- 'null not in (...)' is NULL and a request with no panel would vanish from BOTH grids.
-    and coalesce(q.panel_code, '') in (select ltrim(rtrim(value)) from string_split({{param.panels}}, ','))
+      and coalesce(q.panel_code, '') in (select ltrim(rtrim(value)) from string_split({{param.panels}}, ','))
+  ) clinical
 ),
 labs as (select distinct lab from arrivals),
 -- The CROSS JOIN makes a silent day render blank IN PLACE rather than shifting later days left.
@@ -2512,7 +2545,17 @@ from grid
 group by lab
 order by ord, lab`,
       mysql: `with recursive month_start as (
-  select cast(concat({{param.month}}, '-01') as date) as d
+  -- ⛔ 'ym' is the NORMALISED month. Every string test below compares against it, never against
+  -- the raw parameter. 'month' is free text with no shape check: custom-query-run.ts:14 validates
+  -- only daterange, and RunParamsSheet.tsx:53 renders a plain input. Typed '2017-8' the cast still
+  -- yields 2017-08-01, so 'days' builds a correct August header, but a raw left(ts, 7) = '2017-8'
+  -- matches nothing and the grid prints that header above ZERO laboratories. A reader concludes no
+  -- laboratory transmitted all month. Normalising makes a loose month answer like a strict one.
+  -- ⛔ '%m' is the ZERO-PADDED NUMERIC month, NOT '%M' the month name, and '%Y' is the four-digit
+  -- year. Neither reads lc_time_names, so this returns the same string on every server. That is
+  -- the MySQL stand-in for postgres to_char(..., 'YYYY-MM').
+  select cast(concat({{param.month}}, '-01') as date) as d,
+         date_format(cast(concat({{param.month}}, '-01') as date), '%Y-%m') as ym
 ),
 panel_list as (
   -- ⛔ NOT find_in_set(). MySQL has no string_split/unnest, and find_in_set over the raw parameter
@@ -2558,49 +2601,70 @@ days as (
   where weekday(cal_day) between 0 and 4
 ),
 arrivals as (
-  -- ⛔ 'distinct' is LOAD-BEARING — see the postgres variant. The batch join fans out up to 15x.
-  select distinct
-    coalesce(fm.name, d.performer_display, d.performer, '(unknown)') as lab,
-    -- ⛔ Bucket in the CIVIL timezone. recorded_at is a naive datetime holding UTC.
-    -- ⛔ HONEST NON-PROOF: convert_tz returns NULL unless the server's zone tables are loaded
-    -- (mysql_tzinfo_to_sql). An offset like '+03:00' works without them, an IANA name does not.
-    -- ⛔ The blast radius is the WHOLE REPORT, not one row. Both civil-zone bounds below are
-    -- convert_tz calls, so with no zone tables every comparison is NULL for every row: 'arrivals'
-    -- comes out empty, 'labs' comes out empty, and the grid draws its date header with ZERO
-    -- laboratories — indistinguishable from a month in which nothing arrived. Nothing errors.
-    -- ⛔ HONEST NON-PROOF, LARGER: this SQL HAS NEVER BEEN PARSED BY MySQL. No MySQL warehouse
-    -- was executed for this query, and the only checks on it are regexes over the SQL TEXT, which
-    -- by construction cannot see a syntax error. A syntax error would ship undetected. The two
-    -- recursive CTEs here ('all_days' and 'panel_list') are new to this repo's seeded SQL and are
-    -- where such an error would sit. What would prove it: submitting both variants to a real
-    -- MySQL/MariaDB, even just to parse.
-    cast(convert_tz(e.recorded_at, '+00:00', {{param.tz}}) as date) as cal_day
-  from ingest_events e
-  join lab_requests q on q.id = e.resource_id
-  -- ⛔ Attribute through the SUBMISSION BATCH, never through lab_results.specimen_id — see the
-  -- postgres variant for the 868 requests the specimen route drops.
-  join diagnostic_reports d on d.batch_id = q.batch_id
-  left join facility_map fm
-    on fm.source_system = coalesce(d.source_system, '')
-   and fm.performer_system = coalesce(d.performer_system, '')
-   and fm.source_code = d.performer
-  cross join month_start m
-  where e.resource_type = 'ServiceRequest'
-    -- Sargable bound so the (recorded_at, resource_type) index is usable, widened by two days.
-    and e.recorded_at >= date_sub(m.d, interval 2 day)
-    and e.recorded_at < date_add(date_add(m.d, interval 1 month), interval 2 day)
-    -- ...and the EXACT month bound in the civil zone, so a lab absent from the month is absent
-    -- from the grid rather than drawn as a blank row.
-    and cast(convert_tz(e.recorded_at, '+00:00', {{param.tz}}) as date) >= m.d
-    and cast(convert_tz(e.recorded_at, '+00:00', {{param.tz}}) as date) < date_add(m.d, interval 1 month)
-    -- The panel list is a RUN-TIME parameter (AGENTS.md §8) — no code is written here.
-    -- ⛔ An EMPTY panels value NEVER REACHES THIS SQL — 'panels' is required and substituteParams
-    -- throws first (packages/dashboards/src/custom-query-run.ts:33). What the panel_list split
-    -- would make of '' is not a branch this query has. An empty HVL/EID grid means the codes
-    -- supplied do not match the codes this laboratory sends.
+  -- One row per (laboratory, day) that laboratory showed activity on, for the requested month.
+  -- Same ladder as the postgres variant: registered, then tested, then authorised. One mark per
+  -- request per month, NOT one per event, because coalesce stops at its first non-null.
+  --
+  -- ⛔ Do NOT bucket on ingest arrival. A bulk backfill lands months of clinical work on one
+  -- calendar day, and the grid then reports laboratories as transmitting in a month they were not.
+  --
+  -- ⛔ The month test is a STRING comparison on 'YYYY-MM'. These columns hold ISO 8601 text
+  -- carrying the source's own offset, so left(ts, 10) is the laboratory's local day and needs no
+  -- conversion. There is no timezone conversion left in this query, and none should come back: a
+  -- historical cell must read as the same day for every reader.
+  --
+  -- ⚠ ONE REAL DIVERGENCE FROM POSTGRES, disclosed rather than hidden. On a malformed timestamp
+  -- postgres RAISES on cast(left(ts, 10) as date); MySQL returns NULL and only warns, because
+  -- strict mode does not apply to a SELECT. The row then joins nothing and the cell prints blank.
+  -- So a laboratory that did transmit can read as silent here where postgres would have stopped
+  -- the run. Fixing it means a shape test on the column, which is a separate decision.
+  --
+  -- ⛔ HONEST NON-PROOF: this SQL HAS NEVER BEEN PARSED BY MySQL. No MySQL warehouse was executed
+  -- for this query, and the only checks on it are regexes over the SQL TEXT, which by construction
+  -- cannot see a syntax error. The ladder below is a fresh rewrite, so it is newly unproven on top
+  -- of that. Three constructs are where such an error would sit: the two recursive CTEs
+  -- ('all_days' and 'panel_list'), and the derived table 'clinical' feeding a select distinct.
+  -- What would prove it: submitting both variants to a real MySQL/MariaDB, even just to parse.
+  select distinct clinical.lab, cast(left(clinical.ts, 10) as date) as cal_day
+  from (
+    select
+      coalesce(fm.name, d.performer_display, d.performer, '(unknown)') as lab,
+      coalesce(
+        case when left(q.authored_at, 7) = (select ym from month_start) then q.authored_at end,
+        (select min(r.result_timestamp) from lab_results r
+          where r.request_id = q.id and left(r.result_timestamp, 7) = (select ym from month_start)),
+        (select min(dr.issued) from diagnostic_reports dr
+          where dr.based_on_id = q.id and left(dr.issued, 7) = (select ym from month_start))
+      ) as ts
+    from lab_requests q
+    -- ⛔ Attribute the LABORATORY through the SUBMISSION BATCH, never through
+    -- lab_results.specimen_id. See the postgres variant for the requests the specimen route drops.
+    -- ⛔ 'distinct' above is LOAD-BEARING, not decoration. The batch join fans out once per
+    -- diagnostic_reports row on the batch, up to 18x.
+    join diagnostic_reports d on d.batch_id = q.batch_id
+    left join facility_map fm
+      on fm.source_system = coalesce(d.source_system, '')
+     and fm.performer_system = coalesce(d.performer_system, '')
+     and fm.source_code = d.performer
+    -- Cheap month gate before the coalesce, mirroring the prior system's three-way OR. Without it
+    -- the batch join runs over every request ever loaded rather than over the month's.
+    where (
+         left(q.authored_at, 7) = (select ym from month_start)
+      or exists (select 1 from lab_results r
+                  where r.request_id = q.id and left(r.result_timestamp, 7) = (select ym from month_start))
+      or exists (select 1 from diagnostic_reports dr
+                  where dr.based_on_id = q.id and left(dr.issued, 7) = (select ym from month_start))
+    )
+    -- The panel list is a RUN-TIME parameter (AGENTS.md §8), no code is written here.
+    -- ⛔ An EMPTY panels value NEVER REACHES THIS SQL. 'panels' is declared required, and
+    -- substituteParams throws 'required parameter: panels' on '' or null before any SQL is built
+    -- (packages/dashboards/src/custom-query-run.ts:33). A run with a blank filter is an ERROR the
+    -- operator sees, not an empty grid. An HVL/EID grid that comes out empty means the codes
+    -- supplied do not match the codes this laboratory actually sends.
     -- coalesce(panel_code, '') so a NULL panel is a real value on both sides: without it
     -- 'null not in (...)' is NULL and a request with no panel would vanish from BOTH grids.
-    and coalesce(q.panel_code, '') in (select code from panel_list)
+      and coalesce(q.panel_code, '') in (select code from panel_list)
+  ) clinical
 ),
 labs as (select distinct lab from arrivals),
 -- The CROSS JOIN makes a silent day render blank IN PLACE rather than shifting later days left.
@@ -2682,9 +2746,9 @@ order by ord, lab`,
     name: 'LIS Transmission — Other tests',
     connectorId: '',
     // The complement of q-transmission-hvleid: identical shape, panel predicate inverted, so the
-    // two grids PARTITION the month's arrivals — no laboratory-day lands in both or in neither.
-    // Everything else (batch attribution, civil-timezone bucketing, the 23 fixed columns, the
-    // leading date row) is the same; see q-transmission-hvleid for why each is shaped this way.
+    // two grids PARTITION the month. No request lands in both grids or in neither.
+    // Everything else is the same: batch attribution, the clinical-date ladder, the 23 fixed
+    // columns, the leading date row. See q-transmission-hvleid for why each is shaped that way.
     params: [
       { id: 'month', label: 'Month (YYYY-MM)', type: 'text', required: true },
       { id: 'panels', label: 'HVL/EID panel codes (comma separated)', type: 'text', required: true },
@@ -2692,7 +2756,14 @@ order by ord, lab`,
     ],
     sql: {
       postgres: `with month_start as (
-  select cast({{param.month}} || '-01' as date) as d
+  -- ⛔ 'ym' is the NORMALISED month. Every string test below compares against it, never against
+  -- the raw parameter. 'month' is free text with no shape check: custom-query-run.ts:14 validates
+  -- only daterange, and RunParamsSheet.tsx:53 renders a plain input. Typed '2017-8' the cast still
+  -- yields 2017-08-01, so 'days' builds a correct August header, but a raw left(ts, 7) = '2017-8'
+  -- matches nothing and the grid prints that header above ZERO laboratories. A reader concludes no
+  -- laboratory transmitted all month. Normalising makes a loose month answer like a strict one.
+  select cast({{param.month}} || '-01' as date) as d,
+         to_char(cast({{param.month}} || '-01' as date), 'YYYY-MM') as ym
 ),
 days as (
   -- Working days only, Mon-Fri. NO holiday calendar: the reference report shows 1 January 2021, a
@@ -2703,44 +2774,67 @@ days as (
   where extract(isodow from g) between 1 and 5
 ),
 arrivals as (
-  -- ⛔ 'distinct' is LOAD-BEARING, not decoration. One batch holds up to 15 diagnostic_reports
-  -- rows (measured 2026-08-18), so this join fans out 15x. 0 batches carry more than one distinct
-  -- performer, so collapsing the fan-out here is lossless. Deleting 'distinct' would not change
-  -- the marks (max() folds them) but would multiply the rows the cross join below has to chew.
-  select distinct
-    coalesce(fm.name, d.performer_display, d.performer, '(unknown)') as lab,
-    -- ⛔ Bucket in the CIVIL timezone. recorded_at is an instant; 21:00Z is the NEXT day at +03.
-    -- Bucketing in UTC moves a whole evening's arrivals to the previous day, on every cell.
-    (e.recorded_at at time zone {{param.tz}})::date as cal_day
-  from ingest_events e
-  join lab_requests q on q.id = e.resource_id
-  -- ⛔ Attribute through the SUBMISSION BATCH, never through lab_results.specimen_id. The specimen
-  -- route reaches 6,652 of 7,520 requests; the 868 it drops have no results at all and 548 of them
-  -- are EID, so that grid would print almost empty while those laboratories were transmitting.
-  join diagnostic_reports d on d.batch_id = q.batch_id
-  left join facility_map fm
-    on fm.source_system = coalesce(d.source_system, '')
-   and fm.performer_system = coalesce(d.performer_system, '')
-   and fm.source_code = d.performer
-  cross join month_start m
-  where e.resource_type = 'ServiceRequest'
-    -- Sargable bound so the (recorded_at, resource_type) index is usable, widened by two days on
-    -- each side. Two, not one: this raw comparison casts a date to timestamptz at the SESSION zone,
-    -- and session-vs-civil zone can differ by up to 26 hours.
-    and e.recorded_at >= m.d - interval '2 days'
-    and e.recorded_at < m.d + interval '1 month' + interval '2 days'
-    -- ...and the EXACT month bound, in the civil zone. Without it 'labs' below is "every
-    -- laboratory that ever submitted" and a lab absent from this month still gets a blank row.
-    and (e.recorded_at at time zone {{param.tz}})::date >= m.d
-    and (e.recorded_at at time zone {{param.tz}})::date < m.d + interval '1 month'
-    -- The panel list is a RUN-TIME parameter (AGENTS.md §8) — no code is written here.
+  -- One row per (laboratory, day) that laboratory showed activity on, for the requested month.
+  --
+  -- The DAY is the first clinical timestamp falling inside the month: registered, then tested,
+  -- then authorised. One mark per request per month, NOT one per event. A request registered on
+  -- the 3rd and authorised on the 7th marks the 3rd only, because coalesce stops at its first
+  -- non-null. Deliberate, and mirrors the prior system's CASE.
+  --
+  -- ⛔ Do NOT bucket on ingest arrival. A bulk backfill lands months of clinical work on one
+  -- calendar day, and the grid then reports laboratories as transmitting in a month they were not.
+  -- Measured on this warehouse: all 23,517 ServiceRequest ingest events recorded 2026-08-19,
+  -- against 13,192 patients and 13,191 batches whose authored_at spans 2013 to 2019.
+  --
+  -- ⛔ The month test is a STRING comparison on 'YYYY-MM'. These columns hold ISO 8601 text
+  -- carrying the source's own offset, so left(ts, 10) is the laboratory's local day and needs no
+  -- conversion. Converting into a viewer's zone would make one historical cell render as two
+  -- different days for two readers.
+  --
+  -- ⛔ cast(left(ts, 10) as date) RAISES on anything shorter than a full date, and that is the
+  -- wanted behaviour. See q-transmission-hvleid for why, and for the measured column lengths.
+  select distinct clinical.lab, cast(left(clinical.ts, 10) as date) as cal_day
+  from (
+    select
+      coalesce(fm.name, d.performer_display, d.performer, '(unknown)') as lab,
+      coalesce(
+        case when left(q.authored_at, 7) = (select ym from month_start) then q.authored_at end,
+        (select min(r.result_timestamp) from lab_results r
+          where r.request_id = q.id and left(r.result_timestamp, 7) = (select ym from month_start)),
+        (select min(dr.issued) from diagnostic_reports dr
+          where dr.based_on_id = q.id and left(dr.issued, 7) = (select ym from month_start))
+      ) as ts
+    from lab_requests q
+    -- ⛔ Attribute the LABORATORY through the SUBMISSION BATCH, never through
+    -- lab_results.specimen_id. Re-measured 2026-08-19: the specimen route reaches 17,407 of
+    -- 23,285 requests, so it drops 5,878 that have no results at all. Those include EID, which is
+    -- thin here (374 EIDID), and that grid would print almost empty while those labs transmitted.
+    -- ⛔ 'distinct' above is LOAD-BEARING, not decoration. One batch holds up to 18
+    -- diagnostic_reports rows (measured 2026-08-19), so this join fans out 18x. 0 batches carry
+    -- more than one distinct performer, so collapsing the fan-out here is lossless.
+    join diagnostic_reports d on d.batch_id = q.batch_id
+    left join facility_map fm
+      on fm.source_system = coalesce(d.source_system, '')
+     and fm.performer_system = coalesce(d.performer_system, '')
+     and fm.source_code = d.performer
+    -- Cheap month gate before the coalesce, mirroring the prior system's three-way OR. Without it
+    -- the batch join runs over every request ever loaded rather than over the month's.
+    where (
+         left(q.authored_at, 7) = (select ym from month_start)
+      or exists (select 1 from lab_results r
+                  where r.request_id = q.id and left(r.result_timestamp, 7) = (select ym from month_start))
+      or exists (select 1 from diagnostic_reports dr
+                  where dr.based_on_id = q.id and left(dr.issued, 7) = (select ym from month_start))
+    )
+    -- The panel list is a RUN-TIME parameter (AGENTS.md §8), no code is written here.
     -- ⛔ An EMPTY panels value NEVER REACHES THIS SQL. 'panels' is declared required, and
     -- substituteParams throws 'required parameter: panels' on '' or null before any SQL is built
     -- (packages/dashboards/src/custom-query-run.ts:33). So "the Other grid gets everything because
-    -- the list was blank" is not a state this report can be in — do not reason from it.
+    -- the list was blank" is not a state this report can be in, do not reason from it.
     -- coalesce(panel_code, '') so a NULL panel is a real value on both sides: without it
     -- 'null not in (...)' is NULL and a request with no panel would vanish from BOTH grids.
-    and coalesce(q.panel_code, '') not in (select trim(value) from unnest(string_to_array({{param.panels}}, ',')) as value)
+      and coalesce(q.panel_code, '') not in (select trim(value) from unnest(string_to_array({{param.panels}}, ',')) as value)
+  ) clinical
 ),
 labs as (select distinct lab from arrivals),
 -- Every laboratory crossed with every working day, then left-joined to what actually arrived. The
@@ -2806,7 +2900,17 @@ from grid
 group by lab
 order by ord, lab`,
       mssql: `with month_start as (
-  select cast({{param.month}} + '-01' as date) as d
+  -- ⛔ 'ym' is the NORMALISED month. Every string test below compares against it, never against
+  -- the raw parameter. 'month' is free text with no shape check: custom-query-run.ts:14 validates
+  -- only daterange, and RunParamsSheet.tsx:53 renders a plain input. Typed '2017-8' the cast still
+  -- yields 2017-08-01, so 'days' builds a correct August header, but a raw left(ts, 7) = '2017-8'
+  -- matches nothing and the grid prints that header above ZERO laboratories. A reader concludes no
+  -- laboratory transmitted all month. Normalising makes a loose month answer like a strict one.
+  -- ⛔ format(..., 'en-US') is the T-SQL stand-in for postgres to_char(..., 'YYYY-MM'). Pinning the
+  -- culture keeps 'yyyy-MM' Gregorian ASCII digits whatever the server language is set to. It is
+  -- the same call and the same culture the date header row at the bottom of this query uses.
+  select cast({{param.month}} + '-01' as date) as d,
+         format(cast({{param.month}} + '-01' as date), 'yyyy-MM', 'en-US') as ym
 ),
 all_days as (
   -- T-SQL has no generate_series. Recursive CTE, carrying the month's first day so the recursive
@@ -2825,49 +2929,72 @@ days as (
   where datediff(day, '19000101', cal_day) % 7 between 0 and 4
 ),
 arrivals as (
-  -- ⛔ 'distinct' is LOAD-BEARING — see the postgres variant. The batch join fans out up to 15x.
-  select distinct
-    coalesce(fm.name, d.performer_display, d.performer, '(unknown)') as lab,
-    -- ⛔ Bucket in the CIVIL timezone. recorded_at is datetime2 holding UTC, so it is anchored to
-    -- UTC first and then converted.
-    -- ⛔ HONEST NON-PROOF: SQL Server takes WINDOWS zone names ('E. Africa Standard Time') where
-    -- Postgres and MySQL take IANA ('Africa/Dar_es_Salaam'). ONE lab.timezone value therefore
-    -- cannot be valid on all three engines. lab.timezone accepts IANA only
-    -- (packages/config/src/lab-identity.ts isValidIanaZone), so on a SQL Server warehouse the
-    -- setting cannot supply this value — the zone must be typed into the run's own Time zone box.
-    -- ⛔ HONEST NON-PROOF, LARGER: this SQL HAS NEVER BEEN PARSED BY SQL SERVER. No MSSQL
-    -- warehouse was executed for this query, and the only checks on it are regexes over the SQL
-    -- TEXT, which by construction cannot see a syntax error. A syntax error would ship undetected.
-    -- Two constructs here are new to this repo's seeded SQL and are where such an error would sit:
-    -- the recursive 'all_days' CTE, and that CTE running under 'set rowcount N'
-    -- (packages/dashboards/src/sql-runner.ts:54) — a combination no seeded query has used before.
-    -- What would prove it: submitting both variants to a real SQL Server, even just to parse.
-    cast(e.recorded_at at time zone 'UTC' at time zone {{param.tz}} as date) as cal_day
-  from ingest_events e
-  join lab_requests q on q.id = e.resource_id
-  -- ⛔ Attribute through the SUBMISSION BATCH, never through lab_results.specimen_id — see the
-  -- postgres variant for the 868 requests the specimen route drops.
-  join diagnostic_reports d on d.batch_id = q.batch_id
-  left join facility_map fm
-    on fm.source_system = coalesce(d.source_system, '')
-   and fm.performer_system = coalesce(d.performer_system, '')
-   and fm.source_code = d.performer
-  cross join month_start m
-  where e.resource_type = 'ServiceRequest'
-    -- Sargable bound so the (recorded_at, resource_type) index is usable, widened by two days.
-    and e.recorded_at >= dateadd(day, -2, m.d)
-    and e.recorded_at < dateadd(day, 2, dateadd(month, 1, m.d))
-    -- ...and the EXACT month bound in the civil zone, so a lab absent from the month is absent
-    -- from the grid rather than drawn as a blank row.
-    and cast(e.recorded_at at time zone 'UTC' at time zone {{param.tz}} as date) >= m.d
-    and cast(e.recorded_at at time zone 'UTC' at time zone {{param.tz}} as date) < dateadd(month, 1, m.d)
-    -- The panel list is a RUN-TIME parameter (AGENTS.md §8) — no code is written here.
-    -- ⛔ An EMPTY panels value NEVER REACHES THIS SQL — 'panels' is required and substituteParams
-    -- throws first (packages/dashboards/src/custom-query-run.ts:33). T-SQL's string_split('', ',')
-    -- behaviour is not a branch this query has.
+  -- One row per (laboratory, day) that laboratory showed activity on, for the requested month.
+  -- Same ladder as the postgres variant: registered, then tested, then authorised. One mark per
+  -- request per month, NOT one per event, because coalesce stops at its first non-null.
+  --
+  -- ⛔ Do NOT bucket on ingest arrival. A bulk backfill lands months of clinical work on one
+  -- calendar day, and the grid then reports laboratories as transmitting in a month they were not.
+  --
+  -- ⛔ The month test is a STRING comparison on 'YYYY-MM'. These columns hold ISO 8601 text
+  -- carrying the source's own offset, so left(ts, 10) is the laboratory's local day and needs no
+  -- conversion. There is no timezone conversion left in this query, and none should come back: a
+  -- historical cell must read as the same day for every reader.
+  --
+  -- ⛔ cast(left(ts, 10) as date) RAISES on anything shorter than a full date, which matches
+  -- postgres and is the wanted behaviour. A silent NULL would print a blank cell for a laboratory
+  -- that did transmit, the exact false negative this report exists to prevent.
+  -- ⛔ The target type is 'date', NOT 'datetime'. T-SQL reads 'YYYY-MM-DD' into a date the same
+  -- way whatever SET LANGUAGE and SET DATEFORMAT say; into a datetime it does not. Swapping the
+  -- type here would make the day a server setting on some languages, silently.
+  --
+  -- ⛔ HONEST NON-PROOF: this SQL HAS NEVER BEEN PARSED BY SQL SERVER. No MSSQL warehouse was
+  -- executed for this query, and the only checks on it are regexes over the SQL TEXT, which by
+  -- construction cannot see a syntax error. The ladder below is a fresh rewrite, so it is newly
+  -- unproven on top of that. Three constructs are where such an error would sit: the recursive
+  -- 'all_days' CTE, that CTE running under 'set rowcount N'
+  -- (packages/dashboards/src/sql-runner.ts:54), and the derived table 'clinical' feeding a
+  -- select distinct. What would prove it: submitting both variants to a real SQL Server, even
+  -- just to parse.
+  select distinct clinical.lab, cast(left(clinical.ts, 10) as date) as cal_day
+  from (
+    select
+      coalesce(fm.name, d.performer_display, d.performer, '(unknown)') as lab,
+      coalesce(
+        case when left(q.authored_at, 7) = (select ym from month_start) then q.authored_at end,
+        (select min(r.result_timestamp) from lab_results r
+          where r.request_id = q.id and left(r.result_timestamp, 7) = (select ym from month_start)),
+        (select min(dr.issued) from diagnostic_reports dr
+          where dr.based_on_id = q.id and left(dr.issued, 7) = (select ym from month_start))
+      ) as ts
+    from lab_requests q
+    -- ⛔ Attribute the LABORATORY through the SUBMISSION BATCH, never through
+    -- lab_results.specimen_id. See the postgres variant for the requests the specimen route drops.
+    -- ⛔ 'distinct' above is LOAD-BEARING, not decoration. The batch join fans out once per
+    -- diagnostic_reports row on the batch, up to 18x.
+    join diagnostic_reports d on d.batch_id = q.batch_id
+    left join facility_map fm
+      on fm.source_system = coalesce(d.source_system, '')
+     and fm.performer_system = coalesce(d.performer_system, '')
+     and fm.source_code = d.performer
+    -- Cheap month gate before the coalesce, mirroring the prior system's three-way OR. Without it
+    -- the batch join runs over every request ever loaded rather than over the month's.
+    where (
+         left(q.authored_at, 7) = (select ym from month_start)
+      or exists (select 1 from lab_results r
+                  where r.request_id = q.id and left(r.result_timestamp, 7) = (select ym from month_start))
+      or exists (select 1 from diagnostic_reports dr
+                  where dr.based_on_id = q.id and left(dr.issued, 7) = (select ym from month_start))
+    )
+    -- The panel list is a RUN-TIME parameter (AGENTS.md §8), no code is written here.
+    -- ⛔ An EMPTY panels value NEVER REACHES THIS SQL. 'panels' is declared required, and
+    -- substituteParams throws 'required parameter: panels' on '' or null before any SQL is built
+    -- (packages/dashboards/src/custom-query-run.ts:33). So "the Other grid gets everything because
+    -- the list was blank" is not a state this report can be in, do not reason from it.
     -- coalesce(panel_code, '') so a NULL panel is a real value on both sides: without it
     -- 'null not in (...)' is NULL and a request with no panel would vanish from BOTH grids.
-    and coalesce(q.panel_code, '') not in (select ltrim(rtrim(value)) from string_split({{param.panels}}, ','))
+      and coalesce(q.panel_code, '') not in (select ltrim(rtrim(value)) from string_split({{param.panels}}, ','))
+  ) clinical
 ),
 labs as (select distinct lab from arrivals),
 -- The CROSS JOIN makes a silent day render blank IN PLACE rather than shifting later days left.
@@ -2932,7 +3059,17 @@ from grid
 group by lab
 order by ord, lab`,
       mysql: `with recursive month_start as (
-  select cast(concat({{param.month}}, '-01') as date) as d
+  -- ⛔ 'ym' is the NORMALISED month. Every string test below compares against it, never against
+  -- the raw parameter. 'month' is free text with no shape check: custom-query-run.ts:14 validates
+  -- only daterange, and RunParamsSheet.tsx:53 renders a plain input. Typed '2017-8' the cast still
+  -- yields 2017-08-01, so 'days' builds a correct August header, but a raw left(ts, 7) = '2017-8'
+  -- matches nothing and the grid prints that header above ZERO laboratories. A reader concludes no
+  -- laboratory transmitted all month. Normalising makes a loose month answer like a strict one.
+  -- ⛔ '%m' is the ZERO-PADDED NUMERIC month, NOT '%M' the month name, and '%Y' is the four-digit
+  -- year. Neither reads lc_time_names, so this returns the same string on every server. That is
+  -- the MySQL stand-in for postgres to_char(..., 'YYYY-MM').
+  select cast(concat({{param.month}}, '-01') as date) as d,
+         date_format(cast(concat({{param.month}}, '-01') as date), '%Y-%m') as ym
 ),
 panel_list as (
   -- ⛔ NOT find_in_set(). MySQL has no string_split/unnest, and find_in_set over the raw parameter
@@ -2978,48 +3115,69 @@ days as (
   where weekday(cal_day) between 0 and 4
 ),
 arrivals as (
-  -- ⛔ 'distinct' is LOAD-BEARING — see the postgres variant. The batch join fans out up to 15x.
-  select distinct
-    coalesce(fm.name, d.performer_display, d.performer, '(unknown)') as lab,
-    -- ⛔ Bucket in the CIVIL timezone. recorded_at is a naive datetime holding UTC.
-    -- ⛔ HONEST NON-PROOF: convert_tz returns NULL unless the server's zone tables are loaded
-    -- (mysql_tzinfo_to_sql). An offset like '+03:00' works without them, an IANA name does not.
-    -- ⛔ The blast radius is the WHOLE REPORT, not one row. Both civil-zone bounds below are
-    -- convert_tz calls, so with no zone tables every comparison is NULL for every row: 'arrivals'
-    -- comes out empty, 'labs' comes out empty, and the grid draws its date header with ZERO
-    -- laboratories — indistinguishable from a month in which nothing arrived. Nothing errors.
-    -- ⛔ HONEST NON-PROOF, LARGER: this SQL HAS NEVER BEEN PARSED BY MySQL. No MySQL warehouse
-    -- was executed for this query, and the only checks on it are regexes over the SQL TEXT, which
-    -- by construction cannot see a syntax error. A syntax error would ship undetected. The two
-    -- recursive CTEs here ('all_days' and 'panel_list') are new to this repo's seeded SQL and are
-    -- where such an error would sit. What would prove it: submitting both variants to a real
-    -- MySQL/MariaDB, even just to parse.
-    cast(convert_tz(e.recorded_at, '+00:00', {{param.tz}}) as date) as cal_day
-  from ingest_events e
-  join lab_requests q on q.id = e.resource_id
-  -- ⛔ Attribute through the SUBMISSION BATCH, never through lab_results.specimen_id — see the
-  -- postgres variant for the 868 requests the specimen route drops.
-  join diagnostic_reports d on d.batch_id = q.batch_id
-  left join facility_map fm
-    on fm.source_system = coalesce(d.source_system, '')
-   and fm.performer_system = coalesce(d.performer_system, '')
-   and fm.source_code = d.performer
-  cross join month_start m
-  where e.resource_type = 'ServiceRequest'
-    -- Sargable bound so the (recorded_at, resource_type) index is usable, widened by two days.
-    and e.recorded_at >= date_sub(m.d, interval 2 day)
-    and e.recorded_at < date_add(date_add(m.d, interval 1 month), interval 2 day)
-    -- ...and the EXACT month bound in the civil zone, so a lab absent from the month is absent
-    -- from the grid rather than drawn as a blank row.
-    and cast(convert_tz(e.recorded_at, '+00:00', {{param.tz}}) as date) >= m.d
-    and cast(convert_tz(e.recorded_at, '+00:00', {{param.tz}}) as date) < date_add(m.d, interval 1 month)
-    -- The panel list is a RUN-TIME parameter (AGENTS.md §8) — no code is written here.
-    -- ⛔ An EMPTY panels value NEVER REACHES THIS SQL — 'panels' is required and substituteParams
-    -- throws first (packages/dashboards/src/custom-query-run.ts:33). What the panel_list split
-    -- would make of '' is not a branch this query has.
+  -- One row per (laboratory, day) that laboratory showed activity on, for the requested month.
+  -- Same ladder as the postgres variant: registered, then tested, then authorised. One mark per
+  -- request per month, NOT one per event, because coalesce stops at its first non-null.
+  --
+  -- ⛔ Do NOT bucket on ingest arrival. A bulk backfill lands months of clinical work on one
+  -- calendar day, and the grid then reports laboratories as transmitting in a month they were not.
+  --
+  -- ⛔ The month test is a STRING comparison on 'YYYY-MM'. These columns hold ISO 8601 text
+  -- carrying the source's own offset, so left(ts, 10) is the laboratory's local day and needs no
+  -- conversion. There is no timezone conversion left in this query, and none should come back: a
+  -- historical cell must read as the same day for every reader.
+  --
+  -- ⚠ ONE REAL DIVERGENCE FROM POSTGRES, disclosed rather than hidden. On a malformed timestamp
+  -- postgres RAISES on cast(left(ts, 10) as date); MySQL returns NULL and only warns, because
+  -- strict mode does not apply to a SELECT. The row then joins nothing and the cell prints blank.
+  -- So a laboratory that did transmit can read as silent here where postgres would have stopped
+  -- the run. Fixing it means a shape test on the column, which is a separate decision.
+  --
+  -- ⛔ HONEST NON-PROOF: this SQL HAS NEVER BEEN PARSED BY MySQL. No MySQL warehouse was executed
+  -- for this query, and the only checks on it are regexes over the SQL TEXT, which by construction
+  -- cannot see a syntax error. The ladder below is a fresh rewrite, so it is newly unproven on top
+  -- of that. Three constructs are where such an error would sit: the two recursive CTEs
+  -- ('all_days' and 'panel_list'), and the derived table 'clinical' feeding a select distinct.
+  -- What would prove it: submitting both variants to a real MySQL/MariaDB, even just to parse.
+  select distinct clinical.lab, cast(left(clinical.ts, 10) as date) as cal_day
+  from (
+    select
+      coalesce(fm.name, d.performer_display, d.performer, '(unknown)') as lab,
+      coalesce(
+        case when left(q.authored_at, 7) = (select ym from month_start) then q.authored_at end,
+        (select min(r.result_timestamp) from lab_results r
+          where r.request_id = q.id and left(r.result_timestamp, 7) = (select ym from month_start)),
+        (select min(dr.issued) from diagnostic_reports dr
+          where dr.based_on_id = q.id and left(dr.issued, 7) = (select ym from month_start))
+      ) as ts
+    from lab_requests q
+    -- ⛔ Attribute the LABORATORY through the SUBMISSION BATCH, never through
+    -- lab_results.specimen_id. See the postgres variant for the requests the specimen route drops.
+    -- ⛔ 'distinct' above is LOAD-BEARING, not decoration. The batch join fans out once per
+    -- diagnostic_reports row on the batch, up to 18x.
+    join diagnostic_reports d on d.batch_id = q.batch_id
+    left join facility_map fm
+      on fm.source_system = coalesce(d.source_system, '')
+     and fm.performer_system = coalesce(d.performer_system, '')
+     and fm.source_code = d.performer
+    -- Cheap month gate before the coalesce, mirroring the prior system's three-way OR. Without it
+    -- the batch join runs over every request ever loaded rather than over the month's.
+    where (
+         left(q.authored_at, 7) = (select ym from month_start)
+      or exists (select 1 from lab_results r
+                  where r.request_id = q.id and left(r.result_timestamp, 7) = (select ym from month_start))
+      or exists (select 1 from diagnostic_reports dr
+                  where dr.based_on_id = q.id and left(dr.issued, 7) = (select ym from month_start))
+    )
+    -- The panel list is a RUN-TIME parameter (AGENTS.md §8), no code is written here.
+    -- ⛔ An EMPTY panels value NEVER REACHES THIS SQL. 'panels' is declared required, and
+    -- substituteParams throws 'required parameter: panels' on '' or null before any SQL is built
+    -- (packages/dashboards/src/custom-query-run.ts:33). So "the Other grid gets everything because
+    -- the list was blank" is not a state this report can be in, do not reason from it.
     -- coalesce(panel_code, '') so a NULL panel is a real value on both sides: without it
     -- 'null not in (...)' is NULL and a request with no panel would vanish from BOTH grids.
-    and coalesce(q.panel_code, '') not in (select code from panel_list)
+      and coalesce(q.panel_code, '') not in (select code from panel_list)
+  ) clinical
 ),
 labs as (select distinct lab from arrivals),
 -- The CROSS JOIN makes a silent day render blank IN PLACE rather than shifting later days left.

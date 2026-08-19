@@ -408,6 +408,57 @@ live('the transmission grid queries (live Postgres)', () => {
     expect(loose.some((r) => r.lab === 'LAB-A')).toBe(true);
   });
 
+  it('⛔ partitions the month between the two grids, on every rung of the ladder', async () => {
+    // The two grids must DIVIDE the month's requests: one grid each, never both, never neither.
+    //
+    // ⛔ Every rung is tested, not just registration. A request reaches `arrivals` through a
+    // different branch of the coalesce depending on which timestamp is the first one in the month,
+    // so a panel predicate that only bit on the registration branch would still pass a one-rung
+    // test. Each rung gets a matching pair: same dates, one panel inside the list and one outside.
+    //
+    // 3 June 2013 was a Monday, so the working days run d01 = Mon 3, d02 = Tue 4, d03 = Wed 5.
+    // Confirmed against the calendar. Nothing else in this file seeds June 2013.
+    const rungs = [
+      // Registered in June. The first rung answers and the other two are never consulted.
+      { key: 'reg', authored: '2013-06-03T09:00:00+03:00', result: null, issued: null, day: 'd01' },
+      // Registered in May, resulted in June. The second rung answers.
+      { key: 'res', authored: '2013-05-29T09:00:00+03:00', result: '2013-06-04T11:00:00+03:00', issued: null, day: 'd02' },
+      // Registered in May, never resulted, authorised in June. The third rung answers.
+      { key: 'iss', authored: '2013-05-29T09:00:00+03:00', result: null, issued: '2013-06-05T16:00:00+03:00', day: 'd03' },
+    ] as const;
+
+    for (const r of rungs) {
+      for (const side of ['in', 'out'] as const) {
+        const id = `p-${r.key}-${side}`;
+        const batchId = `pb-${r.key}-${side}`;
+        // Fixture panel codes, not product vocabulary (AGENTS.md §8): the SQL carries none, the
+        // list arrives as {{param.panels}}. 'in' is on the list below, 'out' is not.
+        await seedRequest({ id, batchId, panel: side === 'in' ? 'HIVVL' : 'CHEM', authoredAt: r.authored });
+        await seedReport({ id: `pdr-${r.key}-${side}`, basedOnId: id, batchId,
+          performer: `PLAB-${r.key}-${side}`, issued: r.issued });
+        if (r.result) await seedResult({ id: `po-${r.key}-${side}`, requestId: id, resultTimestamp: r.result });
+      }
+    }
+
+    const hv = await runFor({ month: '2013-06', panels: 'HIVVL' });
+    const ot = await runForOther({ month: '2013-06', panels: 'HIVVL' });
+
+    for (const r of rungs) {
+      const inLab = `PLAB-${r.key}-in`;
+      const outLab = `PLAB-${r.key}-out`;
+
+      const onList = hv.find((x) => x.lab === inLab);
+      expect(onList, `${inLab} is missing from the HVL/EID grid`).toBeDefined();
+      marksExactlyOneDay(onList!, r.day);
+      expect(ot.some((x) => x.lab === inLab), `${inLab} leaked into the Other grid too`).toBe(false);
+
+      const offList = ot.find((x) => x.lab === outLab);
+      expect(offList, `${outLab} fell out of BOTH grids`).toBeDefined();
+      marksExactlyOneDay(offList!, r.day);
+      expect(hv.some((x) => x.lab === outLab), `${outLab} leaked into the HVL/EID grid too`).toBe(false);
+    }
+  });
+
   // ------------------------------------------------------------------------------------------
   // The whole round trip: live SQL -> sortBy -> renderer -> PDF
   // ------------------------------------------------------------------------------------------
