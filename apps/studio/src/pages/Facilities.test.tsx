@@ -1207,10 +1207,88 @@ describe('Facilities page', () => {
         .not.toHaveProperty('id');
     });
 
-    /** Minor 4 (Task 5 review): `statusOptions` comes from `expandValueSet` and is empty whenever
-     *  terminology is down. An `enum` ColumnDef with no `enumOptions` renders an empty, unusable
-     *  Select (FilterPopover.tsx) — and status filtering was a plain text box before Task 5, so an
-     *  empty picker is a regression. The column falls back to a `text` widget instead. */
+    /** ⛔ C1 (whole-branch review): the Status filter is a TEXT box, always — including when the
+     *  terminology expansion succeeded.
+     *
+     *  Task 5's Minor 4 made the type conditional (`statusOptions.length > 0 ? 'enum' : 'text'`),
+     *  which had it backwards. Measured on the live 3 789-row register: stored statuses are
+     *  `Functional` (3 771), `Permanent closure` (11), `Closed` (5), `Active` (1) and
+     *  `Temporarily closure` (1), while `vs-location-status` expands to `active`/`suspended`/
+     *  `inactive`. `status` is an `enum` column server-side (packages/table-query/src/columns.ts),
+     *  so it has no `like` and the SQL is a case-sensitive `coalesce(status::text,'') = $1`. Every
+     *  value the picker could offer therefore returned zero rows, on a column whose cells said
+     *  `Functional`.
+     *
+     *  ⚠ The `findByText('Active')` below is load-bearing, not decoration. It gates on the
+     *  expansion having RESOLVED — the display label only renders once `statusDisplayMap` is
+     *  filled, which is the exact state that used to flip the column to `enum`. Without it the
+     *  first paint has an empty option list and this test would pass against the old code too. */
+    it('C1: status filters as free text even when the terminology expansion IS available', async () => {
+      listFacilitiesMock.mockResolvedValue(makePage([{ ...sampleFacility, status: 'active' }]));
+
+      show();
+      await screen.findByRole('table');
+      expect(await screen.findByText('Active')).toBeInTheDocument();
+
+      // Driven by hand rather than through `addFilterViaPopover`, for the reason spelled out in the
+      // Minor 4 test below: a `findBy` that never resolves reports a 5s timeout, which is equally
+      // what a page that threw looks like.
+      fireEvent.click(screen.getByRole('button', { name: /^filter$/i }));
+      fireEvent.click(await screen.findByRole('button', { name: /add filter/i }));
+      fireEvent.click(screen.getByRole('combobox', { name: /columns/i }));
+      fireEvent.click(await screen.findByRole('option', { name: 'Status' }));
+
+      expect(screen.queryByLabelText(/enter value/i)).not.toBeNull();
+      expect(screen.queryByRole('combobox', { name: /pick value/i })).toBeNull();
+    });
+
+    /** The seam the whole-branch review said no test in this branch covered: not which widget
+     *  renders, but whether a value an operator would actually type — one that exists in the
+     *  register and in no value set — survives the trip to `listFacilities`. */
+    it('C1: the Status value widget forwards a stored value the value set does not contain', async () => {
+      listFacilitiesMock.mockResolvedValue(makePage([{ ...sampleFacility, status: 'active' }]));
+
+      show();
+      await screen.findByRole('table');
+      expect(await screen.findByText('Active')).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: /^filter$/i }));
+      fireEvent.click(await screen.findByRole('button', { name: /add filter/i }));
+      fireEvent.click(screen.getByRole('combobox', { name: /columns/i }));
+      fireEvent.click(await screen.findByRole('option', { name: 'Status' }));
+      fireEvent.change(screen.getByLabelText(/enter value/i), { target: { value: 'Functional' } });
+      fireEvent.click(screen.getByRole('button', { name: /^apply$/i }));
+
+      // Wait for the ARRIVAL of the filtered request, then assert its shape bare.
+      await waitFor(() => expect(listFacilitiesMock.mock.calls.at(-1)![0].filters).toHaveLength(1));
+      expect(listFacilitiesMock.mock.calls.at(-1)![0].filters![0]).toEqual({
+        column: 'status', operator: 'eq', value: 'Functional', combine: 'and',
+      });
+    });
+
+    /** C4 (whole-branch review): `zone`/`region`/`district`/`council` take their options from the
+     *  register's own distinct values, so `enum` is right for them once populated. But each effect
+     *  `.catch`es into `[]`, so a failed `GET /api/facilities/admin-values` left all four rendering
+     *  an empty Select — the same dead end C1 was about, on two default-visible columns. */
+    it('C4: Region falls back to free text when the admin-values fetch fails', async () => {
+      (listFacilityAdminValues as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('admin values unavailable'));
+
+      show();
+      await screen.findByRole('table');
+
+      fireEvent.click(screen.getByRole('button', { name: /^filter$/i }));
+      fireEvent.click(await screen.findByRole('button', { name: /add filter/i }));
+      fireEvent.click(screen.getByRole('combobox', { name: /columns/i }));
+      fireEvent.click(await screen.findByRole('option', { name: 'Region' }));
+
+      expect(screen.queryByLabelText(/enter value/i)).not.toBeNull();
+      expect(screen.queryByRole('combobox', { name: /pick value/i })).toBeNull();
+    });
+
+    /** Minor 4 (Task 5 review), kept as the other half of C1 above: with terminology DOWN the
+     *  column must still filter, which it did before this branch as a plain text box. The type is
+     *  no longer conditional — this pins that the down case did not regress while C1 fixed the up
+     *  case. */
     it('Minor 4: status still filters as free text when the terminology expansion is unavailable', async () => {
       (expandValueSet as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('terminology unavailable'));
 

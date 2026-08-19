@@ -2557,6 +2557,49 @@ describe('facilities list CLI', () => {
     expect(human).toMatch(/no facilities/i);
   });
 
+  /** S1 (whole-branch review): the store caps an unbounded `list()` at DEFAULT_LIST_LIMIT (200
+   *  rows, packages/db/src/facility-registry-store.ts), and the human branch printed rows and
+   *  nothing else. On the live 3 789-row register `openldr facilities list` printed 200 lines with
+   *  no sign that 3 589 more existed. `--json` always carried `total`, so only the person reading
+   *  the terminal was misled. */
+  it('S1: human output says how many of the total it is showing', async () => {
+    mocks.ctx.facilityRegistry.list.mockResolvedValue({ rows: [LIST_ROW], total: 3789 });
+
+    const code = await runFacilitiesList({ where: [], sort: [], json: false });
+
+    expect(code).toBe(0);
+    const human = stdoutSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(human).toMatch(/showing 1 of 3789/);
+  });
+
+  it('S1: says so on an empty result too, rather than leaving the count to inference', async () => {
+    mocks.ctx.facilityRegistry.list.mockResolvedValue({ rows: [], total: 0 });
+
+    await runFacilitiesList({ where: [], sort: [], json: false });
+
+    const human = stdoutSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(human).toMatch(/showing 0 of 0/);
+  });
+
+  /** S1, second half: `--limit abc` used to become `NaN` through a bare `Number()`, reach the
+   *  store, and surface as an opaque Postgres error. Refused up front now, named by flag and
+   *  non-zero — the same treatment a bad `--where` already got. */
+  it('S1: refuses a non-numeric --limit by name, without ever opening the app context', async () => {
+    const code = await runFacilitiesList({ where: [], sort: [], limit: 'abc', json: false });
+
+    expect(code).toBe(1);
+    expect(mocks.createAppContext).not.toHaveBeenCalled();
+    const err = stderrSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(err).toMatch(/--limit/);
+    expect(err).toMatch(/abc/);
+  });
+
+  it('S1: refuses a zero or negative --limit the same way', async () => {
+    expect(await runFacilitiesList({ where: [], sort: [], limit: '0', json: false })).toBe(1);
+    expect(await runFacilitiesList({ where: [], sort: [], limit: '-5', json: false })).toBe(1);
+    expect(mocks.createAppContext).not.toHaveBeenCalled();
+  });
+
   it('closes the app context even when the store throws, and reports a redacted message', async () => {
     mocks.ctx.facilityRegistry.list.mockRejectedValue(new Error('db exploded'));
 

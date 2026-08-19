@@ -1423,18 +1423,37 @@ export async function runFacilitiesList(opts: FacilitiesListOpts): Promise<numbe
     process.stderr.write(`facilities list failed: ${parsed.error}\n`);
     return 1;
   }
+  // S1 (whole-branch review): `--limit` used to go through a bare `Number(opts.limit)`, so
+  // `--limit abc` became `NaN`, travelled all the way into the query and came back as an opaque
+  // Postgres error. Refused here instead, named by flag, and non-zero — the same treatment a bad
+  // `--where` already gets above, and for the same reason.
+  let limit: number | undefined;
+  if (opts.limit !== undefined) {
+    const n = Number(opts.limit);
+    if (!Number.isInteger(n) || n <= 0) {
+      process.stderr.write(`facilities list failed: --limit must be a positive whole number, not "${opts.limit}"\n`);
+      return 1;
+    }
+    limit = n;
+  }
   const ctx = await createAppContext(loadConfig());
   try {
     const { rows, total } = await ctx.facilityRegistry.list({
       filters: parsed.query.filters.length ? parsed.query.filters : undefined,
       sorts: parsed.query.sorts.length ? parsed.query.sorts : undefined,
-      limit: opts.limit ? Number(opts.limit) : undefined,
+      limit,
     });
     if (opts.json) {
       process.stdout.write(JSON.stringify({ rows, total }, null, 2) + '\n');
     } else {
       const lines = rows.map((r) => `${r.facilityCode ?? '-'}\t${r.name}\t${r.region ?? '-'}\t${r.status ?? '-'}`);
+      // S1: the store caps an unbounded `list()` at DEFAULT_LIST_LIMIT (200 rows,
+      // packages/db/src/facility-registry-store.ts). The human branch printed rows and nothing
+      // else, so on the live 3 789-row register `openldr facilities list` printed 200 lines with
+      // no sign that 3 589 more existed. `--json` always carried `total`, so scripts were fine and
+      // only the person reading the terminal was misled. This is that missing sentence.
       process.stdout.write((lines.length ? lines.join('\n') : '(no facilities)') + '\n');
+      process.stdout.write(`showing ${rows.length} of ${total}\n`);
     }
     return 0;
   } catch (err) {

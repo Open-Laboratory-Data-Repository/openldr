@@ -159,7 +159,8 @@ botões Filtrar, Ordenar, Colunas e Repor.
 - Ordenar ordena a tabela por qualquer coluna ordenável, de forma crescente ou decrescente.
 - Colunas mostra ou oculta colunas.
 - Repor limpa todos os filtros, ordenações, termos de pesquisa e escolhas de colunas, e devolve a
-  tabela às suas predefinições.
+  tabela às suas predefinições. Este botão só aparece depois de aplicar um filtro ou uma ordenação.
+  Cada controlo também se limpa sozinho, por isso pode desfazer uma coisa sem desfazer o resto.
 
 Os filtros ativos aparecem como etiquetas removíveis abaixo da barra de ferramentas.
 
@@ -204,16 +205,25 @@ ferramentas, permitindo que um script reproduza qualquer vista construída no na
   delimitadores, pelo que um valor pode em si conter um dois-pontos.
 - `--sort column` ordena de forma crescente. `--sort -column`, com um traço à frente, ordena de
   forma decrescente. Repetível.
-- `--limit <n>` limita quantas linhas são devolvidas.
+- `--limit <n>` limita quantas linhas são devolvidas. Sem este sinalizador, o comando devolve no
+  máximo 200 linhas. A última linha da saída diz quantas está a ver do total.
 - `--json` mostra saída legível por máquina em vez de uma tabela.
+
+```bash
+openldr facilities list --sort -name --limit 10
+```
+
+Este comando lista as últimas dez unidades por nome, de Z a A. Devolve linhas em qualquer registo.
 
 ```bash
 openldr facilities list --where level:eq:hospital --sort -name
 ```
 
 Este comando lista as unidades cuja coluna level corresponde exatamente a "hospital", ordenadas
-por nome de Z a A. `eq` exige uma correspondência exata, por isso verifique primeiro os valores de
-nível reais do seu próprio registo (o filtro Nível do estúdio lista-os).
+por nome de Z a A. `eq` exige uma correspondência exata, e distingue maiúsculas de minúsculas, por
+isso verifique primeiro os valores de nível reais do seu próprio registo. Os registos guardam
+muitas vezes valores como "Health Post", "Health Centre" ou "1st Level Hospital", e um valor que
+não corresponda exatamente não devolve nada.
 
 A CLI também pode filtrar e ordenar por `id` e `facilitySystem` (o código do registo nacional),
 duas colunas que a barra de ferramentas do estúdio deixa de fora porque `facilitySystem` já tem

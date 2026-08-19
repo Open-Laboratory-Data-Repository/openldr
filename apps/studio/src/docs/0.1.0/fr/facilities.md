@@ -163,7 +163,9 @@ boutons Filtrer, Trier, Colonnes et Réinitialiser.
 - Trier ordonne le tableau par n'importe quelle colonne triable, en ordre croissant ou décroissant.
 - Colonnes affiche ou masque des colonnes.
 - Réinitialiser efface tous les filtres, tris, termes de recherche et choix de colonnes, et remet
-  le tableau à ses réglages par défaut.
+  le tableau à ses réglages par défaut. Ce bouton n'apparaît qu'une fois un filtre ou un tri
+  appliqué. Chaque contrôle s'efface aussi tout seul, vous pouvez donc annuler une chose sans
+  annuler le reste.
 
 Les filtres actifs apparaissent sous forme de puces amovibles sous la barre d'outils.
 
@@ -209,16 +211,26 @@ navigateur.
   délimiteurs, une valeur peut donc elle-même contenir un deux-points.
 - `--sort column` trie en ordre croissant. `--sort -column`, avec un tiret en préfixe, trie en
   ordre décroissant. Répétable.
-- `--limit <n>` limite le nombre de lignes renvoyées.
+- `--limit <n>` limite le nombre de lignes renvoyées. Sans cet indicateur, la commande renvoie au
+  plus 200 lignes. La dernière ligne de la sortie indique combien vous en voyez sur le total.
 - `--json` affiche une sortie exploitable par machine au lieu d'un tableau.
+
+```bash
+openldr facilities list --sort -name --limit 10
+```
+
+Cette commande liste les dix derniers établissements par nom, de Z à A. Elle renvoie des lignes sur
+n'importe quel registre.
 
 ```bash
 openldr facilities list --where level:eq:hospital --sort -name
 ```
 
 Cette commande liste les établissements dont la colonne level correspond exactement à
-« hospital », triés par nom de Z à A. `eq` exige une correspondance exacte, vérifiez donc d'abord
-les valeurs de niveau réelles de votre propre registre (le filtre Niveau du studio les liste).
+« hospital », triés par nom de Z à A. `eq` exige une correspondance exacte, et la casse compte,
+vérifiez donc d'abord les valeurs de niveau réelles de votre propre registre. Les registres
+stockent souvent des valeurs comme « Health Post », « Health Centre » ou « 1st Level Hospital », et
+une valeur qui ne correspond pas exactement ne renvoie rien.
 
 La CLI peut aussi filtrer et trier par `id` et `facilitySystem` (le code du registre national),
 deux colonnes que la barre d'outils du studio laisse de côté parce que `facilitySystem` y a déjà

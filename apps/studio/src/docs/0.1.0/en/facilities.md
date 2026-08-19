@@ -141,7 +141,8 @@ Reset buttons.
 - Sort orders the table by any sortable column, ascending or descending.
 - Columns shows or hides columns.
 - Reset clears every filter, sort, search term, and column choice, and returns the table to its
-  defaults.
+  defaults. It only appears once you have applied a filter or a sort. Each control also clears on
+  its own, so you can undo one thing without undoing the rest.
 
 Active filters show as removable chips under the toolbar.
 
@@ -183,16 +184,24 @@ reproduce any view built in the browser.
   can itself contain a colon.
 - `--sort column` sorts ascending. `--sort -column`, with a leading dash, sorts descending.
   Repeatable.
-- `--limit <n>` caps how many rows come back.
+- `--limit <n>` caps how many rows come back. Without it, the command returns at most 200 rows. The
+  last line of the output says how many of the total you are seeing.
 - `--json` prints machine-readable output instead of a table.
+
+```bash
+openldr facilities list --sort -name --limit 10
+```
+
+This lists the last ten facilities by name, Z to A. It returns rows on any register.
 
 ```bash
 openldr facilities list --where level:eq:hospital --sort -name
 ```
 
 This lists facilities whose level column matches "hospital" exactly, sorted by name from Z to A.
-`eq` needs an exact match, so check your own register's actual level values first (the studio's
-Level filter lists them).
+`eq` needs an exact match, and it is case sensitive, so check your own register's actual level
+values first. Registers often store values like "Health Post", "Health Centre" or "1st Level
+Hospital", and a value that does not match exactly returns nothing.
 
 The CLI can also filter and sort by `id` and `facilitySystem` (the national system code), two
 columns the studio toolbar leaves out because `facilitySystem` already has its own text box there.

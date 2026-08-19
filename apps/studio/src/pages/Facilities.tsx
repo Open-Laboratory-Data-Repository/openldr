@@ -480,14 +480,6 @@ export function Facilities() {
   const [districtOptions, setDistrictOptions] = useState<string[]>([]);
   const [councilOptions, setCouncilOptions] = useState<string[]>([]);
 
-  // The Status picker's options are the terminology ValueSet's own concepts, reusing the display
-  // map the Status COLUMN already renders through — not a second, hand-written status list
-  // (AGENTS.md section 8). Empty until the expansion resolves, and empty for good if terminology is
-  // down, which is the same degradation `displayFor` already accepts for the column itself.
-  const statusOptions = useMemo(
-    () => Array.from(statusDisplayMap, ([value, label]) => ({ value, label })),
-    [statusDisplayMap],
-  );
 
   /** Task 5: the registry's columns, for BOTH the table and the shared toolbar.
    *
@@ -507,7 +499,15 @@ export function Facilities() {
    *  pinned to the map's enum list regardless. These four have no value set anywhere in this app —
    *  the panel they replace used a free-text `Input` for each — and an `enum` ColumnDef with no
    *  `enumOptions` renders an empty picker with nothing to choose. Inventing an option list for
-   *  them would be hardcoding vocabulary this registry cannot promise is complete. */
+   *  them would be hardcoding vocabulary this registry cannot promise is complete.
+   *
+   *  ⚠ C4 (whole-branch review): `zone`/`region`/`district`/`council` fall back to `text` when their
+   *  option list is empty. `enum` IS right for these once populated — their options are the
+   *  register's OWN distinct values, read back from `listFacilityAdminValues`, so a picked value
+   *  always exists in the column. But each of the four effects below `.catch`es into `[]`, so one
+   *  failed `GET /api/facilities/admin-values` used to leave all four rendering an empty Select with
+   *  nothing to choose — the same dead end C1 was about, and two of the four (`region`, `district`)
+   *  are default-visible columns. Only the failure path changes; a populated list still picks. */
   const columns: ColumnDef<Facility>[] = useMemo(() => ([
     {
       id: 'code', labelKey: 'facilities.code', type: 'text', defaultVisible: true, cellClassName: 'text-xs',
@@ -522,13 +522,15 @@ export function Facilities() {
       operators: FACILITY_COLUMNS.name!.operators,
     },
     {
-      id: 'region', labelKey: 'facilities.region', type: 'enum', defaultVisible: true, cellClassName: 'text-xs',
+      // C4: `enum` only while the register actually returned distinct values — see the note above.
+      id: 'region', labelKey: 'facilities.region', type: regionOptions.length > 0 ? 'enum' : 'text', defaultVisible: true, cellClassName: 'text-xs',
       accessor: (f) => f.region ?? '—',
       enumOptions: regionOptions.map((value) => ({ value, label: value })),
       operators: FACILITY_COLUMNS.region!.operators,
     },
     {
-      id: 'district', labelKey: 'facilities.district', type: 'enum', defaultVisible: true, cellClassName: 'text-xs',
+      // C4: `enum` only while the register actually returned distinct values — see the note above.
+      id: 'district', labelKey: 'facilities.district', type: districtOptions.length > 0 ? 'enum' : 'text', defaultVisible: true, cellClassName: 'text-xs',
       accessor: (f) => f.district ?? '—',
       enumOptions: districtOptions.map((value) => ({ value, label: value })),
       operators: FACILITY_COLUMNS.district!.operators,
@@ -538,18 +540,32 @@ export function Facilities() {
       // is a `location-status`-bound code, not something an operator scanning this list should have
       // to decode.
       //
-      // Minor 4 (Task 5 review): `enum` ONLY while the ValueSet expansion actually produced
-      // options. `statusOptions` comes from `expandValueSet` and is empty when terminology is down
-      // or the value set is missing, and an `enum` ColumnDef with no `enumOptions` renders an empty,
-      // unusable Select (FilterPopover.tsx) — status filtering was a free-text box before Task 5,
-      // so that would be a regression. Falling back to `text` keeps the filter working; no status
-      // value is invented here either way (AGENTS.md section 8), and `operators` stays pinned to
-      // `FACILITY_COLUMNS` in both cases, so the server sees the same whitelist regardless.
+      // ⛔ `text`, ALWAYS — never the `vs-location-status` expansion as a picker.
+      //
+      // C1 (whole-branch review): a real register stores what it was imported with. Measured on the
+      // live 3 789-row register: `Functional` (3 771), `Permanent closure` (11), `Closed` (5),
+      // `Active` (1), `Temporarily closure` (1). The value set expands to `active`/`suspended`/
+      // `inactive`. `packages/table-query/src/columns.ts` types `status` as `enum`, so the only
+      // operators are `eq`/`ne`/`in`/`is_null` — no `like` — and the SQL is a case-sensitive
+      // `coalesce(status::text,'') = $1`. So an enum picker built from the value set offered three
+      // values and EVERY ONE of them returned zero rows, while the column on screen said
+      // `Functional`. Status was a free-text box before this branch and typing `Functional` worked.
+      //
+      // Not a data defect: `packages/bootstrap/src/facility-controlled-fields.ts` deliberately keeps
+      // an unmapped controlled value exactly as imported, so a mixed column is designed behaviour.
+      //
+      // This replaces Task 5's Minor-4 conditional (`statusOptions.length > 0 ? 'enum' : 'text'`),
+      // which had it backwards: text is the right widget when terminology is UP, not only when it
+      // is down. Same reasoning as `country`/`level`/`ownership`/`managedOrigin` above — see the
+      // block comment on this array. Server-side nothing changes: `type` here only picks the value
+      // WIDGET, and `operators` stays pinned to the `FACILITY_COLUMNS` enum list either way.
+      //
+      // `displayFor` stays on the cell, so the column still shows the friendly label wherever
+      // terminology has one.
       id: 'status', labelKey: 'facilities.status',
-      type: statusOptions.length > 0 ? 'enum' : 'text',
+      type: 'text',
       defaultVisible: true, cellClassName: 'text-xs',
       accessor: (f) => displayFor(statusDisplayMap, f.status),
-      enumOptions: statusOptions,
       operators: FACILITY_COLUMNS.status!.operators,
     },
     {
@@ -564,13 +580,15 @@ export function Facilities() {
       operators: FACILITY_COLUMNS.source!.operators,
     },
     {
-      id: 'zone', labelKey: 'facilities.filters.zoneLabel', type: 'enum', defaultVisible: false, cellClassName: 'text-xs',
+      // C4: `enum` only while the register actually returned distinct values — see the note above.
+      id: 'zone', labelKey: 'facilities.filters.zoneLabel', type: zoneOptions.length > 0 ? 'enum' : 'text', defaultVisible: false, cellClassName: 'text-xs',
       accessor: (f) => f.zone ?? '—',
       enumOptions: zoneOptions.map((value) => ({ value, label: value })),
       operators: FACILITY_COLUMNS.zone!.operators,
     },
     {
-      id: 'council', labelKey: 'facilities.filters.councilLabel', type: 'enum', defaultVisible: false, cellClassName: 'text-xs',
+      // C4: `enum` only while the register actually returned distinct values — see the note above.
+      id: 'council', labelKey: 'facilities.filters.councilLabel', type: councilOptions.length > 0 ? 'enum' : 'text', defaultVisible: false, cellClassName: 'text-xs',
       accessor: (f) => f.council ?? '—',
       enumOptions: councilOptions.map((value) => ({ value, label: value })),
       operators: FACILITY_COLUMNS.council!.operators,
@@ -641,7 +659,7 @@ export function Facilities() {
         </div>
       ),
     },
-  ]), [t, statusDisplayMap, statusOptions, zoneOptions, regionOptions, districtOptions, councilOptions, canManage, hasForm]);
+  ]), [t, statusDisplayMap, zoneOptions, regionOptions, districtOptions, councilOptions, canManage, hasForm]);
 
   // Task 5: the shared table state. `defaultFilters`/`defaultSorts` come from the URL exactly once,
   // on mount, which is what makes a shared grammar-filtered link restore — and what `resetAll`
