@@ -86,3 +86,49 @@ live('audit pagination is stable when the sort key ties (live Postgres)', () => 
     expect(new Set(seen).size).toBe(40); // no repeats, nothing skipped
   });
 });
+
+// I2: nothing else sorts real `audit_events` rows by a text column through AUDIT_COLUMNS. The
+// COLLATE "en-US-x-icu" fix (table-query-sql.ts's applySorts) is proven live only against a
+// synthetic two-column scratch table in packages/db/src/table-query-collation.live.test.ts — if
+// any `sql:` name in AUDIT_COLUMNS (packages/table-query/src/columns.ts) were wrong, the first
+// user click on Sort -> Actor/Action would 500 on the real table. This is the only end-to-end
+// proof the branch's headline fix works on the table it was written for.
+const COLLATION_MARKER = `tq-collation-scratch-${randomUUID()}`;
+
+live('audit sorts a text column with ICU collation, on the real table (live Postgres)', () => {
+  let internal: InternalDb;
+  let store: AuditStore;
+
+  beforeAll(async () => {
+    internal = createInternalDb(url!);
+    store = createAuditStore(internal.db);
+
+    // MIXED CASE IS THE POINT (same fixture as table-query-collation.live.test.ts): an
+    // all-lowercase set of names would pass with or without the explicit collation.
+    const names = ['BETA', 'alpha', 'epsilon'];
+    for (const [i, actorName] of names.entries()) {
+      await store.record({
+        actorType: 'system',
+        actorName,
+        action: 'x.y',
+        entityType: COLLATION_MARKER,
+        entityId: `e-${i}`,
+      });
+    }
+  });
+
+  afterAll(async () => {
+    await internal.db.deleteFrom('audit_events').where('entity_type', '=', COLLATION_MARKER).execute().catch(() => undefined);
+    await internal?.close().catch(() => undefined);
+  });
+
+  it("orders actorName the way applyTableState's localeCompare does, not this musl image's byte order", async () => {
+    const rows = await store.list({
+      entityType: COLLATION_MARKER,
+      sorts: [{ column: 'actorName', ascending: true }],
+    });
+    // ICU: 'alpha' < 'BETA' < 'epsilon'. A bare byte-order ORDER BY on postgres:16-alpine (musl)
+    // would instead produce ['BETA', 'alpha', 'epsilon'] — uppercase sorts first.
+    expect(rows.map((r) => r.actorName)).toEqual(['alpha', 'BETA', 'epsilon']);
+  });
+});
