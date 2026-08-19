@@ -254,6 +254,90 @@ describe('createFacilityRegistryStore', () => {
     expect(r.rows.every((x) => x.region === 'Dodoma' && x.status === 'Closed')).toBe(true);
   });
 
+
+  // --- Task 2: the shared table-query grammar --------------------------------------------------
+
+  // `list()` now also accepts validated `filters`/`sorts` from `parseTableQuery`
+  // (`@openldr/table-query`), ANDed with the fourteen named params above rather than replacing
+  // them. Every column in `FACILITY_COLUMNS` is `text` or `enum`, and `applySorts` collates both,
+  // so NO explicit-sort assertion can run here: pg-mem's parser rejects `COLLATE` outright. The
+  // sort proofs live in `facility-registry-live.test.ts`. What CAN run offline is the filter
+  // translation and the no-sort default, and both are below.
+  describe('grammar filters and sorts', () => {
+    it('applies a grammar filter that no named param sent', async () => {
+      const s = await seedMany(25);
+      // `country: 'KE'` is 5 of the 25 rows (i % 5 === 0). Deliberately a value that selects a
+      // SUBSET: a filter that were silently dropped would return all 25 and fail this, whereas
+      // filtering on `level = 'dispensary'` (all 25 rows) would pass either way.
+      const r = await s.list({
+        filters: [{ column: 'country', operator: 'eq', value: 'KE', combine: 'and' }],
+        limit: 1000,
+      });
+      expect(r.total).toBe(5);
+      expect(r.rows).toHaveLength(5);
+      expect(r.rows.every((x) => x.country === 'KE')).toBe(true);
+    });
+
+    it('applies an operator the named params cannot express (like)', async () => {
+      const s = await seedMany(25);
+      // `q` searches five columns at once; the grammar can target ONE. 'Facility 01' matches
+      // 010..019 — ten rows — and nothing else in the fixture.
+      const r = await s.list({
+        filters: [{ column: 'name', operator: 'like', value: 'Facility 01', combine: 'and' }],
+        limit: 1000,
+      });
+      expect(r.total).toBe(10);
+      expect(r.rows.every((x) => x.name.startsWith('Facility 01'))).toBe(true);
+    });
+
+    it('ANDs a grammar filter with the existing named params', async () => {
+      const s = await seedMany(25);
+      // Named `status: 'Active'` is 17 rows; grammar `country = 'KE'` is 5; the intersection is 4
+      // (row 15 is the KE row that is also Closed). Every number here differs from every other, so
+      // dropping either half of the conjunction changes the count.
+      const r = await s.list({
+        status: 'Active',
+        filters: [{ column: 'country', operator: 'eq', value: 'KE', combine: 'and' }],
+        limit: 1000,
+      });
+      expect(r.total).toBe(4);
+      expect(r.rows.every((x) => x.status === 'Active' && x.country === 'KE')).toBe(true);
+    });
+
+    it('counts with the same grammar filters as the page it describes', async () => {
+      const s = await seedMany(25);
+      // The rows query and the count query share ONE predicate builder. Asserting the VALUE (5),
+      // not just `total === rows.length`, is what catches a count query that skipped the grammar:
+      // that would report 25 against a 5-row page.
+      const r = await s.list({
+        filters: [{ column: 'country', operator: 'eq', value: 'KE', combine: 'and' }],
+        limit: 1000,
+      });
+      expect(r.total).toBe(5);
+      expect(r.total).toBe(r.rows.length);
+    });
+
+    it('keeps the registry alphabetical when the caller sends no sort', async () => {
+      // The regression guard for the literal `orderBy(name, id)` pair. That default is deliberately
+      // NOT routed through `applySorts` as `defaultSorts`: `name` is a text column, `applySorts`
+      // collates text, and pg-mem cannot parse COLLATE — routing it there takes this whole file
+      // (and two other packages) offline. Without this test someone could delete the literal
+      // branch and only the live suite would notice.
+      const { s } = await store();
+      // Inserted in an order that is NOT alphabetical, so pg-mem's stable scan order cannot pass
+      // this by accident if the ordering were dropped altogether. The ids ASCEND with insertion
+      // order and therefore DISAGREE with the alphabetical order of the names — without that, the
+      // `id` tiebreaker alone reproduces alphabetical order and this test passes with the `name`
+      // ordering deleted (measured: mutation M1 in the task report).
+      const seeded = [['f1', 'Zanzibar Clinic'], ['f2', 'Arusha Clinic'], ['f3', 'Mbeya Clinic']];
+      for (const [id, name] of seeded) {
+        await s.upsert({ id: id!, name: name!, facilityCode: `LC-${id}`, source: 'manual' as const });
+      }
+      const names = (await s.list({ limit: 1000 })).rows.map((r) => r.name);
+      expect(names).toEqual(['Arusha Clinic', 'Mbeya Clinic', 'Zanzibar Clinic']);
+    });
+  });
+
   it('handles a realistically long facility name without truncating or erroring', async () => {
     const { s } = await store();
     const long = `Mwananyamala Regional Referral Hospital ${'and Community Outreach Annexe '.repeat(6)}`.trim();

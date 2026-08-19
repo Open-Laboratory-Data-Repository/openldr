@@ -1,4 +1,11 @@
 import { type Kysely, type SelectQueryBuilder, type Selectable, sql } from 'kysely';
+import {
+  FACILITY_COLUMNS,
+  FACILITY_TIEBREAKER,
+  type ParsedFilter,
+  type ParsedSort,
+} from '@openldr/table-query';
+import { applySorts, buildFilterExpression } from './table-query-sql';
 import type { InternalSchema } from './schema/internal';
 import type { ReferenceCapture } from './reference-capture';
 import { FACILITY_ADMIN_LEVELS, type FacilityAdminLevel } from './facility-answers';
@@ -115,6 +122,16 @@ export interface FacilityListOptions {
    *  `facility_concept_projection` row and therefore CANNOT be selected as a mapping target at all
    *  — the FAC-P0-08 failure state, visible in a list instead of only as a failed background job. */
   health?: FacilityHealth;
+  /** Validated grammar rules from `parseTableQuery` (`@openldr/table-query`). ANDed with the named
+   *  fields above, never replacing them — every one of the fourteen keeps working unchanged.
+   *  `health` is deliberately NOT expressible here: it is a join predicate over
+   *  `facility_concept_projection`/`term_mappings`, not a `facility_registry` column, so it has no
+   *  entry in `FACILITY_COLUMNS` and stays on `joinHealth` above. */
+  filters?: ParsedFilter[];
+  /** Validated grammar sorts from `parseTableQuery`. An empty or absent list keeps the registry's
+   *  own alphabetical order — see the ordering comment in `list()` for why that default is NOT
+   *  routed through `applySorts`. */
+  sorts?: ParsedSort[];
 }
 
 /** A `FacilityRecord` as `list()` returns it — with the two fields it derives, per row, via the
@@ -376,6 +393,14 @@ export function createFacilityRegistryStore(
             eb('council', 'ilike', like),
           ]));
         }
+        // Grammar rules, ANDed with the named params above. The chained `q.where(col, op, val)`
+        // form used throughout this closure hands out no ExpressionBuilder; Kysely's callback form
+        // does, and that is what `buildFilterExpression` needs. Guarded on length because
+        // `buildFilterExpression` returns `undefined` for an empty list, and `.where(undefined)` is
+        // not a no-op.
+        if (opts.filters?.length) {
+          q = q.where((eb) => buildFilterExpression(eb, opts.filters!, FACILITY_COLUMNS)!);
+        }
         return q;
       };
 
@@ -424,21 +449,44 @@ export function createFacilityRegistryStore(
         return joined;
       };
 
-      const rowsQ = joinHealth(applyFilters(
+      const base = joinHealth(applyFilters(
         db.selectFrom('facility_registry')
           .selectAll('facility_registry')
           .select(sql<string>`case when fcp.registry_id is null then 'unprojected'
                                    when coalesce(m.n, 0) > 0 then 'mapped'
                                    else 'unmapped' end`.as('health'))
           .select(sql<number>`coalesce(m.n, 0)`.as('mapping_count')),
-      ))
-        .orderBy('facility_registry.name', 'asc')
-        // Tiebreaker only — keeps the result order deterministic when two facilities share a name
-        // (the norm, not the exception, in a national master facility list). Without this, offset
-        // paging over a non-unique sort column can show the same facility on two pages and never
-        // reach another — see the matching tiebreaker on `buildDistinctAdminValuesQuery` above for
-        // the same pattern.
-        .orderBy('facility_registry.id', 'asc')
+      ));
+
+      // ⛔ Two ordering paths on purpose, and the split is NOT an oversight.
+      //
+      // An explicit sort goes through `applySorts`, which appends `FACILITY_TIEBREAKER` and
+      // collates text/enum columns with `en-US-x-icu` — that is where client/server ordering parity
+      // actually matters, because the studio's own comparator uses `localeCompare`.
+      //
+      // The no-sort default stays the literal `orderBy` pair it has always been, and is
+      // deliberately NOT handed to `applySorts` as its `defaultSorts` argument. Every column in
+      // `FACILITY_COLUMNS` is `text` or `enum`, so routing the default through `applySorts` puts
+      // `collate "en-US-x-icu"` on EVERY facility list query — and pg-mem's parser cannot parse
+      // COLLATE at all (a hard syntax error, not a semantic gap). Measured on this branch: doing it
+      // that way fails 21 of the 34 tests in facility-registry-store.test.ts, every one of them on
+      // `Unexpected kw_collate token`. The same change was separately measured to take 2 tests
+      // offline in apps/server's facilities-routes.test.ts and 1 in packages/bootstrap. Known and
+      // accepted cost, disclosed rather than worked around: the
+      // default view orders on the database's own collation while an explicit name-ascending sort
+      // orders by ICU, and on the shipped musl-based image those differ ('BETA' before 'alpha' by
+      // byte order, after it by ICU).
+      const ordered = opts.sorts?.length
+        ? applySorts(base, opts.sorts, FACILITY_COLUMNS, FACILITY_TIEBREAKER)
+        : base
+          .orderBy('facility_registry.name', 'asc')
+          // Tiebreaker only — keeps the result order deterministic when two facilities share a name
+          // (the norm, not the exception, in a national master facility list). Without this, offset
+          // paging over a non-unique sort column can show the same facility on two pages and never
+          // reach another — see the matching tiebreaker on `buildDistinctAdminValuesQuery` above for
+          // the same pattern. `applySorts` appends the same column on the explicit-sort path.
+          .orderBy('facility_registry.id', 'asc');
+      const rowsQ = ordered
         .limit(opts.limit ?? DEFAULT_LIST_LIMIT)
         .offset(opts.offset ?? 0);
       const countQ = joinHealth(applyFilters(
