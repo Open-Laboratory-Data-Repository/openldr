@@ -1,4 +1,4 @@
-# Plugin sandbox — security posture (P2-HARD-1)
+# Plugin sandbox security posture (P2-HARD-1)
 
 OpenLDR CE runs ingestion plugins as **WebAssembly** modules through the
 [Extism](https://extism.org/) host runtime (`@extism/extism@1.0.3`). This document
@@ -13,18 +13,18 @@ an informed trust decision. The implementation lives in
 The runner instantiates each plugin **without** `allowedPaths` or `allowedHosts`
 (both are left unset). With Extism, an unset allow-list means **no access**: a plugin
 cannot open host files and cannot make network connections. There is no opt-in switch
-in CE config to widen this — it is closed by construction.
+in CE config to widen this. It is closed by construction.
 
 ### WASI is opt-in per plugin
 `useWasi` is set from the plugin's own manifest (`opts.wasi`), defaulting to `false`
 (`manifest.ts`: `wasi: z.boolean().default(false)`). A plugin only gets the WASI
-preview-1 surface if its manifest explicitly requests it. Note: pure-Rust plugins
+preview-1 imports if its manifest asks for them. Pure-Rust plugins
 compiled to `wasm32-wasip1` still require `wasi:true` because the Rust standard
 library imports `wasi_snapshot_preview1` symbols (clock/random) even for purely
-in-memory work — so `wasi:true` here does **not** imply filesystem or network access
+in-memory work, so `wasi:true` here does **not** imply filesystem or network access
 (those remain governed by the unset allow-lists above).
 
-### Minimal host-function surface
+### Minimal set of host functions
 The only host functions exposed to plugins are `log` and `progress`
 (under `extism:host/user`). There is no host function granting syscalls, process
 control, environment access, or arbitrary host callbacks. A plugin's entire
@@ -38,16 +38,16 @@ tampered or corrupted artifact is rejected, not run.
 
 ### Strict output validation
 Plugin output is NDJSON (one FHIR resource per line). Each resource is re-validated
-against the CE FHIR schemas strictly before it is persisted — a plugin cannot inject
+against the CE FHIR schemas strictly before the store persists it. A plugin cannot inject
 an unvalidated or malformed resource into the warehouse.
 
 ### In-process, not worker-isolated
 The runner uses `runInWorker: false`. The 1.0.3 SDK's worker path bootstraps from an
 inline `data:` URL whose bundle references a relative `worker.js.map`, which Node
-cannot resolve (`ERR_INVALID_URL`) — a known SDK bug. The plugin therefore runs in
+cannot resolve (`ERR_INVALID_URL`), a known SDK bug. The plugin therefore runs in
 the host process. This is relevant to the limits gap below.
 
-## What is NOT enforced — the known gap
+## What is NOT enforced
 
 **Memory and CPU/time limits are recorded but not hard-enforced.**
 
@@ -72,7 +72,7 @@ Treat plugin installation as a privileged, trusted operation:
 - **Only install plugins you have authored or audited.** A malicious or buggy plugin
   can consume CPU and memory until the host process dies (a denial-of-service against
   the ingest worker). It cannot read your filesystem, reach the network, or emit
-  unvalidated data — but it can hang or exhaust the process it runs in.
+  unvalidated data, but it can hang or exhaust the process it runs in.
 - Run the ingest worker under an OS-level resource governor (cgroup memory/CPU limits,
   a container memory cap, a process supervisor that restarts on OOM) as defence in
   depth against a runaway plugin, since the runtime cannot cap it.

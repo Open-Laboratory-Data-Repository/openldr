@@ -1,4 +1,4 @@
-# Phase 4 Security Audit — Workflows, Connectors, Marketplace, and Plugin UI
+# Phase 4 security audit of workflows, connectors, marketplace, and plugin UI
 
 Audit date: 2026-06-25  
 Previous audit baseline: `a1e3003` (2026-06-23)  
@@ -17,7 +17,7 @@ No source changes were made by this audit.
 
 ## Cutover blockers
 
-### SEC-01 — Critical: Workflow Code node escapes the sandbox
+### SEC-01 (Critical). Workflow Code node escapes the sandbox
 
 Files:
 
@@ -61,16 +61,16 @@ Recommendation:
 
 Interim remediation applied 2026-06-26: Code-node execution is now gated behind a new
 `WORKFLOW_CODE_ENABLED` config flag (default **false**). The handler
-(`packages/workflows/src/engine/node-handlers/code.ts`) refuses to run — before the worker
-is started — with a clear error when the flag is off, and emits a loud host-level-privilege
+(`packages/workflows/src/engine/node-handlers/code.ts`) refuses to run, before the worker
+is started, with a clear error when the flag is off, and emits a loud host-level-privilege
 warning when an enabled Code node runs. The misleading "require/process/fetch undefined" test
 was replaced/augmented with an honest adversarial test
 (`packages/workflows/src/engine/sandbox.test.ts`) that asserts the `vm` constructor-chain
-escape WORKS (reaches the host `process`) — documenting why Code nodes are off by default.
+escape WORKS (reaches the host `process`), which documents why Code nodes are off by default.
 A real-isolate replacement (separate unprivileged process / `isolated-vm`) is tracked as the
 proper long-term fix (see the comment block atop `sandbox.ts`).
 
-### SEC-02 — Critical: Plugin iframe can exfiltrate broker data
+### SEC-02 (Critical). Plugin iframe can exfiltrate broker data
 
 Files:
 
@@ -99,7 +99,7 @@ Recommendation:
 - Consider explicitly restricting `form-action`, `navigate-to` where supported, `base-uri`, and other navigation/exfiltration paths.
 - Add a browser security test proving that network requests cannot leave the iframe.
 
-### SEC-03 — High: DHIS2 cutover removes the existing admin authorization boundary
+### SEC-03 (High). DHIS2 cutover removes the existing admin authorization boundary
 
 Files:
 
@@ -134,7 +134,7 @@ Recommendation:
 4. For the immediate DHIS2 cutover, require `lab_admin` for the `dhis2-sink` UI and all its broker operations.
 5. Add tests using `lab_technician` and other non-admin roles against direct broker calls.
 
-### SEC-04 — High: `PLUGIN_EGRESS_ENABLED=false` does not block connector egress
+### SEC-04 (High). `PLUGIN_EGRESS_ENABLED=false` does not block connector egress
 
 Files:
 
@@ -158,7 +158,7 @@ Recommendation:
 - When `PLUGIN_EGRESS_ENABLED=false`, reject at least connector test, metadata, push, and any future outbound host operation.
 - Add tests proving the kill switch blocks actual connector target invocation.
 
-### SEC-05 — High: Workflow HTTP allowlist is bypassable through redirects
+### SEC-05 (High). Workflow HTTP allowlist is bypassable through redirects
 
 Files:
 
@@ -188,7 +188,7 @@ Recommendation:
 
 ## Additional high-priority findings
 
-### SEC-06 — High: Workflow reads expose secrets to every authenticated user
+### SEC-06 (High). Workflow reads expose secrets to every authenticated user
 
 Files:
 
@@ -212,7 +212,7 @@ Recommendation:
 - Return redacted summaries from list endpoints.
 - Move secrets out of workflow definitions into a server-side secret store referenced by opaque IDs.
 
-### SEC-07 — High: Webhooks may be unauthenticated and query-string tokens are accepted
+### SEC-07 (High). Webhooks may be unauthenticated and query-string tokens are accepted
 
 Files:
 
@@ -231,7 +231,7 @@ Recommendation:
 - Remove authentication headers before forwarding input to the workflow.
 - Add request body limits, rate limiting, replay protection where relevant, and concurrency controls.
 
-### SEC-08 — High: Workflow artifact route accepts an arbitrary blob key
+### SEC-08 (High). Workflow artifact route accepts an arbitrary blob key
 
 File:
 
@@ -245,7 +245,7 @@ Recommendation:
 - Prefer an opaque artifact ID resolved through a database record with ownership/type metadata.
 - Set safe download filenames and content types from trusted metadata.
 
-### SEC-09 — High: Marketplace registries enable SSRF and server-local path access
+### SEC-09 (High). Marketplace registries enable SSRF and server-local path access
 
 Files:
 
@@ -258,7 +258,7 @@ A `lab_admin` can configure:
 - Arbitrary HTTP registry base URLs, including internal services
 - Arbitrary local filesystem paths
 
-The server then reads from those locations. Even though this requires an administrator, it creates a strong SSRF/local-file primitive and expands the impact of a compromised admin account.
+The server then reads from those locations. Even though this requires an administrator, it creates a strong SSRF and local-file read capability, and expands the impact of a compromised admin account.
 
 Recommendation:
 
@@ -269,7 +269,7 @@ Recommendation:
 
 ## Medium-priority findings
 
-### SEC-10 — Medium: Remote registry downloads have no byte limits
+### SEC-10 (Medium). Remote registry downloads have no byte limits
 
 Files:
 
@@ -286,7 +286,7 @@ Recommendation:
 - Bound WASM, UI, manifest, and public-key sizes separately.
 - Revalidate redirects and final URLs.
 
-### SEC-11 — Medium: UI integrity is not rechecked when loaded
+### SEC-11 (Medium). UI integrity is not rechecked when loaded
 
 Files:
 
@@ -300,7 +300,7 @@ Recommendation:
 - Hash UI bytes in `loadUi()` and compare them with `payload.ui.sha256`.
 - Fail closed on missing or mismatched bytes.
 
-### SEC-12 — Medium: Broker request shapes and storage limits need server-side bounds
+### SEC-12 (Medium). Broker request shapes and storage limits need server-side bounds
 
 Files:
 
@@ -316,7 +316,7 @@ Recommendation:
 - Bound collection/key names, document byte size, list limits, report parameters, and mapping payloads.
 - Add rate and concurrency limits for expensive broker calls.
 
-### SEC-13 — Medium: Connector URL and host validation is too permissive
+### SEC-13 (Medium). Connector URL and host validation is too permissive
 
 Files:
 
@@ -351,10 +351,10 @@ Severity: 2 low | 16 moderate | 13 high | 2 critical
 
 Notable installed versions:
 
-- `jspdf@2.5.2` — critical/high advisories, including local-file/path traversal and injection advisories
-- `xlsx@0.18.5` — prototype-pollution and ReDoS advisories
-- `@fastify/static@8.3.0` — reported vulnerable
-- `dompurify@2.5.9` through jsPDF — multiple sanitization advisories
+- `jspdf@2.5.2`. Critical and high advisories, including local-file/path traversal and injection advisories
+- `xlsx@0.18.5`. Prototype-pollution and ReDoS advisories
+- `@fastify/static@8.3.0`. Reported vulnerable
+- `dompurify@2.5.9` through jsPDF. Multiple sanitization advisories
 
 Recommended action:
 
@@ -370,7 +370,7 @@ Recommended action:
   `dompurify` sanitization advisories. The only consumer is `apps/web/src/docs/export/toPdf.ts`
   (client-side "export docs to PDF"); the constructor + `text`/`save`/`addImage`/`getImageProperties`/
   `output('blob')` API is unchanged across v2→v4, so no code change was required. Note: jsPDF 3.0.x
-  was insufficient — newer advisories (HTML injection in new-window paths, FreeText object injection)
+  was insufficient. Newer advisories (HTML injection in new-window paths, FreeText object injection)
   are patched only in 4.2.1.
 - `@fastify/static` `^8.0.0` → `^9.1.3` (matches the installed `fastify@5`). The `register(fastifyStatic,
   { root })` + `sendFile` usage in `apps/server/src/app.ts` is unchanged; option names are stable.
@@ -391,7 +391,7 @@ Severity: 0 low | 0 moderate | 3 high | 0 critical
 
 The 3 remaining HIGH advisories are all `kysely@0.27.6` (JSON-path traversal in
 `JSONPathBuilder.key()`/`.at()`, patched `>=0.28.17`). **Not reachable:** OpenLDR uses none of the
-kysely JSON-path builder methods (`.jsonPath()`/`.key()`/`.at()`) — grep confirms the only JSON
+kysely JSON-path builder methods (`.jsonPath()`/`.key()`/`.at()`). Grep confirms the only JSON
 access is a single hardcoded raw-SQL literal `definition->>'kind'` (`packages/db/src/dhis2-store.ts`,
 no interpolation; that file is removed in the Phase-4 cutover). The `kysely@>=0.28.17` bump is a
 core data-layer change with broad blast radius, so it is tracked as a separate follow-up rather than

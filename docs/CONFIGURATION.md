@@ -20,8 +20,8 @@ writes all of them into `.env.prod`; you can also set them manually.
 
 Keycloak is proxied by nginx at `/auth`. The application accesses it two ways:
 
-- **Browser (front-channel):** via the public `OIDC_ISSUER_URL` — e.g. `https://HOST/auth/realms/openldr`. This is the issuer embedded in tokens and used for OIDC discovery.
-- **Server (back-channel token/admin/JWKS):** via `OIDC_INTERNAL_ISSUER_URL` — the docker-internal realm base, which avoids the gateway and the need to trust a self-signed cert. `OIDC_INTERNAL_JWKS_URL` is a sibling that overrides just the JWKS endpoint when it differs from `OIDC_INTERNAL_ISSUER_URL` + `/protocol/openid-connect/certs`. Either way, the issuer **claim** is still validated against the public `OIDC_ISSUER_URL`.
+- **Browser (front-channel):** via the public `OIDC_ISSUER_URL`, for example `https://HOST/auth/realms/openldr`. This is the issuer embedded in tokens and used for OIDC discovery.
+- **Server (back-channel token/admin/JWKS):** via `OIDC_INTERNAL_ISSUER_URL`, the docker-internal realm base, which avoids the gateway and the need to trust a self-signed cert. `OIDC_INTERNAL_JWKS_URL` is a sibling that overrides just the JWKS endpoint when it differs from `OIDC_INTERNAL_ISSUER_URL` + `/protocol/openid-connect/certs`. Either way, the issuer **claim** is still validated against the public `OIDC_ISSUER_URL`.
 
 | Variable | Type | Default | Effect |
 |---|---:|---:|---|
@@ -56,14 +56,14 @@ On a fresh install the seed (`openldr db seed`, or `SEED_ON_START=true`) auto-im
 out of the box. The import is **idempotent** (skipped once already present) and **best-effort**
 (a terminology-import failure logs a warning and never aborts the rest of the seed):
 
-- **HL7 FHIR R4 base ValueSet catalog** — the FHIR R4 value sets, imported via the FHIR catalog
+- **HL7 FHIR R4 base ValueSet catalog.** The FHIR R4 value sets, imported via the FHIR catalog
   path (`packages/db/fixtures/fhir/R4.valuesets.json.gz`).
-- **Full UCUM code system** — every UCUM atomic unit + prefix as a FHIR `CodeSystem`
+- **Full UCUM code system.** Every UCUM atomic unit and prefix as a FHIR `CodeSystem`
   (`http://unitsofmeasure.org`), generated from `ucum-essence.xml` by
   `scripts/make-ucum-codesystem.mjs` (`packages/db/fixtures/fhir/ucum.codesystem.json.gz`). UCUM is
   © Regenstrief Institute and the UCUM Organization, redistributable with attribution.
 
-**LOINC, SNOMED CT and RxNorm are NOT bundled** — they carry usage licenses and remain
+**LOINC, SNOMED CT and RxNorm are NOT bundled.** They carry usage licenses and remain
 user-provided. Import them yourself once you have accepted the relevant license, e.g.:
 
 ```sh
@@ -129,8 +129,8 @@ Required only when `TARGET_STORE_ADAPTER=mysql`. Serves both MySQL 8.4+ and Mari
 ## Connectors (DHIS2 & external targets)
 
 DHIS2 ships as a removable `dhis2-sink` plugin (Settings ▸ Marketplace). Its connection,
-mappings, org-unit links, and schedules are managed from the plugin's own screens —
-there are no DHIS2 env vars. Connector credentials are stored encrypted in the database.
+mappings, org-unit links, and schedules are managed from the plugin's own screens.
+There are no DHIS2 env vars. Connector credentials are stored encrypted in the database.
 
 | Variable | Type | Default | Effect |
 |---|---:|---:|---|
@@ -138,13 +138,13 @@ there are no DHIS2 env vars. Connector credentials are stored encrypted in the d
 
 ## Dashboards
 
-Dashboard raw SQL is toggled at runtime in **Settings → General → Feature Flags** (`dashboard.raw_sql`, admin-only, default off). Its **statement timeout** and **row cap** are no longer environment variables — they are **number settings** under **Settings → General → Limits & tuning** (`dashboard.sql_timeout_ms`, `dashboard.sql_row_cap`), also settable with `openldr settings numbers set`.
+Dashboard raw SQL is toggled at runtime in **Settings → General → Feature Flags** (`dashboard.raw_sql`, admin-only, default off). Its **statement timeout** and **row cap** are no longer environment variables. They are **number settings** under **Settings → General → Limits & tuning** (`dashboard.sql_timeout_ms`, `dashboard.sql_row_cap`), also settable with `openldr settings numbers set`.
 
 ## Workflows
 
 | Variable | Type | Default | Effect |
 |---|---:|---:|---|
-| `WORKFLOW_CODE_ENABLED` | boolean string | `false` | Master switch for Workflow Code nodes. **Default off (fail-safe).** Code nodes run author-supplied JavaScript via Node's `vm`, which is **not** a security sandbox — enabled code executes with **host-level privileges** (filesystem, network, environment, secrets). Enable only in trusted, single-tenant deployments. When false, Code nodes refuse to run. |
+| `WORKFLOW_CODE_ENABLED` | boolean string | `false` | Master switch for Workflow Code nodes. **Default off (fail-safe).** Code nodes run author-supplied JavaScript via Node's `vm`, which is **not** a security sandbox. Enabled code executes with **host-level privileges** (filesystem, network, environment, secrets). Enable only in trusted, single-tenant deployments. When false, Code nodes refuse to run. |
 | `WORKFLOW_CODE_TIMEOUT_MS` | positive integer | `5000` | Code node timeout. |
 | `WORKFLOW_CODE_MEMORY_MB` | positive integer | `128` | Code node worker memory cap. |
 | `WORKFLOW_HTTP_ALLOWLIST` | comma-separated hostnames | empty | Allowed hosts for Workflow HTTP Request nodes. Empty means no hosts are reachable. |
@@ -156,13 +156,13 @@ Dashboard raw SQL is toggled at runtime in **Settings → General → Feature Fl
 | `WORKFLOW_EMAIL_POLL_MIN_SECONDS` | positive integer | `30` | Floor for an email-trigger's poll interval, in seconds. |
 | `WORKFLOW_EMAIL_MAX_PER_POLL` | positive integer | `50` | Max unseen messages processed per email-trigger poll. |
 
-> `workflow.dataset_publish_enabled` (publish materialized datasets as real target tables) and `workflow.listeners_enabled` (external listener triggers — Postgres `LISTEN` / IMAP poll) are now **Settings → General feature flags**, not environment variables.
+> `workflow.dataset_publish_enabled` (publish materialized datasets as real target tables) and `workflow.listeners_enabled` (external listener triggers, Postgres `LISTEN` or IMAP poll) are now **Settings → General feature flags**, not environment variables.
 
 ## Plugin Runtime
 
 | Variable | Type | Default | Effect |
 |---|---:|---:|---|
-| `PLUGIN_UI_ENABLED` | boolean string | `true` | Master switch for the plugin webview/UI surface. When false the host serves no plugin nav/UI and the broker refuses all UI calls. |
+| `PLUGIN_UI_ENABLED` | boolean string | `true` | Master switch for the plugin webview and UI. When false the host serves no plugin nav/UI and the broker refuses all UI calls. |
 | `PLUGIN_EGRESS_ENABLED` | boolean string | `true` | Global network-egress kill-switch for plugin host services. When false the broker refuses any egress-bearing operation regardless of a plugin's grant. |
 | `PLUGIN_DATA_MAX_DOC_BYTES` | positive integer | `8388608` | Max serialized byte size of a plugin document persisted/forwarded through the broker. |
 | `PLUGIN_CRASH_LOG_DIR` | path | `.openldr/crash` | Directory for durable plugin crash markers, drained into the audit trail on the next boot. |

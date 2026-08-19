@@ -4,16 +4,16 @@ Source of truth: `packages/cli/src/index.ts`. Captured help output for every com
 
 > Commands below are written for an installed stack, where the installer provides an `openldr`
 > wrapper in the install directory (`.\openldr.ps1` on Windows). From a source checkout, use
-> `pnpm openldr` instead — the arguments are identical. File arguments on an installed stack
+> `pnpm openldr` instead. The arguments are identical. File arguments on an installed stack
 > must live under `./data`; see the CLI doc's "Running it" section.
 
 There are two ways to invoke it:
 
 ```bash
-# Installed stack — from the install directory (`.\openldr.ps1` on Windows)
+# Installed stack, from the install directory (`.\openldr.ps1` on Windows)
 ./openldr --help
 
-# Source checkout — from the repository root
+# Source checkout, from the repository root
 pnpm openldr --help
 ```
 
@@ -75,15 +75,15 @@ The WHONET sample is a repository file, so ingesting it is a source-checkout com
 pnpm openldr ingest samples/whonet-sample.sqlite --plugin whonet-sqlite --json
 ```
 
-## Ingesting data — `openldr ingest`
+## Ingesting data with `openldr ingest`
 
-`openldr ingest <file>` runs a file through the ingest pipeline (accept → convert → drain into the FHIR store). It is the file/CLI half of the "push data into CE" story (the HTTP half is the workflow webhook — see [Operator Guide → Ingesting & pushing data](OPERATOR-GUIDE.md)).
+`openldr ingest <file>` runs a file through the ingest pipeline (accept → convert → drain into the FHIR store). It is the file/CLI half of the "push data into CE" story (the HTTP half is the workflow webhook, see [Operator Guide, Ingesting & pushing data](OPERATOR-GUIDE.md)).
 
 | Option | Default | Purpose |
 |---|---|---|
 | `--converter <id>` | `fhir-bundle` | Converter that parses the file. `fhir-bundle` expects a FHIR transaction/collection Bundle. |
-| `--plugin <id>` | — | Alias of `--converter`; use an installed WASM converter plugin (e.g. `whonet-sqlite`, `hl7v2`, `tabular`). |
-| `--config <file>` | — | Plugin config JSON (e.g. tabular column mapping). |
+| `--plugin <id>` | none | Alias of `--converter`; use an installed WASM converter plugin (e.g. `whonet-sqlite`, `hl7v2`, `tabular`). |
+| `--config <file>` | none | Plugin config JSON (e.g. tabular column mapping). |
 | `--source <s>` | `cli` | Source-system identifier recorded on the batch/provenance. |
 | `--json` | off | Emit the batch result as JSON. |
 
@@ -107,7 +107,7 @@ On an installed stack the same commands are `./openldr …`, and each file must 
 
 Distributed sync links labs to a central OpenLDR server. Two command groups cover it: `openldr settings sync …` edits the stored configuration on a lab, and `openldr sync …` reports live status, triggers a pass, and (on central) enrolls labs. All accept `--json`.
 
-**Configuration (lab) — `openldr settings sync`**
+**Configuration (lab), `openldr settings sync`**
 
 | Command | Purpose |
 |---|---|
@@ -116,7 +116,7 @@ Distributed sync links labs to a central OpenLDR server. Two command groups cove
 
 `mode` is one of `push`, `pull`, or `bidirectional`. `clientSecret` is write-only.
 
-**Status and control — `openldr sync`**
+**Status and control, `openldr sync`**
 
 | Command | Purpose |
 |---|---|
@@ -128,9 +128,9 @@ Distributed sync links labs to a central OpenLDR server. Two command groups cove
 | `openldr sync divergence show <resourceType> <resourceId> <version>` | Inspect one divergence. |
 | `openldr sync divergence clear <resourceType> <resourceId> <version>` | Acknowledge/clear a divergence. |
 
-A pull record that fails repeatedly is quarantined rather than left to block the stream — see [Operator Guide → Distributed sync](OPERATOR-GUIDE.md#distributed-sync).
+A pull record that fails repeatedly is quarantined rather than left to block the stream. See [Operator Guide, Distributed sync](OPERATOR-GUIDE.md#distributed-sync).
 
-**Offline bundle (sneakernet) — `openldr sync`**
+**Offline bundle (sneakernet), `openldr sync`**
 
 For a lab with no live link, sync can move through a signed file instead of HTTP.
 
@@ -139,7 +139,7 @@ For a lab with no live link, sync can move through a signed file instead of HTTP
 | `openldr sync export` | Write a signed offline sync bundle to a file (on a lab this is the push delta; on central use `--site <id>` for that site's pull delta). |
 | `openldr sync import <file>` | Apply a signed offline sync bundle received from the other side. |
 
-**Result amendment — `openldr sync`** (run on the central server)
+**Result amendment, `openldr sync`** (run on the central server)
 
 | Command | Purpose |
 |---|---|
@@ -153,7 +153,7 @@ For an order (co-edit lab request status/metadata), amend the `ServiceRequest`, 
 
 The owning lab drains these central-authored amendments on its pull pass via the `'sync-amend-pull'` cursor (a distinct `change_cursors` consumer alongside `'sync-push'`, `'sync-pull'`, and the terminology cursor).
 
-**Central-side enrollment — `openldr sync`** (run on the central server)
+**Central-side enrollment, `openldr sync`** (run on the central server)
 
 | Command | Purpose |
 |---|---|
@@ -173,7 +173,7 @@ Enroll a lab on central, then hand the printed credentials to the lab operator:
 
 ## Captured Terminal Output
 
-`docs/audit/2026-06-23/cli-help-output.md` is a captured terminal-output appendix (dated 2026-06-23 — it predates the `errors`, `ingest`, `report-def`, `report-design`, and `sync divergence/export/import` additions, and still shows the removed `dhis2` group, so treat it as a snapshot, not the current surface; run `./openldr <group> --help` for the live help). It contains fenced `console` blocks with the prompt, command, real output, and `EXIT_CODE` for each command, including:
+`docs/audit/2026-06-23/cli-help-output.md` is a captured terminal-output appendix dated 2026-06-23. It predates the `errors`, `ingest`, `report-def`, `report-design`, and `sync divergence/export/import` additions, and still shows the removed `dhis2` group. Treat it as a snapshot, not the current command list. Run `./openldr <group> --help` for the live help. It contains fenced `console` blocks with the prompt, command, real output, and `EXIT_CODE` for each command, including:
 
 - top-level `openldr --help`;
 - every command family help page;

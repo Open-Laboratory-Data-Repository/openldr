@@ -4,7 +4,7 @@ This guide documents the repository as it exists now. It complements the in-app 
 
 > Commands below are written for an installed stack, where the installer provides an `openldr`
 > wrapper in the install directory (`.\openldr.ps1` on Windows). From a source checkout, use
-> `pnpm openldr` instead — the arguments are identical. File arguments on an installed stack
+> `pnpm openldr` instead. The arguments are identical. File arguments on an installed stack
 > must live under `./data`; see the CLI doc's "Running it" section.
 
 ## Setup
@@ -94,7 +94,7 @@ Use Workflow Builder for analyst-authored data jobs: triggers, SQL/FHIR/HTTP sou
 
 Key configuration:
 
-- `WORKFLOW_CODE_ENABLED` is the master switch for Code nodes (**default off, fail-safe** — `vm` is not a sandbox); `WORKFLOW_CODE_TIMEOUT_MS` and `WORKFLOW_CODE_MEMORY_MB` bound them once enabled.
+- `WORKFLOW_CODE_ENABLED` is the master switch for Code nodes (**default off, fail-safe**, because `vm` is not a sandbox); `WORKFLOW_CODE_TIMEOUT_MS` and `WORKFLOW_CODE_MEMORY_MB` bound them once enabled.
 - `WORKFLOW_HTTP_ALLOWLIST` controls HTTP Request egress.
 - Publishing materialized datasets as `wf_ds_<name>` tables (PostgreSQL target) is the `workflow.dataset_publish_enabled` **feature flag** (Settings → General), not an env var.
 
@@ -159,14 +159,14 @@ Troubleshooting:
 
 ## Ingesting & pushing data
 
-"How do I push data into CE?" has three answers depending on what you have. **There is no generic `POST /fhir` or `POST /api/ingest` endpoint** — do not try to POST a FHIR Bundle to an arbitrary URL and expect it to persist.
+"How do I push data into CE?" has three answers depending on what you have. **There is no generic `POST /fhir` or `POST /api/ingest` endpoint.** Do not try to POST a FHIR Bundle to an arbitrary URL and expect it to persist.
 
-### 1. From a file — `openldr ingest` (the reliable path)
+### 1. From a file, with `openldr ingest` (the reliable path)
 
 `openldr ingest <file>` runs a file through the pipeline (accept → convert → drain into the FHIR store). The **converter** decides how the file is parsed:
 
-- `--converter fhir-bundle` (default) — the file is a FHIR **transaction/collection Bundle** (a JSON object with `resourceType: "Bundle"` and an `entry` array). A bare JSON array is **not** a Bundle and will not persist clinical rows.
-- `--plugin <id>` — parse with an installed WASM converter plugin, e.g. `whonet-sqlite` (WHONET AMR databases), `hl7v2` (HL7 v2 messages), or `tabular` (CSV/TSV with a `--config` column mapping). Install the plugin first with `openldr plugin install`.
+- `--converter fhir-bundle` (default). The file is a FHIR **transaction/collection Bundle** (a JSON object with `resourceType: "Bundle"` and an `entry` array). A bare JSON array is **not** a Bundle and will not persist clinical rows.
+- `--plugin <id>`. Parse with an installed WASM converter plugin, e.g. `whonet-sqlite` (WHONET AMR databases), `hl7v2` (HL7 v2 messages), or `tabular` (CSV/TSV with a `--config` column mapping). Install the plugin first with `openldr plugin install`.
 
 The plugin and the sample file below are repository files, so this example is a source checkout:
 
@@ -186,27 +186,27 @@ pnpm openldr pipeline retry <batchId>
 On an installed stack the same commands are `./openldr …`, and each file must be copied into
 `./data` and named with the `data/` prefix.
 
-A successful run prints `batch <id>: done (<n> resources)`. Zero resources means the converter did not recognise the input — check the file shape against the converter, not the pipeline.
+A successful run prints `batch <id>: done (<n> resources)`. Zero resources means the converter did not recognise the input. Check the file shape against the converter, not the pipeline.
 
-### 2. Over HTTP — a workflow webhook
+### 2. Over HTTP, with a workflow webhook
 
-The only inbound HTTP data path is a **workflow webhook**: `POST /api/workflows/hooks/<path>`, gated by a per-webhook secret. The request body is delivered to the workflow as its input; **what gets persisted is whatever the workflow does with it**, not a fixed FHIR contract. Build the workflow first (Workflow Builder → a Webhook trigger → validate/transform → a Persist/Store node), then have the external system POST to that path with its secret. See [Workflows](#workflows). This is deliberately flexible — the same webhook can accept a form submission, a vendor JSON payload, or a Bundle you then normalise inside the workflow.
+The only inbound HTTP data path is a **workflow webhook**: `POST /api/workflows/hooks/<path>`, gated by a per-webhook secret. The request body is delivered to the workflow as its input; **what gets persisted is whatever the workflow does with it**, not a fixed FHIR contract. Build the workflow first (Workflow Builder → a Webhook trigger → validate/transform → a Persist/Store node), then have the external system POST to that path with its secret. See [Workflows](#workflows). This is flexible on purpose. The same webhook can accept a form submission, a vendor JSON payload, or a Bundle you then normalise inside the workflow.
 
 An **ingest trigger** is the complement: a workflow with an `ingest` trigger runs *after* `openldr ingest` (or any pipeline batch) completes, so you can post-process each batch (notify, forward to a sink, re-report).
 
-### 3. Lab → central — sync push (not for third parties)
+### 3. Lab to central, with sync push (not for third parties)
 
-`POST /api/sync/push` exists, but it is **machine-to-machine change-log replication** from an enrolled lab up to a central server, authenticated by client-credentials with a `site_id` claim. It is not a general ingest endpoint — a third-party system cannot use it. See [Distributed sync](#distributed-sync).
+`POST /api/sync/push` exists, but it is **machine-to-machine change-log replication** from an enrolled lab up to a central server, authenticated by client-credentials with a `site_id` claim. It is not a general ingest endpoint. A third-party system cannot use it. See [Distributed sync](#distributed-sync).
 
 Troubleshooting:
 
 - `batch … done (0 resources)`: the converter did not parse the input (wrong `--converter`/`--plugin`, or a bare array where a Bundle was expected).
-- A webhook POST returns `401`/`404`: the per-webhook secret is wrong/missing, or the workflow (and thus its webhook path) is not saved/enabled — a webhook only exists once its workflow is saved.
+- A webhook POST returns `401`/`404`: the per-webhook secret is wrong/missing, or the workflow (and thus its webhook path) is not saved or enabled. A webhook only exists once its workflow is saved.
 - Data ingested but not visible in reports: the analytics warehouse projection runs off the FHIR change log; confirm `TARGET_STORE_ADAPTER`/target DB and that the projection worker is running.
 
 ## DHIS2 (plugin)
 
-DHIS2 is **no longer a core feature** — it ships as a removable `dhis2-sink` plugin installed from **Settings ▸ Marketplace**. There are no `REPORTING_TARGET_ADAPTER`/`DHIS2_SYNC_ENABLED` env vars and no `openldr dhis2 …` CLI. Once installed, configure it from the plugin's own screens: set `SECRETS_ENCRYPTION_KEY` (`openssl rand -base64 32`), create a DHIS2 connector under **Settings ▸ Connectors** (base URL + credentials, encrypted at rest), and drive aggregate `dataValueSet` / tracker pushes from the plugin UI or a workflow sink node (use its dry-run before a live push). See the plugin's bundled documentation for details.
+DHIS2 is **no longer a core feature**. It ships as a removable `dhis2-sink` plugin installed from **Settings ▸ Marketplace**. There are no `REPORTING_TARGET_ADAPTER`/`DHIS2_SYNC_ENABLED` env vars and no `openldr dhis2 …` CLI. Once installed, configure it from the plugin's own screens: set `SECRETS_ENCRYPTION_KEY` (`openssl rand -base64 32`), create a DHIS2 connector under **Settings ▸ Connectors** (base URL + credentials, encrypted at rest), and drive aggregate `dataValueSet` / tracker pushes from the plugin UI or a workflow sink node (use its dry-run before a live push). See the plugin's bundled documentation for details.
 
 ## Users And Audit
 
@@ -239,24 +239,24 @@ Flow:
    ./openldr sync list
    ```
 
-   Hand the printed client id, client secret, site id, central URL, and OIDC issuer to the lab operator. Lost secrets are unrecoverable — `./openldr sync rotate <siteId>` issues a new one; `./openldr sync revoke <siteId>` deletes the client.
+   Hand the printed client id, client secret, site id, central URL, and OIDC issuer to the lab operator. Lost secrets are unrecoverable. `./openldr sync rotate <siteId>` issues a new one; `./openldr sync revoke <siteId>` deletes the client.
 
-2. **On each lab**, enter those values under **Settings → General → Distributed Sync** (or `./openldr settings sync set …`), choose a **mode** — `push`, `pull`, or `bidirectional` — set the interval, and enable. Monitor with the card's live status panel or `./openldr sync status`, and force a pass with **Sync now** / `./openldr sync now`.
+2. **On each lab**, enter those values under **Settings → General → Distributed Sync** (or `./openldr settings sync set …`), choose a **mode** of `push`, `pull`, or `bidirectional`, set the interval, and enable. Monitor with the card's live status panel or `./openldr sync status`, and force a pass with **Sync now** / `./openldr sync now`.
 
-Result amendments (co-edit): a central operator can correct a lab-owned result without breaking ownership. `POST /api/settings/sync/amend` (admin, `lab_admin`) or `./openldr sync amend --resource-type <t> --id <id> --status <s> [--reason …] [--patch <json>]` writes a new FHIR version on central and queues it. The owning lab drains those amendments on its next `pull`/`bidirectional` pass through the `'sync-amend-pull'` cursor, applying the higher versionId back into its own store. Order status/metadata co-edit uses this same amend surface against the `ServiceRequest` (e.g. `activity: update`). Intra-lab MPI merge: `POST /api/settings/sync/merge-patient` (admin, `lab_admin`) or `./openldr sync merge-patient --survivor <id> --duplicate <id> [--reason …]` keeps the survivor, marks the duplicate `replaced-by` the survivor, and re-attributes the duplicate's lab history to it — the superseded duplicate then shows `active=false` in the patient list.
+Result amendments (co-edit): a central operator can correct a lab-owned result without breaking ownership. `POST /api/settings/sync/amend` (admin, `lab_admin`) or `./openldr sync amend --resource-type <t> --id <id> --status <s> [--reason …] [--patch <json>]` writes a new FHIR version on central and queues it. The owning lab drains those amendments on its next `pull`/`bidirectional` pass through the `'sync-amend-pull'` cursor, applying the higher versionId back into its own store. Order status/metadata co-edit uses this same amend route against the `ServiceRequest` (e.g. `activity: update`). Intra-lab MPI merge: `POST /api/settings/sync/merge-patient` (admin, `lab_admin`) or `./openldr sync merge-patient --survivor <id> --duplicate <id> [--reason …]` keeps the survivor, marks the duplicate `replaced-by` the survivor, and re-attributes the duplicate's lab history to it. The superseded duplicate then shows `active=false` in the patient list.
 
-Transport compression: sync traffic is gzip-compressed both ways, with no configuration. Responses — including the large terminology bulk drains and pull pages — compress automatically once they exceed ~1KB. Push bodies compress only after central advertises support (an `Accept-Encoding: gzip` response header, RFC 7694), so a lab on a newer build talking to an older central simply keeps sending uncompressed and keeps working: there is **no upgrade-order requirement** and no operator action.
+Transport compression: sync traffic is gzip-compressed both ways, with no configuration. Responses, including the large terminology bulk drains and pull pages, compress once they exceed ~1KB. Push bodies compress only after central advertises support (an `Accept-Encoding: gzip` response header, RFC 7694), so a lab on a newer build talking to an older central simply keeps sending uncompressed and keeps working: there is **no upgrade-order requirement** and no operator action.
 
 Troubleshooting:
 
-- `415` from a machine endpoint: the request body used a `Content-Encoding` central does not accept — only `gzip` is supported. The coded response is `SY0415`.
+- `415` from a machine endpoint: the request body used a `Content-Encoding` central does not accept. Only `gzip` is supported. The coded response is `SY0415`.
 
-- One bad record blocks the pull: the pull stream is ordered, so a terminology system/concept map (or other bulk record) that keeps failing to apply used to silently wedge **all** config and terminology sync behind it. Such a record is now quarantined after 3 failed attempts and the stream moves on. Inspect the held/quarantined records with `./openldr sync quarantine list` or `GET /api/settings/sync/quarantine` (admin, `lab_admin`); once the cause is fixed, re-apply it with `./openldr sync quarantine retry <entityType> <entityId>` or `POST /api/settings/sync/quarantine/retry`.
+- One bad record blocks the pull: the pull stream is ordered, so a terminology system/concept map (or other bulk record) that keeps failing to apply used to block **all** config and terminology sync behind it, with no error shown. Such a record is now quarantined after 3 failed attempts and the stream moves on. Inspect the held/quarantined records with `./openldr sync quarantine list` or `GET /api/settings/sync/quarantine` (admin, `lab_admin`); once the cause is fixed, re-apply it with `./openldr sync quarantine retry <entityType> <entityId>` or `POST /api/settings/sync/quarantine/retry`.
 
 - Sync does nothing: confirm it is enabled and the mode is what you expect; re-check the central URL, site id, OIDC issuer, client id, and (if blanked) the secret.
-- `403`/`503` when enrolling on central: the admin service account lacks `manage-clients`/`view-clients` or Keycloak admin is not configured — re-import the realm and retry.
+- `403`/`503` when enrolling on central: the admin service account lacks `manage-clients`/`view-clients` or Keycloak admin is not configured. Re-import the realm and retry.
 - Machine endpoints `POST /api/sync/push`, `POST /api/sync/pull`, and `POST /api/sync/pull-amendments` are client-credentials-authed (lab → central); the `/api/settings/sync/*` admin endpoints (including `sync/amend`) are `lab_admin` user-authed.
 
 ## i18n
 
-The app ships English, French, and Portuguese UI bundles. The in-app manual (`apps/studio/src/docs`) is grouped into Start here, Daily work, Data and design, Administration, and More — currently: Start Here, Dashboard, Reports, Workflows, Scheduled reports, Custom Queries, Report Designer, Forms, Terminology, Users and Roles, Audit, Settings, Distributed Sync, Connectors, Marketplace, Environment Variables, and Deployment & Developer Docs. French/Portuguese in-app guides fall back to English until authored. Adding an in-app page requires a source-code registry change (`apps/studio/src/docs/registry.ts`), so operator/API/deployment reference lives here under `docs/**` and on the public website.
+The app ships English, French, and Portuguese UI bundles. The in-app manual (`apps/studio/src/docs`) is grouped into Start here, Daily work, Data and design, Administration, and More. The current pages are Start Here, Dashboard, Reports, Workflows, Scheduled reports, Custom Queries, Report Designer, Forms, Terminology, Users and Roles, Audit, Settings, Distributed Sync, Connectors, Marketplace, Environment Variables, and Deployment & Developer Docs. French/Portuguese in-app guides fall back to English until authored. Adding an in-app page requires a source-code registry change (`apps/studio/src/docs/registry.ts`), so operator/API/deployment reference lives here under `docs/**` and on the public website.

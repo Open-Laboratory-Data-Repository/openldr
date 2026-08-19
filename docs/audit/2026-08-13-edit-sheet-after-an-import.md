@@ -1,7 +1,7 @@
 # The Edit sheet after an import
 
 Import 3788 real facilities, open any one of them, and three separate things are wrong on the same
-screen. None is a regression — the import is what made them visible at scale.
+screen. None is a regression. The import is what made them visible at scale.
 
 Found 2026-08-13 during a live run of the Zambia MFL export (3788 rows) against a dev stack, after
 the facility import column/value mapping slice merged (`edfe5915`). Every number below is measured
@@ -11,7 +11,7 @@ against the resulting database, not inferred.
 
 ---
 
-## F1 — "Facility code" is blank on every imported facility, while the table shows a code
+## F1. "Facility code" is blank on every imported facility, while the table shows a code
 
 The table's CODE column falls back across two different fields:
 
@@ -22,8 +22,8 @@ The table's CODE column falls back across two different fields:
 The Edit sheet's "Facility code" field is bound to `localCode` **alone** (`apiProperty: 'localCode'`
 on `fld-fac-local-code`).
 
-An imported row has no `localCode` and never will. The parser refuses to invent one, deliberately —
-`packages/terminology/src/facility-csv.test.ts` pins it: *"gives an imported row NO local code — a
+An imported row has no `localCode` and never will. The parser refuses to invent one, on purpose.
+`packages/terminology/src/facility-csv.test.ts` pins it: *"gives an imported row NO local code, a
 national register has no concept of one"*. So the table shows the **national** code and the sheet
 shows nothing.
 
@@ -33,24 +33,24 @@ which is why this reads as "imported data is broken" rather than "these are two 
 
 **What would fix it:** either bind the sheet to the same fallback the table uses, or label them
 differently so "CODE" and "Facility code" are not read as the same thing. The first is probably
-wrong — editing a national code through a field labelled local code would be worse.
+wrong. Editing a national code through a field labelled local code would be worse.
 
-## F2 — Required markers that nothing enforces
+## F2. Required markers that nothing enforces
 
 The Facility form marks eight fields required. Two of them are fields the import path cannot supply:
 
 | Field | Form | Import contract | Imported rows affected |
 |---|---|---|---|
-| `localCode` ("Facility code") | `required: true` | never produced — see F1 | 3788 / 3788 |
+| `localCode` ("Facility code") | `required: true` | never produced, see F1 | 3788 / 3788 |
 | `region` ("Region") | `required: true` | Zambia has no tier between Province and District | 3788 / 3788 |
 
 The red `!` markers in the sheet promise a constraint. **Nothing checks it on this path.**
 
 - `validateAnswers` (`packages/forms/src/validate-answers.ts`) exists and does flag missing required
   fields, but it is wired into `apps/server/src/forms-routes.ts:321` and
-  `packages/bootstrap/src/form-validate-service.ts` — **not** into `apps/server/src/facilities-routes.ts`.
+  `packages/bootstrap/src/form-validate-service.ts`, **not** into `apps/server/src/facilities-routes.ts`.
 - The dialog's Save is gated on `formReady` (`apps/studio/src/facilities/FacilityDialog.tsx:252`),
-  which is `!schemaLoading && !noForm && schema !== null` — schema loading, not validity.
+  which is `!schemaLoading && !noForm && schema !== null`. That is schema loading, not validity.
 
 **Measured, not inferred.** A `PUT /api/facilities/:id` carrying empty `fld-fac-local-code` and
 empty `fld-fac-region` returned **HTTP 200 and saved**, leaving both columns NULL.
@@ -62,10 +62,10 @@ hard block at least tells the truth.
 facilities route (and then `region` must stop being required, or no Zambian facility can ever be
 edited), or stop rendering a required marker the path does not honour.
 
-⚠ Note the interaction: making the route enforce required **without** first relaxing `region` would
+The two changes interact. Making the route enforce required **without** first relaxing `region` would
 turn F2 from a cosmetic lie into a hard lock-out on 3788 rows.
 
-## F3 — The vocabulary guard blocks editing an imported facility outright
+## F3. The vocabulary guard blocks editing an imported facility outright
 
 Before either of the above can even be reached, the save is refused:
 
@@ -75,13 +75,13 @@ PUT /api/facilities/fac-ffba14a83e48c1e5
 ```
 
 `Health Centre` is the value the import legitimately wrote. Unmapped values are written through raw
-by design — `applyControlledFields` never blocks and never blanks
+by design. `applyControlledFields` never blocks and never blanks
 (`packages/bootstrap/src/facility-controlled-fields.ts:155`). The edit path then refuses the very
 value the import path was designed to keep.
 
 The same save succeeded once `level` was changed to the canonical `health-center`.
 
-**So an imported facility cannot be edited at all until its vocabulary is mapped** — and mapping is
+**So an imported facility cannot be edited at all until its vocabulary is mapped**, and mapping is
 optional by design. Two subsystems each behaving correctly, disagreeing at the seam.
 
 This matches the known open item about the vocabulary guard blocking legacy edits; this is it

@@ -24,9 +24,11 @@ temp/
 # Portable Python runtime downloaded by @openldr/bootstrap at runtime/test time (not source)
 packages/bootstrap/Python/
 
-# Claude Code workspace config. `launch.json` IS tracked — it names the dev servers
-# `/run` and the browser preview start, so it belongs to the repo. The siblings do not:
-# settings.local.json is per-machine permissions/env, the lock holds a live pid, and
-# worktrees/ is scratch.
+# Claude Code workspace config. Two entries ARE tracked. `launch.json` names the dev
+# servers `/run` and the browser preview start. `skills/` holds repo rules that every
+# session must load, so it belongs to the repo the same way AGENTS.md does. The siblings
+# do not: settings.local.json is per-machine permissions and env, the lock holds a live
+# pid, and worktrees/ is scratch.
 .claude/*
 !.claude/launch.json
+!.claude/skills/

@@ -1,8 +1,8 @@
-# OpenLDR CE HTTP API Surface
+# OpenLDR CE HTTP API
 
 Source of truth: `apps/server/src/*.ts` (route registration in `apps/server/src/app.ts`). Routes marked "admin" use `requireRole('lab_admin')`; workflow manage routes use `lab_admin` or `lab_manager`.
 
-> **DHIS2 is no longer a core API.** DHIS2 shipped as a removable plugin — there is no `dhis2-routes.ts` and the server registers no `/api/dhis2/*` routes. A DHIS2 integration is installed from the Marketplace and surfaces through the connector model and the plugin UI (`GET /api/plugins/ui`). See [Ingesting & pushing data](OPERATOR-GUIDE.md) for how external systems exchange data with CE.
+> **DHIS2 is no longer a core API.** DHIS2 shipped as a removable plugin. There is no `dhis2-routes.ts` and the server registers no `/api/dhis2/*` routes. You install a DHIS2 integration from the Marketplace. It appears through the connector model and the plugin UI (`GET /api/plugins/ui`). See [Ingesting & pushing data](OPERATOR-GUIDE.md) for how external systems exchange data with CE.
 
 ## Core
 
@@ -104,7 +104,7 @@ Powers the `/query` workbench and the queries that back report definitions.
 | `GET` | `/api/workflows/datasets/:name` | Get a materialized workflow dataset. |
 | `GET` | `/api/workflows/datasets/:name.csv` | Download a dataset as CSV. |
 | `GET` | `/api/workflows/artifacts/*` | Download a workflow artifact. |
-| `POST` | `/api/workflows/hooks/*` | Invoke a registered webhook trigger. See [Ingesting & pushing data](OPERATOR-GUIDE.md) — this is the inbound HTTP data path. |
+| `POST` | `/api/workflows/hooks/*` | Invoke a registered webhook trigger. See [Ingesting & pushing data](OPERATOR-GUIDE.md). This is the inbound HTTP data path. |
 
 ## Forms
 
@@ -169,7 +169,7 @@ Saved, encrypted connections to external systems (databases, email, SFTP, plugin
 
 ## Terminology
 
-Read-only FHIR terminology operations plus the admin CRUD surface.
+Read-only FHIR terminology operations plus the admin CRUD routes.
 
 | Method | Path | Purpose |
 |---|---|---|
@@ -210,7 +210,7 @@ Read-only FHIR terminology operations plus the admin CRUD surface.
 
 ## Settings
 
-Admin-gated (`lab_admin`) general settings, plus the sync admin surface (next section).
+Admin-gated (`lab_admin`) general settings, plus the sync admin routes (next section).
 
 | Method | Path | Purpose |
 |---|---|---|
@@ -254,7 +254,7 @@ The machine endpoints below are authenticated by lab **client credentials** (not
 
 ### Compression
 
-Compression is global, so it applies to every route above — but it matters most for sync, which moves the largest payloads over the thinnest links.
+Compression is global, so it applies to every route above, but it matters most for sync, which moves the largest payloads over the thinnest links.
 
 - **Responses**: compressed when the client sends `Accept-Encoding: gzip` and the body exceeds 1024 bytes. Already-compressed content types (PDF, xlsx) are skipped.
 - **Requests**: a gzipped body (`Content-Encoding: gzip`) is accepted on every route. Any other request encoding → `415` with code `SY0415`.
@@ -264,8 +264,8 @@ Compression is global, so it applies to every route above — but it matters mos
 
 External systems do **not** post FHIR to a generic endpoint. The inbound data paths are:
 
-1. **Workflow webhook** — `POST /api/workflows/hooks/<path>`, secured by a per-webhook secret, routed into a workflow you build.
-2. **CLI ingest** — `openldr ingest <file> --plugin <converter>` for file/plugin-based loads.
-3. **Sync push** — `POST /api/sync/push`, but only for enrolled lab→central change-log replication (client-credentialed), not third-party ingest.
+1. **Workflow webhook.** `POST /api/workflows/hooks/<path>`, secured by a per-webhook secret, routed into a workflow you build.
+2. **CLI ingest.** `openldr ingest <file> --plugin <converter>` for file and plugin-based loads.
+3. **Sync push.** `POST /api/sync/push`, but only for enrolled lab-to-central change-log replication (client-credentialed), not third-party ingest.
 
 See [Ingesting & pushing data](OPERATOR-GUIDE.md) for the full walkthrough.

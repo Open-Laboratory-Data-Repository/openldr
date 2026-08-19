@@ -71,7 +71,7 @@ flowchart LR
     M --> Q["Report Designer / published reports"]
 ```
 
-The Observed page resolves from live terminology mappings and registry rows. Reports do not; they use the separately rebuilt `facility_map`. This split is the reason the interface can say “mapped” while reports remain stale.
+The Observed page resolves from live terminology mappings and registry rows. Reports do not; they use the separately rebuilt `facility_map`. This split is the reason the interface can say "mapped" while reports remain stale.
 
 ## What should be preserved
 
@@ -87,7 +87,7 @@ The Observed page resolves from live terminology mappings and registry rows. Rep
 - **Reports have a raw-performer fallback.** A missing canonical mapping does not turn the facility into a blank value.
 - **Database portability has received attention.** PostgreSQL, SQL Server, and MySQL behavior is considered in the reconciliation path.
 
-These are substantive strengths. The audit does not recommend replacing the page or decorating it heavily; it recommends making its clean surface trustworthy.
+These are substantive strengths. The audit does not recommend replacing the page or decorating it heavily; it recommends making its clean layout trustworthy.
 
 ## Priority definitions
 
@@ -127,7 +127,7 @@ Relevant implementation: `apps/studio/src/facilities/ObservedTab.tsx:152-165`, `
 - an upsert whose body resolver returns `null` is emitted as a delete;
 - the receiving reference-apply switch also has no `facility_registry` case and rejects the unknown entity.
 
-This means distributed use can turn a central registry upsert into a bogus deletion instruction, then fail/quarantine when applied at a lab. This is more severe than “sync is unfinished” because change capture is already active and implies support.
+This means distributed use can turn a central registry upsert into a bogus deletion instruction, then fail/quarantine when applied at a lab. This is more severe than "sync is unfinished" because change capture is already active and implies support.
 
 Required direction - choose one safe state immediately:
 
@@ -154,7 +154,7 @@ being interpreted approximately as:
 - region: `Hospital`
 - trailing `Dodoma`: dropped
 
-That is silent master-data corruption: the row parses, no unknown column is reported, and the wrong values can be applied. The existing “ragged row does not throw” test treats this permissiveness as expected behavior.
+That is silent master-data corruption: the row parses, no unknown column is reported, and the wrong values can be applied. The existing "ragged row does not throw" test treats this permissiveness as expected behavior.
 
 Required direction:
 
@@ -184,7 +184,7 @@ Relevant implementation: `packages/bootstrap/src/facility-reconcile.ts:511-523`,
 
 ### FAC-P0-05 - Multiple active mappings are allowed and resolution is ambiguous
 
-The database does not enforce one active facility mapping per observed coding `(system, code)`. The resolver selects the first active registry-target candidate without a deterministic facility-specific ordering. The UI opens `outgoing[0]`, which is ordered by creation time, and “Remove mapping” deletes every active outgoing candidate.
+The database does not enforce one active facility mapping per observed coding `(system, code)`. The resolver selects the first active registry-target candidate without a deterministic facility-specific ordering. The UI opens `outgoing[0]`, which is ordered by creation time, and "Remove mapping" deletes every active outgoing candidate.
 
 Consequences include:
 
@@ -211,7 +211,7 @@ An operator can therefore record `UNMAPPED-FROM` or `RELATED-TO` and still cause
 
 Required direction:
 
-- Use a facility-specific “Resolve observed facility” sheet.
+- Use a facility-specific "Resolve observed facility" sheet.
 - Lock the saved semantic to the one facility resolution relationship actually supported, normally exact/SAME-AS.
 - If broader/narrower relationships are genuinely required, specify their report behavior and make the resolver enforce it; do not inherit generic options by accident.
 - Reject unsupported map types at the API/domain boundary, not only in the UI.
@@ -279,11 +279,11 @@ Required direction:
 - Convert imports to background jobs with upload storage, chunked processing, progress, validation stage, cancel, retry/resume, and final reconciliation summary.
 - Keep the CLI for automation and very large controlled operations, but do not make shell access the only path for the intended workload.
 - Ensure apply is transactional per defined batch and recoverable across process restarts.
-- Surface who imported which source release and when.
+- Show who imported which source release and when.
 
 Relevant implementation: `apps/studio/src/facilities/ImportFacilitiesSheet.tsx:26-37` and `:162-169`, and `apps/server/src/facilities-routes.ts:39-55` and `:761-766`.
 
-### FAC-P1-03 - Import “preview” does not show the database impact
+### FAC-P1-03 - Import "preview" does not show the database impact
 
 Dry run reports parsed/skipped/duplicate/unknown-column counts but returns zero created and updated because it exits before comparing with the registry. Apply counts existing rows as updated even if their material data is unchanged. The operator cannot see the facilities that will be added, changed, left unchanged, conflicted, or retired.
 
@@ -359,7 +359,7 @@ Required direction:
 - Never fuzzy-auto-merge authoritative facilities.
 - Make merge preserve one stable ID, identifiers, aliases, mappings, provenance, and change history.
 - Show every downstream mapping/report impact before confirmation.
-- Support “link local facility to registry record” as a safer guided task than deleting/recreating.
+- Support "link local facility to registry record" as a safer guided task than deleting/recreating.
 
 ### FAC-P1-08 - Source, ownership, and managed status are hidden
 
@@ -386,7 +386,7 @@ Required direction:
 
 ### FAC-P1-10 - Form selection is implicit and configuration failures are misdiagnosed
 
-Facility create/edit asks for published forms and uses the first acceptable summary. If more than one facility-targeted form is published, selection is implicit. If loading published forms fails, the page can present the state as “no form published,” hiding an API/auth/network error.
+Facility create/edit asks for published forms and uses the first acceptable summary. If more than one facility-targeted form is published, selection is implicit. If loading published forms fails, the page can present the state as "no form published," hiding an API/auth/network error.
 
 Required direction:
 
@@ -398,7 +398,7 @@ Required direction:
 
 Relevant implementation: `apps/studio/src/facilities/FacilityDialog.tsx:99-131` and `apps/studio/src/pages/Facilities.tsx:86-91`.
 
-### FAC-P1-11 - “Scan for new facilities” mixes routine ingestion, repair, and projection
+### FAC-P1-11 - "Scan for new facilities" mixes routine ingestion, repair, and projection
 
 New performers are captured during ingestion, but their report count starts at zero. Scan is then needed to backfill and refresh counts. The scan action also publishes registry concepts, an unrelated side effect. It runs immediately from a hidden menu with no preview, job progress, last-run information, or explanation.
 
@@ -415,7 +415,7 @@ Relevant implementation: `apps/studio/src/facilities/ObservedTab.tsx:130-150` an
 
 ### FAC-P1-12 - The mapping flow should be a facility picker, not a generic terminology editor
 
-The current sheet asks users to understand Map type, Relationship, Owner, target system, active mapping, manual coding, and ontology browsing. This is unnecessary terminology jargon for the task “make this incoming facility resolve to that registry facility.”
+The current sheet asks users to understand Map type, Relationship, Owner, target system, active mapping, manual coding, and ontology browsing. This is unnecessary terminology jargon for the task "make this incoming facility resolve to that registry facility."
 
 The picker also lacks the information needed to choose safely: national/local code distinction, registry source, status, level, and full administrative path.
 
@@ -433,20 +433,20 @@ Relevant implementation: `apps/studio/src/terminology/TermMappingDialog.tsx` and
 
 ### FAC-P1-13 - The Browse control is structurally impossible in this workflow
 
-Browse is enabled only when a target coding-system distribution has a ready ontology index. The facility registry has no ontology distribution and the Facilities flow does not pass one. The disabled control is therefore permanent, matching the reported “Browse never works” experience.
+Browse is enabled only when a target coding-system distribution has a ready ontology index. The facility registry has no ontology distribution and the Facilities flow does not pass one. The disabled control is therefore permanent, matching the reported "Browse never works" experience.
 
 Required direction:
 
 - Remove Browse from the facility-specific sheet.
 - Make the default and prominent action `Find facility`.
-- If hierarchical exploration is wanted later, implement a real facility browser by administrative hierarchy or map—not an ontology-index button.
+- If hierarchical exploration is wanted later, implement a real facility browser by administrative hierarchy or map, not an ontology-index button.
 - Do not show controls that can never become available in the current context.
 
 Relevant implementation: `apps/studio/src/terminology/TermMappingDialog.tsx:186-193` and `:540-579`.
 
 ### FAC-P1-14 - Terminology search can include inactive targets and has weak async/a11y behavior
 
-The facility flow requests statuses `ACTIVE` and `DRAFT`, but `TermPicker` only sends a status to the API when exactly one is selected. With two, no status filter is sent, potentially returning inactive/retired/ghost terms. Search has no robust loading/error state, stale requests can race, and the results do not implement full combobox/listbox keyboard semantics.
+The facility flow requests statuses `ACTIVE` and `DRAFT`, but `TermPicker` only sends a status to the API when exactly one is selected. With two, no status filter is sent, potentially returning inactive/retired/ghost terms. Search has no reliable loading or error state, stale requests can race, and the results do not implement full combobox/listbox keyboard semantics.
 
 Required direction:
 
@@ -713,7 +713,7 @@ Each value should filter or open the relevant detail.
 4. Operator selects an active candidate, opens its detail if needed, or creates/links a missing registry record.
 5. The API transactionally supersedes any prior facility resolution and records audit history.
 6. A durable job updates the affected report-facing dimension row.
-7. The sheet closes only into a truthful state: Updated, Updating, or Failed with Retry—not a silent “mapped” state while reports remain stale.
+7. The sheet closes only into a truthful state: Updated, Updating, or Failed with Retry. Never a silent "mapped" state while reports remain stale.
 8. Terminology shows the resulting managed mapping for specialist audit, but generic edits cannot violate facility invariants.
 
 ## Implementation sequence for Claude Code
