@@ -6,6 +6,18 @@
       "version": null,
       "entries": [
         {
+          "hash": "7e0ecf89",
+          "type": "fix",
+          "scope": "server",
+          "title": "Report the release version, not @openldr/server's own"
+        },
+        {
+          "hash": "75ad0f60",
+          "type": "fix",
+          "scope": "install",
+          "title": "Generate the self-signed cert on Windows, and print why when it fails"
+        },
+        {
           "hash": "7975cdc5",
           "type": "fix",
           "scope": "reports",
