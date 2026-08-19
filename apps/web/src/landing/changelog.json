@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "5cc58a40",
+          "type": "fix",
+          "scope": "config",
+          "title": "Remove a duplicate TERMINOLOGY_WORK_DIR I added to the prod template"
+        },
+        {
           "hash": "c311698c",
           "type": "fix",
           "scope": "docs",
