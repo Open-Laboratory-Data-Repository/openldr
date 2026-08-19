@@ -47,4 +47,11 @@ describe('EXTERNAL_TABLE_COLUMNS', () => {
       expect(EXTERNAL_TABLE_COLUMNS.facility_map).toContain(col);
     }
   });
+  it('includes based_on_id on diagnostic_reports', () => {
+    // Migration 017 added the column to DiagnosticReportsTable and diagnostic-report.ts projects
+    // it, but nothing type-checks this list against the table type, so a column can exist on the
+    // table and stay invisible to the CSV export, the query builder, and the Data Exposure policy
+    // at the same time. Named explicitly so the next added column gets the same check.
+    expect(EXTERNAL_TABLE_COLUMNS.diagnostic_reports).toContain('based_on_id');
+  });
 });

@@ -24,8 +24,15 @@ async function migratedDb(): Promise<{ mem: ReturnType<typeof newDb>; db: Kysely
       // this migration and this test does not depend on 015's backfilled values, so swallow it here
       // too rather than skipping straight to only running 017 (which would leave every EARLIER
       // migration's DDL, including facility_map itself, unapplied).
+      //
+      // Verified, not assumed, same as the shipped helper: a matching error message alone does not
+      // prove the DDL ran before the backfill threw. Query information_schema (works against
+      // pg-mem) for facility_map.performer_system before swallowing.
       if (name === '015_facility_map_performer_system' && err instanceof Error && /does not exist/.test(err.message)) {
-        continue;
+        const cols = await sql<{ column_name: string }>`
+          select column_name from information_schema.columns
+           where table_name = 'facility_map' and column_name = 'performer_system'`.execute(db);
+        if (cols.rows.length > 0) continue;
       }
       throw err;
     }

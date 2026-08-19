@@ -2,7 +2,7 @@ import { type Kysely, sql } from 'kysely';
 import type { TargetEngine } from '../../engine';
 import { keyType } from './dialect';
 
-// `diagnostic_reports.batch_id` carries up to 15 reports (measured on the current warehouse), so
+// `diagnostic_reports.batch_id` carries up to 18 reports (measured on the current warehouse), so
 // `min(issued)` over a batch attributes one report's authorisation date to a different request. The
 // transmission report's step-3 fallback (registered -> tested -> authorised) needs one report tied
 // to one request, not to a whole submission. This column is that tie: `DiagnosticReport.basedOn[0]`,
