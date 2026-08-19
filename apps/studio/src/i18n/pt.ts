@@ -722,6 +722,17 @@ export const pt: EnShape = {
       failed: 'Falhou',
     },
   },
+  audit: {
+    colOccurred: 'Quando',
+    colActor: 'Ator',
+    colAction: 'Ação',
+    colEntityType: 'Tipo de entidade',
+    colEntityId: 'ID da entidade',
+    searchPlaceholder: 'Pesquisar eventos de auditoria',
+    noMatch: 'Nenhum evento de auditoria corresponde.',
+    actions: 'Ações',
+    refresh: 'Atualizar',
+  },
   notifications: {
     title: 'Notificações',
     unread: 'não lidas',

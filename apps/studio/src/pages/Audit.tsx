@@ -1,47 +1,22 @@
-import { useCallback, useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react';
-import { ClipboardCheck, Copy, Filter, RefreshCw, RotateCcw, X } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { ClipboardCheck, Copy, MoreHorizontal } from 'lucide-react';
+import { AUDIT_COLUMNS } from '@openldr/table-query';
 import { AppShell } from '@/shell/AppShell';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { StripedEmpty } from '@/components/ui/striped-empty';
 import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/spinner';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { TablePagination } from '@/components/ui/table-pagination';
-import { TruncatedText } from '@/components/ui/truncated-text';
-import { getAuditEvent, queryAudit, type AuditEvent, type AuditQuery } from '@/api';
+import {
+  ActiveFilterChips, DataTableToolbar, useTableState, type ColumnDef,
+} from '@/components/data-table';
+import { getAuditEvent, queryAudit, type AuditEvent } from '@/api';
 import { JsonView } from '@/workflows/components/panels/json-view';
-
-interface AuditFilters {
-  action: string;
-  entityType: string;
-  entityId: string;
-  actorId: string;
-  from: string;
-  to: string;
-}
-
-const EMPTY_FILTERS: AuditFilters = {
-  action: '',
-  entityType: '',
-  entityId: '',
-  actorId: '',
-  from: '',
-  to: '',
-};
-
-const FILTER_LABELS: Record<keyof AuditFilters, string> = {
-  action: 'Action',
-  entityType: 'Entity type',
-  entityId: 'Entity ID',
-  actorId: 'Actor',
-  from: 'From',
-  to: 'To',
-};
 
 function formatTimestamp(iso: string): string {
   const d = new Date(iso);
@@ -57,30 +32,6 @@ function formatTimestamp(iso: string): string {
   });
 }
 
-function toIsoFromLocalInput(value: string): string | undefined {
-  if (!value.trim()) return undefined;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return undefined;
-  return date.toISOString();
-}
-
-function toAuditParams(filters: AuditFilters): Omit<AuditQuery, 'limit' | 'offset'> {
-  const params: Omit<AuditQuery, 'limit' | 'offset'> = {};
-  const action = filters.action.trim();
-  const entityType = filters.entityType.trim();
-  const entityId = filters.entityId.trim();
-  const actorId = filters.actorId.trim();
-  const from = toIsoFromLocalInput(filters.from);
-  const to = toIsoFromLocalInput(filters.to);
-  if (action) params.action = action;
-  if (entityType) params.entityType = entityType;
-  if (entityId) params.entityId = entityId;
-  if (actorId) params.actorId = actorId;
-  if (from) params.from = from;
-  if (to) params.to = to;
-  return params;
-}
-
 function ActionBadge({ action }: { action: string }) {
   const category = action.split('.')[0];
   const destructive = category === 'tamper' || category === 'delete' || action.endsWith('.delete');
@@ -88,110 +39,6 @@ function ActionBadge({ action }: { action: string }) {
     <Badge variant={destructive ? 'default' : 'secondary'} className={destructive ? 'border-transparent bg-destructive text-destructive-foreground' : undefined}>
       {action}
     </Badge>
-  );
-}
-
-function AuditFilterField({
-  id,
-  label,
-  value,
-  placeholder,
-  type = 'text',
-  mono = false,
-  onChange,
-}: {
-  id: string;
-  label: string;
-  value: string;
-  placeholder?: string;
-  type?: 'text' | 'datetime-local';
-  mono?: boolean;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <div className="space-y-1">
-      <Label htmlFor={id} className="text-[11px] uppercase text-muted-foreground">{label}</Label>
-      <Input
-        id={id}
-        type={type}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        placeholder={placeholder}
-        className={`h-8 text-xs ${mono ? 'font-mono' : ''}`}
-      />
-    </div>
-  );
-}
-
-function AuditFilterPopover({
-  draftFilters,
-  activeFilterCount,
-  setDraftFilters,
-  onApply,
-}: {
-  draftFilters: AuditFilters;
-  activeFilterCount: number;
-  setDraftFilters: Dispatch<SetStateAction<AuditFilters>>;
-  onApply: () => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const apply = () => {
-    onApply();
-    setOpen(false);
-  };
-
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
-          <Filter className="h-3.5 w-3.5" />
-          Filter
-          {activeFilterCount > 0 && (
-            <span className="ml-1 rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] font-medium text-primary">
-              {activeFilterCount}
-            </span>
-          )}
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent align="start" className="w-[640px] p-0">
-        <div className="grid gap-3 p-3 md:grid-cols-2">
-          <AuditFilterField id="audit-filter-action" label="Action" value={draftFilters.action} placeholder="form.create" mono onChange={(value) => setDraftFilters((f) => ({ ...f, action: value }))} />
-          <AuditFilterField id="audit-filter-entity-type" label="Entity type" value={draftFilters.entityType} placeholder="form" mono onChange={(value) => setDraftFilters((f) => ({ ...f, entityType: value }))} />
-          <AuditFilterField id="audit-filter-entity-id" label="Entity ID" value={draftFilters.entityId} placeholder="form-1" mono onChange={(value) => setDraftFilters((f) => ({ ...f, entityId: value }))} />
-          <AuditFilterField id="audit-filter-actor" label="Actor" value={draftFilters.actorId} placeholder="user id" mono onChange={(value) => setDraftFilters((f) => ({ ...f, actorId: value }))} />
-          <div className="grid grid-cols-2 gap-2 md:col-span-2">
-            <AuditFilterField id="audit-filter-from" label="From" value={draftFilters.from} type="datetime-local" onChange={(value) => setDraftFilters((f) => ({ ...f, from: value }))} />
-            <AuditFilterField id="audit-filter-to" label="To" value={draftFilters.to} type="datetime-local" onChange={(value) => setDraftFilters((f) => ({ ...f, to: value }))} />
-          </div>
-        </div>
-        <div className="flex items-center justify-end gap-2 border-t border-border px-3 py-2">
-          <Button type="button" size="sm" className="h-7 text-xs" onClick={apply}>Apply</Button>
-        </div>
-      </PopoverContent>
-    </Popover>
-  );
-}
-
-function AuditFilterChips({ filters, onRemove }: { filters: AuditFilters; onRemove: (key: keyof AuditFilters) => void }) {
-  const entries = Object.entries(filters).filter(([, value]) => value.trim() !== '') as Array<[keyof AuditFilters, string]>;
-  if (entries.length === 0) return null;
-  return (
-    <div className="border-t border-border pt-2">
-      <div className="flex flex-wrap items-center gap-1.5">
-        {entries.map(([key, value]) => (
-          <button
-            key={key}
-            type="button"
-            className="inline-flex h-7 items-center gap-1 rounded-md border border-border bg-muted/30 px-2 text-xs text-muted-foreground hover:bg-muted/60 hover:text-foreground"
-            onClick={() => onRemove(key)}
-          >
-            <span className="font-medium text-foreground">{FILTER_LABELS[key]}</span>
-            <TruncatedText text={value} className="min-w-0 max-w-[14rem]" />
-            <X className="h-3 w-3" />
-          </button>
-        ))}
-      </div>
-    </div>
   );
 }
 
@@ -270,23 +117,60 @@ function AuditEventSheet({ event, onOpenChange }: { event: AuditEvent | null; on
 }
 
 export function Audit() {
-  const [draftFilters, setDraftFilters] = useState<AuditFilters>(EMPTY_FILTERS);
-  const [filters, setFilters] = useState<AuditFilters>(EMPTY_FILTERS);
-  const [page, setPage] = useState(0);
-  const [pageSize, setPageSize] = useState(25);
+  const { t } = useTranslation();
   const [events, setEvents] = useState<AuditEvent[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<AuditEvent | null>(null);
 
-  const activeFilterCount = useMemo(() => Object.values(filters).filter((value) => value.trim() !== '').length, [filters]);
+  // actorName leads the column list (not occurredAt) so the Filter popover's "add filter"
+  // default — first filterable column, first operator (FilterPopover.tsx:141-149) — lands on a
+  // plain text input. A date column there defaults to `eq`, which renders a DatePicker button
+  // with no "Enter value" labeled input, breaking addFilterViaPopover in every test that follows
+  // this page as a model. See date-picker.tsx: it exposes no text input at all.
+  const columns: ColumnDef<AuditEvent>[] = useMemo(() => ([
+    {
+      id: 'actorName', labelKey: 'audit.colActor', type: 'text', defaultVisible: true, headClassName: 'w-40 text-xs uppercase',
+      accessor: (e) => <span className="text-sm">{e.actorName}</span>,
+      operators: AUDIT_COLUMNS.actorName!.operators,
+    },
+    {
+      id: 'occurredAt', labelKey: 'audit.colOccurred', type: 'date', defaultVisible: true, headClassName: 'w-48 text-xs uppercase',
+      accessor: (e) => <span className="whitespace-nowrap font-mono text-xs text-muted-foreground">{formatTimestamp(e.occurredAt)}</span>,
+      operators: AUDIT_COLUMNS.occurredAt!.operators,
+    },
+    {
+      id: 'action', labelKey: 'audit.colAction', type: 'text', defaultVisible: true, headClassName: 'w-48 text-xs uppercase',
+      accessor: (e) => <ActionBadge action={e.action} />,
+      operators: AUDIT_COLUMNS.action!.operators,
+    },
+    {
+      id: 'entityType', labelKey: 'audit.colEntityType', type: 'text', defaultVisible: true, headClassName: 'w-36 text-xs uppercase',
+      accessor: (e) => <span className="font-mono text-xs">{e.entityType}</span>,
+      operators: AUDIT_COLUMNS.entityType!.operators,
+    },
+    {
+      id: 'entityId', labelKey: 'audit.colEntityId', type: 'text', defaultVisible: true,
+      accessor: (e) => <span className="font-mono text-xs text-muted-foreground">{e.entityId}</span>,
+      operators: AUDIT_COLUMNS.entityId!.operators,
+    },
+  ]), []);
 
+  const table = useTableState({ columns, defaultPageSize: 25 });
+
+  // Server-paginated: filters, sorts, page and pageSize all travel to the server. The response
+  // is rendered exactly as returned — this page never calls applyTableState.
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const result = await queryAudit({ ...toAuditParams(filters), limit: pageSize, offset: page * pageSize });
+      const result = await queryAudit({
+        filters: table.filters,
+        sorts: table.sorts,
+        limit: table.pageSize,
+        offset: table.page * table.pageSize,
+      });
       setEvents(result.events);
       setTotal(result.total);
     } catch (err) {
@@ -296,27 +180,9 @@ export function Audit() {
     } finally {
       setLoading(false);
     }
-  }, [filters, page, pageSize]);
+  }, [table.filters, table.sorts, table.page, table.pageSize]);
 
   useEffect(() => { void load(); }, [load]);
-
-  const applyFilters = () => {
-    setFilters({ ...draftFilters });
-    setPage(0);
-  };
-
-  const resetFilters = () => {
-    setDraftFilters(EMPTY_FILTERS);
-    setFilters(EMPTY_FILTERS);
-    setPage(0);
-  };
-
-  const removeFilter = (key: keyof AuditFilters) => {
-    const next = { ...filters, [key]: '' };
-    setFilters(next);
-    setDraftFilters(next);
-    setPage(0);
-  };
 
   const openEvent = async (event: AuditEvent) => {
     setSelected(event);
@@ -328,83 +194,69 @@ export function Audit() {
   };
 
   return (
-    <AppShell title="Audit" fullBleed>
+    <AppShell title={t('nav.audit')} fullBleed>
       <div className="flex min-h-0 flex-1 flex-col">
-        <form
-          className="flex flex-col gap-2 border-b border-border px-3 py-2"
-          onSubmit={(event) => {
-            event.preventDefault();
-            applyFilters();
-          }}
-        >
-          <div className="flex flex-wrap items-center gap-2">
-            <AuditFilterPopover draftFilters={draftFilters} activeFilterCount={activeFilterCount} setDraftFilters={setDraftFilters} onApply={applyFilters} />
-            {activeFilterCount > 0 && (
-              <Button type="button" variant="ghost" size="sm" className="h-8 gap-1.5 text-xs text-muted-foreground" onClick={resetFilters}>
-                <RotateCcw className="h-3.5 w-3.5" />
-                Reset
-              </Button>
-            )}
-            <div className="flex-1" />
-            <span className="hidden text-xs text-muted-foreground sm:inline">Newest events first. Sign-in history lives in Keycloak.</span>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 text-muted-foreground"
-              onClick={() => void load()}
-              disabled={loading}
-              aria-label="Refresh"
-              title="Refresh"
-            >
-              <RefreshCw className={loading ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />
-            </Button>
-          </div>
-          <AuditFilterChips filters={filters} onRemove={removeFilter} />
-          <button type="submit" className="hidden" aria-hidden="true">Apply</button>
-        </form>
+        <div className="flex flex-col gap-2 border-b border-border px-3 py-2">
+          <DataTableToolbar
+            columns={columns}
+            filters={table.filters}
+            onFiltersChange={table.setFilters}
+            sorts={table.sorts}
+            onSortsChange={table.setSorts}
+            visibleIds={table.visibleIds}
+            onVisibleIdsChange={table.setVisibleIds}
+            onResetColumns={table.resetColumns}
+            onResetAll={table.resetAll}
+            actions={
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-8 w-8" aria-label={t('audit.actions')}>
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => { void load(); }}>{t('audit.refresh')}</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            }
+          />
+          <ActiveFilterChips columns={columns} filters={table.filters} onChange={table.setFilters} />
+        </div>
 
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <Table wrapperClassName={events.length > 0 ? 'min-h-0 flex-1' : undefined} className="[&_td]:whitespace-nowrap [&_th]:whitespace-nowrap">
-            <TableHeader className="sticky top-0 z-10 bg-background">
-              <TableRow>
-                <TableHead className="w-48 text-xs uppercase">Timestamp</TableHead>
-                <TableHead className="w-40 text-xs uppercase">Actor</TableHead>
-                <TableHead className="w-48 text-xs uppercase">Action</TableHead>
-                <TableHead className="w-36 text-xs uppercase">Entity type</TableHead>
-                <TableHead className="text-xs uppercase">Entity ID</TableHead>
-              </TableRow>
-            </TableHeader>
-            {!loading && !error && events.length > 0 && (
+          {!loading && !error && events.length > 0 && (
+            <Table wrapperClassName="min-h-0 flex-1" className="[&_td]:whitespace-nowrap [&_th]:whitespace-nowrap">
+              <TableHeader className="sticky top-0 z-10 bg-background">
+                <TableRow>
+                  {table.visibleColumns.map((c) => <TableHead key={c.id} className={c.headClassName}>{t(c.labelKey)}</TableHead>)}
+                </TableRow>
+              </TableHeader>
               <TableBody className="[&_tr:last-child]:border-b">
                 {events.map((event) => (
                   <TableRow key={event.id} className="cursor-pointer transition-colors hover:bg-[rgba(70,130,180,0.08)]" onClick={() => { void openEvent(event); }} title="Open audit event details">
-                    <TableCell><span className="whitespace-nowrap font-mono text-xs text-muted-foreground">{formatTimestamp(event.occurredAt)}</span></TableCell>
-                    <TableCell className="text-sm">{event.actorName}</TableCell>
-                    <TableCell><ActionBadge action={event.action} /></TableCell>
-                    <TableCell className="font-mono text-xs">{event.entityType}</TableCell>
-                    <TableCell><span className="font-mono text-xs text-muted-foreground">{event.entityId}</span></TableCell>
+                    {table.visibleColumns.map((c) => <TableCell key={c.id} className={c.cellClassName}>{c.accessor(event)}</TableCell>)}
                   </TableRow>
                 ))}
               </TableBody>
-            )}
-          </Table>
-          {loading && <LoadingState className="flex-1" label="Loading…" />}
+            </Table>
+          )}
+          {loading && <LoadingState className="flex-1" label={t('common.loading')} />}
           {!loading && error && <div className="flex flex-1 items-center justify-center px-6 text-center text-sm text-destructive">{error}</div>}
           {!loading && !error && events.length === 0 && (
-            <EmptyState icon={<ClipboardCheck className="h-6 w-6" />} title="No audit events" />
+            table.filters.length === 0 ? (
+              <EmptyState icon={<ClipboardCheck className="h-6 w-6" />} title="No audit events" />
+            ) : (
+              <StripedEmpty className="flex-1">{t('audit.noMatch')}</StripedEmpty>
+            )
           )}
         </div>
 
         <TablePagination
-          page={page}
-          pageSize={pageSize}
+          page={table.page}
+          pageSize={table.pageSize}
           total={total}
-          onPageChange={setPage}
-          onPageSizeChange={(size) => {
-            setPageSize(size);
-            setPage(0);
-          }}
+          onPageChange={table.setPage}
+          onPageSizeChange={table.setPageSize}
           leftSlot={<span className="text-muted-foreground">{total} events</span>}
         />
 
