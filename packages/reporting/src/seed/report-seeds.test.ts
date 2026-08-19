@@ -14,7 +14,6 @@ import {
 } from './report-seeds';
 import { pairRects, toPt, paperSizePt, type ReportDesign } from '@openldr/report-designer';
 import { findInvalidImageSources, findUnsortedHeaderRows } from '@openldr/report-designer/pure';
-import { isValidIanaZone, paramFormatMessage } from '@openldr/core/pure';
 
 // In-memory fakes — no real Kysely instance needed (unlike `packages/bootstrap/src/seed.ts`,
 // which builds `customQueries` from a real DB handle; here we inject fakes directly to unit-test
@@ -1633,10 +1632,23 @@ describe('SEED_DESIGNS — no built-in id can collide with a designer-minted id'
 describe('SEED_QUERIES — the transmission grids', () => {
   const q = (id: string) => SEED_QUERIES.find((x) => x.id === id)!;
 
-  it('reads ServiceRequest arrivals, in every dialect', () => {
+  // ⛔ The ladder, in order: registered, then tested, then authorised. `coalesce` stops at its
+  // first non-null, so the ORDER is the rule, not just the presence of three rungs. Swap the last
+  // two and a request with both a result and a report starts marking the authorisation day
+  // instead of the testing day, on every row, with nothing else in this file noticing.
+  it('climbs the clinical-date ladder in order, in every dialect', () => {
+    // One regex spanning all three rungs, so a reordering fails rather than passing on presence.
+    const LADDER = new RegExp(
+      String.raw`coalesce\(\s*`
+      + String.raw`case when left\(q\.authored_at, 7\)[\s\S]*?then q\.authored_at end,\s*`
+      + String.raw`\(select min\(r\.result_timestamp\) from lab_results r[\s\S]*?\),\s*`
+      + String.raw`\(select min\(dr\.issued\) from diagnostic_reports dr\s*`
+      + String.raw`where dr\.based_on_id = q\.id`,
+    );
     for (const id of ['q-transmission-hvleid', 'q-transmission-other']) {
       for (const [dialect, sql] of Object.entries(q(id).sql)) {
-        expect(sql, `${id}/${dialect}`).toMatch(/resource_type\s*=\s*'ServiceRequest'/);
+        expect(sql, `${id}/${dialect} no longer climbs authored_at, then result_timestamp, then issued`)
+          .toMatch(LADDER);
       }
     }
   });
@@ -1653,11 +1665,34 @@ describe('SEED_QUERIES — the transmission grids', () => {
     }
   });
 
-  it('buckets days in the supplied timezone, not UTC', () => {
+  // ⛔ The day is the source's OWN clinical date, read straight out of the ISO 8601 text. Those
+  // columns already carry the source's offset, so there is nothing to convert and no zone to
+  // convert into. A bulk backfill lands months of clinical work on one arrival day, so bucketing
+  // on arrival reports laboratories as transmitting in a month they were not.
+  it('reads no arrival timestamp and converts no timezone, in every dialect', () => {
+    // Checked over the SQL INCLUDING its comments. The comments here explain why arrival bucketing
+    // was removed, so they name the concept but must never name the identifiers: `ingest_events`,
+    // `recorded_at`, `{{param.tz}}`, `at time zone` and `convert_tz` are all absent from the file's
+    // transmission blocks today, and a comment that reintroduced one would be the same warning
+    // sign as code that did.
+    const BANNED: [string, RegExp][] = [
+      ['ingest_events', /ingest_events/],
+      ['recorded_at', /recorded_at/],
+      ['{{param.tz}}', /\{\{\s*param\.tz\s*\}\}/],
+      ['at time zone', /at time zone/i],
+      ['convert_tz', /convert_tz/i],
+    ];
     for (const id of ['q-transmission-hvleid', 'q-transmission-other']) {
       for (const [dialect, sql] of Object.entries(q(id).sql)) {
-        expect(sql, `${id}/${dialect} ignores the tz parameter`).toContain('{{param.tz}}');
+        for (const [name, re] of BANNED) {
+          expect(sql, `${id}/${dialect} is back on arrival bucketing: it mentions ${name}`).not.toMatch(re);
+        }
       }
+      // The declared parameters must agree. A required `tz` the SQL never reads is a box the
+      // operator has to fill for no effect, and `substituteParams` refuses the run when it is
+      // blank (packages/dashboards/src/custom-query-run.ts:33).
+      expect((q(id).params ?? []).map((p) => p.id), `${id} still demands a run parameter`)
+        .toEqual(['month', 'panels']);
     }
   });
 
@@ -1726,42 +1761,61 @@ describe('SEED_QUERIES — the transmission grids', () => {
     }
   });
 
-  // C2: `arrivals` must carry its own month bound. Without one, `labs` is "every laboratory that
-  // ever submitted" and a lab absent from the window still gets a blank row — and the only index
-  // on ingest_events leads with recorded_at, so an unbounded scan reads the whole table.
-  it('bounds recorded_at inside the arrivals CTE, in every dialect', () => {
+  // ⛔ Every month test compares against `ym`, the NORMALISED month, never against the raw
+  // parameter. `month` is free text with no shape check: `substituteParams` inlines a text param
+  // with no validation (packages/dashboards/src/custom-query-run.ts:34). Typed '2017-8' the date
+  // cast still yields 2017-08-01, so `days` builds a correct August header, but a raw
+  // `left(ts, 7) = '2017-8'` matches nothing and the grid prints that header above ZERO
+  // laboratories. A reader concludes no laboratory transmitted all month. This is the load-bearing
+  // difference between a loose month answering like a strict one and answering with a lie.
+  it('compares the month through the normalised ym, not the raw parameter, in every dialect', () => {
     for (const id of ['q-transmission-hvleid', 'q-transmission-other']) {
       for (const [dialect, sql] of Object.entries(q(id).sql)) {
-        expect(sql, `${id}/${dialect} never bounds recorded_at`)
-          .toMatch(/e\.recorded_at\s*>=/);
-        expect(sql, `${id}/${dialect} never caps recorded_at`)
-          .toMatch(/e\.recorded_at\s*</);
+        // `month_start` is the ONLY place the raw parameter may appear: twice, once for the date
+        // and once for the 'YYYY-MM' string derived from it. Counted rather than matched anywhere,
+        // because a match-anywhere test passes while a seventh site regresses to the raw value.
+        expect(sql.match(/\{\{\s*param\.month\s*\}\}/g) ?? [],
+          `${id}/${dialect} reads the raw month outside month_start`).toHaveLength(2);
+        // ⚠ The end boundary is '\ndays as (', newline-anchored. A bare 'days as (' would find the
+        // 'all_days as (' CTE that mssql and mysql declare first, and the slice would silently
+        // cover a different span on those two dialects than on postgres.
+        const monthStart = sql.slice(sql.indexOf('month_start as ('), sql.indexOf('\ndays as ('));
+        expect(monthStart.match(/\{\{\s*param\.month\s*\}\}/g) ?? [],
+          `${id}/${dialect} moved the raw month out of month_start`).toHaveLength(2);
+        expect(monthStart, `${id}/${dialect} no longer derives ym`).toMatch(/as ym\b/);
+
+        // Six month tests downstream: three rungs of the coalesce ladder, three arms of the
+        // `where` gate that precedes it. All six read `ym`. Pinning the count stops one of them
+        // silently reverting while the other five keep this green.
+        expect(sql.match(/\(select ym from month_start\)/g) ?? [],
+          `${id}/${dialect} lost a month test that reads the normalised ym`).toHaveLength(6);
+        // And no month test may compare a timestamp prefix against the raw parameter.
+        expect(sql, `${id}/${dialect} compares a timestamp prefix against the raw month`)
+          .not.toMatch(/left\([^)]*,\s*7\)\s*=\s*\{\{\s*param\.month\s*\}\}/);
       }
     }
   });
 
-  // ⛔ The assertion above matches only the WIDENED sargable bound, which is two days looser than
-  // the month on each side. Deleting the exact civil-zone bound — the mutation that proved the
-  // live test bites — leaves it green, and a hermetic CI run skips the live file entirely. These
-  // regexes pin the exact bound, per dialect, because the expression differs in all three.
-  const CIVIL_LOWER: Record<string, RegExp> = {
-    postgres: /and \(e\.recorded_at at time zone \{\{param\.tz\}\}\)::date >= m\.d/,
-    mssql: /and cast\(e\.recorded_at at time zone 'UTC' at time zone \{\{param\.tz\}\} as date\) >= m\.d/,
-    mysql: /and cast\(convert_tz\(e\.recorded_at, '\+00:00', \{\{param\.tz\}\}\) as date\) >= m\.d/,
-  };
-  const CIVIL_UPPER: Record<string, RegExp> = {
-    postgres: /and \(e\.recorded_at at time zone \{\{param\.tz\}\}\)::date < m\.d \+ interval '1 month'/,
-    mssql: /and cast\(e\.recorded_at at time zone 'UTC' at time zone \{\{param\.tz\}\} as date\) < dateadd\(month, 1, m\.d\)/,
-    mysql: /and cast\(convert_tz\(e\.recorded_at, '\+00:00', \{\{param\.tz\}\}\) as date\) < date_add\(m\.d, interval 1 month\)/,
-  };
-
-  it('pins the EXACT civil-zone month bound, in every dialect', () => {
+  // ⛔ `d` and `dr` are two DIFFERENT rows of diagnostic_reports and must stay separate aliases.
+  // `d` is the SUBMISSION BATCH the laboratory is attributed through (`d.batch_id = q.batch_id`).
+  // `dr` is the report authorising THIS request (`dr.based_on_id = q.id`). One batch carries up to
+  // 18 reports, so merging them would take the issued date off some other request in the batch and
+  // print it as this request's authorisation day. Nothing downstream would show the swap.
+  it('keeps the batch alias d and the authorising alias dr apart, in every dialect', () => {
     for (const id of ['q-transmission-hvleid', 'q-transmission-other']) {
       for (const [dialect, sql] of Object.entries(q(id).sql)) {
-        expect(sql, `${id}/${dialect} lost the exact civil-zone lower bound`)
-          .toMatch(CIVIL_LOWER[dialect]);
-        expect(sql, `${id}/${dialect} lost the exact civil-zone upper bound`)
-          .toMatch(CIVIL_UPPER[dialect]);
+        expect(sql, `${id}/${dialect} lost the batch-attribution alias d`)
+          .toMatch(/join diagnostic_reports d on d\.batch_id = q\.batch_id/);
+        // TWO `dr` sites, counted: the coalesce rung that reads the issued date, and the arm of
+        // the `where` gate that admits the request in the first place. A match-anywhere assertion
+        // is satisfied by the gate alone, so the rung could lose its own alias and stay green.
+        expect(sql.match(/from diagnostic_reports dr\b/g) ?? [],
+          `${id}/${dialect} lost an authorising-alias site`).toHaveLength(2);
+        expect(sql.match(/where dr\.based_on_id = q\.id\b/g) ?? [],
+          `${id}/${dialect} stopped keying dr on based_on_id`).toHaveLength(2);
+        // The issued date must come off `dr`, never off the batch alias.
+        expect(sql, `${id}/${dialect} reads issued off the batch alias`)
+          .not.toMatch(/min\(d\.issued\)/);
       }
     }
   });
@@ -1866,22 +1920,13 @@ describe('SEED_DESIGNS — rt-transmission-grid run parameters are checked and s
   const params = () => SEED_DESIGNS.find((d) => d.id === 'rt-transmission-grid')!.parameters;
   const param = (key: string) => params().find((p) => p.key === key)!;
 
-  it('declares the time zone rule that refuses a signed offset, so a bare +3 is caught', () => {
-    // ⛔ The defect. Postgres reads `+3` with the POSIX sign convention, so it means UTC−3.
-    // Measured: an arrival at 2026-08-06 03:48Z bucketed to 2026-08-06 00:48 — six hours out, in
-    // the wrong direction, with no error. Near midnight that is a mark on the wrong day.
-    expect(param('tz').format).toBe('timezone-no-signed-offset');
-  });
-
-  it('⛔ does NOT demand a valid IANA name — the SQL Server workflow depends on that', () => {
-    // `apps/studio/src/docs/0.1.0/en/reports.md:51` tells a SQL Server operator to leave the
-    // Settings zone empty and type the WINDOWS zone name into this filter, because SQL Server's
-    // `AT TIME ZONE` takes Windows names. An IANA-validity rule here would break that documented
-    // path, while still waving through `Etc/GMT+3`, which is inverted. The rule guards the silent
-    // failure only; an unrecognised name is refused loudly by the engine itself.
-    expect(paramFormatMessage('tz', param('tz').format!, 'E. Africa Standard Time')).toBeNull();
-    expect(paramFormatMessage('tz', param('tz').format!, 'Etc/GMT+3')).not.toBeNull();
-    expect(paramFormatMessage('tz', param('tz').format!, '+3')).not.toBeNull();
+  // ⛔ TWO boxes, not three. The Time zone box and the tests that pinned its signed-offset rule
+  // are gone with the arrival bucketing they served. The grid now reads the source's own
+  // clinical date text, so no zone could change a cell, and a required box that changes nothing
+  // is a question the operator cannot answer wrongly OR rightly. The rule itself still exists
+  // and is still tested, in packages/core/src/param-format.test.ts; nothing seeded declares it.
+  it('asks for the month and the panel codes, and for nothing else', () => {
+    expect(params().map((p) => p.key)).toEqual(['month', 'panels']);
   });
 
   it('declares the month as YYYY-MM', () => {
@@ -1892,16 +1937,6 @@ describe('SEED_DESIGNS — rt-transmission-grid run parameters are checked and s
     // The operator typed `1`. The format was stated only in the help popover, which has to be
     // opened to be read.
     expect(param('month').placeholder).toMatch(/^\d{4}-\d{2}$/);
-  });
-
-  it('shows an example zone in the time zone box', () => {
-    const ph = param('tz').placeholder!;
-    expect(ph).toContain('/');
-    // The example must be a real zone AND pass the run-parameter rule, or the box teaches the
-    // wrong thing. Both checks, because they are now genuinely different rules: `Etc/GMT+3` would
-    // pass the first and fail the second.
-    expect(isValidIanaZone(ph)).toBe(true);
-    expect(paramFormatMessage('tz', 'timezone-no-signed-offset', ph)).toBeNull();
   });
 
   it('⚠ AGENTS.md §8 — leaves the panel-codes box without a placeholder', () => {
@@ -1945,14 +1980,6 @@ describe('SEED_DESIGNS — rt-transmission-grid keeps ord off the page', () => {
   it('names no panel code anywhere in the design — the list is a run-time parameter', () => {
     // AGENTS.md §8. HIVVL/HIVPC are Tanzania's codes; this design ships worldwide.
     expect(JSON.stringify(design())).not.toMatch(/HIVVL|HIVPC|HIVEL|HIVDR/);
-  });
-
-  it('says in the tz help that the prefill is a studio default, not a binding', () => {
-    // A CLI or scheduled run passes tz explicitly and never reads the setting. An operator who
-    // reads "defaults to Settings" and nothing else will assume a schedule inherits it.
-    const tz = design().parameters.find((p) => p.key === 'tz')!;
-    expect(tz.required).toBe(true);
-    expect(tz.help ?? '').toMatch(/schedul|CLI/i);
   });
 });
 
