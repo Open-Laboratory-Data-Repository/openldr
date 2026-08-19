@@ -639,12 +639,16 @@ git commit -m "docs(reports): say the transmission grid marks clinical work, not
 
 ### Task 9: Documentation in en, fr and pt
 
-AGENTS.md §6.3. All three ship together. A missing key renders as literal braces and the user sees it.
+⛔ **CORRECTION, measured 2026-08-19. This task is English-only, and the plan was wrong to name three files.**
+
+`reports.md` exists ONLY in English. `apps/studio/src/docs/0.1.0/en/` holds 19 files; `fr/` and `pt/` hold 2 each, `audit.md` and `facilities.md`. There is no fr or pt `reports.md` to modify.
+
+That is safe, not broken. The docs registry falls back to English per section: `apps/studio/src/pages/Docs.tsx:83-85` narrows the locale, and `Docs.test.tsx:179` pins the behaviour with a test named "uses English fallback when app language is fr". A missing locale FILE degrades to English. The AGENTS.md §6.3 warning about literal braces applies to a missing i18n KEY in the app shell, which is a different mechanism.
+
+Do NOT translate `reports.md` into fr and pt as part of this slice. Seventeen other files are equally untranslated, so doing one here would be an inconsistent partial fix and a large piece of writing unrelated to clinical-date bucketing. Record it, do not build it.
 
 **Files:**
 - Modify: `apps/studio/src/docs/0.1.0/en/reports.md`
-- Modify: `apps/studio/src/docs/0.1.0/fr/reports.md`
-- Modify: `apps/studio/src/docs/0.1.0/pt/reports.md`
 
 - [ ] **Step 1: Find every affected passage**
 
