@@ -185,14 +185,16 @@ reproduce any view built in the browser.
 - `--sort column` sorts ascending. `--sort -column`, with a leading dash, sorts descending.
   Repeatable.
 - `--limit <n>` caps how many rows come back. Without it, the command returns at most 200 rows. The
-  last line of the output says how many of the total you are seeing.
+  table view's last line says how many of the total you are seeing. With `--json`, the total
+  travels in the payload instead, and no such line prints.
 - `--json` prints machine-readable output instead of a table.
 
 ```bash
 openldr facilities list --sort -name --limit 10
 ```
 
-This lists the last ten facilities by name, Z to A. It returns rows on any register.
+This lists the last ten facilities by name, Z to A. It applies no filter, so it returns rows
+wherever the register has any.
 
 ```bash
 openldr facilities list --where level:eq:hospital --sort -name

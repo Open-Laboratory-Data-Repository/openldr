@@ -2598,6 +2598,9 @@ describe('facilities list CLI', () => {
     expect(await runFacilitiesList({ where: [], sort: [], limit: '0', json: false })).toBe(1);
     expect(await runFacilitiesList({ where: [], sort: [], limit: '-5', json: false })).toBe(1);
     expect(mocks.createAppContext).not.toHaveBeenCalled();
+    const err = stderrSpy.mock.calls.map((c) => String(c[0])).join('');
+    expect(err).toMatch(/--limit/);
+    expect(err).toMatch(/-5/);
   });
 
   it('closes the app context even when the store throws, and reports a redacted message', async () => {

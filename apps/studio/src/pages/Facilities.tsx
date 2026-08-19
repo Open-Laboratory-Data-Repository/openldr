@@ -480,7 +480,6 @@ export function Facilities() {
   const [districtOptions, setDistrictOptions] = useState<string[]>([]);
   const [councilOptions, setCouncilOptions] = useState<string[]>([]);
 
-
   /** Task 5: the registry's columns, for BOTH the table and the shared toolbar.
    *
    *  ⛔ `operators` comes from `FACILITY_COLUMNS`, never from `validOperators(type)`. That map is

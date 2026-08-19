@@ -212,15 +212,16 @@ navigateur.
 - `--sort column` trie en ordre croissant. `--sort -column`, avec un tiret en préfixe, trie en
   ordre décroissant. Répétable.
 - `--limit <n>` limite le nombre de lignes renvoyées. Sans cet indicateur, la commande renvoie au
-  plus 200 lignes. La dernière ligne de la sortie indique combien vous en voyez sur le total.
+  plus 200 lignes. Dans la vue tableau, la dernière ligne indique combien vous en voyez sur le
+  total. Avec `--json`, le total voyage dans la réponse à la place, et cette ligne ne s'affiche pas.
 - `--json` affiche une sortie exploitable par machine au lieu d'un tableau.
 
 ```bash
 openldr facilities list --sort -name --limit 10
 ```
 
-Cette commande liste les dix derniers établissements par nom, de Z à A. Elle renvoie des lignes sur
-n'importe quel registre.
+Cette commande liste les dix derniers établissements par nom, de Z à A. Elle n'applique aucun
+filtre, donc elle renvoie des lignes partout où le registre en a.
 
 ```bash
 openldr facilities list --where level:eq:hospital --sort -name

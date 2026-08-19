@@ -206,14 +206,16 @@ ferramentas, permitindo que um script reproduza qualquer vista construída no na
 - `--sort column` ordena de forma crescente. `--sort -column`, com um traço à frente, ordena de
   forma decrescente. Repetível.
 - `--limit <n>` limita quantas linhas são devolvidas. Sem este sinalizador, o comando devolve no
-  máximo 200 linhas. A última linha da saída diz quantas está a ver do total.
+  máximo 200 linhas. Na vista de tabela, a última linha diz quantas está a ver do total. Com
+  `--json`, o total viaja no payload, e essa linha não é impressa.
 - `--json` mostra saída legível por máquina em vez de uma tabela.
 
 ```bash
 openldr facilities list --sort -name --limit 10
 ```
 
-Este comando lista as últimas dez unidades por nome, de Z a A. Devolve linhas em qualquer registo.
+Este comando lista as últimas dez unidades por nome, de Z a A. Não aplica nenhum filtro, por isso
+devolve linhas onde quer que o registo tenha alguma.
 
 ```bash
 openldr facilities list --where level:eq:hospital --sort -name
