@@ -60,7 +60,7 @@ export type KeyValueLayout = 'inline' | 'stacked';
  *  magnitude or presence, never a result state, so it deliberately does not reach for
  *  `CELL_STATUSES`. Keeping the two apart is what stops a submission grid inheriting the meaning of
  *  a red AST chip. */
-export const CELL_RAMPS = ['blue', 'slate'] as const;
+export const CELL_RAMPS = ['blue'] as const;
 export type CellRamp = (typeof CELL_RAMPS)[number];
 
 export const CellPaletteSchema = z.object({

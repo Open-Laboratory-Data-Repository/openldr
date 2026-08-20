@@ -94,8 +94,7 @@ export const EMPTY_FILL = '#cbd5e1';
 /** Five-step sequential ramps, lightest to darkest. One hue each: a sequential scale that changes
  *  hue stops encoding magnitude and starts encoding category. */
 const RAMPS: Record<CellRamp, readonly string[]> = {
-  blue:  ['#c9ddf3', '#9dc2e8', '#5f9adb', '#2f76bd', '#185FA5'],
-  slate: ['#e2e8f0', '#cbd5e1', '#94a3b8', '#64748b', '#334155'],
+  blue: ['#c9ddf3', '#9dc2e8', '#5f9adb', '#2f76bd', '#185FA5'],
 };
 
 /**
