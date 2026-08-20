@@ -156,7 +156,7 @@ export const DesignElementSchema = z.object({
    *  Set this alone and the page prints a laboratory's name as its date header, with no error.
    *  It is a write-time gate rather than a refinement here on purpose — see that file.
    *
-   *  ⛔ Opt-in, and inert when unset — a design without it renders byte-for-byte as before
+   *  ⛔ Opt-in, and inert when unset. A design without it renders byte-for-byte as before
    *  (`render/golden.test.ts`). */
   headerRow: z.boolean().optional(),
   /** Draw this element only on the physical chunks the NAMED table element on the same page
@@ -197,7 +197,7 @@ export const DesignElementSchema = z.object({
    *  third case is a design defect loud enough that rendering must stop, not one page quietly
    *  never finishing.
    *
-   *  ⛔ Opt-in, and inert when unset — a design without it renders byte-for-byte as before
+   *  ⛔ Opt-in, and inert when unset. A design without it renders byte-for-byte as before
    *  (`render/golden.test.ts`). */
   flowAfter: z.string().optional(),
   /** `cellgrid` only: end this element at its DECLARED BOTTOM EDGE (`rect.y + rect.h`) on every
@@ -209,8 +209,8 @@ export const DesignElementSchema = z.object({
    *  the 21 records its authored 285pt box allowed, so the blank band a reader saw simply moved from
    *  the top of the page to the bottom, and the report still spent 4 pages on 2 pages of grid.
    *
-   *  ⛔ Capacity then DIFFERS PER PAGE — full grid above on page 1, finished grid contributing
-   *  nothing on page 3 — so the chunk count stops being `ceil(records / perPage)` and becomes a loop
+   *  ⛔ Capacity then DIFFERS PER PAGE. A full grid above on page 1, finished grid contributing
+   *  and nothing on page 3, so the chunk count stops being `ceil(records / perPage)` and becomes a loop
    *  that consumes records page by page. `cellGridRowSchedule` (`render/cellgrid.ts`) is that loop
    *  and is the only place it lives: the chunk count, the drawn height and the drawn slice all read
    *  the same array, because two of them disagreeing by one row makes a laboratory vanish from the
@@ -219,7 +219,7 @@ export const DesignElementSchema = z.object({
    *  ⛔ Fails OPEN, like `flowAfter`: asked with no page context around it, the element falls back to
    *  its declared height. Every render path supplies the context.
    *
-   *  ⛔ Opt-in, and inert when unset — a design without it renders byte-for-byte as before
+   *  ⛔ Opt-in, and inert when unset. A design without it renders byte-for-byte as before
    *  (`render/golden.test.ts`). */
   fillTo: z.literal('rect-bottom').optional(),
   /** Draw this element on the FIRST physical chunk of its design page and on no other.
@@ -239,7 +239,7 @@ export const DesignElementSchema = z.object({
    *  on the follower's chunk count. Measuring it there would be a cycle. Nothing needs it today,
    *  because a `showWithTable` heading is hidden exactly when the block it names is hidden too.
    *
-   *  ⛔ Opt-in, and inert when unset — a design without it renders byte-for-byte as before
+   *  ⛔ Opt-in, and inert when unset. A design without it renders byte-for-byte as before
    *  (`render/golden.test.ts`). */
   showOn: z.literal('first-chunk').optional(),
   /** Space in px@96 left BETWEEN the element named by `flowAfter` and this one, on top of the

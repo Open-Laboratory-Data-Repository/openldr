@@ -972,7 +972,7 @@ describe('SEED_DESIGNS — rt-clinical-micro uses real keyvalue panels', () => {
     const sql = SEED_QUERIES.find((q) => q.id === 'q-clinical-micro-header')!.sql.postgres;
     for (const id of ['hdr', 'org']) {
       for (const c of el(id).boundColumns ?? []) {
-        // ⚠ `\\b` — inside a TEMPLATE LITERAL a lone `\b` is the backspace character, not a regex
+        // ⚠ `\\b`, inside a TEMPLATE LITERAL a lone `\b` is the backspace character, not a regex
         // word boundary, so the pattern becomes `as panel\x08` and never matches anything.
         expect(new RegExp(`as ${c.key}\\b`).test(sql), `${id}.${c.key} is not selected by the header query`).toBe(true);
       }
@@ -1945,7 +1945,7 @@ describe('SEED_QUERIES — the transmission grids', () => {
   });
 });
 
-describe('SEED_QUERIES — the summary band', () => {
+describe('SEED_QUERIES: the summary band', () => {
   const q = (id: string) => SEED_QUERIES.find((x) => x.id === id)!;
   const BAND = ['q-transmission-calendar', 'q-transmission-summary'];
   const CAL_COLS = ['ord', 'c1', 'c2', 'c3', 'c4', 'c5'];
@@ -2020,7 +2020,7 @@ describe('SEED_QUERIES — the summary band', () => {
   it('returns ord and five cell columns from the calendar, in every dialect', () => {
     for (const [dialect, sql] of Object.entries(q('q-transmission-calendar').sql)) {
       for (const col of CAL_COLS) {
-        // ⚠ `\b` — inside a TEMPLATE LITERAL a lone `\b` is the backspace character, not a regex
+        // ⚠ `\b`, inside a TEMPLATE LITERAL a lone `\b` is the backspace character, not a regex
         // word boundary, and the assertion then matches far more than it means to.
         expect(sql, `calendar/${dialect} lost ${col}`).toMatch(new RegExp(`as ${col}\\b`));
       }

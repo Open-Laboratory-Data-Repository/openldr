@@ -390,7 +390,7 @@ live('the transmission grid queries (live Postgres)', () => {
     // both right. Proves the semantics on the one engine that runs here; MySQL stays unproven.
     // ⛔ Both halves now read the HVL/EID grid, which is still one row per laboratory. The mirror
     // half used to look for this laboratory's ABSENCE from the Other grid, and the Other grid has
-    // no laboratory names left to be absent from — that assertion would pass vacuously. Comparing
+    // no laboratory names left to be absent from, so that assertion would pass vacuously. Comparing
     // the correct list against the WRONG one (every space stripped from the whole list, which is
     // the implementation this trim replaced) discriminates without needing the other grid at all.
     const hv = await runFor({ month: '2026-03', panels: 'A, BB CC', tz: 'UTC' });

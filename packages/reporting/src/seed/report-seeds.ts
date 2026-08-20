@@ -2214,7 +2214,7 @@ where exists (select 1 from isolates)
   },
   {
     id: 'q-transmission-hvleid',
-    name: 'LIS Transmission — selected panels',
+    name: 'LIS Transmission - selected panels',
     connectorId: '',
     // Monthly LIS transmission grid — "did any data arrive from laboratory L on working day D".
     // One row per laboratory, 23 working-day columns, plus a leading row 0 carrying the dates.
@@ -2474,7 +2474,7 @@ all_days as (
 ),
 days as (
   -- Working days only, Mon-Fri. NO holiday calendar (see the postgres variant).
-  -- ⛔ NOT datepart(weekday, ...) — that depends on SET DATEFIRST and is not deterministic across
+  -- ⛔ NOT datepart(weekday, ...). That depends on SET DATEFIRST and is not deterministic across
   -- sessions. 1900-01-01 was a Monday, so this modulo is 0=Mon .. 6=Sun on every server.
   select cal_day, row_number() over (order by cal_day) as n
   from all_days
@@ -3176,7 +3176,7 @@ all_days as (
 ),
 days as (
   -- Working days only, Mon-Fri. NO holiday calendar (see the postgres variant).
-  -- ⛔ NOT datepart(weekday, ...) — that depends on SET DATEFIRST and is not deterministic across
+  -- ⛔ NOT datepart(weekday, ...). That depends on SET DATEFIRST and is not deterministic across
   -- sessions. 1900-01-01 was a Monday, so this modulo is 0=Mon .. 6=Sun on every server.
   select cal_day, row_number() over (order by cal_day) as n
   from all_days
@@ -3781,7 +3781,7 @@ per_day as (
 )
 select 0 as ord, 'M' as c1, 'T' as c2, 'W' as c3, 'T' as c4, 'F' as c5
 union all
--- ⛔ NOT datepart(weekday, ...) — that depends on SET DATEFIRST and is not deterministic across
+-- ⛔ NOT datepart(weekday, ...). That depends on SET DATEFIRST and is not deterministic across
 -- sessions. 1900-01-01 was a Monday, so this modulo is 0=Mon .. 6=Sun on every server.
 -- ⛔ datepart(iso_week, ...) IS deterministic and is the ISO week, unlike datepart(week, ...).
 select cast(row_number() over (order by min(c.cal_day)) as int) as ord,
@@ -3970,7 +3970,7 @@ cal as (
   where dateadd(day, 1, c.cal_day) < dateadd(month, 1, c.first_day)
 ),
 days as (
-  -- ⛔ NOT datepart(weekday, ...) — that depends on SET DATEFIRST. 1900-01-01 was a Monday.
+  -- ⛔ NOT datepart(weekday, ...). That depends on SET DATEFIRST. 1900-01-01 was a Monday.
   select cal_day, row_number() over (order by cal_day) as n
   from cal where datediff(day, '19000101', cal_day) % 7 between 0 and 4
 ),
@@ -4522,7 +4522,7 @@ export const SEED_DESIGNS: ReportDesign[] = [
           ['Generated', '{{date}}'],
         ] },
 
-      // Band 3 — the summary band. PAGE 1 ONLY (`showOn`), so it costs its 90pt once instead of on
+      // Band 3, the summary band. PAGE 1 ONLY (`showOn`), so it costs its 90pt once instead of on
       // every continuation page, and the grids below move up to take the space on page 2.
       //
       // ⛔ The calendar is the SAME element as the two grids below, in a second configuration:

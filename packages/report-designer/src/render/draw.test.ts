@@ -566,8 +566,8 @@ describe('pairRects', () => {
     // 5.65pt below the caption, and it read as bottom padding with none on top.
     //
     // The cause is that the block was centred on two LINE BOXES. pdfkit puts a line box's top at
-    // the cap top for these two strings — a number and an uppercase caption, neither with a
-    // descender — so the ink stops at the caption's BASELINE and the caption's own descender space
+    // the cap top for these two strings, a number and an uppercase caption, neither with a
+    // descender, so the ink stops at the caption's BASELINE and the caption's own descender space
     // is empty. Charging it to the block pushed everything up by half of it.
     const CARD_H = 40 - 6;          // KV_STAT_H less KV_STAT_VGAP: the card the drawer paints
     const CAP = 0.718;              // Helvetica cap height per point of size
@@ -1080,7 +1080,7 @@ describe('resolveFlowY — where flowAfter actually puts an element', () => {
   });
 });
 
-describe('fillTo — an element that takes the height flowAfter freed above it', () => {
+describe('fillTo: an element that takes the height flowAfter freed above it', () => {
   /** A cellgrid of `rows` records whose declared box is `y`..`y+h` (px@96). */
   function grid(id: string, rows: number, rect: { y: number; h: number }, over: Partial<DesignElement> = {}) {
     const el = {
@@ -1096,7 +1096,7 @@ describe('fillTo — an element that takes the height flowAfter freed above it',
   }
 
   // `a` is the anchor: 200px@96 = 150pt, so cellGridMaxRows(150) = 10 records a chunk, and 14
-  // records make it two chunks — 10 on chunk 0, 4 on chunk 1.
+  // records make it two chunks: 10 on chunk 0, 4 on chunk 1.
   // `b` follows it and ends at its own declared bottom, 600px@96 = 450pt.
   const anchor = grid('a', 14, { y: 0, h: 200 });
   const follower = grid('b', 52, { y: 200, h: 400 }, { flowAfter: 'a', fillTo: 'rect-bottom' });
@@ -1129,7 +1129,7 @@ describe('fillTo — an element that takes the height flowAfter freed above it',
   });
 });
 
-describe("showOn: 'first-chunk' — a band that belongs to page 1 alone", () => {
+describe("showOn: 'first-chunk', a band that belongs to page 1 alone", () => {
   const band = {
     id: 'band', kind: 'keyvalue', name: 'band', rect: { x: 0, y: 100, w: 400, h: 120 },
     layout: 'stat', panelColumns: 2, showOn: 'first-chunk',
@@ -1157,7 +1157,7 @@ describe("showOn: 'first-chunk' — a band that belongs to page 1 alone", () => 
       id: 'g', kind: 'cellgrid', name: 'g', rect: { x: 0, y: 0, w: 400, h: 200 },
       dataSource: { kind: 'custom-query', queryId: 'q' }, cellColumns: ['c1'], showOn: 'first-chunk',
     } as DesignElement;
-    // 200px@96 = 150pt holds 10 records, and 15 records need two chunks — so WITHOUT the flag this
+    // 200px@96 = 150pt holds 10 records, and 15 records need two chunks, so WITHOUT the flag this
     // grid genuinely draws on chunk 1, and the assertion below is not vacuous.
     const resolved: ResolvedTable = {
       columns: [{ key: 'c1', label: '' }],
@@ -1188,7 +1188,7 @@ describe("showOn: 'first-chunk' — a band that belongs to page 1 alone", () => 
   });
 });
 
-describe('flowGap — space between one block and the next', () => {
+describe('flowGap: space between one block and the next', () => {
   const anchor = {
     id: 'a', kind: 'text', name: 'a', rect: { x: 0, y: 100, w: 100, h: 20 }, text: 'x',
   } as DesignElement;

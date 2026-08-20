@@ -138,8 +138,8 @@ export interface SplitRows {
  * Synthetic leading rows a `cellgrid` result carries: the label row, plus the group-token row when
  * the element groups.
  *
- * ⛔ ONE definition. Three call sites need this number — the row split, the trailing-column status
- * alignment, and the record count pagination runs on — and a site that disagreed by one would shift
+ * ⛔ ONE definition. Three call sites need this number, the row split, the trailing-column status
+ * alignment, and the record count pagination runs on. A site that disagreed by one would shift
  * every laboratory's chip up a row, or paginate against a record count the drawer never has.
  */
 export function cellGridLift(grouped: boolean): number {
@@ -220,7 +220,7 @@ export function cellGridChunkStart(schedule: number[], chunk: number): number {
 }
 
 /** Physical chunks a grid of FIXED height needs. The schedule above, asked for a height that never
- *  changes — kept as a name for the common case, not as a second algorithm. */
+ *  changes. Kept as a name for the common case, not as a second algorithm. */
 export function cellGridChunks(bodyRowCount: number, hPt: number): number {
   return cellGridRowSchedule(bodyRowCount, () => hPt, '').length;
 }

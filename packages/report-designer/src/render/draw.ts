@@ -872,7 +872,7 @@ function drawUnencodable(doc: Doc, r: Box): void {
  * depends on it: `flowAfter` (where the element starts) and `fillTo` (how much room that leaves).
  *
  * Optional at every call site, and the answer is identical without it for the elements that declare
- * neither — which is every element in every design that has not opted in.
+ * neither, which is every element in every design that has not opted in.
  *
  * `seen` is `resolveFlowY`'s cycle guard, carried through so a `fillTo` element whose height is being
  * measured mid-resolution still throws on a cycle instead of recursing forever.
@@ -884,7 +884,7 @@ export interface FlowContext {
 }
 
 /**
- * Records this cellgrid draws on each chunk — the ONE answer `elementChunkCount`, `drawnHeight` and
+ * Records this cellgrid draws on each chunk. The ONE answer `elementChunkCount`, `drawnHeight` and
  * `drawCellGrid` all read. See `cellGridRowSchedule` for why this is a loop and not a division.
  */
 function cellGridScheduleFor(
@@ -897,7 +897,7 @@ function cellGridScheduleFor(
 /**
  * The height, in pt, the element's BOX has on chunk `chunk`.
  *
- * The declared rect height, unless the element declares `fillTo` — then its bottom edge is fixed and
+ * The declared rect height, unless the element declares `fillTo`. Then its bottom edge is fixed and
  * its top is wherever `flowAfter` put it, so the box is whatever is left between them.
  */
 function elementHeight(el: DesignElement, chunk: number, flow?: FlowContext): number {
@@ -1022,7 +1022,7 @@ export function drawElement(
   // element with no `flowAfter` that is exactly `toPt(el.rect).y`, so this parameter changes
   // nothing for the (still overwhelmingly common) design that never opts in.
   yPt?: number,
-  // The page around this element, needed only by `fillTo` — see `FlowContext`.
+  // The page around this element, needed only by `fillTo`. See `FlowContext`.
   flow?: FlowContext,
 ): void {
   const box = toPt(el.rect);
@@ -1179,7 +1179,7 @@ function drawCellGrid(
   }
 
   // Records. ⛔ The slice comes from the SAME schedule the chunk count was taken from, never from a
-  // division computed here — see `cellGridRowSchedule`. With `fillTo` the capacity differs per page,
+  // division computed here. See `cellGridRowSchedule`. With `fillTo` the capacity differs per page,
   // so `chunk * perChunk` is not this chunk's first record and never was safe to assume.
   const schedule = cellGridScheduleFor(el, resolved, flow);
   const from = cellGridChunkStart(schedule, chunk);
@@ -1207,7 +1207,7 @@ function drawCellGrid(
         doc.rect(x + CHIP_INSET_X, y + CHIP_INSET_Y, c.width - CHIP_INSET_X * 2, CELL_ROW_H - CHIP_INSET_Y * 2)
           .fill(CELL_CHIP_FILL);
       }
-      // ⛔ The cellgrid's own two colours, never the clinical status palette — see `CELL_CHIP_FILL`.
+      // ⛔ The cellgrid's own two colours, never the clinical status palette. See `CELL_CHIP_FILL`.
       // The token still decides WHETHER the value is emphasised; it never decides in what colour.
       doc.font('Helvetica').fontSize(7)
         .fillColor(filled ? CELL_CHIP_TEXT : (st ? CELL_CHIP_FILL : BODY_TEXT))

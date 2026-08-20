@@ -971,7 +971,7 @@ describe('cellgrid trailing column honours statusKey and emphasis', () => {
     expect(content).not.toContain(fillOp('#9f1239'));
   });
 
-  it('darkens the value under the default (omitted) emphasis — no chip, and no clinical tint', async () => {
+  it('darkens the value under the default (omitted) emphasis: no chip, and no clinical tint', async () => {
     const cols = [{ key: 'silent', label: 'Silent', width: 30, statusKey: 'silent_status' }];
     const pdf = await renderReportDesignPdf(design(cols), resolved('critical'), { now: NOW });
     const content = decodedContent(pdf);

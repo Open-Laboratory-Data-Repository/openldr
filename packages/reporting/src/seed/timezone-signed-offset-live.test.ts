@@ -49,7 +49,7 @@ live('a signed-offset time zone is read backwards by Postgres (live Postgres)', 
 
   afterAll(async () => { await pool.end(); });
 
-  /** The calendar DAY `INSTANT` falls on when read in `zone` — the bucket any report would use.
+  /** The calendar DAY `INSTANT` falls on when read in `zone`, the bucket any report would use.
    *  Read-only: one `select`, no table, nothing written. */
   const dayIn = async (zone: string): Promise<string> => {
     const res = await pool.query(
@@ -70,14 +70,14 @@ live('a signed-offset time zone is read backwards by Postgres (live Postgres)', 
     expect(east).toBe('2026-03-03');
     expect(plus3).toBe('2026-03-02');
 
-    // Different days — the inversion is real.
+    // Different days, so the inversion is real.
     expect(plus3).not.toBe(east);
     // ...and '+3' lands exactly where a NAMED UTC−3 zone lands. This is the half that names the
     // direction: without it the test only shows the two disagree, not which way round.
     expect(plus3).toBe(west);
   });
 
-  it("⛔ 'Etc/GMT+3' inverts identically — the case the SETTING used to accept", async () => {
+  it("⛔ 'Etc/GMT+3' inverts identically, the case the SETTING used to accept", async () => {
     // `Intl.DateTimeFormat` resolves this name, so the setting's IANA check stored it happily until
     // the slice that added `isSignedOffsetZone`. It is a fixed offset wearing an IANA-shaped name,
     // and IANA defines it as UTC−3.
@@ -88,7 +88,7 @@ live('a signed-offset time zone is read backwards by Postgres (live Postgres)', 
 
   it('⛔ an unrecognised zone RAISES rather than returning a wrong day', async () => {
     // The fact the narrower run-parameter rule rests on. A Windows zone name is refused by the
-    // engine at once, with the operator watching, so no wrong number is ever produced — which is
+    // engine at once, with the operator watching, so no wrong number is ever produced, which is
     // why `isSignedOffsetZone` deliberately does NOT widen to "everything the runtime cannot
     // resolve". If this ever started returning a day instead, that decision needs revisiting.
     await expect(dayIn('E. Africa Standard Time')).rejects.toThrow(/not recognized/i);
@@ -107,7 +107,7 @@ live('a signed-offset time zone is read backwards by Postgres (live Postgres)', 
       expect(paramFormatMessage('tz', 'timezone-no-signed-offset', good)).toBeNull();
       expect(isValidIanaZone(good)).toBe(true);
     }
-    // The LOUD value stays accepted by the run-parameter rule on purpose — the engine owns it.
+    // The LOUD value stays accepted by the run-parameter rule on purpose. The engine owns it.
     expect(paramFormatMessage('tz', 'timezone-no-signed-offset', 'E. Africa Standard Time')).toBeNull();
   });
 });
