@@ -144,29 +144,46 @@ describe('TemplateParamSchema — format and placeholder', () => {
 });
 
 describe('DesignElementSchema: cellgrid', () => {
-  it('accepts a cellgrid element with a palette and trailing columns', () => {
-    const el = {
+  // Asserts the PARSED OUTPUT, never just `.not.toThrow()`. `DesignElementSchema` strips unknown
+  // keys, so a throw-only assertion passes just as happily when none of these fields exist on the
+  // schema at all. Measured: deleting all five fields and re-running left the old test green.
+  it('accepts a cellgrid element and keeps every cellgrid field', () => {
+    const out = DesignElementSchema.parse({
       id: 'grid', kind: 'cellgrid', name: 'Submission grid',
       rect: { x: 48, y: 200, w: 698, h: 400 },
       dataSource: { kind: 'custom-query', queryId: 'q' },
       sortBy: 'ord',
       labelColumn: 'lab',
       cellColumns: ['d01', 'd02', 'd03'],
-      groupBy: 'header-change',
+      groupBoundary: 'token-change',
       palette: { ramp: 'blue', steps: 1 },
       trailingColumns: [
         { key: 'days', label: 'Days', width: 34.5 },
         { key: 'silent', label: 'Silent', width: 52, emphasis: 'fill' },
       ],
-    };
-    expect(() => DesignElementSchema.parse(el)).not.toThrow();
+    });
+    expect(out.kind).toBe('cellgrid');
+    expect(out.labelColumn).toBe('lab');
+    expect(out.cellColumns).toEqual(['d01', 'd02', 'd03']);
+    expect(out.groupBoundary).toBe('token-change');
+    expect(out.palette).toEqual({ ramp: 'blue', steps: 1 });
+    expect(out.trailingColumns).toEqual([
+      { key: 'days', label: 'Days', width: 34.5 },
+      { key: 'silent', label: 'Silent', width: 52, emphasis: 'fill' },
+    ]);
   });
 
-  it('rejects a palette step count outside 1..5', () => {
-    const el = {
+  it.each([0, 6, 2.5])('rejects a palette step count of %s', (steps) => {
+    expect(() => DesignElementSchema.parse({
       id: 'grid', kind: 'cellgrid', name: 'g', rect: { x: 0, y: 0, w: 10, h: 10 },
-      palette: { ramp: 'blue', steps: 9 },
-    };
-    expect(() => DesignElementSchema.parse(el)).toThrow();
+      palette: { ramp: 'blue', steps },
+    })).toThrow();
+  });
+
+  it('rejects an unknown ramp', () => {
+    expect(() => DesignElementSchema.parse({
+      id: 'grid', kind: 'cellgrid', name: 'g', rect: { x: 0, y: 0, w: 10, h: 10 },
+      palette: { ramp: 'chartreuse', steps: 1 },
+    })).toThrow();
   });
 });

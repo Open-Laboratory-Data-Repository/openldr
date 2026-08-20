@@ -178,8 +178,14 @@ export const DesignElementSchema = z.object({
    *
    *  The group row is data (row 1 of the sorted result, after the header row), never a design
    *  constant, because the grouping a month needs is not knowable when the design is authored. A
-   *  month starting mid-week has a short first group, and every month has a different one. */
-  groupBy: z.literal('header-change').optional(),
+   *  month starting mid-week has a short first group, and every month has a different one.
+   *
+   *  ⛔ NOT `groupBy`. That name takes a column key everywhere else in this repo
+   *  (`packages/workflows/src/engine/node-handlers/pivot.ts`,
+   *  `packages/dashboards/src/compile.ts`), and this takes neither a column nor a key. The value is
+   *  `token-change` rather than `header-change` for the same kind of reason: the tokens live in
+   *  their own row, and naming the header would send a reader to the wrong one. */
+  groupBoundary: z.literal('token-change').optional(),
   /** `cellgrid`: how a cell value becomes a fill. */
   palette: CellPaletteSchema.optional(),
   /** `cellgrid`: text columns drawn after the cells. */
