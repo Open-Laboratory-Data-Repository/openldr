@@ -79,11 +79,12 @@ export function groupBreaks(groupRow: string[] | undefined): number[] {
 /**
  * The empty cell.
  *
- * ⚠ MEASURED for a mono office printer, which is what these reports are signed on. `#cbd5e1` is 17%
- * ink; the darkest blue step is 68%. That is 50.8 percentage points of luminance apart, well clear
- * of the ~15pp a 600dpi laser needs to hold two tints apart. A lighter empty tint was tried at 6%
- * ink and drops out entirely on some lasers, which erases the grid and leaves filled cells floating
- * with no positional ruler behind them.
+ * ⚠ COMPUTED, not printed. `#cbd5e1` is 17% ink and the darkest blue step is 68%, which is 50.8
+ * percentage points of ITU-R 601 luma apart. The ~15pp a 600dpi laser needs to hold two tints
+ * apart is a general figure, not one measured on the printer these reports are signed on. Nobody
+ * has run this through that printer. A tint near 6% ink would be the one at risk of dropping out
+ * and taking the whole grid with it, leaving filled cells floating with no positional ruler, but
+ * that is reasoning from the same arithmetic rather than something anyone observed.
  *
  * It happens to equal `GRID_RULE` in `draw.ts`. That is a coincidence of both wanting the lightest
  * slate that still prints, not a shared constant. Do not factor them together.
