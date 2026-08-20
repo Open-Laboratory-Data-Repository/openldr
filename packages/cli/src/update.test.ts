@@ -176,26 +176,43 @@ describe('runningVersion', () => {
   });
 });
 
-describe('renderUpdateCheck — running ahead of the cached release', () => {
-  // Measured on a real 0.1.4 install: it polled 18 seconds before v0.1.4 was published, cached
-  // 0.1.3, and then printed "published: 0.1.3 / this install is up to date", which reads backwards.
-  it('says the install is newer than the last release it saw, and still exits 0', () => {
+describe('renderUpdateCheck: cache older than the running version', () => {
+  // ⛔ The assertion that matters is the NEGATIVE one. An operator read "published: 0.1.5" under
+  // "running: 0.1.6" as an instruction to roll back, so the number must not be printed at all.
+  it('prints no published line, and names when the check last ran', () => {
     const { text, code } = renderUpdateCheck(
-      state({ running: '0.1.4', latestVersion: '0.1.3', updateAvailable: false, lastError: null }),
+      state({
+        running: '0.1.4', latestVersion: '0.1.3', updateAvailable: false, lastError: null,
+        lastCheckedAt: '2026-08-20T05:32:24.718Z',
+      }),
       { json: false },
     );
-    expect(text).toMatch(/newer than the last release it saw/);
-    expect(text).not.toMatch(/this install is up to date/);
+    expect(text).not.toMatch(/published:/);
+    expect(text).not.toMatch(/0\.1\.3/);
+    expect(text).toMatch(/no update found \(last checked 2026-08-20T05:32:24\.718Z\)/);
     expect(code).toBe(0);
   });
 
-  it('keeps the plain wording when the cache matches the running version', () => {
+  it('omits the parenthetical rather than printing a null timestamp', () => {
+    const { text } = renderUpdateCheck(
+      state({
+        running: '0.1.4', latestVersion: '0.1.3', updateAvailable: false, lastError: null,
+        lastCheckedAt: null,
+      }),
+      { json: false },
+    );
+    expect(text).toMatch(/no update found\./);
+    expect(text).not.toMatch(/last checked/);
+  });
+
+  it('keeps the published line and the plain wording when the cache matches', () => {
     const { text, code } = renderUpdateCheck(
       state({ running: '0.1.4', latestVersion: '0.1.4', updateAvailable: false, lastError: null }),
       { json: false },
     );
+    expect(text).toMatch(/published: 0\.1\.4/);
     expect(text).toMatch(/this install is up to date/);
-    expect(text).not.toMatch(/newer than the last release/);
+    expect(text).not.toMatch(/no update found/);
     expect(code).toBe(0);
   });
 });
