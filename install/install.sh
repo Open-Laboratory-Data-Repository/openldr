@@ -42,6 +42,11 @@ DIR="./openldr"
 VERSION="latest"
 LATEST_URL="https://github.com/Open-Laboratory-Data-Repository/openldr/releases/latest/download/latest.json"
 HOST="localhost"
+# Was --server-name actually typed? The adoption block below must be able to tell a default
+# apart from a deliberate choice, or a re-run silently discards the operator's flag.
+HOST_EXPLICIT=0
+HOST_CHANGED=0
+PREVIOUS_HOST=""
 HTTP_PORT="80"
 HTTPS_PORT="443"
 LE_EMAIL=""
@@ -72,7 +77,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --dir) DIR="$2"; shift 2 ;;
     --version) VERSION="$2"; shift 2 ;;
-    --server-name) HOST="$2"; shift 2 ;;
+    --server-name) HOST="$2"; HOST_EXPLICIT=1; shift 2 ;;
     --http-port) HTTP_PORT="$2"; shift 2 ;;
     --https-port) HTTPS_PORT="$2"; shift 2 ;;
     --letsencrypt) LE_EMAIL="$2"; shift 2 ;;
@@ -146,7 +151,20 @@ if [ -f "$DIR/.env" ]; then
   EXISTING_HOST="$(grep -E '^SERVER_NAME=' "$DIR/.env" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '\r')"
   [ -n "$EXISTING_HTTP" ] && HTTP_PORT="$EXISTING_HTTP"
   [ -n "$EXISTING_HTTPS" ] && HTTPS_PORT="$EXISTING_HTTPS"
-  [ -n "$EXISTING_HOST" ] && HOST="$EXISTING_HOST"
+  # ⛔ An explicit --server-name WINS over the stored one. This used to adopt unconditionally, so
+  # a re-run threw the operator's flag away without a word: a site installed once as localhost and
+  # then re-run with --server-name <ip> kept localhost, studio still worked because the gateway
+  # serves any host, and only Keycloak gave it away by redirecting to localhost. Measured against
+  # a real deployment 2026-08-20. Without --server-name the stored value is still adopted, which is
+  # what makes a bare re-run safe.
+  if [ -n "$EXISTING_HOST" ]; then
+    if [ "$HOST_EXPLICIT" -eq 1 ] && [ "$EXISTING_HOST" != "$HOST" ]; then
+      HOST_CHANGED=1
+      PREVIOUS_HOST="$EXISTING_HOST"
+    else
+      HOST="$EXISTING_HOST"
+    fi
+  fi
   EXISTING_ADAPTER="$(grep -E '^TARGET_STORE_ADAPTER=' "$DIR/.env" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '\r')"
   if [ "$EXISTING_ADAPTER" = "mssql" ]; then
     TARGET_DB="mssql"
@@ -167,6 +185,27 @@ if [ "$HTTPS_PORT" = "443" ]; then
   ORIGIN="https://$HOST"
 else
   ORIGIN="https://$HOST:$HTTPS_PORT"
+fi
+
+# The host changed on an install that already exists. `.env` is never rewritten on a re-run (the
+# secrets block below is guarded on ENV_EXISTS), so the four host-derived keys have to be edited in
+# place or the flag would win in this script and lose everywhere it matters.
+if [ "$HOST_CHANGED" -eq 1 ]; then
+  echo "→ --server-name $HOST overrides the stored $PREVIOUS_HOST"
+  for kv in "SERVER_NAME=$HOST" "PUBLIC_ORIGIN=$ORIGIN" \
+            "OIDC_ISSUER_URL=$ORIGIN/auth/realms/openldr" "KC_HOSTNAME=$ORIGIN/auth"; do
+    k="${kv%%=*}"
+    # `|` as the delimiter: every value here contains the `/` of a URL.
+    sed "s|^$k=.*|$kv|" "$DIR/.env" > "$DIR/.env.tmp" && mv "$DIR/.env.tmp" "$DIR/.env"
+  done
+  echo "→ Rewrote SERVER_NAME, PUBLIC_ORIGIN, OIDC_ISSUER_URL and KC_HOSTNAME in .env"
+  # The self-signed cert carries the OLD host in its SAN, and the generator below only runs when
+  # fullchain.pem is absent. Drop it so it is reissued for the new host. Let's Encrypt certs are
+  # left alone: they are issued by a different path and are not ours to delete.
+  if [ -z "$LE_EMAIL" ] && [ -f "$DIR/config/nginx/certs/fullchain.pem" ]; then
+    rm -f "$DIR/config/nginx/certs/fullchain.pem" "$DIR/config/nginx/certs/privkey.pem"
+    echo "→ Removed the old self-signed cert so it is reissued for $HOST"
+  fi
 fi
 
 err() { echo "✗ $1" >&2; exit 1; }
@@ -630,6 +669,19 @@ else
 fi
 echo "  Keycloak admin password: $(grep '^KEYCLOAK_ADMIN_PASSWORD=' .env | cut -d= -f2)"
 echo "  App sign-in: labadmin / $(grep '^INITIAL_LAB_ADMIN_PASSWORD=' .env | cut -d= -f2-)  (change it on first login)"
+# ⛔ The one part of a host change this script CANNOT do for you. The realm patch above edits the
+# JSON, but the compose runs `start --import-realm`, and Keycloak imports a realm only when it is
+# not already in its database. On an existing install it is, carrying the OLD redirect URI, so
+# login will bounce to $PREVIOUS_HOST no matter what this script rewrote. Saying nothing here is
+# how the operator concludes the whole flag was ignored again.
+if [ "$HOST_CHANGED" -eq 1 ]; then
+  echo ""
+  echo "  ⚠ Keycloak still has the realm it imported as $PREVIOUS_HOST, and an existing realm is"
+  echo "    never re-imported. Sign-in will redirect to $PREVIOUS_HOST until you either:"
+  echo "      a) add $ORIGIN/* to the openldr-web client's Valid redirect URIs at $ORIGIN/auth"
+  echo "         (Administration Console, realm 'openldr', Clients, openldr-web), or"
+  echo "      b) install into a fresh directory, which imports the realm cleanly."
+fi
 if [ "$MSSQL_DEMO" -eq 1 ]; then
   echo "  MSSQL (demo) SA password: $(grep '^MSSQL_PASSWORD=' .env | cut -d= -f2-)"
   echo "  ⚠ The demo SQL Server container is for evaluation only — not licensed for production."
