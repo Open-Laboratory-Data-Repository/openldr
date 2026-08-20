@@ -104,6 +104,36 @@ export function cellTextOptions(width: number): { width: number; height: number;
   return { width, height: CELL_TEXT_H, ellipsis: true };
 }
 
+/**
+ * Cut `text` to fit `maxW` pt under the doc's CURRENT font/size, appending one ellipsis character.
+ *
+ * ⛔ NOT `{ ellipsis: true }`. `drawCellGrid`'s label call passed `width` + `lineBreak: false` +
+ * `ellipsis: true` with no `height`, which is exactly the `cellTextOptions` quirk above minus the
+ * `height` that quirk exists to supply — measured directly (pdfkit 0.15.2, a throwaway script
+ * drawing "Bugando Medical Centre (BMC)" at `CELL_LABEL_W`): `ellipsis` did NOTHING, the string
+ * still wrapped to a second line, and that second line ("(BMC)") printed on top of the laboratory
+ * name in the row below it. Passing `height` (`cellTextOptions`'s fix) also stops the wrap, but a
+ * `cellgrid` label is drawn without one, at a fixed `y = r.y + CELL_HEAD_H + ri * CELL_ROW_H`, and
+ * this cuts the STRING instead so the fix does not lean on a pdfkit option combination that has
+ * already been measured doing nothing once.
+ *
+ * Binary search on character count, not `widthOfString` per character shaved off one at a time —
+ * a label column is short and this runs once per row, but there is no reason to make it O(n) when
+ * O(log n) measurements answer the same question.
+ */
+export function truncateToWidth(doc: Doc, text: string, maxW: number): string {
+  if (doc.widthOfString(text) <= maxW) return text;
+  const ELLIPSIS = '…';
+  if (doc.widthOfString(ELLIPSIS) > maxW) return '';
+  let lo = 0;
+  let hi = text.length;
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2);
+    if (doc.widthOfString(text.slice(0, mid) + ELLIPSIS) <= maxW) lo = mid; else hi = mid - 1;
+  }
+  return text.slice(0, lo) + ELLIPSIS;
+}
+
 /** Lines a header cell may stack. Two, because `STACKED_HEAD_H` reserves room for exactly two —
  *  a third would be drawn over the first body row. */
 export const MAX_HEAD_LINES = 2;
@@ -1029,7 +1059,7 @@ function drawCellGrid(
     const y = r.y + CELL_HEAD_H + ri * CELL_ROW_H;
     if (hasLabel) {
       doc.font('Helvetica').fontSize(8).fillColor(BODY_TEXT)
-        .text(row[0] ?? '', r.x, y + 1, { width: CELL_LABEL_W, lineBreak: false, ellipsis: true });
+        .text(truncateToWidth(doc, row[0] ?? '', CELL_LABEL_W), r.x, y + 1, { width: CELL_LABEL_W, lineBreak: false });
     }
     for (let i = 0; i < cellCount; i += 1) {
       doc.rect(xOfCell(i), y, CELL_SIZE, CELL_SIZE).fill(cellFill(Number(row[cellIndex(i)]), max, palette));

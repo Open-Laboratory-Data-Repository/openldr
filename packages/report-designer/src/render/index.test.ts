@@ -3,6 +3,7 @@ import zlib from 'node:zlib';
 import PDFDocument from 'pdfkit';
 import { renderReportDesignPdf, type ResolvedTable } from './index';
 import { columnWidths, HEAD_LINE_H, STACKED_HEAD_H, ROW_H } from './draw';
+import { CELL_LABEL_W } from './cellgrid';
 import { encodeCode128, encodeQr, QR_QUIET_ZONE } from '../encode';
 import type { ReportDesign, BoundColumn } from '../schema';
 
@@ -836,6 +837,55 @@ describe('truncation, and the byte it is written as', () => {
     const texts = pdfTexts(await renderReportDesignPdf(narrow(400, 'short enough'), new Map(), { now: NOW }));
     expect(texts).toContain('short enough');
     expect(texts.join('')).not.toContain(String.fromCharCode(0x85));
+  });
+});
+
+describe('cellgrid label column truncates instead of wrapping', () => {
+  // The exact string from the reported defect: 8pt Helvetica measures it at ~113.4pt, wider than
+  // CELL_LABEL_W (105pt). Before the fix, `{ lineBreak: false, ellipsis: true }` with no `height`
+  // did nothing (see `truncateToWidth`'s doc comment) and this WRAPPED onto a second line —
+  // "(BMC)" — which printed on top of the laboratory drawn in the row underneath it.
+  const LONG_NAME = 'Bugando Medical Centre (BMC)';
+
+  function cellGridDesign(): ReportDesign {
+    return baseDesign({
+      pages: [{ id: 'p1', elements: [
+        { id: 'g', kind: 'cellgrid', name: 'g', rect: { x: 48, y: 40, w: 698, h: 200 },
+          dataSource: { kind: 'custom-query', queryId: 'q' }, labelColumn: 'lab', cellColumns: ['d01', 'd02'] },
+      ] }],
+    });
+  }
+
+  function cellGridResolved(): Map<string, ResolvedTable> {
+    return new Map([['g', {
+      columns: [{ key: 'lab', label: '' }, { key: 'd01', label: '' }, { key: 'd02', label: '' }],
+      rows: [
+        { lab: '', d01: '', d02: '' }, // the header row a cellgrid always lifts, regardless of design
+        { lab: LONG_NAME, d01: '1', d02: '' },
+        { lab: 'Buguruni', d01: '', d02: '1' },
+      ],
+    }]]);
+  }
+
+  it('cuts a laboratory name wider than CELL_LABEL_W and ends it with the ellipsis byte', async () => {
+    expect(105).toBe(CELL_LABEL_W); // pins the width this test's premise depends on
+    const texts = pdfTexts(await renderReportDesignPdf(cellGridDesign(), cellGridResolved(), { now: NOW }));
+    const cut = texts.find((t) => t.startsWith('Bugando Medical Centre'));
+    expect(cut, 'the label never printed at all').toBeDefined();
+    expect(cut).not.toBe(LONG_NAME);
+    expect(cut!.endsWith(String.fromCharCode(0x85))).toBe(true);
+  });
+
+  it('never draws the wrapped second line as its own run', async () => {
+    // The pre-fix wrap drew "(BMC)" as a SEPARATE text run (its own Tm/TJ), one line under the
+    // first — distinct from a truncated run, which ends the string before reaching it at all.
+    const texts = pdfTexts(await renderReportDesignPdf(cellGridDesign(), cellGridResolved(), { now: NOW }));
+    expect(texts).not.toContain('(BMC)');
+  });
+
+  it('leaves a short laboratory name completely untouched', async () => {
+    const texts = pdfTexts(await renderReportDesignPdf(cellGridDesign(), cellGridResolved(), { now: NOW }));
+    expect(texts).toContain('Buguruni');
   });
 });
 
