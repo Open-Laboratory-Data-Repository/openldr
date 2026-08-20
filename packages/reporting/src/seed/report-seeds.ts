@@ -2214,7 +2214,7 @@ where exists (select 1 from isolates)
   },
   {
     id: 'q-transmission-hvleid',
-    name: 'LIS Transmission — HVL/EID',
+    name: 'LIS Transmission — selected panels',
     connectorId: '',
     // Monthly LIS transmission grid — "did any data arrive from laboratory L on working day D".
     // One row per laboratory, 23 working-day columns, plus a leading row 0 carrying the dates.
@@ -2231,7 +2231,7 @@ where exists (select 1 from isolates)
     // tested, then authorised. None reads ingest arrival and none converts a timezone.
     params: [
       { id: 'month', label: 'Month (YYYY-MM)', type: 'text', required: true },
-      { id: 'panels', label: 'HVL/EID panel codes (comma separated)', type: 'text', required: true },
+      { id: 'panels', label: 'Panel codes (comma separated)', type: 'text', required: true },
     ],
     sql: {
       postgres: `with month_start as (
@@ -2962,7 +2962,7 @@ order by ord`,
     // columns, the leading date row. See q-transmission-hvleid for why each is shaped that way.
     params: [
       { id: 'month', label: 'Month (YYYY-MM)', type: 'text', required: true },
-      { id: 'panels', label: 'HVL/EID panel codes (comma separated)', type: 'text', required: true },
+      { id: 'panels', label: 'Panel codes (comma separated)', type: 'text', required: true },
     ],
     sql: {
       postgres: `with month_start as (
@@ -4494,8 +4494,12 @@ export const SEED_DESIGNS: ReportDesign[] = [
         help: 'The reporting month as YYYY-MM, for example 2021-01.' },
       // ⛔ AGENTS.md §8 — the help text names no code either. This design ships worldwide and one
       // country's panel codes are not another's.
-      { key: 'panels', label: 'HVL/EID panel codes', type: 'text', required: true, value: '',
-        help: 'Comma-separated panel codes counted as HVL/EID. Everything else appears in the Other grid.' },
+      // ⛔ The label names no disease. This parameter takes ANY panel codes: the report splits the
+      // month into the panels you list and everything else, and 'HVL/EID' was only ever the first
+      // use anybody put it to. An operator running it for PCRIN read a box that said HVL/EID and
+      // had to guess whether it applied. The operator caught this on 2026-08-20.
+      { key: 'panels', label: 'Panel codes', type: 'text', required: true, value: '',
+        help: 'Comma-separated panel codes for the upper grid. Every other test lands in the Others row below it.' },
     ],
     pages: [{ id: 'rt-transmission-grid-p1', elements: [
       // Band 1 — the letterhead, ids and rects byte-identical to `simpleTableDesign`'s.
@@ -4514,7 +4518,7 @@ export const SEED_DESIGNS: ReportDesign[] = [
         layout: 'inline', panelColumns: 2,
         rows: [
           ['Month', '{{param.month}}'],
-          ['HVL/EID panel codes', '{{param.panels}}'],
+          ['Panel codes', '{{param.panels}}'],
           ['Generated', '{{date}}'],
         ] },
 
@@ -4561,14 +4565,14 @@ export const SEED_DESIGNS: ReportDesign[] = [
       // ⛔ `flowAfter` the FIGURES panel, not the calendar: the panel's height is fixed and the
       // calendar's is not. On page 2 the panel draws nothing and adds nothing, so this heading and
       // everything chained below it move up by the band's whole height.
-      { id: 'rt-transmission-grid-hvleid-title', kind: 'text', name: 'HVL/EID heading', rect: { x: 48, y: TG_BAND_Y + TG_BAND_H, w: 600, h: 14 },
-        text: 'Any HVL/EID Data Submission by Testing Laboratory', style: { fontSize: 10, bold: true, color: '#334155' },
+      { id: 'rt-transmission-grid-hvleid-title', kind: 'text', name: 'Selected-panel heading', rect: { x: 48, y: TG_BAND_Y + TG_BAND_H, w: 600, h: 14 },
+        text: 'Any Selected-Panel Data Submission by Testing Laboratory', style: { fontSize: 10, bold: true, color: '#334155' },
         showWithTable: 'hvleid', flowAfter: 'rt-transmission-grid-figures' },
       // ⛔ `fillTo` lives HERE now, not on the Other grid. This is the grid that grows with the
       // network: one row per laboratory, and the only thing between it and the bottom of the page is
       // the Other block's fixed 74px. Without it this grid would carry a frozen row count and leave
       // the blank band `fillTo` exists to close.
-      { id: 'hvleid', kind: 'cellgrid', name: 'HVL/EID submission',
+      { id: 'hvleid', kind: 'cellgrid', name: 'Selected-panel submission',
         rect: { x: 48, y: TG_HVLEID_Y, w: TG_CONTENT_W, h: TG_HVLEID_BOTTOM - TG_HVLEID_Y },
         flowAfter: 'rt-transmission-grid-hvleid-title',
         fillTo: 'rect-bottom',
@@ -4771,10 +4775,11 @@ export const SEED_REPORT_DEFS: ReportRecord[] = [
   {
     id: 'r-transmission-grid',
     name: 'LIS Stakeholders Update',
-    description: 'Which laboratories sent data on which working day of a month: one grid for the '
-      + 'HVL/EID panels named in the parameter, one for every other test. A filled cell means data '
-      + 'arrived from that laboratory on that day; a blank cell means nothing did. Days are bucketed '
-      + 'in the supplied time zone, so an evening arrival stays on the day it was sent.',
+    description: 'Which laboratories sent data on which working day of a month. The upper grid is '
+      + 'one row per laboratory for the panel codes you name; below it, a single row stands for every '
+      + 'other test, from all laboratories together. A filled cell means data arrived that day and a '
+      + 'blank cell means nothing did. The day is the clinical date the source system itself recorded, '
+      + 'so the same cell reads the same way for every reader.',
     category: 'operational',
     designId: 'rt-transmission-grid',
     primaryQueryId: 'q-transmission-hvleid',
