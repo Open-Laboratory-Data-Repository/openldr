@@ -3776,6 +3776,100 @@ group by to_char(c.cal_day, 'IW')
 order by ord`,
     },
   },
+  {
+    id: 'q-transmission-summary',
+    name: 'LIS Transmission - month figures',
+    connectorId: '',
+    // The four figures beside the month calendar. ONE row, four columns.
+    //
+    // ⛔ One row, and not one more. A bound keyvalue reads resolved.rows[0] and nothing else
+    // (packages/report-designer/src/render/draw.ts:479), so a second row would be dropped in
+    // silence.
+    //
+    // ⛔ NO panel parameter, for the same reason as q-transmission-calendar.
+    //
+    // ⛔ TWO UNITS IN ONE PANEL, deliberately. 'busiest' counts CALENDAR days, so it can land on a
+    // Saturday and it must equal the largest cell in the calendar beside it. 'pct_lab_days' and
+    // 'silent10' count WORKING days, because both measure a laboratory against what the month asked
+    // of it. Do not "fix" one to match the other.
+    //
+    // ⚠ The percent sign lives in the CAPTION, not here. Formatting a number into a string is where
+    // three dialects stop agreeing, and the design's caption already has to say what the figure is.
+    params: [
+      { id: 'month', label: 'Month (YYYY-MM)', type: 'text', required: true },
+    ],
+    sql: {
+      postgres: `with month_start as (
+  -- ⛔ 'ym' is the NORMALISED month. See q-transmission-hvleid postgres for the full text.
+  select cast({{param.month}} || '-01' as date) as d,
+         to_char(cast({{param.month}} || '-01' as date), 'YYYY-MM') as ym
+),
+cal as (
+  select g::date as cal_day
+  from month_start m
+  cross join generate_series(m.d::timestamp, (m.d + interval '1 month' - interval '1 day')::timestamp, interval '1 day') g
+),
+days as (
+  -- Working days only, Mon-Fri, the same definition every per-laboratory figure in this report
+  -- already uses. NO holiday calendar.
+  select cal_day, row_number() over (order by cal_day) as n
+  from cal where extract(isodow from cal_day) between 1 and 5
+),
+arrivals as (
+  -- The same clinical-date ladder as q-transmission-calendar, minus nothing. See that query.
+  select distinct clinical.lab, cast(left(clinical.ts, 10) as date) as cal_day
+  from (
+    select
+      coalesce(fm.name, d.performer_display, d.performer, '(unknown)') as lab,
+      coalesce(
+        case when left(q.authored_at, 7) = (select ym from month_start) then q.authored_at end,
+        (select min(r.result_timestamp) from lab_results r
+          where r.request_id = q.id and left(r.result_timestamp, 7) = (select ym from month_start)),
+        (select min(dr.issued) from diagnostic_reports dr
+          where dr.based_on_id = q.id and left(dr.issued, 7) = (select ym from month_start))
+      ) as ts
+    from lab_requests q
+    join diagnostic_reports d on d.batch_id = q.batch_id
+    left join facility_map fm
+      on fm.source_system = coalesce(d.source_system, '')
+     and fm.performer_system = coalesce(d.performer_system, '')
+     and fm.source_code = d.performer
+    where (
+         left(q.authored_at, 7) = (select ym from month_start)
+      or exists (select 1 from lab_results r
+                  where r.request_id = q.id and left(r.result_timestamp, 7) = (select ym from month_start))
+      or exists (select 1 from diagnostic_reports dr
+                  where dr.based_on_id = q.id and left(dr.issued, 7) = (select ym from month_start))
+    )
+  ) clinical
+),
+labs as (select distinct lab from arrivals),
+lab_stats as (
+  -- 'silent': working days between a laboratory's LAST submission and the last working day of the
+  -- month. LEFT JOIN throughout: a laboratory whose only submission landed on a Saturday has no row
+  -- in 'days' at all, and an inner join would drop it instead of counting it silent all month.
+  select l.lab, (select max(n) from days) - coalesce(max(dy.n), 0) as silent
+  from labs l
+  left join arrivals a on a.lab = l.lab
+  left join days dy on dy.cal_day = a.cal_day
+  group by l.lab
+)
+select
+  cast((select count(*) from labs) as text) as labs,
+  -- ⛔ The division is GUARDED. A month with no arrivals has no laboratories, and 0/0 would make
+  -- the whole run fail rather than print a page saying nothing arrived. coalesce puts a 0 on the
+  -- page instead.
+  coalesce(cast(round(100.0 * (select count(*) from arrivals a join days dy on dy.cal_day = a.cal_day)
+    / nullif((select count(*) from labs) * (select max(n) from days), 0), 1) as text), '0') as pct_lab_days,
+  -- ⛔ CALENDAR days. This figure is the cross-check on q-transmission-calendar: it must equal the
+  -- largest cell there, and a test asserts it rather than leaving it to be noticed.
+  cast(coalesce((select max(c) from (select count(distinct lab) as c from arrivals group by cal_day) x), 0) as text) as busiest,
+  -- ⚠ 10 working days is an INVENTED threshold, the same operational number lab_stats carries in
+  -- both grid queries. It is not clinical and not a design decision either. Somebody will want to
+  -- change it, and it is now in three places.
+  cast((select count(*) from lab_stats where silent >= 10) as text) as silent10`,
+    },
+  },
 ];
 
 /**
