@@ -6,6 +6,36 @@
       "version": "v0.1.5",
       "entries": [
         {
+          "hash": "c771d2d5",
+          "type": "fix",
+          "scope": "release",
+          "title": "Bound the post-publish manifest fetch, use parseReleaseManifest, document it"
+        },
+        {
+          "hash": "e3a57ef0",
+          "type": "fix",
+          "scope": "release",
+          "title": "Verify the published manifest, and repoll the verification stack"
+        },
+        {
+          "hash": "24fc9140",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Show no version when the cached release is older than this install"
+        },
+        {
+          "hash": "179f91a6",
+          "type": "fix",
+          "scope": "cli",
+          "title": "Print no version when the cached release is older than this install"
+        },
+        {
+          "hash": "c4a2030d",
+          "type": "feat",
+          "scope": "core",
+          "title": "A verdict that carries no version when the cache is behind"
+        },
+        {
           "hash": "2221a069",
           "type": "fix",
           "scope": "install",
