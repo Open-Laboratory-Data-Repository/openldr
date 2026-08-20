@@ -44,6 +44,26 @@ const STATUS_TEXT_COLOR: Record<CellStatus, string> = {
   normal: '#166534', abnormal: '#b91c1c', critical: '#9f1239', indeterminate: '#475569', none: BODY_TEXT,
 };
 /**
+ * The `cellgrid` trailing-column chip, and the ink a trailing value is tinted with.
+ *
+ * ⛔ NOT `STATUS_CHIP_FILL`. That palette is CLINICAL: `#9f1239` is the dark rose this codebase
+ * reserves for a critical result. A laboratory that has sent nothing for nineteen working days is
+ * an operational fact about a data feed, not a result about a patient, and printing it in the same
+ * red on a clinical report states something that is not true. `CELL_RAMPS`' own doc comment in
+ * `schema.ts` already says the rule this restores: a cellgrid shows magnitude or presence, never a
+ * result state, so it does not reach for `CELL_STATUSES`' colours.
+ *
+ * ⚠ ONE ink for every recognised token, deliberately. This element FLAGS, it does not grade: five
+ * clinical severities collapsing to one near-black is the point, not an omission. A design that
+ * needs two levels of emphasis here needs a second declaration, not a second clinical colour.
+ *
+ * Near-black is what the approved preview used. It is the darkest ink in the slate scale the rest
+ * of this renderer draws from, so it survives a mono office printer, which a hue does not.
+ */
+const CELL_CHIP_FILL = '#0f172a';
+const CELL_CHIP_TEXT = '#ffffff';
+
+/**
  * A chip is inset inside its cell rather than filling it edge to edge.
  *
  * Without this, two vertically adjacent rows sharing a status paint touching rectangles and read as
@@ -1160,10 +1180,12 @@ function drawCellGrid(
       const filled = Boolean(st) && (c.emphasis ?? 'text') === 'fill';
       if (filled) {
         doc.rect(x + CHIP_INSET_X, y + CHIP_INSET_Y, c.width - CHIP_INSET_X * 2, CELL_ROW_H - CHIP_INSET_Y * 2)
-          .fill(STATUS_CHIP_FILL[st!]);
+          .fill(CELL_CHIP_FILL);
       }
+      // ⛔ The cellgrid's own two colours, never the clinical status palette — see `CELL_CHIP_FILL`.
+      // The token still decides WHETHER the value is emphasised; it never decides in what colour.
       doc.font('Helvetica').fontSize(7)
-        .fillColor(filled ? STATUS_CHIP_TEXT[st!] : (st ? STATUS_TEXT_COLOR[st] : BODY_TEXT))
+        .fillColor(filled ? CELL_CHIP_TEXT : (st ? CELL_CHIP_FILL : BODY_TEXT))
         .text(v, x, y + 1, { width: c.width, align: 'center', lineBreak: false });
       x += c.width;
     });

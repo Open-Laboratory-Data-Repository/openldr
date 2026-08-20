@@ -909,17 +909,44 @@ describe('cellgrid trailing column honours statusKey and emphasis', () => {
     ],
   }]]);
 
-  it('paints the fill chip on the trailing column, CELL_ROW_H tall, in the status colour', async () => {
+  // cellStart 114 (CELL_LABEL_W 105 + CELL_COL_GAP 9); trailingStart 124.5 (+ one CELL_SIZE 10.5,
+  // no breaks); + CELL_COL_GAP 9 = 133.5 left edge; + CHIP_INSET_X 1 = 134.5. y = CELL_HEAD_H 13
+  // (row 0) + CHIP_INSET_Y 1.5 = 14.5. Width 30 - 2*1 = 28; height CELL_ROW_H 12.75 - 2*1.5 = 9.75.
+  const chipRect = `${pdfNum(134.5)} ${pdfNum(14.5)} ${pdfNum(28)} ${pdfNum(9.75)} re`;
+  const chipPaint = (hex: string): string => `${chipRect}\n/DeviceRGB cs\n${fillOp(hex)}\nf`;
+  /** The clinical fills, for the negative assertions. ⚠ `indeterminate` (#94a3b8) equals HEAD_RULE,
+   *  which the header band paints on every render, so scanning the document for the bare colour
+   *  proves nothing. Every assertion below anchors on the chip RECT immediately before it. */
+  const CLINICAL_FILLS = ['#16a34a', '#e11d48', '#9f1239', '#94a3b8', '#e2e8f0'];
+
+  it('paints the fill chip on the trailing column, CELL_ROW_H tall, in the cellgrid ink', async () => {
     const cols = [{ key: 'silent', label: 'Silent', width: 30, statusKey: 'silent_status', emphasis: 'fill' as const }];
     const pdf = await renderReportDesignPdf(design(cols), resolved('critical'), { now: NOW });
-    const content = decodedContent(pdf);
-    // cellStart 114 (CELL_LABEL_W 105 + CELL_COL_GAP 9); trailingStart 124.5 (+ one CELL_SIZE
-    // 10.5, no breaks); + CELL_COL_GAP 9 = 133.5 left edge; + CHIP_INSET_X 1 = 134.5.
-    // y = CELL_HEAD_H 13 (row 0); + CHIP_INSET_Y 1.5 = 14.5. Width 30 - 2*1 = 28; height
-    // CELL_ROW_H 12.75 - 2*1.5 = 9.75.
-    const expectedRect = `${pdfNum(134.5)} ${pdfNum(14.5)} ${pdfNum(28)} ${pdfNum(9.75)} re`;
-    const expectedFill = fillOp('#9f1239'); // STATUS_CHIP_FILL.critical
-    expect(content).toContain(`${expectedRect}\n/DeviceRGB cs\n${expectedFill}\nf`);
+    expect(decodedContent(pdf)).toContain(chipPaint('#0f172a'));
+  });
+
+  it('never paints a clinical status colour, whatever token the query emits', async () => {
+    // ⛔ THE point. #9f1239 is the dark rose this codebase reserves for a critical clinical result.
+    // A laboratory that stopped transmitting is an operational fact, not a result, and printing it
+    // in that red on a clinical report says something untrue. CELL_RAMPS' own doc comment in
+    // schema.ts states the rule: a cellgrid shows magnitude or presence, never a result state.
+    const cols = [{ key: 'silent', label: 'Silent', width: 30, statusKey: 'silent_status', emphasis: 'fill' as const }];
+    for (const token of ['critical', 'abnormal', 'normal', 'indeterminate', 'none']) {
+      const content = decodedContent(await renderReportDesignPdf(design(cols), resolved(token), { now: NOW }));
+      // Every recognised token paints the SAME ink: this element flags, it does not grade.
+      expect(content, token).toContain(chipPaint('#0f172a'));
+      for (const hex of CLINICAL_FILLS) {
+        expect(content, `${token} painted a chip in ${hex}`).not.toContain(chipPaint(hex));
+      }
+    }
+  });
+
+  it('knocks the value out in white on the ink chip', async () => {
+    const cols = [{ key: 'silent', label: 'Silent', width: 30, statusKey: 'silent_status', emphasis: 'fill' as const }];
+    const content = decodedContent(await renderReportDesignPdf(design(cols), resolved('none'), { now: NOW }));
+    // White for EVERY token, including `none`. The table's dark-text exception exists only because
+    // STATUS_CHIP_FILL.none is near-white; this palette has no near-white member.
+    expect(content).toContain(`${fillOp('#0f172a')}\nf\n/DeviceRGB cs\n${fillOp('#ffffff')}`);
   });
 
   it('draws no chip when the status is unset (blank silent_status) — plain text only', async () => {
@@ -932,7 +959,6 @@ describe('cellgrid trailing column honours statusKey and emphasis', () => {
     const cols = [{ key: 'silent', label: 'Silent', width: 30, statusKey: 'silent_status', emphasis: 'fill' as const }];
     const pdf = await renderReportDesignPdf(design(cols), resolved(''), { now: NOW });
     const content = decodedContent(pdf);
-    const chipRect = `${pdfNum(134.5)} ${pdfNum(14.5)} ${pdfNum(28)} ${pdfNum(9.75)} re`;
     expect(content).not.toContain(chipRect);
     expect(content).toContain(fillOp('#334155')); // BODY_TEXT — the value still prints, un-knocked-out
   });
@@ -941,17 +967,18 @@ describe('cellgrid trailing column honours statusKey and emphasis', () => {
     const cols = [{ key: 'silent', label: 'Silent', width: 30 }];
     const pdf = await renderReportDesignPdf(design(cols), resolved('critical'), { now: NOW });
     const content = decodedContent(pdf);
+    expect(content).not.toContain(fillOp('#0f172a'));
     expect(content).not.toContain(fillOp('#9f1239'));
   });
 
-  it('tints the value with STATUS_TEXT_COLOR under the default (omitted) emphasis, not a fill chip', async () => {
+  it('darkens the value under the default (omitted) emphasis — no chip, and no clinical tint', async () => {
     const cols = [{ key: 'silent', label: 'Silent', width: 30, statusKey: 'silent_status' }];
     const pdf = await renderReportDesignPdf(design(cols), resolved('critical'), { now: NOW });
     const content = decodedContent(pdf);
-    expect(content).toContain(fillOp('#9f1239')); // STATUS_TEXT_COLOR.critical happens to equal the chip fill
+    expect(content).toContain(fillOp('#0f172a'));   // the cellgrid's own ink, as text
+    expect(content).not.toContain(fillOp('#9f1239')); // STATUS_TEXT_COLOR.critical, the clinical rose
     // The chip RECT never appears, only the text colour — same shape check as the table's version.
-    const expectedRect = `${pdfNum(134.5)} ${pdfNum(14.5)} ${pdfNum(28)} ${pdfNum(9.75)} re`;
-    expect(content).not.toContain(expectedRect);
+    expect(content).not.toContain(chipRect);
   });
 });
 
