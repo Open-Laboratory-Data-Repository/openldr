@@ -14,7 +14,7 @@ const input = (over: Partial<Parameters<typeof updateVerdict>[0]> = {}) => ({
 
 describe('updateVerdict', () => {
   it('reports up_to_date when the published version matches', () => {
-    expect(updateVerdict(input())).toEqual({ kind: 'up_to_date', latest: '0.1.3', runningIsNewer: false });
+    expect(updateVerdict(input())).toEqual({ kind: 'up_to_date', latest: '0.1.3' });
   });
 
   it('reports update_available and carries the notes through', () => {
@@ -71,33 +71,34 @@ describe('updateVerdict', () => {
   });
 });
 
-describe('updateVerdict — running ahead of the cached release', () => {
+describe('updateVerdict: cache older than the running version', () => {
   const input = (over = {}) => ({
     enabled: true, running: '0.1.4', latestVersion: '0.1.3',
     releasedAt: '2026-08-19', notesUrl: 'https://example.org/x', lastError: null, ...over,
   });
 
-  // ⛔ Measured on a real install 2026-08-19: the release script starts the verification stack at
-  // step 9 and publishes at step 10, so this install polled 18 seconds BEFORE v0.1.4 existed and
-  // cached 0.1.3. It then printed "published: 0.1.3" beside "running: 0.1.4" and called itself up
-  // to date, which reads backwards. The cache cannot be made reliably fresh: GitHub's
-  // releases/latest/download alias served the PREVIOUS manifest for over 10 minutes after v0.1.3.
-  // So the fix is to say which of the two situations this is.
-  it('flags that the install is ahead of what the last check saw', () => {
-    expect(updateVerdict(input())).toEqual({
-      kind: 'up_to_date', latest: '0.1.3', runningIsNewer: true,
-    });
+  // ⛔ toEqual with no second key is the point of this test. An operator read "published: 0.1.5"
+  // under "running: 0.1.6" as an instruction to roll back. The number carries no action either
+  // way, so this kind carries NO version and no surface can print one. Reintroducing a field here
+  // means deleting this assertion, which is the intended speed bump.
+  it('carries no version at all when the cache is behind', () => {
+    expect(updateVerdict(input())).toEqual({ kind: 'no_update_found' });
   });
 
-  it('does not flag it when the cache matches the running version', () => {
+  it('still reports up_to_date, with the number, when the cache matches', () => {
     expect(updateVerdict(input({ latestVersion: '0.1.4' }))).toEqual({
-      kind: 'up_to_date', latest: '0.1.4', runningIsNewer: false,
+      kind: 'up_to_date', latest: '0.1.4',
     });
   });
 
-  // The flag must never change WHICH verdict fires, only how it is worded. An install genuinely
-  // behind still gets update_available, not an "ahead" reading.
+  // The split must not change WHICH verdict fires for a genuine update.
   it('still reports update_available when the cache is genuinely newer', () => {
     expect(updateVerdict(input({ running: '0.1.2' })).kind).toBe('update_available');
+  });
+
+  // Precedence: the no_update_found check sits ABOVE the up_to_date fallthrough, but BELOW the
+  // error check, so a stale cache under a live error is still cannot_confirm, not no_update_found.
+  it('reports cannot_confirm, not no_update_found, when the last check failed', () => {
+    expect(updateVerdict(input({ lastError: 'HTTP 404' })).kind).toBe('cannot_confirm');
   });
 });
