@@ -1887,37 +1887,34 @@ describe('SEED_DESIGNS — rt-transmission-grid', () => {
   const design = () => SEED_DESIGNS.find((d) => d.id === 'rt-transmission-grid')!;
   const el = (id: string) => design().pages[0].elements.find((e) => e.id === id)!;
 
-  it('is landscape — MEASURED: 24 columns cannot fit portrait', () => {
-    // The reference document is portrait, and this design is not. The reason is arithmetic, not
-    // taste, and it is worth pinning because "make it portrait like the reference" is an obvious
-    // and wrong instruction to give this file.
-    //
-    // Measured with real pdfkit metrics at the renderer's fixed 8pt, WITH the stacked header:
-    //   day column natural   = max("23" 8.90, "Feb" 14.22) + CELL_PAD*2 + 2 = 24.22pt
-    //   portrait body, 36pt margins                                          = 523.28pt
-    //   floor applied by columnWidths = min(MIN_COL_W 22, 523.28/24 = 21.80) = 21.80pt
-    // 23 day columns cannot go below that floor, so they take 501.4pt of 523.28 and the
-    // laboratory column is left 21.8pt — about three characters. Landscape gives it 171.85pt.
-    // Tighter margins do not rescue it: at 16pt margins the name column is 57.3pt.
-    expect(design().orientation).toBe('landscape');
+  it('is portrait, cellgrid does not need MIN_COL_W headroom the way table did', () => {
+    // The reason the design was landscape (a 22pt column floor colliding with a 23-column grid)
+    // no longer applies: cellgrid declares its cell pitch instead of measuring it. See the
+    // geometry describe block below for the arithmetic that replaces this comment.
+    expect(design().orientation).toBe('portrait');
   });
 
-  it('lifts the query date row into the header so it repeats on every page', () => {
-    // Without `headerRow` the dates are an ordinary body row: they print on chunk 0 only, and page
-    // 2 shows marks under blank columns with nothing to say which day is which.
+  it('binds both grids as cellgrid, not table', () => {
     for (const id of ['hvleid', 'other']) {
-      expect(el(id).headerRow, `${id} leaves the dates as a body row`).toBe(true);
+      expect(el(id).kind, `${id} is still a table`).toBe('cellgrid');
     }
   });
 
-  it('⛔ leaves the 23 day labels BLANK, because a declared label wins over the header row', () => {
-    // `headerTexts` keeps a non-blank declared label and fills only a blank one from the header
-    // row. Labelling the day columns `1`..`23` would therefore print slot numbers OVER the dates —
-    // which is exactly the mitigation an earlier review proposed before the lift existed.
+  it('sorts its own rows on ord instead of trusting the SQL row order', () => {
     for (const id of ['hvleid', 'other']) {
-      const labels = (el(id).boundColumns ?? []).map((c) => c.label);
-      expect(labels[0]).toBe('Laboratory');
-      expect(labels.slice(1), `${id} labels its day columns`).toEqual(Array(23).fill(''));
+      expect(el(id).sortBy, `${id} trusts the SQL row order`).toBe('ord');
+    }
+  });
+
+  it('groups day columns by the week-token row', () => {
+    for (const id of ['hvleid', 'other']) {
+      expect(el(id).groupBoundary, `${id} does not group by week`).toBe('token-change');
+    }
+  });
+
+  it('marks a filled cell with the binary blue ramp', () => {
+    for (const id of ['hvleid', 'other']) {
+      expect(el(id).palette, `${id} palette`).toEqual({ ramp: 'blue', steps: 1 });
     }
   });
 
@@ -1926,40 +1923,56 @@ describe('SEED_DESIGNS — rt-transmission-grid', () => {
     expect(el('rt-transmission-grid-other-title').showWithTable).toBe('other');
   });
 
-  it('fits 8 laboratories per grid per page — computed in POINTS, not px@96', () => {
-    // ⛔ UNITS. The rect is px@96 and the renderer multiplies by 0.75; ROW_H and the header band are
-    // already points. Doing this in px@96 gives floor((214-24)/16) = 11 and overstates the capacity
-    // by a third, in the direction that says "it fits".
-    const ROW_H_PT = 16;
-    const STACKED_HEAD_PT = 24; // ROW_H + HEAD_LINE_H, and HEAD_LINE_H is the reference's 8pt
-    for (const id of ['hvleid', 'other']) {
-      const hPt = toPt(el(id).rect).h;
-      expect(hPt).toBeCloseTo(160.5, 6);
-      expect(Math.floor((hPt - STACKED_HEAD_PT) / ROW_H_PT)).toBe(8);
-    }
-  });
-
   it('draws BOTH grids on one page, as the reference does', () => {
     expect(el('hvleid').dataSource).toEqual({ kind: 'custom-query', queryId: 'q-transmission-hvleid' });
     expect(el('other').dataSource).toEqual({ kind: 'custom-query', queryId: 'q-transmission-other' });
   });
 
-  it('binds the lab column and all 23 day columns explicitly', () => {
+  it('binds the laboratory as labelColumn and all 23 day columns as cellColumns', () => {
     for (const id of ['hvleid', 'other']) {
-      const keys = (el(id).boundColumns ?? []).map((c) => c.key);
-      expect(keys[0]).toBe('lab');
-      expect(keys).toHaveLength(24);
-      expect(keys).toContain('d23');
+      expect(el(id).labelColumn, `${id} labelColumn`).toBe('lab');
+      const cells = el(id).cellColumns ?? [];
+      expect(cells, `${id} cellColumns`).toHaveLength(23);
+      expect(cells[0]).toBe('d01');
+      expect(cells[22]).toBe('d23');
+    }
+  });
+
+  it('trails each row with Days and Silent, matching the spec widths', () => {
+    for (const id of ['hvleid', 'other']) {
+      expect(el(id).trailingColumns, `${id} trailingColumns`).toEqual([
+        { key: 'days', label: 'Days', width: 34.5 },
+        { key: 'silent', label: 'Silent', width: 52 },
+      ]);
     }
   });
 
   it('projects only keys the queries actually select', () => {
     const sql = SEED_QUERIES.find((q) => q.id === 'q-transmission-hvleid')!.sql.postgres;
-    for (const c of el('hvleid').boundColumns ?? []) {
-      // ⚠ `\\b` — inside a TEMPLATE LITERAL a lone `\b` is the backspace character, not a word
+    const keys = [
+      el('hvleid').labelColumn!, ...(el('hvleid').cellColumns ?? []),
+      ...(el('hvleid').trailingColumns ?? []).map((c) => c.key),
+    ];
+    for (const key of keys) {
+      // ⚠ `\\b`, inside a TEMPLATE LITERAL a lone `\b` is the backspace character, not a word
       // boundary, so the pattern silently never matches.
-      expect(new RegExp(`as ${c.key}\\b`).test(sql), `${c.key} is not selected`).toBe(true);
+      expect(new RegExp(`as ${key}\\b`).test(sql), `${key} is not selected`).toBe(true);
     }
+  });
+
+  it('keeps the footer clear of the signature line, and right-aligns the signature to the content edge', () => {
+    // Both boxes carried their landscape widths (500 and 375) into the first portrait draft and
+    // collided: 500 + 375 = 875pt cannot fit inside a 698pt body at any x. The fix measured the
+    // real strings with pdfkit rather than guessing a smaller pair of numbers; this pins the
+    // result rather than trusting the next reader to re-measure it by eye.
+    //
+    // Content edge read off the hvleid grid's own rect, not hardcoded, since both it and the
+    // signature's x are derived from the same TG_CONTENT_W.
+    const contentEdge = el('hvleid').rect.x + el('hvleid').rect.w;
+    const foot = el('rt-transmission-grid-foot').rect;
+    const sig = el('rt-transmission-grid-sig').rect;
+    expect(foot.x + foot.w, 'the footer runs into the signature line').toBeLessThan(sig.x);
+    expect(sig.x + sig.w, 'the signature does not right-align to the content edge').toBe(contentEdge);
   });
 });
 
@@ -1999,19 +2012,11 @@ describe('SEED_DESIGNS — rt-transmission-grid keeps ord off the page', () => {
   const design = () => SEED_DESIGNS.find((d) => d.id === 'rt-transmission-grid')!;
   const el = (id: string) => design().pages[0].elements.find((e) => e.id === id)!;
 
-  it('never binds ord — it sorts the rows, it is not a column of the report', () => {
+  it('never binds ord, it sorts the rows, it is not a column of the report', () => {
     for (const id of ['hvleid', 'other']) {
-      expect((el(id).boundColumns ?? []).map((c) => c.key), `${id} prints ord`).not.toContain('ord');
-    }
-  });
-
-  it('sorts its own rows on ord instead of trusting the SQL row order', () => {
-    // planPagination wraps the query as `select * from (<inner>) as _q limit N`
-    // (packages/dashboards/src/sql-runner.ts:56). MySQL may discard an ORDER BY inside a derived
-    // table; if it does, the '(dates)' row lands in the middle of the grid. Sorting where the
-    // renderer consumes the rows removes the dependency on the engine keeping that order.
-    for (const id of ['hvleid', 'other']) {
-      expect(el(id).sortBy, `${id} trusts the SQL row order`).toBe('ord');
+      const keys = [el(id).labelColumn, ...(el(id).cellColumns ?? []),
+        ...(el(id).trailingColumns ?? []).map((c) => c.key)];
+      expect(keys, `${id} prints ord`).not.toContain('ord');
     }
   });
 
