@@ -111,7 +111,10 @@ describe('stepFor', () => {
   });
 
   it('is empty when the maximum is zero, rather than dividing by it', () => {
-    expect(stepFor(0, 0, 5)).toBe(-1);
+    // ⚠ A POSITIVE value against a zero max. `stepFor(0, 0, 5)` reads like it covers this and
+    // does not: the `value <= 0` guard returns first, so the max guard could be deleted whole
+    // and this would stay green. Measured, by deleting it.
+    expect(stepFor(5, 0, 5)).toBe(-1);
   });
 });
 

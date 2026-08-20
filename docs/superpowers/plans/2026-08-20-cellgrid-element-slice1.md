@@ -363,7 +363,7 @@ Append to `cellgrid.ts`:
 /**
  * Cell indices at which a new group starts, read from the group row.
  *
- * The token itself is never drawn and its value carries no meaning — only the CHANGE does. That is
+ * The token itself is never drawn and its value carries no meaning. Only the CHANGE does. That is
  * what lets one implementation group by week, by quarter, by batch or by anything else a query can
  * emit, without the renderer knowing what any of them are.
  */
@@ -445,7 +445,10 @@ describe('stepFor', () => {
   });
 
   it('is empty when the maximum is zero, rather than dividing by it', () => {
-    expect(stepFor(0, 0, 5)).toBe(-1);
+    // ⚠ A POSITIVE value against a zero max. `stepFor(0, 0, 5)` reads like it covers this and
+    // does not: the `value <= 0` guard returns first, so the max guard could be deleted whole
+    // and this would stay green. Measured, by deleting it.
+    expect(stepFor(5, 0, 5)).toBe(-1);
   });
 });
 

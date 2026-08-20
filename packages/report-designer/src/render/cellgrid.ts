@@ -60,7 +60,7 @@ export function cellGridWidth(i: CellGridWidthInput): number {
 /**
  * Cell indices at which a new group starts, read from the group row.
  *
- * The token itself is never drawn and its value carries no meaning — only the CHANGE does. That is
+ * The token itself is never drawn and its value carries no meaning. Only the CHANGE does. That is
  * what lets one implementation group by week, by quarter, by batch or by anything else a query can
  * emit, without the renderer knowing what any of them are.
  */
