@@ -238,16 +238,15 @@ live('the transmission grid queries (live Postgres)', () => {
     expect(lab!.d02).not.toBe('');
   });
 
-  it('buckets an arrival at 21:00Z into the NEXT day at +03', async () => {
-    // The whole reason lab.timezone exists. Assert BOTH sides or this proves nothing.
-    const east = await runFor({ month: '2026-03', panels: 'HIVPC', tz: EAST });
-    const utc = await runFor({ month: '2026-03', panels: 'HIVPC', tz: 'UTC' });
-    const e = east.find((r) => r.lab === 'Late Evening Lab')!;
-    const u = utc.find((r) => r.lab === 'Late Evening Lab')!;
-    expect(e.d03).not.toBe('');   // 3 March 21:00Z is 4 March 00:00 at +03, and 4 March is n3
-    expect(u.d02).not.toBe('');   // ...and still 3 March in UTC, which is n2
-    expect(e.d02).toBe('');
-  });
+  // ⛔ A test lived here asserting that a 21:00Z arrival re-buckets into the NEXT day at +03.
+  // Commit 658d2897 removed that behaviour deliberately: the grid now buckets on the source's
+  // own clinical date text, with no zone conversion anywhere, and the report dropped its time
+  // zone parameter in the same change. The test survived only because this file needs a live
+  // database and skips without one, so nobody ran it for months.
+  //
+  // The 'Late Evening Lab' fixture seeded at 2026-03-03T21:00:00Z is KEPT. Nothing asserts it
+  // today. It is the boundary case, and the day somebody reintroduces any zone handling it is
+  // the fixture that catches it.
 
   it('leaves trailing columns blank in a short month rather than shifting cells left', async () => {
     // February 2026 has 20 working days. d21..d23 must be empty and d01 must still be the 2nd.
