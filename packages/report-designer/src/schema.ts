@@ -222,6 +222,26 @@ export const DesignElementSchema = z.object({
    *  ⛔ Opt-in, and inert when unset — a design without it renders byte-for-byte as before
    *  (`render/golden.test.ts`). */
   fillTo: z.literal('rect-bottom').optional(),
+  /** Draw this element on the FIRST physical chunk of its design page and on no other.
+   *
+   *  A design page repeats every element on every chunk it runs to. The letterhead should repeat. A
+   *  month-wide summary band above a continuation page should not: it costs its own height on every
+   *  later page and restates figures the reader already has on page 1.
+   *
+   *  ⛔ Checked BEFORE `drawsOnChunk`'s table/cellgrid short-circuit. A bound element answers that
+   *  question from its own chunk count, so a `cellgrid` declaring this would otherwise ignore it,
+   *  and a bound calendar is the element the flag exists for.
+   *
+   *  ⛔ An element hidden this way also contributes ZERO height to a `flowAfter` follower, so the
+   *  block below it moves up and takes the space instead of leaving a hole the size of the band.
+   *  That is deliberately NOT extended to `showWithTable`: a follower's own pagination depends on
+   *  its y, its y depends on the target's height, and a `showWithTable` target's visibility depends
+   *  on the follower's chunk count. Measuring it there would be a cycle. Nothing needs it today,
+   *  because a `showWithTable` heading is hidden exactly when the block it names is hidden too.
+   *
+   *  ⛔ Opt-in, and inert when unset — a design without it renders byte-for-byte as before
+   *  (`render/golden.test.ts`). */
+  showOn: z.literal('first-chunk').optional(),
   /** `cellgrid`: result column holding each row's label. Omit for a grid with no label column, such
    *  as a month calendar whose position already says which day a cell is. */
   labelColumn: z.string().optional(),

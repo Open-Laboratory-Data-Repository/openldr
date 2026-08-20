@@ -439,6 +439,10 @@ export function headerTexts(labels: string[], headerRow: string[] | undefined): 
 export function drawsOnChunk(
   el: DesignElement, page: DesignPage, resolved: Map<string, ResolvedTable>, chunk: number,
 ): boolean {
+  // ⛔ FIRST, before the table/cellgrid short-circuit below. A bound element answers that question
+  // from its own chunk count and would never reach this line, and a bound calendar is exactly the
+  // element `showOn` exists for. See its doc comment in `schema.ts`.
+  if (el.showOn === 'first-chunk' && chunk > 0) return false;
   if (el.kind === 'table' || el.kind === 'cellgrid') {
     return elementDrawsOnChunk(el, resolved.get(el.id), chunk, { page, resolved });
   }
@@ -936,6 +940,12 @@ export function pageFooterLabel(n: number, total: number): string {
 export function drawnHeight(
   el: DesignElement, resolved: ResolvedTable | undefined, chunk: number, flow?: FlowContext,
 ): number {
+  // An element `showOn` keeps off this chunk draws nothing, so it adds nothing to a follower and
+  // the block below it moves up into its place. ⛔ Deliberately narrower than "anything
+  // `drawsOnChunk` hides": consulting that predicate here would recurse forever for a
+  // `showWithTable` target, whose visibility depends on the follower whose height is being measured.
+  // See `showOn` in `schema.ts`.
+  if (el.showOn === 'first-chunk' && chunk > 0) return 0;
   // The box the element actually paints into: its declared height, or the filled one when it
   // declares `fillTo`. The error placeholder below fills that box, whichever it is.
   const boxH = elementHeight(el, chunk, flow);

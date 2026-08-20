@@ -1111,3 +1111,62 @@ describe('fillTo — an element that takes the height flowAfter freed above it',
     expect(elementChunkCount(follower.el, follower.resolved)).toBe(3);
   });
 });
+
+describe("showOn: 'first-chunk' — a band that belongs to page 1 alone", () => {
+  const band = {
+    id: 'band', kind: 'keyvalue', name: 'band', rect: { x: 0, y: 100, w: 400, h: 120 },
+    layout: 'stat', panelColumns: 2, showOn: 'first-chunk',
+  } as DesignElement;
+  const plain = { ...band, id: 'plain', showOn: undefined } as DesignElement;
+  const page: DesignPage = { id: 'p', elements: [band, plain] };
+  const map = new Map<string, ResolvedTable>();
+
+  it('draws on the first chunk and on no other', () => {
+    expect(drawsOnChunk(band, page, map, 0)).toBe(true);
+    expect(drawsOnChunk(band, page, map, 1)).toBe(false);
+    expect(drawsOnChunk(band, page, map, 7)).toBe(false);
+  });
+
+  it('leaves an element that does not declare it on every chunk', () => {
+    expect(drawsOnChunk(plain, page, map, 0)).toBe(true);
+    expect(drawsOnChunk(plain, page, map, 3)).toBe(true);
+  });
+
+  it('is honoured by a BOUND element too, not only an unbound one', () => {
+    // ⛔ The check has to come BEFORE the table/cellgrid short-circuit in `drawsOnChunk`. A cellgrid
+    // returns early on its own chunk count, so a calendar declaring this would otherwise ignore it,
+    // which is exactly the element the flag was added for.
+    const grid = {
+      id: 'g', kind: 'cellgrid', name: 'g', rect: { x: 0, y: 0, w: 400, h: 200 },
+      dataSource: { kind: 'custom-query', queryId: 'q' }, cellColumns: ['c1'], showOn: 'first-chunk',
+    } as DesignElement;
+    // 200px@96 = 150pt holds 10 records, and 15 records need two chunks — so WITHOUT the flag this
+    // grid genuinely draws on chunk 1, and the assertion below is not vacuous.
+    const resolved: ResolvedTable = {
+      columns: [{ key: 'c1', label: '' }],
+      rows: [{ c1: 'M' }, ...Array.from({ length: 15 }, () => ({ c1: '3' }))],
+    };
+    const p2: DesignPage = { id: 'p', elements: [grid] };
+    const m2 = new Map([['g', resolved]]);
+    expect(elementChunkCount(grid, resolved)).toBe(2);
+    expect(drawsOnChunk(grid, p2, m2, 0)).toBe(true);
+    expect(drawsOnChunk(grid, p2, m2, 1)).toBe(false);
+    expect(drawsOnChunk({ ...grid, showOn: undefined } as DesignElement, p2, m2, 1)).toBe(true);
+  });
+
+  it('adds no height to a flowAfter follower on a chunk it does not draw on', () => {
+    // Without this the follower leaves a hole exactly the size of the band, which is the whole
+    // reason the band could not simply be declared and forgotten.
+    const follower = {
+      id: 'f', kind: 'text', name: 'f', rect: { x: 0, y: 900, w: 100, h: 14 }, text: 'x',
+      flowAfter: 'band',
+    } as DesignElement;
+    const p2: DesignPage = { id: 'p', elements: [band, follower] };
+    const flow = { page: p2, resolved: map };
+    expect(drawnHeight(band, undefined, 0, flow)).toBe(90); // 120px@96
+    expect(drawnHeight(band, undefined, 1, flow)).toBe(0);
+    // Chunk 0: the follower sits under the band. Chunk 1: it takes the band's own place.
+    expect(resolveFlowY(follower, p2, map, 0)).toBe(75 + 90);
+    expect(resolveFlowY(follower, p2, map, 1)).toBe(75);
+  });
+});

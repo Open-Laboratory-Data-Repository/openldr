@@ -152,18 +152,21 @@ restates figures that are already on page 1.
 `showOn: 'first-chunk'` is read by `drawsOnChunk`, beside `showWithTable`, and fails open the same
 way.
 
-### 4.2 `drawnHeight` returns 0 for an element that is not drawn
+### 4.2 A `showOn` element adds no height to a follower
 
 `drawnHeight` returns the full declared rect for anything that is not a table or a cellgrid, whatever
 chunk it is asked about. A `flowAfter` follower therefore leaves a hole where a hidden element would
-have been.
+have been. `hvleid` flows after the stat panel, and on page 2 the panel is gone.
 
-Nothing hits this today. `rt-transmission-grid`'s only hidden element is the `other` heading, and it
-is hidden exactly when `other` is hidden, so no drawn element measures it. The band changes that:
-`hvleid` flows after the stat panel, and on page 2 the panel is gone.
+**Narrower than it first looked.** The obvious fix, "return 0 for anything `drawsOnChunk` hides",
+does not terminate. A follower's pagination depends on its y, its y depends on the target's drawn
+height, and a `showWithTable` target's visibility depends on the follower's own chunk count.
+Measuring the target there is a cycle, and it is reachable from the design as it stands today:
+`other` flows after a heading that `showWithTable` ties back to `other`.
 
-This is a latent defect in `flowAfter`, found while designing on top of it. Fixing it is one line
-plus a test. `golden.test.ts` proves it changes no existing design.
+So the rule is keyed on `showOn` alone, which cannot recurse because it reads nothing but the chunk
+number. Nothing needs the wider version: a `showWithTable` heading is hidden exactly when the block
+it names is hidden, so no drawn element ever measures one. Found while implementing, on 2026-08-20.
 
 ---
 
