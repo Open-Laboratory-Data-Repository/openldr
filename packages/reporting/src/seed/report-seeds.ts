@@ -3774,6 +3774,137 @@ from cal c
 left join per_day p on p.cal_day = c.cal_day
 group by to_char(c.cal_day, 'IW')
 order by ord`,
+      mssql: `with month_start as (
+  -- ⛔ 'ym' is the NORMALISED month, and format(..., 'en-US') is the T-SQL stand-in for to_char.
+  -- Pinning the culture keeps 'yyyy-MM' Gregorian ASCII digits whatever the server language is.
+  select cast({{param.month}} + '-01' as date) as d,
+         format(cast({{param.month}} + '-01' as date), 'yyyy-MM', 'en-US') as ym
+),
+cal as (
+  -- T-SQL has no generate_series. Recursive CTE carrying the month's first day, at most 31
+  -- iterations, well under the default recursion limit of 100. ALL SEVEN DAYS: see the header
+  -- comment for the weekend measurement that rules out reusing a working-day series here.
+  select m.d as cal_day, m.d as first_day from month_start m
+  union all
+  select dateadd(day, 1, c.cal_day), c.first_day from cal c
+  where dateadd(day, 1, c.cal_day) < dateadd(month, 1, c.first_day)
+),
+arrivals as (
+  -- The SAME clinical-date ladder as the postgres variant and as q-transmission-hvleid: registered,
+  -- then tested, then authorised, one mark per request per month. No arrival bucketing, no timezone
+  -- conversion, and none should come back.
+  select distinct clinical.lab, cast(left(clinical.ts, 10) as date) as cal_day
+  from (
+    select
+      coalesce(fm.name, d.performer_display, d.performer, '(unknown)') as lab,
+      coalesce(
+        case when left(q.authored_at, 7) = (select ym from month_start) then q.authored_at end,
+        (select min(r.result_timestamp) from lab_results r
+          where r.request_id = q.id and left(r.result_timestamp, 7) = (select ym from month_start)),
+        (select min(dr.issued) from diagnostic_reports dr
+          where dr.based_on_id = q.id and left(dr.issued, 7) = (select ym from month_start))
+      ) as ts
+    from lab_requests q
+    -- ⛔ Attribute through the SUBMISSION BATCH. ⛔ 'distinct' is LOAD-BEARING: the join fans out.
+    join diagnostic_reports d on d.batch_id = q.batch_id
+    left join facility_map fm
+      on fm.source_system = coalesce(d.source_system, '')
+     and fm.performer_system = coalesce(d.performer_system, '')
+     and fm.source_code = d.performer
+    where (
+         left(q.authored_at, 7) = (select ym from month_start)
+      or exists (select 1 from lab_results r
+                  where r.request_id = q.id and left(r.result_timestamp, 7) = (select ym from month_start))
+      or exists (select 1 from diagnostic_reports dr
+                  where dr.based_on_id = q.id and left(dr.issued, 7) = (select ym from month_start))
+    )
+  ) clinical
+),
+per_day as (
+  select a.cal_day, count(distinct a.lab) as labs from arrivals a group by a.cal_day
+)
+select 0 as ord, 'M' as c1, 'T' as c2, 'W' as c3, 'T' as c4, 'F' as c5, 'S' as c6, 'S' as c7
+union all
+-- ⛔ NOT datepart(weekday, ...) — that depends on SET DATEFIRST and is not deterministic across
+-- sessions. 1900-01-01 was a Monday, so this modulo is 0=Mon .. 6=Sun on every server.
+-- ⛔ datepart(iso_week, ...) IS deterministic and is the ISO week, unlike datepart(week, ...).
+select cast(row_number() over (order by min(c.cal_day)) as int) as ord,
+  max(case when datediff(day, '19000101', c.cal_day) % 7 = 0 then cast(coalesce(p.labs, 0) as varchar(10)) else '' end) as c1,
+  max(case when datediff(day, '19000101', c.cal_day) % 7 = 1 then cast(coalesce(p.labs, 0) as varchar(10)) else '' end) as c2,
+  max(case when datediff(day, '19000101', c.cal_day) % 7 = 2 then cast(coalesce(p.labs, 0) as varchar(10)) else '' end) as c3,
+  max(case when datediff(day, '19000101', c.cal_day) % 7 = 3 then cast(coalesce(p.labs, 0) as varchar(10)) else '' end) as c4,
+  max(case when datediff(day, '19000101', c.cal_day) % 7 = 4 then cast(coalesce(p.labs, 0) as varchar(10)) else '' end) as c5,
+  max(case when datediff(day, '19000101', c.cal_day) % 7 = 5 then cast(coalesce(p.labs, 0) as varchar(10)) else '' end) as c6,
+  max(case when datediff(day, '19000101', c.cal_day) % 7 = 6 then cast(coalesce(p.labs, 0) as varchar(10)) else '' end) as c7
+from cal c
+left join per_day p on p.cal_day = c.cal_day
+group by datepart(iso_week, c.cal_day)
+order by ord`,
+      mysql: `with recursive month_start as (
+  -- ⛔ '%m' is the ZERO-PADDED NUMERIC month and '%Y' the four-digit year. Neither reads
+  -- lc_time_names, so this returns the same string on every server.
+  select cast(concat({{param.month}}, '-01') as date) as d,
+         date_format(cast(concat({{param.month}}, '-01') as date), '%Y-%m') as ym
+),
+cal as (
+  -- MySQL 8 has no generate_series. At most 31 iterations, well under cte_max_recursion_depth.
+  select m.d as cal_day, m.d as first_day from month_start m
+  union all
+  select date_add(c.cal_day, interval 1 day), c.first_day from cal c
+  where date_add(c.cal_day, interval 1 day) < date_add(c.first_day, interval 1 month)
+),
+arrivals as (
+  -- The SAME clinical-date ladder as the postgres variant and as q-transmission-hvleid: registered,
+  -- then tested, then authorised, one mark per request per month. No arrival bucketing, no timezone
+  -- conversion, and none should come back.
+  select distinct clinical.lab, cast(left(clinical.ts, 10) as date) as cal_day
+  from (
+    select
+      coalesce(fm.name, d.performer_display, d.performer, '(unknown)') as lab,
+      coalesce(
+        case when left(q.authored_at, 7) = (select ym from month_start) then q.authored_at end,
+        (select min(r.result_timestamp) from lab_results r
+          where r.request_id = q.id and left(r.result_timestamp, 7) = (select ym from month_start)),
+        (select min(dr.issued) from diagnostic_reports dr
+          where dr.based_on_id = q.id and left(dr.issued, 7) = (select ym from month_start))
+      ) as ts
+    from lab_requests q
+    -- ⛔ Attribute through the SUBMISSION BATCH. ⛔ 'distinct' is LOAD-BEARING: the join fans out.
+    join diagnostic_reports d on d.batch_id = q.batch_id
+    left join facility_map fm
+      on fm.source_system = coalesce(d.source_system, '')
+     and fm.performer_system = coalesce(d.performer_system, '')
+     and fm.source_code = d.performer
+    where (
+         left(q.authored_at, 7) = (select ym from month_start)
+      or exists (select 1 from lab_results r
+                  where r.request_id = q.id and left(r.result_timestamp, 7) = (select ym from month_start))
+      or exists (select 1 from diagnostic_reports dr
+                  where dr.based_on_id = q.id and left(dr.issued, 7) = (select ym from month_start))
+    )
+  ) clinical
+),
+per_day as (
+  select a.cal_day, count(distinct a.lab) as labs from arrivals a group by a.cal_day
+)
+select 0 as ord, 'M' as c1, 'T' as c2, 'W' as c3, 'T' as c4, 'F' as c5, 'S' as c6, 'S' as c7
+union all
+-- weekday() is 0=Mon .. 6=Sun and reads no session setting. weekofyear() is the ISO week.
+-- ⚠ NO concat() over a table column anywhere in this query. q-transmission-hvleid's mysql variant
+-- cannot run today because max() over its date row's concat raises error 1267 through the connector
+-- pool. Every cell here is a cast of one integer, and every other value is a plain literal.
+select cast(row_number() over (order by min(c.cal_day)) as signed) as ord,
+  max(case when weekday(c.cal_day) = 0 then cast(coalesce(p.labs, 0) as char(10)) else '' end) as c1,
+  max(case when weekday(c.cal_day) = 1 then cast(coalesce(p.labs, 0) as char(10)) else '' end) as c2,
+  max(case when weekday(c.cal_day) = 2 then cast(coalesce(p.labs, 0) as char(10)) else '' end) as c3,
+  max(case when weekday(c.cal_day) = 3 then cast(coalesce(p.labs, 0) as char(10)) else '' end) as c4,
+  max(case when weekday(c.cal_day) = 4 then cast(coalesce(p.labs, 0) as char(10)) else '' end) as c5,
+  max(case when weekday(c.cal_day) = 5 then cast(coalesce(p.labs, 0) as char(10)) else '' end) as c6,
+  max(case when weekday(c.cal_day) = 6 then cast(coalesce(p.labs, 0) as char(10)) else '' end) as c7
+from cal c
+left join per_day p on p.cal_day = c.cal_day
+group by weekofyear(c.cal_day)
+order by ord`,
     },
   },
   {
@@ -3868,6 +3999,136 @@ select
   -- both grid queries. It is not clinical and not a design decision either. Somebody will want to
   -- change it, and it is now in three places.
   cast((select count(*) from lab_stats where silent >= 10) as text) as silent10`,
+      mssql: `with month_start as (
+  select cast({{param.month}} + '-01' as date) as d,
+         format(cast({{param.month}} + '-01' as date), 'yyyy-MM', 'en-US') as ym
+),
+cal as (
+  select m.d as cal_day, m.d as first_day from month_start m
+  union all
+  select dateadd(day, 1, c.cal_day), c.first_day from cal c
+  where dateadd(day, 1, c.cal_day) < dateadd(month, 1, c.first_day)
+),
+days as (
+  -- ⛔ NOT datepart(weekday, ...) — that depends on SET DATEFIRST. 1900-01-01 was a Monday.
+  select cal_day, row_number() over (order by cal_day) as n
+  from cal where datediff(day, '19000101', cal_day) % 7 between 0 and 4
+),
+arrivals as (
+  -- The SAME clinical-date ladder as the postgres variant and as q-transmission-hvleid: registered,
+  -- then tested, then authorised, one mark per request per month. No arrival bucketing, no timezone
+  -- conversion, and none should come back.
+  select distinct clinical.lab, cast(left(clinical.ts, 10) as date) as cal_day
+  from (
+    select
+      coalesce(fm.name, d.performer_display, d.performer, '(unknown)') as lab,
+      coalesce(
+        case when left(q.authored_at, 7) = (select ym from month_start) then q.authored_at end,
+        (select min(r.result_timestamp) from lab_results r
+          where r.request_id = q.id and left(r.result_timestamp, 7) = (select ym from month_start)),
+        (select min(dr.issued) from diagnostic_reports dr
+          where dr.based_on_id = q.id and left(dr.issued, 7) = (select ym from month_start))
+      ) as ts
+    from lab_requests q
+    -- ⛔ Attribute through the SUBMISSION BATCH. ⛔ 'distinct' is LOAD-BEARING: the join fans out.
+    join diagnostic_reports d on d.batch_id = q.batch_id
+    left join facility_map fm
+      on fm.source_system = coalesce(d.source_system, '')
+     and fm.performer_system = coalesce(d.performer_system, '')
+     and fm.source_code = d.performer
+    where (
+         left(q.authored_at, 7) = (select ym from month_start)
+      or exists (select 1 from lab_results r
+                  where r.request_id = q.id and left(r.result_timestamp, 7) = (select ym from month_start))
+      or exists (select 1 from diagnostic_reports dr
+                  where dr.based_on_id = q.id and left(dr.issued, 7) = (select ym from month_start))
+    )
+  ) clinical
+),
+labs as (select distinct lab from arrivals),
+lab_stats as (
+  -- 'silent': working days between a laboratory's LAST submission and the last working day of the
+  -- month. LEFT JOIN throughout: a laboratory whose only submission landed on a Saturday has no row
+  -- in 'days' at all, and an inner join would drop it instead of counting it silent all month.
+  select l.lab, (select max(n) from days) - coalesce(max(dy.n), 0) as silent
+  from labs l
+  left join arrivals a on a.lab = l.lab
+  left join days dy on dy.cal_day = a.cal_day
+  group by l.lab
+)
+select
+  cast((select count(*) from labs) as varchar(10)) as labs,
+  -- ⛔ The division is GUARDED, and the result is cast to a FIXED SCALE before it becomes text.
+  -- round() alone keeps the numeric's own scale in T-SQL, so a bare cast prints '9.800000'.
+  coalesce(cast(cast(round(100.0 * (select count(*) from arrivals a join days dy on dy.cal_day = a.cal_day)
+    / nullif((select count(*) from labs) * (select max(n) from days), 0), 1) as decimal(6,1)) as varchar(20)), '0') as pct_lab_days,
+  cast(coalesce((select max(c) from (select count(distinct lab) as c from arrivals group by cal_day) x), 0) as varchar(10)) as busiest,
+  -- ⚠ 10 working days is an INVENTED threshold, the same one both grid queries carry.
+  cast((select count(*) from lab_stats where silent >= 10) as varchar(10)) as silent10`,
+      mysql: `with recursive month_start as (
+  select cast(concat({{param.month}}, '-01') as date) as d,
+         date_format(cast(concat({{param.month}}, '-01') as date), '%Y-%m') as ym
+),
+cal as (
+  select m.d as cal_day, m.d as first_day from month_start m
+  union all
+  select date_add(c.cal_day, interval 1 day), c.first_day from cal c
+  where date_add(c.cal_day, interval 1 day) < date_add(c.first_day, interval 1 month)
+),
+days as (
+  -- weekday() is 0=Mon .. 6=Sun and reads no session setting.
+  select cal_day, row_number() over (order by cal_day) as n
+  from cal where weekday(cal_day) between 0 and 4
+),
+arrivals as (
+  -- The SAME clinical-date ladder as the postgres variant and as q-transmission-hvleid: registered,
+  -- then tested, then authorised, one mark per request per month. No arrival bucketing, no timezone
+  -- conversion, and none should come back.
+  select distinct clinical.lab, cast(left(clinical.ts, 10) as date) as cal_day
+  from (
+    select
+      coalesce(fm.name, d.performer_display, d.performer, '(unknown)') as lab,
+      coalesce(
+        case when left(q.authored_at, 7) = (select ym from month_start) then q.authored_at end,
+        (select min(r.result_timestamp) from lab_results r
+          where r.request_id = q.id and left(r.result_timestamp, 7) = (select ym from month_start)),
+        (select min(dr.issued) from diagnostic_reports dr
+          where dr.based_on_id = q.id and left(dr.issued, 7) = (select ym from month_start))
+      ) as ts
+    from lab_requests q
+    -- ⛔ Attribute through the SUBMISSION BATCH. ⛔ 'distinct' is LOAD-BEARING: the join fans out.
+    join diagnostic_reports d on d.batch_id = q.batch_id
+    left join facility_map fm
+      on fm.source_system = coalesce(d.source_system, '')
+     and fm.performer_system = coalesce(d.performer_system, '')
+     and fm.source_code = d.performer
+    where (
+         left(q.authored_at, 7) = (select ym from month_start)
+      or exists (select 1 from lab_results r
+                  where r.request_id = q.id and left(r.result_timestamp, 7) = (select ym from month_start))
+      or exists (select 1 from diagnostic_reports dr
+                  where dr.based_on_id = q.id and left(dr.issued, 7) = (select ym from month_start))
+    )
+  ) clinical
+),
+labs as (select distinct lab from arrivals),
+lab_stats as (
+  -- 'silent': working days between a laboratory's LAST submission and the last working day of the
+  -- month. LEFT JOIN throughout: a laboratory whose only submission landed on a Saturday has no row
+  -- in 'days' at all, and an inner join would drop it instead of counting it silent all month.
+  select l.lab, (select max(n) from days) - coalesce(max(dy.n), 0) as silent
+  from labs l
+  left join arrivals a on a.lab = l.lab
+  left join days dy on dy.cal_day = a.cal_day
+  group by l.lab
+)
+select
+  cast((select count(*) from labs) as char(10)) as labs,
+  coalesce(cast(round(100.0 * (select count(*) from arrivals a join days dy on dy.cal_day = a.cal_day)
+    / nullif((select count(*) from labs) * (select max(n) from days), 0), 1) as char(20)), '0') as pct_lab_days,
+  cast(coalesce((select max(c) from (select count(distinct lab) as c from arrivals group by cal_day) x), 0) as char(10)) as busiest,
+  -- ⚠ 10 working days is an INVENTED threshold, the same one both grid queries carry.
+  cast((select count(*) from lab_stats where silent >= 10) as char(10)) as silent10`,
     },
   },
 ];
