@@ -57,3 +57,37 @@ describe('findUnsortedHeaderRows', () => {
     expect(findUnsortedHeaderRows(parsed.data as ReportDesign)).toEqual([{ elementId: 'g' }]);
   });
 });
+
+const cellgrid = (over: Record<string, unknown> = {}): unknown => ({
+  id: 'cg', kind: 'cellgrid', name: 'CG', rect: { x: 0, y: 0, w: 400, h: 200 },
+  dataSource: { kind: 'custom-query', queryId: 'q' },
+  cellColumns: ['d01'], sortBy: 'ord',
+  ...over,
+});
+
+describe('findUnsortedHeaderRows: cellgrid', () => {
+  it('⛔ names a bound cellgrid with no sortBy, even though it has no headerRow field to opt in with', () => {
+    // A cellgrid ALWAYS treats row 0 as its header (cellgrid.ts's splitCellGridRows), unlike
+    // table where headerRow is opt-in. Without sortBy the same exposure headerRow's pairing
+    // exists to prevent applies here with nothing currently enforcing it.
+    expect(findUnsortedHeaderRows(design([cellgrid({ sortBy: undefined })])))
+      .toEqual([{ elementId: 'cg' }]);
+  });
+
+  it('passes a bound cellgrid with sortBy', () => {
+    expect(findUnsortedHeaderRows(design([cellgrid()]))).toEqual([]);
+  });
+
+  it('leaves an unbound cellgrid alone, its rows are the author\'s own array', () => {
+    expect(findUnsortedHeaderRows(design([cellgrid({
+      dataSource: undefined, sortBy: undefined, rows: [['1']],
+    })]))).toEqual([]);
+  });
+
+  it('names both an offending table and an offending cellgrid on the same page', () => {
+    expect(findUnsortedHeaderRows(design([
+      grid({ id: 'a', sortBy: undefined }),
+      cellgrid({ id: 'b', sortBy: undefined }),
+    ]))).toEqual([{ elementId: 'a' }, { elementId: 'b' }]);
+  });
+});
