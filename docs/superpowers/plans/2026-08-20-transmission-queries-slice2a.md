@@ -665,7 +665,7 @@ At `:1719-1723`, change the expected length:
     const ORD = /\bas ord\b/g;
     for (const id of ['q-transmission-hvleid', 'q-transmission-other']) {
       for (const [dialect, sql] of Object.entries(q(id).sql)) {
-        expect(sql.match(ORD) ?? [], `${id}/${dialect} dropped 'as ord' — sortBy silently degrades to no sort`)
+        expect(sql.match(ORD) ?? [], `${id}/${dialect} dropped 'as ord', so sortBy silently degrades to no sort`)
           .toHaveLength(3);
       }
     }
@@ -733,6 +733,10 @@ Expected before Tasks 1-4: FAIL at the first dialect checked (`q-transmission-hv
 - [ ] **Step 4: Run the whole describe block**
 
 Run: `pnpm --filter @openldr/reporting test -- report-seeds.test.ts -t "SEED_QUERIES — the transmission grids"`
+
+⚠ That em dash is not a rule 13 violation. It is quoting the name of a `describe` block that
+already exists at `report-seeds.test.ts:1632` and predates the rule. Changing it here would just
+make the filter match nothing. Do not "fix" it, and do not copy it into anything new you write.
 Expected: PASS, all tests including the ones untouched by this slice (the ladder, batch
 attribution, no-arrival-bucketing, panel-list-per-element tests). None of these read `ord`, the
 mark, or the day-count, so none of them should have moved.
