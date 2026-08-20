@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { interpolate, paramMap, elementChunkCount, pageChunkCount, rowsFor, totalPhysicalPages, pageFooterLabel, cellTextOptions, columnWidths, isNumericColumn, CELL_TEXT_H, ROW_H, asCellStatus, cellStatusesFor, isRightAligned, keyValuePairs, pairRects, elementValue, interpolatedPairValues, transposeResolved, tableHeaders, headerBandHeight, headerRowFor, bodyRowsFor, headerTexts, drawsOnChunk, STACKED_HEAD_H, headerLines } from './draw';
+import { interpolate, paramMap, elementChunkCount, pageChunkCount, rowsFor, totalPhysicalPages, pageFooterLabel, cellTextOptions, columnWidths, isNumericColumn, CELL_TEXT_H, ROW_H, asCellStatus, cellStatusesFor, isRightAligned, keyValuePairs, pairRects, elementValue, interpolatedPairValues, transposeResolved, tableHeaders, headerBandHeight, headerRowFor, bodyRowsFor, headerTexts, drawsOnChunk, STACKED_HEAD_H, headerLines, drawnHeight, resolveFlowY } from './draw';
 import type { ReportDesign, DesignElement, DesignPage } from '../schema';
 import type { ResolvedTable } from './index';
 
@@ -887,4 +887,116 @@ it('lets a heading follow a cellgrid via showWithTable', () => {
   const map = new Map([['g', resolved]]);
   expect(drawsOnChunk(heading, page, map, 0)).toBe(true);
   expect(drawsOnChunk(heading, page, map, 1)).toBe(false);
+});
+
+describe('drawnHeight — what flowAfter actually adds', () => {
+  it('is the header band plus only the rows drawn on THIS chunk, not the declared rect height', () => {
+    // 200px@96 = 150pt; cellGridMaxRows(150) = floor((150-13)/12.75) = 10 rows a chunk.
+    const el = {
+      id: 'g', kind: 'cellgrid', name: 'g', rect: { x: 0, y: 0, w: 400, h: 200 },
+      dataSource: { kind: 'custom-query', queryId: 'q' }, labelColumn: 'lab', cellColumns: ['d01'],
+    } as DesignElement;
+    const body = Array.from({ length: 4 }, (_, i) => ({ lab: `L${i}`, d01: '1' }));
+    const resolved: ResolvedTable = {
+      columns: [{ key: 'lab', label: '' }, { key: 'd01', label: '' }],
+      rows: [{ lab: '', d01: '' }, ...body], // one lifted header row, 4 body rows
+    };
+    // CELL_HEAD_H (13) + 4 * CELL_ROW_H (12.75) = 64, nowhere near the declared 150pt.
+    expect(drawnHeight(el, resolved, 0)).toBe(64);
+  });
+
+  it('is zero on a chunk the element does not reach — this is the whole point', () => {
+    const { el, resolved } = cellGridEl(10); // 1 chunk only (10 rows fit the 31-row page)
+    expect(elementChunkCount(el, resolved)).toBe(1);
+    expect(drawnHeight(el, resolved, 1)).toBe(0);
+  });
+
+  it('is the full declared rect for a FAILED table/cellgrid — it draws the whole error box every chunk', () => {
+    const el = {
+      id: 'g', kind: 'cellgrid', name: 'g', rect: { x: 0, y: 0, w: 400, h: 200 },
+      dataSource: { kind: 'custom-query', queryId: 'q' },
+    } as DesignElement;
+    const errored: ResolvedTable = { error: 'boom' };
+    expect(drawnHeight(el, errored, 0)).toBe(150); // 200px@96 = 150pt
+    expect(drawnHeight(el, errored, 5)).toBe(150); // still the full box, on a page far past any chunk count
+  });
+
+  it('is the declared rect height for anything that is not a table or a cellgrid', () => {
+    const el = { id: 't', kind: 'text', name: 't', rect: { x: 0, y: 0, w: 100, h: 20 }, text: 'x' } as DesignElement;
+    expect(drawnHeight(el, undefined, 0)).toBe(15); // 20px@96 = 15pt
+  });
+});
+
+describe('resolveFlowY — where flowAfter actually puts an element', () => {
+  it('is the declared y when the element has no flowAfter', () => {
+    const el = { id: 'a', kind: 'text', name: 'a', rect: { x: 0, y: 100, w: 10, h: 10 }, text: 'x' } as DesignElement;
+    const page: DesignPage = { id: 'p', elements: [el] };
+    expect(resolveFlowY(el, page, new Map(), 0)).toBe(75); // 100px@96 = 75pt
+  });
+
+  it('sits at the target\'s y plus what the target actually drew, not the target\'s declared height', () => {
+    const { el: grid, resolved } = cellGridEl(10); // draws far less than its declared 545px@96 box
+    const follower = {
+      id: 'f', kind: 'text', name: 'f', rect: { x: 0, y: 900, w: 10, h: 10 }, text: 'x', flowAfter: 'g',
+    } as DesignElement;
+    const page: DesignPage = { id: 'p', elements: [grid, follower] };
+    const map = new Map([['g', resolved]]);
+    const expectedY = drawnHeight(grid, resolved, 0); // grid.rect.y is 0
+    expect(resolveFlowY(follower, page, map, 0)).toBe(expectedY);
+    expect(resolveFlowY(follower, page, map, 0)).not.toBe(900 * 0.75);
+  });
+
+  it('moves a follower up to the target\'s own y once the target has finished — the blank-band fix', () => {
+    // This is the exact shape of the defect: a grid that finishes on chunk 0 and draws nothing on
+    // chunk 1, and a follower that used to sit at a fixed y regardless.
+    const { el: grid, resolved } = cellGridEl(10);
+    expect(elementChunkCount(grid, resolved)).toBe(1); // finished after chunk 0
+    const follower = {
+      id: 'f', kind: 'text', name: 'f', rect: { x: 0, y: 900, w: 10, h: 10 }, text: 'x', flowAfter: 'g',
+    } as DesignElement;
+    const page: DesignPage = { id: 'p', elements: [grid, follower] };
+    const map = new Map([['g', resolved]]);
+    // Chunk 1: grid draws nothing (drawnHeight 0), so the follower lands exactly on the grid's own
+    // declared y instead of the huge gap its own rect.y (900px) would otherwise leave.
+    expect(resolveFlowY(follower, page, map, 1)).toBe(0);
+  });
+
+  it('chains through an intermediate element — a heading following a grid, and a grid following the heading', () => {
+    const { el: grid, resolved } = cellGridEl(10);
+    const heading = {
+      id: 'h', kind: 'text', name: 'h', rect: { x: 0, y: 900, w: 100, h: 14 }, text: 'x', flowAfter: 'g',
+    } as DesignElement;
+    const nextGrid = {
+      id: 'g2', kind: 'cellgrid', name: 'g2', rect: { x: 0, y: 900, w: 400, h: 100 }, flowAfter: 'h',
+    } as DesignElement;
+    const page: DesignPage = { id: 'p', elements: [grid, heading, nextGrid] };
+    const map = new Map([['g', resolved]]);
+    const headingY = drawnHeight(grid, resolved, 0); // grid.rect.y is 0
+    const nextGridY = headingY + drawnHeight(heading, undefined, 0); // heading's own rect.h, 14px@96
+    expect(resolveFlowY(heading, page, map, 0)).toBe(headingY);
+    expect(resolveFlowY(nextGrid, page, map, 0)).toBe(nextGridY);
+  });
+
+  it('fails OPEN on a flowAfter naming nothing on the page, same contract as showWithTable', () => {
+    const el = {
+      id: 'a', kind: 'text', name: 'a', rect: { x: 0, y: 100, w: 10, h: 10 }, text: 'x', flowAfter: 'nope',
+    } as DesignElement;
+    const page: DesignPage = { id: 'p', elements: [el] };
+    expect(resolveFlowY(el, page, new Map(), 0)).toBe(75);
+  });
+
+  it('throws instead of looping on a straight self-reference', () => {
+    const el = {
+      id: 'a', kind: 'text', name: 'a', rect: { x: 0, y: 0, w: 10, h: 10 }, text: 'x', flowAfter: 'a',
+    } as DesignElement;
+    const page: DesignPage = { id: 'p', elements: [el] };
+    expect(() => resolveFlowY(el, page, new Map(), 0)).toThrow(/cycle/);
+  });
+
+  it('throws instead of looping on a two-element cycle', () => {
+    const a = { id: 'a', kind: 'text', name: 'a', rect: { x: 0, y: 0, w: 10, h: 10 }, text: 'x', flowAfter: 'b' } as DesignElement;
+    const b = { id: 'b', kind: 'text', name: 'b', rect: { x: 0, y: 0, w: 10, h: 10 }, text: 'x', flowAfter: 'a' } as DesignElement;
+    const page: DesignPage = { id: 'p', elements: [a, b] };
+    expect(() => resolveFlowY(a, page, new Map(), 0)).toThrow(/cycle/);
+  });
 });

@@ -1923,6 +1923,15 @@ describe('SEED_DESIGNS — rt-transmission-grid', () => {
     expect(el('rt-transmission-grid-other-title').showWithTable).toBe('other');
   });
 
+  it('chains other flowAfter its own heading flowAfter hvleid, so the block moves up as one unit', () => {
+    // `hvleid` itself declares no flowAfter — it is the anchor everything else measures from.
+    // Chained THROUGH the heading, not both pointing straight at `hvleid`: two elements resolving
+    // to the same y would overprint each other. See flowAfter's doc comment in schema.ts.
+    expect(el('hvleid').flowAfter).toBeUndefined();
+    expect(el('rt-transmission-grid-other-title').flowAfter).toBe('hvleid');
+    expect(el('other').flowAfter).toBe('rt-transmission-grid-other-title');
+  });
+
   it('draws BOTH grids on one page, as the reference does', () => {
     expect(el('hvleid').dataSource).toEqual({ kind: 'custom-query', queryId: 'q-transmission-hvleid' });
     expect(el('other').dataSource).toEqual({ kind: 'custom-query', queryId: 'q-transmission-other' });

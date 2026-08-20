@@ -4068,10 +4068,18 @@ export const SEED_DESIGNS: ReportDesign[] = [
           { key: 'silent', label: 'Silent', width: 52 },
         ] },
 
+      // ⛔ `flowAfter`, on the heading AND the grid, chained through each other rather than both
+      // pointing straight at `hvleid`. If both pointed at `hvleid` they would compute the SAME y
+      // and overprint each other; chaining (heading follows `hvleid`, grid follows the heading) is
+      // what keeps the heading glued to the top of whatever `other` draws, on every chunk. `rect.y`
+      // (594/612) stays as the FALLBACK for a page where `hvleid` is missing from `page.elements`
+      // entirely — see `flowAfter`'s doc comment in schema.ts for why that fails open rather than
+      // refusing to draw.
       { id: 'rt-transmission-grid-other-title', kind: 'text', name: 'Other heading', rect: { x: 48, y: 594, w: 600, h: 14 },
         text: 'Any Other Test Data Submission by Testing Laboratory', style: { fontSize: 10, bold: true, color: '#334155' },
-        showWithTable: 'other' },
+        showWithTable: 'other', flowAfter: 'hvleid' },
       { id: 'other', kind: 'cellgrid', name: 'Other submission', rect: { x: 48, y: 612, w: TG_CONTENT_W, h: TG_GRID_H },
+        flowAfter: 'rt-transmission-grid-other-title',
         dataSource: { kind: 'custom-query', queryId: 'q-transmission-other' },
         sortBy: 'ord',
         labelColumn: 'lab',

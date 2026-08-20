@@ -6,7 +6,7 @@ import type { ResolvedTable } from './index';
 import { formatDisplayDate, formatDisplayDateOf } from './format-date';
 import {
   CELL_SIZE, CELL_GAP, GROUP_GAP, CELL_ROW_H, CELL_COL_GAP, CELL_HEAD_H, CELL_LABEL_W,
-  cellFill, groupBreaks, splitCellGridRows, cellGridMaxRows, cellGridChunks,
+  cellFill, groupBreaks, splitCellGridRows, cellGridMaxRows, cellGridChunks, cellGridRowsInChunk,
   stripWidth as stripWidthOf,
 } from './cellgrid';
 
@@ -799,6 +799,66 @@ export function pageFooterLabel(n: number, total: number): string {
   return `Page ${n} / ${total}`;
 }
 
+/**
+ * The height, in pt, `el` actually draws on chunk `chunk` — for `flowAfter`, never for anything
+ * else.
+ *
+ * ⛔ NOT `toPt(el.rect).h`. That is the MOST an element may occupy, declared at design time; a
+ * `cellgrid`/`table` almost never fills it, which is the entire reason `flowAfter` exists — see
+ * its doc comment in `schema.ts`. The one exception is a FAILED query: `elementDrawsOnChunk` keeps
+ * a broken table/cellgrid drawing on every chunk, and it always paints the full error-placeholder
+ * box, so this returns the full rect height for that case, matching what actually lands on the
+ * page.
+ *
+ * A chunk this element does not reach at all (its rows ran out on an earlier page) draws nothing —
+ * zero — which is what lets a `flowAfter` follower move up and take its place.
+ */
+export function drawnHeight(
+  el: DesignElement, resolved: ResolvedTable | undefined, chunk: number,
+): number {
+  const rectH = toPt(el.rect).h;
+  if (el.dataSource && resolved && 'error' in resolved) return rectH;
+  if (el.kind !== 'cellgrid' && el.kind !== 'table') return rectH;
+  if (chunk >= elementChunkCount(el, resolved)) return 0;
+  if (el.kind === 'cellgrid') {
+    const body = splitCellGridRows(rowsFor(el, resolved), el.groupBoundary === 'token-change').body;
+    return CELL_HEAD_H + cellGridRowsInChunk(body.length, rectH, chunk) * CELL_ROW_H;
+  }
+  const headH = headerBandHeight(el);
+  const maxRows = maxRowsFor(rectH, headH);
+  const rowCount = bodyRowsFor(el, resolved).length;
+  const rowsInChunk = maxRows < 1 ? 0 : Math.max(0, Math.min(maxRows, rowCount - chunk * maxRows));
+  return headH + rowsInChunk * ROW_H;
+}
+
+/**
+ * The y (pt) `el` actually draws at on chunk `chunk`, honouring `flowAfter` (see `schema.ts`).
+ *
+ * `seen` carries every id visited on THIS resolution, so a cycle — including a straight
+ * self-reference — throws instead of looping: a page has finitely many elements, so recursing here
+ * either lands on an element with no `flowAfter`, a name not on the page, or an id already in
+ * `seen`. There is no fourth outcome, so this cannot spin.
+ */
+export function resolveFlowY(
+  el: DesignElement, page: DesignPage, resolved: Map<string, ResolvedTable>, chunk: number,
+  seen: ReadonlySet<string> = new Set(),
+): number {
+  const declared = toPt(el.rect).y;
+  if (!el.flowAfter) return declared;
+  if (seen.has(el.id)) {
+    const path = [...seen, el.id].join(' -> ');
+    throw new Error(`report design '${page.id}': flowAfter cycle at '${el.id}' (${path})`);
+  }
+  const target = page.elements.find((e) => e.id === el.flowAfter);
+  // Fails OPEN, same contract `showWithTable` documents: a dangling reference is a design defect,
+  // not a reason to jump this element somewhere unrelated.
+  if (!target) return declared;
+  const nextSeen = new Set(seen);
+  nextSeen.add(el.id);
+  const targetY = resolveFlowY(target, page, resolved, chunk, nextSeen);
+  return targetY + drawnHeight(target, resolved.get(target.id), chunk);
+}
+
 /** Draw the "Page X / Y" footer centered ~24pt above the bottom edge of a full-bleed page. */
 export function drawPageFooter(doc: Doc, wPt: number, hPt: number, n: number, total: number): void {
   doc.save().font('Helvetica').fontSize(8).fillColor('#737373')
@@ -808,8 +868,13 @@ export function drawPageFooter(doc: Doc, wPt: number, hPt: number, n: number, to
 
 export function drawElement(
   doc: Doc, el: DesignElement, tokens: Map<string, string>, resolved: ResolvedTable | undefined, chunk = 0,
+  // `flowAfter`'s resolved y, in pt. The caller always passes `resolveFlowY`'s result — for an
+  // element with no `flowAfter` that is exactly `toPt(el.rect).y`, so this parameter changes
+  // nothing for the (still overwhelmingly common) design that never opts in.
+  yPt?: number,
 ): void {
-  const r = toPt(el.rect);
+  const box = toPt(el.rect);
+  const r = yPt === undefined ? box : { ...box, y: yPt };
   const s = el.style ?? {};
   switch (el.kind) {
     case 'rect': {

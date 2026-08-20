@@ -1,7 +1,7 @@
 import PDFDocument from 'pdfkit';
 import type { ReportDesign } from '../schema';
 import { paperSizePt } from './units';
-import { drawElement, paramMap, pageChunkCount, totalPhysicalPages, drawPageFooter, drawsOnChunk } from './draw';
+import { drawElement, paramMap, pageChunkCount, totalPhysicalPages, drawPageFooter, drawsOnChunk, resolveFlowY } from './draw';
 
 export type ResolvedTable =
   | { columns: { key: string; label: string }[]; rows: Record<string, unknown>[] }
@@ -80,7 +80,8 @@ export function renderReportDesignPdf(
       // submitted" rather than "this grid finished earlier".
       for (const el of page.elements) {
         if (!drawsOnChunk(el, page, resolved, c)) continue;
-        drawElement(doc, el, tokens, resolved.get(el.id), c);
+        const y = resolveFlowY(el, page, resolved, c);
+        drawElement(doc, el, tokens, resolved.get(el.id), c, y);
       }
       if (design.pageNumbers) drawPageFooter(doc, w, h, physical, total);
     }

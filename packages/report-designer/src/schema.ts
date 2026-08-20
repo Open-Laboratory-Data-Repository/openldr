@@ -171,6 +171,35 @@ export const DesignElementSchema = z.object({
    *  Fails OPEN: naming an element that is not on the page draws normally. A dangling reference is
    *  a design defect, and silently deleting a heading everywhere would hide it. */
   showWithTable: z.string().optional(),
+  /** Take this element's y from the NAMED element's own y plus the height that element actually
+   *  drew on the current physical chunk, instead of the declared `rect.y`.
+   *
+   *  `showWithTable` answers "does this belong on this page"; this answers "where does it sit,
+   *  given what the page before it actually drew." Without it, a follower's y is fixed forever at
+   *  whatever gap fit page 1 — the `other` grid sat at a constant `rect.y` of 612px@96 while the
+   *  `hvleid` grid above it, on continuation pages, had already finished and drew nothing. The gap
+   *  a reader saw was not "no data": it was 380px@96 of paper `other` had no reason to leave
+   *  blank, on every page after the first, turning a 2-page report into 4.
+   *
+   *  The height added is DRAWN, not declared — `toPt(el.rect).h` is the most an element may
+   *  occupy, and a `cellgrid`/`table` almost never fills it. A target that draws nothing on a
+   *  chunk (its rows ran out on an earlier page) contributes zero, and the follower moves up to
+   *  take its place. A target that FAILED (query error) keeps its full declared height on every
+   *  chunk, matching the placeholder box it actually paints every time.
+   *
+   *  ⛔ Fails OPEN, same contract `showWithTable` documents: a name that is not on the page draws
+   *  at its own declared `rect.y`. A dangling reference is a design defect, not a reason to jump
+   *  the element somewhere unrelated.
+   *
+   *  ⛔ A cycle — including a straight self-reference — THROWS instead of looping. A page has
+   *  finitely many elements, so resolving this can only end one of three ways: a target with no
+   *  `flowAfter`, a target not on the page, or an id already visited on this same resolution. The
+   *  third case is a design defect loud enough that rendering must stop, not one page quietly
+   *  never finishing.
+   *
+   *  ⛔ Opt-in, and inert when unset — a design without it renders byte-for-byte as before
+   *  (`render/golden.test.ts`). */
+  flowAfter: z.string().optional(),
   /** `cellgrid`: result column holding each row's label. Omit for a grid with no label column, such
    *  as a month calendar whose position already says which day a cell is. */
   labelColumn: z.string().optional(),
