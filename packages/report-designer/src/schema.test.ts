@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ReportDesignSchema, BoundColumnSchema, CELL_STATUSES } from './schema';
+import { ReportDesignSchema, BoundColumnSchema, CELL_STATUSES, DesignElementSchema } from './schema';
 
 describe('ReportDesignSchema', () => {
   it('round-trips a full design and strips unknown keys', () => {
@@ -140,5 +140,33 @@ describe('TemplateParamSchema — format and placeholder', () => {
     const out = parseParam({ format: 'iana-timezone', placeholder: 'Africa/Nairobi' });
     expect(out.format).toBeUndefined();
     expect(out.placeholder).toBe('Africa/Nairobi');
+  });
+});
+
+describe('DesignElementSchema — cellgrid', () => {
+  it('accepts a cellgrid element with a palette and trailing columns', () => {
+    const el = {
+      id: 'grid', kind: 'cellgrid', name: 'Submission grid',
+      rect: { x: 48, y: 200, w: 698, h: 400 },
+      dataSource: { kind: 'custom-query', queryId: 'q' },
+      sortBy: 'ord',
+      labelColumn: 'lab',
+      cellColumns: ['d01', 'd02', 'd03'],
+      groupBy: 'header-change',
+      palette: { ramp: 'blue', steps: 1 },
+      trailingColumns: [
+        { key: 'days', label: 'Days', width: 34.5 },
+        { key: 'silent', label: 'Silent', width: 52, emphasis: 'fill' },
+      ],
+    };
+    expect(() => DesignElementSchema.parse(el)).not.toThrow();
+  });
+
+  it('rejects a palette step count outside 1..5', () => {
+    const el = {
+      id: 'grid', kind: 'cellgrid', name: 'g', rect: { x: 0, y: 0, w: 10, h: 10 },
+      palette: { ramp: 'blue', steps: 9 },
+    };
+    expect(() => DesignElementSchema.parse(el)).toThrow();
   });
 });

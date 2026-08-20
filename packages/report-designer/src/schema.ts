@@ -56,9 +56,36 @@ export type BoundColumn = z.infer<typeof BoundColumnSchema>;
  *  `stacked` puts a small uppercase label above the value, for values too long to share a line. */
 export type KeyValueLayout = 'inline' | 'stacked';
 
+/** Sequential ramps a `cellgrid` may paint with. Presentational, not clinical: a `cellgrid` shows
+ *  magnitude or presence, never a result state, so it deliberately does not reach for
+ *  `CELL_STATUSES`. Keeping the two apart is what stops a submission grid inheriting the meaning of
+ *  a red AST chip. */
+export const CELL_RAMPS = ['blue', 'slate'] as const;
+export type CellRamp = (typeof CELL_RAMPS)[number];
+
+export const CellPaletteSchema = z.object({
+  ramp: z.enum(CELL_RAMPS),
+  /** How many filled steps the ramp is quantised into. 1 makes the grid binary, which is the right
+   *  choice when the data is presence/absence rather than a count. */
+  steps: z.number().int().min(1).max(5),
+});
+export type CellPalette = z.infer<typeof CellPaletteSchema>;
+
+/** A text column drawn AFTER a `cellgrid`'s run of cells. Width is DECLARED, not measured: the whole
+ *  reason `cellgrid` exists is that measured widths cannot go below `MIN_COL_W`. */
+export const TrailingColumnSchema = z.object({
+  key: z.string(),
+  label: z.string(),
+  /** Points. Declared so the element's total width is knowable without a Doc. */
+  width: z.number().positive(),
+  statusKey: z.string().optional(),
+  emphasis: z.enum(['fill', 'text']).optional(),
+});
+export type TrailingColumn = z.infer<typeof TrailingColumnSchema>;
+
 export const DesignElementSchema = z.object({
   id: z.string(),
-  kind: z.enum(['text', 'table', 'image', 'line', 'rect', 'datetime', 'keyvalue', 'barcode', 'qrcode']),
+  kind: z.enum(['text', 'table', 'image', 'line', 'rect', 'datetime', 'keyvalue', 'barcode', 'qrcode', 'cellgrid']),
   name: z.string(),
   rect: RectSchema,
   /** text/datetime content; the OPTIONAL title of a `keyvalue` panel (no title when empty); and the
@@ -142,6 +169,21 @@ export const DesignElementSchema = z.object({
    *  Fails OPEN: naming an element that is not on the page draws normally. A dangling reference is
    *  a design defect, and silently deleting a heading everywhere would hide it. */
   showWithTable: z.string().optional(),
+  /** `cellgrid`: result column holding each row's label. Omit for a grid with no label column, such
+   *  as a month calendar whose position already says which day a cell is. */
+  labelColumn: z.string().optional(),
+  /** `cellgrid`: result columns drawn as cells, in order. */
+  cellColumns: z.array(z.string()).optional(),
+  /** `cellgrid`: insert a wider gap wherever the GROUP ROW's token changes.
+   *
+   *  The group row is data (row 1 of the sorted result, after the header row), never a design
+   *  constant, because the grouping a month needs is not knowable when the design is authored. A
+   *  month starting mid-week has a short first group, and every month has a different one. */
+  groupBy: z.literal('header-change').optional(),
+  /** `cellgrid`: how a cell value becomes a fill. */
+  palette: CellPaletteSchema.optional(),
+  /** `cellgrid`: text columns drawn after the cells. */
+  trailingColumns: z.array(TrailingColumnSchema).optional(),
   /** `keyvalue` pair arrangement (default `inline`) */
   layout: z.enum(['inline', 'stacked']).optional(),
   /** `keyvalue` pairs side by side per line (default 1). Capped at 4 — beyond that a pair's share of
