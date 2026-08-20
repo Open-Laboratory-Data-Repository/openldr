@@ -2804,16 +2804,43 @@ labs as (select distinct lab from arrivals),
 -- The CROSS JOIN makes a silent day render blank IN PLACE rather than shifting later days left.
 grid as (
   select l.lab, dy.n,
-         case when a.lab is null then '' else 'Y' end as mark
+         case when a.lab is null then '' else '1' end as mark
   from labs l
   cross join days dy
   left join arrivals a on a.lab = l.lab and a.cal_day = dy.cal_day
+),
+lab_stats as (
+  -- Same LEFT JOIN reasoning as the postgres variant: a laboratory whose only submission this
+  -- month landed on a weekend has zero rows in 'days' (Mon-Fri only), and an inner join here would
+  -- drop it from the grid entirely instead of showing it silent all month.
+  select l.lab,
+         count(dy.n) as days,
+         (select max(n) from days) - coalesce(max(dy.n), 0) as silent
+  from labs l
+  left join arrivals a on a.lab = l.lab
+  left join days dy on dy.cal_day = a.cal_day
+  group by l.lab
+),
+lab_ord as (
+  -- Unique per-laboratory ord, alphabetical from 2 -- see the postgres variant for why 'order by
+  -- ord' alone is now a full tiebreaker (AGENTS.md section 7). MySQL 8 supports window functions.
+  select lab, row_number() over (order by lab) + 1 as ord
+  from labs
 )
+-- ⛔ READ FIRST, still true after this task: this query CANNOT RUN on a MySQL warehouse today.
+-- max() over the date row's concat still raises error 1267 through the connector pool -- see
+-- 'arrivals' above for the measured path. This task adds a SECOND synthetic row (the week-token
+-- row directly below) but that row's own max() does not concatenate a mixed-collation literal, so
+-- it does not itself trip 1267. The overall cannot-run status is UNCHANGED: the union's date-row
+-- branch fails on its own aggregate, independently of what any other branch does, before the union
+-- ever combines them. HONEST NON-PROOF beyond that reasoning -- no MySQL server is available here
+-- to confirm which branch actually raises first once the query is three branches instead of two.
+--
 -- The day and the month are TWO LINES: the design's 'headerRow' stacks a header cell's newlines,
 -- which is what keeps a day column the width of 'Feb' rather than '2 Feb'.
 --
 -- ⛔ 'using utf8mb4' is LOAD-BEARING, not decoration. Bare CHAR(10) returns a BINARY string,
--- and CONCAT returns binary if ANY argument is binary — so d01..d23 on this row come back
+-- and CONCAT returns binary if ANY argument is binary -- so d01..d23 on this row come back
 -- as VARBINARY. The mysql2 pool is built with no 'typeCast'
 -- (packages/bootstrap/src/connector-db.ts:64-67), and mysql2 hands a binary column back as a Buffer:
 -- the PDF would survive ('rowsFor' does String(...)), but the JSON and CSV export of this row
@@ -2845,36 +2872,73 @@ select 0 as ord, '(dates)' as lab,
   max(case when n = 20 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d20,
   max(case when n = 21 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d21,
   max(case when n = 22 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d22,
-  max(case when n = 23 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d23
+  max(case when n = 23 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d23,
+  '' as days, '' as silent
 from days
 union all
-select 1 as ord, lab,
-  max(case when n = 1 then mark else '' end) as d01,
-  max(case when n = 2 then mark else '' end) as d02,
-  max(case when n = 3 then mark else '' end) as d03,
-  max(case when n = 4 then mark else '' end) as d04,
-  max(case when n = 5 then mark else '' end) as d05,
-  max(case when n = 6 then mark else '' end) as d06,
-  max(case when n = 7 then mark else '' end) as d07,
-  max(case when n = 8 then mark else '' end) as d08,
-  max(case when n = 9 then mark else '' end) as d09,
-  max(case when n = 10 then mark else '' end) as d10,
-  max(case when n = 11 then mark else '' end) as d11,
-  max(case when n = 12 then mark else '' end) as d12,
-  max(case when n = 13 then mark else '' end) as d13,
-  max(case when n = 14 then mark else '' end) as d14,
-  max(case when n = 15 then mark else '' end) as d15,
-  max(case when n = 16 then mark else '' end) as d16,
-  max(case when n = 17 then mark else '' end) as d17,
-  max(case when n = 18 then mark else '' end) as d18,
-  max(case when n = 19 then mark else '' end) as d19,
-  max(case when n = 20 then mark else '' end) as d20,
-  max(case when n = 21 then mark else '' end) as d21,
-  max(case when n = 22 then mark else '' end) as d22,
-  max(case when n = 23 then mark else '' end) as d23
-from grid
-group by lab
-order by ord, lab`,
+select 1 as ord, '(week)' as lab,
+  -- ISO-style week number, Monday-first, 01..53. '%v' pairs with '%x' only when a GLOBAL
+  -- year-spanning key is needed; this token never draws its value and never needs one (spec
+  -- section 4), so '%v' alone is enough. Deliberately NOT '%u', which is Sunday-first and would
+  -- move a week boundary onto the wrong working day, and NOT '%U'/'%W', which read lc_time_names
+  -- the way this query's own month_start CTE already warns '%m'/'%M' do, above. '%v' is
+  -- numeric-only and carries no such dependency.
+  max(case when n = 1 then date_format(cal_day, '%v') else '' end) as d01,
+  max(case when n = 2 then date_format(cal_day, '%v') else '' end) as d02,
+  max(case when n = 3 then date_format(cal_day, '%v') else '' end) as d03,
+  max(case when n = 4 then date_format(cal_day, '%v') else '' end) as d04,
+  max(case when n = 5 then date_format(cal_day, '%v') else '' end) as d05,
+  max(case when n = 6 then date_format(cal_day, '%v') else '' end) as d06,
+  max(case when n = 7 then date_format(cal_day, '%v') else '' end) as d07,
+  max(case when n = 8 then date_format(cal_day, '%v') else '' end) as d08,
+  max(case when n = 9 then date_format(cal_day, '%v') else '' end) as d09,
+  max(case when n = 10 then date_format(cal_day, '%v') else '' end) as d10,
+  max(case when n = 11 then date_format(cal_day, '%v') else '' end) as d11,
+  max(case when n = 12 then date_format(cal_day, '%v') else '' end) as d12,
+  max(case when n = 13 then date_format(cal_day, '%v') else '' end) as d13,
+  max(case when n = 14 then date_format(cal_day, '%v') else '' end) as d14,
+  max(case when n = 15 then date_format(cal_day, '%v') else '' end) as d15,
+  max(case when n = 16 then date_format(cal_day, '%v') else '' end) as d16,
+  max(case when n = 17 then date_format(cal_day, '%v') else '' end) as d17,
+  max(case when n = 18 then date_format(cal_day, '%v') else '' end) as d18,
+  max(case when n = 19 then date_format(cal_day, '%v') else '' end) as d19,
+  max(case when n = 20 then date_format(cal_day, '%v') else '' end) as d20,
+  max(case when n = 21 then date_format(cal_day, '%v') else '' end) as d21,
+  max(case when n = 22 then date_format(cal_day, '%v') else '' end) as d22,
+  max(case when n = 23 then date_format(cal_day, '%v') else '' end) as d23,
+  '' as days, '' as silent
+from days
+union all
+select max(lo.ord) as ord, g.lab,
+  max(case when g.n = 1 then g.mark else '' end) as d01,
+  max(case when g.n = 2 then g.mark else '' end) as d02,
+  max(case when g.n = 3 then g.mark else '' end) as d03,
+  max(case when g.n = 4 then g.mark else '' end) as d04,
+  max(case when g.n = 5 then g.mark else '' end) as d05,
+  max(case when g.n = 6 then g.mark else '' end) as d06,
+  max(case when g.n = 7 then g.mark else '' end) as d07,
+  max(case when g.n = 8 then g.mark else '' end) as d08,
+  max(case when g.n = 9 then g.mark else '' end) as d09,
+  max(case when g.n = 10 then g.mark else '' end) as d10,
+  max(case when g.n = 11 then g.mark else '' end) as d11,
+  max(case when g.n = 12 then g.mark else '' end) as d12,
+  max(case when g.n = 13 then g.mark else '' end) as d13,
+  max(case when g.n = 14 then g.mark else '' end) as d14,
+  max(case when g.n = 15 then g.mark else '' end) as d15,
+  max(case when g.n = 16 then g.mark else '' end) as d16,
+  max(case when g.n = 17 then g.mark else '' end) as d17,
+  max(case when g.n = 18 then g.mark else '' end) as d18,
+  max(case when g.n = 19 then g.mark else '' end) as d19,
+  max(case when g.n = 20 then g.mark else '' end) as d20,
+  max(case when g.n = 21 then g.mark else '' end) as d21,
+  max(case when g.n = 22 then g.mark else '' end) as d22,
+  max(case when g.n = 23 then g.mark else '' end) as d23,
+  max(cast(ls.days as char(3))) as days, max(cast(ls.silent as char(3))) as silent
+from grid g
+join lab_ord lo on lo.lab = g.lab
+join lab_stats ls on ls.lab = g.lab
+group by g.lab
+order by ord`,
     },
   },
   {
@@ -3446,16 +3510,43 @@ labs as (select distinct lab from arrivals),
 -- The CROSS JOIN makes a silent day render blank IN PLACE rather than shifting later days left.
 grid as (
   select l.lab, dy.n,
-         case when a.lab is null then '' else 'Y' end as mark
+         case when a.lab is null then '' else '1' end as mark
   from labs l
   cross join days dy
   left join arrivals a on a.lab = l.lab and a.cal_day = dy.cal_day
+),
+lab_stats as (
+  -- Same LEFT JOIN reasoning as the postgres variant: a laboratory whose only submission this
+  -- month landed on a weekend has zero rows in 'days' (Mon-Fri only), and an inner join here would
+  -- drop it from the grid entirely instead of showing it silent all month.
+  select l.lab,
+         count(dy.n) as days,
+         (select max(n) from days) - coalesce(max(dy.n), 0) as silent
+  from labs l
+  left join arrivals a on a.lab = l.lab
+  left join days dy on dy.cal_day = a.cal_day
+  group by l.lab
+),
+lab_ord as (
+  -- Unique per-laboratory ord, alphabetical from 2 -- see the postgres variant for why 'order by
+  -- ord' alone is now a full tiebreaker (AGENTS.md section 7). MySQL 8 supports window functions.
+  select lab, row_number() over (order by lab) + 1 as ord
+  from labs
 )
+-- ⛔ READ FIRST, still true after this task: this query CANNOT RUN on a MySQL warehouse today.
+-- max() over the date row's concat still raises error 1267 through the connector pool -- see
+-- 'arrivals' above for the measured path. This task adds a SECOND synthetic row (the week-token
+-- row directly below) but that row's own max() does not concatenate a mixed-collation literal, so
+-- it does not itself trip 1267. The overall cannot-run status is UNCHANGED: the union's date-row
+-- branch fails on its own aggregate, independently of what any other branch does, before the union
+-- ever combines them. HONEST NON-PROOF beyond that reasoning -- no MySQL server is available here
+-- to confirm which branch actually raises first once the query is three branches instead of two.
+--
 -- The day and the month are TWO LINES: the design's 'headerRow' stacks a header cell's newlines,
 -- which is what keeps a day column the width of 'Feb' rather than '2 Feb'.
 --
 -- ⛔ 'using utf8mb4' is LOAD-BEARING, not decoration. Bare CHAR(10) returns a BINARY string,
--- and CONCAT returns binary if ANY argument is binary — so d01..d23 on this row come back
+-- and CONCAT returns binary if ANY argument is binary -- so d01..d23 on this row come back
 -- as VARBINARY. The mysql2 pool is built with no 'typeCast'
 -- (packages/bootstrap/src/connector-db.ts:64-67), and mysql2 hands a binary column back as a Buffer:
 -- the PDF would survive ('rowsFor' does String(...)), but the JSON and CSV export of this row
@@ -3487,36 +3578,73 @@ select 0 as ord, '(dates)' as lab,
   max(case when n = 20 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d20,
   max(case when n = 21 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d21,
   max(case when n = 22 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d22,
-  max(case when n = 23 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d23
+  max(case when n = 23 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d23,
+  '' as days, '' as silent
 from days
 union all
-select 1 as ord, lab,
-  max(case when n = 1 then mark else '' end) as d01,
-  max(case when n = 2 then mark else '' end) as d02,
-  max(case when n = 3 then mark else '' end) as d03,
-  max(case when n = 4 then mark else '' end) as d04,
-  max(case when n = 5 then mark else '' end) as d05,
-  max(case when n = 6 then mark else '' end) as d06,
-  max(case when n = 7 then mark else '' end) as d07,
-  max(case when n = 8 then mark else '' end) as d08,
-  max(case when n = 9 then mark else '' end) as d09,
-  max(case when n = 10 then mark else '' end) as d10,
-  max(case when n = 11 then mark else '' end) as d11,
-  max(case when n = 12 then mark else '' end) as d12,
-  max(case when n = 13 then mark else '' end) as d13,
-  max(case when n = 14 then mark else '' end) as d14,
-  max(case when n = 15 then mark else '' end) as d15,
-  max(case when n = 16 then mark else '' end) as d16,
-  max(case when n = 17 then mark else '' end) as d17,
-  max(case when n = 18 then mark else '' end) as d18,
-  max(case when n = 19 then mark else '' end) as d19,
-  max(case when n = 20 then mark else '' end) as d20,
-  max(case when n = 21 then mark else '' end) as d21,
-  max(case when n = 22 then mark else '' end) as d22,
-  max(case when n = 23 then mark else '' end) as d23
-from grid
-group by lab
-order by ord, lab`,
+select 1 as ord, '(week)' as lab,
+  -- ISO-style week number, Monday-first, 01..53. '%v' pairs with '%x' only when a GLOBAL
+  -- year-spanning key is needed; this token never draws its value and never needs one (spec
+  -- section 4), so '%v' alone is enough. Deliberately NOT '%u', which is Sunday-first and would
+  -- move a week boundary onto the wrong working day, and NOT '%U'/'%W', which read lc_time_names
+  -- the way this query's own month_start CTE already warns '%m'/'%M' do, above. '%v' is
+  -- numeric-only and carries no such dependency.
+  max(case when n = 1 then date_format(cal_day, '%v') else '' end) as d01,
+  max(case when n = 2 then date_format(cal_day, '%v') else '' end) as d02,
+  max(case when n = 3 then date_format(cal_day, '%v') else '' end) as d03,
+  max(case when n = 4 then date_format(cal_day, '%v') else '' end) as d04,
+  max(case when n = 5 then date_format(cal_day, '%v') else '' end) as d05,
+  max(case when n = 6 then date_format(cal_day, '%v') else '' end) as d06,
+  max(case when n = 7 then date_format(cal_day, '%v') else '' end) as d07,
+  max(case when n = 8 then date_format(cal_day, '%v') else '' end) as d08,
+  max(case when n = 9 then date_format(cal_day, '%v') else '' end) as d09,
+  max(case when n = 10 then date_format(cal_day, '%v') else '' end) as d10,
+  max(case when n = 11 then date_format(cal_day, '%v') else '' end) as d11,
+  max(case when n = 12 then date_format(cal_day, '%v') else '' end) as d12,
+  max(case when n = 13 then date_format(cal_day, '%v') else '' end) as d13,
+  max(case when n = 14 then date_format(cal_day, '%v') else '' end) as d14,
+  max(case when n = 15 then date_format(cal_day, '%v') else '' end) as d15,
+  max(case when n = 16 then date_format(cal_day, '%v') else '' end) as d16,
+  max(case when n = 17 then date_format(cal_day, '%v') else '' end) as d17,
+  max(case when n = 18 then date_format(cal_day, '%v') else '' end) as d18,
+  max(case when n = 19 then date_format(cal_day, '%v') else '' end) as d19,
+  max(case when n = 20 then date_format(cal_day, '%v') else '' end) as d20,
+  max(case when n = 21 then date_format(cal_day, '%v') else '' end) as d21,
+  max(case when n = 22 then date_format(cal_day, '%v') else '' end) as d22,
+  max(case when n = 23 then date_format(cal_day, '%v') else '' end) as d23,
+  '' as days, '' as silent
+from days
+union all
+select max(lo.ord) as ord, g.lab,
+  max(case when g.n = 1 then g.mark else '' end) as d01,
+  max(case when g.n = 2 then g.mark else '' end) as d02,
+  max(case when g.n = 3 then g.mark else '' end) as d03,
+  max(case when g.n = 4 then g.mark else '' end) as d04,
+  max(case when g.n = 5 then g.mark else '' end) as d05,
+  max(case when g.n = 6 then g.mark else '' end) as d06,
+  max(case when g.n = 7 then g.mark else '' end) as d07,
+  max(case when g.n = 8 then g.mark else '' end) as d08,
+  max(case when g.n = 9 then g.mark else '' end) as d09,
+  max(case when g.n = 10 then g.mark else '' end) as d10,
+  max(case when g.n = 11 then g.mark else '' end) as d11,
+  max(case when g.n = 12 then g.mark else '' end) as d12,
+  max(case when g.n = 13 then g.mark else '' end) as d13,
+  max(case when g.n = 14 then g.mark else '' end) as d14,
+  max(case when g.n = 15 then g.mark else '' end) as d15,
+  max(case when g.n = 16 then g.mark else '' end) as d16,
+  max(case when g.n = 17 then g.mark else '' end) as d17,
+  max(case when g.n = 18 then g.mark else '' end) as d18,
+  max(case when g.n = 19 then g.mark else '' end) as d19,
+  max(case when g.n = 20 then g.mark else '' end) as d20,
+  max(case when g.n = 21 then g.mark else '' end) as d21,
+  max(case when g.n = 22 then g.mark else '' end) as d22,
+  max(case when g.n = 23 then g.mark else '' end) as d23,
+  max(cast(ls.days as char(3))) as days, max(cast(ls.silent as char(3))) as silent
+from grid g
+join lab_ord lo on lo.lab = g.lab
+join lab_stats ls on ls.lab = g.lab
+group by g.lab
+order by ord`,
     },
   },
 ];
