@@ -1908,6 +1908,105 @@ describe('SEED_QUERIES — the transmission grids', () => {
   });
 });
 
+describe('SEED_QUERIES — the summary band', () => {
+  const q = (id: string) => SEED_QUERIES.find((x) => x.id === id)!;
+  const BAND = ['q-transmission-calendar', 'q-transmission-summary'];
+  const CAL_COLS = ['ord', 'c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7'];
+  const FIGURES = ['labs', 'pct_lab_days', 'busiest', 'silent10'];
+
+  it('ships all three dialects for both queries', () => {
+    for (const id of BAND) {
+      for (const dialect of ['postgres', 'mssql', 'mysql'] as const) {
+        expect(q(id).sql[dialect], `${id}/${dialect} is missing`).toBeTruthy();
+      }
+    }
+  });
+
+  it('takes the month and nothing else', () => {
+    // ⛔ NOT `panels`. The band sits above BOTH grids, so the HVL/EID split does not apply to it.
+    // A required parameter the SQL never reads is also a box the operator must fill for no effect,
+    // and substituteParams refuses the run when it is blank.
+    for (const id of BAND) {
+      expect((q(id).params ?? []).map((p) => p.id), `${id} parameters`).toEqual(['month']);
+      for (const [dialect, sql] of Object.entries(q(id).sql)) {
+        expect(sql, `${id}/${dialect} filters by panel`).not.toMatch(/\{\{\s*param\.panels\s*\}\}/);
+      }
+    }
+  });
+
+  it('reads no arrival timestamp and converts no timezone, in every dialect', () => {
+    // The same ban the two grid queries carry. Bucketing on ingest arrival lands a bulk backfill's
+    // whole history on one calendar day, and this band would then report a month that never
+    // happened. Checked over the SQL including its comments, for the same reason as the grids.
+    const BANNED: [string, RegExp][] = [
+      ['ingest_events', /ingest_events/],
+      ['recorded_at', /recorded_at/],
+      ['at time zone', /at time zone/i],
+      ['convert_tz', /convert_tz/i],
+    ];
+    for (const id of BAND) {
+      for (const [dialect, sql] of Object.entries(q(id).sql)) {
+        for (const [name, re] of BANNED) {
+          expect(sql, `${id}/${dialect} mentions ${name}`).not.toMatch(re);
+        }
+      }
+    }
+  });
+
+  it('gives the calendar all seven days, not the working-day series the grids use', () => {
+    // Measured on the dev warehouse 2026-08-20: 7 weekend arrivals in 2013-07, 10 in 2013-09.
+    // A calendar built on Mon-Fri would drop those cells and print a month with holes in it.
+    const pg = q('q-transmission-calendar').sql.postgres;
+    expect(pg).not.toMatch(/between 1 and 5/);
+    expect(q('q-transmission-calendar').sql.mssql).not.toMatch(/% 7 between 0 and 4/);
+    expect(q('q-transmission-calendar').sql.mysql).not.toMatch(/weekday\(cal_day\) between 0 and 4/);
+    // ...while the figures query, which counts working days, still has one.
+    expect(q('q-transmission-summary').sql.postgres).toMatch(/between 1 and 5/);
+  });
+
+  it('returns ord and seven cell columns from the calendar, in every dialect', () => {
+    for (const [dialect, sql] of Object.entries(q('q-transmission-calendar').sql)) {
+      for (const col of CAL_COLS) {
+        // ⚠ `\b` — inside a TEMPLATE LITERAL a lone `\b` is the backspace character, not a regex
+        // word boundary, and the assertion then matches far more than it means to.
+        expect(sql, `calendar/${dialect} lost ${col}`).toMatch(new RegExp(`as ${col}\\b`));
+      }
+      expect(sql, `calendar/${dialect} lost the header row`).toMatch(/'M' as c1/);
+      expect(sql, `calendar/${dialect} lost its sort discriminator`).toMatch(/order by ord/);
+    }
+  });
+
+  it('returns exactly the four figures, in every dialect', () => {
+    for (const [dialect, sql] of Object.entries(q('q-transmission-summary').sql)) {
+      for (const col of FIGURES) {
+        expect(sql, `summary/${dialect} lost ${col}`).toMatch(new RegExp(`as ${col}\\b`));
+      }
+    }
+  });
+
+  it('guards the percentage division in every dialect', () => {
+    // A month with no arrivals has no laboratories. Without the guard the run fails instead of
+    // printing a page that says nothing arrived.
+    for (const [dialect, sql] of Object.entries(q('q-transmission-summary').sql)) {
+      expect(sql, `summary/${dialect} divides unguarded`).toMatch(/nullif\(/);
+    }
+  });
+
+  it('keeps the percent sign out of the value, in every dialect', () => {
+    // Formatting a number into a string is where three dialects stop agreeing. The design's caption
+    // carries the unit.
+    for (const [dialect, sql] of Object.entries(q('q-transmission-summary').sql)) {
+      expect(sql, `summary/${dialect} formats a percent sign into the value`).not.toMatch(/'%'/);
+    }
+  });
+
+  it('documents 10 as an invented operational threshold, not a clinical one, in every dialect', () => {
+    for (const [dialect, sql] of Object.entries(q('q-transmission-summary').sql)) {
+      expect(sql, `summary/${dialect} lost the invented-threshold disclosure`).toMatch(/INVENTED threshold/);
+    }
+  });
+});
+
 describe('SEED_DESIGNS — rt-transmission-grid', () => {
   const design = () => SEED_DESIGNS.find((d) => d.id === 'rt-transmission-grid')!;
   const el = (id: string) => design().pages[0].elements.find((e) => e.id === id)!;
