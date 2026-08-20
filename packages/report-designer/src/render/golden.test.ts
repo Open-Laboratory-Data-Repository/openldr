@@ -143,7 +143,7 @@ function cellGridResolved(): Map<string, ResolvedTable> {
   const spread = (vals: (string | number)[]) =>
     Object.fromEntries(vals.map((v, i) => [`d${String(i + 1).padStart(2, '0')}`, v]));
   // ⛔ Keyed by the ELEMENT id, never the query id. `resolveDesignTables` does
-  // `resolved.set(el.id, ...)` (resolve.ts:35) and every reader does `resolved.get(el.id)`
+  // `resolved.set(el.id, ...)` (resolve.ts:39) and every reader does `resolved.get(el.id)`
   // (index.ts:78, draw.ts:392, :401, :749). Keying by `'q'` resolves to undefined, the grid
   // renders as if it had zero rows, and the pagination assertion below fails for a reason that
   // has nothing to do with pagination. `goldenResolved()` above already keys by element id.
