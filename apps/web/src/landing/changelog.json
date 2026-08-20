@@ -6,6 +6,12 @@
       "version": "v0.1.5",
       "entries": [
         {
+          "hash": "1d3d17f5",
+          "type": "fix",
+          "scope": "install",
+          "title": "Let an explicit --server-name override a stale .env"
+        },
+        {
           "hash": "c771d2d5",
           "type": "fix",
           "scope": "release",
