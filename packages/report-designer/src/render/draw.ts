@@ -1122,6 +1122,20 @@ function drawTable(doc: Doc, el: DesignElement, r: Box, resolved: ResolvedTable 
  * constants in `cellgrid.ts`, which is what lets 23 columns fit A4 portrait where `table`'s
  * measured-and-floored widths cannot.
  */
+/**
+ * Top offset inside a cellgrid row for a line of digits or capitals at `size`, so its INK centres
+ * on the RUN OF CELLS beside it.
+ *
+ * CELL_SIZE, not CELL_ROW_H. The squares are what a reader reads as the row; the extra 2.25pt of
+ * pitch below them is the gap to the next one. Everything on the row lines up on the squares'
+ * centre: the laboratory name, both trailing values, and the chip behind one of them.
+ *
+ * ⛔ Ink, not line box. pdfkit puts a line box's top at the cap top for a string with no descender,
+ * and its bottom is then the BASELINE, not the box. Centring the box instead leaves the text high
+ * by half the unused descender space, which is what put a Silent count at the top of its own pill.
+ */
+const cellRowInkY = (size: number): number => (CELL_SIZE - size * HELVETICA_CAP) / 2;
+
 function drawCellGrid(
   doc: Doc, el: DesignElement, r: Box, resolved: ResolvedTable | undefined, chunk: number,
   flow?: FlowContext,
@@ -1189,7 +1203,7 @@ function drawCellGrid(
     const y = r.y + CELL_HEAD_H + ri * CELL_ROW_H;
     if (hasLabel) {
       doc.font('Helvetica').fontSize(8).fillColor(BODY_TEXT)
-        .text(truncateToWidth(doc, row[0] ?? '', CELL_LABEL_W), r.x, y + 1, { width: CELL_LABEL_W, lineBreak: false });
+        .text(truncateToWidth(doc, row[0] ?? '', CELL_LABEL_W), r.x, y + cellRowInkY(8), { width: CELL_LABEL_W, lineBreak: false });
     }
     for (let i = 0; i < cellCount; i += 1) {
       doc.rect(xOfCell(i), y, CELL_SIZE, CELL_SIZE).fill(cellFill(Number(row[cellIndex(i)]), max, palette));
@@ -1204,14 +1218,16 @@ function drawCellGrid(
       const st = rowStatuses?.[ci];
       const filled = Boolean(st) && (c.emphasis ?? 'text') === 'fill';
       if (filled) {
-        doc.rect(x + CHIP_INSET_X, y + CHIP_INSET_Y, c.width - CHIP_INSET_X * 2, CELL_ROW_H - CHIP_INSET_Y * 2)
+        // Same centre line as the value it sits behind, and as the cells to its left.
+        const chipH = CELL_ROW_H - CHIP_INSET_Y * 2;
+        doc.rect(x + CHIP_INSET_X, y + (CELL_SIZE - chipH) / 2, c.width - CHIP_INSET_X * 2, chipH)
           .fill(CELL_CHIP_FILL);
       }
       // ⛔ The cellgrid's own two colours, never the clinical status palette. See `CELL_CHIP_FILL`.
       // The token still decides WHETHER the value is emphasised; it never decides in what colour.
       doc.font('Helvetica').fontSize(7)
         .fillColor(filled ? CELL_CHIP_TEXT : (st ? CELL_CHIP_FILL : BODY_TEXT))
-        .text(v, x, y + 1, { width: c.width, align: 'center', lineBreak: false });
+        .text(v, x, y + cellRowInkY(7), { width: c.width, align: 'center', lineBreak: false });
       x += c.width;
     });
   });

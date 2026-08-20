@@ -910,9 +910,14 @@ describe('cellgrid trailing column honours statusKey and emphasis', () => {
   }]]);
 
   // cellStart 114 (CELL_LABEL_W 105 + CELL_COL_GAP 9); trailingStart 124.5 (+ one CELL_SIZE 10.5,
-  // no breaks); + CELL_COL_GAP 9 = 133.5 left edge; + CHIP_INSET_X 1 = 134.5. y = CELL_HEAD_H 13
-  // (row 0) + CHIP_INSET_Y 1.5 = 14.5. Width 30 - 2*1 = 28; height CELL_ROW_H 12.75 - 2*1.5 = 9.75.
-  const chipRect = `${pdfNum(134.5)} ${pdfNum(14.5)} ${pdfNum(28)} ${pdfNum(9.75)} re`;
+  // no breaks); + CELL_COL_GAP 9 = 133.5 left edge; + CHIP_INSET_X 1 = 134.5. Width 30 - 2*1 = 28;
+  // height CELL_ROW_H 12.75 - 2*1.5 = 9.75.
+  //
+  // ⛔ y is CELL_HEAD_H 13 (row 0) + (CELL_SIZE 10.5 - 9.75) / 2 = 13.375, NOT 13 + CHIP_INSET_Y.
+  // The chip centres on the RUN OF CELLS beside it, which is what a reader reads as the row. It
+  // used to centre on the row's full 12.75pt pitch while its own digits sat 2.86pt higher, and the
+  // number looked stuck to the top of the pill.
+  const chipRect = `${pdfNum(134.5)} ${pdfNum(13.375)} ${pdfNum(28)} ${pdfNum(9.75)} re`;
   const chipPaint = (hex: string): string => `${chipRect}\n/DeviceRGB cs\n${fillOp(hex)}\nf`;
   /** The clinical fills, for the negative assertions. ⚠ `indeterminate` (#94a3b8) equals HEAD_RULE,
    *  which the header band paints on every render, so scanning the document for the bare colour
