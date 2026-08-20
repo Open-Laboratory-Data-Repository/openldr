@@ -1881,6 +1881,31 @@ describe('SEED_QUERIES — the transmission grids', () => {
       }
     }
   });
+
+  // The renderer half of this (drawCellGrid honouring statusKey/emphasis) is covered in
+  // @openldr/report-designer. This is the query half: the token has to exist before the design's
+  // statusKey can name it.
+  it('derives a silent_status token at the 10-working-day threshold, in every dialect', () => {
+    for (const id of ['q-transmission-hvleid', 'q-transmission-other']) {
+      for (const [dialect, sql] of Object.entries(q(id).sql)) {
+        expect(sql, `${id}/${dialect} no longer selects silent_status`).toMatch(/\bas silent_status\b/);
+        expect(sql, `${id}/${dialect} threshold moved off >= 10`)
+          .toMatch(/>=\s*10\s+then\s+'critical'/);
+      }
+    }
+  });
+
+  // ⚠ AGENTS.md section 8 does not forbid 10 — it names no clinical vocabulary, only a count of
+  // working days. It IS an invented, operational number, and the SQL comment says so, so nobody
+  // reads it as a clinical decision later.
+  it('documents 10 as an invented operational threshold, not a clinical one, in every dialect', () => {
+    for (const id of ['q-transmission-hvleid', 'q-transmission-other']) {
+      for (const [dialect, sql] of Object.entries(q(id).sql)) {
+        expect(sql, `${id}/${dialect} lost the invented-threshold disclosure`)
+          .toMatch(/INVENTED threshold/);
+      }
+    }
+  });
 });
 
 describe('SEED_DESIGNS — rt-transmission-grid', () => {
@@ -1951,8 +1976,19 @@ describe('SEED_DESIGNS — rt-transmission-grid', () => {
     for (const id of ['hvleid', 'other']) {
       expect(el(id).trailingColumns, `${id} trailingColumns`).toEqual([
         { key: 'days', label: 'Days', width: 34.5 },
-        { key: 'silent', label: 'Silent', width: 52 },
+        { key: 'silent', label: 'Silent', width: 52, statusKey: 'silent_status', emphasis: 'fill' },
       ]);
+    }
+  });
+
+  it('binds Silent to the query-carried silent_status token, filled, for both grids', () => {
+    // The approved preview showed a dark filled pill for a laboratory silent ten or more working
+    // days. Without statusKey/emphasis here, drawCellGrid has a status token to read (see the
+    // SQL test below) but nothing in the design ever names it, and the render stays plain numerals.
+    for (const id of ['hvleid', 'other']) {
+      const silent = el(id).trailingColumns?.find((c) => c.key === 'silent');
+      expect(silent?.statusKey, `${id} silent has no statusKey`).toBe('silent_status');
+      expect(silent?.emphasis, `${id} silent is not filled`).toBe('fill');
     }
   });
 

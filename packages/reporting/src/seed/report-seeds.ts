@@ -2346,7 +2346,13 @@ lab_stats as (
   -- 'Mwananyamala' are exactly this case -- days=0, silent=23 (the whole month). See Step 2.
   select l.lab,
          count(dy.n) as days,
-         (select max(n) from days) - coalesce(max(dy.n), 0) as silent
+         (select max(n) from days) - coalesce(max(dy.n), 0) as silent,
+         -- ⚠ 10 working days is an INVENTED threshold -- an operational decision the
+         -- approved preview made for shading the Silent column, not a clinical one and not a
+         -- design one either. AGENTS.md section 8 does not forbid it (it names no clinical
+         -- vocabulary), but it IS a number somebody will want to change, so it is named here
+         -- rather than left as a bare literal for a future reader to wonder about.
+         case when (select max(n) from days) - coalesce(max(dy.n), 0) >= 10 then 'critical' else '' end as silent_status
   from labs l
   left join arrivals a on a.lab = l.lab
   left join days dy on dy.cal_day = a.cal_day
@@ -2384,7 +2390,7 @@ select 0 as ord, '(dates)' as lab,
   max(case when n = 21 then to_char(cal_day, 'FMDD') || chr(10) || to_char(cal_day, 'Mon') else '' end) as d21,
   max(case when n = 22 then to_char(cal_day, 'FMDD') || chr(10) || to_char(cal_day, 'Mon') else '' end) as d22,
   max(case when n = 23 then to_char(cal_day, 'FMDD') || chr(10) || to_char(cal_day, 'Mon') else '' end) as d23,
-  '' as days, '' as silent
+  '' as days, '' as silent, '' as silent_status
 from days
 union all
 select 1 as ord, '(week)' as lab,
@@ -2415,7 +2421,7 @@ select 1 as ord, '(week)' as lab,
   max(case when n = 21 then to_char(cal_day, 'IW') else '' end) as d21,
   max(case when n = 22 then to_char(cal_day, 'IW') else '' end) as d22,
   max(case when n = 23 then to_char(cal_day, 'IW') else '' end) as d23,
-  '' as days, '' as silent
+  '' as days, '' as silent, '' as silent_status
 from days
 union all
 select max(lo.ord) as ord, g.lab,
@@ -2442,7 +2448,7 @@ select max(lo.ord) as ord, g.lab,
   max(case when g.n = 21 then g.mark else '' end) as d21,
   max(case when g.n = 22 then g.mark else '' end) as d22,
   max(case when g.n = 23 then g.mark else '' end) as d23,
-  max(ls.days::text) as days, max(ls.silent::text) as silent
+  max(ls.days::text) as days, max(ls.silent::text) as silent, max(ls.silent_status) as silent_status
 from grid g
 join lab_ord lo on lo.lab = g.lab
 join lab_stats ls on ls.lab = g.lab
@@ -2561,7 +2567,13 @@ lab_stats as (
   -- drop it from the grid entirely instead of showing it silent all month.
   select l.lab,
          count(dy.n) as days,
-         (select max(n) from days) - coalesce(max(dy.n), 0) as silent
+         (select max(n) from days) - coalesce(max(dy.n), 0) as silent,
+         -- ⚠ 10 working days is an INVENTED threshold -- an operational decision the
+         -- approved preview made for shading the Silent column, not a clinical one and not a
+         -- design one either. AGENTS.md section 8 does not forbid it (it names no clinical
+         -- vocabulary), but it IS a number somebody will want to change, so it is named here
+         -- rather than left as a bare literal for a future reader to wonder about.
+         case when (select max(n) from days) - coalesce(max(dy.n), 0) >= 10 then 'critical' else '' end as silent_status
   from labs l
   left join arrivals a on a.lab = l.lab
   left join days dy on dy.cal_day = a.cal_day
@@ -2597,7 +2609,7 @@ select 0 as ord, '(dates)' as lab,
   max(case when n = 21 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d21,
   max(case when n = 22 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d22,
   max(case when n = 23 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d23,
-  '' as days, '' as silent
+  '' as days, '' as silent, '' as silent_status
 from days
 union all
 select 1 as ord, '(week)' as lab,
@@ -2627,7 +2639,7 @@ select 1 as ord, '(week)' as lab,
   max(case when n = 21 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d21,
   max(case when n = 22 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d22,
   max(case when n = 23 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d23,
-  '' as days, '' as silent
+  '' as days, '' as silent, '' as silent_status
 from days
 union all
 select max(lo.ord) as ord, g.lab,
@@ -2654,7 +2666,7 @@ select max(lo.ord) as ord, g.lab,
   max(case when g.n = 21 then g.mark else '' end) as d21,
   max(case when g.n = 22 then g.mark else '' end) as d22,
   max(case when g.n = 23 then g.mark else '' end) as d23,
-  max(cast(ls.days as varchar(3))) as days, max(cast(ls.silent as varchar(3))) as silent
+  max(cast(ls.days as varchar(3))) as days, max(cast(ls.silent as varchar(3))) as silent, max(cast(ls.silent_status as varchar(20))) as silent_status
 from grid g
 join lab_ord lo on lo.lab = g.lab
 join lab_stats ls on ls.lab = g.lab
@@ -2815,7 +2827,13 @@ lab_stats as (
   -- drop it from the grid entirely instead of showing it silent all month.
   select l.lab,
          count(dy.n) as days,
-         (select max(n) from days) - coalesce(max(dy.n), 0) as silent
+         (select max(n) from days) - coalesce(max(dy.n), 0) as silent,
+         -- ⚠ 10 working days is an INVENTED threshold -- an operational decision the
+         -- approved preview made for shading the Silent column, not a clinical one and not a
+         -- design one either. AGENTS.md section 8 does not forbid it (it names no clinical
+         -- vocabulary), but it IS a number somebody will want to change, so it is named here
+         -- rather than left as a bare literal for a future reader to wonder about.
+         case when (select max(n) from days) - coalesce(max(dy.n), 0) >= 10 then 'critical' else '' end as silent_status
   from labs l
   left join arrivals a on a.lab = l.lab
   left join days dy on dy.cal_day = a.cal_day
@@ -2873,7 +2891,7 @@ select 0 as ord, '(dates)' as lab,
   max(case when n = 21 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d21,
   max(case when n = 22 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d22,
   max(case when n = 23 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d23,
-  '' as days, '' as silent
+  '' as days, '' as silent, '' as silent_status
 from days
 union all
 select 1 as ord, '(week)' as lab,
@@ -2906,7 +2924,7 @@ select 1 as ord, '(week)' as lab,
   max(case when n = 21 then date_format(cal_day, '%v') else '' end) as d21,
   max(case when n = 22 then date_format(cal_day, '%v') else '' end) as d22,
   max(case when n = 23 then date_format(cal_day, '%v') else '' end) as d23,
-  '' as days, '' as silent
+  '' as days, '' as silent, '' as silent_status
 from days
 union all
 select max(lo.ord) as ord, g.lab,
@@ -2933,7 +2951,7 @@ select max(lo.ord) as ord, g.lab,
   max(case when g.n = 21 then g.mark else '' end) as d21,
   max(case when g.n = 22 then g.mark else '' end) as d22,
   max(case when g.n = 23 then g.mark else '' end) as d23,
-  max(cast(ls.days as char(3))) as days, max(cast(ls.silent as char(3))) as silent
+  max(cast(ls.days as char(3))) as days, max(cast(ls.silent as char(3))) as silent, max(cast(ls.silent_status as char(20))) as silent_status
 from grid g
 join lab_ord lo on lo.lab = g.lab
 join lab_stats ls on ls.lab = g.lab
@@ -3054,7 +3072,13 @@ lab_stats as (
   -- 'Mwananyamala' are exactly this case -- days=0, silent=23 (the whole month). See Step 2.
   select l.lab,
          count(dy.n) as days,
-         (select max(n) from days) - coalesce(max(dy.n), 0) as silent
+         (select max(n) from days) - coalesce(max(dy.n), 0) as silent,
+         -- ⚠ 10 working days is an INVENTED threshold -- an operational decision the
+         -- approved preview made for shading the Silent column, not a clinical one and not a
+         -- design one either. AGENTS.md section 8 does not forbid it (it names no clinical
+         -- vocabulary), but it IS a number somebody will want to change, so it is named here
+         -- rather than left as a bare literal for a future reader to wonder about.
+         case when (select max(n) from days) - coalesce(max(dy.n), 0) >= 10 then 'critical' else '' end as silent_status
   from labs l
   left join arrivals a on a.lab = l.lab
   left join days dy on dy.cal_day = a.cal_day
@@ -3092,7 +3116,7 @@ select 0 as ord, '(dates)' as lab,
   max(case when n = 21 then to_char(cal_day, 'FMDD') || chr(10) || to_char(cal_day, 'Mon') else '' end) as d21,
   max(case when n = 22 then to_char(cal_day, 'FMDD') || chr(10) || to_char(cal_day, 'Mon') else '' end) as d22,
   max(case when n = 23 then to_char(cal_day, 'FMDD') || chr(10) || to_char(cal_day, 'Mon') else '' end) as d23,
-  '' as days, '' as silent
+  '' as days, '' as silent, '' as silent_status
 from days
 union all
 select 1 as ord, '(week)' as lab,
@@ -3123,7 +3147,7 @@ select 1 as ord, '(week)' as lab,
   max(case when n = 21 then to_char(cal_day, 'IW') else '' end) as d21,
   max(case when n = 22 then to_char(cal_day, 'IW') else '' end) as d22,
   max(case when n = 23 then to_char(cal_day, 'IW') else '' end) as d23,
-  '' as days, '' as silent
+  '' as days, '' as silent, '' as silent_status
 from days
 union all
 select max(lo.ord) as ord, g.lab,
@@ -3150,7 +3174,7 @@ select max(lo.ord) as ord, g.lab,
   max(case when g.n = 21 then g.mark else '' end) as d21,
   max(case when g.n = 22 then g.mark else '' end) as d22,
   max(case when g.n = 23 then g.mark else '' end) as d23,
-  max(ls.days::text) as days, max(ls.silent::text) as silent
+  max(ls.days::text) as days, max(ls.silent::text) as silent, max(ls.silent_status) as silent_status
 from grid g
 join lab_ord lo on lo.lab = g.lab
 join lab_stats ls on ls.lab = g.lab
@@ -3268,7 +3292,13 @@ lab_stats as (
   -- drop it from the grid entirely instead of showing it silent all month.
   select l.lab,
          count(dy.n) as days,
-         (select max(n) from days) - coalesce(max(dy.n), 0) as silent
+         (select max(n) from days) - coalesce(max(dy.n), 0) as silent,
+         -- ⚠ 10 working days is an INVENTED threshold -- an operational decision the
+         -- approved preview made for shading the Silent column, not a clinical one and not a
+         -- design one either. AGENTS.md section 8 does not forbid it (it names no clinical
+         -- vocabulary), but it IS a number somebody will want to change, so it is named here
+         -- rather than left as a bare literal for a future reader to wonder about.
+         case when (select max(n) from days) - coalesce(max(dy.n), 0) >= 10 then 'critical' else '' end as silent_status
   from labs l
   left join arrivals a on a.lab = l.lab
   left join days dy on dy.cal_day = a.cal_day
@@ -3304,7 +3334,7 @@ select 0 as ord, '(dates)' as lab,
   max(case when n = 21 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d21,
   max(case when n = 22 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d22,
   max(case when n = 23 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d23,
-  '' as days, '' as silent
+  '' as days, '' as silent, '' as silent_status
 from days
 union all
 select 1 as ord, '(week)' as lab,
@@ -3334,7 +3364,7 @@ select 1 as ord, '(week)' as lab,
   max(case when n = 21 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d21,
   max(case when n = 22 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d22,
   max(case when n = 23 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d23,
-  '' as days, '' as silent
+  '' as days, '' as silent, '' as silent_status
 from days
 union all
 select max(lo.ord) as ord, g.lab,
@@ -3361,7 +3391,7 @@ select max(lo.ord) as ord, g.lab,
   max(case when g.n = 21 then g.mark else '' end) as d21,
   max(case when g.n = 22 then g.mark else '' end) as d22,
   max(case when g.n = 23 then g.mark else '' end) as d23,
-  max(cast(ls.days as varchar(3))) as days, max(cast(ls.silent as varchar(3))) as silent
+  max(cast(ls.days as varchar(3))) as days, max(cast(ls.silent as varchar(3))) as silent, max(cast(ls.silent_status as varchar(20))) as silent_status
 from grid g
 join lab_ord lo on lo.lab = g.lab
 join lab_stats ls on ls.lab = g.lab
@@ -3521,7 +3551,13 @@ lab_stats as (
   -- drop it from the grid entirely instead of showing it silent all month.
   select l.lab,
          count(dy.n) as days,
-         (select max(n) from days) - coalesce(max(dy.n), 0) as silent
+         (select max(n) from days) - coalesce(max(dy.n), 0) as silent,
+         -- ⚠ 10 working days is an INVENTED threshold -- an operational decision the
+         -- approved preview made for shading the Silent column, not a clinical one and not a
+         -- design one either. AGENTS.md section 8 does not forbid it (it names no clinical
+         -- vocabulary), but it IS a number somebody will want to change, so it is named here
+         -- rather than left as a bare literal for a future reader to wonder about.
+         case when (select max(n) from days) - coalesce(max(dy.n), 0) >= 10 then 'critical' else '' end as silent_status
   from labs l
   left join arrivals a on a.lab = l.lab
   left join days dy on dy.cal_day = a.cal_day
@@ -3579,7 +3615,7 @@ select 0 as ord, '(dates)' as lab,
   max(case when n = 21 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d21,
   max(case when n = 22 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d22,
   max(case when n = 23 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d23,
-  '' as days, '' as silent
+  '' as days, '' as silent, '' as silent_status
 from days
 union all
 select 1 as ord, '(week)' as lab,
@@ -3612,7 +3648,7 @@ select 1 as ord, '(week)' as lab,
   max(case when n = 21 then date_format(cal_day, '%v') else '' end) as d21,
   max(case when n = 22 then date_format(cal_day, '%v') else '' end) as d22,
   max(case when n = 23 then date_format(cal_day, '%v') else '' end) as d23,
-  '' as days, '' as silent
+  '' as days, '' as silent, '' as silent_status
 from days
 union all
 select max(lo.ord) as ord, g.lab,
@@ -3639,7 +3675,7 @@ select max(lo.ord) as ord, g.lab,
   max(case when g.n = 21 then g.mark else '' end) as d21,
   max(case when g.n = 22 then g.mark else '' end) as d22,
   max(case when g.n = 23 then g.mark else '' end) as d23,
-  max(cast(ls.days as char(3))) as days, max(cast(ls.silent as char(3))) as silent
+  max(cast(ls.days as char(3))) as days, max(cast(ls.silent as char(3))) as silent, max(cast(ls.silent_status as char(20))) as silent_status
 from grid g
 join lab_ord lo on lo.lab = g.lab
 join lab_stats ls on ls.lab = g.lab
@@ -4065,7 +4101,9 @@ export const SEED_DESIGNS: ReportDesign[] = [
         palette: { ramp: 'blue', steps: 1 },
         trailingColumns: [
           { key: 'days', label: 'Days', width: 34.5 },
-          { key: 'silent', label: 'Silent', width: 52 },
+          // statusKey names a column the QUERY carries beside 'silent' (see lab_stats in
+          // q-transmission-hvleid/-other) -- the count still prints, the fill is layered on top.
+          { key: 'silent', label: 'Silent', width: 52, statusKey: 'silent_status', emphasis: 'fill' },
         ] },
 
       // ⛔ `flowAfter`, on the heading AND the grid, chained through each other rather than both
@@ -4088,7 +4126,9 @@ export const SEED_DESIGNS: ReportDesign[] = [
         palette: { ramp: 'blue', steps: 1 },
         trailingColumns: [
           { key: 'days', label: 'Days', width: 34.5 },
-          { key: 'silent', label: 'Silent', width: 52 },
+          // statusKey names a column the QUERY carries beside 'silent' (see lab_stats in
+          // q-transmission-hvleid/-other) -- the count still prints, the fill is layered on top.
+          { key: 'silent', label: 'Silent', width: 52, statusKey: 'silent_status', emphasis: 'fill' },
         ] },
 
       { id: 'rt-transmission-grid-rule2', kind: 'line', name: 'rule2', rect: { x: 48, y: 1003, w: TG_CONTENT_W, h: 0 }, style: { strokeColor: '#cbd5e1', strokeWidth: 0.75 } },
