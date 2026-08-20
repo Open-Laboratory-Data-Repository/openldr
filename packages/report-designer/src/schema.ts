@@ -53,8 +53,10 @@ export const BoundColumnSchema = z.object({
 export type BoundColumn = z.infer<typeof BoundColumnSchema>;
 
 /** How a `keyvalue` pair arranges its label against its value. `inline` puts them side by side;
- *  `stacked` puts a small uppercase label above the value, for values too long to share a line. */
-export type KeyValueLayout = 'inline' | 'stacked';
+ *  `stacked` puts a small uppercase label above the value, for values too long to share a line;
+ *  `stat` puts a large value ABOVE a small uppercase caption, one figure per box, for a panel a
+ *  reader scans by number first. */
+export type KeyValueLayout = 'inline' | 'stacked' | 'stat';
 
 /** Sequential ramps a `cellgrid` may paint with. Presentational, not clinical: a `cellgrid` shows
  *  magnitude or presence, never a result state, so it deliberately does not reach for
@@ -191,7 +193,7 @@ export const DesignElementSchema = z.object({
   /** `cellgrid`: text columns drawn after the cells. */
   trailingColumns: z.array(TrailingColumnSchema).optional(),
   /** `keyvalue` pair arrangement (default `inline`) */
-  layout: z.enum(['inline', 'stacked']).optional(),
+  layout: z.enum(['inline', 'stacked', 'stat']).optional(),
   /** `keyvalue` pairs side by side per line (default 1). Capped at 4 — beyond that a pair's share of
    *  an A4 width is narrower than its own label. */
   panelColumns: z.number().int().min(1).max(4).optional(),

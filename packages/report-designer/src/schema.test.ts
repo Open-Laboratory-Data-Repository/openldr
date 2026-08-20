@@ -186,4 +186,19 @@ describe('DesignElementSchema: cellgrid', () => {
       palette: { ramp: 'chartreuse', steps: 1 },
     })).toThrow();
   });
+
+  it('accepts a keyvalue element with layout: stat', () => {
+    const out = DesignElementSchema.parse({
+      id: 'stats', kind: 'keyvalue', name: 'Summary', rect: { x: 0, y: 0, w: 400, h: 120 },
+      layout: 'stat', panelColumns: 2,
+      rows: [['Laboratories', '81'], ['Coverage', '5.9%'], ['Busiest day', '45'], ['Silent 10+d', '16']],
+    });
+    expect(out.layout).toBe('stat');
+  });
+
+  it('still rejects an unknown keyvalue layout', () => {
+    expect(() => DesignElementSchema.parse({
+      id: 'stats', kind: 'keyvalue', name: 'g', rect: { x: 0, y: 0, w: 10, h: 10 }, layout: 'grid',
+    })).toThrow();
+  });
 });
