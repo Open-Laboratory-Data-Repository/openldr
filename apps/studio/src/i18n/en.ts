@@ -629,6 +629,7 @@ export const en = {
     run: 'Run',
     parameters: 'Parameters',
     aboutParam: 'About {{label}}',
+    refresh: 'Refresh',
     runHistory: 'Run History',
     schedules: 'Schedules',
     comingSoon: 'Coming soon',

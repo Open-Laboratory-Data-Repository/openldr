@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { MoreHorizontal, Pencil, EyeOff, Trash2, SlidersHorizontal } from 'lucide-react';
+import { MoreHorizontal, Pencil, EyeOff, Trash2, SlidersHorizontal, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
@@ -9,6 +9,12 @@ import {
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 
 interface Props {
+  /** Re-runs the report with the parameters it was LAST RUN WITH, not with whatever is currently
+   *  typed in the parameters sheet. Without this the only way to see new data was to open the
+   *  sheet, change a value and change it back. */
+  onRefresh?: () => void;
+  /** False until the report has been run once: there is nothing to re-run before that. */
+  canRefresh?: boolean;
   /** Opens the parameters sheet. Parameters live here rather than in a always-on bar so the
    *  report itself starts near the top of the viewport on a phone. */
   onOpenParameters?: () => void;
@@ -29,7 +35,7 @@ interface Props {
 
 /** SP-3b: Run History (SP-2) and Schedules (manager-only) are live. Unpublish/Delete apply to source==='design' reports. */
 export function ReportActionsMenu({
-  onOpenParameters, onOpenHistory, onOpenSchedules, canManageSchedules, designId, reportId, source, canManage, onUnpublish, onDelete,
+  onRefresh, canRefresh, onOpenParameters, onOpenHistory, onOpenSchedules, canManageSchedules, designId, reportId, source, canManage, onUnpublish, onDelete,
 }: Props) {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -44,6 +50,11 @@ export function ReportActionsMenu({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-44">
+        {onRefresh && (
+          <DropdownMenuItem disabled={!canRefresh} onSelect={() => { if (canRefresh) onRefresh(); }}>
+            <RefreshCw className="mr-2 h-4 w-4" /> {t('reports.refresh')}
+          </DropdownMenuItem>
+        )}
         {onOpenParameters && (
           <>
             <DropdownMenuItem onSelect={() => onOpenParameters()}>

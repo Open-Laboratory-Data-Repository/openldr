@@ -16,6 +16,32 @@ function openMenu() {
 describe('ReportActionsMenu', () => {
   beforeEach(() => navigate.mockClear());
 
+  it('fires onRefresh when Refresh is clicked, once a report has been run', async () => {
+    // The gap this closes: there was no way to re-run a report without opening the parameters
+    // sheet, changing a value and changing it back.
+    const onRefresh = vi.fn();
+    render(<MemoryRouter><ReportActionsMenu onRefresh={onRefresh} canRefresh onOpenHistory={() => {}} onOpenSchedules={() => {}} canManageSchedules /></MemoryRouter>);
+    openMenu();
+    fireEvent.click(await screen.findByText(/refresh|actualiser|atualizar/i));
+    expect(onRefresh).toHaveBeenCalled();
+  });
+
+  it('keeps Refresh disabled and inert before the first run', async () => {
+    const onRefresh = vi.fn();
+    render(<MemoryRouter><ReportActionsMenu onRefresh={onRefresh} canRefresh={false} onOpenHistory={() => {}} onOpenSchedules={() => {}} canManageSchedules /></MemoryRouter>);
+    openMenu();
+    const item = (await screen.findByText(/refresh|actualiser|atualizar/i)).closest('[role="menuitem"]');
+    expect(item?.hasAttribute('data-disabled') || item?.getAttribute('aria-disabled') === 'true').toBe(true);
+    fireEvent.click(item!);
+    expect(onRefresh).not.toHaveBeenCalled();
+  });
+
+  it('omits Refresh entirely when no handler is supplied', async () => {
+    render(<MemoryRouter><ReportActionsMenu onOpenHistory={() => {}} onOpenSchedules={() => {}} canManageSchedules /></MemoryRouter>);
+    openMenu();
+    expect(screen.queryByText(/refresh|actualiser|atualizar/i)).not.toBeInTheDocument();
+  });
+
   it('fires onOpenHistory when Run History is clicked', async () => {
     const onOpenHistory = vi.fn();
     render(<MemoryRouter><ReportActionsMenu onOpenHistory={onOpenHistory} onOpenSchedules={() => {}} canManageSchedules /></MemoryRouter>);

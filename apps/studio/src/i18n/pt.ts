@@ -631,6 +631,7 @@ export const pt: EnShape = {
     run: 'Executar',
     parameters: 'Parâmetros',
     aboutParam: 'Sobre {{label}}',
+    refresh: 'Atualizar',
     runHistory: 'Histórico',
     schedules: 'Agendamentos',
     comingSoon: 'Em breve',

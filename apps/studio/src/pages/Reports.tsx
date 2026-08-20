@@ -130,23 +130,34 @@ export function Reports() {
       .every((p) => (p.type === 'daterange' ? Boolean(params.from && params.to) : Boolean(params[p.id])));
   }, [selected, params]);
 
-  const handleRun = useCallback(async () => {
+  const runWith = useCallback(async (values: Record<string, string>) => {
     if (!selectedId) return;
     setRunning(true);
     try {
-      const res = await fetchReport(selectedId, params);
+      const res = await fetchReport(selectedId, values);
       setResult(res);
-      setRanParams(params);
+      setRanParams(values);
       setRanAt(new Date().toLocaleString());
-      logReportRun(selectedId, { format: 'preview', rowCount: res.meta.rowCount, params });
-      const next = { ...loadLastParams(), [selectedId]: params };
+      logReportRun(selectedId, { format: 'preview', rowCount: res.meta.rowCount, params: values });
+      const next = { ...loadLastParams(), [selectedId]: values };
       saveLastParams(next);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : String(e));
     } finally {
       setRunning(false);
     }
-  }, [selectedId, params]);
+  }, [selectedId]);
+
+  const handleRun = useCallback(() => runWith(params), [runWith, params]);
+
+  /** ⛔ Re-runs with `ranParams`, the values that produced the report ON SCREEN, never with the
+   *  sheet's current `params`. A half-edited parameter would otherwise turn a refresh into a
+   *  different report while looking like the same one. Nothing is cached on either side, so this
+   *  is a real second query against the warehouse. */
+  const handleRefresh = useCallback(() => {
+    if (!result) return;
+    void runWith(ranParams);
+  }, [runWith, ranParams, result]);
 
   const metrics = useMemo(
     () => (selected?.summaryMetrics && result ? computeSummaryMetrics(selected.summaryMetrics, result.rows) : []),
@@ -218,6 +229,8 @@ export function Reports() {
                   <TruncatedText text={selected.description} className="text-xs text-muted-foreground" />
                 </div>
                 <ReportActionsMenu
+                  onRefresh={handleRefresh}
+                  canRefresh={Boolean(result) && !running}
                   onOpenParameters={() => setParamsOpen(true)}
                   onOpenHistory={() => setHistoryOpen(true)}
                   onOpenSchedules={() => setSchedulesOpen(true)}
