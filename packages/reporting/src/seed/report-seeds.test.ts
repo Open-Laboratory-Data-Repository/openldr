@@ -1713,14 +1713,14 @@ describe('SEED_QUERIES — the transmission grids', () => {
   // falls back to the untrusted SQL row order — and every existing test stays green while the date
   // row lands in the middle of the grid. Nothing else in this file would notice.
   it('selects the ord discriminator sortBy depends on, in every dialect', () => {
-    // Two rows carry `ord` per dialect string: the dates row (`0 as ord`) and the lab rows
-    // (`1 as ord`). A match-anywhere assertion passes even if one of the two regresses, so this
-    // pins the count.
+    // Four occurrences of `as ord` per dialect string: the dates row (`0 as ord`), the week-token
+    // row (`1 as ord`), the laboratory rows (`max(lo.ord) as ord`), and `lab_ord`'s own
+    // `row_number() over (order by lab) + 1 as ord`.
     const ORD = /\bas ord\b/g;
     for (const id of ['q-transmission-hvleid', 'q-transmission-other']) {
       for (const [dialect, sql] of Object.entries(q(id).sql)) {
         expect(sql.match(ORD) ?? [], `${id}/${dialect} dropped 'as ord' — sortBy silently degrades to no sort`)
-          .toHaveLength(2);
+          .toHaveLength(4);
       }
     }
   });
@@ -1832,6 +1832,53 @@ describe('SEED_QUERIES — the transmission grids', () => {
       expect(code, `${id}/mysql matches panels with find_in_set`).not.toMatch(/find_in_set/);
       expect(code, `${id}/mysql has no per-element split`).toMatch(/panel_list/);
       expect(code, `${id}/mysql never trims an element`).toMatch(/trim\(substring_index\(/);
+    }
+  });
+
+  // ⛔ cellgrid's palette does Number(cellValue) and treats anything that is not a finite
+  // positive number as empty (packages/report-designer/src/render/cellgrid.ts, stepFor). 'Y' is
+  // NaN. Left as 'Y', every cell in the grid would paint empty on every run, silently.
+  it('marks a submission with a numeric string cellgrid can parse, not the letter Y, in every dialect', () => {
+    for (const id of ['q-transmission-hvleid', 'q-transmission-other']) {
+      for (const [dialect, sql] of Object.entries(q(id).sql)) {
+        expect(sql, `${id}/${dialect} still marks with the letter Y`)
+          .toMatch(/case when a\.lab is null then '' else '1' end as mark/);
+      }
+    }
+  });
+
+  it('carries a second synthetic row of week tokens at ord = 1, in every dialect', () => {
+    const WEEK_ROW = /union all\s*\nselect 1 as ord, '\(week\)' as lab,/;
+    for (const id of ['q-transmission-hvleid', 'q-transmission-other']) {
+      for (const [dialect, sql] of Object.entries(q(id).sql)) {
+        expect(sql, `${id}/${dialect} lost the week-token row`).toMatch(WEEK_ROW);
+      }
+    }
+  });
+
+  it('gives each laboratory a unique ord from 2, alphabetically, in every dialect', () => {
+    for (const id of ['q-transmission-hvleid', 'q-transmission-other']) {
+      for (const [dialect, sql] of Object.entries(q(id).sql)) {
+        expect(sql, `${id}/${dialect} lost the per-laboratory ord`)
+          .toMatch(/row_number\(\) over \(order by lab\)\s*\+\s*1 as ord/);
+      }
+    }
+  });
+
+  // ⛔ LEFT, never INNER: a laboratory whose only submission this month landed on a weekend has
+  // zero rows in 'days' (Mon-Fri only). An inner join here silently drops that laboratory from the
+  // grid instead of showing it silent all month — no error, just a shorter grid. Measured on the
+  // live warehouse (see the plan this test came from): 'Mbagala Kizuiani' and 'Mwananyamala',
+  // 2017-08.
+  it('computes days and silent per laboratory, outer-joined to the working-day calendar, in every dialect', () => {
+    for (const id of ['q-transmission-hvleid', 'q-transmission-other']) {
+      for (const [dialect, sql] of Object.entries(q(id).sql)) {
+        expect(sql, `${id}/${dialect} lost lab_stats`).toMatch(/lab_stats as \(/);
+        expect(sql, `${id}/${dialect} no longer selects days`).toMatch(/\bas days\b/);
+        expect(sql, `${id}/${dialect} no longer selects silent`).toMatch(/\bas silent\b/);
+        expect(sql, `${id}/${dialect} inner-joins days inside lab_stats and can drop a weekend-only lab`)
+          .toMatch(/left join days dy on dy\.cal_day = a\.cal_day/);
+      }
     }
   });
 });
