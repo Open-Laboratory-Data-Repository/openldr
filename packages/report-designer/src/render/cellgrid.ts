@@ -1,3 +1,5 @@
+import type { CellPalette, CellRamp } from '../schema';
+
 /**
  * Geometry for a `cellgrid`, in POINTS.
  *
@@ -69,4 +71,53 @@ export function groupBreaks(groupRow: string[] | undefined): number[] {
     if (groupRow[i] !== groupRow[i - 1]) out.push(i);
   }
   return out;
+}
+
+/**
+ * The empty cell.
+ *
+ * ⚠ MEASURED for a mono office printer, which is what these reports are signed on. `#cbd5e1` is 17%
+ * ink; the darkest blue step is 68%. That is 50.8 percentage points of luminance apart, well clear
+ * of the ~15pp a 600dpi laser needs to hold two tints apart. A lighter empty tint was tried at 6%
+ * ink and drops out entirely on some lasers, which erases the grid and leaves filled cells floating
+ * with no positional ruler behind them.
+ *
+ * It happens to equal `GRID_RULE` in `draw.ts`. That is a coincidence of both wanting the lightest
+ * slate that still prints, not a shared constant. Do not factor them together.
+ */
+export const EMPTY_FILL = '#cbd5e1';
+
+/** Five-step sequential ramps, lightest to darkest. One hue each: a sequential scale that changes
+ *  hue stops encoding magnitude and starts encoding category. */
+const RAMPS: Record<CellRamp, readonly string[]> = {
+  blue:  ['#c9ddf3', '#9dc2e8', '#5f9adb', '#2f76bd', '#185FA5'],
+  slate: ['#e2e8f0', '#cbd5e1', '#94a3b8', '#64748b', '#334155'],
+};
+
+/**
+ * `n` evenly spaced steps of a ramp, always ending on the darkest.
+ *
+ * Ending on the darkest matters more than even spacing: at `steps: 1` the single step must be the
+ * one with the most contrast against the empty tint, not the one nearest the middle.
+ */
+export function rampSteps(ramp: CellRamp, n: number): string[] {
+  const full = RAMPS[ramp];
+  const last = full.length - 1;
+  if (n <= 1) return [full[last]];
+  return Array.from({ length: n }, (_, i) => full[Math.round((i * last) / (n - 1))]);
+}
+
+/** Which step a value lands on, or -1 for the empty tint. */
+export function stepFor(value: number, max: number, steps: number): number {
+  if (!Number.isFinite(value) || value <= 0) return -1;
+  if (max <= 0) return -1;
+  if (steps <= 1) return 0;
+  return Math.min(steps - 1, Math.floor((value / max) * steps));
+}
+
+/** The fill a cell paints. */
+export function cellFill(value: number, max: number, palette: CellPalette): string {
+  const step = stepFor(value, max, palette.steps);
+  if (step < 0) return EMPTY_FILL;
+  return rampSteps(palette.ramp, palette.steps)[step];
 }

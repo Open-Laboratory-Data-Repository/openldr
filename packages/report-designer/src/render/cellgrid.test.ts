@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { stripWidth, cellGridWidth, groupBreaks, CELL_SIZE, CELL_GAP, GROUP_GAP } from './cellgrid';
+import {
+  stripWidth, cellGridWidth, groupBreaks, rampSteps, stepFor, cellFill, EMPTY_FILL,
+  CELL_SIZE, CELL_GAP, GROUP_GAP,
+} from './cellgrid';
 
 describe('stripWidth', () => {
   it('is cells plus small gaps when there are no group breaks', () => {
@@ -61,5 +64,62 @@ describe('groupBreaks', () => {
   it('handles a short first group, which is what a month starting mid-week gives', () => {
     // Wed Thu Fri | Mon..Fri
     expect(groupBreaks(['1', '1', '1', '2', '2', '2', '2', '2'])).toEqual([3]);
+  });
+});
+
+describe('rampSteps', () => {
+  it('gives the darkest step alone when the grid is binary', () => {
+    expect(rampSteps('blue', 1)).toEqual(['#185FA5']);
+  });
+
+  it('gives five distinct steps at full depth', () => {
+    const s = rampSteps('blue', 5);
+    expect(s).toHaveLength(5);
+    expect(new Set(s).size).toBe(5);
+  });
+
+  it('always ends on the darkest step', () => {
+    for (const n of [1, 2, 3, 4, 5]) {
+      expect(rampSteps('blue', n)[n - 1]).toBe('#185FA5');
+    }
+  });
+});
+
+describe('stepFor', () => {
+  it('is empty for zero, whatever the depth', () => {
+    expect(stepFor(0, 10, 5)).toBe(-1);
+    expect(stepFor(0, 10, 1)).toBe(-1);
+  });
+
+  it('is empty for a negative or unparseable value', () => {
+    expect(stepFor(-2, 10, 3)).toBe(-1);
+    expect(stepFor(Number.NaN, 10, 3)).toBe(-1);
+  });
+
+  it('collapses every non-zero value onto one step when binary', () => {
+    expect(stepFor(1, 24, 1)).toBe(0);
+    expect(stepFor(24, 24, 1)).toBe(0);
+  });
+
+  it('puts the maximum on the darkest step', () => {
+    expect(stepFor(24, 24, 5)).toBe(4);
+  });
+
+  it('never exceeds the declared depth', () => {
+    expect(stepFor(9999, 24, 5)).toBe(4);
+  });
+
+  it('is empty when the maximum is zero, rather than dividing by it', () => {
+    expect(stepFor(0, 0, 5)).toBe(-1);
+  });
+});
+
+describe('cellFill', () => {
+  it('paints the empty tint for a zero value', () => {
+    expect(cellFill(0, 24, { ramp: 'blue', steps: 5 })).toBe(EMPTY_FILL);
+  });
+
+  it('paints the darkest step for the maximum', () => {
+    expect(cellFill(24, 24, { ramp: 'blue', steps: 5 })).toBe('#185FA5');
   });
 });
