@@ -3683,6 +3683,99 @@ group by g.lab
 order by ord`,
     },
   },
+  {
+    id: 'q-transmission-calendar',
+    name: 'LIS Transmission - month calendar',
+    connectorId: '',
+    // The month calendar above the two laboratory grids. One row per ISO week, seven cells, Monday
+    // first, each cell the number of DISTINCT laboratories that submitted on that calendar day.
+    //
+    // ⛔ NO panel parameter. The band sits above BOTH grids and describes the whole month, so the
+    // HVL/EID split does not apply to it. substituteParams builds its replacements from THIS
+    // query's declared parameters (packages/dashboards/src/custom-query-run.ts:24), so the design
+    // passing 'panels' as well is harmless: the value is ignored.
+    //
+    // ⛔ 'cal' is EVERY day of the month, not the working-day 'days' CTE the grids use. Measured on
+    // the dev warehouse 2026-08-20: 7 weekend arrivals in 2013-07 and 10 in 2013-09. Laboratories
+    // do submit at weekends here, and a calendar built on Mon-Fri would print a month with holes in
+    // it while claiming to be a calendar.
+    //
+    // ⛔ ord 0 is the HEADER row the cellgrid lifts. There is no group-token row, so the lift is 1,
+    // not the 2 the laboratory grids need.
+    params: [
+      { id: 'month', label: 'Month (YYYY-MM)', type: 'text', required: true },
+    ],
+    sql: {
+      postgres: `with month_start as (
+  -- ⛔ 'ym' is the NORMALISED month, for the same reason and with the same citations as
+  -- q-transmission-hvleid postgres. A loose '2017-8' must answer exactly like '2017-08'.
+  select cast({{param.month}} || '-01' as date) as d,
+         to_char(cast({{param.month}} || '-01' as date), 'YYYY-MM') as ym
+),
+cal as (
+  -- All seven days. See the header comment for the weekend measurement.
+  select g::date as cal_day
+  from month_start m
+  cross join generate_series(m.d::timestamp, (m.d + interval '1 month' - interval '1 day')::timestamp, interval '1 day') g
+),
+arrivals as (
+  -- One row per (laboratory, day), the SAME clinical-date ladder q-transmission-hvleid uses and for
+  -- the same reasons: registered, then tested, then authorised, one mark per request per month.
+  -- Bucketing on ingest arrival would land a bulk backfill's whole history on one calendar day.
+  -- The panel predicate is the only thing missing.
+  select distinct clinical.lab, cast(left(clinical.ts, 10) as date) as cal_day
+  from (
+    select
+      coalesce(fm.name, d.performer_display, d.performer, '(unknown)') as lab,
+      coalesce(
+        case when left(q.authored_at, 7) = (select ym from month_start) then q.authored_at end,
+        (select min(r.result_timestamp) from lab_results r
+          where r.request_id = q.id and left(r.result_timestamp, 7) = (select ym from month_start)),
+        (select min(dr.issued) from diagnostic_reports dr
+          where dr.based_on_id = q.id and left(dr.issued, 7) = (select ym from month_start))
+      ) as ts
+    from lab_requests q
+    -- ⛔ Attribute through the SUBMISSION BATCH, never through lab_results.specimen_id. See
+    -- q-transmission-hvleid postgres for the count of requests the specimen route drops.
+    -- ⛔ 'distinct' is LOAD-BEARING: the batch join fans out once per diagnostic_reports row.
+    join diagnostic_reports d on d.batch_id = q.batch_id
+    left join facility_map fm
+      on fm.source_system = coalesce(d.source_system, '')
+     and fm.performer_system = coalesce(d.performer_system, '')
+     and fm.source_code = d.performer
+    where (
+         left(q.authored_at, 7) = (select ym from month_start)
+      or exists (select 1 from lab_results r
+                  where r.request_id = q.id and left(r.result_timestamp, 7) = (select ym from month_start))
+      or exists (select 1 from diagnostic_reports dr
+                  where dr.based_on_id = q.id and left(dr.issued, 7) = (select ym from month_start))
+    )
+  ) clinical
+),
+per_day as (
+  select a.cal_day, count(distinct a.lab) as labs from arrivals a group by a.cal_day
+)
+-- ⛔ The header row is DATA, like the laboratory grids' day numbers. The renderer reads row 0 of the
+-- sorted result as its header band and draws nothing else from the design.
+select 0 as ord, 'M' as c1, 'T' as c2, 'W' as c3, 'T' as c4, 'F' as c5, 'S' as c6, 'S' as c7
+union all
+-- ⛔ Grouped on the ISO WEEK, which is never drawn, and ordered by the week's first day so December
+-- and January cannot interleave. Within one month two week 01s are impossible.
+-- A day outside the month has no row in 'cal', so its cell falls to '' and paints the empty tint.
+select cast(row_number() over (order by min(c.cal_day)) as int) as ord,
+  max(case when extract(isodow from c.cal_day) = 1 then cast(coalesce(p.labs, 0) as text) else '' end) as c1,
+  max(case when extract(isodow from c.cal_day) = 2 then cast(coalesce(p.labs, 0) as text) else '' end) as c2,
+  max(case when extract(isodow from c.cal_day) = 3 then cast(coalesce(p.labs, 0) as text) else '' end) as c3,
+  max(case when extract(isodow from c.cal_day) = 4 then cast(coalesce(p.labs, 0) as text) else '' end) as c4,
+  max(case when extract(isodow from c.cal_day) = 5 then cast(coalesce(p.labs, 0) as text) else '' end) as c5,
+  max(case when extract(isodow from c.cal_day) = 6 then cast(coalesce(p.labs, 0) as text) else '' end) as c6,
+  max(case when extract(isodow from c.cal_day) = 7 then cast(coalesce(p.labs, 0) as text) else '' end) as c7
+from cal c
+left join per_day p on p.cal_day = c.cal_day
+group by to_char(c.cal_day, 'IW')
+order by ord`,
+    },
+  },
 ];
 
 /**
