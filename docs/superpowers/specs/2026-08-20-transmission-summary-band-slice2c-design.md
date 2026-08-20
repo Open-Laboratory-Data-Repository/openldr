@@ -1,7 +1,7 @@
 # The LIS Stakeholders Update grows a summary band
 
 **Date:** 2026-08-20
-**Status:** designed, not started.
+**Status:** built. Both slices landed on 2026-08-20.
 **Design:** `rt-transmission-grid`  **Report:** `r-transmission-grid`
 
 Page 1 of the approved design carries a month calendar and four figures above the two laboratory
