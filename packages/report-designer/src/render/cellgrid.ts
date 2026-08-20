@@ -54,3 +54,19 @@ export function cellGridWidth(i: CellGridWidthInput): number {
   const trailing = i.trailingWidths.reduce((sum, w) => sum + CELL_COL_GAP + w, 0);
   return label + stripWidth(i.cellCount, i.breaks) + trailing;
 }
+
+/**
+ * Cell indices at which a new group starts, read from the group row.
+ *
+ * The token itself is never drawn and its value carries no meaning — only the CHANGE does. That is
+ * what lets one implementation group by week, by quarter, by batch or by anything else a query can
+ * emit, without the renderer knowing what any of them are.
+ */
+export function groupBreaks(groupRow: string[] | undefined): number[] {
+  if (!groupRow) return [];
+  const out: number[] = [];
+  for (let i = 1; i < groupRow.length; i += 1) {
+    if (groupRow[i] !== groupRow[i - 1]) out.push(i);
+  }
+  return out;
+}

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { stripWidth, cellGridWidth, CELL_SIZE, CELL_GAP, GROUP_GAP } from './cellgrid';
+import { stripWidth, cellGridWidth, groupBreaks, CELL_SIZE, CELL_GAP, GROUP_GAP } from './cellgrid';
 
 describe('stripWidth', () => {
   it('is cells plus small gaps when there are no group breaks', () => {
@@ -38,5 +38,28 @@ describe('cellGridWidth', () => {
     const withLabel = cellGridWidth({ labelWidth: 105, cellCount: 7, breaks: [], trailingWidths: [] });
     const without = cellGridWidth({ labelWidth: 0, cellCount: 7, breaks: [], trailingWidths: [] });
     expect(withLabel - without).toBeCloseTo(105 + 9, 5);
+  });
+});
+
+describe('groupBreaks', () => {
+  it('breaks wherever the token changes', () => {
+    expect(groupBreaks(['1', '1', '1', '2', '2', '3'])).toEqual([3, 5]);
+  });
+
+  it('never reports a break at index 0', () => {
+    expect(groupBreaks(['9', '9'])).toEqual([]);
+  });
+
+  it('breaks on every cell when every token differs', () => {
+    expect(groupBreaks(['a', 'b', 'c'])).toEqual([1, 2]);
+  });
+
+  it('is empty for an absent group row', () => {
+    expect(groupBreaks(undefined)).toEqual([]);
+  });
+
+  it('handles a short first group, which is what a month starting mid-week gives', () => {
+    // Wed Thu Fri | Mon..Fri
+    expect(groupBreaks(['1', '1', '1', '2', '2', '2', '2', '2'])).toEqual([3]);
   });
 });
