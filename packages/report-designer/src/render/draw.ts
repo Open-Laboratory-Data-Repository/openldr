@@ -303,6 +303,7 @@ function effectiveResolved(el: DesignElement, resolved: ResolvedTable | undefine
 
 /** The projected body rows for a table element (bound → project columns from resolved.rows; static → el.rows; error/unresolved → []). */
 export function rowsFor(el: DesignElement, resolved: ResolvedTable | undefined): string[][] {
+  if (el.kind === 'cellgrid') return cellGridRowsFor(el, resolved);
   if (el.kind !== 'table') return [];
   if (el.dataSource) {
     const rt = effectiveResolved(el, resolved);
@@ -311,6 +312,20 @@ export function rowsFor(el: DesignElement, resolved: ResolvedTable | undefined):
     return rt.rows.map((row) => cols.map((c) => String(row[c.key] ?? '')));
   }
   return el.rows ?? [];
+}
+
+/** A cellgrid's projection: label, then each cell column, then each trailing column. That ORDER is
+ *  the contract every other cellgrid function indexes against, so it is built in exactly one place. */
+function cellGridRowsFor(el: DesignElement, resolved: ResolvedTable | undefined): string[][] {
+  if (!el.dataSource) return el.rows ?? [];
+  const rt = effectiveResolved(el, resolved);
+  if (!rt || 'error' in rt) return [];
+  const keys = [
+    ...(el.labelColumn ? [el.labelColumn] : []),
+    ...(el.cellColumns ?? []),
+    ...(el.trailingColumns ?? []).map((c) => c.key),
+  ];
+  return rt.rows.map((row) => keys.map((k) => String(row[k] ?? '')));
 }
 
 /** True when this element declares its first data row to be the header (`headerRow`). */

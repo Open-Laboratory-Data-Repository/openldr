@@ -806,3 +806,28 @@ describe('drawsOnChunk — nothing is drawn for a chunk a table does not reach',
     expect(drawsOnChunk(dangling, page, resolved, 5)).toBe(true);
   });
 });
+
+it('projects cellgrid rows through labelColumn, cellColumns and trailingColumns in order', () => {
+  const el = {
+    id: 'g', kind: 'cellgrid', name: 'g', rect: { x: 0, y: 0, w: 400, h: 200 },
+    dataSource: { kind: 'custom-query', queryId: 'q' },
+    labelColumn: 'lab',
+    cellColumns: ['d01', 'd02'],
+    trailingColumns: [{ key: 'days', label: 'Days', width: 34.5 }],
+  } as DesignElement;
+  const resolved: ResolvedTable = {
+    columns: [{ key: 'lab', label: 'Lab' }, { key: 'd01', label: '' }, { key: 'd02', label: '' }, { key: 'days', label: 'Days' }],
+    rows: [{ lab: 'Bahi', d01: 0, d02: 1, days: '01/22' }],
+  };
+  expect(rowsFor(el, resolved)).toEqual([['Bahi', '0', '1', '01/22']]);
+});
+
+it('omits the label slot for a cellgrid with no labelColumn', () => {
+  const el = {
+    id: 'g', kind: 'cellgrid', name: 'g', rect: { x: 0, y: 0, w: 400, h: 200 },
+    dataSource: { kind: 'custom-query', queryId: 'q' },
+    cellColumns: ['d01'],
+  } as DesignElement;
+  const resolved: ResolvedTable = { columns: [{ key: 'd01', label: '' }], rows: [{ d01: 3 }] };
+  expect(rowsFor(el, resolved)).toEqual([['3']]);
+});
