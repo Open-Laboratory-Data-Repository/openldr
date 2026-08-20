@@ -651,7 +651,9 @@ EOF
   transmission-grid `describe` block
 
 By this point all six SQL variants carry three branches (`0 as ord`, `1 as ord`, and
-`max(lo.ord) as ord`), so the file-wide `as ord` count goes from 2 to 3 per dialect. This task
+`max(lo.ord) as ord`), so the file-wide `as ord` count goes from 2 to 4 per dialect. Four, not three: the three union
+branches plus `lab_ord`'s own `row_number() over (order by lab) + 1 as ord`. Measured against the
+rewritten postgres variants, not counted by eye. This task
 updates that existing assertion and adds four new ones.
 
 - [ ] **Step 1: Fix the existing `as ord` count**
@@ -666,7 +668,7 @@ At `:1719-1723`, change the expected length:
     for (const id of ['q-transmission-hvleid', 'q-transmission-other']) {
       for (const [dialect, sql] of Object.entries(q(id).sql)) {
         expect(sql.match(ORD) ?? [], `${id}/${dialect} dropped 'as ord', so sortBy silently degrades to no sort`)
-          .toHaveLength(3);
+          .toHaveLength(4);
       }
     }
   });
@@ -755,7 +757,7 @@ git add packages/reporting/src/seed/report-seeds.test.ts
 git commit -m "$(cat <<'EOF'
 test(reports): pin the two-row transmission grid shape across all six variants
 
-Fixes the pre-existing 'as ord' count (2 -> 3) and adds shape tests for the numeric mark, the
+Fixes the pre-existing 'as ord' count (2 -> 4) and adds shape tests for the numeric mark, the
 week-token row, the unique per-laboratory ord, and days/silent -- each verified capable of
 failing by breaking the code under test and rerunning.
 EOF
