@@ -831,3 +831,45 @@ it('omits the label slot for a cellgrid with no labelColumn', () => {
   const resolved: ResolvedTable = { columns: [{ key: 'd01', label: '' }], rows: [{ d01: 3 }] };
   expect(rowsFor(el, resolved)).toEqual([['3']]);
 });
+
+function cellGridEl(rows: number): { el: DesignElement; resolved: ResolvedTable } {
+  // 545px@96 = 408.75pt; (408.75 - 13) / 12.75 = 31.03 -> 31 rows a chunk
+  const el = {
+    id: 'g', kind: 'cellgrid', name: 'g', rect: { x: 0, y: 0, w: 900, h: 545 },
+    dataSource: { kind: 'custom-query', queryId: 'q' },
+    labelColumn: 'lab', cellColumns: ['d01'], groupBoundary: 'token-change',
+  } as DesignElement;
+  const body = Array.from({ length: rows }, (_, i) => ({ lab: `L${i}`, d01: 1 }));
+  const resolved: ResolvedTable = {
+    columns: [{ key: 'lab', label: '' }, { key: 'd01', label: '' }],
+    rows: [{ lab: '', d01: '02' }, { lab: '', d01: '1' }, ...body],
+  };
+  return { el, resolved };
+}
+
+it('chunks a cellgrid by its own row pitch, not the table row pitch', () => {
+  const a = cellGridEl(31);
+  expect(tableChunkCount(a.el, a.resolved)).toBe(1);
+  const b = cellGridEl(32);
+  expect(tableChunkCount(b.el, b.resolved)).toBe(2);
+});
+
+it('stops drawing a cellgrid once its rows run out', () => {
+  const { el, resolved } = cellGridEl(10);
+  const page = { id: 'p', elements: [el] };
+  const map = new Map([['g', resolved]]);
+  expect(drawsOnChunk(el, page, map, 0)).toBe(true);
+  expect(drawsOnChunk(el, page, map, 1)).toBe(false);
+});
+
+it('lets a heading follow a cellgrid via showWithTable', () => {
+  const { el, resolved } = cellGridEl(10);
+  const heading = {
+    id: 'h', kind: 'text', name: 'h', rect: { x: 0, y: 0, w: 100, h: 14 },
+    text: 'Any HVL/EID data submission', showWithTable: 'g',
+  } as DesignElement;
+  const page = { id: 'p', elements: [heading, el] };
+  const map = new Map([['g', resolved]]);
+  expect(drawsOnChunk(heading, page, map, 0)).toBe(true);
+  expect(drawsOnChunk(heading, page, map, 1)).toBe(false);
+});

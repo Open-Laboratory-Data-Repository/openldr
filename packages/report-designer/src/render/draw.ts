@@ -4,6 +4,7 @@ import { encodeCode128, encodeQr, QR_QUIET_ZONE } from '../encode';
 import { toPt, PX_TO_PT } from './units';
 import type { ResolvedTable } from './index';
 import { formatDisplayDate, formatDisplayDateOf } from './format-date';
+import { splitCellGridRows, cellGridChunks } from './cellgrid';
 
 type Doc = PDFKit.PDFDocument;
 type Box = { x: number; y: number; w: number; h: number };
@@ -384,9 +385,14 @@ export function headerTexts(labels: string[], headerRow: string[] | undefined): 
 export function drawsOnChunk(
   el: DesignElement, page: DesignPage, resolved: Map<string, ResolvedTable>, chunk: number,
 ): boolean {
-  if (el.kind === 'table') return tableDrawsOnChunk(el, resolved.get(el.id), chunk);
+  if (el.kind === 'table' || el.kind === 'cellgrid') return tableDrawsOnChunk(el, resolved.get(el.id), chunk);
   if (!el.showWithTable) return true;
-  const target = page.elements.find((e) => e.id === el.showWithTable && e.kind === 'table');
+  // ⛔ `cellgrid` is accepted here too. `showWithTable` names the element a heading belongs to, and
+  // the reason it exists — never print a heading over a block that finished earlier — applies to a
+  // cellgrid exactly as it does to a table.
+  const target = page.elements.find(
+    (e) => e.id === el.showWithTable && (e.kind === 'table' || e.kind === 'cellgrid'),
+  );
   if (!target) return true;
   return tableDrawsOnChunk(target, resolved.get(target.id), chunk);
 }
@@ -723,6 +729,10 @@ function drawUnencodable(doc: Doc, r: Box): void {
 
 /** How many physical pages this one table needs (repeat-page model). 1 for non-tables/errors/degenerate boxes. */
 export function tableChunkCount(el: DesignElement, resolved: ResolvedTable | undefined): number {
+  if (el.kind === 'cellgrid') {
+    const body = splitCellGridRows(rowsFor(el, resolved), el.groupBoundary === 'token-change').body;
+    return cellGridChunks(body.length, toPt(el.rect).h);
+  }
   if (el.kind !== 'table') return 1;
   const maxRows = maxRowsFor(toPt(el.rect).h, headerBandHeight(el));
   if (maxRows < 1) return 1;
