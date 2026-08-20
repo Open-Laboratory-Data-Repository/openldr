@@ -236,3 +236,41 @@ Per AGENTS.md section 6.
 5. **Changelog.** `pnpm make:changelog` after each slice merges to `main`.
 
 **No migration.** No column, no table, no parameter.
+
+---
+
+## 8. Changed after the operator looked at it, same day
+
+Everything above describes what was built. The operator then read a render and changed five things.
+They are recorded here rather than edited into the sections above, so the reasoning that led to the
+first answer stays readable next to the reason it was overruled.
+
+**The Other grid is one row.** It was one row per laboratory, like the grid above it. It is now a
+single row labelled `Others` standing for every laboratory outside the panel list, and its cell asks
+whether ANY of them submitted that day. A reader wants to know whether other test data arrived, not
+which of sixty-five sites sent it. `Days` and `Silent` on that row count DAYS.
+
+`fillTo` moved with it, from the Other grid to the HVL/EID one, because the long grid is now the
+upper one. July 2013 went from two pages to one.
+
+**A section gap.** `flowGap`, a new schema field, puts space between the two blocks. The Other
+heading sat flush against the last row above it, and on a page where that grid was empty it landed
+on its header band.
+
+**The calendar lost Saturday and Sunday.** Section 2.1 argued for all seven columns and had the
+measurement behind it: 7 weekend arrivals in 2013-07, 10 in 2013-09. The operator cut them anyway.
+The report asks whether laboratories transmit on the days they are asked to, and two nearly empty
+columns a week took a fifth of the block. **The cost is real: a laboratory that only ever submits at
+a weekend now appears in no cell of this report.** `busiest` moved to working days with it, so the
+figure can still be found on the chart beside it.
+
+**The day header lost its month.** It printed the day over an abbreviated month. One line now. The
+second line overflowed the cellgrid's 13pt header band and printed over whatever followed it, and on
+MySQL the `concat` that built it was the measured cause of error 1267. That trigger is gone; nothing
+was re-run, so MySQL is no more proven than it was.
+
+**The report stopped saying HVL/EID.** The parameter, the scope panel, the upper grid's heading and
+the report description all named a disease programme for what is really "the panel codes you list
+against everything else". An operator running it for PCRIN could not tell whether it applied. The
+element and query ids keep the word, because they are internal and renaming them would orphan a
+stored query row on every existing install.
