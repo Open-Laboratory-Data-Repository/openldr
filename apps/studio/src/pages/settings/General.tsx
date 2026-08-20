@@ -205,8 +205,13 @@ export function General() {
                   {verdict.kind === 'up_to_date' && (
                     <>
                       {verdict.latest}
+                      {/* "up to date" under a LOWER Latest than Version reads backwards. That
+                          happens whenever the cache predates the running version, which an
+                          operator who upgrades promptly sees until the next daily poll. */}
                       <span className="ml-1 font-sans text-xs text-muted-foreground">
-                        · {t('settings.general.about.upToDate')}
+                        · {t(verdict.runningIsNewer
+                          ? 'settings.general.about.nothingNewer'
+                          : 'settings.general.about.upToDate')}
                       </span>
                     </>
                   )}

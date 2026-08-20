@@ -175,3 +175,27 @@ describe('runningVersion', () => {
     expect(runningVersion()).toMatch(/^\d+\.\d+\.\d+/);
   });
 });
+
+describe('renderUpdateCheck — running ahead of the cached release', () => {
+  // Measured on a real 0.1.4 install: it polled 18 seconds before v0.1.4 was published, cached
+  // 0.1.3, and then printed "published: 0.1.3 / this install is up to date", which reads backwards.
+  it('says the install is newer than the last release it saw, and still exits 0', () => {
+    const { text, code } = renderUpdateCheck(
+      state({ running: '0.1.4', latestVersion: '0.1.3', updateAvailable: false, lastError: null }),
+      { json: false },
+    );
+    expect(text).toMatch(/newer than the last release it saw/);
+    expect(text).not.toMatch(/this install is up to date/);
+    expect(code).toBe(0);
+  });
+
+  it('keeps the plain wording when the cache matches the running version', () => {
+    const { text, code } = renderUpdateCheck(
+      state({ running: '0.1.4', latestVersion: '0.1.4', updateAvailable: false, lastError: null }),
+      { json: false },
+    );
+    expect(text).toMatch(/this install is up to date/);
+    expect(text).not.toMatch(/newer than the last release/);
+    expect(code).toBe(0);
+  });
+});

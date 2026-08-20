@@ -329,6 +329,7 @@ export const fr: EnShape = {
         releaseNotes: 'Notes de version',
         latest: 'Dernière version',
         upToDate: 'à jour',
+        nothingNewer: 'rien de plus récent',
         checkOff: 'vérification des mises à jour désactivée',
         cannotConfirm: 'impossible de confirmer',
         notCheckedYet: 'pas encore vérifié',

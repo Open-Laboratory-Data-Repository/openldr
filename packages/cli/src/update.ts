@@ -84,7 +84,12 @@ export function renderUpdateCheck(state: UpdateState, opts: { json: boolean }): 
       lines.push('', 'not checked yet.');
       return { text: lines.join('\n'), code };
     case 'up_to_date':
-      lines.push('', 'this install is up to date.');
+      // Both readings are "nothing to upgrade to", but they are not the same situation and the
+      // numbers above make that obvious. Saying "up to date" under a LOWER published version reads
+      // backwards, and an operator who upgrades promptly sees it until the next daily poll.
+      lines.push('', verdict.runningIsNewer
+        ? 'this install is newer than the last release it saw.\nnothing to upgrade to.'
+        : 'this install is up to date.');
       return { text: lines.join('\n'), code };
   }
 }

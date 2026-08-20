@@ -14,7 +14,7 @@ const input = (over: Partial<Parameters<typeof updateVerdict>[0]> = {}) => ({
 
 describe('updateVerdict', () => {
   it('reports up_to_date when the published version matches', () => {
-    expect(updateVerdict(input())).toEqual({ kind: 'up_to_date', latest: '0.1.3' });
+    expect(updateVerdict(input())).toEqual({ kind: 'up_to_date', latest: '0.1.3', runningIsNewer: false });
   });
 
   it('reports update_available and carries the notes through', () => {
@@ -68,5 +68,36 @@ describe('updateVerdict', () => {
     const v = updateVerdict(input({ running: 'dev', lastError: null }));
     expect(v).toMatchObject({ cause: 'bad_running_version' });
     expect(v.kind === 'cannot_confirm' && v.error).toBe(BAD_RUNNING_VERSION);
+  });
+});
+
+describe('updateVerdict — running ahead of the cached release', () => {
+  const input = (over = {}) => ({
+    enabled: true, running: '0.1.4', latestVersion: '0.1.3',
+    releasedAt: '2026-08-19', notesUrl: 'https://example.org/x', lastError: null, ...over,
+  });
+
+  // ⛔ Measured on a real install 2026-08-19: the release script starts the verification stack at
+  // step 9 and publishes at step 10, so this install polled 18 seconds BEFORE v0.1.4 existed and
+  // cached 0.1.3. It then printed "published: 0.1.3" beside "running: 0.1.4" and called itself up
+  // to date, which reads backwards. The cache cannot be made reliably fresh: GitHub's
+  // releases/latest/download alias served the PREVIOUS manifest for over 10 minutes after v0.1.3.
+  // So the fix is to say which of the two situations this is.
+  it('flags that the install is ahead of what the last check saw', () => {
+    expect(updateVerdict(input())).toEqual({
+      kind: 'up_to_date', latest: '0.1.3', runningIsNewer: true,
+    });
+  });
+
+  it('does not flag it when the cache matches the running version', () => {
+    expect(updateVerdict(input({ latestVersion: '0.1.4' }))).toEqual({
+      kind: 'up_to_date', latest: '0.1.4', runningIsNewer: false,
+    });
+  });
+
+  // The flag must never change WHICH verdict fires, only how it is worded. An install genuinely
+  // behind still gets update_available, not an "ahead" reading.
+  it('still reports update_available when the cache is genuinely newer', () => {
+    expect(updateVerdict(input({ running: '0.1.2' })).kind).toBe('update_available');
   });
 });

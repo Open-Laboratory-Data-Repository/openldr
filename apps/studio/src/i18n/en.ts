@@ -327,6 +327,7 @@ export const en = {
         releaseNotes: 'Release notes',
         latest: 'Latest',
         upToDate: 'up to date',
+        nothingNewer: 'nothing newer',
         checkOff: 'update check is off',
         cannotConfirm: 'cannot confirm',
         notCheckedYet: 'not checked yet',

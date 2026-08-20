@@ -17,10 +17,15 @@ This manual documents supported settings areas only. If a settings page is not c
 ## Update checks
 
 **Settings → General** shows the version this install is running and, on the line below it, where
-that version stands. That line reads one of five ways: the version number and *up to date*; a
-newer version with its release date and notes, followed by the two commands to upgrade; *update
-check is off*; *cannot confirm*, when the last check failed or the running version could not be
-read; or *not checked yet*.
+that version stands. That line reads one of six ways: the version number and *up to date*; the
+version number and *nothing newer*; a newer version with its release date and notes, followed by
+the two commands to upgrade; *update check is off*; *cannot confirm*, when the last check failed or
+the running version could not be read; or *not checked yet*.
+
+*Nothing newer* means the last successful check saw an **older** release than the one you are
+running. There is still nothing to upgrade to. It happens when you upgrade shortly after a release,
+because the check runs once a day and the answer it cached predates your own version. It corrects
+itself at the next check, or immediately if you restart the api container.
 
 The check is **on by default**. It fetches a small file from GitHub once a day, with a
 10-second timeout on that one request, and compares version numbers. It never downloads an
