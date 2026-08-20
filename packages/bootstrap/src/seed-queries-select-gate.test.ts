@@ -77,10 +77,21 @@ describe('every seeded query passes the SELECT-only gate, in every dialect', () 
  * guard. This asserts the guard where it actually is.
  */
 describe('the transmission grid refuses a blank panel list rather than drawing an empty grid', () => {
-  const gridQueries = SEED_QUERIES.filter((q) => q.id.startsWith('q-transmission-'));
+  // ⛔ The two queries that TAKE a panel list, not everything named `q-transmission-*`. The summary
+  // band's calendar and figures sit above BOTH grids and describe the whole month, so they declare
+  // no `panels` at all and this rule has nothing to say about them. Selecting them by name prefix
+  // asserted the opposite and failed the moment they landed.
+  const PANEL_QUERIES = ['q-transmission-hvleid', 'q-transmission-other'];
+  const gridQueries = SEED_QUERIES.filter((q) => PANEL_QUERIES.includes(q.id));
 
-  it('there are two transmission-grid queries to check', () => {
-    expect(gridQueries.map((q) => q.id).sort()).toEqual(['q-transmission-hvleid', 'q-transmission-other']);
+  it('checks both panel-filtered grid queries, and only those', () => {
+    expect(gridQueries.map((q) => q.id).sort()).toEqual([...PANEL_QUERIES].sort());
+    // The band's queries exist and are deliberately not in that list.
+    const band = SEED_QUERIES.filter((q) => q.id.startsWith('q-transmission-') && !PANEL_QUERIES.includes(q.id));
+    expect(band.map((q) => q.id).sort()).toEqual(['q-transmission-calendar', 'q-transmission-summary']);
+    for (const q of band) {
+      expect((q.params ?? []).map((p) => p.id), `${q.id} takes a panel list it does not use`).toEqual(['month']);
+    }
   });
 
   for (const q of gridQueries) {
