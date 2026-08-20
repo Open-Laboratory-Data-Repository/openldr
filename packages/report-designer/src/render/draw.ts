@@ -4,7 +4,11 @@ import { encodeCode128, encodeQr, QR_QUIET_ZONE } from '../encode';
 import { toPt, PX_TO_PT } from './units';
 import type { ResolvedTable } from './index';
 import { formatDisplayDate, formatDisplayDateOf } from './format-date';
-import { splitCellGridRows, cellGridChunks } from './cellgrid';
+import {
+  CELL_SIZE, CELL_GAP, GROUP_GAP, CELL_ROW_H, CELL_COL_GAP, CELL_HEAD_H, CELL_LABEL_W,
+  cellFill, groupBreaks, splitCellGridRows, cellGridMaxRows, cellGridChunks,
+  stripWidth as stripWidthOf,
+} from './cellgrid';
 
 type Doc = PDFKit.PDFDocument;
 type Box = { x: number; y: number; w: number; h: number };
@@ -807,6 +811,10 @@ export function drawElement(
       drawTable(doc, el, r, resolved, chunk);
       return;
     }
+    case 'cellgrid': {
+      drawCellGrid(doc, el, r, resolved, chunk);
+      return;
+    }
     case 'keyvalue': {
       drawKeyValue(doc, el, r, resolved, tokens);
       return;
@@ -845,6 +853,88 @@ function drawTable(doc: Doc, el: DesignElement, r: Box, resolved: ResolvedTable 
   const emphasis = cols.map((c) => c.emphasis ?? 'text');
   const kinds = cols.map((c) => c.kind);
   drawGrid(doc, r, headers, allRows, chunk, statuses, emphasis, kinds, headerBandHeight(el));
+}
+
+/**
+ * One row per record: a label, a run of fixed-size filled squares, then declared-width text columns.
+ *
+ * ⛔ Nothing here measures a string to decide a width. Every horizontal position comes from the
+ * constants in `cellgrid.ts`, which is what lets 23 columns fit A4 portrait where `table`'s
+ * measured-and-floored widths cannot.
+ */
+function drawCellGrid(
+  doc: Doc, el: DesignElement, r: Box, resolved: ResolvedTable | undefined, chunk: number,
+): void {
+  if (el.dataSource && resolved && 'error' in resolved) { drawErrorPlaceholder(doc, r, resolved.error); return; }
+
+  const grouped = el.groupBoundary === 'token-change';
+  const split = splitCellGridRows(rowsFor(el, resolved), grouped);
+  const hasLabel = Boolean(el.labelColumn);
+  const cellCount = (el.cellColumns ?? []).length;
+  const trailing = el.trailingColumns ?? [];
+  const palette = el.palette ?? { ramp: 'blue' as const, steps: 1 };
+
+  // Every projected row is [label?, ...cells, ...trailing], so a cell's slot is offset by the label.
+  const cellIndex = (i: number): number => (hasLabel ? 1 : 0) + i;
+
+  const cellStart = hasLabel ? CELL_LABEL_W + CELL_COL_GAP : 0;
+  const breaks = grouped ? groupBreaks(split.groups?.slice(hasLabel ? 1 : 0)) : [];
+  const xOfCell = (i: number): number => {
+    let x = r.x + cellStart;
+    for (let k = 0; k < i; k += 1) x += CELL_SIZE + (breaks.includes(k + 1) ? GROUP_GAP : CELL_GAP);
+    return x;
+  };
+  const trailingStart = r.x + cellStart + stripWidthOf(cellCount, breaks);
+
+  // ⚠ The maximum is taken over EVERY record, not over the chunk being drawn. A per-chunk maximum
+  // would re-scale the ramp on page 2 and paint the same value two different colours in one
+  // document.
+  let max = 0;
+  for (const row of split.body) {
+    for (let i = 0; i < cellCount; i += 1) {
+      const v = Number(row[cellIndex(i)]);
+      if (Number.isFinite(v) && v > max) max = v;
+    }
+  }
+
+  doc.save().rect(r.x, r.y, r.w, r.h).clip();
+
+  // Header band: cell labels then trailing labels, redrawn on every chunk.
+  doc.font('Helvetica').fontSize(6).fillColor(HEAD_RULE);
+  for (let i = 0; i < cellCount; i += 1) {
+    const text = split.header[cellIndex(i)] ?? '';
+    if (text) doc.text(text, xOfCell(i), r.y + 3, { width: CELL_SIZE, align: 'center', lineBreak: false });
+  }
+  let hx = trailingStart;
+  for (const c of trailing) {
+    hx += CELL_COL_GAP;
+    doc.text(c.label, hx, r.y + 3, { width: c.width, align: 'center', lineBreak: false });
+    hx += c.width;
+  }
+
+  // Records.
+  const perChunk = cellGridMaxRows(r.h);
+  const slice = perChunk < 1 ? [] : split.body.slice(chunk * perChunk, (chunk + 1) * perChunk);
+  slice.forEach((row, ri) => {
+    const y = r.y + CELL_HEAD_H + ri * CELL_ROW_H;
+    if (hasLabel) {
+      doc.font('Helvetica').fontSize(8).fillColor(BODY_TEXT)
+        .text(row[0] ?? '', r.x, y + 1, { width: CELL_LABEL_W, lineBreak: false, ellipsis: true });
+    }
+    for (let i = 0; i < cellCount; i += 1) {
+      doc.rect(xOfCell(i), y, CELL_SIZE, CELL_SIZE).fill(cellFill(Number(row[cellIndex(i)]), max, palette));
+    }
+    let x = trailingStart;
+    trailing.forEach((c, ci) => {
+      x += CELL_COL_GAP;
+      const v = row[cellIndex(cellCount) + ci] ?? '';
+      doc.font('Helvetica').fontSize(7).fillColor(BODY_TEXT)
+        .text(v, x, y + 1, { width: c.width, align: 'center', lineBreak: false });
+      x += c.width;
+    });
+  });
+
+  doc.restore();
 }
 
 export function tableHeaders(el: DesignElement, resolved: ResolvedTable | undefined): string[] {
