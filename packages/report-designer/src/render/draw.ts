@@ -600,6 +600,11 @@ export interface PairBox {
 /** pdfkit line height ≈ 1.15 × font size for Helvetica. Used only to centre text in a pair row; the
  *  drawer asks the document for the real value when it needs to size a chip. */
 const lineH = (fontSize: number): number => fontSize * 1.15;
+/** Helvetica's cap height as a fraction of the point size, from the font's own metrics. Used to
+ *  find where a line of capitals or digits actually ENDS, which is its baseline, rather than where
+ *  its line box does. */
+const HELVETICA_CAP = 0.718;
+
 
 /**
  * Geometry for `n` pairs inside panel box `r`, flowing ACROSS then down.
@@ -626,7 +631,14 @@ export function pairRects(
       const boxH = pitch - KV_STAT_VGAP;
       const valueLh = lineH(KV_STAT_VALUE_SIZE);
       const labelLh = lineH(KV_STAT_LABEL_SIZE);
-      const innerY = y + (boxH - valueLh - labelLh) / 2;
+      // ⛔ Centre the INK, not the two line boxes. Both strings here are a number and an uppercase
+      // caption, so neither has a descender, and pdfkit puts a line box's TOP at the cap top: the
+      // ink starts at `innerY` and stops at the caption's BASELINE, leaving the caption's own
+      // descender space empty. Charging that empty space to the block pushed everything up by half
+      // of it. MEASURED on a rendered page, 2026-08-20: a 34pt card carried 2.63pt above the digits
+      // and 5.65pt below the caption, which reads as bottom padding with none on top.
+      const inkH = valueLh + KV_STAT_LABEL_SIZE * HELVETICA_CAP;
+      const innerY = y + (boxH - inkH) / 2;
       return {
         ...cell,
         value: { x, y: innerY, w: cellW, h: valueLh },

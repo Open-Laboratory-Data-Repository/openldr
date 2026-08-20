@@ -561,6 +561,23 @@ describe('pairRects', () => {
     expect(p.value.w).toBe(p.label.w);
   });
 
+  it('leaves the same space above the number as below the caption', () => {
+    // ⛔ MEASURED on a rendered page, 2026-08-20: a 34pt card carried 2.63pt above the digits and
+    // 5.65pt below the caption, and it read as bottom padding with none on top.
+    //
+    // The cause is that the block was centred on two LINE BOXES. pdfkit puts a line box's top at
+    // the cap top for these two strings — a number and an uppercase caption, neither with a
+    // descender — so the ink stops at the caption's BASELINE and the caption's own descender space
+    // is empty. Charging it to the block pushed everything up by half of it.
+    const CARD_H = 40 - 6;          // KV_STAT_H less KV_STAT_VGAP: the card the drawer paints
+    const CAP = 0.718;              // Helvetica cap height per point of size
+    const [p] = pairRects({ x: 0, y: 0, w: 200, h: 200 }, 1, 'stat', 1, false);
+    const above = p.value.y - p.y;                       // card top to the digits' cap top
+    const below = (p.y + CARD_H) - (p.label.y + 7 * CAP); // caption baseline to the card bottom
+    expect(above).toBeCloseTo(below, 5);
+    expect(above).toBeGreaterThan(0);
+  });
+
   it('gives every stat pair the same box width, split by panelColumns', () => {
     const box = { x: 0, y: 0, w: 200, h: 200 };
     const four = pairRects(box, 4, 'stat', 2, false);
