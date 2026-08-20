@@ -220,7 +220,9 @@ describe('cellGridWidth', () => {
       breaks: [5, 10, 15, 20],
       trailingWidths: [34.5, 52],
     });
-    expect(w).toBeCloseTo(514, 1);
+    // 105 + 9 + 298.5 + 9 + 34.5 + 9 + 52. One gap constant, charged before every
+    // trailing column. See spec section 5 for why it is not two.
+    expect(w).toBeCloseTo(517, 1);
   });
 
   it('drops the label gap when there is no label column', () => {

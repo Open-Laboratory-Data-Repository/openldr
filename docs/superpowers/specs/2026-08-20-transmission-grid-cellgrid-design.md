@@ -219,11 +219,17 @@ A4 portrait, 36pt margins, 523.28pt body width.
 Worst case is a 31-day month starting Monday: 23 working days across 5 week groups.
 
 ```
-label 105 + gap 9 + strip 298.5 + gap 9 + days 34.5 + gap 6 + silent 52  =  514.0pt
+label 105 + gap 9 + strip 298.5 + gap 9 + days 34.5 + gap 9 + silent 52  =  517.0pt
 strip = 23 cells x 10.5  +  18 intra-gaps x 1.5  +  4 inter-gaps x 7.5
 ```
 
-Nine points of headroom against 523.28. **That is thin enough to be a test rather than a
+**One gap constant, 9pt, charged before every column after the strip.** An earlier draft of this
+arithmetic charged 9pt before `Days` and 6pt before `Silent`. Those two numbers were an artefact of
+the CSS margins in the HTML preview, not a decision anybody made, and 3pt is not a difference a
+reader can see. Two constants would have to be kept in step in the width function and the drawer
+both, for nothing.
+
+That leaves 6.3 points of headroom against 523.28. **Thin enough to be a test rather than a
 comment.** The worst-case month must be asserted to fit, computed from the constants, so a later
 change to any one of them fails loudly instead of silently ellipsizing laboratory names.
 
