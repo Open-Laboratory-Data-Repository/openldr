@@ -310,6 +310,14 @@ cat > "$DIR/openldr" <<'WRAPPER'
 #!/bin/sh
 # OpenLDR operator CLI. Runs inside the api container.
 # Files must live under ./data (mounted at /data) — e.g. ./openldr ingest data/bundle.json
+#
+# ⛔ Git Bash (MSYS) rewrites any argument that looks like a POSIX path into a Windows one before
+# Docker ever sees it. Measured on Windows: `-w /` arrived as `-w C:/Program Files/Git/` and the
+# runtime refused with "OCI runtime exec failed: Cwd must be an absolute path". The container path
+# after `node` would have been mangled next. Every argument this wrapper passes through is either
+# a container path or a relative one like `data/bundle.json`, and relative paths are not converted
+# anyway, so turning conversion off for this command loses nothing. Non-MSYS shells ignore it.
+export MSYS_NO_PATHCONV=1
 exec docker compose exec -T -u "$(id -u):$(id -g)" -w / api node /app/cli/dist/index.js "$@"
 WRAPPER
 chmod +x "$DIR/openldr" 2>/dev/null || true
