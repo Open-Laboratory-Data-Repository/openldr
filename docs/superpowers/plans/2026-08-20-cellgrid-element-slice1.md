@@ -112,7 +112,7 @@ Expected: FAIL, `Invalid enum value. Expected 'text' | 'table' | ... received 'c
 In `packages/report-designer/src/schema.ts`, above `DesignElementSchema`:
 
 ```ts
-/** Sequential ramps a `cellgrid` may paint with. Presentational, not clinical — a `cellgrid` shows
+/** Sequential ramps a `cellgrid` may paint with. Presentational, not clinical. A `cellgrid` shows
  *  magnitude or presence, never a result state, so it deliberately does not reach for
  *  `CELL_STATUSES`. Keeping the two apart is what stops a submission grid inheriting the meaning of
  *  a red AST chip. */
@@ -155,7 +155,7 @@ Then change the kind enum and add five fields inside `DesignElementSchema`:
   /** `cellgrid`: insert a wider gap wherever the GROUP ROW's token changes.
    *
    *  The group row is data (row 1 of the sorted result, after the header row), never a design
-   *  constant, because the grouping a month needs is not knowable when the design is authored — a
+   *  constant, because the grouping a month needs is not knowable when the design is authored. A
    *  month starting mid-week has a short first group, and every month has a different one. */
   groupBoundary: z.literal('token-change').optional(),
   /** `cellgrid`: how a cell value becomes a fill. */
@@ -798,7 +798,9 @@ git commit -m "feat(report-designer): resolve cellgrid rows in column order"
 Append to `draw.test.ts`:
 
 ```ts
-function gridEl(rows: number): { el: DesignElement; resolved: ResolvedTable } {
+// NOT `gridEl`. `draw.test.ts` already has an unrelated `const gridEl` used by the existing table
+// pagination tests, and redeclaring it is a build error, not a lint warning.
+function cellGridEl(rows: number): { el: DesignElement; resolved: ResolvedTable } {
   // 545px@96 = 408.75pt; (408.75 - 13) / 12.75 = 31.03 -> 31 rows a chunk
   const el = {
     id: 'g', kind: 'cellgrid', name: 'g', rect: { x: 0, y: 0, w: 900, h: 545 },
@@ -814,14 +816,14 @@ function gridEl(rows: number): { el: DesignElement; resolved: ResolvedTable } {
 }
 
 it('chunks a cellgrid by its own row pitch, not the table row pitch', () => {
-  const a = gridEl(31);
+  const a = cellGridEl(31);
   expect(tableChunkCount(a.el, a.resolved)).toBe(1);
-  const b = gridEl(32);
+  const b = cellGridEl(32);
   expect(tableChunkCount(b.el, b.resolved)).toBe(2);
 });
 
 it('stops drawing a cellgrid once its rows run out', () => {
-  const { el, resolved } = gridEl(10);
+  const { el, resolved } = cellGridEl(10);
   const page = { id: 'p', elements: [el] };
   const map = new Map([['g', resolved]]);
   expect(drawsOnChunk(el, page, map, 0)).toBe(true);
@@ -829,7 +831,7 @@ it('stops drawing a cellgrid once its rows run out', () => {
 });
 
 it('lets a heading follow a cellgrid via showWithTable', () => {
-  const { el, resolved } = gridEl(10);
+  const { el, resolved } = cellGridEl(10);
   const heading = {
     id: 'h', kind: 'text', name: 'h', rect: { x: 0, y: 0, w: 100, h: 14 },
     text: 'Any HVL/EID data submission', showWithTable: 'g',
@@ -879,7 +881,7 @@ export function drawsOnChunk(
   if (el.kind === 'table' || el.kind === 'cellgrid') return tableDrawsOnChunk(el, resolved.get(el.id), chunk);
   if (!el.showWithTable) return true;
   // ⛔ `cellgrid` is accepted here too. `showWithTable` names the element a heading belongs to, and
-  // the reason it exists — never print a heading over a block that finished earlier — applies to a
+  // the reason it exists (never print a heading over a block that finished earlier) applies to a
   // cellgrid exactly as it does to a table.
   const target = page.elements.find(
     (e) => e.id === el.showWithTable && (e.kind === 'table' || e.kind === 'cellgrid'),
