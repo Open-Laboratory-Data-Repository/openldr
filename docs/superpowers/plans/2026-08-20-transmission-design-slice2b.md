@@ -425,7 +425,11 @@ not by a standalone assertion here. Change `drawKeyValue` (`draw.ts:588-620`):
 
 This reorders the existing label-then-value drawing into value-then-label so the `stat` fill box
 (drawn first, per pair) sits behind both, and swaps which of the two gets `Helvetica-Bold` based
-on `layout`. `inline` and `stacked` keep their current weighting and draw order is irrelevant to
+⛔ Draw order is NOT irrelevant. Reordering the label and value draw calls changes the PDF
+content stream even when the rendered pixels are identical, and the golden digest catches
+it. Measured during implementation: the digest passed, failed on a naive reorder, and
+passed again once `stat` was isolated in its own early-returning branch. Leave the
+inline and stacked path byte-for-byte as it is.
 them since they do not share a fill.
 
 - [ ] **Step 12: Run the full render test file**
