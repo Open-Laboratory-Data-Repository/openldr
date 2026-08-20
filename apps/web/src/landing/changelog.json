@@ -1,6 +1,24 @@
 {
-  "generatedAt": "2026-08-19",
+  "generatedAt": "2026-08-20",
   "days": [
+    {
+      "date": "2026-08-20",
+      "version": null,
+      "entries": [
+        {
+          "hash": "ed3972fd",
+          "type": "fix",
+          "scope": "update-verdict",
+          "title": "Say nothing newer when the cache predates the running version"
+        },
+        {
+          "hash": "0cf45b0b",
+          "type": "fix",
+          "scope": "install",
+          "title": "Make the openldr CLI wrapper work from Git Bash"
+        }
+      ]
+    },
     {
       "date": "2026-08-19",
       "version": "v0.1.2",
