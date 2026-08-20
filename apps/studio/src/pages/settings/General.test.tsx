@@ -214,26 +214,28 @@ describe('General settings — About card update notice', () => {
   });
 });
 
-describe('General settings — Latest row when the install is ahead of its cache', () => {
-  // The release script starts the verification stack before it publishes, so a fresh install can
-  // cache the PREVIOUS version and then read "Latest 0.1.3" under "Version 0.1.4".
-  it('says nothing newer rather than up to date when the cache is behind', async () => {
+describe('General settings: Latest row when the cache is older than this install', () => {
+  // ⛔ The negative assertion is the point. An operator read a lower version number here as an
+  // instruction to roll back, so the number must not reach the screen at all.
+  it('shows no version number when the cache is behind', async () => {
     (api.fetchUpdateState as any).mockResolvedValue({
       ...AVAILABLE, running: '0.1.4', latestVersion: '0.1.3', updateAvailable: false, lastError: null,
     });
     render(<MemoryRouter><General /></MemoryRouter>);
     const row = await screen.findByTestId('update-latest');
-    expect(row).toHaveTextContent(/nothing newer/i);
+    expect(row).toHaveTextContent(/no update found/i);
+    expect(row).not.toHaveTextContent('0.1.3');
     expect(row).not.toHaveTextContent(/up to date/i);
   });
 
-  it('keeps up to date when the cache matches the running version', async () => {
+  it('keeps the version and up to date when the cache matches', async () => {
     (api.fetchUpdateState as any).mockResolvedValue({
       ...AVAILABLE, running: '0.1.4', latestVersion: '0.1.4', updateAvailable: false, lastError: null,
     });
     render(<MemoryRouter><General /></MemoryRouter>);
     const row = await screen.findByTestId('update-latest');
+    expect(row).toHaveTextContent('0.1.4');
     expect(row).toHaveTextContent(/up to date/i);
-    expect(row).not.toHaveTextContent(/nothing newer/i);
+    expect(row).not.toHaveTextContent(/no update found/i);
   });
 });

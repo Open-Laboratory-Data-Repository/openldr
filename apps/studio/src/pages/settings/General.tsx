@@ -205,15 +205,17 @@ export function General() {
                   {verdict.kind === 'up_to_date' && (
                     <>
                       {verdict.latest}
-                      {/* "up to date" under a LOWER Latest than Version reads backwards. That
-                          happens whenever the cache predates the running version, which an
-                          operator who upgrades promptly sees until the next daily poll. */}
                       <span className="ml-1 font-sans text-xs text-muted-foreground">
-                        · {t(verdict.runningIsNewer
-                          ? 'settings.general.about.nothingNewer'
-                          : 'settings.general.about.upToDate')}
+                        · {t('settings.general.about.upToDate')}
                       </span>
                     </>
+                  )}
+                  {/* ⛔ No version number here, and the verdict does not carry one to print. The
+                      cache is OLDER than the running version in this state, and an operator read
+                      that lower number as an instruction to roll back. "Last checked" below the
+                      divider is what conveys the staleness. */}
+                  {verdict.kind === 'no_update_found' && (
+                    <span className="font-sans text-xs text-muted-foreground">{t('settings.general.about.noUpdateFound')}</span>
                   )}
                   {verdict.kind === 'check_off' && (
                     <span className="font-sans text-xs text-muted-foreground">{t('settings.general.about.checkOff')}</span>
