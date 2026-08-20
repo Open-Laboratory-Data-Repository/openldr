@@ -22,7 +22,7 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 import { resolveGitBash } from '../packages/release/src/git-bash';
-import { buildReleaseManifest } from '../packages/release/src/manifest';
+import { buildReleaseManifest, parseReleaseManifest } from '../packages/release/src/manifest';
 import { evaluatePreconditions, type ReleaseFacts } from '../packages/release/src/preconditions';
 import {
   imagesWithTag,
@@ -196,10 +196,16 @@ async function verifyPublishedManifest(version: string): Promise<void> {
   let problem = '';
   for (let attempt = 1; attempt <= 3; attempt += 1) {
     try {
-      const res = await fetch(url, { redirect: 'follow' });
+      // ⛔ The timeout is not optional. Node's fetch has no default request timeout, so a
+      // connection GitHub accepts and then leaves silent never settles. This step runs after the
+      // tag and release are already public, so a hang here means the release never finishes, with
+      // no output and nothing to tell it apart from a slow network. The retry loop already treats
+      // an abort as a failed attempt, so it just retries.
+      const res = await fetch(url, { redirect: 'follow', signal: AbortSignal.timeout(10_000) });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const parsed = JSON.parse(await res.text()) as { version?: unknown };
-      if (parsed.version !== version) throw new Error(`the asset names ${String(parsed.version)}`);
+      const manifest = parseReleaseManifest(JSON.parse(await res.text()));
+      if (!manifest) throw new Error('the asset is not a valid release manifest');
+      if (manifest.version !== version) throw new Error(`the asset names ${manifest.version}`);
       console.log(`published manifest verified: ${url}`);
       return;
     } catch (err) {
