@@ -182,6 +182,15 @@ Both `q-transmission-hvleid` and `q-transmission-other` change shape.
 today. `ord = 1` carries a week token per column, read by `groupBoundary: 'token-change'`. This
 reuses the existing `ord` mechanism rather than inventing a second one.
 
+**The mark becomes a number.** The query emits `'Y'` today. `cellgrid` reads a cell with
+`Number(value)` and `stepFor` treats anything non-finite as empty, so `Number('Y')` being `NaN`
+would paint every cell empty on every run, with no error and no failing test. The report would
+ship blank. `'Y'` becomes `'1'`. The blank branch stays `''`, because `Number('')` is 0, which the
+palette already reads as empty.
+
+This was missed when this spec was first written. It is listed first because it is the one change
+that silently produces a plausible-looking wrong report rather than an obvious failure.
+
 **Two computed columns per laboratory.** `days` is the count of working days carrying a
 submission. `silent` is the count of working days since the last submission, as at the last
 working day of the month. Both are SQL, so the renderer does no arithmetic over the data.
@@ -196,6 +205,20 @@ what AGENTS.md §7 requires of any `ORDER BY` carrying an `OFFSET`.
 
 `blocks` is applied by the caller, not inside the SQL. It decides which of the two elements
 render, and `showWithTable` already handles a block that is absent.
+
+### 4.0 The second synthetic row breaks the CURRENT design
+
+`bodyRowsFor` lifts exactly one synthetic row: `rows.slice(1)` at `draw.ts:354`. The design that is
+live today is still a `table` with `headerRow: true`. The moment these queries emit a second
+synthetic row, the week-token row prints as an ordinary body row, a laboratory named `(week)`
+carrying week numbers, above every real laboratory, in both grids.
+
+`seedDataDrivenReports` refreshes stored query SQL from `report-seeds.ts` on every boot
+(`report-seeds.ts:4006`), so any install that takes the code takes the breakage.
+
+**The query slice therefore cannot merge on its own.** It develops alongside the design slice and
+they merge together. The operator decided this on 2026-08-20, choosing it over accepting an interim
+state on `main` and over changing the shared table path that slice 1 was careful never to disturb.
 
 ### 4.1 Two things the second synthetic row puts at risk
 
