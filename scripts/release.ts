@@ -149,7 +149,17 @@ function newestTag(): string | null {
  *  --fail-if-no-match makes that impossible a second way: measured on pnpm 11.13.0, the same
  *  filter exits 1 with it and 0 without. */
 async function gateGreen(): Promise<boolean> {
-  const gate = await pnpm(['turbo', 'run', 'test']);
+  // ⛔ --concurrency=4, not turbo's default. This box has 12 CPUs and 35 test tasks, each
+  // spawning its own vitest with workers up to the core count, so the default oversubscribes and
+  // tests fail on `Test timed out` rather than on anything real. Measured 2026-08-19 on a cold
+  // cache: the default failed 4 of 4 runs, each on a DIFFERENT package, every one passing when
+  // run alone; --concurrency=4 passed 35/35.
+  //
+  // ⚠ The five releases before this one passed at the default only because 29 to 33 of the 35
+  // tasks came from cache, so almost nothing ran concurrently. That is luck, not evidence, and it
+  // runs out on exactly the release that changes the most packages. The retry loop below would
+  // have caught it, but a release should not depend on its own recovery path.
+  const gate = await pnpm(['turbo', 'run', 'test', '--concurrency=4']);
   if (gate.code === 0) return true;
 
   const failed = parseFailedTasks(gate.output);

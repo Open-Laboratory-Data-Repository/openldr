@@ -321,6 +321,26 @@ export MSYS_NO_PATHCONV=1
 exec docker compose exec -T -u "$(id -u):$(id -g)" -w / api node /app/cli/dist/index.js "$@"
 WRAPPER
 chmod +x "$DIR/openldr" 2>/dev/null || true
+
+# ⛔ On Windows the wrapper above is unusable from PowerShell. It has no file extension and
+# PowerShell does not read shebangs, so `./openldr` never runs: Windows falls back to file
+# association, finds none, and pops a "Select an app to open 'openldr'" dialog. install.ps1
+# already writes the wrapper below, but `pnpm release` step 9 calls THIS installer on every
+# platform, so a Windows verification install had no CLI its own operator could run.
+# Body kept identical to install/install.ps1. No -u on purpose: Windows bind mounts do not
+# enforce the ownership check the sh wrapper's `id` call exists for, and there is no `id`
+# command to resolve the flag anyway.
+case "$(uname -s 2>/dev/null)" in
+  MINGW*|MSYS*|CYGWIN*)
+    cat > "$DIR/openldr.ps1" <<'PSWRAPPER'
+# OpenLDR operator CLI. Runs inside the api container.
+# Files must live under .\data (mounted at /data) - e.g. .\openldr.ps1 ingest data/bundle.json
+docker compose exec -T -w / api node /app/cli/dist/index.js $args
+exit $LASTEXITCODE
+PSWRAPPER
+    echo "→ Also wrote openldr.ps1 (PowerShell cannot run the extensionless sh wrapper)"
+    ;;
+esac
 if [ "$MSSQL_DEMO" -eq 1 ]; then
   fetch "deploy/install/docker-compose.mssql.yml" "$DIR/docker-compose.mssql.yml"
   fetch "scripts/init-target-db-mssql.sql" "$DIR/config/init-target-db-mssql.sql"
