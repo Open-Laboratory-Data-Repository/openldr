@@ -466,6 +466,32 @@ export function cellStatusesFor(
   return resolved.rows.map((row) => cols.map((c) => (c.statusKey ? asCellStatus(row[c.statusKey]) : undefined)));
 }
 
+/**
+ * Per-record status for each `cellgrid` trailing column that declares a `statusKey`, one entry per
+ * RECORD (the synthetic header/group rows already stripped), one status per `el.trailingColumns`
+ * in order. `[]` when no trailing column carries a `statusKey` — the compatibility contract
+ * `cellStatusesFor` documents above, so a cellgrid that does not opt in draws exactly the plain-text
+ * path it always has.
+ *
+ * ⛔ NOT read off `rowsFor`'s projected row array. `cellGridRowsFor` projects each trailing
+ * column's `key` (the DISPLAYED value — a count, in this design) but never its `statusKey`: most
+ * designs bind no trailing status at all, and adding an invisible column to every projected row
+ * would be dead weight for every one of them. This reads `resolved.rows` directly instead, the same
+ * way `cellStatusesFor` does for `table`, and relies on the SAME already-sorted order
+ * `resolveDesignTables` produced — `cellGridRowsFor` reads that identical array, so index `i` here
+ * is index `i` there.
+ */
+export function cellGridTrailingStatusesFor(
+  el: DesignElement, resolved: ResolvedTable | undefined,
+): (CellStatus | undefined)[][] {
+  if (el.kind !== 'cellgrid' || !el.dataSource) return [];
+  if (!resolved || 'error' in resolved) return [];
+  const cols = el.trailingColumns ?? [];
+  if (!cols.some((c) => c.statusKey)) return [];
+  const lift = el.groupBoundary === 'token-change' ? 2 : 1;
+  return resolved.rows.slice(lift).map((row) => cols.map((c) => (c.statusKey ? asCellStatus(row[c.statusKey]) : undefined)));
+}
+
 // ---------------------------------------------------------------------------------------------
 // keyvalue panel
 // ---------------------------------------------------------------------------------------------
@@ -1055,6 +1081,7 @@ function drawCellGrid(
   // Records.
   const perChunk = cellGridMaxRows(r.h);
   const slice = perChunk < 1 ? [] : split.body.slice(chunk * perChunk, (chunk + 1) * perChunk);
+  const trailingStatuses = cellGridTrailingStatusesFor(el, resolved);
   slice.forEach((row, ri) => {
     const y = r.y + CELL_HEAD_H + ri * CELL_ROW_H;
     if (hasLabel) {
@@ -1065,10 +1092,20 @@ function drawCellGrid(
       doc.rect(xOfCell(i), y, CELL_SIZE, CELL_SIZE).fill(cellFill(Number(row[cellIndex(i)]), max, palette));
     }
     let x = trailingStart;
+    // `chunk * perChunk + ri` is this row's index in `split.body`, which `trailingStatuses` is
+    // aligned to (both are `resolved.rows` with the same synthetic header/group rows stripped).
+    const rowStatuses = trailingStatuses[chunk * perChunk + ri];
     trailing.forEach((c, ci) => {
       x += CELL_COL_GAP;
       const v = row[cellIndex(cellCount) + ci] ?? '';
-      doc.font('Helvetica').fontSize(7).fillColor(BODY_TEXT)
+      const st = rowStatuses?.[ci];
+      const filled = Boolean(st) && (c.emphasis ?? 'text') === 'fill';
+      if (filled) {
+        doc.rect(x + CHIP_INSET_X, y + CHIP_INSET_Y, c.width - CHIP_INSET_X * 2, CELL_ROW_H - CHIP_INSET_Y * 2)
+          .fill(STATUS_CHIP_FILL[st!]);
+      }
+      doc.font('Helvetica').fontSize(7)
+        .fillColor(filled ? STATUS_CHIP_TEXT[st!] : (st ? STATUS_TEXT_COLOR[st] : BODY_TEXT))
         .text(v, x, y + 1, { width: c.width, align: 'center', lineBreak: false });
       x += c.width;
     });

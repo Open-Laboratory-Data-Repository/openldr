@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { interpolate, paramMap, elementChunkCount, pageChunkCount, rowsFor, totalPhysicalPages, pageFooterLabel, cellTextOptions, columnWidths, isNumericColumn, CELL_TEXT_H, ROW_H, asCellStatus, cellStatusesFor, isRightAligned, keyValuePairs, pairRects, elementValue, interpolatedPairValues, transposeResolved, tableHeaders, headerBandHeight, headerRowFor, bodyRowsFor, headerTexts, drawsOnChunk, STACKED_HEAD_H, headerLines, drawnHeight, resolveFlowY } from './draw';
+import { interpolate, paramMap, elementChunkCount, pageChunkCount, rowsFor, totalPhysicalPages, pageFooterLabel, cellTextOptions, columnWidths, isNumericColumn, CELL_TEXT_H, ROW_H, asCellStatus, cellStatusesFor, cellGridTrailingStatusesFor, isRightAligned, keyValuePairs, pairRects, elementValue, interpolatedPairValues, transposeResolved, tableHeaders, headerBandHeight, headerRowFor, bodyRowsFor, headerTexts, drawsOnChunk, STACKED_HEAD_H, headerLines, drawnHeight, resolveFlowY } from './draw';
 import type { ReportDesign, DesignElement, DesignPage } from '../schema';
 import type { ResolvedTable } from './index';
 
@@ -383,6 +383,68 @@ describe('cellStatusesFor', () => {
   it('returns [] for a static table and for an error-resolved bound table', () => {
     expect(cellStatusesFor(tbl({ columns: ['A'], rows: [['1']] }), undefined)).toEqual([]);
     expect(cellStatusesFor(tbl({ dataSource: ds, boundColumns: [{ key: 'a', label: 'A', statusKey: 's' }] }), { error: 'x' })).toEqual([]);
+  });
+});
+
+describe('cellGridTrailingStatusesFor', () => {
+  const ds = { kind: 'custom-query', queryId: 'q' } as const;
+  const cg = (over: Partial<DesignElement> = {}): DesignElement => ({
+    id: 'g', kind: 'cellgrid', name: 'g', rect: { x: 0, y: 0, w: 400, h: 200 },
+    labelColumn: 'lab', cellColumns: ['d01'], ...over,
+  } as DesignElement);
+
+  it('returns [] when no trailing column declares a statusKey (the identical-output contract)', () => {
+    const el = cg({ dataSource: ds, trailingColumns: [{ key: 'silent', label: 'Silent', width: 52 }] });
+    const resolved = { columns: [{ key: 'lab', label: '' }, { key: 'd01', label: '' }, { key: 'silent', label: '' }],
+      rows: [{ lab: '', d01: '', silent: '' }, { lab: 'Bahi', d01: '1', silent: '3' }] };
+    expect(cellGridTrailingStatusesFor(el, resolved)).toEqual([]);
+  });
+
+  it('reads the status column, aligned to the RECORDS — the lifted header row is not one', () => {
+    const el = cg({ dataSource: ds,
+      trailingColumns: [{ key: 'silent', label: 'Silent', width: 52, statusKey: 'silent_status' }] });
+    const resolved = {
+      columns: [{ key: 'lab', label: '' }, { key: 'd01', label: '' }, { key: 'silent', label: '' }, { key: 'silent_status', label: '' }],
+      rows: [
+        { lab: '', d01: '', silent: '', silent_status: '' }, // the lifted header row
+        { lab: 'Bahi', d01: '1', silent: '1', silent_status: '' },
+        { lab: 'Chunya', d01: '0', silent: '22', silent_status: 'critical' },
+      ],
+    };
+    expect(cellGridTrailingStatusesFor(el, resolved)).toEqual([[undefined], ['critical']]);
+  });
+
+  it('lifts TWO synthetic rows when the grid groups by token-change, not one', () => {
+    const el = cg({ dataSource: ds, groupBoundary: 'token-change',
+      trailingColumns: [{ key: 'silent', label: 'Silent', width: 52, statusKey: 'silent_status' }] });
+    const resolved = {
+      columns: [{ key: 'lab', label: '' }, { key: 'd01', label: '' }, { key: 'silent', label: '' }, { key: 'silent_status', label: '' }],
+      rows: [
+        { lab: '', d01: '', silent: '', silent_status: '' },   // date row
+        { lab: '', d01: '', silent: '', silent_status: '' },   // week-token row
+        { lab: 'Bahi', d01: '1', silent: '22', silent_status: 'critical' },
+      ],
+    };
+    expect(cellGridTrailingStatusesFor(el, resolved)).toEqual([['critical']]);
+  });
+
+  it('drops an unrecognised status rather than passing it through', () => {
+    const el = cg({ dataSource: ds,
+      trailingColumns: [{ key: 'silent', label: 'Silent', width: 52, statusKey: 'silent_status' }] });
+    const resolved = {
+      columns: [{ key: 'lab', label: '' }, { key: 'silent_status', label: '' }],
+      rows: [{ lab: '' }, { lab: 'Bahi', silent_status: 'VERY SILENT' }],
+    };
+    expect(cellGridTrailingStatusesFor(el, resolved)).toEqual([[undefined]]);
+  });
+
+  it('returns [] for an unbound cellgrid and for an error-resolved bound one', () => {
+    expect(cellGridTrailingStatusesFor(
+      cg({ rows: [['x']], trailingColumns: [{ key: 's', label: 'S', width: 20, statusKey: 'st' }] }), undefined,
+    )).toEqual([]);
+    expect(cellGridTrailingStatusesFor(
+      cg({ dataSource: ds, trailingColumns: [{ key: 's', label: 'S', width: 20, statusKey: 'st' }] }), { error: 'boom' },
+    )).toEqual([]);
   });
 });
 
