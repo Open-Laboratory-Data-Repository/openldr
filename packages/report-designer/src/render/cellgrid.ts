@@ -19,7 +19,10 @@ export const CELL_GAP = 1.5;
 /** At a group break. Five times the small gap, so a break reads as structure rather than as a
  *  slightly larger gap. */
 export const GROUP_GAP = 7.5;
-/** Baseline row pitch. Derived from cell size, not from `ROW_H`. */
+/** Baseline row pitch. Its own constant: no formula ties it to `CELL_SIZE`, and the 2.25pt
+ *  difference between them is not derived from anything. Settled by eye over preview rounds,
+ *  the same way `CELL_SIZE` was. Stated rather than computed so nobody goes looking for the
+ *  relationship. */
 export const CELL_ROW_H = 12.75;
 /** Between the label column and the strip, and between the strip and each trailing column. */
 export const CELL_COL_GAP = 9;
