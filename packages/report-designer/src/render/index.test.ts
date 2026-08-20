@@ -1078,3 +1078,49 @@ function textRunsOf(content: string): { x: number; y: number; text: string }[] {
     text: [...m[3].matchAll(/<([0-9a-fA-F]*)>/g)].map((h) => Buffer.from(h[1], 'hex').toString('latin1')).join(''),
   }));
 }
+
+describe('fillTo through the whole render path', () => {
+  /** Two stacked cellgrids, the shape `rt-transmission-grid` uses: an anchor, then a follower that
+   *  flows under it and (optionally) fills the rest of its own declared box. */
+  function stacked(fill: boolean, followerRows: number): { design: ReportDesign; resolved: Map<string, ResolvedTable> } {
+    const cells = { columns: [{ key: 'lab', label: '' }, { key: 'd01', label: '' }] };
+    const body = (n: number, tag: string) => [
+      { lab: '', d01: '01' },
+      ...Array.from({ length: n }, (_, i) => ({ lab: `${tag}${String(i).padStart(2, '0')}`, d01: '1' })),
+    ];
+    const design = baseDesign({ pages: [{ id: 'p1', elements: [
+      { id: 'a', kind: 'cellgrid', name: 'a', rect: { x: 0, y: 0, w: 900, h: 200 },
+        dataSource: { kind: 'custom-query', queryId: 'qa' }, labelColumn: 'lab', cellColumns: ['d01'] },
+      { id: 'b', kind: 'cellgrid', name: 'b', rect: { x: 0, y: 200, w: 900, h: 400 },
+        flowAfter: 'a', ...(fill ? { fillTo: 'rect-bottom' } : {}),
+        dataSource: { kind: 'custom-query', queryId: 'qb' }, labelColumn: 'lab', cellColumns: ['d01'] },
+    ] }] }) as ReportDesign;
+    return { design, resolved: new Map<string, ResolvedTable>([
+      ['a', { ...cells, rows: body(14, 'A') }],
+      ['b', { ...cells, rows: body(followerRows, 'B') }],
+    ]) };
+  }
+
+  it('draws every record exactly once, so the page count and the drawer cannot disagree', async () => {
+    // The failure this pins: the chunk count and the drawn slice deriving capacity separately.
+    // One row of disagreement makes a laboratory vanish or print twice, with no error anywhere.
+    const { design, resolved } = stacked(true, 52);
+    const drawn = textsOf(decodedContent(await renderReportDesignPdf(design, resolved, { now: NOW })));
+    for (let i = 0; i < 52; i += 1) {
+      const label = `B${String(i).padStart(2, '0')}`;
+      expect(drawn.filter((t) => t === label)).toHaveLength(1);
+    }
+    for (let i = 0; i < 14; i += 1) {
+      expect(drawn.filter((t) => t === `A${String(i).padStart(2, '0')}`)).toHaveLength(1);
+    }
+  });
+
+  it('spends fewer pages on the same records than the same design without it', async () => {
+    const filled = stacked(true, 52);
+    const declared = stacked(false, 52);
+    const withFill = await renderReportDesignPdf(filled.design, filled.resolved, { now: NOW });
+    const without = await renderReportDesignPdf(declared.design, declared.resolved, { now: NOW });
+    expect(withFill.toString('latin1')).toMatch(/\/Count 2/);
+    expect(without.toString('latin1')).toMatch(/\/Count 3/);
+  });
+});

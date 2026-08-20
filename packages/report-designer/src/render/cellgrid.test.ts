@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   stripWidth, cellGridWidth, groupBreaks, rampSteps, stepFor, cellFill, EMPTY_FILL,
-  splitCellGridRows, cellGridMaxRows, cellGridChunks,
+  splitCellGridRows, cellGridMaxRows, cellGridChunks, cellGridRowSchedule, cellGridChunkStart,
   CELL_SIZE, CELL_GAP, GROUP_GAP,
 } from './cellgrid';
 
@@ -191,5 +191,59 @@ describe('cellGridChunks', () => {
 
   it('is one when the rect cannot hold a single row, rather than looping forever', () => {
     expect(cellGridChunks(50, 8)).toBe(1);
+  });
+});
+
+describe('cellGridRowSchedule', () => {
+  const fixed = (hPt: number) => () => hPt;
+
+  it('matches the fixed-height division it replaces', () => {
+    // 400pt holds 30 records a chunk, so 31 records are 30 then 1.
+    expect(cellGridRowSchedule(31, fixed(400), 'g')).toEqual([30, 1]);
+    expect(cellGridRowSchedule(60, fixed(400), 'g')).toEqual([30, 30]);
+    expect(cellGridRowSchedule(10, fixed(400), 'g')).toEqual([10]);
+  });
+
+  it('is one chunk carrying no records when the query returned none, so the header still draws', () => {
+    expect(cellGridRowSchedule(0, fixed(400), 'g')).toEqual([0]);
+  });
+
+  it('is one chunk when the box cannot hold a single record, rather than looping forever', () => {
+    expect(cellGridRowSchedule(50, fixed(8), 'g')).toEqual([0]);
+  });
+
+  it('consumes records against the height EACH chunk actually has', () => {
+    // Chunk 0 is short (100pt -> 6 records), every later chunk is the full box (400pt -> 30).
+    const heights = (chunk: number): number => (chunk === 0 ? 100 : 400);
+    expect(cellGridRowSchedule(20, heights, 'g')).toEqual([6, 14]);
+    // The same 20 records against the SHORT height everywhere need four chunks, which is the
+    // whole point: capacity is no longer one division.
+    expect(cellGridRowSchedule(20, fixed(100), 'g')).toEqual([6, 6, 6, 2]);
+  });
+
+  it('loses no record and repeats none, whatever the heights do', () => {
+    const heights = (chunk: number): number => [90, 400, 60, 250, 800][chunk % 5];
+    const schedule = cellGridRowSchedule(97, heights, 'g');
+    expect(schedule.reduce((a, b) => a + b, 0)).toBe(97);
+    // Each chunk starts exactly where the previous one stopped.
+    const starts = schedule.map((_, c) => cellGridChunkStart(schedule, c));
+    expect(starts).toEqual(schedule.map((_, c) => schedule.slice(0, c).reduce((a, b) => a + b, 0)));
+    expect(starts[0]).toBe(0);
+  });
+
+  it('refuses rather than dropping records when a later chunk has no room at all', () => {
+    // A record that fits nowhere would otherwise vanish from the report with no error: the
+    // element would report N chunks and the drawer would paint fewer rows than it counted.
+    const heights = (chunk: number): number => (chunk === 0 ? 100 : 5);
+    expect(() => cellGridRowSchedule(20, heights, 'other')).toThrow(/other/);
+    expect(() => cellGridRowSchedule(20, heights, 'other')).toThrow(/14/);
+  });
+});
+
+describe('cellGridChunkStart', () => {
+  it('is the running total of the chunks before it', () => {
+    expect(cellGridChunkStart([6, 14, 3], 0)).toBe(0);
+    expect(cellGridChunkStart([6, 14, 3], 1)).toBe(6);
+    expect(cellGridChunkStart([6, 14, 3], 2)).toBe(20);
   });
 });

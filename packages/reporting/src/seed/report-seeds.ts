@@ -4116,8 +4116,14 @@ export const SEED_DESIGNS: ReportDesign[] = [
       { id: 'rt-transmission-grid-other-title', kind: 'text', name: 'Other heading', rect: { x: 48, y: 594, w: 600, h: 14 },
         text: 'Any Other Test Data Submission by Testing Laboratory', style: { fontSize: 10, bold: true, color: '#334155' },
         showWithTable: 'other', flowAfter: 'hvleid' },
+      // ⛔ `fillTo` as well as `flowAfter`. `flowAfter` moved this grid's TOP up; on its own it moved
+      // the blank band from the top of every continuation page to the bottom, because the grid still
+      // held the 21 records TG_GRID_H allows wherever it started. `fillTo` fixes its BOTTOM edge
+      // (612 + 380 = 992px@96, clear of rule2 at 1003) and lets the record count follow the height,
+      // which is what turns a 4-page report into 2. See `fillTo` in schema.ts.
       { id: 'other', kind: 'cellgrid', name: 'Other submission', rect: { x: 48, y: 612, w: TG_CONTENT_W, h: TG_GRID_H },
         flowAfter: 'rt-transmission-grid-other-title',
+        fillTo: 'rect-bottom',
         dataSource: { kind: 'custom-query', queryId: 'q-transmission-other' },
         sortBy: 'ord',
         labelColumn: 'lab',

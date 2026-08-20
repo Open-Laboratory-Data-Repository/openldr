@@ -81,7 +81,9 @@ export function renderReportDesignPdf(
       for (const el of page.elements) {
         if (!drawsOnChunk(el, page, resolved, c)) continue;
         const y = resolveFlowY(el, page, resolved, c);
-        drawElement(doc, el, tokens, resolved.get(el.id), c, y);
+        // The page context goes with it: `fillTo` needs the same view of the page the chunk count
+        // was computed from, or the drawer and the counter would answer differently.
+        drawElement(doc, el, tokens, resolved.get(el.id), c, y, { page, resolved });
       }
       if (design.pageNumbers) drawPageFooter(doc, w, h, physical, total);
     }

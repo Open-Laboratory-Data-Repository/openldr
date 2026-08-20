@@ -6,7 +6,7 @@ import type { ResolvedTable } from './index';
 import { formatDisplayDate, formatDisplayDateOf } from './format-date';
 import {
   CELL_SIZE, CELL_GAP, GROUP_GAP, CELL_ROW_H, CELL_COL_GAP, CELL_HEAD_H, CELL_LABEL_W,
-  cellFill, groupBreaks, splitCellGridRows, cellGridMaxRows, cellGridChunks, cellGridRowsInChunk,
+  cellFill, groupBreaks, splitCellGridRows, cellGridLift, cellGridRowSchedule, cellGridChunkStart,
   stripWidth as stripWidthOf,
 } from './cellgrid';
 
@@ -419,7 +419,9 @@ export function headerTexts(labels: string[], headerRow: string[] | undefined): 
 export function drawsOnChunk(
   el: DesignElement, page: DesignPage, resolved: Map<string, ResolvedTable>, chunk: number,
 ): boolean {
-  if (el.kind === 'table' || el.kind === 'cellgrid') return elementDrawsOnChunk(el, resolved.get(el.id), chunk);
+  if (el.kind === 'table' || el.kind === 'cellgrid') {
+    return elementDrawsOnChunk(el, resolved.get(el.id), chunk, { page, resolved });
+  }
   if (!el.showWithTable) return true;
   // ⛔ `cellgrid` is accepted here too. `showWithTable` names the element a heading belongs to, and
   // the reason it exists (never print a heading over a block that finished earlier) applies to a
@@ -428,15 +430,17 @@ export function drawsOnChunk(
     (e) => e.id === el.showWithTable && (e.kind === 'table' || e.kind === 'cellgrid'),
   );
   if (!target) return true;
-  return elementDrawsOnChunk(target, resolved.get(target.id), chunk);
+  return elementDrawsOnChunk(target, resolved.get(target.id), chunk, { page, resolved });
 }
 
 /** ⛔ A FAILED table keeps drawing on every chunk. Running out of rows and failing to run are not
  *  the same condition: the first is finished, the second is a defect that is just as true on page 3
  *  as on page 1, and a reader who is handed only the last page must still see it. */
-function elementDrawsOnChunk(el: DesignElement, resolved: ResolvedTable | undefined, chunk: number): boolean {
+function elementDrawsOnChunk(
+  el: DesignElement, resolved: ResolvedTable | undefined, chunk: number, flow?: FlowContext,
+): boolean {
   if (el.dataSource && resolved && 'error' in resolved) return true;
-  return chunk < elementChunkCount(el, resolved);
+  return chunk < elementChunkCount(el, resolved, flow);
 }
 
 /** Parse a status token from a query cell. Unrecognised values become `undefined` — a report must
@@ -488,7 +492,7 @@ export function cellGridTrailingStatusesFor(
   if (!resolved || 'error' in resolved) return [];
   const cols = el.trailingColumns ?? [];
   if (!cols.some((c) => c.statusKey)) return [];
-  const lift = el.groupBoundary === 'token-change' ? 2 : 1;
+  const lift = cellGridLift(el.groupBoundary === 'token-change');
   return resolved.rows.slice(lift).map((row) => cols.map((c) => (c.statusKey ? asCellStatus(row[c.statusKey]) : undefined)));
 }
 
@@ -827,12 +831,50 @@ function drawUnencodable(doc: Doc, r: Box): void {
     .rect(r.x, r.y, r.w, r.h).stroke().undash().restore();
 }
 
+/**
+ * What an element needs to know about the PAGE around it, for the two declarations whose answer
+ * depends on it: `flowAfter` (where the element starts) and `fillTo` (how much room that leaves).
+ *
+ * Optional at every call site, and the answer is identical without it for the elements that declare
+ * neither — which is every element in every design that has not opted in.
+ *
+ * `seen` is `resolveFlowY`'s cycle guard, carried through so a `fillTo` element whose height is being
+ * measured mid-resolution still throws on a cycle instead of recursing forever.
+ */
+export interface FlowContext {
+  page: DesignPage;
+  resolved: Map<string, ResolvedTable>;
+  seen?: ReadonlySet<string>;
+}
+
+/**
+ * Records this cellgrid draws on each chunk — the ONE answer `elementChunkCount`, `drawnHeight` and
+ * `drawCellGrid` all read. See `cellGridRowSchedule` for why this is a loop and not a division.
+ */
+function cellGridScheduleFor(
+  el: DesignElement, resolved: ResolvedTable | undefined, flow?: FlowContext,
+): number[] {
+  const body = splitCellGridRows(rowsFor(el, resolved), el.groupBoundary === 'token-change').body;
+  return cellGridRowSchedule(body.length, (chunk) => elementHeight(el, chunk, flow), el.id);
+}
+
+/**
+ * The height, in pt, the element's BOX has on chunk `chunk`.
+ *
+ * The declared rect height, unless the element declares `fillTo` — then its bottom edge is fixed and
+ * its top is wherever `flowAfter` put it, so the box is whatever is left between them.
+ */
+function elementHeight(el: DesignElement, chunk: number, flow?: FlowContext): number {
+  const box = toPt(el.rect);
+  if (el.kind !== 'cellgrid' || el.fillTo !== 'rect-bottom' || !flow) return box.h;
+  return box.y + box.h - resolveFlowY(el, flow.page, flow.resolved, chunk, flow.seen);
+}
+
 /** How many physical pages this one table needs (repeat-page model). 1 for non-tables/errors/degenerate boxes. */
-export function elementChunkCount(el: DesignElement, resolved: ResolvedTable | undefined): number {
-  if (el.kind === 'cellgrid') {
-    const body = splitCellGridRows(rowsFor(el, resolved), el.groupBoundary === 'token-change').body;
-    return cellGridChunks(body.length, toPt(el.rect).h);
-  }
+export function elementChunkCount(
+  el: DesignElement, resolved: ResolvedTable | undefined, flow?: FlowContext,
+): number {
+  if (el.kind === 'cellgrid') return cellGridScheduleFor(el, resolved, flow).length;
   if (el.kind !== 'table') return 1;
   const maxRows = maxRowsFor(toPt(el.rect).h, headerBandHeight(el));
   if (maxRows < 1) return 1;
@@ -842,7 +884,9 @@ export function elementChunkCount(el: DesignElement, resolved: ResolvedTable | u
 
 /** Physical pages needed for a design page = the largest table's chunk count (min 1). */
 export function pageChunkCount(page: DesignPage, resolved: Map<string, ResolvedTable>): number {
-  return Math.max(1, ...page.elements.map((el) => elementChunkCount(el, resolved.get(el.id))));
+  return Math.max(1, ...page.elements.map(
+    (el) => elementChunkCount(el, resolved.get(el.id), { page, resolved }),
+  ));
 }
 
 /** Total physical PDF pages across the whole design = sum of each design page's chunk count. */
@@ -870,18 +914,21 @@ export function pageFooterLabel(n: number, total: number): string {
  * zero — which is what lets a `flowAfter` follower move up and take its place.
  */
 export function drawnHeight(
-  el: DesignElement, resolved: ResolvedTable | undefined, chunk: number,
+  el: DesignElement, resolved: ResolvedTable | undefined, chunk: number, flow?: FlowContext,
 ): number {
-  const rectH = toPt(el.rect).h;
-  if (el.dataSource && resolved && 'error' in resolved) return rectH;
-  if (el.kind !== 'cellgrid' && el.kind !== 'table') return rectH;
-  if (chunk >= elementChunkCount(el, resolved)) return 0;
+  // The box the element actually paints into: its declared height, or the filled one when it
+  // declares `fillTo`. The error placeholder below fills that box, whichever it is.
+  const boxH = elementHeight(el, chunk, flow);
+  if (el.dataSource && resolved && 'error' in resolved) return boxH;
+  if (el.kind !== 'cellgrid' && el.kind !== 'table') return boxH;
   if (el.kind === 'cellgrid') {
-    const body = splitCellGridRows(rowsFor(el, resolved), el.groupBoundary === 'token-change').body;
-    return CELL_HEAD_H + cellGridRowsInChunk(body.length, rectH, chunk) * CELL_ROW_H;
+    const schedule = cellGridScheduleFor(el, resolved, flow);
+    if (chunk >= schedule.length) return 0;
+    return CELL_HEAD_H + schedule[chunk] * CELL_ROW_H;
   }
+  if (chunk >= elementChunkCount(el, resolved, flow)) return 0;
   const headH = headerBandHeight(el);
-  const maxRows = maxRowsFor(rectH, headH);
+  const maxRows = maxRowsFor(boxH, headH);
   const rowCount = bodyRowsFor(el, resolved).length;
   const rowsInChunk = maxRows < 1 ? 0 : Math.max(0, Math.min(maxRows, rowCount - chunk * maxRows));
   return headH + rowsInChunk * ROW_H;
@@ -912,7 +959,9 @@ export function resolveFlowY(
   const nextSeen = new Set(seen);
   nextSeen.add(el.id);
   const targetY = resolveFlowY(target, page, resolved, chunk, nextSeen);
-  return targetY + drawnHeight(target, resolved.get(target.id), chunk);
+  // `nextSeen`, not `seen`: measuring a `fillTo` target means resolving its own y, which walks
+  // further up the chain. Carrying the guard is what keeps a cycle throwing instead of recursing.
+  return targetY + drawnHeight(target, resolved.get(target.id), chunk, { page, resolved, seen: nextSeen });
 }
 
 /** Draw the "Page X / Y" footer centered ~24pt above the bottom edge of a full-bleed page. */
@@ -928,9 +977,14 @@ export function drawElement(
   // element with no `flowAfter` that is exactly `toPt(el.rect).y`, so this parameter changes
   // nothing for the (still overwhelmingly common) design that never opts in.
   yPt?: number,
+  // The page around this element, needed only by `fillTo` — see `FlowContext`.
+  flow?: FlowContext,
 ): void {
   const box = toPt(el.rect);
-  const r = yPt === undefined ? box : { ...box, y: yPt };
+  // A `fillTo` element keeps its BOTTOM edge and takes everything down to it, so the box grows by
+  // exactly what `flowAfter` moved it up. Every other element keeps its authored height.
+  const y = yPt ?? box.y;
+  const r = { ...box, y, h: el.fillTo === 'rect-bottom' && el.kind === 'cellgrid' ? box.y + box.h - y : box.h };
   const s = el.style ?? {};
   switch (el.kind) {
     case 'rect': {
@@ -973,7 +1027,7 @@ export function drawElement(
       return;
     }
     case 'cellgrid': {
-      drawCellGrid(doc, el, r, resolved, chunk);
+      drawCellGrid(doc, el, r, resolved, chunk, flow);
       return;
     }
     case 'keyvalue': {
@@ -1025,6 +1079,7 @@ function drawTable(doc: Doc, el: DesignElement, r: Box, resolved: ResolvedTable 
  */
 function drawCellGrid(
   doc: Doc, el: DesignElement, r: Box, resolved: ResolvedTable | undefined, chunk: number,
+  flow?: FlowContext,
 ): void {
   if (el.dataSource && resolved && 'error' in resolved) { drawErrorPlaceholder(doc, r, resolved.error); return; }
 
@@ -1078,9 +1133,12 @@ function drawCellGrid(
     hx += c.width;
   }
 
-  // Records.
-  const perChunk = cellGridMaxRows(r.h);
-  const slice = perChunk < 1 ? [] : split.body.slice(chunk * perChunk, (chunk + 1) * perChunk);
+  // Records. ⛔ The slice comes from the SAME schedule the chunk count was taken from, never from a
+  // division computed here — see `cellGridRowSchedule`. With `fillTo` the capacity differs per page,
+  // so `chunk * perChunk` is not this chunk's first record and never was safe to assume.
+  const schedule = cellGridScheduleFor(el, resolved, flow);
+  const from = cellGridChunkStart(schedule, chunk);
+  const slice = split.body.slice(from, from + (schedule[chunk] ?? 0));
   const trailingStatuses = cellGridTrailingStatusesFor(el, resolved);
   slice.forEach((row, ri) => {
     const y = r.y + CELL_HEAD_H + ri * CELL_ROW_H;
@@ -1092,9 +1150,9 @@ function drawCellGrid(
       doc.rect(xOfCell(i), y, CELL_SIZE, CELL_SIZE).fill(cellFill(Number(row[cellIndex(i)]), max, palette));
     }
     let x = trailingStart;
-    // `chunk * perChunk + ri` is this row's index in `split.body`, which `trailingStatuses` is
-    // aligned to (both are `resolved.rows` with the same synthetic header/group rows stripped).
-    const rowStatuses = trailingStatuses[chunk * perChunk + ri];
+    // `from + ri` is this row's index in `split.body`, which `trailingStatuses` is aligned to (both
+    // are `resolved.rows` with the same synthetic header/group rows stripped).
+    const rowStatuses = trailingStatuses[from + ri];
     trailing.forEach((c, ci) => {
       x += CELL_COL_GAP;
       const v = row[cellIndex(cellCount) + ci] ?? '';

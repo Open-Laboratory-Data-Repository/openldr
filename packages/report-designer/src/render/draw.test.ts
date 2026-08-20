@@ -1062,3 +1062,52 @@ describe('resolveFlowY — where flowAfter actually puts an element', () => {
     expect(() => resolveFlowY(a, page, new Map(), 0)).toThrow(/cycle/);
   });
 });
+
+describe('fillTo — an element that takes the height flowAfter freed above it', () => {
+  /** A cellgrid of `rows` records whose declared box is `y`..`y+h` (px@96). */
+  function grid(id: string, rows: number, rect: { y: number; h: number }, over: Partial<DesignElement> = {}) {
+    const el = {
+      id, kind: 'cellgrid', name: id, rect: { x: 0, y: rect.y, w: 900, h: rect.h },
+      dataSource: { kind: 'custom-query', queryId: 'q' },
+      labelColumn: 'lab', cellColumns: ['d01'], ...over,
+    } as DesignElement;
+    const resolved: ResolvedTable = {
+      columns: [{ key: 'lab', label: '' }, { key: 'd01', label: '' }],
+      rows: [{ lab: '', d01: '01' }, ...Array.from({ length: rows }, (_, i) => ({ lab: `L${i}`, d01: '1' }))],
+    };
+    return { el, resolved };
+  }
+
+  // `a` is the anchor: 200px@96 = 150pt, so cellGridMaxRows(150) = 10 records a chunk, and 14
+  // records make it two chunks — 10 on chunk 0, 4 on chunk 1.
+  // `b` follows it and ends at its own declared bottom, 600px@96 = 450pt.
+  const anchor = grid('a', 14, { y: 0, h: 200 });
+  const follower = grid('b', 52, { y: 200, h: 400 }, { flowAfter: 'a', fillTo: 'rect-bottom' });
+  const page: DesignPage = { id: 'p', elements: [anchor.el, follower.el] };
+  const map = new Map<string, ResolvedTable>([['a', anchor.resolved], ['b', follower.resolved]]);
+  const flow = { page, resolved: map };
+
+  it('leaves an element that does not declare it exactly as it was', () => {
+    // The anchor never fills: 150pt, 10 records a chunk, 14 records, two chunks. Unchanged.
+    expect(elementChunkCount(anchor.el, anchor.resolved)).toBe(2);
+    expect(elementChunkCount(anchor.el, anchor.resolved, flow)).toBe(2);
+    expect(drawnHeight(anchor.el, anchor.resolved, 0, flow)).toBe(13 + 10 * 12.75);
+    expect(drawnHeight(anchor.el, anchor.resolved, 1, flow)).toBe(13 + 4 * 12.75);
+  });
+
+  it('takes the rows the freed height can hold, so the same records need fewer pages', () => {
+    // Declared height alone: 300pt -> floor((300-13)/12.75) = 22 records a chunk -> 3 chunks.
+    expect(elementChunkCount(follower.el, follower.resolved)).toBe(3);
+    // Filling: chunk 0 starts at 140.5pt (what `a` drew) and runs to 450pt -> 309.5pt -> 23
+    // records; chunk 1 starts at 64pt -> 386pt -> 29 records. 23 + 29 = 52, so two chunks.
+    expect(elementChunkCount(follower.el, follower.resolved, flow)).toBe(2);
+    expect(drawnHeight(follower.el, follower.resolved, 0, flow)).toBe(13 + 23 * 12.75);
+    expect(drawnHeight(follower.el, follower.resolved, 1, flow)).toBe(13 + 29 * 12.75);
+  });
+
+  it('is inert without the flow context, because the declared box is the same answer', () => {
+    // An element that declares `fillTo` but is asked with no page around it falls back to its
+    // declared height, the same contract `flowAfter` documents for a name it cannot resolve.
+    expect(elementChunkCount(follower.el, follower.resolved)).toBe(3);
+  });
+});

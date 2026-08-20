@@ -1957,6 +1957,15 @@ describe('SEED_DESIGNS — rt-transmission-grid', () => {
     expect(el('other').flowAfter).toBe('rt-transmission-grid-other-title');
   });
 
+  it('lets the lower grid take the height the upper one freed, instead of only moving up', () => {
+    // `flowAfter` alone moved the blank band from the top of a continuation page to its bottom:
+    // `other` started higher and still held the 21 records its authored 285pt box allows. `fillTo`
+    // is what makes the capacity move with the position. The upper grid does NOT declare it — its
+    // bottom edge is what leaves room for the `other` block on page 1.
+    expect(el('other').fillTo).toBe('rect-bottom');
+    expect(el('hvleid').fillTo).toBeUndefined();
+  });
+
   it('draws BOTH grids on one page, as the reference does', () => {
     expect(el('hvleid').dataSource).toEqual({ kind: 'custom-query', queryId: 'q-transmission-hvleid' });
     expect(el('other').dataSource).toEqual({ kind: 'custom-query', queryId: 'q-transmission-other' });

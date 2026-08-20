@@ -135,6 +135,18 @@ export interface SplitRows {
 }
 
 /**
+ * Synthetic leading rows a `cellgrid` result carries: the label row, plus the group-token row when
+ * the element groups.
+ *
+ * ⛔ ONE definition. Three call sites need this number — the row split, the trailing-column status
+ * alignment, and the record count pagination runs on — and a site that disagreed by one would shift
+ * every laboratory's chip up a row, or paginate against a record count the drawer never has.
+ */
+export function cellGridLift(grouped: boolean): number {
+  return grouped ? 2 : 1;
+}
+
+/**
  * Separate the synthetic leading rows from the records.
  *
  * ⛔ TWO synthetic rows, where `table`'s `headerRow` lifts ONE. Row 0 is the labels a reader sees,
@@ -148,7 +160,7 @@ export interface SplitRows {
  * off-by-two here.
  */
 export function splitCellGridRows(rows: string[][], grouped: boolean): SplitRows {
-  const lift = grouped ? 2 : 1;
+  const lift = cellGridLift(grouped);
   return {
     header: rows[0] ?? [],
     groups: grouped ? rows[1] : undefined,
@@ -161,19 +173,59 @@ export function cellGridMaxRows(hPt: number): number {
   return Math.max(0, Math.floor((hPt - CELL_HEAD_H) / CELL_ROW_H));
 }
 
-/** Physical chunks this grid needs. Never zero: an empty grid still draws its header once, which is
- *  what tells a reader the block ran and found nothing rather than being omitted. */
-export function cellGridChunks(bodyRowCount: number, hPt: number): number {
-  const max = cellGridMaxRows(hPt);
-  if (max < 1) return 1;
-  return Math.max(1, Math.ceil(bodyRowCount / max));
+/**
+ * Records each physical chunk carries, in order.
+ *
+ * ⛔ THE single source of a cellgrid's pagination. `elementChunkCount` reads its LENGTH, `drawnHeight`
+ * reads one entry, and `drawCellGrid` slices the body with it. They cannot disagree because there is
+ * nothing to disagree with: one row of drift and a laboratory silently vanishes from the report or
+ * prints on two pages, with no error anywhere.
+ *
+ * ⛔ NOT a division. `heightAt` is asked chunk by chunk because an element that takes the height
+ * `flowAfter` freed above it (`fillTo` in `schema.ts`) has a DIFFERENT capacity on every page: on
+ * page 1 the grid above it is full, on page 3 it has finished and contributes nothing. Consuming the
+ * records in a loop is what makes that expressible; `ceil(n / max)` cannot say it.
+ *
+ * Never empty: a grid with no records still draws its header once, which is what tells a reader the
+ * block ran and found nothing rather than being left off the page.
+ */
+export function cellGridRowSchedule(
+  bodyRowCount: number, heightAt: (chunk: number) => number, id: string,
+): number[] {
+  const out: number[] = [];
+  let drawn = 0;
+  do {
+    const chunk = out.length;
+    const max = cellGridMaxRows(heightAt(chunk));
+    if (max < 1) {
+      // A box too short for even one record on the FIRST chunk is a design defect the renderer has
+      // always tolerated: it draws the header and nothing else, rather than paginating forever.
+      if (chunk === 0) return [0];
+      // Past the first chunk it is not tolerable. Records are left and no page will ever take them,
+      // so the alternatives are looping forever or dropping laboratories with no error.
+      throw new Error(
+        `cellgrid '${id}': chunk ${chunk} has room for no records and ${bodyRowCount - drawn} are left`,
+      );
+    }
+    const take = Math.min(max, bodyRowCount - drawn);
+    out.push(take);
+    drawn += take;
+  } while (drawn < bodyRowCount);
+  return out;
 }
 
-/** Records actually drawn on physical chunk `chunk` — not the whole body, just this chunk's own
- *  slice. Shared by `drawCellGrid`'s own slicing and by `flowAfter`'s `drawnHeight`, so the two can
- *  never disagree about how many rows one page carries. */
+/** Index of the first record chunk `chunk` draws, given the schedule above. */
+export function cellGridChunkStart(schedule: number[], chunk: number): number {
+  return schedule.slice(0, chunk).reduce((sum, n) => sum + n, 0);
+}
+
+/** Physical chunks a grid of FIXED height needs. The schedule above, asked for a height that never
+ *  changes — kept as a name for the common case, not as a second algorithm. */
+export function cellGridChunks(bodyRowCount: number, hPt: number): number {
+  return cellGridRowSchedule(bodyRowCount, () => hPt, '').length;
+}
+
+/** Records drawn on physical chunk `chunk` of a grid of FIXED height. Same source as above. */
 export function cellGridRowsInChunk(bodyRowCount: number, hPt: number, chunk: number): number {
-  const max = cellGridMaxRows(hPt);
-  if (max < 1) return 0;
-  return Math.max(0, Math.min(max, bodyRowCount - chunk * max));
+  return cellGridRowSchedule(bodyRowCount, () => hPt, '')[chunk] ?? 0;
 }

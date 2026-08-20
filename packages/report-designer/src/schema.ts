@@ -200,6 +200,28 @@ export const DesignElementSchema = z.object({
    *  ⛔ Opt-in, and inert when unset — a design without it renders byte-for-byte as before
    *  (`render/golden.test.ts`). */
   flowAfter: z.string().optional(),
+  /** `cellgrid` only: end this element at its DECLARED BOTTOM EDGE (`rect.y + rect.h`) on every
+   *  chunk, taking whatever height `flowAfter` freed above it, instead of carrying its authored
+   *  height around.
+   *
+   *  `flowAfter` moves an element's TOP. Without this, its CAPACITY never moved with it: the
+   *  `other` grid on `rt-transmission-grid` started higher on every continuation page and still held
+   *  the 21 records its authored 285pt box allowed, so the blank band a reader saw simply moved from
+   *  the top of the page to the bottom, and the report still spent 4 pages on 2 pages of grid.
+   *
+   *  ⛔ Capacity then DIFFERS PER PAGE — full grid above on page 1, finished grid contributing
+   *  nothing on page 3 — so the chunk count stops being `ceil(records / perPage)` and becomes a loop
+   *  that consumes records page by page. `cellGridRowSchedule` (`render/cellgrid.ts`) is that loop
+   *  and is the only place it lives: the chunk count, the drawn height and the drawn slice all read
+   *  the same array, because two of them disagreeing by one row makes a laboratory vanish from the
+   *  report or print twice, with no error anywhere.
+   *
+   *  ⛔ Fails OPEN, like `flowAfter`: asked with no page context around it, the element falls back to
+   *  its declared height. Every render path supplies the context.
+   *
+   *  ⛔ Opt-in, and inert when unset — a design without it renders byte-for-byte as before
+   *  (`render/golden.test.ts`). */
+  fillTo: z.literal('rect-bottom').optional(),
   /** `cellgrid`: result column holding each row's label. Omit for a grid with no label column, such
    *  as a month calendar whose position already says which day a cell is. */
   labelColumn: z.string().optional(),
