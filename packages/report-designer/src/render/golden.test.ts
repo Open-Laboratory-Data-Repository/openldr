@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { createHash } from 'node:crypto';
 import { renderReportDesignPdf, type ResolvedTable } from './index';
 import type { ReportDesign } from '../schema';
+import { elementChunkCount } from './draw';
+import { cellFill } from './cellgrid';
 
 /**
  * A byte-for-byte guard on what the renderer draws for a design that opts into NOTHING new.
@@ -105,4 +107,154 @@ describe('golden — a design that opts into nothing renders byte-identically', 
   it('matches the digest recorded before `headerRow` existed', async () => {
     expect(await goldenDigest()).toBe(GOLDEN_DIGEST);
   });
+});
+
+/** A binary submission grid: two week groups, the first short, which is the shape a month starting
+ *  mid-week produces. Kept separate from `goldenDesign()` so the untouched-design digest above
+ *  stays sensitive to the shared path and nothing else. */
+function cellGridDesign(): ReportDesign {
+  return {
+    id: 'cg', name: 'CellGrid', status: 'published', paper: 'A4', orientation: 'portrait',
+    parameters: [],
+    pages: [{
+      id: 'p1',
+      elements: [
+        { id: 'head', kind: 'text', name: 'head', rect: { x: 48, y: 40, w: 600, h: 14 },
+          text: 'Any HVL/EID data submission by testing laboratory',
+          style: { fontSize: 10, bold: true }, showWithTable: 'grid' },
+        { id: 'grid', kind: 'cellgrid', name: 'grid', rect: { x: 48, y: 60, w: 698, h: 200 },
+          dataSource: { kind: 'custom-query', queryId: 'q' },
+          sortBy: 'ord',
+          labelColumn: 'lab',
+          cellColumns: ['d01', 'd02', 'd03', 'd04', 'd05', 'd06', 'd07', 'd08'],
+          groupBoundary: 'token-change',
+          palette: { ramp: 'blue', steps: 1 },
+          trailingColumns: [
+            { key: 'days', label: 'Days', width: 34.5 },
+            { key: 'silent', label: 'Silent', width: 52 },
+          ] },
+      ],
+    }],
+    pageNumbers: true,
+  };
+}
+
+function cellGridResolved(): Map<string, ResolvedTable> {
+  const spread = (vals: (string | number)[]) =>
+    Object.fromEntries(vals.map((v, i) => [`d${String(i + 1).padStart(2, '0')}`, v]));
+  // ⛔ Keyed by the ELEMENT id, never the query id. `resolveDesignTables` does
+  // `resolved.set(el.id, ...)` (resolve.ts:39) and every reader does `resolved.get(el.id)`
+  // (index.ts:78, draw.ts:392, :401, :749). Keying by `'q'` resolves to undefined, the grid
+  // renders as if it had zero rows, and the pagination assertion below fails for a reason that
+  // has nothing to do with pagination. `goldenResolved()` above already keys by element id.
+  return new Map([['grid', {
+    columns: [{ key: 'lab', label: '' },
+      ...Array.from({ length: 8 }, (_, i) => ({ key: `d${String(i + 1).padStart(2, '0')}`, label: '' })),
+      { key: 'days', label: 'Days' }, { key: 'silent', label: 'Silent' }],
+    rows: [
+      // Wed Thu Fri | Mon Tue Wed Thu Fri  -> one break, at cell index 3
+      { ord: 0, lab: '', days: 'Days', silent: 'Silent', ...spread(['03','04','05','09','10','11','12','13']) },
+      { ord: 1, lab: '', days: '', silent: '', ...spread(['1','1','1','2','2','2','2','2']) },
+      { ord: 2, lab: 'Bahi',   days: '02/08', silent: 'current',    ...spread([0, 0, 1, 0, 0, 0, 0, 1]) },
+      { ord: 3, lab: 'Chunya', days: '01/08', silent: '05d silent', ...spread([1, 0, 0, 0, 0, 0, 0, 0]) },
+    ],
+  }]]);
+}
+
+// Proves DETERMINISM, not correctness. Two renders of one design agree; nothing here says the
+// drawing is right. Task 10 and the unit tests in `cellgrid.test.ts` carry that.
+//
+// ⚠ Hash `normalisePdf(buf)`, never the raw buffer. pdfkit derives `/ID` by MD5-ing
+// `info.CreationDate.getTime()` at millisecond precision, and `CreationDate` defaults to real
+// wall-clock time at construction. `opts.now` does not reach it. Two back-to-back renders of an
+// identical design therefore differ, and only in `/ID`. That is why the digest test above
+// normalises too.
+it('draws a cellgrid identically across runs', async () => {
+  const at = new Date('2026-01-15T09:00:00Z');
+  const a = await renderReportDesignPdf(cellGridDesign(), cellGridResolved(), { now: at });
+  const b = await renderReportDesignPdf(cellGridDesign(), cellGridResolved(), { now: at });
+  expect(createHash('sha256').update(normalisePdf(a)).digest('hex'))
+    .toBe(createHash('sha256').update(normalisePdf(b)).digest('hex'));
+  expect(a.length).toBeGreaterThan(1000);
+});
+
+// ⛔ Asserts the chunk count directly. It does NOT scrape the rendered PDF for `Page 5 / 5`:
+// pdfkit FlateDecodes every content stream and splits text runs at kerning pairs inside `[...] TJ`
+// arrays, so a plain string never appears in the bytes. `index.test.ts` documents that and carries
+// `decodedContent`/`textsOf` helpers for the cases that genuinely need it. This one does not, and
+// a direct assertion says what it means.
+it('paginates a cellgrid whose rows exceed its rect', async () => {
+  const many = cellGridResolved();
+  const q = many.get('grid') as { columns: unknown[]; rows: Record<string, unknown>[] };
+  for (let i = 0; i < 40; i += 1) {
+    q.rows.push({ ord: 100 + i, lab: `Extra ${i}`, days: '00/08', silent: '08d silent',
+      ...Object.fromEntries(Array.from({ length: 8 }, (_, k) => [`d${String(k + 1).padStart(2, '0')}`, 0])) });
+  }
+  const el = cellGridDesign().pages[0].elements.find((e) => e.id === 'grid')!;
+  // 200px@96 = 150pt; (150 - 13) / 12.75 = 10 rows a chunk; 42 records => 5 chunks
+  expect(elementChunkCount(el, many.get('grid'))).toBe(5);
+  const buf = await renderReportDesignPdf(cellGridDesign(), many, { now: new Date('2026-01-15T09:00:00Z') });
+  expect(buf.length).toBeGreaterThan(1000);
+});
+
+/**
+ * The month calendar from the approved design, expressed as a `cellgrid` in a DIFFERENT
+ * configuration: seven cell columns, one row per week, no label column, five palette steps instead
+ * of one, and no grouping.
+ *
+ * ⛔ If this needs anything added to `drawCellGrid`, the contract in spec §2.4 is wrong and slices 2
+ * to 4 must not be built on it. Passing WITHOUT a production change is the assertion.
+ */
+function calendarDesign(): ReportDesign {
+  return {
+    id: 'cal', name: 'Calendar', status: 'published', paper: 'A4', orientation: 'portrait',
+    parameters: [],
+    pages: [{
+      id: 'p1',
+      elements: [
+        { id: 'cal', kind: 'cellgrid', name: 'cal', rect: { x: 48, y: 60, w: 200, h: 120 },
+          dataSource: { kind: 'custom-query', queryId: 'q' },
+          sortBy: 'ord',
+          cellColumns: ['c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7'],
+          palette: { ramp: 'blue', steps: 5 } },
+      ],
+    }],
+    pageNumbers: false,
+  };
+}
+
+function calendarResolved(): Map<string, ResolvedTable> {
+  const week = (ord: number, vals: (string | number)[]) =>
+    ({ ord, ...Object.fromEntries(vals.map((v, i) => [`c${i + 1}`, v])) });
+  // Element id, not query id. Same reason as `cellGridResolved` above.
+  return new Map([['cal', {
+    columns: Array.from({ length: 7 }, (_, i) => ({ key: `c${i + 1}`, label: '' })),
+    rows: [
+      week(0, ['M', 'T', 'W', 'T', 'F', 'S', 'S']),
+      week(1, [0, 0, 0, 0, 0, 0, 1]),   // July 2018 starts on a Sunday
+      week(2, [4, 1, 0, 0, 1, 0, 0]),
+      week(3, [0, 0, 0, 5, 0, 0, 0]),
+      week(4, [0, 0, 0, 0, 1, 0, 0]),
+      week(5, [1, 1, 1, 2, 0, 0, 0]),
+      week(6, [3, 2, 0, 0, 0, 0, 0]),
+    ],
+  }]]);
+}
+
+it('draws a month calendar as the same element in a second configuration', async () => {
+  const buf = await renderReportDesignPdf(calendarDesign(), calendarResolved(), {
+    now: new Date('2026-01-15T09:00:00Z'),
+  });
+  expect(buf.length).toBeGreaterThan(500);
+});
+
+it('keeps a calendar on one page: six weeks fit its rect', () => {
+  const el = calendarDesign().pages[0].elements[0];
+  expect(elementChunkCount(el, calendarResolved().get(el.id))).toBe(1);
+});
+
+it('scales the ramp across the whole calendar rather than per chunk', () => {
+  // The maximum is 5. At steps: 5 the busiest day lands on the darkest step, and a 1 must not.
+  expect(cellFill(5, 5, { ramp: 'blue', steps: 5 })).toBe('#185FA5');
+  expect(cellFill(1, 5, { ramp: 'blue', steps: 5 })).not.toBe('#185FA5');
 });
