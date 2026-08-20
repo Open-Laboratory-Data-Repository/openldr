@@ -256,8 +256,35 @@ That leaves 6.3 points of headroom against 523.28. **Thin enough to be a test ra
 comment.** The worst-case month must be asserted to fit, computed from the constants, so a later
 change to any one of them fails loudly instead of silently ellipsizing laboratory names.
 
-Continuation pages hold about 43 rows against the preview's 40. That number is also asserted
-rather than assumed.
+**The 43-rows figure in an earlier draft of this section was wrong.** It solved
+`cellGridMaxRows` for a single grid owning the whole page. Two grids share it, as they do today, so
+a defensible even split gives each roughly 285pt, which is about 21 rows per grid per page. The
+real number belongs in an assertion against the real design rect, not in this paragraph, because
+the split between the two grids is a layout decision the design makes and this document should not
+pre-empt it.
+
+---
+
+## 5.1 The summary band is slice 2c, not slice 2
+
+Page 1 of the approved design carries a month calendar and four figures above the laboratory
+grids. Neither can be built from the two transmission queries: `keyvalue` reads only row 0 of a
+bound result (`draw.ts:479`) and `cellgrid` lifts row 0 as its header, while both queries are
+shaped one row per laboratory with day columns. A calendar needs laboratories per day, and the
+figures need aggregates.
+
+That is **two new queries across three dialects, six more SQL variants**, comparable in size to
+the whole of slice 2a. Verified live on 2026-08-20 that both are buildable from the existing CTE
+pattern with the panel filter removed, reusing the same ISO-week function the queries already use.
+
+A single query serving both via a carrier row was considered and rejected. It saves no SQL, since
+every query in this file already duplicates its own CTEs, and it couples two elements' semantics
+into one row.
+
+**The laboratory grids are the report. The summary band is an addition on top of what was asked
+for.** Slice 2b delivers the grids in portrait; the band follows in 2c. The operator decided this
+on 2026-08-20 rather than put six unverifiable-dialect variants on the critical path to seeing the
+report look right.
 
 ---
 

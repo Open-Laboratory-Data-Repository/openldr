@@ -33,10 +33,14 @@ export function findUnsortedHeaderRows(design: ReportDesign): UnsortedHeaderRow[
   const bad: UnsortedHeaderRow[] = [];
   for (const page of design.pages) {
     for (const el of page.elements) {
-      if (el.kind !== 'table' || el.headerRow !== true) continue;
-      // A BOUND table takes its rows from a query and needs the discriminator. An UNBOUND one draws
-      // the author's own `rows` array in the order it is written, so row 0 is already knowable and
-      // requiring `sortBy` there would refuse a design that cannot be wrong.
+      // A table only lifts a header row when it opts in with headerRow: true. A cellgrid has no
+      // such flag: it ALWAYS lifts row 0 (splitCellGridRows, unconditional). Both therefore need
+      // sortBy on the same rows-came-from-a-query condition below; only the "does this element
+      // even lift a header row" test differs between the two kinds.
+      const liftsHeaderRow = (el.kind === 'table' && el.headerRow === true) || el.kind === 'cellgrid';
+      if (!liftsHeaderRow) continue;
+      // An UNBOUND element draws its own static rows/columns in the order written, so row 0 is
+      // already knowable and requiring sortBy there would refuse a design that cannot be wrong.
       if (!el.dataSource) continue;
       if (!el.sortBy) bad.push({ elementId: el.id });
     }

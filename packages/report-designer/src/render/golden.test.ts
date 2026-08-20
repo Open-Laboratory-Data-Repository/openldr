@@ -258,3 +258,28 @@ it('scales the ramp across the whole calendar rather than per chunk', () => {
   expect(cellFill(5, 5, { ramp: 'blue', steps: 5 })).toBe('#185FA5');
   expect(cellFill(1, 5, { ramp: 'blue', steps: 5 })).not.toBe('#185FA5');
 });
+
+function statPanelDesign(): ReportDesign {
+  return {
+    id: 'sp', name: 'Stat', status: 'published', paper: 'A4', orientation: 'portrait',
+    parameters: [],
+    pages: [{
+      id: 'p1',
+      elements: [
+        { id: 'panel', kind: 'keyvalue', name: 'panel', rect: { x: 48, y: 60, w: 300, h: 120 },
+          layout: 'stat', panelColumns: 2,
+          rows: [['Laboratories', '81'], ['Coverage', '5.9%'], ['Busiest day', '45'], ['Silent 10+d', '16']] },
+      ],
+    }],
+    pageNumbers: false,
+  };
+}
+
+it('draws a stat keyvalue panel identically across runs', async () => {
+  const at = new Date('2026-01-15T09:00:00Z');
+  const a = await renderReportDesignPdf(statPanelDesign(), new Map(), { now: at });
+  const b = await renderReportDesignPdf(statPanelDesign(), new Map(), { now: at });
+  expect(createHash('sha256').update(normalisePdf(a)).digest('hex'))
+    .toBe(createHash('sha256').update(normalisePdf(b)).digest('hex'));
+  expect(a.length).toBeGreaterThan(1000);
+});

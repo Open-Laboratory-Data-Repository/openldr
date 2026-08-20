@@ -2329,10 +2329,42 @@ labs as (select distinct lab from arrivals),
 -- CROSS JOIN is what makes a silent day render blank IN PLACE rather than shifting later days left.
 grid as (
   select l.lab, dy.n,
-         case when a.lab is null then '' else 'Y' end as mark
+         case when a.lab is null then '' else '1' end as mark
   from labs l
   cross join days dy
   left join arrivals a on a.lab = l.lab and a.cal_day = dy.cal_day
+),
+lab_stats as (
+  -- 'days': count of DISTINCT WORKING days this laboratory submitted on -- the same figure a
+  -- reader gets by counting filled cells in its own row, computed here so the renderer does no
+  -- arithmetic over the data (spec section 4).
+  -- 'silent': working days between the laboratory's LAST submission and the last working day of
+  -- the month. LEFT JOIN throughout, never INNER: a laboratory whose only submission this month
+  -- landed on a Saturday or Sunday has ZERO rows in 'days' (Mon-Fri only), and an inner join here
+  -- would drop that laboratory from the grid ENTIRELY instead of showing it silent all month.
+  -- ⛔ MEASURED on the live warehouse, 2017-08, HVL/EID panels: 'Mbagala Kizuiani' and
+  -- 'Mwananyamala' are exactly this case -- days=0, silent=23 (the whole month). See Step 2.
+  select l.lab,
+         count(dy.n) as days,
+         (select max(n) from days) - coalesce(max(dy.n), 0) as silent,
+         -- ⚠ 10 working days is an INVENTED threshold -- an operational decision the
+         -- approved preview made for shading the Silent column, not a clinical one and not a
+         -- design one either. AGENTS.md section 8 does not forbid it (it names no clinical
+         -- vocabulary), but it IS a number somebody will want to change, so it is named here
+         -- rather than left as a bare literal for a future reader to wonder about.
+         case when (select max(n) from days) - coalesce(max(dy.n), 0) >= 10 then 'critical' else '' end as silent_status
+  from labs l
+  left join arrivals a on a.lab = l.lab
+  left join days dy on dy.cal_day = a.cal_day
+  group by l.lab
+),
+lab_ord as (
+  -- Unique per-laboratory ord, alphabetical from 2. 0 and 1 are spoken for by the date row and the
+  -- week-token row below, so 'order by ord' alone is a full tiebreaker across the WHOLE result --
+  -- what AGENTS.md section 7 requires of any ORDER BY carrying an OFFSET, and planPagination
+  -- (packages/dashboards/src/sql-runner.ts:56) wraps this query in exactly that shape.
+  select lab, row_number() over (order by lab) + 1 as ord
+  from labs
 )
 select 0 as ord, '(dates)' as lab,
   max(case when n = 1 then to_char(cal_day, 'FMDD') || chr(10) || to_char(cal_day, 'Mon') else '' end) as d01,
@@ -2357,36 +2389,71 @@ select 0 as ord, '(dates)' as lab,
   max(case when n = 20 then to_char(cal_day, 'FMDD') || chr(10) || to_char(cal_day, 'Mon') else '' end) as d20,
   max(case when n = 21 then to_char(cal_day, 'FMDD') || chr(10) || to_char(cal_day, 'Mon') else '' end) as d21,
   max(case when n = 22 then to_char(cal_day, 'FMDD') || chr(10) || to_char(cal_day, 'Mon') else '' end) as d22,
-  max(case when n = 23 then to_char(cal_day, 'FMDD') || chr(10) || to_char(cal_day, 'Mon') else '' end) as d23
+  max(case when n = 23 then to_char(cal_day, 'FMDD') || chr(10) || to_char(cal_day, 'Mon') else '' end) as d23,
+  '' as days, '' as silent, '' as silent_status
 from days
 union all
-select 1 as ord, lab,
-  max(case when n = 1 then mark else '' end) as d01,
-  max(case when n = 2 then mark else '' end) as d02,
-  max(case when n = 3 then mark else '' end) as d03,
-  max(case when n = 4 then mark else '' end) as d04,
-  max(case when n = 5 then mark else '' end) as d05,
-  max(case when n = 6 then mark else '' end) as d06,
-  max(case when n = 7 then mark else '' end) as d07,
-  max(case when n = 8 then mark else '' end) as d08,
-  max(case when n = 9 then mark else '' end) as d09,
-  max(case when n = 10 then mark else '' end) as d10,
-  max(case when n = 11 then mark else '' end) as d11,
-  max(case when n = 12 then mark else '' end) as d12,
-  max(case when n = 13 then mark else '' end) as d13,
-  max(case when n = 14 then mark else '' end) as d14,
-  max(case when n = 15 then mark else '' end) as d15,
-  max(case when n = 16 then mark else '' end) as d16,
-  max(case when n = 17 then mark else '' end) as d17,
-  max(case when n = 18 then mark else '' end) as d18,
-  max(case when n = 19 then mark else '' end) as d19,
-  max(case when n = 20 then mark else '' end) as d20,
-  max(case when n = 21 then mark else '' end) as d21,
-  max(case when n = 22 then mark else '' end) as d22,
-  max(case when n = 23 then mark else '' end) as d23
-from grid
-group by lab
-order by ord, lab`,
+select 1 as ord, '(week)' as lab,
+  -- The ISO week number. NEVER DRAWN -- spec section 4: "the token's value is never drawn and
+  -- carries no meaning, only its CHANGES matter." Verified against August 2017 on the live
+  -- warehouse (Step 2): 23 working days fall into weeks 31,31,31,31 | 32×5 | 33×5 | 34×5 | 35×4 --
+  -- breaks at n=5,10,15,20, exactly the fixture cellgrid.test.ts's groupBreaks already covers.
+  max(case when n = 1 then to_char(cal_day, 'IW') else '' end) as d01,
+  max(case when n = 2 then to_char(cal_day, 'IW') else '' end) as d02,
+  max(case when n = 3 then to_char(cal_day, 'IW') else '' end) as d03,
+  max(case when n = 4 then to_char(cal_day, 'IW') else '' end) as d04,
+  max(case when n = 5 then to_char(cal_day, 'IW') else '' end) as d05,
+  max(case when n = 6 then to_char(cal_day, 'IW') else '' end) as d06,
+  max(case when n = 7 then to_char(cal_day, 'IW') else '' end) as d07,
+  max(case when n = 8 then to_char(cal_day, 'IW') else '' end) as d08,
+  max(case when n = 9 then to_char(cal_day, 'IW') else '' end) as d09,
+  max(case when n = 10 then to_char(cal_day, 'IW') else '' end) as d10,
+  max(case when n = 11 then to_char(cal_day, 'IW') else '' end) as d11,
+  max(case when n = 12 then to_char(cal_day, 'IW') else '' end) as d12,
+  max(case when n = 13 then to_char(cal_day, 'IW') else '' end) as d13,
+  max(case when n = 14 then to_char(cal_day, 'IW') else '' end) as d14,
+  max(case when n = 15 then to_char(cal_day, 'IW') else '' end) as d15,
+  max(case when n = 16 then to_char(cal_day, 'IW') else '' end) as d16,
+  max(case when n = 17 then to_char(cal_day, 'IW') else '' end) as d17,
+  max(case when n = 18 then to_char(cal_day, 'IW') else '' end) as d18,
+  max(case when n = 19 then to_char(cal_day, 'IW') else '' end) as d19,
+  max(case when n = 20 then to_char(cal_day, 'IW') else '' end) as d20,
+  max(case when n = 21 then to_char(cal_day, 'IW') else '' end) as d21,
+  max(case when n = 22 then to_char(cal_day, 'IW') else '' end) as d22,
+  max(case when n = 23 then to_char(cal_day, 'IW') else '' end) as d23,
+  '' as days, '' as silent, '' as silent_status
+from days
+union all
+select max(lo.ord) as ord, g.lab,
+  max(case when g.n = 1 then g.mark else '' end) as d01,
+  max(case when g.n = 2 then g.mark else '' end) as d02,
+  max(case when g.n = 3 then g.mark else '' end) as d03,
+  max(case when g.n = 4 then g.mark else '' end) as d04,
+  max(case when g.n = 5 then g.mark else '' end) as d05,
+  max(case when g.n = 6 then g.mark else '' end) as d06,
+  max(case when g.n = 7 then g.mark else '' end) as d07,
+  max(case when g.n = 8 then g.mark else '' end) as d08,
+  max(case when g.n = 9 then g.mark else '' end) as d09,
+  max(case when g.n = 10 then g.mark else '' end) as d10,
+  max(case when g.n = 11 then g.mark else '' end) as d11,
+  max(case when g.n = 12 then g.mark else '' end) as d12,
+  max(case when g.n = 13 then g.mark else '' end) as d13,
+  max(case when g.n = 14 then g.mark else '' end) as d14,
+  max(case when g.n = 15 then g.mark else '' end) as d15,
+  max(case when g.n = 16 then g.mark else '' end) as d16,
+  max(case when g.n = 17 then g.mark else '' end) as d17,
+  max(case when g.n = 18 then g.mark else '' end) as d18,
+  max(case when g.n = 19 then g.mark else '' end) as d19,
+  max(case when g.n = 20 then g.mark else '' end) as d20,
+  max(case when g.n = 21 then g.mark else '' end) as d21,
+  max(case when g.n = 22 then g.mark else '' end) as d22,
+  max(case when g.n = 23 then g.mark else '' end) as d23,
+  max(ls.days::text) as days, max(ls.silent::text) as silent, max(ls.silent_status) as silent_status
+from grid g
+join lab_ord lo on lo.lab = g.lab
+join lab_stats ls on ls.lab = g.lab
+group by g.lab
+order by ord`,
       mssql: `with month_start as (
   -- ⛔ 'ym' is the NORMALISED month. Every string test below compares against it, never against
   -- the raw parameter, so a loose '2017-8' answers exactly like '2017-08' instead of emptying the
@@ -2489,10 +2556,34 @@ labs as (select distinct lab from arrivals),
 -- The CROSS JOIN makes a silent day render blank IN PLACE rather than shifting later days left.
 grid as (
   select l.lab, dy.n,
-         case when a.lab is null then '' else 'Y' end as mark
+         case when a.lab is null then '' else '1' end as mark
   from labs l
   cross join days dy
   left join arrivals a on a.lab = l.lab and a.cal_day = dy.cal_day
+),
+lab_stats as (
+  -- Same LEFT JOIN reasoning as the postgres variant: a laboratory whose only submission this
+  -- month landed on a weekend has zero rows in 'days' (Mon-Fri only), and an inner join here would
+  -- drop it from the grid entirely instead of showing it silent all month.
+  select l.lab,
+         count(dy.n) as days,
+         (select max(n) from days) - coalesce(max(dy.n), 0) as silent,
+         -- ⚠ 10 working days is an INVENTED threshold -- an operational decision the
+         -- approved preview made for shading the Silent column, not a clinical one and not a
+         -- design one either. AGENTS.md section 8 does not forbid it (it names no clinical
+         -- vocabulary), but it IS a number somebody will want to change, so it is named here
+         -- rather than left as a bare literal for a future reader to wonder about.
+         case when (select max(n) from days) - coalesce(max(dy.n), 0) >= 10 then 'critical' else '' end as silent_status
+  from labs l
+  left join arrivals a on a.lab = l.lab
+  left join days dy on dy.cal_day = a.cal_day
+  group by l.lab
+),
+lab_ord as (
+  -- Unique per-laboratory ord, alphabetical from 2 -- see the postgres variant for why 'order by
+  -- ord' alone is now a full tiebreaker (AGENTS.md section 7).
+  select lab, row_number() over (order by lab) + 1 as ord
+  from labs
 )
 select 0 as ord, '(dates)' as lab,
   max(case when n = 1 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d01,
@@ -2517,36 +2608,70 @@ select 0 as ord, '(dates)' as lab,
   max(case when n = 20 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d20,
   max(case when n = 21 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d21,
   max(case when n = 22 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d22,
-  max(case when n = 23 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d23
+  max(case when n = 23 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d23,
+  '' as days, '' as silent, '' as silent_status
 from days
 union all
-select 1 as ord, lab,
-  max(case when n = 1 then mark else '' end) as d01,
-  max(case when n = 2 then mark else '' end) as d02,
-  max(case when n = 3 then mark else '' end) as d03,
-  max(case when n = 4 then mark else '' end) as d04,
-  max(case when n = 5 then mark else '' end) as d05,
-  max(case when n = 6 then mark else '' end) as d06,
-  max(case when n = 7 then mark else '' end) as d07,
-  max(case when n = 8 then mark else '' end) as d08,
-  max(case when n = 9 then mark else '' end) as d09,
-  max(case when n = 10 then mark else '' end) as d10,
-  max(case when n = 11 then mark else '' end) as d11,
-  max(case when n = 12 then mark else '' end) as d12,
-  max(case when n = 13 then mark else '' end) as d13,
-  max(case when n = 14 then mark else '' end) as d14,
-  max(case when n = 15 then mark else '' end) as d15,
-  max(case when n = 16 then mark else '' end) as d16,
-  max(case when n = 17 then mark else '' end) as d17,
-  max(case when n = 18 then mark else '' end) as d18,
-  max(case when n = 19 then mark else '' end) as d19,
-  max(case when n = 20 then mark else '' end) as d20,
-  max(case when n = 21 then mark else '' end) as d21,
-  max(case when n = 22 then mark else '' end) as d22,
-  max(case when n = 23 then mark else '' end) as d23
-from grid
-group by lab
-order by ord, lab`,
+select 1 as ord, '(week)' as lab,
+  -- ISO week number, never drawn -- see the postgres variant's comment for why. datepart(iso_week,
+  -- ...) matches the file's existing preference for deterministic, session-setting-independent
+  -- date arithmetic (see 'days' above: not datepart(weekday, ...), which depends on SET DATEFIRST).
+  max(case when n = 1 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d01,
+  max(case when n = 2 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d02,
+  max(case when n = 3 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d03,
+  max(case when n = 4 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d04,
+  max(case when n = 5 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d05,
+  max(case when n = 6 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d06,
+  max(case when n = 7 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d07,
+  max(case when n = 8 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d08,
+  max(case when n = 9 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d09,
+  max(case when n = 10 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d10,
+  max(case when n = 11 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d11,
+  max(case when n = 12 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d12,
+  max(case when n = 13 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d13,
+  max(case when n = 14 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d14,
+  max(case when n = 15 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d15,
+  max(case when n = 16 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d16,
+  max(case when n = 17 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d17,
+  max(case when n = 18 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d18,
+  max(case when n = 19 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d19,
+  max(case when n = 20 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d20,
+  max(case when n = 21 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d21,
+  max(case when n = 22 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d22,
+  max(case when n = 23 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d23,
+  '' as days, '' as silent, '' as silent_status
+from days
+union all
+select max(lo.ord) as ord, g.lab,
+  max(case when g.n = 1 then g.mark else '' end) as d01,
+  max(case when g.n = 2 then g.mark else '' end) as d02,
+  max(case when g.n = 3 then g.mark else '' end) as d03,
+  max(case when g.n = 4 then g.mark else '' end) as d04,
+  max(case when g.n = 5 then g.mark else '' end) as d05,
+  max(case when g.n = 6 then g.mark else '' end) as d06,
+  max(case when g.n = 7 then g.mark else '' end) as d07,
+  max(case when g.n = 8 then g.mark else '' end) as d08,
+  max(case when g.n = 9 then g.mark else '' end) as d09,
+  max(case when g.n = 10 then g.mark else '' end) as d10,
+  max(case when g.n = 11 then g.mark else '' end) as d11,
+  max(case when g.n = 12 then g.mark else '' end) as d12,
+  max(case when g.n = 13 then g.mark else '' end) as d13,
+  max(case when g.n = 14 then g.mark else '' end) as d14,
+  max(case when g.n = 15 then g.mark else '' end) as d15,
+  max(case when g.n = 16 then g.mark else '' end) as d16,
+  max(case when g.n = 17 then g.mark else '' end) as d17,
+  max(case when g.n = 18 then g.mark else '' end) as d18,
+  max(case when g.n = 19 then g.mark else '' end) as d19,
+  max(case when g.n = 20 then g.mark else '' end) as d20,
+  max(case when g.n = 21 then g.mark else '' end) as d21,
+  max(case when g.n = 22 then g.mark else '' end) as d22,
+  max(case when g.n = 23 then g.mark else '' end) as d23,
+  max(cast(ls.days as varchar(3))) as days, max(cast(ls.silent as varchar(3))) as silent, max(cast(ls.silent_status as varchar(20))) as silent_status
+from grid g
+join lab_ord lo on lo.lab = g.lab
+join lab_stats ls on ls.lab = g.lab
+group by g.lab
+order by ord`,
       mysql: `-- ⛔ READ FIRST: this query CANNOT RUN on a MySQL warehouse today. max() over the
 -- date row's concat raises error 1267 through the connector pool. See the disclosure in
 -- 'arrivals' below for the path, the measurement and why it predates the clinical-date port.
@@ -2691,16 +2816,49 @@ labs as (select distinct lab from arrivals),
 -- The CROSS JOIN makes a silent day render blank IN PLACE rather than shifting later days left.
 grid as (
   select l.lab, dy.n,
-         case when a.lab is null then '' else 'Y' end as mark
+         case when a.lab is null then '' else '1' end as mark
   from labs l
   cross join days dy
   left join arrivals a on a.lab = l.lab and a.cal_day = dy.cal_day
+),
+lab_stats as (
+  -- Same LEFT JOIN reasoning as the postgres variant: a laboratory whose only submission this
+  -- month landed on a weekend has zero rows in 'days' (Mon-Fri only), and an inner join here would
+  -- drop it from the grid entirely instead of showing it silent all month.
+  select l.lab,
+         count(dy.n) as days,
+         (select max(n) from days) - coalesce(max(dy.n), 0) as silent,
+         -- ⚠ 10 working days is an INVENTED threshold -- an operational decision the
+         -- approved preview made for shading the Silent column, not a clinical one and not a
+         -- design one either. AGENTS.md section 8 does not forbid it (it names no clinical
+         -- vocabulary), but it IS a number somebody will want to change, so it is named here
+         -- rather than left as a bare literal for a future reader to wonder about.
+         case when (select max(n) from days) - coalesce(max(dy.n), 0) >= 10 then 'critical' else '' end as silent_status
+  from labs l
+  left join arrivals a on a.lab = l.lab
+  left join days dy on dy.cal_day = a.cal_day
+  group by l.lab
+),
+lab_ord as (
+  -- Unique per-laboratory ord, alphabetical from 2 -- see the postgres variant for why 'order by
+  -- ord' alone is now a full tiebreaker (AGENTS.md section 7). MySQL 8 supports window functions.
+  select lab, row_number() over (order by lab) + 1 as ord
+  from labs
 )
+-- ⛔ READ FIRST, still true after this task: this query CANNOT RUN on a MySQL warehouse today.
+-- max() over the date row's concat still raises error 1267 through the connector pool -- see
+-- 'arrivals' above for the measured path. This task adds a SECOND synthetic row (the week-token
+-- row directly below) but that row's own max() does not concatenate a mixed-collation literal, so
+-- it does not itself trip 1267. The overall cannot-run status is UNCHANGED: the union's date-row
+-- branch fails on its own aggregate, independently of what any other branch does, before the union
+-- ever combines them. HONEST NON-PROOF beyond that reasoning -- no MySQL server is available here
+-- to confirm which branch actually raises first once the query is three branches instead of two.
+--
 -- The day and the month are TWO LINES: the design's 'headerRow' stacks a header cell's newlines,
 -- which is what keeps a day column the width of 'Feb' rather than '2 Feb'.
 --
 -- ⛔ 'using utf8mb4' is LOAD-BEARING, not decoration. Bare CHAR(10) returns a BINARY string,
--- and CONCAT returns binary if ANY argument is binary — so d01..d23 on this row come back
+-- and CONCAT returns binary if ANY argument is binary -- so d01..d23 on this row come back
 -- as VARBINARY. The mysql2 pool is built with no 'typeCast'
 -- (packages/bootstrap/src/connector-db.ts:64-67), and mysql2 hands a binary column back as a Buffer:
 -- the PDF would survive ('rowsFor' does String(...)), but the JSON and CSV export of this row
@@ -2732,36 +2890,73 @@ select 0 as ord, '(dates)' as lab,
   max(case when n = 20 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d20,
   max(case when n = 21 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d21,
   max(case when n = 22 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d22,
-  max(case when n = 23 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d23
+  max(case when n = 23 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d23,
+  '' as days, '' as silent, '' as silent_status
 from days
 union all
-select 1 as ord, lab,
-  max(case when n = 1 then mark else '' end) as d01,
-  max(case when n = 2 then mark else '' end) as d02,
-  max(case when n = 3 then mark else '' end) as d03,
-  max(case when n = 4 then mark else '' end) as d04,
-  max(case when n = 5 then mark else '' end) as d05,
-  max(case when n = 6 then mark else '' end) as d06,
-  max(case when n = 7 then mark else '' end) as d07,
-  max(case when n = 8 then mark else '' end) as d08,
-  max(case when n = 9 then mark else '' end) as d09,
-  max(case when n = 10 then mark else '' end) as d10,
-  max(case when n = 11 then mark else '' end) as d11,
-  max(case when n = 12 then mark else '' end) as d12,
-  max(case when n = 13 then mark else '' end) as d13,
-  max(case when n = 14 then mark else '' end) as d14,
-  max(case when n = 15 then mark else '' end) as d15,
-  max(case when n = 16 then mark else '' end) as d16,
-  max(case when n = 17 then mark else '' end) as d17,
-  max(case when n = 18 then mark else '' end) as d18,
-  max(case when n = 19 then mark else '' end) as d19,
-  max(case when n = 20 then mark else '' end) as d20,
-  max(case when n = 21 then mark else '' end) as d21,
-  max(case when n = 22 then mark else '' end) as d22,
-  max(case when n = 23 then mark else '' end) as d23
-from grid
-group by lab
-order by ord, lab`,
+select 1 as ord, '(week)' as lab,
+  -- ISO-style week number, Monday-first, 01..53. '%v' pairs with '%x' only when a GLOBAL
+  -- year-spanning key is needed; this token never draws its value and never needs one (spec
+  -- section 4), so '%v' alone is enough. Deliberately NOT '%u', which is Sunday-first and would
+  -- move a week boundary onto the wrong working day, and NOT '%U'/'%W', which read lc_time_names
+  -- the way this query's own month_start CTE already warns '%m'/'%M' do, above. '%v' is
+  -- numeric-only and carries no such dependency.
+  max(case when n = 1 then date_format(cal_day, '%v') else '' end) as d01,
+  max(case when n = 2 then date_format(cal_day, '%v') else '' end) as d02,
+  max(case when n = 3 then date_format(cal_day, '%v') else '' end) as d03,
+  max(case when n = 4 then date_format(cal_day, '%v') else '' end) as d04,
+  max(case when n = 5 then date_format(cal_day, '%v') else '' end) as d05,
+  max(case when n = 6 then date_format(cal_day, '%v') else '' end) as d06,
+  max(case when n = 7 then date_format(cal_day, '%v') else '' end) as d07,
+  max(case when n = 8 then date_format(cal_day, '%v') else '' end) as d08,
+  max(case when n = 9 then date_format(cal_day, '%v') else '' end) as d09,
+  max(case when n = 10 then date_format(cal_day, '%v') else '' end) as d10,
+  max(case when n = 11 then date_format(cal_day, '%v') else '' end) as d11,
+  max(case when n = 12 then date_format(cal_day, '%v') else '' end) as d12,
+  max(case when n = 13 then date_format(cal_day, '%v') else '' end) as d13,
+  max(case when n = 14 then date_format(cal_day, '%v') else '' end) as d14,
+  max(case when n = 15 then date_format(cal_day, '%v') else '' end) as d15,
+  max(case when n = 16 then date_format(cal_day, '%v') else '' end) as d16,
+  max(case when n = 17 then date_format(cal_day, '%v') else '' end) as d17,
+  max(case when n = 18 then date_format(cal_day, '%v') else '' end) as d18,
+  max(case when n = 19 then date_format(cal_day, '%v') else '' end) as d19,
+  max(case when n = 20 then date_format(cal_day, '%v') else '' end) as d20,
+  max(case when n = 21 then date_format(cal_day, '%v') else '' end) as d21,
+  max(case when n = 22 then date_format(cal_day, '%v') else '' end) as d22,
+  max(case when n = 23 then date_format(cal_day, '%v') else '' end) as d23,
+  '' as days, '' as silent, '' as silent_status
+from days
+union all
+select max(lo.ord) as ord, g.lab,
+  max(case when g.n = 1 then g.mark else '' end) as d01,
+  max(case when g.n = 2 then g.mark else '' end) as d02,
+  max(case when g.n = 3 then g.mark else '' end) as d03,
+  max(case when g.n = 4 then g.mark else '' end) as d04,
+  max(case when g.n = 5 then g.mark else '' end) as d05,
+  max(case when g.n = 6 then g.mark else '' end) as d06,
+  max(case when g.n = 7 then g.mark else '' end) as d07,
+  max(case when g.n = 8 then g.mark else '' end) as d08,
+  max(case when g.n = 9 then g.mark else '' end) as d09,
+  max(case when g.n = 10 then g.mark else '' end) as d10,
+  max(case when g.n = 11 then g.mark else '' end) as d11,
+  max(case when g.n = 12 then g.mark else '' end) as d12,
+  max(case when g.n = 13 then g.mark else '' end) as d13,
+  max(case when g.n = 14 then g.mark else '' end) as d14,
+  max(case when g.n = 15 then g.mark else '' end) as d15,
+  max(case when g.n = 16 then g.mark else '' end) as d16,
+  max(case when g.n = 17 then g.mark else '' end) as d17,
+  max(case when g.n = 18 then g.mark else '' end) as d18,
+  max(case when g.n = 19 then g.mark else '' end) as d19,
+  max(case when g.n = 20 then g.mark else '' end) as d20,
+  max(case when g.n = 21 then g.mark else '' end) as d21,
+  max(case when g.n = 22 then g.mark else '' end) as d22,
+  max(case when g.n = 23 then g.mark else '' end) as d23,
+  max(cast(ls.days as char(3))) as days, max(cast(ls.silent as char(3))) as silent, max(cast(ls.silent_status as char(20))) as silent_status
+from grid g
+join lab_ord lo on lo.lab = g.lab
+join lab_stats ls on ls.lab = g.lab
+group by g.lab
+order by ord`,
     },
   },
   {
@@ -2860,10 +3055,42 @@ labs as (select distinct lab from arrivals),
 -- CROSS JOIN is what makes a silent day render blank IN PLACE rather than shifting later days left.
 grid as (
   select l.lab, dy.n,
-         case when a.lab is null then '' else 'Y' end as mark
+         case when a.lab is null then '' else '1' end as mark
   from labs l
   cross join days dy
   left join arrivals a on a.lab = l.lab and a.cal_day = dy.cal_day
+),
+lab_stats as (
+  -- 'days': count of DISTINCT WORKING days this laboratory submitted on -- the same figure a
+  -- reader gets by counting filled cells in its own row, computed here so the renderer does no
+  -- arithmetic over the data (spec section 4).
+  -- 'silent': working days between the laboratory's LAST submission and the last working day of
+  -- the month. LEFT JOIN throughout, never INNER: a laboratory whose only submission this month
+  -- landed on a Saturday or Sunday has ZERO rows in 'days' (Mon-Fri only), and an inner join here
+  -- would drop that laboratory from the grid ENTIRELY instead of showing it silent all month.
+  -- ⛔ MEASURED on the live warehouse, 2017-08, HVL/EID panels: 'Mbagala Kizuiani' and
+  -- 'Mwananyamala' are exactly this case -- days=0, silent=23 (the whole month). See Step 2.
+  select l.lab,
+         count(dy.n) as days,
+         (select max(n) from days) - coalesce(max(dy.n), 0) as silent,
+         -- ⚠ 10 working days is an INVENTED threshold -- an operational decision the
+         -- approved preview made for shading the Silent column, not a clinical one and not a
+         -- design one either. AGENTS.md section 8 does not forbid it (it names no clinical
+         -- vocabulary), but it IS a number somebody will want to change, so it is named here
+         -- rather than left as a bare literal for a future reader to wonder about.
+         case when (select max(n) from days) - coalesce(max(dy.n), 0) >= 10 then 'critical' else '' end as silent_status
+  from labs l
+  left join arrivals a on a.lab = l.lab
+  left join days dy on dy.cal_day = a.cal_day
+  group by l.lab
+),
+lab_ord as (
+  -- Unique per-laboratory ord, alphabetical from 2. 0 and 1 are spoken for by the date row and the
+  -- week-token row below, so 'order by ord' alone is a full tiebreaker across the WHOLE result --
+  -- what AGENTS.md section 7 requires of any ORDER BY carrying an OFFSET, and planPagination
+  -- (packages/dashboards/src/sql-runner.ts:56) wraps this query in exactly that shape.
+  select lab, row_number() over (order by lab) + 1 as ord
+  from labs
 )
 select 0 as ord, '(dates)' as lab,
   max(case when n = 1 then to_char(cal_day, 'FMDD') || chr(10) || to_char(cal_day, 'Mon') else '' end) as d01,
@@ -2888,36 +3115,71 @@ select 0 as ord, '(dates)' as lab,
   max(case when n = 20 then to_char(cal_day, 'FMDD') || chr(10) || to_char(cal_day, 'Mon') else '' end) as d20,
   max(case when n = 21 then to_char(cal_day, 'FMDD') || chr(10) || to_char(cal_day, 'Mon') else '' end) as d21,
   max(case when n = 22 then to_char(cal_day, 'FMDD') || chr(10) || to_char(cal_day, 'Mon') else '' end) as d22,
-  max(case when n = 23 then to_char(cal_day, 'FMDD') || chr(10) || to_char(cal_day, 'Mon') else '' end) as d23
+  max(case when n = 23 then to_char(cal_day, 'FMDD') || chr(10) || to_char(cal_day, 'Mon') else '' end) as d23,
+  '' as days, '' as silent, '' as silent_status
 from days
 union all
-select 1 as ord, lab,
-  max(case when n = 1 then mark else '' end) as d01,
-  max(case when n = 2 then mark else '' end) as d02,
-  max(case when n = 3 then mark else '' end) as d03,
-  max(case when n = 4 then mark else '' end) as d04,
-  max(case when n = 5 then mark else '' end) as d05,
-  max(case when n = 6 then mark else '' end) as d06,
-  max(case when n = 7 then mark else '' end) as d07,
-  max(case when n = 8 then mark else '' end) as d08,
-  max(case when n = 9 then mark else '' end) as d09,
-  max(case when n = 10 then mark else '' end) as d10,
-  max(case when n = 11 then mark else '' end) as d11,
-  max(case when n = 12 then mark else '' end) as d12,
-  max(case when n = 13 then mark else '' end) as d13,
-  max(case when n = 14 then mark else '' end) as d14,
-  max(case when n = 15 then mark else '' end) as d15,
-  max(case when n = 16 then mark else '' end) as d16,
-  max(case when n = 17 then mark else '' end) as d17,
-  max(case when n = 18 then mark else '' end) as d18,
-  max(case when n = 19 then mark else '' end) as d19,
-  max(case when n = 20 then mark else '' end) as d20,
-  max(case when n = 21 then mark else '' end) as d21,
-  max(case when n = 22 then mark else '' end) as d22,
-  max(case when n = 23 then mark else '' end) as d23
-from grid
-group by lab
-order by ord, lab`,
+select 1 as ord, '(week)' as lab,
+  -- The ISO week number. NEVER DRAWN -- spec section 4: "the token's value is never drawn and
+  -- carries no meaning, only its CHANGES matter." Verified against August 2017 on the live
+  -- warehouse (Step 2): 23 working days fall into weeks 31,31,31,31 | 32×5 | 33×5 | 34×5 | 35×4 --
+  -- breaks at n=5,10,15,20, exactly the fixture cellgrid.test.ts's groupBreaks already covers.
+  max(case when n = 1 then to_char(cal_day, 'IW') else '' end) as d01,
+  max(case when n = 2 then to_char(cal_day, 'IW') else '' end) as d02,
+  max(case when n = 3 then to_char(cal_day, 'IW') else '' end) as d03,
+  max(case when n = 4 then to_char(cal_day, 'IW') else '' end) as d04,
+  max(case when n = 5 then to_char(cal_day, 'IW') else '' end) as d05,
+  max(case when n = 6 then to_char(cal_day, 'IW') else '' end) as d06,
+  max(case when n = 7 then to_char(cal_day, 'IW') else '' end) as d07,
+  max(case when n = 8 then to_char(cal_day, 'IW') else '' end) as d08,
+  max(case when n = 9 then to_char(cal_day, 'IW') else '' end) as d09,
+  max(case when n = 10 then to_char(cal_day, 'IW') else '' end) as d10,
+  max(case when n = 11 then to_char(cal_day, 'IW') else '' end) as d11,
+  max(case when n = 12 then to_char(cal_day, 'IW') else '' end) as d12,
+  max(case when n = 13 then to_char(cal_day, 'IW') else '' end) as d13,
+  max(case when n = 14 then to_char(cal_day, 'IW') else '' end) as d14,
+  max(case when n = 15 then to_char(cal_day, 'IW') else '' end) as d15,
+  max(case when n = 16 then to_char(cal_day, 'IW') else '' end) as d16,
+  max(case when n = 17 then to_char(cal_day, 'IW') else '' end) as d17,
+  max(case when n = 18 then to_char(cal_day, 'IW') else '' end) as d18,
+  max(case when n = 19 then to_char(cal_day, 'IW') else '' end) as d19,
+  max(case when n = 20 then to_char(cal_day, 'IW') else '' end) as d20,
+  max(case when n = 21 then to_char(cal_day, 'IW') else '' end) as d21,
+  max(case when n = 22 then to_char(cal_day, 'IW') else '' end) as d22,
+  max(case when n = 23 then to_char(cal_day, 'IW') else '' end) as d23,
+  '' as days, '' as silent, '' as silent_status
+from days
+union all
+select max(lo.ord) as ord, g.lab,
+  max(case when g.n = 1 then g.mark else '' end) as d01,
+  max(case when g.n = 2 then g.mark else '' end) as d02,
+  max(case when g.n = 3 then g.mark else '' end) as d03,
+  max(case when g.n = 4 then g.mark else '' end) as d04,
+  max(case when g.n = 5 then g.mark else '' end) as d05,
+  max(case when g.n = 6 then g.mark else '' end) as d06,
+  max(case when g.n = 7 then g.mark else '' end) as d07,
+  max(case when g.n = 8 then g.mark else '' end) as d08,
+  max(case when g.n = 9 then g.mark else '' end) as d09,
+  max(case when g.n = 10 then g.mark else '' end) as d10,
+  max(case when g.n = 11 then g.mark else '' end) as d11,
+  max(case when g.n = 12 then g.mark else '' end) as d12,
+  max(case when g.n = 13 then g.mark else '' end) as d13,
+  max(case when g.n = 14 then g.mark else '' end) as d14,
+  max(case when g.n = 15 then g.mark else '' end) as d15,
+  max(case when g.n = 16 then g.mark else '' end) as d16,
+  max(case when g.n = 17 then g.mark else '' end) as d17,
+  max(case when g.n = 18 then g.mark else '' end) as d18,
+  max(case when g.n = 19 then g.mark else '' end) as d19,
+  max(case when g.n = 20 then g.mark else '' end) as d20,
+  max(case when g.n = 21 then g.mark else '' end) as d21,
+  max(case when g.n = 22 then g.mark else '' end) as d22,
+  max(case when g.n = 23 then g.mark else '' end) as d23,
+  max(ls.days::text) as days, max(ls.silent::text) as silent, max(ls.silent_status) as silent_status
+from grid g
+join lab_ord lo on lo.lab = g.lab
+join lab_stats ls on ls.lab = g.lab
+group by g.lab
+order by ord`,
       mssql: `with month_start as (
   -- ⛔ 'ym' is the NORMALISED month. Every string test below compares against it, never against
   -- the raw parameter, so a loose '2017-8' answers exactly like '2017-08' instead of emptying the
@@ -3019,10 +3281,34 @@ labs as (select distinct lab from arrivals),
 -- The CROSS JOIN makes a silent day render blank IN PLACE rather than shifting later days left.
 grid as (
   select l.lab, dy.n,
-         case when a.lab is null then '' else 'Y' end as mark
+         case when a.lab is null then '' else '1' end as mark
   from labs l
   cross join days dy
   left join arrivals a on a.lab = l.lab and a.cal_day = dy.cal_day
+),
+lab_stats as (
+  -- Same LEFT JOIN reasoning as the postgres variant: a laboratory whose only submission this
+  -- month landed on a weekend has zero rows in 'days' (Mon-Fri only), and an inner join here would
+  -- drop it from the grid entirely instead of showing it silent all month.
+  select l.lab,
+         count(dy.n) as days,
+         (select max(n) from days) - coalesce(max(dy.n), 0) as silent,
+         -- ⚠ 10 working days is an INVENTED threshold -- an operational decision the
+         -- approved preview made for shading the Silent column, not a clinical one and not a
+         -- design one either. AGENTS.md section 8 does not forbid it (it names no clinical
+         -- vocabulary), but it IS a number somebody will want to change, so it is named here
+         -- rather than left as a bare literal for a future reader to wonder about.
+         case when (select max(n) from days) - coalesce(max(dy.n), 0) >= 10 then 'critical' else '' end as silent_status
+  from labs l
+  left join arrivals a on a.lab = l.lab
+  left join days dy on dy.cal_day = a.cal_day
+  group by l.lab
+),
+lab_ord as (
+  -- Unique per-laboratory ord, alphabetical from 2 -- see the postgres variant for why 'order by
+  -- ord' alone is now a full tiebreaker (AGENTS.md section 7).
+  select lab, row_number() over (order by lab) + 1 as ord
+  from labs
 )
 select 0 as ord, '(dates)' as lab,
   max(case when n = 1 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d01,
@@ -3047,36 +3333,70 @@ select 0 as ord, '(dates)' as lab,
   max(case when n = 20 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d20,
   max(case when n = 21 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d21,
   max(case when n = 22 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d22,
-  max(case when n = 23 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d23
+  max(case when n = 23 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d23,
+  '' as days, '' as silent, '' as silent_status
 from days
 union all
-select 1 as ord, lab,
-  max(case when n = 1 then mark else '' end) as d01,
-  max(case when n = 2 then mark else '' end) as d02,
-  max(case when n = 3 then mark else '' end) as d03,
-  max(case when n = 4 then mark else '' end) as d04,
-  max(case when n = 5 then mark else '' end) as d05,
-  max(case when n = 6 then mark else '' end) as d06,
-  max(case when n = 7 then mark else '' end) as d07,
-  max(case when n = 8 then mark else '' end) as d08,
-  max(case when n = 9 then mark else '' end) as d09,
-  max(case when n = 10 then mark else '' end) as d10,
-  max(case when n = 11 then mark else '' end) as d11,
-  max(case when n = 12 then mark else '' end) as d12,
-  max(case when n = 13 then mark else '' end) as d13,
-  max(case when n = 14 then mark else '' end) as d14,
-  max(case when n = 15 then mark else '' end) as d15,
-  max(case when n = 16 then mark else '' end) as d16,
-  max(case when n = 17 then mark else '' end) as d17,
-  max(case when n = 18 then mark else '' end) as d18,
-  max(case when n = 19 then mark else '' end) as d19,
-  max(case when n = 20 then mark else '' end) as d20,
-  max(case when n = 21 then mark else '' end) as d21,
-  max(case when n = 22 then mark else '' end) as d22,
-  max(case when n = 23 then mark else '' end) as d23
-from grid
-group by lab
-order by ord, lab`,
+select 1 as ord, '(week)' as lab,
+  -- ISO week number, never drawn -- see the postgres variant's comment for why. datepart(iso_week,
+  -- ...) matches the file's existing preference for deterministic, session-setting-independent
+  -- date arithmetic (see 'days' above: not datepart(weekday, ...), which depends on SET DATEFIRST).
+  max(case when n = 1 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d01,
+  max(case when n = 2 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d02,
+  max(case when n = 3 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d03,
+  max(case when n = 4 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d04,
+  max(case when n = 5 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d05,
+  max(case when n = 6 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d06,
+  max(case when n = 7 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d07,
+  max(case when n = 8 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d08,
+  max(case when n = 9 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d09,
+  max(case when n = 10 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d10,
+  max(case when n = 11 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d11,
+  max(case when n = 12 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d12,
+  max(case when n = 13 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d13,
+  max(case when n = 14 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d14,
+  max(case when n = 15 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d15,
+  max(case when n = 16 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d16,
+  max(case when n = 17 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d17,
+  max(case when n = 18 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d18,
+  max(case when n = 19 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d19,
+  max(case when n = 20 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d20,
+  max(case when n = 21 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d21,
+  max(case when n = 22 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d22,
+  max(case when n = 23 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d23,
+  '' as days, '' as silent, '' as silent_status
+from days
+union all
+select max(lo.ord) as ord, g.lab,
+  max(case when g.n = 1 then g.mark else '' end) as d01,
+  max(case when g.n = 2 then g.mark else '' end) as d02,
+  max(case when g.n = 3 then g.mark else '' end) as d03,
+  max(case when g.n = 4 then g.mark else '' end) as d04,
+  max(case when g.n = 5 then g.mark else '' end) as d05,
+  max(case when g.n = 6 then g.mark else '' end) as d06,
+  max(case when g.n = 7 then g.mark else '' end) as d07,
+  max(case when g.n = 8 then g.mark else '' end) as d08,
+  max(case when g.n = 9 then g.mark else '' end) as d09,
+  max(case when g.n = 10 then g.mark else '' end) as d10,
+  max(case when g.n = 11 then g.mark else '' end) as d11,
+  max(case when g.n = 12 then g.mark else '' end) as d12,
+  max(case when g.n = 13 then g.mark else '' end) as d13,
+  max(case when g.n = 14 then g.mark else '' end) as d14,
+  max(case when g.n = 15 then g.mark else '' end) as d15,
+  max(case when g.n = 16 then g.mark else '' end) as d16,
+  max(case when g.n = 17 then g.mark else '' end) as d17,
+  max(case when g.n = 18 then g.mark else '' end) as d18,
+  max(case when g.n = 19 then g.mark else '' end) as d19,
+  max(case when g.n = 20 then g.mark else '' end) as d20,
+  max(case when g.n = 21 then g.mark else '' end) as d21,
+  max(case when g.n = 22 then g.mark else '' end) as d22,
+  max(case when g.n = 23 then g.mark else '' end) as d23,
+  max(cast(ls.days as varchar(3))) as days, max(cast(ls.silent as varchar(3))) as silent, max(cast(ls.silent_status as varchar(20))) as silent_status
+from grid g
+join lab_ord lo on lo.lab = g.lab
+join lab_stats ls on ls.lab = g.lab
+group by g.lab
+order by ord`,
       mysql: `-- ⛔ READ FIRST: this query CANNOT RUN on a MySQL warehouse today. max() over the
 -- date row's concat raises error 1267 through the connector pool. See the disclosure in
 -- 'arrivals' below for the path, the measurement and why it predates the clinical-date port.
@@ -3220,16 +3540,49 @@ labs as (select distinct lab from arrivals),
 -- The CROSS JOIN makes a silent day render blank IN PLACE rather than shifting later days left.
 grid as (
   select l.lab, dy.n,
-         case when a.lab is null then '' else 'Y' end as mark
+         case when a.lab is null then '' else '1' end as mark
   from labs l
   cross join days dy
   left join arrivals a on a.lab = l.lab and a.cal_day = dy.cal_day
+),
+lab_stats as (
+  -- Same LEFT JOIN reasoning as the postgres variant: a laboratory whose only submission this
+  -- month landed on a weekend has zero rows in 'days' (Mon-Fri only), and an inner join here would
+  -- drop it from the grid entirely instead of showing it silent all month.
+  select l.lab,
+         count(dy.n) as days,
+         (select max(n) from days) - coalesce(max(dy.n), 0) as silent,
+         -- ⚠ 10 working days is an INVENTED threshold -- an operational decision the
+         -- approved preview made for shading the Silent column, not a clinical one and not a
+         -- design one either. AGENTS.md section 8 does not forbid it (it names no clinical
+         -- vocabulary), but it IS a number somebody will want to change, so it is named here
+         -- rather than left as a bare literal for a future reader to wonder about.
+         case when (select max(n) from days) - coalesce(max(dy.n), 0) >= 10 then 'critical' else '' end as silent_status
+  from labs l
+  left join arrivals a on a.lab = l.lab
+  left join days dy on dy.cal_day = a.cal_day
+  group by l.lab
+),
+lab_ord as (
+  -- Unique per-laboratory ord, alphabetical from 2 -- see the postgres variant for why 'order by
+  -- ord' alone is now a full tiebreaker (AGENTS.md section 7). MySQL 8 supports window functions.
+  select lab, row_number() over (order by lab) + 1 as ord
+  from labs
 )
+-- ⛔ READ FIRST, still true after this task: this query CANNOT RUN on a MySQL warehouse today.
+-- max() over the date row's concat still raises error 1267 through the connector pool -- see
+-- 'arrivals' above for the measured path. This task adds a SECOND synthetic row (the week-token
+-- row directly below) but that row's own max() does not concatenate a mixed-collation literal, so
+-- it does not itself trip 1267. The overall cannot-run status is UNCHANGED: the union's date-row
+-- branch fails on its own aggregate, independently of what any other branch does, before the union
+-- ever combines them. HONEST NON-PROOF beyond that reasoning -- no MySQL server is available here
+-- to confirm which branch actually raises first once the query is three branches instead of two.
+--
 -- The day and the month are TWO LINES: the design's 'headerRow' stacks a header cell's newlines,
 -- which is what keeps a day column the width of 'Feb' rather than '2 Feb'.
 --
 -- ⛔ 'using utf8mb4' is LOAD-BEARING, not decoration. Bare CHAR(10) returns a BINARY string,
--- and CONCAT returns binary if ANY argument is binary — so d01..d23 on this row come back
+-- and CONCAT returns binary if ANY argument is binary -- so d01..d23 on this row come back
 -- as VARBINARY. The mysql2 pool is built with no 'typeCast'
 -- (packages/bootstrap/src/connector-db.ts:64-67), and mysql2 hands a binary column back as a Buffer:
 -- the PDF would survive ('rowsFor' does String(...)), but the JSON and CSV export of this row
@@ -3261,36 +3614,73 @@ select 0 as ord, '(dates)' as lab,
   max(case when n = 20 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d20,
   max(case when n = 21 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d21,
   max(case when n = 22 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d22,
-  max(case when n = 23 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d23
+  max(case when n = 23 then concat(date_format(cal_day, '%e'), char(10 using utf8mb4), date_format(cal_day, '%b')) else '' end) as d23,
+  '' as days, '' as silent, '' as silent_status
 from days
 union all
-select 1 as ord, lab,
-  max(case when n = 1 then mark else '' end) as d01,
-  max(case when n = 2 then mark else '' end) as d02,
-  max(case when n = 3 then mark else '' end) as d03,
-  max(case when n = 4 then mark else '' end) as d04,
-  max(case when n = 5 then mark else '' end) as d05,
-  max(case when n = 6 then mark else '' end) as d06,
-  max(case when n = 7 then mark else '' end) as d07,
-  max(case when n = 8 then mark else '' end) as d08,
-  max(case when n = 9 then mark else '' end) as d09,
-  max(case when n = 10 then mark else '' end) as d10,
-  max(case when n = 11 then mark else '' end) as d11,
-  max(case when n = 12 then mark else '' end) as d12,
-  max(case when n = 13 then mark else '' end) as d13,
-  max(case when n = 14 then mark else '' end) as d14,
-  max(case when n = 15 then mark else '' end) as d15,
-  max(case when n = 16 then mark else '' end) as d16,
-  max(case when n = 17 then mark else '' end) as d17,
-  max(case when n = 18 then mark else '' end) as d18,
-  max(case when n = 19 then mark else '' end) as d19,
-  max(case when n = 20 then mark else '' end) as d20,
-  max(case when n = 21 then mark else '' end) as d21,
-  max(case when n = 22 then mark else '' end) as d22,
-  max(case when n = 23 then mark else '' end) as d23
-from grid
-group by lab
-order by ord, lab`,
+select 1 as ord, '(week)' as lab,
+  -- ISO-style week number, Monday-first, 01..53. '%v' pairs with '%x' only when a GLOBAL
+  -- year-spanning key is needed; this token never draws its value and never needs one (spec
+  -- section 4), so '%v' alone is enough. Deliberately NOT '%u', which is Sunday-first and would
+  -- move a week boundary onto the wrong working day, and NOT '%U'/'%W', which read lc_time_names
+  -- the way this query's own month_start CTE already warns '%m'/'%M' do, above. '%v' is
+  -- numeric-only and carries no such dependency.
+  max(case when n = 1 then date_format(cal_day, '%v') else '' end) as d01,
+  max(case when n = 2 then date_format(cal_day, '%v') else '' end) as d02,
+  max(case when n = 3 then date_format(cal_day, '%v') else '' end) as d03,
+  max(case when n = 4 then date_format(cal_day, '%v') else '' end) as d04,
+  max(case when n = 5 then date_format(cal_day, '%v') else '' end) as d05,
+  max(case when n = 6 then date_format(cal_day, '%v') else '' end) as d06,
+  max(case when n = 7 then date_format(cal_day, '%v') else '' end) as d07,
+  max(case when n = 8 then date_format(cal_day, '%v') else '' end) as d08,
+  max(case when n = 9 then date_format(cal_day, '%v') else '' end) as d09,
+  max(case when n = 10 then date_format(cal_day, '%v') else '' end) as d10,
+  max(case when n = 11 then date_format(cal_day, '%v') else '' end) as d11,
+  max(case when n = 12 then date_format(cal_day, '%v') else '' end) as d12,
+  max(case when n = 13 then date_format(cal_day, '%v') else '' end) as d13,
+  max(case when n = 14 then date_format(cal_day, '%v') else '' end) as d14,
+  max(case when n = 15 then date_format(cal_day, '%v') else '' end) as d15,
+  max(case when n = 16 then date_format(cal_day, '%v') else '' end) as d16,
+  max(case when n = 17 then date_format(cal_day, '%v') else '' end) as d17,
+  max(case when n = 18 then date_format(cal_day, '%v') else '' end) as d18,
+  max(case when n = 19 then date_format(cal_day, '%v') else '' end) as d19,
+  max(case when n = 20 then date_format(cal_day, '%v') else '' end) as d20,
+  max(case when n = 21 then date_format(cal_day, '%v') else '' end) as d21,
+  max(case when n = 22 then date_format(cal_day, '%v') else '' end) as d22,
+  max(case when n = 23 then date_format(cal_day, '%v') else '' end) as d23,
+  '' as days, '' as silent, '' as silent_status
+from days
+union all
+select max(lo.ord) as ord, g.lab,
+  max(case when g.n = 1 then g.mark else '' end) as d01,
+  max(case when g.n = 2 then g.mark else '' end) as d02,
+  max(case when g.n = 3 then g.mark else '' end) as d03,
+  max(case when g.n = 4 then g.mark else '' end) as d04,
+  max(case when g.n = 5 then g.mark else '' end) as d05,
+  max(case when g.n = 6 then g.mark else '' end) as d06,
+  max(case when g.n = 7 then g.mark else '' end) as d07,
+  max(case when g.n = 8 then g.mark else '' end) as d08,
+  max(case when g.n = 9 then g.mark else '' end) as d09,
+  max(case when g.n = 10 then g.mark else '' end) as d10,
+  max(case when g.n = 11 then g.mark else '' end) as d11,
+  max(case when g.n = 12 then g.mark else '' end) as d12,
+  max(case when g.n = 13 then g.mark else '' end) as d13,
+  max(case when g.n = 14 then g.mark else '' end) as d14,
+  max(case when g.n = 15 then g.mark else '' end) as d15,
+  max(case when g.n = 16 then g.mark else '' end) as d16,
+  max(case when g.n = 17 then g.mark else '' end) as d17,
+  max(case when g.n = 18 then g.mark else '' end) as d18,
+  max(case when g.n = 19 then g.mark else '' end) as d19,
+  max(case when g.n = 20 then g.mark else '' end) as d20,
+  max(case when g.n = 21 then g.mark else '' end) as d21,
+  max(case when g.n = 22 then g.mark else '' end) as d22,
+  max(case when g.n = 23 then g.mark else '' end) as d23,
+  max(cast(ls.days as char(3))) as days, max(cast(ls.silent as char(3))) as silent, max(cast(ls.silent_status as char(20))) as silent_status
+from grid g
+join lab_ord lo on lo.lab = g.lab
+join lab_stats ls on ls.lab = g.lab
+group by g.lab
+order by ord`,
     },
   },
 ];
@@ -3314,56 +3704,55 @@ export const DESIGNS_REQUIRING_DATA: Readonly<Record<string, string>> = {
   'rt-clinical-micro': 'hdr',
 };
 
-/** Body width of the transmission grid's A4-LANDSCAPE page, px@96. Same arithmetic
- *  `simpleTableDesign` uses: `round(pageWpt / 0.75) - 96`, i.e. 1123 - 96 for A4 landscape. */
-const TG_CONTENT_W = 1027;
-/** Height of each of the two grids, px@96 = 160.5pt. Both grids set `headerRow`, so the header band
- *  is `STACKED_HEAD_H` (24pt) rather than one 16pt row, and `maxRowsFor` is
- *  `floor((160.5 - 24) / 16)` = **8 laboratories per page, on EVERY page**.
+/** Body width of the transmission grid's A4-PORTRAIT page, px@96. Same arithmetic
+ *  simpleTableDesign uses: round(pageWpt / 0.75) - 96, i.e. round(595.28/0.75) - 96 for A4
+ *  portrait. Was 1027 (A4 landscape) from slice 1 through slice 2a; this slice turns the page
+ *  portrait per the approved design (spec section 1), so the value moves with it. */
+const TG_CONTENT_W = 698;
+
+/** Height of each of the two grids, px@96 = 285pt each.
  *
- *  ⚠ UNITS. 214 is px@96; the renderer multiplies a design rect by 0.75 to reach points, while
- *  `ROW_H`/`STACKED_HEAD_H` are already points. Doing this arithmetic in px@96 overstates the
- *  capacity by a third, in the direction that says "it fits".
+ *  ⚠ NOT sourced from the approved preview. That mockup was shown to the operator across five
+ *  rounds and its exact pixel geometry is not committed anywhere this plan can read. This value
+ *  is derived instead: portrait content height (769.89pt, 36pt margins) minus the SAME leading
+ *  letterhead/scope-panel chrome and trailing footer chrome the landscape design already used
+ *  (unchanged, neither depends on orientation), split evenly between the two grids the way the
+ *  landscape design already split its own 214pt equally between them.
  *
- *  It is already the most the landscape sheet can give — the two grids, their headings and the
- *  footer rule fill it — so this is a page-size limit, not a chosen number. The date row is no
- *  longer a body row: `headerRow` lifts it into the header band, which every chunk redraws, so
- *  page 2 onward carries the dates too. */
-const TG_GRID_H = 214;
+ *  cellGridMaxRows(285) = floor((285 - CELL_HEAD_H 13) / CELL_ROW_H 12.75) = 21 rows per
+ *  page-chunk per grid. Measured against the live warehouse (slice 2a's own verification, August
+ *  2017): the HVL/EID grid's 20 laboratories fit page 1 with no continuation; the Other grid's 65
+ *  need ceil(65/21) = 4 chunks.
+ *
+ *  ⛔ Spec section 5 SAID continuation pages hold "about 43 rows". Corrected in 7588f8db to the
+ *  preview's 40." This plan could not reconcile that figure with a two-grids-share-one-page
+ *  layout: 43 rows needs roughly 561-574pt for ONE grid alone (cellGridMaxRows solved backwards),
+ *  not 285pt for two side by side. Treat this constant as a documented starting point pending the
+ *  operator's visual confirmation against the actual preview, not as a rendering of it. */
+const TG_GRID_H = 380; // px@96; 380 * 0.75 = 285pt
 
 /**
- * The 24 columns each transmission grid prints: the laboratory, then the 23 working-day slots.
+ * Footer and signature box widths, px@96, and the signature's x. Both boxes carried their
+ * LANDSCAPE widths (500 and 375) into the first portrait draft of this design and collided:
+ * 500 + 375 = 875pt cannot fit any x inside a 698pt body. In landscape, 1027pt made the overlap
+ * impossible to notice; nothing about the numbers was ever checked against the text they hold.
  *
- * ⛔ Bound EXPLICITLY, and it has to be. An empty `boundColumns` makes the renderer take its
- * headers from the query's own result columns, which would print `ord`, `d01`, `d02` … as the
- * header row. The real dates are DATA — they travel in the query's first row, because the month is
- * a run-time parameter and no static design can know them.
+ * Fixed by MEASURING the actual strings with the same pdfkit calls `drawText` itself makes
+ * (`doc.font('Helvetica').fontSize(style.fontSize * PX_TO_PT).widthOfString(text)`, since
+ * `drawText` scales a design's px@96 `style.fontSize` by `PX_TO_PT` before handing it to pdfkit):
  *
- * ⛔ The 23 day labels are blank ON PURPOSE, and that blankness is now load-bearing. With
- * `headerRow` set, `headerTexts` keeps a non-blank declared label and fills only a BLANK one from
- * the header row — so "Laboratory" survives and each day column takes its date. Giving the day
- * columns labels (`1`..`23`, say) would print slot numbers OVER the real dates.
+ *   footer, 7px@96 (5.25pt): 'Generated by OpenLDR, a filled cell means data arrived from that
+ *     laboratory that day.' = 198.22pt = 264.29px@96
+ *   signature, 8px@96 (6pt): 'Reviewed by ______________________' = 108.92pt = 145.23px@96
  *
- * ⛔ `ord` is excluded. It exists only to sort the date row to the top and is not a column of the
- * report; the element's `sortBy` reads it, the page never prints it.
- *
- * ⚠ MEASURED, with real pdfkit metrics at the renderer's fixed 8pt (see the Task 3b report).
- * The query emits each date as two lines (`2` over `Feb`) and `columnWidths` measures the WIDER
- * LINE, so a day column costs `Feb` (14.22pt) rather than `2 Feb` (20.90pt). Over the 770.25pt
- * landscape body that leaves the laboratory column 171.9pt of box — 163.9pt of text — against
- * 129.5pt for "Kilimanjaro Christian Medical Centre" (fits) and 186.6pt for
- * "Mtwara (Ligula) Regional Referral Hospital - EVLIMS" (still ellipsizes, by 22.7pt).
- * The residual is `MAX_NATURAL_W = 160`, which caps how much natural width one column may claim
- * before the proportional scale runs. A curated short-name list is the fix, not a design constant.
+ * Both boxes below are declared wider than their own measurement, not at the tight minimum, so a
+ * later wording change does not silently re-collide the way the landscape numbers did.
  */
-function transmissionGridColumns(): { key: string; label: string; kind: 'label' }[] {
-  return [
-    { key: 'lab', label: 'Laboratory', kind: 'label' },
-    ...Array.from({ length: 23 }, (_, i) => ({
-      key: `d${String(i + 1).padStart(2, '0')}`, label: '', kind: 'label' as const,
-    })),
-  ];
-}
+const TG_FOOT_W = 320; // measured 264.29, +55.71 headroom
+const TG_SIG_W = 180; // measured 145.23, +34.77 headroom
+/** Right-aligned to the content edge (48 + TG_CONTENT_W = 746), the same edge the two grids and
+ *  rule2 already draw to. */
+const TG_SIG_X = 48 + TG_CONTENT_W - TG_SIG_W;
 
 /** Report-designer page designs, one table bound to a `SEED_QUERIES` entry (via `simpleTableDesign`). */
 export const SEED_DESIGNS: ReportDesign[] = [
@@ -3651,22 +4040,15 @@ export const SEED_DESIGNS: ReportDesign[] = [
     name: 'LIS Stakeholders Update',
     status: 'published',
     paper: 'A4',
-    // ⛔ LANDSCAPE, though the reference document is PORTRAIT. Measured, at the renderer's fixed
-    // 8pt table font and WITH the stacked two-line header:
-    //
-    //   a day column needs max("23" 8.90pt, "Feb" 14.22pt) + CELL_PAD*2 + 2 = 24.22pt
-    //   A4 portrait body at 36pt margins                                    = 523.28pt
-    //   `columnWidths`'s floor = min(MIN_COL_W 22, 523.28 / 24 columns)      = 21.80pt
-    //
-    // 23 day columns cannot be squeezed below that floor, so they claim 501.4pt of the 523.28 and
-    // the laboratory column is left 21.8pt — three characters. Tightening the margins to the
-    // reference's ~16pt only lifts it to 57.3pt. Landscape gives it 171.85pt, and every name but
-    // the single longest prints in full.
-    //
-    // The reference achieves 156pt in portrait with a ~6pt header font, 21 day columns and a
-    // curated short-name list. CE has none of those: the 8pt cell font and MIN_COL_W are renderer
-    // constants with no design-level lever, and the laboratory names come from the data.
-    orientation: 'landscape',
+    // ⛔ PORTRAIT, matching the reference document. The old landscape reasoning no longer applies:
+    // it was a `table` limit, not a design choice. A `table` column floors at MIN_COL_W (22pt),
+    // measured from the widest string it holds, and 23 day columns plus a laboratory column could
+    // not stay above that floor inside A4 portrait's 523.28pt body (36pt margins). Both grids are
+    // now `cellgrid`, whose cell width (CELL_SIZE, 10.5pt) and label width (CELL_LABEL_W, 105pt)
+    // are DECLARED rather than measured, because a cell holds no text to floor against. See the
+    // "rt-transmission-grid geometry" describe block in report-seeds.test.ts for the arithmetic
+    // that replaces the old landscape measurement this comment used to carry.
+    orientation: 'portrait',
     parameters: [
       // ⚠ `format` and `placeholder` are the run-time guard and the on-page hint for the one
       // parameter that was measured to go wrong. An operator typed `1` here, with the format
@@ -3710,25 +4092,49 @@ export const SEED_DESIGNS: ReportDesign[] = [
       { id: 'rt-transmission-grid-hvleid-title', kind: 'text', name: 'HVL/EID heading', rect: { x: 48, y: 194, w: 600, h: 14 },
         text: 'Any HVL/EID Data Submission by Testing Laboratory', style: { fontSize: 10, bold: true, color: '#334155' },
         showWithTable: 'hvleid' },
-      { id: 'hvleid', kind: 'table', name: 'HVL/EID submission', rect: { x: 48, y: 210, w: TG_CONTENT_W, h: TG_GRID_H },
+      { id: 'hvleid', kind: 'cellgrid', name: 'HVL/EID submission', rect: { x: 48, y: 210, w: TG_CONTENT_W, h: TG_GRID_H },
         dataSource: { kind: 'custom-query', queryId: 'q-transmission-hvleid' },
         sortBy: 'ord',
-        headerRow: true,
-        boundColumns: transmissionGridColumns() },
+        labelColumn: 'lab',
+        cellColumns: Array.from({ length: 23 }, (_, i) => `d${String(i + 1).padStart(2, '0')}`),
+        groupBoundary: 'token-change',
+        palette: { ramp: 'blue', steps: 1 },
+        trailingColumns: [
+          { key: 'days', label: 'Days', width: 34.5 },
+          // statusKey names a column the QUERY carries beside 'silent' (see lab_stats in
+          // q-transmission-hvleid/-other) -- the count still prints, the fill is layered on top.
+          { key: 'silent', label: 'Silent', width: 52, statusKey: 'silent_status', emphasis: 'fill' },
+        ] },
 
-      { id: 'rt-transmission-grid-other-title', kind: 'text', name: 'Other heading', rect: { x: 48, y: 428, w: 600, h: 14 },
+      // ⛔ `flowAfter`, on the heading AND the grid, chained through each other rather than both
+      // pointing straight at `hvleid`. If both pointed at `hvleid` they would compute the SAME y
+      // and overprint each other; chaining (heading follows `hvleid`, grid follows the heading) is
+      // what keeps the heading glued to the top of whatever `other` draws, on every chunk. `rect.y`
+      // (594/612) stays as the FALLBACK for a page where `hvleid` is missing from `page.elements`
+      // entirely — see `flowAfter`'s doc comment in schema.ts for why that fails open rather than
+      // refusing to draw.
+      { id: 'rt-transmission-grid-other-title', kind: 'text', name: 'Other heading', rect: { x: 48, y: 594, w: 600, h: 14 },
         text: 'Any Other Test Data Submission by Testing Laboratory', style: { fontSize: 10, bold: true, color: '#334155' },
-        showWithTable: 'other' },
-      { id: 'other', kind: 'table', name: 'Other submission', rect: { x: 48, y: 446, w: TG_CONTENT_W, h: TG_GRID_H },
+        showWithTable: 'other', flowAfter: 'hvleid' },
+      { id: 'other', kind: 'cellgrid', name: 'Other submission', rect: { x: 48, y: 612, w: TG_CONTENT_W, h: TG_GRID_H },
+        flowAfter: 'rt-transmission-grid-other-title',
         dataSource: { kind: 'custom-query', queryId: 'q-transmission-other' },
         sortBy: 'ord',
-        headerRow: true,
-        boundColumns: transmissionGridColumns() },
+        labelColumn: 'lab',
+        cellColumns: Array.from({ length: 23 }, (_, i) => `d${String(i + 1).padStart(2, '0')}`),
+        groupBoundary: 'token-change',
+        palette: { ramp: 'blue', steps: 1 },
+        trailingColumns: [
+          { key: 'days', label: 'Days', width: 34.5 },
+          // statusKey names a column the QUERY carries beside 'silent' (see lab_stats in
+          // q-transmission-hvleid/-other) -- the count still prints, the fill is layered on top.
+          { key: 'silent', label: 'Silent', width: 52, statusKey: 'silent_status', emphasis: 'fill' },
+        ] },
 
-      { id: 'rt-transmission-grid-rule2', kind: 'line', name: 'rule2', rect: { x: 48, y: 671, w: TG_CONTENT_W, h: 0 }, style: { strokeColor: '#cbd5e1', strokeWidth: 0.75 } },
-      { id: 'rt-transmission-grid-foot', kind: 'text', name: 'Footer', rect: { x: 48, y: 683, w: 500, h: 16 },
-        text: 'Generated by OpenLDR — a filled cell means data arrived from that laboratory that day.', style: { fontSize: 7, color: '#94a3b8' } },
-      { id: 'rt-transmission-grid-sig', kind: 'text', name: 'Signature', rect: { x: 700, y: 683, w: 375, h: 16 },
+      { id: 'rt-transmission-grid-rule2', kind: 'line', name: 'rule2', rect: { x: 48, y: 1003, w: TG_CONTENT_W, h: 0 }, style: { strokeColor: '#cbd5e1', strokeWidth: 0.75 } },
+      { id: 'rt-transmission-grid-foot', kind: 'text', name: 'Footer', rect: { x: 48, y: 1015, w: TG_FOOT_W, h: 16 },
+        text: 'Generated by OpenLDR, a filled cell means data arrived from that laboratory that day.', style: { fontSize: 7, color: '#94a3b8' } },
+      { id: 'rt-transmission-grid-sig', kind: 'text', name: 'Signature', rect: { x: TG_SIG_X, y: 1015, w: TG_SIG_W, h: 16 },
         text: 'Reviewed by ______________________', style: { fontSize: 8, color: '#475569' } },
     ] }],
     pageNumbers: true,

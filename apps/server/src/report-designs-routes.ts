@@ -37,7 +37,7 @@ export function registerReportDesignRoutes(
     const unsorted = findUnsortedHeaderRows(p.data);
     if (unsorted.length > 0) {
       reply.code(400);
-      const error = `headerRow needs sortBy: ${unsorted.map((u) => u.elementId).join(', ')}`;
+      const error = `a header row needs sortBy: ${unsorted.map((u) => u.elementId).join(', ')}`;
       return { error, unsortedHeaderRows: unsorted };
     }
     const invalidImages = findInvalidImageSources(p.data);
@@ -67,7 +67,7 @@ export function registerReportDesignRoutes(
     const unsorted = findUnsortedHeaderRows(p.data);
     if (unsorted.length > 0) {
       reply.code(400);
-      const error = `headerRow needs sortBy: ${unsorted.map((u) => u.elementId).join(', ')}`;
+      const error = `a header row needs sortBy: ${unsorted.map((u) => u.elementId).join(', ')}`;
       return { error, unsortedHeaderRows: unsorted };
     }
     const invalidImages = findInvalidImageSources(p.data);

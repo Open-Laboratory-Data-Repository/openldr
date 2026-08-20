@@ -12,7 +12,7 @@ import {
   DESIGNS_REQUIRING_DATA,
   type SeedDataDrivenReportsDeps,
 } from './report-seeds';
-import { pairRects, toPt, paperSizePt, type ReportDesign } from '@openldr/report-designer';
+import { pairRects, toPt, paperSizePt, cellGridWidth, CELL_LABEL_W, type ReportDesign } from '@openldr/report-designer';
 import { findInvalidImageSources, findUnsortedHeaderRows } from '@openldr/report-designer/pure';
 
 // In-memory fakes — no real Kysely instance needed (unlike `packages/bootstrap/src/seed.ts`,
@@ -1713,14 +1713,14 @@ describe('SEED_QUERIES — the transmission grids', () => {
   // falls back to the untrusted SQL row order — and every existing test stays green while the date
   // row lands in the middle of the grid. Nothing else in this file would notice.
   it('selects the ord discriminator sortBy depends on, in every dialect', () => {
-    // Two rows carry `ord` per dialect string: the dates row (`0 as ord`) and the lab rows
-    // (`1 as ord`). A match-anywhere assertion passes even if one of the two regresses, so this
-    // pins the count.
+    // Four occurrences of `as ord` per dialect string: the dates row (`0 as ord`), the week-token
+    // row (`1 as ord`), the laboratory rows (`max(lo.ord) as ord`), and `lab_ord`'s own
+    // `row_number() over (order by lab) + 1 as ord`.
     const ORD = /\bas ord\b/g;
     for (const id of ['q-transmission-hvleid', 'q-transmission-other']) {
       for (const [dialect, sql] of Object.entries(q(id).sql)) {
         expect(sql.match(ORD) ?? [], `${id}/${dialect} dropped 'as ord' — sortBy silently degrades to no sort`)
-          .toHaveLength(2);
+          .toHaveLength(4);
       }
     }
   });
@@ -1834,43 +1834,112 @@ describe('SEED_QUERIES — the transmission grids', () => {
       expect(code, `${id}/mysql never trims an element`).toMatch(/trim\(substring_index\(/);
     }
   });
+
+  // ⛔ cellgrid's palette does Number(cellValue) and treats anything that is not a finite
+  // positive number as empty (packages/report-designer/src/render/cellgrid.ts, stepFor). 'Y' is
+  // NaN. Left as 'Y', every cell in the grid would paint empty on every run, silently.
+  it('marks a submission with a numeric string cellgrid can parse, not the letter Y, in every dialect', () => {
+    for (const id of ['q-transmission-hvleid', 'q-transmission-other']) {
+      for (const [dialect, sql] of Object.entries(q(id).sql)) {
+        expect(sql, `${id}/${dialect} still marks with the letter Y`)
+          .toMatch(/case when a\.lab is null then '' else '1' end as mark/);
+      }
+    }
+  });
+
+  it('carries a second synthetic row of week tokens at ord = 1, in every dialect', () => {
+    const WEEK_ROW = /union all\s*\nselect 1 as ord, '\(week\)' as lab,/;
+    for (const id of ['q-transmission-hvleid', 'q-transmission-other']) {
+      for (const [dialect, sql] of Object.entries(q(id).sql)) {
+        expect(sql, `${id}/${dialect} lost the week-token row`).toMatch(WEEK_ROW);
+      }
+    }
+  });
+
+  it('gives each laboratory a unique ord from 2, alphabetically, in every dialect', () => {
+    for (const id of ['q-transmission-hvleid', 'q-transmission-other']) {
+      for (const [dialect, sql] of Object.entries(q(id).sql)) {
+        expect(sql, `${id}/${dialect} lost the per-laboratory ord`)
+          .toMatch(/row_number\(\) over \(order by lab\)\s*\+\s*1 as ord/);
+      }
+    }
+  });
+
+  // ⛔ LEFT, never INNER: a laboratory whose only submission this month landed on a weekend has
+  // zero rows in 'days' (Mon-Fri only). An inner join here silently drops that laboratory from the
+  // grid instead of showing it silent all month — no error, just a shorter grid. Measured on the
+  // live warehouse (see the plan this test came from): 'Mbagala Kizuiani' and 'Mwananyamala',
+  // 2017-08.
+  it('computes days and silent per laboratory, outer-joined to the working-day calendar, in every dialect', () => {
+    for (const id of ['q-transmission-hvleid', 'q-transmission-other']) {
+      for (const [dialect, sql] of Object.entries(q(id).sql)) {
+        expect(sql, `${id}/${dialect} lost lab_stats`).toMatch(/lab_stats as \(/);
+        expect(sql, `${id}/${dialect} no longer selects days`).toMatch(/\bas days\b/);
+        expect(sql, `${id}/${dialect} no longer selects silent`).toMatch(/\bas silent\b/);
+        expect(sql, `${id}/${dialect} inner-joins days inside lab_stats and can drop a weekend-only lab`)
+          .toMatch(/left join days dy on dy\.cal_day = a\.cal_day/);
+      }
+    }
+  });
+
+  // The renderer half of this (drawCellGrid honouring statusKey/emphasis) is covered in
+  // @openldr/report-designer. This is the query half: the token has to exist before the design's
+  // statusKey can name it.
+  it('derives a silent_status token at the 10-working-day threshold, in every dialect', () => {
+    for (const id of ['q-transmission-hvleid', 'q-transmission-other']) {
+      for (const [dialect, sql] of Object.entries(q(id).sql)) {
+        expect(sql, `${id}/${dialect} no longer selects silent_status`).toMatch(/\bas silent_status\b/);
+        expect(sql, `${id}/${dialect} threshold moved off >= 10`)
+          .toMatch(/>=\s*10\s+then\s+'critical'/);
+      }
+    }
+  });
+
+  // ⚠ AGENTS.md section 8 does not forbid 10 — it names no clinical vocabulary, only a count of
+  // working days. It IS an invented, operational number, and the SQL comment says so, so nobody
+  // reads it as a clinical decision later.
+  it('documents 10 as an invented operational threshold, not a clinical one, in every dialect', () => {
+    for (const id of ['q-transmission-hvleid', 'q-transmission-other']) {
+      for (const [dialect, sql] of Object.entries(q(id).sql)) {
+        expect(sql, `${id}/${dialect} lost the invented-threshold disclosure`)
+          .toMatch(/INVENTED threshold/);
+      }
+    }
+  });
 });
 
 describe('SEED_DESIGNS — rt-transmission-grid', () => {
   const design = () => SEED_DESIGNS.find((d) => d.id === 'rt-transmission-grid')!;
   const el = (id: string) => design().pages[0].elements.find((e) => e.id === id)!;
 
-  it('is landscape — MEASURED: 24 columns cannot fit portrait', () => {
-    // The reference document is portrait, and this design is not. The reason is arithmetic, not
-    // taste, and it is worth pinning because "make it portrait like the reference" is an obvious
-    // and wrong instruction to give this file.
-    //
-    // Measured with real pdfkit metrics at the renderer's fixed 8pt, WITH the stacked header:
-    //   day column natural   = max("23" 8.90, "Feb" 14.22) + CELL_PAD*2 + 2 = 24.22pt
-    //   portrait body, 36pt margins                                          = 523.28pt
-    //   floor applied by columnWidths = min(MIN_COL_W 22, 523.28/24 = 21.80) = 21.80pt
-    // 23 day columns cannot go below that floor, so they take 501.4pt of 523.28 and the
-    // laboratory column is left 21.8pt — about three characters. Landscape gives it 171.85pt.
-    // Tighter margins do not rescue it: at 16pt margins the name column is 57.3pt.
-    expect(design().orientation).toBe('landscape');
+  it('is portrait, cellgrid does not need MIN_COL_W headroom the way table did', () => {
+    // The reason the design was landscape (a 22pt column floor colliding with a 23-column grid)
+    // no longer applies: cellgrid declares its cell pitch instead of measuring it. See the
+    // geometry describe block below for the arithmetic that replaces this comment.
+    expect(design().orientation).toBe('portrait');
   });
 
-  it('lifts the query date row into the header so it repeats on every page', () => {
-    // Without `headerRow` the dates are an ordinary body row: they print on chunk 0 only, and page
-    // 2 shows marks under blank columns with nothing to say which day is which.
+  it('binds both grids as cellgrid, not table', () => {
     for (const id of ['hvleid', 'other']) {
-      expect(el(id).headerRow, `${id} leaves the dates as a body row`).toBe(true);
+      expect(el(id).kind, `${id} is still a table`).toBe('cellgrid');
     }
   });
 
-  it('⛔ leaves the 23 day labels BLANK, because a declared label wins over the header row', () => {
-    // `headerTexts` keeps a non-blank declared label and fills only a blank one from the header
-    // row. Labelling the day columns `1`..`23` would therefore print slot numbers OVER the dates —
-    // which is exactly the mitigation an earlier review proposed before the lift existed.
+  it('sorts its own rows on ord instead of trusting the SQL row order', () => {
     for (const id of ['hvleid', 'other']) {
-      const labels = (el(id).boundColumns ?? []).map((c) => c.label);
-      expect(labels[0]).toBe('Laboratory');
-      expect(labels.slice(1), `${id} labels its day columns`).toEqual(Array(23).fill(''));
+      expect(el(id).sortBy, `${id} trusts the SQL row order`).toBe('ord');
+    }
+  });
+
+  it('groups day columns by the week-token row', () => {
+    for (const id of ['hvleid', 'other']) {
+      expect(el(id).groupBoundary, `${id} does not group by week`).toBe('token-change');
+    }
+  });
+
+  it('marks a filled cell with the binary blue ramp', () => {
+    for (const id of ['hvleid', 'other']) {
+      expect(el(id).palette, `${id} palette`).toEqual({ ramp: 'blue', steps: 1 });
     }
   });
 
@@ -1879,17 +1948,13 @@ describe('SEED_DESIGNS — rt-transmission-grid', () => {
     expect(el('rt-transmission-grid-other-title').showWithTable).toBe('other');
   });
 
-  it('fits 8 laboratories per grid per page — computed in POINTS, not px@96', () => {
-    // ⛔ UNITS. The rect is px@96 and the renderer multiplies by 0.75; ROW_H and the header band are
-    // already points. Doing this in px@96 gives floor((214-24)/16) = 11 and overstates the capacity
-    // by a third, in the direction that says "it fits".
-    const ROW_H_PT = 16;
-    const STACKED_HEAD_PT = 24; // ROW_H + HEAD_LINE_H, and HEAD_LINE_H is the reference's 8pt
-    for (const id of ['hvleid', 'other']) {
-      const hPt = toPt(el(id).rect).h;
-      expect(hPt).toBeCloseTo(160.5, 6);
-      expect(Math.floor((hPt - STACKED_HEAD_PT) / ROW_H_PT)).toBe(8);
-    }
+  it('chains other flowAfter its own heading flowAfter hvleid, so the block moves up as one unit', () => {
+    // `hvleid` itself declares no flowAfter — it is the anchor everything else measures from.
+    // Chained THROUGH the heading, not both pointing straight at `hvleid`: two elements resolving
+    // to the same y would overprint each other. See flowAfter's doc comment in schema.ts.
+    expect(el('hvleid').flowAfter).toBeUndefined();
+    expect(el('rt-transmission-grid-other-title').flowAfter).toBe('hvleid');
+    expect(el('other').flowAfter).toBe('rt-transmission-grid-other-title');
   });
 
   it('draws BOTH grids on one page, as the reference does', () => {
@@ -1897,22 +1962,62 @@ describe('SEED_DESIGNS — rt-transmission-grid', () => {
     expect(el('other').dataSource).toEqual({ kind: 'custom-query', queryId: 'q-transmission-other' });
   });
 
-  it('binds the lab column and all 23 day columns explicitly', () => {
+  it('binds the laboratory as labelColumn and all 23 day columns as cellColumns', () => {
     for (const id of ['hvleid', 'other']) {
-      const keys = (el(id).boundColumns ?? []).map((c) => c.key);
-      expect(keys[0]).toBe('lab');
-      expect(keys).toHaveLength(24);
-      expect(keys).toContain('d23');
+      expect(el(id).labelColumn, `${id} labelColumn`).toBe('lab');
+      const cells = el(id).cellColumns ?? [];
+      expect(cells, `${id} cellColumns`).toHaveLength(23);
+      expect(cells[0]).toBe('d01');
+      expect(cells[22]).toBe('d23');
+    }
+  });
+
+  it('trails each row with Days and Silent, matching the spec widths', () => {
+    for (const id of ['hvleid', 'other']) {
+      expect(el(id).trailingColumns, `${id} trailingColumns`).toEqual([
+        { key: 'days', label: 'Days', width: 34.5 },
+        { key: 'silent', label: 'Silent', width: 52, statusKey: 'silent_status', emphasis: 'fill' },
+      ]);
+    }
+  });
+
+  it('binds Silent to the query-carried silent_status token, filled, for both grids', () => {
+    // The approved preview showed a dark filled pill for a laboratory silent ten or more working
+    // days. Without statusKey/emphasis here, drawCellGrid has a status token to read (see the
+    // SQL test below) but nothing in the design ever names it, and the render stays plain numerals.
+    for (const id of ['hvleid', 'other']) {
+      const silent = el(id).trailingColumns?.find((c) => c.key === 'silent');
+      expect(silent?.statusKey, `${id} silent has no statusKey`).toBe('silent_status');
+      expect(silent?.emphasis, `${id} silent is not filled`).toBe('fill');
     }
   });
 
   it('projects only keys the queries actually select', () => {
     const sql = SEED_QUERIES.find((q) => q.id === 'q-transmission-hvleid')!.sql.postgres;
-    for (const c of el('hvleid').boundColumns ?? []) {
-      // ⚠ `\\b` — inside a TEMPLATE LITERAL a lone `\b` is the backspace character, not a word
+    const keys = [
+      el('hvleid').labelColumn!, ...(el('hvleid').cellColumns ?? []),
+      ...(el('hvleid').trailingColumns ?? []).map((c) => c.key),
+    ];
+    for (const key of keys) {
+      // ⚠ `\\b`, inside a TEMPLATE LITERAL a lone `\b` is the backspace character, not a word
       // boundary, so the pattern silently never matches.
-      expect(new RegExp(`as ${c.key}\\b`).test(sql), `${c.key} is not selected`).toBe(true);
+      expect(new RegExp(`as ${key}\\b`).test(sql), `${key} is not selected`).toBe(true);
     }
+  });
+
+  it('keeps the footer clear of the signature line, and right-aligns the signature to the content edge', () => {
+    // Both boxes carried their landscape widths (500 and 375) into the first portrait draft and
+    // collided: 500 + 375 = 875pt cannot fit inside a 698pt body at any x. The fix measured the
+    // real strings with pdfkit rather than guessing a smaller pair of numbers; this pins the
+    // result rather than trusting the next reader to re-measure it by eye.
+    //
+    // Content edge read off the hvleid grid's own rect, not hardcoded, since both it and the
+    // signature's x are derived from the same TG_CONTENT_W.
+    const contentEdge = el('hvleid').rect.x + el('hvleid').rect.w;
+    const foot = el('rt-transmission-grid-foot').rect;
+    const sig = el('rt-transmission-grid-sig').rect;
+    expect(foot.x + foot.w, 'the footer runs into the signature line').toBeLessThan(sig.x);
+    expect(sig.x + sig.w, 'the signature does not right-align to the content edge').toBe(contentEdge);
   });
 });
 
@@ -1952,19 +2057,11 @@ describe('SEED_DESIGNS — rt-transmission-grid keeps ord off the page', () => {
   const design = () => SEED_DESIGNS.find((d) => d.id === 'rt-transmission-grid')!;
   const el = (id: string) => design().pages[0].elements.find((e) => e.id === id)!;
 
-  it('never binds ord — it sorts the rows, it is not a column of the report', () => {
+  it('never binds ord, it sorts the rows, it is not a column of the report', () => {
     for (const id of ['hvleid', 'other']) {
-      expect((el(id).boundColumns ?? []).map((c) => c.key), `${id} prints ord`).not.toContain('ord');
-    }
-  });
-
-  it('sorts its own rows on ord instead of trusting the SQL row order', () => {
-    // planPagination wraps the query as `select * from (<inner>) as _q limit N`
-    // (packages/dashboards/src/sql-runner.ts:56). MySQL may discard an ORDER BY inside a derived
-    // table; if it does, the '(dates)' row lands in the middle of the grid. Sorting where the
-    // renderer consumes the rows removes the dependency on the engine keeping that order.
-    for (const id of ['hvleid', 'other']) {
-      expect(el(id).sortBy, `${id} trusts the SQL row order`).toBe('ord');
+      const keys = [el(id).labelColumn, ...(el(id).cellColumns ?? []),
+        ...(el(id).trailingColumns ?? []).map((c) => c.key)];
+      expect(keys, `${id} prints ord`).not.toContain('ord');
     }
   });
 
@@ -2007,25 +2104,47 @@ describe('SEED_DESIGNS — rt-transmission-grid geometry', () => {
   const design = () => SEED_DESIGNS.find((d) => d.id === 'rt-transmission-grid')!;
   const el = (id: string) => design().pages[0].elements.find((e) => e.id === id)!;
 
-  it('gives both grids the FULL landscape body width', () => {
-    // ⚠ MEASURED off a real render at the renderer's fixed 8pt, with the stacked header: the day
-    // columns draw at 26.02pt and the laboratory column at 171.85pt (163.85pt of text). That is
-    // enough for "Kilimanjaro Christian Medical Centre" (129.5pt) but NOT for
-    // "Mtwara (Ligula) Regional Referral Hospital - EVLIMS" (186.6pt), which still ellipsizes.
-    // Narrowing these rects makes a legibility problem that is already at its limit worse, and
-    // nothing in a rendering test would say so.
-    const [wPt] = paperSizePt(design().paper, design().orientation);
-    const body = Math.round(wPt / 0.75) - 96; // simpleTableDesign's own arithmetic
-    for (const id of ['hvleid', 'other']) {
-      expect(el(id).rect.w, `${id} is narrower than the page allows`).toBe(body);
-    }
-  });
-
   it('gives both grids the same width and the same height', () => {
-    // Two readings of the same month, one above the other. Different column widths between them
-    // would make a lab's row in the top grid not line up with its row in the bottom one.
+    // Two readings of the same month, one above the other. Different geometry between them would
+    // make a laboratory's row in the top grid not line up with its row in the bottom one.
     expect(el('hvleid').rect.w).toBe(el('other').rect.w);
     expect(el('hvleid').rect.h).toBe(el('other').rect.h);
     expect(el('hvleid').rect.x).toBe(el('other').rect.x);
   });
+
+  it('fits the worst-case 23-day, 5-week month inside the A4 portrait body: DERIVED, not hardcoded', () => {
+    // Worst case per spec section 5: a 31-day month starting Monday, 23 working days across 5
+    // week groups, breaks at cell index 5, 10, 15, 20, the exact pattern q-transmission-hvleid's
+    // own week-token union branch cites for August 2017 on the live warehouse.
+    const worstCaseBreaks = [5, 10, 15, 20];
+    const [pageWpt] = paperSizePt(design().paper, design().orientation);
+    const bodyWpt = pageWpt - 72; // 36pt margins each side, per spec section 5
+    for (const id of ['hvleid', 'other']) {
+      const trailing = (el(id).trailingColumns ?? []).map((c) => c.width);
+      const needed = cellGridWidth({
+        labelWidth: CELL_LABEL_W,
+        cellCount: (el(id).cellColumns ?? []).length,
+        breaks: worstCaseBreaks,
+        trailingWidths: trailing,
+      });
+      expect(needed, `${id} needs more than the ${bodyWpt}pt portrait body has`).toBeLessThanOrEqual(bodyWpt);
+      expect(bodyWpt - needed, `${id} headroom`).toBeGreaterThan(0);
+    }
+  });
+
+  it('declares a rect wide enough to hold the full body, not just the worst-case minimum', () => {
+    // The grid's OWN rect need not equal the tight minimum computed above. cellgrid does not
+    // stretch cells to fill unused width, so a wider clip region is harmless. This just confirms
+    // the declared rect is not narrower than what the previous test proved is needed.
+    const [pageWpt] = paperSizePt(design().paper, design().orientation);
+    const bodyWpt = pageWpt - 72;
+    for (const id of ['hvleid', 'other']) {
+      expect(toPt(el(id).rect).w).toBeGreaterThan(bodyWpt - 10);
+    }
+  });
+});
+
+it('exports cellGridWidth and CELL_LABEL_W for a seed test to use', () => {
+  expect(typeof cellGridWidth).toBe('function');
+  expect(CELL_LABEL_W).toBe(105);
 });

@@ -278,17 +278,42 @@ describe('report-design routes', () => {
     const res = await app.inject({ method: 'POST', url: '/api/report-designs', payload: withGrid({}) });
     expect(res.statusCode).toBe(400);
     expect(res.json().unsortedHeaderRows).toEqual([{ elementId: 'hvleid' }]);
-    expect(res.json().error).toBe('headerRow needs sortBy: hvleid');
+    expect(res.json().error).toBe('a header row needs sortBy: hvleid');
 
     await app.inject({ method: 'POST', url: '/api/report-designs', payload: minimal });
     const put = await app.inject({ method: 'PUT', url: '/api/report-designs/rd1', payload: withGrid({}) });
     expect(put.statusCode).toBe(400);
-    expect(put.json().error).toBe('headerRow needs sortBy: hvleid');
+    expect(put.json().error).toBe('a header row needs sortBy: hvleid');
   });
 
   it('accepts the pair', async () => {
     const app = appWith(fakeCtx());
     const res = await app.inject({ method: 'POST', url: '/api/report-designs', payload: withGrid({ sortBy: 'ord' }) });
+    expect(res.statusCode).toBe(201);
+  });
+
+  const withCellGrid = (over: Record<string, unknown>) => ({
+    ...minimal,
+    pages: [{ id: 'p1', elements: [{
+      id: 'cg', kind: 'cellgrid', name: 'CG', rect: { x: 0, y: 0, w: 400, h: 200 },
+      dataSource: { kind: 'custom-query', queryId: 'q' }, cellColumns: ['d01'], ...over,
+    }] }],
+  });
+
+  it('⛔ refuses a bound cellgrid without sortBy, though it has no headerRow field to opt in with', async () => {
+    // cellgrid always lifts row 0 as a header. Unlike table, there is nothing to opt into. The
+    // gate has to catch this unconditionally rather than by checking a flag that does not exist
+    // on this element kind.
+    const app = appWith(fakeCtx());
+    const res = await app.inject({ method: 'POST', url: '/api/report-designs', payload: withCellGrid({}) });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().unsortedHeaderRows).toEqual([{ elementId: 'cg' }]);
+    expect(res.json().error).toBe('a header row needs sortBy: cg');
+  });
+
+  it('accepts a bound cellgrid with sortBy', async () => {
+    const app = appWith(fakeCtx());
+    const res = await app.inject({ method: 'POST', url: '/api/report-designs', payload: withCellGrid({ sortBy: 'ord' }) });
     expect(res.statusCode).toBe(201);
   });
 

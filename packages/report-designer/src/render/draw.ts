@@ -6,7 +6,7 @@ import type { ResolvedTable } from './index';
 import { formatDisplayDate, formatDisplayDateOf } from './format-date';
 import {
   CELL_SIZE, CELL_GAP, GROUP_GAP, CELL_ROW_H, CELL_COL_GAP, CELL_HEAD_H, CELL_LABEL_W,
-  cellFill, groupBreaks, splitCellGridRows, cellGridMaxRows, cellGridChunks,
+  cellFill, groupBreaks, splitCellGridRows, cellGridMaxRows, cellGridChunks, cellGridRowsInChunk,
   stripWidth as stripWidthOf,
 } from './cellgrid';
 
@@ -102,6 +102,36 @@ export const CELL_TEXT_H = ROW_H - CELL_PAD; // 12pt — one 8pt line (9.25pt), 
  */
 export function cellTextOptions(width: number): { width: number; height: number; ellipsis: true } {
   return { width, height: CELL_TEXT_H, ellipsis: true };
+}
+
+/**
+ * Cut `text` to fit `maxW` pt under the doc's CURRENT font/size, appending one ellipsis character.
+ *
+ * ⛔ NOT `{ ellipsis: true }`. `drawCellGrid`'s label call passed `width` + `lineBreak: false` +
+ * `ellipsis: true` with no `height`, which is exactly the `cellTextOptions` quirk above minus the
+ * `height` that quirk exists to supply — measured directly (pdfkit 0.15.2, a throwaway script
+ * drawing "Bugando Medical Centre (BMC)" at `CELL_LABEL_W`): `ellipsis` did NOTHING, the string
+ * still wrapped to a second line, and that second line ("(BMC)") printed on top of the laboratory
+ * name in the row below it. Passing `height` (`cellTextOptions`'s fix) also stops the wrap, but a
+ * `cellgrid` label is drawn without one, at a fixed `y = r.y + CELL_HEAD_H + ri * CELL_ROW_H`, and
+ * this cuts the STRING instead so the fix does not lean on a pdfkit option combination that has
+ * already been measured doing nothing once.
+ *
+ * Binary search on character count, not `widthOfString` per character shaved off one at a time —
+ * a label column is short and this runs once per row, but there is no reason to make it O(n) when
+ * O(log n) measurements answer the same question.
+ */
+export function truncateToWidth(doc: Doc, text: string, maxW: number): string {
+  if (doc.widthOfString(text) <= maxW) return text;
+  const ELLIPSIS = '…';
+  if (doc.widthOfString(ELLIPSIS) > maxW) return '';
+  let lo = 0;
+  let hi = text.length;
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2);
+    if (doc.widthOfString(text.slice(0, mid) + ELLIPSIS) <= maxW) lo = mid; else hi = mid - 1;
+  }
+  return text.slice(0, lo) + ELLIPSIS;
 }
 
 /** Lines a header cell may stack. Two, because `STACKED_HEAD_H` reserves room for exactly two —
@@ -436,6 +466,32 @@ export function cellStatusesFor(
   return resolved.rows.map((row) => cols.map((c) => (c.statusKey ? asCellStatus(row[c.statusKey]) : undefined)));
 }
 
+/**
+ * Per-record status for each `cellgrid` trailing column that declares a `statusKey`, one entry per
+ * RECORD (the synthetic header/group rows already stripped), one status per `el.trailingColumns`
+ * in order. `[]` when no trailing column carries a `statusKey` — the compatibility contract
+ * `cellStatusesFor` documents above, so a cellgrid that does not opt in draws exactly the plain-text
+ * path it always has.
+ *
+ * ⛔ NOT read off `rowsFor`'s projected row array. `cellGridRowsFor` projects each trailing
+ * column's `key` (the DISPLAYED value — a count, in this design) but never its `statusKey`: most
+ * designs bind no trailing status at all, and adding an invisible column to every projected row
+ * would be dead weight for every one of them. This reads `resolved.rows` directly instead, the same
+ * way `cellStatusesFor` does for `table`, and relies on the SAME already-sorted order
+ * `resolveDesignTables` produced — `cellGridRowsFor` reads that identical array, so index `i` here
+ * is index `i` there.
+ */
+export function cellGridTrailingStatusesFor(
+  el: DesignElement, resolved: ResolvedTable | undefined,
+): (CellStatus | undefined)[][] {
+  if (el.kind !== 'cellgrid' || !el.dataSource) return [];
+  if (!resolved || 'error' in resolved) return [];
+  const cols = el.trailingColumns ?? [];
+  if (!cols.some((c) => c.statusKey)) return [];
+  const lift = el.groupBoundary === 'token-change' ? 2 : 1;
+  return resolved.rows.slice(lift).map((row) => cols.map((c) => (c.statusKey ? asCellStatus(row[c.statusKey]) : undefined)));
+}
+
 // ---------------------------------------------------------------------------------------------
 // keyvalue panel
 // ---------------------------------------------------------------------------------------------
@@ -462,6 +518,15 @@ const KV_LABEL_SIZE = 8;
 const KV_VALUE_SIZE = 8;
 const KV_STACKED_LABEL_SIZE = 6.5;
 const KV_STACKED_VALUE_SIZE = 8.5;
+/** `stat` box pitch. Taller than `inline`/`stacked`: a stat panel holds two stacked lines at
+ *  much larger sizes, not one line of label-and-value. */
+const KV_STAT_H = 40;
+/** Visible gutter below each stat box, so four boxes in a 2x2 grid read as separate cards rather
+ *  than one solid block. Subtracted from KV_STAT_H, not added to it: the row PITCH stays
+ *  KV_STAT_H so the grid math in pairRects does not need a second constant. */
+const KV_STAT_VGAP = 6;
+const KV_STAT_VALUE_SIZE = 18;
+const KV_STAT_LABEL_SIZE = 7;
 
 export type KeyValuePair = { label: string; value: string; status?: CellStatus; emphasis: CellEmphasis };
 
@@ -517,10 +582,10 @@ const lineH = (fontSize: number): number => fontSize * 1.15;
  * disagree with what the reader sees at the boundary.
  */
 export function pairRects(
-  r: Box, n: number, layout: 'inline' | 'stacked', panelColumns: number, hasTitle: boolean,
+  r: Box, n: number, layout: 'inline' | 'stacked' | 'stat', panelColumns: number, hasTitle: boolean,
 ): PairBox[] {
   const cols = Math.max(1, Math.min(4, Math.floor(panelColumns) || 1));
-  const pitch = layout === 'stacked' ? KV_STACKED_H : KV_INLINE_H;
+  const pitch = layout === 'stacked' ? KV_STACKED_H : layout === 'stat' ? KV_STAT_H : KV_INLINE_H;
   const x0 = r.x + KV_PAD_X;
   const y0 = r.y + (hasTitle ? KV_TITLE_H : 0) + KV_PAD_Y;
   const innerW = Math.max(0, r.w - KV_PAD_X * 2);
@@ -529,6 +594,17 @@ export function pairRects(
     const x = x0 + (i % cols) * (cellW + KV_GUTTER);
     const y = y0 + Math.floor(i / cols) * pitch;
     const cell = { x, y, w: cellW, h: pitch };
+    if (layout === 'stat') {
+      const boxH = pitch - KV_STAT_VGAP;
+      const valueLh = lineH(KV_STAT_VALUE_SIZE);
+      const labelLh = lineH(KV_STAT_LABEL_SIZE);
+      const innerY = y + (boxH - valueLh - labelLh) / 2;
+      return {
+        ...cell,
+        value: { x, y: innerY, w: cellW, h: valueLh },
+        label: { x, y: innerY + valueLh, w: cellW, h: labelLh },
+      };
+    }
     if (layout === 'stacked') {
       const lh = lineH(KV_STACKED_LABEL_SIZE);
       return {
@@ -588,6 +664,26 @@ function drawKeyValue(doc: Doc, el: DesignElement, r: Box, resolved: ResolvedTab
   const boxes = pairRects(r, pairs.length, layout, el.panelColumns ?? 1, !!title);
   pairs.forEach((p, i) => {
     const b = boxes[i];
+
+    // `stat` is a fully separate branch, not folded into the shared inline/stacked drawing below.
+    // It draws the VALUE first and BOLD, and the caption second and small — the opposite order and
+    // weighting from inline/stacked, because a stat panel is scanned by number first, caption
+    // second. Sharing one code path with inline/stacked would reorder THEIR draw calls too, which
+    // changes the bytes of the content stream even though the rendered pixels are unchanged — that
+    // is what golden.test.ts's digest caught here.
+    if (layout === 'stat') {
+      // The box itself, inset by half the vertical gutter so adjacent stat boxes read as
+      // separate cards. Reuses HEAD_FILL rather than introducing a new near-duplicate tint.
+      doc.rect(b.x, b.y, b.w, b.h - KV_STAT_VGAP).fill(HEAD_FILL);
+      doc.font('Helvetica-Bold').fontSize(KV_STAT_VALUE_SIZE).fillColor('#0f172a')
+        .text(values[i], b.value.x, b.value.y,
+          { width: b.value.w, height: b.value.h, ellipsis: true, align: 'center' });
+      doc.font('Helvetica').fontSize(KV_STAT_LABEL_SIZE).fillColor(KV_LABEL_COLOR)
+        .text(p.label.toUpperCase(), b.label.x, b.label.y,
+          { width: b.label.w, height: b.label.h, ellipsis: true, align: 'center' });
+      return;
+    }
+
     const labelSize = layout === 'stacked' ? KV_STACKED_LABEL_SIZE : KV_LABEL_SIZE;
     const valueSize = layout === 'stacked' ? KV_STACKED_VALUE_SIZE : KV_VALUE_SIZE;
     // The label is BOLD and the value regular — the opposite of a table, on purpose. A table's
@@ -759,6 +855,66 @@ export function pageFooterLabel(n: number, total: number): string {
   return `Page ${n} / ${total}`;
 }
 
+/**
+ * The height, in pt, `el` actually draws on chunk `chunk` — for `flowAfter`, never for anything
+ * else.
+ *
+ * ⛔ NOT `toPt(el.rect).h`. That is the MOST an element may occupy, declared at design time; a
+ * `cellgrid`/`table` almost never fills it, which is the entire reason `flowAfter` exists — see
+ * its doc comment in `schema.ts`. The one exception is a FAILED query: `elementDrawsOnChunk` keeps
+ * a broken table/cellgrid drawing on every chunk, and it always paints the full error-placeholder
+ * box, so this returns the full rect height for that case, matching what actually lands on the
+ * page.
+ *
+ * A chunk this element does not reach at all (its rows ran out on an earlier page) draws nothing —
+ * zero — which is what lets a `flowAfter` follower move up and take its place.
+ */
+export function drawnHeight(
+  el: DesignElement, resolved: ResolvedTable | undefined, chunk: number,
+): number {
+  const rectH = toPt(el.rect).h;
+  if (el.dataSource && resolved && 'error' in resolved) return rectH;
+  if (el.kind !== 'cellgrid' && el.kind !== 'table') return rectH;
+  if (chunk >= elementChunkCount(el, resolved)) return 0;
+  if (el.kind === 'cellgrid') {
+    const body = splitCellGridRows(rowsFor(el, resolved), el.groupBoundary === 'token-change').body;
+    return CELL_HEAD_H + cellGridRowsInChunk(body.length, rectH, chunk) * CELL_ROW_H;
+  }
+  const headH = headerBandHeight(el);
+  const maxRows = maxRowsFor(rectH, headH);
+  const rowCount = bodyRowsFor(el, resolved).length;
+  const rowsInChunk = maxRows < 1 ? 0 : Math.max(0, Math.min(maxRows, rowCount - chunk * maxRows));
+  return headH + rowsInChunk * ROW_H;
+}
+
+/**
+ * The y (pt) `el` actually draws at on chunk `chunk`, honouring `flowAfter` (see `schema.ts`).
+ *
+ * `seen` carries every id visited on THIS resolution, so a cycle — including a straight
+ * self-reference — throws instead of looping: a page has finitely many elements, so recursing here
+ * either lands on an element with no `flowAfter`, a name not on the page, or an id already in
+ * `seen`. There is no fourth outcome, so this cannot spin.
+ */
+export function resolveFlowY(
+  el: DesignElement, page: DesignPage, resolved: Map<string, ResolvedTable>, chunk: number,
+  seen: ReadonlySet<string> = new Set(),
+): number {
+  const declared = toPt(el.rect).y;
+  if (!el.flowAfter) return declared;
+  if (seen.has(el.id)) {
+    const path = [...seen, el.id].join(' -> ');
+    throw new Error(`report design '${page.id}': flowAfter cycle at '${el.id}' (${path})`);
+  }
+  const target = page.elements.find((e) => e.id === el.flowAfter);
+  // Fails OPEN, same contract `showWithTable` documents: a dangling reference is a design defect,
+  // not a reason to jump this element somewhere unrelated.
+  if (!target) return declared;
+  const nextSeen = new Set(seen);
+  nextSeen.add(el.id);
+  const targetY = resolveFlowY(target, page, resolved, chunk, nextSeen);
+  return targetY + drawnHeight(target, resolved.get(target.id), chunk);
+}
+
 /** Draw the "Page X / Y" footer centered ~24pt above the bottom edge of a full-bleed page. */
 export function drawPageFooter(doc: Doc, wPt: number, hPt: number, n: number, total: number): void {
   doc.save().font('Helvetica').fontSize(8).fillColor('#737373')
@@ -768,8 +924,13 @@ export function drawPageFooter(doc: Doc, wPt: number, hPt: number, n: number, to
 
 export function drawElement(
   doc: Doc, el: DesignElement, tokens: Map<string, string>, resolved: ResolvedTable | undefined, chunk = 0,
+  // `flowAfter`'s resolved y, in pt. The caller always passes `resolveFlowY`'s result — for an
+  // element with no `flowAfter` that is exactly `toPt(el.rect).y`, so this parameter changes
+  // nothing for the (still overwhelmingly common) design that never opts in.
+  yPt?: number,
 ): void {
-  const r = toPt(el.rect);
+  const box = toPt(el.rect);
+  const r = yPt === undefined ? box : { ...box, y: yPt };
   const s = el.style ?? {};
   switch (el.kind) {
     case 'rect': {
@@ -920,20 +1081,31 @@ function drawCellGrid(
   // Records.
   const perChunk = cellGridMaxRows(r.h);
   const slice = perChunk < 1 ? [] : split.body.slice(chunk * perChunk, (chunk + 1) * perChunk);
+  const trailingStatuses = cellGridTrailingStatusesFor(el, resolved);
   slice.forEach((row, ri) => {
     const y = r.y + CELL_HEAD_H + ri * CELL_ROW_H;
     if (hasLabel) {
       doc.font('Helvetica').fontSize(8).fillColor(BODY_TEXT)
-        .text(row[0] ?? '', r.x, y + 1, { width: CELL_LABEL_W, lineBreak: false, ellipsis: true });
+        .text(truncateToWidth(doc, row[0] ?? '', CELL_LABEL_W), r.x, y + 1, { width: CELL_LABEL_W, lineBreak: false });
     }
     for (let i = 0; i < cellCount; i += 1) {
       doc.rect(xOfCell(i), y, CELL_SIZE, CELL_SIZE).fill(cellFill(Number(row[cellIndex(i)]), max, palette));
     }
     let x = trailingStart;
+    // `chunk * perChunk + ri` is this row's index in `split.body`, which `trailingStatuses` is
+    // aligned to (both are `resolved.rows` with the same synthetic header/group rows stripped).
+    const rowStatuses = trailingStatuses[chunk * perChunk + ri];
     trailing.forEach((c, ci) => {
       x += CELL_COL_GAP;
       const v = row[cellIndex(cellCount) + ci] ?? '';
-      doc.font('Helvetica').fontSize(7).fillColor(BODY_TEXT)
+      const st = rowStatuses?.[ci];
+      const filled = Boolean(st) && (c.emphasis ?? 'text') === 'fill';
+      if (filled) {
+        doc.rect(x + CHIP_INSET_X, y + CHIP_INSET_Y, c.width - CHIP_INSET_X * 2, CELL_ROW_H - CHIP_INSET_Y * 2)
+          .fill(STATUS_CHIP_FILL[st!]);
+      }
+      doc.font('Helvetica').fontSize(7)
+        .fillColor(filled ? STATUS_CHIP_TEXT[st!] : (st ? STATUS_TEXT_COLOR[st] : BODY_TEXT))
         .text(v, x, y + 1, { width: c.width, align: 'center', lineBreak: false });
       x += c.width;
     });

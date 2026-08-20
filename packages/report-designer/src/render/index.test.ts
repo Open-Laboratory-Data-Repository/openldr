@@ -3,6 +3,7 @@ import zlib from 'node:zlib';
 import PDFDocument from 'pdfkit';
 import { renderReportDesignPdf, type ResolvedTable } from './index';
 import { columnWidths, HEAD_LINE_H, STACKED_HEAD_H, ROW_H } from './draw';
+import { CELL_LABEL_W } from './cellgrid';
 import { encodeCode128, encodeQr, QR_QUIET_ZONE } from '../encode';
 import type { ReportDesign, BoundColumn } from '../schema';
 
@@ -836,6 +837,121 @@ describe('truncation, and the byte it is written as', () => {
     const texts = pdfTexts(await renderReportDesignPdf(narrow(400, 'short enough'), new Map(), { now: NOW }));
     expect(texts).toContain('short enough');
     expect(texts.join('')).not.toContain(String.fromCharCode(0x85));
+  });
+});
+
+describe('cellgrid label column truncates instead of wrapping', () => {
+  // The exact string from the reported defect: 8pt Helvetica measures it at ~113.4pt, wider than
+  // CELL_LABEL_W (105pt). Before the fix, `{ lineBreak: false, ellipsis: true }` with no `height`
+  // did nothing (see `truncateToWidth`'s doc comment) and this WRAPPED onto a second line —
+  // "(BMC)" — which printed on top of the laboratory drawn in the row underneath it.
+  const LONG_NAME = 'Bugando Medical Centre (BMC)';
+
+  function cellGridDesign(): ReportDesign {
+    return baseDesign({
+      pages: [{ id: 'p1', elements: [
+        { id: 'g', kind: 'cellgrid', name: 'g', rect: { x: 48, y: 40, w: 698, h: 200 },
+          dataSource: { kind: 'custom-query', queryId: 'q' }, labelColumn: 'lab', cellColumns: ['d01', 'd02'] },
+      ] }],
+    });
+  }
+
+  function cellGridResolved(): Map<string, ResolvedTable> {
+    return new Map([['g', {
+      columns: [{ key: 'lab', label: '' }, { key: 'd01', label: '' }, { key: 'd02', label: '' }],
+      rows: [
+        { lab: '', d01: '', d02: '' }, // the header row a cellgrid always lifts, regardless of design
+        { lab: LONG_NAME, d01: '1', d02: '' },
+        { lab: 'Buguruni', d01: '', d02: '1' },
+      ],
+    }]]);
+  }
+
+  it('cuts a laboratory name wider than CELL_LABEL_W and ends it with the ellipsis byte', async () => {
+    expect(105).toBe(CELL_LABEL_W); // pins the width this test's premise depends on
+    const texts = pdfTexts(await renderReportDesignPdf(cellGridDesign(), cellGridResolved(), { now: NOW }));
+    const cut = texts.find((t) => t.startsWith('Bugando Medical Centre'));
+    expect(cut, 'the label never printed at all').toBeDefined();
+    expect(cut).not.toBe(LONG_NAME);
+    expect(cut!.endsWith(String.fromCharCode(0x85))).toBe(true);
+  });
+
+  it('never draws the wrapped second line as its own run', async () => {
+    // The pre-fix wrap drew "(BMC)" as a SEPARATE text run (its own Tm/TJ), one line under the
+    // first — distinct from a truncated run, which ends the string before reaching it at all.
+    const texts = pdfTexts(await renderReportDesignPdf(cellGridDesign(), cellGridResolved(), { now: NOW }));
+    expect(texts).not.toContain('(BMC)');
+  });
+
+  it('leaves a short laboratory name completely untouched', async () => {
+    const texts = pdfTexts(await renderReportDesignPdf(cellGridDesign(), cellGridResolved(), { now: NOW }));
+    expect(texts).toContain('Buguruni');
+  });
+});
+
+describe('cellgrid trailing column honours statusKey and emphasis', () => {
+  // 400px@96 = 300pt, 200px@96 = 150pt.
+  function design(trailingColumns: ReportDesign['pages'][0]['elements'][0]['trailingColumns']): ReportDesign {
+    return baseDesign({
+      pages: [{ id: 'p1', elements: [
+        { id: 'g', kind: 'cellgrid', name: 'g', rect: { x: 0, y: 0, w: 400, h: 200 },
+          dataSource: { kind: 'custom-query', queryId: 'q' }, labelColumn: 'lab', cellColumns: ['d01'],
+          trailingColumns },
+      ] }],
+    });
+  }
+
+  const resolved = (silentStatus: string): Map<string, ResolvedTable> => new Map([['g', {
+    columns: [{ key: 'lab', label: '' }, { key: 'd01', label: '' }, { key: 'silent', label: '' }, { key: 'silent_status', label: '' }],
+    rows: [
+      { lab: '', d01: '', silent: '', silent_status: '' }, // the lifted header row
+      { lab: 'Bahi', d01: '1', silent: '22', silent_status: silentStatus },
+    ],
+  }]]);
+
+  it('paints the fill chip on the trailing column, CELL_ROW_H tall, in the status colour', async () => {
+    const cols = [{ key: 'silent', label: 'Silent', width: 30, statusKey: 'silent_status', emphasis: 'fill' as const }];
+    const pdf = await renderReportDesignPdf(design(cols), resolved('critical'), { now: NOW });
+    const content = decodedContent(pdf);
+    // cellStart 114 (CELL_LABEL_W 105 + CELL_COL_GAP 9); trailingStart 124.5 (+ one CELL_SIZE
+    // 10.5, no breaks); + CELL_COL_GAP 9 = 133.5 left edge; + CHIP_INSET_X 1 = 134.5.
+    // y = CELL_HEAD_H 13 (row 0); + CHIP_INSET_Y 1.5 = 14.5. Width 30 - 2*1 = 28; height
+    // CELL_ROW_H 12.75 - 2*1.5 = 9.75.
+    const expectedRect = `${pdfNum(134.5)} ${pdfNum(14.5)} ${pdfNum(28)} ${pdfNum(9.75)} re`;
+    const expectedFill = fillOp('#9f1239'); // STATUS_CHIP_FILL.critical
+    expect(content).toContain(`${expectedRect}\n/DeviceRGB cs\n${expectedFill}\nf`);
+  });
+
+  it('draws no chip when the status is unset (blank silent_status) — plain text only', async () => {
+    // ⚠ NOT a "scan the whole document for any status hex" check. `HEAD_RULE` (#94a3b8) is also
+    // `STATUS_CHIP_FILL.indeterminate` (draw.ts's own comment calls this out as coincidence), and
+    // the cellgrid header band fills its day-column labels with `HEAD_RULE` on every render,
+    // status or not. That collision would make a whole-document colour scan fail even with the
+    // fix working correctly. The chip's own RECT geometry is what actually distinguishes "drew a
+    // chip" from "drew label text in a colour that happens to match one".
+    const cols = [{ key: 'silent', label: 'Silent', width: 30, statusKey: 'silent_status', emphasis: 'fill' as const }];
+    const pdf = await renderReportDesignPdf(design(cols), resolved(''), { now: NOW });
+    const content = decodedContent(pdf);
+    const chipRect = `${pdfNum(134.5)} ${pdfNum(14.5)} ${pdfNum(28)} ${pdfNum(9.75)} re`;
+    expect(content).not.toContain(chipRect);
+    expect(content).toContain(fillOp('#334155')); // BODY_TEXT — the value still prints, un-knocked-out
+  });
+
+  it('emits no chip colour anywhere when the design declares no statusKey at all', async () => {
+    const cols = [{ key: 'silent', label: 'Silent', width: 30 }];
+    const pdf = await renderReportDesignPdf(design(cols), resolved('critical'), { now: NOW });
+    const content = decodedContent(pdf);
+    expect(content).not.toContain(fillOp('#9f1239'));
+  });
+
+  it('tints the value with STATUS_TEXT_COLOR under the default (omitted) emphasis, not a fill chip', async () => {
+    const cols = [{ key: 'silent', label: 'Silent', width: 30, statusKey: 'silent_status' }];
+    const pdf = await renderReportDesignPdf(design(cols), resolved('critical'), { now: NOW });
+    const content = decodedContent(pdf);
+    expect(content).toContain(fillOp('#9f1239')); // STATUS_TEXT_COLOR.critical happens to equal the chip fill
+    // The chip RECT never appears, only the text colour — same shape check as the table's version.
+    const expectedRect = `${pdfNum(134.5)} ${pdfNum(14.5)} ${pdfNum(28)} ${pdfNum(9.75)} re`;
+    expect(content).not.toContain(expectedRect);
   });
 });
 

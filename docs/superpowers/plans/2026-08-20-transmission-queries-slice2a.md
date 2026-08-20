@@ -89,7 +89,7 @@ this slice edits: none references a table this repo does not already have wired 
 | File | Responsibility |
 |---|---|
 | `packages/reporting/src/seed/report-seeds.ts` | **Modify.** `sql.postgres`/`sql.mssql`/`sql.mysql` on both `q-transmission-hvleid` (`:2216`) and `q-transmission-other` (`:2768`). |
-| `packages/reporting/src/seed/report-seeds.test.ts` | **Modify.** Fix the `as ord` count (2 to 3) and add new shape tests for the week-token row, the unique `ord`, `days`/`silent`, and the `'1'` mark, inside the `SEED_QUERIES` transmission-grid `describe` block at `:1632`. |
+| `packages/reporting/src/seed/report-seeds.test.ts` | **Modify.** Fix the `as ord` count (2 to 4) and add new shape tests for the week-token row, the unique `ord`, `days`/`silent`, and the `'1'` mark, inside the `SEED_QUERIES` transmission-grid `describe` block at `:1632`. |
 | `packages/reporting/src/seed/transmission-grid-live.test.ts` | **Modify.** Fix the four `'Y'` literals, add fixture tests for `days`/`silent`/unique `ord`, and add the characterization test for the `rt-transmission-grid` regression described above. |
 
 ---
@@ -651,7 +651,9 @@ EOF
   transmission-grid `describe` block
 
 By this point all six SQL variants carry three branches (`0 as ord`, `1 as ord`, and
-`max(lo.ord) as ord`), so the file-wide `as ord` count goes from 2 to 3 per dialect. This task
+`max(lo.ord) as ord`), so the file-wide `as ord` count goes from 2 to 4 per dialect. Four, not three: the three union
+branches plus `lab_ord`'s own `row_number() over (order by lab) + 1 as ord`. Measured against the
+rewritten postgres variants, not counted by eye. This task
 updates that existing assertion and adds four new ones.
 
 - [ ] **Step 1: Fix the existing `as ord` count**
@@ -660,13 +662,13 @@ At `:1719-1723`, change the expected length:
 
 ```ts
   it('selects the ord discriminator sortBy depends on, in every dialect', () => {
-    // Three rows carry `ord` per dialect string now: the dates row (`0 as ord`), the week-token
+    // Four occurrences of `as ord` per dialect per dialect string now: the dates row (`0 as ord`), the week-token
     // row (`1 as ord`), and the laboratory rows (`max(lo.ord) as ord`).
     const ORD = /\bas ord\b/g;
     for (const id of ['q-transmission-hvleid', 'q-transmission-other']) {
       for (const [dialect, sql] of Object.entries(q(id).sql)) {
-        expect(sql.match(ORD) ?? [], `${id}/${dialect} dropped 'as ord' — sortBy silently degrades to no sort`)
-          .toHaveLength(3);
+        expect(sql.match(ORD) ?? [], `${id}/${dialect} dropped 'as ord', so sortBy silently degrades to no sort`)
+          .toHaveLength(4);
       }
     }
   });
@@ -733,6 +735,10 @@ Expected before Tasks 1-4: FAIL at the first dialect checked (`q-transmission-hv
 - [ ] **Step 4: Run the whole describe block**
 
 Run: `pnpm --filter @openldr/reporting test -- report-seeds.test.ts -t "SEED_QUERIES — the transmission grids"`
+
+⚠ That em dash is not a rule 13 violation. It is quoting the name of a `describe` block that
+already exists at `report-seeds.test.ts:1632` and predates the rule. Changing it here would just
+make the filter match nothing. Do not "fix" it, and do not copy it into anything new you write.
 Expected: PASS, all tests including the ones untouched by this slice (the ladder, batch
 attribution, no-arrival-bucketing, panel-list-per-element tests). None of these read `ord`, the
 mark, or the day-count, so none of them should have moved.
@@ -751,7 +757,7 @@ git add packages/reporting/src/seed/report-seeds.test.ts
 git commit -m "$(cat <<'EOF'
 test(reports): pin the two-row transmission grid shape across all six variants
 
-Fixes the pre-existing 'as ord' count (2 -> 3) and adds shape tests for the numeric mark, the
+Fixes the pre-existing 'as ord' count (2 -> 4) and adds shape tests for the numeric mark, the
 week-token row, the unique per-laboratory ord, and days/silent -- each verified capable of
 failing by breaking the code under test and rerunning.
 EOF

@@ -1,7 +1,7 @@
 import PDFDocument from 'pdfkit';
 import type { ReportDesign } from '../schema';
 import { paperSizePt } from './units';
-import { drawElement, paramMap, pageChunkCount, totalPhysicalPages, drawPageFooter, drawsOnChunk } from './draw';
+import { drawElement, paramMap, pageChunkCount, totalPhysicalPages, drawPageFooter, drawsOnChunk, resolveFlowY } from './draw';
 
 export type ResolvedTable =
   | { columns: { key: string; label: string }[]; rows: Record<string, unknown>[] }
@@ -26,6 +26,11 @@ export { toPt, PX_TO_PT } from './units';
 // hardcoded A4-portrait number — that hardcoding is exactly what shipped a footer off the bottom
 // of the two Letter/landscape seeded designs.
 export { paperSizePt } from './units';
+
+// Exported for the same reason as pairRects above: a seed that binds a cellgrid needs to assert
+// its OWN declared geometry fits the page it is authored for, using the same arithmetic the
+// renderer itself uses rather than a hand-copied number that can drift out of sync with it.
+export { cellGridWidth, CELL_LABEL_W } from './cellgrid';
 
 export interface RenderOptions {
   now?: Date;
@@ -75,7 +80,8 @@ export function renderReportDesignPdf(
       // submitted" rather than "this grid finished earlier".
       for (const el of page.elements) {
         if (!drawsOnChunk(el, page, resolved, c)) continue;
-        drawElement(doc, el, tokens, resolved.get(el.id), c);
+        const y = resolveFlowY(el, page, resolved, c);
+        drawElement(doc, el, tokens, resolved.get(el.id), c, y);
       }
       if (design.pageNumbers) drawPageFooter(doc, w, h, physical, total);
     }

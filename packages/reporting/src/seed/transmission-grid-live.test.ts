@@ -83,28 +83,36 @@ live('the transmission grid queries (live Postgres)', () => {
   const runFor = runQuery('q-transmission-hvleid');
   const runForOther = runQuery('q-transmission-other');
 
-  // One submission: a batch carrying a ServiceRequest arrival, a lab_request and a
-  // diagnostic_report naming the laboratory. Deliberately NO lab_results and NO specimen — that is
-  // the shape 548 of 550 real EID requests have, and the shape the specimen route cannot see.
+  // One submission: a batch carrying a lab_request and a diagnostic_report naming the
+  // laboratory. Deliberately NO lab_results and NO specimen — that is the shape 548 of 550 real
+  // EID requests have, and the shape the specimen route cannot see.
   //
   // The panel codes below are TEST FIXTURE DATA, not product vocabulary: the queries themselves
   // carry no code at all (AGENTS.md §8), the list arrives as {{param.panels}}.
   //
   // `labName`, `panelCode` and `performer` are nullable so the two fallback branches added beyond
   // the brief — the '(unknown)' lab name and the coalesced NULL panel — can actually be reached.
+  //
+  // ⛔ FIXED 2026-08-20: this helper wrote only ingest_events.recorded_at, a column `arrivals`
+  // stopped reading when commit 658d2897 moved the grid onto the clinical-date ladder
+  // (authored_at, then result_timestamp, then issued). From that commit until now every test built
+  // on this helper matched ZERO rows and failed silently -- silently because this whole file only
+  // runs with TARGET_DATABASE_URL set, which no CI job sets, so nothing ever reported it red. Now
+  // writes `authored_at`, the ladder's first (and, for a registration-only submission, only) rung,
+  // exactly the shape this helper's own comment already claimed to build. The ingest_events insert
+  // is gone with it: `arrivals` never reads that table, so keeping the write was dead weight that
+  // could go stale again unnoticed, the same way this one did.
   const seedSubmission = async (
-    key: string, labName: string | null, panelCode: string | null, recordedAt: string,
+    key: string, labName: string | null, panelCode: string | null, authoredAt: string,
     performer: string | null = `CODE-${key}`,
   ): Promise<void> => {
     const batchId = `batch-${key}`;
     await db.insertInto('lab_requests' as never).values({
       id: `req-${key}`, request_id: `LAB-${key}`, panel_code: panelCode, batch_id: batchId,
+      authored_at: authoredAt,
     } as never).execute();
     await db.insertInto('diagnostic_reports' as never).values({
       id: `dr-${key}`, batch_id: batchId, performer, performer_display: labName,
-    } as never).execute();
-    await db.insertInto('ingest_events' as never).values({
-      resource_type: 'ServiceRequest', resource_id: `req-${key}`, version: 1, recorded_at: recordedAt,
     } as never).execute();
   };
 
@@ -149,8 +157,8 @@ live('the transmission grid queries (live Postgres)', () => {
    *  month, at its highest-priority in-month timestamp. Asserting a single adjacent blank cell
    *  only pins an off-by-one; this pins the whole row, so a second mark anywhere fails. */
   const marksExactlyOneDay = (row: Record<string, string>, day: string): void => {
-    expect(row[day], `expected the mark on ${day}`).toBe('Y');
-    expect(dayCells(row).filter((c) => c === 'Y'), `${row.lab} marked more than one day`).toEqual(['Y']);
+    expect(row[day], `expected the mark on ${day}`).toBe('1');
+    expect(dayCells(row).filter((c) => c === '1'), `${row.lab} marked more than one day`).toEqual(['1']);
   };
 
   beforeAll(async () => {
@@ -230,16 +238,15 @@ live('the transmission grid queries (live Postgres)', () => {
     expect(lab!.d02).not.toBe('');
   });
 
-  it('buckets an arrival at 21:00Z into the NEXT day at +03', async () => {
-    // The whole reason lab.timezone exists. Assert BOTH sides or this proves nothing.
-    const east = await runFor({ month: '2026-03', panels: 'HIVPC', tz: EAST });
-    const utc = await runFor({ month: '2026-03', panels: 'HIVPC', tz: 'UTC' });
-    const e = east.find((r) => r.lab === 'Late Evening Lab')!;
-    const u = utc.find((r) => r.lab === 'Late Evening Lab')!;
-    expect(e.d03).not.toBe('');   // 3 March 21:00Z is 4 March 00:00 at +03, and 4 March is n3
-    expect(u.d02).not.toBe('');   // ...and still 3 March in UTC, which is n2
-    expect(e.d02).toBe('');
-  });
+  // ⛔ A test lived here asserting that a 21:00Z arrival re-buckets into the NEXT day at +03.
+  // Commit 658d2897 removed that behaviour deliberately: the grid now buckets on the source's
+  // own clinical date text, with no zone conversion anywhere, and the report dropped its time
+  // zone parameter in the same change. The test survived only because this file needs a live
+  // database and skips without one, so nobody ran it for months.
+  //
+  // The 'Late Evening Lab' fixture seeded at 2026-03-03T21:00:00Z is KEPT. Nothing asserts it
+  // today. It is the boundary case, and the day somebody reintroduces any zone handling it is
+  // the fixture that catches it.
 
   it('leaves trailing columns blank in a short month rather than shifting cells left', async () => {
     // February 2026 has 20 working days. d21..d23 must be empty and d01 must still be the 2nd.
@@ -290,13 +297,13 @@ live('the transmission grid queries (live Postgres)', () => {
     expect(rows.some((r) => r.lab === 'Wire Name Nobody Wants')).toBe(false);
   });
 
-  it("writes exactly 'Y' in an arrival cell and leaves a silent day empty", async () => {
+  it("writes exactly '1' in an arrival cell and leaves a silent day empty", async () => {
     // NOT a test of the `distinct` in `arrivals`: max() folds duplicates, so this passes with or
     // without it. What it does pin is the cell VALUE — a mark, never a count, and never a run of
     // marks from the batch's several diagnostic_reports rows.
     const rows = await runFor({ month: '2026-03', panels: 'HIVPC', tz: 'UTC' });
     const lab = rows.find((r) => r.lab === 'Registration Only Lab')!;
-    expect(lab.d02).toBe('Y');
+    expect(lab.d02).toBe('1');
     expect(lab.d01).toBe('');
   });
 
@@ -311,13 +318,43 @@ live('the transmission grid queries (live Postgres)', () => {
     }
   });
 
+  it('gives each laboratory a unique ord from 2, alphabetically', async () => {
+    const rows = await runFor({ month: '2026-03', panels: 'HIVPC', tz: 'UTC' });
+    const labRows = rows.filter((r) => r.lab !== '(dates)' && r.lab !== '(week)');
+    const ords = labRows.map((r) => Number(r.ord)).sort((a, b) => a - b);
+    expect(new Set(ords).size, 'ord repeats across laboratories').toBe(ords.length);
+    expect(Math.min(...ords)).toBe(2);
+    const byName = [...labRows].sort((a, b) => a.lab.localeCompare(b.lab));
+    expect(labRows.map((r) => r.lab)).toEqual(byName.map((r) => r.lab));
+  });
+
+  it('carries a week-token row at ord = 1, whose value changes across a week boundary', async () => {
+    const rows = await runFor({ month: '2026-03', panels: 'HIVPC', tz: 'UTC' });
+    const week = rows.find((r) => r.lab === '(week)');
+    expect(week, 'the week-token row is missing').toBeDefined();
+    // 2 March 2026 (d01) is a Monday and 6 March (d05) is a Friday, same week; 9 March (d06) is
+    // the following Monday. The token must change there and only there among d01..d06.
+    expect(week!.d01).toBe(week!.d05);
+    expect(week!.d06).not.toBe(week!.d01);
+  });
+
+  it('computes days as the count of marked working days, and silent against the last one', async () => {
+    // Registration Only Lab (fixture, beforeAll) marks exactly d02 in March 2026 and nothing else.
+    const rows = await runFor({ month: '2026-03', panels: 'HIVPC', tz: 'UTC' });
+    const lab = rows.find((r) => r.lab === 'Registration Only Lab')!;
+    expect(lab.days).toBe('1');
+    // March 2026 has 22 working days (starts on a Sunday, see the file header comment). Silent
+    // since d02 (n=2) as at the month's last working day (n=22) is 22 - 2 = 20.
+    expect(lab.silent).toBe('20');
+  });
+
   it("names a laboratory '(unknown)' when the registry, the display name and the code are all null", async () => {
     // Beyond the brief, so it needs its own fixture: without the fallback `lab` is NULL, the grid
     // join never matches, and the laboratory renders as a blank name with 23 blank cells.
     const rows = await runFor({ month: '2026-03', panels: 'HIVPC', tz: 'UTC' });
     const unknown = rows.find((r) => r.lab === '(unknown)');
     expect(unknown, 'a nameless laboratory must still get a row').toBeDefined();
-    expect(unknown!.d02).toBe('Y');
+    expect(unknown!.d02).toBe('1');
   });
 
   it('trims each panel element on its own, so a code with an inner space still matches', async () => {
@@ -466,10 +503,12 @@ live('the transmission grid queries (live Postgres)', () => {
   it('⛔ carries the two-line date from live Postgres all the way onto the page', async () => {
     // Every other test in this file stops at the query, and every test in report-seeds.test.ts is
     // a regex over SQL text. Neither can see the join this task actually rests on: that `chr(10)`
-    // survives the pg driver, that `headerRow` splits it back into two lines, and that
-    // `columnWidths` then measures the WIDER LINE rather than the concatenation. If any link
-    // breaks, the dates draw on one line and every laboratory name goes back under an ellipsis —
-    // with the entire hermetic suite green.
+    // survives the pg driver, and that pdfkit still honours it as a forced line break inside
+    // `drawCellGrid`'s header band even though that call passes `lineBreak: false`
+    // (report-designer/src/render/draw.ts:945-950). That option only suppresses automatic WORD
+    // WRAP; it does not strip an explicit newline already in the string. Not obvious, and worth
+    // pinning: if it stops being true, the date draws as one run instead of two, with the entire
+    // hermetic suite still green, since nothing there renders a page.
     const design = SEED_DESIGNS.find((d) => d.id === 'rt-transmission-grid')!;
 
     // ⛔ Through the REAL `resolveDesignTables`, not a hand-rolled sort. Re-implementing
@@ -495,30 +534,44 @@ live('the transmission grid queries (live Postgres)', () => {
 
     const page1 = pageStreams(buf)[0];
     const drawn = textRuns(page1);
-    const headY = drawn.find((r) => r.text === 'Laboratory')!.y;
+    // ⛔ No 'Laboratory' caption to anchor on, and that is deliberate, not a gap. `drawCellGrid`
+    // (report-designer/src/render/draw.ts:905-980) never draws a label for the label column: the
+    // heading above the grid already reads "Any HVL/EID data submission by testing laboratory", so
+    // a column caption repeating "Laboratory" would say it twice. Same situation as the time zone
+    // box this branch already removed from the design: a real decision, not an oversight to
+    // restore. Anchor on the first date run instead.
+    const headY = drawn.find((r) => r.text === '2')!.y;
+    // ⚠ Anchored on the actual 'Mar' text, not a hardcoded `headY - 8`. The old table header ran
+    // at a fixed 8pt line pitch; `drawCellGrid`'s header band draws at 6pt (report-designer/src/
+    // render/draw.ts:945), so pdfkit's own font-metric line height for the second line measures
+    // 6.936pt below the first, not 8. Finding 'Mar' directly is robust to that pitch without
+    // needing to hardcode pdfkit's own metric.
+    const marY = drawn.find((r) => r.text === 'Mar')!.y;
     const line1 = drawn.filter((r) => r.y === headY).sort((a, b) => a.x - b.x);
-    const line2 = drawn.filter((r) => r.y === headY - 8).sort((a, b) => a.x - b.x);
+    const line2 = drawn.filter((r) => r.y === marY).sort((a, b) => a.x - b.x);
 
     // March 2026 starts on a Sunday: 22 working days, so d23 is blank and draws nothing. These are
     // CALENDAR day numbers with the weekends missing, not 1..22 — which is the point of the first
     // header line, and something a `String(i + 1)` slot label could never say.
-    expect(line1.map((r) => r.text)).toEqual(['Laboratory',
+    //
+    // ⛔ 'Days' and 'Silent' trail the day numbers on this SAME line, and that is new versus the
+    // old `table` design: `drawCellGrid` draws its cell labels and its trailing-column labels at
+    // the identical y (`r.y + 3`) in one pass (report-designer/src/render/draw.ts:945-955), where
+    // `table`'s header band had no trailing columns to share the row with at all. Not a leak, the
+    // grid's own Days/Silent columns, sorted after the dates because they sit further right.
+    expect(line1.map((r) => r.text)).toEqual([
       '2', '3', '4', '5', '6', '9', '10', '11', '12', '13', '16', '17', '18', '19', '20',
-      '23', '24', '25', '26', '27', '30', '31']);
+      '23', '24', '25', '26', '27', '30', '31', 'Days', 'Silent']);
     expect(line2.map((r) => r.text)).toEqual(Array(22).fill('Mar'));
 
-    // ⛔ The measurement, taken off the real page. The gain lands in the LABORATORY column, and
-    // that is the number to assert. Measured on this fixture by running it both ways:
-    //
-    //   one-line `2 Mar` header : laboratory column  76.02pt, day column 27.77pt
-    //   stacked  `2` / `Mar`    : laboratory column 102.95pt, day column 29.33pt
-    //
-    // ⚠ The day columns come out slightly WIDER stacked, not narrower. These fixture laboratory
-    // names are short, so the day columns were never the starved ones here and the proportional
-    // allocation simply hands the freed width around. Asserting "the day column shrank" would be
-    // wrong on this data and would have failed for the right reason on the wrong claim.
-    const xs = line1.map((r) => r.x);
-    expect(xs[1] - xs[0]).toBeGreaterThan(90);
+    // ⛔ DELETED: the old laboratory-column-width-gain assertion
+    // (`expect(xs[1] - xs[0]).toBeGreaterThan(90)`). It measured a `table`-specific relationship —
+    // stacking the date narrowed the day columns, because `table` MEASURES widths, and that
+    // narrowing freed room the laboratory column then claimed. `cellgrid` DECLARES its widths
+    // instead: `CELL_LABEL_W` and `CELL_SIZE` (report-designer/src/render/cellgrid.ts) are fixed
+    // constants with no dependency on how the date renders. The assertion is not merely
+    // inconvenient here, it is MEANINGLESS — there is no gain left to measure — which is what makes
+    // deleting it safe rather than just convenient. Do not restore it.
 
     // ⛔ Nothing on the page was ellipsized. The comparison is against BYTE 0x85, not U+2026:
     // pdfkit writes the ellipsis in WinAnsiEncoding, where it is 0x85, and the latin1 decode in
@@ -528,6 +581,27 @@ live('the transmission grid queries (live Postgres)', () => {
     expect(drawn.map((r) => r.text).join('')).not.toContain(String.fromCharCode(0x85));
     expect(drawn.map((r) => r.text)).not.toContain('(dates)');
     expect(drawn.map((r) => r.text)).not.toContain('ord');
+  });
+
+  it('no longer leaks the week-token row into the body, now that the design binds cellgrid', async () => {
+    // The regression this replaces: with rt-transmission-grid as a `table` with `headerRow: true`,
+    // only the date row was lifted and the week-token row printed as a body row named '(week)'.
+    // cellgrid lifts BOTH synthetic rows unconditionally when groupBoundary is set
+    // (splitCellGridRows), so '(week)' should not appear as drawn text anywhere on the page.
+    const design = SEED_DESIGNS.find((d) => d.id === 'rt-transmission-grid')!;
+    const runForDesign = async (queryId: string, values: Record<string, unknown>) => {
+      const rows = await runQuery(queryId)(values as { month: string; panels: string; tz: string });
+      return { columns: Object.keys(rows[0]).map((k) => ({ key: k, label: k })), rows: [...rows].reverse() };
+    };
+    const resolved = await resolveDesignTables(
+      design, { month: '2026-03', panels: 'HIVPC', tz: 'UTC' }, runForDesign);
+    const buf = await renderReportDesignPdf(design, resolved, {
+      now: new Date('2026-03-31T09:00:00Z'),
+      values: { month: '2026-03', panels: 'HIVPC', tz: 'UTC' },
+    });
+    const page1 = pageStreams(buf)[0];
+    const drawn = textRuns(page1);
+    expect(drawn.map((r) => r.text)).not.toContain('(week)');
   });
 
   // ⛔ DELETED: 'returns an EMPTY HVL/EID grid and a FULL Other grid when the panel list is empty'.

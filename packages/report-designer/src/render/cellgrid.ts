@@ -168,3 +168,12 @@ export function cellGridChunks(bodyRowCount: number, hPt: number): number {
   if (max < 1) return 1;
   return Math.max(1, Math.ceil(bodyRowCount / max));
 }
+
+/** Records actually drawn on physical chunk `chunk` — not the whole body, just this chunk's own
+ *  slice. Shared by `drawCellGrid`'s own slicing and by `flowAfter`'s `drawnHeight`, so the two can
+ *  never disagree about how many rows one page carries. */
+export function cellGridRowsInChunk(bodyRowCount: number, hPt: number, chunk: number): number {
+  const max = cellGridMaxRows(hPt);
+  if (max < 1) return 0;
+  return Math.max(0, Math.min(max, bodyRowCount - chunk * max));
+}
