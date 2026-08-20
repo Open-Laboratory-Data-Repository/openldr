@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   stripWidth, cellGridWidth, groupBreaks, rampSteps, stepFor, cellFill, EMPTY_FILL,
+  splitCellGridRows, cellGridMaxRows, cellGridChunks,
   CELL_SIZE, CELL_GAP, GROUP_GAP,
 } from './cellgrid';
 
@@ -121,5 +122,71 @@ describe('cellFill', () => {
 
   it('paints the darkest step for the maximum', () => {
     expect(cellFill(24, 24, { ramp: 'blue', steps: 5 })).toBe('#185FA5');
+  });
+});
+
+describe('splitCellGridRows', () => {
+  const rows = [
+    ['', '02', '03'],
+    ['', '1', '1'],
+    ['Bahi', '0', '1'],
+    ['Chunya', '1', '0'],
+  ];
+
+  it('lifts both synthetic rows when grouping is on', () => {
+    const s = splitCellGridRows(rows, true);
+    expect(s.header).toEqual(['', '02', '03']);
+    expect(s.groups).toEqual(['', '1', '1']);
+    expect(s.body).toHaveLength(2);
+    expect(s.body[0][0]).toBe('Bahi');
+  });
+
+  it('lifts only the header when grouping is off', () => {
+    const s = splitCellGridRows(rows, false);
+    expect(s.groups).toBeUndefined();
+    expect(s.body).toHaveLength(3);
+  });
+
+  it('survives a result with no rows at all', () => {
+    const s = splitCellGridRows([], true);
+    expect(s.header).toEqual([]);
+    expect(s.groups).toBeUndefined();
+    expect(s.body).toEqual([]);
+  });
+
+  it('survives a result carrying only the synthetic rows', () => {
+    const s = splitCellGridRows([['', '02'], ['', '1']], true);
+    expect(s.body).toEqual([]);
+  });
+});
+
+describe('cellGridMaxRows', () => {
+  it('subtracts the header band before dividing by the row pitch', () => {
+    // (400 - 13) / 12.75 = 30.35 -> 30
+    expect(cellGridMaxRows(400)).toBe(30);
+  });
+
+  it('is zero for a rect too short to hold its own header', () => {
+    expect(cellGridMaxRows(8)).toBe(0);
+  });
+});
+
+describe('cellGridChunks', () => {
+  it('is one when everything fits', () => {
+    expect(cellGridChunks(10, 400)).toBe(1);
+  });
+
+  it('is never zero, even with no rows, so an empty grid still draws its header once', () => {
+    expect(cellGridChunks(0, 400)).toBe(1);
+  });
+
+  it('rounds up', () => {
+    expect(cellGridChunks(31, 400)).toBe(2);
+    expect(cellGridChunks(60, 400)).toBe(2);
+    expect(cellGridChunks(61, 400)).toBe(3);
+  });
+
+  it('is one when the rect cannot hold a single row, rather than looping forever', () => {
+    expect(cellGridChunks(50, 8)).toBe(1);
   });
 });

@@ -121,3 +121,47 @@ export function cellFill(value: number, max: number, palette: CellPalette): stri
   if (step < 0) return EMPTY_FILL;
   return rampSteps(palette.ramp, palette.steps)[step];
 }
+
+export interface SplitRows {
+  /** Cell labels drawn in the header band, redrawn on every chunk. */
+  header: string[];
+  /** Group tokens, or `undefined` when the element does not group. Never drawn. */
+  groups: string[] | undefined;
+  /** One entry per record. */
+  body: string[][];
+}
+
+/**
+ * Separate the synthetic leading rows from the records.
+ *
+ * ⛔ TWO synthetic rows, where `table`'s `headerRow` lifts ONE. Row 0 is the labels a reader sees,
+ * row 1 is the grouping the renderer needs and nobody sees. They cannot be the same row: a day
+ * column shows "02" and belongs to week 1, and neither value derives from the other for an
+ * arbitrary month.
+ *
+ * ⚠ Anything counting rows over one of these queries must now subtract 2, not 1.
+ * `r-transmission-grid` already declares `summaryMetrics: null` and a static `chart` to stop a
+ * row-count fallback that once published "24" for a 23-laboratory month. That off-by-one is an
+ * off-by-two here.
+ */
+export function splitCellGridRows(rows: string[][], grouped: boolean): SplitRows {
+  const lift = grouped ? 2 : 1;
+  return {
+    header: rows[0] ?? [],
+    groups: grouped ? rows[1] : undefined,
+    body: rows.slice(lift),
+  };
+}
+
+/** Records that fit a rect of height `hPt`. */
+export function cellGridMaxRows(hPt: number): number {
+  return Math.max(0, Math.floor((hPt - CELL_HEAD_H) / CELL_ROW_H));
+}
+
+/** Physical chunks this grid needs. Never zero: an empty grid still draws its header once, which is
+ *  what tells a reader the block ran and found nothing rather than being omitted. */
+export function cellGridChunks(bodyRowCount: number, hPt: number): number {
+  const max = cellGridMaxRows(hPt);
+  if (max < 1) return 1;
+  return Math.max(1, Math.ceil(bodyRowCount / max));
+}
