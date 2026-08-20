@@ -51,7 +51,7 @@ const STATUS_TEXT_COLOR: Record<CellStatus, string> = {
  * single grey block, and two Resistant rows a single red one, so the reader loses the row boundary
  * and the count. The horizontal inset does the same job between a chip and its neighbouring column.
  *
- * ⚠ The inset must stay strictly inside `ROW_H`: pagination (`maxRowsFor`, `tableChunkCount`) and
+ * ⚠ The inset must stay strictly inside `ROW_H`: pagination (`maxRowsFor`, `elementChunkCount`) and
  * the fixed `y = r.y + headH + ri * ROW_H` advance all assume a chip can never affect row pitch.
  */
 const CHIP_INSET_X = 1;
@@ -92,7 +92,7 @@ export const CELL_TEXT_H = ROW_H - CELL_PAD; // 12pt — one 8pt line (9.25pt), 
  * and 9.25pt (1 line) once `height` is supplied. Do not "simplify" this back to `lineBreak`.
  *
  * Single-line is right for THIS element model rather than growing the row: a design's table has an
- * author-fixed box, and `maxRowsFor`/`tableChunkCount` derive pagination from a constant `ROW_H`,
+ * author-fixed box, and `maxRowsFor`/`elementChunkCount` derive pagination from a constant `ROW_H`,
  * so variable row heights would make the row count unknowable before layout. The untruncated value
  * stays available in the Spreadsheet tab and the CSV export, and an ellipsis is strictly better
  * than text printed over other text.
@@ -389,7 +389,7 @@ export function headerTexts(labels: string[], headerRow: string[] | undefined): 
 export function drawsOnChunk(
   el: DesignElement, page: DesignPage, resolved: Map<string, ResolvedTable>, chunk: number,
 ): boolean {
-  if (el.kind === 'table' || el.kind === 'cellgrid') return tableDrawsOnChunk(el, resolved.get(el.id), chunk);
+  if (el.kind === 'table' || el.kind === 'cellgrid') return elementDrawsOnChunk(el, resolved.get(el.id), chunk);
   if (!el.showWithTable) return true;
   // ⛔ `cellgrid` is accepted here too. `showWithTable` names the element a heading belongs to, and
   // the reason it exists (never print a heading over a block that finished earlier) applies to a
@@ -398,15 +398,15 @@ export function drawsOnChunk(
     (e) => e.id === el.showWithTable && (e.kind === 'table' || e.kind === 'cellgrid'),
   );
   if (!target) return true;
-  return tableDrawsOnChunk(target, resolved.get(target.id), chunk);
+  return elementDrawsOnChunk(target, resolved.get(target.id), chunk);
 }
 
 /** ⛔ A FAILED table keeps drawing on every chunk. Running out of rows and failing to run are not
  *  the same condition: the first is finished, the second is a defect that is just as true on page 3
  *  as on page 1, and a reader who is handed only the last page must still see it. */
-function tableDrawsOnChunk(el: DesignElement, resolved: ResolvedTable | undefined, chunk: number): boolean {
+function elementDrawsOnChunk(el: DesignElement, resolved: ResolvedTable | undefined, chunk: number): boolean {
   if (el.dataSource && resolved && 'error' in resolved) return true;
-  return chunk < tableChunkCount(el, resolved);
+  return chunk < elementChunkCount(el, resolved);
 }
 
 /** Parse a status token from a query cell. Unrecognised values become `undefined` — a report must
@@ -732,7 +732,7 @@ function drawUnencodable(doc: Doc, r: Box): void {
 }
 
 /** How many physical pages this one table needs (repeat-page model). 1 for non-tables/errors/degenerate boxes. */
-export function tableChunkCount(el: DesignElement, resolved: ResolvedTable | undefined): number {
+export function elementChunkCount(el: DesignElement, resolved: ResolvedTable | undefined): number {
   if (el.kind === 'cellgrid') {
     const body = splitCellGridRows(rowsFor(el, resolved), el.groupBoundary === 'token-change').body;
     return cellGridChunks(body.length, toPt(el.rect).h);
@@ -746,7 +746,7 @@ export function tableChunkCount(el: DesignElement, resolved: ResolvedTable | und
 
 /** Physical pages needed for a design page = the largest table's chunk count (min 1). */
 export function pageChunkCount(page: DesignPage, resolved: Map<string, ResolvedTable>): number {
-  return Math.max(1, ...page.elements.map((el) => tableChunkCount(el, resolved.get(el.id))));
+  return Math.max(1, ...page.elements.map((el) => elementChunkCount(el, resolved.get(el.id))));
 }
 
 /** Total physical PDF pages across the whole design = sum of each design page's chunk count. */

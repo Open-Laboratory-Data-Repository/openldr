@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { createHash } from 'node:crypto';
 import { renderReportDesignPdf, type ResolvedTable } from './index';
 import type { ReportDesign } from '../schema';
-import { tableChunkCount } from './draw';
+import { elementChunkCount } from './draw';
 import { cellFill } from './cellgrid';
 
 /**
@@ -192,7 +192,7 @@ it('paginates a cellgrid whose rows exceed its rect', async () => {
   }
   const el = cellGridDesign().pages[0].elements.find((e) => e.id === 'grid')!;
   // 200px@96 = 150pt; (150 - 13) / 12.75 = 10 rows a chunk; 42 records => 5 chunks
-  expect(tableChunkCount(el, many.get('grid'))).toBe(5);
+  expect(elementChunkCount(el, many.get('grid'))).toBe(5);
   const buf = await renderReportDesignPdf(cellGridDesign(), many, { now: new Date('2026-01-15T09:00:00Z') });
   expect(buf.length).toBeGreaterThan(1000);
 });
@@ -250,7 +250,7 @@ it('draws a month calendar as the same element in a second configuration', async
 
 it('keeps a calendar on one page: six weeks fit its rect', () => {
   const el = calendarDesign().pages[0].elements[0];
-  expect(tableChunkCount(el, calendarResolved().get(el.id))).toBe(1);
+  expect(elementChunkCount(el, calendarResolved().get(el.id))).toBe(1);
 });
 
 it('scales the ramp across the whole calendar rather than per chunk', () => {

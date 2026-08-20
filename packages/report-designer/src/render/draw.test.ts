@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { interpolate, paramMap, tableChunkCount, pageChunkCount, rowsFor, totalPhysicalPages, pageFooterLabel, cellTextOptions, columnWidths, isNumericColumn, CELL_TEXT_H, ROW_H, asCellStatus, cellStatusesFor, isRightAligned, keyValuePairs, pairRects, elementValue, interpolatedPairValues, transposeResolved, tableHeaders, headerBandHeight, headerRowFor, bodyRowsFor, headerTexts, drawsOnChunk, STACKED_HEAD_H, headerLines } from './draw';
+import { interpolate, paramMap, elementChunkCount, pageChunkCount, rowsFor, totalPhysicalPages, pageFooterLabel, cellTextOptions, columnWidths, isNumericColumn, CELL_TEXT_H, ROW_H, asCellStatus, cellStatusesFor, isRightAligned, keyValuePairs, pairRects, elementValue, interpolatedPairValues, transposeResolved, tableHeaders, headerBandHeight, headerRowFor, bodyRowsFor, headerTexts, drawsOnChunk, STACKED_HEAD_H, headerLines } from './draw';
 import type { ReportDesign, DesignElement, DesignPage } from '../schema';
 import type { ResolvedTable } from './index';
 
@@ -167,20 +167,20 @@ describe('rowsFor', () => {
   });
 });
 
-describe('tableChunkCount', () => {
+describe('elementChunkCount', () => {
   // box h=100px → 75pt; maxRows = floor((75-16)/16) = 3
   it('splits a bound table into ceil(rows/maxRows) chunks', () => {
     const el = tbl({ dataSource: { kind: 'custom-query', queryId: 'q' }, boundColumns: [{ key: 'a', label: 'A' }] });
     const resolved: ResolvedTable = { columns: [{ key: 'a', label: 'A' }], rows: Array.from({ length: 7 }, (_, i) => ({ a: i })) };
-    expect(tableChunkCount(el, resolved)).toBe(3); // ceil(7/3)
+    expect(elementChunkCount(el, resolved)).toBe(3); // ceil(7/3)
   });
   it('returns 1 for a non-table, an error table, and a degenerate (too-short) box', () => {
-    expect(tableChunkCount(tbl({ kind: 'text' } as Partial<DesignElement>), undefined)).toBe(1);
-    expect(tableChunkCount(tbl({ dataSource: { kind: 'custom-query', queryId: 'q' } }), { error: 'x' })).toBe(1);
-    expect(tableChunkCount(tbl({ rect: { x: 0, y: 0, w: 300, h: 10 }, columns: ['A'], rows: [['1'], ['2']] }), undefined)).toBe(1);
+    expect(elementChunkCount(tbl({ kind: 'text' } as Partial<DesignElement>), undefined)).toBe(1);
+    expect(elementChunkCount(tbl({ dataSource: { kind: 'custom-query', queryId: 'q' } }), { error: 'x' })).toBe(1);
+    expect(elementChunkCount(tbl({ rect: { x: 0, y: 0, w: 300, h: 10 }, columns: ['A'], rows: [['1'], ['2']] }), undefined)).toBe(1);
   });
   it('counts static (unbound) table rows', () => {
-    expect(tableChunkCount(tbl({ columns: ['A'], rows: [['1'], ['2'], ['3'], ['4']] }), undefined)).toBe(2); // ceil(4/3)
+    expect(elementChunkCount(tbl({ columns: ['A'], rows: [['1'], ['2'], ['3'], ['4']] }), undefined)).toBe(2); // ceil(4/3)
   });
 });
 
@@ -623,7 +623,7 @@ describe('a transposed table element flows through headers, rows and pagination'
     const short = { ...el, rect: { x: 0, y: 0, w: 700, h: 160 } } as unknown as DesignElement;
     const flat = { ...short, transpose: false } as unknown as DesignElement;
     expect(rowsFor(short, wide)).toHaveLength(29);
-    expect(tableChunkCount(short, wide)).toBeGreaterThan(tableChunkCount(flat, wide));
+    expect(elementChunkCount(short, wide)).toBeGreaterThan(elementChunkCount(flat, wide));
   });
 });
 
@@ -687,14 +687,14 @@ describe('headerRow — lifting the first data row out of the body', () => {
     // h = 200px = 150pt. Without the flag: floor((150-16)/16) = 8 rows over 5 rows = 1 chunk.
     // With it: floor((150-24)/16) = 7 body rows over 20 body rows = 3 chunks.
     const plain = gridEl({ headerRow: undefined });
-    expect(tableChunkCount(plain, gridResolved(20))).toBe(3); // ceil(21/8)
-    expect(tableChunkCount(gridEl(), gridResolved(20))).toBe(3); // ceil(20/7)
-    expect(tableChunkCount(gridEl(), gridResolved(7))).toBe(1);
-    expect(tableChunkCount(gridEl(), gridResolved(8))).toBe(2);
+    expect(elementChunkCount(plain, gridResolved(20))).toBe(3); // ceil(21/8)
+    expect(elementChunkCount(gridEl(), gridResolved(20))).toBe(3); // ceil(20/7)
+    expect(elementChunkCount(gridEl(), gridResolved(7))).toBe(1);
+    expect(elementChunkCount(gridEl(), gridResolved(8))).toBe(2);
   });
 
   it('is 1 chunk when the query returned only the header row', () => {
-    expect(tableChunkCount(gridEl(), gridResolved(0))).toBe(1);
+    expect(elementChunkCount(gridEl(), gridResolved(0))).toBe(1);
   });
 });
 
@@ -849,9 +849,9 @@ function cellGridEl(rows: number): { el: DesignElement; resolved: ResolvedTable 
 
 it('chunks a cellgrid by its own row pitch, not the table row pitch', () => {
   const a = cellGridEl(31);
-  expect(tableChunkCount(a.el, a.resolved)).toBe(1);
+  expect(elementChunkCount(a.el, a.resolved)).toBe(1);
   const b = cellGridEl(32);
-  expect(tableChunkCount(b.el, b.resolved)).toBe(2);
+  expect(elementChunkCount(b.el, b.resolved)).toBe(2);
 });
 
 it('stops drawing a cellgrid once its rows run out', () => {
