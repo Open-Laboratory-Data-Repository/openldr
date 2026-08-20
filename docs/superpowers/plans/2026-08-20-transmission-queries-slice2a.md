@@ -89,7 +89,7 @@ this slice edits: none references a table this repo does not already have wired 
 | File | Responsibility |
 |---|---|
 | `packages/reporting/src/seed/report-seeds.ts` | **Modify.** `sql.postgres`/`sql.mssql`/`sql.mysql` on both `q-transmission-hvleid` (`:2216`) and `q-transmission-other` (`:2768`). |
-| `packages/reporting/src/seed/report-seeds.test.ts` | **Modify.** Fix the `as ord` count (2 to 3) and add new shape tests for the week-token row, the unique `ord`, `days`/`silent`, and the `'1'` mark, inside the `SEED_QUERIES` transmission-grid `describe` block at `:1632`. |
+| `packages/reporting/src/seed/report-seeds.test.ts` | **Modify.** Fix the `as ord` count (2 to 4) and add new shape tests for the week-token row, the unique `ord`, `days`/`silent`, and the `'1'` mark, inside the `SEED_QUERIES` transmission-grid `describe` block at `:1632`. |
 | `packages/reporting/src/seed/transmission-grid-live.test.ts` | **Modify.** Fix the four `'Y'` literals, add fixture tests for `days`/`silent`/unique `ord`, and add the characterization test for the `rt-transmission-grid` regression described above. |
 
 ---
@@ -660,7 +660,7 @@ At `:1719-1723`, change the expected length:
 
 ```ts
   it('selects the ord discriminator sortBy depends on, in every dialect', () => {
-    // Three rows carry `ord` per dialect string now: the dates row (`0 as ord`), the week-token
+    // Four occurrences of `as ord` per dialect per dialect string now: the dates row (`0 as ord`), the week-token
     // row (`1 as ord`), and the laboratory rows (`max(lo.ord) as ord`).
     const ORD = /\bas ord\b/g;
     for (const id of ['q-transmission-hvleid', 'q-transmission-other']) {
