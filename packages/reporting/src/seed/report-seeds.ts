@@ -4192,7 +4192,11 @@ const TG_GRID_H = 380; // px@96; 380 * 0.75 = 285pt
  *  drags the whole page to a second chunk that nothing else needs. cellGridMaxRows(90) = 6 exactly.
  *  The same seed test asserts it. */
 const TG_BAND_Y = 194;
-const TG_BAND_H = 120;
+/** 128px@96 = 96pt. The floor is 89.5pt, the tallest calendar a month can produce; the extra 6.5pt
+ *  is the gap between a SIX-week calendar's last row and the heading under it. At the bare floor the
+ *  two touched, which was visible in a September render and in nothing else, because every month
+ *  with five weeks or fewer leaves the gap by accident. */
+const TG_BAND_H = 128;
 /** Width of the calendar block: seven cells at CELL_SIZE plus six CELL_GAPs = 82.5pt = 110px@96,
  *  with a little slack so a later cell-size change does not clip the last column silently. */
 const TG_CAL_W = 116;
