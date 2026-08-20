@@ -143,7 +143,7 @@ describe('TemplateParamSchema — format and placeholder', () => {
   });
 });
 
-describe('DesignElementSchema — cellgrid', () => {
+describe('DesignElementSchema: cellgrid', () => {
   it('accepts a cellgrid element with a palette and trailing columns', () => {
     const el = {
       id: 'grid', kind: 'cellgrid', name: 'Submission grid',
