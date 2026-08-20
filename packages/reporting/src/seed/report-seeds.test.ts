@@ -12,7 +12,7 @@ import {
   DESIGNS_REQUIRING_DATA,
   type SeedDataDrivenReportsDeps,
 } from './report-seeds';
-import { pairRects, toPt, paperSizePt, type ReportDesign } from '@openldr/report-designer';
+import { pairRects, toPt, paperSizePt, cellGridWidth, CELL_LABEL_W, type ReportDesign } from '@openldr/report-designer';
 import { findInvalidImageSources, findUnsortedHeaderRows } from '@openldr/report-designer/pure';
 
 // In-memory fakes — no real Kysely instance needed (unlike `packages/bootstrap/src/seed.ts`,
@@ -2075,4 +2075,9 @@ describe('SEED_DESIGNS — rt-transmission-grid geometry', () => {
     expect(el('hvleid').rect.h).toBe(el('other').rect.h);
     expect(el('hvleid').rect.x).toBe(el('other').rect.x);
   });
+});
+
+it('exports cellGridWidth and CELL_LABEL_W for a seed test to use', () => {
+  expect(typeof cellGridWidth).toBe('function');
+  expect(CELL_LABEL_W).toBe(105);
 });

@@ -27,6 +27,11 @@ export { toPt, PX_TO_PT } from './units';
 // of the two Letter/landscape seeded designs.
 export { paperSizePt } from './units';
 
+// Exported for the same reason as pairRects above: a seed that binds a cellgrid needs to assert
+// its OWN declared geometry fits the page it is authored for, using the same arithmetic the
+// renderer itself uses rather than a hand-copied number that can drift out of sync with it.
+export { cellGridWidth, CELL_LABEL_W } from './cellgrid';
+
 export interface RenderOptions {
   now?: Date;
   /**
