@@ -1,12 +1,35 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterAll } from 'vitest';
 import { resolveGitBash } from './git-bash';
 import { execFileSync } from 'node:child_process';
-import { writeFileSync, readFileSync, mkdtempSync, chmodSync, existsSync } from 'node:fs';
+import { writeFileSync, readFileSync, mkdtempSync, rmSync, chmodSync, existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { tmpdir, platform } from 'node:os';
 import { pathToFileURL } from 'node:url';
 
 const REPO = resolve(__dirname, '../../..');
+
+/** Every temp dir the helpers below create, so afterAll can remove them.
+ *
+ *  ⛔ Nothing used to. Measured 2026-08-20: 1318 stale openldr-fakebin / openldr-fixture /
+ *  openldr-install directories had piled up in the OS temp dir, one to two per test per run, going
+ *  back weeks. The helpers hand back a command result or a file:// URL and never the path, so a
+ *  caller cannot clean up after itself even if it wanted to. Tracking them here is the only place
+ *  that can. */
+const tempDirs: string[] = [];
+
+function tempDir(prefix: string): string {
+  const dir = mkdtempSync(join(tmpdir(), prefix));
+  tempDirs.push(dir);
+  return dir;
+}
+
+afterAll(() => {
+  for (const dir of tempDirs) {
+    // A leaked temp dir must never turn a green suite red. On Windows a fake bin can still be held
+    // briefly by a just-exited child, and force already swallows a missing path.
+    try { rmSync(dir, { recursive: true, force: true }); } catch { /* best effort */ }
+  }
+});
 
 /** `C:\tmp\bin` -> `/c/tmp/bin`.
  *
@@ -68,7 +91,7 @@ function sq(s: string): string {
  */
 function buildAndPush(args: string[], gh: string | FakeGh): { code: number; out: string } {
   const opts: FakeGh = typeof gh === 'string' ? { stdout: gh } : gh;
-  const bin = mkdtempSync(join(tmpdir(), 'openldr-fakebin-'));
+  const bin = tempDir('openldr-fakebin-');
 
   const ghPath = join(bin, 'gh');
   const ghLines = [
@@ -249,8 +272,8 @@ describe('build-and-push.sh overwrite guard — gh failure handling', () => {
  * bound, and this test must not depend on what the machine is running.
  */
 function installSh(args: string[]): { code: number; out: string } {
-  const bin = mkdtempSync(join(tmpdir(), 'openldr-fakebin-'));
-  const dir = join(mkdtempSync(join(tmpdir(), 'openldr-install-')), 'openldr');
+  const bin = tempDir('openldr-fakebin-');
+  const dir = join(tempDir('openldr-install-'), 'openldr');
 
   writeFileSync(
     join(bin, 'docker'),
@@ -372,7 +395,7 @@ function resolveVersion(url: string): { code: number; stdout: string; stderr: st
 
 /** Write a latest.json fixture and return a file:// URL curl can fetch with no network. */
 function fixture(body: string): string {
-  const dir = mkdtempSync(join(tmpdir(), 'openldr-fixture-'));
+  const dir = tempDir('openldr-fixture-');
   const file = join(dir, 'latest.json');
   writeFileSync(file, body);
   return pathToFileURL(file).href;
