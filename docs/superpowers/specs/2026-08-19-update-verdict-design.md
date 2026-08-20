@@ -1,7 +1,13 @@
 # Update verdict: telling the operator where they stand
 
 Date: 2026-08-19
-Status: approved, not implemented
+Status: implemented, shipped in 0.1.4. PARTLY SUPERSEDED.
+
+The `runningIsNewer` field added to `up_to_date`, and the "this install is newer than the last
+release it saw" wording it drove, shipped in 0.1.5 and were replaced one release later. An operator
+read a lower `published` number as an instruction to roll back. See
+`docs/superpowers/specs/2026-08-20-no-update-found-design.md`, which deletes that field and shows no
+version number at all in that state. Everything else in this document still holds.
 
 ## The problem
 
