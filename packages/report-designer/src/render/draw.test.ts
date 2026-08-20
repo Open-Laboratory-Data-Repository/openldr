@@ -1170,3 +1170,50 @@ describe("showOn: 'first-chunk' — a band that belongs to page 1 alone", () => 
     expect(resolveFlowY(follower, p2, map, 1)).toBe(75);
   });
 });
+
+describe('flowGap — space between one block and the next', () => {
+  const anchor = {
+    id: 'a', kind: 'text', name: 'a', rect: { x: 0, y: 100, w: 100, h: 20 }, text: 'x',
+  } as DesignElement;
+
+  it('adds its own px@96 gap after the target, on top of what the target drew', () => {
+    // Without it a follower sits flush against the block above, which is what put the second
+    // grid's heading hard against the last row of the first.
+    const glued = { id: 'f', kind: 'text', name: 'f', rect: { x: 0, y: 900, w: 100, h: 14 }, text: 'y', flowAfter: 'a' } as DesignElement;
+    const spaced = { ...glued, id: 'g', flowGap: 20 } as DesignElement;
+    const page: DesignPage = { id: 'p', elements: [anchor, glued, spaced] };
+    const map = new Map<string, ResolvedTable>();
+    expect(resolveFlowY(glued, page, map, 0)).toBe(75 + 15);        // 100px + 20px, in pt
+    expect(resolveFlowY(spaced, page, map, 0)).toBe(75 + 15 + 15);  // + 20px@96 = 15pt
+  });
+
+  it('is inert on an element that does not flow at all', () => {
+    // `flowGap` describes the space after the thing this element FOLLOWS. With nothing to follow
+    // there is no such space, and the declared y stands.
+    const loose = { id: 'l', kind: 'text', name: 'l', rect: { x: 0, y: 400, w: 10, h: 10 }, text: 'x', flowGap: 40 } as DesignElement;
+    const page: DesignPage = { id: 'p', elements: [loose] };
+    expect(resolveFlowY(loose, page, new Map(), 0)).toBe(300);
+  });
+
+  it('takes the gap out of what a fillTo element has left to fill', () => {
+    // The two declarations meet here: the gap pushes the top down, and `fillTo` measures from the
+    // new top to the same fixed bottom, so the grid holds one row fewer rather than overrunning.
+    const grid = {
+      id: 'g', kind: 'cellgrid', name: 'g', rect: { x: 0, y: 0, w: 400, h: 400 },
+      dataSource: { kind: 'custom-query', queryId: 'q' }, labelColumn: 'lab', cellColumns: ['d01'],
+      flowAfter: 'a', fillTo: 'rect-bottom', flowGap: 40,
+    } as DesignElement;
+    const resolved: ResolvedTable = {
+      columns: [{ key: 'lab', label: '' }, { key: 'd01', label: '' }],
+      rows: [{ lab: '', d01: '01' }, ...Array.from({ length: 40 }, (_, i) => ({ lab: `L${i}`, d01: '1' }))],
+    };
+    const page: DesignPage = { id: 'p', elements: [anchor, grid] };
+    const flow = { page, resolved: new Map([['g', resolved]]) };
+    // Bottom is 400px@96 = 300pt. Top is the anchor's 75pt + its 15pt + the 30pt gap = 120pt.
+    // 180pt of box, less the 13pt header band, over a 12.75pt pitch = 13 records.
+    const withGap = elementChunkCount(grid, resolved, flow);
+    const withoutGap = elementChunkCount({ ...grid, flowGap: undefined } as DesignElement, resolved, flow);
+    expect(withGap).toBeGreaterThan(withoutGap);
+    expect(drawnHeight(grid, resolved, 0, flow)).toBe(13 + 13 * 12.75);
+  });
+});

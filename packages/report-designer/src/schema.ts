@@ -242,6 +242,20 @@ export const DesignElementSchema = z.object({
    *  ⛔ Opt-in, and inert when unset — a design without it renders byte-for-byte as before
    *  (`render/golden.test.ts`). */
   showOn: z.literal('first-chunk').optional(),
+  /** Space in px@96 left BETWEEN the element named by `flowAfter` and this one, on top of the
+   *  height that element actually drew.
+   *
+   *  `flowAfter` puts a follower flush against the block above it, which is right for a heading and
+   *  its own table and wrong between two sections: the second grid's heading sat hard against the
+   *  last row of the first, and on a page where the first grid was empty it landed on top of its
+   *  header band.
+   *
+   *  ⛔ Inert without `flowAfter`. It describes the space after the thing this element follows, and
+   *  with nothing to follow there is no such space. It is NOT a top margin.
+   *
+   *  ⛔ px@96, like every other coordinate on a design, converted with `PX_TO_PT` at resolution.
+   *  Declaring it in points would make it the only length here that is not. */
+  flowGap: z.number().nonnegative().optional(),
   /** `cellgrid`: result column holding each row's label. Omit for a grid with no label column, such
    *  as a month calendar whose position already says which day a cell is. */
   labelColumn: z.string().optional(),

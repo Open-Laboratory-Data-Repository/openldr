@@ -1717,36 +1717,46 @@ describe('SEED_QUERIES — the transmission grids', () => {
     // row (`1 as ord`), the laboratory rows (`max(lo.ord) as ord`), and `lab_ord`'s own
     // `row_number() over (order by lab) + 1 as ord`.
     const ORD = /\bas ord\b/g;
-    for (const id of ['q-transmission-hvleid', 'q-transmission-other']) {
+    // ⛔ FOUR in the HVL/EID grid and THREE in the Other one, and the difference is the point. The
+    // HVL/EID query numbers its laboratories (`lab_ord`'s own `row_number() ... + 1 as ord`); the
+    // Other query collapsed to a single 'Others' row on 2026-08-20 and numbers nothing, so it
+    // carries the dates row, the week row and its own row and no more.
+    const EXPECTED: Record<string, number> = { 'q-transmission-hvleid': 4, 'q-transmission-other': 3 };
+    for (const [id, count] of Object.entries(EXPECTED)) {
       for (const [dialect, sql] of Object.entries(q(id).sql)) {
         expect(sql.match(ORD) ?? [], `${id}/${dialect} dropped 'as ord' — sortBy silently degrades to no sort`)
-          .toHaveLength(4);
+          .toHaveLength(count);
       }
     }
   });
 
-  // ⛔ The date row carries the day and the month as TWO LINES. `headerRow` draws a header cell's
-  // newlines stacked and `columnWidths` measures the widest LINE, so a day column costs "Feb"
-  // (14.22pt) instead of "2 Feb" (20.90pt) — measured with real pdfkit metrics. Collapsing these
-  // back to one line puts every laboratory name back under the ellipsis.
-  it('emits the date row as two lines, in every dialect', () => {
-    // Each dialect string carries this expression once per day column — 23 sites. A match-anywhere
-    // assertion (`toMatch`) is satisfied by 1 of 23, so 22 columns could regress to a bare
-    // `char(10)`/single-line expression and this test would stay green. Mutation-tested: flipping
-    // one of the 23 sites back to the un-stacked form fails the count, confirming this discriminates
-    // where `toMatch` could not — see git history for the reviewer's own proof on the mysql case.
-    const NEWLINE: Record<string, RegExp> = {
-      postgres: /to_char\(cal_day, 'FMDD'\) \|\| chr\(10\) \|\| to_char\(cal_day, 'Mon'\)/g,
-      mssql: /concat\(format\(cal_day, '%d', 'en-US'\), char\(10\), format\(cal_day, 'MMM', 'en-US'\)\)/g,
-      // ⛔ `using utf8mb4` is asserted, not just `char(10)`. Bare CHAR(10) is a BINARY string in
-      // MySQL and CONCAT turns the whole cell binary, so mysql2 (built with no `typeCast`) hands the
-      // date row back as Buffers and the JSON/CSV export of that row stops being text.
-      mysql: /concat\(date_format\(cal_day, '%e'\), char\(10 using utf8mb4\), date_format\(cal_day, '%b'\)\)/g,
-    };
+  // ⛔ ONE LINE, the day number alone. The month was stacked under it until 2026-08-20, when the
+  // operator cut it: the report runs one month at a time and the scope panel already names the
+  // month. That also removed two defects the second line caused. A cellgrid's header band is 13pt
+  // and a two-line label overflowed it, printing over whatever followed; and on MySQL the concat
+  // that built it was the measured cause of error 1267.
+  it('emits the date row as the day number alone, in every dialect', () => {
+    // COUNTED, not matched anywhere. A match-anywhere assertion is satisfied by 1 of 23 columns, so
+    // 22 could regress and this would stay green. Same reasoning as the version it replaces, which
+    // counted the two-line form.
+    const DAY_ONLY = {
+      postgres: /to_char\(cal_day, 'FMDD'\) else ''/g,
+      mssql: /format\(cal_day, '%d', 'en-US'\) else ''/g,
+      mysql: /date_format\(cal_day, '%e'\) else ''/g,
+    } as Record<string, RegExp>;
+    // ⚠ The negative names the CONSTRUCTION, not the bytes. Both mysql variants still discuss
+    // `char(10 using utf8mb4)` in a comment explaining why it is gone, and both cast their trailing
+    // counts to `char(10)`, so a bare search for those characters fails on prose and on a cast.
+    const STACKED = {
+      postgres: /\|\| chr\(10\) \|\|/,
+      mssql: /concat\(format\(cal_day/,
+      mysql: /concat\(date_format\(cal_day/,
+    } as Record<string, RegExp>;
     for (const id of ['q-transmission-hvleid', 'q-transmission-other']) {
       for (const [dialect, sql] of Object.entries(q(id).sql)) {
-        expect(sql.match(NEWLINE[dialect]) ?? [], `${id}/${dialect} no longer stacks the day over the month on all 23 columns`)
+        expect(sql.match(DAY_ONLY[dialect]) ?? [], `${id}/${dialect} lost the bare day number`)
           .toHaveLength(23);
+        expect(sql, `${id}/${dialect} stacks a second header line again`).not.toMatch(STACKED[dialect]);
       }
     }
   });
@@ -1839,10 +1849,18 @@ describe('SEED_QUERIES — the transmission grids', () => {
   // positive number as empty (packages/report-designer/src/render/cellgrid.ts, stepFor). 'Y' is
   // NaN. Left as 'Y', every cell in the grid would paint empty on every run, silently.
   it('marks a submission with a numeric string cellgrid can parse, not the letter Y, in every dialect', () => {
-    for (const id of ['q-transmission-hvleid', 'q-transmission-other']) {
+    // ⛔ `cellgrid` reads a cell with Number(value). 'Y' is NaN, `stepFor` treats a non-finite
+    // value as empty, and the grid would paint every cell blank on every run with no error.
+    // The two queries build the mark differently now: HVL/EID asks whether THIS laboratory arrived
+    // that day, the collapsed Other grid asks whether ANY did.
+    const MARK: Record<string, RegExp> = {
+      'q-transmission-hvleid': /case when a\.lab is null then '' else '1' end as mark/,
+      'q-transmission-other': /then '1' else '' end as mark/,
+    };
+    for (const [id, re] of Object.entries(MARK)) {
       for (const [dialect, sql] of Object.entries(q(id).sql)) {
-        expect(sql, `${id}/${dialect} still marks with the letter Y`)
-          .toMatch(/case when a\.lab is null then '' else '1' end as mark/);
+        expect(sql, `${id}/${dialect} still marks with the letter Y`).toMatch(re);
+        expect(sql, `${id}/${dialect} marks with the letter Y`).not.toMatch(/else 'Y' end as mark/);
       }
     }
   });
@@ -1857,11 +1875,15 @@ describe('SEED_QUERIES — the transmission grids', () => {
   });
 
   it('gives each laboratory a unique ord from 2, alphabetically, in every dialect', () => {
-    for (const id of ['q-transmission-hvleid', 'q-transmission-other']) {
-      for (const [dialect, sql] of Object.entries(q(id).sql)) {
-        expect(sql, `${id}/${dialect} lost the per-laboratory ord`)
-          .toMatch(/row_number\(\) over \(order by lab\)\s*\+\s*1 as ord/);
-      }
+    // ⛔ HVL/EID ONLY. The Other grid stopped listing laboratories on 2026-08-20, so it has nothing
+    // to number: its single 'Others' row is a literal `2 as ord`. Looping over both here would
+    // demand a per-laboratory ord from a query that deliberately has none.
+    for (const [dialect, sql] of Object.entries(q('q-transmission-hvleid').sql)) {
+      expect(sql, `hvleid/${dialect} lost the per-laboratory ord`)
+        .toMatch(/row_number\(\) over \(order by lab\)\s*\+\s*1 as ord/);
+    }
+    for (const [dialect, sql] of Object.entries(q('q-transmission-other').sql)) {
+      expect(sql, `other/${dialect} is numbering laboratories again`).toMatch(/select 2 as ord, 'Others' as lab/);
     }
   });
 
@@ -1871,14 +1893,29 @@ describe('SEED_QUERIES — the transmission grids', () => {
   // live warehouse (see the plan this test came from): 'Mbagala Kizuiani' and 'Mwananyamala',
   // 2017-08.
   it('computes days and silent per laboratory, outer-joined to the working-day calendar, in every dialect', () => {
-    for (const id of ['q-transmission-hvleid', 'q-transmission-other']) {
-      for (const [dialect, sql] of Object.entries(q(id).sql)) {
-        expect(sql, `${id}/${dialect} lost lab_stats`).toMatch(/lab_stats as \(/);
-        expect(sql, `${id}/${dialect} no longer selects days`).toMatch(/\bas days\b/);
-        expect(sql, `${id}/${dialect} no longer selects silent`).toMatch(/\bas silent\b/);
-        expect(sql, `${id}/${dialect} inner-joins days inside lab_stats and can drop a weekend-only lab`)
-          .toMatch(/left join days dy on dy\.cal_day = a\.cal_day/);
-      }
+    for (const [dialect, sql] of Object.entries(q('q-transmission-hvleid').sql)) {
+      expect(sql, `hvleid/${dialect} lost lab_stats`).toMatch(/lab_stats as \(/);
+      expect(sql, `hvleid/${dialect} no longer selects days`).toMatch(/\bas days\b/);
+      expect(sql, `hvleid/${dialect} no longer selects silent`).toMatch(/\bas silent\b/);
+      expect(sql, `hvleid/${dialect} inner-joins days inside lab_stats and can drop a weekend-only lab`)
+        .toMatch(/left join days dy on dy\.cal_day = a\.cal_day/);
+    }
+  });
+
+  // The collapsed Other grid measures the same two things over the whole set of off-list
+  // laboratories instead of one at a time. `days` is working days that carried any other test
+  // data; `silent` is working days since the last one. The outer-join argument above does not
+  // apply, because there is no per-laboratory row left to drop: the row exists whatever arrived.
+  it('computes days and silent over ALL off-list laboratories at once, in every dialect', () => {
+    for (const [dialect, sql] of Object.entries(q('q-transmission-other').sql)) {
+      expect(sql, `other/${dialect} lost all_stats`).toMatch(/all_stats as \(/);
+      expect(sql, `other/${dialect} still computes per laboratory`).not.toMatch(/lab_stats as \(/);
+      expect(sql, `other/${dialect} no longer selects days`).toMatch(/\bas days\b/);
+      expect(sql, `other/${dialect} no longer selects silent`).toMatch(/\bas silent\b/);
+      // Selecting FROM the working-day series, not from arrivals, is what keeps a silent day blank
+      // IN PLACE instead of shifting later days left.
+      expect(sql, `other/${dialect} builds its marks from arrivals instead of from the day series`)
+        .toMatch(/from days dy/);
     }
   });
 
@@ -1911,7 +1948,7 @@ describe('SEED_QUERIES — the transmission grids', () => {
 describe('SEED_QUERIES — the summary band', () => {
   const q = (id: string) => SEED_QUERIES.find((x) => x.id === id)!;
   const BAND = ['q-transmission-calendar', 'q-transmission-summary'];
-  const CAL_COLS = ['ord', 'c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7'];
+  const CAL_COLS = ['ord', 'c1', 'c2', 'c3', 'c4', 'c5'];
   const FIGURES = ['labs', 'pct_lab_days', 'busiest', 'silent10'];
 
   it('ships all three dialects for both queries', () => {
@@ -1953,18 +1990,34 @@ describe('SEED_QUERIES — the summary band', () => {
     }
   });
 
-  it('gives the calendar all seven days, not the working-day series the grids use', () => {
-    // Measured on the dev warehouse 2026-08-20: 7 weekend arrivals in 2013-07, 10 in 2013-09.
-    // A calendar built on Mon-Fri would drop those cells and print a month with holes in it.
-    const pg = q('q-transmission-calendar').sql.postgres;
-    expect(pg).not.toMatch(/between 1 and 5/);
-    expect(q('q-transmission-calendar').sql.mssql).not.toMatch(/% 7 between 0 and 4/);
-    expect(q('q-transmission-calendar').sql.mysql).not.toMatch(/weekday\(cal_day\) between 0 and 4/);
-    // ...while the figures query, which counts working days, still has one.
-    expect(q('q-transmission-summary').sql.postgres).toMatch(/between 1 and 5/);
+  it('gives the calendar working days only, five columns, in every dialect', () => {
+    // ⛔ REVERSED on 2026-08-20. This calendar carried all seven days, and the reason was measured:
+    // 7 weekend arrivals in 2013-07 and 10 in 2013-09 on the dev warehouse. The operator cut the
+    // weekend anyway, because the report asks whether laboratories transmit on the days they are
+    // asked to, and two columns a week that are nearly always empty took a fifth of the block.
+    // The cost is real and stays stated: a laboratory that only ever submits at a weekend now
+    // appears nowhere in this report.
+    expect(q('q-transmission-calendar').sql.postgres).toMatch(/between 1 and 5/);
+    expect(q('q-transmission-calendar').sql.mssql).toMatch(/% 7 between 0 and 4/);
+    expect(q('q-transmission-calendar').sql.mysql).toMatch(/weekday\(cal_day\) between 0 and 4/);
+    for (const [dialect, sql] of Object.entries(q('q-transmission-calendar').sql)) {
+      expect(sql, `calendar/${dialect} still has a weekend column`).not.toMatch(/as c6\b/);
+      expect(sql, `calendar/${dialect} still has a weekend column`).not.toMatch(/as c7\b/);
+      expect(sql, `calendar/${dialect} lost the day initials`).toMatch(/'M' as c1, 'T' as c2, 'W' as c3, 'T' as c4, 'F' as c5/);
+    }
   });
 
-  it('returns ord and seven cell columns from the calendar, in every dialect', () => {
+  it('counts the busiest day over working days too, so it can equal a cell on the calendar', () => {
+    // The two figures are read side by side. `busiest` counted CALENDAR days while the calendar had
+    // seven columns; naming a Saturday that is no longer drawn would give a reader a number they
+    // cannot find on the chart beside it.
+    for (const [dialect, sql] of Object.entries(q('q-transmission-summary').sql)) {
+      expect(sql, `summary/${dialect} counts the busiest day over all seven days`)
+        .toMatch(/join days dy on dy\.cal_day = a\.cal_day group by a\.cal_day/);
+    }
+  });
+
+  it('returns ord and five cell columns from the calendar, in every dialect', () => {
     for (const [dialect, sql] of Object.entries(q('q-transmission-calendar').sql)) {
       for (const col of CAL_COLS) {
         // ⚠ `\b` — inside a TEMPLATE LITERAL a lone `\b` is the backspace character, not a regex
@@ -2069,7 +2122,7 @@ describe('SEED_DESIGNS — rt-transmission-grid', () => {
       expect(el(id).showOn, `${id} repeats on every page`).toBe('first-chunk');
     }
     expect(el('rt-transmission-grid-calendar').kind).toBe('cellgrid');
-    expect(el('rt-transmission-grid-calendar').cellColumns).toEqual(['c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7']);
+    expect(el('rt-transmission-grid-calendar').cellColumns).toEqual(['c1', 'c2', 'c3', 'c4', 'c5']);
     expect(el('rt-transmission-grid-calendar').labelColumn, "a calendar cell's position is its label").toBeUndefined();
     expect(el('rt-transmission-grid-calendar').palette, 'a calendar carries magnitude, not presence')
       .toEqual({ ramp: 'blue', steps: 5 });
@@ -2112,13 +2165,32 @@ describe('SEED_DESIGNS — rt-transmission-grid', () => {
     expect(other.y + other.h).toBeLessThan(rule.y);
   });
 
-  it('lets the lower grid take the height the upper one freed, instead of only moving up', () => {
-    // `flowAfter` alone moved the blank band from the top of a continuation page to its bottom:
-    // `other` started higher and still held the 21 records its authored 285pt box allows. `fillTo`
-    // is what makes the capacity move with the position. The upper grid does NOT declare it — its
-    // bottom edge is what leaves room for the `other` block on page 1.
-    expect(el('other').fillTo).toBe('rect-bottom');
-    expect(el('hvleid').fillTo).toBeUndefined();
+  it('lets the laboratory grid take every row the page can hold, wherever it starts', () => {
+    // `flowAfter` alone moved the blank band from the top of a continuation page to its bottom: a
+    // grid started higher and still held the records its authored box allowed. `fillTo` is what
+    // makes the capacity move with the position.
+    // ⛔ It sits on HVL/EID, the grid that grows with the network. The Other grid is one collapsed
+    // 'Others' row, so filling it to the bottom of the page would reserve height for records the
+    // query no longer emits.
+    expect(el('hvleid').fillTo).toBe('rect-bottom');
+    expect(el('other').fillTo).toBeUndefined();
+  });
+
+  it('keeps the two sections apart, and says so on the heading rather than in a rect', () => {
+    // The Other heading sat flush against the last row of the grid above, and on a page where that
+    // grid was empty it landed on its header band. The gap belongs to the block below the break.
+    expect(el('rt-transmission-grid-other-title').flowGap).toBeGreaterThan(0);
+    expect(el('rt-transmission-grid-hvleid-title').flowGap, 'the first heading follows the band and needs no break')
+      .toBeUndefined();
+  });
+
+  it('collapses the Other grid to one row and stops promising a list of sites', () => {
+    // A heading reading "by Testing Laboratory" over a single aggregate row is worse than none.
+    expect(el('rt-transmission-grid-other-title').text).not.toMatch(/by Testing Laboratory/);
+    expect(el('rt-transmission-grid-hvleid-title').text, 'the HVL/EID grid IS per laboratory')
+      .toMatch(/by Testing Laboratory/);
+    // Room for the header band and exactly one record, and no room for a second.
+    expect(cellGridMaxRows(toPt(el('other').rect).h)).toBe(1);
   });
 
   it('draws BOTH grids on one page, as the reference does', () => {
@@ -2277,12 +2349,12 @@ describe('SEED_DESIGNS — rt-transmission-grid geometry', () => {
 
   it('no longer asks the two grids to be the same HEIGHT, because they no longer mean the same thing', () => {
     // ⛔ This assertion used to read `hvleid.rect.h === other.rect.h`, and it was right while both
-    // heights meant "how many records this grid may hold". `fillTo` changed what the lower one
-    // means: `other`'s box is measured DOWN TO ITS BOTTOM EDGE from wherever `flowAfter` put its
-    // top, so its declared height is a fallback and its bottom is the number that matters. Pinning
-    // the two together again would force the lower grid to stop 118px short of the page.
-    expect(el('other').fillTo).toBe('rect-bottom');
-    expect(el('other').rect.h).not.toBe(el('hvleid').rect.h);
+    // grids were one row per laboratory. They are not: HVL/EID is the long one and measures itself
+    // DOWN TO ITS BOTTOM EDGE with `fillTo`, while Other is a single collapsed row in a box built
+    // to hold exactly that. Pinning the two together again would either starve the long grid or
+    // reserve most of a page for one row.
+    expect(el('hvleid').fillTo).toBe('rect-bottom');
+    expect(el('other').rect.h).toBeLessThan(el('hvleid').rect.h);
   });
 
   it('fits the worst-case 23-day, 5-week month inside the A4 portrait body: DERIVED, not hardcoded', () => {

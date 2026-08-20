@@ -991,7 +991,10 @@ export function resolveFlowY(
   const targetY = resolveFlowY(target, page, resolved, chunk, nextSeen);
   // `nextSeen`, not `seen`: measuring a `fillTo` target means resolving its own y, which walks
   // further up the chain. Carrying the guard is what keeps a cycle throwing instead of recursing.
-  return targetY + drawnHeight(target, resolved.get(target.id), chunk, { page, resolved, seen: nextSeen });
+  const drawn = drawnHeight(target, resolved.get(target.id), chunk, { page, resolved, seen: nextSeen });
+  // `flowGap` is charged even when the target drew nothing: a section break is a property of the
+  // block below it, not of whatever happens to sit above.
+  return targetY + drawn + (el.flowGap ?? 0) * PX_TO_PT;
 }
 
 /** Draw the "Page X / Y" footer centered ~24pt above the bottom edge of a full-bleed page. */

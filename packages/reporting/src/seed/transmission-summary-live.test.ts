@@ -22,7 +22,8 @@ const url = process.env.TARGET_DATABASE_URL;
 const live = describe.skipIf(!url);
 
 // July 2013 starts on a Monday. Working days n1 = 1 Jul, n2 = 2 Jul, ... 23 of them.
-// 6 July is a Saturday, which is what makes the calendar and the figures disagree on purpose.
+// 6 July is a Saturday. The fixture puts a laboratory there on purpose: since the calendar was cut
+// to Mon-Fri, a weekend arrival is the one thing that can tell a cut weekend from an empty one.
 const MONTH = '2013-07';
 
 live('the summary band queries (live Postgres)', () => {
@@ -57,9 +58,10 @@ live('the summary band queries (live Postgres)', () => {
     } as never).execute();
   };
 
-  /** Every cell of the calendar's body, as numbers, blanks dropped. */
+  /** Every cell of the calendar's body, as numbers, blanks dropped. Five columns: the operator cut
+   *  Saturday and Sunday on 2026-08-20. */
   const cells = (rows: Record<string, string>[]): number[] =>
-    rows.slice(1).flatMap((r) => ['c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7']
+    rows.slice(1).flatMap((r) => ['c1', 'c2', 'c3', 'c4', 'c5']
       .map((k) => r[k]).filter((v) => v !== '').map(Number));
 
   beforeAll(async () => {
@@ -84,7 +86,8 @@ live('the summary band queries (live Postgres)', () => {
     // Quiet: one submission on Mon 1 Jul, n1, so it is silent 22. Counted by silent10.
     await seed('quiet1', 'Quiet Lab', '2013-07-01T08:00:00+03:00');
     // Weekend: submits ONLY on Sat 6 Jul. It has no working day at all, so it is silent for the
-    // whole month, and its arrival appears in the calendar but in no working-day figure.
+    // whole month, it is counted in `labs`, and it appears in NO cell of the chart and in no
+    // working-day figure. That combination is what the assertions below pin.
     await seed('wknd1', 'Weekend Lab', '2013-07-06T09:00:00+03:00');
   });
 
@@ -94,33 +97,41 @@ live('the summary band queries (live Postgres)', () => {
     await admin.end();
   });
 
-  it('lifts a header row of day initials, Monday first', async () => {
+  it('lifts a header row of day initials, Monday to Friday', async () => {
     const rows = await calendar(MONTH);
-    expect([rows[0].c1, rows[0].c2, rows[0].c3, rows[0].c4, rows[0].c5, rows[0].c6, rows[0].c7])
-      .toEqual(['M', 'T', 'W', 'T', 'F', 'S', 'S']);
+    expect([rows[0].c1, rows[0].c2, rows[0].c3, rows[0].c4, rows[0].c5])
+      .toEqual(['M', 'T', 'W', 'T', 'F']);
+    expect(rows[0].c6, 'Saturday came back').toBeUndefined();
     expect(rows[0].ord).toBe(0);
   });
 
-  it('counts DISTINCT laboratories per calendar day, weekends included', async () => {
+  it('counts DISTINCT laboratories per working day, and drops the weekend entirely', async () => {
+    // ⛔ REVERSED on 2026-08-20. This used to assert the Saturday arrival APPEARED, and the fixture
+    // still seeds one, on purpose: it is the only thing that can tell "the weekend was cut" from
+    // "the weekend happened to be empty". The laboratory that submits only on Saturday now appears
+    // nowhere in this report, and that is the operator's decision, not an accident.
     const rows = await calendar(MONTH);
-    // Week 27 is 1-7 July. Mon carries Busy and Quiet, Tue carries Busy, Sat carries Weekend.
+    // Week 27 is 1-5 July now. Mon carries Busy and Quiet, Tue carries Busy.
     const wk27 = rows[1];
     expect(wk27.c1, 'Monday 1 July: two laboratories').toBe('2');
     expect(wk27.c2, 'Tuesday 2 July: one').toBe('1');
     expect(wk27.c3).toBe('0');
-    expect(wk27.c6, 'Saturday 6 July: the weekend arrival must appear').toBe('1');
-    expect(wk27.c7).toBe('0');
+    expect(wk27.c5, 'Friday 5 July: nobody').toBe('0');
+    // The Saturday arrival is in the fixture and must be nowhere in the chart.
+    expect(Object.keys(wk27)).not.toContain('c6');
+    expect(cells(rows).reduce((a, b) => a + b, 0), 'the weekend arrival leaked into a working-day cell')
+      .toBe(4);
   });
 
   it('leaves days outside the month blank rather than zero', async () => {
-    // 31 July is a Wednesday, so the last row's Thursday onward are not days of this month. A blank
-    // and a zero paint the same tint, but they must not be the same VALUE: a later slice that gives
-    // the element a third cell state needs the distinction to still be in the data.
+    // 31 July is a Wednesday, so the last row's Thursday and Friday are not days of this month. A
+    // blank and a zero paint the same tint, but they must not be the same VALUE: a later slice that
+    // gives the element a third cell state needs the distinction to still be in the data.
     const rows = await calendar(MONTH);
     const last = rows[rows.length - 1];
     expect(last.c3, '31 July is a Wednesday and is in the month').toBe('0');
     expect(last.c4, '1 August is not').toBe('');
-    expect(last.c7).toBe('');
+    expect(last.c5).toBe('');
   });
 
   it('agrees with the figures on the busiest day, which is the cross-check between the two', async () => {
@@ -140,7 +151,7 @@ live('the summary band queries (live Postgres)', () => {
     expect((await summary(MONTH))[0].labs).toBe('3');
   });
 
-  it('keeps the weekend arrival out of the working-day percentage', async () => {
+  it('keeps the weekend arrival out of the working-day percentage, as it does out of the chart', async () => {
     // 3 laboratories x 23 working days = 69 possible laboratory-days. Filled: Busy on 1, 2 and 24
     // July, Quiet on 1 July. The Saturday arrival is NOT one of them. 4 / 69 = 5.8 per cent.
     // If the weekend day leaked in, this would be 5 / 69 = 7.2.

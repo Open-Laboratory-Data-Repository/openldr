@@ -161,6 +161,15 @@ live('the transmission grid queries (live Postgres)', () => {
     expect(dayCells(row).filter((c) => c === '1'), `${row.lab} marked more than one day`).toEqual(['1']);
   };
 
+  /** The Other grid's ONE body row. It stands for every laboratory outside the panel list, so it is
+   *  named 'Others' and there is never a second one. */
+  const othersRow = async (p: { month: string; panels: string }) => {
+    const rows = await runForOther(p);
+    const body = rows.filter((r) => r.ord !== '0' && r.ord !== '1' && r.lab !== '(dates)' && r.lab !== '(week)');
+    expect(body.map((r) => r.lab), 'the Other grid must collapse to exactly one row').toEqual(['Others']);
+    return body[0];
+  };
+
   beforeAll(async () => {
     await admin.query(`create database "${dbName}"`);
     const target = new URL(url!);
@@ -177,7 +186,11 @@ live('the transmission grid queries (live Postgres)', () => {
     await seedSubmission('evening', 'Late Evening Lab', 'HIVPC', '2026-03-03T21:00:00Z');
 
     // A non-HVL/EID panel, so the two grids can be shown to partition the month.
-    await seedSubmission('chem', 'Chemistry Lab', 'CHEM', '2026-03-03T08:00:00Z');
+    // ⛔ 4 March, a day NOTHING on the panel list submits on. The Other grid is one collapsed
+    // 'Others' row now, so the partition can no longer be shown by looking for this laboratory's
+    // name in it. It is shown by the DAY instead, and that only discriminates if the day belongs to
+    // one side alone. 4 Mar 2026 = n3 = d03.
+    await seedSubmission('chem', 'Chemistry Lab', 'CHEM', '2026-03-04T08:00:00Z');
 
     // C2: submitted ONLY outside March. Must not appear in a March grid AT ALL — not even blank.
     // ⛔ The dates are chosen to sit INSIDE the two-day widening on each side (27 Feb is 2 days
@@ -202,7 +215,9 @@ live('the transmission grid queries (live Postgres)', () => {
 
     // A request with NO panel code. Without coalesce(panel_code, '') the `not in` predicate is NULL
     // for this row and it vanishes from BOTH grids — the partition would silently lose it.
-    await seedSubmission('nopanel', 'No Panel Lab', null, '2026-03-03T08:00:00Z');
+    // ⛔ 23 March, again a day of its own, for the same reason as the chemistry fixture above.
+    // 23 Mar 2026 = n16 = d16.
+    await seedSubmission('nopanel', 'No Panel Lab', null, '2026-03-23T08:00:00Z');
 
     // A panel code with an INNER SPACE. This is the Postgres half of the case that separates a
     // per-element trim from a whole-parameter space strip: called with panels 'A, BB CC', a correct
@@ -255,10 +270,10 @@ live('the transmission grid queries (live Postgres)', () => {
     expect(dates.d21).toBe('');
     expect(dates.d22).toBe('');
     expect(dates.d23).toBe('');
-    // TWO LINES, day over month: the design's `headerRow` draws a header cell's newlines stacked,
-    // and `columnWidths` then measures "Feb" rather than "2 Feb" — which is what leaves the
-    // laboratory column enough width to print a real name.
-    expect(dates.d01).toBe('2\nFeb');
+    // ONE LINE, the day number alone, since 2026-08-20. It carried the month stacked under it
+    // and the operator cut it: the report runs one month at a time and the scope panel already
+    // names the month.
+    expect(dates.d01).toBe('2');
   });
 
   it('puts the date row first, whatever the laboratory names sort like', async () => {
@@ -267,14 +282,26 @@ live('the transmission grid queries (live Postgres)', () => {
   });
 
   it('HVL/EID and Other partition the arrivals — none in both, none in neither', async () => {
+    // ⛔ Shown by DAY, not by name. The Other grid collapsed to one 'Others' row on 2026-08-20, so
+    // `ot.some(r => r.lab === 'Chemistry Lab')` cannot be asked any more. The assertion only
+    // discriminates on a day ONE side owns: 2 Mar (d01) carries the mapped registry laboratory and
+    // nothing else, and 4 Mar (d03) carries the chemistry laboratory and nothing else. ⛔ NOT 3 Mar:
+    // the inner-space-code fixture sits there and is off-list under this panel value, so d02 is
+    // legitimately marked on both sides.
     const hv = await runFor({ month: '2026-03', panels: 'HIVPC', tz: 'UTC' });
-    const ot = await runForOther({ month: '2026-03', panels: 'HIVPC', tz: 'UTC' });
-    // The registration-only lab submitted HIVPC only, so it appears in one grid and not the other.
+    const others = await othersRow({ month: '2026-03', panels: 'HIVPC' });
+
+    // The mapped registry lab is on the panel list: it has its own row on d01, and that day is NOT
+    // claimed by the Other grid.
     expect(hv.some((r) => r.lab === 'Registration Only Lab')).toBe(true);
-    expect(ot.some((r) => r.lab === 'Registration Only Lab')).toBe(false);
-    // ...and the chemistry lab is the mirror image, so neither grid is simply empty.
-    expect(ot.some((r) => r.lab === 'Chemistry Lab')).toBe(true);
+    expect(hv.find((r) => r.lab === 'Mapped Registry Lab')?.d01).toBe('1');
+    expect(others.d01, 'a panel-list arrival leaked into the Other grid').toBe('');
+
+    // The chemistry lab is the mirror image: no row of its own anywhere in HVL/EID, and its day
+    // marked in the Other grid. Neither grid is simply empty.
     expect(hv.some((r) => r.lab === 'Chemistry Lab')).toBe(false);
+    expect(hv.some((r) => r.d03 === '1'), 'an off-list arrival leaked into the HVL/EID grid').toBe(false);
+    expect(others.d03, 'the off-list arrival fell out of both grids').toBe('1');
   });
 
   it('⛔ omits a laboratory that submitted only OUTSIDE the month — no blank row', async () => {
@@ -361,19 +388,26 @@ live('the transmission grid queries (live Postgres)', () => {
     // The Postgres half of the case that motivated replacing MySQL's find_in_set. The list has a
     // space after the comma AND a space inside the second code, so only a per-element trim can get
     // both right. Proves the semantics on the one engine that runs here; MySQL stays unproven.
+    // ⛔ Both halves now read the HVL/EID grid, which is still one row per laboratory. The mirror
+    // half used to look for this laboratory's ABSENCE from the Other grid, and the Other grid has
+    // no laboratory names left to be absent from — that assertion would pass vacuously. Comparing
+    // the correct list against the WRONG one (every space stripped from the whole list, which is
+    // the implementation this trim replaced) discriminates without needing the other grid at all.
     const hv = await runFor({ month: '2026-03', panels: 'A, BB CC', tz: 'UTC' });
-    const ot = await runForOther({ month: '2026-03', panels: 'A, BB CC', tz: 'UTC' });
     expect(hv.some((r) => r.lab === 'Inner Space Lab')).toBe(true);
-    expect(ot.some((r) => r.lab === 'Inner Space Lab')).toBe(false);
+    const stripped = await runFor({ month: '2026-03', panels: 'A,BBCC', tz: 'UTC' });
+    expect(stripped.some((r) => r.lab === 'Inner Space Lab')).toBe(false);
   });
 
   it('puts a request with NO panel code in the Other grid, not in neither', async () => {
     // Beyond the brief, so it needs its own fixture. `null not in (...)` is NULL, so without
     // coalesce(panel_code, '') this laboratory disappears from both grids and the partition leaks.
+    // Its own day, 23 Mar = d16, so the mark can only have come from this request.
     const hv = await runFor({ month: '2026-03', panels: 'HIVPC', tz: 'UTC' });
-    const ot = await runForOther({ month: '2026-03', panels: 'HIVPC', tz: 'UTC' });
+    const others = await othersRow({ month: '2026-03', panels: 'HIVPC' });
     expect(hv.some((r) => r.lab === 'No Panel Lab')).toBe(false);
-    expect(ot.some((r) => r.lab === 'No Panel Lab')).toBe(true);
+    expect(hv.some((r) => r.d16 === '1'), 'the no-panel request leaked into the HVL/EID grid').toBe(false);
+    expect(others.d16, 'the no-panel request fell out of BOTH grids').toBe('1');
   });
 
   // ------------------------------------------------------------------------------------------
@@ -455,44 +489,59 @@ live('the transmission grid queries (live Postgres)', () => {
     //
     // 3 June 2013 was a Monday, so the working days run d01 = Mon 3, d02 = Tue 4, d03 = Wed 5.
     // Confirmed against the calendar. Nothing else in this file seeds June 2013.
+    // ⛔ Each pair now sits on ITS OWN DAY, one working day apart. The Other grid collapsed to a
+    // single 'Others' row on 2026-08-20, so a laboratory outside the list can no longer be found by
+    // name there. It is found by its DAY, and a day shared with the on-list half of the pair would
+    // be marked whichever side the request landed on. One day each is what keeps this able to fail.
     const rungs = [
       // Registered in June. The first rung answers and the other two are never consulted.
-      { key: 'reg', authored: '2013-06-03T09:00:00+03:00', result: null, issued: null, day: 'd01' },
+      { key: 'reg', inAuthored: '2013-06-03T09:00:00+03:00', outAuthored: '2013-06-04T09:00:00+03:00',
+        inResult: null, outResult: null, inIssued: null, outIssued: null, inDay: 'd01', outDay: 'd02' },
       // Registered in May, resulted in June. The second rung answers.
-      { key: 'res', authored: '2013-05-29T09:00:00+03:00', result: '2013-06-04T11:00:00+03:00', issued: null, day: 'd02' },
+      { key: 'res', inAuthored: '2013-05-29T09:00:00+03:00', outAuthored: '2013-05-29T09:00:00+03:00',
+        inResult: '2013-06-05T11:00:00+03:00', outResult: '2013-06-06T11:00:00+03:00',
+        inIssued: null, outIssued: null, inDay: 'd03', outDay: 'd04' },
       // Registered in May, never resulted, authorised in June. The third rung answers.
-      { key: 'iss', authored: '2013-05-29T09:00:00+03:00', result: null, issued: '2013-06-05T16:00:00+03:00', day: 'd03' },
+      { key: 'iss', inAuthored: '2013-05-29T09:00:00+03:00', outAuthored: '2013-05-29T09:00:00+03:00',
+        inResult: null, outResult: null,
+        inIssued: '2013-06-07T16:00:00+03:00', outIssued: '2013-06-10T16:00:00+03:00',
+        inDay: 'd05', outDay: 'd06' },
     ] as const;
 
     for (const r of rungs) {
       for (const side of ['in', 'out'] as const) {
         const id = `p-${r.key}-${side}`;
         const batchId = `pb-${r.key}-${side}`;
+        const authored = side === 'in' ? r.inAuthored : r.outAuthored;
+        const result = side === 'in' ? r.inResult : r.outResult;
+        const issued = side === 'in' ? r.inIssued : r.outIssued;
         // Fixture panel codes, not product vocabulary (AGENTS.md §8): the SQL carries none, the
         // list arrives as {{param.panels}}. 'in' is on the list below, 'out' is not.
-        await seedRequest({ id, batchId, panel: side === 'in' ? 'HIVVL' : 'CHEM', authoredAt: r.authored });
+        await seedRequest({ id, batchId, panel: side === 'in' ? 'HIVVL' : 'CHEM', authoredAt: authored });
         await seedReport({ id: `pdr-${r.key}-${side}`, basedOnId: id, batchId,
-          performer: `PLAB-${r.key}-${side}`, issued: r.issued });
-        if (r.result) await seedResult({ id: `po-${r.key}-${side}`, requestId: id, resultTimestamp: r.result });
+          performer: `PLAB-${r.key}-${side}`, issued });
+        if (result) await seedResult({ id: `po-${r.key}-${side}`, requestId: id, resultTimestamp: result });
       }
     }
 
     const hv = await runFor({ month: '2013-06', panels: 'HIVVL' });
-    const ot = await runForOther({ month: '2013-06', panels: 'HIVVL' });
+    const others = await othersRow({ month: '2013-06', panels: 'HIVVL' });
 
     for (const r of rungs) {
       const inLab = `PLAB-${r.key}-in`;
       const outLab = `PLAB-${r.key}-out`;
 
+      // On the list: its own row in HVL/EID, marking its own day, and that day untouched by the
+      // Other grid.
       const onList = hv.find((x) => x.lab === inLab);
       expect(onList, `${inLab} is missing from the HVL/EID grid`).toBeDefined();
-      marksExactlyOneDay(onList!, r.day);
-      expect(ot.some((x) => x.lab === inLab), `${inLab} leaked into the Other grid too`).toBe(false);
+      marksExactlyOneDay(onList!, r.inDay);
+      expect(others[r.inDay], `${inLab} leaked into the Other grid too`).toBe('');
 
-      const offList = ot.find((x) => x.lab === outLab);
-      expect(offList, `${outLab} fell out of BOTH grids`).toBeDefined();
-      marksExactlyOneDay(offList!, r.day);
+      // Off the list: no row anywhere in HVL/EID, and its day marked in the Other grid.
       expect(hv.some((x) => x.lab === outLab), `${outLab} leaked into the HVL/EID grid too`).toBe(false);
+      expect(hv.some((x) => x[r.outDay] === '1'), `${outLab}'s day leaked into the HVL/EID grid`).toBe(false);
+      expect(others[r.outDay], `${outLab} fell out of BOTH grids`).toBe('1');
     }
   });
 
@@ -500,15 +549,15 @@ live('the transmission grid queries (live Postgres)', () => {
   // The whole round trip: live SQL -> sortBy -> renderer -> PDF
   // ------------------------------------------------------------------------------------------
 
-  it('⛔ carries the two-line date from live Postgres all the way onto the page', async () => {
+  it('⛔ carries the day number from live Postgres all the way onto the page, on ONE line', async () => {
     // Every other test in this file stops at the query, and every test in report-seeds.test.ts is
-    // a regex over SQL text. Neither can see the join this task actually rests on: that `chr(10)`
-    // survives the pg driver, and that pdfkit still honours it as a forced line break inside
-    // `drawCellGrid`'s header band even though that call passes `lineBreak: false`
-    // (report-designer/src/render/draw.ts:945-950). That option only suppresses automatic WORD
-    // WRAP; it does not strip an explicit newline already in the string. Not obvious, and worth
-    // pinning: if it stops being true, the date draws as one run instead of two, with the entire
-    // hermetic suite still green, since nothing there renders a page.
+    // a regex over SQL text. Neither renders a page.
+    //
+    // ⛔ REVERSED on 2026-08-20. This used to pin the opposite: that `chr(10)` survived the pg
+    // driver and that pdfkit honoured it as a forced line break, so the day printed over its month.
+    // The operator cut the month line, so what needs pinning now is that NOTHING follows the day
+    // number on a second line. The old assertion would still pass on a header that quietly grew a
+    // second line back, because it only ever looked at the first.
     const design = SEED_DESIGNS.find((d) => d.id === 'rt-transmission-grid')!;
 
     // ⛔ Through the REAL `resolveDesignTables`, not a hand-rolled sort. Re-implementing
@@ -541,14 +590,7 @@ live('the transmission grid queries (live Postgres)', () => {
     // box this branch already removed from the design: a real decision, not an oversight to
     // restore. Anchor on the first date run instead.
     const headY = drawn.find((r) => r.text === '2')!.y;
-    // ⚠ Anchored on the actual 'Mar' text, not a hardcoded `headY - 8`. The old table header ran
-    // at a fixed 8pt line pitch; `drawCellGrid`'s header band draws at 6pt (report-designer/src/
-    // render/draw.ts:945), so pdfkit's own font-metric line height for the second line measures
-    // 6.936pt below the first, not 8. Finding 'Mar' directly is robust to that pitch without
-    // needing to hardcode pdfkit's own metric.
-    const marY = drawn.find((r) => r.text === 'Mar')!.y;
     const line1 = drawn.filter((r) => r.y === headY).sort((a, b) => a.x - b.x);
-    const line2 = drawn.filter((r) => r.y === marY).sort((a, b) => a.x - b.x);
 
     // March 2026 starts on a Sunday: 22 working days, so d23 is blank and draws nothing. These are
     // CALENDAR day numbers with the weekends missing, not 1..22 — which is the point of the first
@@ -562,7 +604,12 @@ live('the transmission grid queries (live Postgres)', () => {
     expect(line1.map((r) => r.text)).toEqual([
       '2', '3', '4', '5', '6', '9', '10', '11', '12', '13', '16', '17', '18', '19', '20',
       '23', '24', '25', '26', '27', '30', '31', 'Days', 'Silent']);
-    expect(line2.map((r) => r.text)).toEqual(Array(22).fill('Mar'));
+    // ⛔ And NOTHING on a second line. A month abbreviation is the string that used to sit there;
+    // any of them appearing means the header stacked again, overflowed the 13pt band, and printed
+    // over whatever followed it.
+    for (const m of ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']) {
+      expect(drawn.map((r) => r.text), `the header stacked ${m} under the day again`).not.toContain(m);
+    }
 
     // ⛔ DELETED: the old laboratory-column-width-gain assertion
     // (`expect(xs[1] - xs[0]).toBeGreaterThan(90)`). It measured a `table`-specific relationship —
