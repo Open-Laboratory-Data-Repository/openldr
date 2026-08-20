@@ -6,6 +6,60 @@
       "version": "v0.1.5",
       "entries": [
         {
+          "hash": "617ef59d",
+          "type": "fix",
+          "scope": "reports",
+          "title": "Give a six-week calendar room to clear the heading below it"
+        },
+        {
+          "hash": "0a9cd9f6",
+          "type": "fix",
+          "scope": "bootstrap",
+          "title": "The blank-panel gate checks the two grid queries, not every q-transmission-*"
+        },
+        {
+          "hash": "c605276c",
+          "type": "feat",
+          "scope": "reports",
+          "title": "The LIS Stakeholders Update grows its summary band"
+        },
+        {
+          "hash": "c527381e",
+          "type": "feat",
+          "scope": "report-designer",
+          "title": "ShowOn keeps an element on the first chunk only"
+        },
+        {
+          "hash": "b651e493",
+          "type": "feat",
+          "scope": "reports",
+          "title": "Add the mssql and mysql variants of the summary band queries"
+        },
+        {
+          "hash": "c042fd1e",
+          "type": "feat",
+          "scope": "reports",
+          "title": "Add q-transmission-summary (postgres)"
+        },
+        {
+          "hash": "2442cc57",
+          "type": "feat",
+          "scope": "reports",
+          "title": "Add q-transmission-calendar (postgres)"
+        },
+        {
+          "hash": "da68e670",
+          "type": "fix",
+          "scope": "report-designer",
+          "title": "A cellgrid's trailing chip stops using the clinical palette"
+        },
+        {
+          "hash": "79911324",
+          "type": "fix",
+          "scope": "report-designer",
+          "title": "FillTo lets a flowed grid take the height it was given"
+        },
+        {
           "hash": "14c54a13",
           "type": "feat",
           "scope": "reports",
