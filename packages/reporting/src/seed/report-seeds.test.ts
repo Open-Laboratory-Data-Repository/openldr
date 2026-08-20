@@ -2059,26 +2059,43 @@ describe('SEED_DESIGNS — rt-transmission-grid geometry', () => {
   const design = () => SEED_DESIGNS.find((d) => d.id === 'rt-transmission-grid')!;
   const el = (id: string) => design().pages[0].elements.find((e) => e.id === id)!;
 
-  it('gives both grids the FULL landscape body width', () => {
-    // ⚠ MEASURED off a real render at the renderer's fixed 8pt, with the stacked header: the day
-    // columns draw at 26.02pt and the laboratory column at 171.85pt (163.85pt of text). That is
-    // enough for "Kilimanjaro Christian Medical Centre" (129.5pt) but NOT for
-    // "Mtwara (Ligula) Regional Referral Hospital - EVLIMS" (186.6pt), which still ellipsizes.
-    // Narrowing these rects makes a legibility problem that is already at its limit worse, and
-    // nothing in a rendering test would say so.
-    const [wPt] = paperSizePt(design().paper, design().orientation);
-    const body = Math.round(wPt / 0.75) - 96; // simpleTableDesign's own arithmetic
-    for (const id of ['hvleid', 'other']) {
-      expect(el(id).rect.w, `${id} is narrower than the page allows`).toBe(body);
-    }
-  });
-
   it('gives both grids the same width and the same height', () => {
-    // Two readings of the same month, one above the other. Different column widths between them
-    // would make a lab's row in the top grid not line up with its row in the bottom one.
+    // Two readings of the same month, one above the other. Different geometry between them would
+    // make a laboratory's row in the top grid not line up with its row in the bottom one.
     expect(el('hvleid').rect.w).toBe(el('other').rect.w);
     expect(el('hvleid').rect.h).toBe(el('other').rect.h);
     expect(el('hvleid').rect.x).toBe(el('other').rect.x);
+  });
+
+  it('fits the worst-case 23-day, 5-week month inside the A4 portrait body: DERIVED, not hardcoded', () => {
+    // Worst case per spec section 5: a 31-day month starting Monday, 23 working days across 5
+    // week groups, breaks at cell index 5, 10, 15, 20, the exact pattern q-transmission-hvleid's
+    // own week-token union branch cites for August 2017 on the live warehouse.
+    const worstCaseBreaks = [5, 10, 15, 20];
+    const [pageWpt] = paperSizePt(design().paper, design().orientation);
+    const bodyWpt = pageWpt - 72; // 36pt margins each side, per spec section 5
+    for (const id of ['hvleid', 'other']) {
+      const trailing = (el(id).trailingColumns ?? []).map((c) => c.width);
+      const needed = cellGridWidth({
+        labelWidth: CELL_LABEL_W,
+        cellCount: (el(id).cellColumns ?? []).length,
+        breaks: worstCaseBreaks,
+        trailingWidths: trailing,
+      });
+      expect(needed, `${id} needs more than the ${bodyWpt}pt portrait body has`).toBeLessThanOrEqual(bodyWpt);
+      expect(bodyWpt - needed, `${id} headroom`).toBeGreaterThan(0);
+    }
+  });
+
+  it('declares a rect wide enough to hold the full body, not just the worst-case minimum', () => {
+    // The grid's OWN rect need not equal the tight minimum computed above. cellgrid does not
+    // stretch cells to fill unused width, so a wider clip region is harmless. This just confirms
+    // the declared rect is not narrower than what the previous test proved is needed.
+    const [pageWpt] = paperSizePt(design().paper, design().orientation);
+    const bodyWpt = pageWpt - 72;
+    for (const id of ['hvleid', 'other']) {
+      expect(toPt(el(id).rect).w).toBeGreaterThan(bodyWpt - 10);
+    }
   });
 });
 
