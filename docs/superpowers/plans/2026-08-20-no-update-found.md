@@ -53,7 +53,7 @@ with:
 Then replace the whole final `describe('updateVerdict — running ahead of the cached release', ...)` block with:
 
 ```ts
-describe('updateVerdict — cache older than the running version', () => {
+describe('updateVerdict: cache older than the running version', () => {
   const input = (over = {}) => ({
     enabled: true, running: '0.1.4', latestVersion: '0.1.3',
     releasedAt: '2026-08-19', notesUrl: 'https://example.org/x', lastError: null, ...over,
@@ -176,7 +176,7 @@ git commit -m "feat(core): a verdict that carries no version when the cache is b
 In `packages/cli/src/update.test.ts`, replace the whole final `describe('renderUpdateCheck — running ahead of the cached release', ...)` block with:
 
 ```ts
-describe('renderUpdateCheck — cache older than the running version', () => {
+describe('renderUpdateCheck: cache older than the running version', () => {
   // ⛔ The assertion that matters is the NEGATIVE one. An operator read "published: 0.1.5" under
   // "running: 0.1.6" as an instruction to roll back, so the number must not be printed at all.
   it('prints no published line, and names when the check last ran', () => {
@@ -371,7 +371,7 @@ Expected: PASS. If it fails it names the language still carrying `nothingNewer` 
 In `apps/studio/src/pages/settings/General.test.tsx`, replace the whole final `describe('General settings — Latest row when the install is ahead of its cache', ...)` block with:
 
 ```ts
-describe('General settings — Latest row when the cache is older than this install', () => {
+describe('General settings: Latest row when the cache is older than this install', () => {
   // ⛔ The negative assertion is the point. An operator read a lower version number here as an
   // instruction to roll back, so the number must not reach the screen at all.
   it('shows no version number when the cache is behind', async () => {
