@@ -6,6 +6,156 @@
       "version": "v0.1.5",
       "entries": [
         {
+          "hash": "14c54a13",
+          "type": "feat",
+          "scope": "reports",
+          "title": "Derive silent_status for the transmission grid, wire the design"
+        },
+        {
+          "hash": "8ef0fc57",
+          "type": "fix",
+          "scope": "report-designer",
+          "title": "DrawCellGrid honours a trailing column's statusKey"
+        },
+        {
+          "hash": "04a74ef0",
+          "type": "fix",
+          "scope": "report-designer",
+          "title": "Cut a cellgrid label instead of wrapping it"
+        },
+        {
+          "hash": "cd76c8c9",
+          "type": "fix",
+          "scope": "report-designer",
+          "title": "FlowAfter closes the blank band a finished grid leaves"
+        },
+        {
+          "hash": "80267a7d",
+          "type": "feat",
+          "scope": "reports",
+          "title": "Rt-transmission-grid turns A4 portrait, both grids become cellgrid"
+        },
+        {
+          "hash": "fb9718ea",
+          "type": "feat",
+          "scope": "report-designer",
+          "title": "Export cellGridWidth and CELL_LABEL_W for seed tests"
+        },
+        {
+          "hash": "ad32caf4",
+          "type": "fix",
+          "scope": "server",
+          "title": "The header-row gate error names cellgrid too, not just headerRow"
+        },
+        {
+          "hash": "94f6922e",
+          "type": "feat",
+          "scope": "report-designer",
+          "title": "The sortBy gate also covers a bound cellgrid"
+        },
+        {
+          "hash": "f6299b8c",
+          "type": "feat",
+          "scope": "report-designer",
+          "title": "Draw a keyvalue stat panel, value over caption"
+        },
+        {
+          "hash": "ba068930",
+          "type": "feat",
+          "scope": "report-designer",
+          "title": "Keyvalue accepts a stat layout"
+        },
+        {
+          "hash": "d7868773",
+          "type": "feat",
+          "scope": "reports",
+          "title": "Two-row transmission grid shape, computed columns, unique ord (mysql)"
+        },
+        {
+          "hash": "5fa7aa02",
+          "type": "feat",
+          "scope": "reports",
+          "title": "Two-row transmission grid shape, computed columns, unique ord (mssql)"
+        },
+        {
+          "hash": "9980a498",
+          "type": "feat",
+          "scope": "reports",
+          "title": "Two-row transmission grid shape, computed columns, unique ord (postgres other)"
+        },
+        {
+          "hash": "adcc0f6b",
+          "type": "feat",
+          "scope": "reports",
+          "title": "Two-row transmission grid shape, computed columns, unique ord (postgres hvleid)"
+        },
+        {
+          "hash": "e4835fb8",
+          "type": "fix",
+          "scope": "report-designer",
+          "title": "Slice the cellgrid group row to the cell range"
+        },
+        {
+          "hash": "eb388664",
+          "type": "feat",
+          "scope": "report-designer",
+          "title": "Draw the cellgrid element"
+        },
+        {
+          "hash": "56af6191",
+          "type": "feat",
+          "scope": "report-designer",
+          "title": "Paginate cellgrid and let headings follow it"
+        },
+        {
+          "hash": "c95fd32b",
+          "type": "feat",
+          "scope": "report-designer",
+          "title": "Resolve cellgrid rows in column order"
+        },
+        {
+          "hash": "27b48ff9",
+          "type": "fix",
+          "scope": "report-designer",
+          "title": "Make the zero-maximum cell test reachable"
+        },
+        {
+          "hash": "cd3b9e2b",
+          "type": "feat",
+          "scope": "report-designer",
+          "title": "Cellgrid row splitting and chunk arithmetic"
+        },
+        {
+          "hash": "a367d861",
+          "type": "feat",
+          "scope": "report-designer",
+          "title": "Sequential cell palette with a print-safe empty tint"
+        },
+        {
+          "hash": "73227028",
+          "type": "feat",
+          "scope": "report-designer",
+          "title": "Derive cellgrid group breaks from the group row"
+        },
+        {
+          "hash": "eb296369",
+          "type": "feat",
+          "scope": "report-designer",
+          "title": "Cellgrid geometry constants and width arithmetic"
+        },
+        {
+          "hash": "3e99ba42",
+          "type": "fix",
+          "scope": "report-designer",
+          "title": "Rename groupBy to groupBoundary, assert the parsed schema"
+        },
+        {
+          "hash": "e90ab47f",
+          "type": "feat",
+          "scope": "report-designer",
+          "title": "Accept a cellgrid element in the design schema"
+        },
+        {
           "hash": "1d3d17f5",
           "type": "fix",
           "scope": "install",
