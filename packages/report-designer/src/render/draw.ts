@@ -392,7 +392,7 @@ export function drawsOnChunk(
   if (el.kind === 'table' || el.kind === 'cellgrid') return tableDrawsOnChunk(el, resolved.get(el.id), chunk);
   if (!el.showWithTable) return true;
   // ⛔ `cellgrid` is accepted here too. `showWithTable` names the element a heading belongs to, and
-  // the reason it exists — never print a heading over a block that finished earlier — applies to a
+  // the reason it exists (never print a heading over a block that finished earlier) applies to a
   // cellgrid exactly as it does to a table.
   const target = page.elements.find(
     (e) => e.id === el.showWithTable && (e.kind === 'table' || e.kind === 'cellgrid'),
