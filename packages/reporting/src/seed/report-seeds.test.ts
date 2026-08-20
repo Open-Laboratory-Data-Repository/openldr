@@ -2211,8 +2211,8 @@ describe('SEED_DESIGNS — rt-transmission-grid', () => {
   it('trails each row with Days and Silent, matching the spec widths', () => {
     for (const id of ['hvleid', 'other']) {
       expect(el(id).trailingColumns, `${id} trailingColumns`).toEqual([
-        { key: 'days', label: 'Days', width: 34.5 },
-        { key: 'silent', label: 'Silent', width: 52, statusKey: 'silent_status', emphasis: 'fill' },
+        { key: 'days', label: 'Days', width: 20 },
+        { key: 'silent', label: 'Silent', width: 22, statusKey: 'silent_status', emphasis: 'fill' },
       ]);
     }
   });
@@ -2391,5 +2391,5 @@ describe('SEED_DESIGNS — rt-transmission-grid geometry', () => {
 
 it('exports cellGridWidth and CELL_LABEL_W for a seed test to use', () => {
   expect(typeof cellGridWidth).toBe('function');
-  expect(CELL_LABEL_W).toBe(105);
+  expect(CELL_LABEL_W).toBe(149.5);
 });

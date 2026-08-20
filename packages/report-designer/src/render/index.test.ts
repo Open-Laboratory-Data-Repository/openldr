@@ -841,11 +841,16 @@ describe('truncation, and the byte it is written as', () => {
 });
 
 describe('cellgrid label column truncates instead of wrapping', () => {
-  // The exact string from the reported defect: 8pt Helvetica measures it at ~113.4pt, wider than
-  // CELL_LABEL_W (105pt). Before the fix, `{ lineBreak: false, ellipsis: true }` with no `height`
-  // did nothing (see `truncateToWidth`'s doc comment) and this WRAPPED onto a second line —
-  // "(BMC)" — which printed on top of the laboratory drawn in the row underneath it.
-  const LONG_NAME = 'Bugando Medical Centre (BMC)';
+  // The defect was reported against 'Bugando Medical Centre (BMC)', which 8pt Helvetica measures at
+  // 113.37pt. That was wider than the 105pt CELL_LABEL_W of the day and it WRAPPED onto a second
+  // line, "(BMC)", which printed on top of the laboratory in the row underneath. `lineBreak: false`
+  // plus `ellipsis: true` with no `height` did nothing; see `truncateToWidth`'s doc comment.
+  //
+  // ⚠ The name here is LONGER than that one now. CELL_LABEL_W grew to 149.5pt on 2026-08-21 and the
+  // reported string stopped overflowing, which made this test pass for the wrong reason. It needs a
+  // name the column cannot hold: this one measures 202.50pt, and it is a real hospital's full name
+  // rather than a row of padding characters.
+  const LONG_NAME = 'Muhimbili National Hospital Central Pathology Laboratory';
 
   function cellGridDesign(): ReportDesign {
     return baseDesign({
@@ -868,19 +873,24 @@ describe('cellgrid label column truncates instead of wrapping', () => {
   }
 
   it('cuts a laboratory name wider than CELL_LABEL_W and ends it with the ellipsis byte', async () => {
-    expect(105).toBe(CELL_LABEL_W); // pins the width this test's premise depends on
+    // The premise is only that the name is WIDER than the column, whatever the column is.
     const texts = pdfTexts(await renderReportDesignPdf(cellGridDesign(), cellGridResolved(), { now: NOW }));
-    const cut = texts.find((t) => t.startsWith('Bugando Medical Centre'));
+    const cut = texts.find((t) => t.startsWith('Muhimbili National'));
     expect(cut, 'the label never printed at all').toBeDefined();
     expect(cut).not.toBe(LONG_NAME);
     expect(cut!.endsWith(String.fromCharCode(0x85))).toBe(true);
   });
 
   it('never draws the wrapped second line as its own run', async () => {
-    // The pre-fix wrap drew "(BMC)" as a SEPARATE text run (its own Tm/TJ), one line under the
-    // first — distinct from a truncated run, which ends the string before reaching it at all.
+    // The pre-fix wrap drew the tail as a SEPARATE text run (its own Tm/TJ), one line under the
+    // first. That is distinct from a truncated run, which ends the string before reaching it.
+    // ⛔ Asserts on every WORD the cut discards, not on one hardcoded tail: whatever the column
+    // width is, no word beyond the cut may appear as a run of its own.
     const texts = pdfTexts(await renderReportDesignPdf(cellGridDesign(), cellGridResolved(), { now: NOW }));
-    expect(texts).not.toContain('(BMC)');
+    const drawn = texts.find((t) => t.startsWith('Muhimbili National'))!;
+    for (const word of LONG_NAME.slice(drawn.length - 1).split(' ').filter(Boolean)) {
+      expect(texts, `the label wrapped and drew "${word}" on a second line`).not.toContain(word);
+    }
   });
 
   it('leaves a short laboratory name completely untouched', async () => {
@@ -909,15 +919,18 @@ describe('cellgrid trailing column honours statusKey and emphasis', () => {
     ],
   }]]);
 
-  // cellStart 114 (CELL_LABEL_W 105 + CELL_COL_GAP 9); trailingStart 124.5 (+ one CELL_SIZE 10.5,
-  // no breaks); + CELL_COL_GAP 9 = 133.5 left edge; + CHIP_INSET_X 1 = 134.5. Width 30 - 2*1 = 28;
-  // height CELL_ROW_H 12.75 - 2*1.5 = 9.75.
+  // ⛔ DERIVED from the constants, not typed as 134.5. CELL_LABEL_W moved on 2026-08-21 and a
+  // hardcoded x turned a width change into three failures that all looked like colour bugs.
+  // cellStart = CELL_LABEL_W + CELL_COL_GAP; trailingStart adds one CELL_SIZE (one cell column, no
+  // breaks); the column's own left edge adds another CELL_COL_GAP, and the chip insets by
+  // CHIP_INSET_X. Width 30 - 2*1 = 28; height CELL_ROW_H 12.75 - 2*1.5 = 9.75.
   //
   // ⛔ y is CELL_HEAD_H 13 (row 0) + (CELL_SIZE 10.5 - 9.75) / 2 = 13.375, NOT 13 + CHIP_INSET_Y.
   // The chip centres on the RUN OF CELLS beside it, which is what a reader reads as the row. It
   // used to centre on the row's full 12.75pt pitch while its own digits sat 2.86pt higher, and the
   // number looked stuck to the top of the pill.
-  const chipRect = `${pdfNum(134.5)} ${pdfNum(13.375)} ${pdfNum(28)} ${pdfNum(9.75)} re`;
+  const chipX = CELL_LABEL_W + 9 + 10.5 + 9 + 1; // + CELL_COL_GAP, CELL_SIZE, CELL_COL_GAP, CHIP_INSET_X
+  const chipRect = `${pdfNum(chipX)} ${pdfNum(13.375)} ${pdfNum(28)} ${pdfNum(9.75)} re`;
   const chipPaint = (hex: string): string => `${chipRect}\n/DeviceRGB cs\n${fillOp(hex)}\nf`;
   /** The clinical fills, for the negative assertions. ⚠ `indeterminate` (#94a3b8) equals HEAD_RULE,
    *  which the header band paints on every render, so scanning the document for the bare colour

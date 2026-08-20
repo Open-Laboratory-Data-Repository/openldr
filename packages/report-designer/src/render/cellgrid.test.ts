@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   stripWidth, cellGridWidth, groupBreaks, rampSteps, stepFor, cellFill, EMPTY_FILL,
-  splitCellGridRows, cellGridMaxRows, cellGridChunks, cellGridRowSchedule, cellGridChunkStart,
+  splitCellGridRows, cellGridMaxRows, cellGridChunks, cellGridRowSchedule, cellGridChunkStart, CELL_LABEL_W,
   CELL_SIZE, CELL_GAP, GROUP_GAP,
 } from './cellgrid';
 
@@ -28,12 +28,12 @@ describe('stripWidth', () => {
 describe('cellGridWidth', () => {
   it('matches the spec arithmetic for the worst-case month', () => {
     const w = cellGridWidth({
-      labelWidth: 105,
+      labelWidth: CELL_LABEL_W,
       cellCount: 23,
       breaks: [5, 10, 15, 20],
-      trailingWidths: [34.5, 52],
+      trailingWidths: [20, 22],
     });
-    // 105 + 9 + 298.5 + 9 + 34.5 + 9 + 52. One gap constant, charged before every
+    // 149.5 + 9 + 298.5 + 9 + 20 + 9 + 22. One gap constant, charged before every
     // trailing column. See spec section 5 for why it is not two.
     expect(w).toBeCloseTo(517, 1);
   });

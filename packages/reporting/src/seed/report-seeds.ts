@@ -4583,10 +4583,15 @@ export const SEED_DESIGNS: ReportDesign[] = [
         groupBoundary: 'token-change',
         palette: { ramp: 'blue', steps: 1 },
         trailingColumns: [
-          { key: 'days', label: 'Days', width: 34.5 },
+          // ⚠ Sized to the HEADER, not the value. Both columns hold at most two digits (7.78pt at
+          // 7pt), but 'Days' measures 13.49pt at the 6pt the header band draws, and 'Silent' 15.01pt,
+          // and a `lineBreak: false` header overruns its column rather than wrapping. Both were much
+          // wider until 2026-08-21; the 44.5pt they gave back went to the laboratory name, which was
+          // cutting real names at CELL_LABEL_W.
+          { key: 'days', label: 'Days', width: 20 },
           // statusKey names a column the QUERY carries beside 'silent' (see lab_stats in
           // q-transmission-hvleid/-other) -- the count still prints, the fill is layered on top.
-          { key: 'silent', label: 'Silent', width: 52, statusKey: 'silent_status', emphasis: 'fill' },
+          { key: 'silent', label: 'Silent', width: 22, statusKey: 'silent_status', emphasis: 'fill' },
         ] },
 
       // ⛔ `flowAfter`, on the heading AND the grid, chained through each other rather than both
@@ -4620,10 +4625,15 @@ export const SEED_DESIGNS: ReportDesign[] = [
         groupBoundary: 'token-change',
         palette: { ramp: 'blue', steps: 1 },
         trailingColumns: [
-          { key: 'days', label: 'Days', width: 34.5 },
+          // ⚠ Sized to the HEADER, not the value. Both columns hold at most two digits (7.78pt at
+          // 7pt), but 'Days' measures 13.49pt at the 6pt the header band draws, and 'Silent' 15.01pt,
+          // and a `lineBreak: false` header overruns its column rather than wrapping. Both were much
+          // wider until 2026-08-21; the 44.5pt they gave back went to the laboratory name, which was
+          // cutting real names at CELL_LABEL_W.
+          { key: 'days', label: 'Days', width: 20 },
           // For this row Days and Silent count DAYS, not laboratories: how many working days carried
           // other test data, and how long since the last one. See q-transmission-other's all_stats.
-          { key: 'silent', label: 'Silent', width: 52, statusKey: 'silent_status', emphasis: 'fill' },
+          { key: 'silent', label: 'Silent', width: 22, statusKey: 'silent_status', emphasis: 'fill' },
         ] },
 
       { id: 'rt-transmission-grid-rule2', kind: 'line', name: 'rule2', rect: { x: 48, y: 1003, w: TG_CONTENT_W, h: 0 }, style: { strokeColor: '#cbd5e1', strokeWidth: 0.75 } },

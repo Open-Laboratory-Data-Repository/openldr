@@ -29,8 +29,14 @@ export const CELL_COL_GAP = 9;
 /** The label band above the cells. Redrawn on every chunk, like a table header. */
 export const CELL_HEAD_H = 13;
 /** Width of the label column. Declared for the same reason every other width here is: a measured
- *  label column is what leaves 21.8pt for a laboratory name in A4 portrait. */
-export const CELL_LABEL_W = 105;
+ *  label column is what leaves 21.8pt for a laboratory name in A4 portrait.
+ *
+ *  ⚠ 149.5, not the 105 this shipped with. The extra 44.5pt came out of the two trailing columns on
+ *  2026-08-21, and the total width of the element did not change. MEASURED at 8pt Helvetica, the
+ *  size `drawCellGrid` draws a label at: 'International School of Tanzania' is 113.57pt, 'National
+ *  Public Health Laboratory' 119.16pt, 'Kilimanjaro Christian Medical Centre' 129.48pt. All three
+ *  were being cut at 105 and all three fit now. */
+export const CELL_LABEL_W = 149.5;
 
 /**
  * Width of the run of cells alone.
