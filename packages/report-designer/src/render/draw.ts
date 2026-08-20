@@ -462,6 +462,15 @@ const KV_LABEL_SIZE = 8;
 const KV_VALUE_SIZE = 8;
 const KV_STACKED_LABEL_SIZE = 6.5;
 const KV_STACKED_VALUE_SIZE = 8.5;
+/** `stat` box pitch. Taller than `inline`/`stacked`: a stat panel holds two stacked lines at
+ *  much larger sizes, not one line of label-and-value. */
+const KV_STAT_H = 40;
+/** Visible gutter below each stat box, so four boxes in a 2x2 grid read as separate cards rather
+ *  than one solid block. Subtracted from KV_STAT_H, not added to it: the row PITCH stays
+ *  KV_STAT_H so the grid math in pairRects does not need a second constant. */
+const KV_STAT_VGAP = 6;
+const KV_STAT_VALUE_SIZE = 18;
+const KV_STAT_LABEL_SIZE = 7;
 
 export type KeyValuePair = { label: string; value: string; status?: CellStatus; emphasis: CellEmphasis };
 
@@ -517,10 +526,10 @@ const lineH = (fontSize: number): number => fontSize * 1.15;
  * disagree with what the reader sees at the boundary.
  */
 export function pairRects(
-  r: Box, n: number, layout: 'inline' | 'stacked', panelColumns: number, hasTitle: boolean,
+  r: Box, n: number, layout: 'inline' | 'stacked' | 'stat', panelColumns: number, hasTitle: boolean,
 ): PairBox[] {
   const cols = Math.max(1, Math.min(4, Math.floor(panelColumns) || 1));
-  const pitch = layout === 'stacked' ? KV_STACKED_H : KV_INLINE_H;
+  const pitch = layout === 'stacked' ? KV_STACKED_H : layout === 'stat' ? KV_STAT_H : KV_INLINE_H;
   const x0 = r.x + KV_PAD_X;
   const y0 = r.y + (hasTitle ? KV_TITLE_H : 0) + KV_PAD_Y;
   const innerW = Math.max(0, r.w - KV_PAD_X * 2);
@@ -529,6 +538,17 @@ export function pairRects(
     const x = x0 + (i % cols) * (cellW + KV_GUTTER);
     const y = y0 + Math.floor(i / cols) * pitch;
     const cell = { x, y, w: cellW, h: pitch };
+    if (layout === 'stat') {
+      const boxH = pitch - KV_STAT_VGAP;
+      const valueLh = lineH(KV_STAT_VALUE_SIZE);
+      const labelLh = lineH(KV_STAT_LABEL_SIZE);
+      const innerY = y + (boxH - valueLh - labelLh) / 2;
+      return {
+        ...cell,
+        value: { x, y: innerY, w: cellW, h: valueLh },
+        label: { x, y: innerY + valueLh, w: cellW, h: labelLh },
+      };
+    }
     if (layout === 'stacked') {
       const lh = lineH(KV_STACKED_LABEL_SIZE);
       return {
@@ -588,6 +608,26 @@ function drawKeyValue(doc: Doc, el: DesignElement, r: Box, resolved: ResolvedTab
   const boxes = pairRects(r, pairs.length, layout, el.panelColumns ?? 1, !!title);
   pairs.forEach((p, i) => {
     const b = boxes[i];
+
+    // `stat` is a fully separate branch, not folded into the shared inline/stacked drawing below.
+    // It draws the VALUE first and BOLD, and the caption second and small — the opposite order and
+    // weighting from inline/stacked, because a stat panel is scanned by number first, caption
+    // second. Sharing one code path with inline/stacked would reorder THEIR draw calls too, which
+    // changes the bytes of the content stream even though the rendered pixels are unchanged — that
+    // is what golden.test.ts's digest caught here.
+    if (layout === 'stat') {
+      // The box itself, inset by half the vertical gutter so adjacent stat boxes read as
+      // separate cards. Reuses HEAD_FILL rather than introducing a new near-duplicate tint.
+      doc.rect(b.x, b.y, b.w, b.h - KV_STAT_VGAP).fill(HEAD_FILL);
+      doc.font('Helvetica-Bold').fontSize(KV_STAT_VALUE_SIZE).fillColor('#0f172a')
+        .text(values[i], b.value.x, b.value.y,
+          { width: b.value.w, height: b.value.h, ellipsis: true, align: 'center' });
+      doc.font('Helvetica').fontSize(KV_STAT_LABEL_SIZE).fillColor(KV_LABEL_COLOR)
+        .text(p.label.toUpperCase(), b.label.x, b.label.y,
+          { width: b.label.w, height: b.label.h, ellipsis: true, align: 'center' });
+      return;
+    }
+
     const labelSize = layout === 'stacked' ? KV_STACKED_LABEL_SIZE : KV_LABEL_SIZE;
     const valueSize = layout === 'stacked' ? KV_STACKED_VALUE_SIZE : KV_VALUE_SIZE;
     // The label is BOLD and the value regular — the opposite of a table, on purpose. A table's

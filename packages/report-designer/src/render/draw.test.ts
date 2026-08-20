@@ -491,6 +491,21 @@ describe('pairRects', () => {
   it('returns every pair even when they overflow the box, leaving clipping to the drawer', () => {
     expect(pairRects({ ...box, h: 20 }, 6, 'inline', 1, false)).toHaveLength(6);
   });
+
+  it('stacks a stat pair value ABOVE its caption, both centred', () => {
+    const box = { x: 0, y: 0, w: 200, h: 200 };
+    const [p] = pairRects(box, 1, 'stat', 1, false);
+    expect(p.value.y).toBeLessThan(p.label.y);
+    expect(p.value.w).toBe(p.label.w);
+  });
+
+  it('gives every stat pair the same box width, split by panelColumns', () => {
+    const box = { x: 0, y: 0, w: 200, h: 200 };
+    const four = pairRects(box, 4, 'stat', 2, false);
+    expect(four[0].w).toBeCloseTo(four[1].w, 5);
+    expect(four[0].y).toBeCloseTo(four[1].y, 5);
+    expect(four[2].y).toBeGreaterThan(four[0].y);
+  });
 });
 
 describe('lab identity tokens', () => {
