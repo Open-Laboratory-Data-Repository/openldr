@@ -32,6 +32,11 @@ export { paperSizePt } from './units';
 // renderer itself uses rather than a hand-copied number that can drift out of sync with it.
 export { cellGridWidth, CELL_LABEL_W } from './cellgrid';
 
+// Same reason again, for the VERTICAL direction. A seeded design that puts a cellgrid in a fixed
+// band has to prove the band holds the tallest result that design can produce, and a hand-copied
+// row pitch drifts the moment the renderer's own changes.
+export { cellGridMaxRows, CELL_HEAD_H, CELL_ROW_H } from './cellgrid';
+
 export interface RenderOptions {
   now?: Date;
   /**

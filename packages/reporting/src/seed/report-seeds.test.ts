@@ -12,7 +12,7 @@ import {
   DESIGNS_REQUIRING_DATA,
   type SeedDataDrivenReportsDeps,
 } from './report-seeds';
-import { pairRects, toPt, paperSizePt, cellGridWidth, CELL_LABEL_W, type ReportDesign } from '@openldr/report-designer';
+import { pairRects, toPt, paperSizePt, cellGridWidth, CELL_LABEL_W, cellGridMaxRows, CELL_HEAD_H, CELL_ROW_H, type ReportDesign } from '@openldr/report-designer';
 import { findInvalidImageSources, findUnsortedHeaderRows } from '@openldr/report-designer/pure';
 
 // In-memory fakes — no real Kysely instance needed (unlike `packages/bootstrap/src/seed.ts`,
@@ -2047,13 +2047,69 @@ describe('SEED_DESIGNS — rt-transmission-grid', () => {
     expect(el('rt-transmission-grid-other-title').showWithTable).toBe('other');
   });
 
-  it('chains other flowAfter its own heading flowAfter hvleid, so the block moves up as one unit', () => {
-    // `hvleid` itself declares no flowAfter — it is the anchor everything else measures from.
-    // Chained THROUGH the heading, not both pointing straight at `hvleid`: two elements resolving
-    // to the same y would overprint each other. See flowAfter's doc comment in schema.ts.
-    expect(el('hvleid').flowAfter).toBeUndefined();
+  it('chains the whole page through one flow, so the block moves up as one unit', () => {
+    // Chained THROUGH each heading, never two elements pointing at the same target: two elements
+    // resolving to the same y would overprint each other. See flowAfter's doc comment in schema.ts.
+    // ⛔ `hvleid` used to be the anchor everything measured from. The summary band is the anchor
+    // now, and it is the FIGURES panel rather than the calendar because the panel's height is fixed
+    // and a calendar's is not. On a continuation page the band draws nothing and adds nothing, so
+    // this whole chain moves up by the band's height.
+    expect(el('rt-transmission-grid-figures').flowAfter).toBeUndefined();
+    expect(el('rt-transmission-grid-hvleid-title').flowAfter).toBe('rt-transmission-grid-figures');
+    expect(el('hvleid').flowAfter).toBe('rt-transmission-grid-hvleid-title');
     expect(el('rt-transmission-grid-other-title').flowAfter).toBe('hvleid');
     expect(el('other').flowAfter).toBe('rt-transmission-grid-other-title');
+  });
+
+  it('carries a month calendar and four figures, on the first chunk and nowhere else', () => {
+    // A month-wide band above a CONTINUATION page restates figures the reader already has, and
+    // costs its own height on every later page. Both elements are bound; `showOn` has to be
+    // honoured before `drawsOnChunk`'s bound-element short-circuit for that to hold.
+    for (const id of ['rt-transmission-grid-calendar', 'rt-transmission-grid-figures']) {
+      expect(el(id).showOn, `${id} repeats on every page`).toBe('first-chunk');
+    }
+    expect(el('rt-transmission-grid-calendar').kind).toBe('cellgrid');
+    expect(el('rt-transmission-grid-calendar').cellColumns).toEqual(['c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7']);
+    expect(el('rt-transmission-grid-calendar').labelColumn, "a calendar cell's position is its label").toBeUndefined();
+    expect(el('rt-transmission-grid-calendar').palette, 'a calendar carries magnitude, not presence')
+      .toEqual({ ramp: 'blue', steps: 5 });
+    expect(el('rt-transmission-grid-figures').layout).toBe('stat');
+    expect(el('rt-transmission-grid-figures').panelColumns).toBe(2);
+    expect((el('rt-transmission-grid-figures').boundColumns ?? []).map((c) => c.key))
+      .toEqual(['labs', 'pct_lab_days', 'busiest', 'silent10']);
+  });
+
+  it('gives the calendar room for six weeks, so no month drags the page to a second chunk', () => {
+    // ⛔ Computed from the renderer's own constants, never from the literal 120. A 31-day month
+    // beginning on a Sunday spans SIX ISO weeks; a rect one row short would paginate the calendar
+    // and force a second physical page that nothing else on it needs.
+    expect(cellGridMaxRows(toPt(el('rt-transmission-grid-calendar').rect).h)).toBeGreaterThanOrEqual(6);
+  });
+
+  it('makes the figures panel the flow anchor, tall enough to cover the tallest calendar', () => {
+    // The calendar's DRAWN height moves with the month. The panel's does not, which is why the
+    // grids below flow after the PANEL. It still has to be the taller of the two, or a six-week
+    // calendar would overrun it and collide with the heading underneath.
+    const panelH = toPt(el('rt-transmission-grid-figures').rect).h;
+    expect(panelH).toBeGreaterThanOrEqual(CELL_HEAD_H + 6 * CELL_ROW_H);
+    expect(el('rt-transmission-grid-hvleid-title').flowAfter).toBe('rt-transmission-grid-figures');
+    expect(el('hvleid').flowAfter).toBe('rt-transmission-grid-hvleid-title');
+  });
+
+  it('keeps the band and the figures side by side inside the content width', () => {
+    const cal = el('rt-transmission-grid-calendar').rect;
+    const fig = el('rt-transmission-grid-figures').rect;
+    expect(cal.x + cal.w, 'the calendar overlaps the figures').toBeLessThanOrEqual(fig.x);
+    expect(fig.x + fig.w, 'the figures run past the content edge').toBeLessThanOrEqual(48 + 698);
+    expect(cal.y).toBe(fig.y);
+  });
+
+  it('leaves the other grid ending clear of the closing rule, whatever flowAfter does to its top', () => {
+    // `fillTo` measures down to the DECLARED bottom edge, so that number is the one that has to
+    // stay above rule2. Its top is a fallback and moves on every chunk.
+    const other = el('other').rect;
+    const rule = el('rt-transmission-grid-rule2').rect;
+    expect(other.y + other.h).toBeLessThan(rule.y);
   });
 
   it('lets the lower grid take the height the upper one freed, instead of only moving up', () => {
@@ -2212,12 +2268,21 @@ describe('SEED_DESIGNS — rt-transmission-grid geometry', () => {
   const design = () => SEED_DESIGNS.find((d) => d.id === 'rt-transmission-grid')!;
   const el = (id: string) => design().pages[0].elements.find((e) => e.id === id)!;
 
-  it('gives both grids the same width and the same height', () => {
-    // Two readings of the same month, one above the other. Different geometry between them would
-    // make a laboratory's row in the top grid not line up with its row in the bottom one.
+  it('gives both grids the same width and the same left edge', () => {
+    // Two readings of the same month, one above the other. A different width or a different left
+    // edge would stop a laboratory's row in the top grid lining up with its row in the bottom one.
     expect(el('hvleid').rect.w).toBe(el('other').rect.w);
-    expect(el('hvleid').rect.h).toBe(el('other').rect.h);
     expect(el('hvleid').rect.x).toBe(el('other').rect.x);
+  });
+
+  it('no longer asks the two grids to be the same HEIGHT, because they no longer mean the same thing', () => {
+    // ⛔ This assertion used to read `hvleid.rect.h === other.rect.h`, and it was right while both
+    // heights meant "how many records this grid may hold". `fillTo` changed what the lower one
+    // means: `other`'s box is measured DOWN TO ITS BOTTOM EDGE from wherever `flowAfter` put its
+    // top, so its declared height is a fallback and its bottom is the number that matters. Pinning
+    // the two together again would force the lower grid to stop 118px short of the page.
+    expect(el('other').fillTo).toBe('rect-bottom');
+    expect(el('other').rect.h).not.toBe(el('hvleid').rect.h);
   });
 
   it('fits the worst-case 23-day, 5-week month inside the A4 portrait body: DERIVED, not hardcoded', () => {

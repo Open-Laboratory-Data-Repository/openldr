@@ -4179,6 +4179,35 @@ const TG_CONTENT_W = 698;
  *  operator's visual confirmation against the actual preview, not as a rendering of it. */
 const TG_GRID_H = 380; // px@96; 380 * 0.75 = 285pt
 
+/** The summary band: the month calendar and the four figures, above both grids on page 1 only.
+ *
+ *  ⛔ 120px@96 = 90pt, and BOTH elements declare it. The calendar's DRAWN height varies with the
+ *  month (four weeks is 64pt, six is CELL_HEAD_H 13 + 6 x CELL_ROW_H 12.75 = 89.5pt), so the fixed
+ *  stat panel is what the grids below flow after: an anchor whose height moved would put them at a
+ *  different y in a four-week month, and would overlap the panel beside it in a six-week one.
+ *  90pt covers the tallest calendar with half a point to spare, and a seed test asserts that from
+ *  the renderer's own constants rather than from the number 120.
+ *
+ *  ⛔ The calendar's rect must also hold six ROWS, or a six-week month paginates the calendar and
+ *  drags the whole page to a second chunk that nothing else needs. cellGridMaxRows(90) = 6 exactly.
+ *  The same seed test asserts it. */
+const TG_BAND_Y = 194;
+const TG_BAND_H = 120;
+/** Width of the calendar block: seven cells at CELL_SIZE plus six CELL_GAPs = 82.5pt = 110px@96,
+ *  with a little slack so a later cell-size change does not clip the last column silently. */
+const TG_CAL_W = 116;
+/** The figures take the rest of the content width, starting one gutter right of the calendar. */
+const TG_FIGURES_X = 48 + TG_CAL_W + 12;
+const TG_FIGURES_W = 48 + TG_CONTENT_W - TG_FIGURES_X;
+/** The `other` grid's declared BOTTOM edge, px@96. `fillTo` measures down to it from wherever
+ *  `flowAfter` put the grid's top, so this is the number that matters, not the height. 992 leaves
+ *  rule2 (1003) and the footer alone. */
+const TG_OTHER_BOTTOM = 992;
+/** Where the `other` grid's box starts on page 1, under a full HVL/EID grid and its heading. Only a
+ *  FALLBACK: `flowAfter` supplies the real y on every chunk, and `fillTo` measures from there down
+ *  to TG_OTHER_BOTTOM. */
+const TG_OTHER_Y = TG_BAND_Y + TG_BAND_H + 16 + TG_GRID_H + 4 + 16;
+
 /**
  * Footer and signature box widths, px@96, and the signature's x. Both boxes carried their
  * LANDSCAPE widths (500 and 375) into the first portrait draft of this design and collided:
@@ -4532,15 +4561,54 @@ export const SEED_DESIGNS: ReportDesign[] = [
           ['Generated', '{{date}}'],
         ] },
 
+      // Band 3 — the summary band. PAGE 1 ONLY (`showOn`), so it costs its 90pt once instead of on
+      // every continuation page, and the grids below move up to take the space on page 2.
+      //
+      // ⛔ The calendar is the SAME element as the two grids below, in a second configuration:
+      // seven cells, no label column, five palette steps, no week grouping. If it ever needs a
+      // special case in `drawCellGrid`, the element contract is wrong (spec section 2.4).
+      { id: 'rt-transmission-grid-calendar', kind: 'cellgrid', name: 'Month calendar',
+        rect: { x: 48, y: TG_BAND_Y, w: TG_CAL_W, h: TG_BAND_H },
+        dataSource: { kind: 'custom-query', queryId: 'q-transmission-calendar' },
+        sortBy: 'ord',
+        // No labelColumn: a cell's POSITION already says which day it is, and the header row the
+        // query carries says which column is which.
+        cellColumns: ['c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7'],
+        // 5 steps, not the grids' 1: this cell counts laboratories, so it carries magnitude rather
+        // than presence. The ramp scales across the whole calendar, so the busiest day is the
+        // darkest cell and every other day is read against it.
+        palette: { ramp: 'blue', steps: 5 },
+        showOn: 'first-chunk' },
+      // ⛔ The four figures are what the whole band is FOR: the grid answers "did Mohoro send
+      // something on the 12th", and these answer "how is the month going". `layout: 'stat'` puts
+      // the number above the caption, which is the order a reader scans a figure panel in.
+      // ⚠ The percent SIGN is here, in the caption. The query emits 9.8, because formatting a
+      // number into a string is where three dialects stop agreeing.
+      { id: 'rt-transmission-grid-figures', kind: 'keyvalue', name: 'Month figures',
+        rect: { x: TG_FIGURES_X, y: TG_BAND_Y, w: TG_FIGURES_W, h: TG_BAND_H },
+        dataSource: { kind: 'custom-query', queryId: 'q-transmission-summary' },
+        layout: 'stat', panelColumns: 2,
+        boundColumns: [
+          { key: 'labs', label: 'Laboratories' },
+          { key: 'pct_lab_days', label: '% of possible lab-days' },
+          { key: 'busiest', label: 'Busiest day (laboratories)' },
+          { key: 'silent10', label: 'Silent 10+ working days' },
+        ],
+        showOn: 'first-chunk' },
+
       // ⛔ `showWithTable` on each heading. The page is as long as the LONGER grid, so when "Other"
       // runs to page 3 and HVL/EID does not, page 3 used to print the HVL/EID heading over an empty
       // framed box — which a reader takes as "no laboratory submitted HVL/EID data", the opposite
       // of the truth. The grid itself is guarded by the renderer without any declaration; this ties
       // the heading to it so the two appear and disappear together.
-      { id: 'rt-transmission-grid-hvleid-title', kind: 'text', name: 'HVL/EID heading', rect: { x: 48, y: 194, w: 600, h: 14 },
+      // ⛔ `flowAfter` the FIGURES panel, not the calendar: the panel's height is fixed and the
+      // calendar's is not. On page 2 the panel draws nothing and adds nothing, so this heading and
+      // everything chained below it move up by the band's whole height.
+      { id: 'rt-transmission-grid-hvleid-title', kind: 'text', name: 'HVL/EID heading', rect: { x: 48, y: TG_BAND_Y + TG_BAND_H, w: 600, h: 14 },
         text: 'Any HVL/EID Data Submission by Testing Laboratory', style: { fontSize: 10, bold: true, color: '#334155' },
-        showWithTable: 'hvleid' },
-      { id: 'hvleid', kind: 'cellgrid', name: 'HVL/EID submission', rect: { x: 48, y: 210, w: TG_CONTENT_W, h: TG_GRID_H },
+        showWithTable: 'hvleid', flowAfter: 'rt-transmission-grid-figures' },
+      { id: 'hvleid', kind: 'cellgrid', name: 'HVL/EID submission', rect: { x: 48, y: TG_BAND_Y + TG_BAND_H + 16, w: TG_CONTENT_W, h: TG_GRID_H },
+        flowAfter: 'rt-transmission-grid-hvleid-title',
         dataSource: { kind: 'custom-query', queryId: 'q-transmission-hvleid' },
         sortBy: 'ord',
         labelColumn: 'lab',
@@ -4561,7 +4629,7 @@ export const SEED_DESIGNS: ReportDesign[] = [
       // (594/612) stays as the FALLBACK for a page where `hvleid` is missing from `page.elements`
       // entirely — see `flowAfter`'s doc comment in schema.ts for why that fails open rather than
       // refusing to draw.
-      { id: 'rt-transmission-grid-other-title', kind: 'text', name: 'Other heading', rect: { x: 48, y: 594, w: 600, h: 14 },
+      { id: 'rt-transmission-grid-other-title', kind: 'text', name: 'Other heading', rect: { x: 48, y: TG_BAND_Y + TG_BAND_H + 16 + TG_GRID_H + 4, w: 600, h: 14 },
         text: 'Any Other Test Data Submission by Testing Laboratory', style: { fontSize: 10, bold: true, color: '#334155' },
         showWithTable: 'other', flowAfter: 'hvleid' },
       // ⛔ `fillTo` as well as `flowAfter`. `flowAfter` moved this grid's TOP up; on its own it moved
@@ -4569,7 +4637,8 @@ export const SEED_DESIGNS: ReportDesign[] = [
       // held the 21 records TG_GRID_H allows wherever it started. `fillTo` fixes its BOTTOM edge
       // (612 + 380 = 992px@96, clear of rule2 at 1003) and lets the record count follow the height,
       // which is what turns a 4-page report into 2. See `fillTo` in schema.ts.
-      { id: 'other', kind: 'cellgrid', name: 'Other submission', rect: { x: 48, y: 612, w: TG_CONTENT_W, h: TG_GRID_H },
+      { id: 'other', kind: 'cellgrid', name: 'Other submission',
+        rect: { x: 48, y: TG_OTHER_Y, w: TG_CONTENT_W, h: TG_OTHER_BOTTOM - TG_OTHER_Y },
         flowAfter: 'rt-transmission-grid-other-title',
         fillTo: 'rect-bottom',
         dataSource: { kind: 'custom-query', queryId: 'q-transmission-other' },
