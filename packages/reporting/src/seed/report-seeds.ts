@@ -2550,10 +2550,28 @@ labs as (select distinct lab from arrivals),
 -- The CROSS JOIN makes a silent day render blank IN PLACE rather than shifting later days left.
 grid as (
   select l.lab, dy.n,
-         case when a.lab is null then '' else 'Y' end as mark
+         case when a.lab is null then '' else '1' end as mark
   from labs l
   cross join days dy
   left join arrivals a on a.lab = l.lab and a.cal_day = dy.cal_day
+),
+lab_stats as (
+  -- Same LEFT JOIN reasoning as the postgres variant: a laboratory whose only submission this
+  -- month landed on a weekend has zero rows in 'days' (Mon-Fri only), and an inner join here would
+  -- drop it from the grid entirely instead of showing it silent all month.
+  select l.lab,
+         count(dy.n) as days,
+         (select max(n) from days) - coalesce(max(dy.n), 0) as silent
+  from labs l
+  left join arrivals a on a.lab = l.lab
+  left join days dy on dy.cal_day = a.cal_day
+  group by l.lab
+),
+lab_ord as (
+  -- Unique per-laboratory ord, alphabetical from 2 -- see the postgres variant for why 'order by
+  -- ord' alone is now a full tiebreaker (AGENTS.md section 7).
+  select lab, row_number() over (order by lab) + 1 as ord
+  from labs
 )
 select 0 as ord, '(dates)' as lab,
   max(case when n = 1 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d01,
@@ -2578,36 +2596,70 @@ select 0 as ord, '(dates)' as lab,
   max(case when n = 20 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d20,
   max(case when n = 21 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d21,
   max(case when n = 22 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d22,
-  max(case when n = 23 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d23
+  max(case when n = 23 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d23,
+  '' as days, '' as silent
 from days
 union all
-select 1 as ord, lab,
-  max(case when n = 1 then mark else '' end) as d01,
-  max(case when n = 2 then mark else '' end) as d02,
-  max(case when n = 3 then mark else '' end) as d03,
-  max(case when n = 4 then mark else '' end) as d04,
-  max(case when n = 5 then mark else '' end) as d05,
-  max(case when n = 6 then mark else '' end) as d06,
-  max(case when n = 7 then mark else '' end) as d07,
-  max(case when n = 8 then mark else '' end) as d08,
-  max(case when n = 9 then mark else '' end) as d09,
-  max(case when n = 10 then mark else '' end) as d10,
-  max(case when n = 11 then mark else '' end) as d11,
-  max(case when n = 12 then mark else '' end) as d12,
-  max(case when n = 13 then mark else '' end) as d13,
-  max(case when n = 14 then mark else '' end) as d14,
-  max(case when n = 15 then mark else '' end) as d15,
-  max(case when n = 16 then mark else '' end) as d16,
-  max(case when n = 17 then mark else '' end) as d17,
-  max(case when n = 18 then mark else '' end) as d18,
-  max(case when n = 19 then mark else '' end) as d19,
-  max(case when n = 20 then mark else '' end) as d20,
-  max(case when n = 21 then mark else '' end) as d21,
-  max(case when n = 22 then mark else '' end) as d22,
-  max(case when n = 23 then mark else '' end) as d23
-from grid
-group by lab
-order by ord, lab`,
+select 1 as ord, '(week)' as lab,
+  -- ISO week number, never drawn -- see the postgres variant's comment for why. datepart(iso_week,
+  -- ...) matches the file's existing preference for deterministic, session-setting-independent
+  -- date arithmetic (see 'days' above: not datepart(weekday, ...), which depends on SET DATEFIRST).
+  max(case when n = 1 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d01,
+  max(case when n = 2 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d02,
+  max(case when n = 3 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d03,
+  max(case when n = 4 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d04,
+  max(case when n = 5 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d05,
+  max(case when n = 6 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d06,
+  max(case when n = 7 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d07,
+  max(case when n = 8 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d08,
+  max(case when n = 9 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d09,
+  max(case when n = 10 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d10,
+  max(case when n = 11 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d11,
+  max(case when n = 12 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d12,
+  max(case when n = 13 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d13,
+  max(case when n = 14 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d14,
+  max(case when n = 15 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d15,
+  max(case when n = 16 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d16,
+  max(case when n = 17 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d17,
+  max(case when n = 18 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d18,
+  max(case when n = 19 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d19,
+  max(case when n = 20 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d20,
+  max(case when n = 21 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d21,
+  max(case when n = 22 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d22,
+  max(case when n = 23 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d23,
+  '' as days, '' as silent
+from days
+union all
+select max(lo.ord) as ord, g.lab,
+  max(case when g.n = 1 then g.mark else '' end) as d01,
+  max(case when g.n = 2 then g.mark else '' end) as d02,
+  max(case when g.n = 3 then g.mark else '' end) as d03,
+  max(case when g.n = 4 then g.mark else '' end) as d04,
+  max(case when g.n = 5 then g.mark else '' end) as d05,
+  max(case when g.n = 6 then g.mark else '' end) as d06,
+  max(case when g.n = 7 then g.mark else '' end) as d07,
+  max(case when g.n = 8 then g.mark else '' end) as d08,
+  max(case when g.n = 9 then g.mark else '' end) as d09,
+  max(case when g.n = 10 then g.mark else '' end) as d10,
+  max(case when g.n = 11 then g.mark else '' end) as d11,
+  max(case when g.n = 12 then g.mark else '' end) as d12,
+  max(case when g.n = 13 then g.mark else '' end) as d13,
+  max(case when g.n = 14 then g.mark else '' end) as d14,
+  max(case when g.n = 15 then g.mark else '' end) as d15,
+  max(case when g.n = 16 then g.mark else '' end) as d16,
+  max(case when g.n = 17 then g.mark else '' end) as d17,
+  max(case when g.n = 18 then g.mark else '' end) as d18,
+  max(case when g.n = 19 then g.mark else '' end) as d19,
+  max(case when g.n = 20 then g.mark else '' end) as d20,
+  max(case when g.n = 21 then g.mark else '' end) as d21,
+  max(case when g.n = 22 then g.mark else '' end) as d22,
+  max(case when g.n = 23 then g.mark else '' end) as d23,
+  max(cast(ls.days as varchar(3))) as days, max(cast(ls.silent as varchar(3))) as silent
+from grid g
+join lab_ord lo on lo.lab = g.lab
+join lab_stats ls on ls.lab = g.lab
+group by g.lab
+order by ord`,
       mysql: `-- ⛔ READ FIRST: this query CANNOT RUN on a MySQL warehouse today. max() over the
 -- date row's concat raises error 1267 through the connector pool. See the disclosure in
 -- 'arrivals' below for the path, the measurement and why it predates the clinical-date port.
@@ -3141,10 +3193,28 @@ labs as (select distinct lab from arrivals),
 -- The CROSS JOIN makes a silent day render blank IN PLACE rather than shifting later days left.
 grid as (
   select l.lab, dy.n,
-         case when a.lab is null then '' else 'Y' end as mark
+         case when a.lab is null then '' else '1' end as mark
   from labs l
   cross join days dy
   left join arrivals a on a.lab = l.lab and a.cal_day = dy.cal_day
+),
+lab_stats as (
+  -- Same LEFT JOIN reasoning as the postgres variant: a laboratory whose only submission this
+  -- month landed on a weekend has zero rows in 'days' (Mon-Fri only), and an inner join here would
+  -- drop it from the grid entirely instead of showing it silent all month.
+  select l.lab,
+         count(dy.n) as days,
+         (select max(n) from days) - coalesce(max(dy.n), 0) as silent
+  from labs l
+  left join arrivals a on a.lab = l.lab
+  left join days dy on dy.cal_day = a.cal_day
+  group by l.lab
+),
+lab_ord as (
+  -- Unique per-laboratory ord, alphabetical from 2 -- see the postgres variant for why 'order by
+  -- ord' alone is now a full tiebreaker (AGENTS.md section 7).
+  select lab, row_number() over (order by lab) + 1 as ord
+  from labs
 )
 select 0 as ord, '(dates)' as lab,
   max(case when n = 1 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d01,
@@ -3169,36 +3239,70 @@ select 0 as ord, '(dates)' as lab,
   max(case when n = 20 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d20,
   max(case when n = 21 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d21,
   max(case when n = 22 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d22,
-  max(case when n = 23 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d23
+  max(case when n = 23 then concat(format(cal_day, '%d', 'en-US'), char(10), format(cal_day, 'MMM', 'en-US')) else '' end) as d23,
+  '' as days, '' as silent
 from days
 union all
-select 1 as ord, lab,
-  max(case when n = 1 then mark else '' end) as d01,
-  max(case when n = 2 then mark else '' end) as d02,
-  max(case when n = 3 then mark else '' end) as d03,
-  max(case when n = 4 then mark else '' end) as d04,
-  max(case when n = 5 then mark else '' end) as d05,
-  max(case when n = 6 then mark else '' end) as d06,
-  max(case when n = 7 then mark else '' end) as d07,
-  max(case when n = 8 then mark else '' end) as d08,
-  max(case when n = 9 then mark else '' end) as d09,
-  max(case when n = 10 then mark else '' end) as d10,
-  max(case when n = 11 then mark else '' end) as d11,
-  max(case when n = 12 then mark else '' end) as d12,
-  max(case when n = 13 then mark else '' end) as d13,
-  max(case when n = 14 then mark else '' end) as d14,
-  max(case when n = 15 then mark else '' end) as d15,
-  max(case when n = 16 then mark else '' end) as d16,
-  max(case when n = 17 then mark else '' end) as d17,
-  max(case when n = 18 then mark else '' end) as d18,
-  max(case when n = 19 then mark else '' end) as d19,
-  max(case when n = 20 then mark else '' end) as d20,
-  max(case when n = 21 then mark else '' end) as d21,
-  max(case when n = 22 then mark else '' end) as d22,
-  max(case when n = 23 then mark else '' end) as d23
-from grid
-group by lab
-order by ord, lab`,
+select 1 as ord, '(week)' as lab,
+  -- ISO week number, never drawn -- see the postgres variant's comment for why. datepart(iso_week,
+  -- ...) matches the file's existing preference for deterministic, session-setting-independent
+  -- date arithmetic (see 'days' above: not datepart(weekday, ...), which depends on SET DATEFIRST).
+  max(case when n = 1 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d01,
+  max(case when n = 2 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d02,
+  max(case when n = 3 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d03,
+  max(case when n = 4 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d04,
+  max(case when n = 5 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d05,
+  max(case when n = 6 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d06,
+  max(case when n = 7 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d07,
+  max(case when n = 8 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d08,
+  max(case when n = 9 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d09,
+  max(case when n = 10 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d10,
+  max(case when n = 11 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d11,
+  max(case when n = 12 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d12,
+  max(case when n = 13 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d13,
+  max(case when n = 14 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d14,
+  max(case when n = 15 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d15,
+  max(case when n = 16 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d16,
+  max(case when n = 17 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d17,
+  max(case when n = 18 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d18,
+  max(case when n = 19 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d19,
+  max(case when n = 20 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d20,
+  max(case when n = 21 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d21,
+  max(case when n = 22 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d22,
+  max(case when n = 23 then cast(datepart(iso_week, cal_day) as varchar(2)) else '' end) as d23,
+  '' as days, '' as silent
+from days
+union all
+select max(lo.ord) as ord, g.lab,
+  max(case when g.n = 1 then g.mark else '' end) as d01,
+  max(case when g.n = 2 then g.mark else '' end) as d02,
+  max(case when g.n = 3 then g.mark else '' end) as d03,
+  max(case when g.n = 4 then g.mark else '' end) as d04,
+  max(case when g.n = 5 then g.mark else '' end) as d05,
+  max(case when g.n = 6 then g.mark else '' end) as d06,
+  max(case when g.n = 7 then g.mark else '' end) as d07,
+  max(case when g.n = 8 then g.mark else '' end) as d08,
+  max(case when g.n = 9 then g.mark else '' end) as d09,
+  max(case when g.n = 10 then g.mark else '' end) as d10,
+  max(case when g.n = 11 then g.mark else '' end) as d11,
+  max(case when g.n = 12 then g.mark else '' end) as d12,
+  max(case when g.n = 13 then g.mark else '' end) as d13,
+  max(case when g.n = 14 then g.mark else '' end) as d14,
+  max(case when g.n = 15 then g.mark else '' end) as d15,
+  max(case when g.n = 16 then g.mark else '' end) as d16,
+  max(case when g.n = 17 then g.mark else '' end) as d17,
+  max(case when g.n = 18 then g.mark else '' end) as d18,
+  max(case when g.n = 19 then g.mark else '' end) as d19,
+  max(case when g.n = 20 then g.mark else '' end) as d20,
+  max(case when g.n = 21 then g.mark else '' end) as d21,
+  max(case when g.n = 22 then g.mark else '' end) as d22,
+  max(case when g.n = 23 then g.mark else '' end) as d23,
+  max(cast(ls.days as varchar(3))) as days, max(cast(ls.silent as varchar(3))) as silent
+from grid g
+join lab_ord lo on lo.lab = g.lab
+join lab_stats ls on ls.lab = g.lab
+group by g.lab
+order by ord`,
       mysql: `-- ⛔ READ FIRST: this query CANNOT RUN on a MySQL warehouse today. max() over the
 -- date row's concat raises error 1267 through the connector pool. See the disclosure in
 -- 'arrivals' below for the path, the measurement and why it predates the clinical-date port.
