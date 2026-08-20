@@ -196,3 +196,65 @@ it('paginates a cellgrid whose rows exceed its rect', async () => {
   const buf = await renderReportDesignPdf(cellGridDesign(), many, { now: new Date('2026-01-15T09:00:00Z') });
   expect(buf.length).toBeGreaterThan(1000);
 });
+
+/**
+ * The month calendar from the approved design, expressed as a `cellgrid` in a DIFFERENT
+ * configuration: seven cell columns, one row per week, no label column, five palette steps instead
+ * of one, and no grouping.
+ *
+ * ⛔ If this needs anything added to `drawCellGrid`, the contract in spec §2.4 is wrong and slices 2
+ * to 4 must not be built on it. Passing WITHOUT a production change is the assertion.
+ */
+function calendarDesign(): ReportDesign {
+  return {
+    id: 'cal', name: 'Calendar', status: 'published', paper: 'A4', orientation: 'portrait',
+    parameters: [],
+    pages: [{
+      id: 'p1',
+      elements: [
+        { id: 'cal', kind: 'cellgrid', name: 'cal', rect: { x: 48, y: 60, w: 200, h: 120 },
+          dataSource: { kind: 'custom-query', queryId: 'q' },
+          sortBy: 'ord',
+          cellColumns: ['c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7'],
+          palette: { ramp: 'blue', steps: 5 } },
+      ],
+    }],
+    pageNumbers: false,
+  };
+}
+
+function calendarResolved(): Map<string, ResolvedTable> {
+  const week = (ord: number, vals: (string | number)[]) =>
+    ({ ord, ...Object.fromEntries(vals.map((v, i) => [`c${i + 1}`, v])) });
+  // Element id, not query id. Same reason as `cellGridResolved` above.
+  return new Map([['cal', {
+    columns: Array.from({ length: 7 }, (_, i) => ({ key: `c${i + 1}`, label: '' })),
+    rows: [
+      week(0, ['M', 'T', 'W', 'T', 'F', 'S', 'S']),
+      week(1, [0, 0, 0, 0, 0, 0, 1]),   // July 2018 starts on a Sunday
+      week(2, [4, 1, 0, 0, 1, 0, 0]),
+      week(3, [0, 0, 0, 5, 0, 0, 0]),
+      week(4, [0, 0, 0, 0, 1, 0, 0]),
+      week(5, [1, 1, 1, 2, 0, 0, 0]),
+      week(6, [3, 2, 0, 0, 0, 0, 0]),
+    ],
+  }]]);
+}
+
+it('draws a month calendar as the same element in a second configuration', async () => {
+  const buf = await renderReportDesignPdf(calendarDesign(), calendarResolved(), {
+    now: new Date('2026-01-15T09:00:00Z'),
+  });
+  expect(buf.length).toBeGreaterThan(500);
+});
+
+it('keeps a calendar on one page: six weeks fit its rect', () => {
+  const el = calendarDesign().pages[0].elements[0];
+  expect(tableChunkCount(el, calendarResolved().get(el.id))).toBe(1);
+});
+
+it('scales the ramp across the whole calendar rather than per chunk', () => {
+  // The maximum is 5. At steps: 5 the busiest day lands on the darkest step, and a 1 must not.
+  expect(cellFill(5, 5, { ramp: 'blue', steps: 5 })).toBe('#185FA5');
+  expect(cellFill(1, 5, { ramp: 'blue', steps: 5 })).not.toBe('#185FA5');
+});
