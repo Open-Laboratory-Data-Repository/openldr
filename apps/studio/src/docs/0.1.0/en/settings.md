@@ -17,15 +17,19 @@ This manual documents supported settings areas only. If a settings page is not c
 ## Update checks
 
 **Settings → General** shows the version this install is running and, on the line below it, where
-that version stands. That line reads one of six ways: the version number and *up to date*; the
-version number and *nothing newer*; a newer version with its release date and notes, followed by
-the two commands to upgrade; *update check is off*; *cannot confirm*, when the last check failed or
-the running version could not be read; or *not checked yet*.
+that version stands. That line reads one of six ways: the version number and *up to date*; *no
+update found*; a newer version with its release date and notes, followed by the two commands to
+upgrade; *update check is off*; *cannot confirm*, when the last check failed or the running version
+could not be read; or *not checked yet*.
 
-*Nothing newer* means the last successful check saw an **older** release than the one you are
-running. There is still nothing to upgrade to. It happens when you upgrade shortly after a release,
-because the check runs once a day and the answer it cached predates your own version. It corrects
-itself at the next check, or immediately if you restart the api container.
+*No update found* means the last successful check saw an **older** release than the one you are
+running, so it has nothing to tell you. **No version number is shown in this case, on purpose.** A
+number lower than the one you are running is not something to act on, and reading it as an
+instruction to downgrade would be wrong. Use *Last checked* underneath to see how old the answer is.
+
+This happens when you upgrade shortly after a release, because the check runs once a day and the
+answer it cached predates your own version. It corrects itself at the next check, or immediately if
+you restart the api container.
 
 The check is **on by default**. It fetches a small file from GitHub once a day, with a
 10-second timeout on that one request, and compares version numbers. It never downloads an
@@ -40,10 +44,11 @@ makes no outbound request at all, and the version line shows only what you are r
 air-gapped lab can leave it on — a failed check is silent, and the last known answer is kept.
 There is no command-line switch for this; it is a Studio-only setting.
 
-**From the command line:** `openldr update check` prints the same information. It exits **0** when
-the install is up to date, **1** when an update is available, and **2** when the check itself
-failed. Exit 1 means "an update exists", not an error, so a script can act on it directly — and a
-failed run exits 2, so a broken check never looks like a new release.
+**From the command line:** `openldr update check` prints the same information. It exits **1**
+when an update is available and **0** for every other outcome, including a failed or unconfirmed
+check. Exit 1 means "an update exists", not an error, so a script can act on it directly. Exit
+**2** comes only from the check failing to run at all, for example an unreachable database, so a
+broken check never looks like a new release.
 
 ## Related guides
 

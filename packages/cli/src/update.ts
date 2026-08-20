@@ -55,7 +55,12 @@ export function renderUpdateCheck(state: UpdateState, opts: { json: boolean }): 
     lines.push('update check is disabled (Studio: Settings → General)');
     return { text: lines.join('\n'), code };
   }
-  lines.push(`published: ${state.latestVersion ?? 'unknown'}`);
+  // ⛔ Not printed for no_update_found. The cached version is OLDER than the running one there,
+  // and an operator read that lower number as an instruction to roll back. It is the only state
+  // where this line has nothing honest to say.
+  if (verdict.kind !== 'no_update_found') {
+    lines.push(`published: ${state.latestVersion ?? 'unknown'}`);
+  }
 
   // ⛔ Gate on state.lastError, not on the verdict kind. A failed poll leaves latestVersion
   // alone (recordFailure in bootstrap/update-check.ts), so the verdict can be update_available
@@ -84,12 +89,17 @@ export function renderUpdateCheck(state: UpdateState, opts: { json: boolean }): 
       lines.push('', 'not checked yet.');
       return { text: lines.join('\n'), code };
     case 'up_to_date':
-      // Both readings are "nothing to upgrade to", but they are not the same situation and the
-      // numbers above make that obvious. Saying "up to date" under a LOWER published version reads
-      // backwards, and an operator who upgrades promptly sees it until the next daily poll.
-      lines.push('', verdict.runningIsNewer
-        ? 'this install is newer than the last release it saw.\nnothing to upgrade to.'
-        : 'this install is up to date.');
+      lines.push('', 'this install is up to date.');
+      return { text: lines.join('\n'), code };
+    case 'no_update_found':
+      // The raw ISO stamp, not a relative phrase. This package has no date-formatting dependency
+      // and has never rendered lastCheckedAt at all; hand-rolling relative time means untested,
+      // unlocalised date logic, and ISO is better for anything scripting this output.
+      // lastCheckedAt is non-null whenever this state is reached, because a cached version is only
+      // written by a successful poll. The null branch exists so a surprise cannot print "null".
+      lines.push('', state.lastCheckedAt
+        ? `no update found (last checked ${state.lastCheckedAt})`
+        : 'no update found.');
       return { text: lines.join('\n'), code };
   }
 }

@@ -22,7 +22,7 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 import { resolveGitBash } from '../packages/release/src/git-bash';
-import { buildReleaseManifest } from '../packages/release/src/manifest';
+import { buildReleaseManifest, parseReleaseManifest } from '../packages/release/src/manifest';
 import { evaluatePreconditions, type ReleaseFacts } from '../packages/release/src/preconditions';
 import {
   imagesWithTag,
@@ -180,6 +180,67 @@ async function gateGreen(): Promise<boolean> {
   }
   console.warn(`\n${names} pass alone — treating the turbo failure as a load timeout`);
   return true;
+}
+
+/** Prove the manifest the release just uploaded is actually readable, and says what it should.
+ *
+ *  ⛔ The DIRECT asset URL, never `releases/latest/download/…`. Measured 2026-08-19 and 08-20: the
+ *  direct URL was correct immediately every time, while the `latest` alias served the PREVIOUS
+ *  release's manifest for over ten minutes after v0.1.3. This runs AFTER the tag is public, so
+ *  gating on the alias would fail a release that is already released.
+ *
+ *  Closes a real gap: nothing else checks that this file is readable, and a broken asset silently
+ *  disables the update check on every install in the field while the release reports success. */
+async function verifyPublishedManifest(version: string): Promise<void> {
+  const url = `https://github.com/${OWNER}/${REPO}/releases/download/v${version}/latest.json`;
+  let problem = '';
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      // ⛔ The timeout is not optional. Node's fetch has no default request timeout, so a
+      // connection GitHub accepts and then leaves silent never settles. This step runs after the
+      // tag and release are already public, so a hang here means the release never finishes, with
+      // no output and nothing to tell it apart from a slow network. The retry loop already treats
+      // an abort as a failed attempt, so it just retries.
+      const res = await fetch(url, { redirect: 'follow', signal: AbortSignal.timeout(10_000) });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const manifest = parseReleaseManifest(JSON.parse(await res.text()));
+      if (!manifest) throw new Error('the asset is not a valid release manifest');
+      if (manifest.version !== version) throw new Error(`the asset names ${manifest.version}`);
+      console.log(`published manifest verified: ${url}`);
+      return;
+    } catch (err) {
+      problem = err instanceof Error ? err.message : String(err);
+      if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, 5000));
+    }
+  }
+  console.error(`\n⛔ the release published, but its latest.json is not readable: ${problem}`);
+  console.error(`  ${url}`);
+  console.error('Every install polls this file, so update checks stay broken until it is fixed.');
+  // ⛔ No rollback here, unlike step 10. The images are public and :latest has already moved, so
+  // deleting the tag would remove the record and leave the artifacts. A loud failure naming the
+  // fix is more honest than a rollback that undoes the wrong half. Do not "fix" this later.
+  console.error('The tag is NOT rolled back: the images are already public, so deleting it would');
+  console.error('remove the record and leave the artifacts. Re-upload the asset instead:');
+  console.error(`  gh release upload v${version} latest.json --clobber`);
+  process.exit(1);
+}
+
+/** Make the verification stack poll again, now that the release exists.
+ *
+ *  It polled at step 9, BEFORE step 10 published, so its cached answer predates the version it is
+ *  running. That ordering is structural, so this happens on every release.
+ *
+ *  ⚠ This may change nothing, and must not be described as if it fixes anything. Installs poll the
+ *  `latest` alias, which lagged over ten minutes after v0.1.3, so the stack can come back with the
+ *  same stale answer. It then reads "no update found", which is honest. Never fail a release over
+ *  a cosmetic repoll. */
+function repollVerificationStack(probeDir: string): void {
+  try {
+    execFileSync('docker', ['compose', 'restart', 'api'], { cwd: probeDir, stdio: 'inherit' });
+    console.log('verification stack repolled');
+  } catch (err) {
+    console.warn(`could not repoll the verification stack, harmless: ${err instanceof Error ? err.message : String(err)}`);
+  }
 }
 
 async function main(): Promise<void> {
@@ -357,6 +418,13 @@ async function main(): Promise<void> {
     console.error('bump the version, or — only if this tag was never announced — re-push by hand with');
     console.error('  bash scripts/build-and-push.sh --allow-overwrite');
     process.exit(1);
+  }
+
+  // Both are skipped under --dry-run: nothing was published, so there is no asset to read and no
+  // stack to repoll.
+  if (!DRY_RUN) {
+    await verifyPublishedManifest(version);
+    repollVerificationStack(probe);
   }
 
   console.log(`\nreleased ${version}`);

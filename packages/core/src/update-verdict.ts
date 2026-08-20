@@ -6,11 +6,11 @@ import { isNewerVersion, parseSemver } from './semver';
  *  about which state an install is in. Wording may differ between them, the verdict may not. */
 export type UpdateVerdict =
   | { kind: 'update_available'; latest: string; releasedAt: string | null; notesUrl: string | null }
-  // `runningIsNewer` separates "nothing newer exists" from "my cache predates my own version".
-  // Both are up to date and neither offers an upgrade, but printing "published: 0.1.3" beside
-  // "running: 0.1.4" and calling it up to date reads backwards, and an operator who upgrades
-  // promptly sees exactly that until the next daily poll.
-  | { kind: 'up_to_date'; latest: string; runningIsNewer: boolean }
+  | { kind: 'up_to_date'; latest: string }
+  // ⛔ Carries NO version, deliberately. The cache being older than the running version tells an
+  // operator nothing they can act on: it cannot mean upgrade, and it must not read as roll back,
+  // which is exactly how one read it. A kind with no version is a kind no surface can misprint.
+  | { kind: 'no_update_found' }
   | { kind: 'check_off' }
   | { kind: 'cannot_confirm'; error: string; cause: 'check_failed' | 'bad_running_version' }
   | { kind: 'never_checked' };
@@ -58,5 +58,10 @@ export function updateVerdict(input: UpdateVerdictInput): UpdateVerdict {
   // Reached only when latestVersion is not newer, so this is either equal or behind. Both sides
   // parse here: `running` was checked at step 2, and an unparseable `latestVersion` would have
   // made isNewerVersion false at step 3 and false again here, giving equal, which is the safe read.
-  return { kind: 'up_to_date', latest: latestVersion, runningIsNewer: isNewerVersion(running, latestVersion) };
+  //
+  // This sits below the lastError check above, so a stale cache under a live error stays
+  // cannot_confirm rather than being downgraded to a confident "no update found".
+  if (isNewerVersion(running, latestVersion)) return { kind: 'no_update_found' };
+
+  return { kind: 'up_to_date', latest: latestVersion };
 }

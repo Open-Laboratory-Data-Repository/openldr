@@ -137,6 +137,12 @@ Nothing in the suite touches a real registry either, so the package-visibility r
 also real-release-only. The gate-retry loop is unproven against a genuinely red turbo run — the
 tests exercise `parseFailedTasks` against captured output, not a live failing suite.
 
+The post-publish manifest check is the same: it fetches the direct release asset URL, retries
+three times, and exits non-zero without rolling back the tag if the file is still unreadable or
+names the wrong version. No test exercises that path. The best-effort repoll of the verification
+stack that runs after it is real-release-only too, and by design never fails the release either
+way.
+
 What *is* unit-tested, with injected inputs: semver comparison, each precondition's refusal,
 the manifest shape, the registry probes (`tagExistsInRegistry`, `imagesWithTag`,
 `findPrivatePackages`) including their fail-closed behaviour on an unreadable body, pagination
