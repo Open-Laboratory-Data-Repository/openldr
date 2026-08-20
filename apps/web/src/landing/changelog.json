@@ -3,8 +3,14 @@
   "days": [
     {
       "date": "2026-08-20",
-      "version": null,
+      "version": "v0.1.5",
       "entries": [
+        {
+          "hash": "2221a069",
+          "type": "fix",
+          "scope": "install",
+          "title": "Write openldr.ps1 on Windows, and pin the release gate to --concurrency=4"
+        },
         {
           "hash": "ed3972fd",
           "type": "fix",
