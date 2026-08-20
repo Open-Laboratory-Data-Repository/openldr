@@ -37,7 +37,7 @@ pnpm --filter @openldr/report-designer test
 
 | File | Responsibility |
 |---|---|
-| `packages/report-designer/src/schema.ts` | **Modify.** Add `'cellgrid'` to the kind enum, plus `labelColumn`, `cellColumns`, `groupBy`, `palette`, `trailingColumns`. |
+| `packages/report-designer/src/schema.ts` | **Modify.** Add `'cellgrid'` to the kind enum, plus `labelColumn`, `cellColumns`, `groupBoundary`, `palette`, `trailingColumns`. |
 | `packages/report-designer/src/render/cellgrid.ts` | **Create.** Pure functions: geometry constants, width arithmetic, group breaks, palette stepping, chunk counting. No pdfkit import. |
 | `packages/report-designer/src/render/cellgrid.test.ts` | **Create.** Unit tests for every function above. |
 | `packages/report-designer/src/render/draw.ts` | **Modify.** Add `drawCellGrid`, dispatch it from `drawElement`, and teach `rowsFor`, `tableChunkCount` and `drawsOnChunk` about the new kind. |
@@ -58,30 +58,47 @@ pnpm --filter @openldr/report-designer test
 Append to `packages/report-designer/src/schema.test.ts`:
 
 ```ts
-it('accepts a cellgrid element with a palette and trailing columns', () => {
-  const el = {
+// ⚠ Asserts the PARSED OUTPUT, never just `.not.toThrow()`. `DesignElementSchema` strips unknown
+// keys, so a throw-only assertion passes just as happily when none of these fields exist on the
+// schema at all. Measured: deleting all five fields and re-running left this test green.
+it('accepts a cellgrid element and keeps every cellgrid field', () => {
+  const out = DesignElementSchema.parse({
     id: 'grid', kind: 'cellgrid', name: 'Submission grid',
     rect: { x: 48, y: 200, w: 698, h: 400 },
     dataSource: { kind: 'custom-query', queryId: 'q' },
     sortBy: 'ord',
     labelColumn: 'lab',
     cellColumns: ['d01', 'd02', 'd03'],
-    groupBy: 'header-change',
+    groupBoundary: 'token-change',
     palette: { ramp: 'blue', steps: 1 },
     trailingColumns: [
       { key: 'days', label: 'Days', width: 34.5 },
       { key: 'silent', label: 'Silent', width: 52, emphasis: 'fill' },
     ],
-  };
-  expect(() => DesignElementSchema.parse(el)).not.toThrow();
+  });
+  expect(out.kind).toBe('cellgrid');
+  expect(out.labelColumn).toBe('lab');
+  expect(out.cellColumns).toEqual(['d01', 'd02', 'd03']);
+  expect(out.groupBoundary).toBe('token-change');
+  expect(out.palette).toEqual({ ramp: 'blue', steps: 1 });
+  expect(out.trailingColumns).toEqual([
+    { key: 'days', label: 'Days', width: 34.5 },
+    { key: 'silent', label: 'Silent', width: 52, emphasis: 'fill' },
+  ]);
 });
 
-it('rejects a palette step count outside 1..5', () => {
-  const el = {
+it('rejects an unknown ramp', () => {
+  expect(() => DesignElementSchema.parse({
     id: 'grid', kind: 'cellgrid', name: 'g', rect: { x: 0, y: 0, w: 10, h: 10 },
-    palette: { ramp: 'blue', steps: 9 },
-  };
-  expect(() => DesignElementSchema.parse(el)).toThrow();
+    palette: { ramp: 'chartreuse', steps: 1 },
+  })).toThrow();
+});
+
+it.each([0, 6, 2.5])('rejects a palette step count of %s', (steps) => {
+  expect(() => DesignElementSchema.parse({
+    id: 'grid', kind: 'cellgrid', name: 'g', rect: { x: 0, y: 0, w: 10, h: 10 },
+    palette: { ramp: 'blue', steps },
+  })).toThrow();
 });
 ```
 
@@ -140,7 +157,7 @@ Then change the kind enum and add five fields inside `DesignElementSchema`:
    *  The group row is data (row 1 of the sorted result, after the header row), never a design
    *  constant, because the grouping a month needs is not knowable when the design is authored — a
    *  month starting mid-week has a short first group, and every month has a different one. */
-  groupBy: z.literal('header-change').optional(),
+  groupBoundary: z.literal('token-change').optional(),
   /** `cellgrid`: how a cell value becomes a fill. */
   palette: CellPaletteSchema.optional(),
   /** `cellgrid`: text columns drawn after the cells. */
@@ -527,7 +544,7 @@ git commit -m "feat(report-designer): sequential cell palette with a print-safe 
 - Modify: `packages/report-designer/src/render/cellgrid.ts`
 - Modify: `packages/report-designer/src/render/cellgrid.test.ts`
 
-The resolved result carries two synthetic leading rows: row 0 is the visible cell labels, row 1 is the group tokens. Everything after them is a record. Without `groupBy`, only row 0 is synthetic.
+The resolved result carries two synthetic leading rows: row 0 is the visible cell labels, row 1 is the group tokens. Everything after them is a record. Without `groupBoundary`, only row 0 is synthetic.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -778,7 +795,7 @@ function gridEl(rows: number): { el: DesignElement; resolved: ResolvedTable } {
   const el = {
     id: 'g', kind: 'cellgrid', name: 'g', rect: { x: 0, y: 0, w: 900, h: 545 },
     dataSource: { kind: 'custom-query', queryId: 'q' },
-    labelColumn: 'lab', cellColumns: ['d01'], groupBy: 'header-change',
+    labelColumn: 'lab', cellColumns: ['d01'], groupBoundary: 'token-change',
   } as DesignElement;
   const body = Array.from({ length: rows }, (_, i) => ({ lab: `L${i}`, d01: 1 }));
   const resolved: ResolvedTable = {
@@ -834,7 +851,7 @@ In `tableChunkCount` at `draw.ts:710`, add a cellgrid branch before the table gu
 ```ts
 export function tableChunkCount(el: DesignElement, resolved: ResolvedTable | undefined): number {
   if (el.kind === 'cellgrid') {
-    const body = splitCellGridRows(rowsFor(el, resolved), el.groupBy === 'header-change').body;
+    const body = splitCellGridRows(rowsFor(el, resolved), el.groupBoundary === 'token-change').body;
     return cellGridChunks(body.length, toPt(el.rect).h);
   }
   if (el.kind !== 'table') return 1;
@@ -925,7 +942,7 @@ function drawCellGrid(
 ): void {
   if (el.dataSource && resolved && 'error' in resolved) { drawErrorPlaceholder(doc, r, resolved.error); return; }
 
-  const grouped = el.groupBy === 'header-change';
+  const grouped = el.groupBoundary === 'token-change';
   const split = splitCellGridRows(rowsFor(el, resolved), grouped);
   const hasLabel = Boolean(el.labelColumn);
   const cellCount = (el.cellColumns ?? []).length;
@@ -1045,7 +1062,7 @@ function cellGridDesign(): ReportDesign {
           sortBy: 'ord',
           labelColumn: 'lab',
           cellColumns: ['d01', 'd02', 'd03', 'd04', 'd05', 'd06', 'd07', 'd08'],
-          groupBy: 'header-change',
+          groupBoundary: 'token-change',
           palette: { ramp: 'blue', steps: 1 },
           trailingColumns: [
             { key: 'days', label: 'Days', width: 34.5 },

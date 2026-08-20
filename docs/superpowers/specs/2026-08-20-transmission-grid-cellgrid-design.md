@@ -53,7 +53,7 @@ operator has asked for more elements in this family, so the first one sets the p
 { kind: 'cellgrid', rect, dataSource,
   labelColumn:     'lab',
   cellColumns:     ['d01', … , 'd23'],
-  groupBy:         'header-change',
+  groupBoundary:         'token-change',
   palette:         { ramp: 'blue', steps: 1 },
   trailingColumns: [{ key: 'days',   label: 'Days' },
                     { key: 'silent', label: 'Silent', emphasis: 'fill' }] }
@@ -83,9 +83,14 @@ status palette. A cell value of zero paints the empty tint. With `steps: 1` the 
 which is what the data supports today. Raising `steps` later carries result volume with no
 change to the layout or the query shape.
 
-**Group gaps.** `groupBy: 'header-change'` inserts a gap wherever the group token changes. The
-token is data, so week grouping works for any month, including one starting mid-week where the
+**Group gaps.** `groupBoundary: 'token-change'` inserts a gap wherever the group token changes.
+The token is data, so week grouping works for any month, including one starting mid-week where the
 first group is short. No special case.
+
+It is deliberately not called `groupBy`. Everywhere else in this repo that name takes a column key
+(`packages/workflows/src/engine/node-handlers/pivot.ts`, `packages/dashboards/src/compile.ts`), and
+this takes neither a column nor a key. Nor is the value called `header-change`: the tokens live in
+their own row, not in the header row, and naming the header would send a reader to the wrong one.
 
 **Row pitch derived from cell size**, not the fixed 16pt.
 
@@ -174,7 +179,7 @@ says a laboratory did not transmit when the truth is that it was never asked abo
 Both `q-transmission-hvleid` and `q-transmission-other` change shape.
 
 **Two synthetic leading rows instead of one.** `ord = 0` carries the visible day labels, as
-today. `ord = 1` carries a week token per column, read by `groupBy: 'header-change'`. This
+today. `ord = 1` carries a week token per column, read by `groupBoundary: 'token-change'`. This
 reuses the existing `ord` mechanism rather than inventing a second one.
 
 **Two computed columns per laboratory.** `days` is the count of working days carrying a
