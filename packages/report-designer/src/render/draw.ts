@@ -878,7 +878,12 @@ function drawCellGrid(
   const cellIndex = (i: number): number => (hasLabel ? 1 : 0) + i;
 
   const cellStart = hasLabel ? CELL_LABEL_W + CELL_COL_GAP : 0;
-  const breaks = grouped ? groupBreaks(split.groups?.slice(hasLabel ? 1 : 0)) : [];
+  // ⛔ Sliced to EXACTLY the cell range. Passing the trailing-column tokens too happens to be
+  // harmless, because a spurious break lands at an index `stripWidth` and `xOfCell` both discard.
+  // That is a coincidence of index ranges, not a design, and it stops being true the moment the
+  // trailing columns carry varying tokens.
+  const cellsFrom = hasLabel ? 1 : 0;
+  const breaks = grouped ? groupBreaks(split.groups?.slice(cellsFrom, cellsFrom + cellCount)) : [];
   const xOfCell = (i: number): number => {
     let x = r.x + cellStart;
     for (let k = 0; k < i; k += 1) x += CELL_SIZE + (breaks.includes(k + 1) ? GROUP_GAP : CELL_GAP);
