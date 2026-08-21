@@ -1,5 +1,6 @@
 import type { FormSchema } from './schema/form-schema';
 import { lintFhirPaths } from './lint-fhir-path';
+import { lintFacilityAdminOrder } from './lint-facility-admin';
 import { validateTemplateTargets } from './page-targets';
 import { isReferenceFieldType, resolveReferenceSource } from './reference-source';
 
@@ -18,7 +19,8 @@ export interface FormLintIssue {
     | 'ambiguous-fhir-path'
     | 'unknown-fhir-path'
     | 'fhir-path-cardinality'
-    | 'fhir-path-type-mismatch';
+    | 'fhir-path-type-mismatch'
+    | 'facility-admin-order';
   message: string;
   fieldId?: string;
   sectionId?: string;
@@ -199,6 +201,7 @@ export function lintFormSchema(form: FormSchema): FormLintIssue[] {
   }
 
   issues.push(...lintFhirPaths(form));
+  issues.push(...lintFacilityAdminOrder(form));
 
   return issues;
 }
