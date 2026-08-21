@@ -52,6 +52,44 @@ The form is saved as a draft during design, published when ready, and available 
 - **A terminology field has no options:** check the terminology binding and the selected ValueSet.
 - **Users see the wrong page after submit:** review the configured target pages.
 
+## FHIR path validation
+
+When a form maps to a FHIR resource type, the builder checks each field's FHIR path against the element list.
+
+A red badge means an error blocks publishing. A yellow badge means a warning that does not block publishing but you should review.
+
+The builder only checks resource types in the built-in element list, which covers nine common types. Forms using other resource types show no badges because they are not path-checked at all.
+
+### unknown-fhir-path (error)
+
+The path is not an element of this resource type.
+
+Usually a typo in the path. Check the spelling and nesting depth. If the path is correct and the resource type is outside the built-in nine types, the form will not be checked.
+
+### facility-admin-order (error)
+
+The facility administrative levels are bound to FHIR address parts in the wrong order.
+
+For example, binding Zone to an address part that FHIR nests inside the one Region is bound to. Reorder the field bindings to match the FHIR structure.
+
+### fhir-path-cardinality (warning)
+
+The path passes through an element that can repeat with no discriminator.
+
+The path cannot resolve which occurrence to use. Add a FHIR discriminator on the field to pick a specific occurrence.
+
+### fhir-path-type-mismatch (warning)
+
+A plain input is bound to a structured FHIR element that a single value cannot fill.
+
+Change the field type to match the FHIR structure, or bind a more specific path that points to a simpler element.
+
+### From the command line
+
+Operators running without the studio can run `openldr forms lint` to get the same findings.
+
+You can pass an optional form ID to lint a single form. Use `--json` for structured output. The command exits non-zero when any error is present.
+
 ## Advanced web usage
 
 - Use validation rules for format, range, and required-value checks close to the point of capture.
