@@ -39,7 +39,13 @@ beforeEach(() => {
   vi.mocked(api.listFacilityImportSources).mockResolvedValue([] as never);
 });
 
-const saveButton = () => screen.getByRole('button', { name: /^(save|enregistrer|salvar)$/i });
+/** AGENTS.md section 5: page actions live in a ⋯ dropdown, never a standalone button. Radix opens
+ *  its menu on pointerdown, not click, so fireEvent.click alone never opens it. */
+async function save(): Promise<void> {
+  const trigger = screen.getByRole('button', { name: /^(actions|aktionen|ações)$/i });
+  fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false });
+  fireEvent.click(await screen.findByText(/^(save|enregistrer|salvar)$/i));
+}
 
 describe('Settings → Laboratory', () => {
   it('renders the stored identity, logo included', async () => {
@@ -66,7 +72,7 @@ describe('Settings → Laboratory', () => {
 
     render(<MemoryRouter><Laboratory /></MemoryRouter>);
     await screen.findByDisplayValue('OpenLDR');
-    fireEvent.click(saveButton());
+    await save();
 
     await waitFor(() => expect(api.saveLabIdentity).toHaveBeenCalled());
     // The page is still standing, still holding the identity, and the logo did not vanish.
@@ -81,7 +87,7 @@ describe('Settings → Laboratory', () => {
     vi.mocked(api.saveLabIdentity).mockResolvedValue(META.values as never);
     render(<MemoryRouter><Laboratory /></MemoryRouter>);
     await screen.findByDisplayValue('OpenLDR');
-    fireEvent.click(saveButton());
+    await save();
 
     await waitFor(() => expect(api.saveLabIdentity).toHaveBeenCalledWith(
       expect.objectContaining({ 'lab.name': 'OpenLDR', 'lab.timezone': '' }),
@@ -92,7 +98,7 @@ describe('Settings → Laboratory', () => {
     vi.mocked(api.saveLabIdentity).mockRejectedValue(new Error('boom'));
     render(<MemoryRouter><Laboratory /></MemoryRouter>);
     await screen.findByDisplayValue('OpenLDR');
-    fireEvent.click(saveButton());
+    await save();
 
     expect(await screen.findByText(/could not save|impossible d|não foi poss/i)).toBeInTheDocument();
     expect(screen.getByDisplayValue('OpenLDR')).toBeInTheDocument();

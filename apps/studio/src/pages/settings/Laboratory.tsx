@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { MoreHorizontal } from 'lucide-react';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
@@ -104,6 +108,10 @@ export function Laboratory(): JSX.Element {
 
   return (
     <div className="flex flex-col gap-4 p-4">
+      {/* ⛔ Save lives in the ⋯ menu, never as a standalone button. AGENTS.md section 5: page-header,
+          sheet and per-row actions all go in a MoreHorizontal DropdownMenu. Ref:
+          pages/settings/Connectors.tsx, the header menu this copies. */}
+      <div className="flex items-start justify-between gap-4">
       <div>
         <h2 className="text-sm font-semibold">{t('settings.laboratory.title')}</h2>
         <p className="text-xs text-muted-foreground">{t('settings.laboratory.description')}</p>
@@ -114,6 +122,19 @@ export function Laboratory(): JSX.Element {
           {t('settings.laboratory.tokensHint')}{' '}
           <code className="text-[11px]">{'{{lab.name}} {{lab.address}} {{lab.contact}} {{lab.logo}}'}</code>
         </p>
+      </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-8 w-8" aria-label={t('common.actions')}>
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem disabled={saving} onSelect={() => { void save(); }}>
+              {t('settings.laboratory.save')}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       <div className="grid grid-cols-[10rem_1fr] items-center gap-x-4 gap-y-3">
@@ -180,11 +201,6 @@ export function Laboratory(): JSX.Element {
       {error && <p className="text-xs text-destructive">{error}</p>}
       {saved && !error && <p className="text-xs text-muted-foreground">{t('settings.laboratory.saved')}</p>}
 
-      <div>
-        <Button type="button" size="sm" disabled={saving} onClick={() => { void save(); }}>
-          {t('settings.laboratory.save')}
-        </Button>
-      </div>
     </div>
   );
 }
