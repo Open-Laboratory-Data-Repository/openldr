@@ -110,7 +110,12 @@ export function Laboratory(): JSX.Element {
   const logo = values[LOGO_KEY] ?? '';
 
   return (
-    <div className="flex flex-col gap-4 p-4">
+    /* ⛔ This page owns its own scroll region. SettingsShell's outlet is `overflow-hidden` on
+       purpose (a scroller there AND one here gave two nested scrollers, the Distributed-sync
+       defect), so a page without one is simply CLIPPED. That is what happened here: on a phone the
+       Logo row sat below the cut and nothing on the page could scroll. `min-h-0` + `flex-1` are what
+       let this box shrink to the outlet instead of overflowing it. Ref: General.tsx, DataExposure.tsx. */
+    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4" data-testid="laboratory-page">
       {/* ⛔ Save lives in the ⋯ menu, never as a standalone button. AGENTS.md section 5: page-header,
           sheet and per-row actions all go in a MoreHorizontal DropdownMenu. Ref:
           pages/settings/Connectors.tsx, the header menu this copies. */}
@@ -140,7 +145,13 @@ export function Laboratory(): JSX.Element {
         </DropdownMenu>
       </div>
 
-      <div className="grid grid-cols-[10rem_1fr] items-center gap-x-4 gap-y-3">
+      {/* ⛔ `minmax(0,1fr)`, NOT `1fr`. A bare `1fr` is `minmax(auto,1fr)`, and the auto floor is the
+          control's OWN min-content — an Input/Textarea/SelectTrigger will not go under ~236px. With a
+          fixed 10rem label column that pinned the form at 428px intrinsic, so on any phone narrower than
+          that the inputs ran off the right edge with no horizontal scroller to reach them. `auto` on the
+          label column is the AGENTS.md section 5 shape (ref Connectors.tsx); the `minmax(0,...)` is what
+          actually lets the controls shrink. */}
+      <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-4 gap-y-3">
         {meta.fields.filter((f) => f.id !== LOGO_KEY).map((f) => (
           /* ⛔ A PICKER, never a text box. `idFor` hashes this register's URI into every facility's
              permanent id WITHOUT normalising it, so a typed label ('HFR' vs 'hfr') mints a second
@@ -184,7 +195,11 @@ export function Laboratory(): JSX.Element {
         ))}
 
         <span className="self-start pt-2 text-xs text-muted-foreground">{t('settings.laboratory.logo')}</span>
-        <div className="flex items-center gap-3">
+        {/* `flex-wrap` because this row is three fixed-width things — the 48px preview and two
+            whitespace-nowrap buttons — that together outrun the control column on a 320px phone and
+            pushed Clear past the right padding. Wrapping, not sideways scrolling: a portalled scroller
+            here would be unreachable if this page ever renders inside a sheet. */}
+        <div className="flex flex-wrap items-center gap-3">
           {logo
             ? <img src={logo} alt={t('settings.laboratory.logo')} className="h-12 w-12 border border-border object-contain" />
             : <div className="flex h-12 w-12 items-center justify-center border border-dashed border-border text-[10px] text-muted-foreground">—</div>}
