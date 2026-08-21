@@ -961,6 +961,17 @@ export function Facilities() {
           {/* Portal target for whichever tab's `⋯` menu is currently mounted — see `actionsEl`'s
               doc comment above. */}
           <div ref={setActionsEl} className="flex items-center justify-self-end sm:order-3" />
+          {/* ⛔ The rule under the TABS row, mobile only. The container's own `border-b` sits at the
+              bottom of the whole block, which on a phone is below the health chip — so without this
+              the tabs and the ⋯ had no line under them at all and the two rows read as one soup.
+              `-mx-4` cancels the container's `px-4` so it reaches the pane edges like every other
+              rule here. `sm:hidden` because from `sm` up the strip is a single line again and the
+              container's border is already directly under the tabs. */}
+          <div
+            aria-hidden="true"
+            data-testid="facility-tabs-rule"
+            className="col-span-2 -mx-4 border-b border-border sm:hidden"
+          />
           {health && (
             <div
               className="col-span-2 pb-2 sm:order-2 sm:ml-auto sm:pb-0"

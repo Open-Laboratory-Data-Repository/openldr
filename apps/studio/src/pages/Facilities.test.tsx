@@ -631,6 +631,27 @@ describe('Facilities page', () => {
       expect(document.querySelectorAll('[data-testid="facility-health-slot"]')).toHaveLength(1);
     });
 
+    // The tabs keep a rule beneath them when the chip drops to its own row. Without it the only
+    // horizontal line sat under the CHIP, at the bottom of the whole two-row block, so the tabs and
+    // the ⋯ had nothing separating them from the health text and the strip read as one soup.
+    // Desktop already had this: there the row is a single line and the container's own `border-b`
+    // is directly under the tabs. `sm:hidden` because that is exactly when it stops being needed.
+    it('rules off the tabs row on a phone, so the chip row reads as separate', async () => {
+      (getFacilityHealth as ReturnType<typeof vi.fn>).mockResolvedValue({
+        reportDimension: { state: 'current', lastSuccessAt: '2026-08-01T10:00:00Z', rows: 88, error: null, jobId: null },
+        projection: { failedCount: 0, failed: [] },
+      });
+      show();
+      await screen.findByText(/current/i);
+      const rule = document.querySelector('[data-testid="facility-tabs-rule"]');
+      expect(rule, 'the tabs need their own rule once the chip is below them').toBeTruthy();
+      expect(rule?.className, 'full width, to the pane edges like every other rule here').toMatch(/-mx-4/);
+      expect(rule?.className, 'and gone once the strip is a single line again').toMatch(/sm:hidden/);
+      // It must sit BETWEEN the tabs and the chip, not anywhere else in the block.
+      const slot = document.querySelector('[data-testid="facility-health-slot"]');
+      expect(rule!.compareDocumentPosition(slot!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
     it('shows Updating while a rebuild is queued, with no Retry action', async () => {
       (getFacilityHealth as ReturnType<typeof vi.fn>).mockResolvedValue({
         reportDimension: { state: 'updating', lastSuccessAt: null, rows: null, error: null, jobId: null },
