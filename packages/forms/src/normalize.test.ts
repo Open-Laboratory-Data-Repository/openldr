@@ -122,3 +122,45 @@ describe('normalizeFormSchema', () => {
     expect(() => FormSchema.parse(result)).not.toThrow();
   });
 });
+
+describe('normalizeFormSchema fhirPath canonicalisation', () => {
+  it('prefixes a bare path with the form resource type', () => {
+    const result = normalizeFormSchema({
+      id: 'f1',
+      name: 'Facility',
+      fhirResourceType: 'Location',
+      fields: [{ id: 'fld-zone', fhirPath: 'address.district', displayLabel: 'Zone', fieldType: 'text' }],
+    });
+    expect(result.fields[0]!.fhirPath).toBe('Location.address.district');
+  });
+
+  it('leaves an already prefixed path untouched', () => {
+    const result = normalizeFormSchema({
+      id: 'f2',
+      name: 'Requisition',
+      fhirResourceType: 'ServiceRequest',
+      fields: [{ id: 'fld-spec', fhirPath: 'Specimen.type', displayLabel: 'Specimen', fieldType: 'text' }],
+    });
+    expect(result.fields[0]!.fhirPath).toBe('Specimen.type');
+  });
+
+  it('leaves a bare path alone when it cannot be resolved, rather than blanking it', () => {
+    const result = normalizeFormSchema({
+      id: 'f3',
+      name: 'Untyped',
+      fhirResourceType: null,
+      fields: [{ id: 'fld-x', fhirPath: 'address.district', displayLabel: 'X', fieldType: 'text' }],
+    });
+    expect(result.fields[0]!.fhirPath).toBe('address.district');
+  });
+
+  it('leaves a null path null', () => {
+    const result = normalizeFormSchema({
+      id: 'f4',
+      name: 'Facility',
+      fhirResourceType: 'Location',
+      fields: [{ id: 'fld-council', fhirPath: null, displayLabel: 'Council', fieldType: 'text' }],
+    });
+    expect(result.fields[0]!.fhirPath).toBeNull();
+  });
+});

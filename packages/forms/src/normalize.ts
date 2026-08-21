@@ -1,5 +1,6 @@
 import { FormSchema, type FormField, type FormSection } from './schema/form-schema';
 import { deriveLanguagesFromTranslations } from './derive-languages';
+import { resolveFhirPath } from './fhir-path';
 
 type DraftObject = Record<string, unknown>;
 
@@ -10,7 +11,8 @@ export function normalizeFormSchema(input: unknown): FormSchema {
 
   // Normalize flat fields array
   const rawFields = Array.isArray(source.fields) ? source.fields : [];
-  const fields = rawFields.map((f, idx) => normalizeField(f, idx));
+  const resourceType = stringValue(source.fhirResourceType) ?? null;
+  const fields = rawFields.map((f, idx) => normalizeField(f, idx, resourceType));
 
   // Normalize flat sections array
   const sections = Array.isArray(source.sections) ? source.sections.map(normalizeSection) : [];
@@ -60,7 +62,7 @@ function normalizeSection(input: unknown): FormSection {
   } as FormSection;
 }
 
-function normalizeField(input: unknown, idx: number): FormField {
+function normalizeField(input: unknown, idx: number, resourceType: string | null = null): FormField {
   const source = isObject(input) ? input : {};
   const id = stringValue(source.id) ?? `field-${idx}`;
 
@@ -71,7 +73,11 @@ function normalizeField(input: unknown, idx: number): FormField {
     ? source.cardinality
     : { min: 0, max: '1' };
   const required = typeof source.required === 'boolean' ? source.required : false;
-  const fhirPath = source.fhirPath !== undefined ? source.fhirPath : null;
+  const rawPath = source.fhirPath !== undefined ? source.fhirPath : null;
+  // Canonicalise to the resource-prefixed grammar. An unresolvable bare path is kept as
+  // written: blanking it would throw away an operator's mapping over a resource type the
+  // generated table happens not to cover.
+  const fhirPath = typeof rawPath === 'string' ? (resolveFhirPath(rawPath, resourceType) ?? rawPath) : rawPath;
   const description = source.description !== undefined ? source.description : null;
 
   return {
