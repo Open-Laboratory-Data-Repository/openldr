@@ -78,9 +78,15 @@ export function PackageDetail({ entry, onBack, onInstall, onToggleEnabled, onRol
           50px off the top of every phone screen for one control. Back is the first item in the ⋯
           menu now, which is also where AGENTS.md section 5 puts everything else on this page. */}
       {/* Title row — a fixed header above the scrollable body */}
-      <div className="flex items-start justify-between gap-4 py-4">
+      {/* ⚠ `pt-0`. The wrapper in MarketplaceTabs already pays 16px of top padding; a second 16 here
+          plus the h1's UA margin opened this view with a 45px dead band above the title on a phone.
+          One source of top spacing, not three. */}
+      <div className="flex items-start justify-between gap-4 pb-4 pt-0">
           <div>
-            <h1 className="text-xl font-medium text-foreground">{entry.id}</h1>
+            {/* ⛔ `m-0`. This app ships Tailwind WITHOUT global preflight (tokens.css), so a bare
+                <h1> keeps the user-agent `margin: 0.67em 0` — 13.4px at `text-xl`. Nothing else is
+                going to strip it. */}
+            <h1 className="m-0 text-xl font-medium text-foreground">{entry.id}</h1>
             {/* `flex-wrap`: on a phone the publisher name already takes two lines, and without this
                 the badges squeeze it further instead of dropping below. */}
             <p className="mt-0.5 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
@@ -104,11 +110,6 @@ export function PackageDetail({ entry, onBack, onInstall, onToggleEnabled, onRol
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                {/* First, and separated: it navigates away rather than acting on this package. */}
-                <DropdownMenuItem data-testid="detail-back" onSelect={onBack}>
-                  {t('settings.marketplace.back')}
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
                 {canPublish && entry.ref ? (
                   <DropdownMenuItem data-testid="detail-publish" onSelect={() => onPublish?.(entry)}>
                     {t('settings.marketplace.publish')}
@@ -161,6 +162,12 @@ export function PackageDetail({ entry, onBack, onInstall, onToggleEnabled, onRol
                     </>
                   )
                 ) : null}
+                {/* Last, and separated: it navigates away rather than acting on this package, so it
+                    sits below the actions instead of above them. */}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem data-testid="detail-back" onSelect={onBack}>
+                  {t('settings.marketplace.back')}
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>

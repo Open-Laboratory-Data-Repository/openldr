@@ -149,6 +149,20 @@ describe('PackageDetail', () => {
   //
   // ⚠ HONEST NON-PROOF: jsdom applies no media queries. This pins the classes and the absence of
   // the inline style, not the rendered column count.
+  // ⛔ The studio ships Tailwind WITHOUT global preflight, on purpose, to protect the older
+  // token-CSS pages (see tokens.css). So a bare <h1> KEEPS its user-agent `margin: 0.67em 0`, which
+  // at `text-xl` is 13.4px of space nobody asked for. Stacked on the wrapper's `p-4` and the title
+  // row's own padding, the detail view opened with 45px of dead band above the title on a phone.
+  //
+  // ⚠ This is not local tidying. Any heading added anywhere in this app carries the same stray
+  // margin, and there is no preflight coming to remove it.
+  it('zeroes the title margin, because this app has no preflight to do it', async () => {
+    mockDetail();
+    const { container } = render(<PackageDetail entry={entry} onBack={() => {}} onInstall={() => {}} onToggleEnabled={() => {}} onRollback={() => {}} onRemove={() => {}} />);
+    await screen.findByText(/Converts WHONET SQLite/);
+    expect(container.querySelector('h1')?.className, 'a UA margin no preflight will strip').toMatch(/(^|\s)m-0(\s|$)/);
+  });
+
   describe('mobile layout', () => {
     it('stacks the body into one column below md, instead of holding a 244px sidebar', async () => {
       mockDetail();
