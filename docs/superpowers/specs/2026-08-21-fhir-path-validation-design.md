@@ -113,8 +113,19 @@ carries `Specimen.type` fields (`packages/forms/src/samples/forms.ts:428`). An u
 cannot say which resource a field lands on, and multi-resource extraction is exactly what the
 extractor already does.
 
-Bare paths stay readable. `normalize.ts` upgrades them using the form's `fhirResourceType` on
-load, so an existing form keeps working with no data migration for the grammar alone.
+Bare paths stay readable, through a `resolveFhirPath(field, schema)` helper in
+`packages/forms`. Given a bare path it prepends the form's `fhirResourceType`. Given an already
+prefixed path it returns it unchanged. Given a bare path on a form with no `fhirResourceType`
+it returns null, and the linter reports that as its own finding.
+
+Every consumer goes through that helper. That includes the new lint rules, and it is what the
+export writer will use later.
+
+`normalize.ts` also upgrades bare paths so the builder persists canonical values on the next
+save. That alone is not sufficient and must not be relied on: `normalizeFormSchema` runs only
+in the studio builder (`apps/studio/src/forms-builder/FormBuilderPage.tsx:47` and
+`CompareDialog.tsx:45`). It is absent from the server read path, the form runtime, and
+extraction. The helper is the mechanism; normalize is convenience on top of it.
 
 ### 3. Structural lint rules
 
@@ -188,6 +199,62 @@ Two changes are needed to land this:
 `FACILITY_FORM_MIGRATION_BOUND_FIELDS`, which `packages/forms/src/samples/forms.test.ts` pins
 the sample against, moves to the new snapshot.
 
+## Phasing
+
+Three phases, each independently mergeable, each leaving the tree green.
+
+The boundary is chosen so no phase can leave a shipped form unpublishable. Lint errors gate
+publish (`apps/studio/src/forms-builder/FormBuilderPage.tsx:240`), and the seeded Facility form
+fails the new rules today. So no rule may ship before the data it would reject is corrected.
+Phase 1 therefore carries no rules at all, and Phase 2 carries every rule together with the
+correction in one commit.
+
+### Phase 1: path table and grammar
+
+Deliverable: the generator, the checked-in table, and `resolveFhirPath`.
+
+- The `.d.ts` walker and its `pnpm` script.
+- The generated table and its staleness test.
+- `resolveFhirPath(field, schema)` in `packages/forms`.
+- `normalize.ts` upgrading bare paths.
+
+No lint rules. No behaviour change any operator can see. Nothing can break, because nothing
+reads the table yet.
+
+This phase is the one with real unknowns, chiefly how the TypeScript compiler API handles the
+`Element`-extends pattern and the `_field` sibling properties that `@types/fhir` emits. Landing
+it alone means those unknowns cannot delay the correctness work behind them.
+
+### Phase 2: rules and the correction
+
+Deliverable: forms are validated, and the shipped forms pass.
+
+- All four lint rules: `unknown-fhir-path`, `fhir-path-cardinality`,
+  `fhir-path-type-mismatch`, `facility-admin-order`.
+- The corrected mapping in `packages/forms/src/samples/forms.ts`.
+- Migration 089 for installed forms.
+- `FACILITY_FORM_MIGRATION_BOUND_FIELDS` moved to the new snapshot.
+- The regression test asserting every shipped sample passes every rule.
+
+Rules and correction ship together, in that order within the phase but the same merge. Landing
+the rules first would gate publish on the seeded form. Landing the correction first would leave
+a window where nothing defends it.
+
+One migration, not two, because Phase 2 corrects the structural paths and the administrative
+order in the same rewrite.
+
+### Phase 3: builder UI
+
+Deliverable: an operator cannot easily type a wrong path in the first place.
+
+- The FHIR Path combobox over the table, scoped to the form's resource type.
+- The element definition rendered under the input.
+- Free text preserved as an escape hatch.
+- Mobile check at 375x812.
+
+Purely additive. The rules from Phase 2 already hold the line, so this phase can slip without
+correctness cost.
+
 ## Out of scope
 
 **IHE mCSD.** The standard answer to having more administrative tiers than `Address` has slots
@@ -205,19 +272,52 @@ schemas keep their existing job of validating what CE writes.
 **A generic path writer.** `setPath` stays uncalled. Teaching it to honour discriminators and
 array indices belongs with the export work.
 
+## Definition of done, per `AGENTS.md` §6
+
+| | Phase 1 | Phase 2 | Phase 3 |
+|---|---|---|---|
+| UI | none | none | combobox and definitions |
+| CLI parity | none | `openldr forms lint` | none |
+| Docs, en/fr/pt | none | lint code reference | builder help text |
+| Mobile | none | none | 375x812 check |
+| Changelog | run it | run it | run it |
+
+CLI parity lands in Phase 2, not Phase 3, because that is the phase that introduces the
+findings. Lint is builder-only today, which means a headless lab has no way to see any of this.
+`packages/cli/src/forms.ts` already carries `runFormsExtract` and `runFormsList`, so a `lint`
+sibling calling the same `lintFormSchema` is the established shape. Shared logic stays in
+`packages/forms`, so the route and the CLI call identical code.
+
+Phase 1 has no user-facing surface, so four of the five rows are legitimately empty. The
+changelog still runs, because the generator script is a `feat`.
+
 ## Verification
 
 What each layer proves, and what it does not.
 
+Phase 1:
+
 - Unit tests over the generator: given a fixture `.d.ts`, the emitted table has the expected
   paths, array flags, leaf types, and descriptions.
 - A staleness test: regenerating produces no diff.
+- `resolveFhirPath` unit tests: bare path prefixed, prefixed path untouched, bare path with no
+  `fhirResourceType` returning null.
+
+Phase 2:
+
 - Unit tests per lint rule, including the negative cases. A discriminated `identifier.value`
   must not fire `fhir-path-cardinality`. A renamed Zone must still fire `facility-admin-order`.
 - A test asserting every path in every shipped sample form passes all four new rules. This is
   the regression that would have caught the original bug.
 - Migration 089 gets the same test shape as 071 and 073: each prior era repointed, an edited
   form left alone, `down()` restoring exactly.
+- CLI parsing test for `openldr forms lint`, matching the shape of the existing
+  `packages/cli/src/*-cli-parsing.test.ts` files.
+
+Phase 3:
+
+- Component tests for the combobox: filtered to the resource type, definition rendered, free
+  text still accepted.
 
 Not proven by any of the above: that a real FHIR consumer accepts the output. Nothing exports a
 Location yet, so there is nothing to point at a validator. That gap closes with the export
