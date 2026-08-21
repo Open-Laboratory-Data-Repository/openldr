@@ -6,6 +6,48 @@
       "version": null,
       "entries": [
         {
+          "hash": "09390e09",
+          "type": "fix",
+          "scope": "studio",
+          "title": "The settings actions the dots-menu rule missed"
+        },
+        {
+          "hash": "d1eb0712",
+          "type": "fix",
+          "scope": "studio",
+          "title": "The laboratory identity saves from the ⋯ menu, not a standalone button"
+        },
+        {
+          "hash": "2b160a91",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Saving the laboratory identity no longer crashes the page it just saved"
+        },
+        {
+          "hash": "095fdd27",
+          "type": "perf",
+          "scope": "reports",
+          "title": "Collect the month's requests once instead of ORing three tests per row"
+        },
+        {
+          "hash": "57c669ae",
+          "type": "perf",
+          "scope": "reports",
+          "title": "The Others row asks about arrivals once, not once per working day"
+        },
+        {
+          "hash": "29e69079",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Say the report is re-running while it re-runs"
+        },
+        {
+          "hash": "16d4dcec",
+          "type": "fix",
+          "scope": "studio",
+          "title": "A report refresh re-fetches the document, not just the rows"
+        },
+        {
           "hash": "b8adb82d",
           "type": "fix",
           "scope": "reports",
