@@ -1631,6 +1631,9 @@ describe('SEED_DESIGNS — no built-in id can collide with a designer-minted id'
 
 describe('SEED_QUERIES — the transmission grids', () => {
   const q = (id: string) => SEED_QUERIES.find((x) => x.id === id)!;
+  /** The two grids and the two band queries: every query that reads the clinical-date ladder. */
+  const BAND_AND_GRIDS = ['q-transmission-hvleid', 'q-transmission-other',
+    'q-transmission-calendar', 'q-transmission-summary'];
 
   // ⛔ The ladder, in order: registered, then tested, then authorised. `coalesce` stops at its
   // first non-null, so the ORDER is the rule, not just the presence of three rungs. Swap the last
@@ -1761,6 +1764,30 @@ describe('SEED_QUERIES — the transmission grids', () => {
     }
   });
 
+  // ⛔ The month gate is a UNION collected once, not an OR of three predicates per request row.
+  // MEASURED 2026-08-21 on the live warehouse: the OR form cost 1014ms of startup on a single
+  // sequential scan of lab_requests and every one of the report's four queries paid it. Indexes do
+  // not fix it; the tables are small enough that there is no scan to save. A future edit that
+  // reaches back for the readable OR would take a 0.16s report back to 4.3s with every test green,
+  // which is exactly why this is pinned in text.
+  it('gates the month with a collected candidate set, in every dialect', () => {
+    for (const id of BAND_AND_GRIDS) {
+      for (const [dialect, sql] of Object.entries(q(id).sql)) {
+        expect(sql, `${id}/${dialect} lost the in_month candidate set`).toMatch(/in_month as \(/);
+        expect(sql, `${id}/${dialect} no longer selects requests from the candidate set`)
+          .toMatch(/where q\.id in \(select id from in_month\)/);
+        // All three rungs of the clinical-date ladder must contribute candidates, or a request
+        // resulted or authorised in the month silently drops out of the report.
+        expect(sql, `${id}/${dialect} dropped the registered rung`).toMatch(/from lab_requests lq where left\(lq\.authored_at, 7\)/);
+        expect(sql, `${id}/${dialect} dropped the resulted rung`).toMatch(/from lab_results lr where left\(lr\.result_timestamp, 7\)/);
+        expect(sql, `${id}/${dialect} dropped the authorised rung`).toMatch(/from diagnostic_reports ldr where left\(ldr\.issued, 7\)/);
+        // ...and the per-row OR must be gone, not merely joined by the union.
+        expect(sql, `${id}/${dialect} still ORs the month gate per request row`)
+          .not.toMatch(/or exists \(select 1 from lab_results/);
+      }
+    }
+  });
+
   it('carries no panel code in SQL — the list is a run-time parameter', () => {
     // AGENTS.md §8. HIVVL/HIVPC are Tanzania's codes; another country's differ.
     for (const id of ['q-transmission-hvleid', 'q-transmission-other']) {
@@ -1816,13 +1843,15 @@ describe('SEED_QUERIES — the transmission grids', () => {
       for (const [dialect, sql] of Object.entries(q(id).sql)) {
         expect(sql, `${id}/${dialect} lost the batch-attribution alias d`)
           .toMatch(/join diagnostic_reports d on d\.batch_id = q\.batch_id/);
-        // TWO `dr` sites, counted: the coalesce rung that reads the issued date, and the arm of
-        // the `where` gate that admits the request in the first place. A match-anywhere assertion
-        // is satisfied by the gate alone, so the rung could lose its own alias and stay green.
+        // ONE `dr` site: the coalesce rung that reads the issued date. It was TWO until 2026-08-21,
+        // when the second one, the arm of the `where` gate that admitted the request at all, moved
+        // into the `in_month` candidate set under its own alias `ldr`. The count is asserted rather
+        // than matched anywhere, so the rung cannot quietly lose its alias; the gate's own rungs are
+        // pinned separately, by the candidate-set test above.
         expect(sql.match(/from diagnostic_reports dr\b/g) ?? [],
-          `${id}/${dialect} lost an authorising-alias site`).toHaveLength(2);
+          `${id}/${dialect} lost the authorising-alias site`).toHaveLength(1);
         expect(sql.match(/where dr\.based_on_id = q\.id\b/g) ?? [],
-          `${id}/${dialect} stopped keying dr on based_on_id`).toHaveLength(2);
+          `${id}/${dialect} stopped keying dr on based_on_id`).toHaveLength(1);
         // The issued date must come off `dr`, never off the batch alias.
         expect(sql, `${id}/${dialect} reads issued off the batch alias`)
           .not.toMatch(/min\(d\.issued\)/);

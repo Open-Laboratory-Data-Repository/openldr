@@ -2256,6 +2256,33 @@ days as (
   cross join generate_series(m.d::timestamp, (m.d + interval '1 month' - interval '1 day')::timestamp, interval '1 day') g
   where extract(isodow from g) between 1 and 5
 ),
+in_month as (
+  -- Requests this month touched, by ANY of the three clinical timestamps: registered in the month,
+  -- resulted in it, or authorised in it. Same three tests the coalesce ladder below reads, and the
+  -- same requests the old predicate selected.
+  --
+  -- ⛔ A UNION of three single-table scans, collected ONCE, never an OR of three predicates
+  -- evaluated per request row. MEASURED 2026-08-21 on the live warehouse, 22,964 requests, month
+  -- 2018-08: the OR form put 1014ms of STARTUP time on one sequential scan of lab_requests, whose
+  -- own subplans accounted for 42ms of it, and all four of this report's queries paid it every run.
+  -- The four together went from 4.3s to 0.16s. Equivalence is not assumed: both forms were run over
+  -- every month the warehouse holds, 64 query/month pairs, 0 mismatched.
+  --
+  -- ⚠ INDEXES DO NOT FIX THE OR FORM, so do not reach for one instead. Measured the same day on the
+  -- same data: indexes on diagnostic_reports(batch_id), lab_requests(authored_at),
+  -- lab_results(result_timestamp) and diagnostic_reports(issued) moved the total from 3868ms to
+  -- 4291ms. These tables are small enough that a full scan of all 22,964 rows costs 1.7ms, so there
+  -- is no scan for an index to save.
+  --
+  -- ⚠ NULL based_on_id rows can enter this set and that is harmless: 'in' treats a NULL candidate as
+  -- no match. It would NOT be harmless under 'not in', which is why the panel predicate below stays
+  -- where it is rather than joining this one.
+  select lq.id from lab_requests lq where left(lq.authored_at, 7) = (select ym from month_start)
+  union
+  select lr.request_id from lab_results lr where left(lr.result_timestamp, 7) = (select ym from month_start)
+  union
+  select ldr.based_on_id from diagnostic_reports ldr where left(ldr.issued, 7) = (select ym from month_start)
+),
 arrivals as (
   -- One row per (laboratory, day) that laboratory showed activity on, for the requested month.
   --
@@ -2306,13 +2333,8 @@ arrivals as (
      and fm.source_code = d.performer
     -- Cheap month gate before the coalesce, mirroring the prior system's three-way OR. Without it
     -- the batch join runs over every request ever loaded rather than over the month's.
-    where (
-         left(q.authored_at, 7) = (select ym from month_start)
-      or exists (select 1 from lab_results r
-                  where r.request_id = q.id and left(r.result_timestamp, 7) = (select ym from month_start))
-      or exists (select 1 from diagnostic_reports dr
-                  where dr.based_on_id = q.id and left(dr.issued, 7) = (select ym from month_start))
-    )
+    -- The whole month gate. It is collected once, in 'in_month' above.
+    where q.id in (select id from in_month)
     -- The panel list is a RUN-TIME parameter (AGENTS.md §8), no code is written here.
     -- ⛔ An EMPTY panels value NEVER REACHES THIS SQL. 'panels' is declared required, and
     -- substituteParams throws 'required parameter: panels' on '' or null before any SQL is built
@@ -2480,6 +2502,33 @@ days as (
   from all_days
   where datediff(day, '19000101', cal_day) % 7 between 0 and 4
 ),
+in_month as (
+  -- Requests this month touched, by ANY of the three clinical timestamps: registered in the month,
+  -- resulted in it, or authorised in it. Same three tests the coalesce ladder below reads, and the
+  -- same requests the old predicate selected.
+  --
+  -- ⛔ A UNION of three single-table scans, collected ONCE, never an OR of three predicates
+  -- evaluated per request row. MEASURED 2026-08-21 on the live warehouse, 22,964 requests, month
+  -- 2018-08: the OR form put 1014ms of STARTUP time on one sequential scan of lab_requests, whose
+  -- own subplans accounted for 42ms of it, and all four of this report's queries paid it every run.
+  -- The four together went from 4.3s to 0.16s. Equivalence is not assumed: both forms were run over
+  -- every month the warehouse holds, 64 query/month pairs, 0 mismatched.
+  --
+  -- ⚠ INDEXES DO NOT FIX THE OR FORM, so do not reach for one instead. Measured the same day on the
+  -- same data: indexes on diagnostic_reports(batch_id), lab_requests(authored_at),
+  -- lab_results(result_timestamp) and diagnostic_reports(issued) moved the total from 3868ms to
+  -- 4291ms. These tables are small enough that a full scan of all 22,964 rows costs 1.7ms, so there
+  -- is no scan for an index to save.
+  --
+  -- ⚠ NULL based_on_id rows can enter this set and that is harmless: 'in' treats a NULL candidate as
+  -- no match. It would NOT be harmless under 'not in', which is why the panel predicate below stays
+  -- where it is rather than joining this one.
+  select lq.id from lab_requests lq where left(lq.authored_at, 7) = (select ym from month_start)
+  union
+  select lr.request_id from lab_results lr where left(lr.result_timestamp, 7) = (select ym from month_start)
+  union
+  select ldr.based_on_id from diagnostic_reports ldr where left(ldr.issued, 7) = (select ym from month_start)
+),
 arrivals as (
   -- One row per (laboratory, day) that laboratory showed activity on, for the requested month.
   -- Same ladder as the postgres variant: registered, then tested, then authorised. One mark per
@@ -2534,13 +2583,8 @@ arrivals as (
      and fm.source_code = d.performer
     -- Cheap month gate before the coalesce, mirroring the prior system's three-way OR. Without it
     -- the batch join runs over every request ever loaded rather than over the month's.
-    where (
-         left(q.authored_at, 7) = (select ym from month_start)
-      or exists (select 1 from lab_results r
-                  where r.request_id = q.id and left(r.result_timestamp, 7) = (select ym from month_start))
-      or exists (select 1 from diagnostic_reports dr
-                  where dr.based_on_id = q.id and left(dr.issued, 7) = (select ym from month_start))
-    )
+    -- The whole month gate. It is collected once, in 'in_month' above.
+    where q.id in (select id from in_month)
     -- The panel list is a RUN-TIME parameter (AGENTS.md §8), no code is written here.
     -- ⛔ An EMPTY panels value NEVER REACHES THIS SQL. 'panels' is declared required, and
     -- substituteParams throws 'required parameter: panels' on '' or null before any SQL is built
@@ -2731,6 +2775,33 @@ days as (
   from all_days
   where weekday(cal_day) between 0 and 4
 ),
+in_month as (
+  -- Requests this month touched, by ANY of the three clinical timestamps: registered in the month,
+  -- resulted in it, or authorised in it. Same three tests the coalesce ladder below reads, and the
+  -- same requests the old predicate selected.
+  --
+  -- ⛔ A UNION of three single-table scans, collected ONCE, never an OR of three predicates
+  -- evaluated per request row. MEASURED 2026-08-21 on the live warehouse, 22,964 requests, month
+  -- 2018-08: the OR form put 1014ms of STARTUP time on one sequential scan of lab_requests, whose
+  -- own subplans accounted for 42ms of it, and all four of this report's queries paid it every run.
+  -- The four together went from 4.3s to 0.16s. Equivalence is not assumed: both forms were run over
+  -- every month the warehouse holds, 64 query/month pairs, 0 mismatched.
+  --
+  -- ⚠ INDEXES DO NOT FIX THE OR FORM, so do not reach for one instead. Measured the same day on the
+  -- same data: indexes on diagnostic_reports(batch_id), lab_requests(authored_at),
+  -- lab_results(result_timestamp) and diagnostic_reports(issued) moved the total from 3868ms to
+  -- 4291ms. These tables are small enough that a full scan of all 22,964 rows costs 1.7ms, so there
+  -- is no scan for an index to save.
+  --
+  -- ⚠ NULL based_on_id rows can enter this set and that is harmless: 'in' treats a NULL candidate as
+  -- no match. It would NOT be harmless under 'not in', which is why the panel predicate below stays
+  -- where it is rather than joining this one.
+  select lq.id from lab_requests lq where left(lq.authored_at, 7) = (select ym from month_start)
+  union
+  select lr.request_id from lab_results lr where left(lr.result_timestamp, 7) = (select ym from month_start)
+  union
+  select ldr.based_on_id from diagnostic_reports ldr where left(ldr.issued, 7) = (select ym from month_start)
+),
 arrivals as (
   -- One row per (laboratory, day) that laboratory showed activity on, for the requested month.
   -- Same ladder as the postgres variant: registered, then tested, then authorised. One mark per
@@ -2800,13 +2871,8 @@ arrivals as (
      and fm.source_code = d.performer
     -- Cheap month gate before the coalesce, mirroring the prior system's three-way OR. Without it
     -- the batch join runs over every request ever loaded rather than over the month's.
-    where (
-         left(q.authored_at, 7) = (select ym from month_start)
-      or exists (select 1 from lab_results r
-                  where r.request_id = q.id and left(r.result_timestamp, 7) = (select ym from month_start))
-      or exists (select 1 from diagnostic_reports dr
-                  where dr.based_on_id = q.id and left(dr.issued, 7) = (select ym from month_start))
-    )
+    -- The whole month gate. It is collected once, in 'in_month' above.
+    where q.id in (select id from in_month)
     -- The panel list is a RUN-TIME parameter (AGENTS.md §8), no code is written here.
     -- ⛔ An EMPTY panels value NEVER REACHES THIS SQL. 'panels' is declared required, and
     -- substituteParams throws 'required parameter: panels' on '' or null before any SQL is built
@@ -2980,6 +3046,33 @@ days as (
   cross join generate_series(m.d::timestamp, (m.d + interval '1 month' - interval '1 day')::timestamp, interval '1 day') g
   where extract(isodow from g) between 1 and 5
 ),
+in_month as (
+  -- Requests this month touched, by ANY of the three clinical timestamps: registered in the month,
+  -- resulted in it, or authorised in it. Same three tests the coalesce ladder below reads, and the
+  -- same requests the old predicate selected.
+  --
+  -- ⛔ A UNION of three single-table scans, collected ONCE, never an OR of three predicates
+  -- evaluated per request row. MEASURED 2026-08-21 on the live warehouse, 22,964 requests, month
+  -- 2018-08: the OR form put 1014ms of STARTUP time on one sequential scan of lab_requests, whose
+  -- own subplans accounted for 42ms of it, and all four of this report's queries paid it every run.
+  -- The four together went from 4.3s to 0.16s. Equivalence is not assumed: both forms were run over
+  -- every month the warehouse holds, 64 query/month pairs, 0 mismatched.
+  --
+  -- ⚠ INDEXES DO NOT FIX THE OR FORM, so do not reach for one instead. Measured the same day on the
+  -- same data: indexes on diagnostic_reports(batch_id), lab_requests(authored_at),
+  -- lab_results(result_timestamp) and diagnostic_reports(issued) moved the total from 3868ms to
+  -- 4291ms. These tables are small enough that a full scan of all 22,964 rows costs 1.7ms, so there
+  -- is no scan for an index to save.
+  --
+  -- ⚠ NULL based_on_id rows can enter this set and that is harmless: 'in' treats a NULL candidate as
+  -- no match. It would NOT be harmless under 'not in', which is why the panel predicate below stays
+  -- where it is rather than joining this one.
+  select lq.id from lab_requests lq where left(lq.authored_at, 7) = (select ym from month_start)
+  union
+  select lr.request_id from lab_results lr where left(lr.result_timestamp, 7) = (select ym from month_start)
+  union
+  select ldr.based_on_id from diagnostic_reports ldr where left(ldr.issued, 7) = (select ym from month_start)
+),
 arrivals as (
   -- One row per (laboratory, day) that laboratory showed activity on, for the requested month.
   --
@@ -3026,13 +3119,8 @@ arrivals as (
      and fm.source_code = d.performer
     -- Cheap month gate before the coalesce, mirroring the prior system's three-way OR. Without it
     -- the batch join runs over every request ever loaded rather than over the month's.
-    where (
-         left(q.authored_at, 7) = (select ym from month_start)
-      or exists (select 1 from lab_results r
-                  where r.request_id = q.id and left(r.result_timestamp, 7) = (select ym from month_start))
-      or exists (select 1 from diagnostic_reports dr
-                  where dr.based_on_id = q.id and left(dr.issued, 7) = (select ym from month_start))
-    )
+    -- The whole month gate. It is collected once, in 'in_month' above.
+    where q.id in (select id from in_month)
     -- The panel list is a RUN-TIME parameter (AGENTS.md §8), no code is written here.
     -- ⛔ An EMPTY panels value NEVER REACHES THIS SQL. 'panels' is declared required, and
     -- substituteParams throws 'required parameter: panels' on '' or null before any SQL is built
@@ -3187,6 +3275,33 @@ days as (
   from all_days
   where datediff(day, '19000101', cal_day) % 7 between 0 and 4
 ),
+in_month as (
+  -- Requests this month touched, by ANY of the three clinical timestamps: registered in the month,
+  -- resulted in it, or authorised in it. Same three tests the coalesce ladder below reads, and the
+  -- same requests the old predicate selected.
+  --
+  -- ⛔ A UNION of three single-table scans, collected ONCE, never an OR of three predicates
+  -- evaluated per request row. MEASURED 2026-08-21 on the live warehouse, 22,964 requests, month
+  -- 2018-08: the OR form put 1014ms of STARTUP time on one sequential scan of lab_requests, whose
+  -- own subplans accounted for 42ms of it, and all four of this report's queries paid it every run.
+  -- The four together went from 4.3s to 0.16s. Equivalence is not assumed: both forms were run over
+  -- every month the warehouse holds, 64 query/month pairs, 0 mismatched.
+  --
+  -- ⚠ INDEXES DO NOT FIX THE OR FORM, so do not reach for one instead. Measured the same day on the
+  -- same data: indexes on diagnostic_reports(batch_id), lab_requests(authored_at),
+  -- lab_results(result_timestamp) and diagnostic_reports(issued) moved the total from 3868ms to
+  -- 4291ms. These tables are small enough that a full scan of all 22,964 rows costs 1.7ms, so there
+  -- is no scan for an index to save.
+  --
+  -- ⚠ NULL based_on_id rows can enter this set and that is harmless: 'in' treats a NULL candidate as
+  -- no match. It would NOT be harmless under 'not in', which is why the panel predicate below stays
+  -- where it is rather than joining this one.
+  select lq.id from lab_requests lq where left(lq.authored_at, 7) = (select ym from month_start)
+  union
+  select lr.request_id from lab_results lr where left(lr.result_timestamp, 7) = (select ym from month_start)
+  union
+  select ldr.based_on_id from diagnostic_reports ldr where left(ldr.issued, 7) = (select ym from month_start)
+),
 arrivals as (
   -- One row per (laboratory, day) that laboratory showed activity on, for the requested month.
   -- Same ladder as the postgres variant: registered, then tested, then authorised. One mark per
@@ -3241,13 +3356,8 @@ arrivals as (
      and fm.source_code = d.performer
     -- Cheap month gate before the coalesce, mirroring the prior system's three-way OR. Without it
     -- the batch join runs over every request ever loaded rather than over the month's.
-    where (
-         left(q.authored_at, 7) = (select ym from month_start)
-      or exists (select 1 from lab_results r
-                  where r.request_id = q.id and left(r.result_timestamp, 7) = (select ym from month_start))
-      or exists (select 1 from diagnostic_reports dr
-                  where dr.based_on_id = q.id and left(dr.issued, 7) = (select ym from month_start))
-    )
+    -- The whole month gate. It is collected once, in 'in_month' above.
+    where q.id in (select id from in_month)
     -- The panel list is a RUN-TIME parameter (AGENTS.md §8), no code is written here.
     -- ⛔ An EMPTY panels value NEVER REACHES THIS SQL. 'panels' is declared required, and
     -- substituteParams throws 'required parameter: panels' on '' or null before any SQL is built
@@ -3434,6 +3544,33 @@ days as (
   from all_days
   where weekday(cal_day) between 0 and 4
 ),
+in_month as (
+  -- Requests this month touched, by ANY of the three clinical timestamps: registered in the month,
+  -- resulted in it, or authorised in it. Same three tests the coalesce ladder below reads, and the
+  -- same requests the old predicate selected.
+  --
+  -- ⛔ A UNION of three single-table scans, collected ONCE, never an OR of three predicates
+  -- evaluated per request row. MEASURED 2026-08-21 on the live warehouse, 22,964 requests, month
+  -- 2018-08: the OR form put 1014ms of STARTUP time on one sequential scan of lab_requests, whose
+  -- own subplans accounted for 42ms of it, and all four of this report's queries paid it every run.
+  -- The four together went from 4.3s to 0.16s. Equivalence is not assumed: both forms were run over
+  -- every month the warehouse holds, 64 query/month pairs, 0 mismatched.
+  --
+  -- ⚠ INDEXES DO NOT FIX THE OR FORM, so do not reach for one instead. Measured the same day on the
+  -- same data: indexes on diagnostic_reports(batch_id), lab_requests(authored_at),
+  -- lab_results(result_timestamp) and diagnostic_reports(issued) moved the total from 3868ms to
+  -- 4291ms. These tables are small enough that a full scan of all 22,964 rows costs 1.7ms, so there
+  -- is no scan for an index to save.
+  --
+  -- ⚠ NULL based_on_id rows can enter this set and that is harmless: 'in' treats a NULL candidate as
+  -- no match. It would NOT be harmless under 'not in', which is why the panel predicate below stays
+  -- where it is rather than joining this one.
+  select lq.id from lab_requests lq where left(lq.authored_at, 7) = (select ym from month_start)
+  union
+  select lr.request_id from lab_results lr where left(lr.result_timestamp, 7) = (select ym from month_start)
+  union
+  select ldr.based_on_id from diagnostic_reports ldr where left(ldr.issued, 7) = (select ym from month_start)
+),
 arrivals as (
   -- One row per (laboratory, day) that laboratory showed activity on, for the requested month.
   -- Same ladder as the postgres variant: registered, then tested, then authorised. One mark per
@@ -3503,13 +3640,8 @@ arrivals as (
      and fm.source_code = d.performer
     -- Cheap month gate before the coalesce, mirroring the prior system's three-way OR. Without it
     -- the batch join runs over every request ever loaded rather than over the month's.
-    where (
-         left(q.authored_at, 7) = (select ym from month_start)
-      or exists (select 1 from lab_results r
-                  where r.request_id = q.id and left(r.result_timestamp, 7) = (select ym from month_start))
-      or exists (select 1 from diagnostic_reports dr
-                  where dr.based_on_id = q.id and left(dr.issued, 7) = (select ym from month_start))
-    )
+    -- The whole month gate. It is collected once, in 'in_month' above.
+    where q.id in (select id from in_month)
     -- The panel list is a RUN-TIME parameter (AGENTS.md §8), no code is written here.
     -- ⛔ An EMPTY panels value NEVER REACHES THIS SQL. 'panels' is declared required, and
     -- substituteParams throws 'required parameter: panels' on '' or null before any SQL is built
@@ -3685,6 +3817,33 @@ cal as (
   cross join generate_series(m.d::timestamp, (m.d + interval '1 month' - interval '1 day')::timestamp, interval '1 day') g
   where extract(isodow from g) between 1 and 5
 ),
+in_month as (
+  -- Requests this month touched, by ANY of the three clinical timestamps: registered in the month,
+  -- resulted in it, or authorised in it. Same three tests the coalesce ladder below reads, and the
+  -- same requests the old predicate selected.
+  --
+  -- ⛔ A UNION of three single-table scans, collected ONCE, never an OR of three predicates
+  -- evaluated per request row. MEASURED 2026-08-21 on the live warehouse, 22,964 requests, month
+  -- 2018-08: the OR form put 1014ms of STARTUP time on one sequential scan of lab_requests, whose
+  -- own subplans accounted for 42ms of it, and all four of this report's queries paid it every run.
+  -- The four together went from 4.3s to 0.16s. Equivalence is not assumed: both forms were run over
+  -- every month the warehouse holds, 64 query/month pairs, 0 mismatched.
+  --
+  -- ⚠ INDEXES DO NOT FIX THE OR FORM, so do not reach for one instead. Measured the same day on the
+  -- same data: indexes on diagnostic_reports(batch_id), lab_requests(authored_at),
+  -- lab_results(result_timestamp) and diagnostic_reports(issued) moved the total from 3868ms to
+  -- 4291ms. These tables are small enough that a full scan of all 22,964 rows costs 1.7ms, so there
+  -- is no scan for an index to save.
+  --
+  -- ⚠ NULL based_on_id rows can enter this set and that is harmless: 'in' treats a NULL candidate as
+  -- no match. It would NOT be harmless under 'not in', which is why the panel predicate below stays
+  -- where it is rather than joining this one.
+  select lq.id from lab_requests lq where left(lq.authored_at, 7) = (select ym from month_start)
+  union
+  select lr.request_id from lab_results lr where left(lr.result_timestamp, 7) = (select ym from month_start)
+  union
+  select ldr.based_on_id from diagnostic_reports ldr where left(ldr.issued, 7) = (select ym from month_start)
+),
 arrivals as (
   -- One row per (laboratory, day), the SAME clinical-date ladder q-transmission-hvleid uses and for
   -- the same reasons: registered, then tested, then authorised, one mark per request per month.
@@ -3710,13 +3869,8 @@ arrivals as (
       on fm.source_system = coalesce(d.source_system, '')
      and fm.performer_system = coalesce(d.performer_system, '')
      and fm.source_code = d.performer
-    where (
-         left(q.authored_at, 7) = (select ym from month_start)
-      or exists (select 1 from lab_results r
-                  where r.request_id = q.id and left(r.result_timestamp, 7) = (select ym from month_start))
-      or exists (select 1 from diagnostic_reports dr
-                  where dr.based_on_id = q.id and left(dr.issued, 7) = (select ym from month_start))
-    )
+    -- The whole month gate. It is collected once, in 'in_month' above.
+    where q.id in (select id from in_month)
   ) clinical
 ),
 per_day as (
@@ -3760,6 +3914,33 @@ cal as (
   -- NOT datepart(weekday, ...) - that depends on SET DATEFIRST. 1900-01-01 was a Monday.
   select cal_day from all_days where datediff(day, '19000101', cal_day) % 7 between 0 and 4
 ),
+in_month as (
+  -- Requests this month touched, by ANY of the three clinical timestamps: registered in the month,
+  -- resulted in it, or authorised in it. Same three tests the coalesce ladder below reads, and the
+  -- same requests the old predicate selected.
+  --
+  -- ⛔ A UNION of three single-table scans, collected ONCE, never an OR of three predicates
+  -- evaluated per request row. MEASURED 2026-08-21 on the live warehouse, 22,964 requests, month
+  -- 2018-08: the OR form put 1014ms of STARTUP time on one sequential scan of lab_requests, whose
+  -- own subplans accounted for 42ms of it, and all four of this report's queries paid it every run.
+  -- The four together went from 4.3s to 0.16s. Equivalence is not assumed: both forms were run over
+  -- every month the warehouse holds, 64 query/month pairs, 0 mismatched.
+  --
+  -- ⚠ INDEXES DO NOT FIX THE OR FORM, so do not reach for one instead. Measured the same day on the
+  -- same data: indexes on diagnostic_reports(batch_id), lab_requests(authored_at),
+  -- lab_results(result_timestamp) and diagnostic_reports(issued) moved the total from 3868ms to
+  -- 4291ms. These tables are small enough that a full scan of all 22,964 rows costs 1.7ms, so there
+  -- is no scan for an index to save.
+  --
+  -- ⚠ NULL based_on_id rows can enter this set and that is harmless: 'in' treats a NULL candidate as
+  -- no match. It would NOT be harmless under 'not in', which is why the panel predicate below stays
+  -- where it is rather than joining this one.
+  select lq.id from lab_requests lq where left(lq.authored_at, 7) = (select ym from month_start)
+  union
+  select lr.request_id from lab_results lr where left(lr.result_timestamp, 7) = (select ym from month_start)
+  union
+  select ldr.based_on_id from diagnostic_reports ldr where left(ldr.issued, 7) = (select ym from month_start)
+),
 arrivals as (
   -- The SAME clinical-date ladder as the postgres variant and as q-transmission-hvleid: registered,
   -- then tested, then authorised, one mark per request per month. No arrival bucketing, no timezone
@@ -3782,13 +3963,8 @@ arrivals as (
       on fm.source_system = coalesce(d.source_system, '')
      and fm.performer_system = coalesce(d.performer_system, '')
      and fm.source_code = d.performer
-    where (
-         left(q.authored_at, 7) = (select ym from month_start)
-      or exists (select 1 from lab_results r
-                  where r.request_id = q.id and left(r.result_timestamp, 7) = (select ym from month_start))
-      or exists (select 1 from diagnostic_reports dr
-                  where dr.based_on_id = q.id and left(dr.issued, 7) = (select ym from month_start))
-    )
+    -- The whole month gate. It is collected once, in 'in_month' above.
+    where q.id in (select id from in_month)
   ) clinical
 ),
 per_day as (
@@ -3827,6 +4003,33 @@ cal as (
   -- weekend arrivals it gives up. weekday() is 0=Mon .. 6=Sun and reads no session setting.
   select cal_day from all_days where weekday(cal_day) between 0 and 4
 ),
+in_month as (
+  -- Requests this month touched, by ANY of the three clinical timestamps: registered in the month,
+  -- resulted in it, or authorised in it. Same three tests the coalesce ladder below reads, and the
+  -- same requests the old predicate selected.
+  --
+  -- ⛔ A UNION of three single-table scans, collected ONCE, never an OR of three predicates
+  -- evaluated per request row. MEASURED 2026-08-21 on the live warehouse, 22,964 requests, month
+  -- 2018-08: the OR form put 1014ms of STARTUP time on one sequential scan of lab_requests, whose
+  -- own subplans accounted for 42ms of it, and all four of this report's queries paid it every run.
+  -- The four together went from 4.3s to 0.16s. Equivalence is not assumed: both forms were run over
+  -- every month the warehouse holds, 64 query/month pairs, 0 mismatched.
+  --
+  -- ⚠ INDEXES DO NOT FIX THE OR FORM, so do not reach for one instead. Measured the same day on the
+  -- same data: indexes on diagnostic_reports(batch_id), lab_requests(authored_at),
+  -- lab_results(result_timestamp) and diagnostic_reports(issued) moved the total from 3868ms to
+  -- 4291ms. These tables are small enough that a full scan of all 22,964 rows costs 1.7ms, so there
+  -- is no scan for an index to save.
+  --
+  -- ⚠ NULL based_on_id rows can enter this set and that is harmless: 'in' treats a NULL candidate as
+  -- no match. It would NOT be harmless under 'not in', which is why the panel predicate below stays
+  -- where it is rather than joining this one.
+  select lq.id from lab_requests lq where left(lq.authored_at, 7) = (select ym from month_start)
+  union
+  select lr.request_id from lab_results lr where left(lr.result_timestamp, 7) = (select ym from month_start)
+  union
+  select ldr.based_on_id from diagnostic_reports ldr where left(ldr.issued, 7) = (select ym from month_start)
+),
 arrivals as (
   -- The SAME clinical-date ladder as the postgres variant and as q-transmission-hvleid: registered,
   -- then tested, then authorised, one mark per request per month. No arrival bucketing, no timezone
@@ -3849,13 +4052,8 @@ arrivals as (
       on fm.source_system = coalesce(d.source_system, '')
      and fm.performer_system = coalesce(d.performer_system, '')
      and fm.source_code = d.performer
-    where (
-         left(q.authored_at, 7) = (select ym from month_start)
-      or exists (select 1 from lab_results r
-                  where r.request_id = q.id and left(r.result_timestamp, 7) = (select ym from month_start))
-      or exists (select 1 from diagnostic_reports dr
-                  where dr.based_on_id = q.id and left(dr.issued, 7) = (select ym from month_start))
-    )
+    -- The whole month gate. It is collected once, in 'in_month' above.
+    where q.id in (select id from in_month)
   ) clinical
 ),
 per_day as (
@@ -3918,6 +4116,33 @@ days as (
   select cal_day, row_number() over (order by cal_day) as n
   from cal where extract(isodow from cal_day) between 1 and 5
 ),
+in_month as (
+  -- Requests this month touched, by ANY of the three clinical timestamps: registered in the month,
+  -- resulted in it, or authorised in it. Same three tests the coalesce ladder below reads, and the
+  -- same requests the old predicate selected.
+  --
+  -- ⛔ A UNION of three single-table scans, collected ONCE, never an OR of three predicates
+  -- evaluated per request row. MEASURED 2026-08-21 on the live warehouse, 22,964 requests, month
+  -- 2018-08: the OR form put 1014ms of STARTUP time on one sequential scan of lab_requests, whose
+  -- own subplans accounted for 42ms of it, and all four of this report's queries paid it every run.
+  -- The four together went from 4.3s to 0.16s. Equivalence is not assumed: both forms were run over
+  -- every month the warehouse holds, 64 query/month pairs, 0 mismatched.
+  --
+  -- ⚠ INDEXES DO NOT FIX THE OR FORM, so do not reach for one instead. Measured the same day on the
+  -- same data: indexes on diagnostic_reports(batch_id), lab_requests(authored_at),
+  -- lab_results(result_timestamp) and diagnostic_reports(issued) moved the total from 3868ms to
+  -- 4291ms. These tables are small enough that a full scan of all 22,964 rows costs 1.7ms, so there
+  -- is no scan for an index to save.
+  --
+  -- ⚠ NULL based_on_id rows can enter this set and that is harmless: 'in' treats a NULL candidate as
+  -- no match. It would NOT be harmless under 'not in', which is why the panel predicate below stays
+  -- where it is rather than joining this one.
+  select lq.id from lab_requests lq where left(lq.authored_at, 7) = (select ym from month_start)
+  union
+  select lr.request_id from lab_results lr where left(lr.result_timestamp, 7) = (select ym from month_start)
+  union
+  select ldr.based_on_id from diagnostic_reports ldr where left(ldr.issued, 7) = (select ym from month_start)
+),
 arrivals as (
   -- The same clinical-date ladder as q-transmission-calendar, minus nothing. See that query.
   select distinct clinical.lab, cast(left(clinical.ts, 10) as date) as cal_day
@@ -3937,13 +4162,8 @@ arrivals as (
       on fm.source_system = coalesce(d.source_system, '')
      and fm.performer_system = coalesce(d.performer_system, '')
      and fm.source_code = d.performer
-    where (
-         left(q.authored_at, 7) = (select ym from month_start)
-      or exists (select 1 from lab_results r
-                  where r.request_id = q.id and left(r.result_timestamp, 7) = (select ym from month_start))
-      or exists (select 1 from diagnostic_reports dr
-                  where dr.based_on_id = q.id and left(dr.issued, 7) = (select ym from month_start))
-    )
+    -- The whole month gate. It is collected once, in 'in_month' above.
+    where q.id in (select id from in_month)
   ) clinical
 ),
 labs as (select distinct lab from arrivals),
@@ -3989,6 +4209,33 @@ days as (
   select cal_day, row_number() over (order by cal_day) as n
   from cal where datediff(day, '19000101', cal_day) % 7 between 0 and 4
 ),
+in_month as (
+  -- Requests this month touched, by ANY of the three clinical timestamps: registered in the month,
+  -- resulted in it, or authorised in it. Same three tests the coalesce ladder below reads, and the
+  -- same requests the old predicate selected.
+  --
+  -- ⛔ A UNION of three single-table scans, collected ONCE, never an OR of three predicates
+  -- evaluated per request row. MEASURED 2026-08-21 on the live warehouse, 22,964 requests, month
+  -- 2018-08: the OR form put 1014ms of STARTUP time on one sequential scan of lab_requests, whose
+  -- own subplans accounted for 42ms of it, and all four of this report's queries paid it every run.
+  -- The four together went from 4.3s to 0.16s. Equivalence is not assumed: both forms were run over
+  -- every month the warehouse holds, 64 query/month pairs, 0 mismatched.
+  --
+  -- ⚠ INDEXES DO NOT FIX THE OR FORM, so do not reach for one instead. Measured the same day on the
+  -- same data: indexes on diagnostic_reports(batch_id), lab_requests(authored_at),
+  -- lab_results(result_timestamp) and diagnostic_reports(issued) moved the total from 3868ms to
+  -- 4291ms. These tables are small enough that a full scan of all 22,964 rows costs 1.7ms, so there
+  -- is no scan for an index to save.
+  --
+  -- ⚠ NULL based_on_id rows can enter this set and that is harmless: 'in' treats a NULL candidate as
+  -- no match. It would NOT be harmless under 'not in', which is why the panel predicate below stays
+  -- where it is rather than joining this one.
+  select lq.id from lab_requests lq where left(lq.authored_at, 7) = (select ym from month_start)
+  union
+  select lr.request_id from lab_results lr where left(lr.result_timestamp, 7) = (select ym from month_start)
+  union
+  select ldr.based_on_id from diagnostic_reports ldr where left(ldr.issued, 7) = (select ym from month_start)
+),
 arrivals as (
   -- The SAME clinical-date ladder as the postgres variant and as q-transmission-hvleid: registered,
   -- then tested, then authorised, one mark per request per month. No arrival bucketing, no timezone
@@ -4011,13 +4258,8 @@ arrivals as (
       on fm.source_system = coalesce(d.source_system, '')
      and fm.performer_system = coalesce(d.performer_system, '')
      and fm.source_code = d.performer
-    where (
-         left(q.authored_at, 7) = (select ym from month_start)
-      or exists (select 1 from lab_results r
-                  where r.request_id = q.id and left(r.result_timestamp, 7) = (select ym from month_start))
-      or exists (select 1 from diagnostic_reports dr
-                  where dr.based_on_id = q.id and left(dr.issued, 7) = (select ym from month_start))
-    )
+    -- The whole month gate. It is collected once, in 'in_month' above.
+    where q.id in (select id from in_month)
   ) clinical
 ),
 labs as (select distinct lab from arrivals),
@@ -4056,6 +4298,33 @@ days as (
   select cal_day, row_number() over (order by cal_day) as n
   from cal where weekday(cal_day) between 0 and 4
 ),
+in_month as (
+  -- Requests this month touched, by ANY of the three clinical timestamps: registered in the month,
+  -- resulted in it, or authorised in it. Same three tests the coalesce ladder below reads, and the
+  -- same requests the old predicate selected.
+  --
+  -- ⛔ A UNION of three single-table scans, collected ONCE, never an OR of three predicates
+  -- evaluated per request row. MEASURED 2026-08-21 on the live warehouse, 22,964 requests, month
+  -- 2018-08: the OR form put 1014ms of STARTUP time on one sequential scan of lab_requests, whose
+  -- own subplans accounted for 42ms of it, and all four of this report's queries paid it every run.
+  -- The four together went from 4.3s to 0.16s. Equivalence is not assumed: both forms were run over
+  -- every month the warehouse holds, 64 query/month pairs, 0 mismatched.
+  --
+  -- ⚠ INDEXES DO NOT FIX THE OR FORM, so do not reach for one instead. Measured the same day on the
+  -- same data: indexes on diagnostic_reports(batch_id), lab_requests(authored_at),
+  -- lab_results(result_timestamp) and diagnostic_reports(issued) moved the total from 3868ms to
+  -- 4291ms. These tables are small enough that a full scan of all 22,964 rows costs 1.7ms, so there
+  -- is no scan for an index to save.
+  --
+  -- ⚠ NULL based_on_id rows can enter this set and that is harmless: 'in' treats a NULL candidate as
+  -- no match. It would NOT be harmless under 'not in', which is why the panel predicate below stays
+  -- where it is rather than joining this one.
+  select lq.id from lab_requests lq where left(lq.authored_at, 7) = (select ym from month_start)
+  union
+  select lr.request_id from lab_results lr where left(lr.result_timestamp, 7) = (select ym from month_start)
+  union
+  select ldr.based_on_id from diagnostic_reports ldr where left(ldr.issued, 7) = (select ym from month_start)
+),
 arrivals as (
   -- The SAME clinical-date ladder as the postgres variant and as q-transmission-hvleid: registered,
   -- then tested, then authorised, one mark per request per month. No arrival bucketing, no timezone
@@ -4078,13 +4347,8 @@ arrivals as (
       on fm.source_system = coalesce(d.source_system, '')
      and fm.performer_system = coalesce(d.performer_system, '')
      and fm.source_code = d.performer
-    where (
-         left(q.authored_at, 7) = (select ym from month_start)
-      or exists (select 1 from lab_results r
-                  where r.request_id = q.id and left(r.result_timestamp, 7) = (select ym from month_start))
-      or exists (select 1 from diagnostic_reports dr
-                  where dr.based_on_id = q.id and left(dr.issued, 7) = (select ym from month_start))
-    )
+    -- The whole month gate. It is collected once, in 'in_month' above.
+    where q.id in (select id from in_month)
   ) clinical
 ),
 labs as (select distinct lab from arrivals),
