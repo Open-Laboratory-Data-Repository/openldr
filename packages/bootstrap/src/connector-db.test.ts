@@ -1,4 +1,13 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+
+// Captures what the mysql arm does to its pool. mysql2 is mocked at the module boundary because the
+// thing under test happens at POOL CONSTRUCTION, before any connection exists, and there is no
+// server here to open one against.
+const { poolOn, poolQuery } = vi.hoisted(() => ({ poolOn: vi.fn(), poolQuery: vi.fn() }));
+vi.mock('mysql2', () => ({
+  createPool: () => ({ on: poolOn, query: poolQuery, getConnection: vi.fn(), end: vi.fn() }),
+}));
+
 import { createConnectorDb, buildPgUrl } from './connector-db';
 
 describe('createConnectorDb', () => {
@@ -34,5 +43,29 @@ describe('createConnectorDb — mysql', () => {
   });
   it('rejects an invalid mysql port', () => {
     expect(() => createConnectorDb('mysql', { host: 'h', port: 'abc', database: 'd', user: 'u', password: 'p' })).toThrow(/invalid connector port/);
+  });
+
+  // ⛔ THE regression this exists for. mysql2 opens a connection as latin1_swedish_ci while a MySQL
+  // 8 table is utf8mb4_0900_ai_ci, so comparing any column to any literal mixes two IMPLICIT
+  // collations and the server refuses the whole statement with errno 1267. Every seeded report
+  // query compares a timestamp prefix to a month string, so on 2026-08-21 NO report could run on a
+  // MySQL warehouse at all. Measured through this pool, on MySQL 8.4.10.
+  //
+  // ⚠ `@@collation_database`, never a hardcoded collation name: utf8mb4_0900_ai_ci does not exist
+  // on MariaDB, which this same connector supports. Asserting the literal statement is the point of
+  // the test, so a well-meaning edit to a named collation fails here rather than on a MariaDB site.
+  it('adopts the database collation on every new connection', () => {
+    poolOn.mockClear();
+    createConnectorDb('mysql', { host: 'h', port: '3306', database: 'd', user: 'u', password: 'p' });
+
+    const registration = poolOn.mock.calls.find((c) => c[0] === 'connection');
+    expect(registration, 'the mysql pool registers no connection handler').toBeDefined();
+
+    // Drive the handler with a fake connection and read back the statement it issues.
+    const seen: string[] = [];
+    (registration![1] as (c: { query: (sql: string, cb: (e: unknown) => void) => void }) => void)({
+      query: (statement, cb) => { seen.push(statement); cb(null); },
+    });
+    expect(seen).toEqual(['set collation_connection = @@collation_database']);
   });
 });

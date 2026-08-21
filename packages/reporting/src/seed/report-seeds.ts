@@ -2716,12 +2716,10 @@ join lab_ord lo on lo.lab = g.lab
 join lab_stats ls on ls.lab = g.lab
 group by g.lab
 order by ord`,
-      mysql: `-- ⛔ READ FIRST: this query has NEVER BEEN RUN through a MySQL connector pool.
--- It used to carry a stronger statement: that it CANNOT run, because max() over the date row's
--- concat raised error 1267 through that pool, measured 2026-08-19. The date row stopped
--- concatenating on 2026-08-20 (the day number no longer stacks a month under it), so that
--- particular trigger is gone. Nothing was re-measured. Whether this now runs on MySQL is
--- UNKNOWN, not fixed. See the disclosure in 'arrivals' below for the path and the numbers.
+      mysql: `-- ⛔ READ FIRST: this query RUNS on MySQL, and is checked by a harness.
+-- \`pnpm mysql:reports:accept\` (scripts/mysql-reports-accept.ts) executes it against a live MySQL
+-- through createConnectorDb, the pool a report actually gets, and asserts the marks it produces.
+-- It had never been run that way until 2026-08-21, and the first run failed. See 'arrivals' below.
 with recursive month_start as (
   -- ⛔ 'ym' is the NORMALISED month. Every string test below compares against it, never against
   -- the raw parameter, so a loose '2017-8' answers exactly like '2017-08' instead of emptying the
@@ -2825,13 +2823,20 @@ arrivals as (
   -- 8.4.11, on a database built by the real external migrations, with a six-request fixture
   -- covering all three rungs. They parsed and marked the right days, each grid took the requests
   -- the other did not, and the loose month '2013-6' answered exactly like '2013-06'.
-  -- ⛔ That run went through the mysql CLI, NOT through the pool a report actually gets. Through
-  -- that pool BOTH GRIDS FAILED OUTRIGHT with error 1267, illegal mix of collations, on the max()
-  -- over char(10 using utf8mb4) in the date row at the bottom of this query.
-  -- ⚠ That concat is GONE as of 2026-08-20: the date row is now a bare day number with no month
-  -- stacked under it, so nothing on this path concatenates a mixed-collation literal any more. The
-  -- measured trigger is removed. NOBODY HAS RE-RUN IT, so this is not a fix, only the removal of
-  -- the one cause that was measured.
+  -- ⛔ That run went through the mysql CLI, NOT through the pool a report actually gets, and the
+  -- difference mattered: through that pool every seeded query FAILED with error 1267, illegal mix
+  -- of collations. The diagnosis recorded here for months blamed the date row's concat, and it was
+  -- wrong. Removing that concat on 2026-08-20 changed nothing.
+  -- ⛔ THE REAL CAUSE, measured 2026-08-21 on MySQL 8.4.10: mysql2 opens the connection as
+  -- latin1_swedish_ci and a MySQL 8 table is utf8mb4_0900_ai_ci, so the plain comparison
+  -- comparing left(authored_at, 7) against the normalised month string mixes two IMPLICIT
+  -- collations and the server refuses it outright. EVERY query in this file makes that
+  -- comparison, which is why every report
+  -- failed, not just the two that carried a concat. The CLI escaped it by negotiating the server's
+  -- own collation.
+  -- Fixed in the POOL, not here: createConnectorDb now runs
+  -- \`set collation_connection = @@collation_database\` on each connection
+  -- (packages/bootstrap/src/connector-db.ts). Nothing in the SQL had to change.
   -- The path is custom-query-run.ts:65, then createConnectorSqlRunner
   -- (packages/bootstrap/src/connector-sql-service.ts:38), then createConnectorDb
   -- (packages/bootstrap/src/connector-db.ts:43), whose mysql arm at :64-67 passes NO charset.
@@ -2842,12 +2847,13 @@ arrivals as (
   -- rejected under it. The CLI escapes it only by negotiating utf8mb4_0900_ai_ci instead.
   -- The fault PREDATES this change and reproduces on the previous commit's SQL. It is tracked
   -- OUT OF BAND, not in this repo, so there is no in-repo record to grep for.
-  -- ⛔ HONEST NON-PROOF, for the pool path and for every later edit. A CLI run says nothing about
-  -- the path a real report takes, and that path is blocked by 1267 today. The run was one-off and
-  -- left no artifact, and NOTHING IN THE SUITE RE-CHECKS ANY OF IT: the automated checks are
-  -- regexes over the SQL TEXT, which cannot see a syntax error. What would prove it: a CI harness
-  -- running both dialects, and for MySQL a warehouse reached through createConnectorDb rather
-  -- than the CLI, which needs 1267 fixed first.
+  -- ⛔ NOW PROVEN, and by the harness that paragraph asked for. \`pnpm mysql:reports:accept\` builds
+  -- a throwaway database with the real external migrations, seeds one request per rung of the
+  -- ladder, and runs every seeded mysql variant through createConnectorDb, asserting the days each
+  -- laboratory marks. It is opt-in, like every other live harness here: it needs
+  -- \`docker compose --profile mysql up -d\`, so the hermetic suite does not run it.
+  -- ⚠ What is STILL not proven: MariaDB. The collation fix reads @@collation_database rather than
+  -- naming one, which is what makes it correct there in principle, and nobody has run it.
   select distinct clinical.lab, cast(left(clinical.ts, 10) as date) as cal_day
   from (
     select
@@ -2924,8 +2930,9 @@ lab_ord as (
 -- a time and the month is already in the scope panel, so the second line said nothing the reader
 -- did not have. The operator decided this on 2026-08-20.
 --
--- ⚠ Removing it removes the 1267 trigger. It does NOT make this query proven on MySQL: nobody has
--- re-run it through the pool.
+-- ⚠ Removing it did NOT fix 1267, though this comment once implied it might. The cause was the
+-- connection collation, not the concat, and it was fixed in the pool on 2026-08-21. See 'arrivals'.
+-- The one-line form stands on its own merits: the report is run one month at a time.
 select 0 as ord, '(dates)' as lab,
   max(case when n = 1 then date_format(cal_day, '%e') else '' end) as d01,
   max(case when n = 2 then date_format(cal_day, '%e') else '' end) as d02,
@@ -3485,12 +3492,10 @@ select 2 as ord, 'Others' as lab,
   cast((select silent from all_stats) as varchar(10)) as silent,
   (select case when silent >= 10 then 'critical' else '' end from all_stats) as silent_status
 from day_marks`,
-      mysql: `-- ⛔ READ FIRST: this query has NEVER BEEN RUN through a MySQL connector pool.
--- It used to carry a stronger statement: that it CANNOT run, because max() over the date row's
--- concat raised error 1267 through that pool, measured 2026-08-19. The date row stopped
--- concatenating on 2026-08-20 (the day number no longer stacks a month under it), so that
--- particular trigger is gone. Nothing was re-measured. Whether this now runs on MySQL is
--- UNKNOWN, not fixed. See the disclosure in 'arrivals' below for the path and the numbers.
+      mysql: `-- ⛔ READ FIRST: this query RUNS on MySQL, and is checked by a harness.
+-- \`pnpm mysql:reports:accept\` (scripts/mysql-reports-accept.ts) executes it against a live MySQL
+-- through createConnectorDb, the pool a report actually gets, and asserts the marks it produces.
+-- It had never been run that way until 2026-08-21, and the first run failed. See 'arrivals' below.
 with recursive month_start as (
   -- ⛔ 'ym' is the NORMALISED month. Every string test below compares against it, never against
   -- the raw parameter, so a loose '2017-8' answers exactly like '2017-08' instead of emptying the
@@ -3594,13 +3599,20 @@ arrivals as (
   -- 8.4.11, on a database built by the real external migrations, with a six-request fixture
   -- covering all three rungs. They parsed and marked the right days, each grid took the requests
   -- the other did not, and the loose month '2013-6' answered exactly like '2013-06'.
-  -- ⛔ That run went through the mysql CLI, NOT through the pool a report actually gets. Through
-  -- that pool BOTH GRIDS FAILED OUTRIGHT with error 1267, illegal mix of collations, on the max()
-  -- over char(10 using utf8mb4) in the date row at the bottom of this query.
-  -- ⚠ That concat is GONE as of 2026-08-20: the date row is now a bare day number with no month
-  -- stacked under it, so nothing on this path concatenates a mixed-collation literal any more. The
-  -- measured trigger is removed. NOBODY HAS RE-RUN IT, so this is not a fix, only the removal of
-  -- the one cause that was measured.
+  -- ⛔ That run went through the mysql CLI, NOT through the pool a report actually gets, and the
+  -- difference mattered: through that pool every seeded query FAILED with error 1267, illegal mix
+  -- of collations. The diagnosis recorded here for months blamed the date row's concat, and it was
+  -- wrong. Removing that concat on 2026-08-20 changed nothing.
+  -- ⛔ THE REAL CAUSE, measured 2026-08-21 on MySQL 8.4.10: mysql2 opens the connection as
+  -- latin1_swedish_ci and a MySQL 8 table is utf8mb4_0900_ai_ci, so the plain comparison
+  -- comparing left(authored_at, 7) against the normalised month string mixes two IMPLICIT
+  -- collations and the server refuses it outright. EVERY query in this file makes that
+  -- comparison, which is why every report
+  -- failed, not just the two that carried a concat. The CLI escaped it by negotiating the server's
+  -- own collation.
+  -- Fixed in the POOL, not here: createConnectorDb now runs
+  -- \`set collation_connection = @@collation_database\` on each connection
+  -- (packages/bootstrap/src/connector-db.ts). Nothing in the SQL had to change.
   -- The path is custom-query-run.ts:65, then createConnectorSqlRunner
   -- (packages/bootstrap/src/connector-sql-service.ts:38), then createConnectorDb
   -- (packages/bootstrap/src/connector-db.ts:43), whose mysql arm at :64-67 passes NO charset.
@@ -3611,12 +3623,13 @@ arrivals as (
   -- rejected under it. The CLI escapes it only by negotiating utf8mb4_0900_ai_ci instead.
   -- The fault PREDATES this change and reproduces on the previous commit's SQL. It is tracked
   -- OUT OF BAND, not in this repo, so there is no in-repo record to grep for.
-  -- ⛔ HONEST NON-PROOF, for the pool path and for every later edit. A CLI run says nothing about
-  -- the path a real report takes, and that path is blocked by 1267 today. The run was one-off and
-  -- left no artifact, and NOTHING IN THE SUITE RE-CHECKS ANY OF IT: the automated checks are
-  -- regexes over the SQL TEXT, which cannot see a syntax error. What would prove it: a CI harness
-  -- running both dialects, and for MySQL a warehouse reached through createConnectorDb rather
-  -- than the CLI, which needs 1267 fixed first.
+  -- ⛔ NOW PROVEN, and by the harness that paragraph asked for. \`pnpm mysql:reports:accept\` builds
+  -- a throwaway database with the real external migrations, seeds one request per rung of the
+  -- ladder, and runs every seeded mysql variant through createConnectorDb, asserting the days each
+  -- laboratory marks. It is opt-in, like every other live harness here: it needs
+  -- \`docker compose --profile mysql up -d\`, so the hermetic suite does not run it.
+  -- ⚠ What is STILL not proven: MariaDB. The collation fix reads @@collation_database rather than
+  -- naming one, which is what makes it correct there in principle, and nobody has run it.
   select distinct clinical.lab, cast(left(clinical.ts, 10) as date) as cal_day
   from (
     select

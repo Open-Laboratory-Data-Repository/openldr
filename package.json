@@ -40,6 +40,7 @@
     "mssql:accept": "tsx scripts/mssql-live-acceptance.ts",
     "mssql:accept:matrix": "bash scripts/mssql-matrix-accept.sh",
     "mysql:accept": "tsx scripts/mysql-live-acceptance.ts",
+    "mysql:reports:accept": "tsx scripts/mysql-reports-accept.ts",
     "reports:accept": "tsx scripts/reports-golden-accept.ts",
     "sync:accept": "tsx scripts/sync-live-acceptance.ts",
     "sync:pull:accept": "tsx scripts/sync-pull-live-acceptance.ts",

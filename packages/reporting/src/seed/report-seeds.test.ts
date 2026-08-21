@@ -1821,9 +1821,11 @@ describe('SEED_QUERIES — the transmission grids', () => {
           `${id}/${dialect} moved the raw month out of month_start`).toHaveLength(2);
         expect(monthStart, `${id}/${dialect} no longer derives ym`).toMatch(/as ym\b/);
 
-        // Six month tests downstream: three rungs of the coalesce ladder, three arms of the
-        // `where` gate that precedes it. All six read `ym`. Pinning the count stops one of them
-        // silently reverting while the other five keep this green.
+        // Six month tests downstream: three rungs of the coalesce ladder, and three branches of the
+        // `in_month` candidate set that precedes it. (Those three were the arms of an OR in the
+        // `where` clause until 2026-08-21; the count did not move when they became a union.) All
+        // six read `ym`. Pinning the count stops one of them silently reverting while the other
+        // five keep this green.
         expect(sql.match(/\(select ym from month_start\)/g) ?? [],
           `${id}/${dialect} lost a month test that reads the normalised ym`).toHaveLength(6);
         // And no month test may compare a timestamp prefix against the raw parameter.

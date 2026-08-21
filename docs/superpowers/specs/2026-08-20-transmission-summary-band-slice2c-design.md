@@ -205,9 +205,19 @@ once per report.
 
 ## 6. What this will not tell you
 
-**Two of three dialects are unverified.** Postgres and MSSQL get a live run. MySQL ships written and
-unverified, because no MySQL container runs on this machine. That is an HONEST NON-PROOF and 2c-i
-says so in the slice report, not only here.
+**All three dialects now get a live run.** ~~MySQL ships written and unverified, because no MySQL
+container runs on this machine.~~ Closed on 2026-08-21: `docker-compose.yml` gained a `mysql`
+profile and `pnpm mysql:reports:accept` runs every seeded mysql variant against it through
+`createConnectorDb`, the pool a report actually gets.
+
+That harness earned its keep on its first run. It failed, with error 1267, and the diagnosis this
+repo had carried for months was wrong: the cause was never the date row's `concat`, it was that
+mysql2 opens a connection as `latin1_swedish_ci` against `utf8mb4_0900_ai_ci` tables, so EVERY
+seeded query failed on the plain comparison of a timestamp prefix to a month string. No report could
+run on a MySQL warehouse at all. Fixed in the pool, not in the SQL.
+
+**MariaDB is still unverified.** The fix reads `@@collation_database` rather than naming a
+collation, which is what should make it correct there, and nobody has run it.
 
 **pg-mem cannot stand in for any of it.** No correlated subqueries, a stable scan order, and the
 pivot and the distinct counts are exactly what is under test.
