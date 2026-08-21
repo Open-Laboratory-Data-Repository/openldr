@@ -3,12 +3,20 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "exports": { ".": "./src/index.ts" },
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run --testTimeout 30000 --hookTimeout 30000",
     "lint": "echo \"no lint\""
   },
-  "dependencies": { "zod": "^3.24.1" },
-  "devDependencies": { "typescript": "^5.7.2", "vitest": "^2.1.8" }
+  "dependencies": {
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/fhir": "^0.0.44",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
 }
