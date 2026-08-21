@@ -1,6 +1,18 @@
 {
-  "generatedAt": "2026-08-21",
+  "generatedAt": "2026-08-22",
   "days": [
+    {
+      "date": "2026-08-22",
+      "version": null,
+      "entries": [
+        {
+          "hash": "8fcbb2a6",
+          "type": "fix",
+          "scope": "marketplace",
+          "title": "The type filter's label wrapped inside its own control"
+        }
+      ]
+    },
     {
       "date": "2026-08-21",
       "version": null,
