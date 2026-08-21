@@ -7,6 +7,7 @@ export * from './visibility';
 export * from './lifecycle';
 export * from './normalize';
 export * from './lint';
+export * from './fhir-path';
 export * from './diff';
 export * from './page-targets';
 export * from './validate-answers';

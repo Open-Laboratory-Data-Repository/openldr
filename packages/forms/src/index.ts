@@ -16,6 +16,7 @@ export * from './routing';
 export * from './to-transaction-bundle';
 export * from './page-targets';
 export * from './lint';
+export * from './fhir-path';
 export * from './diff';
 export * from './lifecycle';
 export * from './normalize';
