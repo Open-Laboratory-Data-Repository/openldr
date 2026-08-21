@@ -1855,7 +1855,7 @@ describe('SEED_QUERIES — the transmission grids', () => {
     // that day, the collapsed Other grid asks whether ANY did.
     const MARK: Record<string, RegExp> = {
       'q-transmission-hvleid': /case when a\.lab is null then '' else '1' end as mark/,
-      'q-transmission-other': /then '1' else '' end as mark/,
+      'q-transmission-other': /case when a\.cal_day is null then '' else '1' end as mark/,
     };
     for (const [id, re] of Object.entries(MARK)) {
       for (const [dialect, sql] of Object.entries(q(id).sql)) {
