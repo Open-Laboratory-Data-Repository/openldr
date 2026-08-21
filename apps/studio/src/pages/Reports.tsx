@@ -11,6 +11,7 @@ import {
 import { ReportLibrary } from '../reports/ReportLibrary';
 import { TruncatedText } from '@/components/ui/truncated-text';
 import { StripedEmpty } from '@/components/ui/striped-empty';
+import { Spinner } from '@/components/ui/spinner';
 import { EmptyState } from '@/components/ui/empty-state';
 import { listReportCategories, type ReportCategory } from '../reports/reportCategoriesApi';
 import { ReportHistoryDrawer } from '../reports/ReportHistoryDrawer';
@@ -290,8 +291,22 @@ export function Reports() {
                         {tab === 'document' ? t('reports.tabDocument') : t('reports.tabSpreadsheet')}
                       </button>
                     ))}
-                    <span className="ml-auto text-[11px] text-muted-foreground">
-                      {t('reports.runMeta', { count: result.meta.rowCount, time: ranAt })}
+                    {/* ⛔ The run meta is REPLACED by a busy state while a run is in flight, not
+                        left showing the previous run's numbers. A refresh re-runs with the same
+                        parameters, so the row count and every cell can come back identical and the
+                        only difference is a timestamp nobody is watching: the page looked frozen
+                        and the operator reported it as "it doesn't look like it's refreshing".
+                        Measured the same day against the live warehouse, this report's PDF takes
+                        4.7 to 5.2 seconds, so this is on screen for seconds, not a flicker. */}
+                    <span className="ml-auto flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                      {running ? (
+                        <>
+                          <Spinner className="h-3 w-3" />
+                          {t('reports.running')}
+                        </>
+                      ) : (
+                        t('reports.runMeta', { count: result.meta.rowCount, time: ranAt })
+                      )}
                     </span>
                   </div>
 

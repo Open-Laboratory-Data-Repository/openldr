@@ -121,6 +121,43 @@ describe('Reports page', () => {
     ));
   });
 
+  // ⛔ THE refresh complaint, reported 2026-08-21: "it doesn't look like it's refreshing". Re-running
+  // keeps the same parameters, so the row count and every cell can come back identical and the only
+  // change is a timestamp nobody is watching. The page has to SAY it is re-running while it does.
+  // Measured against the live warehouse the same day: the PDF for this report takes 4.7 to 5.2
+  // seconds, so this state is on screen for seconds, not a flicker.
+  it('says it is running while a re-run is in flight, and shows the row count again after', async () => {
+    const api = await import('../api');
+    let release: (v: unknown) => void = () => {};
+    render(<MemoryRouter><Reports /></MemoryRouter>);
+    fireEvent.click(await screen.findByText('AMR Resistance Rate'));
+    await openParameters();
+    fireEvent.click(await screen.findByRole('button', { name: /^(run|exécuter|executar)$/i }));
+    await waitFor(() => expect(screen.getByText(/1 row/i)).toBeInTheDocument());
+
+    // Hold the second run open so the in-flight state is observable rather than a race.
+    vi.mocked(api.fetchReport).mockImplementationOnce(() => new Promise((res) => {
+      release = res as (v: unknown) => void;
+    }) as ReturnType<typeof api.fetchReport>);
+
+    openActionsMenu();
+    fireEvent.click(await screen.findByText(/^(refresh|actualiser|atualizar)$/i));
+
+    // While it runs: a busy indicator and the running label, in place of the run meta.
+    expect(await screen.findByText(/running|exécution|executando/i)).toBeInTheDocument();
+    expect(screen.getAllByRole('status').length).toBeGreaterThan(0);
+
+    release({
+      columns: [{ key: 'antibiotic', label: 'Antibiotic', kind: 'string' }],
+      rows: [{ antibiotic: 'AMP' }],
+      chart: { type: 'bar', x: 'antibiotic', y: 'percentR' },
+      meta: { generatedAt: '2026-01-01', rowCount: 1 },
+    });
+
+    // ...and afterwards the meta line is back, so the running state is not sticky.
+    await waitFor(() => expect(screen.getByText(/1 row/i)).toBeInTheDocument());
+  });
+
   it('opens the Schedules drawer for a manager', async () => {
     render(<MemoryRouter><Reports /></MemoryRouter>);
     fireEvent.click(await screen.findByText('AMR Resistance Rate'));
