@@ -9,13 +9,26 @@ export function normalizeFormSchema(input: unknown): FormSchema {
   const name = stringValue(source.name) ?? stringValue(source.id) ?? 'Untitled form';
   const id = stringValue(source.id) ?? slug(name);
 
-  // Normalize flat fields array
-  const rawFields = Array.isArray(source.fields) ? source.fields : [];
-  const resourceType = stringValue(source.fhirResourceType) ?? null;
-  const fields = rawFields.map((f, idx) => normalizeField(f, idx, resourceType));
+  const formResourceType = stringValue(source.fhirResourceType) ?? null;
 
-  // Normalize flat sections array
+  // Normalize flat sections array first: a field's resource type can come from its own
+  // section, so the section list has to exist before fields are mapped.
   const sections = Array.isArray(source.sections) ? source.sections.map(normalizeSection) : [];
+  const sectionResourceTypes = new Map(
+    sections
+      .filter((s) => typeof s.fhirResourceType === 'string')
+      .map((s) => [s.id, s.fhirResourceType as string]),
+  );
+
+  // Normalize flat fields array. A field in a section that declares its own
+  // fhirResourceType resolves against that resource type, not the form's; a field with no
+  // section, or one whose section declares none, falls back to the form-level type.
+  const rawFields = Array.isArray(source.fields) ? source.fields : [];
+  const fields = rawFields.map((f, idx) => {
+    const sectionId = isObject(f) ? stringValue(f.section) : undefined;
+    const resourceType = (sectionId ? sectionResourceTypes.get(sectionId) : undefined) ?? formResourceType;
+    return normalizeField(f, idx, resourceType);
+  });
 
   // Derive targetPages default
   const targetPages = Array.isArray(source.targetPages) ? source.targetPages : [];
@@ -62,7 +75,7 @@ function normalizeSection(input: unknown): FormSection {
   } as FormSection;
 }
 
-function normalizeField(input: unknown, idx: number, resourceType: string | null = null): FormField {
+function normalizeField(input: unknown, idx: number, resourceType: string | null): FormField {
   const source = isObject(input) ? input : {};
   const id = stringValue(source.id) ?? `field-${idx}`;
 

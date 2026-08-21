@@ -22,3 +22,7 @@ docker-compose*.yml        text eol=lf
 # packed form). See packages/marketplace/src/bundle-fs.ts (verifyBundle).
 *.wasm                       binary
 reference-plugins/**/ui.html text eol=lf
+
+# Generated from @types/fhir at build time. The generator writes LF; pin it so a CRLF
+# checkout on Windows does not mark the file modified after every `pnpm gen:fhir-paths`.
+packages/fhir/src/paths/r4-paths.generated.ts text eol=lf

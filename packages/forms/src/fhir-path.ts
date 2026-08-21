@@ -19,10 +19,13 @@ export function resolveFhirPath(
 ): string | null {
   if (!fhirPath) return null;
 
-  const head = fhirPath.slice(0, fhirPath.indexOf('.') === -1 ? fhirPath.length : fhirPath.indexOf('.'));
-  if (isKnownFhirResourceType(head)) return fhirPath;
+  const trimmedPath = fhirPath.trim();
+  if (!trimmedPath) return null;
+
+  const head = trimmedPath.slice(0, trimmedPath.indexOf('.') === -1 ? trimmedPath.length : trimmedPath.indexOf('.'));
+  if (isKnownFhirResourceType(head)) return trimmedPath;
 
   if (!fhirResourceType) return null;
   if (!isKnownFhirResourceType(fhirResourceType)) return null;
-  return `${fhirResourceType}.${fhirPath}`;
+  return `${fhirResourceType}.${trimmedPath}`;
 }

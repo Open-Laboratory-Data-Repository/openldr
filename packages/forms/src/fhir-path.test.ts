@@ -37,4 +37,14 @@ describe('resolveFhirPath', () => {
   it('does not mistake a single-segment path for a resource prefix', () => {
     expect(resolveFhirPath('status', 'Location')).toBe('Location.status');
   });
+
+  it('trims leading and trailing whitespace before resolving', () => {
+    expect(resolveFhirPath(' address.district', 'Location')).toBe('Location.address.district');
+    expect(resolveFhirPath('address.district ', 'Location')).toBe('Location.address.district');
+    expect(resolveFhirPath(' ServiceRequest.code ', 'ServiceRequest')).toBe('ServiceRequest.code');
+  });
+
+  it('returns null for a whitespace-only path', () => {
+    expect(resolveFhirPath('   ', 'Location')).toBeNull();
+  });
 });

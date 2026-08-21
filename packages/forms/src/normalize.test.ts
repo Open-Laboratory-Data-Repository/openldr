@@ -163,4 +163,37 @@ describe('normalizeFormSchema fhirPath canonicalisation', () => {
     });
     expect(result.fields[0]!.fhirPath).toBeNull();
   });
+
+  it('resolves a field against its own section resource type, not the form type', () => {
+    const result = normalizeFormSchema({
+      id: 'f5',
+      name: 'Requisition',
+      fhirResourceType: 'ServiceRequest',
+      sections: [{ id: 'specimen', label: 'Specimen', order: 0, fhirResourceType: 'Specimen' }],
+      fields: [{ id: 'fld-type', fhirPath: 'type', displayLabel: 'Type', fieldType: 'text', section: 'specimen' }],
+    });
+    expect(result.fields[0]!.fhirPath).toBe('Specimen.type');
+  });
+
+  it('resolves a field with no section against the form type', () => {
+    const result = normalizeFormSchema({
+      id: 'f6',
+      name: 'Requisition',
+      fhirResourceType: 'ServiceRequest',
+      sections: [{ id: 'specimen', label: 'Specimen', order: 0, fhirResourceType: 'Specimen' }],
+      fields: [{ id: 'fld-priority', fhirPath: 'priority', displayLabel: 'Priority', fieldType: 'text' }],
+    });
+    expect(result.fields[0]!.fhirPath).toBe('ServiceRequest.priority');
+  });
+
+  it('falls back to the form type when the named section declares no resource type', () => {
+    const result = normalizeFormSchema({
+      id: 'f7',
+      name: 'Requisition',
+      fhirResourceType: 'ServiceRequest',
+      sections: [{ id: 'order', label: 'Order', order: 0 }],
+      fields: [{ id: 'fld-status', fhirPath: 'status', displayLabel: 'Status', fieldType: 'text', section: 'order' }],
+    });
+    expect(result.fields[0]!.fhirPath).toBe('ServiceRequest.status');
+  });
 });
