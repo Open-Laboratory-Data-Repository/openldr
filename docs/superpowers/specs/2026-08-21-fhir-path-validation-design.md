@@ -87,7 +87,11 @@ Each row carries:
 - the dotted path, resource-prefixed
 - the leaf datatype name
 - whether any segment on the way is an array
-- the JSDoc first line, which is the official short definition
+- the JSDoc first line. For most elements this is a short prose definition, but for a coded
+  element `@types/fhir` puts the allowed code list there instead: 89 rows in the generated
+  table read like `"active | suspended | inactive"`, not prose. A Phase 3 picker showing the
+  allowed codes for those rows is arguably a better use of the field than rendering it as a
+  definition.
 
 Scope controls:
 
@@ -218,8 +222,12 @@ Deliverable: the generator, the checked-in table, and `resolveFhirPath`.
 - `resolveFhirPath(field, schema)` in `packages/forms`.
 - `normalize.ts` upgrading bare paths.
 
-No lint rules. No behaviour change any operator can see. Nothing can break, because nothing
-reads the table yet.
+No lint rules. Nothing can break, because nothing reads the table yet. One caveat:
+canonicalising a bare path can newly trigger the existing `ambiguous-fhir-path` rule
+(`packages/forms/src/lint.ts:49`, which keys on the raw path string) for a form that mixes
+grammars, one field on `address.city` and another already on `Location.address.city`. No
+shipped sample mixes grammars, so nothing shipped is affected, and the rule firing there is
+correct behaviour.
 
 This phase is the one with real unknowns, chiefly how the TypeScript compiler API handles the
 `Element`-extends pattern and the `_field` sibling properties that `@types/fhir` emits. Landing

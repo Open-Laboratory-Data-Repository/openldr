@@ -28,7 +28,7 @@ Each was verified in the working tree on 2026-08-21, not assumed.
 - The zod schemas in `packages/fhir/src/resources/` are deliberately partial and end in `.passthrough()`. `ServiceRequest` stops at `specimen` (`packages/fhir/src/resources/service-request.ts:21`) and has no `locationCode`, `note`, or `performer`, all three of which the shipped Requisition sample binds. They cannot be the path authority.
 - `@types/fhir@0.0.44` has no `exports` map, so deep file resolution works.
 - A prototype walker over `r4.d.ts` at depth 3 across nine resource types produced 1596 rows, and every one of the 25 paths used by the four shipped sample forms resolved. Zero false positives.
-- Payload size, measured: 487 KB with full JSDoc, 146 KB with the JSDoc first line only, 78 KB with no docs. This plan ships the 146 KB variant, because the first line is the text that carries "District name (aka county)", which is the entire point of the table.
+- Payload size, measured on a prototype: 487 KB with full JSDoc, 146 KB with the JSDoc first line only, 78 KB with no docs. This plan ships the JSDoc-first-line variant, because the first line is the text that carries "District name (aka county)", which is the entire point of the table. The committed file, measured after Phase 1 landed, is 155,949 bytes (about 152 KB), with LF line endings. The three-variant comparison above was a prototype measurement made before the file was generated for real; it is kept for the reasoning, not as a claim about the shipped file's exact size.
 - `Practitioner` is the `fhirResourceType` of a shipped sample (`packages/forms/src/samples/forms.ts:143`) but is absent from `registerResource`. The allowlist must not be derived from the registry alone.
 - `normalizeFormSchema` runs only in the studio builder (`apps/studio/src/forms-builder/FormBuilderPage.tsx:47`, `CompareDialog.tsx:45`). It is not on the server read path, in the form runtime, or in extraction.
 
@@ -60,7 +60,12 @@ The walker is split from the generator so it can be tested without touching the 
 
 # Phase 1: path table and grammar
 
-No lint rules. No visible change. Nothing can break, because nothing reads the table yet.
+No lint rules. Nothing can break, because nothing reads the table yet. One caveat:
+canonicalising a bare path can newly trigger the existing `ambiguous-fhir-path` rule
+(`packages/forms/src/lint.ts:49`, which keys on the raw path string) for a form that mixes
+grammars, one field on `address.city` and another already on `Location.address.city`. No
+shipped sample mixes grammars, so nothing shipped is affected, and the rule firing there is
+correct behaviour.
 
 ---
 
@@ -412,7 +417,7 @@ git commit -m "feat(fhir): walk the R4 type definitions into a bindable path tab
 
 The generator config lives inside `packages/fhir` rather than in `scripts/`, so Task 3's staleness test can import it as a sibling. A test reaching up into `scripts/` would sit outside the package's `rootDir` and break `tsc --noEmit`.
 
-The tuple encoding is deliberate. Measured on the real input: objects with full JSDoc are 487 KB, tuples with the JSDoc first line are 146 KB. The first line is the payload that matters, so tuples plus first line is the shipped shape.
+The tuple encoding is deliberate. Measured on a prototype run over the real input: objects with full JSDoc are 487 KB, tuples with the JSDoc first line are 146 KB. The first line is the payload that matters, so tuples plus first line is the shipped shape. The committed file is 155,949 bytes (about 152 KB, LF line endings); see the Facts section above for how that differs from the prototype figure.
 
 - [ ] **Step 1: Write the generator module**
 
@@ -621,7 +626,7 @@ to:
 },
 ```
 
-This mirrors the `@openldr/forms/pure` precedent. The table stays out of the main entry so a consumer that only wants the zod schemas does not pull 146 KB.
+This mirrors the `@openldr/forms/pure` precedent. The table stays out of the main entry so a consumer that only wants the zod schemas does not pull the committed table's 155,949 bytes (about 152 KB, LF line endings).
 
 - [ ] **Step 2: Write the failing test**
 
@@ -1239,6 +1244,10 @@ Not yet expanded into tasks. The rule implementations depend on the shape of the
 
 **Migration hazard:** 089 must be verified on a real boot. pg-mem cannot catch a numbering gap. Recheck that 089 is still unclaimed at the time Phase 2 starts, because an unmerged branch may have taken it since.
 
+**Constraint: the allowlist covers 9 resource types, the builder offers 145.** `packages/fhir/src/paths/generate.ts` lists nine root resource types. The studio's Resource Type picker offers 145 (`apps/studio/src/forms-builder/BuilderHeader.tsx:44`), including Condition, Device, PractitionerRole, Task, and HealthcareService. `unknown-fhir-path` fires whenever `resolveFhirPath` returns null for a non-null path, at error severity, and lint errors gate publish (`apps/studio/src/forms-builder/FormBuilderPage.tsx:240`). So an operator form targeting any of the other 136 types would have every bound field flagged and become unpublishable. Phase 2's rules must stay silent when `isKnownFhirResourceType(form.fhirResourceType)` is false, or the picker must be narrowed to the covered set. Widening the table is not the answer: 145 types at depth 3 is roughly 25,000 rows and 2.4 MB. Condition is the most plausible addition, for a requisition carrying a provisional diagnosis, and PractitionerRole for a users form; each is about 150 more rows.
+
+**Constraint: Phase 1's canonicalisation defeats migration 089's exact-match guard.** `packages/forms/src/normalize.ts` rewrites `address.district` to `Location.address.district` the next time an operator opens and saves the Facility form in the builder. Migration 089 follows the 071/072/073 pattern, matching the row against a frozen prior snapshot. Any install whose operator saves the Facility form between Phase 1 and Phase 2 will carry the canonicalised shape. 089 will not recognise the row, will skip it, and will leave Zone bound to `Location.address.district` permanently. Once `facility-admin-order` ships at error severity, that install's Facility form becomes unpublishable, which is exactly what the phasing was built to prevent. `KNOWN_HISTORICAL_SHAPES` must carry the canonicalised variant as an additional frozen prior shape.
+
 ---
 
 # Phase 3 outline: builder UI
@@ -1257,4 +1266,4 @@ Not yet expanded into tasks. Purely additive; Phase 2's rules already hold the l
 
 **Known trap, from the mobile pass:** a portalled `PopoverContent` inside a Sheet cannot scroll, because `react-remove-scroll` only permits the Sheet's own subtree. The FHIR Path input lives inside `FieldEditorSheet`, and the combobox list will be long. Wrap rather than scrolling sideways inside the dialog, and verify at 375x812.
 
-**Bundle note:** the table measures 146 KB. It is reachable only from the forms-builder route. Check whether the studio's build splits that route before deciding whether a dynamic import is warranted.
+**Bundle note:** the table measures 155,949 bytes, about 152 KB with LF line endings. It is reachable only from the forms-builder route. Check whether the studio's build splits that route before deciding whether a dynamic import is warranted.
