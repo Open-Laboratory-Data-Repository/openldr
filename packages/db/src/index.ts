@@ -102,6 +102,7 @@ export { NEW_FIELDS_SNAPSHOT as FACILITY_FORM_MIGRATION_NEW_FIELDS } from './mig
 // packages/forms/src/samples/forms.test.ts pins the CURRENT sample against it from the forms side.
 export { BOUND_FIELDS_SNAPSHOT as FACILITY_FORM_MIGRATION_BOUND_FIELDS } from './migrations/internal/089_facility_form_canonical_paths';
 export { PREV_BOUND_FIELDS_SNAPSHOT as FACILITY_FORM_MIGRATION_PREV_BOUND_FIELDS } from './migrations/internal/089_facility_form_canonical_paths';
+export { PREV_CANONICALISED_SNAPSHOT as FACILITY_FORM_MIGRATION_PREV_CANONICALISED } from './migrations/internal/089_facility_form_canonical_paths';
 // Same reasoning as the two re-exports above: `export * from './migrations/internal/index'` only
 // surfaces the aggregated migration map, not a migration's own named constants. These three are the
 // one spelling of `facility_registry.register_state`'s codes (migration 081) — a consumer outside

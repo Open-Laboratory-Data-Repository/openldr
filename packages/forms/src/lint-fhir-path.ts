@@ -1,4 +1,4 @@
-import { isKnownFhirResourceType, lookupFhirPath } from '@openldr/fhir/paths';
+import { fhirPathsFor, isKnownFhirResourceType, lookupFhirPath } from '@openldr/fhir/paths';
 import { resolveFhirPath } from './fhir-path';
 import type { FormLintIssue } from './lint';
 import type { FormSchema } from './schema/form-schema';
@@ -40,6 +40,14 @@ export function lintFhirPaths(form: FormSchema): FormLintIssue[] {
   const resourceType = form.fhirResourceType;
   if (!resourceType || !isKnownFhirResourceType(resourceType)) return issues;
 
+  // The generated table stops at a fixed depth past the resource name (currently 3 segments).
+  // Read the cap from the table itself instead of hardcoding it, so a future regeneration at a
+  // different depth cannot silently change what this rule accepts.
+  const maxDepth = fhirPathsFor(resourceType).reduce(
+    (max, info) => Math.max(max, info.path.split('.').length - 1),
+    0,
+  );
+
   for (const field of form.fields) {
     if (!field.enabled || !field.fhirPath) continue;
 
@@ -54,6 +62,20 @@ export function lintFhirPaths(form: FormSchema): FormLintIssue[] {
 
     const info = lookupFhirPath(lookupKey);
     if (!info) {
+      // The table is generated only down to `maxDepth` segments past the resource name, so a
+      // legitimate deeper path (for example `Observation.component.code.coding.code`, depth 4
+      // when the table stops at 3) always misses the lookup above. Before calling it unknown,
+      // check whether its ancestor at the table's depth is a real element. If it is, this is a
+      // valid path the table simply does not go deep enough to list, and the field stays silent.
+      // A typo still fires: either it is shallow enough that the lookup above already caught it,
+      // or its ancestor at the cap is not real either.
+      const segments = lookupKey.split('.');
+      const depth = segments.length - 1;
+      if (depth > maxDepth) {
+        const ancestor = segments.slice(0, maxDepth + 1).join('.');
+        if (lookupFhirPath(ancestor)) continue;
+      }
+
       issues.push({
         severity: 'error',
         code: 'unknown-fhir-path',

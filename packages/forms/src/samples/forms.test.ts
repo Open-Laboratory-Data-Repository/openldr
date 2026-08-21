@@ -10,6 +10,7 @@ import {
   CORE_FACILITY_KEYS,
   FACILITY_FORM_MIGRATION_BOUND_FIELDS,
   FACILITY_FORM_MIGRATION_PREV_BOUND_FIELDS,
+  FACILITY_FORM_MIGRATION_PREV_CANONICALISED,
 } from '@openldr/db';
 
 describe('sample forms', () => {
@@ -298,18 +299,9 @@ describe('migration 089 canonicalised guard', () => {
       targetPages: ['facilities'],
       fields: FACILITY_FORM_MIGRATION_PREV_BOUND_FIELDS,
     });
-    const paths = normalized.fields.map((f) => f.fhirPath);
-    expect(paths).toEqual([
-      null,
-      'Location.identifier.value',
-      'Location.name',
-      'Location.address.country',
-      'Location.address.district',
-      'Location.address.state',
-      'Location.address.city',
-      null,
-      'Location.status',
-      'Location.physicalType',
-    ]);
+    // The migration's own guard compares `stableStringify` over WHOLE field objects, not just
+    // fhirPath. Comparing the full objects here, not only their paths, is what actually proves
+    // the frozen PREV_CANONICALISED_SNAPSHOT the migration matches against is real.
+    expect(normalized.fields).toEqual(FACILITY_FORM_MIGRATION_PREV_CANONICALISED);
   });
 });
