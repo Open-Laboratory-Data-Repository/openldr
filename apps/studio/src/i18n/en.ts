@@ -1080,7 +1080,7 @@ export const en = {
         failed: 'Failed',
         stale: 'Stale',
       },
-      chipLabel: 'Facility data in reports: {{state}}',
+      chipLabel: 'Report facilities: {{state}}',
       lastBuilt: 'Last built {{time}}',
       neverBuilt: 'Never built',
       retry: 'Retry',

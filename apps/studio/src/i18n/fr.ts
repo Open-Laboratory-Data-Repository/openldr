@@ -1024,7 +1024,7 @@ export const fr: EnShape = {
         failed: 'Échec',
         stale: 'Obsolète',
       },
-      chipLabel: 'Données d’établissement dans les rapports : {{state}}',
+      chipLabel: 'Établissements des rapports : {{state}}',
       lastBuilt: 'Dernière reconstruction {{time}}',
       neverBuilt: 'Jamais reconstruite',
       retry: 'Réessayer',

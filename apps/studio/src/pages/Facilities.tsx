@@ -332,15 +332,18 @@ function FacilityHealthChip({
   const Icon = HEALTH_ICON[dim.state];
 
   return (
-    /* ⚠ `flex-wrap` plus `whitespace-nowrap` on each piece. In its own row on a phone this still
-       needs two lines — the label and the timestamp do not fit in 328px together — but the break
-       now falls BETWEEN them instead of inside the label, which read as
-       "Facility data in reports: / Current". Wrapping as units, not mid-phrase. */
+    /* ⚠ `flex-wrap` plus `whitespace-nowrap` on each piece: if the two do not fit side by side the
+       break falls BETWEEN them, never inside a phrase. Since the label was trimmed they do fit on
+       one line at 328px (150 + 8 + 162), but a longer locale or a Retry button brings the wrap back
+       and it needs to land in the right place when it does. */
     <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 text-xs">
-      <Badge variant="outline" className="gap-1.5 whitespace-nowrap font-medium">
+      {/* ⚠ Plain text, not a <Badge>. Boxing only the state while "Last built …" sat bare beside it
+          made the two halves of one sentence look like different kinds of thing. The icon still
+          carries the state; the outline was doing nothing the icon was not. */}
+      <span className="flex items-center gap-1.5 whitespace-nowrap font-medium text-foreground">
         <Icon className={dim.state === 'updating' ? 'h-3 w-3 animate-spin' : 'h-3 w-3'} />
         {t('facilities.health.chipLabel', { state: t(`facilities.health.states.${dim.state}`) })}
-      </Badge>
+      </span>
       <span className="whitespace-nowrap text-muted-foreground">
         {dim.lastSuccessAt
           ? t('facilities.health.lastBuilt', { time: formatBuildTime(dim.lastSuccessAt) })

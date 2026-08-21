@@ -1024,7 +1024,7 @@ export const pt: EnShape = {
         failed: 'Falhou',
         stale: 'Desatualizado',
       },
-      chipLabel: 'Dados de unidades nos relatórios: {{state}}',
+      chipLabel: 'Unidades dos relatórios: {{state}}',
       lastBuilt: 'Última reconstrução {{time}}',
       neverBuilt: 'Nunca reconstruída',
       retry: 'Tentar novamente',
