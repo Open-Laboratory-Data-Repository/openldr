@@ -24,7 +24,7 @@ import { type Kysely } from 'kysely';
 // Zone on `Location.address.district` forever, and the new `facility-admin-order` lint rule then
 // makes that install's form unpublishable.
 //
-// Field literals are INLINED, not imported from @openldr/forms — packages/db must not depend on it
+// Field literals are INLINED, not imported from @openldr/forms: packages/db must not depend on it
 // (@openldr/forms already depends on packages/db). Same reasoning as 071/073/085/087.
 
 /** 087's shipped shape, copied verbatim, not imported. A migration is a frozen snapshot of one
@@ -220,7 +220,7 @@ export const BOUND_FIELDS_SNAPSHOT: readonly unknown[] = [
   },
 ];
 
-/** Mirrors 071/072/073/087's MARKER_KEY discipline — a fresh install seeded after this release
+/** Mirrors 071/072/073/087's MARKER_KEY discipline. A fresh install seeded after this release
  *  lands on exactly BOUND_FIELDS_SNAPSHOT too, content-identical to a row up() just rewrote, so
  *  down() needs a marker rather than a heuristic to tell them apart. The marker also records
  *  WHICH prior shape up() found, so down() restores that one, not the other. */
@@ -236,15 +236,15 @@ async function repointForm(seedDb: Kysely<any>): Promise<void> {
     .select(['id', 'schema'])
     .where('name', '=', 'Facility')
     .execute();
-  if (rows.length !== 1) return; // none seeded, or ambiguous — never guess which row is "the" one
+  if (rows.length !== 1) return; // none seeded, or ambiguous: never guess which row is "the" one
   const row = rows[0];
 
   const schema = (typeof row.schema === 'string' ? JSON.parse(row.schema) : row.schema) as Record<string, unknown> | null;
   const fields = schema?.fields;
   if (!Array.isArray(fields) || fields.length === 0) return;
 
-  // Match against EITHER prior shape. Anything else — already corrected, an operator's own edit,
-  // or a row that never reached either shape — is left alone.
+  // Match against EITHER prior shape. Anything else, already corrected, an operator's own edit,
+  // or a row that never reached either shape, is left alone.
   const fieldsStr = stableStringify(fields);
   let matchedPrior: readonly unknown[] | null = null;
   if (fieldsStr === stableStringify(PREV_BOUND_FIELDS_SNAPSHOT)) matchedPrior = PREV_BOUND_FIELDS_SNAPSHOT;
@@ -278,7 +278,7 @@ export async function down(db: Kysely<unknown>): Promise<void> {
   await unrepointForm(db as Kysely<any>);
 }
 
-/** Order-preserving, object-key-order-insensitive deep equality — copied from 071/072/073/087, not
+/** Order-preserving, object-key-order-insensitive deep equality, copied from 071/072/073/087, not
  *  imported: importing a private helper across migration files would couple two frozen snapshots. */
 function stableStringify(value: unknown): string {
   return JSON.stringify(sortValue(value));
