@@ -6,6 +6,48 @@
       "version": null,
       "entries": [
         {
+          "hash": "f042f6b9",
+          "type": "fix",
+          "scope": "forms",
+          "title": "Resolve fhirPath against a field's own section, not just the form"
+        },
+        {
+          "hash": "c7f2cd87",
+          "type": "feat",
+          "scope": "forms",
+          "title": "Persist canonical resource-prefixed fhirPath values from the builder"
+        },
+        {
+          "hash": "8d124d25",
+          "type": "feat",
+          "scope": "forms",
+          "title": "Resolve a bare fhirPath to its canonical resource-prefixed form"
+        },
+        {
+          "hash": "4ad99d99",
+          "type": "feat",
+          "scope": "fhir",
+          "title": "Look up an R4 path definition by its dotted path"
+        },
+        {
+          "hash": "ea015622",
+          "type": "feat",
+          "scope": "fhir",
+          "title": "Generate the R4 path table from the published type definitions"
+        },
+        {
+          "hash": "e68e5bdd",
+          "type": "feat",
+          "scope": "fhir",
+          "title": "Walk the R4 type definitions into a bindable path table"
+        },
+        {
+          "hash": "e244afd8",
+          "type": "fix",
+          "scope": "bootstrap",
+          "title": "No report could run on a MySQL warehouse, and now one can"
+        },
+        {
           "hash": "44b7a206",
           "type": "fix",
           "scope": "report-designer",
