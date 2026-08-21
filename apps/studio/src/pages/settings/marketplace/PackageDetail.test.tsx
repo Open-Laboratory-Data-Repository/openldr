@@ -89,10 +89,15 @@ describe('PackageDetail', () => {
     ));
   });
 
-  it('Back calls onBack', async () => {
+  // ⛔ Back moved INTO the ⋯ menu on 2026-08-21 to reclaim the row it had to itself — a button,
+  // a divider and their padding, about 50px, at the top of every phone screen. So it must be
+  // reached the way every other action here is: open the menu first.
+  it('Back calls onBack, from inside the menu', async () => {
     mockDetail();
     const onBack = vi.fn();
     render(<PackageDetail entry={entry} onBack={onBack} onInstall={() => {}} onToggleEnabled={() => {}} onRollback={() => {}} onRemove={() => {}} />);
+    expect(screen.queryByTestId('detail-back'), 'no standalone Back button outside the menu').toBeNull();
+    await openDetailMenu();
     fireEvent.click(await screen.findByTestId('detail-back'));
     expect(onBack).toHaveBeenCalledOnce();
   });
@@ -127,5 +132,41 @@ describe('PackageDetail', () => {
     // pass even if Install were still offered for an installed package.
     await openDetailMenu();
     expect(screen.queryByTestId('detail-install')).toBeNull();
+  });
+
+  // ⛔ REGRESSION, reported 2026-08-21 from a phone: the detail body was unreadable, wrapping one
+  // or two words a line ("DHIS2 / aggregate + / tracker sink / (mapping, / metadata, / push)").
+  //
+  // The body was a hardcoded two-column grid set through an INLINE STYLE,
+  // `gridTemplateColumns: 'minmax(0,1fr) 244px'`. An inline style cannot carry a media query, so
+  // the 244px sidebar held its width on every screen: on a 360px phone that left the main column
+  // about 90px once the gap and padding were paid. The columns are Tailwind classes now, so the
+  // body is a single column below `md`.
+  //
+  // The sidebar comes FIRST when stacked. It is short and factual (publisher, version, license,
+  // permissions) where the readme above it can run for screens, and on a phone anything after a
+  // long readme is effectively gone.
+  //
+  // ⚠ HONEST NON-PROOF: jsdom applies no media queries. This pins the classes and the absence of
+  // the inline style, not the rendered column count.
+  describe('mobile layout', () => {
+    it('stacks the body into one column below md, instead of holding a 244px sidebar', async () => {
+      mockDetail();
+      const { container } = render(<PackageDetail entry={entry} onBack={() => {}} onInstall={() => {}} onToggleEnabled={() => {}} onRollback={() => {}} onRemove={() => {}} />);
+      await screen.findByText(/Converts WHONET SQLite/);
+      const grid = container.querySelector('[data-testid="detail-body"]');
+      expect(grid, 'the body grid must be findable').toBeTruthy();
+      expect(grid?.getAttribute('style') ?? '', 'an inline style cannot carry a media query').not.toMatch(/gridTemplateColumns|grid-template-columns/);
+      expect(grid?.className, 'two columns only from md up').toMatch(/md:grid-cols-/);
+    });
+
+    it('puts the details sidebar above the readme when stacked', async () => {
+      mockDetail();
+      const { container } = render(<PackageDetail entry={entry} onBack={() => {}} onInstall={() => {}} onToggleEnabled={() => {}} onRollback={() => {}} onRemove={() => {}} />);
+      await screen.findByText(/Converts WHONET SQLite/);
+      const side = container.querySelector('[data-testid="detail-side"]');
+      expect(side?.className, 'first on a phone').toMatch(/order-first/);
+      expect(side?.className, 'back in place on desktop').toMatch(/md:order-none/);
+    });
   });
 });

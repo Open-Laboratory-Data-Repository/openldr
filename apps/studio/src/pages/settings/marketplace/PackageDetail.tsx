@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Divider } from '@/components/ui/bleed';
 import {
-  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -74,18 +74,16 @@ export function PackageDetail({ entry, onBack, onInstall, onToggleEnabled, onRol
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex items-center gap-3 py-2">
-        <Button variant="ghost" size="sm" className="h-7 gap-1 text-xs" data-testid="detail-back" onClick={onBack}>
-          ← {t('settings.marketplace.back')}
-        </Button>
-      </div>
-      <Divider />
-
+      {/* ⛔ No standalone Back row. It had a button, a divider and their padding to itself — about
+          50px off the top of every phone screen for one control. Back is the first item in the ⋯
+          menu now, which is also where AGENTS.md section 5 puts everything else on this page. */}
       {/* Title row — a fixed header above the scrollable body */}
       <div className="flex items-start justify-between gap-4 py-4">
           <div>
             <h1 className="text-xl font-medium text-foreground">{entry.id}</h1>
-            <p className="mt-0.5 flex items-center gap-2 text-sm text-muted-foreground">
+            {/* `flex-wrap`: on a phone the publisher name already takes two lines, and without this
+                the badges squeeze it further instead of dropping below. */}
+            <p className="mt-0.5 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
               <span>{(publisher?.name || '—')} · v{entry.version}</span>
               <Badge variant="outline" className="text-[10px] uppercase">{entry.type}</Badge>
               {entry.ref ? <SignatureBadge valid={detail ? detail.valid : entry.valid} invalidReason={detail ? detail.invalidReason : entry.invalidReason} publisher={publisher} /> : null}
@@ -106,6 +104,11 @@ export function PackageDetail({ entry, onBack, onInstall, onToggleEnabled, onRol
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
+                {/* First, and separated: it navigates away rather than acting on this package. */}
+                <DropdownMenuItem data-testid="detail-back" onSelect={onBack}>
+                  {t('settings.marketplace.back')}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
                 {canPublish && entry.ref ? (
                   <DropdownMenuItem data-testid="detail-publish" onSelect={() => onPublish?.(entry)}>
                     {t('settings.marketplace.publish')}
@@ -166,7 +169,11 @@ export function PackageDetail({ entry, onBack, onInstall, onToggleEnabled, onRol
 
       {/* Scrollable body */}
       <div className="min-h-0 flex-1 overflow-auto py-4">
-        <div className="grid gap-6" style={{ gridTemplateColumns: 'minmax(0,1fr) 244px' }}>
+        {/* ⛔ Tailwind classes, NOT an inline `gridTemplateColumns`. An inline style carries no media
+            query, so the 244px sidebar held its width on every screen — on a 360px phone the main
+            column was left about 90px and the description wrapped one or two words a line. One
+            column below `md`, the original two from `md` up. */}
+        <div className="grid gap-6 md:grid-cols-[minmax(0,1fr)_244px]" data-testid="detail-body">
           <div className="min-w-0 space-y-4">
             <p className="whitespace-pre-line text-sm text-foreground/85">
               {detail?.description || entry.description || t('settings.marketplace.noDescription')}
@@ -183,7 +190,10 @@ export function PackageDetail({ entry, onBack, onInstall, onToggleEnabled, onRol
             ) : null}
           </div>
 
-          <div className="space-y-4">
+          {/* ⚠ `order-first` when stacked. This block is short and factual — publisher, version,
+              license, permissions — and the readme above it can run for screens, so on a phone
+              anything sitting after it is effectively unreachable. Back in source order from `md`. */}
+          <div className="order-first space-y-4 md:order-none" data-testid="detail-side">
             <section className="rounded-md bg-muted/40 p-3">
               <p className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">{t('settings.marketplace.details')}</p>
               <dl className="space-y-1 text-[13px]">
