@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "2d346da2",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Trim the health label and stop boxing half of it"
+        },
+        {
           "hash": "2bbd2569",
           "type": "fix",
           "scope": "studio",
