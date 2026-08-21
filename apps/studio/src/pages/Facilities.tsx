@@ -332,12 +332,16 @@ function FacilityHealthChip({
   const Icon = HEALTH_ICON[dim.state];
 
   return (
-    <div className="flex items-center gap-2 text-xs">
-      <Badge variant="outline" className="gap-1.5 font-medium">
+    /* ⚠ `flex-wrap` plus `whitespace-nowrap` on each piece. In its own row on a phone this still
+       needs two lines — the label and the timestamp do not fit in 328px together — but the break
+       now falls BETWEEN them instead of inside the label, which read as
+       "Facility data in reports: / Current". Wrapping as units, not mid-phrase. */
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+      <Badge variant="outline" className="gap-1.5 whitespace-nowrap font-medium">
         <Icon className={dim.state === 'updating' ? 'h-3 w-3 animate-spin' : 'h-3 w-3'} />
         {t('facilities.health.chipLabel', { state: t(`facilities.health.states.${dim.state}`) })}
       </Badge>
-      <span className="text-muted-foreground">
+      <span className="whitespace-nowrap text-muted-foreground">
         {dim.lastSuccessAt
           ? t('facilities.health.lastBuilt', { time: formatBuildTime(dim.lastSuccessAt) })
           : t('facilities.health.neverBuilt')}
@@ -941,24 +945,35 @@ export function Facilities() {
             no inset to negative-margin away. The row itself carries the ONE `border-b` rule for
             both the tab labels and the `⋯` slot; `TabsList` drops its own (`border-b-0`) so the
             two don't stack into a double line. */}
-        <div className="flex items-center justify-between border-b border-border px-4">
-          <TabsList className="border-b-0">
+        {/* ⛔ A GRID below `sm`, the old flex row from `sm` up.
+            The health chip is a long state badge, a full timestamp and up to N Retry buttons. Sharing
+            one row with the tabs and the ⋯ made the strip 71px tall at 360px wide, with the chip
+            wrapping and the tabs squeezed to 165px. Row one is now tabs + ⋯; the chip takes row two
+            at full width.
+            ⚠ The chip is rendered ONCE and MOVED, never duplicated per breakpoint: it holds live
+            Retry buttons, one per failed projection, and a second copy would double every one of
+            them. `sm:order-*` restores the desktop sequence (tabs, health, ⋯) instead. */}
+        <div className="grid grid-cols-[1fr_auto] items-center gap-x-3 border-b border-border px-4 sm:flex sm:items-center">
+          <TabsList className="border-b-0 sm:order-1">
             <TabsTrigger value="registry">{t('facilities.tabs.registry')}</TabsTrigger>
             <TabsTrigger value="observed">{t('facilities.tabs.observed')}</TabsTrigger>
           </TabsList>
-          <div className="flex items-center gap-3">
-            {health && (
+          {/* Portal target for whichever tab's `⋯` menu is currently mounted — see `actionsEl`'s
+              doc comment above. */}
+          <div ref={setActionsEl} className="flex items-center justify-self-end sm:order-3" />
+          {health && (
+            <div
+              className="col-span-2 pb-2 sm:order-2 sm:ml-auto sm:pb-0"
+              data-testid="facility-health-slot"
+            >
               <FacilityHealthChip
                 health={health}
                 canManage={canManage}
                 retryingJobId={retryingJobId}
                 onRetry={(jobId) => void retryHealthJob(jobId)}
               />
-            )}
-            {/* Portal target for whichever tab's `⋯` menu is currently mounted — see `actionsEl`'s
-                doc comment above. */}
-            <div ref={setActionsEl} className="flex items-center" />
-          </div>
+            </div>
+          )}
         </div>
 
         {/* The `TabsContent` primitive (components/ui/tabs.tsx) now defends against the
