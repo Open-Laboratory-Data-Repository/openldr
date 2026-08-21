@@ -207,6 +207,29 @@ describe('marketplace routes', () => {
     expect(res.statusCode).toBe(400);
   });
 
+  // ⛔ The operator hit this for real on 2026-08-21: Browse said only "Registry unreachable." while
+  // the actual cause was a registry whose location was stored RELATIVE ('.docs-marketplace/bundles')
+  // and therefore resolved against the SERVER's working directory, not the repo root. The route knew
+  // the resolved absolute path all along — it was in the ENOENT — and threw the name away.
+  //
+  // Two things this pins: the message survives, and it says WHICH registry produced it. Without the
+  // name an install with several registries cannot tell which one is broken.
+  it('names the failing registry in the error, and keeps the underlying message', async () => {
+    const { runtime } = fakePlugins();
+    const missing = join(registryDir, 'does-not-exist');
+    const { app } = await appWith({}, runtime, {
+      seed: [{ id: 'reg-broken', name: 'Documentation samples', kind: 'local', location: missing }],
+    });
+    const res = await app.inject({ method: 'GET', url: '/api/marketplace/available' });
+    const body = res.json();
+    expect(body.configured).toBe(true);
+    expect(body.bundles).toEqual([]);
+    expect(body.error, 'must say which registry failed').toContain('Documentation samples');
+    // The resolved path is the whole point — it is what tells the operator the relative location
+    // pointed somewhere they did not expect.
+    expect(body.error, 'must keep the underlying reason').toMatch(/ENOENT|no such file/i);
+  });
+
   it('reports unconfigured when no enabled registries', async () => {
     const { runtime } = fakePlugins();
     const { app } = await appWith({}, runtime);

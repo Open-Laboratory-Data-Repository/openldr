@@ -114,7 +114,13 @@ export function registerMarketplaceRoutes(app: FastifyInstance<any, any, any, an
           });
         }
       } catch (e) {
-        firstError = firstError ?? (e instanceof Error ? e.message : 'registry unreachable');
+        // ⛔ Prefixed with the registry NAME. The message reaches Browse verbatim, and with several
+        // registries configured an unlabelled reason cannot say which one is broken. The underlying
+        // text is kept whole: for a local registry it is the ENOENT carrying the RESOLVED absolute
+        // path, which is the only thing that reveals a relative `location` landing somewhere other
+        // than the operator expected (it resolves against the SERVER's cwd, not the repo root).
+        const reason = e instanceof Error ? e.message : 'registry unreachable';
+        firstError = firstError ?? `${reg.name}: ${reason}`;
       }
     }
     return {
