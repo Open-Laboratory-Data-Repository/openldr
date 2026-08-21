@@ -1,4 +1,5 @@
 import type { FormSchema } from './schema/form-schema';
+import { lintFhirPaths } from './lint-fhir-path';
 import { validateTemplateTargets } from './page-targets';
 import { isReferenceFieldType, resolveReferenceSource } from './reference-source';
 
@@ -14,7 +15,10 @@ export interface FormLintIssue {
     | 'target-contract-violation'
     | 'reference-missing-source'
     | 'reference-ambiguous-source'
-    | 'ambiguous-fhir-path';
+    | 'ambiguous-fhir-path'
+    | 'unknown-fhir-path'
+    | 'fhir-path-cardinality'
+    | 'fhir-path-type-mismatch';
   message: string;
   fieldId?: string;
   sectionId?: string;
@@ -193,6 +197,8 @@ export function lintFormSchema(form: FormSchema): FormLintIssue[] {
       message: `Page "${v.pageLabel}" requires fields for: ${v.missing.join(', ')}`,
     });
   }
+
+  issues.push(...lintFhirPaths(form));
 
   return issues;
 }
