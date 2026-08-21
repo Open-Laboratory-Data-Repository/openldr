@@ -86,8 +86,9 @@ export function Laboratory(): JSX.Element {
     try {
       const patch: LabIdentity = {};
       for (const f of meta.fields) patch[f.id] = values[f.id] ?? '';
-      const r = await saveLabIdentity(patch);
-      setValues(r.values);
+      // The PUT answers with the values map itself, not with the GET's `{ fields, values, logo }`
+      // envelope. See `saveLabIdentity` for what reading `.values` here cost.
+      setValues(await saveLabIdentity(patch));
       setSaved(true);
     } catch {
       setError(t('settings.laboratory.saveError'));

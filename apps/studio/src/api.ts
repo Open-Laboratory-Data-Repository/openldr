@@ -469,8 +469,18 @@ export interface LabIdentityResponse {
 export const fetchLabIdentity = (): Promise<LabIdentityResponse> =>
   authFetch('/api/settings/lab').then((r) => okJson<LabIdentityResponse>(r, 'load lab identity'));
 
-export const saveLabIdentity = (patch: LabIdentity): Promise<{ values: LabIdentity }> =>
-  authFetch('/api/settings/lab', jbody(patch, 'PUT')).then((r) => okJson<{ values: LabIdentity }>(r, 'save lab identity'));
+/** ⛔ The PUT answers with the values map ITSELF, where the GET above wraps it as
+ *  `{ fields, values, logo }`. That asymmetry is deliberate on the server (`return after`,
+ *  apps/server/src/settings-routes.ts) and pinned by its own route test: a save has no need to
+ *  re-send the field list or the logo limits, which never change.
+ *
+ *  ⚠ This used to be declared as `{ values: LabIdentity }`. Nothing caught the lie, because
+ *  `okJson<T>` casts rather than validates, so it type-checked perfectly and then handed the
+ *  Laboratory page `undefined` for its values on every successful save. The page threw
+ *  "Cannot read properties of undefined (reading 'lab.logo')" into the error boundary over a write
+ *  that had already landed. Reported 2026-08-21. */
+export const saveLabIdentity = (patch: LabIdentity): Promise<LabIdentity> =>
+  authFetch('/api/settings/lab', jbody(patch, 'PUT')).then((r) => okJson<LabIdentity>(r, 'save lab identity'));
 
 export interface NumberSetting {
   id: string;
