@@ -150,6 +150,34 @@ describe('Roles page', () => {
     expect(await screen.findByText('Administrator')).toBeInTheDocument();
   });
 
+  // ⛔ REGRESSION, reported 2026-08-21 from a phone: the table's horizontal scrollbar sat directly
+  // under the last row with a band of dead background between it and the pagination.
+  //
+  // The Table had no `wrapperClassName`, so its built-in scroll wrapper kept the default
+  // `relative w-full overflow-auto` and hugged its content height. The fill has to be on THAT
+  // wrapper — `flex-1` on an ancestor moves the ancestor, not the scroller, and the scrollbar
+  // belongs to the scroller. Same trap as Terminology's tables in the 2026-07-31 mobile pass.
+  //
+  // ⚠ The Table must also render only when there are rows. `LoadingState` is a SIBLING here, so an
+  // always-filling wrapper would split the pane 50/50 with the loader on every load, and an empty
+  // table's header still forces its own intrinsic width and scrolls sideways on a phone.
+  //
+  // ⚠ HONEST NON-PROOF: jsdom computes no layout. This pins the classes, not the pixels.
+  it('fills the pane with the table scroller, so its scrollbar sits above the pagination', async () => {
+    const { container } = render(<MemoryRouter><Roles /></MemoryRouter>);
+    await screen.findByText('Administrator');
+    const wrapper = container.querySelector('table')?.parentElement;
+    expect(wrapper?.className, 'the SCROLLER is what must fill').toMatch(/min-h-0/);
+    expect(wrapper?.className).toMatch(/flex-1/);
+    expect(wrapper?.className, 'and it is the thing that scrolls').toMatch(/overflow-auto/);
+  });
+
+  it('renders no table at all while loading, so the loader does not share the pane', async () => {
+    (api.listRoles as any).mockReturnValue(new Promise(() => {}));
+    const { container } = render(<MemoryRouter><Roles /></MemoryRouter>);
+    expect(container.querySelector('table'), 'an empty header still forces intrinsic width').toBeNull();
+  });
+
   it('adopts the standard table toolbar (filter/sort/columns + chips)', async () => {
     render(<MemoryRouter><Roles /></MemoryRouter>);
     await screen.findByText('Administrator');

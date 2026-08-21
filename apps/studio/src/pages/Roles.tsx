@@ -11,7 +11,6 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { StripedEmpty } from '@/components/ui/striped-empty';
 import { LoadingState } from '@/components/ui/spinner';
 import { TruncatedText } from '@/components/ui/truncated-text';
-import { Bleed } from '@/components/ui/bleed';
 import { TablePagination } from '@/components/ui/table-pagination';
 import {
   ActiveFilterChips, DataTableToolbar, applyTableState, useTableState, type ColumnDef,
@@ -144,17 +143,28 @@ export function Roles() {
         <ActiveFilterChips columns={columns} filters={table.filters} onChange={table.setFilters} />
       </div>
 
-      <div className="flex flex-1 flex-col overflow-auto p-4">
-        <Bleed>
-          <Table>
+      {/* ⛔ `min-h-0` + `overflow-hidden`, and NO `p-4`. The padding is what forced the <Bleed> that
+          used to wrap the table, and the missing `min-h-0` is why nothing could shrink. Matches the
+          shape RegistriesTab and Connectors already use. */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        {/* ⛔ Rendered ONLY when populated, for two reasons. `LoadingState` below is a SIBLING, so a
+            wrapper that always fills splits the pane 50/50 with the loader on every load. And an
+            empty table's HEADER still forces its own intrinsic width, which scrolls sideways on a
+            phone. */}
+        {/* ⛔ `wrapperClassName` puts the fill on the Table's OWN scroll wrapper. Without it that
+            wrapper keeps its default `relative w-full overflow-auto` and hugs its content, so the
+            horizontal scrollbar landed directly under the last row with dead background beneath it.
+            `flex-1` on an ancestor moves the ancestor, not the scroller, and the scrollbar belongs
+            to the scroller. */}
+        {!loading && view.rows.length > 0 && (
+          <Table wrapperClassName="min-h-0 flex-1">
             <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow>
                 {table.visibleColumns.map((c) => <TableHead key={c.id} className={c.headClassName}>{t(c.labelKey)}</TableHead>)}
                 <TableHead className="w-16" />
               </TableRow>
             </TableHeader>
-            {!loading && view.rows.length > 0 && (
-              <TableBody className="[&_tr:last-child]:border-b">
+            <TableBody className="[&_tr:last-child]:border-b">
                 {view.rows.map((r) => (
                   <TableRow
                     key={r.id}
@@ -189,15 +199,15 @@ export function Roles() {
                     </TableCell>
                   </TableRow>
                 ))}
-              </TableBody>
-            )}
+            </TableBody>
           </Table>
-        </Bleed>
+        )}
         {loading && <LoadingState className="flex-1" label={t('roles.loading')} />}
         {!loading && view.rows.length === 0 && (
           rows.length === 0 ? (
             <EmptyState
               icon={<ShieldCheck className="h-6 w-6" />}
+              className="flex-1"
               title={t('roles.emptyTitle')}
               body={t('roles.emptyBody')}
               action={canManage ? <Button onClick={() => setCreateOpen(true)}>{t('roles.createRole')}</Button> : undefined}
