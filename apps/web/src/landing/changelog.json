@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "31670512",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Rule off the tabs row when the health chip drops below it"
+        },
+        {
           "hash": "d89ec0ea",
           "type": "fix",
           "scope": "facilities",
