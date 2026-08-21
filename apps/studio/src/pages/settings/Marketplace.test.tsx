@@ -264,6 +264,27 @@ describe('Marketplace', () => {
     await waitFor(() => expect(screen.queryByTestId('registry-source')).toBeNull());
   });
 
+  // ⛔ REGRESSION, 2026-08-21: the type filter's label wrapped to two lines inside a one-line
+  // control on a phone, so "All types" read as "All / types" and overflowed the 36px trigger.
+  //
+  // `w-36` is a PREFERRED width, not a floor. A flex item shrinks by default, and this row wanted
+  // 320 (search) + 144 (select) + 8 (gap) inside 328, so both were squeezed proportionally and the
+  // trigger landed at 101px. Measured before the fix: trigger 101px wide, its label span 40px tall
+  // in a 36px box. `shrink-0` makes the 144 a floor and the search box gives up the difference.
+  //
+  // ⚠ `truncate` matters for fr and pt: "Tous les types" and "Todos os tipos" are longer than the
+  // English, and an ellipsis is the correct failure, not a second line.
+  it('keeps the type filter on one line, so its label cannot wrap inside the control', async () => {
+    (api.listAvailableArtifacts as any).mockResolvedValue({ configured: true, source: 'local', host: 'local', bundles: [] });
+    (api.listInstalledArtifacts as any).mockResolvedValue([]);
+    render(<MemoryRouter><Marketplace /></MemoryRouter>);
+    const trigger = await screen.findByRole('combobox', { name: /filter by type/i });
+    expect(trigger.className, 'w-36 is only a floor if the item cannot shrink').toMatch(/shrink-0/);
+    expect(trigger.className, 'a longer locale must ellipsize, not wrap').toMatch(/truncate|whitespace-nowrap/);
+    const search = screen.getByLabelText(/search/i);
+    expect(search.className, 'the search box absorbs the shortfall instead').toMatch(/min-w-0/);
+  });
+
   it('refreshes the registry', async () => {
     (api.listAvailableArtifacts as any).mockResolvedValue({ configured: true, source: 'local', host: 'local', bundles: [] });
     (api.listInstalledArtifacts as any).mockResolvedValue([]);

@@ -83,9 +83,16 @@ function FilterBar({ filter, setFilter, typeFilter, setTypeFilter }: {
   const { t } = useTranslation();
   return (
     <div className="mb-3 flex items-center gap-2">
-      <Input className="max-w-xs" placeholder={t('settings.marketplace.searchPlaceholder')} value={filter} onChange={(e) => setFilter(e.target.value)} aria-label={t('settings.marketplace.searchPlaceholder')} />
+      {/* `min-w-0`: this is the item that gives up width when the row is tight. Without it the input's
+          own intrinsic minimum fights the select for the same pixels. */}
+      <Input className="min-w-0 max-w-xs" placeholder={t('settings.marketplace.searchPlaceholder')} value={filter} onChange={(e) => setFilter(e.target.value)} aria-label={t('settings.marketplace.searchPlaceholder')} />
       <Select value={typeFilter} onValueChange={setTypeFilter}>
-        <SelectTrigger className="w-36" aria-label={t('settings.marketplace.filterByType', { defaultValue: 'Filter by type' })}><SelectValue /></SelectTrigger>
+        {/* ⛔ `shrink-0`. `w-36` is a PREFERRED width, not a floor: a flex item shrinks by default, and
+            this row wanted 320 + 144 + 8 inside 328 on a phone, so the trigger was squeezed to 101px
+            and "All types" wrapped to two lines inside a 36px control.
+            ⚠ `truncate` for fr and pt — "Tous les types" and "Todos os tipos" are longer than the
+            English, and an ellipsis is the right failure, not a second line. */}
+        <SelectTrigger className="w-36 shrink-0 truncate [&>span]:truncate" aria-label={t('settings.marketplace.filterByType', { defaultValue: 'Filter by type' })}><SelectValue /></SelectTrigger>
         <SelectContent>
           <SelectItem value="all">{t('settings.marketplace.allTypes')}</SelectItem>
           <SelectItem value="plugin">Plugin</SelectItem>
