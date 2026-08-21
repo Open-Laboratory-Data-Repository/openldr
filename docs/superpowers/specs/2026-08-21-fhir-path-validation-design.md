@@ -37,17 +37,20 @@ measured against the shipped samples on 2026-08-21 by running the proposed rules
 
 **The Facility form trips zero structural rules.** Its only defect is the semantic one below.
 
-The structural defects that do exist are in the other three shipped samples, 11 findings across
-them:
+The structural defects that do exist are in the other three shipped samples, 13 findings across
+11 fields:
 
-- Seven cardinality findings, all the same shape: `name.given`, `name.family`, and
-  `telecom.value` cross `HumanName[]` and `ContactPoint[]` with no discriminator naming which
-  element. Underspecified in principle, ordinary in practice.
-- Three real type mismatches on the Lab order form: `ServiceRequest.requester` (a `Reference`),
+- Ten cardinality findings: `name.given`, `name.family`, and `telecom.value` on both the Users
+  and the Patient form (six), plus `ServiceRequest.locationCode`, `.identifier`, `.note`, and
+  `.performer` on the Lab order form (four). Every one crosses a repeating element with no
+  discriminator naming which occurrence. Underspecified in principle, ordinary in practice.
+- Three type mismatches, all on the Lab order form: `ServiceRequest.requester` (a `Reference`),
   `.identifier` (an `Identifier`), and `.note` (an `Annotation`) are each bound to a plain `text`
   field. A text box cannot write any of those. The extractor survives only because it hardcodes
   `identifier` and ignores the other two.
-- One cardinality finding on `ServiceRequest.locationCode`, which is `CodeableConcept[]`.
+- `.identifier` and `.note` each trip both rules: one cardinality finding and one type mismatch.
+  That is the only overlap between the two lists above, so 10 plus 3 minus that overlap of 2
+  lands on 11 distinct fields carrying 13 issues.
 
 Fixing those means designing a discriminator convention for `HumanName` and `ContactPoint`,
 which nobody has done. That is why the structural rules ship at `warning`, not `error`. See

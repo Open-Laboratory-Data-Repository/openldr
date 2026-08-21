@@ -787,8 +787,15 @@ Expected: green. Every test in the migrations directory calls the migrated-db he
 
 pg-mem cannot catch a migration numbering gap. This is the only check that can.
 
+`reset()` migrates but never seeds (`packages/bootstrap/src/db-context.ts:68-75`). Add `db seed`
+so the boot leaves a Facility row behind, for parity with Task 7's real-boot check. Migration 089
+runs against an empty database at this point either way, and correctly no-ops; seeding after
+`reset` does not change that. See "What this phase does not prove" for what a real boot can and
+cannot show about 089's rewrite.
+
 ```bash
 pnpm openldr db reset
+pnpm openldr db seed
 ```
 
 Expected: completes without error. Report the actual output.
@@ -1158,12 +1165,17 @@ pnpm turbo run typecheck
 
 - [ ] **Step 3: Verify on a real boot**
 
+`reset()` migrates but never seeds (`packages/bootstrap/src/db-context.ts:68-75`). Without a
+seed, there is no Facility row, and `forms lint` prints `(no findings)` and exits 0 for the wrong
+reason. Seed first, so the lint run actually has a form to check.
+
 ```bash
 pnpm openldr db reset
+pnpm openldr db seed
 pnpm openldr forms lint
 ```
 
-Expected: reset completes, and lint exits 0 with only the 11 known warnings.
+Expected: reset and seed complete, and lint exits 0 with only the 11 known warnings.
 
 - [ ] **Step 4: Merge to local main**
 
@@ -1201,4 +1213,4 @@ git commit -m "chore(landing): regenerate the changelog"
 - **That any of the 11 warnings gets fixed.** They become visible and stay visible. Fixing them needs a `fhirDiscriminator` convention for `HumanName` and `ContactPoint` that nobody has designed, and a re-typing of three Lab order fields.
 - **That the corrected Facility mapping round-trips to a real FHIR consumer.** Nothing exports a `Location` yet. That gap closes with the export slice.
 - **That `fhir-path-type-mismatch` catches every type error.** It is deliberately narrow, firing only for scalar-only field types on non-primitive leaves. A `select` bound to a `Reference` is a real error it will not catch, and that is the price of never firing on the shipped `reference` bindings.
-- **Migration 089 on a real Postgres upgrade path.** Task 3 step 6 and Task 7 step 3 run `db reset`, which is a fresh install, not an upgrade over an existing 087-era database. Proving the upgrade needs a database that predates 089. If one is available, run it; if not, write **HONEST NON-PROOF** in the report and say so.
+- **That the real boot proves 089's rewrite.** Task 3 step 6 and Task 7 step 3 run `db reset` against a fresh install, so `up()` finds no Facility row yet and correctly no-ops. The `db seed` that follows creates the row only after 089 has already run, so it never exercises the rewrite either. What the real boot actually proves is migration ORDERING: the numbering gap pg-mem cannot catch. The rewrite itself, on both prior shapes, is proven only by pg-mem, in Task 3's own test suite. Proving the rewrite on a real upgrade needs a database that predates 089. If one is available, run it; if not, write **HONEST NON-PROOF** in the report and say so.
