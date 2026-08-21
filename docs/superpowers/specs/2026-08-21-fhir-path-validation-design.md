@@ -182,15 +182,37 @@ unpublishable. Lint errors already gate publish
 | Zone | `address.district` | `null` |
 | Region | `address.state` | `Location.address.state` |
 | District | `address.city` | `Location.address.district` |
-| Council | `null` | `Location.address.city` |
+| Council | `null` | `null`, unchanged |
 | Status | `status` | `Location.status` |
 | Level | `physicalType` | `Location.physicalType` |
 
-This uses all four Address slots in their real containment order and drops the one tier with no
-standard analogue, Zone. Council on `city` is a stretch, but `city` is defined as "city, town,
-suburb, village or other community", which a council is far closer to than a district is.
+Two of the registry's tiers get no Address slot: Zone and Council. That is the honest answer,
+and both export properly only through `Location.partOf`. See Out of scope.
 
-Zone only exports honestly through `Location.partOf`. See Out of scope.
+`Location.address.city` stays deliberately unmapped, reserved for Ward.
+
+An earlier draft of this spec put Council on `address.city`. That was wrong. `facility_registry`
+carries six administrative columns, `zone, region, district, council, ward, village`
+(`packages/db/src/facility-answers.ts:24`), and the source hierarchy is
+Zone, Region, District, Council, Ward, Village
+(`docs/superpowers/specs/2026-08-04-facility-registry-design.md:49`). Only the first four are in
+`FACILITY_ADMIN_LEVELS` and on the form, but Ward and Village exist in storage and they are the
+populated places `address.city` actually describes: "city, town, suburb, village or other
+community". A Council is a local government authority, not a settlement. Putting it on `city`
+squats on the slot Ward fits.
+
+The rule that drops Zone is the same rule that drops Council. An earlier draft applied it to one
+and not the other.
+
+Do not reach for the ISO 21090 ADXP address-part extensions to rescue either tier. `precinct`,
+`county`, and `censusTract` all sit below `city` and `state`, which is the wrong direction for a
+supra-regional Zone.
+
+A caution on the general literature. Guidance written for Tanzanian administrative geography
+often glosses ADM2 as "District or Council", treating the two as synonyms. In this registry's own
+data they are adjacent distinct tiers, and the import mapper keeps them separate
+(`docs/superpowers/specs/2026-08-12-facility-import-mapping-design.md:78`). Taking the general
+gloss at face value would collide Council and District on `address.district`.
 
 Two changes are needed to land this:
 
