@@ -4,7 +4,13 @@ import { FormSchema } from '../schema/form-schema';
 import { toQuestionnaire } from '../to-questionnaire';
 import { resolveReferenceSource } from '../reference-source';
 import { PAGE_TARGETS } from '../page-targets';
-import { CORE_FACILITY_KEYS, FACILITY_FORM_MIGRATION_BOUND_FIELDS } from '@openldr/db';
+import { normalizeFormSchema } from '../normalize';
+import { lintFormSchema } from '../lint';
+import {
+  CORE_FACILITY_KEYS,
+  FACILITY_FORM_MIGRATION_BOUND_FIELDS,
+  FACILITY_FORM_MIGRATION_PREV_BOUND_FIELDS,
+} from '@openldr/db';
 
 describe('sample forms', () => {
   it('parse against the schema and export to Questionnaire', () => {
@@ -246,5 +252,64 @@ describe('the seeded Facility form', () => {
   // against the db-exported snapshot is what actually catches that drift.
   it('⛔ matches migration 085\'s frozen BOUND_FIELDS snapshot exactly, so a future edit here cannot silently desynchronise an already-migrated install from what the migration thinks "bound" looks like', () => {
     expect(facility().fields).toEqual(FACILITY_FORM_MIGRATION_BOUND_FIELDS);
+  });
+});
+
+describe('every shipped sample passes the FHIR path rules', () => {
+  it('no sample form produces a lint ERROR', () => {
+    for (const form of sampleForms) {
+      const errors = lintFormSchema(form).filter((i) => i.severity === 'error');
+      expect(errors, `${form.name}: ${errors.map((e) => e.message).join('; ')}`).toEqual([]);
+    }
+  });
+
+  it('the Facility form produces no findings of any severity', () => {
+    const facility = sampleForms.find((f) => f.name === 'Facility')!;
+    expect(lintFormSchema(facility)).toEqual([]);
+  });
+
+  // The three other samples carry 13 known warnings, not the 11 the design spec's "Two defect
+  // classes" section counted. Measured directly against lintFormSchema on 2026-08-21: the spec's
+  // count named identifier's and note's type mismatches on the Lab order form but not the
+  // cardinality finding each one ALSO carries (identifier and note are both arrays, same as
+  // locationCode and performer), and it did not name performer's cardinality finding at all. This
+  // pins the measured count so a future edit that adds a fourteenth has to say so out loud. See
+  // the spec's "Two defect classes" section for what each finding is and why they are warnings
+  // rather than errors.
+  it('the other samples carry exactly the 13 known structural warnings', () => {
+    const warnings = sampleForms
+      .filter((f) => f.name !== 'Facility')
+      .flatMap((f) => lintFormSchema(f).filter((i) => i.severity === 'warning'))
+      .filter((i) => i.code === 'fhir-path-cardinality' || i.code === 'fhir-path-type-mismatch');
+    expect(warnings).toHaveLength(13);
+  });
+});
+
+describe('migration 089 canonicalised guard', () => {
+  // ⛔ This is the test that proves migration 089's SECOND prior shape is real. The migration
+  // hand-writes what it believes a post-Phase-1 builder save produces. Only running the real
+  // normaliser can confirm that belief, and packages/db cannot import @openldr/forms to do it.
+  // This package can import both, so the proof lives here.
+  it('normalizing the 087 shape produces exactly the shape 089 expects to find', () => {
+    const normalized = normalizeFormSchema({
+      id: 'form-sample-facility',
+      name: 'Facility',
+      fhirResourceType: 'Location',
+      targetPages: ['facilities'],
+      fields: FACILITY_FORM_MIGRATION_PREV_BOUND_FIELDS,
+    });
+    const paths = normalized.fields.map((f) => f.fhirPath);
+    expect(paths).toEqual([
+      null,
+      'Location.identifier.value',
+      'Location.name',
+      'Location.address.country',
+      'Location.address.district',
+      'Location.address.state',
+      'Location.address.city',
+      null,
+      'Location.status',
+      'Location.physicalType',
+    ]);
   });
 });

@@ -49,14 +49,14 @@ const facilityForm: FormSchema = {
       // belonged in. That is what let the Facilities table display a code the Edit sheet could not
       // bind, and what sent the first hand-registered facility into the wrong box. Migration 086
       // collapsed the columns; 087 collapsed the form onto them.
-      id: 'fld-fac-code', fhirPath: 'identifier.value',
+      id: 'fld-fac-code', fhirPath: 'Location.identifier.value',
       fhirDiscriminator: { system: NATIONAL_FACILITY_SYSTEM },
       displayLabel: 'Facility code', description: null, fieldType: 'identifier',
       required: true, enabled: true, order: 1, cardinality: { min: 1, max: '1' },
       apiProperty: 'facilityCode',
     },
     {
-      id: 'fld-fac-name', fhirPath: 'name', displayLabel: 'Name', description: null,
+      id: 'fld-fac-name', fhirPath: 'Location.name', displayLabel: 'Name', description: null,
       fieldType: 'text', required: true, enabled: true, order: 2,
       cardinality: { min: 1, max: '1' }, apiProperty: 'name',
     },
@@ -66,7 +66,7 @@ const facilityForm: FormSchema = {
     // is deliberately absent. Seeded by migration 073, which also repoints any already-migrated
     // install's Facility form (see migrations 071/072) to this exact shape.
     {
-      id: 'fld-fac-country', fhirPath: 'address.country', displayLabel: 'Country', description: null,
+      id: 'fld-fac-country', fhirPath: 'Location.address.country', displayLabel: 'Country', description: null,
       fieldType: 'reference', required: true, enabled: true, order: 3,
       cardinality: { min: 1, max: '1' }, apiProperty: 'country',
       valueSetUrl: 'urn:openldr:valueset:country',
@@ -80,7 +80,12 @@ const facilityForm: FormSchema = {
     // already chosen — apps/studio wires that fetch) but never blocks a value that isn't suggested
     // yet, since a newly gazetted district must be enterable on day one.
     {
-      id: 'fld-fac-zone', fhirPath: 'address.district', displayLabel: 'Zone', description: null,
+      // Zone and Council both carry `fhirPath: null`. FHIR `Address` has four administrative slots
+      // and this registry has six tiers, so two get none. `address.city` means a settlement
+      // ("city, town, suburb, village or other community") and is deliberately left free for Ward,
+      // which `facility_registry` already stores. Both unmapped tiers export honestly only through
+      // `Location.partOf`. See `docs/superpowers/specs/2026-08-21-fhir-path-validation-design.md`.
+      id: 'fld-fac-zone', fhirPath: null, displayLabel: 'Zone', description: null,
       fieldType: 'suggest', required: true, enabled: true, order: 4,
       cardinality: { min: 1, max: '1' }, apiProperty: 'zone',
     },
@@ -89,25 +94,21 @@ const facilityForm: FormSchema = {
       // has a tier here: Zambia's has nothing between Province and District, so 3788 of 3788 rows in
       // its MFL export carry no region at all. A required marker on a column the import path cannot
       // fill is a promise the data can never keep.
-      id: 'fld-fac-region', fhirPath: 'address.state', displayLabel: 'Region', description: null,
+      id: 'fld-fac-region', fhirPath: 'Location.address.state', displayLabel: 'Region', description: null,
       fieldType: 'suggest', required: false, enabled: true, order: 5,
       cardinality: { min: 0, max: '1' }, apiProperty: 'region',
     },
     {
-      id: 'fld-fac-district', fhirPath: 'address.city', displayLabel: 'District', description: null,
+      id: 'fld-fac-district', fhirPath: 'Location.address.district', displayLabel: 'District', description: null,
       fieldType: 'suggest', required: true, enabled: true, order: 6,
       cardinality: { min: 1, max: '1' }, apiProperty: 'district',
     },
     {
-      // OPTIONAL — nobody may be blocked from saving a facility when council data is unknown.
-      // `fhirPath: null`, not `address.line`: no standard R4 Address element remains for a fourth
-      // admin tier once country/district/region/state are already bound to the four real Address
-      // elements above (`address.country`/`.district`/`.state`/`.city`), and `address.line` is the
-      // STREET-ADDRESS element — binding an administrative tier to it would corrupt any future
-      // Location export. `FormField.fhirPath` is `z.string().nullable()`, and the
-      // `ambiguous-fhir-path` lint rule skips falsy paths
-      // (`if (!field.enabled || !field.fhirPath) continue`), so `null` is valid and lint-clean.
-      // council is FACILITY_ADMIN_LEVELS' fourth column (packages/db/src/facility-answers.ts).
+      // Zone and Council both carry `fhirPath: null`. FHIR `Address` has four administrative slots
+      // and this registry has six tiers, so two get none. `address.city` means a settlement
+      // ("city, town, suburb, village or other community") and is deliberately left free for Ward,
+      // which `facility_registry` already stores. Both unmapped tiers export honestly only through
+      // `Location.partOf`. See `docs/superpowers/specs/2026-08-21-fhir-path-validation-design.md`.
       id: 'fld-fac-council', fhirPath: null, displayLabel: 'Council', description: null,
       fieldType: 'suggest', required: false, enabled: true, order: 7,
       cardinality: { min: 0, max: '1' }, apiProperty: 'council',
@@ -120,13 +121,13 @@ const facilityForm: FormSchema = {
     // 073 repoints the same form again afterwards, shifting status/level's `order` from 6/7 to 7/8
     // to make room for the new council field, without touching either binding itself.
     {
-      id: 'fld-fac-status', fhirPath: 'status', displayLabel: 'Status', description: null,
+      id: 'fld-fac-status', fhirPath: 'Location.status', displayLabel: 'Status', description: null,
       fieldType: 'reference', required: true, enabled: true, order: 8,
       cardinality: { min: 1, max: '1' }, apiProperty: 'status',
       valueSetUrl: 'urn:openldr:valueset:location-status',
     },
     {
-      id: 'fld-fac-level', fhirPath: 'physicalType', displayLabel: 'Level', description: null,
+      id: 'fld-fac-level', fhirPath: 'Location.physicalType', displayLabel: 'Level', description: null,
       fieldType: 'reference', required: true, enabled: true, order: 9,
       cardinality: { min: 1, max: '1' }, apiProperty: 'level',
       valueSetUrl: 'urn:openldr:valueset:facility-type',
