@@ -6,10 +6,15 @@ import { PdfCanvasViewer } from './PdfCanvasViewer';
 interface Props {
   reportId: string;
   params: Record<string, string>;
+  /** Bumped by the page on every completed run, INCLUDING a refresh that re-ran with the very same
+   *  parameters. Without it this tab's effect key is `reportId` plus the params, both identical
+   *  across a refresh, so the document never re-fetched and the page kept showing the first run's
+   *  PDF while the row query and the timestamp both moved on. */
+  runSeq?: number;
   onDownload?: () => void;
 }
 
-export function ReportDocumentTab({ reportId, params, onDownload }: Props) {
+export function ReportDocumentTab({ reportId, params, runSeq = 0, onDownload }: Props) {
   const { t } = useTranslation();
   const [blob, setBlob] = useState<Blob | null>(null);
   // Holds the thrown error's own message when it has one (e.g. the server's coded refusal
@@ -17,7 +22,10 @@ export function ReportDocumentTab({ reportId, params, onDownload }: Props) {
   // to show" — the render below falls back to the untranslated-but-generic pdfRenderError copy.
   const [error, setError] = useState<string | boolean>(false);
   const [loading, setLoading] = useState(true);
-  const key = `${reportId}?${new URLSearchParams(params).toString()}`;
+  // ⛔ `runSeq` is part of the key, not decoration. A refresh re-runs with the SAME parameters by
+  // design, so everything else here is byte-identical between two runs and the effect would not
+  // fire. Re-rendering for any other reason leaves `runSeq` alone and still costs no second fetch.
+  const key = `${reportId}?${new URLSearchParams(params).toString()}#${runSeq}`;
 
   useEffect(() => {
     let active = true;

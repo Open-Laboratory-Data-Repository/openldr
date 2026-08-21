@@ -58,6 +58,9 @@ export function Reports() {
   const [result, setResult] = useState<ReportResult | null>(null);
   const [running, setRunning] = useState(false);
   const [ranAt, setRanAt] = useState('');
+  /** Counts COMPLETED runs, so a re-run with identical parameters is still a new run to anything
+   *  keyed on it. The document tab needs that: its parameters do not change on a refresh. */
+  const [runSeq, setRunSeq] = useState(0);
   const [activeTab, setActiveTab] = useState<Tab>('document');
   const [paramsOpen, setParamsOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -138,6 +141,7 @@ export function Reports() {
       setResult(res);
       setRanParams(values);
       setRanAt(new Date().toLocaleString());
+      setRunSeq((n) => n + 1);
       logReportRun(selectedId, { format: 'preview', rowCount: res.meta.rowCount, params: values });
       const next = { ...loadLastParams(), [selectedId]: values };
       saveLastParams(next);
@@ -296,6 +300,7 @@ export function Reports() {
                       <ReportDocumentTab
                         reportId={selected.id}
                         params={ranParams}
+                        runSeq={runSeq}
                         onDownload={() => logReportRun(selected.id, { format: 'pdf', rowCount: result.meta.rowCount, params: ranParams })}
                       />
                     ) : (
