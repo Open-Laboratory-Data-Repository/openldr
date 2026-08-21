@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import '@/i18n';
 
@@ -22,10 +22,6 @@ function openDropdown(trigger: HTMLElement) {
   if (!document.querySelector('[role="menu"]')) fireEvent.keyDown(trigger, { key: 'Enter' });
 }
 
-async function openHeaderMenu() {
-  openDropdown(await screen.findByRole('button', { name: 'Registry actions' }));
-}
-
 async function openRowMenu(name: string) {
   openDropdown(await screen.findByRole('button', { name: `Actions for ${name}` }));
 }
@@ -46,9 +42,13 @@ describe('RegistriesTab', () => {
 
   it('creates a registry via the dialog', async () => {
     (api.createRegistry as any).mockResolvedValue({ ...reg, id: 'r2', name: 'New' });
-    render(<MemoryRouter><RegistriesTab onChanged={() => {}} /></MemoryRouter>);
-    await openHeaderMenu();
-    fireEvent.click(await screen.findByTestId('add-registry'));
+    // ⛔ "Add registry" no longer lives in this component. The page's single ⋯ moved onto the tab
+    // strip in MarketplaceTabs, and this tab hands its opener up through `onReady`. Driving that
+    // handle is the seam — the menu ITEM is covered where it now lives, in Marketplace.test.tsx.
+    let handle: { openCreate: () => void } | null = null;
+    render(<MemoryRouter><RegistriesTab onChanged={() => {}} onReady={(a) => { handle = a; }} /></MemoryRouter>);
+    await screen.findByText('Official');
+    act(() => { handle!.openCreate(); });
     fireEvent.change(await screen.findByTestId('registry-name'), { target: { value: 'New' } });
     // Radix Select inside a Radix Dialog: open with ArrowDown then click the rendered option.
     fireEvent.keyDown(screen.getByTestId('registry-kind'), { key: 'ArrowDown' });

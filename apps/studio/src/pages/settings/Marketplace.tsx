@@ -104,8 +104,13 @@ export function Marketplace() {
     catch (e) { toast.error(t('settings.marketplace.errorToast', { error: e instanceof Error ? e.message : String(e) })); }
   }, [pendingDetach, t, load]);
 
+  // ⛔ NO `p-4` on the page box. It used to inset EVERYTHING: the Registries table could not reach
+  // the pane edges, its pagination floated 16px off the bottom, and Browse's scrollbar sat inside
+  // the padding rather than on the pane edge. Padding now lives on the rows that need it — the tab
+  // strip, the filter bar, the card list — so scrollers and rules run edge-to-edge while text stays
+  // inset. The detail view keeps its own `p-4` in MarketplaceTabs, because <Divider/> needs one.
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden p-4" data-testid="marketplace-page">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden" data-testid="marketplace-page">
       <MarketplaceTabs
         configured={configured}
         available={available}

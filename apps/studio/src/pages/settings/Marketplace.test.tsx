@@ -10,7 +10,9 @@ vi.mock('@/api', async (orig) => {
   return { ...actual,
     listInstalledArtifacts: vi.fn(), listAvailableArtifacts: vi.fn(), getAvailableArtifact: vi.fn(),
     installArtifact: vi.fn(), setArtifactEnabled: vi.fn(), rollbackArtifact: vi.fn(), removeArtifact: vi.fn(), detachArtifact: vi.fn(), refreshRegistry: vi.fn(),
-    getPublishStatus: vi.fn(), publishArtifact: vi.fn() };
+    getPublishStatus: vi.fn(), publishArtifact: vi.fn(),
+    // Registries is a real tab now that the page's ⋯ reaches into it.
+    listRegistries: vi.fn(), createRegistry: vi.fn(), updateRegistry: vi.fn(), deleteRegistry: vi.fn() };
 });
 import * as api from '@/api';
 import { Marketplace } from './Marketplace';
@@ -18,6 +20,7 @@ import { Marketplace } from './Marketplace';
 beforeEach(() => {
   vi.clearAllMocks();
   (api.getPublishStatus as any).mockResolvedValue({ configured: false, repo: null });
+  (api.listRegistries as any).mockResolvedValue([]);
 });
 
 const oneBundle = {
@@ -50,15 +53,19 @@ async function openDetailMenu(): Promise<void> {
   }
 }
 
-/** Open the tab header's ⋯ menu (Browse and Installed each have one). Radix opens on pointerDown in
- *  jsdom, with a keyboard fallback. */
+/** Open the page's single ⋯, which lives on the tab strip. Radix opens on pointerDown in jsdom,
+ *  with a keyboard fallback.
+ *
+ *  ⚠ The guard must name EVERY item the menu can hold. It is a toggle: if the fallback fires after
+ *  the pointerDown already opened the menu, it closes it again. That is what the Registries item
+ *  did before `add-registry` was listed here — the menu opened and immediately shut, and the test
+ *  hung on findBy until it timed out rather than failing on the real assertion. */
 async function openTabActions(): Promise<void> {
   const triggers = await screen.findAllByRole('button', { name: /^(actions|aktionen|ações)$/i });
   const trigger = triggers[triggers.length - 1];
   fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
-  if (!screen.queryByTestId('refresh-registry') && !screen.queryByTestId('refresh-installed')) {
-    fireEvent.keyDown(trigger, { key: 'Enter' });
-  }
+  const open = ['refresh-registry', 'refresh-installed', 'add-registry'].some((id) => screen.queryByTestId(id));
+  if (!open) fireEvent.keyDown(trigger, { key: 'Enter' });
 }
 
 describe('Marketplace', () => {
@@ -145,6 +152,116 @@ describe('Marketplace', () => {
     await openDetailMenu();
     fireEvent.click(await screen.findByTestId('detail-publish'));
     await waitFor(() => expect(api.publishArtifact).toHaveBeenCalledWith('whonet-narrow'));
+  });
+
+  // ⛔ REGRESSION, reported 2026-08-21 from a phone: the Registries table stopped short and left
+  // dead background under its pagination row.
+  //
+  // RegistriesTab itself is correct — `flex min-h-0 flex-1 flex-col`, and the Table carries
+  // `wrapperClassName="min-h-0 flex-1"`. The break was one level up: this TabsContent had
+  // `min-h-0 flex-1` but no `display: flex`, so it was a BLOCK box and `flex-1` on its child did
+  // nothing. Measured on a real Chromium at 360x640 before the fix: the panel was 455px tall and
+  // registries-tab sat at 349px inside it, 106px short.
+  //
+  // This is the same trap as Terminology's tables (mobile pass, 2026-07-31): a fill child needs a
+  // FLEX COLUMN parent. Adding `flex` here is only safe because ui/tabs.tsx already ships
+  // `data-[state=inactive]:hidden` — without it a `display` utility ties the UA `[hidden]` rule on
+  // specificity and the inactive panel keeps stealing space.
+  //
+  // ⚠ HONEST NON-PROOF: jsdom computes no layout, so this asserts the CLASSES. Only the browser
+  // measurement above shows the pixels.
+  it('gives the registries panel a flex column, so its table can fill the height', async () => {
+    (api.listAvailableArtifacts as any).mockResolvedValue({ configured: true, source: 'local', host: 'local', bundles: [] });
+    (api.listInstalledArtifacts as any).mockResolvedValue([]);
+    render(<MemoryRouter><Marketplace /></MemoryRouter>);
+    fireEvent.mouseDown(await screen.findByRole('tab', { name: /Registries/i }), { button: 0 });
+    const panel = await screen.findByRole('tabpanel');
+    expect(panel.className, 'a block panel makes flex-1 on the tab body a no-op').toMatch(/(^|\s)flex(\s|$)/);
+    expect(panel.className, 'the tab body stacks vertically').toMatch(/flex-col/);
+    expect(panel.className, 'and must still be able to shrink').toMatch(/min-h-0/);
+  });
+
+  // ⛔ The operator saw only "Registry unreachable." and had no way to act on it. The server had
+  // already sent the reason ("Documentation samples: ENOENT ... apps\server\.docs-marketplace"),
+  // Marketplace.tsx put it in state as `loadError`, and this banner then rendered a translated
+  // headline INSTEAD of it. The detail is deliberately NOT translated: it is a server message and a
+  // filesystem path, and inventing an i18n key for it would ship two of the three locales broken.
+  it('shows the reason the registry failed, not just the generic headline', async () => {
+    (api.listAvailableArtifacts as any).mockResolvedValue({
+      configured: true, source: 'local', host: 'Documentation samples', bundles: [],
+      error: "Documentation samples: ENOENT: no such file or directory, scandir '/srv/.docs-marketplace/bundles'",
+    });
+    (api.listInstalledArtifacts as any).mockResolvedValue([]);
+    render(<MemoryRouter><Marketplace /></MemoryRouter>);
+    expect(await screen.findByText(/Registry unreachable/i)).toBeTruthy();
+    expect(screen.getByText(/ENOENT/), 'the actual reason must reach the screen').toBeTruthy();
+    expect(screen.getByText(/\.docs-marketplace/), 'including the path that did not resolve').toBeTruthy();
+  });
+
+  // ⛔ Same clipping defect as Settings ▸ Laboratory, found while fixing the Registries panel.
+  // `marketplace-page` is `overflow-hidden`, and neither card panel owned a scroll region, so a
+  // registry with more bundles than fit was simply unreachable. Measured on a real Chromium at
+  // 360x340 with ONE card: panel scrollHeight 202 vs clientHeight 155, and zero scrollable elements
+  // anywhere under `marketplace-page`.
+  //
+  // ⚠ The Divider stays OUTSIDE the new scroller on purpose. It bleeds edge-to-edge with negative
+  // margins, and AGENTS.md section 5 says an `overflow-auto` ancestor clips a bleeding element.
+  it.each(['Browse', 'Installed'])('%s scrolls its card grid instead of clipping it', async (tab) => {
+    (api.listAvailableArtifacts as any).mockResolvedValue({ configured: true, source: 'local', host: 'local', bundles: [] });
+    (api.listInstalledArtifacts as any).mockResolvedValue([]);
+    render(<MemoryRouter><Marketplace /></MemoryRouter>);
+    fireEvent.mouseDown(await screen.findByRole('tab', { name: new RegExp(tab, 'i') }), { button: 0 });
+    const panel = await screen.findByRole('tabpanel');
+    expect(panel.className, 'a block panel cannot lay out a fill child').toMatch(/(^|\s)flex(\s|$)/);
+    expect(panel.className).toMatch(/flex-col/);
+    expect(panel.querySelector('.overflow-y-auto'), 'the card list needs its own scroller').toBeTruthy();
+  });
+
+  // The page has ONE ⋯ and it sits on the tab strip, beside Browse / Installed / Registries.
+  // Requested by the operator on 2026-08-21: three separate menus (two in the filter bar, one in the
+  // table toolbar) became one that follows the active tab. AGENTS.md section 5 asks for exactly one
+  // MoreHorizontal DropdownMenu per page header.
+  //
+  // One tab per case, deliberately. Driving all three in a single test means opening and closing a
+  // Radix menu across tab switches, and a menu left half-open turns a real failure into a timeout.
+  it.each([
+    ['Browse', 'refresh-registry', 'add-registry'],
+    ['Installed', 'refresh-installed', 'add-registry'],
+    ['Registries', 'add-registry', 'refresh-registry'],
+  ])('the tab-strip menu on %s offers %s and not %s', async (tab, wanted, unwanted) => {
+    (api.listAvailableArtifacts as any).mockResolvedValue({ configured: true, source: 'local', host: 'local', bundles: [] });
+    (api.listInstalledArtifacts as any).mockResolvedValue([]);
+    render(<MemoryRouter><Marketplace /></MemoryRouter>);
+    if (tab !== 'Browse') fireEvent.mouseDown(await screen.findByRole('tab', { name: new RegExp(tab, 'i') }), { button: 0 });
+    await openTabActions();
+    expect(await screen.findByTestId(wanted)).toBeTruthy();
+    expect(screen.queryByTestId(unwanted), 'the action belonging to another tab must not be offered').toBeNull();
+  });
+
+  // ⛔ The item must actually reach RegistriesTab's dialog. The opener is handed up through
+  // `onReady`, so a broken wire would leave a menu item that silently does nothing — exactly the
+  // failure a class-level assertion cannot see.
+  it("the Registries item opens that tab's create dialog", async () => {
+    (api.listAvailableArtifacts as any).mockResolvedValue({ configured: true, source: 'local', host: 'local', bundles: [] });
+    (api.listInstalledArtifacts as any).mockResolvedValue([]);
+    (api.listRegistries as any).mockResolvedValue([]);
+    render(<MemoryRouter><Marketplace /></MemoryRouter>);
+    fireEvent.mouseDown(await screen.findByRole('tab', { name: /Registries/i }), { button: 0 });
+    await openTabActions();
+    fireEvent.click(await screen.findByTestId('add-registry'));
+    expect(await screen.findByTestId('registry-name'), 'the create dialog is open').toBeTruthy();
+  });
+
+  // The source label moved onto the tab strip with the ⋯, and belongs to Browse only — it names
+  // where the BROWSE listing came from, which says nothing about Installed or Registries.
+  it('shows the registry source on the tab strip, and only on Browse', async () => {
+    (api.listAvailableArtifacts as any).mockResolvedValue({ configured: true, source: 'local', host: 'local', bundles: [] });
+    (api.listInstalledArtifacts as any).mockResolvedValue([]);
+    (api.listRegistries as any).mockResolvedValue([]);
+    render(<MemoryRouter><Marketplace /></MemoryRouter>);
+    expect(await screen.findByTestId('registry-source')).toBeTruthy();
+    fireEvent.mouseDown(await screen.findByRole('tab', { name: /Registries/i }), { button: 0 });
+    await waitFor(() => expect(screen.queryByTestId('registry-source')).toBeNull());
   });
 
   it('refreshes the registry', async () => {

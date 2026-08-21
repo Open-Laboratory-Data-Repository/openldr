@@ -37,7 +37,14 @@ const SEARCH_FIELDS = [
   (r: MarketplaceRegistry) => r.location,
 ];
 
-export function RegistriesTab({ onChanged }: { onChanged: () => void }) {
+/**
+ * @param onReady Hands this tab's create-dialog opener up to MarketplaceTabs, which owns the page's
+ *   single ⋯ on the tab strip. Optional so the component still stands alone in its own tests.
+ */
+export function RegistriesTab({ onChanged, onReady }: {
+  onChanged: () => void;
+  onReady?: (api: { openCreate: () => void }) => void;
+}) {
   const { t } = useTranslation();
   const [rows, setRows] = useState<MarketplaceRegistry[]>([]);
   const [draft, setDraft] = useState<DraftState | null>(null);
@@ -54,7 +61,10 @@ export function RegistriesTab({ onChanged }: { onChanged: () => void }) {
   }, [err]);
   useEffect(() => { void load(); }, [load]);
 
-  const openCreate = () => setDraft(emptyDraft());
+  // useCallback with no deps: `setDraft` is stable, so the handle handed up below never changes
+  // identity and the effect that publishes it runs once.
+  const openCreate = useCallback(() => setDraft(emptyDraft()), []);
+  useEffect(() => { onReady?.({ openCreate }); }, [onReady, openCreate]);
   const openEdit = (r: MarketplaceRegistry) =>
     setDraft({ id: r.id, name: r.name, kind: r.kind, location: r.location, enabled: r.enabled });
 
@@ -151,20 +161,9 @@ export function RegistriesTab({ onChanged }: { onChanged: () => void }) {
           searchValue={search}
           onSearchChange={(v) => { setSearch(v); table.setPage(0); }}
           searchPlaceholder={t('settings.marketplace.registrySearchPlaceholder')}
-          actions={
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-8 w-8" aria-label={t('settings.marketplace.registryActions')}>
-                  <MoreHorizontal className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem data-testid="add-registry" onClick={openCreate}>
-                  {t('settings.marketplace.registryAddBtn')}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          }
+          /* ⛔ No `actions` slot. "Add registry" moved to the page's single ⋯ on the tab strip, so
+             this toolbar keeps only Filter / Sort / Columns. Two ⋯ menus a few pixels apart, one
+             per-page and one per-table, is what the move was for. */
         />
         <ActiveFilterChips columns={columns} filters={table.filters} onChange={table.setFilters} />
       </div>
