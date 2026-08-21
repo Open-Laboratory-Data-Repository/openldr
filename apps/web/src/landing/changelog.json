@@ -6,6 +6,78 @@
       "version": null,
       "entries": [
         {
+          "hash": "7354a44f",
+          "type": "fix",
+          "scope": "marketplace",
+          "title": "45px of dead space above the package detail title"
+        },
+        {
+          "hash": "89b3bc7a",
+          "type": "fix",
+          "scope": "marketplace",
+          "title": "Package detail was unreadable on a phone"
+        },
+        {
+          "hash": "b48574f3",
+          "type": "feat",
+          "scope": "cli",
+          "title": "Report form FHIR path findings from openldr forms lint"
+        },
+        {
+          "hash": "1ae6e82b",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Table toolbar wrapped badly on a phone"
+        },
+        {
+          "hash": "4049c80e",
+          "type": "fix",
+          "scope": "forms",
+          "title": "Bind facility admin levels to the right FHIR Address elements"
+        },
+        {
+          "hash": "a5cfbfe8",
+          "type": "fix",
+          "scope": "settings",
+          "title": "Roles table scrollbar sat under the last row, not above pagination"
+        },
+        {
+          "hash": "4911c50d",
+          "type": "fix",
+          "scope": "marketplace",
+          "title": "One tab-strip menu, scrollable panels, edge-to-edge tables"
+        },
+        {
+          "hash": "fedd6c98",
+          "type": "fix",
+          "scope": "marketplace",
+          "title": "Name the registry that failed, and keep its reason"
+        },
+        {
+          "hash": "dbd87bc8",
+          "type": "fix",
+          "scope": "settings",
+          "title": "Laboratory could not scroll and ran off a phone screen"
+        },
+        {
+          "hash": "07679a46",
+          "type": "feat",
+          "scope": "db",
+          "title": "Repoint installed facility forms onto corrected FHIR paths"
+        },
+        {
+          "hash": "846b8d99",
+          "type": "feat",
+          "scope": "forms",
+          "title": "Catch facility admin levels bound out of containment order"
+        },
+        {
+          "hash": "5799b48c",
+          "type": "feat",
+          "scope": "forms",
+          "title": "Lint a field's FHIR path against the R4 element table"
+        },
+        {
           "hash": "f042f6b9",
           "type": "fix",
           "scope": "forms",
