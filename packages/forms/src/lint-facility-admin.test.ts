@@ -76,4 +76,32 @@ describe('facility-admin-order', () => {
     const issues = lintFacilityAdminOrder(form([relabelled, field('r', 'region', 'address.state')]));
     expect(issues).toHaveLength(1);
   });
+
+  it('says both levels bind the same element when two ranks tie, not that one nests the other', () => {
+    const issues = lintFacilityAdminOrder(form([
+      field('z', 'zone', 'address.state'),
+      field('r', 'region', 'address.state'),
+    ]));
+    expect(issues).toHaveLength(1);
+    expect(issues[0]).toMatchObject({ code: 'facility-admin-order', severity: 'error' });
+    expect(issues[0]!.message).toBe(
+      'Administrative levels are bound out of order: "zone" and "region" bind the same element, address.state',
+    );
+  });
+
+  it('still fires on a genuine reordering in the corrected, two-null shape', () => {
+    // The corrected mapping leaves zone and council unbound (null). This proves the rule still
+    // catches a real inversion between the two levels that DO carry a path, so the null-skip
+    // above did not narrow the rule into never firing.
+    const issues = lintFacilityAdminOrder(form([
+      field('z', 'zone', null),
+      field('r', 'region', 'Location.address.district'),
+      field('d', 'district', 'Location.address.state'),
+      field('c', 'council', null),
+    ]));
+    expect(issues).toHaveLength(1);
+    expect(issues[0]).toMatchObject({ code: 'facility-admin-order', severity: 'error' });
+    expect(issues[0]!.message).toContain('region');
+    expect(issues[0]!.message).toContain('district');
+  });
 });

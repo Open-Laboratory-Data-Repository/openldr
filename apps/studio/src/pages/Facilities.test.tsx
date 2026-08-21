@@ -603,6 +603,34 @@ describe('Facilities page', () => {
       expect(screen.queryByRole('button', { name: /retry/i })).not.toBeInTheDocument();
     });
 
+    // ⛔ REGRESSION, reported 2026-08-22 from a phone: the tab strip was crowded to the point of
+    // uselessness. The chip carries a long state badge, a full timestamp and up to N Retry buttons,
+    // all sharing one row with the tabs and the ⋯. Measured at 360x720 before the fix: the strip
+    // was 71px tall instead of 36, the chip group took 194px of 360 and wrapped, and the tabs were
+    // squeezed to 165px.
+    //
+    // The chip gets its own full-width row below the tabs on a phone, and goes back inline from
+    // `sm` up. A grid does the split; `sm:` order classes restore the desktop sequence
+    // (tabs, health, ⋯) without rendering the chip twice — it holds live Retry buttons, and one
+    // per failed projection, so a duplicate copy would double every one of them.
+    //
+    // ⚠ HONEST NON-PROOF: jsdom applies no media queries. This pins the structure and the classes
+    // the responsive rules act on, not the rendered row count.
+    it('gives the health chip its own row on a phone, and puts it back inline on desktop', async () => {
+      (getFacilityHealth as ReturnType<typeof vi.fn>).mockResolvedValue({
+        reportDimension: { state: 'current', lastSuccessAt: '2026-08-01T10:00:00Z', rows: 88, error: null, jobId: null },
+        projection: { failedCount: 0, failed: [] },
+      });
+      show();
+      await screen.findByText(/current/i);
+      const slot = document.querySelector('[data-testid="facility-health-slot"]');
+      expect(slot, 'the chip needs its own slot to be moved as a unit').toBeTruthy();
+      expect(slot?.className, 'full width below the tabs on a phone').toMatch(/col-span-2/);
+      expect(slot?.className, 'back between the tabs and the dots on desktop').toMatch(/sm:order-2/);
+      // Rendered once. A second copy would mean two Retry buttons per failed projection.
+      expect(document.querySelectorAll('[data-testid="facility-health-slot"]')).toHaveLength(1);
+    });
+
     it('shows Updating while a rebuild is queued, with no Retry action', async () => {
       (getFacilityHealth as ReturnType<typeof vi.fn>).mockResolvedValue({
         reportDimension: { state: 'updating', lastSuccessAt: null, rows: null, error: null, jobId: null },

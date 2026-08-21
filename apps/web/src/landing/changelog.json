@@ -6,10 +6,22 @@
       "version": null,
       "entries": [
         {
-          "hash": "8fcbb2a6",
+          "hash": "d89ec0ea",
           "type": "fix",
-          "scope": "marketplace",
-          "title": "The type filter's label wrapped inside its own control"
+          "scope": "facilities",
+          "title": "The tab strip was too crowded to read on a phone"
+        },
+        {
+          "hash": "da289925",
+          "type": "fix",
+          "scope": "db",
+          "title": "Remove em dashes from migration 089 comments"
+        },
+        {
+          "hash": "2a9e75dc",
+          "type": "fix",
+          "scope": "forms",
+          "title": "Gate unknown-fhir-path by table depth, fix admin-order tie wording, strengthen the 089 guard"
         }
       ]
     },

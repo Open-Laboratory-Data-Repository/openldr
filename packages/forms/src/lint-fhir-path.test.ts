@@ -62,6 +62,35 @@ describe('unknown-fhir-path', () => {
   });
 });
 
+describe('unknown-fhir-path, depth past the generated table', () => {
+  it('accepts a real path deeper than the table (depth 4, table caps at 3)', () => {
+    // Observation.component.code is CodeableConcept, so .coding.code is a real R4 element, but
+    // the table only lists Observation.component.code.coding (depth 3), not the .code under it.
+    const issues = lintFhirPaths(form('Observation', [
+      field({ id: 'a', fhirPath: 'component.code.coding.code' }),
+    ]));
+    expect(codes(issues)).toEqual([]);
+  });
+
+  it('still fires when the depth-3 ancestor of a deep path is not real', () => {
+    // "bogus" is not a real element of Observation.component, so the depth-3 ancestor
+    // (component.bogus.coding) is not in the table either, and the typo still gets caught.
+    const issues = lintFhirPaths(form('Observation', [
+      field({ id: 'a', fhirPath: 'component.bogus.coding.code' }),
+    ]));
+    expect(issues).toHaveLength(1);
+    expect(issues[0]).toMatchObject({ code: 'unknown-fhir-path', severity: 'error', fieldId: 'a' });
+  });
+
+  it('still fires for a typo at depth 3, inside the table\'s own coverage', () => {
+    const issues = lintFhirPaths(form('Observation', [
+      field({ id: 'a', fhirPath: 'component.code.bogus' }),
+    ]));
+    expect(issues).toHaveLength(1);
+    expect(issues[0]).toMatchObject({ code: 'unknown-fhir-path', severity: 'error', fieldId: 'a' });
+  });
+});
+
 describe('fhir-path-cardinality', () => {
   it('fires at warning severity when the path crosses an array with no discriminator', () => {
     // Location.identifier is Identifier[], so `value` below it is array-reached.

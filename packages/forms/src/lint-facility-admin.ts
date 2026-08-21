@@ -58,10 +58,13 @@ export function lintFacilityAdminOrder(form: FormSchema): FormLintIssue[] {
     const previous = ranked[i - 1]!;
     const current = ranked[i]!;
     if (current.rank > previous.rank) continue;
+    const message = current.rank === previous.rank
+      ? `Administrative levels are bound out of order: "${previous.level}" and "${current.level}" bind the same element, ${ADDRESS_ORDER[current.rank]}`
+      : `Administrative levels are bound out of order: "${previous.level}" is wider than "${current.level}" but binds ${ADDRESS_ORDER[previous.rank]}, which FHIR nests inside ${ADDRESS_ORDER[current.rank]}`;
     issues.push({
       severity: 'error',
       code: 'facility-admin-order',
-      message: `Administrative levels are bound out of order: "${previous.level}" is wider than "${current.level}" but binds ${ADDRESS_ORDER[previous.rank]}, which FHIR nests inside ${ADDRESS_ORDER[current.rank]}`,
+      message,
       fieldId: current.fieldId,
     });
   }

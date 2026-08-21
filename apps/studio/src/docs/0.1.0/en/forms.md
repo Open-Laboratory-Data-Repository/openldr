@@ -70,7 +70,9 @@ Usually a typo in the path. Check the spelling and nesting depth. If the path is
 
 The facility administrative levels are bound to FHIR address parts in the wrong order.
 
-For example, binding Zone to an address part that FHIR nests inside the one Region is bound to. Reorder the field bindings to match the FHIR structure.
+FHIR Address has four administrative slots: country, state, district, city. This registry has six tiers, so not every tier can bind to a slot. Zone is the tier with no slot of its own. Clear the Zone field's FHIR path and leave it unmapped. There is no reordering that fits six tiers into four slots.
+
+A Facility form saved by an earlier migration can still carry Zone bound to `address.district`. This error now flags that install, and no migration corrects it. Clear Zone's FHIR path by hand.
 
 ### fhir-path-cardinality (warning)
 
