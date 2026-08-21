@@ -627,6 +627,11 @@ describe('Facilities page', () => {
       expect(slot, 'the chip needs its own slot to be moved as a unit').toBeTruthy();
       expect(slot?.className, 'full width below the tabs on a phone').toMatch(/col-span-2/);
       expect(slot?.className, 'back between the tabs and the dots on desktop').toMatch(/sm:order-2/);
+      // ⛔ Padding on BOTH sides. With only `pb-*` the badge sat at y=85 against a rule at y=84,
+      // touching it. The row needs air above as well as below, and none of it on desktop where the
+      // chip is inline again.
+      expect(slot?.className, 'air above the chip, not just below').toMatch(/(^|\s)py-3(\s|$)/);
+      expect(slot?.className, 'and none of it once inline').toMatch(/sm:py-0/);
       // Rendered once. A second copy would mean two Retry buttons per failed projection.
       expect(document.querySelectorAll('[data-testid="facility-health-slot"]')).toHaveLength(1);
     });

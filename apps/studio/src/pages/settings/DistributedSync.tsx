@@ -432,7 +432,7 @@ export function DistributedSync() {
 
             {/* Recent activity toolbar. Sync now / Refresh live on the tab row's ⋯ menu, which
                 serves both tabs, so the toolbar's actions slot carries the ordering note instead. */}
-            <div className="flex flex-col gap-2 border-b border-border px-4 py-2">
+            <div className="flex flex-col gap-3 border-b border-border px-4 py-3 sm:gap-2 sm:py-2">
               <DataTableToolbar
                 columns={columns}
                 filters={table.filters}

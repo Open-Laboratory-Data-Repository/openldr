@@ -44,6 +44,9 @@ export function DataTableToolbar<T>({
   const { t } = useTranslation();
   const hasActiveState = filters.length > 0 || sorts.length > 0;
 
+  // `gap-3` below `sm`: that is exactly where this becomes TWO rows, and 8px between a search
+  // box and a row of buttons read as crowded on a phone. Back to `gap-2` from `sm` up, where it
+  // is a single line again and the gap is only horizontal.
   return (
     /* ⛔ Two rows on a phone, ONE row from `sm` up.
        It used to be a single `flex-wrap` row, so a narrow screen broke it wherever it ran out of
@@ -53,7 +56,7 @@ export function DataTableToolbar<T>({
        box, restoring the single desktop line this has always had.
        ⚠ `actions` is rendered ONCE. Duplicating it per breakpoint would double every testid and
        aria-label the page menus carry. */
-    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 sm:flex sm:flex-wrap">
+    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 sm:flex sm:flex-wrap sm:gap-2">
       <div className="contents" data-testid="toolbar-search-row">
         {onSearchChange && (
           <Input

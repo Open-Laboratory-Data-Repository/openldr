@@ -336,7 +336,7 @@ function FacilityHealthChip({
        needs two lines — the label and the timestamp do not fit in 328px together — but the break
        now falls BETWEEN them instead of inside the label, which read as
        "Facility data in reports: / Current". Wrapping as units, not mid-phrase. */
-    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 text-xs">
       <Badge variant="outline" className="gap-1.5 whitespace-nowrap font-medium">
         <Icon className={dim.state === 'updating' ? 'h-3 w-3 animate-spin' : 'h-3 w-3'} />
         {t('facilities.health.chipLabel', { state: t(`facilities.health.states.${dim.state}`) })}
@@ -974,7 +974,10 @@ export function Facilities() {
           />
           {health && (
             <div
-              className="col-span-2 pb-2 sm:order-2 sm:ml-auto sm:pb-0"
+              /* `py-3`, not `pb-2`. With padding only underneath, the badge sat at y=85 against the
+                 rule at y=84 and touched it. `sm:py-0` because from `sm` up the chip is inline in a
+                 single-line strip and any vertical padding would just make that row taller. */
+              className="col-span-2 py-3 sm:order-2 sm:ml-auto sm:py-0"
               data-testid="facility-health-slot"
             >
               <FacilityHealthChip
@@ -1033,7 +1036,7 @@ export function Facilities() {
             such column keep their own controls on the row below it. The toolbar's `actions` slot is
             left empty on purpose: this page's ⋯ is portalled to the tab strip above (see
             `actionsEl`), so putting a second one here would give the Registry tab two. */}
-        <div className="flex flex-col gap-2 border-b border-border px-4 py-2">
+        <div className="flex flex-col gap-3 border-b border-border px-4 py-3 sm:gap-2 sm:py-2">
           <DataTableToolbar
             columns={columns}
             filters={table.filters}

@@ -326,7 +326,7 @@ export function Connectors() {
     <div className="flex min-h-0 flex-1 flex-col" data-testid="connectors-page">
       <SettingsHeader description={t('settings.connectors.description')} />
 
-      <div className="flex flex-col gap-2 border-b border-border px-4 py-2">
+      <div className="flex flex-col gap-3 border-b border-border px-4 py-3 sm:gap-2 sm:py-2">
         <DataTableToolbar
           columns={columns}
           filters={table.filters}
