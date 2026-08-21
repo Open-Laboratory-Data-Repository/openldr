@@ -5,7 +5,7 @@ import { exitCodeFor, formatHealthTable } from './format';
 import { redactError } from './redact-error';
 import { runFhirValidate, formatFhirValidate } from './fhir';
 import { runDbMigrate, runDbReset, runDbSeed, runDbReproject } from './db';
-import { runFormsExtract, runFormsList } from './forms';
+import { runFormsExtract, runFormsList, runFormsLint } from './forms';
 import { runList as runReportDesignList, runDelete as runReportDesignDelete, runPublish as runReportDesignPublish, runVersions as runReportDesignVersions } from './report-design';
 import { runList as runReportDefList, runDelete as runReportDefDelete } from './report-def';
 import { runIngest, runPipelineStatus, runPipelineRetry, runPipelineLogs, runQueueStatus, runProvenanceAudit } from './ingest';
@@ -598,6 +598,14 @@ export function buildProgram(): Command {
   forms.command('list').description('List persisted form definitions').option('--json', 'emit JSON', false).action(async (opts: { json: boolean }) => {
     try { process.exitCode = await runFormsList(opts); } catch (err) { process.stderr.write(`forms list failed: ${redactError(err)}\n`); process.exitCode = 1; }
   });
+  forms
+    .command('lint [id]')
+    .description('Report FHIR path and structure findings for one form, or every form')
+    .option('--json', 'emit JSON', false)
+    .action(async (id: string | undefined, opts: { json: boolean }) => {
+      try { process.exitCode = await runFormsLint(id, opts); }
+      catch (err) { process.stderr.write(`forms lint failed: ${redactError(err)}\n`); process.exitCode = 1; }
+    });
   forms
     .command('extract <questionnaire> <response>')
     .description('Extract FHIR resources from a filled QuestionnaireResponse')
