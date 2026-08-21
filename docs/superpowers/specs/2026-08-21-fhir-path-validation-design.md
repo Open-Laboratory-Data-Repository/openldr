@@ -22,16 +22,36 @@ exported Location concludes Region contains Zone.
 
 They need different mechanisms, and conflating them is how this goes wrong.
 
-**Structural.** The path does not exist, or it lies about shape. Present today in the shipped
-samples:
+**Structural.** The path does not exist, or it lies about shape. A machine catches these.
 
-- `identifier.value` on a Location. `Location.identifier` is `Identifier[]`
-  (`packages/fhir/src/resources/location.ts:12`). The repo's only path writer, `setPath`,
-  produces `{identifier: {value: 'X'}}`, an object where FHIR wants an array.
-- `telecom.value`. Same problem, `ContactPoint[]`.
-- `physicalType` bound to a reference field. `Location.physicalType` is a `CodeableConcept`.
+An earlier draft of this spec listed three structural defects in the Facility form. All three
+were true of the migration-073-era shape and none is true of what ships today. Corrected, and
+measured against the shipped samples on 2026-08-21 by running the proposed rules over them:
 
-A machine catches all of these.
+- `identifier.value` now carries a `fhirDiscriminator`
+  (`packages/db/src/migrations/internal/087_facility_form_one_code.ts`), which is exactly what
+  tells a writer which array element to use. Not a defect.
+- `telecom.value` is no longer on the Facility form at all. 087 dropped the phone field.
+- `physicalType` is bound to a `reference` field carrying a `valueSetUrl`. A coded picker onto a
+  `CodeableConcept` is the correct pairing, not a mismatch.
+
+**The Facility form trips zero structural rules.** Its only defect is the semantic one below.
+
+The structural defects that do exist are in the other three shipped samples, 11 findings across
+them:
+
+- Seven cardinality findings, all the same shape: `name.given`, `name.family`, and
+  `telecom.value` cross `HumanName[]` and `ContactPoint[]` with no discriminator naming which
+  element. Underspecified in principle, ordinary in practice.
+- Three real type mismatches on the Lab order form: `ServiceRequest.requester` (a `Reference`),
+  `.identifier` (an `Identifier`), and `.note` (an `Annotation`) are each bound to a plain `text`
+  field. A text box cannot write any of those. The extractor survives only because it hardcodes
+  `identifier` and ignores the other two.
+- One cardinality finding on `ServiceRequest.locationCode`, which is `CodeableConcept[]`.
+
+Fixing those means designing a discriminator convention for `HumanName` and `ContactPoint`,
+which nobody has done. That is why the structural rules ship at `warning`, not `error`. See
+section 6.
 
 **Semantic.** Zone on `address.district`. The path exists. The leaf is a string. The field is a
 string. It is structurally perfect and describes the wrong thing. No generic FHIR validator
@@ -133,18 +153,25 @@ extraction. The helper is the mechanism; normalize is convenience on top of it.
 
 ### 3. Structural lint rules
 
-Three new codes in `packages/forms/src/lint.ts`, alongside the existing ones.
+Three new codes in `packages/forms/src/lint.ts`, alongside the existing ones. Severity is not
+uniform, and the reason is in section 6.
 
-`unknown-fhir-path`. The path is absent from the table for its resource type. Catches typos and
-invented elements.
+`unknown-fhir-path`, severity `error`. The path is absent from the table for its resource type.
+Catches typos and invented elements. Every path on every shipped sample resolves, so nothing
+shipped trips it.
 
-`fhir-path-cardinality`. The path crosses an array segment with neither a numeric index nor a
-`fhirDiscriminator`. Catches `identifier.value`. Stays quiet when a discriminator is present,
-because that is how the writer will select the element. This rule pairs with the existing
-`ambiguous-fhir-path` rule rather than replacing it.
+`fhir-path-cardinality`, severity `warning`. The path crosses an array segment with neither a
+numeric index nor a `fhirDiscriminator`. Stays quiet when a discriminator is present, because
+that is how the writer will select the element. This rule pairs with the existing
+`ambiguous-fhir-path` rule rather than replacing it. Seven shipped fields trip it.
 
-`fhir-path-type-mismatch`. The leaf datatype cannot hold the declared field type. A `text`
-field on a `CodeableConcept`, for example.
+`fhir-path-type-mismatch`, severity `warning`. Fires only when a scalar-only field type (`text`,
+`number`, `date`, `datetime`, `boolean`, `phone`, `email`) binds a leaf that is not a primitive
+(`string`, `number`, `boolean`, `code`). Deliberately narrow. A `reference` field legitimately
+binds a `string` leaf (`address.country`), a `code` leaf (`status`), and a `CodeableConcept`
+leaf (`physicalType`) in the shipped Facility form, so any rule that constrained `reference` by
+leaf type would fire on correct code. Three shipped fields trip the narrow rule, and all three
+are real defects.
 
 ### 4. Admin-order rule
 
@@ -170,12 +197,29 @@ shadcn components only. Label left, input right, per `AGENTS.md` §5. No standal
 
 ### 6. Correcting the Facility mapping
 
-Rules ship at `error` severity, and the data is corrected in the same slice so nothing is ever
-unpublishable. Lint errors already gate publish
-(`canPublish={!hasErrors}`, `apps/studio/src/forms-builder/FormBuilderPage.tsx:240`).
+Lint errors gate publish
+(`canPublish={!hasErrors}`, `apps/studio/src/forms-builder/FormBuilderPage.tsx:240`). Warnings do
+not. That is what sets each rule's severity:
+
+- `unknown-fhir-path` and `facility-admin-order` ship at `error`. Nothing shipped trips
+  `unknown-fhir-path`, and the Facility mapping is corrected in this same slice so nothing trips
+  `facility-admin-order` either.
+- `fhir-path-cardinality` and `fhir-path-type-mismatch` ship at `warning`. Eleven fields across
+  the Users, Patient, and Lab order samples trip them. Correcting those means designing a
+  discriminator convention for `HumanName` and `ContactPoint`, which is its own piece of work.
+  Warnings make all eleven visible without making three forms unpublishable.
+
+Promoting the two warning rules to `error` is a later slice, once the samples are clean. The
+operator chose this split on 2026-08-21 after seeing the eleven measured findings.
+
+The current shipped shape is migration 087's, ten fields, not the nine an earlier draft of this
+spec listed. It is re-exported as `FACILITY_FORM_MIGRATION_BOUND_FIELDS` from
+`packages/db/src/index.ts:103`, which now points at 087 rather than 073. Region became optional
+in 085, because the Zambia MFL export has nothing between Province and District.
 
 | Field | Today | Corrected |
 |---|---|---|
+| System | `null` | `null`, unchanged |
 | Facility code | `identifier.value` | `Location.identifier.value` (discriminator unchanged) |
 | Name | `name` | `Location.name` |
 | Country | `address.country` | `Location.address.country` |
@@ -217,13 +261,23 @@ gloss at face value would collide Council and District on `address.district`.
 Two changes are needed to land this:
 
 - `packages/forms/src/samples/forms.ts`, for fresh installs.
-- Migration 089, for installed forms. Follows the 071/072/073 pattern exactly: a frozen
+- Migration 089, for installed forms. Follows the 071/072/073/087 pattern exactly: a frozen
   snapshot of the prior shape, an exact-match guard so an operator's own edits are never
   overwritten, and a marker key so `down()` is a precise inverse. 089 is unclaimed on every
   local and remote branch as of this date.
 
-`FACILITY_FORM_MIGRATION_BOUND_FIELDS`, which `packages/forms/src/samples/forms.test.ts` pins
-the sample against, moves to the new snapshot.
+089 needs **two** frozen prior shapes, not one. 087's shape is the untouched case. The
+canonicalised variant, where every path has already gained its `Location.` prefix, is what an
+install carries once an operator has opened and saved the form in the builder since Phase 1
+landed. Matching only the first would silently skip those installs.
+
+`FACILITY_FORM_MIGRATION_BOUND_FIELDS`, which `packages/forms/src/samples/forms.test.ts:248`
+pins the sample against, is re-exported from `packages/db/src/index.ts:103` and must be
+repointed from 087 to 089.
+
+`facility-admin-order` must treat a `null` path as "skip this level". After the correction, two
+of the four admin tiers carry no path, and Region is optional besides, so a rule requiring all
+four to be bound would fail the very form it was written to protect.
 
 ## Phasing
 
