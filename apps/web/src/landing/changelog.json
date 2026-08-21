@@ -22,6 +22,12 @@
           "type": "fix",
           "scope": "forms",
           "title": "Gate unknown-fhir-path by table depth, fix admin-order tie wording, strengthen the 089 guard"
+        },
+        {
+          "hash": "8fcbb2a6",
+          "type": "fix",
+          "scope": "marketplace",
+          "title": "The type filter's label wrapped inside its own control"
         }
       ]
     },
