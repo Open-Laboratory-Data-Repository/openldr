@@ -30,6 +30,17 @@ function mockDetail(over: Partial<api.AvailableArtifactDetail> = {}) {
   });
 }
 
+/** Open the detail pane's ⋯ menu. AGENTS.md section 5 moved Install and Publish into it on
+ *  2026-08-21, so every action there is now reached this way. Radix opens on pointerDown in jsdom,
+ *  with a keyboard fallback, matching the pattern already used further down this file. */
+async function openDetailMenu(): Promise<void> {
+  const trigger = await screen.findByTestId('detail-menu');
+  fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+  if (!screen.queryByTestId('detail-install') && !screen.queryByTestId('detail-publish')) {
+    fireEvent.keyDown(trigger, { key: 'Enter' });
+  }
+}
+
 describe('PackageDetail', () => {
   it('fetches and renders description, permissions and requirements', async () => {
     mockDetail();
@@ -43,6 +54,7 @@ describe('PackageDetail', () => {
     mockDetail();
     const onInstall = vi.fn();
     render(<PackageDetail entry={entry} onBack={() => {}} onInstall={onInstall} onToggleEnabled={() => {}} onRollback={() => {}} onRemove={() => {}} />);
+    await openDetailMenu();
     fireEvent.click(await screen.findByTestId('detail-install'));
     await waitFor(() => expect(onInstall).toHaveBeenCalledWith(
       expect.objectContaining({ ref: 'whonet-narrow' }),
@@ -62,6 +74,7 @@ describe('PackageDetail', () => {
     const onInstall = vi.fn();
     render(<PackageDetail entry={listEntry} onBack={() => {}} onInstall={onInstall} onToggleEnabled={() => {}} onRollback={() => {}} onRemove={() => {}} />);
     // The consent trigger surfaces the REAL capabilities, not "none".
+    await openDetailMenu();
     const btn = await screen.findByTestId('detail-install');
     await waitFor(() => expect(btn).not.toBeDisabled());
     expect(screen.getByText(/emit-fhir/)).toBeTruthy();
@@ -99,6 +112,7 @@ describe('PackageDetail', () => {
     fireEvent.click(await screen.findByTestId('version-select'));
     fireEvent.click(await screen.findByRole('option', { name: '1.0.0' }));
     await waitFor(() => expect(api.getAvailableArtifact).toHaveBeenCalledWith('whonet-narrow'));
+    await openDetailMenu();
     fireEvent.click(await screen.findByTestId('detail-install'));
     expect(onInstall).toHaveBeenCalledWith(expect.objectContaining({ ref: 'whonet-narrow' }), expect.anything());
   });
@@ -106,8 +120,12 @@ describe('PackageDetail', () => {
   it('installed item shows the actions menu instead of Install', async () => {
     const installedEntry: CardEntry = { ...entry, ref: undefined, installed: true, active: true, enabled: true };
     render(<PackageDetail entry={installedEntry} onBack={() => {}} onInstall={() => {}} onToggleEnabled={() => {}} onRollback={() => {}} onRemove={() => {}} />);
-    expect(screen.queryByTestId('detail-install')).toBeNull();
     expect(await screen.findByText(/emit-fhir/)).toBeTruthy();
     expect(screen.getByTestId('detail-menu')).toBeTruthy();
+    // ⛔ Absent from the OPEN menu, not merely absent from the page. Since the actions moved into
+    // the ⋯ menu, a closed menu renders no items at all, so asserting on the closed page would
+    // pass even if Install were still offered for an installed package.
+    await openDetailMenu();
+    expect(screen.queryByTestId('detail-install')).toBeNull();
   });
 });

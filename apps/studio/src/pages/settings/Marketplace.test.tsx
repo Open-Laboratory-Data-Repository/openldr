@@ -39,6 +39,28 @@ function mockDetail() {
   });
 }
 
+/** Open the detail pane's ⋯ menu. AGENTS.md section 5 moved Install and Publish into it on
+ *  2026-08-21, so every action there is now reached this way. Radix opens on pointerDown in jsdom,
+ *  with a keyboard fallback, matching the pattern already used further down this file. */
+async function openDetailMenu(): Promise<void> {
+  const trigger = await screen.findByTestId('detail-menu');
+  fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+  if (!screen.queryByTestId('detail-install') && !screen.queryByTestId('detail-publish')) {
+    fireEvent.keyDown(trigger, { key: 'Enter' });
+  }
+}
+
+/** Open the tab header's ⋯ menu (Browse and Installed each have one). Radix opens on pointerDown in
+ *  jsdom, with a keyboard fallback. */
+async function openTabActions(): Promise<void> {
+  const triggers = await screen.findAllByRole('button', { name: /^(actions|aktionen|ações)$/i });
+  const trigger = triggers[triggers.length - 1];
+  fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+  if (!screen.queryByTestId('refresh-registry') && !screen.queryByTestId('refresh-installed')) {
+    fireEvent.keyDown(trigger, { key: 'Enter' });
+  }
+}
+
 describe('Marketplace', () => {
   it('browses a bundle, opens detail, installs after consent', async () => {
     (api.listAvailableArtifacts as any).mockResolvedValue(oneBundle);
@@ -47,6 +69,7 @@ describe('Marketplace', () => {
     mockDetail();
     render(<MemoryRouter><Marketplace /></MemoryRouter>);
     fireEvent.click(await screen.findByTestId('card-whonet-narrow'));
+    await openDetailMenu();
     fireEvent.click(await screen.findByTestId('detail-install'));
     expect((await screen.findAllByText(/Patient/)).length).toBeGreaterThan(0); // consent dialog
     fireEvent.click(screen.getByTestId('approve-install'));
@@ -60,6 +83,7 @@ describe('Marketplace', () => {
     (api.installArtifact as any).mockResolvedValue({ id: 'demo-form', version: '1.0.0' });
     render(<MemoryRouter><Marketplace /></MemoryRouter>);
     fireEvent.click(await screen.findByTestId('card-demo-form-1'));
+    await openDetailMenu();
     fireEvent.click(await screen.findByTestId('detail-install'));
     fireEvent.click(await screen.findByTestId('approve-install'));
     await waitFor(() => expect(api.installArtifact).toHaveBeenCalledWith('demo-form-1', []));
@@ -118,6 +142,7 @@ describe('Marketplace', () => {
     (api.publishArtifact as any).mockResolvedValue({ prUrl: 'https://gh/pr/9', prNumber: 9 });
     render(<MemoryRouter><Marketplace /></MemoryRouter>);
     fireEvent.click(await screen.findByTestId('card-whonet-narrow'));
+    await openDetailMenu();
     fireEvent.click(await screen.findByTestId('detail-publish'));
     await waitFor(() => expect(api.publishArtifact).toHaveBeenCalledWith('whonet-narrow'));
   });
@@ -127,6 +152,9 @@ describe('Marketplace', () => {
     (api.listInstalledArtifacts as any).mockResolvedValue([]);
     (api.refreshRegistry as any).mockResolvedValue(undefined);
     render(<MemoryRouter><Marketplace /></MemoryRouter>);
+    // Refresh moved into the tab's ⋯ menu on 2026-08-21 (AGENTS.md section 5), so it is reached the
+    // same way every other action on this page is.
+    await openTabActions();
     fireEvent.click(await screen.findByTestId('refresh-registry'));
     await waitFor(() => expect(api.refreshRegistry).toHaveBeenCalled());
   });

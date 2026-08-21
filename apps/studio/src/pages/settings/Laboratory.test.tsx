@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import '@/i18n';
 
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() }, Toaster: () => null }));
+import { toast } from 'sonner';
 vi.mock('@/auth/AuthProvider', () => ({
   useAuth: () => ({ user: { id: 'me', username: 'admin', roles: ['lab_admin'] }, hasCapability: () => true }),
 }));
@@ -35,6 +36,8 @@ const META = {
 };
 
 beforeEach(() => {
+  vi.mocked(toast.success).mockClear();
+  vi.mocked(toast.error).mockClear();
   vi.mocked(api.fetchLabIdentity).mockResolvedValue(META as never);
   vi.mocked(api.listFacilityImportSources).mockResolvedValue([] as never);
 });
@@ -94,13 +97,27 @@ describe('Settings → Laboratory', () => {
     ));
   });
 
-  it('shows the save error and keeps the page usable when the write fails', async () => {
+  // ⛔ Transient feedback is a TOAST, matching Connectors and DataExposure. It used to be a line of
+  // grey text at the foot of the form, below the fold on a short window, which is what the operator
+  // was looking at when they asked for a toast instead.
+  it('toasts on a successful save rather than printing a line under the form', async () => {
+    vi.mocked(api.saveLabIdentity).mockResolvedValue(META.values as never);
+    render(<MemoryRouter><Laboratory /></MemoryRouter>);
+    await screen.findByDisplayValue('OpenLDR');
+    await save();
+
+    await waitFor(() => expect(toast.success).toHaveBeenCalled());
+    expect(screen.queryByText(/^saved\.$/i), 'the inline Saved. line is gone').not.toBeInTheDocument();
+  });
+
+  it('toasts the failure and keeps the page usable when the write fails', async () => {
     vi.mocked(api.saveLabIdentity).mockRejectedValue(new Error('boom'));
     render(<MemoryRouter><Laboratory /></MemoryRouter>);
     await screen.findByDisplayValue('OpenLDR');
     await save();
 
-    expect(await screen.findByText(/could not save|impossible d|não foi poss/i)).toBeInTheDocument();
+    await waitFor(() => expect(toast.error).toHaveBeenCalled());
+    // Still standing, still holding what the operator typed.
     expect(screen.getByDisplayValue('OpenLDR')).toBeInTheDocument();
   });
 });

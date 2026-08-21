@@ -1,9 +1,12 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { RefreshCw } from 'lucide-react';
+import { MoreHorizontal, RefreshCw } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Divider } from '@/components/ui/bleed';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { AvailableArtifact, InstalledArtifact } from '@/api';
@@ -30,12 +33,31 @@ interface MarketplaceTabsProps {
   loadError?: string | null;
 }
 
-/** Icon-only refresh control (shared by Browse + Installed). */
-function RefreshButton({ onClick, label, testId }: { onClick: () => void; label: string; testId: string }) {
+/**
+ * The tab's ⋯ menu, shared by Browse and Installed.
+ *
+ * ⛔ A DropdownMenu, not the icon-only Refresh button this used to be. AGENTS.md section 5 puts
+ * page-header actions in a MoreHorizontal DropdownMenu, always. Refresh is the only item today and
+ * a one-item menu is still the rule: the next action added here has somewhere to go, instead of
+ * becoming a second button beside the first.
+ *
+ * ⚠ The testid stays on the ITEM, so a test opens the menu and clicks the same id it always did.
+ */
+function TabActions({ onRefresh, label, testId }: { onRefresh: () => void; label: string; testId: string }) {
+  const { t } = useTranslation();
   return (
-    <Button variant="outline" size="icon" data-testid={testId} onClick={onClick} aria-label={label} title={label}>
-      <RefreshCw className="h-4 w-4" />
-    </Button>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon" className="h-8 w-8" aria-label={t('common.actions')}>
+          <MoreHorizontal className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem data-testid={testId} onSelect={onRefresh}>
+          <RefreshCw className="mr-2 h-4 w-4" /> {label}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -122,7 +144,7 @@ export function MarketplaceTabs(props: MarketplaceTabsProps) {
                 {props.source === 'http' ? t('settings.marketplace.sourceRemote', { host: props.host ?? '' }) : t('settings.marketplace.sourceLocal')}
               </span>
             ) : null}
-            <RefreshButton onClick={props.onRefresh} label={t('settings.marketplace.refresh')} testId="refresh-registry" />
+            <TabActions onRefresh={props.onRefresh} label={t('settings.marketplace.refresh')} testId="refresh-registry" />
           </>}
         />
         <Divider className="mb-4" />
@@ -145,7 +167,7 @@ export function MarketplaceTabs(props: MarketplaceTabsProps) {
       <TabsContent value="installed" className="mt-4 min-h-0 flex-1">
         <FilterBar
           filter={filter} setFilter={setFilter} typeFilter={typeFilter} setTypeFilter={setTypeFilter}
-          right={<RefreshButton onClick={props.onRefresh} label={t('settings.marketplace.refresh')} testId="refresh-installed" />}
+          right={<TabActions onRefresh={props.onRefresh} label={t('settings.marketplace.refresh')} testId="refresh-installed" />}
         />
         <Divider className="mb-4" />
         {installedEntries.length === 0 ? (

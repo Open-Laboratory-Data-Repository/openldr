@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
+import { MoreHorizontal } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { enUS, fr as frDate, pt as ptDate } from 'date-fns/locale';
 import { useAuth } from '@/auth/AuthProvider';
@@ -8,6 +9,9 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Divider } from '@/components/ui/bleed';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -385,9 +389,31 @@ export function General() {
                   <div className="text-sm font-medium">{t(`settings.general.danger.${k}.label`)}</div>
                   <div className="text-xs text-muted-foreground">{t(`settings.general.danger.${k}.description`)}</div>
                 </div>
-                <Button variant="secondary" className="w-32 shrink-0 border-destructive/50 text-destructive" disabled={dangerBusy} onClick={() => setPending(action)}>
-                  {t(`settings.general.danger.${k}.button`)}
-                </Button>
+                {/* ⛔ A ⋯ menu, never a standalone button. AGENTS.md section 5 puts page-header,
+                    sheet and per-row actions all in a MoreHorizontal DropdownMenu; this row is the
+                    per-row case, and pages/Users.tsx is its reference. The extra click before a
+                    destructive action is not a cost worth avoiding. */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 shrink-0 text-destructive"
+                      disabled={dangerBusy}
+                      aria-label={t(`settings.general.danger.${k}.label`)}
+                    >
+                      <MoreHorizontal className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem
+                      className="text-destructive focus:text-destructive"
+                      onSelect={() => setPending(action)}
+                    >
+                      {t(`settings.general.danger.${k}.button`)}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             );
           })}

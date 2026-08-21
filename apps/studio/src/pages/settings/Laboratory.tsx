@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 import { MoreHorizontal } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
@@ -33,8 +34,11 @@ export function Laboratory(): JSX.Element {
   const [values, setValues] = useState<LabIdentity>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  /** ⛔ The LOAD failure only, because that one is not transient: it replaces the whole page below.
+   *  Everything else this page reports (a save, a rejected logo) is a toast, matching Connectors and
+   *  DataExposure. It used to be a line of grey text under the form, which is where the operator
+   *  found it, below the fold. */
   const [error, setError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   // The registers this install knows about — the only values the facility-system picker may offer.
   // Active-only, matching the import sheet's own picklist: offering a deactivated register here
@@ -62,7 +66,6 @@ export function Laboratory(): JSX.Element {
 
   const set = (key: string, value: string) => {
     setValues((v) => ({ ...v, [key]: value }));
-    setSaved(false);
   };
 
   /**
@@ -74,28 +77,28 @@ export function Laboratory(): JSX.Element {
    */
   const onLogoFile = (file: File | undefined) => {
     if (!file || !meta) return;
-    if (!meta.logo.mimeTypes.includes(file.type)) { setError(t('settings.laboratory.logoType')); return; }
+    if (!meta.logo.mimeTypes.includes(file.type)) { toast.error(t('settings.laboratory.logoType')); return; }
     if (file.size > meta.logo.maxBytes) {
-      setError(t('settings.laboratory.logoTooBig', { max: Math.round(meta.logo.maxBytes / 1024) })); return;
+      toast.error(t('settings.laboratory.logoTooBig', { max: Math.round(meta.logo.maxBytes / 1024) })); return;
     }
     const reader = new FileReader();
-    reader.onload = () => { setError(null); set(LOGO_KEY, String(reader.result ?? '')); };
-    reader.onerror = () => setError(t('settings.laboratory.logoReadError'));
+    reader.onload = () => { set(LOGO_KEY, String(reader.result ?? '')); };
+    reader.onerror = () => toast.error(t('settings.laboratory.logoReadError'));
     reader.readAsDataURL(file);
   };
 
   const save = async () => {
     if (!meta) return;
-    setSaving(true); setError(null);
+    setSaving(true);
     try {
       const patch: LabIdentity = {};
       for (const f of meta.fields) patch[f.id] = values[f.id] ?? '';
       // The PUT answers with the values map itself, not with the GET's `{ fields, values, logo }`
       // envelope. See `saveLabIdentity` for what reading `.values` here cost.
       setValues(await saveLabIdentity(patch));
-      setSaved(true);
+      toast.success(t('settings.laboratory.saved'));
     } catch {
-      setError(t('settings.laboratory.saveError'));
+      toast.error(t('settings.laboratory.saveError'));
     } finally {
       setSaving(false);
     }
@@ -198,8 +201,6 @@ export function Laboratory(): JSX.Element {
         </div>
       </div>
 
-      {error && <p className="text-xs text-destructive">{error}</p>}
-      {saved && !error && <p className="text-xs text-muted-foreground">{t('settings.laboratory.saved')}</p>}
 
     </div>
   );

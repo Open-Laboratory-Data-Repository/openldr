@@ -92,36 +92,46 @@ export function PackageDetail({ entry, onBack, onInstall, onToggleEnabled, onRol
               {entry.drifted ? <Badge variant="outline" className="border-amber-500 text-amber-700">{t('settings.marketplace.modifiedLocally')}</Badge> : null}
             </p>
           </div>
+          {/* ⛔ ONE ⋯ menu, carrying every action. AGENTS.md section 5: page-header actions go in a
+              MoreHorizontal DropdownMenu, never a standalone button, and "never a standalone
+              Create/New button" is exactly what Install and Publish were. The menu already existed
+              here for an installed package; the rest have joined it instead of sitting beside it.
+              Ref: pages/settings/Connectors.tsx, whose "Add connector" lives the same way.
+              ⚠ The testids stay on the ITEMS, so a test opens the menu and clicks the same id. */}
           <div className="flex shrink-0 items-center gap-2">
-            {canPublish && entry.ref ? (
-              <Button variant="outline" data-testid="detail-publish" onClick={() => onPublish?.(entry)}>
-                {t('settings.marketplace.publish')}
-              </Button>
-            ) : null}
-            {canInstall ? (
-              <Button data-testid="detail-install" disabled={detail ? !detail.compatible : false} onClick={() => onInstall({ ...entry, ref: selectedRef, version: detail?.version ?? entry.version }, capabilities)}>
-                {t('settings.marketplace.install')}
-              </Button>
-            ) : entry.ref && installableType && !entry.installed && !detailReadyForInstall && (entry.valid !== false) ? (
-              // Detail (the authoritative capability set) is still loading — show a disabled
-              // install button rather than nothing, so the control does not flicker in.
-              <Button data-testid="detail-install" disabled>
-                {t('settings.marketplace.install')}
-              </Button>
-            ) : entry.ref && !installableType && !entry.installed ? (
-              <Button disabled title={t('settings.marketplace.installPluginOnly')}>
-                {t('settings.marketplace.installComingSoon')}
-              </Button>
-            ) : null}
-            {entry.installed ? (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" data-testid="detail-menu" aria-label={t('settings.marketplace.details')}>
-                    <MoreHorizontal className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  {entry.type === 'form-template' ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" data-testid="detail-menu" aria-label={t('settings.marketplace.details')}>
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {canPublish && entry.ref ? (
+                  <DropdownMenuItem data-testid="detail-publish" onSelect={() => onPublish?.(entry)}>
+                    {t('settings.marketplace.publish')}
+                  </DropdownMenuItem>
+                ) : null}
+                {canInstall ? (
+                  <DropdownMenuItem
+                    data-testid="detail-install"
+                    disabled={detail ? !detail.compatible : false}
+                    onSelect={() => onInstall({ ...entry, ref: selectedRef, version: detail?.version ?? entry.version }, capabilities)}
+                  >
+                    {t('settings.marketplace.install')}
+                  </DropdownMenuItem>
+                ) : entry.ref && installableType && !entry.installed && !detailReadyForInstall && (entry.valid !== false) ? (
+                  // Detail (the authoritative capability set) is still loading — a disabled item
+                  // rather than nothing, so the control does not flicker in.
+                  <DropdownMenuItem data-testid="detail-install" disabled>
+                    {t('settings.marketplace.install')}
+                  </DropdownMenuItem>
+                ) : entry.ref && !installableType && !entry.installed ? (
+                  <DropdownMenuItem disabled title={t('settings.marketplace.installPluginOnly')}>
+                    {t('settings.marketplace.installComingSoon')}
+                  </DropdownMenuItem>
+                ) : null}
+                {entry.installed ? (
+                  entry.type === 'form-template' ? (
                     <>
                       {entry.targetFormId ? (
                         <DropdownMenuItem onSelect={() => onOpenForm?.(entry.targetFormId!)}>
@@ -146,10 +156,10 @@ export function PackageDetail({ entry, onBack, onInstall, onToggleEnabled, onRol
                         {t('settings.marketplace.remove')}
                       </DropdownMenuItem>
                     </>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            ) : null}
+                  )
+                ) : null}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       <Divider />
