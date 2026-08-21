@@ -11,7 +11,12 @@ export function paperSize(paper: Paper, orientation: Orientation): { w: number; 
   return orientation === 'landscape' ? { w: b.h, h: b.w } : b;
 }
 
-/** Insertable element kinds, in menu order. */
+/** Insertable element kinds, in menu order.
+ *
+ *  ⛔ `cellgrid` is deliberately NOT here, and its absence is not an oversight. Inserting one from
+ *  the palette would create an element with no `cellColumns`, which draws nothing at all: the kind
+ *  is authored by a seeded design that knows its own query's column names. It still needs a name
+ *  and an icon below, because an existing design containing one has to be editable. */
 export const ELEMENT_KINDS: ElementKind[] = ['text', 'table', 'keyvalue', 'image', 'barcode', 'qrcode', 'line', 'rect', 'datetime'];
 
 let seq = 0;
@@ -19,7 +24,7 @@ export function newElementId(): string { seq += 1; return `el-${Date.now()}-${se
 
 const DEFAULT_NAME: Record<ElementKind, string> = {
   text: 'Text', table: 'Table', image: 'Image', line: 'Line', rect: 'Rectangle', datetime: 'Date/time',
-  keyvalue: 'Key/value panel', barcode: 'Barcode', qrcode: 'QR code',
+  keyvalue: 'Key/value panel', barcode: 'Barcode', qrcode: 'QR code', cellgrid: 'Cell grid',
 };
 
 export function newElement(kind: ElementKind): DesignElement {

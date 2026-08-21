@@ -291,7 +291,50 @@ function ElementContent({ el, zoom, identity }: { el: DesignElement; zoom: numbe
       return <SymbolPreview el={el} identity={identity} />;
     case 'table':
       return <TablePreview el={el} />;
+    case 'cellgrid':
+      return <CellGridPreview el={el} />;
   }
+}
+
+/**
+ * Canvas preview of a cellgrid: a label strip, the run of cells, and the trailing columns.
+ *
+ * ⛔ It draws the SHAPE, never invented data. Everything a cellgrid actually prints comes from the
+ * query at render time: the cell values, the day labels in its header band, and the laboratory
+ * names down the side. The only things the design itself knows are how MANY cells there are and
+ * what the trailing columns are called, so those are the only things shown as themselves.
+ *
+ * ⚠ `bg-slate-300` is #cbd5e1, the renderer's own EMPTY_FILL (`render/cellgrid.ts`). It is matched
+ * by value rather than imported: that constant is internal to the render path and not exported at
+ * the package boundary, and widening the boundary for a preview tint is the wrong trade.
+ */
+function CellGridPreview({ el }: { el: DesignElement }): JSX.Element {
+  const { t } = useTranslation();
+  const cellCount = el.cellColumns?.length ?? 0;
+  const trailing = el.trailingColumns ?? [];
+  // Three body rows is enough to read as a grid. The real row count is one per record and is not
+  // knowable here, which is what the marker underneath says.
+  const rows = [0, 1, 2];
+  return (
+    <div className="flex h-full w-full flex-col gap-[2px] overflow-hidden text-[7px] text-neutral-500">
+      {rows.map((r) => (
+        <div key={r} className="flex items-center gap-[3px]">
+          {el.labelColumn ? <div className="h-[5px] w-8 shrink-0 rounded-[1px] bg-neutral-200" /> : null}
+          <div className="flex gap-[1px]">
+            {Array.from({ length: cellCount }, (_, i) => (
+              <div key={i} className="h-[5px] w-[5px] shrink-0 bg-slate-300" />
+            ))}
+          </div>
+          {r === 0
+            ? trailing.map((c) => (
+              <span key={c.key} className="ml-[3px] shrink-0 truncate">{c.label}</span>
+            ))
+            : null}
+        </div>
+      ))}
+      <span className="mt-[2px] italic text-neutral-400">{t('reportDesigner.rowsAtRender')}</span>
+    </div>
+  );
 }
 
 /** Canvas preview of a table, in three states.

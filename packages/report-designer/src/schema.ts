@@ -8,7 +8,24 @@ import type { ReportParamFormat } from '@openldr/core/pure';
  *  format would fall off the validator's switch and reject every value the operator typed. */
 const PARAM_FORMATS = ['timezone-no-signed-offset', 'year-month'] as const satisfies readonly ReportParamFormat[];
 
-export type ElementKind = 'text' | 'table' | 'image' | 'line' | 'rect' | 'datetime' | 'keyvalue' | 'barcode' | 'qrcode';
+/**
+ * Every element kind, and the ONLY place the list lives.
+ *
+ * ⛔ `ElementKind` used to be a hand-written union beside `DesignElementSchema`'s own `z.enum`, and
+ * the two drifted the moment `cellgrid` was added: the enum accepted it, the union did not, and
+ * anything typed `Record<ElementKind, ...>` silently stopped covering the real set. The studio's
+ * layer icons and default names were both such records, so `KIND_ICON[el.kind]` stopped
+ * type-checking and the canvas's `switch` lost its exhaustiveness — the compiler could no longer
+ * tell anyone a kind was unhandled, which is exactly what it is for.
+ *
+ * Same `as const` + `z.enum` shape `CELL_STATUSES` and `CELL_RAMPS` already use in this file.
+ * MEASURED after the change: adding a hypothetical kind here fails three sites at once, the icon
+ * map, the default names and the canvas switch. Before it, it failed none of them.
+ */
+export const ELEMENT_KIND_VALUES = [
+  'text', 'table', 'image', 'line', 'rect', 'datetime', 'keyvalue', 'barcode', 'qrcode', 'cellgrid',
+] as const;
+export type ElementKind = (typeof ELEMENT_KIND_VALUES)[number];
 export type Paper = 'A4' | 'Letter';
 export type Orientation = 'portrait' | 'landscape';
 export type TextAlign = 'left' | 'center' | 'right';
@@ -87,7 +104,7 @@ export type TrailingColumn = z.infer<typeof TrailingColumnSchema>;
 
 export const DesignElementSchema = z.object({
   id: z.string(),
-  kind: z.enum(['text', 'table', 'image', 'line', 'rect', 'datetime', 'keyvalue', 'barcode', 'qrcode', 'cellgrid']),
+  kind: z.enum(ELEMENT_KIND_VALUES),
   name: z.string(),
   rect: RectSchema,
   /** text/datetime content; the OPTIONAL title of a `keyvalue` panel (no title when empty); and the
