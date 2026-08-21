@@ -22,6 +22,7 @@
     "make:whonet-sample": "node scripts/make-whonet-sample.mjs",
     "make:docs-marketplace-bundle": "tsx scripts/make-docs-marketplace-bundle.ts",
     "make:changelog": "tsx scripts/make-changelog.ts",
+    "gen:fhir-paths": "tsx scripts/gen-fhir-paths.ts",
     "release": "tsx scripts/release.ts",
     "e2e": "turbo build --filter=@openldr/studio --filter=@openldr/server && pnpm --filter @openldr/e2e e2e",
     "verify:ui": "turbo build --filter=@openldr/studio --filter=@openldr/server && pnpm --filter @openldr/e2e capture",
