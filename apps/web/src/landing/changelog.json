@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "2bbd2569",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Give the table header room to breathe on a phone"
+        },
+        {
           "hash": "31670512",
           "type": "fix",
           "scope": "facilities",
