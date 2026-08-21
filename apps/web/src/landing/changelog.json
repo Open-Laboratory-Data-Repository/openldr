@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "44b7a206",
+          "type": "fix",
+          "scope": "report-designer",
+          "title": "One source for the element kinds, so the studio can see cellgrid"
+        },
+        {
           "hash": "09390e09",
           "type": "fix",
           "scope": "studio",
