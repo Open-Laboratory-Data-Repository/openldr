@@ -840,15 +840,15 @@ describe('every shipped sample passes the FHIR path rules', () => {
     expect(lintFormSchema(facility)).toEqual([]);
   });
 
-  // The three other samples carry 11 known warnings. This pins the count so a future edit that
-  // adds a twelfth has to say so out loud. See the spec's "Two defect classes" section for what
+  // The three other samples carry 13 known warnings. This pins the count so a future edit that
+  // adds a fourteenth has to say so out loud. See the spec's "Two defect classes" section for what
   // each one is and why they are warnings rather than errors.
-  it('the other samples carry exactly the 11 known structural warnings', () => {
+  it('the other samples carry exactly the 13 known structural warnings', () => {
     const warnings = sampleForms
       .filter((f) => f.name !== 'Facility')
       .flatMap((f) => lintFormSchema(f).filter((i) => i.severity === 'warning'))
       .filter((i) => i.code === 'fhir-path-cardinality' || i.code === 'fhir-path-type-mismatch');
-    expect(warnings).toHaveLength(11);
+    expect(warnings).toHaveLength(13);
   });
 });
 
@@ -917,7 +917,7 @@ pnpm --filter @openldr/db test
 
 Expected: all green. This is the point at which Task 2's deliberate failure clears.
 
-If the 11-warning count assertion fails, read the actual list before changing the number. A different count means either a rule is firing where it should not, or a sample changed.
+If the 13-warning count assertion fails, read the actual list before changing the number. A different count means either a rule is firing where it should not, or a sample changed.
 
 - [ ] **Step 6: Typecheck and commit**
 
@@ -1077,7 +1077,7 @@ Expected: both green.
 pnpm openldr forms lint
 ```
 
-Expected: exit 0, and output listing the 11 warnings across the Users, Patient, and Lab order forms with no Facility findings. Paste the real output into your report. If the Facility form appears, Task 4 did not land correctly.
+Expected: exit 0, and output listing the 13 warnings across the Users, Patient, and Lab order forms with no Facility findings. Paste the real output into your report. If the Facility form appears, Task 4 did not land correctly.
 
 ```bash
 pnpm openldr forms lint --json
@@ -1175,7 +1175,7 @@ pnpm openldr db seed
 pnpm openldr forms lint
 ```
 
-Expected: reset and seed complete, and lint exits 0 with only the 11 known warnings.
+Expected: reset and seed complete, and lint exits 0 with only the 13 known warnings.
 
 - [ ] **Step 4: Merge to local main**
 
@@ -1210,7 +1210,7 @@ git commit -m "chore(landing): regenerate the changelog"
 
 ## What this phase does not prove
 
-- **That any of the 11 warnings gets fixed.** They become visible and stay visible. Fixing them needs a `fhirDiscriminator` convention for `HumanName` and `ContactPoint` that nobody has designed, and a re-typing of three Lab order fields.
+- **That any of the 13 warnings gets fixed.** They become visible and stay visible. Fixing them needs a `fhirDiscriminator` convention for `HumanName` and `ContactPoint` that nobody has designed, and a re-typing of three Lab order fields.
 - **That the corrected Facility mapping round-trips to a real FHIR consumer.** Nothing exports a `Location` yet. That gap closes with the export slice.
 - **That `fhir-path-type-mismatch` catches every type error.** It is deliberately narrow, firing only for scalar-only field types on non-primitive leaves. A `select` bound to a `Reference` is a real error it will not catch, and that is the price of never firing on the shipped `reference` bindings.
 - **That the real boot proves 089's rewrite.** Task 3 step 6 and Task 7 step 3 run `db reset` against a fresh install, so `up()` finds no Facility row yet and correctly no-ops. The `db seed` that follows creates the row only after 089 has already run, so it never exercises the rewrite either. What the real boot actually proves is migration ORDERING: the numbering gap pg-mem cannot catch. The rewrite itself, on both prior shapes, is proven only by pg-mem, in Task 3's own test suite. Proving the rewrite on a real upgrade needs a database that predates 089. If one is available, run it; if not, write **HONEST NON-PROOF** in the report and say so.
