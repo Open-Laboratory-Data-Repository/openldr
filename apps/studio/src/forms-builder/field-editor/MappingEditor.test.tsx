@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { FormField } from '@openldr/forms/pure';
 import { MappingEditor } from './MappingEditor';
@@ -213,6 +213,17 @@ describe('MappingEditor FHIR path picker', () => {
     const input = screen.getByLabelText('FHIR Path');
     await userEvent.type(input, 'address.dist');
     expect(await screen.findByRole('option', { name: /Location\.address\.district/ })).toBeInTheDocument();
+  });
+
+  it('shows the path and the definition as separate text nodes, not joined into one line', async () => {
+    // A narrow mobile column cannot fit both on one line (measured 313px needed vs 163px
+    // available). Two separate nodes let the definition wrap onto its own line instead of
+    // being clipped away with the rest of a single truncated string.
+    renderEditor();
+    await userEvent.type(screen.getByLabelText('FHIR Path'), 'address.dist');
+    const option = await screen.findByRole('option', { name: /Location\.address\.district/ });
+    expect(within(option).getByText('Location.address.district')).toBeInTheDocument();
+    expect(within(option).getByText('District name (aka county)')).toBeInTheDocument();
   });
 
   it('finds an element by what it MEANS, not only by its path', async () => {

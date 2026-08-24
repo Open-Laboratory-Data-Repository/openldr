@@ -45,19 +45,20 @@ export function MappingEditor({ field, fhirResourceType, onUpdate }: MappingEdit
     onUpdate({ constraints: { ...field.constraints, ...patch } });
   }
 
-  // Two spaces, not a dash: the path must survive truncation, and the label is what
-  // SuggestCombobox both DISPLAYS and SEARCHES. Searching by definition is the point, because
-  // an operator thinking "county" will not type "district".
+  // The definition is its own line, not joined onto the path: a narrow mobile column (163px
+  // measured) cannot fit both on one truncated line, and the definition is what an operator
+  // actually needs to read. SuggestCombobox searches the definition the same as it searches the
+  // label, so an operator thinking "county" still finds `district` without typing it.
   const pathOptions = React.useMemo(
     () => fhirPathOptionsFor(fhirResourceType ?? ''),
     [fhirResourceType],
   );
-  const pathLabels = React.useMemo(() => {
-    const labels: Record<string, string> = {};
+  const pathDescriptions = React.useMemo(() => {
+    const descriptions: Record<string, string> = {};
     for (const option of pathOptions) {
-      labels[option.path] = option.label ? `${option.path}  ${option.label}` : option.path;
+      if (option.label) descriptions[option.path] = option.label;
     }
-    return labels;
+    return descriptions;
   }, [pathOptions]);
 
   const currentDefinition = field.fhirPath ? lookupFhirPath(field.fhirPath)?.label ?? null : null;
@@ -79,7 +80,7 @@ export function MappingEditor({ field, fhirResourceType, onUpdate }: MappingEdit
               value={field.fhirPath ?? ''}
               onChange={(next) => onUpdate({ fhirPath: next || null })}
               options={pathOptions.map((option) => option.path)}
-              optionLabels={pathLabels}
+              optionDescriptions={pathDescriptions}
               placeholder={fhirResourceType ? `e.g. ${fhirResourceType}.name` : 'e.g. Patient.name'}
               noSuggestionsLabel="No matching element in FHIR R4"
             />

@@ -120,3 +120,57 @@ describe('SuggestCombobox — optionLabels', () => {
     expect(screen.getByText('urn:zm:mfl')).toBeInTheDocument();
   });
 });
+
+describe('SuggestCombobox — optionDescriptions', () => {
+  const paths = ['Location.address.district', 'Location.name'];
+  const descriptions = { 'Location.address.district': 'District name (aka county)' };
+
+  it('renders both the label and the description for an option that has one', () => {
+    render(
+      <SuggestCombobox
+        value="" onChange={vi.fn()}
+        options={paths} optionDescriptions={descriptions}
+      />,
+    );
+    fireEvent.focus(screen.getByRole('combobox'));
+    expect(screen.getByText('Location.address.district')).toBeInTheDocument();
+    expect(screen.getByText('District name (aka county)')).toBeInTheDocument();
+  });
+
+  it('renders only the label, with no empty second line, for an option without a description', () => {
+    render(
+      <SuggestCombobox
+        value="" onChange={vi.fn()}
+        options={paths} optionDescriptions={descriptions}
+      />,
+    );
+    fireEvent.focus(screen.getByRole('combobox'));
+    const option = screen.getByRole('option', { name: 'Location.name' });
+    expect(option.children).toHaveLength(1);
+  });
+
+  it('filters to an option whose description matches, even when the query is absent from the path', () => {
+    render(
+      <SuggestCombobox
+        value="county" onChange={vi.fn()}
+        options={paths} optionDescriptions={descriptions}
+      />,
+    );
+    fireEvent.focus(screen.getByRole('combobox'));
+    expect(screen.getByText('Location.address.district')).toBeInTheDocument();
+    expect(screen.queryByText('Location.name')).not.toBeInTheDocument();
+  });
+
+  it('commits the option VALUE when picked, not the label or the description', () => {
+    const onChange = vi.fn();
+    render(
+      <SuggestCombobox
+        value="" onChange={onChange}
+        options={paths} optionDescriptions={descriptions}
+      />,
+    );
+    fireEvent.focus(screen.getByRole('combobox'));
+    fireEvent.click(screen.getByText('District name (aka county)'));
+    expect(onChange).toHaveBeenCalledWith('Location.address.district');
+  });
+});

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { TruncatedText } from '@/components/ui/truncated-text';
 import { Spinner } from '@/components/ui/spinner';
+import { cn } from '@/lib/cn';
 
 /**
  * Where the suggestion list currently stands. Deliberately three states, not a boolean —
@@ -26,6 +27,15 @@ export interface SuggestComboboxProps {
    * The label is display and search only; the value stored is always the option itself.
    */
   optionLabels?: Record<string, string>;
+  /**
+   * Optional value to secondary-line text. When an option has one, it renders BELOW the label,
+   * wrapped rather than truncated, and it is searchable like the label is.
+   *
+   * Exists because a one-line option truncates hard in a narrow column: the FHIR path picker's
+   * list is 163px on a 375px viewport, where a path plus its definition needs 313px, and the
+   * definition is what the operator actually needs to read.
+   */
+  optionDescriptions?: Record<string, string>;
   /** Defaults to 'ready' so a caller that hasn't wired fetching yet still gets a usable field. */
   status?: SuggestStatus;
   error?: string | null;
@@ -57,7 +67,7 @@ export interface SuggestComboboxProps {
  * "select from a fixed list" interaction model doesn't fit free text.
  */
 export function SuggestCombobox({
-  id, value, onChange, options, optionLabels, status = 'ready', error = null,
+  id, value, onChange, options, optionLabels, optionDescriptions, status = 'ready', error = null,
   placeholder = 'Type or pick a suggestion…',
   loadingLabel = 'Loading suggestions…',
   noSuggestionsLabel = 'No suggestions',
@@ -69,15 +79,20 @@ export function SuggestCombobox({
   const containerRef = useRef<HTMLDivElement>(null);
 
   const labelOf = (o: string): string => optionLabels?.[o] ?? o;
+  const descriptionOf = (o: string): string | undefined => optionDescriptions?.[o];
 
   const filtered = useMemo(() => {
     const q = value.trim().toLowerCase();
     if (!q) return options;
-    // Matches the LABEL as well as the value: an operator typing "zambia" is looking for the register
-    // they can see, not the URI underneath it.
-    return options.filter((o) => o.toLowerCase().includes(q) || labelOf(o).toLowerCase().includes(q));
+    // Matches the LABEL and the DESCRIPTION as well as the value: an operator typing "zambia" is
+    // looking for the register they can see, not the URI underneath it, and one typing "county"
+    // is looking for the element whose definition says so, not one whose path does.
+    return options.filter((o) =>
+      o.toLowerCase().includes(q)
+      || labelOf(o).toLowerCase().includes(q)
+      || (descriptionOf(o)?.toLowerCase().includes(q) ?? false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [options, optionLabels, value]);
+  }, [options, optionLabels, optionDescriptions, value]);
 
   useEffect(() => { setActive(-1); }, [filtered.length, open]);
 
@@ -144,20 +159,36 @@ export function SuggestCombobox({
           {status === 'ready' && filtered.length === 0 && (
             <div className="px-3 py-3 text-xs text-muted-foreground">{noSuggestionsLabel}</div>
           )}
-          {status === 'ready' && filtered.map((opt, i) => (
-            <button
-              key={opt}
-              id={optionId(i)}
-              type="button"
-              role="option"
-              aria-selected={i === active}
-              onClick={() => pick(opt)}
-              onMouseEnter={() => setActive(i)}
-              className={`flex w-full items-center px-3 py-2 text-left text-sm transition-colors hover:bg-accent ${i === active ? 'bg-accent' : ''}`}
-            >
-              <TruncatedText text={labelOf(opt)} className="min-w-0" />
-            </button>
-          ))}
+          {status === 'ready' && filtered.map((opt, i) => {
+            const description = descriptionOf(opt);
+            return (
+              <button
+                key={opt}
+                id={optionId(i)}
+                type="button"
+                role="option"
+                aria-selected={i === active}
+                onClick={() => pick(opt)}
+                onMouseEnter={() => setActive(i)}
+                className={description
+                  ? cn(
+                    'flex w-full flex-col items-start gap-0.5 px-3 py-2 text-left text-sm transition-colors hover:bg-accent',
+                    i === active && 'bg-accent',
+                  )
+                  // Unchanged from before this prop existed: an option without a description
+                  // must render byte-identically, since FormRuntime's facility picker still
+                  // relies on this exact single-line layout.
+                  : `flex w-full items-center px-3 py-2 text-left text-sm transition-colors hover:bg-accent ${i === active ? 'bg-accent' : ''}`}
+              >
+                <TruncatedText text={labelOf(opt)} className="min-w-0" />
+                {description && (
+                  <span className="whitespace-normal break-words text-xs text-muted-foreground">
+                    {description}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
       )}
     </div>
