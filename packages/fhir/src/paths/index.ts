@@ -61,6 +61,30 @@ export function fhirPathsFor(resourceType: string): FhirPathInfo[] {
   return out;
 }
 
+/**
+ * Segments that are FHIR plumbing rather than something a form field binds to.
+ *
+ * Only meaningful in a NON-LEADING position. `Patient.identifier` is a real element; nobody binds
+ * to `Patient.identifier.id`.
+ */
+const STRUCTURAL_SEGMENTS: ReadonlySet<string> = new Set(['id', 'extension', 'modifierExtension']);
+
+function isStructuralNoise(path: string): boolean {
+  return path.split('.').some((segment, index) => index > 0 && STRUCTURAL_SEGMENTS.has(segment));
+}
+
+/**
+ * The paths to OFFER a person in a picker, as opposed to the paths that are VALID.
+ *
+ * Separate from `fhirPathsFor` on purpose. That one feeds the lint rules, which must keep treating
+ * `Location.identifier.id` as a real element: `unknown-fhir-path` is a publish-blocking error, so
+ * trimming its view would reject a path that genuinely exists. This one feeds the builder's
+ * picker, where the same row is noise. Measured 2026-08-24: 497 of 1596 rows are trimmed here.
+ */
+export function fhirPathOptionsFor(resourceType: string): FhirPathInfo[] {
+  return fhirPathsFor(resourceType).filter((info) => !isStructuralNoise(info.path));
+}
+
 /** Whether the table covers this resource type at all. */
 export function isKnownFhirResourceType(resourceType: string): boolean {
   return RESOURCE_TYPE_SET.has(resourceType);
