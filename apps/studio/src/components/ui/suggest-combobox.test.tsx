@@ -202,4 +202,49 @@ describe('SuggestCombobox — optionDescriptions', () => {
     const option = screen.getByRole('option', { name: 'Location.name' });
     expect(option).not.toHaveAttribute('aria-label');
   });
+
+  it('gives the label a width constraint so truncate can actually clip a long path', () => {
+    // `truncate` (block + overflow-hidden + text-overflow: ellipsis) does nothing unless the
+    // element also has a bounded width. In the two-line column layout the label is a flex item;
+    // without an explicit width claim it sizes to its own content instead of the row's width,
+    // so a long path renders in full and gets hard-clipped by the listbox instead of showing
+    // an ellipsis. `truncate` alone is not enough, so this asserts both classes are present.
+    render(
+      <SuggestCombobox
+        value="" onChange={vi.fn()}
+        options={paths} optionDescriptions={descriptions}
+      />,
+    );
+    fireEvent.focus(screen.getByRole('combobox'));
+    const label = screen.getByText('Location.address.district');
+    expect(label.className).toContain('truncate');
+    expect(label.className).toContain('w-full');
+  });
+
+  it('keeps the description wrapping across lines, never truncated', () => {
+    render(
+      <SuggestCombobox
+        value="" onChange={vi.fn()}
+        options={paths} optionDescriptions={descriptions}
+      />,
+    );
+    fireEvent.focus(screen.getByRole('combobox'));
+    const description = screen.getByText('District name (aka county)');
+    expect(description.className).toContain('whitespace-normal');
+    expect(description.className).not.toContain('truncate');
+  });
+
+  it('leaves the no-description option class string byte-identical to the single-line layout', () => {
+    render(
+      <SuggestCombobox
+        value="" onChange={vi.fn()}
+        options={paths} optionDescriptions={descriptions}
+      />,
+    );
+    fireEvent.focus(screen.getByRole('combobox'));
+    const option = screen.getByRole('option', { name: 'Location.name' });
+    expect(option.className).toBe(
+      'flex w-full items-center px-3 py-2 text-left text-sm transition-colors hover:bg-accent ',
+    );
+  });
 });

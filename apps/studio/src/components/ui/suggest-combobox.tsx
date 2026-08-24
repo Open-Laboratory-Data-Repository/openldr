@@ -189,7 +189,12 @@ export function SuggestCombobox({
                   // relies on this exact single-line layout.
                   : `flex w-full items-center px-3 py-2 text-left text-sm transition-colors hover:bg-accent ${i === active ? 'bg-accent' : ''}`}
               >
-                <TruncatedText text={labelOf(opt)} className="min-w-0" />
+                {/* w-full: this button is a flex COLUMN with items-start, so a plain flex
+                    item sizes to its own content instead of the row's width. TruncatedText's
+                    `truncate` needs a bounded width to clip against, so the label must claim
+                    the full row width explicitly here. Only this line gets it — the
+                    description below stays a natural-width block so it keeps wrapping. */}
+                <TruncatedText text={labelOf(opt)} className="min-w-0 w-full" />
                 {description && (
                   <span className="whitespace-normal break-words text-xs text-muted-foreground">
                     {description}
