@@ -6,10 +6,28 @@
       "version": null,
       "entries": [
         {
+          "hash": "5fa2000d",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Drop the empty actions wrapper from the table toolbar"
+        },
+        {
           "hash": "16949505",
           "type": "feat",
           "scope": "facilities",
           "title": "Fold the National system box into Filter"
+        },
+        {
+          "hash": "ca7e9417",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Pick a FHIR path from the real R4 elements, with its definition"
+        },
+        {
+          "hash": "3b38c54f",
+          "type": "feat",
+          "scope": "fhir",
+          "title": "Offer only bindable FHIR paths to a picker"
         }
       ]
     },
