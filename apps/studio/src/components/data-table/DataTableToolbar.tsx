@@ -70,8 +70,16 @@ export function DataTableToolbar<T>({
           />
         )}
         {/* `order-last` + `ml-auto` put the ⋯ at the far right of the single desktop row, which is
-            where it sat before. On the phone grid it is simply the second column of row one. */}
-        <div className="flex items-center justify-self-end sm:order-last sm:ml-auto">{actions}</div>
+            where it sat before. On the phone grid it is simply the second column of row one.
+
+            ⛔ Rendered only when the caller HAS actions. An empty wrapper still counts as a flex
+            item, so `gap-2` applied on both sides of it and a caller that puts its own control
+            beside the toolbar got a double gap there (16px against 8px everywhere else) with
+            nothing in between. Facilities is that caller: its ⋯ is portalled to the tab strip, so
+            it passes no `actions` and sits its Mapping health Select next to the toolbar. */}
+        {actions && (
+          <div className="flex items-center justify-self-end sm:order-last sm:ml-auto">{actions}</div>
+        )}
       </div>
 
       <div className="col-span-2 flex flex-wrap items-center gap-2 sm:contents" data-testid="toolbar-controls-row">

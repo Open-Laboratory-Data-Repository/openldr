@@ -112,5 +112,34 @@ describe("DataTableToolbar", () => {
       renderToolbar();
       expect(screen.getAllByTestId("page-actions")).toHaveLength(1);
     });
+
+    /** ⛔ The actions wrapper is a FLEX ITEM, so `gap-2` applies on both sides of it whether or not
+     *  it has content. Rendered unconditionally, a caller that passes no actions and puts its own
+     *  control beside the toolbar got 16px there against 8px between every other control, with an
+     *  empty node in the middle. Facilities is that caller: its ⋯ is portalled to the tab strip.
+     *
+     *  jsdom has no layout engine, so this counts NODES rather than measuring the gap. That is the
+     *  regression though: bring the empty wrapper back and the count goes up. */
+    it("renders no actions wrapper at all when the caller passes none", () => {
+      render(
+        <DataTableToolbar
+          columns={columns}
+          filters={[]}
+          onFiltersChange={noop}
+          sorts={[]}
+          onSortsChange={noop}
+          visibleIds={["name"]}
+          onVisibleIdsChange={noop}
+          onResetColumns={noop}
+          onResetAll={noop}
+          searchValue=""
+          onSearchChange={noop}
+          searchPlaceholder="Search"
+        />,
+      );
+      const searchRow = screen.getByTestId("toolbar-search-row");
+      expect(searchRow.children).toHaveLength(1);
+      expect(searchRow.children[0]).toBe(screen.getByLabelText("Search"));
+    });
   });
 });
