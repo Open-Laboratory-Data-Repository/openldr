@@ -146,7 +146,7 @@ Reset buttons.
 
 Active filters show as removable chips under the toolbar.
 
-Two controls sit on their own row below the toolbar, because they are not ordinary columns:
+One control sits on its own row below the toolbar, because it is not an ordinary column:
 
 - **Mapping health.** Whether a facility can be a mapping target, and whether anything maps to it
   yet. Mapped means at least one observed code already resolves to it. Unmapped means the facility
@@ -154,16 +154,21 @@ Two controls sit on their own row below the toolbar, because they are not ordina
   reached the report-facing table yet, so it cannot be a mapping target at all. This state comes
   from a join across two other tables, not a stored column, so it keeps its own dropdown instead of
   joining the Filter list.
-- **National system.** A free-text box matching the register a facility was imported from. Free
-  text, because a facility can carry a register code your install no longer lists as an active
-  source.
+
+National system used to sit beside it as a second box. It is a Filter column now, listed as
+National system, because it always filtered a stored column like every other filter. Filter gives
+it operators the box did not have: the box matched the whole register URI exactly, and Filter's
+"contains" matches part of one, so you can type `hfr` instead of the full
+`urn:openldr:cs:facility-register:hfr`. Values stay free text rather than a picklist, because a
+facility can carry a register code your install no longer lists as an active source, and a picklist
+would hide those rows.
 
 A filtered, sorted view is shareable. Filters and sorts show up in the page's own URL, so copying
 the link and sending it to someone reopens the same view. Older links that used a single query
 parameter, such as `?zone=Central`, still work.
 
 In the studio, Filter and Sort can use these columns: code, name, region, district, status, source,
-zone, council, country, level, ownership, managed origin, and register state.
+zone, council, country, level, ownership, managed origin, register state, and national system.
 
 ### Two things worth knowing
 
@@ -205,10 +210,10 @@ This lists facilities whose level column matches "hospital" exactly, sorted by n
 values first. Registers often store values like "Health Post", "Health Centre" or "1st Level
 Hospital", and a value that does not match exactly returns nothing.
 
-The CLI can also filter and sort by `id` and `facilitySystem` (the national system code), two
-columns the studio toolbar leaves out because `facilitySystem` already has its own text box there.
-`health` has no `--where` form: it is worked out, not stored, so filter by it in the studio's
-Mapping health dropdown instead.
+The CLI can also filter and sort by `id`, the one column the studio toolbar leaves out. `health`
+has no `--where` form: it is worked out, not stored, so filter by it in the studio's Mapping health
+dropdown instead. Use `facilitySystem` for the national system, the same column name the studio's
+National system filter uses.
 
 An unknown column, or an operator that column does not allow, is rejected with a message naming
 what was wrong, the same validation the toolbar uses. A mistyped flag fails the same way a

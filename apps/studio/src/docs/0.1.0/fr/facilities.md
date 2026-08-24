@@ -169,8 +169,8 @@ boutons Filtrer, Trier, Colonnes et Réinitialiser.
 
 Les filtres actifs apparaissent sous forme de puces amovibles sous la barre d'outils.
 
-Deux contrôles occupent leur propre ligne sous la barre d'outils, parce que ce ne sont pas des
-colonnes ordinaires :
+Un contrôle occupe sa propre ligne sous la barre d'outils, parce que ce n'est pas une colonne
+ordinaire :
 
 - **État du mappage.** Si un établissement peut être une cible de mappage, et si quelque chose le
   mappe déjà. Mappé signifie qu'au moins un code observé s'y résout déjà. Non mappé signifie que
@@ -179,16 +179,22 @@ colonnes ordinaires :
   peut pas du tout être une cible de mappage. Cet état provient d'une jointure entre deux autres
   tables, pas d'une colonne stockée, il garde donc son propre menu déroulant au lieu de rejoindre
   la liste Filtrer.
-- **Registre national.** Une zone de texte libre qui filtre sur le registre dont un établissement a
-  été importé. Texte libre, car un établissement peut porter un code de registre que votre
-  installation ne liste plus comme source active.
+
+Registre national occupait cette ligne comme deuxième zone. C'est une colonne de Filtrer
+maintenant, sous le nom Registre national, car elle a toujours filtré une colonne stockée comme
+tous les autres filtres. Filtrer lui donne des opérateurs que la zone n'avait pas : la zone exigeait
+l'URI complète du registre, et « contient » en trouve une partie, vous pouvez donc taper `hfr` au
+lieu de `urn:openldr:cs:facility-register:hfr` en entier. Les valeurs restent du texte libre plutôt
+qu'une liste de choix, car un établissement peut porter un code de registre que votre installation
+ne liste plus comme source active, et une liste de choix masquerait ces lignes.
 
 Une vue filtrée et triée peut être partagée. Les filtres et tris apparaissent dans l'URL de la
 page, donc copier le lien et l'envoyer à quelqu'un rouvre la même vue. Les anciens liens qui
 utilisaient un seul paramètre de requête, comme `?zone=Central`, fonctionnent toujours.
 
 Dans le studio, Filtrer et Trier peuvent utiliser ces colonnes : code, nom, région, district,
-statut, source, zone, conseil, pays, niveau, propriété, origine gérée et état du registre.
+statut, source, zone, conseil, pays, niveau, propriété, origine gérée, état du registre et registre
+national.
 
 ### Deux choses à savoir
 
@@ -233,10 +239,10 @@ vérifiez donc d'abord les valeurs de niveau réelles de votre propre registre. 
 stockent souvent des valeurs comme « Health Post », « Health Centre » ou « 1st Level Hospital », et
 une valeur qui ne correspond pas exactement ne renvoie rien.
 
-La CLI peut aussi filtrer et trier par `id` et `facilitySystem` (le code du registre national),
-deux colonnes que la barre d'outils du studio laisse de côté parce que `facilitySystem` y a déjà
-sa propre zone de texte. `health` n'a pas de forme `--where` : elle est calculée, pas stockée,
-donc filtrez-la plutôt via le menu déroulant État du mappage du studio.
+La CLI peut aussi filtrer et trier par `id`, la seule colonne que la barre d'outils du studio
+laisse de côté. `health` n'a pas de forme `--where` : elle est calculée, pas stockée, donc
+filtrez-la plutôt via le menu déroulant État du mappage du studio. Utilisez `facilitySystem` pour
+le registre national, le nom de colonne qu'emploie aussi le filtre Registre national du studio.
 
 Une colonne inconnue, ou un opérateur que cette colonne n'autorise pas, est rejeté avec un message
 qui nomme précisément l'erreur, la même validation qu'utilise la barre d'outils. Un indicateur mal

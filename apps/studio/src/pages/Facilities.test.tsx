@@ -232,9 +232,10 @@ describe('Facilities page', () => {
 
     clickMenuItem('Facility actions', /import facilities/i);
     expect(await screen.findByText(/^import facilities$/i)).toBeInTheDocument();
-    // Task 5: the page's OWN 'National system' filter is always visible now (it used to sit behind
-    // the removed "More filters" disclosure), so both fields carry that label while the sheet is
-    // open. Scoped to the sheet rather than relaxed — this test is about the SHEET's field.
+    // Scoped to the sheet, not relaxed to the page: this test is about the SHEET's field. The
+    // page's own 'National system' box, which briefly made this label ambiguous, is gone. It
+    // filtered a grammar column and lives in the Filter popover now. The scoping stays anyway,
+    // because the assertion is about the sheet either way.
     const sheet = await screen.findByRole('dialog');
     expect(within(sheet).getByLabelText('File')).toBeInTheDocument();
     expect(within(sheet).getByLabelText('National system')).toBeInTheDocument();
@@ -914,14 +915,12 @@ describe('Facilities page', () => {
       await waitFor(() => expect(window.location.search).toContain('q=dodoma'));
     });
 
-    // Fix wave 1 / Finding 1 (rewritten for Task 5): the ten open-vocabulary filters no longer live
-    // behind a "More filters" disclosure — the ones with a grammar column moved into the shared
-    // toolbar's Filter popover, and the one without (`nationalSystem`) keeps its own debounced
-    // input. Same two capabilities the original test pinned, driven through the new surface: an
-    // admin-area value comes from `listFacilityAdminValues` (not a hardcoded list) and reaches the
-    // server, and a free-text named filter still debounces into the URL rather than firing per
-    // keystroke.
-    it('Fix wave 1 / Finding 1: the admin-area filters moved into the toolbar, and nationalSystem keeps its own debounced input', async () => {
+    // Fix wave 1 / Finding 1 (rewritten for Task 5, again once `nationalSystem` folded in): every
+    // one of the ten open-vocabulary filters is a Filter-popover rule now, so nothing on this page
+    // fires a request per keystroke except the search box (covered by the debounce test above).
+    // What survives from the original: an admin-area value comes from `listFacilityAdminValues`,
+    // not a hardcoded list, and it reaches the server.
+    it('Fix wave 1 / Finding 1: the admin-area filters moved into the toolbar', async () => {
       window.history.replaceState({}, '', '/facilities');
       listFacilitiesMock.mockResolvedValue(makePage(makeRows(1), { total: 1 }));
       (listFacilityAdminValues as ReturnType<typeof vi.fn>).mockImplementation((level: string) =>
@@ -949,13 +948,51 @@ describe('Facilities page', () => {
         expect(JSON.parse(raw ?? '[]')).toEqual([expect.objectContaining({ column: 'zone', value: 'Central' })]);
       });
 
-      // `nationalSystem` has no column in FACILITY_COLUMNS, so it stays a named param with its own
-      // input — and still debounces into the URL exactly like search does.
-      fireEvent.change(screen.getByLabelText('National system'), { target: { value: 'HFR' } });
-      await waitFor(() => expect(window.location.search).toContain('nationalSystem=HFR'));
-      await waitFor(() => expect(listFacilitiesMock).toHaveBeenCalledWith(
-        expect.objectContaining({ nationalSystem: 'HFR' }),
-      ));
+      window.history.replaceState({}, '', '/facilities');
+    });
+
+    // The fold-in: 'National system' was a bespoke text box sending `?nationalSystem=`, which the
+    // store applied as `where facility_system = ?`, a column the grammar already had
+    // (`facilitySystem` in FACILITY_COLUMNS). It is a Filter rule now. Two things this pins: the
+    // column is reachable from the popover, and the page no longer sends the named param at all.
+    it('folds nationalSystem into the Filter popover as the facilitySystem column', async () => {
+      window.history.replaceState({}, '', '/facilities');
+      listFacilitiesMock.mockResolvedValue(makePage(makeRows(1), { total: 1 }));
+      show();
+      await screen.findByText('Facility 0');
+
+      // No bespoke control left on the toolbar row. Only the Mapping health Select, which is the
+      // page's one genuinely non-grammar filter.
+      expect(screen.queryByLabelText('National system')).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: /^filter$/i }));
+      fireEvent.click(await screen.findByRole('button', { name: /add filter/i }));
+      fireEvent.click(screen.getByRole('combobox', { name: /columns/i }));
+      fireEvent.click(await screen.findByRole('option', { name: 'National system' }));
+      fireEvent.change(screen.getByLabelText('Enter value'), { target: { value: 'urn:openldr:cs:facility-register:hfr' } });
+      fireEvent.click(screen.getByRole('button', { name: /^apply$/i }));
+
+      await waitFor(() => expect(listFacilitiesMock).toHaveBeenCalledWith(expect.objectContaining({
+        filters: [expect.objectContaining({
+          column: 'facilitySystem', operator: 'eq', value: 'urn:openldr:cs:facility-register:hfr',
+        })],
+      })));
+      // The named param is gone from the request, not merely unused.
+      expect(listFacilitiesMock.mock.calls.at(-1)![0].nationalSystem).toBeUndefined();
+      window.history.replaceState({}, '', '/facilities');
+    });
+
+    // The compatibility half: a link saved while the box still existed must still open filtered.
+    it('turns a legacy ?nationalSystem= link into a facilitySystem grammar rule', async () => {
+      window.history.replaceState({}, '', '/facilities?nationalSystem=HFR');
+      listFacilitiesMock.mockResolvedValue(makePage(makeRows(1), { total: 1 }));
+      show();
+      await screen.findByText('Facility 0');
+
+      await waitFor(() => expect(listFacilitiesMock).toHaveBeenCalledWith(expect.objectContaining({
+        filters: [expect.objectContaining({ column: 'facilitySystem', operator: 'eq', value: 'HFR' })],
+      })));
+      expect(listFacilitiesMock.mock.calls.at(-1)![0].nationalSystem).toBeUndefined();
       window.history.replaceState({}, '', '/facilities');
     });
 
@@ -1117,7 +1154,8 @@ describe('Facilities page', () => {
   /** Task 5 (shared table-query grammar): the registry's filter surface is now the shared
    *  DataTableToolbar, and every grammar filter/sort travels to the server as JSON. `health` is NOT
    *  a grammar column (it is not in FACILITY_COLUMNS) so it keeps its own Select and its own named
-   *  param, and `nationalSystem` keeps its own debounced Input for the same reason.
+   *  param. It is the only one left: `nationalSystem` had a grammar column all along
+   *  (`facilitySystem`) and folded into the popover.
    *
    *  These tests run after the "Task 4" block, which deliberately shares `window.location` between
    *  its own tests, so each one resets the URL first — a grammar filter now lands in the query
@@ -1173,6 +1211,33 @@ describe('Facilities page', () => {
           expect.objectContaining({ column: 'level', value: 'hospital' }),
         ]);
       });
+    });
+
+    /** The Mapping health Select shares the toolbar's line instead of owning a row underneath it.
+     *  Structural, not visual: jsdom has no layout engine, so this pins the DOM shape the CSS
+     *  depends on. The Select and the toolbar are children of ONE flex row, with the toolbar in a
+     *  `w-full sm:w-auto` wrapper so it shrinks to its content from `sm` up and the Select lands
+     *  beside Columns rather than at the far right.
+     *
+     *  ⚠ HONEST NON-PROOF for the rendered result. Only a browser can show that. What this catches
+     *  is the regression that matters: someone moving the Select back out into its own row. */
+    it('renders the Mapping health Select on the toolbar row, not a row of its own', async () => {
+      show();
+      await screen.findByRole('table');
+
+      const select = screen.getByRole('combobox', { name: 'Mapping health' });
+      const search = screen.getByRole('searchbox');
+
+      // The toolbar's wrapper: shrink-to-fit from `sm` up, full width below it.
+      const toolbarWrapper = search.closest('div.w-full.sm\\:w-auto');
+      expect(toolbarWrapper).not.toBeNull();
+
+      // One flex row holds both. `contains` alone would pass with the Select nested in the toolbar,
+      // so assert the Select is a DIRECT child of that row and a sibling of the toolbar wrapper.
+      const row = toolbarWrapper!.parentElement!;
+      expect(row.className).toContain('flex');
+      expect(row.className).toContain('items-center');
+      expect(select.parentElement).toBe(row);
     });
 
     it('puts the grammar filters in the URL, so a filtered view is still shareable', async () => {
@@ -1377,13 +1442,20 @@ describe('Facilities page', () => {
     /** Minor 3 (Task 5 review): Reset used `table.resetAll()`, which restores `defaultFilters` —
      *  on this page that is the URL's own grammar, so on a page opened from a filtered link Reset
      *  put that link's filters straight back. It also left `q`, `health` and `nationalSystem`
-     *  applied, which is three filters surviving a button labelled Reset. */
+     *  applied, which is three filters surviving a button labelled Reset.
+     *
+     *  The URL below still carries `nationalSystem=HFR`, but it arrives as a SECOND grammar rule
+     *  now (`facilitySystem`, via `LEGACY_FILTER_PARAMS`) rather than a named param, which is why
+     *  the pre-Reset filter count is 2. Reset must clear both. */
     it('Minor 3: Reset clears everything the page filters on, including a filter restored from the URL', async () => {
       window.history.replaceState({}, '', '/facilities?filters=%5B%7B%22column%22%3A%22zone%22%2C%22operator%22%3A%22eq%22%2C%22value%22%3A%22Central%22%2C%22combine%22%3A%22and%22%7D%5D&q=dodoma&health=unmapped&nationalSystem=HFR');
 
       show();
       await screen.findByRole('table');
-      await waitFor(() => expect(listFacilitiesMock.mock.calls.at(-1)![0].filters).toHaveLength(1));
+      await waitFor(() => expect(listFacilitiesMock.mock.calls.at(-1)![0].filters).toHaveLength(2));
+      expect(listFacilitiesMock.mock.calls.at(-1)![0].filters).toEqual(
+        expect.arrayContaining([expect.objectContaining({ column: 'facilitySystem', value: 'HFR' })]),
+      );
 
       const before = listFacilitiesMock.mock.calls.length;
       fireEvent.click(screen.getByRole('button', { name: /^reset$/i }));

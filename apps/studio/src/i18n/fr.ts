@@ -843,10 +843,9 @@ export const fr: EnShape = {
       sourceLabel: 'Source',
       sourceManual: 'Saisie manuelle',
       sourceImport: 'Importé',
+      // Voir en.ts : libellé de la COLONNE 'facilitySystem'. La zone de texte dédiée a disparu,
+      // remplacée par une règle du menu Filtrer.
       nationalSystemLabel: 'Registre national',
-      // Voir en.ts : correspondance EXACTE avec un URI canonique de registre (migration 082), et non
-      // un code court — « HFR » ne correspond plus à aucune ligne.
-      nationalSystemPlaceholder: 'ex. urn:openldr:cs:facility-register:hfr',
       managedOriginLabel: 'Origine gérée',
       ownershipLabel: 'Propriété',
       statusLabel: 'Statut',

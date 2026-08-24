@@ -164,8 +164,8 @@ botões Filtrar, Ordenar, Colunas e Repor.
 
 Os filtros ativos aparecem como etiquetas removíveis abaixo da barra de ferramentas.
 
-Dois controlos ocupam a sua própria linha abaixo da barra de ferramentas, porque não são colunas
-comuns:
+Um controlo ocupa a sua própria linha abaixo da barra de ferramentas, porque não é uma coluna
+comum:
 
 - **Estado do mapeamento.** Se uma unidade pode ser um alvo de mapeamento, e se algo já mapeia
   para ela. Mapeada significa que pelo menos um código observado já se resolve para ela. Não
@@ -174,16 +174,22 @@ comuns:
   que não pode ser de todo um alvo de mapeamento. Este estado vem de uma junção entre duas outras
   tabelas, não de uma coluna guardada, por isso mantém o seu próprio menu suspenso em vez de se
   juntar à lista de Filtrar.
-- **Registo nacional.** Uma caixa de texto livre que filtra pelo registo do qual uma unidade foi
-  importada. Texto livre, porque uma unidade pode ter um código de registo que a sua instalação
-  já não lista como fonte ativa.
+
+Registo nacional ocupava essa linha como segunda caixa. Agora é uma coluna de Filtrar, com o nome
+Registo nacional, porque sempre filtrou uma coluna guardada como todos os outros filtros. Filtrar
+dá-lhe operadores que a caixa não tinha: a caixa exigia o URI completo do registo, e "contém"
+encontra parte dele, por isso pode escrever `hfr` em vez de
+`urn:openldr:cs:facility-register:hfr` inteiro. Os valores continuam a ser texto livre em vez de
+uma lista de escolha, porque uma unidade pode ter um código de registo que a sua instalação já não
+lista como fonte ativa, e uma lista de escolha esconderia essas linhas.
 
 Uma vista filtrada e ordenada pode ser partilhada. Os filtros e ordenações aparecem no próprio URL
 da página, pelo que copiar o link e enviá-lo a alguém reabre a mesma vista. Links antigos que
 usavam um único parâmetro de consulta, como `?zone=Central`, continuam a funcionar.
 
 No estúdio, Filtrar e Ordenar podem usar estas colunas: código, nome, região, distrito, estado,
-origem, zona, conselho, país, nível, titularidade, origem gerida e estado no registo.
+origem, zona, conselho, país, nível, titularidade, origem gerida, estado no registo e registo
+nacional.
 
 ### Duas coisas a saber
 
@@ -227,10 +233,10 @@ isso verifique primeiro os valores de nível reais do seu próprio registo. Os r
 muitas vezes valores como "Health Post", "Health Centre" ou "1st Level Hospital", e um valor que
 não corresponda exatamente não devolve nada.
 
-A CLI também pode filtrar e ordenar por `id` e `facilitySystem` (o código do registo nacional),
-duas colunas que a barra de ferramentas do estúdio deixa de fora porque `facilitySystem` já tem
-ali a sua própria caixa de texto. `health` não tem forma `--where`: é calculada, não guardada, por
-isso filtre por ela através do menu suspenso Estado do mapeamento do estúdio.
+A CLI também pode filtrar e ordenar por `id`, a única coluna que a barra de ferramentas do
+estúdio deixa de fora. `health` não tem forma `--where`: é calculada, não guardada, por isso filtre
+por ela através do menu suspenso Estado do mapeamento do estúdio. Use `facilitySystem` para o
+registo nacional, o mesmo nome de coluna que o filtro Registo nacional do estúdio usa.
 
 Uma coluna desconhecida, ou um operador que essa coluna não permite, é rejeitado com uma mensagem
 que identifica exatamente o erro, a mesma validação que a barra de ferramentas usa. Um sinalizador

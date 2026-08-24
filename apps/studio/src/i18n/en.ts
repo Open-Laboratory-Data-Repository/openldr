@@ -852,12 +852,11 @@ export const en = {
       sourceLabel: 'Source',
       sourceManual: 'Manual entry',
       sourceImport: 'Imported',
+      // The 'facilitySystem' COLUMN label, not a bespoke control's any more. The page's own
+      // National system text box is gone: it filtered `facility_system`, which is a grammar column,
+      // so it is a Filter-popover rule now. Its placeholder key went with it. Values are canonical
+      // register URIs (migration 082 rewrote every one), not short codes like 'HFR'.
       nationalSystemLabel: 'National system',
-      // ⛔ A CANONICAL REGISTER URI, not a short code. This filter is an EXACT match on
-      // `facility_registry.national_system` (facility-registry-store.ts's `list`), and migration 082
-      // rewrote every one of those values to a registered source's URI — so the previous
-      // 'e.g. HFR, MFL' told the operator to type a string that now matches nothing at all.
-      nationalSystemPlaceholder: 'e.g. urn:openldr:cs:facility-register:hfr',
       managedOriginLabel: 'Managed origin',
       ownershipLabel: 'Ownership',
       statusLabel: 'Status',

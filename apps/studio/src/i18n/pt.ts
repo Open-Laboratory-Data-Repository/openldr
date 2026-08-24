@@ -843,10 +843,9 @@ export const pt: EnShape = {
       sourceLabel: 'Origem',
       sourceManual: 'Entrada manual',
       sourceImport: 'Importada',
+      // Ver en.ts: rótulo da COLUNA 'facilitySystem'. A caixa de texto dedicada desapareceu,
+      // substituída por uma regra no menu Filtrar.
       nationalSystemLabel: 'Registo nacional',
-      // Ver en.ts: correspondência EXATA com um URI canónico de registo (migração 082), não um
-      // código curto — «HFR» já não corresponde a nenhuma linha.
-      nationalSystemPlaceholder: 'ex. urn:openldr:cs:facility-register:hfr',
       managedOriginLabel: 'Origem gerida',
       ownershipLabel: 'Titularidade',
       statusLabel: 'Estado',

@@ -8,7 +8,6 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
@@ -34,16 +33,24 @@ import { FACILITY_STATUS_VALUESET_ID, useCodeDisplayMap, displayFor } from '@/fa
 
 /** Task 5: the filters `GET /api/facilities` accepts that have NO column in `FACILITY_COLUMNS`,
  *  so they cannot be expressed as grammar rules and keep their own named params and their own
- *  controls: `q` (a multi-column search the store spells out itself), `health` (a DERIVED mapping
- *  state, not a stored column) and `nationalSystem` (`national_system` is not on the grammar
- *  whitelist). Everything this type used to also carry - country/zone/region/district/council/
- *  status/level/ownership/source/managedOrigin/registerState - is a grammar column now and travels
- *  in `filters`/`sorts` instead, serialised into the URL as the same JSON the wire format uses, so
- *  a filtered view stays linkable exactly as it was before.
+ *  controls: `q` (a multi-column search the store spells out itself) and `health` (a DERIVED
+ *  mapping state, not a stored column). Everything this type used to also carry - country/zone/
+ *  region/district/council/status/level/ownership/source/managedOrigin/registerState - is a
+ *  grammar column now and travels in `filters`/`sorts` instead, serialised into the URL as the
+ *  same JSON the wire format uses, so a filtered view stays linkable exactly as it was before.
+ *
+ *  ⛔ `nationalSystem` was the last named param to go, and it never belonged here. The store
+ *  applies it as `where facility_system = ?` (facility-registry-store.ts:374), and
+ *  `facility_system` IS a grammar column: `facilitySystem` in `FACILITY_COLUMNS`, with the full
+ *  text operator set. The page just never declared a ColumnDef for it, so its own text box was the
+ *  only way to reach the column. That box is gone and the column is in the Filter popover, which
+ *  also gains `like` over the box's exact match alone. Do not add the box back. The SERVER param
+ *  stays: the CLI uses it, and `LEGACY_FILTER_PARAMS` below turns a link saved before this change
+ *  into the grammar rule it always meant.
  *
  *  `offset` stays here too: this page keeps its own pager rather than `useTableState`'s `page`,
  *  because `useTableState` has no way to START on a page restored from a link. */
-type FacilitiesUrlState = Pick<FacilityListQuery, 'q' | 'health' | 'nationalSystem'> & { offset: number };
+type FacilitiesUrlState = Pick<FacilityListQuery, 'q' | 'health'> & { offset: number };
 
 /** The three values `health` accepts on the wire - used to validate whatever `?health=` a restored
  *  URL carries, the same closed-whitelist reasoning as the server's own `isFacilityHealth`
@@ -144,34 +151,33 @@ function readUrlState(): FacilitiesUrlState {
   const params = new URLSearchParams(window.location.search);
   const q = params.get('q');
   const health = params.get('health');
-  const nationalSystem = params.get('nationalSystem');
   const offsetRaw = Number(params.get('offset'));
   return {
     q: q ?? '',
     health: health != null && isHealthValue(health) ? health : undefined,
-    // No compile-time union to validate against, and none needed: this is passed straight through
-    // as an exact-match `where` server-side (facility-registry-store.ts), so a value the registry
-    // has never seen simply matches zero rows rather than doing anything unsafe.
-    nationalSystem: nationalSystem || undefined,
     offset: Number.isFinite(offsetRaw) && offsetRaw > 0 ? Math.floor(offsetRaw) : 0,
   };
 }
 
 /** Important 2 (Task 5 review): the named params this page USED to accept, each of which is a
- *  `FACILITY_COLUMNS` column now. Every param name here is also its column id, so this list IS the
- *  mapping.
+ *  `FACILITY_COLUMNS` column now. `[param, column]` pairs, because one of them does not share its
+ *  column's name: `?nationalSystem=` has always been an exact match on `facility_system`
+ *  (facility-registry-store.ts:374), whose column id is `facilitySystem`. The other eleven name
+ *  their own column, so their two halves are identical.
  *
  *  ⛔ READ-SIDE ONLY. Nothing writes these back out: the JSON `filters` form is the going-forward
  *  format, and this is a compatibility shim so a link saved or bookmarked before Task 5 —
  *  `/facilities?zone=Central` — still opens filtered. Without it that link loads the entire
  *  register with nothing on screen saying a filter was dropped.
  *
- *  `q`, `health`, `nationalSystem` and `offset` are deliberately NOT in this list. They never
- *  became grammar columns; `readUrlState` above still reads them as named params, unchanged. */
-const LEGACY_FILTER_PARAMS = [
-  'source', 'country', 'zone', 'region', 'district', 'council',
-  'status', 'level', 'ownership', 'managedOrigin', 'registerState',
-] as const;
+ *  `q`, `health` and `offset` are deliberately NOT in this list. They never became grammar columns;
+ *  `readUrlState` above still reads them as named params, unchanged. */
+const LEGACY_FILTER_PARAMS: readonly (readonly [param: string, column: string])[] = [
+  ['source', 'source'], ['country', 'country'], ['zone', 'zone'], ['region', 'region'],
+  ['district', 'district'], ['council', 'council'], ['status', 'status'], ['level', 'level'],
+  ['ownership', 'ownership'], ['managedOrigin', 'managedOrigin'], ['registerState', 'registerState'],
+  ['nationalSystem', 'facilitySystem'],
+];
 
 /** Turn any surviving legacy named param into the `eq` grammar rule it always meant — the named
  *  params were exact matches server-side (facility-registry-store.ts's `list`), so `eq` is what
@@ -179,15 +185,17 @@ const LEGACY_FILTER_PARAMS = [
  *  `readFiltersFromUrl` is: a rule the route would 400 on must never reach the network. */
 function readLegacyFiltersFromUrl(params: URLSearchParams, already: FilterRule[]): FilterRule[] {
   const out: FilterRule[] = [];
-  for (const name of LEGACY_FILTER_PARAMS) {
-    const raw = params.get(name);
+  for (const [param, column] of LEGACY_FILTER_PARAMS) {
+    const raw = params.get(param);
     if (!raw) continue;
-    const spec = FACILITY_COLUMNS[name];
+    const spec = FACILITY_COLUMNS[column];
     if (!spec || !spec.operators.includes('eq')) continue;
     // A URL carrying BOTH forms for one column can only be hand-assembled — nothing generates it.
-    // The grammar rule wins: it is the newer and the more expressive of the two.
-    if (already.some((f) => f.column === name)) continue;
-    out.push({ id: newId('f'), column: name, operator: 'eq', value: raw, combine: 'and' });
+    // The grammar rule wins: it is the newer and the more expressive of the two. Checked against
+    // the COLUMN, not the param, so `?nationalSystem=` loses to a `facilitySystem` rule the same
+    // way `?zone=` loses to a `zone` one.
+    if (already.some((f) => f.column === column)) continue;
+    out.push({ id: newId('f'), column, operator: 'eq', value: raw, combine: 'and' });
   }
   return out;
 }
@@ -223,7 +231,6 @@ function writeUrlState(state: FacilitiesUrlState, filters: FilterRule[], sorts: 
   const params = new URLSearchParams();
   if (state.q) params.set('q', state.q);
   if (state.health) params.set('health', state.health);
-  if (state.nationalSystem) params.set('nationalSystem', state.nationalSystem);
   if (filters.length > 0) params.set('filters', JSON.stringify(toWireFilters(filters)));
   if (sorts.length > 0) params.set('sorts', JSON.stringify(toWireSorts(sorts)));
   if (state.offset > 0) params.set('offset', String(state.offset));
@@ -231,13 +238,14 @@ function writeUrlState(state: FacilitiesUrlState, filters: FilterRule[], sorts: 
   window.history.replaceState({}, '', `${window.location.pathname}${qs ? `?${qs}` : ''}`);
 }
 
-/** Fix wave 1 / Finding 3: debounce window for every free-text filter input — search plus the
- *  open-vocabulary filters added for Finding 1 (nationalSystem/managedOrigin/ownership/status/
- *  level/country). 250ms is the low end of the conventional 250-300ms range: long enough to
- *  collapse a typing burst into one request against a 13k-row table, short enough that results
- *  still feel live. Applied uniformly, not just to `q` — every one of these fields hits the same
- *  endpoint on every keystroke, so the rationale that motivated debouncing search applies equally
- *  to the rest; leaving them un-debounced would just move Finding 3's problem to six other inputs. */
+/** Fix wave 1 / Finding 3: debounce window for the search box. 250ms is the low end of the
+ *  conventional 250-300ms range: long enough to collapse a typing burst into one request against a
+ *  13k-row table, short enough that results still feel live.
+ *
+ *  This used to cover six more free-text filters (nationalSystem/managedOrigin/ownership/status/
+ *  level/country), each of which fired a request per keystroke. All six are grammar columns now and
+ *  commit through the Filter popover's Apply button, which fires once. `q` is the only per-keystroke
+ *  input the page has left. */
 const FILTER_DEBOUNCE_MS = 250;
 
 /** Fix wave 1 / Finding 3: keeps a text filter input responsive to every keystroke while only
@@ -620,6 +628,26 @@ export function Facilities() {
       operators: FACILITY_COLUMNS.managedOrigin!.operators,
     },
     {
+      // WHICH register named this facility's `facilityCode`. This column replaces the page's own
+      // 'National system' text box, which sent `?nationalSystem=` and reached this exact SQL column
+      // (facility-registry-store.ts:374). The box existed only because this ColumnDef did not.
+      //
+      // ⛔ `text`, not `enum`, and NOT a picker over the registered facility registers. A filter
+      // runs over rows ALREADY STORED, so it must still match a value written before the register
+      // picklist existed, or by a register since deactivated. Restricting it to the current active
+      // source list would hide rows this registry genuinely holds. That was the reason the control
+      // it replaces was an open Input, and folding it into the popover does not change it.
+      //
+      // Values are canonical register URIs (`urn:openldr:cs:facility-register:hfr`), not short
+      // codes. Migration 082 rewrote every one of them. `eq` is the default operator, so the box's
+      // exact-match behaviour is unchanged; `like` is the new part, and it is an ilike '%needle%'
+      // server-side (table-query-sql.ts), so typing `hfr` now finds that URI without the operator
+      // having to know the whole thing.
+      id: 'facilitySystem', labelKey: 'facilities.filters.nationalSystemLabel', type: 'text', defaultVisible: false, cellClassName: 'text-xs',
+      accessor: (f) => f.facilitySystem ?? '—',
+      operators: FACILITY_COLUMNS.facilitySystem!.operators,
+    },
+    {
       // Task 10: registry MEMBERSHIP — a closed, three-value vocabulary this app owns, so it keeps
       // a real picker.
       id: 'registerState', labelKey: 'facilities.filters.registerStateLabel', type: 'enum', defaultVisible: false, cellClassName: 'text-xs',
@@ -699,13 +727,13 @@ export function Facilities() {
    *  and `setSorts([])` clear outright; `resetColumns()` covers the visibility half that
    *  `resetAll` also did.
    *
-   *  `q`, `health` and `nationalSystem` go with them. They are three more filters the operator can
-   *  see applied, and a button labelled Reset that leaves them in effect reads as a bug. */
+   *  `q` and `health` go with them. They are two more filters the operator can see applied, and a
+   *  button labelled Reset that leaves them in effect reads as a bug. */
   const resetTable = () => {
     table.setFilters([]);
     table.setSorts([]);
     table.resetColumns();
-    setUrlState({ q: '', health: undefined, nationalSystem: undefined, offset: 0 });
+    setUrlState({ q: '', health: undefined, offset: 0 });
   };
 
   // F1 fix: a plain `reload()` flips `loading` to true, which the render below turns into a
@@ -743,11 +771,10 @@ export function Facilities() {
     void reloadHealth();
     try {
       const page = await listFacilities({
-        // The three named params with no grammar column (see `FacilitiesUrlState`). They are ANDed
+        // The two named params with no grammar column (see `FacilitiesUrlState`). They are ANDed
         // with the grammar rules server-side, never replaced by them.
         q: urlState.q || undefined,
         health: urlState.health,
-        nationalSystem: urlState.nationalSystem,
         // Task 5: the shared grammar. Applied by the server — this page is server-paginated, so it
         // must never filter or sort the fetched page in the browser: that would filter one page
         // while `total` kept claiming the unfiltered count. Minor 5: `toWireFilters`/`toWireSorts`
@@ -814,18 +841,14 @@ export function Facilities() {
   // stay independently readable: this one owns the URL, that one owns the network call.
   useEffect(() => { writeUrlState(urlState, table.filters, table.sorts); }, [urlState, table.filters, table.sorts]);
 
-  // Fix wave 1 / Finding 3: one `useDebouncedFilterField` per free-text NAMED filter. Only two are
-  // left — `q` and `nationalSystem`, the ones with no grammar column. Everything else that used to
-  // need one now commits through the Filter popover's own Apply button, which fires once instead of
-  // per keystroke. Each commit resets `offset` to 0: changing what is being searched for
-  // invalidates whatever page of the OLD result set the operator was on.
+  // Fix wave 1 / Finding 3: one `useDebouncedFilterField` per free-text NAMED filter. `q` is the
+  // only one left. Everything else that used to need one now commits through the Filter popover's
+  // own Apply button, which fires once instead of per keystroke. The commit resets `offset` to 0:
+  // changing what is being searched for invalidates whatever page of the OLD result set the
+  // operator was on.
   const [searchDraft, onSearchDraftChange] = useDebouncedFilterField(
     urlState.q ?? '',
     (v) => setUrlState((s) => ({ ...s, q: v, offset: 0 })),
-  );
-  const [nationalSystemDraft, onNationalSystemDraftChange] = useDebouncedFilterField(
-    urlState.nationalSystem ?? '',
-    (v) => setUrlState((s) => ({ ...s, nationalSystem: v || undefined, offset: 0 })),
   );
 
   // Fix wave 1 / Finding 1: option values for the four administrative-area filters come from the
@@ -1035,30 +1058,48 @@ export function Facilities() {
 
         {/* Task 5: one shared toolbar — search, Filter, Sort, Columns, Reset — in place of this
             page's own twelve-control panel. Every dimension with a column in `FACILITY_COLUMNS`
-            reaches the server as a grammar rule through the Filter popover; the two that have no
-            such column keep their own controls on the row below it. The toolbar's `actions` slot is
-            left empty on purpose: this page's ⋯ is portalled to the tab strip above (see
-            `actionsEl`), so putting a second one here would give the Registry tab two. */}
+            reaches the server as a grammar rule through the Filter popover; the one that has no
+            such column sits beside the toolbar. The toolbar's `actions` slot is left empty on
+            purpose: this page's ⋯ is portalled to the tab strip above (see `actionsEl`), so putting
+            a second one here would give the Registry tab two. */}
         <div className="flex flex-col gap-3 border-b border-border px-4 py-3 sm:gap-2 sm:py-2">
-          <DataTableToolbar
-            columns={columns}
-            filters={table.filters}
-            onFiltersChange={applyFilters}
-            sorts={table.sorts}
-            onSortsChange={applySorts}
-            visibleIds={table.visibleIds}
-            onVisibleIdsChange={table.setVisibleIds}
-            onResetColumns={table.resetColumns}
-            onResetAll={resetTable}
-            searchValue={searchDraft}
-            onSearchChange={onSearchDraftChange}
-            searchPlaceholder={t('facilities.searchPlaceholder')}
-          />
-          {/* ⛔ The two filters with NO grammar column. `health` is a DERIVED mapping state, not a
-              stored column, and `nationalSystem` is not on the grammar whitelist — both stay named
-              params and keep their own controls beside the toolbar rather than being faked into the
-              popover, where the server would reject them. */}
-          <div className="flex flex-wrap items-center gap-2">
+          {/* The Mapping health Select shares the toolbar's line rather than owning a row below it.
+              `DataTableToolbar` has no slot for a page-specific FILTER (its `actions` slot is
+              right-aligned, for a ⋯ menu) and it takes no `className`, so the toolbar is wrapped
+              instead of changed. Audit shares that component and gains nothing from a prop only
+              this page would pass.
+
+              ⛔ `w-full sm:w-auto` on the wrapper, not `flex-1`. The toolbar's own root is a
+              two-column GRID below `sm` and a flex row from `sm` up. Full width below `sm` keeps
+              that grid intact and lets the Select wrap under it on a phone; `w-auto` from `sm` up
+              makes the wrapper shrink to its content so the Select lands directly after Columns
+              instead of being pushed to the far right of the pane. */}
+          <div className="flex flex-wrap items-center gap-3 sm:gap-2">
+            <div className="w-full sm:w-auto">
+              <DataTableToolbar
+                columns={columns}
+                filters={table.filters}
+                onFiltersChange={applyFilters}
+                sorts={table.sorts}
+                onSortsChange={applySorts}
+                visibleIds={table.visibleIds}
+                onVisibleIdsChange={table.setVisibleIds}
+                onResetColumns={table.resetColumns}
+                onResetAll={resetTable}
+                searchValue={searchDraft}
+                onSearchChange={onSearchDraftChange}
+                searchPlaceholder={t('facilities.searchPlaceholder')}
+              />
+            </div>
+            {/* ⛔ The ONE filter with no grammar column. `health` is a DERIVED mapping state built by
+                joining `facility_concept_projection` and `term_mappings`, not a stored column
+                (facility-registry-store.ts:127), so it has no `FACILITY_COLUMNS` entry and stays
+                a named param with its own control. Faking it into the popover would send a rule the
+                route rejects.
+
+                Its old neighbour, the 'National system' Input, is gone: that one DID have a grammar
+                column and is a Filter rule now. Do not put a second bespoke control on this line
+                without checking `FACILITY_COLUMNS` first. */}
             <Select
               value={urlState.health ?? 'all'}
               // `isHealthValue` (not a cast): Radix types `onValueChange` as `(value: string) =>
@@ -1076,17 +1117,6 @@ export function Facilities() {
                 <SelectItem value="unprojected">{t('facilities.filters.healthUnprojected')}</SelectItem>
               </SelectContent>
             </Select>
-            {/* An open `Input`, not a `Select`: a FILTER over already-stored rows must still match
-                values written before the register picklist existed, or by a register since
-                deactivated, so restricting it to the CURRENT active-source list would hide rows this
-                registry genuinely holds. */}
-            <Input
-              value={nationalSystemDraft}
-              onChange={(e) => onNationalSystemDraftChange(e.target.value)}
-              placeholder={t('facilities.filters.nationalSystemPlaceholder')}
-              aria-label={t('facilities.filters.nationalSystemLabel')}
-              className="h-8 w-56 text-xs"
-            />
           </div>
           {/* A sibling of the toolbar, not part of it — a page can render the toolbar and silently
               omit the chips, which is what `expectStandardTableToolbar` guards against. Renders
