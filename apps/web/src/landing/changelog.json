@@ -1,10 +1,28 @@
 {
-  "generatedAt": "2026-08-22",
+  "generatedAt": "2026-08-24",
   "days": [
+    {
+      "date": "2026-08-24",
+      "version": null,
+      "entries": [
+        {
+          "hash": "16949505",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Fold the National system box into Filter"
+        }
+      ]
+    },
     {
       "date": "2026-08-22",
       "version": null,
       "entries": [
+        {
+          "hash": "03bf8e8f",
+          "type": "fix",
+          "scope": "db",
+          "title": "Register migration 089, which never ran because it was absent from the map"
+        },
         {
           "hash": "2d346da2",
           "type": "fix",
