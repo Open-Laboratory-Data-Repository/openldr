@@ -25,6 +25,7 @@
     "@openldr/core": "workspace:*",
     "@openldr/dashboards": "workspace:*",
     "@openldr/db": "workspace:*",
+    "@openldr/fhir": "workspace:*",
     "@openldr/forms": "workspace:*",
     "@openldr/plugin-ui-sdk": "workspace:*",
     "@openldr/rbac": "workspace:*",

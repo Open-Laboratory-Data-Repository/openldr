@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type { FormField } from '@openldr/forms/pure';
 import { MappingEditor } from './MappingEditor';
 
@@ -15,31 +17,65 @@ const BASE_FIELD: FormField = {
   description: null,
 };
 
-function renderEditor(overrides: Partial<FormField> = {}) {
+// SuggestCombobox's <Input value={value}> is fully controlled with no state of its own
+// (by design — it is a shared primitive; see suggest-combobox.tsx). A React controlled input
+// needs its value prop to move on every keystroke for userEvent.type to accumulate text; a bare
+// vi.fn() spy that never feeds a patch back into `field` leaves the DOM value snapping back after
+// each character, so only the last keystroke would survive. FieldEditorSheet's patchDraft feeds
+// every patch back into the field it renders next, so this harness mirrors exactly that, while
+// still recording every call on the onUpdate spy the tests assert against.
+function Harness({
+  field,
+  fhirResourceType,
+  onUpdate,
+}: {
+  field: FormField;
+  fhirResourceType: string | null;
+  onUpdate: (patch: Partial<FormField>) => void;
+}) {
+  const [current, setCurrent] = useState(field);
+  return (
+    <MappingEditor
+      field={current}
+      fhirResourceType={fhirResourceType}
+      onUpdate={(patch) => {
+        onUpdate(patch);
+        setCurrent((f) => ({ ...f, ...patch }));
+      }}
+    />
+  );
+}
+
+function renderEditor(overrides: Partial<FormField> = {}, fhirResourceType: string | null = 'Location') {
   const onUpdate = vi.fn();
   const field = { ...BASE_FIELD, ...overrides };
-  const utils = render(<MappingEditor field={field} onUpdate={onUpdate} />);
+  const utils = render(
+    <Harness field={field} fhirResourceType={fhirResourceType} onUpdate={onUpdate} />,
+  );
   return { ...utils, onUpdate };
 }
 
 describe('MappingEditor', () => {
   describe('FHIR path input', () => {
+    // The control is now a SuggestCombobox (role="combobox"), not a plain textbox — that is
+    // exactly what this task changes. The role in these assertions was updated to match; the
+    // behavior under test (shows the value, commits on change, clears to null) is unchanged.
     it('shows the current fhirPath value', () => {
       renderEditor({ fhirPath: 'Patient.name' });
-      const input = screen.getByRole('textbox', { name: /fhir path/i });
+      const input = screen.getByRole('combobox', { name: /fhir path/i });
       expect((input as HTMLInputElement).value).toBe('Patient.name');
     });
 
     it('calls onUpdate with fhirPath on change', () => {
       const { onUpdate } = renderEditor();
-      const input = screen.getByRole('textbox', { name: /fhir path/i });
+      const input = screen.getByRole('combobox', { name: /fhir path/i });
       fireEvent.change(input, { target: { value: 'Patient.name' } });
       expect(onUpdate).toHaveBeenCalledWith({ fhirPath: 'Patient.name' });
     });
 
     it('calls onUpdate with null when fhirPath cleared', () => {
       const { onUpdate } = renderEditor({ fhirPath: 'Patient.name' });
-      const input = screen.getByRole('textbox', { name: /fhir path/i });
+      const input = screen.getByRole('combobox', { name: /fhir path/i });
       fireEvent.change(input, { target: { value: '' } });
       expect(onUpdate).toHaveBeenCalledWith({ fhirPath: null });
     });
@@ -168,5 +204,65 @@ describe('MappingEditor', () => {
         expect(onUpdate).toHaveBeenCalledWith({ adminNote: undefined });
       });
     });
+  });
+});
+
+describe('MappingEditor FHIR path picker', () => {
+  it('offers the real elements of the form resource type when the operator types', async () => {
+    renderEditor();
+    const input = screen.getByLabelText('FHIR Path');
+    await userEvent.type(input, 'address.dist');
+    expect(await screen.findByRole('option', { name: /Location\.address\.district/ })).toBeInTheDocument();
+  });
+
+  it('finds an element by what it MEANS, not only by its path', async () => {
+    // This is the case the whole workstream exists for. Someone thinking "county" must be able
+    // to find address.district, whose path never contains that word.
+    renderEditor();
+    await userEvent.type(screen.getByLabelText('FHIR Path'), 'county');
+    expect(await screen.findByRole('option', { name: /Location\.address\.district/ })).toBeInTheDocument();
+  });
+
+  it('commits the path alone when an option is picked, not the label', async () => {
+    const { onUpdate } = renderEditor();
+    await userEvent.type(screen.getByLabelText('FHIR Path'), 'address.dist');
+    await userEvent.click(await screen.findByRole('option', { name: /Location\.address\.district/ }));
+    expect(onUpdate).toHaveBeenCalledWith({ fhirPath: 'Location.address.district' });
+  });
+
+  it('shows the official definition under the input for the current value', () => {
+    renderEditor({ fhirPath: 'Location.address.district' });
+    expect(screen.getByText('District name (aka county)')).toBeInTheDocument();
+  });
+
+  it('shows no definition for a path the table does not know', () => {
+    renderEditor({ fhirPath: 'Location.address.zone' });
+    expect(screen.queryByTestId('fhir-path-definition')).not.toBeInTheDocument();
+  });
+
+  it('still accepts free text, so a gap in the table never blocks anyone', async () => {
+    const { onUpdate } = renderEditor();
+    await userEvent.type(screen.getByLabelText('FHIR Path'), 'Location.address.zone');
+    expect(onUpdate).toHaveBeenLastCalledWith({ fhirPath: 'Location.address.zone' });
+  });
+
+  it('clears the path to null when the box is emptied', async () => {
+    const { onUpdate } = renderEditor({ fhirPath: 'Location.name' });
+    await userEvent.clear(screen.getByLabelText('FHIR Path'));
+    expect(onUpdate).toHaveBeenLastCalledWith({ fhirPath: null });
+  });
+
+  it('degrades to a plain free-text field for an uncovered resource type', async () => {
+    // The builder offers 145 resource types and the table covers 9. An empty picker must not
+    // look broken, and must never stop someone typing.
+    const { onUpdate } = renderEditor({}, 'Condition');
+    await userEvent.type(screen.getByLabelText('FHIR Path'), 'onsetDateTime');
+    expect(onUpdate).toHaveBeenLastCalledWith({ fhirPath: 'onsetDateTime' });
+  });
+
+  it('degrades the same way when the form declares no resource type at all', async () => {
+    const { onUpdate } = renderEditor({}, null);
+    await userEvent.type(screen.getByLabelText('FHIR Path'), 'name');
+    expect(onUpdate).toHaveBeenLastCalledWith({ fhirPath: 'name' });
   });
 });
