@@ -168,6 +168,15 @@ export function SuggestCombobox({
                 type="button"
                 role="option"
                 aria-selected={i === active}
+                // The label and description render as two sibling elements with no whitespace
+                // between them, so the DOM text content runs them together into a single word
+                // ("districtDistrict..."). Anything that reads the accessible name from
+                // content sees that run-together string: a screen reader, or a test matching
+                // by role name. An explicit aria-label fixes that without touching the visible
+                // two-line layout. Left unset when there is no description, so an option
+                // without one keeps deriving its name from content exactly as it did before
+                // this prop existed.
+                aria-label={description ? `${labelOf(opt)}, ${description}` : undefined}
                 onClick={() => pick(opt)}
                 onMouseEnter={() => setActive(i)}
                 className={description

@@ -173,4 +173,33 @@ describe('SuggestCombobox — optionDescriptions', () => {
     fireEvent.click(screen.getByText('District name (aka county)'));
     expect(onChange).toHaveBeenCalledWith('Location.address.district');
   });
+
+  it('gives an option with a description a well-formed accessible name, label comma description', () => {
+    // The label and description render as two sibling elements with no whitespace between
+    // them, so the DOM text content runs them together: "districtDistrict name (aka county)".
+    // A screen reader reads that concatenation. The option needs an explicit aria-label so its
+    // accessible name is well-formed regardless of DOM whitespace.
+    render(
+      <SuggestCombobox
+        value="" onChange={vi.fn()}
+        options={paths} optionDescriptions={descriptions}
+      />,
+    );
+    fireEvent.focus(screen.getByRole('combobox'));
+    const option = screen.getByRole('option', { name: 'Location.address.district, District name (aka county)' });
+    expect(option).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /districtDistrict/ })).not.toBeInTheDocument();
+  });
+
+  it('leaves an option without a description with no aria-label, so its name still comes from its content', () => {
+    render(
+      <SuggestCombobox
+        value="" onChange={vi.fn()}
+        options={paths} optionDescriptions={descriptions}
+      />,
+    );
+    fireEvent.focus(screen.getByRole('combobox'));
+    const option = screen.getByRole('option', { name: 'Location.name' });
+    expect(option).not.toHaveAttribute('aria-label');
+  });
 });
