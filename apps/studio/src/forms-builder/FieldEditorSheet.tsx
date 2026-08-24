@@ -39,6 +39,8 @@ export interface FieldEditorSheetProps {
   allFields: FormField[];
   sections: FormSchema['sections'];
   languages?: string[];
+  /** The form's FHIR resource type, forwarded to MappingEditor to scope its path picker. */
+  fhirResourceType: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSave: (field: FormField) => void;
@@ -50,6 +52,7 @@ export function FieldEditorSheet({
   allFields,
   sections,
   languages = [],
+  fhirResourceType,
   open,
   onOpenChange,
   onSave,
@@ -311,7 +314,7 @@ export function FieldEditorSheet({
         </div>
         <div className="border-t border-border" />
         <div className="px-6 py-2">
-          <MappingEditor field={activeDraft} onUpdate={patchDraft} />
+          <MappingEditor field={activeDraft} fhirResourceType={fhirResourceType} onUpdate={patchDraft} />
         </div>
 
         {/* ── Visibility / conditions section ─────────────────────── */}

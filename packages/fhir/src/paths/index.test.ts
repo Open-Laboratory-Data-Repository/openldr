@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { generateTableSource } from './generate';
 import {
   FHIR_PATH_RESOURCE_TYPES,
+  fhirPathOptionsFor,
   fhirPathsFor,
   isKnownFhirResourceType,
   lookupFhirPath,
@@ -91,5 +92,49 @@ describe('the generated table', () => {
     const actual = readFileSync(generatedFile, 'utf8');
     // Normalise line endings: git checks this file out with CRLF on Windows.
     expect(actual.replace(/\r\n/g, '\n')).toBe(expected.replace(/\r\n/g, '\n'));
+  });
+});
+
+describe('fhirPathOptionsFor', () => {
+  it('drops structural noise that nobody binds a form field to', () => {
+    const paths = fhirPathOptionsFor('Location').map((r) => r.path);
+    expect(paths).not.toContain('Location.identifier.id');
+    expect(paths).not.toContain('Location.extension');
+    expect(paths).not.toContain('Location.address.extension');
+  });
+
+  it('keeps every real element, including the ones this whole workstream is about', () => {
+    const paths = fhirPathOptionsFor('Location').map((r) => r.path);
+    expect(paths).toContain('Location.address.district');
+    expect(paths).toContain('Location.address.state');
+    expect(paths).toContain('Location.address.city');
+    expect(paths).toContain('Location.physicalType');
+    expect(paths).toContain('Location.identifier.value');
+  });
+
+  it('keeps a leading segment that happens to share a noise name', () => {
+    // `Patient.identifier` is a real element. Only NON-LEADING id/extension segments are noise.
+    expect(fhirPathOptionsFor('Patient').map((r) => r.path)).toContain('Patient.identifier');
+  });
+
+  it('trims about a third of the table, and leaves a list a person can browse', () => {
+    // Measured 2026-08-24: 1596 rows total, 1099 after trimming, Location 77.
+    expect(fhirPathOptionsFor('Location')).toHaveLength(77);
+    expect(fhirPathOptionsFor('Observation').length).toBeGreaterThan(200);
+  });
+
+  it('carries the definition, which is the point of the picker', () => {
+    const district = fhirPathOptionsFor('Location').find((r) => r.path === 'Location.address.district');
+    expect(district?.label).toBe('District name (aka county)');
+  });
+
+  it('returns an empty array for a resource type the table does not cover', () => {
+    // The builder offers 145 resource types; the table covers 9. The picker must degrade.
+    expect(fhirPathOptionsFor('Condition')).toEqual([]);
+  });
+
+  it('never returns more than fhirPathsFor, which stays untrimmed for the lint rules', () => {
+    expect(fhirPathOptionsFor('Location').length).toBeLessThan(fhirPathsFor('Location').length);
+    expect(fhirPathsFor('Location').map((r) => r.path)).toContain('Location.identifier.id');
   });
 });

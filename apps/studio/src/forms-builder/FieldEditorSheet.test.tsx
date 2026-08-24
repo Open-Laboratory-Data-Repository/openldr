@@ -47,6 +47,7 @@ function renderSheet(
       field={BASE_FIELD}
       allFields={[BASE_FIELD, GROUP_FIELD]}
       sections={SECTIONS}
+      fhirResourceType="Location"
       open={true}
       onSave={onSave}
       onCancel={onCancel}
@@ -171,6 +172,7 @@ describe('FieldEditorSheet', () => {
           field={OTHER_FIELD}
           allFields={[OTHER_FIELD, GROUP_FIELD]}
           sections={SECTIONS}
+          fhirResourceType="Location"
           open={true}
           onSave={vi.fn()}
           onCancel={vi.fn()}

@@ -11,9 +11,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { SuggestCombobox } from '@/components/ui/suggest-combobox';
+import { fhirPathOptionsFor, lookupFhirPath } from '@openldr/fhir/paths';
 
 export interface MappingEditorProps {
   field: FormField;
+  /**
+   * The form's `fhirResourceType`, which scopes the path picker. Null, or any of the 136 resource
+   * types the generated table does not cover, degrades the picker to a plain free-text box rather
+   * than showing an empty list that looks broken.
+   */
+  fhirResourceType: string | null;
   onUpdate: (patch: Partial<FormField>) => void;
 }
 
@@ -30,12 +38,29 @@ function parseNum(raw: string): number | undefined {
   return Number.isFinite(n) ? n : undefined;
 }
 
-export function MappingEditor({ field, onUpdate }: MappingEditorProps): JSX.Element {
+export function MappingEditor({ field, fhirResourceType, onUpdate }: MappingEditorProps): JSX.Element {
   const [advancedOpen, setAdvancedOpen] = React.useState(false);
 
   function patchConstraints(patch: Partial<FormFieldConstraints>): void {
     onUpdate({ constraints: { ...field.constraints, ...patch } });
   }
+
+  // Two spaces, not a dash: the path must survive truncation, and the label is what
+  // SuggestCombobox both DISPLAYS and SEARCHES. Searching by definition is the point, because
+  // an operator thinking "county" will not type "district".
+  const pathOptions = React.useMemo(
+    () => fhirPathOptionsFor(fhirResourceType ?? ''),
+    [fhirResourceType],
+  );
+  const pathLabels = React.useMemo(() => {
+    const labels: Record<string, string> = {};
+    for (const option of pathOptions) {
+      labels[option.path] = option.label ? `${option.path}  ${option.label}` : option.path;
+    }
+    return labels;
+  }, [pathOptions]);
+
+  const currentDefinition = field.fhirPath ? lookupFhirPath(field.fhirPath)?.label ?? null : null;
 
   return (
     <>
@@ -47,16 +72,23 @@ export function MappingEditor({ field, onUpdate }: MappingEditorProps): JSX.Elem
           <Label htmlFor="mapping-fhir-path" className="whitespace-nowrap">
             FHIR Path
           </Label>
-          <Input
-            id="mapping-fhir-path"
-            aria-label="FHIR Path"
-            value={field.fhirPath ?? ''}
-            onChange={(e) =>
-              onUpdate({ fhirPath: e.target.value || null })
-            }
-            placeholder="e.g. Patient.name"
-            className="font-mono text-xs"
-          />
+          <div className="min-w-0">
+            <SuggestCombobox
+              id="mapping-fhir-path"
+              label="FHIR Path"
+              value={field.fhirPath ?? ''}
+              onChange={(next) => onUpdate({ fhirPath: next || null })}
+              options={pathOptions.map((option) => option.path)}
+              optionLabels={pathLabels}
+              placeholder={fhirResourceType ? `e.g. ${fhirResourceType}.name` : 'e.g. Patient.name'}
+              noSuggestionsLabel="No matching element in FHIR R4"
+            />
+            {currentDefinition && (
+              <p data-testid="fhir-path-definition" className="mt-1 text-xs text-muted-foreground">
+                {currentDefinition}
+              </p>
+            )}
+          </div>
 
           {/* API Property */}
           <Label htmlFor="mapping-api-property" className="whitespace-nowrap">
