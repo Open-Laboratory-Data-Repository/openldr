@@ -1,6 +1,26 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/cn';
+import { truncateToFittingTail } from '@/components/ui/truncate-segments';
+
+// Lazily created, module-level canvas 2D context reused for every measurement. Created on
+// first use rather than at import time, so importing this module has no side effect.
+// jsdom has no canvas: `getContext('2d')` returns null there (and some environments throw
+// instead of returning null), which the caller must treat as "measurement unavailable" and
+// fall back to the full text, never crash and never render nothing.
+let measurementContext: CanvasRenderingContext2D | null | undefined;
+function getMeasurementContext(): CanvasRenderingContext2D | null {
+  if (measurementContext === undefined) {
+    try {
+      // jsdom's getContext('2d') can return undefined (not null) rather than throw;
+      // normalize so the cache is populated once instead of retried on every call.
+      measurementContext = document.createElement('canvas').getContext('2d') ?? null;
+    } catch {
+      measurementContext = null;
+    }
+  }
+  return measurementContext;
+}
 
 export interface TruncatedTextProps {
   /** The full text to render (and truncate). */
@@ -18,13 +38,11 @@ export interface TruncatedTextProps {
    * meaning lives at the end, such as a FHIR path, a file path, or a URL, where
    * `Location.address.per...` is useless but `...address.period.start` is not.
    *
-   * Implemented with `direction: rtl` plus left-aligned text: the browser lays the string
-   * out right to left and clips its start instead of its end. Note that `direction: rtl`
-   * also reorders NEUTRAL characters (punctuation, whitespace) sitting at the string's
-   * edges. FHIR paths are Latin letters separated by dots and never start or end with a
-   * dot, so they are unaffected. A value that begins or ends with punctuation could render
-   * its edge characters in an unexpected position, which is why this stays opt-in per
-   * caller rather than a global change.
+   * Computed in JS with a canvas measurement, not CSS: the display string is cut on a
+   * `.` separator, never mid-segment, so `Location.address.period.start` shortens to
+   * `…address.period.start` rather than a pixel-cut fragment like `…tion.identifier`.
+   * See `truncate-segments.ts` for the cutting logic. When canvas measurement is
+   * unavailable (jsdom has no canvas), this renders the full text instead of guessing.
    */
   truncateFrom?: 'end' | 'start';
 }
@@ -45,10 +63,37 @@ export function TruncatedText({
   const elRef = useRef<HTMLElement | null>(null);
   const roRef = useRef<ResizeObserver | null>(null);
   const [truncated, setTruncated] = useState(false);
+  const [displayText, setDisplayText] = useState(text);
+
+  // Read via refs inside `measure`, not via closure, so `measure`'s identity stays stable
+  // (empty deps) exactly like before this mode existed. `attach` depends on `measure`, and
+  // `attach` is a ref callback: if its identity changed on every `text` change, React would
+  // detach and reattach the ResizeObserver on every keystroke for the 'end' path too, which
+  // is not what happens today. Keeping `measure` stable preserves that for both paths.
+  const textRef = useRef(text);
+  textRef.current = text;
+  const truncateFromRef = useRef(truncateFrom);
+  truncateFromRef.current = truncateFrom;
 
   const measure = useCallback(() => {
     const el = elRef.current;
-    if (el) setTruncated(el.scrollWidth > el.clientWidth);
+    if (!el) return;
+    if (truncateFromRef.current === 'start') {
+      const ctx = getMeasurementContext();
+      if (!ctx) {
+        // No canvas support: render the full text rather than guess at a cut point.
+        setDisplayText(textRef.current);
+        return;
+      }
+      ctx.font = getComputedStyle(el).font;
+      const width = el.clientWidth;
+      setDisplayText(truncateToFittingTail(
+        textRef.current,
+        (candidate) => ctx.measureText(candidate).width <= width,
+      ));
+      return;
+    }
+    setTruncated(el.scrollWidth > el.clientWidth);
   }, []);
 
   // Callback ref (not a plain useRef): when `truncated` flips false→true the
@@ -74,15 +119,18 @@ export function TruncatedText({
   // the same mounted node — re-measure here so a new value is checked for clip.
   useEffect(() => { measure(); }, [text, measure]);
 
-  // Arbitrary properties, not a global rtl class: only this instance clips from the start,
-  // everything else keeps clipping from the end exactly as before.
-  const clipClassName = truncateFrom === 'start' ? '[direction:rtl] text-left' : undefined;
+  // 'end' (the default) renders `text` verbatim and clips with pure CSS `truncate`,
+  // unchanged from before this mode existed. 'start' renders the JS-computed
+  // `displayText`, already cut on a separator boundary (or the full text, when
+  // measurement is unavailable).
+  const displayedText = truncateFrom === 'start' ? displayText : text;
+  const isTruncated = truncateFrom === 'start' ? displayText !== text : truncated;
 
   const node = as === 'div'
-    ? <div ref={attach} className={cn('block truncate', clipClassName, className)}>{text}</div>
-    : <span ref={attach} className={cn('block truncate', clipClassName, className)}>{text}</span>;
+    ? <div ref={attach} className={cn('block truncate', className)}>{displayedText}</div>
+    : <span ref={attach} className={cn('block truncate', className)}>{displayedText}</span>;
 
-  if (!truncated) return node;
+  if (!isTruncated) return node;
 
   return (
     <TooltipProvider delayDuration={400}>
