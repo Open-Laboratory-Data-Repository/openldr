@@ -4,6 +4,7 @@ import { render, screen, fireEvent, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { FormField } from '@openldr/forms/pure';
 import { MappingEditor } from './MappingEditor';
+import * as truncatedTextModule from '@/components/ui/truncated-text';
 
 const BASE_FIELD: FormField = {
   id: 'f-1',
@@ -281,10 +282,19 @@ describe('MappingEditor FHIR path picker', () => {
     // Location.address.period, .period.end, and .period.start are indistinguishable under
     // end-truncation (`Location.address.per...` for all three). Start-truncation keeps the
     // segment that actually tells them apart.
+    //
+    // jsdom has no layout and no canvas, so there is no pixel cut to assert here (under
+    // jsdom, TruncatedText falls back to rendering the full text either way). What this test
+    // can honestly check is that MappingEditor actually asks for start-truncation on this
+    // option, by spying on the real TruncatedText component rather than asserting CSS.
+    const spy = vi.spyOn(truncatedTextModule, 'TruncatedText');
     renderEditor();
     await userEvent.type(screen.getByLabelText('FHIR Path'), 'address.period');
     const option = await screen.findByRole('option', { name: /Location\.address\.period\.start/ });
-    const label = within(option).getByText('Location.address.period.start');
-    expect(label.className).toContain('[direction:rtl]');
+    within(option).getByText('Location.address.period.start');
+    const reachedStart = spy.mock.calls.some((call) => call[0].truncateFrom === 'start'
+      && call[0].text === 'Location.address.period.start');
+    expect(reachedStart).toBe(true);
+    spy.mockRestore();
   });
 });

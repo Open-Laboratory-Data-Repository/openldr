@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { SuggestCombobox } from './suggest-combobox';
+import * as truncatedTextModule from './truncated-text';
 
 const cities = ['Kampala', 'Kigali', 'Kisumu'];
 
@@ -260,6 +261,11 @@ describe('SuggestCombobox optionLabelTruncateFrom', () => {
   });
 
   it('optionLabelTruncateFrom="start" reaches the option label', () => {
+    // jsdom has no layout and no canvas, so there is nothing to measure and no pixel cut to
+    // assert here (TruncatedText falls back to the full text either way under jsdom). What
+    // this test can honestly check is that the prop is actually threaded through to the
+    // label's TruncatedText, by spying on the real component rather than asserting CSS.
+    const spy = vi.spyOn(truncatedTextModule, 'TruncatedText');
     render(
       <SuggestCombobox
         value="" onChange={vi.fn()}
@@ -267,7 +273,9 @@ describe('SuggestCombobox optionLabelTruncateFrom', () => {
       />,
     );
     fireEvent.focus(screen.getByRole('combobox'));
-    const label = screen.getByText('Location.address.period');
-    expect(label.className).toContain('[direction:rtl]');
+    screen.getByText('Location.address.period');
+    const reachedStart = spy.mock.calls.some((call) => call[0].truncateFrom === 'start');
+    expect(reachedStart).toBe(true);
+    spy.mockRestore();
   });
 });
