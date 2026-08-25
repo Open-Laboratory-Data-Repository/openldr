@@ -1,10 +1,46 @@
 {
-  "generatedAt": "2026-08-24",
+  "generatedAt": "2026-08-25",
   "days": [
+    {
+      "date": "2026-08-25",
+      "version": null,
+      "entries": [
+        {
+          "hash": "8aa17d38",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Stop asserting the removed rtl class in two truncateFrom tests"
+        },
+        {
+          "hash": "e17737e2",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Cut a truncated path at a segment boundary, not mid-word"
+        },
+        {
+          "hash": "9358b40c",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Clip long FHIR paths from the start so the tail stays readable"
+        }
+      ]
+    },
     {
       "date": "2026-08-24",
       "version": null,
       "entries": [
+        {
+          "hash": "9ad414bf",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Stop the FHIR path listbox hard-clipping long labels"
+        },
+        {
+          "hash": "5c37fabe",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Give suggest-combobox options a well-formed accessible name"
+        },
         {
           "hash": "5d996249",
           "type": "fix",
