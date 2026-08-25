@@ -248,3 +248,26 @@ describe('SuggestCombobox — optionDescriptions', () => {
     );
   });
 });
+
+describe('SuggestCombobox optionLabelTruncateFrom', () => {
+  const paths = ['Location.address.period'];
+
+  it('clips an option label from the end by default', () => {
+    render(<SuggestCombobox value="" onChange={vi.fn()} options={paths} />);
+    fireEvent.focus(screen.getByRole('combobox'));
+    const label = screen.getByText('Location.address.period');
+    expect(label.className).not.toContain('[direction:rtl]');
+  });
+
+  it('optionLabelTruncateFrom="start" reaches the option label', () => {
+    render(
+      <SuggestCombobox
+        value="" onChange={vi.fn()}
+        options={paths} optionLabelTruncateFrom="start"
+      />,
+    );
+    fireEvent.focus(screen.getByRole('combobox'));
+    const label = screen.getByText('Location.address.period');
+    expect(label.className).toContain('[direction:rtl]');
+  });
+});

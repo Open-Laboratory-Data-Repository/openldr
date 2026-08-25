@@ -10,6 +10,23 @@ export interface TruncatedTextProps {
   as?: 'span' | 'div';
   /** Tooltip side, when shown. Defaults to 'top'. */
   side?: 'top' | 'right' | 'bottom' | 'left';
+  /**
+   * Which end to clip when the text does not fit. Defaults to 'end', the normal
+   * behaviour: the tail is hidden and the ellipsis sits on the right.
+   *
+   * 'start' clips the head instead, so the tail stays readable. Use it for values whose
+   * meaning lives at the end, such as a FHIR path, a file path, or a URL, where
+   * `Location.address.per...` is useless but `...address.period.start` is not.
+   *
+   * Implemented with `direction: rtl` plus left-aligned text: the browser lays the string
+   * out right to left and clips its start instead of its end. Note that `direction: rtl`
+   * also reorders NEUTRAL characters (punctuation, whitespace) sitting at the string's
+   * edges. FHIR paths are Latin letters separated by dots and never start or end with a
+   * dot, so they are unaffected. A value that begins or ends with punctuation could render
+   * its edge characters in an unexpected position, which is why this stays opt-in per
+   * caller rather than a global change.
+   */
+  truncateFrom?: 'end' | 'start';
 }
 
 /**
@@ -22,7 +39,9 @@ export interface TruncatedTextProps {
  * anywhere without requiring an ancestor provider (Radix allows nested
  * providers, so this is safe to nest inside a page that already has one).
  */
-export function TruncatedText({ text, className, as = 'span', side = 'top' }: TruncatedTextProps): JSX.Element {
+export function TruncatedText({
+  text, className, as = 'span', side = 'top', truncateFrom = 'end',
+}: TruncatedTextProps): JSX.Element {
   const elRef = useRef<HTMLElement | null>(null);
   const roRef = useRef<ResizeObserver | null>(null);
   const [truncated, setTruncated] = useState(false);
@@ -55,9 +74,13 @@ export function TruncatedText({ text, className, as = 'span', side = 'top' }: Tr
   // the same mounted node — re-measure here so a new value is checked for clip.
   useEffect(() => { measure(); }, [text, measure]);
 
+  // Arbitrary properties, not a global rtl class: only this instance clips from the start,
+  // everything else keeps clipping from the end exactly as before.
+  const clipClassName = truncateFrom === 'start' ? '[direction:rtl] text-left' : undefined;
+
   const node = as === 'div'
-    ? <div ref={attach} className={cn('block truncate', className)}>{text}</div>
-    : <span ref={attach} className={cn('block truncate', className)}>{text}</span>;
+    ? <div ref={attach} className={cn('block truncate', clipClassName, className)}>{text}</div>
+    : <span ref={attach} className={cn('block truncate', clipClassName, className)}>{text}</span>;
 
   if (!truncated) return node;
 

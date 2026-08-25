@@ -83,6 +83,9 @@ export function MappingEditor({ field, fhirResourceType, onUpdate }: MappingEdit
               optionDescriptions={pathDescriptions}
               placeholder={fhirResourceType ? `e.g. ${fhirResourceType}.name` : 'e.g. Patient.name'}
               noSuggestionsLabel="No matching element in FHIR R4"
+              // A FHIR path carries its meaning in the tail (`.period.start` vs
+              // `.period.end`), so clip the head instead of the tail here.
+              optionLabelTruncateFrom="start"
             />
             {currentDefinition && (
               <p data-testid="fhir-path-definition" className="mt-1 text-xs text-muted-foreground">

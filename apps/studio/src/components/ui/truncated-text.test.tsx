@@ -84,3 +84,46 @@ describe('TruncatedText', () => {
     }
   });
 });
+
+describe('TruncatedText truncateFrom', () => {
+  it('defaults to end-truncation: no rtl direction class, so the 27 existing callers are unchanged', () => {
+    mockWidths(100, 100);
+    render(<TruncatedText text="Location.address.period" />);
+    const el = screen.getByText('Location.address.period');
+    expect(el.className).not.toContain('[direction:rtl]');
+    expect(el.className).toContain('truncate');
+  });
+
+  it('truncateFrom="start" adds the rtl direction and left text alignment, and keeps truncate', () => {
+    mockWidths(100, 100);
+    render(<TruncatedText text="Location.address.period" truncateFrom="start" />);
+    const el = screen.getByText('Location.address.period');
+    expect(el.className).toContain('[direction:rtl]');
+    expect(el.className).toContain('text-left');
+    expect(el.className).toContain('truncate');
+  });
+
+  it('truncateFrom="start" still renders the text content in its original order in the DOM', () => {
+    mockWidths(100, 100);
+    render(<TruncatedText text="Location.address.period" truncateFrom="start" />);
+    // Only the visual clip end changes (direction: rtl is a layout/paint concern). The
+    // underlying DOM text content must stay exactly as given, not reversed.
+    expect(document.body.textContent).toContain('Location.address.period');
+  });
+
+  it('still shows the tooltip with the full text when a start-truncated value is clipped', async () => {
+    mockWidths(300, 100);
+    render(
+      <TruncatedText
+        text="Location.address.period.start"
+        truncateFrom="start"
+      />,
+    );
+    const trigger = screen.getByText('Location.address.period.start');
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+
+    fireEvent.focus(trigger);
+    const tooltip = await screen.findByRole('tooltip');
+    expect(tooltip).toHaveTextContent('Location.address.period.start');
+  });
+});

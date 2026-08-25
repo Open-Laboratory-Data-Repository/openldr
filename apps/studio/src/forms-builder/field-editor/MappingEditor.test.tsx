@@ -276,4 +276,15 @@ describe('MappingEditor FHIR path picker', () => {
     await userEvent.type(screen.getByLabelText('FHIR Path'), 'name');
     expect(onUpdate).toHaveBeenLastCalledWith({ fhirPath: 'name' });
   });
+
+  it('clips option labels from the start, so a long path shows its tail', async () => {
+    // Location.address.period, .period.end, and .period.start are indistinguishable under
+    // end-truncation (`Location.address.per...` for all three). Start-truncation keeps the
+    // segment that actually tells them apart.
+    renderEditor();
+    await userEvent.type(screen.getByLabelText('FHIR Path'), 'address.period');
+    const option = await screen.findByRole('option', { name: /Location\.address\.period\.start/ });
+    const label = within(option).getByText('Location.address.period.start');
+    expect(label.className).toContain('[direction:rtl]');
+  });
 });

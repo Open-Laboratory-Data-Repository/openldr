@@ -56,6 +56,8 @@ export interface SuggestComboboxProps {
   loadingLabel?: string;
   noSuggestionsLabel?: string;
   errorFallback?: string;
+  /** Which end to clip an option's label when it does not fit. Defaults to 'end'. */
+  optionLabelTruncateFrom?: 'end' | 'start';
 }
 
 /**
@@ -73,6 +75,7 @@ export function SuggestCombobox({
   noSuggestionsLabel = 'No suggestions',
   errorFallback = 'Could not load suggestions',
   label, required, disabled,
+  optionLabelTruncateFrom,
 }: SuggestComboboxProps): JSX.Element {
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
@@ -194,7 +197,11 @@ export function SuggestCombobox({
                     `truncate` needs a bounded width to clip against, so the label must claim
                     the full row width explicitly here. Only this line gets it — the
                     description below stays a natural-width block so it keeps wrapping. */}
-                <TruncatedText text={labelOf(opt)} className="min-w-0 w-full" />
+                <TruncatedText
+                  text={labelOf(opt)}
+                  className="min-w-0 w-full"
+                  truncateFrom={optionLabelTruncateFrom}
+                />
                 {description && (
                   <span className="whitespace-normal break-words text-xs text-muted-foreground">
                     {description}
