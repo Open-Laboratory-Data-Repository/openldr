@@ -6,19 +6,19 @@
       "version": null,
       "entries": [
         {
-          "hash": "8aa17d38",
+          "hash": "edc518d0",
           "type": "fix",
           "scope": "studio",
           "title": "Stop asserting the removed rtl class in two truncateFrom tests"
         },
         {
-          "hash": "e17737e2",
+          "hash": "e803e60d",
           "type": "fix",
           "scope": "studio",
           "title": "Cut a truncated path at a segment boundary, not mid-word"
         },
         {
-          "hash": "9358b40c",
+          "hash": "33730c16",
           "type": "fix",
           "scope": "studio",
           "title": "Clip long FHIR paths from the start so the tail stays readable"
@@ -30,43 +30,43 @@
       "version": null,
       "entries": [
         {
-          "hash": "9ad414bf",
+          "hash": "3493adf0",
           "type": "fix",
           "scope": "studio",
           "title": "Stop the FHIR path listbox hard-clipping long labels"
         },
         {
-          "hash": "5c37fabe",
+          "hash": "dc81d3cc",
           "type": "fix",
           "scope": "studio",
           "title": "Give suggest-combobox options a well-formed accessible name"
         },
         {
-          "hash": "5d996249",
+          "hash": "dacaee6e",
           "type": "fix",
           "scope": "studio",
           "title": "Let a suggestion's description wrap onto its own line"
         },
         {
-          "hash": "5fa2000d",
+          "hash": "434c66a8",
           "type": "fix",
           "scope": "studio",
           "title": "Drop the empty actions wrapper from the table toolbar"
         },
         {
-          "hash": "16949505",
+          "hash": "1de12067",
           "type": "feat",
           "scope": "facilities",
           "title": "Fold the National system box into Filter"
         },
         {
-          "hash": "ca7e9417",
+          "hash": "f974d06c",
           "type": "feat",
           "scope": "studio",
           "title": "Pick a FHIR path from the real R4 elements, with its definition"
         },
         {
-          "hash": "3b38c54f",
+          "hash": "70d8e627",
           "type": "feat",
           "scope": "fhir",
           "title": "Offer only bindable FHIR paths to a picker"
@@ -78,49 +78,49 @@
       "version": null,
       "entries": [
         {
-          "hash": "03bf8e8f",
+          "hash": "d30fb125",
           "type": "fix",
           "scope": "db",
           "title": "Register migration 089, which never ran because it was absent from the map"
         },
         {
-          "hash": "2d346da2",
+          "hash": "9358e914",
           "type": "fix",
           "scope": "facilities",
           "title": "Trim the health label and stop boxing half of it"
         },
         {
-          "hash": "2bbd2569",
+          "hash": "d85bb690",
           "type": "fix",
           "scope": "studio",
           "title": "Give the table header room to breathe on a phone"
         },
         {
-          "hash": "31670512",
+          "hash": "89ab51da",
           "type": "fix",
           "scope": "facilities",
           "title": "Rule off the tabs row when the health chip drops below it"
         },
         {
-          "hash": "d89ec0ea",
+          "hash": "7e09d65e",
           "type": "fix",
           "scope": "facilities",
           "title": "The tab strip was too crowded to read on a phone"
         },
         {
-          "hash": "da289925",
+          "hash": "a4534c93",
           "type": "fix",
           "scope": "db",
           "title": "Remove em dashes from migration 089 comments"
         },
         {
-          "hash": "2a9e75dc",
+          "hash": "f3fafcd2",
           "type": "fix",
           "scope": "forms",
           "title": "Gate unknown-fhir-path by table depth, fix admin-order tie wording, strengthen the 089 guard"
         },
         {
-          "hash": "8fcbb2a6",
+          "hash": "82468cee",
           "type": "fix",
           "scope": "marketplace",
           "title": "The type filter's label wrapped inside its own control"
@@ -132,169 +132,169 @@
       "version": null,
       "entries": [
         {
-          "hash": "7354a44f",
+          "hash": "24b302cb",
           "type": "fix",
           "scope": "marketplace",
           "title": "45px of dead space above the package detail title"
         },
         {
-          "hash": "89b3bc7a",
+          "hash": "45b3e9c3",
           "type": "fix",
           "scope": "marketplace",
           "title": "Package detail was unreadable on a phone"
         },
         {
-          "hash": "b48574f3",
+          "hash": "12d78be9",
           "type": "feat",
           "scope": "cli",
           "title": "Report form FHIR path findings from openldr forms lint"
         },
         {
-          "hash": "1ae6e82b",
+          "hash": "e618a862",
           "type": "fix",
           "scope": "studio",
           "title": "Table toolbar wrapped badly on a phone"
         },
         {
-          "hash": "4049c80e",
+          "hash": "4aee1c33",
           "type": "fix",
           "scope": "forms",
           "title": "Bind facility admin levels to the right FHIR Address elements"
         },
         {
-          "hash": "a5cfbfe8",
+          "hash": "0eca5384",
           "type": "fix",
           "scope": "settings",
           "title": "Roles table scrollbar sat under the last row, not above pagination"
         },
         {
-          "hash": "4911c50d",
+          "hash": "52274845",
           "type": "fix",
           "scope": "marketplace",
           "title": "One tab-strip menu, scrollable panels, edge-to-edge tables"
         },
         {
-          "hash": "fedd6c98",
+          "hash": "850eaedf",
           "type": "fix",
           "scope": "marketplace",
           "title": "Name the registry that failed, and keep its reason"
         },
         {
-          "hash": "dbd87bc8",
+          "hash": "8c4cee32",
           "type": "fix",
           "scope": "settings",
           "title": "Laboratory could not scroll and ran off a phone screen"
         },
         {
-          "hash": "07679a46",
+          "hash": "1e03c617",
           "type": "feat",
           "scope": "db",
           "title": "Repoint installed facility forms onto corrected FHIR paths"
         },
         {
-          "hash": "846b8d99",
+          "hash": "c2b42215",
           "type": "feat",
           "scope": "forms",
           "title": "Catch facility admin levels bound out of containment order"
         },
         {
-          "hash": "5799b48c",
+          "hash": "93c04b69",
           "type": "feat",
           "scope": "forms",
           "title": "Lint a field's FHIR path against the R4 element table"
         },
         {
-          "hash": "f042f6b9",
+          "hash": "33b34174",
           "type": "fix",
           "scope": "forms",
           "title": "Resolve fhirPath against a field's own section, not just the form"
         },
         {
-          "hash": "c7f2cd87",
+          "hash": "8fd9035b",
           "type": "feat",
           "scope": "forms",
           "title": "Persist canonical resource-prefixed fhirPath values from the builder"
         },
         {
-          "hash": "8d124d25",
+          "hash": "133a451e",
           "type": "feat",
           "scope": "forms",
           "title": "Resolve a bare fhirPath to its canonical resource-prefixed form"
         },
         {
-          "hash": "4ad99d99",
+          "hash": "754b0c1f",
           "type": "feat",
           "scope": "fhir",
           "title": "Look up an R4 path definition by its dotted path"
         },
         {
-          "hash": "ea015622",
+          "hash": "eb20230e",
           "type": "feat",
           "scope": "fhir",
           "title": "Generate the R4 path table from the published type definitions"
         },
         {
-          "hash": "e68e5bdd",
+          "hash": "d8b39dab",
           "type": "feat",
           "scope": "fhir",
           "title": "Walk the R4 type definitions into a bindable path table"
         },
         {
-          "hash": "e244afd8",
+          "hash": "584b6e83",
           "type": "fix",
           "scope": "bootstrap",
           "title": "No report could run on a MySQL warehouse, and now one can"
         },
         {
-          "hash": "44b7a206",
+          "hash": "ff8e6043",
           "type": "fix",
           "scope": "report-designer",
           "title": "One source for the element kinds, so the studio can see cellgrid"
         },
         {
-          "hash": "09390e09",
+          "hash": "ba90abf6",
           "type": "fix",
           "scope": "studio",
           "title": "The settings actions the dots-menu rule missed"
         },
         {
-          "hash": "d1eb0712",
+          "hash": "9fba98a1",
           "type": "fix",
           "scope": "studio",
           "title": "The laboratory identity saves from the ⋯ menu, not a standalone button"
         },
         {
-          "hash": "2b160a91",
+          "hash": "3fe91108",
           "type": "fix",
           "scope": "studio",
           "title": "Saving the laboratory identity no longer crashes the page it just saved"
         },
         {
-          "hash": "095fdd27",
+          "hash": "673772a2",
           "type": "perf",
           "scope": "reports",
           "title": "Collect the month's requests once instead of ORing three tests per row"
         },
         {
-          "hash": "57c669ae",
+          "hash": "a1c1f064",
           "type": "perf",
           "scope": "reports",
           "title": "The Others row asks about arrivals once, not once per working day"
         },
         {
-          "hash": "29e69079",
+          "hash": "7c6c5679",
           "type": "fix",
           "scope": "studio",
           "title": "Say the report is re-running while it re-runs"
         },
         {
-          "hash": "16d4dcec",
+          "hash": "1860c25f",
           "type": "fix",
           "scope": "studio",
           "title": "A report refresh re-fetches the document, not just the rows"
         },
         {
-          "hash": "b8adb82d",
+          "hash": "ac3ca96d",
           "type": "fix",
           "scope": "reports",
           "title": "Give the laboratory name the width the two count columns were wasting"
@@ -306,289 +306,289 @@
       "version": "v0.1.5",
       "entries": [
         {
-          "hash": "4fdb3d54",
+          "hash": "f1482bf2",
           "type": "fix",
           "scope": "report-designer",
           "title": "Centre a cellgrid row on its cells, not on its pitch"
         },
         {
-          "hash": "f2698799",
+          "hash": "62dcfff0",
           "type": "feat",
           "scope": "studio",
           "title": "A Reports refresh that does not need a parameter changed"
         },
         {
-          "hash": "5ce23d1b",
+          "hash": "0854a61f",
           "type": "fix",
           "scope": "reports",
           "title": "The LIS Stakeholders Update stops calling every panel HVL/EID"
         },
         {
-          "hash": "a072ade5",
+          "hash": "30954ad4",
           "type": "fix",
           "scope": "report-designer",
           "title": "Centre a stat card on its ink, not on its line boxes"
         },
         {
-          "hash": "db212d67",
+          "hash": "443e522e",
           "type": "feat",
           "scope": "reports",
           "title": "One Others row, a section break, and a day number without its month"
         },
         {
-          "hash": "617ef59d",
+          "hash": "15d07d79",
           "type": "fix",
           "scope": "reports",
           "title": "Give a six-week calendar room to clear the heading below it"
         },
         {
-          "hash": "0a9cd9f6",
+          "hash": "9e5e3c1b",
           "type": "fix",
           "scope": "bootstrap",
           "title": "The blank-panel gate checks the two grid queries, not every q-transmission-*"
         },
         {
-          "hash": "c605276c",
+          "hash": "c5f84dc8",
           "type": "feat",
           "scope": "reports",
           "title": "The LIS Stakeholders Update grows its summary band"
         },
         {
-          "hash": "c527381e",
+          "hash": "c46b69d6",
           "type": "feat",
           "scope": "report-designer",
           "title": "ShowOn keeps an element on the first chunk only"
         },
         {
-          "hash": "b651e493",
+          "hash": "679dbef5",
           "type": "feat",
           "scope": "reports",
           "title": "Add the mssql and mysql variants of the summary band queries"
         },
         {
-          "hash": "c042fd1e",
+          "hash": "f7275299",
           "type": "feat",
           "scope": "reports",
           "title": "Add q-transmission-summary (postgres)"
         },
         {
-          "hash": "2442cc57",
+          "hash": "8454f943",
           "type": "feat",
           "scope": "reports",
           "title": "Add q-transmission-calendar (postgres)"
         },
         {
-          "hash": "da68e670",
+          "hash": "6fbb1a8a",
           "type": "fix",
           "scope": "report-designer",
           "title": "A cellgrid's trailing chip stops using the clinical palette"
         },
         {
-          "hash": "79911324",
+          "hash": "9b3d5805",
           "type": "fix",
           "scope": "report-designer",
           "title": "FillTo lets a flowed grid take the height it was given"
         },
         {
-          "hash": "14c54a13",
+          "hash": "cca6b4c6",
           "type": "feat",
           "scope": "reports",
           "title": "Derive silent_status for the transmission grid, wire the design"
         },
         {
-          "hash": "8ef0fc57",
+          "hash": "4c41ed99",
           "type": "fix",
           "scope": "report-designer",
           "title": "DrawCellGrid honours a trailing column's statusKey"
         },
         {
-          "hash": "04a74ef0",
+          "hash": "cc1620a6",
           "type": "fix",
           "scope": "report-designer",
           "title": "Cut a cellgrid label instead of wrapping it"
         },
         {
-          "hash": "cd76c8c9",
+          "hash": "f1e34a27",
           "type": "fix",
           "scope": "report-designer",
           "title": "FlowAfter closes the blank band a finished grid leaves"
         },
         {
-          "hash": "80267a7d",
+          "hash": "6207a186",
           "type": "feat",
           "scope": "reports",
           "title": "Rt-transmission-grid turns A4 portrait, both grids become cellgrid"
         },
         {
-          "hash": "fb9718ea",
+          "hash": "a24bdad3",
           "type": "feat",
           "scope": "report-designer",
           "title": "Export cellGridWidth and CELL_LABEL_W for seed tests"
         },
         {
-          "hash": "ad32caf4",
+          "hash": "5914fe09",
           "type": "fix",
           "scope": "server",
           "title": "The header-row gate error names cellgrid too, not just headerRow"
         },
         {
-          "hash": "94f6922e",
+          "hash": "00716763",
           "type": "feat",
           "scope": "report-designer",
           "title": "The sortBy gate also covers a bound cellgrid"
         },
         {
-          "hash": "f6299b8c",
+          "hash": "b85ddbc8",
           "type": "feat",
           "scope": "report-designer",
           "title": "Draw a keyvalue stat panel, value over caption"
         },
         {
-          "hash": "ba068930",
+          "hash": "355ffb2d",
           "type": "feat",
           "scope": "report-designer",
           "title": "Keyvalue accepts a stat layout"
         },
         {
-          "hash": "d7868773",
+          "hash": "93f4295d",
           "type": "feat",
           "scope": "reports",
           "title": "Two-row transmission grid shape, computed columns, unique ord (mysql)"
         },
         {
-          "hash": "5fa7aa02",
+          "hash": "705e80e7",
           "type": "feat",
           "scope": "reports",
           "title": "Two-row transmission grid shape, computed columns, unique ord (mssql)"
         },
         {
-          "hash": "9980a498",
+          "hash": "f2c93a88",
           "type": "feat",
           "scope": "reports",
           "title": "Two-row transmission grid shape, computed columns, unique ord (postgres other)"
         },
         {
-          "hash": "adcc0f6b",
+          "hash": "1c69c85d",
           "type": "feat",
           "scope": "reports",
           "title": "Two-row transmission grid shape, computed columns, unique ord (postgres hvleid)"
         },
         {
-          "hash": "e4835fb8",
+          "hash": "95ea7d27",
           "type": "fix",
           "scope": "report-designer",
           "title": "Slice the cellgrid group row to the cell range"
         },
         {
-          "hash": "eb388664",
+          "hash": "f20f4d4c",
           "type": "feat",
           "scope": "report-designer",
           "title": "Draw the cellgrid element"
         },
         {
-          "hash": "56af6191",
+          "hash": "1f4d35ba",
           "type": "feat",
           "scope": "report-designer",
           "title": "Paginate cellgrid and let headings follow it"
         },
         {
-          "hash": "c95fd32b",
+          "hash": "64aaa796",
           "type": "feat",
           "scope": "report-designer",
           "title": "Resolve cellgrid rows in column order"
         },
         {
-          "hash": "27b48ff9",
+          "hash": "50ed7acd",
           "type": "fix",
           "scope": "report-designer",
           "title": "Make the zero-maximum cell test reachable"
         },
         {
-          "hash": "cd3b9e2b",
+          "hash": "abd72f27",
           "type": "feat",
           "scope": "report-designer",
           "title": "Cellgrid row splitting and chunk arithmetic"
         },
         {
-          "hash": "a367d861",
+          "hash": "7934e0e6",
           "type": "feat",
           "scope": "report-designer",
           "title": "Sequential cell palette with a print-safe empty tint"
         },
         {
-          "hash": "73227028",
+          "hash": "8f07b6b3",
           "type": "feat",
           "scope": "report-designer",
           "title": "Derive cellgrid group breaks from the group row"
         },
         {
-          "hash": "eb296369",
+          "hash": "488caffd",
           "type": "feat",
           "scope": "report-designer",
           "title": "Cellgrid geometry constants and width arithmetic"
         },
         {
-          "hash": "3e99ba42",
+          "hash": "08ba410e",
           "type": "fix",
           "scope": "report-designer",
           "title": "Rename groupBy to groupBoundary, assert the parsed schema"
         },
         {
-          "hash": "e90ab47f",
+          "hash": "703fd4e9",
           "type": "feat",
           "scope": "report-designer",
           "title": "Accept a cellgrid element in the design schema"
         },
         {
-          "hash": "1d3d17f5",
+          "hash": "a3e2a464",
           "type": "fix",
           "scope": "install",
           "title": "Let an explicit --server-name override a stale .env"
         },
         {
-          "hash": "c771d2d5",
+          "hash": "0886d4b8",
           "type": "fix",
           "scope": "release",
           "title": "Bound the post-publish manifest fetch, use parseReleaseManifest, document it"
         },
         {
-          "hash": "e3a57ef0",
+          "hash": "9143fadb",
           "type": "fix",
           "scope": "release",
           "title": "Verify the published manifest, and repoll the verification stack"
         },
         {
-          "hash": "24fc9140",
+          "hash": "d05f7f51",
           "type": "fix",
           "scope": "studio",
           "title": "Show no version when the cached release is older than this install"
         },
         {
-          "hash": "179f91a6",
+          "hash": "c5a7b0f7",
           "type": "fix",
           "scope": "cli",
           "title": "Print no version when the cached release is older than this install"
         },
         {
-          "hash": "c4a2030d",
+          "hash": "5c56bef9",
           "type": "feat",
           "scope": "core",
           "title": "A verdict that carries no version when the cache is behind"
         },
         {
-          "hash": "2221a069",
+          "hash": "9d883963",
           "type": "fix",
           "scope": "install",
           "title": "Write openldr.ps1 on Windows, and pin the release gate to --concurrency=4"
         },
         {
-          "hash": "ed3972fd",
+          "hash": "f1f49ebe",
           "type": "fix",
           "scope": "update-verdict",
           "title": "Say nothing newer when the cache predates the running version"
         },
         {
-          "hash": "0cf45b0b",
+          "hash": "10cd22b2",
           "type": "fix",
           "scope": "install",
           "title": "Make the openldr CLI wrapper work from Git Bash"
@@ -600,253 +600,253 @@
       "version": "v0.1.2",
       "entries": [
         {
-          "hash": "ae95079d",
+          "hash": "519e44b1",
           "type": "fix",
           "scope": "update-verdict",
           "title": "Restore CLI failure line, pin the verdict agreement test, close two test gaps"
         },
         {
-          "hash": "99e4ca24",
+          "hash": "17efd272",
           "type": "feat",
           "scope": "studio",
           "title": "Say whether this install is the latest, not only when it is not"
         },
         {
-          "hash": "221b8a72",
+          "hash": "9a1cf796",
           "type": "feat",
           "scope": "cli",
           "title": "Name the state when the check cannot confirm or never ran"
         },
         {
-          "hash": "7a5d0d32",
+          "hash": "1e0db1a7",
           "type": "feat",
           "scope": "core",
           "title": "One shared verdict for where an install stands"
         },
         {
-          "hash": "0c9afa82",
+          "hash": "a45460db",
           "type": "fix",
           "scope": "cli",
           "title": "Read APP_VERSION so the CLI and the studio agree on the running version"
         },
         {
-          "hash": "7e0ecf89",
+          "hash": "37577cae",
           "type": "fix",
           "scope": "server",
           "title": "Report the release version, not @openldr/server's own"
         },
         {
-          "hash": "75ad0f60",
+          "hash": "8f7c6ab2",
           "type": "fix",
           "scope": "install",
           "title": "Generate the self-signed cert on Windows, and print why when it fails"
         },
         {
-          "hash": "7975cdc5",
+          "hash": "40cd3696",
           "type": "fix",
           "scope": "reports",
           "title": "Drop the now-dead Time zone filter from the transmission grids"
         },
         {
-          "hash": "658d2897",
+          "hash": "a3f7ded4",
           "type": "fix",
           "scope": "reports",
           "title": "Bucket both transmission grids by clinical date on all three dialects"
         },
         {
-          "hash": "ea82cedd",
+          "hash": "a9d76a2c",
           "type": "fix",
           "scope": "reports",
           "title": "Normalise the month, drop the redundant null filter (postgres grid)"
         },
         {
-          "hash": "2fd6cf30",
+          "hash": "ee5d4964",
           "type": "fix",
           "scope": "reports",
           "title": "Bucket the HVL/EID transmission grid by clinical date (postgres)"
         },
         {
-          "hash": "3defbf1e",
+          "hash": "e9e58300",
           "type": "fix",
           "scope": "db",
           "title": "Widen the index guard's regex, strengthen the width argument, trim the recording driver"
         },
         {
-          "hash": "b99a979a",
+          "hash": "4c6a9aac",
           "type": "fix",
           "scope": "db",
           "title": "Widen lab_results.request_id before indexing it, rename migration, guard the rule"
         },
         {
-          "hash": "64003949",
+          "hash": "c178906d",
           "type": "fix",
           "scope": "db",
           "title": "Close review findings on the DiagnosticReport.basedOn slice"
         },
         {
-          "hash": "fb03f33f",
+          "hash": "c46f5439",
           "type": "feat",
           "scope": "db",
           "title": "Project DiagnosticReport.basedOn so a report attributes to one request"
         },
         {
-          "hash": "5cc58a40",
+          "hash": "aef46bd7",
           "type": "fix",
           "scope": "config",
           "title": "Remove a duplicate TERMINOLOGY_WORK_DIR I added to the prod template"
         },
         {
-          "hash": "c311698c",
+          "hash": "fc94de71",
           "type": "fix",
           "scope": "docs",
           "title": "AUTH_DEV_BYPASS defaults to off everywhere, not on outside production"
         },
         {
-          "hash": "95e1b276",
+          "hash": "85ed040b",
           "type": "fix",
           "scope": "config",
           "title": "Document TERMINOLOGY_WORK_DIR and give it a prod template entry"
         },
         {
-          "hash": "66af17dd",
+          "hash": "2848675b",
           "type": "fix",
           "scope": "config",
           "title": "NODE_EXTRA_CA_CERTS and OPENLDR_VERSION reach the prod template"
         },
         {
-          "hash": "87c65ac5",
+          "hash": "573a1c1d",
           "type": "fix",
           "scope": "config",
           "title": "TRUST_PROXY and TLS_CERT_PATH reach the prod template, drop a dead var"
         },
         {
-          "hash": "fecf603f",
+          "hash": "95d12d20",
           "type": "fix",
           "scope": "facilities",
           "title": "Close four minor findings from the final re-review"
         },
         {
-          "hash": "17d5e328",
+          "hash": "09bc2f4d",
           "type": "fix",
           "scope": "facilities",
           "title": "The status filter takes a stored value, and list says how many it dropped"
         },
         {
-          "hash": "09c4a230",
+          "hash": "932ad3a9",
           "type": "fix",
           "scope": "studio",
           "title": "The facilities page restores legacy filter links and clears fully on reset"
         },
         {
-          "hash": "da1391f4",
+          "hash": "b2b7df44",
           "type": "feat",
           "scope": "studio",
           "title": "The facilities page filters and sorts on the server"
         },
         {
-          "hash": "8a2407c1",
+          "hash": "46e55e0e",
           "type": "feat",
           "scope": "cli",
           "title": "Facilities list with --where and --sort"
         },
         {
-          "hash": "eface95e",
+          "hash": "50028217",
           "type": "feat",
           "scope": "server",
           "title": "The facilities route accepts grammar filters and sorts"
         },
         {
-          "hash": "70fbabfb",
+          "hash": "92e2c198",
           "type": "fix",
           "scope": "db",
           "title": "Apply Task 2 review findings to the facility grammar store"
         },
         {
-          "hash": "7efba6e7",
+          "hash": "30f95c3c",
           "type": "feat",
           "scope": "db",
           "title": "The facility store takes grammar filters and sorts"
         },
         {
-          "hash": "43c6ba70",
+          "hash": "6864e468",
           "type": "feat",
           "scope": "table-query",
           "title": "Facility map carries source, managedOrigin and registerState"
         },
         {
-          "hash": "b93a3fe0",
+          "hash": "d15f8195",
           "type": "fix",
           "scope": "web",
           "title": "Publish the full changelog history instead of the last 400 commits"
         },
         {
-          "hash": "190271d9",
+          "hash": "1f090601",
           "type": "fix",
           "scope": "db",
           "title": "Date eq/ne honour a full timestamp, not just a whole day"
         },
         {
-          "hash": "0a8afdf6",
+          "hash": "3dadf590",
           "type": "fix",
           "scope": "db,studio",
           "title": "Make date eq/ne/between day-aware on client and SQL"
         },
         {
-          "hash": "613add3a",
+          "hash": "96ce0c34",
           "type": "fix",
           "scope": "studio",
           "title": "Client sorter breaks ties by id like the server does"
         },
         {
-          "hash": "b2e71859",
+          "hash": "92657df1",
           "type": "fix",
           "scope": "studio",
           "title": "Give addFilterViaPopover a target column, restore Audit order"
         },
         {
-          "hash": "db5c5d2d",
+          "hash": "1936c749",
           "type": "feat",
           "scope": "studio",
           "title": "The audit page filters and sorts on the server"
         },
         {
-          "hash": "125d13a9",
+          "hash": "80dd89db",
           "type": "feat",
           "scope": "cli",
           "title": "Audit list gains --where and --sort, validated like the route"
         },
         {
-          "hash": "60168177",
+          "hash": "4cf758c0",
           "type": "feat",
           "scope": "server",
           "title": "The audit route accepts grammar filters and sorts"
         },
         {
-          "hash": "7253eb0d",
+          "hash": "421037f1",
           "type": "fix",
           "scope": "db",
           "title": "Drop COLLATE from applySorts' tiebreaker, remove the audit pg-mem shim"
         },
         {
-          "hash": "c58a0e24",
+          "hash": "98e9f9b6",
           "type": "feat",
           "scope": "audit",
           "title": "The store takes grammar filters and sorts, with a stable tiebreaker"
         },
         {
-          "hash": "f45cb0c2",
+          "hash": "402d117c",
           "type": "fix",
           "scope": "table-query",
           "title": "Reject dates Postgres cannot parse, as 400 not 500"
         },
         {
-          "hash": "429d2781",
+          "hash": "3a133c31",
           "type": "fix",
           "scope": "studio",
           "title": "The filter popover offers only operators a column declares"
         },
         {
-          "hash": "8cf87a97",
+          "hash": "fdfaf93d",
           "type": "fix",
           "scope": "db",
           "title": "Text sorts use an explicit ICU collation, not the image's libc"
@@ -858,211 +858,211 @@
       "version": "v0.1.2",
       "entries": [
         {
-          "hash": "ba12d22d",
+          "hash": "538d8417",
           "type": "feat",
           "scope": "studio",
           "title": "Marketplace registries adopt the standard table toolbar"
         },
         {
-          "hash": "06b0116f",
+          "hash": "0716b6f6",
           "type": "fix",
           "scope": "db",
           "title": "Match applyTableState's null-sort order and add default sorts"
         },
         {
-          "hash": "b84084e4",
+          "hash": "131b82ac",
           "type": "fix",
           "scope": "table-query",
           "title": "Reject bad number/date values at parse time"
         },
         {
-          "hash": "621856db",
+          "hash": "ec9f12af",
           "type": "fix",
           "scope": "table-query",
           "title": "Offer is_null/is_not_null on date columns"
         },
         {
-          "hash": "32e3447e",
+          "hash": "b05680df",
           "type": "fix",
           "scope": "db",
           "title": "Fail loud on an unknown sort/tiebreaker column in applySorts"
         },
         {
-          "hash": "73f5e321",
+          "hash": "49d38258",
           "type": "feat",
           "scope": "db",
           "title": "Translate parsed table filters and sorts into Kysely"
         },
         {
-          "hash": "0753251f",
+          "hash": "4a025aa5",
           "type": "fix",
           "scope": "table-query",
           "title": "Stop the parser from throwing on hostile input"
         },
         {
-          "hash": "967d0490",
+          "hash": "81156684",
           "type": "feat",
           "scope": "table-query",
           "title": "Validating parser for wire filters and sorts"
         },
         {
-          "hash": "8f43e414",
+          "hash": "c74d1a42",
           "type": "feat",
           "scope": "table-query",
           "title": "Column maps for audit and facility list queries"
         },
         {
-          "hash": "687dcf56",
+          "hash": "e0d0f4f3",
           "type": "feat",
           "scope": "table-query",
           "title": "Shared rule types for client and server filtering"
         },
         {
-          "hash": "93662fcd",
+          "hash": "0ac81544",
           "type": "fix",
           "scope": "settings",
           "title": "Refuse a signed-offset zone in lab.timezone, in every spelling"
         },
         {
-          "hash": "271c34d9",
+          "hash": "1e81d6aa",
           "type": "fix",
           "scope": "reports",
           "title": "Refuse only a time zone that is silently inverted"
         },
         {
-          "hash": "f95762e4",
+          "hash": "e66c0b2f",
           "type": "fix",
           "scope": "reports",
           "title": "Check a run parameter's declared format before the query runs"
         },
         {
-          "hash": "0803c6ff",
+          "hash": "20e425e8",
           "type": "fix",
           "scope": "reports",
           "title": "The transmission grid stops describing states it cannot be in"
         },
         {
-          "hash": "6bf5fa68",
+          "hash": "2134b60b",
           "type": "fix",
           "scope": "report-designer",
           "title": "A table that did not opt into a stacked header draws one line"
         },
         {
-          "hash": "78df58b6",
+          "hash": "098d5908",
           "type": "fix",
           "scope": "reports",
           "title": "Keep the MySQL date row as text, and make two assertions able to fail"
         },
         {
-          "hash": "dd5d5a0c",
+          "hash": "d1e39e7b",
           "type": "fix",
           "scope": "install",
           "title": "Run the CLI wrapper as the invoking user, and propagate the Windows exit code"
         },
         {
-          "hash": "9e4fbc6d",
+          "hash": "3cac4315",
           "type": "fix",
           "scope": "install",
           "title": "Run the CLI wrapper from the container root, not the data mount"
         },
         {
-          "hash": "058a992d",
+          "hash": "bb80e19a",
           "type": "feat",
           "scope": "install",
           "title": "Write an openldr wrapper and mount ./data for the CLI"
         },
         {
-          "hash": "77458115",
+          "hash": "a4dc1efa",
           "type": "feat",
           "scope": "deploy",
           "title": "Ship the operator CLI inside the api image"
         },
         {
-          "hash": "231a99d1",
+          "hash": "43a82c5a",
           "type": "fix",
           "scope": "cli",
           "title": "Externalise the deps that resolve files from disk at runtime"
         },
         {
-          "hash": "dd62dafd",
+          "hash": "2c50a583",
           "type": "fix",
           "scope": "reports",
           "title": "Prove the two-line date on live Postgres, and pair headerRow with sortBy"
         },
         {
-          "hash": "98bc0022",
+          "hash": "d22c8eca",
           "type": "feat",
           "scope": "reports",
           "title": "Take the transmission grid's header from its date row"
         },
         {
-          "hash": "428a7766",
+          "hash": "23d10b35",
           "type": "feat",
           "scope": "reports",
           "title": "Seed the transmission grid design and report"
         },
         {
-          "hash": "2c5fb395",
+          "hash": "59b9da8d",
           "type": "fix",
           "scope": "reports",
           "title": "Split the MySQL panel list per element, and correct the empty-list comments"
         },
         {
-          "hash": "04723c34",
+          "hash": "116d289d",
           "type": "feat",
           "scope": "reports",
           "title": "Transmission grid queries, attributed through the submission batch"
         },
         {
-          "hash": "ad088df3",
+          "hash": "3dfb962c",
           "type": "feat",
           "scope": "settings",
           "title": "Add the lab.timezone identity field"
         },
         {
-          "hash": "512130d3",
+          "hash": "231ac357",
           "type": "fix",
           "scope": "db",
           "title": "082 asserts on facility_system, and widen the arrival-ledger poll bound"
         },
         {
-          "hash": "25e5dc5a",
+          "hash": "eb28a84c",
           "type": "fix",
           "scope": "projection",
           "title": "Record arrivals when the canonical row is gone, and page the rebuild by key"
         },
         {
-          "hash": "23cfb34a",
+          "hash": "274e595e",
           "type": "feat",
           "scope": "cli",
           "title": "Add db reproject and deprecate the misnamed terminology alias"
         },
         {
-          "hash": "c95c72f2",
+          "hash": "c81fe4d2",
           "type": "feat",
           "scope": "db",
           "title": "Record arrivals on the live projection path"
         },
         {
-          "hash": "7472ac32",
+          "hash": "42c13134",
           "type": "fix",
           "scope": "db",
           "title": "Filter tombstones from the arrival ledger, dedupe the row mapper, correct created_at claim"
         },
         {
-          "hash": "091a37c5",
+          "hash": "987ab88c",
           "type": "feat",
           "scope": "db",
           "title": "Rebuild the arrival ledger from resource_history"
         },
         {
-          "hash": "7244df20",
+          "hash": "68d25da9",
           "type": "feat",
           "scope": "db",
           "title": "Add the ingest_events arrival ledger table"
         },
         {
-          "hash": "bb931288",
+          "hash": "027c1d92",
           "type": "fix",
           "scope": "reports",
           "title": "Restore the non-reportable filter, keyed by url"
@@ -1074,235 +1074,235 @@
       "version": "v0.1.2",
       "entries": [
         {
-          "hash": "cbe959da",
+          "hash": "de7e844c",
           "type": "fix",
           "scope": "reports",
           "title": "Clinical micro help opens on touch, and terminology matching is case-insensitive"
         },
         {
-          "hash": "c4ebd89c",
+          "hash": "04fa671a",
           "type": "feat",
           "scope": "reports",
           "title": "Report parameters can carry operator help text"
         },
         {
-          "hash": "e63c51bc",
+          "hash": "40dd94e0",
           "type": "fix",
           "scope": "reports",
           "title": "Clinical micro header resolves the lab number and requires an isolate"
         },
         {
-          "hash": "4a030ce5",
+          "hash": "b404b1bd",
           "type": "fix",
           "scope": "reports",
           "title": "AST susceptibilities resolve up to the lab number"
         },
         {
-          "hash": "51b9f933",
+          "hash": "ee08aeb9",
           "type": "fix",
           "scope": "reports",
           "title": "Key the AST value set by URL, not the random seeded id"
         },
         {
-          "hash": "ff4fb6e4",
+          "hash": "6c7387e4",
           "type": "fix",
           "scope": "reports",
           "title": "Clinical micro susceptibilities resolve from the lab number"
         },
         {
-          "hash": "9926c2b0",
+          "hash": "28ad4983",
           "type": "fix",
           "scope": "release",
           "title": "The release script must not call the WSL bash either"
         },
         {
-          "hash": "f0b8ec62",
+          "hash": "99402502",
           "type": "fix",
           "scope": "studio",
           "title": "Right-align the update switch, and name it for what it does"
         },
         {
-          "hash": "8830b679",
+          "hash": "9b9ddd92",
           "type": "fix",
           "scope": "update-notice",
           "title": "A failed check must not read as up to date"
         },
         {
-          "hash": "879cda2c",
+          "hash": "d301d30f",
           "type": "fix",
           "scope": "test",
           "title": "The gate must not depend on GitHub being up"
         },
         {
-          "hash": "ebad4b24",
+          "hash": "95da84ea",
           "type": "feat",
           "scope": "cli",
           "title": "Openldr update check"
         },
         {
-          "hash": "b50aacab",
+          "hash": "30c299fb",
           "type": "feat",
           "scope": "studio",
           "title": "Show the available version and how to upgrade"
         },
         {
-          "hash": "084b4a6a",
+          "hash": "a07a7206",
           "type": "feat",
           "scope": "server",
           "title": "Poll for updates, expose the state, own the switch"
         },
         {
-          "hash": "23cff16f",
+          "hash": "eb82d5dd",
           "type": "fix",
           "scope": "bootstrap",
           "title": "Re-sort notifications after appending the update entry"
         },
         {
-          "hash": "e13575d6",
+          "hash": "560ce0a9",
           "type": "feat",
           "scope": "bootstrap",
           "title": "A dismissible bell entry for an available update"
         },
         {
-          "hash": "8eb36e31",
+          "hash": "51129fa3",
           "type": "feat",
           "scope": "bootstrap",
           "title": "Poll the published manifest, silently on failure"
         },
         {
-          "hash": "217fa7cb",
+          "hash": "7ac77f5b",
           "type": "feat",
           "scope": "bootstrap",
           "title": "Cache and decide whether a newer version exists"
         },
         {
-          "hash": "0c28ca03",
+          "hash": "a41699da",
           "type": "fix",
           "scope": "release",
           "title": "Ask origin whether the tag is there, don't trust a local flag"
         },
         {
-          "hash": "2f5e5d19",
+          "hash": "025328ee",
           "type": "fix",
           "scope": "release",
           "title": "The verification install can fail, and a failed release leaves no tag"
         },
         {
-          "hash": "4cdfad1e",
+          "hash": "d4aedb88",
           "type": "fix",
           "scope": "release",
           "title": "Read the last tag after fetching, and never let a non-JSON body read as absent"
         },
         {
-          "hash": "de1ef53a",
+          "hash": "c0239636",
           "type": "fix",
           "scope": "release",
           "title": "The gate retry reads the failing package from turbo, not the operator"
         },
         {
-          "hash": "1fe8b411",
+          "hash": "02f9d874",
           "type": "feat",
           "scope": "release",
           "title": "Pnpm release, with the git tag written last"
         },
         {
-          "hash": "2f546762",
+          "hash": "779a4960",
           "type": "feat",
           "scope": "release",
           "title": "GHCR tag-existence and visibility probes"
         },
         {
-          "hash": "2038c4f6",
+          "hash": "d3c4d151",
           "type": "fix",
           "scope": "release",
           "title": "Read the tag list with a herestring, not a pipe"
         },
         {
-          "hash": "fdc87368",
+          "hash": "b4f61348",
           "type": "fix",
           "scope": "install",
           "title": "Default back to the latest tag, and load the resolver in memory"
         },
         {
-          "hash": "23a2db11",
+          "hash": "d80cd775",
           "type": "fix",
           "scope": "release",
           "title": "The overwrite guard reads every version and distrusts a bare 404"
         },
         {
-          "hash": "d5a579cf",
+          "hash": "46ca5834",
           "type": "fix",
           "scope": "release",
           "title": "Shell.test.ts resolves Git Bash instead of trusting PATH"
         },
         {
-          "hash": "16327e37",
+          "hash": "afc032bc",
           "type": "feat",
           "scope": "install",
           "title": "Pin new installs to a resolved release instead of the moving latest tag"
         },
         {
-          "hash": "1604a467",
+          "hash": "89ac8cb4",
           "type": "fix",
           "scope": "release",
           "title": "Overwrite guard fails closed on gh failures other than 404"
         },
         {
-          "hash": "ef7e78fd",
+          "hash": "849dac1b",
           "type": "fix",
           "scope": "release",
           "title": "Refuse to overwrite an already-published version tag"
         },
         {
-          "hash": "b904a098",
+          "hash": "b010d541",
           "type": "fix",
           "scope": "release",
           "title": "Don't tell the operator to bump an unparseable version"
         },
         {
-          "hash": "2eaca3f8",
+          "hash": "2e1f605e",
           "type": "feat",
           "scope": "release",
           "title": "Precondition checks that refuse a broken release"
         },
         {
-          "hash": "bbad5849",
+          "hash": "d511522b",
           "type": "feat",
           "scope": "release",
           "title": "The latest.json manifest, with a parser for untrusted input"
         },
         {
-          "hash": "230b9ea3",
+          "hash": "e0361b66",
           "type": "feat",
           "scope": "core",
           "title": "Shared semver comparison for the release process and update checks"
         },
         {
-          "hash": "20c48dd1",
+          "hash": "003880e8",
           "type": "fix",
           "scope": "studio",
           "title": "Empty Connectors and sync activity tables no longer render a header"
         },
         {
-          "hash": "1b99f54b",
+          "hash": "103650a7",
           "type": "feat",
           "scope": "studio",
           "title": "Terminology value sets adopt the standard table toolbar"
         },
         {
-          "hash": "5a306c89",
+          "hash": "ab074e5b",
           "type": "feat",
           "scope": "studio",
           "title": "DistributedSync activity table adopts the standard table toolbar"
         },
         {
-          "hash": "e3e00fef",
+          "hash": "defcc67a",
           "type": "feat",
           "scope": "studio",
           "title": "Sites adopts the standard table toolbar"
         },
         {
-          "hash": "f8aba352",
+          "hash": "0bea2d61",
           "type": "feat",
           "scope": "studio",
           "title": "Connectors adopts the standard table toolbar"
@@ -1314,139 +1314,139 @@
       "version": "v0.1.2",
       "entries": [
         {
-          "hash": "2c20256b",
+          "hash": "388100da",
           "type": "feat",
           "scope": "studio",
           "title": "Activity adopts the standard table toolbar"
         },
         {
-          "hash": "60a8b87e",
+          "hash": "360732dd",
           "type": "fix",
           "scope": "studio",
           "title": "Forms search no longer discards an active popover filter"
         },
         {
-          "hash": "798db5ea",
+          "hash": "bbbaf456",
           "type": "feat",
           "scope": "studio",
           "title": "Forms adopts the standard table toolbar and translates its headers"
         },
         {
-          "hash": "508fe2b2",
+          "hash": "663a68cd",
           "type": "feat",
           "scope": "studio",
           "title": "Roles adopts the standard table toolbar"
         },
         {
-          "hash": "faa7d56f",
+          "hash": "78d7b99f",
           "type": "fix",
           "scope": "facilities",
           "title": "The register-source placeholders translate"
         },
         {
-          "hash": "4fcdd0cd",
+          "hash": "a81bce77",
           "type": "fix",
           "scope": "facilities",
           "title": "The register refusal speaks to an edit, and the picker shows register names"
         },
         {
-          "hash": "ad60a76d",
+          "hash": "29ae4dbd",
           "type": "feat",
           "scope": "facilities",
           "title": "One code on the form, and the register default lives in Settings"
         },
         {
-          "hash": "518a3ff2",
+          "hash": "320c7a23",
           "type": "feat",
           "scope": "facilities",
           "title": "Writers set facility_code/facility_system, and the importer matches on the pair"
         },
         {
-          "hash": "f1caa835",
+          "hash": "db38f46b",
           "type": "feat",
           "scope": "facilities",
           "title": "Add facility_code and facility_system alongside the pair they replace"
         },
         {
-          "hash": "af7a236d",
+          "hash": "7c9a65c8",
           "type": "fix",
           "scope": "forms",
           "title": "An untouched seeded reference value does not block a save"
         },
         {
-          "hash": "781f48d1",
+          "hash": "feb9f888",
           "type": "fix",
           "scope": "facilities",
           "title": "A canonical display is canonical"
         },
         {
-          "hash": "4e5dfdbc",
+          "hash": "96fd6c07",
           "type": "fix",
           "scope": "forms",
           "title": "A seeded reference answer is resolved before validation sees it"
         },
         {
-          "hash": "f5c1af92",
+          "hash": "5f25fd4c",
           "type": "feat",
           "scope": "forms",
           "title": "The rule for matching a stored string back to a concept"
         },
         {
-          "hash": "7c8d1803",
+          "hash": "18f0954f",
           "type": "feat",
           "scope": "facilities",
           "title": "The sheet suggests this install's registered facility registers"
         },
         {
-          "hash": "d4eb580f",
+          "hash": "707b4afe",
           "type": "feat",
           "scope": "facilities",
           "title": "The route enforces required — fully on create, on what changed on edit"
         },
         {
-          "hash": "43dab14b",
+          "hash": "0a90de01",
           "type": "feat",
           "scope": "facilities",
           "title": "A manual create keys on the register and national code"
         },
         {
-          "hash": "bac3f5cf",
+          "hash": "056986fc",
           "type": "fix",
           "scope": "facilities",
           "title": "An edit cannot move a facility's national code or register"
         },
         {
-          "hash": "a2e1d29b",
+          "hash": "7b143f82",
           "type": "feat",
           "scope": "facilities",
           "title": "The Facility form carries the national code, and stops requiring what an import cannot supply"
         },
         {
-          "hash": "e9aad25b",
+          "hash": "48694278",
           "type": "fix",
           "scope": "facilities",
           "title": "The vocabulary guard checks only what an edit changed"
         },
         {
-          "hash": "ffac0725",
+          "hash": "450c705f",
           "type": "fix",
           "scope": "facilities",
           "title": "Column-map extras, refusal visibility, and two guards"
         },
         {
-          "hash": "49e44b81",
+          "hash": "0a49e28d",
           "type": "fix",
           "scope": "cli",
           "title": "Facility import mapping — close three review findings"
         },
         {
-          "hash": "b0030c41",
+          "hash": "910f7bfa",
           "type": "feat",
           "scope": "cli",
           "title": "Suggest and apply facility import mappings headlessly"
         },
         {
-          "hash": "28f7932e",
+          "hash": "879a7abb",
           "type": "feat",
           "scope": "facilities",
           "title": "Map source columns and vocabulary during an import"
@@ -1458,277 +1458,277 @@
       "version": "v0.1.2",
       "entries": [
         {
-          "hash": "394ceeb1",
+          "hash": "4ba535b9",
           "type": "feat",
           "scope": "facilities",
           "title": "The import doors accept a column map"
         },
         {
-          "hash": "bcf4e563",
+          "hash": "3bdae372",
           "type": "fix",
           "scope": "facilities",
           "title": "A declined column-map suggestion now stays declined"
         },
         {
-          "hash": "3f657fff",
+          "hash": "abee3e64",
           "type": "feat",
           "scope": "facilities",
           "title": "Map file columns to the contract in the import sheet"
         },
         {
-          "hash": "20472d9b",
+          "hash": "49a30878",
           "type": "feat",
           "scope": "facilities",
           "title": "Write value mappings through a gated route"
         },
         {
-          "hash": "e3eceb56",
+          "hash": "29796bd6",
           "type": "fix",
           "scope": "bootstrap",
           "title": "Facility value mappings file under the code's own system"
         },
         {
-          "hash": "554d9fc6",
+          "hash": "9435b176",
           "type": "feat",
           "scope": "facilities",
           "title": "Write controlled-field value mappings under one pinned map type"
         },
         {
-          "hash": "d87f1c15",
+          "hash": "b858da53",
           "type": "feat",
           "scope": "facilities",
           "title": "Serve column and value mapping suggestions"
         },
         {
-          "hash": "a5c9fb66",
+          "hash": "cd432797",
           "type": "feat",
           "scope": "facilities",
           "title": "Accept a column map on an import and block on a bad one"
         },
         {
-          "hash": "6aee4230",
+          "hash": "b2b69626",
           "type": "feat",
           "scope": "facilities",
           "title": "Rank column and value mapping suggestions offline"
         },
         {
-          "hash": "5ac1fe50",
+          "hash": "2cb60b83",
           "type": "fix",
           "scope": "facilities",
           "title": "A passthrough header could silently collide with a mapped column"
         },
         {
-          "hash": "0514191e",
+          "hash": "1c59c4d5",
           "type": "feat",
           "scope": "facilities",
           "title": "Apply a column map while parsing an import file"
         },
         {
-          "hash": "c6ed4d58",
+          "hash": "058e2bb0",
           "type": "fix",
           "scope": "facilities",
           "title": "Observed facilities were named after their own code"
         },
         {
-          "hash": "a55bec15",
+          "hash": "17a7a8f4",
           "type": "fix",
           "scope": "docs",
           "title": "The reports capture clicks Parameters before Run"
         },
         {
-          "hash": "8f06ed68",
+          "hash": "ba813e4b",
           "type": "feat",
           "scope": "web",
           "title": "Three new landing sections, and screenshots of the real app"
         },
         {
-          "hash": "e9a05808",
+          "hash": "fc9d2b69",
           "type": "feat",
           "scope": "e2e",
           "title": "Capture the landing gallery separately from the docs shots"
         },
         {
-          "hash": "54393884",
+          "hash": "8d0155dd",
           "type": "fix",
           "scope": "web",
           "title": "The docs page named itself three times and kept its scroll"
         },
         {
-          "hash": "88f56e6b",
+          "hash": "9a664aca",
           "type": "feat",
           "scope": "web",
           "title": "Changelog page, GitHub mark and a brand mark in the navbar"
         },
         {
-          "hash": "2be3f0b1",
+          "hash": "efc73986",
           "type": "fix",
           "scope": "studio",
           "title": "Show why a report refused to render, not just that it failed"
         },
         {
-          "hash": "fbfe0f70",
+          "hash": "709f7f66",
           "type": "fix",
           "scope": "terminology",
           "title": "Escape shuts the term picker's panel, not the whole sheet"
         },
         {
-          "hash": "f020f22b",
+          "hash": "bfd1fa52",
           "type": "feat",
           "scope": "reporting",
           "title": "Refuse to render a report whose subject does not exist"
         },
         {
-          "hash": "42f38ea6",
+          "hash": "cdb49062",
           "type": "fix",
           "scope": "terminology",
           "title": "A keyboard-only operator can use the term picker"
         },
         {
-          "hash": "6493db62",
+          "hash": "1d6b9bf5",
           "type": "fix",
           "scope": "dev",
           "title": "Pin the studio and web dev-server ports"
         },
         {
-          "hash": "0867c865",
+          "hash": "506e09ab",
           "type": "fix",
           "scope": "report-designer",
           "title": "An unreadable clock renders an em dash, not \"undefined\""
         },
         {
-          "hash": "ab789c3d",
+          "hash": "1ab3431f",
           "type": "fix",
           "scope": "report-designer",
           "title": "Format a text parameter that holds a date"
         },
         {
-          "hash": "6c6f2ec8",
+          "hash": "1925c48a",
           "type": "fix",
           "scope": "report-designer",
           "title": "Print an unambiguous date and reporting period"
         },
         {
-          "hash": "f391a2bc",
+          "hash": "74bae7a7",
           "type": "feat",
           "scope": "report-designer",
           "title": "Add an environment-independent display date formatter"
         },
         {
-          "hash": "45348bea",
+          "hash": "5b137c2b",
           "type": "fix",
           "scope": "terminology",
           "title": "Let a NULL status match a filter that asks for ACTIVE"
         },
         {
-          "hash": "ae438965",
+          "hash": "fc526255",
           "type": "feat",
           "scope": "data-exposure",
           "title": "Govern facility_map's columns instead of exposing them by omission"
         },
         {
-          "hash": "c4be6965",
+          "hash": "bbb7e990",
           "type": "fix",
           "scope": "reporting",
           "title": "The antibiogram legend says what a blank cell actually means"
         },
         {
-          "hash": "08924778",
+          "hash": "4876b043",
           "type": "fix",
           "scope": "reporting",
           "title": "Shorten the GLASS metric and guard every design's metric width"
         },
         {
-          "hash": "0217867f",
+          "hash": "bf380aa9",
           "type": "fix",
           "scope": "facilities",
           "title": "Choose the capture form explicitly and cancel an abandoned load"
         },
         {
-          "hash": "b5fc2ed0",
+          "hash": "a81f9ca5",
           "type": "fix",
           "scope": "reporting",
           "title": "Move the antibiogram's notation to the untruncated legend line"
         },
         {
-          "hash": "79a14826",
+          "hash": "4c0e06d0",
           "type": "fix",
           "scope": "terminology",
           "title": "Send every status the term picker was given"
         },
         {
-          "hash": "5218faf2",
+          "hash": "f668cdbf",
           "type": "fix",
           "scope": "reporting",
           "title": "Group GLASS rows by code, take the display name as an aggregate"
         },
         {
-          "hash": "67bbef39",
+          "hash": "42d54501",
           "type": "feat",
           "scope": "reporting",
           "title": "GLASS shows pathogen and specimen names, codes stay in the submission"
         },
         {
-          "hash": "05a03164",
+          "hash": "46f5e494",
           "type": "fix",
           "scope": "reporting",
           "title": "GLASS spells out R/I/S, AMR and GLASS on the document"
         },
         {
-          "hash": "0caabcb7",
+          "hash": "39a13e8d",
           "type": "fix",
           "scope": "reporting",
           "title": "The antibiogram states that its percentages are resistance"
         },
         {
-          "hash": "6472e2de",
+          "hash": "5fe460b1",
           "type": "fix",
           "scope": "cli",
           "title": "Glass-export --json carries the pinned submission fields too"
         },
         {
-          "hash": "b4d35e83",
+          "hash": "f3769c24",
           "type": "fix",
           "scope": "reporting",
           "title": "Pin the GLASS submission CSV's columns instead of echoing the query"
         },
         {
-          "hash": "79d85f30",
+          "hash": "dfc648a9",
           "type": "fix",
           "scope": "terminology",
           "title": "Stop the delete dialog offering a delete the server refuses"
         },
         {
-          "hash": "f0057bde",
+          "hash": "d99d00a3",
           "type": "fix",
           "scope": "reporting",
           "title": "Widen-proof the metric test's parameter literal"
         },
         {
-          "hash": "53340693",
+          "hash": "283645fe",
           "type": "feat",
           "scope": "reporting",
           "title": "Let a seeded design carry a legend under its table"
         },
         {
-          "hash": "3bbae252",
+          "hash": "1b397baf",
           "type": "feat",
           "scope": "reporting",
           "title": "Let a seeded design declare the metric its numbers measure"
         },
         {
-          "hash": "6099948f",
+          "hash": "8b2c75bc",
           "type": "fix",
           "scope": "terminology",
           "title": "Refuse destroying a facility register that has facilities"
         },
         {
-          "hash": "ba1d8fc6",
+          "hash": "8399354f",
           "type": "fix",
           "scope": "studio",
           "title": "A local production build no longer emits dev JSX"
         },
         {
-          "hash": "9703d913",
+          "hash": "4178e150",
           "type": "feat",
           "scope": "web",
           "title": "Give the ingest workflow its own section on the landing page"
@@ -1740,265 +1740,265 @@
       "version": "v0.1.2",
       "entries": [
         {
-          "hash": "b57cf4c1",
+          "hash": "ba822970",
           "type": "fix",
           "scope": "db",
           "title": "Chunk migration 082 under Postgres's parameter limit"
         },
         {
-          "hash": "1aebdd65",
+          "hash": "d6ea0026",
           "type": "fix",
           "scope": "report-designer",
           "title": "A duplicated design starts as a draft"
         },
         {
-          "hash": "bf4cf4d1",
+          "hash": "cd0cff4f",
           "type": "fix",
           "scope": "db",
           "title": "Carry status to the lab when a design is applied"
         },
         {
-          "hash": "0aaa0e0f",
+          "hash": "5c77baf3",
           "type": "fix",
           "scope": "sync",
           "title": "Serve a design body only while it is published"
         },
         {
-          "hash": "7a543528",
+          "hash": "05642942",
           "type": "feat",
           "scope": "cli",
           "title": "List facility register sources and import against one"
         },
         {
-          "hash": "dc4c73e0",
+          "hash": "1e96d33e",
           "type": "fix",
           "scope": "facilities",
           "title": "Write the register membership an import implies, and wire the audit that records it"
         },
         {
-          "hash": "c7c87df0",
+          "hash": "1e5e2209",
           "type": "fix",
           "scope": "facilities",
           "title": "Unbreak the db typecheck and stop two assertions that could not fail"
         },
         {
-          "hash": "6d07d9af",
+          "hash": "c23f3809",
           "type": "feat",
           "scope": "facilities",
           "title": "Show where a facility came from and what happened to it"
         },
         {
-          "hash": "0cc4ad9f",
+          "hash": "fe2adaaf",
           "type": "feat",
           "scope": "studio",
           "title": "Publish a revision, and show whether a design is a draft"
         },
         {
-          "hash": "26a0880d",
+          "hash": "dafcb0dd",
           "type": "feat",
           "scope": "server,cli",
           "title": "Publish a report design revision"
         },
         {
-          "hash": "63ccbb81",
+          "hash": "8e69e202",
           "type": "feat",
           "scope": "facilities",
           "title": "Give a fresh install a way to register a facility source"
         },
         {
-          "hash": "3b125767",
+          "hash": "1140ea08",
           "type": "fix",
           "scope": "report-designer",
           "title": "Give the seed an atomic publish path"
         },
         {
-          "hash": "c98515c2",
+          "hash": "aaaa2dc9",
           "type": "fix",
           "scope": "reporting",
           "title": "Seed built-in designs as published"
         },
         {
-          "hash": "d3378400",
+          "hash": "b9d56ef1",
           "type": "feat",
           "scope": "report-designer",
           "title": "Add publish and listVersions"
         },
         {
-          "hash": "7205c5e8",
+          "hash": "ef86c393",
           "type": "feat",
           "scope": "report-designer",
           "title": "Gate reference-sync capture on published status"
         },
         {
-          "hash": "ad819ff9",
+          "hash": "891b579f",
           "type": "fix",
           "scope": "core",
           "title": "Add a browser-safe entry point, and use it from the lifecycle module"
         },
         {
-          "hash": "8ba5dac0",
+          "hash": "16a63481",
           "type": "feat",
           "scope": "facilities",
           "title": "Pick a register source instead of typing one"
         },
         {
-          "hash": "a06d9be1",
+          "hash": "24fca0e8",
           "type": "feat",
           "scope": "report-designer",
           "title": "Add the design lifecycle module"
         },
         {
-          "hash": "4f877bbd",
+          "hash": "f1d14b07",
           "type": "feat",
           "scope": "db",
           "title": "Add report design versions and a draft/published status"
         },
         {
-          "hash": "c8d9b87c",
+          "hash": "b4d197a5",
           "type": "fix",
           "scope": "config",
           "title": "Drop WebP from the lab logo allowlist — pdfkit cannot draw it"
         },
         {
-          "hash": "36b7aed6",
+          "hash": "f15a513f",
           "type": "feat",
           "scope": "facilities",
           "title": "Serve a facility's change history from audit events"
         },
         {
-          "hash": "fa1c4ad2",
+          "hash": "d7e5decb",
           "type": "fix",
           "scope": "report-designer",
           "title": "Drop WebP, and close the gaps the branch review found"
         },
         {
-          "hash": "2b2e0327",
+          "hash": "06e52c2b",
           "type": "fix",
           "scope": "facilities",
           "title": "Carry source in the Task 7 audit before, not just after"
         },
         {
-          "hash": "d9f6c228",
+          "hash": "210cad32",
           "type": "fix",
           "scope": "studio",
           "title": "Give a transposed table the same rows-at-render affordance"
         },
         {
-          "hash": "06681001",
+          "hash": "79ea4205",
           "type": "feat",
           "scope": "studio",
           "title": "Show a bound table's real headers on the canvas"
         },
         {
-          "hash": "3e32be07",
+          "hash": "a9962626",
           "type": "feat",
           "scope": "studio",
           "title": "Implement Duplicate, mark Check unavailable"
         },
         {
-          "hash": "f78a1a4a",
+          "hash": "07109c1f",
           "type": "feat",
           "scope": "facilities",
           "title": "Audit imported facility changes per row, only when they changed"
         },
         {
-          "hash": "cc988275",
+          "hash": "defc0bee",
           "type": "fix",
           "scope": "studio",
           "title": "Reset the image error when the selected element changes"
         },
         {
-          "hash": "95f74d83",
+          "hash": "fe15f8c1",
           "type": "feat",
           "scope": "studio",
           "title": "Give image elements a file picker instead of a URL field"
         },
         {
-          "hash": "163a4e6e",
+          "hash": "3efa119a",
           "type": "feat",
           "scope": "server",
           "title": "Reject unrenderable image sources when saving a design"
         },
         {
-          "hash": "b9e09fbf",
+          "hash": "cb8e9903",
           "type": "feat",
           "scope": "facilities",
           "title": "Enforce the canonical vocabulary on manual facility writes"
         },
         {
-          "hash": "f64262a1",
+          "hash": "69f4c501",
           "type": "fix",
           "scope": "report-designer",
           "title": "Anchor the image-source token check"
         },
         {
-          "hash": "5ef4bc3f",
+          "hash": "d4473bd5",
           "type": "feat",
           "scope": "report-designer",
           "title": "Add the element-image source rule"
         },
         {
-          "hash": "7f1c9c90",
+          "hash": "c6f6fe19",
           "type": "fix",
           "scope": "facilities",
           "title": "A dropped register row no longer overwrites operational status"
         },
         {
-          "hash": "cca4c133",
+          "hash": "23346a1b",
           "type": "fix",
           "scope": "db",
           "title": "Carry pageNumbers through the lab-side reference applier"
         },
         {
-          "hash": "5acff2ab",
+          "hash": "f603dacd",
           "type": "feat",
           "scope": "facilities",
           "title": "Re-key facility identity onto the canonical source URI"
         },
         {
-          "hash": "727aed52",
+          "hash": "ec3cba69",
           "type": "fix",
           "scope": "facilities",
           "title": "Correct a false idFor comment and gate deactivated registers"
         },
         {
-          "hash": "6c9a37c7",
+          "hash": "91975e3a",
           "type": "fix",
           "scope": "report-designer",
           "title": "Include pageNumbers in the design content hash"
         },
         {
-          "hash": "7dd2bbd8",
+          "hash": "2829454a",
           "type": "fix",
           "scope": "report-designer",
           "title": "Persist pageNumbers through the design store"
         },
         {
-          "hash": "e341859b",
+          "hash": "875f1b28",
           "type": "feat",
           "scope": "report-designer",
           "title": "Add nullable report_designs.page_numbers column"
         },
         {
-          "hash": "85074ac4",
+          "hash": "c608950e",
           "type": "feat",
           "scope": "facilities",
           "title": "Key registry identity on the source's canonical URI"
         },
         {
-          "hash": "4526614e",
+          "hash": "330e89b7",
           "type": "feat",
           "scope": "facilities",
           "title": "A facility-register source surface over coding_systems"
         },
         {
-          "hash": "2086b699",
+          "hash": "d5cb29f0",
           "type": "fix",
           "scope": "facilities",
           "title": "Correct migration 081's retirement-comment claims, tighten backfill typing"
         },
         {
-          "hash": "e1546622",
+          "hash": "b19b1402",
           "type": "feat",
           "scope": "facilities",
           "title": "Add source kind/jurisdiction/contact and register_state"
@@ -2010,187 +2010,187 @@
       "version": "v0.1.2",
       "entries": [
         {
-          "hash": "bd31fe02",
+          "hash": "550a833e",
           "type": "fix",
           "scope": "facilities",
           "title": "Give the browser a completable import path, and stop the confirm refusing a JSONL no-op"
         },
         {
-          "hash": "25db6a90",
+          "hash": "b16a7024",
           "type": "fix",
           "scope": "facilities",
           "title": "Keep the import sweep out of CLI processes and off live runs"
         },
         {
-          "hash": "2605fd7b",
+          "hash": "912cd4eb",
           "type": "fix",
           "scope": "facilities",
           "title": "Stop the progress-threshold test failing the repo's gate"
         },
         {
-          "hash": "b179f620",
+          "hash": "13bcd47d",
           "type": "fix",
           "scope": "cli",
           "title": "Make import-run-cancel's exit codes mirror the route, and drop a false comment"
         },
         {
-          "hash": "6798bba8",
+          "hash": "9b329d6f",
           "type": "feat",
           "scope": "cli",
           "title": "Cancel and inspect job-path import runs"
         },
         {
-          "hash": "35d92f9f",
+          "hash": "a3762049",
           "type": "fix",
           "scope": "facilities",
           "title": "Stop the confirm dropping an override the operator ticked"
         },
         {
-          "hash": "678abe8d",
+          "hash": "eace8f7c",
           "type": "fix",
           "scope": "facilities",
           "title": "Let the job path declare a complete release, and stop it overstating"
         },
         {
-          "hash": "f878f32a",
+          "hash": "0dca4468",
           "type": "feat",
           "scope": "facilities",
           "title": "Upload and confirm a register import from the browser"
         },
         {
-          "hash": "121c104d",
+          "hash": "cd7c224a",
           "type": "perf",
           "scope": "facilities",
           "title": "Measure where per-row import progress becomes observable"
         },
         {
-          "hash": "268ea279",
+          "hash": "72176754",
           "type": "feat",
           "scope": "facilities",
           "title": "Let an operator request cancellation of an import run"
         },
         {
-          "hash": "935de90e",
+          "hash": "81993d4f",
           "type": "feat",
           "scope": "facilities",
           "title": "Apply a confirmed import in the worker"
         },
         {
-          "hash": "dcd4e8cd",
+          "hash": "3dbbbedc",
           "type": "fix",
           "scope": "facilities",
           "title": "Bound what the import worker will buffer, and say which cap is which"
         },
         {
-          "hash": "9d3a4a7b",
+          "hash": "ea87349c",
           "type": "feat",
           "scope": "facilities",
           "title": "Validate an uploaded register in a worker"
         },
         {
-          "hash": "0ee04d99",
+          "hash": "60d33867",
           "type": "fix",
           "scope": "facilities",
           "title": "Give the upload a real byte ceiling and a transfer that fails fast"
         },
         {
-          "hash": "6f1b4f25",
+          "hash": "e133f277",
           "type": "feat",
           "scope": "facilities",
           "title": "Stream an import upload to blob and mint its run"
         },
         {
-          "hash": "b204f65b",
+          "hash": "bb346ece",
           "type": "feat",
           "scope": "facilities",
           "title": "Give the import-run store a worker surface"
         },
         {
-          "hash": "8b16f14b",
+          "hash": "31b5a0a6",
           "type": "fix",
           "scope": "facilities",
           "title": "Pin the supersede gate's 409 half and correct five overstated comments"
         },
         {
-          "hash": "74f3365d",
+          "hash": "a56a210d",
           "type": "feat",
           "scope": "facilities",
           "title": "Make the whole preview surface reachable in the browser"
         },
         {
-          "hash": "199eab3e",
+          "hash": "e0a83141",
           "type": "feat",
           "scope": "facilities",
           "title": "Add the coordinate override, and export the controlled-field layer"
         },
         {
-          "hash": "7d61cd4d",
+          "hash": "6b387cd6",
           "type": "fix",
           "scope": "facilities",
           "title": "Never infer absence from a file that produced no records"
         },
         {
-          "hash": "166b3319",
+          "hash": "61c340ca",
           "type": "feat",
           "scope": "cli",
           "title": "Carry the import summary and retirement policy to the CLI"
         },
         {
-          "hash": "4d5cf1fe",
+          "hash": "e94bdb0a",
           "type": "feat",
           "scope": "facilities",
           "title": "Wire the conflict overwrite option end to end"
         },
         {
-          "hash": "f2adade0",
+          "hash": "09283604",
           "type": "feat",
           "scope": "facilities",
           "title": "Show the real reconciliation summary in the import sheet"
         },
         {
-          "hash": "c2842ca0",
+          "hash": "241141a6",
           "type": "fix",
           "scope": "facilities",
           "title": "Validate the import runId and release an abandoned preview"
         },
         {
-          "hash": "f7b89827",
+          "hash": "057c751a",
           "type": "feat",
           "scope": "facilities",
           "title": "Link import preview to apply and expose import runs"
         },
         {
-          "hash": "c1c954dd",
+          "hash": "64ebeddc",
           "type": "feat",
           "scope": "facilities",
           "title": "Report absent and publisher-deleted rows, retire only on request"
         },
         {
-          "hash": "5e86be4a",
+          "hash": "aeed7464",
           "type": "fix",
           "scope": "facilities",
           "title": "Name schema violations distinctly and stop silent meta drops"
         },
         {
-          "hash": "44824663",
+          "hash": "729e329d",
           "type": "feat",
           "scope": "facilities",
           "title": "Parse the JSONL national-release format"
         },
         {
-          "hash": "1fd055f6",
+          "hash": "3ad9c705",
           "type": "feat",
           "scope": "facilities",
           "title": "Resolve level/status/country through term_mappings"
         },
         {
-          "hash": "0a15cb24",
+          "hash": "49a5376d",
           "type": "fix",
           "scope": "facilities",
           "title": "Pin the unchanged-write and conflict paths, correct four comments"
         },
         {
-          "hash": "5ef4e612",
+          "hash": "91d6b955",
           "type": "feat",
           "scope": "facilities",
           "title": "Make the import preview report real database impact"
@@ -2202,121 +2202,121 @@
       "version": "v0.1.2",
       "entries": [
         {
-          "hash": "7600b1bd",
+          "hash": "87dc2a09",
           "type": "feat",
           "scope": "facilities",
           "title": "Classify import rows as create/changed/unchanged/conflict"
         },
         {
-          "hash": "7330a860",
+          "hash": "bbf0630d",
           "type": "feat",
           "scope": "facilities",
           "title": "Reject unparseable and out-of-range coordinates instead of nulling them"
         },
         {
-          "hash": "4ccf59cf",
+          "hash": "1e7abb4f",
           "type": "feat",
           "scope": "facilities",
           "title": "Add the import-run store"
         },
         {
-          "hash": "e2c661f3",
+          "hash": "73fce254",
           "type": "fix",
           "scope": "facilities",
           "title": "Type byte_size as integer and correct the audit quote"
         },
         {
-          "hash": "56bacc03",
+          "hash": "3b6e0fbd",
           "type": "feat",
           "scope": "facilities",
           "title": "Add facility_import_runs, the durable record of an import"
         },
         {
-          "hash": "20b9c7ed",
+          "hash": "f478c10f",
           "type": "fix",
           "scope": "facilities",
           "title": "Stop the Registry spinner stranding on every load"
         },
         {
-          "hash": "3214e5ab",
+          "hash": "db7f95ae",
           "type": "fix",
           "scope": "facilities",
           "title": "Tiebreak non-unique paging, backfill filter test coverage, and correct four false comments"
         },
         {
-          "hash": "ae986623",
+          "hash": "ca22c01e",
           "type": "fix",
           "scope": "facilities",
           "title": "Wire the ten missing filters, guard reload() against out-of-order responses, and debounce filter input"
         },
         {
-          "hash": "bdac5d76",
+          "hash": "7c543c3c",
           "type": "feat",
           "scope": "facilities",
           "title": "Page the registry table with search, filters and URL state"
         },
         {
-          "hash": "7530d327",
+          "hash": "91f07ad5",
           "type": "feat",
           "scope": "facilities",
           "title": "Expose paging, search and filters on GET /api/facilities"
         },
         {
-          "hash": "393f4176",
+          "hash": "22ece590",
           "type": "feat",
           "scope": "facilities",
           "title": "Report mapping/projection health per registry row"
         },
         {
-          "hash": "a9091546",
+          "hash": "ad2b11f5",
           "type": "feat",
           "scope": "facilities",
           "title": "Page, search and filter the registry with an exact total"
         },
         {
-          "hash": "68480efc",
+          "hash": "31e68109",
           "type": "fix",
           "scope": "db",
           "title": "Drop 015's narrowing cast — MSSQL MIN(nvarchar(max)) is not broken"
         },
         {
-          "hash": "827bcd1d",
+          "hash": "8f787e39",
           "type": "fix",
           "scope": "facilities",
           "title": "Close the NULL/'' seam that made resolvedObservedSystem's own invariant false"
         },
         {
-          "hash": "e6f7484a",
+          "hash": "76240400",
           "type": "fix",
           "scope": "bootstrap",
           "title": "Update facility-durable-updates.e2e regression pin for Task 3's join"
         },
         {
-          "hash": "cba10752",
+          "hash": "29c7524f",
           "type": "feat",
           "scope": "facilities",
           "title": "Enqueue a facility-map rebuild on every boot"
         },
         {
-          "hash": "fd769a5a",
+          "hash": "c029a0f3",
           "type": "feat",
           "scope": "reports",
           "title": "Join facility_map on the observed namespace as well as the feed"
         },
         {
-          "hash": "bf4b96cf",
+          "hash": "26538907",
           "type": "feat",
           "scope": "facilities",
           "title": "Publish one facility_map row per raw observed wire tuple"
         },
         {
-          "hash": "bc7e4544",
+          "hash": "feb5fe3d",
           "type": "fix",
           "scope": "db,bootstrap",
           "title": "Enforce, not assume, the pg-mem 015 rescue's safety claim"
         },
         {
-          "hash": "262de7a4",
+          "hash": "d30a8e72",
           "type": "feat",
           "scope": "facilities",
           "title": "Add facility_map.performer_system and backfill it"
@@ -2328,109 +2328,109 @@
       "version": "v0.1.2",
       "entries": [
         {
-          "hash": "50a3ec0b",
+          "hash": "e5fb3c57",
           "type": "fix",
           "scope": "facilities",
           "title": "Make failed projections retryable, the chip live, and two enqueues correct"
         },
         {
-          "hash": "99e10383",
+          "hash": "aa2acbef",
           "type": "fix",
           "scope": "facilities",
           "title": "Stop Retry wedging the job mechanism, and enqueue on the CLI import path"
         },
         {
-          "hash": "c317f473",
+          "hash": "ff61fa62",
           "type": "feat",
           "scope": "facilities",
           "title": "Show report-dimension freshness on the Facilities page"
         },
         {
-          "hash": "8b791b6d",
+          "hash": "8c0ca986",
           "type": "fix",
           "scope": "facilities",
           "title": "Audit facility job retries and pin the attempts-reset test"
         },
         {
-          "hash": "0a97cbe8",
+          "hash": "73b6bfe2",
           "type": "feat",
           "scope": "facilities",
           "title": "Expose report-dimension health and job retry"
         },
         {
-          "hash": "dbf32bf7",
+          "hash": "995f8dee",
           "type": "feat",
           "scope": "facilities",
           "title": "Resolve the report-dimension health state"
         },
         {
-          "hash": "532ee596",
+          "hash": "e3705771",
           "type": "fix",
           "scope": "facilities",
           "title": "Report the projection outcome of THIS call, not \"ever projected\""
         },
         {
-          "hash": "4c3dd660",
+          "hash": "b8e08618",
           "type": "feat",
           "scope": "facilities",
           "title": "Make a failed projection durable and the response truthful"
         },
         {
-          "hash": "e2cb5608",
+          "hash": "72664a51",
           "type": "feat",
           "scope": "facilities",
           "title": "Enqueue a dimension rebuild when a facility mapping changes"
         },
         {
-          "hash": "6b0a1f49",
+          "hash": "a42ca049",
           "type": "fix",
           "scope": "facilities",
           "title": "Pin the import route's job-store wiring and contain enqueue failures"
         },
         {
-          "hash": "08397cda",
+          "hash": "c6c3a3c9",
           "type": "feat",
           "scope": "facilities",
           "title": "Enqueue a dimension rebuild after every facility mutation"
         },
         {
-          "hash": "d3630d19",
+          "hash": "fa6bf89e",
           "type": "fix",
           "scope": "bootstrap",
           "title": "Extract facility job runners so apply:true and the missing-row path are testable"
         },
         {
-          "hash": "018e75f1",
+          "hash": "dda667ef",
           "type": "feat",
           "scope": "bootstrap",
           "title": "Run the facility job worker in the app context"
         },
         {
-          "hash": "627e7ef4",
+          "hash": "a5e26ce3",
           "type": "feat",
           "scope": "bootstrap",
           "title": "Add the facility job worker"
         },
         {
-          "hash": "6ff91167",
+          "hash": "cf1e4138",
           "type": "fix",
           "scope": "db",
           "title": "Stage claimNext race+tiebreak tests, tighten facility-job-store comments"
         },
         {
-          "hash": "7cddf6e7",
+          "hash": "9e61af1c",
           "type": "fix",
           "scope": "db",
           "title": "Scope facility job coalescing per identity, not per kind"
         },
         {
-          "hash": "27be919b",
+          "hash": "d91489ff",
           "type": "feat",
           "scope": "db",
           "title": "Add createFacilityJobStore"
         },
         {
-          "hash": "d44e7eb4",
+          "hash": "7281a38a",
           "type": "feat",
           "scope": "db",
           "title": "Add facility_jobs for durable facility work"
@@ -2442,181 +2442,181 @@
       "version": "v0.1.2",
       "entries": [
         {
-          "hash": "9ee8344e",
+          "hash": "9da1ba86",
           "type": "fix",
           "scope": "facilities",
           "title": "State what 077 actually guarantees, and let the import override work both ways"
         },
         {
-          "hash": "0ec3cda4",
+          "hash": "4b40a9ca",
           "type": "fix",
           "scope": "facilities",
           "title": "Stop a facility mapping being re-pointed at the wrong lab"
         },
         {
-          "hash": "1a38e31b",
+          "hash": "498e9516",
           "type": "feat",
           "scope": "facilities",
           "title": "Expose the mapping-conflict review queue"
         },
         {
-          "hash": "807d4397",
+          "hash": "feb22c6e",
           "type": "fix",
           "scope": "db",
           "title": "Replace migration 078's literal NUL byte with an escape"
         },
         {
-          "hash": "352d6c03",
+          "hash": "eaf93cdc",
           "type": "fix",
           "scope": "facilities",
           "title": "A superseded mapping takes its mirror element and its audit record with it"
         },
         {
-          "hash": "08fa6f28",
+          "hash": "3ec97bf8",
           "type": "feat",
           "scope": "db",
           "title": "Enforce one active SAME-AS facility resolution per observed key"
         },
         {
-          "hash": "995207e3",
+          "hash": "c40991b6",
           "type": "fix",
           "scope": "facilities",
           "title": "A mapping edit retargets, it never moves the source term"
         },
         {
-          "hash": "dbd00c2a",
+          "hash": "dbc1230c",
           "type": "feat",
           "scope": "facilities",
           "title": "Enforce SAME-AS and single active resolution at the API boundary"
         },
         {
-          "hash": "6afddf3b",
+          "hash": "2b2deb48",
           "type": "fix",
           "scope": "facilities",
           "title": "Duplicate mappings to the same facility are not a conflict"
         },
         {
-          "hash": "c75d9825",
+          "hash": "07d21b7b",
           "type": "fix",
           "scope": "facilities",
           "title": "Only SAME-AS resolves, and competing mappings resolve to nothing"
         },
         {
-          "hash": "0e05ffa7",
+          "hash": "b2a7f52a",
           "type": "feat",
           "scope": "facilities",
           "title": "Retire a deleted facility's concept, and reproject what the delete frees"
         },
         {
-          "hash": "5258c4fe",
+          "hash": "805167b1",
           "type": "fix",
           "scope": "facilities",
           "title": "Reproject the incumbent when a batch RELEASES a contested code"
         },
         {
-          "hash": "adc4b29f",
+          "hash": "ba6bf20b",
           "type": "fix",
           "scope": "facilities",
           "title": "Make both projection paths agree on a colliding code"
         },
         {
-          "hash": "b4ec42db",
+          "hash": "3bf89142",
           "type": "fix",
           "scope": "facilities",
           "title": "Collide on projected codes, and pin the reprojection contract"
         },
         {
-          "hash": "c3da93ab",
+          "hash": "83d31a3b",
           "type": "feat",
           "scope": "facilities",
           "title": "Migrate term_mappings when a facility's projected code moves"
         },
         {
-          "hash": "cb8370f0",
+          "hash": "a22f572e",
           "type": "feat",
           "scope": "db",
           "title": "Add facility_concept_projection link table"
         },
         {
-          "hash": "8677e76a",
+          "hash": "8538f110",
           "type": "feat",
           "scope": "facilities",
           "title": "Surface quarantined CSV rows in route, CLI, and import sheet"
         },
         {
-          "hash": "53411516",
+          "hash": "bfcfd193",
           "type": "feat",
           "scope": "bootstrap",
           "title": "Block facility import apply while rows are quarantined"
         },
         {
-          "hash": "068ad21a",
+          "hash": "b62ba91a",
           "type": "fix",
           "scope": "terminology",
           "title": "Quarantine ragged facility CSV rows instead of shifting columns"
         },
         {
-          "hash": "b5fd236c",
+          "hash": "4cc48abe",
           "type": "fix",
           "scope": "sync",
           "title": "Purge logged facility_registry change rows"
         },
         {
-          "hash": "432b825e",
+          "hash": "1306a4e6",
           "type": "fix",
           "scope": "facilities",
           "title": "Remove dead hash helpers, correct stale apply-cap rationale"
         },
         {
-          "hash": "d062852d",
+          "hash": "6a099722",
           "type": "fix",
           "scope": "sync",
           "title": "Suspend facility_registry capture, serve, and apply"
         },
         {
-          "hash": "155103a8",
+          "hash": "480c7d0d",
           "type": "fix",
           "scope": "reporting",
           "title": "Transpose the antibiogram so its columns are readable"
         },
         {
-          "hash": "4dffcf02",
+          "hash": "e6f96cd8",
           "type": "fix",
           "scope": "reporting,bootstrap,server",
           "title": "Dedupe facility picker, resolve names in scope panel, pin predicates"
         },
         {
-          "hash": "c752da89",
+          "hash": "efc5e0f2",
           "type": "feat",
           "scope": "bootstrap",
           "title": "Seed the OpenLDR mark and a default laboratory name"
         },
         {
-          "hash": "263185ed",
+          "hash": "31897079",
           "type": "fix",
           "scope": "reporting",
           "title": "Derive seeded-report footer/table geometry from the design's own page size"
         },
         {
-          "hash": "f9c9a16c",
+          "hash": "086bc262",
           "type": "feat",
           "scope": "reporting",
           "title": "Letterhead and scope panel on every seeded report"
         },
         {
-          "hash": "93f9eace",
+          "hash": "a48865ca",
           "type": "fix",
           "scope": "report-designer",
           "title": "Render run parameters, and interpolate authored keyvalue pairs"
         },
         {
-          "hash": "3e19a46b",
+          "hash": "5db7ead1",
           "type": "fix",
           "scope": "reporting",
           "title": "The facility filter filters on the report performer"
         },
         {
-          "hash": "750edcdb",
+          "hash": "06c419cd",
           "type": "fix",
           "scope": "reporting",
           "title": "Q-amr-facility-summary label rejected by MySQL ONLY_FULL_GROUP_BY"
@@ -2628,241 +2628,241 @@
       "version": "v0.1.2",
       "entries": [
         {
-          "hash": "db932117",
+          "hash": "a15b62d6",
           "type": "fix",
           "scope": "reporting",
           "title": "Q-amr-facility-summary no longer forks one lab across rows"
         },
         {
-          "hash": "49772e53",
+          "hash": "2392face",
           "type": "feat",
           "scope": "reporting",
           "title": "Resolve facility names in the picker and the AMR facility report"
         },
         {
-          "hash": "8440cece",
+          "hash": "e0bb645d",
           "type": "feat",
           "scope": "reports",
           "title": "Param options carry a value and a label"
         },
         {
-          "hash": "14d7983c",
+          "hash": "1185d9c7",
           "type": "fix",
           "scope": "reporting",
           "title": "Keyvalue capacity computed in px@96 vs pt was the clipped-row bug"
         },
         {
-          "hash": "6bfbab93",
+          "hash": "bc86a51a",
           "type": "feat",
           "scope": "reporting",
           "title": "Print the performing laboratory on the clinical micro report"
         },
         {
-          "hash": "e4df8b9f",
+          "hash": "11115145",
           "type": "fix",
           "scope": "reporting",
           "title": "Fold facilities to one row before joining the clinical header"
         },
         {
-          "hash": "c9388e8f",
+          "hash": "bdc237c3",
           "type": "feat",
           "scope": "reporting",
           "title": "Resolve the performing laboratory in the clinical header query"
         },
         {
-          "hash": "0b1d0f2a",
+          "hash": "3759cc53",
           "type": "feat",
           "scope": "studio",
           "title": "Show observed-facility location on the Observed tab"
         },
         {
-          "hash": "63f24261",
+          "hash": "603909bc",
           "type": "feat",
           "scope": "bootstrap",
           "title": "Join facilities.region/district onto resolveObservedFacilities"
         },
         {
-          "hash": "90c6a5ec",
+          "hash": "7c2a84f1",
           "type": "feat",
           "scope": "db",
           "title": "ProjectFacility reads Organization.address into region/district"
         },
         {
-          "hash": "90c465b5",
+          "hash": "8ea97b48",
           "type": "feat",
           "scope": "db",
           "title": "Add facilities.region/district for the CDR Organization.address"
         },
         {
-          "hash": "b3113a86",
+          "hash": "fc078c85",
           "type": "feat",
           "scope": "studio",
           "title": "Add Remove mapping to the Observed tab's row menu"
         },
         {
-          "hash": "3c6ba1e6",
+          "hash": "77053b6d",
           "type": "fix",
           "scope": "studio",
           "title": "Stop TermMappingDialog silently retargeting a locked mapping's stored toSystem"
         },
         {
-          "hash": "492d22ac",
+          "hash": "9f532589",
           "type": "fix",
           "scope": "studio,bootstrap",
           "title": "Close review findings on facility-mapping-targets"
         },
         {
-          "hash": "ea008f0b",
+          "hash": "5d09bcf4",
           "type": "fix",
           "scope": "studio",
           "title": "Drop the Observed tab's mapping-target System selector entirely"
         },
         {
-          "hash": "10fd1e07",
+          "hash": "6904560e",
           "type": "feat",
           "scope": "studio",
           "title": "Add TermMappingDialog.lockedTargetSystem for a fixed mapping target"
         },
         {
-          "hash": "0460e92f",
+          "hash": "99f70f3d",
           "type": "fix",
           "scope": "server",
           "title": "Remove GET /api/facilities/mapping-target-systems"
         },
         {
-          "hash": "e960a741",
+          "hash": "6cdb1745",
           "type": "fix",
           "scope": "bootstrap",
           "title": "Drop facilityMappingTargetSystems — facility mapping targets only the registry"
         },
         {
-          "hash": "44e539a8",
+          "hash": "16f44cdd",
           "type": "fix",
           "scope": "studio",
           "title": "Restrict the Observed tab's mapping dialog to real facility targets"
         },
         {
-          "hash": "b102054e",
+          "hash": "3888eea2",
           "type": "feat",
           "scope": "server",
           "title": "Add GET /api/facilities/mapping-target-systems"
         },
         {
-          "hash": "95dcfb74",
+          "hash": "74765c26",
           "type": "fix",
           "scope": "bootstrap",
           "title": "Stop misclassifying a self- or non-facility mapping as target missing"
         },
         {
-          "hash": "0db380ab",
+          "hash": "a7372a58",
           "type": "fix",
           "scope": "bootstrap",
           "title": "Gate the term_mappings check on what deleteSupersededIdConcepts actually deletes"
         },
         {
-          "hash": "3f03e57c",
+          "hash": "92482814",
           "type": "fix",
           "scope": "db,bootstrap",
           "title": "Delete a facility's superseded id-keyed registry concept"
         },
         {
-          "hash": "7dbe820f",
+          "hash": "167195ff",
           "type": "fix",
           "scope": "studio",
           "title": "Stop lowering ReferencePicker.test.tsx's async timeout, fix the real race"
         },
         {
-          "hash": "0518e7d3",
+          "hash": "ca70fd7e",
           "type": "fix",
           "scope": "db,bootstrap",
           "title": "Key facility registry concepts on the operator's own code, not the row id"
         },
         {
-          "hash": "a61ef171",
+          "hash": "91eb0a53",
           "type": "fix",
           "scope": "studio",
           "title": "Distinguish \"index not built yet\" from \"this system can never be browsed\""
         },
         {
-          "hash": "e144c527",
+          "hash": "1b2fed35",
           "type": "fix",
           "scope": "studio",
           "title": "Relabel facilities.observed.publish now that it is no longer the only path to mapping"
         },
         {
-          "hash": "6ac3975e",
+          "hash": "a28b00f8",
           "type": "fix",
           "scope": "bootstrap,server,cli",
           "title": "Project a facility into FACILITY_REGISTRY_SYSTEM on write, not just on publish"
         },
         {
-          "hash": "874e7326",
+          "hash": "5d188967",
           "type": "fix",
           "scope": "studio",
           "title": "Don't let the re-auth guard latch a tab out of ever logging in again"
         },
         {
-          "hash": "34f7bb77",
+          "hash": "40e7f4dc",
           "type": "fix",
           "scope": "bootstrap",
           "title": "Suppress auth.failed notifications for reasons that carry no security signal"
         },
         {
-          "hash": "d050123f",
+          "hash": "5ecf4b5a",
           "type": "fix",
           "scope": "studio",
           "title": "Answer credential-less API calls locally instead of asking the server to reject them"
         },
         {
-          "hash": "2a763924",
+          "hash": "3747145f",
           "type": "feat",
           "scope": "db",
           "title": "Seed the facility-registry coding_systems row on every install"
         },
         {
-          "hash": "fe7208bd",
+          "hash": "2d6feb56",
           "type": "fix",
           "scope": "bootstrap",
           "title": "Register coding_systems row on ingest-time facility capture"
         },
         {
-          "hash": "201359ab",
+          "hash": "f024993e",
           "type": "fix",
           "scope": "bootstrap,server",
           "title": "Sum reportCount in the fold, not a route-side join"
         },
         {
-          "hash": "18f3c933",
+          "hash": "8df769d2",
           "type": "fix",
           "scope": "bootstrap",
           "title": "Dedupe resolveObservedFacilities to one row per (system, code)"
         },
         {
-          "hash": "80565ad8",
+          "hash": "17a5aa2a",
           "type": "feat",
           "scope": "server,studio",
           "title": "Show the observed facility's name next to its code"
         },
         {
-          "hash": "32476e9e",
+          "hash": "f3064f18",
           "type": "feat",
           "scope": "bootstrap",
           "title": "Reconcile facilities on performer_system/display, not display"
         },
         {
-          "hash": "fbada0d8",
+          "hash": "8e3bf5b5",
           "type": "feat",
           "scope": "db",
           "title": "Project performer as identifier.value, not display"
         },
         {
-          "hash": "e7399eb7",
+          "hash": "8b350a35",
           "type": "feat",
           "scope": "db",
           "title": "Add performer_display/performer_system to diagnostic_reports"
         },
         {
-          "hash": "c575560d",
+          "hash": "f5d616ee",
           "type": "feat",
           "scope": "fhir",
           "title": "Model Reference.identifier for logical references"
@@ -2874,253 +2874,253 @@
       "version": "v0.1.2",
       "entries": [
         {
-          "hash": "169c9ad6",
+          "hash": "9c9a0a6c",
           "type": "fix",
           "scope": "studio",
           "title": "Give ReferencePicker's post-type findBy* assertions real headroom"
         },
         {
-          "hash": "bd3bf2a7",
+          "hash": "2756349b",
           "type": "fix",
           "scope": "facility-reconcile",
           "title": "Whole-branch review fixes for facility-reconciliation slice"
         },
         {
-          "hash": "a4e99790",
+          "hash": "0fd3f0f8",
           "type": "feat",
           "scope": "cli",
           "title": "Facilities scan-observed and publish commands"
         },
         {
-          "hash": "6d709a20",
+          "hash": "64762579",
           "type": "fix",
           "scope": "facility-reconcile",
           "title": "Thread the feed system through live ingest and the mapping dialog"
         },
         {
-          "hash": "b35983c2",
+          "hash": "0cee3629",
           "type": "fix",
           "scope": "facilities",
           "title": "Bind each ingest feed to its own observed-facility coding system"
         },
         {
-          "hash": "73a55254",
+          "hash": "4839c33d",
           "type": "fix",
           "scope": "studio",
           "title": "Show local code in Observed detail line only when it differs from the observed code"
         },
         {
-          "hash": "43735bd4",
+          "hash": "25a1b03d",
           "type": "fix",
           "scope": "studio",
           "title": "Restore flex on Facilities TabsContent so height reaches Observed/Registry"
         },
         {
-          "hash": "f98858bc",
+          "hash": "84946cf0",
           "type": "fix",
           "scope": "studio",
           "title": "Task 9 fix round — local code disambiguation, pagination, tab-primitive hardening"
         },
         {
-          "hash": "5fc72756",
+          "hash": "c0e17092",
           "type": "fix",
           "scope": "studio",
           "title": "Keep display off TabsContent so the inactive Facilities tab collapses"
         },
         {
-          "hash": "b04939a6",
+          "hash": "f19d1457",
           "type": "feat",
           "scope": "studio",
           "title": "Observed facilities tab on the Facilities page"
         },
         {
-          "hash": "07660f13",
+          "hash": "b84e52b0",
           "type": "fix",
           "scope": "facilities",
           "title": "Impact route ignores deactivated term_mappings"
         },
         {
-          "hash": "a0f141d2",
+          "hash": "2ce3b735",
           "type": "feat",
           "scope": "server",
           "title": "Facility deletion impact, mappings survive delete"
         },
         {
-          "hash": "17579a78",
+          "hash": "32bc9250",
           "type": "feat",
           "scope": "server",
           "title": "Observed-facility list, scan and publish routes"
         },
         {
-          "hash": "7d911ca3",
+          "hash": "b36959f5",
           "type": "fix",
           "scope": "bootstrap",
           "title": "Close facility-reconcile review findings (F1-F4)"
         },
         {
-          "hash": "87bc933a",
+          "hash": "44ff472e",
           "type": "feat",
           "scope": "bootstrap",
           "title": "Capture observed facilities at ingest time"
         },
         {
-          "hash": "c932a0f3",
+          "hash": "3405eb9c",
           "type": "feat",
           "scope": "bootstrap",
           "title": "Project facility_registry into a pickable coding system"
         },
         {
-          "hash": "8340ff71",
+          "hash": "9964f862",
           "type": "feat",
           "scope": "bootstrap",
           "title": "Resolve observed facilities and publish facility_map"
         },
         {
-          "hash": "f44ad172",
+          "hash": "663c216c",
           "type": "fix",
           "scope": "bootstrap",
           "title": "Address facility-reconcile review findings F1-F3"
         },
         {
-          "hash": "761fe420",
+          "hash": "5967b1e8",
           "type": "feat",
           "scope": "bootstrap",
           "title": "Re-runnable observed-facility discovery scan"
         },
         {
-          "hash": "17accee3",
+          "hash": "9a8053dd",
           "type": "feat",
           "scope": "db",
           "title": "Observed-facility constants and pure concept shaping"
         },
         {
-          "hash": "1dd25c39",
+          "hash": "3c0fb70a",
           "type": "fix",
           "scope": "db",
           "title": "Enforce NOT NULL on facility_map join keys, add unmapped-row test"
         },
         {
-          "hash": "657a6987",
+          "hash": "a24dfc44",
           "type": "feat",
           "scope": "db",
           "title": "Add facility_map warehouse dimension (external 012)"
         },
         {
-          "hash": "b4d40c3e",
+          "hash": "84461193",
           "type": "fix",
           "scope": "cli",
           "title": "Hoist ./program import out of facilities-import test bodies"
         },
         {
-          "hash": "8da3b43f",
+          "hash": "cb6be406",
           "type": "fix",
           "scope": "studio",
           "title": "Repair Facilities CSV import review findings (F1-F6)"
         },
         {
-          "hash": "42ed37fb",
+          "hash": "74f555ed",
           "type": "feat",
           "scope": "studio",
           "title": "Import facilities from a CSV on the Facilities page"
         },
         {
-          "hash": "e0d5a108",
+          "hash": "221a0597",
           "type": "fix",
           "scope": "facilities",
           "title": "Malformed CSV import is a 400 with the parser's message, not a 500"
         },
         {
-          "hash": "40ed0407",
+          "hash": "409eea6c",
           "type": "feat",
           "scope": "server",
           "title": "Facility CSV import endpoint"
         },
         {
-          "hash": "72729cd2",
+          "hash": "e285e103",
           "type": "fix",
           "scope": "cli",
           "title": "Remove is-main guard, extract buildProgram() factory"
         },
         {
-          "hash": "2a9ae559",
+          "hash": "3126b572",
           "type": "feat",
           "scope": "cli",
           "title": "Openldr facilities import"
         },
         {
-          "hash": "c97e443f",
+          "hash": "fc654256",
           "type": "fix",
           "scope": "facility-import",
           "title": "Always report duplicates, correct two docblock claims"
         },
         {
-          "hash": "e891a168",
+          "hash": "b9be0f3b",
           "type": "fix",
           "scope": "facility-import",
           "title": "Dedupe by id, preserve local_code/extras, pin hash parity"
         },
         {
-          "hash": "c3ca9abf",
+          "hash": "e79ac0b3",
           "type": "feat",
           "scope": "bootstrap",
           "title": "Shared facility CSV import (parse, report, apply)"
         },
         {
-          "hash": "3e0daa92",
+          "hash": "e329292e",
           "type": "fix",
           "scope": "server",
           "title": "Keep importer-written facility extras through an edit"
         },
         {
-          "hash": "90b35a36",
+          "hash": "9a0b2bdf",
           "type": "fix",
           "scope": "forms-builder",
           "title": "Derive Field Type picklist from FieldType enum"
         },
         {
-          "hash": "3045d5e8",
+          "hash": "e9ccf1e1",
           "type": "fix",
           "scope": "facility-registry",
           "title": "Scope admin suggestions to ancestors, retry on failure, gate debounce, i18n copy"
         },
         {
-          "hash": "ac121cc5",
+          "hash": "ff003294",
           "type": "feat",
           "scope": "studio",
           "title": "Drive the admin-area fields from registry suggestions"
         },
         {
-          "hash": "79e7fc9e",
+          "hash": "82ee05e8",
           "type": "feat",
           "scope": "db",
           "title": "Seed Country ValueSet, bind admin-hierarchy fields on the Facility form"
         },
         {
-          "hash": "893d9bb7",
+          "hash": "1e8ea26d",
           "type": "fix",
           "scope": "facility-registry",
           "title": "Remove pg-mem clause-order dependency from admin-values NULL guard"
         },
         {
-          "hash": "f2a45227",
+          "hash": "8c9cfd6c",
           "type": "feat",
           "scope": "server",
           "title": "Distinct admin-area values scoped by the chosen parent"
         },
         {
-          "hash": "166edd27",
+          "hash": "6264687f",
           "type": "fix",
           "scope": "db",
           "title": "Commit the lockfile entry for csv-parse"
         },
         {
-          "hash": "30182d11",
+          "hash": "001f4807",
           "type": "feat",
           "scope": "db",
           "title": "Add ISO 3166-1 country literals + drift guard against the fixture"
         },
         {
-          "hash": "ec554b18",
+          "hash": "5daee39a",
           "type": "feat",
           "scope": "forms",
           "title": "Add a suggest field type that proposes without constraining"
@@ -3132,211 +3132,211 @@
       "version": "v0.1.2",
       "entries": [
         {
-          "hash": "8877013d",
+          "hash": "1ec5f34d",
           "type": "fix",
           "scope": "bootstrap",
           "title": "Rebaseline sync-handle pendingPush tests for migration 072"
         },
         {
-          "hash": "968d87b8",
+          "hash": "b58a579d",
           "type": "fix",
           "scope": "facility-registry",
           "title": "072 writes resource_history, drops concept marker"
         },
         {
-          "hash": "0b5a77bd",
+          "hash": "0d08aabc",
           "type": "fix",
           "scope": "facility-registry",
           "title": "072 writes change_log, down() respects concept ownership"
         },
         {
-          "hash": "46b9d37f",
+          "hash": "fbc4b4ba",
           "type": "feat",
           "scope": "db",
           "title": "Seed facility-type and location-status ValueSets and bind the form"
         },
         {
-          "hash": "41f5cb8d",
+          "hash": "e733967a",
           "type": "feat",
           "scope": "forms",
           "title": "Bind facility Level and Status to ValueSets"
         },
         {
-          "hash": "cde14f45",
+          "hash": "c0019051",
           "type": "fix",
           "scope": "db",
           "title": "Fall back to code when a coding answer's display is blank"
         },
         {
-          "hash": "d5881f64",
+          "hash": "523e4da5",
           "type": "feat",
           "scope": "db",
           "title": "Flatten a picked coding answer onto its facility column"
         },
         {
-          "hash": "2bef484c",
+          "hash": "c24fe5f9",
           "type": "fix",
           "scope": "studio",
           "title": "Let the Facilities empty state bleed to the pane edges"
         },
         {
-          "hash": "82facd5e",
+          "hash": "dc99ec7f",
           "type": "fix",
           "scope": "facilities",
           "title": "Drop false-justified cast, pin hasCoreField's reject branch, fix stale rename refs"
         },
         {
-          "hash": "0a9113e1",
+          "hash": "8ddcd8c6",
           "type": "fix",
           "scope": "facilities",
           "title": "Guard the limit/region contract and repoint hasCoreField at targetPages"
         },
         {
-          "hash": "a034091d",
+          "hash": "a8303da9",
           "type": "fix",
           "scope": "studio",
           "title": "Close round-2 facility-registry review findings"
         },
         {
-          "hash": "1befc58a",
+          "hash": "ba8ff9f5",
           "type": "fix",
           "scope": "studio",
           "title": "Close facility-registry review findings (I1-I5, Minor 1/3/4)"
         },
         {
-          "hash": "3ae6fc2c",
+          "hash": "a940a3dc",
           "type": "feat",
           "scope": "studio",
           "title": "Facilities page driven by the Facility form"
         },
         {
-          "hash": "6eae082d",
+          "hash": "4e4e8fc6",
           "type": "fix",
           "scope": "db",
           "title": "Recognise all three historical Facility form shapes, not just one"
         },
         {
-          "hash": "345ef3ae",
+          "hash": "617aace3",
           "type": "fix",
           "scope": "facility-registry",
           "title": "Rewrite the form schema on repoint, make down() a real inverse"
         },
         {
-          "hash": "4b7b181f",
+          "hash": "66af491a",
           "type": "feat",
           "scope": "forms",
           "title": "Point the Facility form at the Facilities page and make it essential"
         },
         {
-          "hash": "8325aa0b",
+          "hash": "094a4294",
           "type": "fix",
           "scope": "server",
           "title": "Facilities wrong-form guard, name-type agreement, honest query-param tests"
         },
         {
-          "hash": "68c9e62e",
+          "hash": "d14d0b71",
           "type": "fix",
           "scope": "server",
           "title": "Facilities routes clear-on-blank, unresolved-form guard, DB error mapping"
         },
         {
-          "hash": "c02861ed",
+          "hash": "4affb57c",
           "type": "feat",
           "scope": "server",
           "title": "Facilities CRUD routes with a server-side answer split"
         },
         {
-          "hash": "d16be868",
+          "hash": "e1637d8a",
           "type": "feat",
           "scope": "rbac",
           "title": "Add facilities.view and facilities.manage capabilities"
         },
         {
-          "hash": "239c6fb5",
+          "hash": "0e0233cb",
           "type": "feat",
           "scope": "bootstrap",
           "title": "Expose the facility registry store on AppContext"
         },
         {
-          "hash": "f58ba75c",
+          "hash": "384b795c",
           "type": "feat",
           "scope": "db",
           "title": "Split facility form answers into columns and extras"
         },
         {
-          "hash": "fd359a64",
+          "hash": "d40d6663",
           "type": "fix",
           "scope": "facility-registry",
           "title": "Stop the parser stamping managed_origin, harden CSV parsing"
         },
         {
-          "hash": "d03f6f88",
+          "hash": "804da713",
           "type": "fix",
           "scope": "db",
           "title": "Update migration-list assertion for 070_facility_registry"
         },
         {
-          "hash": "d7b2c862",
+          "hash": "750f2c5a",
           "type": "feat",
           "scope": "terminology",
           "title": "Facility CSV import contract that refuses to drop columns"
         },
         {
-          "hash": "0cefe637",
+          "hash": "c417386c",
           "type": "fix",
           "scope": "db",
           "title": "Hash facility_registry content with canonicalHash, not JSON.stringify"
         },
         {
-          "hash": "ceeed63d",
+          "hash": "dee3487d",
           "type": "feat",
           "scope": "db",
           "title": "Facility registry store with lab-local aliases"
         },
         {
-          "hash": "99c76043",
+          "hash": "abc19602",
           "type": "feat",
           "scope": "db",
           "title": "Type the facility registry tables"
         },
         {
-          "hash": "07c3f8e9",
+          "hash": "949ff8ce",
           "type": "feat",
           "scope": "db",
           "title": "Add facility_registry and facility_aliases tables"
         },
         {
-          "hash": "7b4d4d58",
+          "hash": "69954457",
           "type": "fix",
           "scope": "forms",
           "title": "Stop Local ID and MFL ID colliding on one fhirPath"
         },
         {
-          "hash": "1655a84c",
+          "hash": "7cb94998",
           "type": "feat",
           "scope": "settings,reports",
           "title": "Lab identity and a real letterhead on the clinical report"
         },
         {
-          "hash": "cb3d8526",
+          "hash": "20e6ac0b",
           "type": "fix",
           "scope": "report-designer",
           "title": "Render the scan-floor value, and name the bound field"
         },
         {
-          "hash": "9cef4a78",
+          "hash": "d2cc5bf6",
           "type": "feat",
           "scope": "report-designer",
           "title": "Warn at authoring time when a symbol is too small to scan"
         },
         {
-          "hash": "17f4336a",
+          "hash": "5167ff9d",
           "type": "feat",
           "scope": "reports",
           "title": "Add barcode and QR element kinds, and put them on the clinical report"
         },
         {
-          "hash": "a787d8b7",
+          "hash": "f85c412a",
           "type": "feat",
           "scope": "reports",
           "title": "Add a keyvalue panel element and re-author the clinical report onto it"
@@ -3348,187 +3348,187 @@
       "version": "v0.1.2",
       "entries": [
         {
-          "hash": "20bafe4a",
+          "hash": "882eaabe",
           "type": "feat",
           "scope": "reports",
           "title": "Ship the clinical microbiology report as a built-in"
         },
         {
-          "hash": "0d4c34f9",
+          "hash": "88aeb896",
           "type": "feat",
           "scope": "reports",
           "title": "Let a shipped fix to a built-in design reach existing installs"
         },
         {
-          "hash": "18db9f6f",
+          "hash": "f40d4624",
           "type": "fix",
           "scope": "reports",
           "title": "Inset the status chip so adjacent rows stop merging"
         },
         {
-          "hash": "f054ee6e",
+          "hash": "1661150c",
           "type": "fix",
           "scope": "db,bootstrap",
           "title": "Make ValueSet expansion tolerate NULL status instead of opting one caller out"
         },
         {
-          "hash": "4b87e8b8",
+          "hash": "788e5fad",
           "type": "feat",
           "scope": "bootstrap",
           "title": "Re-expand result-role value sets after a parameter import"
         },
         {
-          "hash": "9f271569",
+          "hash": "7afa7178",
           "type": "fix",
           "scope": "db",
           "title": "Correct 069 rationale and restore 014 no-extra-seeds coverage"
         },
         {
-          "hash": "c7bfa2db",
+          "hash": "a4397a59",
           "type": "feat",
           "scope": "db",
           "title": "Seed the result-role value sets"
         },
         {
-          "hash": "4413d9a2",
+          "hash": "0be81a84",
           "type": "feat",
           "scope": "cli",
           "title": "Add terminology import parameters"
         },
         {
-          "hash": "7afb1bcb",
+          "hash": "587df20b",
           "type": "feat",
           "scope": "terminology",
           "title": "Import a result-parameter dictionary with result roles"
         },
         {
-          "hash": "05591ba2",
+          "hash": "5d867553",
           "type": "fix",
           "scope": "cli",
           "title": "Name what the reproject count actually measures"
         },
         {
-          "hash": "29b2493b",
+          "hash": "dc2571c9",
           "type": "feat",
           "scope": "cli",
           "title": "Add openldr terminology reproject command"
         },
         {
-          "hash": "02df1e6e",
+          "hash": "df33cb3a",
           "type": "fix",
           "scope": "bootstrap",
           "title": "Make value set delete reach the canonical FHIR resource"
         },
         {
-          "hash": "686553f3",
+          "hash": "f15db8d7",
           "type": "fix",
           "scope": "db",
           "title": "Dedupe and bound the ValueSet projection's composite id"
         },
         {
-          "hash": "a3352913",
+          "hash": "b3d014f4",
           "type": "feat",
           "scope": "db",
           "title": "Replace a fan-out resource's whole scope on write and delete"
         },
         {
-          "hash": "1ed3fbdb",
+          "hash": "8eb99918",
           "type": "feat",
           "scope": "db",
           "title": "Project a ValueSet expansion to terminology_codes rows"
         },
         {
-          "hash": "4156fc04",
+          "hash": "e60e984e",
           "type": "fix",
           "scope": "db",
           "title": "Index-safe value_set_id and utf8mb4 pin on terminology_codes"
         },
         {
-          "hash": "c5a6fcba",
+          "hash": "d0af58b5",
           "type": "feat",
           "scope": "db",
           "title": "Add the terminology_codes warehouse dimension"
         },
         {
-          "hash": "2349214e",
+          "hash": "dd2054bc",
           "type": "feat",
           "scope": "report-pdf",
           "title": "Honour per-cell status on the workflow-export renderer"
         },
         {
-          "hash": "ce1850ec",
+          "hash": "38dfc104",
           "type": "feat",
           "scope": "studio",
           "title": "Add emphasis control for status-bound report columns"
         },
         {
-          "hash": "ceaa50ce",
+          "hash": "c6b9dfa7",
           "type": "feat",
           "scope": "studio",
           "title": "Bind a status column to a report table column"
         },
         {
-          "hash": "b239467d",
+          "hash": "db3aa601",
           "type": "fix",
           "scope": "report-designer",
           "title": "Close the cell-status review gaps (F1-F7)"
         },
         {
-          "hash": "23b4e850",
+          "hash": "a92171cd",
           "type": "feat",
           "scope": "report-designer",
           "title": "Paint per-cell status as a chip or tinted text"
         },
         {
-          "hash": "2be6430b",
+          "hash": "36e81a6d",
           "type": "feat",
           "scope": "report-designer",
           "title": "Derive a per-cell status grid from a bound status column"
         },
         {
-          "hash": "648e41b2",
+          "hash": "e9f0816d",
           "type": "feat",
           "scope": "report-designer",
           "title": "Add presentational cell-status vocabulary to bound columns"
         },
         {
-          "hash": "8cf8acdf",
+          "hash": "2d2067a7",
           "type": "feat",
           "scope": "report-pdf",
           "title": "Match the design renderer's table layout"
         },
         {
-          "hash": "3ac8b4e0",
+          "hash": "7a46f62d",
           "type": "feat",
           "scope": "report-designer",
           "title": "Lay report tables out properly instead of evenly"
         },
         {
-          "hash": "08333617",
+          "hash": "358218af",
           "type": "feat",
           "scope": "terminology",
           "title": "Import a site's organism dictionary as classified data"
         },
         {
-          "hash": "43570f79",
+          "hash": "504ba023",
           "type": "fix",
           "scope": "reporting",
           "title": "Show pathogen names, and derive the GLASS reporting year"
         },
         {
-          "hash": "08fa2f55",
+          "hash": "4e60aaba",
           "type": "fix",
           "scope": "reporting",
           "title": "Give the AMR facility report a facility that exists"
         },
         {
-          "hash": "f02d2f8a",
+          "hash": "2e837099",
           "type": "fix",
           "scope": "report-pdf",
           "title": "Stop long table cells printing over the next row"
         },
         {
-          "hash": "320b4990",
+          "hash": "df5cc2dc",
           "type": "fix",
           "scope": "reporting",
           "title": "Match antibiotics by code, and surface the unmatched"
@@ -3540,43 +3540,43 @@
       "version": "v0.1.2",
       "entries": [
         {
-          "hash": "604c7350",
+          "hash": "fb8d6c20",
           "type": "fix",
           "scope": "reporting",
           "title": "Anchor AMR susceptibility counts to a real isolate"
         },
         {
-          "hash": "1f772319",
+          "hash": "38fcaabe",
           "type": "fix",
           "scope": "reports",
           "title": "Answer 400 with the reason when run parameters are bad"
         },
         {
-          "hash": "361c060f",
+          "hash": "ab64c5da",
           "type": "fix",
           "scope": "seed",
           "title": "Narrow the drift check's parameter to what it reads"
         },
         {
-          "hash": "eb406d1f",
+          "hash": "f6cd6490",
           "type": "feat",
           "scope": "seed",
           "title": "Warn at boot when the warehouse connector has drifted from its URL"
         },
         {
-          "hash": "07713d3d",
+          "hash": "5d8ce70b",
           "type": "fix",
           "scope": "core",
           "title": "Classify a peer-dropped connection as an unavailable backend"
         },
         {
-          "hash": "de223c5f",
+          "hash": "c7725766",
           "type": "fix",
           "scope": "reporting",
           "title": "Q-turnaround-time 500s on month-precision receivedTime"
         },
         {
-          "hash": "06f026ff",
+          "hash": "286b5518",
           "type": "fix",
           "scope": "keycloak",
           "title": "Allow 127.0.0.1 redirect URIs on the openldr-web client"
@@ -3588,361 +3588,361 @@
       "version": "v0.1.2",
       "entries": [
         {
-          "hash": "96a302e5",
+          "hash": "fb87d920",
           "type": "fix",
           "scope": "studio",
           "title": "Wrap date-range presets instead of scrolling them sideways"
         },
         {
-          "hash": "93b0e858",
+          "hash": "397db316",
           "type": "feat",
           "scope": "studio",
           "title": "Move page actions into kebab menus and collapse the publishers rail"
         },
         {
-          "hash": "638a19a6",
+          "hash": "c7a31d5a",
           "type": "fix",
           "scope": "studio",
           "title": "Fill short table regions and pin their pagination footers"
         },
         {
-          "hash": "b56a0eb7",
+          "hash": "26d412a9",
           "type": "fix",
           "scope": "studio",
           "title": "Size the app shell with dvh so bottom-anchored UI is reachable"
         },
         {
-          "hash": "1c2ab2bf",
+          "hash": "13ede989",
           "type": "fix",
           "scope": "forms",
           "title": "Bind sample Specimen Type to the seeded ValueSet and require it"
         },
         {
-          "hash": "ecf78fe7",
+          "hash": "ab7ccef8",
           "type": "fix",
           "scope": "terminology",
           "title": "Normalise concept status casing"
         },
         {
-          "hash": "1feda0fe",
+          "hash": "64cf1b89",
           "type": "fix",
           "scope": "rbac",
           "title": "Make roles doctor read-only and surface an unavailable ledger"
         },
         {
-          "hash": "02015691",
+          "hash": "f8936aa8",
           "type": "feat",
           "scope": "rbac",
           "title": "Openldr roles doctor — report capability drift"
         },
         {
-          "hash": "ebbe5e73",
+          "hash": "6f4fac61",
           "type": "feat",
           "scope": "rbac",
           "title": "Audit boot-time capability backfill"
         },
         {
-          "hash": "361a284d",
+          "hash": "8f15d1e1",
           "type": "feat",
           "scope": "rbac",
           "title": "RoleStore.diagnoseCapabilities — preset drift and orphaned keys"
         },
         {
-          "hash": "6647a185",
+          "hash": "e2f6fe8f",
           "type": "fix",
           "scope": "rbac",
           "title": "Don't record the ledger when reconciliation was disabled"
         },
         {
-          "hash": "6bba247b",
+          "hash": "24d4e9d1",
           "type": "feat",
           "scope": "rbac",
           "title": "Reconcile preset capabilities in seedSystemRoles"
         },
         {
-          "hash": "27050e05",
+          "hash": "19bf2ba2",
           "type": "fix",
           "scope": "rbac",
           "title": "Keep pg-mem's DDL limitation out of migration 067"
         },
         {
-          "hash": "0bded26b",
+          "hash": "13d30033",
           "type": "feat",
           "scope": "rbac",
           "title": "Capability_introductions ledger (migration 067)"
         },
         {
-          "hash": "f6bb0ec7",
+          "hash": "8d14deef",
           "type": "fix",
           "scope": "server",
           "title": "Mask a plaintext webhook secret out of the reset audit event"
         },
         {
-          "hash": "04f06e1b",
+          "hash": "563e7123",
           "type": "fix",
           "scope": "server",
           "title": "Stop overclaiming retry safety on a zero-persisted failed run"
         },
         {
-          "hash": "fc4832e8",
+          "hash": "7ebd86b0",
           "type": "fix",
           "scope": "server",
           "title": "Tell the clerk what landed when a run persists and then fails"
         },
         {
-          "hash": "dd9e05a6",
+          "hash": "37b4e623",
           "type": "fix",
           "scope": "studio",
           "title": "Confirm before resetting a protected workflow"
         },
         {
-          "hash": "5757148e",
+          "hash": "3457dee8",
           "type": "fix",
           "scope": "server",
           "title": "Reset must not mint a webhook token nobody can learn"
         },
         {
-          "hash": "6112347f",
+          "hash": "654f6fae",
           "type": "fix",
           "scope": "seed",
           "title": "Enable an existing disabled `wf-ingest` on upgrade"
         },
         {
-          "hash": "f6c40869",
+          "hash": "543440c7",
           "type": "feat",
           "scope": "rbac",
           "title": "Split `forms.submit` out of `forms.view`"
         },
         {
-          "hash": "5c0da78f",
+          "hash": "cebf3493",
           "type": "fix",
           "scope": "studio",
           "title": "Close the protected-workflow save-gate bypass on revisit"
         },
         {
-          "hash": "00d7e3e7",
+          "hash": "54c9b395",
           "type": "feat",
           "scope": "studio",
           "title": "Protect seeded workflows and offer reset to default"
         },
         {
-          "hash": "f732c7d9",
+          "hash": "22cd52d9",
           "type": "fix",
           "scope": "server",
           "title": "Stop workflow reset persisting a plaintext webhook secret"
         },
         {
-          "hash": "33ee62df",
+          "hash": "363eec68",
           "type": "fix",
           "scope": "server",
           "title": "Give workflow reset's `secretPreserved` one precise meaning"
         },
         {
-          "hash": "dff594b6",
+          "hash": "1f3c432f",
           "type": "feat",
           "scope": "server",
           "title": "Reset a system workflow without regenerating its secret"
         },
         {
-          "hash": "2da0a3e3",
+          "hash": "a23e8db4",
           "type": "fix",
           "scope": "server",
           "title": "Stop the delete refusal claiming a false dependency"
         },
         {
-          "hash": "ff064e25",
+          "hash": "6b9dd44b",
           "type": "feat",
           "scope": "server",
           "title": "Refuse deletion of seeded system workflows"
         },
         {
-          "hash": "695cb2f9",
+          "hash": "5c8a13e6",
           "type": "fix",
           "scope": "forms",
           "title": "Tell Observation-bound forms to flag a field, not that the extractor is missing"
         },
         {
-          "hash": "402dc8ef",
+          "hash": "d50ab5e9",
           "type": "fix",
           "scope": "forms",
           "title": "Name the missing extractor in the no-resources 400"
         },
         {
-          "hash": "88e4173e",
+          "hash": "a1792745",
           "type": "fix",
           "scope": "forms",
           "title": "Redact the workflow run error before returning it"
         },
         {
-          "hash": "91b376b5",
+          "hash": "c70d1f64",
           "type": "fix",
           "scope": "workflows",
           "title": "Seed wf-ingest enabled — form capture depends on it"
         },
         {
-          "hash": "489277d4",
+          "hash": "9dddc226",
           "type": "fix",
           "scope": "forms",
           "title": "Derived ServiceRequests lost their patient on hand capture"
         },
         {
-          "hash": "32f83c9f",
+          "hash": "bfcc2c20",
           "type": "feat",
           "scope": "server",
           "title": "Persist form submissions through the ingest pipeline"
         },
         {
-          "hash": "38fdc5d1",
+          "hash": "a4d2cdce",
           "type": "feat",
           "scope": "workflows",
           "title": "Let an in-process run override the persist source"
         },
         {
-          "hash": "5c4a1789",
+          "hash": "d9204ef4",
           "type": "fix",
           "scope": "studio",
           "title": "Put the reference picker's clear button on the far right"
         },
         {
-          "hash": "ee61057c",
+          "hash": "82932951",
           "type": "fix",
           "scope": "studio",
           "title": "Give UserDialog's reference fields a working search path"
         },
         {
-          "hash": "74e425d7",
+          "hash": "8a19ceae",
           "type": "fix",
           "scope": "forms",
           "title": "Bind the Lab order specimen type to SNOMED CT"
         },
         {
-          "hash": "005f4910",
+          "hash": "ac799864",
           "type": "fix",
           "scope": "server",
           "title": "Resolve cs-url-* system ids to canonical urls for search and validation"
         },
         {
-          "hash": "09c931a6",
+          "hash": "8257779e",
           "type": "fix",
           "scope": "forms",
           "title": "A reference field with no source accepts the text it renders"
         },
         {
-          "hash": "11ff7f34",
+          "hash": "ac39615d",
           "type": "fix",
           "scope": "studio",
           "title": "Stop the reference picker throwing on a bare-string value"
         },
         {
-          "hash": "8e4c6336",
+          "hash": "22a7f1bd",
           "type": "fix",
           "scope": "forms",
           "title": "One predicate decides whether a field holds many values"
         },
         {
-          "hash": "e13408b1",
+          "hash": "508899bb",
           "type": "fix",
           "scope": "studio",
           "title": "Stop the reference picker reading the DOM form id as a form id"
         },
         {
-          "hash": "af75f429",
+          "hash": "16dc39aa",
           "type": "fix",
           "scope": "forms",
           "title": "Bind Lab order tests to LOINC and allow several per order"
         },
         {
-          "hash": "cf3dcdb0",
+          "hash": "1e1e552d",
           "type": "feat",
           "scope": "studio",
           "title": "Render reference fields with the picker"
         },
         {
-          "hash": "3ce7c68a",
+          "hash": "5666e15e",
           "type": "fix",
           "scope": "studio",
           "title": "Ignore stale reference searches, announce the active option"
         },
         {
-          "hash": "7d4b53d7",
+          "hash": "82f1347e",
           "type": "feat",
           "scope": "studio",
           "title": "Add ReferencePicker"
         },
         {
-          "hash": "20bcd2f3",
+          "hash": "52ba6781",
           "type": "feat",
           "scope": "studio",
           "title": "Add reference-search api client"
         },
         {
-          "hash": "cf0fb83b",
+          "hash": "d8086d22",
           "type": "fix",
           "scope": "server",
           "title": "Validate form answers on submit"
         },
         {
-          "hash": "a93510ce",
+          "hash": "d3f822d9",
           "type": "fix",
           "scope": "server",
           "title": "Harden reference search errors, offset, and form status"
         },
         {
-          "hash": "c288e8b6",
+          "hash": "3e7e75d3",
           "type": "feat",
           "scope": "server",
           "title": "Add field-scoped reference search"
         },
         {
-          "hash": "ab23eaf4",
+          "hash": "c2325eaa",
           "type": "feat",
           "scope": "db",
           "title": "Search the patients read model for reference pickers"
         },
         {
-          "hash": "ecc215d9",
+          "hash": "68c927b0",
           "type": "feat",
           "scope": "terminology",
           "title": "Add filter to ValueSet $expand"
         },
         {
-          "hash": "22abf93f",
+          "hash": "21db6e79",
           "type": "fix",
           "scope": "forms",
           "title": "Enforce a reference field's declared source kind and system"
         },
         {
-          "hash": "22717ad7",
+          "hash": "9ca2b754",
           "type": "feat",
           "scope": "forms",
           "title": "Verify reference answers point at things that exist"
         },
         {
-          "hash": "9b421082",
+          "hash": "65db622d",
           "type": "feat",
           "scope": "forms",
           "title": "Reject unresolved values in reference fields"
         },
         {
-          "hash": "71781d07",
+          "hash": "0bfcddf0",
           "type": "feat",
           "scope": "forms",
           "title": "Carry system and display through reference answers"
         },
         {
-          "hash": "0411f329",
+          "hash": "fcee1d62",
           "type": "feat",
           "scope": "forms",
           "title": "Lint reference fields that declare no source"
         },
         {
-          "hash": "2d1fbdf9",
+          "hash": "755aba9f",
           "type": "feat",
           "scope": "forms",
           "title": "Classify what a reference field declares"
         },
         {
-          "hash": "4ed696ad",
+          "hash": "c8deb459",
           "type": "fix",
           "scope": "studio",
           "title": "The calendar's month/year dropdowns were unclickable"
@@ -3954,91 +3954,91 @@
       "version": "v0.1.2",
       "entries": [
         {
-          "hash": "ff98b38f",
+          "hash": "18cd07a8",
           "type": "fix",
           "scope": "install",
           "title": "Wire lab->central TLS trust instead of leaving it to the operator"
         },
         {
-          "hash": "c5eb7af0",
+          "hash": "922bad49",
           "type": "fix",
           "scope": "studio",
           "title": "Remove the settings shell's redundant second scroll container"
         },
         {
-          "hash": "4f6b6491",
+          "hash": "32f5dc8e",
           "type": "fix",
           "scope": "sync",
           "title": "Enrolment hands the site an OIDC issuer it can actually reach"
         },
         {
-          "hash": "010f5fd8",
+          "hash": "943100b8",
           "type": "fix",
           "scope": "studio",
           "title": "Caption dropdowns rendered twice, and give DatePicker year navigation"
         },
         {
-          "hash": "115c5579",
+          "hash": "57dcb5d6",
           "type": "fix",
           "scope": "dhis2",
           "title": "The aggregate push derives its report window from the push period"
         },
         {
-          "hash": "e4469395",
+          "hash": "7be16ff2",
           "type": "fix",
           "scope": "reporting",
           "title": "An empty result set no longer erases a report's columns"
         },
         {
-          "hash": "a80a77bc",
+          "hash": "0f3dafb2",
           "type": "fix",
           "scope": "reports",
           "title": "Probe a report's columns with real params, not an empty object"
         },
         {
-          "hash": "115c41d4",
+          "hash": "9ca4b85f",
           "type": "fix",
           "scope": "server",
           "title": "Capture operator-authored custom queries on the HTTP surfaces too"
         },
         {
-          "hash": "ede345a7",
+          "hash": "51066de4",
           "type": "fix",
           "scope": "sync",
           "title": "Deliver complete, convergent reference config to labs"
         },
         {
-          "hash": "8b3fe967",
+          "hash": "e3f0cc0e",
           "type": "fix",
           "scope": "studio",
           "title": "Make the date-range picker able to reach historical data"
         },
         {
-          "hash": "6b37c71f",
+          "hash": "d203c50f",
           "type": "fix",
           "scope": "terminology",
           "title": "Let a coded form field bind to an imported code system"
         },
         {
-          "hash": "4583f4b1",
+          "hash": "e8642274",
           "type": "fix",
           "scope": "db",
           "title": "Never memoize a null sync.site_id — it permanently un-syncs the data"
         },
         {
-          "hash": "43e67db8",
+          "hash": "ebb00e1d",
           "type": "fix",
           "scope": "gateway",
           "title": "Stop dropping a non-default port from the /studio redirect"
         },
         {
-          "hash": "1ef884f7",
+          "hash": "5cec69f0",
           "type": "fix",
           "scope": "server",
           "title": "Webhook must report the RUN's outcome, not just that we accepted it"
         },
         {
-          "hash": "3f5a61c5",
+          "hash": "5973c240",
           "type": "fix",
           "scope": "server",
           "title": "Keep quickjs-emscripten external so its wasm resolves in the image"
@@ -4050,13 +4050,13 @@
       "version": "v0.1.2",
       "entries": [
         {
-          "hash": "13db8859",
+          "hash": "ccd02fdb",
           "type": "fix",
           "scope": "studio",
           "title": "Accessibility & foundation remediation (shadscan 19→60)"
         },
         {
-          "hash": "068a47fd",
+          "hash": "94fd04c2",
           "type": "feat",
           "scope": "seed",
           "title": "Seed the default warehouse connector as an essential"
@@ -4068,43 +4068,43 @@
       "version": "v0.1.2",
       "entries": [
         {
-          "hash": "6d461357",
+          "hash": "78ada115",
           "type": "fix",
           "scope": "studio",
           "title": "Mobile notifications popover alignment + audit page layout"
         },
         {
-          "hash": "4c279ff1",
+          "hash": "b1a33447",
           "type": "feat",
           "scope": "seed",
           "title": "Seed the unified wf-ingest workflow (one secret)"
         },
         {
-          "hash": "66bfc3bb",
+          "hash": "6f652f25",
           "type": "feat",
           "scope": "workflows",
           "title": "Unify ingest into one Switch-routed workflow"
         },
         {
-          "hash": "e391f9ed",
+          "hash": "c675601e",
           "type": "fix",
           "scope": "studio",
           "title": "Report designer usable at tablet/narrow-desktop widths"
         },
         {
-          "hash": "d3d9e991",
+          "hash": "de788016",
           "type": "fix",
           "scope": "studio",
           "title": "Stop the report-designer inspector flickering shut on mobile"
         },
         {
-          "hash": "5f182183",
+          "hash": "f1fd0ba9",
           "type": "fix",
           "scope": "studio",
           "title": "Make the report-designer inspector reachable on mobile"
         },
         {
-          "hash": "f0188454",
+          "hash": "dc3069d4",
           "type": "feat",
           "scope": "studio",
           "title": "Tabbed widget builder on mobile"
@@ -4116,31 +4116,31 @@
       "version": "v0.1.2",
       "entries": [
         {
-          "hash": "9b895728",
+          "hash": "301bbfd2",
           "type": "fix",
           "scope": "studio",
           "title": "Finish the mobile dialog/sheet + editor sweep"
         },
         {
-          "hash": "0b30abc7",
+          "hash": "817c5f54",
           "type": "fix",
           "scope": "studio",
           "title": "Dialogs fill the width on mobile; workflow canvas fits nodes to view"
         },
         {
-          "hash": "76f1cb53",
+          "hash": "b0b55d22",
           "type": "fix",
           "scope": "studio",
           "title": "Make the workflow editor usable on mobile"
         },
         {
-          "hash": "45dd0ca0",
+          "hash": "e233fa7c",
           "type": "fix",
           "scope": "studio",
           "title": "Make dashboard widget builder and other editors/dialogs mobile-friendly"
         },
         {
-          "hash": "54de5baf",
+          "hash": "5dc16f55",
           "type": "feat",
           "scope": "studio",
           "title": "Make the app mobile-responsive across all screens"
