@@ -3,7 +3,7 @@
 **A FHIR-native laboratory data integration engine, analytics warehouse, and reporting platform for national lab networks.**
 
 [![Status](https://img.shields.io/badge/status-pre--1.0%20%7C%20deployable-blue)](#status)
-[![License](https://img.shields.io/badge/license-AGPL--3.0%20pending-lightgrey)](#license)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/built%20with-TypeScript-3178c6)](#tech-stack)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen)](#contributing)
 
@@ -17,7 +17,7 @@ OpenLDR CE ingests heterogeneous laboratory data from any source, normalizes it 
 
 Still pre-1.0, and honest about it:
 
-- Version is `0.1.0`; there is **no tagged release and no `LICENSE` file yet** (see [License](#license)).
+- Version is `0.1.7`, released under the **Apache License 2.0** (see [License](#license)).
 - APIs, migrations, and configuration keys can still change between commits.
 - Sustained high-volume warehouse load tuning is ongoing; DHIS2's admin UI is mid-migration into a removable webview plugin.
 
@@ -312,7 +312,6 @@ Per-requirement status lives in [`OPENLDR_PRD.md`](OPENLDR_PRD.md).
 - Distributed-sync live testing (LAN phase 1) ahead of further sync feature work.
 - Migrating DHIS2's admin UI into a removable webview plugin, deleting the in-host page.
 - Sustained high-volume warehouse load tuning.
-- A `LICENSE` file and a formal tagged release.
 
 **Deferred, with the seams left clean**
 
@@ -344,6 +343,6 @@ The formal contributing guide is still pending; until it lands, follow the conve
 
 ## License
 
-OpenLDR CE is intended to be released under the **GNU Affero General Public License v3.0 (AGPL-3.0)** for the core, with a permissively licensed **plugin SDK** so third parties can author and distribute plugins under their own terms across the sandboxed plugin boundary.
+OpenLDR CE is released under the **Apache License 2.0**. The full text is in [`LICENSE`](LICENSE).
 
-**Licensing is not yet finalized and no `LICENSE` file has been published.** Until one lands, no license is granted — treat the source as all-rights-reserved for redistribution purposes.
+The Rust plugin SDK ([`wasm/openldr-plugin-sdk`](wasm/openldr-plugin-sdk)) carries the same Apache-2.0 license, so third parties can author and distribute plugins under their own terms across the sandboxed plugin boundary.

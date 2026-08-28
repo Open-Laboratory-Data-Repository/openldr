@@ -24,3 +24,8 @@ together, or the test fails.
 
 ⚠ Six names carry diacritics (`Åland Islands`, `Côte d'Ivoire`, `Curaçao`, `Réunion`,
 `Saint Barthélemy`, `Türkiye`). Keep this file and the migration UTF-8.
+
+## License
+
+The code in OpenLDR CE is released under the **Apache License 2.0** (see the [`LICENSE`](../../../../LICENSE) at the
+repository root). `iso3166-1.csv` itself is public domain, as noted above.

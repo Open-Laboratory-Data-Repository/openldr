@@ -71,3 +71,7 @@ Run these once on a machine that can start the stack:
 - [ ] **(SP1b) Fail-closed** — stop Keycloak (or break `OIDC_ISSUER_URL`) with auth enforced: the app shows the "Cannot reach the server" card (it does NOT silently fall through to anonymous).
 
 > Note: `bearerOnly` on `openldr-api` works in Keycloak 26 but is soft-deprecated; revisit if upgrading to 27+.
+
+## License
+
+Part of OpenLDR CE, released under the **Apache License 2.0**. See the [`LICENSE`](../../LICENSE) at the repository root.

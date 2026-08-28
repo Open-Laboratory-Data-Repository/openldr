@@ -58,3 +58,7 @@ base URL) at call time, so the plugin has no ambient network access — least pr
 `pnpm dhis2:accept` runs the live acceptance against the Docker DHIS2 demo: connector-store
 round-trip → `health_check` → `pull_metadata` → dry-run → real push → reads the value back via
 `GET /api/dataValueSets`.
+
+## License
+
+Part of OpenLDR CE, released under the **Apache License 2.0**. See the [`LICENSE`](../../../LICENSE) at the repository root.

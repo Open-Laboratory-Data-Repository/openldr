@@ -202,6 +202,6 @@ Both faces share the exact same `HealthRegistry` result — no duplicated probin
 
 ## 10. Open items carried forward (not blocking this sub-project)
 
-- AGPL-3.0 license headers pending company/legal sign-off (§9) — no headers added yet.
+- Apache-2.0 license headers pending company/legal sign-off (§9) — no headers added yet.
 - `apps/web` scaffold deferred to the UI sub-project.
 - Full eventing outbox/worker + real token verification deferred to their respective steps.

@@ -55,3 +55,7 @@ judges it against `rubric.md`, reporting PASS/notes per screen.
 - `capture/capture.spec.ts` — the screenshot matrix.
 - `rubric.md` — what each screen should look like.
 - `artifacts/` — gitignored (screenshots, html report, traces).
+
+## License
+
+Part of OpenLDR CE, released under the **Apache License 2.0**. See the [`LICENSE`](../LICENSE) at the repository root.

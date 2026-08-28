@@ -6,7 +6,7 @@ remain in git history). Also absorbs the point-in-time status/handoff/audit note
 previously lived at the repo root.
 
 **Edition:** `openldr_ce` — clean-slate rebuild, no migration from v2 (v2 had no production deployments)
-**License (pending company/legal sign-off):** AGPL-3.0 for the core; permissive (Apache-2.0/MIT) for the plugin SDK
+**License:** Apache-2.0 for the whole repository, core and plugin SDK alike (see `LICENSE`)
 **Status of this document:** living. Requirements below are annotated with **as-built delivery status**.
 
 > **How to read this document.** Sections 1–4 are the durable product vision, principles,
@@ -423,7 +423,7 @@ Designed-for but not built; ports/seams left clean for later.
 
 ## 10. IP Boundary (read before writing any code)
 
-OpenLDR CE is **company-owned and AGPL-licensed**. Corlix is a **separate, personally-owned
+OpenLDR CE is **company-owned and Apache-2.0-licensed**. Corlix is a **separate, personally-owned
 project**. CE reimplements Corlix's proven *designs and architecture* (the FHIR-over-schema
 approach, FHIR Questionnaire forms, the terminology model, the decoupled-users pattern, the
 dashboard/terminology/reports UX). **CE must not copy Corlix source code.** Ideas and architecture
@@ -437,7 +437,7 @@ own terms, including proprietary, across the arm's-length WASM boundary.
 ## 11. Repository & Workflow Conventions
 
 - **Package manager:** pnpm only, with workspaces. Pin the pnpm version, commit the lockfile. No npm/yarn.
-- **License headers:** AGPL-3.0 headers once company/legal sign-off lands; permissive headers on the plugin SDK.
+- **License headers:** none in source files. Apache-2.0 is declared once, by the root `LICENSE`.
 - **Scoped commits:** small, reviewable commits aligned to requirement IDs where practical.
 - **Proxy-relative everything:** no hard-coded hosts/ports in app code; single origin behind the reverse proxy.
 - **Gates (run from repo root):** `pnpm turbo typecheck lint test build` and `pnpm depcruise` — both green before merge.
@@ -447,7 +447,6 @@ own terms, including proprietary, across the arm's-length WASM boundary.
 
 ## 12. Open Decisions
 
-- AGPL-3.0 sign-off from company/legal; final license headers.
 - Keep the "Community Edition" name, or ship as `openldr` until a second edition exists.
 - Oracle dialect approach for the target-store port (community Kysely dialect vs custom) — on demand.
 - Whether/when to host a governed central marketplace catalog (federation), and who moderates it.

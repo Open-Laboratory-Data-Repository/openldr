@@ -40,3 +40,7 @@ send-email node for the real recipients. The report xlsx is encrypted (default p
 pnpm tsx scripts/amr-demo-revert.ts                                                   # removes the 2 workflows + 3 demo connectors
 docker exec openldr_ce-postgres-1 psql -U openldr -d openldr -c "DROP DATABASE IF EXISTS amr_fixture;"
 ```
+
+## License
+
+Part of OpenLDR CE, released under the **Apache License 2.0**. See the [`LICENSE`](../LICENSE) at the repository root.

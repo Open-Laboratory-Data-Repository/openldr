@@ -38,3 +38,9 @@ them yourself once you have accepted the relevant license, e.g.:
 openldr terminology import loinc <dir> --accept-license
 openldr terminology import resource <codesystem.json>
 ```
+
+## License
+
+The code in OpenLDR CE is released under the **Apache License 2.0** (see the [`LICENSE`](../../../../LICENSE) at the
+repository root). That covers this repository, not the terminology distributions described above,
+which keep the licenses of their publishers.

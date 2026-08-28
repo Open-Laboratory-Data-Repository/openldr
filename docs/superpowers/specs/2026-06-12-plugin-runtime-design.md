@@ -81,7 +81,7 @@ ingest event ──▶ handleIngestEvent ──▶ ConverterResolver.resolve(id)
 
 ## 7. Rust workspace (`wasm/`)
 
-- **`wasm/openldr-plugin-sdk/`** — permissively-licensed SDK (P1-PLUG-3, **Apache-2.0**, vs the AGPL TS core). Wraps the Extism PDK: declares the `log`/`progress` host imports; provides a `convert!`-style entry helper taking a `Fn(&[u8]) -> Result<Vec<serde_json::Value>>` that wires Extism input → NDJSON output; ships thin FHIR builders (Patient, Specimen, Observation with the AST shape) so authors emit valid resources without hand-writing JSON.
+- **`wasm/openldr-plugin-sdk/`** — permissively-licensed SDK (P1-PLUG-3, **Apache-2.0**, same as the TS core). Wraps the Extism PDK: declares the `log`/`progress` host imports; provides a `convert!`-style entry helper taking a `Fn(&[u8]) -> Result<Vec<serde_json::Value>>` that wires Extism input → NDJSON output; ships thin FHIR builders (Patient, Specimen, Observation with the AST shape) so authors emit valid resources without hand-writing JSON.
 - **`wasm/whonet-sqlite/`** — the reference plugin (Apache-2.0 example). Enables WASI; writes the input bytes to a WASI temp file; opens it with `rusqlite` (`bundled`). Maps a **documented subset** of the WHONET isolate schema → FHIR AMR: Patient (demographics), Specimen (type + collection), Observation(s) for organism ID + a handful of antibiotic results with S/I/R interpretation. YAGNI: a representative subset that proves the model, not every WHONET column.
 
 **Toolchain & build:**
