@@ -75,6 +75,9 @@ export interface ReportDesignStore {
    *  exists and why it is NOT the same as `update()` followed by `publish()`. */
   upsertPublished(d: ReportDesign, publishedBy?: string | null): Promise<ReportDesign>;
   listVersions(id: string): Promise<ReportDesignVersion[]>;
+  /** One published snapshot, rebuilt as a full design so a caller can restore it through the
+   *  ordinary save path. `undefined` when the design or that version does not exist. */
+  getVersion(id: string, version: number): Promise<ReportDesign | undefined>;
   remove(id: string): Promise<void>;
 }
 
@@ -218,6 +221,18 @@ export function createReportDesignStore(db: Kysely<InternalSchema>, capture?: Re
         publishedAt: String(r.published_at),
         publishedBy: r.published_by == null ? null : String(r.published_by),
       }));
+    },
+
+    async getVersion(id, version) {
+      const row = await db.selectFrom('report_design_versions').selectAll()
+        .where('design_id', '=', id).where('version', '=', version as never).executeTakeFirst();
+      if (!row) return undefined;
+      // Rebuilt through the SAME `fromRow` every read path uses, so a snapshot is parsed and
+      // defaulted exactly like a live design. `design_id` becomes the design's own `id`: a restore
+      // has to write back to the design it came from, not to a row keyed by the snapshot.
+      // `status` is 'published' because a snapshot exists only by having been published; the
+      // caller decides what the restored WORKING copy's status becomes.
+      return fromRow({ ...row, id: row.design_id, status: 'published' });
     },
     async remove(id) {
       await db.transaction().execute(async (trx) => {

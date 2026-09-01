@@ -118,6 +118,31 @@ export function registerReportDesignRoutes(
     return ctx.reportDesigns.listVersions(id);
   });
 
+  // Mirrors `/api/forms/:id/versions/:version` exactly, validation included: the studio's forms
+  // client already speaks this shape, so the designer's version drawer needs no new conventions.
+  app.get('/api/report-designs/:id/versions/:version', VIEW, async (req, reply) => {
+    const { id, version } = req.params as { id: string; version: string };
+    if (!/^[1-9]\d*$/.test(version)) {
+      reply.code(400);
+      return { error: 'version must be a positive integer' };
+    }
+    const parsedVersion = Number(version);
+    if (!Number.isSafeInteger(parsedVersion) || parsedVersion > 2147483647) {
+      reply.code(400);
+      return { error: 'version must be a positive integer' };
+    }
+    if (!(await ctx.reportDesigns.get(id))) {
+      reply.code(404);
+      return { error: 'not found' };
+    }
+    const snapshot = await ctx.reportDesigns.getVersion(id, parsedVersion);
+    if (!snapshot) {
+      reply.code(404);
+      return { error: 'version not found' };
+    }
+    return snapshot;
+  });
+
   app.delete('/api/report-designs/:id', MANAGE, async (req, reply) => {
     const { id } = req.params as { id: string };
     const before = await ctx.reportDesigns.get(id);

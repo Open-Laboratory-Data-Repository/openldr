@@ -3,6 +3,7 @@ import {
   Plus, Minus, Eye, MoreHorizontal, Undo2, Redo2,
   FilePlus, Save, Download, FileText, FileSpreadsheet, ShieldCheck, Copy, Trash2,
   Check, Loader2, PanelRight, Upload,
+  History,
 } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import { Button } from '@/components/ui/button';
@@ -35,6 +36,7 @@ interface Props {
   onExportExcel(): void;
   onPublishAsReport(): void;
   onPublishRevision(): void;
+  onOpenVersions(): void;
   /** The open design's lifecycle state — undefined (e.g. a transient, never-saved design) reads as draft. */
   status?: 'draft' | 'published';
   /** Fill bound elements with the page strip's loaded rows instead of placeholders. */
@@ -153,6 +155,7 @@ export function CanvasHeader(props: Props): JSX.Element {
                 <DropdownMenuItem onSelect={props.onExportExcel}><FileSpreadsheet className="mr-2 h-4 w-4" /> Excel</DropdownMenuItem>
               </DropdownMenuSubContent>
             </DropdownMenuSub>
+            <DropdownMenuItem onSelect={props.onOpenVersions}><History className="mr-2 h-4 w-4" /> {t('reportDesigner.versions')}</DropdownMenuItem>
             <DropdownMenuItem onSelect={props.onPublishRevision}><Upload className="mr-2 h-4 w-4" /> {t('reportDesigner.publishRevision')}</DropdownMenuItem>
             <DropdownMenuItem onSelect={props.onPublishAsReport}><FileText className="mr-2 h-4 w-4" /> {t('reportDesigner.createReportFrom')}</DropdownMenuItem>
             <DropdownMenuItem disabled className="flex-col items-start gap-0">

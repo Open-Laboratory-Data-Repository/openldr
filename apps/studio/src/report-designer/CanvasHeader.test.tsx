@@ -8,7 +8,7 @@ function setup(overrides = {}) {
     onNameChange: vi.fn(), onNewTemplate: vi.fn(), onInsert: vi.fn(), onZoomIn: vi.fn(), onZoomOut: vi.fn(),
     onUndo: vi.fn(), onRedo: vi.fn(), canUndo: false, canRedo: false,
     onPreview: vi.fn(), onSave: vi.fn(), onExportPdf: vi.fn(), onExportExcel: vi.fn(),
-    onPublishAsReport: vi.fn(), onPublishRevision: vi.fn(), status: 'draft' as const,
+    onPublishAsReport: vi.fn(), onPublishRevision: vi.fn(), onOpenVersions: vi.fn(), status: 'draft' as const,
     onDuplicate: vi.fn(), onDelete: vi.fn(), ...overrides,
   };
   render(<CanvasHeader {...props} />);
@@ -143,6 +143,13 @@ describe('CanvasHeader', () => {
     await openSub('Insert');
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Cell grid' }));
     expect(props.onInsert).toHaveBeenCalledWith('cellgrid');
+  });
+
+  it('opens the versions drawer from the kebab', async () => {
+    const props = setup();
+    await openKebab();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Versions' }));
+    expect(props.onOpenVersions).toHaveBeenCalled();
   });
 
   it('exports PDF via the Export submenu', async () => {
