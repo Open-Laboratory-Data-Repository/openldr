@@ -1293,6 +1293,7 @@ export const en = {
     layoutStat: 'Figure above caption',
     transpose: 'Transpose (columns become rows)',
     transposeLabel: 'First column header',
+    pageBreakStart: 'Page {{n}} starts here',
     printsAsPages_one: 'Prints as {{count}} page',
     printsAsPages_other: 'Prints as {{count}} pages',
     printsAsAtLeastOne: 'Prints as at least 1 page',

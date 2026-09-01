@@ -508,7 +508,7 @@ export function ReportDesignerPage(): JSX.Element {
                 onLoad={() => { void loadPages(); }} />
               <PageCanvas template={template} zoom={zoom} selectedIds={selectedIds} onSelect={setSelectedIds} onCommitRects={commitRects}
                 editingId={editingId} onEditStart={startEdit} onEditChange={editChange} onEditEnd={endEdit}
-                identity={labIdentity} />
+                identity={labIdentity} resolved={resolvedData} />
             </div>
             {/* The inspector is a right-side overlay drawer below lg (toggled from the header and
                 auto-opened on selection) and a static column at lg+ where there's room for all three

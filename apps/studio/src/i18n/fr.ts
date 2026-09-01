@@ -1211,6 +1211,7 @@ export const fr: EnShape = {
     layoutStat: 'Chiffre au-dessus de la légende',
     transpose: 'Transposer (les colonnes deviennent des lignes)',
     transposeLabel: 'En-tête de la première colonne',
+    pageBreakStart: 'La page {{n}} commence ici',
     printsAsPages_one: 'S’imprime sur {{count}} page',
     printsAsPages_other: 'S’imprime sur {{count}} pages',
     printsAsAtLeastOne: 'S’imprime sur au moins 1 page',

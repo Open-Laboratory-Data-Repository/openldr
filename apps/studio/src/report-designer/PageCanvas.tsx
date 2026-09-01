@@ -2,8 +2,8 @@ import { useEffect, useRef, type CSSProperties, type PointerEvent as ReactPointe
 import { useTranslation } from 'react-i18next';
 import { Image as ImageIcon } from 'lucide-react';
 import { cn } from '@/lib/cn';
-import type { DesignElement, DesignPage, Margins, Rect, ReportTemplate } from './types';
-import { encodeCode128, encodeQr, QR_QUIET_ZONE } from './types';
+import type { DesignElement, DesignPage, Margins, Rect, ReportTemplate, ResolvedTable } from './types';
+import { encodeCode128, encodeQr, QR_QUIET_ZONE, elementChunkCount, headerBandHeight, maxRowsFor, ROW_H, toPt, PX_TO_PT } from './types';
 import { paperSize } from './model';
 import { HANDLES, boundingBox, type Handle } from './geometry';
 import { useCanvasInteraction } from './useCanvasInteraction';
@@ -36,10 +36,14 @@ interface Props {
   onEditEnd?(): void;
   /** Lab identity, keyed without the `lab.` prefix — resolves `{{lab.*}}` for the letterhead. */
   identity?: Record<string, string>;
+  /** The page strip's loaded rows, keyed by element id. Present, the canvas can mark where an
+   *  overflowing table ends its first physical page. Absent, it draws no break line: the position
+   *  depends on data, and a guessed line is worse than none. */
+  resolved?: Map<string, ResolvedTable> | null;
 }
 
 export function PageCanvas({ template, zoom, selectedIds, onSelect, onCommitRects,
-  editingId = null, onEditStart, onEditChange, onEditEnd, identity }: Props): JSX.Element {
+  editingId = null, onEditStart, onEditChange, onEditEnd, identity, resolved }: Props): JSX.Element {
   const { t } = useTranslation();
   const size = paperSize(template.paper, template.orientation);
   return (
@@ -50,7 +54,7 @@ export function PageCanvas({ template, zoom, selectedIds, onSelect, onCommitRect
           <PageSurface page={page} zoom={zoom} pageSize={size} margins={template.margins}
             selectedIds={selectedIds} onSelect={onSelect} onCommitRects={onCommitRects}
             editingId={editingId} onEditStart={onEditStart} onEditChange={onEditChange} onEditEnd={onEditEnd}
-            identity={identity} />
+            identity={identity} resolved={resolved} />
           <span className="text-[11px] text-neutral-600 dark:text-neutral-300">
             {t('reportDesigner.pageOf', { n: i + 1, total: template.pages.length })}
           </span>
@@ -61,7 +65,7 @@ export function PageCanvas({ template, zoom, selectedIds, onSelect, onCommitRect
 }
 
 function PageSurface({ page, zoom, pageSize, margins, selectedIds, onSelect, onCommitRects,
-  editingId = null, onEditStart, onEditChange, onEditEnd, identity }: {
+  editingId = null, onEditStart, onEditChange, onEditEnd, identity, resolved }: {
   page: DesignPage; zoom: number; pageSize: { w: number; h: number }; margins?: Margins;
   selectedIds: string[]; onSelect(ids: string[]): void; onCommitRects(rects: Map<string, Rect>): void;
   editingId?: string | null;
@@ -69,13 +73,31 @@ function PageSurface({ page, zoom, pageSize, margins, selectedIds, onSelect, onC
   onEditChange?(id: string, text: string): void;
   onEditEnd?(): void;
   identity?: Record<string, string>;
+  resolved?: Map<string, ResolvedTable> | null;
 }): JSX.Element {
+  const { t } = useTranslation();
   const ref = useRef<HTMLDivElement>(null);
   const ix = useCanvasInteraction({ page, zoom, pageSize, selectedIds, originRef: ref, onSelect, onCommitRects });
   const selectedOnPage = page.elements.filter((el) => selectedIds.includes(el.id));
   const groupBox = selectedOnPage.length > 1
     ? boundingBox(selectedOnPage.map((el) => ix.preview?.get(el.id) ?? el.rect))
     : null;
+  // Tables only: a table's chunk-0 capacity is pure box arithmetic. A cellgrid's first-page height
+  // depends on what flowed above it, which lives in the renderer's drawing context — its COUNT is
+  // still right in the page strip, but a guessed line here would sit on the wrong row.
+  const breaks = resolved
+    ? page.elements.flatMap((el) => {
+        if (el.kind !== 'table' || !el.dataSource) return [];
+        const data = resolved.get(el.id);
+        if (!data || elementChunkCount(el, data, { page, resolved }) < 2) return [];
+        // ⛔ POINTS first, one conversion at the end — capacity computed in px@96 against these
+        // point constants is the exact bug the px-vs-pt memory documents.
+        const box = toPt(el.rect);
+        const headH = headerBandHeight(el);
+        const endPt = headH + maxRowsFor(box.h, headH) * ROW_H;
+        return [{ id: el.id, yPx: el.rect.y + endPt / PX_TO_PT }];
+      })
+    : [];
   return (
     <div ref={ref} data-testid={`page-surface-${page.id}`} onPointerDown={ix.onSurfacePointerDown}
       className="relative bg-white shadow-md ring-1 ring-border" style={{ width: pageSize.w * zoom, height: pageSize.h * zoom }}>
@@ -94,6 +116,16 @@ function PageSurface({ page, zoom, pageSize, margins, selectedIds, onSelect, onC
             identity={identity} />
         );
       })}
+      {breaks.map((b) => (
+        <div key={b.id} aria-hidden data-testid={`break-${b.id}`}
+          className="pointer-events-none absolute left-0 right-0 border-t-2 border-dashed"
+          style={{ top: b.yPx * zoom, borderColor: GUIDE_COLOR }}>
+          <span className="absolute -top-2.5 right-2 rounded-full px-2 text-[9px] font-semibold text-white"
+            style={{ background: GUIDE_COLOR }}>
+            {t('reportDesigner.pageBreakStart', { n: 2 })}
+          </span>
+        </div>
+      ))}
       {groupBox && (
         <div aria-hidden data-testid="group-box" className="pointer-events-none absolute outline outline-1 outline-dashed outline-primary"
           style={{ left: groupBox.x * zoom, top: groupBox.y * zoom, width: groupBox.w * zoom, height: groupBox.h * zoom }}>

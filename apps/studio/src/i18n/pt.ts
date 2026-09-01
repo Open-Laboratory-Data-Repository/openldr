@@ -1211,6 +1211,7 @@ export const pt: EnShape = {
     layoutStat: 'Número acima da legenda',
     transpose: 'Transpor (as colunas tornam-se linhas)',
     transposeLabel: 'Cabeçalho da primeira coluna',
+    pageBreakStart: 'A página {{n}} começa aqui',
     printsAsPages_one: 'Imprime em {{count}} página',
     printsAsPages_other: 'Imprime em {{count}} páginas',
     printsAsAtLeastOne: 'Imprime em pelo menos 1 página',
