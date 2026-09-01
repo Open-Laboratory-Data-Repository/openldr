@@ -6,6 +6,36 @@
       "version": null,
       "entries": [
         {
+          "hash": "f597a363",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Bound charts export their rows to Excel and feed the page strip"
+        },
+        {
+          "hash": "b0e5a811",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Chart type, label and value columns are authorable"
+        },
+        {
+          "hash": "c96b3efa",
+          "type": "feat",
+          "scope": "report-designer",
+          "title": "Charts draw as vector shapes in the PDF"
+        },
+        {
+          "hash": "c6b4c5c4",
+          "type": "feat",
+          "scope": "report-designer",
+          "title": "Chart element kind with type and value columns"
+        },
+        {
+          "hash": "59245d7a",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Parameter rows caption every field and say what a parameter is"
+        },
+        {
           "hash": "118ee62e",
           "type": "feat",
           "scope": "studio",
