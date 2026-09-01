@@ -1,4 +1,4 @@
-import type { ReportDesign } from '@openldr/report-designer/pure';
+import type { BoundColumn, ReportDesign } from '@openldr/report-designer/pure';
 import { paperSizePt } from '@openldr/report-designer';
 
 /** Spec for a one-page report design bound to a single custom query: a letterhead, a scope panel
@@ -9,7 +9,7 @@ export interface SimpleDesignSpec {
   id: string;
   name: string;
   queryId: string;
-  columns: { key: string; label: string }[];
+  columns: BoundColumn[];
   parameters: ReportDesign['parameters'];
   paper?: 'A4' | 'Letter';
   orientation?: 'portrait' | 'landscape';

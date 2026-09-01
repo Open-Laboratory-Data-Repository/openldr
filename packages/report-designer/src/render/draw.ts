@@ -362,6 +362,24 @@ function effectiveResolved(el: DesignElement, resolved: ResolvedTable | undefine
   return transposeResolved(resolved, el.transposeLabel ?? '');
 }
 
+/** `{{sum(elementName.columnKey)}}` in a text element: the numeric sum of that column on the NAMED
+ *  same-page bound element, from the RAW resolved rows (never the projected ones, whose own totals
+ *  row would double-count). Unresolvable — no such element, unbound, errored, or nothing parseable
+ *  — renders the em dash character, matching the unset-param convention above. */
+export function resolveSumTokens(text: string, flow?: FlowContext): string {
+  return text.replace(/\{\{\s*sum\(([^).]+)\.([^)\s]+)\)\s*\}\}/g, (_m, name: string, key: string) => {
+    const el = flow?.page.elements.find((e) => e.name === name);
+    const rt = el && el.dataSource ? flow?.resolved.get(el.id) : undefined;
+    if (!rt || 'error' in rt) return '—';
+    let sum: number | null = null;
+    for (const row of rt.rows) {
+      const n = Number(row[key]);
+      if (Number.isFinite(n) && row[key] !== '' && row[key] != null) sum = (sum ?? 0) + n;
+    }
+    return sum == null ? '—' : String(sum);
+  });
+}
+
 /** A cell value as drawn: `decimals` pins numeric formatting (65 beside 23.7 in one column reads
  *  as a mistake); anything that does not parse as a finite number passes through untouched. */
 function formatCell(c: { key: string; decimals?: number }, v: unknown): string {
@@ -415,7 +433,26 @@ export function headerRowFor(el: DesignElement, resolved: ResolvedTable | undefi
  *  for one that lifts its header out of the data. */
 export function bodyRowsFor(el: DesignElement, resolved: ResolvedTable | undefined): string[][] {
   const rows = rowsFor(el, resolved);
-  return liftsHeaderRow(el) ? rows.slice(1) : rows;
+  const body = liftsHeaderRow(el) ? rows.slice(1) : rows;
+  if (el.kind !== 'table' || !el.totals) return body;
+  // The totals row is appended HERE, after the header lift, so pagination counts it and drawing
+  // slices it — one source, and the last chunk can never overflow by one row. Sums come from the
+  // PROJECTED strings (post-decimals values still parse), formatted by each column's decimals.
+  const cols = el.dataSource
+    ? (el.boundColumns && el.boundColumns.length ? el.boundColumns : (resolved && 'columns' in resolved ? resolved.columns : []))
+    : (el.columns ?? []).map((label, i) => ({ key: String(i), label }));
+  const totalsRow = cols.map((c, ci) => {
+    if (!el.totals!.columns.includes(c.key)) return '';
+    let sum: number | null = null;
+    for (const row of body) {
+      const n = Number(row[ci]);
+      if (Number.isFinite(n) && row[ci] !== '') sum = (sum ?? 0) + n;
+    }
+    return sum == null ? '' : formatCell(c as { key: string; decimals?: number }, sum);
+  });
+  // The label takes the first column unless a sum already occupies it.
+  if (totalsRow.length > 0 && totalsRow[0] === '') totalsRow[0] = el.totals.label;
+  return [...body, totalsRow];
 }
 
 /** Height of this table's header band, in pt. */
@@ -1070,7 +1107,7 @@ export function drawElement(
     case 'text':
     case 'datetime': {
       const raw = el.text ?? (el.kind === 'datetime' ? '{{date}}' : '');
-      drawText(doc, interpolate(raw, tokens), r, s);
+      drawText(doc, resolveSumTokens(interpolate(raw, tokens), flow), r, s);
       return;
     }
     case 'chart': {
@@ -1145,7 +1182,7 @@ function drawTable(doc: Doc, el: DesignElement, r: Box, resolved: ResolvedTable 
   const cols = el.boundColumns ?? [];
   const emphasis = cols.map((c) => c.emphasis ?? 'text');
   const kinds = cols.map((c) => c.kind);
-  drawGrid(doc, r, headers, allRows, chunk, statuses, emphasis, kinds, headerBandHeight(el));
+  drawGrid(doc, r, headers, allRows, chunk, statuses, emphasis, kinds, headerBandHeight(el), Boolean(el.totals));
 }
 
 /**
@@ -1282,6 +1319,9 @@ function drawGrid(
   doc: Doc, r: Box, headers: string[], allRows: string[][], chunk: number,
   allStatuses: (CellStatus | undefined)[][] = [], emphasis: CellEmphasis[] = [],
   kinds: (ColumnKind | undefined)[] = [], headH: number = ROW_H,
+  // `bodyRowsFor` already APPENDED the totals row; this only says the absolute-last row gets the
+  // bold face and its closing rule. It lands on whatever chunk the slice puts it on.
+  totals = false,
 ): void {
   const n = Math.max(headers.length, 1);
   // ⛔ Derived from the band this table actually reserves, never a constant. `headerBandHeight`
@@ -1333,7 +1373,13 @@ function drawGrid(
   };
   rows.forEach((row, ri) => {
     const y = r.y + headH + ri * ROW_H;
-    if (ri % 2 === 1) { doc.rect(r.x, y, r.w, ROW_H).fill(ZEBRA_FILL); lastFill = ZEBRA_FILL; }
+    const isTotals = totals && lo + ri === allRows.length - 1;
+    if (isTotals) {
+      doc.save().lineWidth(0.75).strokeColor(HEAD_RULE)
+        .moveTo(r.x, y).lineTo(r.x + r.w, y).stroke().restore();
+      doc.font('Helvetica-Bold').fontSize(8);
+    }
+    if (ri % 2 === 1 && !isTotals) { doc.rect(r.x, y, r.w, ROW_H).fill(ZEBRA_FILL); lastFill = ZEBRA_FILL; }
     row.forEach((cell, ci) => {
       const st = statuses[ri]?.[ci];
       // A chip is exactly one row tall and one column wide, so it can never affect the y-advance.

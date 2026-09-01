@@ -399,3 +399,25 @@ describe('decimals column option', () => {
     expect(clearing.onPatchElement).toHaveBeenLastCalledWith('t', { boundColumns: [{ key: 'pct', label: '%R' }] }, undefined);
   });
 });
+
+describe('totals editor', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it('typing a label turns totals on, blanking deletes it, and column checkboxes toggle sums', () => {
+    const { onPatchElement } = setup({
+      dataSource: { kind: 'custom-query', queryId: 'cq_1' },
+      boundColumns: [{ key: 'count', label: 'Count' }],
+    });
+    fireEvent.change(screen.getByLabelText('Totals label'), { target: { value: 'Total' } });
+    expect(onPatchElement).toHaveBeenLastCalledWith('t', { totals: { label: 'Total', columns: [] } });
+    const withTotals = setup({
+      dataSource: { kind: 'custom-query', queryId: 'cq_1' },
+      boundColumns: [{ key: 'count', label: 'Count' }],
+      totals: { label: 'Total', columns: [] },
+    });
+    fireEvent.click(screen.getAllByLabelText('Sum Count')[0]);
+    expect(withTotals.onPatchElement).toHaveBeenCalledWith('t', { totals: { label: 'Total', columns: ['count'] } }, { discrete: true });
+    fireEvent.change(screen.getAllByLabelText('Totals label')[1], { target: { value: '' } });
+    expect(withTotals.onPatchElement).toHaveBeenLastCalledWith('t', { totals: undefined });
+  });
+});

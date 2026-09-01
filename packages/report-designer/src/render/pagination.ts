@@ -23,6 +23,7 @@ export {
   rowsFor, maxRowsFor, ROW_H, headerBandHeight,
 } from './draw';
 export { cellGridRowSchedule, cellGridMaxRows, cellGridChunkStart, CELL_HEAD_H, CELL_ROW_H } from './cellgrid';
+export { bodyRowsFor } from './draw';
 // The unit converters ride along: every consumer of this math needs them, and capacity computed
 // in px@96 against these point constants is the exact bug the px-vs-pt memory documents.
 export { toPt, PX_TO_PT, paperSizePt } from './units';

@@ -156,6 +156,16 @@ export const DesignElementSchema = z.object({
    *  The column named here does NOT have to be bound: a sort discriminator is usually not a
    *  column of the report. */
   sortBy: z.string().optional(),
+  /** `table`: append one bold totals row after the last body row. `label` sits in the first
+   *  column; each column NAMED here gets the numeric sum of its values (unparseable values
+   *  contribute nothing; a column with none stays blank), formatted by that column's `decimals`.
+   *
+   *  ⛔ The synthetic row travels through `bodyRowsFor`, so pagination counts it and the last
+   *  chunk cannot overflow by one row — the drawing and the arithmetic read one source.
+   *  ⛔ A TRANSPOSED table refuses totals at write time (`findTransposedTotals`, header-row.ts):
+   *  summing across organisms is meaningless.
+   *  ⛔ Opt-in, and inert when unset (`render/golden.test.ts`). */
+  totals: z.object({ label: z.string(), columns: z.array(z.string()) }).optional(),
   /** `table`: the FIRST data row is this table's HEADER, not a body row.
    *
    *  For a grid whose columns are only known at RUN time — one column per working day of a

@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import type { AppContext } from '@openldr/bootstrap';
-import { ReportDesignSchema, findInvalidImageSources, findUnsortedHeaderRows } from '@openldr/report-designer/pure';
+import { ReportDesignSchema, findInvalidImageSources, findTransposedTotals, findUnsortedHeaderRows } from '@openldr/report-designer/pure';
 import { renderReportDesignPdf, resolveDesignTables } from '@openldr/report-designer';
 import { runStoredQuery, type RunStoredQueryDeps } from './run-stored-query';
 import { recordAudit } from './audit-helper';
@@ -40,6 +40,13 @@ export function registerReportDesignRoutes(
       const error = `a header row needs sortBy: ${unsorted.map((u) => u.elementId).join(', ')}`;
       return { error, unsortedHeaderRows: unsorted };
     }
+    // Same boundary, same reason: summing across a transposed table adds organisms together.
+    const transposedTotals = findTransposedTotals(p.data);
+    if (transposedTotals.length > 0) {
+      reply.code(400);
+      const error = `a transposed table cannot total: ${transposedTotals.map((u) => u.elementId).join(', ')}`;
+      return { error, transposedTotals };
+    }
     const invalidImages = findInvalidImageSources(p.data);
     if (invalidImages.length > 0) {
       reply.code(400);
@@ -69,6 +76,13 @@ export function registerReportDesignRoutes(
       reply.code(400);
       const error = `a header row needs sortBy: ${unsorted.map((u) => u.elementId).join(', ')}`;
       return { error, unsortedHeaderRows: unsorted };
+    }
+    // Same boundary, same reason: summing across a transposed table adds organisms together.
+    const transposedTotals = findTransposedTotals(p.data);
+    if (transposedTotals.length > 0) {
+      reply.code(400);
+      const error = `a transposed table cannot total: ${transposedTotals.map((u) => u.elementId).join(', ')}`;
+      return { error, transposedTotals };
     }
     const invalidImages = findInvalidImageSources(p.data);
     if (invalidImages.length > 0) {

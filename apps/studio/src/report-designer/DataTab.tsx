@@ -347,6 +347,33 @@ export function DataTab({ element, parameters, onPatchElement, onPatchParameters
           {!el.sortBy && <p className="mt-1 text-xs text-muted-foreground">{t('reportDesigner.headerRowNeedsSort')}</p>}
         </div>
       )}
+      {el.dataSource && el.kind === 'table' && !el.transpose && (
+        <div>
+          <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">{t('reportDesigner.totals')}</div>
+          <Input aria-label={t('reportDesigner.totalsLabel')} value={el.totals?.label ?? ''}
+            placeholder={t('reportDesigner.totalsOffHint')}
+            onChange={(e) => onPatchElement(el.id, e.target.value
+              ? { totals: { label: e.target.value, columns: el.totals?.columns ?? [] } }
+              : { totals: undefined })} className="h-7 text-xs" />
+          {el.totals && bound.length > 0 && (
+            <div className="mt-1.5 flex flex-col gap-1">
+              {bound.map((c) => (
+                <label key={c.key} className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Checkbox aria-label={`${t('reportDesigner.sumColumn')} ${c.label}`}
+                    checked={el.totals!.columns.includes(c.key)}
+                    onCheckedChange={(v) => onPatchElement(el.id, {
+                      totals: {
+                        label: el.totals!.label,
+                        columns: v === true ? [...el.totals!.columns, c.key] : el.totals!.columns.filter((k) => k !== c.key),
+                      },
+                    }, { discrete: true })} />
+                  {c.label}
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {el.kind === 'cellgrid' ? (
         <p className="text-xs text-muted-foreground">{t('reportDesigner.cellgridColumnsNote')}</p>
