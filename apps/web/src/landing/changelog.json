@@ -6,6 +6,42 @@
       "version": null,
       "entries": [
         {
+          "hash": "118ee62e",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Duplicate, copy and paste elements"
+        },
+        {
+          "hash": "f4160f2b",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Layers hide, lock and reorder elements"
+        },
+        {
+          "hash": "57804a0b",
+          "type": "feat",
+          "scope": "studio",
+          "title": "The canvas honors locked and hidden elements"
+        },
+        {
+          "hash": "4db9937f",
+          "type": "feat",
+          "scope": "report-designer",
+          "title": "Locked and hidden element flags"
+        },
+        {
+          "hash": "2e68b559",
+          "type": "fix",
+          "scope": "studio",
+          "title": "The inspector pane never scrolls sideways"
+        },
+        {
+          "hash": "3fff302b",
+          "type": "fix",
+          "scope": "studio",
+          "title": "Select triggers truncate long values instead of wrapping"
+        },
+        {
           "hash": "a9e0d3a9",
           "type": "feat",
           "scope": "studio",
