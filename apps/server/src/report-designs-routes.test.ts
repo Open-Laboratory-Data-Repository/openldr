@@ -5,7 +5,7 @@ import './auth-plugin';
 
 function fakeCtx() {
   const data: any[] = [];
-  const versions: Array<{ designId: string; version: number; name: string; publishedAt: string; publishedBy: string | null }> = [];
+  const versions: Array<{ designId: string; version: number; name: string; publishedAt: string; publishedBy: string | null; snapshot?: any }> = [];
   const auditEvents: any[] = [];
   return {
     reportDesigns: {
@@ -22,7 +22,8 @@ function fakeCtx() {
         if (!d) throw new Error(`report design not found: ${id}`);
         const existing = versions.filter((v) => v.designId === id).map((v) => v.version);
         const version = existing.length ? Math.max(...existing) + 1 : 1;
-        versions.push({ designId: id, version, name: d.name, publishedAt: new Date().toISOString(), publishedBy });
+        versions.push({ designId: id, version, name: d.name, publishedAt: new Date().toISOString(), publishedBy,
+          snapshot: JSON.parse(JSON.stringify(d)) });
         d.status = 'published';
         return d;
       },
@@ -30,6 +31,10 @@ function fakeCtx() {
         versions.filter((v) => v.designId === id)
           .sort((a, b) => b.version - a.version)
           .map((v) => ({ version: v.version, name: v.name, publishedAt: v.publishedAt, publishedBy: v.publishedBy })),
+      getVersion: async (id: string, version: number) => {
+        const v = versions.find((x) => x.designId === id && x.version === version);
+        return v ? { ...v.snapshot, status: 'published' } : undefined;
+      },
       upsertPublished: async (d: any, publishedBy: string | null = null) => {
         const i = data.findIndex((x) => x.id === d.id);
         const published = { ...d, status: 'published' };
@@ -394,5 +399,27 @@ describe('report-design routes', () => {
     const res = await app.inject({ method: 'GET', url: '/api/report-designs/rd1' });
     expect(res.statusCode).toBe(200);
     expect(res.json().pages[0].elements[0].src).toBe('https://example.org/l.png');
+  });
+});
+
+describe('GET /api/report-designs/:id/versions/:version', () => {
+  it('returns the published snapshot, and rejects bad or missing versions', async () => {
+    const ctx = fakeCtx();
+    const app = appWith(ctx);
+    const design = { id: 'd1', name: 'One', paper: 'A4', orientation: 'portrait', status: 'draft', parameters: [], pages: [{ id: 'p', elements: [] }] };
+    await ctx.reportDesigns.create(design);
+    await ctx.reportDesigns.publish('d1', 'tester');
+
+    const ok = await app.inject({ method: 'GET', url: '/api/report-designs/d1/versions/1' });
+    expect(ok.statusCode).toBe(200);
+    expect(ok.json().name).toBe('One');
+
+    // A version that does not exist is 404, not an empty 200 that a client would restore as blank.
+    expect((await app.inject({ method: 'GET', url: '/api/report-designs/d1/versions/9' })).statusCode).toBe(404);
+    // An unknown design is 404 before the version is even looked up.
+    expect((await app.inject({ method: 'GET', url: '/api/report-designs/nope/versions/1' })).statusCode).toBe(404);
+    // Non-numeric and zero are rejected as 400, mirroring the forms endpoint.
+    expect((await app.inject({ method: 'GET', url: '/api/report-designs/d1/versions/abc' })).statusCode).toBe(400);
+    expect((await app.inject({ method: 'GET', url: '/api/report-designs/d1/versions/0' })).statusCode).toBe(400);
   });
 });

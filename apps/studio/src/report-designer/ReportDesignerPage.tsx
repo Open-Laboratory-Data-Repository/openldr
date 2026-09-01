@@ -21,6 +21,7 @@ import { addElement, allElements, duplicateElements, moveElementTo, newElement, 
 import { clampRectToPage } from './geometry';
 import { exportDesignToExcel } from './exportExcel';
 import { PageStrip } from './PageStrip';
+import { VersionsDrawer } from './VersionsDrawer';
 import { fetchResolvedTables, designPageCounts } from './pageCounts';
 import type { DesignElement, ElementKind, Rect, ReportDesign, ReportTemplate, ResolvedTable } from './types';
 
@@ -83,6 +84,7 @@ export function ReportDesignerPage(): JSX.Element {
   // when an element is selected so its properties are reachable, and can be toggled from the header.
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const [publishOpen, setPublishOpen] = useState(false);
+  const [versionsOpen, setVersionsOpen] = useState(false);
   // Ids of unsaved (transient) designs created via "New template" — Save creates them server-side.
   const [transientIds, setTransientIds] = useState<Set<string>>(() => new Set());
   // Autosave / dirty-state indicator for the open design.
@@ -252,6 +254,25 @@ export function ReportDesignerPage(): JSX.Element {
     const rects = new Map<string, Rect>();
     for (const el of allElements(template)) if (ids.includes(el.id)) rects.set(el.id, clampRectToPage({ ...el.rect, x: el.rect.x + dx, y: el.rect.y + dy }, size));
     updateTemplate(updateElementRects(template, rects)); // coalesced
+  };
+
+  /**
+   * Apply a published snapshot to the WORKING copy.
+   *
+   * ⛔ An ordinary edit, not a server write. `pushTemplate` makes it one undo step, autosave
+   * persists it through PUT like any other change, and every write gate the server runs
+   * (`findUnsortedHeaderRows`, `findTransposedTotals`, `findInvalidImageSources`) still applies.
+   * A dedicated restore endpoint would be the one write path in the app that skips them.
+   *
+   * ⛔ The restored copy keeps the OPEN design's id and its own `status: 'draft'`: restoring is not
+   * publishing. The operator can preview it, undo it, or publish it deliberately — which is what
+   * makes trying a restore safe.
+   */
+  const restoreVersion = (snapshot: ReportTemplate, version: number) => {
+    if (!template) return;
+    pushTemplate({ ...snapshot, id: template.id, status: 'draft', createdAt: template.createdAt, updatedAt: template.updatedAt });
+    setSelectedIds([]);
+    toast.success(t('reportDesigner.restoredVersion', { n: version }));
   };
 
   const duplicateSelected = () => {
@@ -552,6 +573,7 @@ export function ReportDesignerPage(): JSX.Element {
                 onPublishAsReport={onPublishAsReport}
                 status={template?.status} onPublishRevision={() => void onPublishRevision()}
                 onToggleInspector={() => setInspectorOpen((o) => !o)}
+                onOpenVersions={() => setVersionsOpen(true)}
                 showData={showData} hasData={!!resolvedData}
                 onToggleShowData={() => setShowData((v) => !v)}
                 onDuplicate={duplicateTemplate} onDelete={() => setConfirmDeleteOpen(true)} />
@@ -609,6 +631,10 @@ export function ReportDesignerPage(): JSX.Element {
         </AlertDialogContent>
       </AlertDialog>
       {template && previewOpen && <PreviewReportDesignDialog open={previewOpen} design={template} onOpenChange={setPreviewOpen} />}
+      {template && (
+        <VersionsDrawer open={versionsOpen} designId={template.id}
+          onClose={() => setVersionsOpen(false)} onRestore={restoreVersion} />
+      )}
       {template && (
         <NewReportSheet
           open={publishOpen}

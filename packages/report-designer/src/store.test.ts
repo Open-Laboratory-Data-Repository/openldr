@@ -418,3 +418,32 @@ describe('ReportDesign round-trip completeness', () => {
     expect(got?.pages[0].elements[0].src).toBe('https://example.org/logo.png');
   });
 });
+
+describe('getVersion (spec 4 slice 3)', () => {
+  it('returns a published snapshot as a full design, and undefined for one that never existed', async () => {
+    const store = createReportDesignStore(db);
+    const d = ReportDesignSchema.parse({
+      id: 'v1', name: 'Versioned', pages: [{ id: 'p1', elements: [
+        { id: 'e1', kind: 'text', name: 'Title', rect: { x: 1, y: 2, w: 3, h: 4 }, text: 'first' },
+      ] }],
+    });
+    await store.create(d);
+    await store.publish('v1');
+
+    // Edit the working copy AFTER publishing; the snapshot must keep the old content.
+    await store.update('v1', { ...d, name: 'Edited', pages: [{ id: 'p1', elements: [
+      { id: 'e1', kind: 'text', name: 'Title', rect: { x: 1, y: 2, w: 3, h: 4 }, text: 'second' },
+    ] }] } as ReportDesign);
+
+    const snap = await store.getVersion('v1', 1);
+    expect(snap?.name).toBe('Versioned');
+    expect(snap?.pages[0].elements[0].text).toBe('first');
+    // The snapshot carries the design's own id, so restoring it writes back to the right design.
+    expect(snap?.id).toBe('v1');
+    // Published, because a snapshot only exists by being published.
+    expect(snap?.status).toBe('published');
+
+    expect(await store.getVersion('v1', 99)).toBeUndefined();
+    expect(await store.getVersion('nope', 1)).toBeUndefined();
+  });
+});
