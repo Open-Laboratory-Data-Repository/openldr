@@ -5,6 +5,7 @@ import { drawElement, paramMap, pageChunkCount, totalPhysicalPages, drawPageFoot
 
 // Moved to ./pagination so browser code can name the type without this pdfkit entry point;
 // re-exported here so every existing import keeps working.
+import type { ResolvedTable } from './pagination';
 export type { ResolvedTable } from './pagination';
 
 export { resolveDesignTables, type RunQuery } from './resolve';

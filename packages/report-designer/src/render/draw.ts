@@ -10,7 +10,12 @@ import {
   stripWidth as stripWidthOf,
 } from './cellgrid';
 
-type Doc = PDFKit.PDFDocument;
+// Type-only, so this stays runtime-pdfkit-free (the pure barrel re-exports this module's math into
+// the browser). The AMBIENT `PDFKit.PDFDocument` spelling broke the studio's tsc, which compiles
+// this file through /pure without @types/pdfkit in its own program; an explicit type import
+// resolves from THIS package instead.
+import type PDFDocument from 'pdfkit';
+type Doc = typeof PDFDocument;
 type Box = { x: number; y: number; w: number; h: number };
 
 const TEXT_COLOR = '#262626';
