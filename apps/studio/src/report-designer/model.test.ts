@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { ELEMENT_KINDS, newElement, addElement, paperSize, findElement, allElements, updateElementRects, removeElements, updateElement, updateElements } from './model';
+import { ELEMENT_KINDS, flowTargets, newElement, addElement, paperSize, findElement, allElements, updateElementRects, removeElements, updateElement, updateElements } from './model';
 import { MOCK_TEMPLATES } from './mockTemplates';
-import type { ReportTemplate } from './types';
+import type { DesignElement, ReportTemplate } from './types';
 
 describe('report-designer model', () => {
   it('newElement produces a text element with default content', () => {
@@ -101,5 +101,37 @@ describe('report-designer model', () => {
     expect(el.cellColumns).toEqual(['c1', 'c2', 'c3', 'c4', 'c5']);
     expect(el.palette).toEqual({ ramp: 'blue', steps: 1 });
     expect(el.rect).toEqual({ x: 48, y: 48, w: 480, h: 160 });
+  });
+
+  describe('flowTargets', () => {
+    const el = (id: string, flowAfter?: string): DesignElement =>
+      ({ id, kind: 'text', name: id, rect: { x: 0, y: 0, w: 10, h: 10 }, ...(flowAfter ? { flowAfter } : {}) });
+
+    it('offers every other element when no chains exist', () => {
+      const els = [el('a'), el('b'), el('c')];
+      expect(flowTargets(els, 'a').map((e) => e.id)).toEqual(['b', 'c']);
+    });
+
+    it('never offers the element itself', () => {
+      expect(flowTargets([el('a')], 'a')).toEqual([]);
+    });
+
+    it('excludes an element whose chain already reaches me', () => {
+      // b follows a and c follows b; offering either to a would close a cycle.
+      const els = [el('a'), el('b', 'a'), el('c', 'b')];
+      expect(flowTargets(els, 'a').map((e) => e.id)).toEqual([]);
+      expect(flowTargets(els, 'c').map((e) => e.id)).toEqual(['a', 'b']);
+    });
+
+    it('tolerates a dangling flowAfter without looping', () => {
+      const els = [el('a'), el('b', 'ghost')];
+      expect(flowTargets(els, 'a').map((e) => e.id)).toEqual(['b']);
+    });
+
+    it('tolerates pre-existing cycle data without looping', () => {
+      // b and c already point at each other (bad stored data); asking for a's targets must end.
+      const els = [el('a'), el('b', 'c'), el('c', 'b')];
+      expect(flowTargets(els, 'a').map((e) => e.id)).toEqual(['b', 'c']);
+    });
   });
 });

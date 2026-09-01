@@ -56,6 +56,26 @@ export function newElement(kind: ElementKind): DesignElement {
   return { id, kind, name, rect: { x: 48, y: 48, w: 200, h: 80 } };
 }
 
+/** Elements a Place-below Select may offer `forId`. Excludes the element itself and any element
+ *  whose own `flowAfter` chain reaches `forId`: the renderer THROWS on a flow cycle (schema.ts's
+ *  `flowAfter` contract), so the UI must never offer one. A dangling reference simply ends the
+ *  walk, and a visited set guards stored data that already contains a cycle. */
+export function flowTargets(elements: DesignElement[], forId: string): DesignElement[] {
+  const byId = new Map(elements.map((e) => [e.id, e]));
+  const reachesMe = (start: DesignElement): boolean => {
+    const seen = new Set<string>();
+    let cur: DesignElement | undefined = start;
+    while (cur?.flowAfter) {
+      if (cur.flowAfter === forId) return true;
+      if (seen.has(cur.flowAfter)) return false;
+      seen.add(cur.flowAfter);
+      cur = byId.get(cur.flowAfter);
+    }
+    return false;
+  };
+  return elements.filter((e) => e.id !== forId && !reachesMe(e));
+}
+
 export function addElement(tpl: ReportTemplate, pageIndex: number, el: DesignElement): ReportTemplate {
   const pages = tpl.pages.map((p, i) => (i === pageIndex ? { ...p, elements: [...p.elements, el] } : p));
   return { ...tpl, pages };
