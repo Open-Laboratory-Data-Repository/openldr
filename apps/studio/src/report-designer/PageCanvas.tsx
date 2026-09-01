@@ -5,6 +5,7 @@ import { cn } from '@/lib/cn';
 import type { DesignElement, DesignPage, Margins, Rect, ReportTemplate, ResolvedTable } from './types';
 import { encodeCode128, encodeQr, QR_QUIET_ZONE, elementChunkCount, headerBandHeight, maxRowsFor, rowsFor, ROW_H, toPt, PX_TO_PT, LETTERHEAD } from './types';
 import { paperSize } from './model';
+import { resolveGroups } from './types';
 import { HANDLES, boundingBox, type Handle } from './geometry';
 import { useCanvasInteraction } from './useCanvasInteraction';
 
@@ -67,7 +68,7 @@ export function PageCanvas({ template, zoom, selectedIds, onSelect, onCommitRect
   );
 }
 
-function PageSurface({ page, zoom, pageSize, margins, selectedIds, onSelect, onCommitRects,
+function PageSurface({ page: rawPage, zoom, pageSize, margins, selectedIds, onSelect, onCommitRects,
   editingId = null, onEditStart, onEditChange, onEditEnd, identity, resolved, showData }: {
   page: DesignPage; zoom: number; pageSize: { w: number; h: number }; margins?: Margins;
   selectedIds: string[]; onSelect(ids: string[]): void; onCommitRects(rects: Map<string, Rect>): void;
@@ -81,6 +82,9 @@ function PageSurface({ page, zoom, pageSize, margins, selectedIds, onSelect, onC
 }): JSX.Element {
   const { t } = useTranslation();
   const ref = useRef<HTMLDivElement>(null);
+  // ⛔ The SAME resolver the renderer runs (`groups.ts`). Resolving here means the canvas's hidden
+  // and locked behaviour cannot drift from the PDF's, and nothing below this line knows about groups.
+  const page = resolveGroups(rawPage);
   const ix = useCanvasInteraction({ page, zoom, pageSize, selectedIds, originRef: ref, onSelect, onCommitRects });
   const selectedOnPage = page.elements.filter((el) => selectedIds.includes(el.id));
   const groupBox = selectedOnPage.length > 1

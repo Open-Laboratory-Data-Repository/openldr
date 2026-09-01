@@ -8,7 +8,7 @@ function setup(overrides = {}) {
     onNameChange: vi.fn(), onNewTemplate: vi.fn(), onInsert: vi.fn(), onZoomIn: vi.fn(), onZoomOut: vi.fn(),
     onUndo: vi.fn(), onRedo: vi.fn(), canUndo: false, canRedo: false,
     onPreview: vi.fn(), onSave: vi.fn(), onExportPdf: vi.fn(), onExportExcel: vi.fn(),
-    onPublishAsReport: vi.fn(), onPublishRevision: vi.fn(), onOpenVersions: vi.fn(), status: 'draft' as const,
+    onPublishAsReport: vi.fn(), onPublishRevision: vi.fn(), onOpenVersions: vi.fn(), onGroup: vi.fn(), canGroup: true, status: 'draft' as const,
     onDuplicate: vi.fn(), onDelete: vi.fn(), ...overrides,
   };
   render(<CanvasHeader {...props} />);

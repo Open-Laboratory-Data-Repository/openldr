@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ELEMENT_KINDS, duplicateElements, flowTargets, moveElementTo, newElement, addElement, paperSize, findElement, allElements, updateElementRects, removeElements, updateElement, updateElements } from './model';
+import { ELEMENT_KINDS, duplicateElements, flowTargets, moveElementTo, newElement, addElement, paperSize, findElement, allElements, updateElementRects, removeElements, updateElement, updateElements, groupElements, ungroupElements, patchGroup, selectionWithGroups } from './model';
 import { MOCK_TEMPLATES } from './mockTemplates';
 import type { DesignElement, ReportTemplate } from './types';
 
@@ -190,5 +190,54 @@ describe('report-designer model', () => {
       const els = [el('a'), el('b', 'c'), el('c', 'b')];
       expect(flowTargets(els, 'a').map((e) => e.id)).toEqual(['b', 'c']);
     });
+  });
+});
+
+describe('element groups', () => {
+  const el = (id: string, extra: Partial<DesignElement> = {}): DesignElement =>
+    ({ id, kind: 'text', name: id, rect: { x: 0, y: 0, w: 10, h: 10 }, ...extra });
+  const tpl = (): ReportTemplate => ({
+    id: 't', name: 't', paper: 'A4', orientation: 'portrait', status: 'draft', parameters: [],
+    pages: [{ id: 'p1', elements: [el('a'), el('b'), el('c')] }],
+  });
+
+  it('groups a selection under one new id and names it', () => {
+    const { template: next, groupId } = groupElements(tpl(), ['a', 'b'], 'Letterhead');
+    expect(groupId).toBeTruthy();
+    const p = next.pages[0];
+    expect(p.groups).toEqual([{ id: groupId, name: 'Letterhead' }]);
+    expect(p.elements.map((e) => e.groupId)).toEqual([groupId, groupId, undefined]);
+    // z-order is untouched: a group is a label, not a container.
+    expect(p.elements.map((e) => e.id)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('refuses a group of fewer than two elements', () => {
+    const t = tpl();
+    expect(groupElements(t, ['a'], 'X').template).toBe(t);
+    expect(groupElements(t, [], 'X').template).toBe(t);
+  });
+
+  it('ungroup drops the row and clears every member back to ungrouped', () => {
+    const { template: grouped, groupId } = groupElements(tpl(), ['a', 'b'], 'L');
+    const next = ungroupElements(grouped, groupId!);
+    expect(next.pages[0].groups ?? []).toEqual([]);
+    expect(next.pages[0].elements.every((e) => e.groupId === undefined)).toBe(true);
+  });
+
+  it('patchGroup sets a flag and deletes it when returned to the default', () => {
+    const { template: grouped, groupId } = groupElements(tpl(), ['a', 'b'], 'L');
+    const hidden = patchGroup(grouped, groupId!, { hidden: true });
+    expect(hidden.pages[0].groups![0].hidden).toBe(true);
+    const shown = patchGroup(hidden, groupId!, { hidden: undefined });
+    expect(shown.pages[0].groups![0].hidden).toBeUndefined();
+  });
+
+  it('selectionWithGroups expands a member to its whole group, and alt keeps it single', () => {
+    const { template: grouped, groupId } = groupElements(tpl(), ['a', 'b'], 'L');
+    const page = grouped.pages[0];
+    expect(selectionWithGroups(page, 'a')).toEqual(['a', 'b']);
+    expect(selectionWithGroups(page, 'a', true)).toEqual(['a']);
+    expect(selectionWithGroups(page, 'c')).toEqual(['c']);
+    void groupId;
   });
 });

@@ -21,10 +21,12 @@ interface Props {
   /** When set, a close button is shown after the tabs (drawer mode, below lg). */
   /** Move an element to this ARRAY index within its page (array order is z-order). */
   onReorder(id: string, targetIndex: number): void;
+  onPatchGroup(groupId: string, patch: { locked?: boolean; hidden?: boolean }): void;
+  onUngroup(groupId: string): void;
   onClose?(): void;
 }
 
-export function InspectorTabs({ template, selectedIds, onSelect, onPatchElement, onPatchPage, onPatchElements, onPatchParameters, onReorder, onClose }: Props): JSX.Element {
+export function InspectorTabs({ template, selectedIds, onSelect, onPatchElement, onPatchPage, onPatchElements, onPatchParameters, onReorder, onPatchGroup, onUngroup, onClose }: Props): JSX.Element {
   const { t } = useTranslation();
   const [tab, setTab] = useState<TabKey>('properties');
   // Binding is a single-selection action; for 0/multi selection pass undefined so the tab shows its hint.
@@ -69,7 +71,8 @@ export function InspectorTabs({ template, selectedIds, onSelect, onPatchElement,
       <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
         {tab === 'properties' && <PropertiesTab template={template} selectedIds={selectedIds} onPatchElement={onPatchElement} onPatchPage={onPatchPage} onPatchElements={onPatchElements} />}
         {tab === 'layers' && <LayersTab template={template} selectedIds={selectedIds} onSelect={onSelect}
-          onPatchElement={onPatchElement} onReorder={onReorder} />}
+          onPatchElement={onPatchElement} onReorder={onReorder}
+          onPatchGroup={onPatchGroup} onUngroup={onUngroup} />}
         {tab === 'data' && <DataTab element={selectedElement} parameters={template.parameters} onPatchElement={onPatchElement} onPatchParameters={onPatchParameters} />}
       </div>
     </div>

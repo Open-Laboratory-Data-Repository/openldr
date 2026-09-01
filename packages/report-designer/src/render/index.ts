@@ -1,6 +1,7 @@
 import PDFDocument from 'pdfkit';
 import type { ReportDesign } from '../schema';
 import { paperSizePt } from './units';
+import { resolveGroups } from '../groups';
 import { drawElement, paramMap, pageChunkCount, totalPhysicalPages, drawPageFooter, drawsOnChunk, resolveFlowY } from './draw';
 
 // Moved to ./pagination so browser code can name the type without this pdfkit entry point;
@@ -62,7 +63,10 @@ export function renderReportDesignPdf(
 ): Promise<Buffer> {
   const now = opts.now ?? new Date();
   const tokens = paramMap(design, now, opts.identity, opts.values);
-  const pages = design.pages.length ? design.pages : [{ id: '_empty', elements: [] }];
+  // ⛔ Groups resolved ONCE, here, before anything counts or draws. Downstream every function sees
+  // plain `hidden`/`locked` element flags and needs no knowledge of groups — which is what stops
+  // the chunk count and the drawing loop from ever disagreeing about a hidden group.
+  const pages = (design.pages.length ? design.pages : [{ id: '_empty', elements: [] }]).map(resolveGroups);
   const [w, h] = paperSizePt(design.paper, design.orientation);
 
   const doc = new PDFDocument({ size: [w, h], margin: 0, autoFirstPage: false });
