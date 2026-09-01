@@ -66,6 +66,10 @@ export const BoundColumnSchema = z.object({
   emphasis: z.enum(['fill', 'text']).optional(),
   /** Drives alignment/width policy only. `range` and `units` never right-align. */
   kind: z.enum(['value', 'range', 'units', 'flag', 'label']).optional(),
+  /** Fixed decimal places for values that parse as numbers (`65` and `23.7` in one column read as
+   *  a mistake). Renderer-side because number-to-string SQL is where the three dialects stop
+   *  agreeing (the transmission seed's own lesson). Non-numbers pass through untouched. */
+  decimals: z.number().int().min(0).max(4).optional(),
 });
 export type BoundColumn = z.infer<typeof BoundColumnSchema>;
 

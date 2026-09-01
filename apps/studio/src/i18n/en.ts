@@ -1348,6 +1348,7 @@ export const en = {
     paramLabel: 'Label',
     paramType: 'Type',
     paramValue: 'Value for',
+    decimalsFor: 'Decimals for',
     paramDefault: 'Default value',
     defaultFrom: 'Default from',
     defaultTo: 'Default to',

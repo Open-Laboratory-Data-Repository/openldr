@@ -1266,6 +1266,7 @@ export const fr: EnShape = {
     paramLabel: 'Libellé',
     paramType: 'Type',
     paramValue: 'Valeur pour',
+    decimalsFor: 'Décimales pour',
     paramDefault: 'Valeur par défaut',
     defaultFrom: 'Début par défaut',
     defaultTo: 'Fin par défaut',

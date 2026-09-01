@@ -380,3 +380,22 @@ describe('chart binding', () => {
     expect(screen.queryByRole('button', { name: /load columns/i })).toBeNull();
   });
 });
+
+describe('decimals column option', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it('writes clamped decimals and deletes the key when blanked', () => {
+    const { onPatchElement } = setup({
+      dataSource: { kind: 'custom-query', queryId: 'cq_1' },
+      boundColumns: [{ key: 'pct', label: '%R' }],
+    });
+    fireEvent.change(screen.getByLabelText('Decimals for %R'), { target: { value: '7' } });
+    expect(onPatchElement).toHaveBeenLastCalledWith('t', { boundColumns: [{ key: 'pct', label: '%R', decimals: 4 }] }, undefined);
+    const clearing = setup({
+      dataSource: { kind: 'custom-query', queryId: 'cq_1' },
+      boundColumns: [{ key: 'pct', label: '%R', decimals: 1 }],
+    });
+    fireEvent.change(screen.getAllByLabelText('Decimals for %R')[1], { target: { value: '' } });
+    expect(clearing.onPatchElement).toHaveBeenLastCalledWith('t', { boundColumns: [{ key: 'pct', label: '%R' }] }, undefined);
+  });
+});

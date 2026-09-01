@@ -4493,7 +4493,7 @@ export const SEED_DESIGNS: ReportDesign[] = [
       { key: 'r', label: 'R' },
       { key: 'i', label: 'I' },
       { key: 's', label: 'S' },
-      { key: 'percentR', label: '%R' },
+      { key: 'percentR', label: '%R', decimals: 1 },
     ],
     parameters: [
       { key: 'dateRange', label: 'Date range', type: 'daterange', required: true },
@@ -4527,9 +4527,9 @@ export const SEED_DESIGNS: ReportDesign[] = [
     columns: [
       { key: 'test', label: 'Test' },
       { key: 'count', label: 'Reports' },
-      { key: 'avgHours', label: 'Avg hours' },
-      { key: 'minHours', label: 'Min' },
-      { key: 'maxHours', label: 'Max' },
+      { key: 'avgHours', label: 'Avg hours', decimals: 1 },
+      { key: 'minHours', label: 'Min', decimals: 1 },
+      { key: 'maxHours', label: 'Max', decimals: 1 },
     ],
     parameters: [
       { key: 'dateRange', label: 'Date range', type: 'daterange', required: true },
@@ -4613,7 +4613,7 @@ export const SEED_DESIGNS: ReportDesign[] = [
       { key: 'r', label: 'R' },
       { key: 'i', label: 'I' },
       { key: 's', label: 'S' },
-      { key: 'percentR', label: '%R' },
+      { key: 'percentR', label: '%R', decimals: 1 },
     ],
     parameters: [{ key: 'dateRange', label: 'Date range', type: 'daterange', required: true }],
   }),

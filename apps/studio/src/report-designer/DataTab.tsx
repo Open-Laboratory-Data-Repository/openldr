@@ -278,6 +278,15 @@ export function DataTab({ element, parameters, onPatchElement, onPatchParameters
       const { statusKey: _drop, ...rest } = c;
       return statusKey ? { ...rest, statusKey } : rest;
     }), { discrete: true });
+  // Decimals: same delete-the-default idiom. Blank means "as the query sent it".
+  const setDecimals = (idx: number, raw: string) =>
+    setBound(bound.map((c, i) => {
+      if (i !== idx) return c;
+      const { decimals: _drop, ...rest } = c;
+      if (raw === '') return rest;
+      const n = Math.max(0, Math.min(4, Math.round(Number(raw))));
+      return Number.isFinite(n) ? { ...rest, decimals: n } : rest;
+    }));
   // Same idiom as setStatusKey: 'text' is the default emphasis, so picking it deletes the property
   // rather than persisting the redundant value. Also a discrete undo step (one-shot Select choice).
   const setEmphasis = (idx: number, emphasis: 'fill' | 'text') =>
@@ -373,6 +382,12 @@ export function DataTab({ element, parameters, onPatchElement, onPatchParameters
                         {statusOptions.map((c) => <SelectItem key={c.key} value={c.key}>{c.label || c.key}</SelectItem>)}
                       </SelectContent>
                     </Select>
+                  )}
+                  {included && boundCol && (
+                    <Input type="number" min={0} max={4} placeholder="—"
+                      aria-label={`${t('reportDesigner.decimalsFor')} ${boundCol.label}`}
+                      value={boundCol.decimals ?? ''} className="h-7 w-12 shrink-0 text-xs"
+                      onChange={(e) => setDecimals(bound.indexOf(boundCol), e.target.value)} />
                   )}
                   {included && boundCol && (
                     <Select value={boundCol.emphasis ?? 'text'} disabled={!boundCol.statusKey}

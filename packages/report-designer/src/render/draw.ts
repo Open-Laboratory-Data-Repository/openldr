@@ -362,6 +362,14 @@ function effectiveResolved(el: DesignElement, resolved: ResolvedTable | undefine
   return transposeResolved(resolved, el.transposeLabel ?? '');
 }
 
+/** A cell value as drawn: `decimals` pins numeric formatting (65 beside 23.7 in one column reads
+ *  as a mistake); anything that does not parse as a finite number passes through untouched. */
+function formatCell(c: { decimals?: number }, v: unknown): string {
+  if (c.decimals == null) return String(v ?? '');
+  const n = Number(v);
+  return Number.isFinite(n) ? n.toFixed(c.decimals) : String(v ?? '');
+}
+
 /** The projected body rows for a table element (bound → project columns from resolved.rows; static → el.rows; error/unresolved → []). */
 export function rowsFor(el: DesignElement, resolved: ResolvedTable | undefined): string[][] {
   if (el.kind === 'cellgrid') return cellGridRowsFor(el, resolved);
@@ -370,7 +378,7 @@ export function rowsFor(el: DesignElement, resolved: ResolvedTable | undefined):
     const rt = effectiveResolved(el, resolved);
     if (!rt || 'error' in rt) return [];
     const cols = el.boundColumns && el.boundColumns.length ? el.boundColumns : rt.columns;
-    return rt.rows.map((row) => cols.map((c) => String(row[c.key] ?? '')));
+    return rt.rows.map((row) => cols.map((c) => formatCell(c, row[c.key])));
   }
   return el.rows ?? [];
 }

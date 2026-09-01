@@ -56,3 +56,16 @@ describe('T2: authored border widths convert px to pt like fontSize', () => {
     expect(content).toContain('0.75 w');
   });
 });
+
+describe('T4: per-column decimals', () => {
+  it('a decimals column formats numbers and passes junk through', async () => {
+    const { rowsFor } = await import('./pagination');
+    const el: DesignElement = {
+      id: 't', kind: 'table', name: 't', rect: { x: 0, y: 0, w: 400, h: 200 },
+      dataSource: { kind: 'custom-query', queryId: 'q' },
+      boundColumns: [{ key: 'pct', label: '%R', decimals: 1 }],
+    };
+    const rows = rowsFor(el, { columns: [{ key: 'pct', label: '%R' }], rows: [{ pct: 60 }, { pct: '33.33' }, { pct: 'n/a' }] });
+    expect(rows).toEqual([['60.0'], ['33.3'], ['n/a']]);
+  });
+});

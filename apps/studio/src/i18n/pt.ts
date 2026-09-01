@@ -1266,6 +1266,7 @@ export const pt: EnShape = {
     paramLabel: 'Rótulo',
     paramType: 'Tipo',
     paramValue: 'Valor para',
+    decimalsFor: 'Casas decimais para',
     paramDefault: 'Valor predefinido',
     defaultFrom: 'Início predefinido',
     defaultTo: 'Fim predefinido',
