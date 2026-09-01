@@ -423,3 +423,31 @@ describe('ReportDesignerPage', () => {
     expect(screen.getByTestId('save-status')).toHaveTextContent('Unsaved changes');
   });
 });
+
+describe('duplicate, copy and paste', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it('Ctrl+D duplicates the selection and selects the clone', async () => {
+    await renderPage();
+    const before = document.querySelectorAll('[data-testid^="el-"]:not([data-testid^="el-tag-"])').length;
+    fireEvent.pointerDown(screen.getByTestId('el-amr-title'), { button: 0, clientX: 5, clientY: 5 });
+    fireEvent.pointerUp(window, { clientX: 5, clientY: 5 });
+    fireEvent.keyDown(document.body, { key: 'd', ctrlKey: true });
+    const after = document.querySelectorAll('[data-testid^="el-"]:not([data-testid^="el-tag-"])').length;
+    expect(after).toBe(before + 1);
+  });
+
+  it('Ctrl+C then Ctrl+V pastes a fresh copy with a new id', async () => {
+    await renderPage();
+    const before = document.querySelectorAll('[data-testid^="el-"]:not([data-testid^="el-tag-"])').length;
+    fireEvent.pointerDown(screen.getByTestId('el-amr-title'), { button: 0, clientX: 5, clientY: 5 });
+    fireEvent.pointerUp(window, { clientX: 5, clientY: 5 });
+    fireEvent.keyDown(document.body, { key: 'c', ctrlKey: true });
+    fireEvent.keyDown(document.body, { key: 'v', ctrlKey: true });
+    const after = document.querySelectorAll('[data-testid^="el-"]:not([data-testid^="el-tag-"])').length;
+    expect(after).toBe(before + 1);
+    // Paste is one undo step: Ctrl+Z removes the clone again.
+    fireEvent.click(screen.getByRole('button', { name: /undo/i }));
+    expect(document.querySelectorAll('[data-testid^="el-"]:not([data-testid^="el-tag-"])').length).toBe(before);
+  });
+});
