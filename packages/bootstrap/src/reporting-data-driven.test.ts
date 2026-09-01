@@ -29,7 +29,7 @@ let lastRunStoredQueryValues: Record<string, unknown> | undefined;
 // wiring line (`packages/bootstrap/src/index.ts:242`, `{ identity, values }`) has a test pinning it
 // — an opaque mock that ignores its arguments would keep passing if that line reverted to dropping
 // `values` (or `identity`) entirely.
-let lastRenderOptions: { identity?: unknown; values?: Record<string, unknown> } | undefined;
+let lastRenderOptions: { identity?: unknown; values?: Record<string, unknown>; lang?: string } | undefined;
 // Captures the `values` argument resolveDesignTables was actually called with — the trap in item
 // 2 is that the scope panel's display substitution ("Name (CODE)") must NEVER leak into the value
 // the design's bound queries filter on, or the report silently renders empty.
@@ -67,7 +67,7 @@ const deps = {
     lastResolveDesignTablesValues = values;
     return new Map([['t', { columns: [{ key: 'a', label: 'a' }], rows: [{ a: 1 }] }]]);
   },
-  renderReportDesignPdf: async (_design: unknown, _resolved: unknown, opts: { identity?: unknown; values?: Record<string, unknown> }) => {
+  renderReportDesignPdf: async (_design: unknown, _resolved: unknown, opts: { identity?: unknown; values?: Record<string, unknown>; lang?: string }) => {
     lastRenderOptions = opts;
     return Buffer.from('%PDF-1.4 fake');
   },
@@ -113,6 +113,35 @@ describe('reporting data-driven branch', () => {
     await reporting.renderPdf('r-with-facility', { facility: 'BAGAE' });
     expect(lastResolveDesignTablesValues).toEqual({ facility: 'BAGAE' });
     expect(lastRenderOptions?.values).toEqual({ facility: 'National Public Health Laboratory (BAGAE)' });
+  });
+  it('renderPdf forwards `lang` as the print language and keeps it OUT of the query values', async () => {
+    // `lang` is reserved, not a report parameter: it must reach the renderer and must never reach
+    // a stored query, where it would be an unrecognised filter value.
+    await reporting.renderPdf('r-no-options', { facility: 'Ndola', lang: 'fr' });
+    expect(lastRenderOptions?.lang).toBe('fr');
+    expect(lastRenderOptions?.values).toEqual({ facility: 'Ndola' });
+    expect(lastResolveDesignTablesValues).toEqual({ facility: 'Ndola' });
+  });
+  it('renderPdf without `lang` asks for no language, so the authored text prints', async () => {
+    await reporting.renderPdf('r-no-options', { facility: 'Ndola' });
+    expect(lastRenderOptions?.lang).toBeUndefined();
+  });
+  it('a design that DECLARES a `lang` parameter keeps it as a parameter, and asks for no language', async () => {
+    // The collision: eating a declared `lang` would strip the query's filter and render the report
+    // over everything. The parameter wins; such a design just cannot be translated per run.
+    const langDesign = { ...design, id: 'd-lang',
+      parameters: [{ key: 'lang', label: 'Language', type: 'text', value: '' }] };
+    const langDef = { ...defNoOptions, id: 'r-lang', designId: 'd-lang' };
+    const langDeps = {
+      ...deps,
+      reportDefs: { list: async () => [langDef], get: async (id: string) => (id === 'r-lang' ? langDef : undefined) },
+      reportDesigns: { get: async (id: string) => (id === 'd-lang' ? langDesign : undefined) },
+    };
+    const r = buildReportingForTest(langDeps as any);
+    await r.renderPdf('r-lang', { lang: 'sw-code' });
+    expect(lastRenderOptions?.lang).toBeUndefined();
+    expect(lastRenderOptions?.values).toEqual({ lang: 'sw-code' });
+    expect(lastResolveDesignTablesValues).toEqual({ lang: 'sw-code' });
   });
   it('falls back to printing the raw code when it has no matching option (a facility that has since disappeared)', async () => {
     await reporting.renderPdf('r-with-facility', { facility: 'GONE-CODE' });

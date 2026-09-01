@@ -144,7 +144,14 @@ Run a report:
 ```
 ./openldr report list
 ./openldr report run <id>
+
+# PDF in the design's own text, then in French
+./openldr report run <id> --format pdf --out report.pdf
+./openldr report run <id> --format pdf --lang fr --out rapport.pdf
 ```
+
+`--lang` prints the translations stored on the design. Text with no translation for that language
+prints as authored, and data is never translated.
 
 Enroll a lab on the central server, then connect a lab to it:
 

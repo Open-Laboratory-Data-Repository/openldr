@@ -88,6 +88,7 @@ import * as m086 from './086_facility_one_code';
 import * as m087 from './087_facility_form_one_code';
 import * as m088 from './088_facility_drop_old_codes';
 import * as m089 from './089_facility_form_canonical_paths';
+import * as m090 from './090_report_design_i18n';
 
 export const internalMigrations: Record<string, Migration> = {
   '001_fhir_resources': { up: m001.up, down: m001.down },
@@ -179,4 +180,5 @@ export const internalMigrations: Record<string, Migration> = {
   '087_facility_form_one_code': { up: m087.up, down: m087.down },
   '088_facility_drop_old_codes': { up: m088.up, down: m088.down },
   '089_facility_form_canonical_paths': { up: m089.up, down: m089.down },
+  '090_report_design_i18n': { up: m090.up, down: m090.down },
 };

@@ -1160,6 +1160,8 @@ export const fr: EnShape = {
     elementLabel: 'Élément',
     pageSettings: 'Paramètres de page',
     pageNumbers: 'Numéros de page',
+    printLanguage: 'Langue d’impression',
+    designText: 'Texte du modèle',
     paper: 'Papier',
     orientation: 'Orientation',
     columns: 'Colonnes',

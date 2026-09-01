@@ -12,6 +12,7 @@ import { encodeCode128, encodeQr, maxCode128Chars, minWidthPxFor, moduleWidthMm,
 import { findElement, flowTargets, paperSize } from './model';
 import { clampRectToPage } from './geometry';
 import { ColorField } from './ColorField';
+import { SUPPORTED_LANGUAGES } from '@/i18n/language';
 
 export interface PatchOpts { discrete?: boolean }
 
@@ -21,6 +22,11 @@ interface Props {
   onPatchElement(id: string, patch: Partial<import('./types').DesignElement>, opts?: PatchOpts): void;
   onPatchPage(patch: Partial<ReportTemplate>, opts?: PatchOpts): void;
   onPatchElements(ids: string[], patch: Partial<import('./types').DesignElement>, opts?: PatchOpts): void;
+  /** The language being AUTHORED, '' (the default) for the design's own text. Held by the page so
+   *  the preview renders the same language the inspector is editing. */
+  lang?: string;
+  onLangChange?(lang: string): void;
+  onSetI18nText?(lang: string, key: string, text: string): void;
 }
 
 function common<T>(vals: T[]): T | undefined { return vals.length > 0 && vals.every((v) => v === vals[0]) ? vals[0] : undefined; }
@@ -190,9 +196,13 @@ function ImageSource({ el, onPatch }: { el: DesignElement; onPatch: (patch: Part
   );
 }
 
-function KindControls({ el, onPatch }: {
+function KindControls({ el, onPatch, lang = '', i18nText, onSetI18nText = () => {} }: {
   el: import('./types').DesignElement;
   onPatch(patch: Partial<import('./types').DesignElement>, opts?: PatchOpts): void;
+  lang?: string;
+  /** The stored override for `lang`, or undefined when there is none (prints the authored text). */
+  i18nText?: string;
+  onSetI18nText?(lang: string, key: string, text: string): void;
 }): JSX.Element | null {
   const { t } = useTranslation();
   const s = el.style ?? {};
@@ -208,7 +218,14 @@ function KindControls({ el, onPatch }: {
       <div className="flex flex-col gap-3">
         <div>
           <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">{t('reportDesigner.content')}</div>
-          <Textarea aria-label={t('reportDesigner.content')} value={el.text ?? ''} onChange={(e) => onPatch({ text: e.target.value })} className="min-h-[44px] text-xs" />
+          {/* With a language selected this edits that language's OVERRIDE, and the authored text
+              becomes the placeholder — so an empty box means "prints the authored text", which is
+              exactly what the renderer does with a missing entry. */}
+          {lang
+            ? <Textarea aria-label={t('reportDesigner.content')} value={i18nText ?? ''} placeholder={el.text ?? ''}
+                onChange={(e) => onSetI18nText(lang, el.id, e.target.value)} className="min-h-[44px] text-xs" />
+            : <Textarea aria-label={t('reportDesigner.content')} value={el.text ?? ''}
+                onChange={(e) => onPatch({ text: e.target.value })} className="min-h-[44px] text-xs" />}
         </div>
         <div className="flex items-end gap-2">
           <NumberField label={t('reportDesigner.fontSize')} value={s.fontSize ?? 11} onChange={(n) => style({ fontSize: n })} min={4} />
@@ -626,7 +643,41 @@ function BulkControls({ ids, els, onPatchElements }: {
   );
 }
 
-export function PropertiesTab({ template, selectedIds, onPatchElement, onPatchPage, onPatchElements }: Props): JSX.Element {
+/** The language being authored, above everything else in the tab.
+ *
+ *  "Design text" is the authored language, not a fourth language: it edits `el.text`, which is
+ *  what prints when a run asks for a language this design has no entry for. Picking fr or pt
+ *  switches the content field to that language's override map and previews in it. */
+function LanguageBar({ lang, onLangChange }: { lang: string; onLangChange(l: string): void }): JSX.Element {
+  const { t } = useTranslation();
+  return (
+    <div className="border-b border-border p-3">
+      <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">{t('reportDesigner.printLanguage')}</div>
+      <Select value={lang === '' ? '_source' : lang} onValueChange={(v) => onLangChange(v === '_source' ? '' : v)}>
+        <SelectTrigger className="h-8 w-full text-xs" aria-label={t('reportDesigner.printLanguage')}><SelectValue /></SelectTrigger>
+        <SelectContent>
+          <SelectItem value="_source">{t('reportDesigner.designText')}</SelectItem>
+          {/* Every language, English included: a design authored in French needs an English
+              override just as much, and the authored text is a SOURCE, not a language. */}
+          {SUPPORTED_LANGUAGES.map((l) => (
+            <SelectItem key={l.code} value={l.code}>{l.label}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
+export function PropertiesTab(props: Props): JSX.Element {
+  return (
+    <>
+      <LanguageBar lang={props.lang ?? ''} onLangChange={props.onLangChange ?? (() => {})} />
+      <PropertiesBody {...props} />
+    </>
+  );
+}
+
+function PropertiesBody({ template, selectedIds, onPatchElement, onPatchPage, onPatchElements, lang = '', onSetI18nText }: Props): JSX.Element {
   const { t } = useTranslation();
   const selected = selectedIds.length === 1 ? findElement(template, selectedIds[0]) : null;
   const size = paperSize(template.paper, template.orientation);
@@ -685,7 +736,8 @@ export function PropertiesTab({ template, selectedIds, onPatchElement, onPatchPa
       <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
         {t('reportDesigner.elementLabel')} · {t(`reportDesigner.element.${selected.kind}`)}
       </div>
-      <KindControls el={selected} onPatch={(patch, opts) => onPatchElement(selected.id, patch, opts)} />
+      <KindControls el={selected} onPatch={(patch, opts) => onPatchElement(selected.id, patch, opts)}
+        lang={lang} i18nText={lang ? template.i18n?.[lang]?.[selected.id] : undefined} onSetI18nText={onSetI18nText} />
       <FlowSection template={template} el={selected} onPatch={(patch, opts) => onPatchElement(selected.id, patch, opts)} />
       <div>
         <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">{t('reportDesigner.positionSize')}</div>

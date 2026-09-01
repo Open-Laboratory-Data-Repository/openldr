@@ -1,4 +1,5 @@
 import { getAccessToken, isAuthEnforced, notifyUnauthorized } from './auth/token';
+import i18n from './i18n';
 import type { PluginBrokerOp, PluginRpcResult } from '@openldr/plugin-ui-sdk';
 import type { ReportDesign } from '@openldr/report-designer/pure';
 // Browser-safe subpath — no kysely/pg. Same seam FacilityDialog.tsx already imports
@@ -158,7 +159,10 @@ export async function fetchReportOptions(id: string): Promise<Record<string, Rep
 }
 
 export async function fetchReportPdf(id: string, params: Record<string, string> = {}): Promise<Blob> {
-  const qs = new URLSearchParams(params).toString();
+  // The operator's current language, so a French session prints the design's French text where the
+  // design carries one. Set FIRST so a report that declares its own `lang` parameter overwrites it
+  // and keeps working (the server makes the same call — see `splitLang` in @openldr/bootstrap).
+  const qs = new URLSearchParams({ lang: i18n.language || 'en', ...params }).toString();
   const res = await authFetch(`/api/reports/${encodeURIComponent(id)}.pdf${qs ? `?${qs}` : ''}`);
   // Same coded-error surfacing as okJson (errorDetail + formatApiError below), just without the
   // res.json() success path — a PDF response body is a Blob, not JSON, so okJson itself can't be
@@ -1832,15 +1836,17 @@ export const listReportDesignVersions = (id: string): Promise<ReportDesignVersio
   apiGet(`/api/report-designs/${encodeURIComponent(id)}/versions`, 'list report design versions');
 export const getReportDesignVersion = (id: string, version: number): Promise<ReportDesign> =>
   apiGet(`/api/report-designs/${encodeURIComponent(id)}/versions/${version}`, 'get report design version');
-export const previewReportDesign = (design: ReportDesign): Promise<Blob> =>
-  authFetch('/api/report-designs/preview', jbody(design, 'POST')).then((r) => {
+/** `lang` previews the design's translations for one language; omitted, it renders the authored
+ *  text — see `resolveI18n` in @openldr/report-designer. */
+export const previewReportDesign = (design: ReportDesign, lang?: string): Promise<Blob> =>
+  authFetch(`/api/report-designs/preview${lang ? `?lang=${encodeURIComponent(lang)}` : ''}`, jbody(design, 'POST')).then((r) => {
     if (!r.ok) throw new Error(`preview failed: ${r.status}`);
     return r.blob();
   });
 
 /** Render the (working) design via the preview endpoint and download it as a PDF file. */
-export async function downloadReportDesignPdf(design: ReportDesign): Promise<void> {
-  const blob = await previewReportDesign(design);
+export async function downloadReportDesignPdf(design: ReportDesign, lang?: string): Promise<void> {
+  const blob = await previewReportDesign(design, lang);
   const safeName = (design.name || 'report-design').replace(/[^\w.-]+/g, '_');
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');

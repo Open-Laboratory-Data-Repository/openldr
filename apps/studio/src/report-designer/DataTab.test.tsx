@@ -515,3 +515,31 @@ describe('spark column toggle', () => {
       { boundColumns: [{ key: 'trend', label: 'Trend' }] }, { discrete: true });
   });
 });
+
+describe('DataTab column labels per language', () => {
+  const bound = {
+    dataSource: { kind: 'custom-query' as const, queryId: 'cq_1' },
+    boundColumns: [{ key: 'org', label: 'Organism' }],
+  };
+
+  it('with a language picked, the label field edits that language’s header override', () => {
+    const onSetI18nText = vi.fn();
+    const onPatchElement = vi.fn();
+    render(<DataTab element={tableEl(bound)} parameters={[]} onPatchElement={onPatchElement}
+      onPatchParameters={vi.fn()} lang="fr" i18nOfLang={{}} onSetI18nText={onSetI18nText} />);
+    const field = screen.getByLabelText('Label for column org');
+    // Empty with the authored label as the placeholder: an empty box prints the authored header.
+    expect(field).toHaveValue('');
+    expect(field).toHaveAttribute('placeholder', 'Organism');
+    fireEvent.change(field, { target: { value: 'Organisme' } });
+    expect(onSetI18nText).toHaveBeenCalledWith('fr', 't.col.org', 'Organisme');
+    // ⛔ The authored label must not move — that is the difference between a translation and a rename.
+    expect(onPatchElement).not.toHaveBeenCalled();
+  });
+
+  it('shows the stored override and leaves the authored label alone', () => {
+    render(<DataTab element={tableEl(bound)} parameters={[]} onPatchElement={vi.fn()}
+      onPatchParameters={vi.fn()} lang="fr" i18nOfLang={{ 't.col.org': 'Organisme' }} onSetI18nText={vi.fn()} />);
+    expect(screen.getByLabelText('Label for column org')).toHaveValue('Organisme');
+  });
+});

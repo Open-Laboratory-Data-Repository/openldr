@@ -1242,6 +1242,8 @@ export const en = {
     elementLabel: 'Element',
     pageSettings: 'Page settings',
     pageNumbers: 'Page numbers',
+    printLanguage: 'Print language',
+    designText: 'Design text',
     paper: 'Paper',
     orientation: 'Orientation',
     columns: 'Columns',

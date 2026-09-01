@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import zlib from 'node:zlib';
 import Fastify from 'fastify';
 import { registerReportDesignRoutes } from './report-designs-routes';
 import './auth-plugin';
@@ -421,5 +422,42 @@ describe('GET /api/report-designs/:id/versions/:version', () => {
     // Non-numeric and zero are rejected as 400, mirroring the forms endpoint.
     expect((await app.inject({ method: 'GET', url: '/api/report-designs/d1/versions/abc' })).statusCode).toBe(400);
     expect((await app.inject({ method: 'GET', url: '/api/report-designs/d1/versions/0' })).statusCode).toBe(400);
+  });
+});
+
+/** The decoded drawing text of a PDF, the same two-step the renderer's own tests use: inflate every
+ *  flate stream, then rejoin the hex chunks inside one `TJ` array (pdfkit splits a string on kerning
+ *  pairs, so searching the raw bytes for a whole word silently fails). */
+function pdfTexts(pdf: Buffer): string[] {
+  const raw = pdf.toString('latin1');
+  let content = '';
+  for (const m of raw.matchAll(/stream\r?\n([\s\S]*?)\r?\nendstream/g)) {
+    try { content += zlib.inflateSync(Buffer.from(m[1], 'latin1')).toString('latin1'); } catch { /* font, not a content stream */ }
+  }
+  return [...content.matchAll(/\[(.*?)\]\s*TJ/g)].map((m) =>
+    [...m[1].matchAll(/<([0-9a-fA-F]*)>/g)].map((h) => Buffer.from(h[1], 'hex').toString('latin1')).join(''));
+}
+
+describe('preview print language', () => {
+  const design = {
+    id: 'd', name: 'N', paper: 'A4', orientation: 'portrait', parameters: [],
+    i18n: { fr: { t1: 'Rapport' } },
+    pages: [{ id: 'p', elements: [{ id: 't1', kind: 'text', name: 'T', rect: { x: 20, y: 20, w: 300, h: 40 }, text: 'Report' }] }],
+  };
+
+  it('?lang= prints that language\u2019s override', async () => {
+    const app = appWith(fakeCtx(), ['lab_admin'], fakeDeps());
+    const res = await app.inject({ method: 'POST', url: '/api/report-designs/preview?lang=fr', payload: design });
+    expect(res.statusCode).toBe(200);
+    expect(pdfTexts(res.rawPayload)).toContain('Rapport');
+  });
+
+  it('without ?lang= prints the authored text', async () => {
+    const app = appWith(fakeCtx(), ['lab_admin'], fakeDeps());
+    const res = await app.inject({ method: 'POST', url: '/api/report-designs/preview', payload: design });
+    expect(res.statusCode).toBe(200);
+    const texts = pdfTexts(res.rawPayload);
+    expect(texts).toContain('Report');
+    expect(texts).not.toContain('Rapport');
   });
 });

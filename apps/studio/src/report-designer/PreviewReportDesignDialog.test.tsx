@@ -11,7 +11,7 @@ it('fetches and renders the design PDF when open', async () => {
   const design = { id: 'd', name: 'N', paper: 'A4', orientation: 'portrait', parameters: [], pages: [] } as never;
   render(<PreviewReportDesignDialog open design={design} onOpenChange={vi.fn()} />);
   const { previewReportDesign } = await import('../api');
-  await waitFor(() => expect(previewReportDesign).toHaveBeenCalledWith(design));
+  await waitFor(() => expect(previewReportDesign).toHaveBeenCalledWith(design, undefined));
   expect(await screen.findByTestId('pdf-viewer')).toBeInTheDocument();
 });
 

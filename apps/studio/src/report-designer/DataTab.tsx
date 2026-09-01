@@ -8,7 +8,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@
 import { queryApi } from '../query/api';
 import type { CustomQuery } from '../query/custom-query-types';
 import type { BoundColumn, CellStatus, ColumnRule, DesignElement, TemplateParam } from './types';
-import { CELL_STATUSES, designRunValues } from './types';
+import { CELL_STATUSES, designRunValues, i18nKeyForColumn } from './types';
 
 interface Props {
   /** The selected element (may be undefined or a non-table). */
@@ -18,6 +18,12 @@ interface Props {
   onPatchElement: (id: string, patch: Partial<DesignElement>, opts?: { discrete?: boolean }) => void;
   /** Replaces the whole design-parameter array (discrete push). */
   onPatchParameters: (next: TemplateParam[]) => void;
+  /** The language being authored, '' (the default) for the design's own labels. With a language
+   *  set, the column-label field edits that language's override instead of the label itself. */
+  lang?: string;
+  /** The design's stored overrides for `lang`, keyed as in `i18nKeyForColumn`. */
+  i18nOfLang?: Record<string, string>;
+  onSetI18nText?(lang: string, key: string, text: string): void;
 }
 
 type ResultColumn = { key: string; label: string };
@@ -185,7 +191,7 @@ function ParamEditor({ parameters, onPatchParameters }: {
   );
 }
 
-export function DataTab({ element, parameters, onPatchElement, onPatchParameters }: Props): JSX.Element {
+export function DataTab({ element, parameters, onPatchElement, onPatchParameters, lang = '', i18nOfLang, onSetI18nText }: Props): JSX.Element {
   const { t } = useTranslation();
   const [queries, setQueries] = useState<CustomQuery[]>([]);
   const [resultColumns, setResultColumns] = useState<ResultColumn[]>([]);
@@ -416,8 +422,17 @@ export function DataTab({ element, parameters, onPatchElement, onPatchParameters
                 <div key={col.key} className="py-1.5">
                 <div className="flex items-center gap-1.5">
                   <Checkbox aria-label={col.key} checked={included} onCheckedChange={(v) => toggle(col, v === true)} />
-                  <Input aria-label={`${t('reportDesigner.columnLabel')} ${col.key}`} value={boundCol ? boundCol.label : col.label}
-                    disabled={!included} onChange={(e) => relabel(col.key, e.target.value)} className="h-7 flex-1 text-xs" />
+                  {/* With a language selected this edits that language's header OVERRIDE, with the
+                      authored label as the placeholder — the same contract as the content field. */}
+                  {lang && el
+                    ? <Input aria-label={`${t('reportDesigner.columnLabel')} ${col.key}`}
+                        value={i18nOfLang?.[i18nKeyForColumn(el.id, col.key)] ?? ''}
+                        placeholder={boundCol ? boundCol.label : col.label}
+                        disabled={!included}
+                        onChange={(e) => onSetI18nText?.(lang, i18nKeyForColumn(el.id, col.key), e.target.value)}
+                        className="h-7 flex-1 text-xs" />
+                    : <Input aria-label={`${t('reportDesigner.columnLabel')} ${col.key}`} value={boundCol ? boundCol.label : col.label}
+                        disabled={!included} onChange={(e) => relabel(col.key, e.target.value)} className="h-7 flex-1 text-xs" />}
                   {included && boundCol && (
                     <Select value={boundCol.statusKey ?? NONE_STATUS}
                       onValueChange={(v) => setStatusKey(bound.indexOf(boundCol), v === NONE_STATUS ? undefined : v)}>

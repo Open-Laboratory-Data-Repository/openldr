@@ -738,7 +738,8 @@ export function buildProgram(): Command {
     .option('--csv', 'emit CSV', false)
     .option('--format <fmt>', 'json|csv|pdf')
     .option('--out <file>', 'output file (pdf)')
-    .action(async (id: string, opts: { param?: string[]; json: boolean; csv: boolean; format?: string; out?: string }) => {
+    .option('--lang <code>', 'print language for a PDF (en|fr|pt); the design’s own text when omitted')
+    .action(async (id: string, opts: { param?: string[]; json: boolean; csv: boolean; format?: string; out?: string; lang?: string }) => {
       try { process.exitCode = await runReportRun(id, opts); } catch (err) { process.stderr.write(`report run failed: ${redactError(err)}\n`); process.exitCode = 1; }
     });
   report.command('glass-export').description('Export the GLASS-AMR RIS submission file (CSV)')

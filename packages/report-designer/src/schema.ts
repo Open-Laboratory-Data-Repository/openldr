@@ -433,6 +433,11 @@ export const ReportDesignSchema = z.object({
   pages: z.array(DesignPageSchema).default([]),
   parameters: z.array(TemplateParamSchema).default([]),
   margins: MarginsSchema.optional(),
+  /** Printed translations, language then key then text (see `i18n.ts`). A key is an element id, or
+   *  `<elementId>.col.<columnKey>` for one bound column's label. An OVERRIDE map rather than a
+   *  per-language `text`, so an existing design is untouched and an absent map changes nothing.
+   *  A missing entry falls back to the authored text; data is never translated. */
+  i18n: z.record(z.string(), z.record(z.string(), z.string())).optional(),
   /** opt-in "Page X of Y" footer on every physical page (default off) */
   pageNumbers: z.boolean().optional(),
   /** Authoring state. `draft` is the working copy; `published` is what labs mirror and what the
