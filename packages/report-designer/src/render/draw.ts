@@ -705,7 +705,7 @@ function drawKeyValue(doc: Doc, el: DesignElement, r: Box, resolved: ResolvedTab
   // strip that a box would only clutter. A TITLED panel usually wants one: without it the dark title
   // bar floats above its own content and reads as an unrelated section band.
   if (s.strokeColor) {
-    doc.save().lineWidth(s.strokeWidth ?? 0.5).strokeColor(s.strokeColor)
+    doc.save().lineWidth((s.strokeWidth ?? 0.5) * PX_TO_PT).strokeColor(s.strokeColor)
       .rect(r.x, r.y, r.w, r.h).stroke().restore();
   }
 
@@ -1047,12 +1047,14 @@ export function drawElement(
   switch (el.kind) {
     case 'rect': {
       if (s.fill && s.fill !== 'none') doc.save().rect(r.x, r.y, r.w, r.h).fill(s.fill).restore();
-      doc.save().lineWidth(s.strokeWidth ?? 1).strokeColor(s.strokeColor ?? RECT_BORDER)
+      // Authored widths are px@96 like every other design length; consumed raw as POINTS they drew
+      // every border a third too thick. Converted default-inclusive, exactly as fontSize is.
+      doc.save().lineWidth((s.strokeWidth ?? 1) * PX_TO_PT).strokeColor(s.strokeColor ?? RECT_BORDER)
         .rect(r.x, r.y, r.w, r.h).stroke().restore();
       return;
     }
     case 'line': {
-      doc.save().lineWidth(s.strokeWidth ?? 1).strokeColor(s.strokeColor ?? LINE_COLOR)
+      doc.save().lineWidth((s.strokeWidth ?? 1) * PX_TO_PT).strokeColor(s.strokeColor ?? LINE_COLOR)
         .moveTo(r.x, r.y).lineTo(r.x + r.w, r.y + r.h).stroke().restore();
       return;
     }

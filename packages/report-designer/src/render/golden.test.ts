@@ -92,7 +92,7 @@ function normalisePdf(b: Buffer): string {
 }
 
 /** Recorded at `428a7766`, BEFORE `headerRow`/`showWithTable` existed. */
-const GOLDEN_DIGEST = '6c68df4bf6ff8cec3d2c6b4d3122ebaeeb28834d0273fe0ab674fd64c46fac3a'; // re-recorded for T1: an unset logo slot no longer prints a dashed box
+const GOLDEN_DIGEST = '9e84f3f0151d5e2f8636f4d4b0b917a57cf5f2f31dd8fdba225f611175a578c1'; // re-recorded for T1 (unset logo prints nothing) and T2 (strokeWidth converts px to pt)
 
 async function goldenDigest(): Promise<string> {
   const buf = await renderReportDesignPdf(goldenDesign(), goldenResolved(), {
