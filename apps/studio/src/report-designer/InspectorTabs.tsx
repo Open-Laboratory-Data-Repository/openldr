@@ -62,7 +62,9 @@ export function InspectorTabs({ template, selectedIds, onSelect, onPatchElement,
           </button>
         )}
       </div>
-      <div className="min-h-0 flex-1 overflow-auto">
+      {/* overflow-x-hidden: an inspector pane must never scroll sideways. A native date input's
+          intrinsic minimum width once pushed the whole Data tab into a horizontal scrollbar. */}
+      <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
         {tab === 'properties' && <PropertiesTab template={template} selectedIds={selectedIds} onPatchElement={onPatchElement} onPatchPage={onPatchPage} onPatchElements={onPatchElements} />}
         {tab === 'layers' && <LayersTab template={template} selectedIds={selectedIds} onSelect={onSelect} />}
         {tab === 'data' && <DataTab element={selectedElement} parameters={template.parameters} onPatchElement={onPatchElement} onPatchParameters={onPatchParameters} />}

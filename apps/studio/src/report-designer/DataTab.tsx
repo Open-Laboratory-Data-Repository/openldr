@@ -90,11 +90,14 @@ function ParamRow({ param, onChange, onRemove, isKeyTaken }: {
           </SelectContent>
         </Select>
         {type === 'daterange' ? (
-          <div className="flex flex-1 items-center gap-1.5">
+          // flex-wrap plus w-0/min-w: a native date input's INTRINSIC width (~110px) beats flex-1,
+          // and two of them beside the type select forced the whole pane into a sideways scrollbar.
+          // When the pane is narrow the two dates now stack instead of overflowing.
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
             <Input type="date" aria-label={`${t('reportDesigner.from')} ${param.key}`} value={from}
-              onChange={(e) => setFrom(e.target.value)} onBlur={() => onChange({ value: { from, to } })} className="h-7 flex-1 text-xs" />
+              onChange={(e) => setFrom(e.target.value)} onBlur={() => onChange({ value: { from, to } })} className="h-7 w-0 min-w-[6.5rem] flex-1 text-xs" />
             <Input type="date" aria-label={`${t('reportDesigner.to')} ${param.key}`} value={to}
-              onChange={(e) => setTo(e.target.value)} onBlur={() => onChange({ value: { from, to } })} className="h-7 flex-1 text-xs" />
+              onChange={(e) => setTo(e.target.value)} onBlur={() => onChange({ value: { from, to } })} className="h-7 w-0 min-w-[6.5rem] flex-1 text-xs" />
           </div>
         ) : (
           <Input aria-label={`${t('reportDesigner.paramValue')} ${param.key}`} value={value}
