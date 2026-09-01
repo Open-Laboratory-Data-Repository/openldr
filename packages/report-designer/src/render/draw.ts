@@ -9,6 +9,7 @@ import {
   cellFill, groupBreaks, splitCellGridRows, cellGridLift, cellGridRowSchedule, cellGridChunkStart,
   stripWidth as stripWidthOf,
 } from './cellgrid';
+import { drawChart } from './chart';
 
 // Type-only, so this stays runtime-pdfkit-free (the pure barrel re-exports this module's math into
 // the browser). The AMBIENT `PDFKit.PDFDocument` spelling broke the studio's tsc, which compiles
@@ -1059,6 +1060,12 @@ export function drawElement(
     case 'datetime': {
       const raw = el.text ?? (el.kind === 'datetime' ? '{{date}}' : '');
       drawText(doc, interpolate(raw, tokens), r, s);
+      return;
+    }
+    case 'chart': {
+      // A failed query gets the same red placeholder every bound kind gets; drawChart never sees it.
+      if (el.dataSource && resolved && 'error' in resolved) { drawErrorPlaceholder(doc, r, resolved.error); return; }
+      drawChart(doc, el, r, resolved);
       return;
     }
     case 'image': {

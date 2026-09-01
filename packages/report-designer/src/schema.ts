@@ -23,7 +23,7 @@ const PARAM_FORMATS = ['timezone-no-signed-offset', 'year-month'] as const satis
  * map, the default names and the canvas switch. Before it, it failed none of them.
  */
 export const ELEMENT_KIND_VALUES = [
-  'text', 'table', 'image', 'line', 'rect', 'datetime', 'keyvalue', 'barcode', 'qrcode', 'cellgrid',
+  'text', 'table', 'image', 'line', 'rect', 'datetime', 'keyvalue', 'barcode', 'qrcode', 'cellgrid', 'chart',
 ] as const;
 export type ElementKind = (typeof ELEMENT_KIND_VALUES)[number];
 export type Paper = 'A4' | 'Letter';
@@ -302,6 +302,13 @@ export const DesignElementSchema = z.object({
   /** `barcode` human-readable text under the bars (default TRUE — standard on specimen labels, and
    *  what lets a human read the accession when a scanner is unavailable). */
   caption: z.boolean().optional(),
+  /** `chart` only: the shape drawn (default `bar`). Series colors are renderer-owned presentational
+   *  constants, deliberately not authored here — a palette field waits for someone to need one, and
+   *  nothing clinical may ever ride on a color (AGENTS.md §8). */
+  chartType: z.enum(['bar', 'line', 'donut']).optional(),
+  /** `chart` only: result columns plotted as series, in order. Category labels come from
+   *  `labelColumn`, shared with `cellgrid`. A donut uses the FIRST entry only. */
+  valueColumns: z.array(z.string()).optional(),
   /** Authoring-only: the canvas refuses move, resize and delete on a locked element. The renderer
    *  ignores it entirely — a locked letterhead still prints. Opt-in and inert when unset. */
   locked: z.boolean().optional(),

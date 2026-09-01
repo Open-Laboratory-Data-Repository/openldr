@@ -101,7 +101,10 @@ export function buildWorkbook(sheets: SheetData[]): XLSX.WorkBook {
  * tables exported — 0 means nothing was written (caller should surface "nothing to export").
  */
 export async function exportDesignToExcel(design: ReportDesign, deps: ExcelExportDeps = defaultDeps): Promise<number> {
-  const tables = design.pages.flatMap((p) => p.elements).filter((e) => e.kind === 'table');
+  // A BOUND chart exports its query rows like a table (data, not layout). An unbound chart is a
+  // sketch with no data and contributes nothing.
+  const tables = design.pages.flatMap((p) => p.elements)
+    .filter((e) => e.kind === 'table' || (e.kind === 'chart' && e.dataSource));
   if (tables.length === 0) return 0;
   // Only fetch the query catalog when at least one table is actually bound.
   const queries = tables.some((t) => t.dataSource) ? await deps.list() : [];

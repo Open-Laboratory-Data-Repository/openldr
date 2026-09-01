@@ -28,8 +28,9 @@ type ParamType = NonNullable<TemplateParam['type']>;
 const NONE_STATUS = '__none__';
 
 /** Kinds the Data tab can bind. `barcode`/`qrcode` use `boundColumns[0]` only (see `isSymbol`);
- *  a `cellgrid` binds a query and sorts here while its column config lives in Properties. */
-const BINDABLE_KINDS = new Set<DesignElement['kind']>(['table', 'keyvalue', 'barcode', 'qrcode', 'cellgrid']);
+ *  a `cellgrid` or `chart` binds a query and sorts here while its column config lives in
+ *  Properties. */
+const BINDABLE_KINDS = new Set<DesignElement['kind']>(['table', 'keyvalue', 'barcode', 'qrcode', 'cellgrid', 'chart']);
 
 const emptyValue = (type: ParamType): TemplateParam['value'] => (type === 'daterange' ? { from: '', to: '' } : '');
 
@@ -306,7 +307,7 @@ export function DataTab({ element, parameters, onPatchElement, onPatchParameters
         </Select>
       </div>
 
-      {el.kind !== 'cellgrid' && (
+      {el.kind !== 'cellgrid' && el.kind !== 'chart' && (
         <div className="flex items-center gap-2">
           <Button type="button" variant="outline" size="sm" disabled={!queryId || loading} onClick={() => { void loadColumns(); }}>
             {t('reportDesigner.loadColumns')}
@@ -340,6 +341,8 @@ export function DataTab({ element, parameters, onPatchElement, onPatchParameters
 
       {el.kind === 'cellgrid' ? (
         <p className="text-xs text-muted-foreground">{t('reportDesigner.cellgridColumnsNote')}</p>
+      ) : el.kind === 'chart' ? (
+        <p className="text-xs text-muted-foreground">{t('reportDesigner.chartColumnsNote')}</p>
       ) : el.transpose ? (
         <p className="text-xs text-muted-foreground">{t('reportDesigner.transposedNote')}</p>
       ) : (

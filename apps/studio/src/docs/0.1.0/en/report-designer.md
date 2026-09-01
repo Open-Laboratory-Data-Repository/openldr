@@ -4,7 +4,7 @@ Report Designer is a free-form, drag-and-drop page designer for printable report
 
 ## Outcome
 
-You can create a template, place and arrange Text, Table, Key/value panel, Image, Barcode, QR code, Line, Rectangle, Date, and Cell grid elements on A4 or Letter pages, bind elements to a Custom Query and choose their columns, control how blocks flow across pages, add filter parameters, preview the template with live data, export it to PDF or Excel, and publish it as a report.
+You can create a template, place and arrange Text, Table, Key/value panel, Image, Barcode, QR code, Line, Rectangle, Date, Cell grid, and Chart elements on A4 or Letter pages, bind elements to a Custom Query and choose their columns, control how blocks flow across pages, add filter parameters, preview the template with live data, export it to PDF or Excel, and publish it as a report.
 
 ![Report Designer canvas with a bound template open](report-designer-canvas.png)
 
@@ -19,14 +19,15 @@ You can create a template, place and arrange Text, Table, Key/value panel, Image
 1. Open **Report Designer** from the main navigation.
 2. Choose **New template** from the **⋯** menu, or select an existing template in the left explorer to keep working on it.
 3. Set the template's name in the field at the top of the canvas.
-4. Use **⋯ → Insert** to drop an element onto the page: Text, Table, Key/value panel, Image, Barcode, QR code, Line, Rectangle, Date, or Cell grid. Drag to reposition and use the resize handles to size it. A selected element shows its name in a tag above its box.
+4. Use **⋯ → Insert** to drop an element onto the page: Text, Table, Key/value panel, Image, Barcode, QR code, Line, Rectangle, Date, Cell grid, or Chart. Drag to reposition and use the resize handles to size it. A selected element shows its name in a tag above its box.
 5. Select the **Table** element and open its **Data** tab. Choose **Bind query** to pick a Custom Query, then **Load columns** and check off which columns appear on the report — reorder and relabel them as needed. **Sort by column** orders the rows before drawing; turn on **First data row is the header** when the query emits its column labels as its first row (it needs Sort by set). **Transpose** in the Properties tab flips a wide table so its columns become rows.
 6. For a **Cell grid**, bind the query in the **Data** tab and set the label column, cell columns, palette steps, and trailing columns in the **Properties** tab.
-7. Still in the **Data** tab, use **Add parameter** to define the filters the report will expose (Text, Select, or Date range). Give each one a clear label — these become the filters shown when the report runs. Match a parameter's **Key** to a bound query's parameter **Variable ID** so the filter value flows into the query when the report runs.
-8. Choose **Preview** to render the template to PDF using live data.
-9. Select **Save**. The save status next to the template name shows Saved, Saving, or Unsaved changes; the designer also autosaves as you work.
-10. Use **⋯ → Export → PDF** or **Excel** to download the current template's output directly.
-11. When the template is ready, choose **⋯ → Publish**. Give the report a **Name**, **Category** (add, rename, or reorder categories from the same picker), an optional **Description**, and confirm the **Template** and **Primary query** — the primary query's rows feed the published report's Spreadsheet tab and summary. Select **Create report**.
+7. For a **Chart**, bind the query in the **Data** tab, then pick the chart type (bar, line, or donut), the label column, and the value columns in the **Properties** tab. Charts print as sharp vector shapes; a bound chart also exports its rows to Excel.
+8. Still in the **Data** tab, use **Add parameter** to define the filters the report will expose (Text, Select, or Date range). Give each one a clear label — these become the filters shown when the report runs. Match a parameter's **Key** to a bound query's parameter **Variable ID** so the filter value flows into the query when the report runs.
+9. Choose **Preview** to render the template to PDF using live data.
+10. Select **Save**. The save status next to the template name shows Saved, Saving, or Unsaved changes; the designer also autosaves as you work.
+11. Use **⋯ → Export → PDF** or **Excel** to download the current template's output directly.
+12. When the template is ready, choose **⋯ → Publish**. Give the report a **Name**, **Category** (add, rename, or reorder categories from the same picker), an optional **Description**, and confirm the **Template** and **Primary query** — the primary query's rows feed the published report's Spreadsheet tab and summary. Select **Create report**.
 
 ## Expected result
 

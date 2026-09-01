@@ -305,6 +305,42 @@ function UnencodablePreview(): JSX.Element {
   return <div className="h-full w-full border border-dashed border-neutral-300" />;
 }
 
+/**
+ * Canvas preview of a chart: the SHAPE for the chosen type, never invented data values — the same
+ * contract CellGridPreview documents. Real bars come from the query at render time.
+ */
+function ChartPreview({ el }: { el: DesignElement }): JSX.Element {
+  const type = el.chartType ?? 'bar';
+  if (type === 'donut') {
+    return (
+      <div data-testid={`chart-preview-${el.id}`} className="flex h-full w-full items-center justify-center overflow-hidden">
+        <svg viewBox="0 0 40 40" className="h-3/4 max-h-full" aria-hidden>
+          <circle cx="20" cy="20" r="14" fill="none" stroke="#2f6db3" strokeWidth="8" strokeDasharray="50 38" />
+          <circle cx="20" cy="20" r="14" fill="none" stroke="#b9cde4" strokeWidth="8" strokeDasharray="38 50" strokeDashoffset="-50" />
+        </svg>
+      </div>
+    );
+  }
+  if (type === 'line') {
+    return (
+      <div data-testid={`chart-preview-${el.id}`} className="h-full w-full overflow-hidden p-1">
+        <svg viewBox="0 0 100 40" preserveAspectRatio="none" className="h-full w-full" aria-hidden>
+          <polyline points="0,34 20,26 40,29 60,14 80,18 100,6" fill="none" stroke="#2f6db3" strokeWidth="2" />
+          <line x1="0" y1="38" x2="100" y2="38" stroke="#cdd4dc" strokeWidth="1" />
+        </svg>
+      </div>
+    );
+  }
+  const heights = [40, 62, 50, 84, 68, 92];
+  return (
+    <div data-testid={`chart-preview-${el.id}`} className="flex h-full w-full items-end gap-[6%] overflow-hidden border-b border-neutral-300 p-1">
+      {heights.map((h, i) => (
+        <div key={i} className="flex-1 rounded-t-[1px]" style={{ height: `${h}%`, background: i % 2 ? '#b9cde4' : '#2f6db3' }} />
+      ))}
+    </div>
+  );
+}
+
 function ElementContent({ el, zoom, identity }: { el: DesignElement; zoom: number; identity?: Record<string, string> }): JSX.Element {
   const s = el.style ?? {};
   switch (el.kind) {
@@ -338,6 +374,8 @@ function ElementContent({ el, zoom, identity }: { el: DesignElement; zoom: numbe
       return <TablePreview el={el} />;
     case 'cellgrid':
       return <CellGridPreview el={el} />;
+    case 'chart':
+      return <ChartPreview el={el} />;
   }
 }
 
