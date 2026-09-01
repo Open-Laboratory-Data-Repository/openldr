@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "41f64f8c",
+          "type": "feat",
+          "scope": "report-designer",
+          "title": "Print a design in the operator's language"
+        },
+        {
           "hash": "2c653049",
           "type": "feat",
           "scope": "report-designer",
