@@ -302,6 +302,13 @@ export const DesignElementSchema = z.object({
   /** `barcode` human-readable text under the bars (default TRUE — standard on specimen labels, and
    *  what lets a human read the accession when a scanner is unavailable). */
   caption: z.boolean().optional(),
+  /** Authoring-only: the canvas refuses move, resize and delete on a locked element. The renderer
+   *  ignores it entirely — a locked letterhead still prints. Opt-in and inert when unset. */
+  locked: z.boolean().optional(),
+  /** The element is ABSENT: it draws nothing, adds no physical pages, and contributes zero height
+   *  to a `flowAfter` follower (the block below moves up, the `showOn` contract). It keeps its id,
+   *  so flow references to it resolve rather than dangle. Opt-in and inert when unset. */
+  hidden: z.boolean().optional(),
   /** presentational style (text/line/rect) */
   style: ElementStyleSchema.optional(),
   /** image source: a `data:` URI or an interpolation token (`{{lab.logo}}`), never a bare URL — a
