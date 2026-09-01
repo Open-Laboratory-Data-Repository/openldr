@@ -1,6 +1,48 @@
 {
-  "generatedAt": "2026-08-28",
+  "generatedAt": "2026-09-01",
   "days": [
+    {
+      "date": "2026-09-01",
+      "version": null,
+      "entries": [
+        {
+          "hash": "db2555bd",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Data tab binds cellgrids and authors sortBy and headerRow"
+        },
+        {
+          "hash": "41fddecc",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Cellgrid configuration in the properties tab"
+        },
+        {
+          "hash": "0656d082",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Stat layout and table transpose are authorable"
+        },
+        {
+          "hash": "600d9d8e",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Flow controls in the report-designer properties tab"
+        },
+        {
+          "hash": "c4088da1",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Pure flow-target picker that cannot offer a cycle"
+        },
+        {
+          "hash": "fa5e79ea",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Cell grid is insertable in the report designer"
+        }
+      ]
+    },
     {
       "date": "2026-08-25",
       "version": null,
