@@ -553,3 +553,48 @@ describe('live sample data on the canvas (spec 4 slice 1)', () => {
     expect(screen.getByText('Ikwiriri')).toBeInTheDocument();
   });
 });
+
+describe('element groups on the canvas (spec 4 slice 4)', () => {
+  const grouped = (over: Partial<{ hidden: boolean; locked: boolean }> = {}): ReportTemplate => ({
+    id: 't', name: 't', paper: 'A4', orientation: 'portrait', status: 'draft', parameters: [],
+    pages: [{
+      id: 'p1',
+      groups: [{ id: 'g1', name: 'Letterhead', ...over }],
+      elements: [
+        { id: 'a', kind: 'text', name: 'a', rect: { x: 10, y: 10, w: 50, h: 20 }, groupId: 'g1' },
+        { id: 'b', kind: 'text', name: 'b', rect: { x: 10, y: 40, w: 50, h: 20 }, groupId: 'g1' },
+        { id: 'c', kind: 'text', name: 'c', rect: { x: 10, y: 80, w: 50, h: 20 } },
+      ],
+    }],
+  });
+
+  it('clicking one member selects the whole group', () => {
+    const onSelect = vi.fn();
+    render(<PageCanvas template={grouped()} zoom={1} selectedIds={[]} onSelect={onSelect} onCommitRects={vi.fn()} />);
+    pd(screen.getByTestId('el-a'), 20, 20);
+    expect(onSelect).toHaveBeenCalledWith(['a', 'b']);
+  });
+
+  it('alt-click reaches the single member inside the group', () => {
+    const onSelect = vi.fn();
+    render(<PageCanvas template={grouped()} zoom={1} selectedIds={[]} onSelect={onSelect} onCommitRects={vi.fn()} />);
+    pd(screen.getByTestId('el-a'), 20, 20, { altKey: true });
+    expect(onSelect).toHaveBeenCalledWith(['a']);
+  });
+
+  it('a hidden group takes its members off the canvas and leaves others alone', () => {
+    render(<PageCanvas template={grouped({ hidden: true })} zoom={1} selectedIds={[]} onSelect={vi.fn()} onCommitRects={vi.fn()} />);
+    expect(screen.queryByTestId('el-a')).toBeNull();
+    expect(screen.queryByTestId('el-b')).toBeNull();
+    expect(screen.getByTestId('el-c')).toBeInTheDocument();
+  });
+
+  it('a locked group refuses a drag on any member', () => {
+    const onCommitRects = vi.fn();
+    render(<PageCanvas template={grouped({ locked: true })} zoom={1} selectedIds={['a', 'b']} onSelect={vi.fn()} onCommitRects={onCommitRects} />);
+    pd(screen.getByTestId('el-a'), 20, 20);
+    fireEvent.pointerMove(window, { clientX: 90, clientY: 90 });
+    fireEvent.pointerUp(window, { clientX: 90, clientY: 90 });
+    expect(onCommitRects).not.toHaveBeenCalled();
+  });
+});

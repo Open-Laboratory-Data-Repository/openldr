@@ -3,6 +3,7 @@ import type { PointerEvent as ReactPointerEvent, RefObject } from 'react';
 import type { DesignPage, Rect } from './types';
 import { type Handle, type Box, clampRectToPage, clampGroupDelta, resizeRect, boundingBox, boxFromPoints, marqueeHits, scaleGroup } from './geometry';
 import { type GuideLine, computeMoveGuides, computeResizeGuides, applyResizeSnap } from './alignmentGuides';
+import { selectionWithGroups } from './model';
 
 const DRAG_THRESHOLD = 4;   // px before a press becomes a drag
 const SNAP_SCREEN = 6;      // guide snap threshold in screen px
@@ -124,8 +125,10 @@ export function useCanvasInteraction(args: Args): CanvasInteraction {
       onSelect(selectedIds.includes(id) ? selectedIds.filter((x) => x !== id) : [...selectedIds, id]);
       return; // shift-click toggles; no drag
     }
-    const ids = selectedIds.includes(id) ? selectedIds : [id];
-    if (!selectedIds.includes(id)) onSelect([id]);
+    // A click on a group member takes the whole group; Alt reaches the single element inside it.
+    const clicked = selectionWithGroups(page, id, e.altKey);
+    const ids = clicked.every((x) => selectedIds.includes(x)) ? selectedIds : clicked;
+    if (!clicked.every((x) => selectedIds.includes(x))) onSelect(clicked);
     // Locked elements stay selectable (that is how you reach the unlock control) but never move:
     // they are simply left out of the drag base, so a mixed drag moves the unlocked members only.
     const base = new Map<string, Rect>();

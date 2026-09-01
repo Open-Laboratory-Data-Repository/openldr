@@ -69,3 +69,42 @@ describe('LayersTab visibility, locking and order', () => {
     expect(props.onSelect).toHaveBeenCalledWith(['a']);
   });
 });
+
+describe('LayersTab groups', () => {
+  const el = (id: string, groupId?: string): DesignElement =>
+    ({ id, kind: 'text', name: id.toUpperCase(), rect: { x: 0, y: 0, w: 10, h: 10 }, ...(groupId ? { groupId } : {}) });
+  const tplG = (over: Partial<{ hidden: boolean; locked: boolean }> = {}): ReportTemplate => ({
+    id: 't', name: 't', paper: 'A4', orientation: 'portrait', status: 'draft', parameters: [],
+    pages: [{ id: 'p1', groups: [{ id: 'g1', name: 'Letterhead', ...over }], elements: [el('a', 'g1'), el('b', 'g1'), el('c')] }],
+  });
+  function setupG(template = tplG()) {
+    const props = { template, selectedIds: [] as string[], onSelect: vi.fn(), onPatchElement: vi.fn(), onReorder: vi.fn(), onPatchGroup: vi.fn(), onUngroup: vi.fn() };
+    render(<LayersTab {...props} />);
+    return props;
+  }
+
+  it('shows one header row per group, above its topmost member', () => {
+    setupG();
+    expect(screen.getByTestId('layer-group-g1')).toHaveTextContent('Letterhead');
+  });
+
+  it('hides and locks the whole group from its header row', () => {
+    const props = setupG();
+    fireEvent.click(screen.getByLabelText('Hide Letterhead'));
+    expect(props.onPatchGroup).toHaveBeenCalledWith('g1', { hidden: true });
+    fireEvent.click(screen.getByLabelText('Lock Letterhead'));
+    expect(props.onPatchGroup).toHaveBeenCalledWith('g1', { locked: true });
+  });
+
+  it('clears a flag rather than storing false', () => {
+    const props = setupG(tplG({ hidden: true }));
+    fireEvent.click(screen.getByLabelText('Show Letterhead'));
+    expect(props.onPatchGroup).toHaveBeenCalledWith('g1', { hidden: undefined });
+  });
+
+  it('ungroups from the header row', () => {
+    const props = setupG();
+    fireEvent.click(screen.getByLabelText('Ungroup Letterhead'));
+    expect(props.onUngroup).toHaveBeenCalledWith('g1');
+  });
+});

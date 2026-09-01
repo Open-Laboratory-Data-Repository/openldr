@@ -347,6 +347,9 @@ export const DesignElementSchema = z.object({
   /** `chart` only: result columns plotted as series, in order. Category labels come from
    *  `labelColumn`, shared with `cellgrid`. A donut uses the FIRST entry only. */
   valueColumns: z.array(z.string()).optional(),
+  /** The group this element belongs to, if any (see `groups.ts`). A dangling id carries no
+   *  flags rather than throwing, the same fail-open contract `flowAfter` documents. */
+  groupId: z.string().optional(),
   /** Authoring-only: the canvas refuses move, resize and delete on a locked element. The renderer
    *  ignores it entirely — a locked letterhead still prints. Opt-in and inert when unset. */
   locked: z.boolean().optional(),
@@ -364,7 +367,22 @@ export const DesignElementSchema = z.object({
 });
 export type DesignElement = z.infer<typeof DesignElementSchema>;
 
-export const DesignPageSchema = z.object({ id: z.string(), elements: z.array(DesignElementSchema).default([]) });
+/** A named group over several elements on one page. Flat by design — see `groups.ts` for why. */
+export const ElementGroupSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  /** ORed onto each member's own flag; a member locked alone stays locked when the group is not. */
+  locked: z.boolean().optional(),
+  hidden: z.boolean().optional(),
+});
+export type ElementGroup = z.infer<typeof ElementGroupSchema>;
+
+export const DesignPageSchema = z.object({
+  id: z.string(),
+  elements: z.array(DesignElementSchema).default([]),
+  /** Opt-in and inert when unset: a page with no groups renders byte-identically. */
+  groups: z.array(ElementGroupSchema).optional(),
+});
 export type DesignPage = z.infer<typeof DesignPageSchema>;
 
 export const DateRangeValueSchema = z.object({ from: z.string(), to: z.string() });

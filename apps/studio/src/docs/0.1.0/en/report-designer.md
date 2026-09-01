@@ -54,6 +54,7 @@ The template saves and appears in the left explorer. Preview renders a PDF using
 - Turn on **Page numbers** in the page settings to add a footer to every page.
 - A template can span several pages — add and arrange elements independently on each one.
 - In the **Layers** tab, the eye hides an element (it leaves the canvas and the PDF; the block below a hidden element moves up), the lock keeps it selectable but immovable, and rows reorder by drag or the raise and lower buttons.
+- Select two or more elements and choose **⋯ → Group selection** to name them as one group. Clicking any member then selects the whole group; hold **Alt** to reach a single element inside it. The **Layers** tab shows each group as a header row with its own eye and lock, which apply on top of each element's own: locking a group never unlocks an element you locked by itself. **Ungroup** removes the group and leaves the elements alone.
 - **Ctrl+D** duplicates the selected elements, **Ctrl+C** and **Ctrl+V** copy and paste them. Clones arrive slightly offset, selected, and never locked.
 - Use **⋯ → Duplicate** to branch a new template from an existing layout, and **⋯ → Delete** to remove one you no longer need.
 - From [Reports](/docs/reports), managers can jump straight back into a published report's template with **Edit template**.

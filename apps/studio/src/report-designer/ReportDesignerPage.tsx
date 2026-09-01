@@ -17,7 +17,7 @@ import { InspectorTabs } from './InspectorTabs';
 import { PreviewReportDesignDialog } from './PreviewReportDesignDialog';
 import { NewReportSheet } from '../reports/NewReportSheet';
 import { createReportDesign, deleteReportDesign, downloadReportDesignPdf, fetchLabIdentity, getReportDesign, listReportDesigns, publishReportDesign, updateReportDesign } from '../api';
-import { addElement, allElements, duplicateElements, moveElementTo, newElement, newElementId, paperSize, removeElements, updateElement, updateElementRects, updateElements } from './model';
+import { addElement, allElements, duplicateElements, groupElements, moveElementTo, newElement, newElementId, paperSize, patchGroup, removeElements, ungroupElements, updateElement, updateElementRects, updateElements } from './model';
 import { clampRectToPage } from './geometry';
 import { exportDesignToExcel } from './exportExcel';
 import { PageStrip } from './PageStrip';
@@ -273,6 +273,14 @@ export function ReportDesignerPage(): JSX.Element {
     pushTemplate({ ...snapshot, id: template.id, status: 'draft', createdAt: template.createdAt, updatedAt: template.updatedAt });
     setSelectedIds([]);
     toast.success(t('reportDesigner.restoredVersion', { n: version }));
+  };
+
+  /** Group the current selection. Two or more elements only — one element is not a group. */
+  const groupSelected = () => {
+    if (!template || selectedIds.length < 2) return;
+    const { template: next, groupId } = groupElements(template, selectedIds, t('reportDesigner.newGroupName'));
+    if (!groupId) return;
+    pushTemplate(next);
   };
 
   const duplicateSelected = () => {
@@ -574,6 +582,7 @@ export function ReportDesignerPage(): JSX.Element {
                 status={template?.status} onPublishRevision={() => void onPublishRevision()}
                 onToggleInspector={() => setInspectorOpen((o) => !o)}
                 onOpenVersions={() => setVersionsOpen(true)}
+                onGroup={groupSelected} canGroup={selectedIds.length > 1}
                 showData={showData} hasData={!!resolvedData}
                 onToggleShowData={() => setShowData((v) => !v)}
                 onDuplicate={duplicateTemplate} onDelete={() => setConfirmDeleteOpen(true)} />
@@ -605,6 +614,8 @@ export function ReportDesignerPage(): JSX.Element {
               <InspectorTabs template={template} selectedIds={selectedIds} onSelect={setSelectedIds}
                 onPatchElement={patchElement} onPatchPage={patchPage} onPatchElements={patchElements} onPatchParameters={patchParameters}
                 onReorder={(id, targetIndex) => pushTemplate(moveElementTo(template, id, targetIndex))}
+                onPatchGroup={(groupId, patch) => pushTemplate(patchGroup(template, groupId, patch))}
+                onUngroup={(groupId) => pushTemplate(ungroupElements(template, groupId))}
                 onClose={() => setInspectorOpen(false)} />
             </div>
           </>

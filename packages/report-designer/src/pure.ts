@@ -4,5 +4,6 @@ export * from './image-src';
 export * from './header-row';
 export * from './run-values';
 export * from './lifecycle';
+export * from './groups';
 export * from './render/pagination';
 export * from './render/letterhead';

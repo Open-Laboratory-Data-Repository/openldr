@@ -1,4 +1,5 @@
-import type { DesignElement, ElementKind, Orientation, Paper, Rect, ReportTemplate } from './types';
+import type { DesignElement, DesignPage, ElementKind, Orientation, Paper, Rect, ReportTemplate } from './types';
+import { groupMembers } from './types';
 
 /** Paper sizes in CSS px at 96dpi, portrait. */
 export const PAPER_PX: Record<Paper, { w: number; h: number }> = {
@@ -163,6 +164,77 @@ export function duplicateElements(
     return { ...p, elements: [...p.elements, ...clones] };
   });
   return changed ? { template: { ...tpl, pages }, newIds } : { template: tpl, newIds };
+}
+
+/** Group two or more elements on one page under a new named group. Fewer than two is not a group,
+ *  and z-order is untouched: a group is a LABEL over members, never a container (see groups.ts). */
+export function groupElements(
+  tpl: ReportTemplate, ids: string[], name: string,
+): { template: ReportTemplate; groupId: string | null } {
+  if (ids.length < 2) return { template: tpl, groupId: null };
+  const pageIdx = tpl.pages.findIndex((p) => p.elements.some((e) => ids.includes(e.id)));
+  if (pageIdx < 0) return { template: tpl, groupId: null };
+  const groupId = `g-${newElementId()}`;
+  const pages = tpl.pages.map((p, i) => {
+    if (i !== pageIdx) return p;
+    return {
+      ...p,
+      groups: [...(p.groups ?? []), { id: groupId, name }],
+      elements: p.elements.map((e) => (ids.includes(e.id) ? { ...e, groupId } : e)),
+    };
+  });
+  return { template: { ...tpl, pages }, groupId };
+}
+
+/** Drop a group and clear its members back to ungrouped. The elements themselves are untouched. */
+export function ungroupElements(tpl: ReportTemplate, groupId: string): ReportTemplate {
+  return {
+    ...tpl,
+    pages: tpl.pages.map((p) => {
+      if (!(p.groups ?? []).some((g) => g.id === groupId)) return p;
+      return {
+        ...p,
+        groups: (p.groups ?? []).filter((g) => g.id !== groupId),
+        elements: p.elements.map((e) => {
+          if (e.groupId !== groupId) return e;
+          const { groupId: _drop, ...rest } = e;
+          return rest;
+        }),
+      };
+    }),
+  };
+}
+
+/** Patch one group's flags. An `undefined` value DELETES the key, the setStatusKey idiom. */
+export function patchGroup(
+  tpl: ReportTemplate, groupId: string, patch: { name?: string; locked?: boolean; hidden?: boolean },
+): ReportTemplate {
+  return {
+    ...tpl,
+    pages: tpl.pages.map((p) => {
+      if (!(p.groups ?? []).some((g) => g.id === groupId)) return p;
+      return {
+        ...p,
+        groups: (p.groups ?? []).map((g) => {
+          if (g.id !== groupId) return g;
+          const next: Record<string, unknown> = { ...g };
+          for (const [k, v] of Object.entries(patch)) {
+            if (v === undefined) delete next[k]; else next[k] = v;
+          }
+          return next as typeof g;
+        }),
+      };
+    }),
+  };
+}
+
+/** The ids a click on `id` should select: the whole group, or just the element when `alt`.
+ *  Alt-click is the standard escape hatch for reaching one member of a group. */
+export function selectionWithGroups(page: DesignPage, id: string, alt = false): string[] {
+  if (alt) return [id];
+  const el = page.elements.find((e) => e.id === id);
+  if (!el?.groupId) return [id];
+  return groupMembers(page, el.groupId);
 }
 
 export function updateElements(tpl: ReportTemplate, ids: string[], patch: Partial<DesignElement>): ReportTemplate {
