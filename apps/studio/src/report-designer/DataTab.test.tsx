@@ -443,3 +443,23 @@ describe('rule editor', () => {
       { boundColumns: [{ key: 'silent', label: 'Silent', rule: { op: 'gte', value: '12', status: 'critical' } }] }, { discrete: true });
   });
 });
+
+describe('Load columns with a daterange parameter', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it('sends the flat from/to the query declares, not just the nested range', async () => {
+    // The old mapping matched design params against `cq.params` by key, so a design param called
+    // `dateRange` could never match a query param called `from` and the range was dropped whole.
+    (queryApi.list as unknown as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: 'cq_1', name: 'AMR', connectorId: 'c1', sql: 'select 1',
+        params: [{ id: 'from', label: 'From', type: 'text', required: true }, { id: 'to', label: 'To', type: 'text', required: true }] },
+    ]);
+    render(<DataTab
+      element={tableEl({ dataSource: { kind: 'custom-query', queryId: 'cq_1' } })}
+      parameters={[{ key: 'dateRange', label: 'Date range', type: 'daterange', value: { from: '2020-01-01', to: '2030-01-01' } }]}
+      onPatchElement={vi.fn()} onPatchParameters={vi.fn()} />);
+    await loadColumns();
+    const sent = (queryApi.run as unknown as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(sent.values).toMatchObject({ from: '2020-01-01', to: '2030-01-01' });
+  });
+});

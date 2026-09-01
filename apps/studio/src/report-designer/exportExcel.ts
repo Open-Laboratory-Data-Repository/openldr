@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx';
 import type { DesignElement, ReportDesign } from './types';
+import { designRunValues } from './types';
 import type { CustomQuery } from '../query/custom-query-types';
 import { queryApi } from '../query/api';
 
@@ -22,12 +23,10 @@ const defaultDeps: ExcelExportDeps = {
   write: (wb, filename) => XLSX.writeFile(wb, filename),
 };
 
-/** Map design parameters → values keyed by param.key (same contract as the preview route). */
-export function paramValues(design: ReportDesign): Record<string, unknown> {
-  const values: Record<string, unknown> = {};
-  for (const p of design.parameters) if (p.value != null) values[p.key] = p.value;
-  return values;
-}
+/** Map design parameters → values (same contract as the preview route, including the `daterange`
+ *  flattening the seeded queries' flat `from`/`to` params need). Re-exported rather than
+ *  reimplemented so the export, the page strip and the server cannot drift apart. */
+export const paramValues = designRunValues;
 
 /** Excel sheet names must be ≤31 chars, contain none of \ / ? * [ ] :, be non-empty and unique. */
 export function sheetName(raw: string, used: Set<string>): string {

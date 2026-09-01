@@ -8,7 +8,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@
 import { queryApi } from '../query/api';
 import type { CustomQuery } from '../query/custom-query-types';
 import type { BoundColumn, CellStatus, ColumnRule, DesignElement, TemplateParam } from './types';
-import { CELL_STATUSES } from './types';
+import { CELL_STATUSES, designRunValues } from './types';
 
 interface Props {
   /** The selected element (may be undefined or a non-table). */
@@ -235,11 +235,11 @@ export function DataTab({ element, parameters, onPatchElement, onPatchParameters
     setLoading(true);
     setLoadError(null);
     try {
-      const values: Record<string, unknown> = {};
-      for (const param of parameters) {
-        const qp = cq.params.find((p) => p.id === param.key);
-        if (qp) values[param.key] = param.value;
-      }
+      // The same mapping the preview route and the Excel export use, so Load columns cannot
+      // disagree with what the PDF will run. It also supplies the flat `from`/`to` a daterange
+      // parameter carries; the old `cq.params.find(p => p.id === param.key)` guard could never
+      // match those, so Load columns failed on every date-range report.
+      const values = designRunValues({ parameters });
       const result = await queryApi.run({ connectorId: cq.connectorId, sql: cq.sql, params: cq.params, values, limit: 1 });
       if (reqId !== loadSeq.current) return; // a newer request (or element/query switch) superseded this one
       setResultColumns(result.columns);

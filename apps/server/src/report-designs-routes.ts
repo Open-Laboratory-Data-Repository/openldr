@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import type { AppContext } from '@openldr/bootstrap';
-import { ReportDesignSchema, findInvalidImageSources, findTransposedTotals, findUnsortedHeaderRows } from '@openldr/report-designer/pure';
+import { ReportDesignSchema, designRunValues, findInvalidImageSources, findTransposedTotals, findUnsortedHeaderRows } from '@openldr/report-designer/pure';
 import { renderReportDesignPdf, resolveDesignTables } from '@openldr/report-designer';
 import { runStoredQuery, type RunStoredQueryDeps } from './run-stored-query';
 import { recordAudit } from './audit-helper';
@@ -136,8 +136,10 @@ export function registerReportDesignRoutes(
 
     // Binding contract: design.param.key === query.param.id (substituteParams keys by id),
     // so build values once from the design's own params — extra unmapped values are harmless.
-    const values: Record<string, unknown> = {};
-    for (const dp of design.parameters) if (dp.value != null) values[dp.key] = dp.value;
+    // ⛔ Via `designRunValues`, which also flattens a `daterange` into the flat `from`/`to` the
+    // seeded queries declare. Keying by `dp.key` alone left `values.from` unset, so every preview
+    // of a date-range report drew the red placeholder instead of rows.
+    const values = designRunValues(design);
 
     // Per-table failures become an in-PDF placeholder, never a 500
     // (all store access lives inside runStoredQuery, inside resolveDesignTables' per-table catch).
