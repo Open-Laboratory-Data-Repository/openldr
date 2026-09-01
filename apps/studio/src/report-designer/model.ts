@@ -125,6 +125,44 @@ export function updateElement(tpl: ReportTemplate, id: string, patch: Partial<De
   };
 }
 
+/** Move an element to `targetIndex` within its own page (clamped). Array order IS z-order. */
+export function moveElementTo(tpl: ReportTemplate, id: string, targetIndex: number): ReportTemplate {
+  const pageIdx = tpl.pages.findIndex((p) => p.elements.some((e) => e.id === id));
+  if (pageIdx < 0) return tpl;
+  const els = tpl.pages[pageIdx].elements.slice();
+  const from = els.findIndex((e) => e.id === id);
+  const to = Math.max(0, Math.min(els.length - 1, targetIndex));
+  if (from === to) return tpl;
+  const [moved] = els.splice(from, 1);
+  els.splice(to, 0, moved);
+  return { ...tpl, pages: tpl.pages.map((p, i) => (i === pageIdx ? { ...p, elements: els } : p)) };
+}
+
+/** Clone the named elements onto their own pages: fresh ids, a 12px offset clamped to the page,
+ *  and `locked` stripped — a clone you cannot move is not a useful starting point. Returns the new
+ *  ids so the caller can select them. Unknown ids clone nothing and return the template as-is. */
+export function duplicateElements(
+  tpl: ReportTemplate, ids: string[],
+): { template: ReportTemplate; newIds: string[] } {
+  const size = paperSize(tpl.paper, tpl.orientation);
+  const newIds: string[] = [];
+  let changed = false;
+  const pages = tpl.pages.map((p) => {
+    const clones = p.elements.filter((e) => ids.includes(e.id)).map((e) => {
+      const id = newElementId();
+      newIds.push(id);
+      const { locked: _drop, ...rest } = e;
+      const x = Math.max(0, Math.min(e.rect.x + 12, size.w - e.rect.w));
+      const y = Math.max(0, Math.min(e.rect.y + 12, size.h - e.rect.h));
+      return { ...rest, id, rect: { ...e.rect, x, y } };
+    });
+    if (clones.length === 0) return p;
+    changed = true;
+    return { ...p, elements: [...p.elements, ...clones] };
+  });
+  return changed ? { template: { ...tpl, pages }, newIds } : { template: tpl, newIds };
+}
+
 export function updateElements(tpl: ReportTemplate, ids: string[], patch: Partial<DesignElement>): ReportTemplate {
   if (ids.length === 0) return tpl;
   const set = new Set(ids);

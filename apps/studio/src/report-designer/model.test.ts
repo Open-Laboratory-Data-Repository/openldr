@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ELEMENT_KINDS, flowTargets, newElement, addElement, paperSize, findElement, allElements, updateElementRects, removeElements, updateElement, updateElements } from './model';
+import { ELEMENT_KINDS, duplicateElements, flowTargets, moveElementTo, newElement, addElement, paperSize, findElement, allElements, updateElementRects, removeElements, updateElement, updateElements } from './model';
 import { MOCK_TEMPLATES } from './mockTemplates';
 import type { DesignElement, ReportTemplate } from './types';
 
@@ -101,6 +101,63 @@ describe('report-designer model', () => {
     expect(el.cellColumns).toEqual(['c1', 'c2', 'c3', 'c4', 'c5']);
     expect(el.palette).toEqual({ ramp: 'blue', steps: 1 });
     expect(el.rect).toEqual({ x: 48, y: 48, w: 480, h: 160 });
+  });
+
+  describe('moveElementTo', () => {
+    const el = (id: string): DesignElement => ({ id, kind: 'text', name: id, rect: { x: 0, y: 0, w: 10, h: 10 } });
+    const tpl = (): ReportTemplate => ({
+      id: 't', name: 't', paper: 'A4', orientation: 'portrait', status: 'draft', parameters: [],
+      pages: [{ id: 'p1', elements: [el('a'), el('b'), el('c')] }],
+    });
+
+    it('moves an element to a new index within its page, immutably', () => {
+      const next = moveElementTo(tpl(), 'a', 2);
+      expect(next.pages[0].elements.map((e) => e.id)).toEqual(['b', 'c', 'a']);
+      expect(tpl().pages[0].elements.map((e) => e.id)).toEqual(['a', 'b', 'c']);
+    });
+
+    it('clamps the target index into range', () => {
+      expect(moveElementTo(tpl(), 'c', -5).pages[0].elements.map((e) => e.id)).toEqual(['c', 'a', 'b']);
+      expect(moveElementTo(tpl(), 'a', 99).pages[0].elements.map((e) => e.id)).toEqual(['b', 'c', 'a']);
+    });
+
+    it('returns the template unchanged for an unknown id', () => {
+      const t = tpl();
+      expect(moveElementTo(t, 'ghost', 1)).toBe(t);
+    });
+  });
+
+  describe('duplicateElements', () => {
+    const el = (id: string, extra: Partial<DesignElement> = {}): DesignElement =>
+      ({ id, kind: 'text', name: id, rect: { x: 700, y: 1100, w: 60, h: 20 }, ...extra });
+    const tpl = (): ReportTemplate => ({
+      id: 't', name: 't', paper: 'A4', orientation: 'portrait', status: 'draft', parameters: [],
+      pages: [{ id: 'p1', elements: [el('a'), el('b', { locked: true })] }],
+    });
+
+    it('clones with fresh ids, a 12px offset clamped to the page, and returns the new ids', () => {
+      const { template: next, newIds } = duplicateElements(tpl(), ['a']);
+      expect(newIds).toHaveLength(1);
+      const clone = next.pages[0].elements.find((e) => e.id === newIds[0])!;
+      expect(clone.id).not.toBe('a');
+      // The source sits at the page corner, so the offset clamps rather than leaving the page.
+      const size = paperSize('A4', 'portrait');
+      expect(clone.rect.x + clone.rect.w).toBeLessThanOrEqual(size.w);
+      expect(clone.rect.y + clone.rect.h).toBeLessThanOrEqual(size.h);
+    });
+
+    it('a duplicate of a locked element is not locked — a stuck clone helps nobody', () => {
+      const { template: next, newIds } = duplicateElements(tpl(), ['b']);
+      const clone = next.pages[0].elements.find((e) => e.id === newIds[0])!;
+      expect(clone.locked).toBeUndefined();
+    });
+
+    it('unknown ids duplicate nothing', () => {
+      const t = tpl();
+      const { template: next, newIds } = duplicateElements(t, ['ghost']);
+      expect(newIds).toEqual([]);
+      expect(next).toBe(t);
+    });
   });
 
   describe('flowTargets', () => {

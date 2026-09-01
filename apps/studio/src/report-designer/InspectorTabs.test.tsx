@@ -22,7 +22,7 @@ describe('InspectorTabs', () => {
     const onSelect = vi.fn();
     render(<InspectorTabs template={tpl} selectedIds={[]} onSelect={onSelect} onPatchElement={vi.fn()} onPatchPage={vi.fn()} onPatchElements={vi.fn()} onPatchParameters={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Layers' }));
-    fireEvent.click(screen.getByRole('button', { name: /Resistance table/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Resistance table' }));
     expect(onSelect).toHaveBeenCalledWith(['amr-table']);
   });
 
@@ -43,7 +43,7 @@ describe('InspectorTabs', () => {
     const onSelect = vi.fn();
     render(<InspectorTabs template={tpl} selectedIds={['amr-title']} onSelect={onSelect} onPatchElement={vi.fn()} onPatchPage={vi.fn()} onPatchElements={vi.fn()} onPatchParameters={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Layers' }));
-    fireEvent.click(screen.getByRole('button', { name: /Resistance table/ }), { shiftKey: true });
+    fireEvent.click(screen.getByRole('button', { name: 'Resistance table' }), { shiftKey: true });
     expect(onSelect).toHaveBeenCalledWith(['amr-title', 'amr-table']);
   });
 

@@ -17,7 +17,7 @@ import { InspectorTabs } from './InspectorTabs';
 import { PreviewReportDesignDialog } from './PreviewReportDesignDialog';
 import { NewReportSheet } from '../reports/NewReportSheet';
 import { createReportDesign, deleteReportDesign, downloadReportDesignPdf, fetchLabIdentity, getReportDesign, listReportDesigns, publishReportDesign, updateReportDesign } from '../api';
-import { addElement, allElements, newElement, paperSize, removeElements, updateElement, updateElementRects, updateElements } from './model';
+import { addElement, allElements, moveElementTo, newElement, paperSize, removeElements, updateElement, updateElementRects, updateElements } from './model';
 import { clampRectToPage } from './geometry';
 import { exportDesignToExcel } from './exportExcel';
 import { PageStrip } from './PageStrip';
@@ -536,6 +536,7 @@ export function ReportDesignerPage(): JSX.Element {
             >
               <InspectorTabs template={template} selectedIds={selectedIds} onSelect={setSelectedIds}
                 onPatchElement={patchElement} onPatchPage={patchPage} onPatchElements={patchElements} onPatchParameters={patchParameters}
+                onReorder={(id, targetIndex) => pushTemplate(moveElementTo(template, id, targetIndex))}
                 onClose={() => setInspectorOpen(false)} />
             </div>
           </>
