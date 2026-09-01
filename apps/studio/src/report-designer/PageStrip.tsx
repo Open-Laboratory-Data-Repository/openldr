@@ -9,6 +9,9 @@ import { cn } from '@/lib/cn';
  * every bound query per keystroke is the alternative. `stale` marks a snapshot the design has been
  * edited past; the empty state says "at least 1" because that is all that is knowable without rows.
  */
+/** Boxes drawn before the strip collapses to "+N". A 36-page run wrapped the bar without a cap. */
+const MAX_BOXES = 12;
+
 export function PageStrip({ counts, loading, stale, onLoad }: {
   counts: { perPage: number[]; total: number } | null;
   loading: boolean;
@@ -24,7 +27,8 @@ export function PageStrip({ counts, loading, stale, onLoad }: {
             Array.from({ length: n }, (_, ci) => (
               <span key={`${pi}-${ci}`} aria-label={`${t('reportDesigner.physicalPage')} ${pi + 1}.${ci + 1}`}
                 className={cn('h-5 w-3.5 rounded-[2px] border border-border bg-background', ci > 0 && 'border-dashed')} />
-            )))}
+            ))).slice(0, MAX_BOXES)}
+          {counts.total > MAX_BOXES && <span className="tabular-nums">+{counts.total - MAX_BOXES}</span>}
         </div>
       )}
       <span className="text-foreground">

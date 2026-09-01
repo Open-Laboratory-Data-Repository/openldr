@@ -26,4 +26,11 @@ describe('PageStrip', () => {
     render(<PageStrip counts={null} loading stale={false} onLoad={vi.fn()} />);
     expect(screen.getByRole('button', { name: 'Load pages' })).toBeDisabled();
   });
+
+  it('caps the boxes and shows the remainder for a long run', () => {
+    render(<PageStrip counts={{ perPage: [36], total: 36 }} loading={false} stale={false} onLoad={vi.fn()} />);
+    expect(screen.getAllByLabelText(/Physical page/)).toHaveLength(12);
+    expect(screen.getByText('+24')).toBeInTheDocument();
+    expect(screen.getByText('Prints as 36 pages')).toBeInTheDocument();
+  });
 });
