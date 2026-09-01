@@ -28,6 +28,19 @@ export interface UnsortedHeaderRow {
   elementId: string;
 }
 
+/** Every transposed table that also declares totals. Empty when fine. Summing across a transposed
+ *  table adds organisms together, which means nothing — refused at the same write boundary as the
+ *  header-row rule, for the same read-safety reason it is not a zod refinement. */
+export function findTransposedTotals(design: ReportDesign): UnsortedHeaderRow[] {
+  const bad: UnsortedHeaderRow[] = [];
+  for (const page of design.pages) {
+    for (const el of page.elements) {
+      if (el.kind === 'table' && el.transpose && el.totals) bad.push({ elementId: el.id });
+    }
+  }
+  return bad;
+}
+
 /** Every table that lifts a header row without saying how the rows are ordered. Empty when fine. */
 export function findUnsortedHeaderRows(design: ReportDesign): UnsortedHeaderRow[] {
   const bad: UnsortedHeaderRow[] = [];

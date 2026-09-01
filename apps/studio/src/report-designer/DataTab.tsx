@@ -7,7 +7,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { queryApi } from '../query/api';
 import type { CustomQuery } from '../query/custom-query-types';
-import type { BoundColumn, DesignElement, TemplateParam } from './types';
+import type { BoundColumn, CellStatus, ColumnRule, DesignElement, TemplateParam } from './types';
+import { CELL_STATUSES } from './types';
 
 interface Props {
   /** The selected element (may be undefined or a non-table). */
@@ -278,6 +279,14 @@ export function DataTab({ element, parameters, onPatchElement, onPatchParameters
       const { statusKey: _drop, ...rest } = c;
       return statusKey ? { ...rest, statusKey } : rest;
     }), { discrete: true });
+  // Rules: the delete-the-default idiom again. Clearing the op removes the whole rule.
+  const setRule = (idx: number, patch: Partial<ColumnRule> | null) =>
+    setBound(bound.map((c, i) => {
+      if (i !== idx) return c;
+      const { rule: _drop, ...rest } = c;
+      if (patch === null) return rest;
+      return { ...rest, rule: { op: 'gte', value: '', status: 'critical', ...c.rule, ...patch } };
+    }), { discrete: true });
   // Decimals: same delete-the-default idiom. Blank means "as the query sent it".
   const setDecimals = (idx: number, raw: string) =>
     setBound(bound.map((c, i) => {
@@ -347,6 +356,33 @@ export function DataTab({ element, parameters, onPatchElement, onPatchParameters
           {!el.sortBy && <p className="mt-1 text-xs text-muted-foreground">{t('reportDesigner.headerRowNeedsSort')}</p>}
         </div>
       )}
+      {el.dataSource && el.kind === 'table' && !el.transpose && (
+        <div>
+          <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">{t('reportDesigner.totals')}</div>
+          <Input aria-label={t('reportDesigner.totalsLabel')} value={el.totals?.label ?? ''}
+            placeholder={t('reportDesigner.totalsOffHint')}
+            onChange={(e) => onPatchElement(el.id, e.target.value
+              ? { totals: { label: e.target.value, columns: el.totals?.columns ?? [] } }
+              : { totals: undefined })} className="h-7 text-xs" />
+          {el.totals && bound.length > 0 && (
+            <div className="mt-1.5 flex flex-col gap-1">
+              {bound.map((c) => (
+                <label key={c.key} className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Checkbox aria-label={`${t('reportDesigner.sumColumn')} ${c.label}`}
+                    checked={el.totals!.columns.includes(c.key)}
+                    onCheckedChange={(v) => onPatchElement(el.id, {
+                      totals: {
+                        label: el.totals!.label,
+                        columns: v === true ? [...el.totals!.columns, c.key] : el.totals!.columns.filter((k) => k !== c.key),
+                      },
+                    }, { discrete: true })} />
+                  {c.label}
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {el.kind === 'cellgrid' ? (
         <p className="text-xs text-muted-foreground">{t('reportDesigner.cellgridColumnsNote')}</p>
@@ -367,7 +403,8 @@ export function DataTab({ element, parameters, onPatchElement, onPatchParameters
             {rows.map(({ col, included }, i) => {
               const boundCol = bound.find((c) => c.key === col.key);
               return (
-                <div key={col.key} className="flex items-center gap-1.5 py-1.5">
+                <div key={col.key} className="py-1.5">
+                <div className="flex items-center gap-1.5">
                   <Checkbox aria-label={col.key} checked={included} onCheckedChange={(v) => toggle(col, v === true)} />
                   <Input aria-label={`${t('reportDesigner.columnLabel')} ${col.key}`} value={boundCol ? boundCol.label : col.label}
                     disabled={!included} onChange={(e) => relabel(col.key, e.target.value)} className="h-7 flex-1 text-xs" />
@@ -408,6 +445,36 @@ export function DataTab({ element, parameters, onPatchElement, onPatchParameters
                   <Button type="button" variant="ghost" size="icon" className="h-7 w-7 shrink-0"
                     aria-label={`${t('reportDesigner.moveDown')} ${col.label}`} disabled={!included || i >= bound.length - 1}
                     onClick={() => move(col.key, 1)}><ArrowDown className="h-3.5 w-3.5" /></Button>
+                </div>
+                {included && boundCol && (
+                  <div className="mt-1 flex items-center gap-1.5 pl-6">
+                    <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{t('reportDesigner.ruleWhen')}</span>
+                    <Select value={boundCol.rule?.op ?? NONE_STATUS}
+                      onValueChange={(v) => setRule(bound.indexOf(boundCol), v === NONE_STATUS ? null : { op: v as ColumnRule['op'] })}>
+                      <SelectTrigger aria-label={`${t('reportDesigner.ruleOpFor')} ${boundCol.label}`} className="h-7 w-16 shrink-0 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={NONE_STATUS}>{t('reportDesigner.none')}</SelectItem>
+                        <SelectItem value="gte">≥</SelectItem>
+                        <SelectItem value="lte">≤</SelectItem>
+                        <SelectItem value="eq">=</SelectItem>
+                        <SelectItem value="neq">≠</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {boundCol.rule && (
+                      <>
+                        <Input aria-label={`${t('reportDesigner.ruleValueFor')} ${boundCol.label}`} value={boundCol.rule.value}
+                          onChange={(e) => setRule(bound.indexOf(boundCol), { value: e.target.value })} className="h-7 w-16 text-xs" />
+                        <Select value={boundCol.rule.status}
+                          onValueChange={(v) => setRule(bound.indexOf(boundCol), { status: v as CellStatus })}>
+                          <SelectTrigger aria-label={`${t('reportDesigner.ruleStatusFor')} ${boundCol.label}`} className="h-7 flex-1 text-xs"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {CELL_STATUSES.map((s) => <SelectItem key={s} value={s}>{t(`reportDesigner.status_${s}`)}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </>
+                    )}
+                  </div>
+                )}
                 </div>
               );
             })}

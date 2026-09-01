@@ -1,4 +1,5 @@
-import type { ReportDesign } from '@openldr/report-designer/pure';
+import type { BoundColumn, ReportDesign } from '@openldr/report-designer/pure';
+import { LETTERHEAD_H } from '@openldr/report-designer/pure';
 import { paperSizePt } from '@openldr/report-designer';
 
 /** Spec for a one-page report design bound to a single custom query: a letterhead, a scope panel
@@ -9,7 +10,7 @@ export interface SimpleDesignSpec {
   id: string;
   name: string;
   queryId: string;
-  columns: { key: string; label: string }[];
+  columns: BoundColumn[];
   parameters: ReportDesign['parameters'];
   paper?: 'A4' | 'Letter';
   orientation?: 'portrait' | 'landscape';
@@ -113,14 +114,11 @@ export function simpleTableDesign(spec: SimpleDesignSpec): ReportDesign {
       {
         id: `${spec.id}-p1`,
         elements: [
-          // Band 1 — the letterhead. Every value comes from Settings ▸ Laboratory via `{{lab.*}}`;
-          // an install that has not configured its identity renders these BLANK rather than
-          // printing the token, so the design stays valid out of the box.
-          { id: `${spec.id}-logo`, kind: 'image', name: 'Lab logo', rect: { x: 48, y: 28, w: 54, h: 54 }, src: '{{lab.logo}}' },
-          { id: `${spec.id}-labname`, kind: 'text', name: 'Lab name', rect: { x: 112, y: 30, w: 430, h: 18 }, text: '{{lab.name}}', style: { fontSize: 13, bold: true, color: '#0f172a' } },
-          { id: `${spec.id}-labaddr`, kind: 'text', name: 'Lab address', rect: { x: 112, y: 48, w: 430, h: 22 }, text: '{{lab.address}}', style: { fontSize: 7.5, color: '#64748b' } },
-          { id: `${spec.id}-labcontact`, kind: 'text', name: 'Lab contact', rect: { x: 112, y: 71, w: 430, h: 13 }, text: '{{lab.contact}}', style: { fontSize: 7.5, color: '#64748b' } },
-          { id: `${spec.id}-rule1`, kind: 'line', name: 'rule1', rect: { x: 48, y: 92, w: contentW, h: 0 }, style: { strokeColor: '#cbd5e1', strokeWidth: 0.75 } },
+          // Band 1 — ONE letterhead element (spec 2 F4). The five-element block this replaces
+          // lives solely in `render/letterhead.ts` now, and `letterhead.test.ts` proves the
+          // expansion renders byte-identical to the old copies. Values come from Settings ▸
+          // Laboratory via `{{lab.*}}`; an unconfigured install renders them blank.
+          { id: `${spec.id}-letterhead`, kind: 'letterhead', name: 'Letterhead', rect: { x: 48, y: 28, w: contentW, h: LETTERHEAD_H } },
           { id: `${spec.id}-title`, kind: 'text', name: 'Title', rect: { x: 48, y: 102, w: 600, h: 28 }, text: spec.name, style: { fontSize: 18, bold: true } },
           // Band 2 — the scope panel: what this run's numbers were computed over, and when they
           // were generated. UNBOUND (`rows`, not `dataSource`) — a bound keyvalue value is

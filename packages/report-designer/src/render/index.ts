@@ -92,8 +92,24 @@ export function renderReportDesignPdf(
         drawElement(doc, el, tokens, resolved.get(el.id), c, y, { page, resolved });
       }
       if (design.pageNumbers) drawPageFooter(doc, w, h, physical, total);
+      // Painted LAST so nothing covers it: a printed draft used to be indistinguishable from a
+      // published report. DRAFT is process vocabulary, not clinical, so the literal is allowed
+      // here; a lab wanting other words is a future design field, not a config today.
+      if (design.status === 'draft') drawDraftWatermark(doc, w, h);
     }
   }
   doc.end();
   return done;
+}
+
+/** One diagonal low-opacity DRAFT per physical page. Stroked, not filled, so the page under it
+ *  stays readable even where the letters cross dense content. */
+function drawDraftWatermark(doc: InstanceType<typeof PDFDocument> | typeof PDFDocument, w: number, h: number): void {
+  const d = doc as typeof PDFDocument;
+  d.save();
+  d.rotate(-30, { origin: [w / 2, h / 2] });
+  d.font('Helvetica-Bold').fontSize(96).opacity(0.12).fillColor('#b4540a')
+    .text('DRAFT', 0, h / 2 - 48, { width: w, align: 'center' });
+  d.opacity(1);
+  d.restore();
 }

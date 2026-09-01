@@ -16,14 +16,14 @@ export function paperSize(paper: Paper, orientation: Orientation): { w: number; 
  *  `cellgrid` was excluded while its config was JSON-only (an element with no `cellColumns` draws
  *  nothing). The Properties tab now authors that config, so a fresh insert is editable into a real
  *  grid and the exclusion no longer protects anyone. */
-export const ELEMENT_KINDS: ElementKind[] = ['text', 'table', 'keyvalue', 'image', 'barcode', 'qrcode', 'line', 'rect', 'datetime', 'cellgrid', 'chart'];
+export const ELEMENT_KINDS: ElementKind[] = ['text', 'table', 'keyvalue', 'image', 'barcode', 'qrcode', 'line', 'rect', 'datetime', 'cellgrid', 'chart', 'letterhead'];
 
 let seq = 0;
 export function newElementId(): string { seq += 1; return `el-${Date.now()}-${seq}`; }
 
 const DEFAULT_NAME: Record<ElementKind, string> = {
   text: 'Text', table: 'Table', image: 'Image', line: 'Line', rect: 'Rectangle', datetime: 'Date/time',
-  keyvalue: 'Key/value panel', barcode: 'Barcode', qrcode: 'QR code', cellgrid: 'Cell grid', chart: 'Chart',
+  keyvalue: 'Key/value panel', barcode: 'Barcode', qrcode: 'QR code', cellgrid: 'Cell grid', chart: 'Chart', letterhead: 'Letterhead',
 };
 
 export function newElement(kind: ElementKind): DesignElement {
@@ -54,6 +54,7 @@ export function newElement(kind: ElementKind): DesignElement {
     palette: { ramp: 'blue', steps: 1 },
   };
   if (kind === 'chart') return { id, kind, name, rect: { x: 48, y: 48, w: 480, h: 200 }, chartType: 'bar' };
+  if (kind === 'letterhead') return { id, kind, name, rect: { x: 48, y: 28, w: 698, h: 66 } };
   return { id, kind, name, rect: { x: 48, y: 48, w: 200, h: 80 } };
 }
 

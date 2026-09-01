@@ -69,12 +69,38 @@ async function resolveTable(
     if (!cq) throw new Error(`custom query not found: ${el.dataSource.queryId}`);
     const res = await runAllRows(run, { connectorId: cq.connectorId, sql: cq.sql, params: cq.params, values });
     const columns = el.boundColumns && el.boundColumns.length ? el.boundColumns : res.columns;
-    return { name: el.name, columns, rows: res.rows };
+    // The PDF's totals row (bodyRowsFor) and this sheet must agree; the sum logic mirrors it.
+    const rows = el.kind === 'table' && el.totals ? [...res.rows, totalsRowFor(el.totals, columns, res.rows)] : res.rows;
+    return { name: el.name, columns, rows };
   }
   // Unbound: the element's static columns/rows (looks-only sample data on the page).
   const columns = (el.columns ?? []).map((label, i) => ({ key: String(i), label }));
   const rows = (el.rows ?? []).map((r) => Object.fromEntries(r.map((cell, i) => [String(i), cell])));
   return { name: el.name, columns, rows };
+}
+
+/** The totals row for a sheet, mirroring the PDF's `bodyRowsFor` append: numeric sums for the
+ *  named columns (unparseable values contribute nothing), the label in the first column unless a
+ *  sum already sits there. */
+function totalsRowFor(
+  totals: { label: string; columns: string[] },
+  columns: { key: string }[],
+  rows: Record<string, unknown>[],
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  columns.forEach((c, ci) => {
+    if (!totals.columns.includes(c.key)) return;
+    let sum: number | null = null;
+    for (const row of rows) {
+      const n = Number(row[c.key]);
+      if (Number.isFinite(n) && row[c.key] !== '' && row[c.key] != null) sum = (sum ?? 0) + n;
+    }
+    if (sum != null) out[c.key] = sum;
+    void ci;
+  });
+  const firstKey = columns[0]?.key;
+  if (firstKey != null && out[firstKey] == null) out[firstKey] = totals.label;
+  return out;
 }
 
 /** A one-cell sheet reporting a table's query failure — mirrors the PDF renderer's per-table error placeholder. */
