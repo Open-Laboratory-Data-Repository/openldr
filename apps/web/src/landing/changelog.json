@@ -6,6 +6,30 @@
       "version": null,
       "entries": [
         {
+          "hash": "7e1e4058",
+          "type": "feat",
+          "scope": "report-designer",
+          "title": "One shared letterhead element replaces the copied blocks (F4)"
+        },
+        {
+          "hash": "434ae6ea",
+          "type": "feat",
+          "scope": "report-designer",
+          "title": "Conditional rules without SQL (F3)"
+        },
+        {
+          "hash": "2b0a9cfd",
+          "type": "feat",
+          "scope": "report-designer",
+          "title": "Drafts stamp a diagonal DRAFT watermark (F2)"
+        },
+        {
+          "hash": "f20ca261",
+          "type": "feat",
+          "scope": "report-designer",
+          "title": "Totals rows and sum tokens (spec 2 F1)"
+        },
+        {
           "hash": "2f54ac37",
           "type": "feat",
           "scope": "report-designer",
