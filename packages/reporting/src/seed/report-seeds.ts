@@ -4486,6 +4486,7 @@ export const SEED_DESIGNS: ReportDesign[] = [
     id: 'rt-amr-resistance',
     name: 'AMR Resistance Rate',
     queryId: 'q-amr-resistance',
+    metric: 'Tested and %R per antibiotic',
     columns: [
       { key: 'antibiotic', label: 'Antibiotic' },
       { key: 'tested', label: 'Tested' },
@@ -4503,6 +4504,7 @@ export const SEED_DESIGNS: ReportDesign[] = [
     id: 'rt-test-volume',
     name: 'Test Volume Over Time',
     queryId: 'q-test-volume',
+    metric: 'Reports per test and month',
     columns: [
       { key: 'month', label: 'Month' },
       { key: 'test', label: 'Test' },
@@ -4521,6 +4523,7 @@ export const SEED_DESIGNS: ReportDesign[] = [
     id: 'rt-turnaround-time',
     name: 'Specimen Turnaround Time',
     queryId: 'q-turnaround-time',
+    metric: 'Hours received to reported',
     columns: [
       { key: 'test', label: 'Test' },
       { key: 'count', label: 'Reports' },
@@ -4537,6 +4540,7 @@ export const SEED_DESIGNS: ReportDesign[] = [
     id: 'rt-patient-demographics',
     name: 'Patient Demographics',
     queryId: 'q-patient-demographics',
+    metric: 'Patients per age band, by sex',
     columns: [
       { key: 'band', label: 'Age band' },
       { key: 'total', label: 'Total' },
@@ -4553,6 +4557,7 @@ export const SEED_DESIGNS: ReportDesign[] = [
     id: 'rt-amr-facility-summary',
     name: 'AMR Resistance by Facility',
     queryId: 'q-amr-facility-summary',
+    metric: 'Tested and resistant per site',
     columns: [
       { key: 'facility', label: 'Facility' },
       { key: 'tested', label: 'Tested' },
@@ -4599,6 +4604,7 @@ export const SEED_DESIGNS: ReportDesign[] = [
     id: 'rt-amr-first-isolate-summary',
     name: 'AMR First-Isolate Resistance Summary',
     queryId: 'q-amr-first-isolate-summary',
+    metric: 'First isolates: tested and %R',
     columns: [
       { key: 'specimenType', label: 'Specimen' },
       { key: 'pathogen', label: 'Pathogen' },
