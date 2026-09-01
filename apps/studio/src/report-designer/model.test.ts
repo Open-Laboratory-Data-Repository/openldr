@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { newElement, addElement, paperSize, findElement, allElements, updateElementRects, removeElements, updateElement, updateElements } from './model';
+import { ELEMENT_KINDS, newElement, addElement, paperSize, findElement, allElements, updateElementRects, removeElements, updateElement, updateElements } from './model';
 import { MOCK_TEMPLATES } from './mockTemplates';
 import type { ReportTemplate } from './types';
 
@@ -89,5 +89,17 @@ describe('report-designer model', () => {
     expect(next.pages[0].elements[0].style).toEqual({ bold: true });
     expect(next.pages[0].elements[1].style).toEqual({ bold: true });
     expect(tpl.pages[0].elements[0].style).toBeUndefined();
+  });
+
+  it('includes cellgrid in the insert palette', () => {
+    expect(ELEMENT_KINDS).toContain('cellgrid');
+  });
+
+  it('creates a cellgrid with declared cells and a binary palette', () => {
+    const el = newElement('cellgrid');
+    expect(el.kind).toBe('cellgrid');
+    expect(el.cellColumns).toEqual(['c1', 'c2', 'c3', 'c4', 'c5']);
+    expect(el.palette).toEqual({ ramp: 'blue', steps: 1 });
+    expect(el.rect).toEqual({ x: 48, y: 48, w: 480, h: 160 });
   });
 });

@@ -1250,7 +1250,7 @@ export const pt: EnShape = {
     saveFailed: 'Falha ao salvar',
     element: {
       text: 'Texto', table: 'Tabela', image: 'Imagem', line: 'Linha', rect: 'Retângulo', datetime: 'Data/hora',
-      keyvalue: 'Painel chave/valor', barcode: 'Código de barras', qrcode: 'Código QR',
+      keyvalue: 'Painel chave/valor', barcode: 'Código de barras', qrcode: 'Código QR', cellgrid: 'Grelha de células',
     },
     headersFromData: 'Cabeçalhos dos dados',
     rowsAtRender: 'Linhas na renderização',

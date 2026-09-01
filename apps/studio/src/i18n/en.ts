@@ -1332,7 +1332,7 @@ export const en = {
     saveFailed: 'Save failed',
     element: {
       text: 'Text', table: 'Table', image: 'Image', line: 'Line', rect: 'Rectangle', datetime: 'Date/time',
-      keyvalue: 'Key/value panel', barcode: 'Barcode', qrcode: 'QR code',
+      keyvalue: 'Key/value panel', barcode: 'Barcode', qrcode: 'QR code', cellgrid: 'Cell grid',
     },
     headersFromData: 'Headers from data',
     rowsAtRender: 'Rows at render',

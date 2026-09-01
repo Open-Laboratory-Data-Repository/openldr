@@ -13,11 +13,10 @@ export function paperSize(paper: Paper, orientation: Orientation): { w: number; 
 
 /** Insertable element kinds, in menu order.
  *
- *  ⛔ `cellgrid` is deliberately NOT here, and its absence is not an oversight. Inserting one from
- *  the palette would create an element with no `cellColumns`, which draws nothing at all: the kind
- *  is authored by a seeded design that knows its own query's column names. It still needs a name
- *  and an icon below, because an existing design containing one has to be editable. */
-export const ELEMENT_KINDS: ElementKind[] = ['text', 'table', 'keyvalue', 'image', 'barcode', 'qrcode', 'line', 'rect', 'datetime'];
+ *  `cellgrid` was excluded while its config was JSON-only (an element with no `cellColumns` draws
+ *  nothing). The Properties tab now authors that config, so a fresh insert is editable into a real
+ *  grid and the exclusion no longer protects anyone. */
+export const ELEMENT_KINDS: ElementKind[] = ['text', 'table', 'keyvalue', 'image', 'barcode', 'qrcode', 'line', 'rect', 'datetime', 'cellgrid'];
 
 let seq = 0;
 export function newElementId(): string { seq += 1; return `el-${Date.now()}-${seq}`; }
@@ -47,6 +46,13 @@ export function newElement(kind: ElementKind): DesignElement {
   // squashed symbol the author has to fix before it can even be read.
   if (kind === 'barcode') return { id, kind, name, rect: { x: 48, y: 48, w: 220, h: 56 }, text: '123456789', caption: true };
   if (kind === 'qrcode') return { id, kind, name, rect: { x: 48, y: 48, w: 80, h: 80 }, text: '123456789' };
+  // Five declared cells and a binary palette: enough for the canvas preview to show a real shape
+  // before the author binds a query and renames the columns to the query's own keys.
+  if (kind === 'cellgrid') return {
+    id, kind, name, rect: { x: 48, y: 48, w: 480, h: 160 },
+    cellColumns: ['c1', 'c2', 'c3', 'c4', 'c5'],
+    palette: { ramp: 'blue', steps: 1 },
+  };
   return { id, kind, name, rect: { x: 48, y: 48, w: 200, h: 80 } };
 }
 
