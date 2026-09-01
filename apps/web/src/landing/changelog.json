@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "06b69d16",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Show real data on the canvas (spec 4 slice 1)"
+        },
+        {
           "hash": "ffba0f72",
           "type": "fix",
           "scope": "report-designer",
