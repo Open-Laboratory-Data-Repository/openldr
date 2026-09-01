@@ -1309,6 +1309,8 @@ export const en = {
     showDataNeedsLoad: 'Load pages first to see real data',
     loadPages: 'Load pages',
     physicalPage: 'Physical page',
+    spark: 'Trend',
+    sparkFor: 'Draw as a trend line for',
     ruleWhen: 'When',
     ruleOpFor: 'Rule for',
     ruleValueFor: 'Rule value for',

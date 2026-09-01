@@ -494,3 +494,24 @@ describe('date-range parameter commits without losing a field', () => {
     ]);
   });
 });
+
+describe('spark column toggle', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it('marks a column as a trend and clears the flag when unticked', () => {
+    const { onPatchElement } = setup({
+      dataSource: { kind: 'custom-query', queryId: 'cq_1' },
+      boundColumns: [{ key: 'trend', label: 'Trend' }],
+    });
+    fireEvent.click(screen.getByLabelText('Draw as a trend line for Trend'));
+    expect(onPatchElement).toHaveBeenCalledWith('t',
+      { boundColumns: [{ key: 'trend', label: 'Trend', spark: true }] }, { discrete: true });
+    const on = setup({
+      dataSource: { kind: 'custom-query', queryId: 'cq_1' },
+      boundColumns: [{ key: 'trend', label: 'Trend', spark: true }],
+    });
+    fireEvent.click(screen.getAllByLabelText('Draw as a trend line for Trend')[1]);
+    expect(on.onPatchElement).toHaveBeenCalledWith('t',
+      { boundColumns: [{ key: 'trend', label: 'Trend' }] }, { discrete: true });
+  });
+});

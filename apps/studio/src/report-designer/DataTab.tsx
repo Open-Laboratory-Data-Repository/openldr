@@ -458,6 +458,16 @@ export function DataTab({ element, parameters, onPatchElement, onPatchParameters
                 </div>
                 {included && boundCol && (
                   <div className="mt-1 flex items-center gap-1.5 pl-6">
+                    <label className="flex shrink-0 items-center gap-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                      <Checkbox aria-label={`${t('reportDesigner.sparkFor')} ${boundCol.label}`}
+                        checked={boundCol.spark ?? false}
+                        onCheckedChange={(v) => setBound(bound.map((c, i) => {
+                          if (i !== bound.indexOf(boundCol)) return c;
+                          const { spark: _drop, ...rest } = c;
+                          return v === true ? { ...rest, spark: true } : rest;
+                        }), { discrete: true })} />
+                      {t('reportDesigner.spark')}
+                    </label>
                     <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{t('reportDesigner.ruleWhen')}</span>
                     <Select value={boundCol.rule?.op ?? NONE_STATUS}
                       onValueChange={(v) => setRule(bound.indexOf(boundCol), v === NONE_STATUS ? null : { op: v as ColumnRule['op'] })}>

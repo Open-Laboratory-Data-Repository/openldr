@@ -1227,6 +1227,8 @@ export const pt: EnShape = {
     showDataNeedsLoad: 'Carregue as páginas para ver os dados reais',
     loadPages: 'Carregar páginas',
     physicalPage: 'Página física',
+    spark: 'Tendência',
+    sparkFor: 'Desenhar como linha de tendência para',
     ruleWhen: 'Quando',
     ruleOpFor: 'Regra para',
     ruleValueFor: 'Valor da regra para',
