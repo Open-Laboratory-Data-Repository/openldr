@@ -362,6 +362,14 @@ function effectiveResolved(el: DesignElement, resolved: ResolvedTable | undefine
   return transposeResolved(resolved, el.transposeLabel ?? '');
 }
 
+/** A cell value as drawn: `decimals` pins numeric formatting (65 beside 23.7 in one column reads
+ *  as a mistake); anything that does not parse as a finite number passes through untouched. */
+function formatCell(c: { key: string; decimals?: number }, v: unknown): string {
+  if (c.decimals == null) return String(v ?? '');
+  const n = Number(v);
+  return Number.isFinite(n) ? n.toFixed(c.decimals) : String(v ?? '');
+}
+
 /** The projected body rows for a table element (bound → project columns from resolved.rows; static → el.rows; error/unresolved → []). */
 export function rowsFor(el: DesignElement, resolved: ResolvedTable | undefined): string[][] {
   if (el.kind === 'cellgrid') return cellGridRowsFor(el, resolved);
@@ -370,7 +378,7 @@ export function rowsFor(el: DesignElement, resolved: ResolvedTable | undefined):
     const rt = effectiveResolved(el, resolved);
     if (!rt || 'error' in rt) return [];
     const cols = el.boundColumns && el.boundColumns.length ? el.boundColumns : rt.columns;
-    return rt.rows.map((row) => cols.map((c) => String(row[c.key] ?? '')));
+    return rt.rows.map((row) => cols.map((c) => formatCell(c, row[c.key])));
   }
   return el.rows ?? [];
 }
@@ -705,7 +713,7 @@ function drawKeyValue(doc: Doc, el: DesignElement, r: Box, resolved: ResolvedTab
   // strip that a box would only clutter. A TITLED panel usually wants one: without it the dark title
   // bar floats above its own content and reads as an unrelated section band.
   if (s.strokeColor) {
-    doc.save().lineWidth(s.strokeWidth ?? 0.5).strokeColor(s.strokeColor)
+    doc.save().lineWidth((s.strokeWidth ?? 0.5) * PX_TO_PT).strokeColor(s.strokeColor)
       .rect(r.x, r.y, r.w, r.h).stroke().restore();
   }
 
@@ -749,7 +757,8 @@ function drawKeyValue(doc: Doc, el: DesignElement, r: Box, resolved: ResolvedTab
     // contains its label, which a chip must not cover).
     doc.font('Helvetica').fontSize(valueSize);
     const value = values[i];
-    const chip = p.status && p.emphasis === 'fill';
+    // `chip` and `fill` coincide here on purpose: this fill already hugged the value text.
+    const chip = p.status && (p.emphasis === 'fill' || p.emphasis === 'chip');
     const pad = chip ? CELL_PAD : 0;
     let valueColor = BODY_TEXT;
     if (chip) {
@@ -1047,12 +1056,14 @@ export function drawElement(
   switch (el.kind) {
     case 'rect': {
       if (s.fill && s.fill !== 'none') doc.save().rect(r.x, r.y, r.w, r.h).fill(s.fill).restore();
-      doc.save().lineWidth(s.strokeWidth ?? 1).strokeColor(s.strokeColor ?? RECT_BORDER)
+      // Authored widths are px@96 like every other design length; consumed raw as POINTS they drew
+      // every border a third too thick. Converted default-inclusive, exactly as fontSize is.
+      doc.save().lineWidth((s.strokeWidth ?? 1) * PX_TO_PT).strokeColor(s.strokeColor ?? RECT_BORDER)
         .rect(r.x, r.y, r.w, r.h).stroke().restore();
       return;
     }
     case 'line': {
-      doc.save().lineWidth(s.strokeWidth ?? 1).strokeColor(s.strokeColor ?? LINE_COLOR)
+      doc.save().lineWidth((s.strokeWidth ?? 1) * PX_TO_PT).strokeColor(s.strokeColor ?? LINE_COLOR)
         .moveTo(r.x, r.y).lineTo(r.x + r.w, r.y + r.h).stroke().restore();
       return;
     }
@@ -1077,11 +1088,14 @@ export function drawElement(
       // in the PDF. That is why `lab.logo` is validated as a data URI at WRITE time rather than
       // here: by the time we are drawing, there is nobody left to tell.
       const src = el.src ? interpolate(el.src, tokens) : '';
-      if (src) {
-        doc.save();
-        try { doc.image(src, r.x, r.y, { fit: [r.w, r.h] }); doc.restore(); return; }
-        catch { doc.restore(); /* fall through to placeholder */ }
-      }
+      // An UNSET slot prints nothing: every install without a configured logo used to stamp a
+      // dashed rectangle onto the letterhead of every report, which a reader takes as "something
+      // failed". Empty-after-interpolation means "this install has no logo", not a defect. The
+      // canvas keeps its placeholder — authoring still needs to see the slot.
+      if (!src) return;
+      doc.save();
+      try { doc.image(src, r.x, r.y, { fit: [r.w, r.h] }); doc.restore(); return; }
+      catch { doc.restore(); /* a src that RESOLVED but cannot draw is a real defect — show it */ }
       doc.save().lineWidth(1).strokeColor(RECT_BORDER).dash(3, { space: 2 })
         .rect(r.x, r.y, r.w, r.h).stroke().undash().restore();
       return;
@@ -1235,7 +1249,8 @@ function drawCellGrid(
       x += CELL_COL_GAP;
       const v = row[cellIndex(cellCount) + ci] ?? '';
       const st = rowStatuses?.[ci];
-      const filled = Boolean(st) && (c.emphasis ?? 'text') === 'fill';
+      // A trailing cell is already chip-sized, so `chip` and `fill` coincide here too.
+      const filled = Boolean(st) && ((c.emphasis ?? 'text') === 'fill' || c.emphasis === 'chip');
       if (filled) {
         // Same centre line as the value it sits behind, and as the cells to its left.
         const chipH = CELL_ROW_H - CHIP_INSET_Y * 2;
@@ -1324,6 +1339,19 @@ function drawGrid(
       // A chip is exactly one row tall and one column wide, so it can never affect the y-advance.
       if (st && (emphasis[ci] ?? 'text') === 'fill') {
         doc.rect(xOf(ci) + CHIP_INSET_X, y + CHIP_INSET_Y, widths[ci] - CHIP_INSET_X * 2, ROW_H - CHIP_INSET_Y * 2)
+          .fill(STATUS_CHIP_FILL[st]);
+        lastFill = STATUS_CHIP_FILL[st];
+        setFill(STATUS_CHIP_TEXT[st]);
+      } else if (st && emphasis[ci] === 'chip') {
+        // T5: a pill hugging the TEXT, not the column — a full-width Resistant bar across a 350pt
+        // column shouts. Positioned against the same edge the text aligns to, clamped to the cell.
+        const textW = doc.widthOfString(cell);
+        const chipW = Math.min(textW + CELL_PAD * 2, widths[ci] - CHIP_INSET_X * 2);
+        const chipH = ROW_H - CHIP_INSET_Y * 2;
+        const chipX = numeric[ci]
+          ? xOf(ci) + widths[ci] - CELL_PAD - textW - CELL_PAD
+          : xOf(ci) + CHIP_INSET_X;
+        doc.roundedRect(Math.max(xOf(ci) + CHIP_INSET_X, chipX), y + CHIP_INSET_Y, chipW, chipH, chipH / 2)
           .fill(STATUS_CHIP_FILL[st]);
         lastFill = STATUS_CHIP_FILL[st];
         setFill(STATUS_CHIP_TEXT[st]);

@@ -691,13 +691,14 @@ describe('letterhead identity rendering', () => {
     expect(texts.join('')).not.toContain('lab.name');
   });
 
-  it('resolves a token image src to the configured logo, and placeholders when unset', async () => {
+  it('resolves a token image src to the configured logo, and draws NOTHING when unset (T1)', async () => {
     const withLogo = decodedContent(await renderReportDesignPdf(headerDesign(), new Map(), { now: NOW, identity: { logo: PNG } }));
     const without = decodedContent(await renderReportDesignPdf(headerDesign(), new Map(), { now: NOW }));
-    // pdfkit emits an XObject Do for a drawn image; the dashed placeholder emits the dash operator.
+    // pdfkit emits an XObject Do for a drawn image. An UNSET slot is absent entirely: the dashed
+    // box used to print on every logo-less install and read as a failure (spec 3 T1).
     expect(withLogo).toMatch(/\/I\d+ Do/);
     expect(without).not.toMatch(/\/I\d+ Do/);
-    expect(without).toContain('[3 2] 0 d');
+    expect(without).not.toContain('[3 2] 0 d');
   });
 
   it('does not throw when the logo is a URL — it placeholders, which is why write-time validation exists', async () => {

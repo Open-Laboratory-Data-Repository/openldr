@@ -54,7 +54,10 @@ export type DataSource = z.infer<typeof DataSourceSchema>;
  *  of these belongs in the query, which is what lets one renderer serve AST, serology and chemistry. */
 export const CELL_STATUSES = ['normal', 'abnormal', 'critical', 'indeterminate', 'none'] as const;
 export type CellStatus = (typeof CELL_STATUSES)[number];
-export type CellEmphasis = 'fill' | 'text';
+/** `fill` paints the whole cell; `chip` hugs the text in a pill (T5 — a full-width Resistant bar
+ *  shouts); `text` just tints. In a keyvalue panel `chip` and `fill` coincide, because its fill
+ *  already hugged the value. */
+export type CellEmphasis = 'fill' | 'text' | 'chip';
 export type ColumnKind = 'value' | 'range' | 'units' | 'flag' | 'label';
 
 export const BoundColumnSchema = z.object({
@@ -63,9 +66,13 @@ export const BoundColumnSchema = z.object({
   /** Name of ANOTHER column in the same query result carrying a CellStatus token. */
   statusKey: z.string().optional(),
   /** How status is shown: a filled chip, or just coloured text. Defaults to 'text'. */
-  emphasis: z.enum(['fill', 'text']).optional(),
+  emphasis: z.enum(['fill', 'text', 'chip']).optional(),
   /** Drives alignment/width policy only. `range` and `units` never right-align. */
   kind: z.enum(['value', 'range', 'units', 'flag', 'label']).optional(),
+  /** Fixed decimal places for values that parse as numbers (`65` and `23.7` in one column read as
+   *  a mistake). Renderer-side because number-to-string SQL is where the three dialects stop
+   *  agreeing (the transmission seed's own lesson). Non-numbers pass through untouched. */
+  decimals: z.number().int().min(0).max(4).optional(),
 });
 export type BoundColumn = z.infer<typeof BoundColumnSchema>;
 
@@ -98,7 +105,7 @@ export const TrailingColumnSchema = z.object({
   /** Points. Declared so the element's total width is knowable without a Doc. */
   width: z.number().positive(),
   statusKey: z.string().optional(),
-  emphasis: z.enum(['fill', 'text']).optional(),
+  emphasis: z.enum(['fill', 'text', 'chip']).optional(),
 });
 export type TrailingColumn = z.infer<typeof TrailingColumnSchema>;
 

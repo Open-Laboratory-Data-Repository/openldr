@@ -2424,3 +2424,15 @@ it('exports cellGridWidth and CELL_LABEL_W for a seed test to use', () => {
   expect(typeof cellGridWidth).toBe('function');
   expect(CELL_LABEL_W).toBe(149.5);
 });
+
+describe('rt-clinical-micro organism panel capacity (spec 3 T6)', () => {
+  it('holds TWO stacked pairs inside its box, through the real toPt + pairRects path', () => {
+    const design = SEED_DESIGNS.find((d) => d.id === 'rt-clinical-micro')!;
+    const org = design.pages[0].elements.find((e) => e.id === 'org')!;
+    const box = toPt(org.rect);
+    // Two bound columns is the addition the old 58px box clipped 93% of (1.5pt slack).
+    const pairs = pairRects(box, 2, 'stacked', org.panelColumns ?? 1, !!(org.text ?? '').trim());
+    const last = pairs[pairs.length - 1];
+    expect(last.y + last.h).toBeLessThanOrEqual(box.y + box.h);
+  });
+});

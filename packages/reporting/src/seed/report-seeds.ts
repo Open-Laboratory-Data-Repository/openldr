@@ -4486,13 +4486,14 @@ export const SEED_DESIGNS: ReportDesign[] = [
     id: 'rt-amr-resistance',
     name: 'AMR Resistance Rate',
     queryId: 'q-amr-resistance',
+    metric: 'Tested and %R per antibiotic',
     columns: [
       { key: 'antibiotic', label: 'Antibiotic' },
       { key: 'tested', label: 'Tested' },
       { key: 'r', label: 'R' },
       { key: 'i', label: 'I' },
       { key: 's', label: 'S' },
-      { key: 'percentR', label: '%R' },
+      { key: 'percentR', label: '%R', decimals: 1 },
     ],
     parameters: [
       { key: 'dateRange', label: 'Date range', type: 'daterange', required: true },
@@ -4503,6 +4504,7 @@ export const SEED_DESIGNS: ReportDesign[] = [
     id: 'rt-test-volume',
     name: 'Test Volume Over Time',
     queryId: 'q-test-volume',
+    metric: 'Reports per test and month',
     columns: [
       { key: 'month', label: 'Month' },
       { key: 'test', label: 'Test' },
@@ -4521,12 +4523,13 @@ export const SEED_DESIGNS: ReportDesign[] = [
     id: 'rt-turnaround-time',
     name: 'Specimen Turnaround Time',
     queryId: 'q-turnaround-time',
+    metric: 'Hours received to reported',
     columns: [
       { key: 'test', label: 'Test' },
       { key: 'count', label: 'Reports' },
-      { key: 'avgHours', label: 'Avg hours' },
-      { key: 'minHours', label: 'Min' },
-      { key: 'maxHours', label: 'Max' },
+      { key: 'avgHours', label: 'Avg hours', decimals: 1 },
+      { key: 'minHours', label: 'Min', decimals: 1 },
+      { key: 'maxHours', label: 'Max', decimals: 1 },
     ],
     parameters: [
       { key: 'dateRange', label: 'Date range', type: 'daterange', required: true },
@@ -4537,6 +4540,7 @@ export const SEED_DESIGNS: ReportDesign[] = [
     id: 'rt-patient-demographics',
     name: 'Patient Demographics',
     queryId: 'q-patient-demographics',
+    metric: 'Patients per age band, by sex',
     columns: [
       { key: 'band', label: 'Age band' },
       { key: 'total', label: 'Total' },
@@ -4553,6 +4557,7 @@ export const SEED_DESIGNS: ReportDesign[] = [
     id: 'rt-amr-facility-summary',
     name: 'AMR Resistance by Facility',
     queryId: 'q-amr-facility-summary',
+    metric: 'Tested and resistant per site',
     columns: [
       { key: 'facility', label: 'Facility' },
       { key: 'tested', label: 'Tested' },
@@ -4599,6 +4604,7 @@ export const SEED_DESIGNS: ReportDesign[] = [
     id: 'rt-amr-first-isolate-summary',
     name: 'AMR First-Isolate Resistance Summary',
     queryId: 'q-amr-first-isolate-summary',
+    metric: 'First isolates: tested and %R',
     columns: [
       { key: 'specimenType', label: 'Specimen' },
       { key: 'pathogen', label: 'Pathogen' },
@@ -4607,7 +4613,7 @@ export const SEED_DESIGNS: ReportDesign[] = [
       { key: 'r', label: 'R' },
       { key: 'i', label: 'I' },
       { key: 's', label: 'S' },
-      { key: 'percentR', label: '%R' },
+      { key: 'percentR', label: '%R', decimals: 1 },
     ],
     parameters: [{ key: 'dateRange', label: 'Date range', type: 'daterange', required: true }],
   }),
@@ -4724,19 +4730,19 @@ export const SEED_DESIGNS: ReportDesign[] = [
       // Band 4: a titled panel. Stacked, because an organism name ("Klebsiella pneumoniae") is
       // longer than the 40% an inline label would leave it, and it is the one fact on this page a
       // clinician looks for first.
-      { id: 'org', kind: 'keyvalue', name: 'Organism', rect: { x: 40, y: 264, w: 700, h: 58 },
+      { id: 'org', kind: 'keyvalue', name: 'Organism', rect: { x: 40, y: 264, w: 700, h: 88 },
         layout: 'stacked', text: 'ORGANISM ISOLATED', style: { fill: '#334155', strokeColor: '#cbd5e1' },
         dataSource: { kind: 'custom-query', queryId: 'q-clinical-micro-header' },
         boundColumns: [{ key: 'organism', label: 'Isolate', kind: 'label' }] },
-      { id: 'band', kind: 'rect', name: 'band', rect: { x: 40, y: 334, w: 700, h: 20 }, style: { fill: '#334155', strokeColor: '#334155' } },
-      { id: 'bandt', kind: 'text', name: 'bandt', rect: { x: 40, y: 339, w: 420, h: 16 }, text: '   ANTIMICROBIAL SUSCEPTIBILITY', style: { fontSize: 8, bold: true, color: '#ffffff' } },
+      { id: 'band', kind: 'rect', name: 'band', rect: { x: 40, y: 364, w: 700, h: 20 }, style: { fill: '#334155', strokeColor: '#334155' } },
+      { id: 'bandt', kind: 'text', name: 'bandt', rect: { x: 40, y: 369, w: 420, h: 16 }, text: '   ANTIMICROBIAL SUSCEPTIBILITY', style: { fontSize: 8, bold: true, color: '#ffffff' } },
       // Two columns, not three: the interpretation IS the result for a susceptibility test, and
       // carrying the same fact in two renderings is what let them visibly disagree.
-      { id: 'tbl', kind: 'table', name: 'Susceptibility', rect: { x: 40, y: 360, w: 700, h: 300 },
+      { id: 'tbl', kind: 'table', name: 'Susceptibility', rect: { x: 40, y: 390, w: 700, h: 300 },
         dataSource: { kind: 'custom-query', queryId: 'q-clinical-micro-ast' },
         boundColumns: [
           { key: 'test', label: 'Antimicrobial', kind: 'label' },
-          { key: 'result', label: 'Result', statusKey: 'status', emphasis: 'fill', kind: 'flag' },
+          { key: 'result', label: 'Result', statusKey: 'status', emphasis: 'chip', kind: 'flag' },
         ] },
       // ⚠ The footer sits at the BOTTOM of the page: A4 portrait is 1123px tall at 96dpi and the
       // bottom margin is 32, so the last usable row is ~1091. These elements were authored at
