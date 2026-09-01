@@ -463,3 +463,34 @@ describe('Load columns with a daterange parameter', () => {
     expect(sent.values).toMatchObject({ from: '2020-01-01', to: '2030-01-01' });
   });
 });
+
+describe('date-range parameter commits without losing a field', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  const dateParam = () => [{ key: 'dateRange', label: 'Date range', type: 'daterange' as const, value: { from: '', to: '' } }];
+
+  it('commits a date as soon as it is picked, with no blur needed', () => {
+    const onPatchParameters = vi.fn();
+    render(<DataTab element={undefined} parameters={dateParam()}
+      onPatchElement={vi.fn()} onPatchParameters={onPatchParameters} />);
+    fireEvent.change(screen.getByLabelText('To dateRange'), { target: { value: '2035-01-01' } });
+    expect(onPatchParameters).toHaveBeenCalledWith([expect.objectContaining({ value: { from: '', to: '2035-01-01' } })]);
+  });
+
+  it('setting one end never wipes the other end', () => {
+    // The real defect: committing `from` fired the [param.value] effect, which reset the
+    // uncommitted local `to` back to the stored value.
+    const onPatchParameters = vi.fn();
+    const { rerender } = render(<DataTab element={undefined} parameters={dateParam()}
+      onPatchElement={vi.fn()} onPatchParameters={onPatchParameters} />);
+    fireEvent.change(screen.getByLabelText('From dateRange'), { target: { value: '2000-01-01' } });
+    const afterFrom = onPatchParameters.mock.calls.at(-1)![0];
+    // Feed the commit back, exactly as the page does, then set the other end.
+    rerender(<DataTab element={undefined} parameters={afterFrom}
+      onPatchElement={vi.fn()} onPatchParameters={onPatchParameters} />);
+    fireEvent.change(screen.getByLabelText('To dateRange'), { target: { value: '2035-01-01' } });
+    expect(onPatchParameters).toHaveBeenLastCalledWith([
+      expect.objectContaining({ value: { from: '2000-01-01', to: '2035-01-01' } }),
+    ]);
+  });
+});

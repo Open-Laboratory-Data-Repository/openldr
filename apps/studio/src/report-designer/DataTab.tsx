@@ -35,7 +35,8 @@ const BINDABLE_KINDS = new Set<DesignElement['kind']>(['table', 'keyvalue', 'bar
 
 const emptyValue = (type: ParamType): TemplateParam['value'] => (type === 'daterange' ? { from: '', to: '' } : '');
 
-/** One editable design-parameter row. Text inputs commit on blur (local state while typing). */
+/** One editable design-parameter row. Text inputs commit on blur (local state while typing);
+ *  date inputs commit on change, for the reason spelled out at the daterange branch below. */
 function ParamRow({ param, onChange, onRemove, isKeyTaken }: {
   param: TemplateParam;
   onChange: (patch: Partial<TemplateParam>) => void;
@@ -105,6 +106,13 @@ function ParamRow({ param, onChange, onRemove, isKeyTaken }: {
           </Select>
         </div>
         {type === 'daterange' ? (
+          // ⛔ Dates commit on CHANGE, not on blur like the text fields above. Both ends keep
+          // their own local state but share ONE committed `{from,to}`, so committing either end
+          // fired the `[param.value]` effect that re-seeds BOTH — wiping whatever the operator
+          // had just typed into the other end. Measured twice on a live smoke. A `type="date"`
+          // input fires change once per complete date rather than per keystroke, so the
+          // blur-debounce that text needs buys nothing here and costs correctness. The committed
+          // value is read from the event, never from the sibling's possibly-stale local state.
           // flex-wrap plus w-0/min-w: a native date input's INTRINSIC width (~110px) beats flex-1,
           // and two of them beside the type select forced the whole pane into a sideways scrollbar.
           // When the pane is narrow the two dates now stack instead of overflowing.
@@ -112,12 +120,14 @@ function ParamRow({ param, onChange, onRemove, isKeyTaken }: {
             <div className="w-0 min-w-[6.5rem] flex-1">
               <div className={caption}>{t('reportDesigner.defaultFrom')}</div>
               <Input type="date" aria-label={`${t('reportDesigner.from')} ${param.key}`} value={from}
-                onChange={(e) => setFrom(e.target.value)} onBlur={() => onChange({ value: { from, to } })} className="h-7 w-full text-xs" />
+                onChange={(e) => { setFrom(e.target.value); onChange({ value: { from: e.target.value, to } }); }}
+                className="h-7 w-full text-xs" />
             </div>
             <div className="w-0 min-w-[6.5rem] flex-1">
               <div className={caption}>{t('reportDesigner.defaultTo')}</div>
               <Input type="date" aria-label={`${t('reportDesigner.to')} ${param.key}`} value={to}
-                onChange={(e) => setTo(e.target.value)} onBlur={() => onChange({ value: { from, to } })} className="h-7 w-full text-xs" />
+                onChange={(e) => { setTo(e.target.value); onChange({ value: { from, to: e.target.value } }); }}
+                className="h-7 w-full text-xs" />
             </div>
           </div>
         ) : (
