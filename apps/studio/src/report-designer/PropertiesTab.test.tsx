@@ -283,6 +283,67 @@ describe('PropertiesTab stat layout and transpose', () => {
   });
 });
 
+describe('PropertiesTab cellgrid controls', () => {
+  const cg = (over: Partial<DesignElement> = {}): DesignElement =>
+    ({ id: 'cg', kind: 'cellgrid', name: 'Grid', rect: { x: 0, y: 0, w: 480, h: 160 },
+      cellColumns: ['c1', 'c2'], palette: { ramp: 'blue', steps: 1 }, ...over }) as DesignElement;
+
+  it('edits the label column (coalesced)', () => {
+    const props = setup({ template: tplWithEl(cg()), selectedIds: ['cg'] });
+    fireEvent.change(screen.getByLabelText('Label column'), { target: { value: 'lab' } });
+    expect(props.onPatchElement).toHaveBeenCalledWith('cg', { labelColumn: 'lab' }, undefined);
+  });
+
+  it('blanking the label column deletes it rather than storing an empty string', () => {
+    const props = setup({ template: tplWithEl(cg({ labelColumn: 'lab' })), selectedIds: ['cg'] });
+    fireEvent.change(screen.getByLabelText('Label column'), { target: { value: '' } });
+    expect(props.onPatchElement).toHaveBeenCalledWith('cg', { labelColumn: undefined }, undefined);
+  });
+
+  it('renames a cell column (coalesced) and removes one (discrete)', () => {
+    const props = setup({ template: tplWithEl(cg()), selectedIds: ['cg'] });
+    fireEvent.change(screen.getByLabelText('Cell columns 1'), { target: { value: 'd01' } });
+    expect(props.onPatchElement).toHaveBeenCalledWith('cg', { cellColumns: ['d01', 'c2'] }, undefined);
+    fireEvent.click(screen.getByLabelText('Remove column 2'));
+    expect(props.onPatchElement).toHaveBeenCalledWith('cg', { cellColumns: ['c1'] }, { discrete: true });
+  });
+
+  it('adds the smallest free cN cell column (discrete)', () => {
+    const props = setup({ template: tplWithEl(cg({ cellColumns: ['c1', 'c3'] })), selectedIds: ['cg'] });
+    fireEvent.click(screen.getByRole('button', { name: 'Add cell column' }));
+    expect(props.onPatchElement).toHaveBeenCalledWith('cg', { cellColumns: ['c1', 'c3', 'c2'] }, { discrete: true });
+  });
+
+  it('clamps palette steps into 1..5 and keeps the ramp', () => {
+    const props = setup({ template: tplWithEl(cg()), selectedIds: ['cg'] });
+    fireEvent.change(screen.getByLabelText('Palette steps'), { target: { value: '9' } });
+    expect(props.onPatchElement).toHaveBeenCalledWith('cg', { palette: { ramp: 'blue', steps: 5 } }, undefined);
+  });
+
+  it('toggles the group boundary (discrete)', () => {
+    const props = setup({ template: tplWithEl(cg()), selectedIds: ['cg'] });
+    fireEvent.click(screen.getByLabelText('Gap at group change'));
+    expect(props.onPatchElement).toHaveBeenCalledWith('cg', { groupBoundary: 'token-change' }, { discrete: true });
+  });
+
+  it('adds a trailing column with defaults (discrete) and removes the last one back to undefined', () => {
+    const props = setup({ template: tplWithEl(cg()), selectedIds: ['cg'] });
+    fireEvent.click(screen.getByRole('button', { name: 'Add trailing column' }));
+    expect(props.onPatchElement).toHaveBeenCalledWith('cg', { trailingColumns: [{ key: '', label: '', width: 20 }] }, { discrete: true });
+    const props2 = setup({ template: tplWithEl(cg({ trailingColumns: [{ key: 'days', label: 'Days', width: 20 }] })), selectedIds: ['cg'] });
+    fireEvent.click(screen.getByLabelText('Remove column trailing 1'));
+    expect(props2.onPatchElement).toHaveBeenCalledWith('cg', { trailingColumns: undefined }, { discrete: true });
+  });
+
+  it('edits a trailing column key, label and width (coalesced)', () => {
+    const props = setup({ template: tplWithEl(cg({ trailingColumns: [{ key: 'days', label: 'Days', width: 20 }] })), selectedIds: ['cg'] });
+    fireEvent.change(screen.getByLabelText('Column key 1'), { target: { value: 'silent' } });
+    expect(props.onPatchElement).toHaveBeenCalledWith('cg', { trailingColumns: [{ key: 'silent', label: 'Days', width: 20 }] }, undefined);
+    fireEvent.change(screen.getByLabelText('Column width (points) 1'), { target: { value: '22' } });
+    expect(props.onPatchElement).toHaveBeenCalledWith('cg', { trailingColumns: [{ key: 'days', label: 'Days', width: 22 }] }, undefined);
+  });
+});
+
 describe('PropertiesTab barcode and QR controls', () => {
   const sym = (over: Partial<DesignElement> = {}): DesignElement =>
     ({ id: 'sym', kind: 'barcode', name: 'B', rect: { x: 0, y: 0, w: 200, h: 60 }, ...over }) as DesignElement;

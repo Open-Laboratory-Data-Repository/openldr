@@ -382,6 +382,76 @@ function KindControls({ el, onPatch }: {
     );
   }
 
+  if (el.kind === 'cellgrid') {
+    const cells = el.cellColumns ?? [];
+    const trailing = el.trailingColumns ?? [];
+    const setCells = (next: string[], discrete?: boolean) => onPatch({ cellColumns: next }, discrete ? { discrete: true } : undefined);
+    // An empty list deletes the key: `trailingColumns: []` and "no trailing columns" mean the same
+    // thing to the renderer, and the design should persist the shorter spelling.
+    const setTrailing = (next: typeof trailing, discrete?: boolean) =>
+      onPatch({ trailingColumns: next.length ? next : undefined }, discrete ? { discrete: true } : undefined);
+    const nextCellKey = () => { let n = 1; const has = new Set(cells); while (has.has(`c${n}`)) n += 1; return `c${n}`; };
+    return (
+      <div className="flex flex-col gap-3">
+        <div>
+          <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">{t('reportDesigner.labelColumn')}</div>
+          <Input aria-label={t('reportDesigner.labelColumn')} value={el.labelColumn ?? ''} placeholder="—"
+            onChange={(e) => onPatch({ labelColumn: e.target.value || undefined })} className="h-8 text-xs" />
+          <p className="mt-1 text-xs text-muted-foreground">{t('reportDesigner.labelColumnHint')}</p>
+        </div>
+        <div>
+          <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">{t('reportDesigner.cellColumns')}</div>
+          <div className="flex flex-col gap-1">
+            {cells.map((c, i) => (
+              <div key={i} className="flex items-center gap-1">
+                <Input aria-label={`${t('reportDesigner.cellColumns')} ${i + 1}`} value={c}
+                  onChange={(e) => setCells(cells.map((x, j) => (j === i ? e.target.value : x)))} className="h-7 text-xs" />
+                <Button type="button" variant="ghost" size="icon" className="h-7 w-7 shrink-0"
+                  aria-label={`${t('reportDesigner.removeColumn')} ${i + 1}`} onClick={() => setCells(cells.filter((_, j) => j !== i), true)}>
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            ))}
+            <Button type="button" variant="outline" size="sm" className="justify-start"
+              onClick={() => setCells([...cells, nextCellKey()], true)}>{t('reportDesigner.addCellColumn')}</Button>
+          </div>
+        </div>
+        <NumberField label={t('reportDesigner.paletteSteps')} value={el.palette?.steps ?? 1}
+          onChange={(n) => onPatch({ palette: { ramp: el.palette?.ramp ?? 'blue', steps: Math.max(1, Math.min(5, Math.round(n))) } })} min={1} />
+        <label className="flex items-center gap-2 text-xs text-foreground">
+          <Checkbox aria-label={t('reportDesigner.groupBoundary')} checked={el.groupBoundary === 'token-change'}
+            onCheckedChange={(v) => onPatch({ groupBoundary: v === true ? 'token-change' : undefined }, { discrete: true })} />
+          {t('reportDesigner.groupBoundary')}
+        </label>
+        <div>
+          <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">{t('reportDesigner.trailingColumns')}</div>
+          <div className="flex flex-col gap-1">
+            {trailing.map((c, i) => (
+              <div key={i} className="flex items-center gap-1">
+                <Input aria-label={`${t('reportDesigner.trailingKey')} ${i + 1}`} value={c.key} placeholder={t('reportDesigner.trailingKey')}
+                  onChange={(e) => setTrailing(trailing.map((x, j) => (j === i ? { ...x, key: e.target.value } : x)))} className="h-7 w-20 text-xs" />
+                <Input aria-label={`${t('reportDesigner.trailingLabel')} ${i + 1}`} value={c.label} placeholder={t('reportDesigner.trailingLabel')}
+                  onChange={(e) => setTrailing(trailing.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))} className="h-7 flex-1 text-xs" />
+                <Input type="number" aria-label={`${t('reportDesigner.trailingWidth')} ${i + 1}`} value={c.width}
+                  onChange={(e) => { const n = Number(e.target.value); if (n > 0) setTrailing(trailing.map((x, j) => (j === i ? { ...x, width: n } : x))); }}
+                  className="h-7 w-16 text-xs" />
+                <Button type="button" variant="ghost" size="icon" className="h-7 w-7 shrink-0"
+                  aria-label={`${t('reportDesigner.removeColumn')} trailing ${i + 1}`} onClick={() => setTrailing(trailing.filter((_, j) => j !== i), true)}>
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            ))}
+            <Button type="button" variant="outline" size="sm" className="justify-start"
+              onClick={() => setTrailing([...trailing, { key: '', label: '', width: 20 }], true)}>{t('reportDesigner.addTrailingColumn')}</Button>
+          </div>
+          {/* Every other length on this pane is px@96; trailing widths are POINTS by schema. Silence
+              here would re-run the units trap that once shipped a clipped row. */}
+          <p className="mt-1 text-xs text-muted-foreground">{t('reportDesigner.trailingWidthHint')}</p>
+        </div>
+      </div>
+    );
+  }
+
   return null;
 }
 
