@@ -6,6 +6,42 @@
       "version": null,
       "entries": [
         {
+          "hash": "a9e0d3a9",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Cap the page-strip boxes and document the strip"
+        },
+        {
+          "hash": "18536300",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Dashed break line where an overflowing table ends page 1"
+        },
+        {
+          "hash": "fecb6b45",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Page strip shows how many physical pages a design prints as"
+        },
+        {
+          "hash": "5d35aa7d",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Fetch a design's bound rows once and count its physical pages"
+        },
+        {
+          "hash": "ecafc4a5",
+          "type": "feat",
+          "scope": "report-designer",
+          "title": "Pagination math is reachable without pdfkit"
+        },
+        {
+          "hash": "299d56a3",
+          "type": "feat",
+          "scope": "studio",
+          "title": "Selected canvas elements show a name tag above the box"
+        },
+        {
           "hash": "db2555bd",
           "type": "feat",
           "scope": "studio",
