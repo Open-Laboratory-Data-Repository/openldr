@@ -62,3 +62,16 @@ describe('designPageCounts', () => {
     expect(long.total).toBe(long.perPage[0]);
   });
 });
+
+describe('chart elements in the fetch', () => {
+  it('a bound chart gets its rows in the resolved map', async () => {
+    const run = vi.fn().mockResolvedValue({ columns: [{ key: 'month', label: 'M' }], rows: [{ month: 'Jan' }] });
+    const chartEl: DesignElement = {
+      id: 'ch', kind: 'chart', name: 'Chart', rect: { x: 0, y: 0, w: 480, h: 200 },
+      chartType: 'bar', dataSource: { kind: 'custom-query', queryId: 'cq_1' },
+    };
+    const resolved = await fetchResolvedTables(design([chartEl]), { list: async () => [CQ], run });
+    const got = resolved.get('ch');
+    expect(got && 'rows' in got ? got.rows : []).toEqual([{ month: 'Jan' }]);
+  });
+});

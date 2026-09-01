@@ -131,3 +131,27 @@ describe('exportDesignToExcel', () => {
     expect(write).not.toHaveBeenCalled();
   });
 });
+
+describe('chart export', () => {
+  it('a bound chart exports its query rows as a sheet; an unbound chart contributes nothing', async () => {
+    const design = {
+      id: 'd', name: 'D', paper: 'A4' as const, orientation: 'portrait' as const, status: 'draft' as const,
+      parameters: [],
+      pages: [{ id: 'p1', elements: [
+        { id: 'ch', kind: 'chart' as const, name: 'Volume chart', rect: { x: 0, y: 0, w: 480, h: 200 },
+          chartType: 'bar' as const, labelColumn: 'month', valueColumns: ['count'],
+          dataSource: { kind: 'custom-query' as const, queryId: 'cq_1' } },
+        { id: 'un', kind: 'chart' as const, name: 'Sketch', rect: { x: 0, y: 220, w: 480, h: 200 }, chartType: 'bar' as const },
+      ] }],
+    };
+    const write = vi.fn();
+    const n = await exportDesignToExcel(design, {
+      list: async () => [{ id: 'cq_1', name: 'Q', connectorId: 'c1', sql: 'select 1', params: [] } as never],
+      run: vi.fn().mockResolvedValue({ columns: [{ key: 'month', label: 'Month' }, { key: 'count', label: 'Count' }], rows: [{ month: 'Jan', count: 4 }] }),
+      write,
+    });
+    expect(n).toBe(1);
+    const wb = write.mock.calls[0][0];
+    expect(wb.SheetNames).toEqual(['Volume chart']);
+  });
+});
