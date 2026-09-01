@@ -4679,12 +4679,8 @@ export const SEED_DESIGNS: ReportDesign[] = [
       // Band 1 — the letterhead. Every value comes from Settings ▸ Laboratory via `{{lab.*}}`;
       // an install that has not configured its identity renders these BLANK rather than printing
       // the token, so the design stays valid out of the box.
-      { id: 'logo', kind: 'image', name: 'Lab logo', rect: { x: 40, y: 28, w: 54, h: 54 }, src: '{{lab.logo}}' },
-      { id: 'labname', kind: 'text', name: 'Lab name', rect: { x: 104, y: 30, w: 430, h: 18 }, text: '{{lab.name}}', style: { fontSize: 13, bold: true, color: '#0f172a' } },
-      { id: 'labaddr', kind: 'text', name: 'Lab address', rect: { x: 104, y: 48, w: 430, h: 22 }, text: '{{lab.address}}', style: { fontSize: 7.5, color: '#64748b' } },
-      { id: 'labcontact', kind: 'text', name: 'Lab contact', rect: { x: 104, y: 71, w: 430, h: 13 }, text: '{{lab.contact}}', style: { fontSize: 7.5, color: '#64748b' } },
-      // Band 3 of the reference: a rule closing the identity header. Was missing entirely.
-      { id: 'rule1', kind: 'line', name: 'rule1', rect: { x: 40, y: 92, w: 700, h: 0 }, style: { strokeColor: '#cbd5e1', strokeWidth: 0.75 } },
+      // ONE letterhead element (spec 2 F4); geometry lives in render/letterhead.ts alone.
+      { id: 'letterhead', kind: 'letterhead', name: 'Letterhead', rect: { x: 40, y: 28, w: 700, h: 66 } },
       { id: 'lab', kind: 'text', name: 'lab', rect: { x: 40, y: 102, w: 460, h: 16 }, text: 'LABORATORY REPORT', style: { fontSize: 15, bold: true, color: '#0f172a' } },
       { id: 'title', kind: 'text', name: 'title', rect: { x: 40, y: 124, w: 400, h: 16 }, text: 'MICROBIOLOGY — CULTURE & SENSITIVITY', style: { fontSize: 10, bold: true, color: '#334155' } },
       // The accession barcode a technologist scans. BOUND, not `{{param.request}}`: the design's
@@ -4800,12 +4796,8 @@ export const SEED_DESIGNS: ReportDesign[] = [
         help: 'Comma-separated panel codes for the upper grid. Every other test lands in the Others row below it.' },
     ],
     pages: [{ id: 'rt-transmission-grid-p1', elements: [
-      // Band 1 — the letterhead, ids and rects byte-identical to `simpleTableDesign`'s.
-      { id: 'rt-transmission-grid-logo', kind: 'image', name: 'Lab logo', rect: { x: 48, y: 28, w: 54, h: 54 }, src: '{{lab.logo}}' },
-      { id: 'rt-transmission-grid-labname', kind: 'text', name: 'Lab name', rect: { x: 112, y: 30, w: 430, h: 18 }, text: '{{lab.name}}', style: { fontSize: 13, bold: true, color: '#0f172a' } },
-      { id: 'rt-transmission-grid-labaddr', kind: 'text', name: 'Lab address', rect: { x: 112, y: 48, w: 430, h: 22 }, text: '{{lab.address}}', style: { fontSize: 7.5, color: '#64748b' } },
-      { id: 'rt-transmission-grid-labcontact', kind: 'text', name: 'Lab contact', rect: { x: 112, y: 71, w: 430, h: 13 }, text: '{{lab.contact}}', style: { fontSize: 7.5, color: '#64748b' } },
-      { id: 'rt-transmission-grid-rule1', kind: 'line', name: 'rule1', rect: { x: 48, y: 92, w: TG_CONTENT_W, h: 0 }, style: { strokeColor: '#cbd5e1', strokeWidth: 0.75 } },
+      // Band 1 — ONE letterhead element (spec 2 F4), same block simpleTableDesign now uses.
+      { id: 'rt-transmission-grid-letterhead', kind: 'letterhead', name: 'Letterhead', rect: { x: 48, y: 28, w: TG_CONTENT_W, h: 66 } },
       { id: 'rt-transmission-grid-title', kind: 'text', name: 'Title', rect: { x: 48, y: 102, w: 600, h: 28 }, text: 'LIS STAKEHOLDERS UPDATE', style: { fontSize: 18, bold: true } },
       // Band 2 — the scope panel. UNBOUND (`rows`, not `dataSource`): only an unbound pair's value
       // is interpolated, so only this form can carry `{{param.*}}`/`{{date}}`.

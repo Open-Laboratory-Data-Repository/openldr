@@ -1318,7 +1318,7 @@ export const fr: EnShape = {
     saveFailed: 'Échec de l’enregistrement',
     element: {
       text: 'Texte', table: 'Tableau', image: 'Image', line: 'Ligne', rect: 'Rectangle', datetime: 'Date/heure',
-      keyvalue: 'Panneau clé/valeur', barcode: 'Code-barres', qrcode: 'Code QR', cellgrid: 'Grille de cellules', chart: 'Graphique',
+      keyvalue: 'Panneau clé/valeur', barcode: 'Code-barres', qrcode: 'Code QR', cellgrid: 'Grille de cellules', chart: 'Graphique', letterhead: 'En-tête de laboratoire',
     },
     headersFromData: 'En-têtes issus des données',
     rowsAtRender: 'Lignes au rendu',

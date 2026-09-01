@@ -23,7 +23,7 @@ const PARAM_FORMATS = ['timezone-no-signed-offset', 'year-month'] as const satis
  * map, the default names and the canvas switch. Before it, it failed none of them.
  */
 export const ELEMENT_KIND_VALUES = [
-  'text', 'table', 'image', 'line', 'rect', 'datetime', 'keyvalue', 'barcode', 'qrcode', 'cellgrid', 'chart',
+  'text', 'table', 'image', 'line', 'rect', 'datetime', 'keyvalue', 'barcode', 'qrcode', 'cellgrid', 'chart', 'letterhead',
 ] as const;
 export type ElementKind = (typeof ELEMENT_KIND_VALUES)[number];
 export type Paper = 'A4' | 'Letter';

@@ -10,6 +10,7 @@ import {
   stripWidth as stripWidthOf,
 } from './cellgrid';
 import { drawChart } from './chart';
+import { letterheadElements } from './letterhead';
 
 // Type-only, so this stays runtime-pdfkit-free (the pure barrel re-exports this module's math into
 // the browser). The AMBIENT `PDFKit.PDFDocument` spelling broke the studio's tsc, which compiles
@@ -1134,6 +1135,13 @@ export function drawElement(
       // A failed query gets the same red placeholder every bound kind gets; drawChart never sees it.
       if (el.dataSource && resolved && 'error' in resolved) { drawErrorPlaceholder(doc, r, resolved.error); return; }
       drawChart(doc, el, r, resolved);
+      return;
+    }
+    case 'letterhead': {
+      // One block, expanded from the single source of letterhead geometry. `y` honours flowAfter
+      // the way every element does: the children are laid out from the flowed origin.
+      const base = y === box.y ? el : { ...el, rect: { ...el.rect, y: y / PX_TO_PT } };
+      for (const child of letterheadElements(base)) drawElement(doc, child, tokens, undefined, chunk);
       return;
     }
     case 'image': {

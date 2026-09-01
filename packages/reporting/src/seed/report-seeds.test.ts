@@ -1035,7 +1035,10 @@ describe('SEED_DESIGNS — rt-clinical-micro uses real keyvalue panels', () => {
     // between them.
     const els = design().pages[0].elements;
     // `bandt` sits INSIDE `band` by design (a label on its own section bar).
-    const allowed = new Set(['band|bandt']);
+    // The barcode deliberately sits inside the letterhead band's empty right side, as it always
+    // did between the old copied elements; the single letterhead element's bounding box now
+    // spans that area.
+    const allowed = new Set(['band|bandt', 'letterhead|bc']);
     for (let i = 0; i < els.length; i += 1) {
       for (let j = i + 1; j < els.length; j += 1) {
         const a = els[i].rect; const b = els[j].rect;
@@ -1428,9 +1431,9 @@ describe('SEED_DESIGNS — every report carries a letterhead and a scope panel',
     // They were three elements — title, date, table — and read as unbranded printouts beside the
     // clinical report.
     for (const d of simple()) {
-      expect(el(d, '-logo').src, `${d.id} has no logo`).toBe('{{lab.logo}}');
-      expect(el(d, '-labname').text, `${d.id} has no lab name`).toBe('{{lab.name}}');
-      expect(el(d, '-rule1'), `${d.id} has no closing rule`).toBeDefined();
+      // One letterhead element since spec 2 F4; `letterhead.test.ts` proves it expands to the
+      // exact block these three assertions used to pin.
+      expect(el(d, '-letterhead').kind, `${d.id} has no letterhead`).toBe('letterhead');
     }
   });
 

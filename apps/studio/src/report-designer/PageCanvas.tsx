@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Image as ImageIcon } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import type { DesignElement, DesignPage, Margins, Rect, ReportTemplate, ResolvedTable } from './types';
-import { encodeCode128, encodeQr, QR_QUIET_ZONE, elementChunkCount, headerBandHeight, maxRowsFor, ROW_H, toPt, PX_TO_PT } from './types';
+import { encodeCode128, encodeQr, QR_QUIET_ZONE, elementChunkCount, headerBandHeight, maxRowsFor, ROW_H, toPt, PX_TO_PT, LETTERHEAD } from './types';
 import { paperSize } from './model';
 import { HANDLES, boundingBox, type Handle } from './geometry';
 import { useCanvasInteraction } from './useCanvasInteraction';
@@ -306,6 +306,27 @@ function UnencodablePreview(): JSX.Element {
 }
 
 /**
+ * Canvas preview of the shared letterhead: the SAME geometry constants the renderer expands
+ * (`LETTERHEAD` in render/letterhead.ts, via /pure), so what the author positions is what prints.
+ */
+function LetterheadPreview({ el, zoom, identity }: { el: DesignElement; zoom: number; identity?: Record<string, string> }): JSX.Element {
+  const L = LETTERHEAD;
+  const abs = (b: { x: number; y: number; w?: number; h?: number }): CSSProperties =>
+    ({ position: 'absolute', left: b.x * zoom, top: b.y * zoom, width: (b.w ?? 0) * zoom, height: (b.h ?? 0) * zoom });
+  return (
+    <div className="relative h-full w-full" data-testid={`letterhead-preview-${el.id}`}>
+      {identity?.logo
+        ? <img src={identity.logo} alt="" style={abs(L.logo)} className="object-contain" />
+        : <div style={abs(L.logo)} className="border border-dashed border-neutral-300" />}
+      <div style={{ ...abs(L.name), fontSize: L.name.fontSize * zoom, fontWeight: 600, color: L.name.color }} className="overflow-hidden leading-tight">{identity?.name ?? ''}</div>
+      <div style={{ ...abs(L.address), fontSize: L.address.fontSize * zoom, color: L.address.color }} className="overflow-hidden leading-tight">{identity?.address ?? ''}</div>
+      <div style={{ ...abs(L.contact), fontSize: L.contact.fontSize * zoom, color: L.contact.color }} className="overflow-hidden leading-tight">{identity?.contact ?? ''}</div>
+      <div style={{ position: 'absolute', left: 0, top: L.rule.y * zoom, width: el.rect.w * zoom, height: Math.max(1, L.rule.strokeWidth * zoom), background: L.rule.strokeColor }} />
+    </div>
+  );
+}
+
+/**
  * Canvas preview of a chart: the SHAPE for the chosen type, never invented data values — the same
  * contract CellGridPreview documents. Real bars come from the query at render time.
  */
@@ -376,6 +397,8 @@ function ElementContent({ el, zoom, identity }: { el: DesignElement; zoom: numbe
       return <CellGridPreview el={el} />;
     case 'chart':
       return <ChartPreview el={el} />;
+    case 'letterhead':
+      return <LetterheadPreview el={el} zoom={zoom} identity={identity} />;
   }
 }
 
