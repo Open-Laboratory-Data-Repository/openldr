@@ -70,7 +70,11 @@ describe('resolveWithinRoot symlink escape', () => {
     try {
       expect(() => resolveWithinRoot({ enabled: true, root, userPath: 'link/secret.txt', mustExist: true })).toThrow(/escapes the sandbox/);
     } finally {
-      fs.rmSync(link, { force: true }); fs.rmSync(outside, { recursive: true, force: true });
+      // `recursive` is what removes the LINK rather than following it. Without it rmSync
+      // validates the path with statSync, which resolves the symlink to its target directory
+      // and throws ERR_FS_EISDIR "Path is a directory". The recursive path lstats instead, so
+      // it unlinks the symlink and leaves `outside` intact for the rmSync that follows.
+      fs.rmSync(link, { recursive: true, force: true }); fs.rmSync(outside, { recursive: true, force: true });
     }
   });
   it('rejects writing through an in-root symlinked dir pointing outside', () => {
@@ -82,7 +86,7 @@ describe('resolveWithinRoot symlink escape', () => {
       // even for a deep non-existent tail.
       expect(() => resolveWithinRoot({ enabled: true, root, userPath: 'wlink/a/b/new.txt', mustExist: false })).toThrow(/escapes the sandbox/);
     } finally {
-      fs.rmSync(link, { force: true }); fs.rmSync(outside, { recursive: true, force: true });
+      fs.rmSync(link, { recursive: true, force: true }); fs.rmSync(outside, { recursive: true, force: true });
     }
   });
 });
