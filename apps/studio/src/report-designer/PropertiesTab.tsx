@@ -452,6 +452,51 @@ function KindControls({ el, onPatch }: {
     );
   }
 
+  if (el.kind === 'chart') {
+    const values = el.valueColumns ?? [];
+    const setValues = (next: string[], discrete?: boolean) =>
+      onPatch({ valueColumns: next.length ? next : undefined }, discrete ? { discrete: true } : undefined);
+    return (
+      <div className="flex flex-col gap-3">
+        <div>
+          <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">{t('reportDesigner.chartType')}</div>
+          <Select value={el.chartType ?? 'bar'} onValueChange={(v) => onPatch({ chartType: v as 'bar' | 'line' | 'donut' }, { discrete: true })}>
+            <SelectTrigger aria-label={t('reportDesigner.chartType')} className="h-8 w-full text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="bar">{t('reportDesigner.chartBar')}</SelectItem>
+              <SelectItem value="line">{t('reportDesigner.chartLine')}</SelectItem>
+              <SelectItem value="donut">{t('reportDesigner.chartDonut')}</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">{t('reportDesigner.labelColumn')}</div>
+          <Input aria-label={t('reportDesigner.labelColumn')} value={el.labelColumn ?? ''} placeholder="—"
+            onChange={(e) => onPatch({ labelColumn: e.target.value || undefined })} className="h-8 text-xs" />
+          <p className="mt-1 text-xs text-muted-foreground">{t('reportDesigner.chartLabelHint')}</p>
+        </div>
+        <div>
+          <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">{t('reportDesigner.valueColumns')}</div>
+          <div className="flex flex-col gap-1">
+            {values.map((c, i) => (
+              <div key={i} className="flex items-center gap-1">
+                <Input aria-label={`${t('reportDesigner.valueColumns')} ${i + 1}`} value={c}
+                  onChange={(e) => setValues(values.map((x, j) => (j === i ? e.target.value : x)))} className="h-7 text-xs" />
+                <Button type="button" variant="ghost" size="icon" className="h-7 w-7 shrink-0"
+                  aria-label={`${t('reportDesigner.removeColumn')} value ${i + 1}`} onClick={() => setValues(values.filter((_, j) => j !== i), true)}>
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            ))}
+            <Button type="button" variant="outline" size="sm" className="justify-start"
+              onClick={() => setValues([...values, ''], true)}>{t('reportDesigner.addValueColumn')}</Button>
+          </div>
+          {el.chartType === 'donut' && <p className="mt-1 text-xs text-muted-foreground">{t('reportDesigner.donutFirstOnly')}</p>}
+        </div>
+      </div>
+    );
+  }
+
   return null;
 }
 

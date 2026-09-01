@@ -365,3 +365,18 @@ describe('parameter rows explain themselves', () => {
     expect(screen.getByText('Default value')).toBeInTheDocument();
   });
 });
+
+describe('chart binding', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it('a chart binds a query, sorts here, and points at Properties for its columns', async () => {
+    const onPatchElement = vi.fn();
+    render(<DataTab element={{ id: 'ch', kind: 'chart', name: 'Chart', rect: { x: 0, y: 0, w: 480, h: 200 },
+      chartType: 'bar', dataSource: { kind: 'custom-query', queryId: 'cq_1' } }}
+      parameters={[]} onPatchElement={onPatchElement} onPatchParameters={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText('Sort by column'), { target: { value: 'month' } });
+    expect(onPatchElement).toHaveBeenCalledWith('ch', { sortBy: 'month' });
+    expect(screen.getByText('Chart type and columns are set in the Properties tab.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /load columns/i })).toBeNull();
+  });
+});

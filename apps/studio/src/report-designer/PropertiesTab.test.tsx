@@ -520,3 +520,35 @@ describe('PropertiesTab image source', () => {
     expect(screen.queryByText(/too large/i)).not.toBeInTheDocument();
   });
 });
+
+describe('PropertiesTab chart controls', () => {
+  const ch = (over: Partial<DesignElement> = {}): DesignElement =>
+    ({ id: 'ch', kind: 'chart', name: 'Chart', rect: { x: 0, y: 0, w: 480, h: 200 }, chartType: 'bar', ...over }) as DesignElement;
+
+  it('changes the chart type (discrete)', async () => {
+    const props = setup({ template: tplWithEl(ch()), selectedIds: ['ch'] });
+    fireEvent.click(screen.getByLabelText('Chart type'));
+    fireEvent.click(await screen.findByRole('option', { name: 'Donut' }));
+    expect(props.onPatchElement).toHaveBeenCalledWith('ch', { chartType: 'donut' }, { discrete: true });
+  });
+
+  it('edits the label column (coalesced)', () => {
+    const props = setup({ template: tplWithEl(ch()), selectedIds: ['ch'] });
+    fireEvent.change(screen.getByLabelText('Label column'), { target: { value: 'month' } });
+    expect(props.onPatchElement).toHaveBeenCalledWith('ch', { labelColumn: 'month' }, undefined);
+  });
+
+  it('adds and removes value columns (discrete), deleting the empty list', () => {
+    const props = setup({ template: tplWithEl(ch()), selectedIds: ['ch'] });
+    fireEvent.click(screen.getByRole('button', { name: 'Add value column' }));
+    expect(props.onPatchElement).toHaveBeenCalledWith('ch', { valueColumns: [''] }, { discrete: true });
+    const removing = setup({ template: tplWithEl(ch({ valueColumns: ['count'] })), selectedIds: ['ch'] });
+    fireEvent.click(screen.getAllByLabelText('Remove column value 1')[0]);
+    expect(removing.onPatchElement).toHaveBeenCalledWith('ch', { valueColumns: undefined }, { discrete: true });
+  });
+
+  it('says the donut uses the first value column only', () => {
+    setup({ template: tplWithEl(ch({ chartType: 'donut' })), selectedIds: ['ch'] });
+    expect(screen.getByText(/first value column/i)).toBeInTheDocument();
+  });
+});
