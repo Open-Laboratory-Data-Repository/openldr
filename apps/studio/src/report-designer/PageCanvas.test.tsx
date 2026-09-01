@@ -39,6 +39,22 @@ describe('PageCanvas', () => {
     ['nw','n','ne','e','se','s','sw','w'].forEach((h) => expect(el.querySelector(`[data-testid="handle-${h}"]`)).toBeTruthy());
   });
 
+  it('names a single selected element with a tag above its box', () => {
+    render(<PageCanvas template={MOCK_TEMPLATES[0]} zoom={0.75} selectedIds={['amr-table']} onSelect={vi.fn()} onCommitRects={vi.fn()} />);
+    const tag = screen.getByTestId('el-tag-amr-table');
+    expect(tag).toHaveTextContent('Resistance table');
+  });
+
+  it('shows no tag when nothing is selected and none per element in a multi-selection', () => {
+    const { rerender } = render(
+      <PageCanvas template={MOCK_TEMPLATES[0]} zoom={0.75} selectedIds={[]} onSelect={vi.fn()} onCommitRects={vi.fn()} />,
+    );
+    expect(screen.queryByTestId('el-tag-amr-table')).toBeNull();
+    rerender(<PageCanvas template={MOCK_TEMPLATES[0]} zoom={0.75} selectedIds={['amr-table', 'amr-title']} onSelect={vi.fn()} onCommitRects={vi.fn()} />);
+    expect(screen.queryByTestId('el-tag-amr-table')).toBeNull();
+    expect(screen.queryByTestId('el-tag-amr-title')).toBeNull();
+  });
+
   it('shows no handles and outlines every element when multiple are selected', () => {
     render(<PageCanvas template={MOCK_TEMPLATES[0]} zoom={0.75} selectedIds={['amr-title', 'amr-table']} onSelect={vi.fn()} onCommitRects={vi.fn()} />);
     expect(screen.getByTestId('el-amr-title').className).toContain('outline');

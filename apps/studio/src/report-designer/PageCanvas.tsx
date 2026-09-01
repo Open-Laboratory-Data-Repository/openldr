@@ -154,6 +154,14 @@ function ElementBox({ el, rect, zoom, selected, showHandles, editing, onPointerD
       ) : (
         <ElementContent el={el} zoom={zoom} identity={identity} />
       )}
+      {showHandles && !editing && (
+        // The name tag rides the selection, not the hover: hover tags flicker while dragging and
+        // hide the guide lines. pointer-events-none so it never steals the drag from the box under it.
+        <span data-testid={`el-tag-${el.id}`} aria-hidden
+          className="pointer-events-none absolute -top-7 left-0 max-w-full truncate rounded-t rounded-br bg-primary px-2 py-0.5 text-[10px] font-semibold leading-4 text-primary-foreground whitespace-nowrap">
+          {el.name}
+        </span>
+      )}
       {showHandles && !editing && HANDLES.map((h) => (
         <span key={h} data-testid={`handle-${h}`} onPointerDown={(e) => onHandlePointerDown(e, h)}
           className={cn('absolute h-2 w-2 border border-primary bg-white touch-none', HANDLE_CLASS[h])} />
