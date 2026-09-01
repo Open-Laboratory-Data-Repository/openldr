@@ -3,9 +3,9 @@ import type { ReportDesign } from '../schema';
 import { paperSizePt } from './units';
 import { drawElement, paramMap, pageChunkCount, totalPhysicalPages, drawPageFooter, drawsOnChunk, resolveFlowY } from './draw';
 
-export type ResolvedTable =
-  | { columns: { key: string; label: string }[]; rows: Record<string, unknown>[] }
-  | { error: string };
+// Moved to ./pagination so browser code can name the type without this pdfkit entry point;
+// re-exported here so every existing import keeps working.
+export type { ResolvedTable } from './pagination';
 
 export { resolveDesignTables, type RunQuery } from './resolve';
 
