@@ -6,6 +6,36 @@
       "version": null,
       "entries": [
         {
+          "hash": "2f54ac37",
+          "type": "feat",
+          "scope": "report-designer",
+          "title": "Compact chip emphasis and organism panel slack (T5, T6)"
+        },
+        {
+          "hash": "cf138a2c",
+          "type": "feat",
+          "scope": "report-designer",
+          "title": "Per-column decimals pin numeric formatting (T4)"
+        },
+        {
+          "hash": "647f3d32",
+          "type": "feat",
+          "scope": "reporting",
+          "title": "The six factory reports state their metric (T3)"
+        },
+        {
+          "hash": "c0c8b15e",
+          "type": "fix",
+          "scope": "report-designer",
+          "title": "Authored border widths convert px to pt like fontSize (T2)"
+        },
+        {
+          "hash": "0955f1ce",
+          "type": "fix",
+          "scope": "report-designer",
+          "title": "An unset logo slot prints nothing (T1)"
+        },
+        {
           "hash": "f597a363",
           "type": "feat",
           "scope": "studio",
