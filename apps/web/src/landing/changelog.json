@@ -6,6 +6,18 @@
       "version": null,
       "entries": [
         {
+          "hash": "09d7439a",
+          "type": "feat",
+          "scope": "report-designer",
+          "title": "Sparklines in table cells (spec 4 slice 2)"
+        },
+        {
+          "hash": "9cb9667e",
+          "type": "fix",
+          "scope": "studio",
+          "title": "A date-range parameter no longer loses the end you just typed"
+        },
+        {
           "hash": "06b69d16",
           "type": "feat",
           "scope": "studio",
