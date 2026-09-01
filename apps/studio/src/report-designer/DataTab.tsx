@@ -70,38 +70,60 @@ function ParamRow({ param, onChange, onRemove, isKeyTaken }: {
     else setKey(param.key);
   };
 
+  // Every field wears a visible caption. This row once showed "dateRange", "Date range" and
+  // "Date range" side by side with two bare dd/mm/yyyy boxes under them, and the operator could
+  // not tell key from label from type, nor that the dates were a DEFAULT.
+  const caption = 'mb-1 text-[10px] uppercase tracking-wide text-muted-foreground';
   return (
     <div className="flex flex-col gap-1.5 py-2">
-      <div className="flex items-center gap-1.5">
-        <Input aria-label={`${t('reportDesigner.paramKey')} ${param.key}`} value={key} placeholder={t('reportDesigner.paramKey')}
-          onChange={(e) => setKey(e.target.value)} onBlur={commitKey} className="h-7 flex-1 text-xs" />
-        <Input aria-label={`${t('reportDesigner.paramLabel')} ${param.key}`} value={label} placeholder={t('reportDesigner.paramLabel')}
-          onChange={(e) => setLabel(e.target.value)} onBlur={() => onChange({ label })} className="h-7 flex-1 text-xs" />
+      <div className="flex items-end gap-1.5">
+        <div className="min-w-0 flex-1">
+          <div className={caption}>{t('reportDesigner.paramKey')}</div>
+          <Input aria-label={`${t('reportDesigner.paramKey')} ${param.key}`} value={key} placeholder={t('reportDesigner.paramKey')}
+            onChange={(e) => setKey(e.target.value)} onBlur={commitKey} className="h-7 text-xs" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className={caption}>{t('reportDesigner.paramLabel')}</div>
+          <Input aria-label={`${t('reportDesigner.paramLabel')} ${param.key}`} value={label} placeholder={t('reportDesigner.paramLabel')}
+            onChange={(e) => setLabel(e.target.value)} onBlur={() => onChange({ label })} className="h-7 text-xs" />
+        </div>
         <Button type="button" variant="ghost" size="icon" className="h-7 w-7 shrink-0"
           aria-label={`${t('reportDesigner.removeParameter')} ${param.key}`} onClick={onRemove}><X className="h-3.5 w-3.5" /></Button>
       </div>
-      <div className="flex items-center gap-1.5">
-        <Select value={type} onValueChange={(v) => onChange({ type: v as ParamType, value: emptyValue(v as ParamType) })}>
-          <SelectTrigger aria-label={`${t('reportDesigner.paramType')} ${param.key}`} className="h-7 w-28 shrink-0 text-xs"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="text">{t('reportDesigner.paramTypeText')}</SelectItem>
-            <SelectItem value="select">{t('reportDesigner.paramTypeSelect')}</SelectItem>
-            <SelectItem value="daterange">{t('reportDesigner.paramTypeDaterange')}</SelectItem>
-          </SelectContent>
-        </Select>
+      <div className="flex flex-wrap items-end gap-1.5">
+        <div className="w-28 shrink-0">
+          <div className={caption}>{t('reportDesigner.paramType')}</div>
+          <Select value={type} onValueChange={(v) => onChange({ type: v as ParamType, value: emptyValue(v as ParamType) })}>
+            <SelectTrigger aria-label={`${t('reportDesigner.paramType')} ${param.key}`} className="h-7 w-full text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="text">{t('reportDesigner.paramTypeText')}</SelectItem>
+              <SelectItem value="select">{t('reportDesigner.paramTypeSelect')}</SelectItem>
+              <SelectItem value="daterange">{t('reportDesigner.paramTypeDaterange')}</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
         {type === 'daterange' ? (
           // flex-wrap plus w-0/min-w: a native date input's INTRINSIC width (~110px) beats flex-1,
           // and two of them beside the type select forced the whole pane into a sideways scrollbar.
           // When the pane is narrow the two dates now stack instead of overflowing.
-          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
-            <Input type="date" aria-label={`${t('reportDesigner.from')} ${param.key}`} value={from}
-              onChange={(e) => setFrom(e.target.value)} onBlur={() => onChange({ value: { from, to } })} className="h-7 w-0 min-w-[6.5rem] flex-1 text-xs" />
-            <Input type="date" aria-label={`${t('reportDesigner.to')} ${param.key}`} value={to}
-              onChange={(e) => setTo(e.target.value)} onBlur={() => onChange({ value: { from, to } })} className="h-7 w-0 min-w-[6.5rem] flex-1 text-xs" />
+          <div className="flex min-w-0 flex-1 flex-wrap items-end gap-1.5">
+            <div className="w-0 min-w-[6.5rem] flex-1">
+              <div className={caption}>{t('reportDesigner.defaultFrom')}</div>
+              <Input type="date" aria-label={`${t('reportDesigner.from')} ${param.key}`} value={from}
+                onChange={(e) => setFrom(e.target.value)} onBlur={() => onChange({ value: { from, to } })} className="h-7 w-full text-xs" />
+            </div>
+            <div className="w-0 min-w-[6.5rem] flex-1">
+              <div className={caption}>{t('reportDesigner.defaultTo')}</div>
+              <Input type="date" aria-label={`${t('reportDesigner.to')} ${param.key}`} value={to}
+                onChange={(e) => setTo(e.target.value)} onBlur={() => onChange({ value: { from, to } })} className="h-7 w-full text-xs" />
+            </div>
           </div>
         ) : (
-          <Input aria-label={`${t('reportDesigner.paramValue')} ${param.key}`} value={value}
-            onChange={(e) => setValue(e.target.value)} onBlur={() => onChange({ value })} className="h-7 flex-1 text-xs" />
+          <div className="min-w-0 flex-1">
+            <div className={caption}>{t('reportDesigner.paramDefault')}</div>
+            <Input aria-label={`${t('reportDesigner.paramValue')} ${param.key}`} value={value}
+              onChange={(e) => setValue(e.target.value)} onBlur={() => onChange({ value })} className="h-7 text-xs" />
+          </div>
         )}
       </div>
     </div>
@@ -134,6 +156,9 @@ function ParamEditor({ parameters, onPatchParameters }: {
           <Plus className="h-3.5 w-3.5" />{t('reportDesigner.addParameter')}
         </Button>
       </div>
+      {/* What a parameter IS was invisible: this section defines the filters the report asks for
+          when it runs, and the values typed here are only defaults. */}
+      <p className="mb-1 text-xs text-muted-foreground">{t('reportDesigner.paramsHint')}</p>
       {parameters.length === 0 ? (
         <p className="text-xs text-muted-foreground">{t('reportDesigner.noParameters')}</p>
       ) : (

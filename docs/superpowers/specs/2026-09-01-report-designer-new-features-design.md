@@ -16,8 +16,11 @@ Explicitly deferred, each waiting for a named symptom: batch render (a program a
 per-district mailings), group bands (a real report needs one section per group),
 multilingual print (a non-English lab asks), version history (someone loses a design to
 autosave), live sample data on canvas (spec 1's page strip already loads counts; full
-inline data waits), sparklines (a report asks for trends). Do not build these from this
-spec.
+inline data waits), sparklines (a report asks for trends), and element groups (operator
+request, 2026-09-01: select several elements into a named group that moves, locks and
+hides as one — the symptom that revives it is a real design whose letterhead or section
+blocks keep being edited piecemeal; slice C's per-element lock and hide cover the single
+element case today). Do not build these from this spec.
 
 ## 1. Totals row and sum tokens
 

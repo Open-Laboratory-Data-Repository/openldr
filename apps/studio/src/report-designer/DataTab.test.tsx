@@ -344,3 +344,24 @@ describe('DataTab sortBy, headerRow and cellgrid binding', () => {
     expect(screen.queryByText('No columns loaded yet.')).toBeNull();
   });
 });
+
+describe('parameter rows explain themselves', () => {
+  it('captions key, label, type and the default value, and states what parameters are', () => {
+    render(<DataTab element={undefined}
+      parameters={[{ key: 'dateRange', label: 'Date range', type: 'daterange' as const, value: { from: '', to: '' } }]}
+      onPatchElement={vi.fn()} onPatchParameters={vi.fn()} />);
+    expect(screen.getByText('Key')).toBeInTheDocument();
+    expect(screen.getByText('Label')).toBeInTheDocument();
+    expect(screen.getByText('Type')).toBeInTheDocument();
+    expect(screen.getByText('Default from')).toBeInTheDocument();
+    expect(screen.getByText('Default to')).toBeInTheDocument();
+    expect(screen.getByText(/values here are only defaults/i)).toBeInTheDocument();
+  });
+
+  it('captions a text parameter with Default value', () => {
+    render(<DataTab element={undefined}
+      parameters={[{ key: 'facility', label: 'Facility', type: 'text' as const, value: '' }]}
+      onPatchElement={vi.fn()} onPatchParameters={vi.fn()} />);
+    expect(screen.getByText('Default value')).toBeInTheDocument();
+  });
+});
