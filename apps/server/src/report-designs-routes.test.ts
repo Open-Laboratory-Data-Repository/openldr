@@ -199,6 +199,62 @@ describe('report-design routes', () => {
     expect(calls[0].sql).toContain("'HQ'");
   });
 
+  it('flattens a daterange design param into the flat from/to the seeded queries declare', async () => {
+    // The seeded queries declare TWO plain required text params (`from`, `to`) and read
+    // `values.from`/`values.to` — see the param-shape note in report-seeds.ts. A design declares
+    // ONE `daterange` param whose value is `{from,to}`, so without flattening `substituteParams`
+    // throws `required parameter: from` before the connector is ever reached.
+    const cqWithRange = {
+      get: async (id: string) => id === 'cq_1'
+        ? { id: 'cq_1', name: 'Q', connectorId: 'c1',
+            sql: 'select * from t where d between {{param.from}} and {{param.to}}',
+            params: [
+              { id: 'from', label: 'From', type: 'text', required: true },
+              { id: 'to', label: 'To', type: 'text', required: true },
+            ] }
+        : undefined,
+    };
+    const calls: { connectorId: string; sql: string }[] = [];
+    const spyRun = async (input: { connectorId: string; sql: string }) => {
+      calls.push(input);
+      return { columns: [{ key: 'd', label: 'd' }], rows: [{ d: '2026-01-01' }] };
+    };
+    const app = appWith(fakeCtx(), ['lab_admin'], { customQueries: cqWithRange, runConnectorSql: spyRun });
+    const design = { id: 'd', name: 'N', paper: 'A4', orientation: 'portrait',
+      parameters: [{ key: 'dateRange', label: 'Date range', type: 'daterange', required: true, value: { from: '2020-01-01', to: '2030-01-01' } }],
+      pages: [{ id: 'p', elements: [{ id: 't', kind: 'table', name: 'T', rect: { x: 0, y: 0, w: 200, h: 80 }, dataSource: { kind: 'custom-query', queryId: 'cq_1' } }] }] };
+    const res = await app.inject({ method: 'POST', url: '/api/report-designs/preview', payload: design });
+    expect(res.statusCode).toBe(200);
+    // The connector is reached at all only if substitution succeeded.
+    expect(calls.length).toBe(1);
+    expect(calls[0].sql).toContain("'2020-01-01'");
+    expect(calls[0].sql).toContain("'2030-01-01'");
+  });
+
+  it('an explicit param named from wins over a daterange flattening', async () => {
+    const cqFrom = {
+      get: async (id: string) => id === 'cq_1'
+        ? { id: 'cq_1', name: 'Q', connectorId: 'c1', sql: 'select * from t where d = {{param.from}}',
+            params: [{ id: 'from', label: 'From', type: 'text', required: true }] }
+        : undefined,
+    };
+    const calls: { sql: string }[] = [];
+    const spyRun = async (input: { connectorId: string; sql: string }) => {
+      calls.push(input);
+      return { columns: [{ key: 'd', label: 'd' }], rows: [] };
+    };
+    const app = appWith(fakeCtx(), ['lab_admin'], { customQueries: cqFrom, runConnectorSql: spyRun });
+    const design = { id: 'd', name: 'N', paper: 'A4', orientation: 'portrait',
+      parameters: [
+        { key: 'from', label: 'From', type: 'text', value: '1999-09-09' },
+        { key: 'dateRange', label: 'Date range', type: 'daterange', value: { from: '2020-01-01', to: '2030-01-01' } },
+      ],
+      pages: [{ id: 'p', elements: [{ id: 't', kind: 'table', name: 'T', rect: { x: 0, y: 0, w: 200, h: 80 }, dataSource: { kind: 'custom-query', queryId: 'cq_1' } }] }] };
+    const res = await app.inject({ method: 'POST', url: '/api/report-designs/preview', payload: design });
+    expect(res.statusCode).toBe(200);
+    expect(calls[0].sql).toContain("'1999-09-09'");
+  });
+
   it('publishes a design and records an audit event', async () => {
     const ctx = fakeCtx();
     const app = appWith(ctx);

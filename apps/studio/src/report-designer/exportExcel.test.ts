@@ -9,13 +9,21 @@ function design(over: Partial<ReportDesign> = {}): ReportDesign {
 }
 
 describe('paramValues', () => {
-  it('maps string + daterange values by key and skips null', () => {
+  it('maps values by key, skips null, and flattens a daterange into flat from/to', () => {
+    // The flat keys are what the seeded queries' own `from`/`to` text params read; keying by the
+    // parameter's own name alone is what made every date-range export and preview fail. Keyed on
+    // the TYPE, not on a key spelled "dateRange" — this range is called "range".
     const d = design({ parameters: [
       { key: 'facility', label: 'F', type: 'text', value: 'HQ' },
       { key: 'range', label: 'R', type: 'daterange', value: { from: '2026-01-01', to: '2026-06-30' } },
       { key: 'blank', label: 'B', type: 'text' },
     ] });
-    expect(paramValues(d)).toEqual({ facility: 'HQ', range: { from: '2026-01-01', to: '2026-06-30' } });
+    expect(paramValues(d)).toEqual({
+      facility: 'HQ',
+      range: { from: '2026-01-01', to: '2026-06-30' },
+      from: '2026-01-01',
+      to: '2026-06-30',
+    });
   });
 });
 
