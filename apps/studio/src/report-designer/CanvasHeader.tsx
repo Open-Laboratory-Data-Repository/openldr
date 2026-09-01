@@ -4,6 +4,7 @@ import {
   FilePlus, Save, Download, FileText, FileSpreadsheet, ShieldCheck, Copy, Trash2,
   Check, Loader2, PanelRight, Upload,
 } from 'lucide-react';
+import { cn } from '@/lib/cn';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -36,6 +37,11 @@ interface Props {
   onPublishRevision(): void;
   /** The open design's lifecycle state — undefined (e.g. a transient, never-saved design) reads as draft. */
   status?: 'draft' | 'published';
+  /** Fill bound elements with the page strip's loaded rows instead of placeholders. */
+  showData?: boolean;
+  onToggleShowData?(): void;
+  /** True once the page strip has loaded rows; without them there is nothing to show. */
+  hasData?: boolean;
   /** Toggle the inspector drawer (mobile only). */
   onToggleInspector?(): void;
   onDuplicate(): void;
@@ -93,6 +99,19 @@ export function CanvasHeader(props: Props): JSX.Element {
             <Plus className="h-3.5 w-3.5" />
           </button>
         </div>
+
+        {/* Show data: reuses the page strip's snapshot, so it never runs a query of its own.
+            Disabled with nothing loaded — a toggle that silently does nothing is worse than one
+            that says why. */}
+        {props.onToggleShowData && (
+          <button onClick={props.onToggleShowData} disabled={!props.hasData}
+            aria-label={t('reportDesigner.showData')} aria-pressed={!!props.showData}
+            title={props.hasData ? undefined : t('reportDesigner.showDataNeedsLoad')}
+            className={cn('rounded-md border border-border px-2 py-1 text-xs disabled:opacity-50',
+              props.showData ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-accent')}>
+            {t('reportDesigner.showData')}
+          </button>
+        )}
 
         {/* Inspector toggle — shown below lg, where the inspector is a drawer. */}
         {props.onToggleInspector && (

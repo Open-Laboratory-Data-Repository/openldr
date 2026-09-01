@@ -3,6 +3,7 @@ import { render, screen, fireEvent, within } from '@testing-library/react';
 import { PageCanvas } from './PageCanvas';
 import { MOCK_TEMPLATES } from './mockTemplates';
 import type { DesignElement, ReportTemplate } from './types';
+import { maxRowsFor, headerBandHeight, toPt } from './types';
 
 function pd(el: Element, x: number, y: number, extra: object = {}) {
   fireEvent.pointerDown(el, { clientX: x, clientY: y, button: 0, ...extra });
@@ -485,5 +486,70 @@ describe('PageCanvas bound tables', () => {
     });
     expect(screen.getByText('A')).toBeInTheDocument();
     expect(screen.getByText('1')).toBeInTheDocument();
+  });
+});
+
+describe('live sample data on the canvas (spec 4 slice 1)', () => {
+  const boundTable = (over: Partial<DesignElement> = {}): DesignElement => ({
+    id: 'tb', kind: 'table', name: 'Data', rect: { x: 48, y: 48, w: 400, h: 120 },
+    dataSource: { kind: 'custom-query', queryId: 'q' },
+    boundColumns: [{ key: 'drug', label: 'Antibiotic' }, { key: 'pct', label: '%R', decimals: 1 }],
+    ...over,
+  });
+  const tpl = (el: DesignElement): ReportTemplate => ({
+    id: 't', name: 't', paper: 'A4', orientation: 'portrait', status: 'draft', parameters: [],
+    pages: [{ id: 'p1', elements: [el] }],
+  });
+  const rows = (n: number) => Array.from({ length: n }, (_, i) => ({ drug: `Drug ${i}`, pct: 60 + i }));
+  const resolvedFor = (id: string, n: number) => new Map([[id, {
+    columns: [{ key: 'drug', label: 'Antibiotic' }, { key: 'pct', label: '%R' }], rows: rows(n),
+  }]]);
+
+  it('renders the real projected values when a resolved map is supplied', () => {
+    render(<PageCanvas template={tpl(boundTable())} zoom={1} selectedIds={[]} onSelect={vi.fn()}
+      onCommitRects={vi.fn()} resolved={resolvedFor('tb', 3)} showData />);
+    expect(screen.getByText('Drug 0')).toBeInTheDocument();
+    // decimals from the bound column must apply, exactly as the PDF projects them
+    expect(screen.getByText('60.0')).toBeInTheDocument();
+    expect(screen.queryByText('Rows at render')).toBeNull();
+  });
+
+  it('keeps the placeholder when no data has been loaded', () => {
+    render(<PageCanvas template={tpl(boundTable())} zoom={1} selectedIds={[]} onSelect={vi.fn()}
+      onCommitRects={vi.fn()} />);
+    expect(screen.getByText('Rows at render')).toBeInTheDocument();
+  });
+
+  it('never shows more rows than the first page actually holds', () => {
+    const el = boundTable();
+    render(<PageCanvas template={tpl(el)} zoom={1} selectedIds={[]} onSelect={vi.fn()}
+      onCommitRects={vi.fn()} resolved={resolvedFor('tb', 40)} showData />);
+    const cap = maxRowsFor(toPt(el.rect).h, headerBandHeight(el));
+    const bodyRows = screen.getAllByTestId(/^canvas-row-tb-/);
+    expect(bodyRows.length).toBe(cap);
+    expect(bodyRows.length).toBeLessThan(40);
+  });
+
+  it('keeps placeholders when data is loaded but the toggle is off, and still marks the break', () => {
+    render(<PageCanvas template={tpl(boundTable())} zoom={1} selectedIds={[]} onSelect={vi.fn()}
+      onCommitRects={vi.fn()} resolved={resolvedFor('tb', 40)} />);
+    expect(screen.getByText('Rows at render')).toBeInTheDocument();
+    expect(screen.queryByText('Drug 0')).toBeNull();
+    // The page break is structural, not a view preference: it stays regardless of the toggle.
+    expect(screen.getByTestId('break-tb')).toBeInTheDocument();
+  });
+
+  it('shows a bound cellgrid its real label column', () => {
+    const grid: DesignElement = {
+      id: 'cg', kind: 'cellgrid', name: 'Grid', rect: { x: 48, y: 48, w: 400, h: 120 },
+      dataSource: { kind: 'custom-query', queryId: 'q' }, labelColumn: 'lab', cellColumns: ['d01', 'd02'],
+    };
+    const resolved = new Map([['cg', {
+      columns: [{ key: 'lab', label: 'Lab' }, { key: 'd01', label: '1' }, { key: 'd02', label: '2' }],
+      rows: [{ lab: 'Ikwiriri', d01: '1', d02: '' }],
+    }]]);
+    render(<PageCanvas template={tpl(grid)} zoom={1} selectedIds={[]} onSelect={vi.fn()}
+      onCommitRects={vi.fn()} resolved={resolved} showData />);
+    expect(screen.getByText('Ikwiriri')).toBeInTheDocument();
   });
 });
