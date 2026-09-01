@@ -283,3 +283,64 @@ describe('DataTab keyvalue binding', () => {
     expect(screen.getByText(/select a table/i)).toBeInTheDocument();
   });
 });
+
+describe('DataTab sortBy, headerRow and cellgrid binding', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  const cgEl = (over: Partial<DesignElement> = {}): DesignElement => ({
+    id: 'cg', kind: 'cellgrid', name: 'Grid', rect: { x: 0, y: 0, w: 480, h: 160 },
+    cellColumns: ['c1'], ...over,
+  });
+
+  it('lets a cellgrid pick a query but shows no include-columns list', async () => {
+    const onPatchElement = vi.fn();
+    render(<DataTab element={cgEl()} parameters={[]} onPatchElement={onPatchElement} onPatchParameters={vi.fn()} />);
+    fireEvent.click(screen.getByLabelText('Bind query'));
+    fireEvent.click(await screen.findByText('AMR'));
+    expect(onPatchElement).toHaveBeenCalledWith('cg', { dataSource: { kind: 'custom-query', queryId: 'cq_1' } }, { discrete: true });
+    expect(screen.queryByText('No columns loaded yet.')).toBeNull();
+  });
+
+  it('writes sortBy for a bound table (coalesced) and deletes it when blanked', () => {
+    const { onPatchElement } = setup({ dataSource: { kind: 'custom-query', queryId: 'cq_1' }, sortBy: 'ord' });
+    fireEvent.change(screen.getByLabelText('Sort by column'), { target: { value: '' } });
+    expect(onPatchElement).toHaveBeenCalledWith('t', { sortBy: undefined, headerRow: undefined });
+  });
+
+  it('writes sortBy on a bound cellgrid too', () => {
+    const onPatchElement = vi.fn();
+    render(<DataTab element={cgEl({ dataSource: { kind: 'custom-query', queryId: 'cq_1' } })}
+      parameters={[]} onPatchElement={onPatchElement} onPatchParameters={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText('Sort by column'), { target: { value: 'ord' } });
+    expect(onPatchElement).toHaveBeenCalledWith('cg', { sortBy: 'ord' });
+  });
+
+  it('hides sortBy until a query is bound', () => {
+    setup();
+    expect(screen.queryByLabelText('Sort by column')).toBeNull();
+  });
+
+  it('disables the header-row checkbox until sortBy is set, with the explanation', () => {
+    setup({ dataSource: { kind: 'custom-query', queryId: 'cq_1' } });
+    expect(screen.getByLabelText('First data row is the header')).toBeDisabled();
+    expect(screen.getByText('Set Sort by first.')).toBeInTheDocument();
+  });
+
+  it('writes headerRow with sortBy present, and deletes it when unchecked', () => {
+    const { onPatchElement } = setup({ dataSource: { kind: 'custom-query', queryId: 'cq_1' }, sortBy: 'ord' });
+    fireEvent.click(screen.getByLabelText('First data row is the header'));
+    expect(onPatchElement).toHaveBeenCalledWith('t', { headerRow: true }, { discrete: true });
+  });
+
+  it('offers no header-row checkbox on a cellgrid', () => {
+    render(<DataTab element={cgEl({ dataSource: { kind: 'custom-query', queryId: 'cq_1' } })}
+      parameters={[]} onPatchElement={vi.fn()} onPatchParameters={vi.fn()} />);
+    expect(screen.queryByLabelText('First data row is the header')).toBeNull();
+  });
+
+  it('replaces the columns list with the transposed note for a transposed table', () => {
+    setup({ dataSource: { kind: 'custom-query', queryId: 'cq_1' }, transpose: true });
+    expect(screen.getByText(/headers come from the data/i)).toBeInTheDocument();
+    expect(screen.queryByText('No columns loaded yet.')).toBeNull();
+  });
+});

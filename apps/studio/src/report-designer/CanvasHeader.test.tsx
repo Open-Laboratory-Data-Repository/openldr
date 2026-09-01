@@ -137,6 +137,14 @@ describe('CanvasHeader', () => {
     expect(props.onInsert).toHaveBeenCalledWith('text');
   });
 
+  it('inserts a Cell grid via the Insert submenu', async () => {
+    const props = setup();
+    await openKebab();
+    await openSub('Insert');
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Cell grid' }));
+    expect(props.onInsert).toHaveBeenCalledWith('cellgrid');
+  });
+
   it('exports PDF via the Export submenu', async () => {
     const props = setup();
     await openKebab();

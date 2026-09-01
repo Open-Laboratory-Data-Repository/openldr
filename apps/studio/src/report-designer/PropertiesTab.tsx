@@ -9,7 +9,7 @@ import { AlignLeft, AlignCenter, AlignRight, X } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import type { DesignElement, Margins, Orientation, Paper, Rect, ReportTemplate, TextAlign } from './types';
 import { encodeCode128, encodeQr, maxCode128Chars, minWidthPxFor, moduleWidthMm, MIN_MODULE_MM, QR_QUIET_ZONE, ELEMENT_IMAGE_MAX_BYTES, ELEMENT_IMAGE_MIME, validateImageSrc } from './types';
-import { findElement, paperSize } from './model';
+import { findElement, flowTargets, paperSize } from './model';
 import { clampRectToPage } from './geometry';
 import { ColorField } from './ColorField';
 
@@ -312,11 +312,12 @@ function KindControls({ el, onPatch }: {
         </div>
         <div>
           <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">{t('reportDesigner.layout')}</div>
-          <Select value={el.layout ?? 'inline'} onValueChange={(v) => onPatch({ layout: v as 'inline' | 'stacked' }, { discrete: true })}>
+          <Select value={el.layout ?? 'inline'} onValueChange={(v) => onPatch({ layout: v as 'inline' | 'stacked' | 'stat' }, { discrete: true })}>
             <SelectTrigger aria-label={t('reportDesigner.layout')} className="h-8 w-full text-xs"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="inline">{t('reportDesigner.layoutInline')}</SelectItem>
               <SelectItem value="stacked">{t('reportDesigner.layoutStacked')}</SelectItem>
+              <SelectItem value="stat">{t('reportDesigner.layoutStat')}</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -333,12 +334,34 @@ function KindControls({ el, onPatch }: {
   }
 
   if (el.kind === 'table') {
+    // Turning transpose ON clears boundColumns in the SAME patch: a transposed table's headers are
+    // data (the schema refuses authored ones), and a two-step clear would leave a saveable design
+    // in the refused state between the steps.
+    const transposeBlock = (
+      <div className="flex flex-col gap-3">
+        <label className="flex items-center gap-2 text-xs text-foreground">
+          <Checkbox aria-label={t('reportDesigner.transpose')} checked={el.transpose ?? false}
+            onCheckedChange={(v) => onPatch(v === true
+              ? { transpose: true, boundColumns: undefined }
+              : { transpose: undefined, transposeLabel: undefined }, { discrete: true })} />
+          {t('reportDesigner.transpose')}
+        </label>
+        {el.transpose && (
+          <div>
+            <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">{t('reportDesigner.transposeLabel')}</div>
+            <Input aria-label={t('reportDesigner.transposeLabel')} value={el.transposeLabel ?? ''}
+              onChange={(e) => onPatch({ transposeLabel: e.target.value })} className="h-8 text-xs" />
+          </div>
+        )}
+      </div>
+    );
     // Bound tables get their columns from the Data tab's boundColumns — no PropertiesTab columns editor.
-    if (el.dataSource) return null;
+    if (el.dataSource) return transposeBlock;
     const cols = el.columns ?? [];
     const setCols = (next: string[], discrete?: boolean) => onPatch({ columns: next }, discrete ? { discrete: true } : undefined);
     return (
       <div className="flex flex-col gap-3">
+        {transposeBlock}
         <div>
           <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">{t('reportDesigner.columns')}</div>
           <div className="flex flex-col gap-1">
@@ -359,7 +382,137 @@ function KindControls({ el, onPatch }: {
     );
   }
 
+  if (el.kind === 'cellgrid') {
+    const cells = el.cellColumns ?? [];
+    const trailing = el.trailingColumns ?? [];
+    const setCells = (next: string[], discrete?: boolean) => onPatch({ cellColumns: next }, discrete ? { discrete: true } : undefined);
+    // An empty list deletes the key: `trailingColumns: []` and "no trailing columns" mean the same
+    // thing to the renderer, and the design should persist the shorter spelling.
+    const setTrailing = (next: typeof trailing, discrete?: boolean) =>
+      onPatch({ trailingColumns: next.length ? next : undefined }, discrete ? { discrete: true } : undefined);
+    const nextCellKey = () => { let n = 1; const has = new Set(cells); while (has.has(`c${n}`)) n += 1; return `c${n}`; };
+    return (
+      <div className="flex flex-col gap-3">
+        <div>
+          <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">{t('reportDesigner.labelColumn')}</div>
+          <Input aria-label={t('reportDesigner.labelColumn')} value={el.labelColumn ?? ''} placeholder="—"
+            onChange={(e) => onPatch({ labelColumn: e.target.value || undefined })} className="h-8 text-xs" />
+          <p className="mt-1 text-xs text-muted-foreground">{t('reportDesigner.labelColumnHint')}</p>
+        </div>
+        <div>
+          <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">{t('reportDesigner.cellColumns')}</div>
+          <div className="flex flex-col gap-1">
+            {cells.map((c, i) => (
+              <div key={i} className="flex items-center gap-1">
+                <Input aria-label={`${t('reportDesigner.cellColumns')} ${i + 1}`} value={c}
+                  onChange={(e) => setCells(cells.map((x, j) => (j === i ? e.target.value : x)))} className="h-7 text-xs" />
+                <Button type="button" variant="ghost" size="icon" className="h-7 w-7 shrink-0"
+                  aria-label={`${t('reportDesigner.removeColumn')} ${i + 1}`} onClick={() => setCells(cells.filter((_, j) => j !== i), true)}>
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            ))}
+            <Button type="button" variant="outline" size="sm" className="justify-start"
+              onClick={() => setCells([...cells, nextCellKey()], true)}>{t('reportDesigner.addCellColumn')}</Button>
+          </div>
+        </div>
+        <NumberField label={t('reportDesigner.paletteSteps')} value={el.palette?.steps ?? 1}
+          onChange={(n) => onPatch({ palette: { ramp: el.palette?.ramp ?? 'blue', steps: Math.max(1, Math.min(5, Math.round(n))) } })} min={1} />
+        <label className="flex items-center gap-2 text-xs text-foreground">
+          <Checkbox aria-label={t('reportDesigner.groupBoundary')} checked={el.groupBoundary === 'token-change'}
+            onCheckedChange={(v) => onPatch({ groupBoundary: v === true ? 'token-change' : undefined }, { discrete: true })} />
+          {t('reportDesigner.groupBoundary')}
+        </label>
+        <div>
+          <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">{t('reportDesigner.trailingColumns')}</div>
+          <div className="flex flex-col gap-1">
+            {trailing.map((c, i) => (
+              <div key={i} className="flex items-center gap-1">
+                <Input aria-label={`${t('reportDesigner.trailingKey')} ${i + 1}`} value={c.key} placeholder={t('reportDesigner.trailingKey')}
+                  onChange={(e) => setTrailing(trailing.map((x, j) => (j === i ? { ...x, key: e.target.value } : x)))} className="h-7 w-20 text-xs" />
+                <Input aria-label={`${t('reportDesigner.trailingLabel')} ${i + 1}`} value={c.label} placeholder={t('reportDesigner.trailingLabel')}
+                  onChange={(e) => setTrailing(trailing.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))} className="h-7 flex-1 text-xs" />
+                <Input type="number" aria-label={`${t('reportDesigner.trailingWidth')} ${i + 1}`} value={c.width}
+                  onChange={(e) => { const n = Number(e.target.value); if (n > 0) setTrailing(trailing.map((x, j) => (j === i ? { ...x, width: n } : x))); }}
+                  className="h-7 w-16 text-xs" />
+                <Button type="button" variant="ghost" size="icon" className="h-7 w-7 shrink-0"
+                  aria-label={`${t('reportDesigner.removeColumn')} trailing ${i + 1}`} onClick={() => setTrailing(trailing.filter((_, j) => j !== i), true)}>
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            ))}
+            <Button type="button" variant="outline" size="sm" className="justify-start"
+              onClick={() => setTrailing([...trailing, { key: '', label: '', width: 20 }], true)}>{t('reportDesigner.addTrailingColumn')}</Button>
+          </div>
+          {/* Every other length on this pane is px@96; trailing widths are POINTS by schema. Silence
+              here would re-run the units trap that once shipped a clipped row. */}
+          <p className="mt-1 text-xs text-muted-foreground">{t('reportDesigner.trailingWidthHint')}</p>
+        </div>
+      </div>
+    );
+  }
+
   return null;
+}
+
+// Radix Select refuses value="", so "not set" travels as this sentinel (DataTab's NONE convention).
+const NONE_FLOW = '__none__';
+
+/** The Flow section: plain-word controls over the schema's pagination fields (`flowAfter`,
+ *  `flowGap`, `showOn`, `showWithTable`, `fillTo`). The renderer THROWS on a `flowAfter` cycle, so
+ *  the Place-below options come from `flowTargets`, which cannot offer one. */
+function FlowSection({ template, el, onPatch }: {
+  template: ReportTemplate; el: DesignElement;
+  onPatch(patch: Partial<DesignElement>, opts?: PatchOpts): void;
+}): JSX.Element {
+  const { t } = useTranslation();
+  const page = template.pages.find((p) => p.elements.some((e) => e.id === el.id));
+  const siblings = page?.elements ?? [];
+  const targets = flowTargets(siblings, el.id);
+  const anchors = siblings.filter((e) => e.id !== el.id && (e.kind === 'table' || e.kind === 'cellgrid'));
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{t('reportDesigner.flow')}</div>
+      <div>
+        <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">{t('reportDesigner.placeBelow')}</div>
+        <Select value={el.flowAfter ?? NONE_FLOW}
+          onValueChange={(v) => onPatch(v === NONE_FLOW ? { flowAfter: undefined, flowGap: undefined } : { flowAfter: v }, { discrete: true })}>
+          <SelectTrigger aria-label={t('reportDesigner.placeBelow')} className="h-8 w-full text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value={NONE_FLOW}>{t('reportDesigner.none')}</SelectItem>
+            {targets.map((e) => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
+      {el.flowAfter && (
+        <NumberField label={t('reportDesigner.flowGap')} value={el.flowGap ?? 0}
+          onChange={(n) => onPatch({ flowGap: Math.max(0, n) })} min={0} />
+      )}
+      <label className="flex items-center gap-2 text-xs text-foreground">
+        <Checkbox aria-label={t('reportDesigner.firstPageOnly')} checked={el.showOn === 'first-chunk'}
+          onCheckedChange={(v) => onPatch({ showOn: v === true ? 'first-chunk' : undefined }, { discrete: true })} />
+        {t('reportDesigner.firstPageOnly')}
+      </label>
+      <div>
+        <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">{t('reportDesigner.showWith')}</div>
+        <Select value={el.showWithTable ?? NONE_FLOW}
+          onValueChange={(v) => onPatch({ showWithTable: v === NONE_FLOW ? undefined : v }, { discrete: true })}>
+          <SelectTrigger aria-label={t('reportDesigner.showWith')} className="h-8 w-full text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value={NONE_FLOW}>{t('reportDesigner.none')}</SelectItem>
+            {anchors.map((e) => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
+      {el.kind === 'cellgrid' && (
+        <label className="flex items-center gap-2 text-xs text-foreground">
+          <Checkbox aria-label={t('reportDesigner.fillToBottom')} checked={el.fillTo === 'rect-bottom'}
+            onCheckedChange={(v) => onPatch({ fillTo: v === true ? 'rect-bottom' : undefined }, { discrete: true })} />
+          {t('reportDesigner.fillToBottom')}
+        </label>
+      )}
+    </div>
+  );
 }
 
 function BulkControls({ ids, els, onPatchElements }: {
@@ -487,8 +640,8 @@ export function PropertiesTab({ template, selectedIds, onPatchElement, onPatchPa
       <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
         {t('reportDesigner.elementLabel')} · {t(`reportDesigner.element.${selected.kind}`)}
       </div>
-      {/* KIND CONTROLS INSERTION POINT (Task 6) */}
       <KindControls el={selected} onPatch={(patch, opts) => onPatchElement(selected.id, patch, opts)} />
+      <FlowSection template={template} el={selected} onPatch={(patch, opts) => onPatchElement(selected.id, patch, opts)} />
       <div>
         <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">{t('reportDesigner.positionSize')}</div>
         <div className="grid grid-cols-2 gap-2">

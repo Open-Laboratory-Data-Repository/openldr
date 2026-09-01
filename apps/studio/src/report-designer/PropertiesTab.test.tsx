@@ -166,6 +166,184 @@ describe('PropertiesTab keyvalue controls', () => {
   });
 });
 
+describe('PropertiesTab flow controls', () => {
+  const heading = (over: Partial<DesignElement> = {}): DesignElement =>
+    ({ id: 'a', kind: 'text', name: 'Heading', rect: { x: 0, y: 0, w: 100, h: 20 }, ...over }) as DesignElement;
+  const table = (over: Partial<DesignElement> = {}): DesignElement =>
+    ({ id: 'tb', kind: 'table', name: 'Big table', rect: { x: 0, y: 40, w: 200, h: 100 }, columns: ['A'], ...over }) as DesignElement;
+  const grid = (over: Partial<DesignElement> = {}): DesignElement =>
+    ({ id: 'cg', kind: 'cellgrid', name: 'Grid', rect: { x: 0, y: 160, w: 200, h: 100 }, cellColumns: ['c1'], ...over }) as DesignElement;
+
+  function tplWithEls(els: DesignElement[]): ReportTemplate {
+    return { id: 't', name: 't', paper: 'A4', orientation: 'portrait', status: 'draft', parameters: [], pages: [{ id: 'p1', elements: els }] };
+  }
+
+  it('writes flowAfter from the Place below select (discrete)', async () => {
+    const props = setup({ template: tplWithEls([heading(), table(), grid()]), selectedIds: ['a'] });
+    fireEvent.click(screen.getByLabelText('Place below'));
+    fireEvent.click(await screen.findByRole('option', { name: 'Big table' }));
+    expect(props.onPatchElement).toHaveBeenCalledWith('a', { flowAfter: 'tb' }, { discrete: true });
+  });
+
+  it('clearing Place below also clears the gap', async () => {
+    const props = setup({ template: tplWithEls([heading({ flowAfter: 'tb', flowGap: 12 }), table(), grid()]), selectedIds: ['a'] });
+    fireEvent.click(screen.getByLabelText('Place below'));
+    fireEvent.click(await screen.findByRole('option', { name: 'None' }));
+    expect(props.onPatchElement).toHaveBeenCalledWith('a', { flowAfter: undefined, flowGap: undefined }, { discrete: true });
+  });
+
+  it('shows the gap field only while Place below is set, and edits it coalesced', () => {
+    const props = setup({ template: tplWithEls([heading({ flowAfter: 'tb' }), table(), grid()]), selectedIds: ['a'] });
+    fireEvent.change(screen.getByLabelText('Gap after'), { target: { value: '20' } });
+    expect(props.onPatchElement).toHaveBeenCalledWith('a', { flowGap: 20 }, undefined);
+  });
+
+  it('hides the gap field when nothing is followed', () => {
+    setup({ template: tplWithEls([heading(), table(), grid()]), selectedIds: ['a'] });
+    expect(screen.queryByLabelText('Gap after')).toBeNull();
+  });
+
+  it('writes showOn first-chunk from the First page only checkbox (discrete)', () => {
+    const props = setup({ template: tplWithEls([heading(), table(), grid()]), selectedIds: ['a'] });
+    fireEvent.click(screen.getByLabelText('First page only'));
+    expect(props.onPatchElement).toHaveBeenCalledWith('a', { showOn: 'first-chunk' }, { discrete: true });
+  });
+
+  it('offers only table and cellgrid elements in Show with', async () => {
+    const props = setup({ template: tplWithEls([heading(), table(), grid()]), selectedIds: ['a'] });
+    fireEvent.click(screen.getByLabelText('Show with'));
+    expect(await screen.findByRole('option', { name: 'Big table' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Grid' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'Heading' })).toBeNull();
+    fireEvent.click(screen.getByRole('option', { name: 'Grid' }));
+    expect(props.onPatchElement).toHaveBeenCalledWith('a', { showWithTable: 'cg' }, { discrete: true });
+  });
+
+  it('shows Fill to bottom only for a cellgrid and writes fillTo (discrete)', () => {
+    const props = setup({ template: tplWithEls([heading(), table(), grid()]), selectedIds: ['cg'] });
+    fireEvent.click(screen.getByLabelText('Fill to bottom of box'));
+    expect(props.onPatchElement).toHaveBeenCalledWith('cg', { fillTo: 'rect-bottom' }, { discrete: true });
+  });
+
+  it('hides Fill to bottom for non-cellgrid elements', () => {
+    setup({ template: tplWithEls([heading(), table(), grid()]), selectedIds: ['a'] });
+    expect(screen.queryByLabelText('Fill to bottom of box')).toBeNull();
+  });
+
+  it('does not offer an element that would close a flow cycle', async () => {
+    // Big table already follows Heading; offering it back to Heading would make a cycle.
+    setup({ template: tplWithEls([heading(), table({ flowAfter: 'a' }), grid()]), selectedIds: ['a'] });
+    fireEvent.click(screen.getByLabelText('Place below'));
+    expect(await screen.findByRole('option', { name: 'Grid' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'Big table' })).toBeNull();
+  });
+});
+
+describe('PropertiesTab stat layout and transpose', () => {
+  const kv = (over: Partial<DesignElement> = {}): DesignElement =>
+    ({ id: 'kv', kind: 'keyvalue', name: 'Panel', rect: { x: 0, y: 0, w: 200, h: 80 }, ...over }) as DesignElement;
+  const boundTable = (over: Partial<DesignElement> = {}): DesignElement =>
+    ({ id: 'tb', kind: 'table', name: 'Table', rect: { x: 0, y: 0, w: 200, h: 100 },
+      dataSource: { kind: 'custom-query', queryId: 'cq_1' }, ...over }) as DesignElement;
+
+  it('offers stat in the keyvalue layout select (discrete)', async () => {
+    const props = setup({ template: tplWithEl(kv()), selectedIds: ['kv'] });
+    fireEvent.click(screen.getByLabelText('Layout'));
+    fireEvent.click(await screen.findByRole('option', { name: 'Figure above caption' }));
+    expect(props.onPatchElement).toHaveBeenCalledWith('kv', { layout: 'stat' }, { discrete: true });
+  });
+
+  it('turning transpose on clears boundColumns in the same patch (discrete)', () => {
+    const props = setup({ template: tplWithEl(boundTable({ boundColumns: [{ key: 'a', label: 'A' }] })), selectedIds: ['tb'] });
+    fireEvent.click(screen.getByLabelText('Transpose (columns become rows)'));
+    expect(props.onPatchElement).toHaveBeenCalledWith('tb', { transpose: true, boundColumns: undefined }, { discrete: true });
+  });
+
+  it('turning transpose off clears the transpose label too', () => {
+    const props = setup({ template: tplWithEl(boundTable({ transpose: true, transposeLabel: 'Antibiotic' })), selectedIds: ['tb'] });
+    fireEvent.click(screen.getByLabelText('Transpose (columns become rows)'));
+    expect(props.onPatchElement).toHaveBeenCalledWith('tb', { transpose: undefined, transposeLabel: undefined }, { discrete: true });
+  });
+
+  it('edits the transpose label while transpose is on (coalesced)', () => {
+    const props = setup({ template: tplWithEl(boundTable({ transpose: true })), selectedIds: ['tb'] });
+    fireEvent.change(screen.getByLabelText('First column header'), { target: { value: 'Antibiotic' } });
+    expect(props.onPatchElement).toHaveBeenCalledWith('tb', { transposeLabel: 'Antibiotic' }, undefined);
+  });
+
+  it('hides the transpose label input while transpose is off', () => {
+    setup({ template: tplWithEl(boundTable()), selectedIds: ['tb'] });
+    expect(screen.queryByLabelText('First column header')).toBeNull();
+  });
+
+  it('still shows the transpose checkbox on an unbound table above its columns editor', () => {
+    setup({ template: tplWithEl({ id: 'tb', kind: 'table', name: 'Table', rect: { x: 0, y: 0, w: 200, h: 100 }, columns: ['A'] }), selectedIds: ['tb'] });
+    expect(screen.getByLabelText('Transpose (columns become rows)')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /add column/i })).toBeInTheDocument();
+  });
+});
+
+describe('PropertiesTab cellgrid controls', () => {
+  const cg = (over: Partial<DesignElement> = {}): DesignElement =>
+    ({ id: 'cg', kind: 'cellgrid', name: 'Grid', rect: { x: 0, y: 0, w: 480, h: 160 },
+      cellColumns: ['c1', 'c2'], palette: { ramp: 'blue', steps: 1 }, ...over }) as DesignElement;
+
+  it('edits the label column (coalesced)', () => {
+    const props = setup({ template: tplWithEl(cg()), selectedIds: ['cg'] });
+    fireEvent.change(screen.getByLabelText('Label column'), { target: { value: 'lab' } });
+    expect(props.onPatchElement).toHaveBeenCalledWith('cg', { labelColumn: 'lab' }, undefined);
+  });
+
+  it('blanking the label column deletes it rather than storing an empty string', () => {
+    const props = setup({ template: tplWithEl(cg({ labelColumn: 'lab' })), selectedIds: ['cg'] });
+    fireEvent.change(screen.getByLabelText('Label column'), { target: { value: '' } });
+    expect(props.onPatchElement).toHaveBeenCalledWith('cg', { labelColumn: undefined }, undefined);
+  });
+
+  it('renames a cell column (coalesced) and removes one (discrete)', () => {
+    const props = setup({ template: tplWithEl(cg()), selectedIds: ['cg'] });
+    fireEvent.change(screen.getByLabelText('Cell columns 1'), { target: { value: 'd01' } });
+    expect(props.onPatchElement).toHaveBeenCalledWith('cg', { cellColumns: ['d01', 'c2'] }, undefined);
+    fireEvent.click(screen.getByLabelText('Remove column 2'));
+    expect(props.onPatchElement).toHaveBeenCalledWith('cg', { cellColumns: ['c1'] }, { discrete: true });
+  });
+
+  it('adds the smallest free cN cell column (discrete)', () => {
+    const props = setup({ template: tplWithEl(cg({ cellColumns: ['c1', 'c3'] })), selectedIds: ['cg'] });
+    fireEvent.click(screen.getByRole('button', { name: 'Add cell column' }));
+    expect(props.onPatchElement).toHaveBeenCalledWith('cg', { cellColumns: ['c1', 'c3', 'c2'] }, { discrete: true });
+  });
+
+  it('clamps palette steps into 1..5 and keeps the ramp', () => {
+    const props = setup({ template: tplWithEl(cg()), selectedIds: ['cg'] });
+    fireEvent.change(screen.getByLabelText('Palette steps'), { target: { value: '9' } });
+    expect(props.onPatchElement).toHaveBeenCalledWith('cg', { palette: { ramp: 'blue', steps: 5 } }, undefined);
+  });
+
+  it('toggles the group boundary (discrete)', () => {
+    const props = setup({ template: tplWithEl(cg()), selectedIds: ['cg'] });
+    fireEvent.click(screen.getByLabelText('Gap at group change'));
+    expect(props.onPatchElement).toHaveBeenCalledWith('cg', { groupBoundary: 'token-change' }, { discrete: true });
+  });
+
+  it('adds a trailing column with defaults (discrete) and removes the last one back to undefined', () => {
+    const props = setup({ template: tplWithEl(cg()), selectedIds: ['cg'] });
+    fireEvent.click(screen.getByRole('button', { name: 'Add trailing column' }));
+    expect(props.onPatchElement).toHaveBeenCalledWith('cg', { trailingColumns: [{ key: '', label: '', width: 20 }] }, { discrete: true });
+    const props2 = setup({ template: tplWithEl(cg({ trailingColumns: [{ key: 'days', label: 'Days', width: 20 }] })), selectedIds: ['cg'] });
+    fireEvent.click(screen.getByLabelText('Remove column trailing 1'));
+    expect(props2.onPatchElement).toHaveBeenCalledWith('cg', { trailingColumns: undefined }, { discrete: true });
+  });
+
+  it('edits a trailing column key, label and width (coalesced)', () => {
+    const props = setup({ template: tplWithEl(cg({ trailingColumns: [{ key: 'days', label: 'Days', width: 20 }] })), selectedIds: ['cg'] });
+    fireEvent.change(screen.getByLabelText('Column key 1'), { target: { value: 'silent' } });
+    expect(props.onPatchElement).toHaveBeenCalledWith('cg', { trailingColumns: [{ key: 'silent', label: 'Days', width: 20 }] }, undefined);
+    fireEvent.change(screen.getByLabelText('Column width (points) 1'), { target: { value: '22' } });
+    expect(props.onPatchElement).toHaveBeenCalledWith('cg', { trailingColumns: [{ key: 'days', label: 'Days', width: 22 }] }, undefined);
+  });
+});
+
 describe('PropertiesTab barcode and QR controls', () => {
   const sym = (over: Partial<DesignElement> = {}): DesignElement =>
     ({ id: 'sym', kind: 'barcode', name: 'B', rect: { x: 0, y: 0, w: 200, h: 60 }, ...over }) as DesignElement;
