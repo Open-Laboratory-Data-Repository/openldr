@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "ffba0f72",
+          "type": "fix",
+          "scope": "report-designer",
+          "title": "Flatten a daterange param into the flat from/to queries declare"
+        },
+        {
           "hash": "7e1e4058",
           "type": "feat",
           "scope": "report-designer",
