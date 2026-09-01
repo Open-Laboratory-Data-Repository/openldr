@@ -364,7 +364,7 @@ function effectiveResolved(el: DesignElement, resolved: ResolvedTable | undefine
 
 /** A cell value as drawn: `decimals` pins numeric formatting (65 beside 23.7 in one column reads
  *  as a mistake); anything that does not parse as a finite number passes through untouched. */
-function formatCell(c: { decimals?: number }, v: unknown): string {
+function formatCell(c: { key: string; decimals?: number }, v: unknown): string {
   if (c.decimals == null) return String(v ?? '');
   const n = Number(v);
   return Number.isFinite(n) ? n.toFixed(c.decimals) : String(v ?? '');
@@ -757,7 +757,8 @@ function drawKeyValue(doc: Doc, el: DesignElement, r: Box, resolved: ResolvedTab
     // contains its label, which a chip must not cover).
     doc.font('Helvetica').fontSize(valueSize);
     const value = values[i];
-    const chip = p.status && p.emphasis === 'fill';
+    // `chip` and `fill` coincide here on purpose: this fill already hugged the value text.
+    const chip = p.status && (p.emphasis === 'fill' || p.emphasis === 'chip');
     const pad = chip ? CELL_PAD : 0;
     let valueColor = BODY_TEXT;
     if (chip) {
@@ -1248,7 +1249,8 @@ function drawCellGrid(
       x += CELL_COL_GAP;
       const v = row[cellIndex(cellCount) + ci] ?? '';
       const st = rowStatuses?.[ci];
-      const filled = Boolean(st) && (c.emphasis ?? 'text') === 'fill';
+      // A trailing cell is already chip-sized, so `chip` and `fill` coincide here too.
+      const filled = Boolean(st) && ((c.emphasis ?? 'text') === 'fill' || c.emphasis === 'chip');
       if (filled) {
         // Same centre line as the value it sits behind, and as the cells to its left.
         const chipH = CELL_ROW_H - CHIP_INSET_Y * 2;
@@ -1337,6 +1339,19 @@ function drawGrid(
       // A chip is exactly one row tall and one column wide, so it can never affect the y-advance.
       if (st && (emphasis[ci] ?? 'text') === 'fill') {
         doc.rect(xOf(ci) + CHIP_INSET_X, y + CHIP_INSET_Y, widths[ci] - CHIP_INSET_X * 2, ROW_H - CHIP_INSET_Y * 2)
+          .fill(STATUS_CHIP_FILL[st]);
+        lastFill = STATUS_CHIP_FILL[st];
+        setFill(STATUS_CHIP_TEXT[st]);
+      } else if (st && emphasis[ci] === 'chip') {
+        // T5: a pill hugging the TEXT, not the column — a full-width Resistant bar across a 350pt
+        // column shouts. Positioned against the same edge the text aligns to, clamped to the cell.
+        const textW = doc.widthOfString(cell);
+        const chipW = Math.min(textW + CELL_PAD * 2, widths[ci] - CHIP_INSET_X * 2);
+        const chipH = ROW_H - CHIP_INSET_Y * 2;
+        const chipX = numeric[ci]
+          ? xOf(ci) + widths[ci] - CELL_PAD - textW - CELL_PAD
+          : xOf(ci) + CHIP_INSET_X;
+        doc.roundedRect(Math.max(xOf(ci) + CHIP_INSET_X, chipX), y + CHIP_INSET_Y, chipW, chipH, chipH / 2)
           .fill(STATUS_CHIP_FILL[st]);
         lastFill = STATUS_CHIP_FILL[st];
         setFill(STATUS_CHIP_TEXT[st]);

@@ -1192,6 +1192,7 @@ export const pt: EnShape = {
     emphasisFor: 'Ênfase para',
     emphasisText: 'Texto colorido',
     emphasisFill: 'Chip preenchido',
+    emphasisChip: 'Chip compacto',
     fields: 'Campos',
     firstFieldEncoded: 'Apenas o primeiro campo é codificado — um símbolo carrega um valor.',
     symbolValue: 'Valor',

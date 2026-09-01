@@ -1274,6 +1274,7 @@ export const en = {
     emphasisFor: 'Emphasis for',
     emphasisText: 'Tinted text',
     emphasisFill: 'Filled chip',
+    emphasisChip: 'Compact chip',
     fields: 'Fields',
     firstFieldEncoded: 'Only the first field is encoded — one symbol carries one value.',
     symbolValue: 'Value',

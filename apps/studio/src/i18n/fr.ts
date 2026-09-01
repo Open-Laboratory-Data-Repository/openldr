@@ -1192,6 +1192,7 @@ export const fr: EnShape = {
     emphasisFor: 'Mise en valeur pour',
     emphasisText: 'Texte teinté',
     emphasisFill: 'Puce remplie',
+    emphasisChip: 'Puce compacte',
     fields: 'Champs',
     firstFieldEncoded: 'Seul le premier champ est encodé — un symbole porte une seule valeur.',
     symbolValue: 'Valeur',

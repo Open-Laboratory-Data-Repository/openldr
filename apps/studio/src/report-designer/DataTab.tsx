@@ -398,6 +398,7 @@ export function DataTab({ element, parameters, onPatchElement, onPatchParameters
                       <SelectContent>
                         <SelectItem value="text">{t('reportDesigner.emphasisText')}</SelectItem>
                         <SelectItem value="fill">{t('reportDesigner.emphasisFill')}</SelectItem>
+                        <SelectItem value="chip">{t('reportDesigner.emphasisChip')}</SelectItem>
                       </SelectContent>
                     </Select>
                   )}
