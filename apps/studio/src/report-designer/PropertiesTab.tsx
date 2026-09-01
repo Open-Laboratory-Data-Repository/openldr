@@ -9,7 +9,7 @@ import { AlignLeft, AlignCenter, AlignRight, X } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import type { DesignElement, Margins, Orientation, Paper, Rect, ReportTemplate, TextAlign } from './types';
 import { encodeCode128, encodeQr, maxCode128Chars, minWidthPxFor, moduleWidthMm, MIN_MODULE_MM, QR_QUIET_ZONE, ELEMENT_IMAGE_MAX_BYTES, ELEMENT_IMAGE_MIME, validateImageSrc } from './types';
-import { findElement, paperSize } from './model';
+import { findElement, flowTargets, paperSize } from './model';
 import { clampRectToPage } from './geometry';
 import { ColorField } from './ColorField';
 
@@ -362,6 +362,66 @@ function KindControls({ el, onPatch }: {
   return null;
 }
 
+// Radix Select refuses value="", so "not set" travels as this sentinel (DataTab's NONE convention).
+const NONE_FLOW = '__none__';
+
+/** The Flow section: plain-word controls over the schema's pagination fields (`flowAfter`,
+ *  `flowGap`, `showOn`, `showWithTable`, `fillTo`). The renderer THROWS on a `flowAfter` cycle, so
+ *  the Place-below options come from `flowTargets`, which cannot offer one. */
+function FlowSection({ template, el, onPatch }: {
+  template: ReportTemplate; el: DesignElement;
+  onPatch(patch: Partial<DesignElement>, opts?: PatchOpts): void;
+}): JSX.Element {
+  const { t } = useTranslation();
+  const page = template.pages.find((p) => p.elements.some((e) => e.id === el.id));
+  const siblings = page?.elements ?? [];
+  const targets = flowTargets(siblings, el.id);
+  const anchors = siblings.filter((e) => e.id !== el.id && (e.kind === 'table' || e.kind === 'cellgrid'));
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{t('reportDesigner.flow')}</div>
+      <div>
+        <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">{t('reportDesigner.placeBelow')}</div>
+        <Select value={el.flowAfter ?? NONE_FLOW}
+          onValueChange={(v) => onPatch(v === NONE_FLOW ? { flowAfter: undefined, flowGap: undefined } : { flowAfter: v }, { discrete: true })}>
+          <SelectTrigger aria-label={t('reportDesigner.placeBelow')} className="h-8 w-full text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value={NONE_FLOW}>{t('reportDesigner.none')}</SelectItem>
+            {targets.map((e) => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
+      {el.flowAfter && (
+        <NumberField label={t('reportDesigner.flowGap')} value={el.flowGap ?? 0}
+          onChange={(n) => onPatch({ flowGap: Math.max(0, n) })} min={0} />
+      )}
+      <label className="flex items-center gap-2 text-xs text-foreground">
+        <Checkbox aria-label={t('reportDesigner.firstPageOnly')} checked={el.showOn === 'first-chunk'}
+          onCheckedChange={(v) => onPatch({ showOn: v === true ? 'first-chunk' : undefined }, { discrete: true })} />
+        {t('reportDesigner.firstPageOnly')}
+      </label>
+      <div>
+        <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">{t('reportDesigner.showWith')}</div>
+        <Select value={el.showWithTable ?? NONE_FLOW}
+          onValueChange={(v) => onPatch({ showWithTable: v === NONE_FLOW ? undefined : v }, { discrete: true })}>
+          <SelectTrigger aria-label={t('reportDesigner.showWith')} className="h-8 w-full text-xs"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value={NONE_FLOW}>{t('reportDesigner.none')}</SelectItem>
+            {anchors.map((e) => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
+      {el.kind === 'cellgrid' && (
+        <label className="flex items-center gap-2 text-xs text-foreground">
+          <Checkbox aria-label={t('reportDesigner.fillToBottom')} checked={el.fillTo === 'rect-bottom'}
+            onCheckedChange={(v) => onPatch({ fillTo: v === true ? 'rect-bottom' : undefined }, { discrete: true })} />
+          {t('reportDesigner.fillToBottom')}
+        </label>
+      )}
+    </div>
+  );
+}
+
 function BulkControls({ ids, els, onPatchElements }: {
   ids: string[]; els: import('./types').DesignElement[];
   onPatchElements(ids: string[], patch: Partial<import('./types').DesignElement>, opts?: PatchOpts): void;
@@ -487,8 +547,8 @@ export function PropertiesTab({ template, selectedIds, onPatchElement, onPatchPa
       <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
         {t('reportDesigner.elementLabel')} · {t(`reportDesigner.element.${selected.kind}`)}
       </div>
-      {/* KIND CONTROLS INSERTION POINT (Task 6) */}
       <KindControls el={selected} onPatch={(patch, opts) => onPatchElement(selected.id, patch, opts)} />
+      <FlowSection template={template} el={selected} onPatch={(patch, opts) => onPatchElement(selected.id, patch, opts)} />
       <div>
         <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">{t('reportDesigner.positionSize')}</div>
         <div className="grid grid-cols-2 gap-2">

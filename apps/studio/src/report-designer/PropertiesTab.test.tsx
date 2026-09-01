@@ -166,6 +166,79 @@ describe('PropertiesTab keyvalue controls', () => {
   });
 });
 
+describe('PropertiesTab flow controls', () => {
+  const heading = (over: Partial<DesignElement> = {}): DesignElement =>
+    ({ id: 'a', kind: 'text', name: 'Heading', rect: { x: 0, y: 0, w: 100, h: 20 }, ...over }) as DesignElement;
+  const table = (over: Partial<DesignElement> = {}): DesignElement =>
+    ({ id: 'tb', kind: 'table', name: 'Big table', rect: { x: 0, y: 40, w: 200, h: 100 }, columns: ['A'], ...over }) as DesignElement;
+  const grid = (over: Partial<DesignElement> = {}): DesignElement =>
+    ({ id: 'cg', kind: 'cellgrid', name: 'Grid', rect: { x: 0, y: 160, w: 200, h: 100 }, cellColumns: ['c1'], ...over }) as DesignElement;
+
+  function tplWithEls(els: DesignElement[]): ReportTemplate {
+    return { id: 't', name: 't', paper: 'A4', orientation: 'portrait', status: 'draft', parameters: [], pages: [{ id: 'p1', elements: els }] };
+  }
+
+  it('writes flowAfter from the Place below select (discrete)', async () => {
+    const props = setup({ template: tplWithEls([heading(), table(), grid()]), selectedIds: ['a'] });
+    fireEvent.click(screen.getByLabelText('Place below'));
+    fireEvent.click(await screen.findByRole('option', { name: 'Big table' }));
+    expect(props.onPatchElement).toHaveBeenCalledWith('a', { flowAfter: 'tb' }, { discrete: true });
+  });
+
+  it('clearing Place below also clears the gap', async () => {
+    const props = setup({ template: tplWithEls([heading({ flowAfter: 'tb', flowGap: 12 }), table(), grid()]), selectedIds: ['a'] });
+    fireEvent.click(screen.getByLabelText('Place below'));
+    fireEvent.click(await screen.findByRole('option', { name: 'None' }));
+    expect(props.onPatchElement).toHaveBeenCalledWith('a', { flowAfter: undefined, flowGap: undefined }, { discrete: true });
+  });
+
+  it('shows the gap field only while Place below is set, and edits it coalesced', () => {
+    const props = setup({ template: tplWithEls([heading({ flowAfter: 'tb' }), table(), grid()]), selectedIds: ['a'] });
+    fireEvent.change(screen.getByLabelText('Gap after'), { target: { value: '20' } });
+    expect(props.onPatchElement).toHaveBeenCalledWith('a', { flowGap: 20 }, undefined);
+  });
+
+  it('hides the gap field when nothing is followed', () => {
+    setup({ template: tplWithEls([heading(), table(), grid()]), selectedIds: ['a'] });
+    expect(screen.queryByLabelText('Gap after')).toBeNull();
+  });
+
+  it('writes showOn first-chunk from the First page only checkbox (discrete)', () => {
+    const props = setup({ template: tplWithEls([heading(), table(), grid()]), selectedIds: ['a'] });
+    fireEvent.click(screen.getByLabelText('First page only'));
+    expect(props.onPatchElement).toHaveBeenCalledWith('a', { showOn: 'first-chunk' }, { discrete: true });
+  });
+
+  it('offers only table and cellgrid elements in Show with', async () => {
+    const props = setup({ template: tplWithEls([heading(), table(), grid()]), selectedIds: ['a'] });
+    fireEvent.click(screen.getByLabelText('Show with'));
+    expect(await screen.findByRole('option', { name: 'Big table' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Grid' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'Heading' })).toBeNull();
+    fireEvent.click(screen.getByRole('option', { name: 'Grid' }));
+    expect(props.onPatchElement).toHaveBeenCalledWith('a', { showWithTable: 'cg' }, { discrete: true });
+  });
+
+  it('shows Fill to bottom only for a cellgrid and writes fillTo (discrete)', () => {
+    const props = setup({ template: tplWithEls([heading(), table(), grid()]), selectedIds: ['cg'] });
+    fireEvent.click(screen.getByLabelText('Fill to bottom of box'));
+    expect(props.onPatchElement).toHaveBeenCalledWith('cg', { fillTo: 'rect-bottom' }, { discrete: true });
+  });
+
+  it('hides Fill to bottom for non-cellgrid elements', () => {
+    setup({ template: tplWithEls([heading(), table(), grid()]), selectedIds: ['a'] });
+    expect(screen.queryByLabelText('Fill to bottom of box')).toBeNull();
+  });
+
+  it('does not offer an element that would close a flow cycle', async () => {
+    // Big table already follows Heading; offering it back to Heading would make a cycle.
+    setup({ template: tplWithEls([heading(), table({ flowAfter: 'a' }), grid()]), selectedIds: ['a'] });
+    fireEvent.click(screen.getByLabelText('Place below'));
+    expect(await screen.findByRole('option', { name: 'Grid' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'Big table' })).toBeNull();
+  });
+});
+
 describe('PropertiesTab barcode and QR controls', () => {
   const sym = (over: Partial<DesignElement> = {}): DesignElement =>
     ({ id: 'sym', kind: 'barcode', name: 'B', rect: { x: 0, y: 0, w: 200, h: 60 }, ...over }) as DesignElement;
