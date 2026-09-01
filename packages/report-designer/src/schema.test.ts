@@ -202,3 +202,21 @@ describe('DesignElementSchema: cellgrid', () => {
     })).toThrow();
   });
 });
+
+describe('chart elements', () => {
+  it('accepts a bound bar chart with a label column and value columns', () => {
+    const out = DesignElementSchema.parse({
+      id: 'ch', kind: 'chart', name: 'Volume', rect: { x: 0, y: 0, w: 480, h: 200 },
+      chartType: 'bar', labelColumn: 'month', valueColumns: ['count'],
+      dataSource: { kind: 'custom-query', queryId: 'q' },
+    });
+    expect(out.chartType).toBe('bar');
+    expect(out.valueColumns).toEqual(['count']);
+  });
+
+  it('rejects an unknown chart type', () => {
+    expect(() => DesignElementSchema.parse({
+      id: 'ch', kind: 'chart', name: 'g', rect: { x: 0, y: 0, w: 10, h: 10 }, chartType: 'radar',
+    })).toThrow();
+  });
+});
