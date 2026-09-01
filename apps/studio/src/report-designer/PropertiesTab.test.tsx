@@ -239,6 +239,50 @@ describe('PropertiesTab flow controls', () => {
   });
 });
 
+describe('PropertiesTab stat layout and transpose', () => {
+  const kv = (over: Partial<DesignElement> = {}): DesignElement =>
+    ({ id: 'kv', kind: 'keyvalue', name: 'Panel', rect: { x: 0, y: 0, w: 200, h: 80 }, ...over }) as DesignElement;
+  const boundTable = (over: Partial<DesignElement> = {}): DesignElement =>
+    ({ id: 'tb', kind: 'table', name: 'Table', rect: { x: 0, y: 0, w: 200, h: 100 },
+      dataSource: { kind: 'custom-query', queryId: 'cq_1' }, ...over }) as DesignElement;
+
+  it('offers stat in the keyvalue layout select (discrete)', async () => {
+    const props = setup({ template: tplWithEl(kv()), selectedIds: ['kv'] });
+    fireEvent.click(screen.getByLabelText('Layout'));
+    fireEvent.click(await screen.findByRole('option', { name: 'Figure above caption' }));
+    expect(props.onPatchElement).toHaveBeenCalledWith('kv', { layout: 'stat' }, { discrete: true });
+  });
+
+  it('turning transpose on clears boundColumns in the same patch (discrete)', () => {
+    const props = setup({ template: tplWithEl(boundTable({ boundColumns: [{ key: 'a', label: 'A' }] })), selectedIds: ['tb'] });
+    fireEvent.click(screen.getByLabelText('Transpose (columns become rows)'));
+    expect(props.onPatchElement).toHaveBeenCalledWith('tb', { transpose: true, boundColumns: undefined }, { discrete: true });
+  });
+
+  it('turning transpose off clears the transpose label too', () => {
+    const props = setup({ template: tplWithEl(boundTable({ transpose: true, transposeLabel: 'Antibiotic' })), selectedIds: ['tb'] });
+    fireEvent.click(screen.getByLabelText('Transpose (columns become rows)'));
+    expect(props.onPatchElement).toHaveBeenCalledWith('tb', { transpose: undefined, transposeLabel: undefined }, { discrete: true });
+  });
+
+  it('edits the transpose label while transpose is on (coalesced)', () => {
+    const props = setup({ template: tplWithEl(boundTable({ transpose: true })), selectedIds: ['tb'] });
+    fireEvent.change(screen.getByLabelText('First column header'), { target: { value: 'Antibiotic' } });
+    expect(props.onPatchElement).toHaveBeenCalledWith('tb', { transposeLabel: 'Antibiotic' }, undefined);
+  });
+
+  it('hides the transpose label input while transpose is off', () => {
+    setup({ template: tplWithEl(boundTable()), selectedIds: ['tb'] });
+    expect(screen.queryByLabelText('First column header')).toBeNull();
+  });
+
+  it('still shows the transpose checkbox on an unbound table above its columns editor', () => {
+    setup({ template: tplWithEl({ id: 'tb', kind: 'table', name: 'Table', rect: { x: 0, y: 0, w: 200, h: 100 }, columns: ['A'] }), selectedIds: ['tb'] });
+    expect(screen.getByLabelText('Transpose (columns become rows)')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /add column/i })).toBeInTheDocument();
+  });
+});
+
 describe('PropertiesTab barcode and QR controls', () => {
   const sym = (over: Partial<DesignElement> = {}): DesignElement =>
     ({ id: 'sym', kind: 'barcode', name: 'B', rect: { x: 0, y: 0, w: 200, h: 60 }, ...over }) as DesignElement;

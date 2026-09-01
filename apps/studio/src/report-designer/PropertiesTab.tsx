@@ -312,11 +312,12 @@ function KindControls({ el, onPatch }: {
         </div>
         <div>
           <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">{t('reportDesigner.layout')}</div>
-          <Select value={el.layout ?? 'inline'} onValueChange={(v) => onPatch({ layout: v as 'inline' | 'stacked' }, { discrete: true })}>
+          <Select value={el.layout ?? 'inline'} onValueChange={(v) => onPatch({ layout: v as 'inline' | 'stacked' | 'stat' }, { discrete: true })}>
             <SelectTrigger aria-label={t('reportDesigner.layout')} className="h-8 w-full text-xs"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="inline">{t('reportDesigner.layoutInline')}</SelectItem>
               <SelectItem value="stacked">{t('reportDesigner.layoutStacked')}</SelectItem>
+              <SelectItem value="stat">{t('reportDesigner.layoutStat')}</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -333,12 +334,34 @@ function KindControls({ el, onPatch }: {
   }
 
   if (el.kind === 'table') {
+    // Turning transpose ON clears boundColumns in the SAME patch: a transposed table's headers are
+    // data (the schema refuses authored ones), and a two-step clear would leave a saveable design
+    // in the refused state between the steps.
+    const transposeBlock = (
+      <div className="flex flex-col gap-3">
+        <label className="flex items-center gap-2 text-xs text-foreground">
+          <Checkbox aria-label={t('reportDesigner.transpose')} checked={el.transpose ?? false}
+            onCheckedChange={(v) => onPatch(v === true
+              ? { transpose: true, boundColumns: undefined }
+              : { transpose: undefined, transposeLabel: undefined }, { discrete: true })} />
+          {t('reportDesigner.transpose')}
+        </label>
+        {el.transpose && (
+          <div>
+            <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">{t('reportDesigner.transposeLabel')}</div>
+            <Input aria-label={t('reportDesigner.transposeLabel')} value={el.transposeLabel ?? ''}
+              onChange={(e) => onPatch({ transposeLabel: e.target.value })} className="h-8 text-xs" />
+          </div>
+        )}
+      </div>
+    );
     // Bound tables get their columns from the Data tab's boundColumns — no PropertiesTab columns editor.
-    if (el.dataSource) return null;
+    if (el.dataSource) return transposeBlock;
     const cols = el.columns ?? [];
     const setCols = (next: string[], discrete?: boolean) => onPatch({ columns: next }, discrete ? { discrete: true } : undefined);
     return (
       <div className="flex flex-col gap-3">
+        {transposeBlock}
         <div>
           <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">{t('reportDesigner.columns')}</div>
           <div className="flex flex-col gap-1">
