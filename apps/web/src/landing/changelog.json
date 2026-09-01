@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "1f4fa77f",
+          "type": "feat",
+          "scope": "report-designer",
+          "title": "Version history with restore (spec 4 slice 3)"
+        },
+        {
           "hash": "09d7439a",
           "type": "feat",
           "scope": "report-designer",
