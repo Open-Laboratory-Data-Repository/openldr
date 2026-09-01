@@ -46,7 +46,7 @@ export function sheetName(raw: string, used: Set<string>): string {
 // /api/query/run hard-caps each call at 1000 rows, so page through with offset to export every row
 // (an export is a deliverable — unlike the interactive preview grid, silent truncation would lose data).
 const PAGE = 1000;
-async function runAllRows(
+export async function runAllRows(
   run: ExcelExportDeps['run'], body: { connectorId: string; sql: string; params: CustomQuery['params']; values: Record<string, unknown> },
 ): Promise<{ columns: { key: string; label: string }[]; rows: Record<string, unknown>[] }> {
   const rows: Record<string, unknown>[] = [];
