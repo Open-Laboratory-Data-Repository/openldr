@@ -27,8 +27,9 @@ type ParamType = NonNullable<TemplateParam['type']>;
 // BuilderForm's identical NONE convention).
 const NONE_STATUS = '__none__';
 
-/** Kinds the Data tab can bind. `barcode`/`qrcode` use `boundColumns[0]` only (see `isSymbol`). */
-const BINDABLE_KINDS = new Set<DesignElement['kind']>(['table', 'keyvalue', 'barcode', 'qrcode']);
+/** Kinds the Data tab can bind. `barcode`/`qrcode` use `boundColumns[0]` only (see `isSymbol`);
+ *  a `cellgrid` binds a query and sorts here while its column config lives in Properties. */
+const BINDABLE_KINDS = new Set<DesignElement['kind']>(['table', 'keyvalue', 'barcode', 'qrcode', 'cellgrid']);
 
 const emptyValue = (type: ParamType): TemplateParam['value'] => (type === 'daterange' ? { from: '', to: '' } : '');
 
@@ -277,13 +278,43 @@ export function DataTab({ element, parameters, onPatchElement, onPatchParameters
         </Select>
       </div>
 
-      <div className="flex items-center gap-2">
-        <Button type="button" variant="outline" size="sm" disabled={!queryId || loading} onClick={() => { void loadColumns(); }}>
-          {t('reportDesigner.loadColumns')}
-        </Button>
-      </div>
+      {el.kind !== 'cellgrid' && (
+        <div className="flex items-center gap-2">
+          <Button type="button" variant="outline" size="sm" disabled={!queryId || loading} onClick={() => { void loadColumns(); }}>
+            {t('reportDesigner.loadColumns')}
+          </Button>
+        </div>
+      )}
       {loadError && <p className="text-xs text-destructive">{loadError}</p>}
 
+      {el.dataSource && (
+        <div>
+          <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">{t('reportDesigner.sortBy')}</div>
+          {/* Blanking sortBy must delete headerRow in the SAME patch: the server refuses the broken
+              pair (header-row.ts), and the UI must never be able to save it. */}
+          <Input aria-label={t('reportDesigner.sortBy')} value={el.sortBy ?? ''} placeholder="—"
+            onChange={(e) => onPatchElement(el.id, e.target.value
+              ? { sortBy: e.target.value }
+              : { sortBy: undefined, headerRow: undefined })} className="h-7 text-xs" />
+          <p className="mt-1 text-xs text-muted-foreground">{t('reportDesigner.sortByHelp')}</p>
+        </div>
+      )}
+      {el.dataSource && el.kind === 'table' && (
+        <div>
+          <label className="flex items-center gap-2 text-xs text-foreground">
+            <Checkbox aria-label={t('reportDesigner.headerRow')} checked={el.headerRow ?? false} disabled={!el.sortBy}
+              onCheckedChange={(v) => onPatchElement(el.id, { headerRow: v === true ? true : undefined }, { discrete: true })} />
+            {t('reportDesigner.headerRow')}
+          </label>
+          {!el.sortBy && <p className="mt-1 text-xs text-muted-foreground">{t('reportDesigner.headerRowNeedsSort')}</p>}
+        </div>
+      )}
+
+      {el.kind === 'cellgrid' ? (
+        <p className="text-xs text-muted-foreground">{t('reportDesigner.cellgridColumnsNote')}</p>
+      ) : el.transpose ? (
+        <p className="text-xs text-muted-foreground">{t('reportDesigner.transposedNote')}</p>
+      ) : (
       <div>
         <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
           {t(el.kind === 'keyvalue' ? 'reportDesigner.fields' : 'reportDesigner.columns')}
@@ -336,6 +367,7 @@ export function DataTab({ element, parameters, onPatchElement, onPatchParameters
           </div>
         )}
       </div>
+      )}
 
       <ParamEditor parameters={parameters} onPatchParameters={onPatchParameters} />
     </div>
