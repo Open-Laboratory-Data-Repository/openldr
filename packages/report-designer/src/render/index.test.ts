@@ -189,7 +189,7 @@ function fillOp(hex: string): string {
 function pdfNum(n: number): number { return Math.round(n * 1e6) / 1e6; }
 
 const statusDesign = (boundColumns: BoundColumn[], rect: { x: number; y: number; w: number; h: number } = { x: 0, y: 0, w: 400, h: 200 }): ReportDesign => ({
-  id: 'd', name: 'N', paper: 'A4', orientation: 'portrait', status: 'draft', parameters: [],
+  id: 'd', name: 'N', paper: 'A4', orientation: 'portrait', status: 'published', parameters: [],
   pages: [{ id: 'p', elements: [{
     id: 't', kind: 'table', name: 'T', rect,
     dataSource: { kind: 'custom-query', queryId: 'q' }, boundColumns,
@@ -447,7 +447,7 @@ describe('zebra-stripe fill tracking', () => {
 
 describe('keyvalue panel rendering', () => {
   const kvDesign = (over: Partial<import('../schema').DesignElement> = {}): ReportDesign => ({
-    id: 'd', name: 'N', paper: 'A4', orientation: 'portrait', status: 'draft', parameters: [],
+    id: 'd', name: 'N', paper: 'A4', orientation: 'portrait', status: 'published', parameters: [],
     pages: [{ id: 'p', elements: [{
       id: 'k', kind: 'keyvalue', name: 'K', rect: { x: 0, y: 0, w: 400, h: 200 },
       dataSource: { kind: 'custom-query', queryId: 'q' },
@@ -529,7 +529,7 @@ describe('keyvalue panel rendering', () => {
 describe('barcode and qrcode rendering', () => {
   const VALUE = 'TZ00123/26';
   const symDesign = (el: Partial<import('../schema').DesignElement>): ReportDesign => ({
-    id: 'd', name: 'N', paper: 'A4', orientation: 'portrait', status: 'draft', parameters: [],
+    id: 'd', name: 'N', paper: 'A4', orientation: 'portrait', status: 'published', parameters: [],
     pages: [{ id: 'p', elements: [{
       id: 's', kind: 'barcode', name: 'S', rect: { x: 0, y: 0, w: 400, h: 60 }, ...el,
     } as import('../schema').DesignElement] }],
@@ -664,7 +664,7 @@ describe('renderReportDesignPdf prefers RUN parameter values over the design def
 
 describe('letterhead identity rendering', () => {
   const headerDesign = (): ReportDesign => ({
-    id: 'd', name: 'N', paper: 'A4', orientation: 'portrait', status: 'draft', parameters: [],
+    id: 'd', name: 'N', paper: 'A4', orientation: 'portrait', status: 'published', parameters: [],
     pages: [{ id: 'p', elements: [
       { id: 'logo', kind: 'image', name: 'Logo', rect: { x: 0, y: 0, w: 60, h: 60 }, src: '{{lab.logo}}' },
       { id: 'nm', kind: 'text', name: 'Name', rect: { x: 70, y: 0, w: 400, h: 20 }, text: '{{lab.name}}' },

@@ -69,3 +69,16 @@ describe('T4: per-column decimals', () => {
     expect(rows).toEqual([['60.0'], ['33.3'], ['n/a']]);
   });
 });
+
+describe('F2: draft watermark', () => {
+  const keep: DesignElement = { id: 'k', kind: 'text', name: 'k', rect: { x: 0, y: 100, w: 200, h: 20 }, text: 'kept' };
+
+  it('a draft stamps DRAFT; publishing removes it byte-for-byte', async () => {
+    const draft = await renderReportDesignPdf(design([keep]), new Map(), { now: NOW });
+    const published = await renderReportDesignPdf({ ...design([keep]), status: 'published' }, new Map(), { now: NOW });
+    // pdfkit emits the string as HEX: 44 52 41 46 54 spells DRAFT.
+    expect(decodedContent(draft)).toContain('4452414654');
+    expect(decodedContent(published)).not.toContain('4452414654');
+    expect(normalize(draft)).not.toBe(normalize(published));
+  });
+});
