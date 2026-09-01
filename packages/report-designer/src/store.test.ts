@@ -18,6 +18,7 @@ beforeEach(async () => {
     .addColumn('pages', 'jsonb').addColumn('parameters', 'jsonb')
     .addColumn('margins', 'jsonb')
     .addColumn('page_numbers', 'boolean')
+    .addColumn('i18n', 'jsonb')
     .addColumn('status', 'text')
     // Mirrors migration 042's `notNull().defaultTo(sql`now()`)` — needed so a DB-stamped timestamp is
     // actually present to assert on (no earlier test in this file read createdAt/updatedAt).
@@ -29,7 +30,7 @@ beforeEach(async () => {
     .addColumn('design_id', 'text').addColumn('version', 'integer')
     .addColumn('name', 'text').addColumn('paper', 'text').addColumn('orientation', 'text')
     .addColumn('pages', 'jsonb').addColumn('parameters', 'jsonb')
-    .addColumn('margins', 'jsonb').addColumn('page_numbers', 'boolean')
+    .addColumn('margins', 'jsonb').addColumn('page_numbers', 'boolean').addColumn('i18n', 'jsonb')
     .addColumn('published_at', 'text').addColumn('published_by', 'text').execute();
 });
 
@@ -347,7 +348,7 @@ describe('ReportDesignStore', () => {
 // is what forces the fixture to grow.
 const KNOWN_TOP_LEVEL_FIELDS = [
   'id', 'name', 'paper', 'orientation', 'pages', 'parameters', 'margins', 'pageNumbers', 'status',
-  'createdAt', 'updatedAt',
+  'i18n', 'createdAt', 'updatedAt',
 ] as const;
 
 describe('ReportDesign round-trip completeness', () => {
@@ -377,6 +378,7 @@ describe('ReportDesign round-trip completeness', () => {
         elements: [{ id: 'e1', kind: 'text', name: 'Title', rect: { x: 1, y: 2, w: 3, h: 4 }, text: 'Hi' }],
       }],
       pageNumbers: true,
+      i18n: { fr: { e1: 'Salut', 'e1.col.a': 'Colonne A' } },
       status: 'published',
     };
 

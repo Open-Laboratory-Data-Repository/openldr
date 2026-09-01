@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   appCtx: {
     reporting: {
       run: vi.fn(),
+      renderPdf: vi.fn(),
     },
     close: vi.fn(),
   },
@@ -98,5 +99,41 @@ describe('runReportGlassExport — submission column pin', () => {
     ]);
     expect(parsed[0]).not.toHaveProperty('SpecimenName');
     expect(parsed[0]).not.toHaveProperty('Pathogen');
+  });
+});
+
+// `openldr report run --format pdf --lang fr` is the headless half of the studio's print-language
+// switcher. `lang` is a RESERVED run key the server splits off (`splitLang` in @openldr/bootstrap),
+// so the CLI's whole job is to put it in the params map — and to let an explicit --param win, which
+// is the only way to feed a design that declares its own `lang` parameter.
+describe('runReportRun — print language', () => {
+  let dir: string;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    dir = await mkdtemp(join(tmpdir(), 'report-lang-'));
+    mocks.createAppContext.mockResolvedValue(mocks.appCtx);
+    mocks.appCtx.reporting.renderPdf.mockResolvedValue(Buffer.from('%PDF-1.4'));
+  });
+  afterEach(async () => { await rm(dir, { recursive: true, force: true }); });
+
+  it('sends --lang as the reserved `lang` run key', async () => {
+    const { runReportRun } = await import('./report');
+    const out = join(dir, 'r.pdf');
+    expect(await runReportRun('r1', { json: false, csv: false, format: 'pdf', out, lang: 'fr' })).toBe(0);
+    expect(mocks.appCtx.reporting.renderPdf).toHaveBeenCalledWith('r1', { lang: 'fr' });
+    expect((await readFile(out)).subarray(0, 4).toString()).toBe('%PDF');
+  });
+
+  it('omits `lang` entirely without the flag, so the authored text prints', async () => {
+    const { runReportRun } = await import('./report');
+    await runReportRun('r1', { json: false, csv: false, format: 'pdf', out: join(dir, 'r.pdf'), param: ['from=2026-01-01'] });
+    expect(mocks.appCtx.reporting.renderPdf).toHaveBeenCalledWith('r1', { from: '2026-01-01' });
+  });
+
+  it('an explicit --param lang=... beats --lang', async () => {
+    const { runReportRun } = await import('./report');
+    await runReportRun('r1', { json: false, csv: false, format: 'pdf', out: join(dir, 'r.pdf'), lang: 'fr', param: ['lang=sw-code'] });
+    expect(mocks.appCtx.reporting.renderPdf).toHaveBeenCalledWith('r1', { lang: 'sw-code' });
   });
 });

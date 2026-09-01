@@ -2,6 +2,7 @@ import PDFDocument from 'pdfkit';
 import type { ReportDesign } from '../schema';
 import { paperSizePt } from './units';
 import { resolveGroups } from '../groups';
+import { resolveI18n } from '../i18n';
 import { drawElement, paramMap, pageChunkCount, totalPhysicalPages, drawPageFooter, drawsOnChunk, resolveFlowY } from './draw';
 
 // Moved to ./pagination so browser code can name the type without this pdfkit entry point;
@@ -54,14 +55,22 @@ export interface RenderOptions {
    *  design, whose `parameters[].value` are the AUTHORED DEFAULTS — a header built from those
    *  describes the design rather than the run it is printed from. */
   values?: Record<string, unknown>;
+  /** Language to PRINT in (`fr`, `pt`, …). Applied to the design's own `i18n` overrides before
+   *  anything draws; an absent language, or one the design has no entries for, prints the authored
+   *  text. Supplied by the caller the same way `identity` and `values` are. */
+  lang?: string;
 }
 
 export function renderReportDesignPdf(
-  design: ReportDesign,
+  rawDesign: ReportDesign,
   resolved: Map<string, ResolvedTable>,
   opts: RenderOptions = {},
 ): Promise<Buffer> {
   const now = opts.now ?? new Date();
+  // ⛔ Translations resolved FIRST, before tokens or pages. Everything below works on an ordinary
+  // design whose text happens to be in the run's language, so no drawing code knows languages
+  // exist — the same discipline `resolveGroups` follows on the next line.
+  const design = resolveI18n(rawDesign, opts.lang);
   const tokens = paramMap(design, now, opts.identity, opts.values);
   // ⛔ Groups resolved ONCE, here, before anything counts or draws. Downstream every function sees
   // plain `hidden`/`locked` element flags and needs no knowledge of groups — which is what stops

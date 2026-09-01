@@ -17,7 +17,7 @@ import { InspectorTabs } from './InspectorTabs';
 import { PreviewReportDesignDialog } from './PreviewReportDesignDialog';
 import { NewReportSheet } from '../reports/NewReportSheet';
 import { createReportDesign, deleteReportDesign, downloadReportDesignPdf, fetchLabIdentity, getReportDesign, listReportDesigns, publishReportDesign, updateReportDesign } from '../api';
-import { addElement, allElements, duplicateElements, groupElements, moveElementTo, newElement, newElementId, paperSize, patchGroup, removeElements, ungroupElements, updateElement, updateElementRects, updateElements } from './model';
+import { addElement, allElements, duplicateElements, groupElements, moveElementTo, newElement, newElementId, paperSize, patchGroup, removeElements, setI18nText, ungroupElements, updateElement, updateElementRects, updateElements } from './model';
 import { clampRectToPage } from './geometry';
 import { exportDesignToExcel } from './exportExcel';
 import { PageStrip } from './PageStrip';
@@ -85,6 +85,9 @@ export function ReportDesignerPage(): JSX.Element {
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const [publishOpen, setPublishOpen] = useState(false);
   const [versionsOpen, setVersionsOpen] = useState(false);
+  // The language the Properties tab is authoring, '' for the design's own text. Held here rather
+  // than in the tab so Preview and Download render the same language the inspector is editing.
+  const [lang, setLang] = useState('');
   // Ids of unsaved (transient) designs created via "New template" — Save creates them server-side.
   const [transientIds, setTransientIds] = useState<Set<string>>(() => new Set());
   // Autosave / dirty-state indicator for the open design.
@@ -441,7 +444,7 @@ export function ReportDesignerPage(): JSX.Element {
     if (!template) return;
     setError(undefined);
     try {
-      await downloadReportDesignPdf(template);
+      await downloadReportDesignPdf(template, lang || undefined);
       toast.success(t('reportDesigner.exportedToast', { name: template.name }));
     } catch (e) { fail(e); }
   };
@@ -616,6 +619,8 @@ export function ReportDesignerPage(): JSX.Element {
                 onReorder={(id, targetIndex) => pushTemplate(moveElementTo(template, id, targetIndex))}
                 onPatchGroup={(groupId, patch) => pushTemplate(patchGroup(template, groupId, patch))}
                 onUngroup={(groupId) => pushTemplate(ungroupElements(template, groupId))}
+                lang={lang} onLangChange={setLang}
+                onSetI18nText={(l, key, text) => pushTemplate(setI18nText(template, l, key, text))}
                 onClose={() => setInspectorOpen(false)} />
             </div>
           </>
@@ -641,7 +646,7 @@ export function ReportDesignerPage(): JSX.Element {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      {template && previewOpen && <PreviewReportDesignDialog open={previewOpen} design={template} onOpenChange={setPreviewOpen} />}
+      {template && previewOpen && <PreviewReportDesignDialog open={previewOpen} design={template} lang={lang || undefined} onOpenChange={setPreviewOpen} />}
       {template && (
         <VersionsDrawer open={versionsOpen} designId={template.id}
           onClose={() => setVersionsOpen(false)} onRestore={restoreVersion} />

@@ -6,8 +6,8 @@ import { previewReportDesign } from '../api';
 import { PdfCanvasViewer } from '../reports/PdfCanvasViewer';
 import type { ReportDesign } from './types';
 
-export function PreviewReportDesignDialog({ open, design, onOpenChange }: {
-  open: boolean; design: ReportDesign; onOpenChange: (o: boolean) => void;
+export function PreviewReportDesignDialog({ open, design, lang, onOpenChange }: {
+  open: boolean; design: ReportDesign; lang?: string; onOpenChange: (o: boolean) => void;
 }): JSX.Element {
   const { t } = useTranslation();
   const [blob, setBlob] = useState<Blob | null>(null);
@@ -18,13 +18,13 @@ export function PreviewReportDesignDialog({ open, design, onOpenChange }: {
     if (!open) { setBlob(null); return; }
     let active = true;
     setLoading(true); setError(undefined); setBlob(null);
-    previewReportDesign(design)
+    previewReportDesign(design, lang)
       .then((b) => { if (active) { setBlob(b); setLoading(false); } })
       .catch((e: unknown) => { if (active) { setError(e instanceof Error ? e.message : String(e)); setLoading(false); } });
     return () => { active = false; };
     // Re-fetch when the dialog opens or the working design changes (so unsaved edits re-render).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, JSON.stringify(design)]);
+  }, [open, lang, JSON.stringify(design)]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

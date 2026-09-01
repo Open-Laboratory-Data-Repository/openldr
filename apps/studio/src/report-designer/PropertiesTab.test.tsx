@@ -6,7 +6,7 @@ import type { DesignElement, ReportTemplate } from './types';
 
 const tpl = MOCK_TEMPLATES[0];
 function setup(overrides = {}) {
-  const props = { template: tpl, selectedIds: [] as string[], onPatchElement: vi.fn(), onPatchPage: vi.fn(), onPatchElements: vi.fn(), ...overrides };
+  const props = { template: tpl, selectedIds: [] as string[], onPatchElement: vi.fn(), onPatchPage: vi.fn(), onPatchElements: vi.fn(), onLangChange: vi.fn(), onSetI18nText: vi.fn(), ...overrides };
   render(<PropertiesTab {...props} />);
   return props;
 }
@@ -550,5 +550,42 @@ describe('PropertiesTab chart controls', () => {
   it('says the donut uses the first value column only', () => {
     setup({ template: tplWithEl(ch({ chartType: 'donut' })), selectedIds: ['ch'] });
     expect(screen.getByText(/first value column/i)).toBeInTheDocument();
+  });
+});
+
+describe('PropertiesTab print language', () => {
+  const el: DesignElement = { id: 'e1', kind: 'text', name: 'Heading', rect: { x: 0, y: 0, w: 100, h: 20 }, text: 'Laboratory report' };
+
+  it('edits the authored text when no language is selected', () => {
+    const props = setup({ template: tplWithEl(el), selectedIds: ['e1'] });
+    const box = screen.getByLabelText('Content');
+    expect(box).toHaveValue('Laboratory report');
+    fireEvent.change(box, { target: { value: 'Lab report' } });
+    expect(props.onPatchElement).toHaveBeenCalledWith('e1', { text: 'Lab report' }, undefined);
+  });
+
+  // The switcher's whole point: with fr picked, typing writes the OVERRIDE map, never `text`.
+  it('writes the override map under the picked language and leaves the authored text alone', () => {
+    const props = setup({ template: tplWithEl(el), selectedIds: ['e1'], lang: 'fr' });
+    const box = screen.getByLabelText('Content');
+    // Empty with the authored text as the placeholder — an empty box PRINTS the authored text.
+    expect(box).toHaveValue('');
+    expect(box).toHaveAttribute('placeholder', 'Laboratory report');
+    fireEvent.change(box, { target: { value: 'Rapport de laboratoire' } });
+    expect(props.onSetI18nText).toHaveBeenCalledWith('fr', 'e1', 'Rapport de laboratoire');
+    expect(props.onPatchElement).not.toHaveBeenCalled();
+  });
+
+  it('shows the stored override for the picked language', () => {
+    const template = { ...tplWithEl(el), i18n: { fr: { e1: 'Rapport de laboratoire' } } };
+    setup({ template, selectedIds: ['e1'], lang: 'fr' });
+    expect(screen.getByLabelText('Content')).toHaveValue('Rapport de laboratoire');
+  });
+
+  it('the switcher reports the picked language to the page', () => {
+    const props = setup({ template: tplWithEl(el), selectedIds: ['e1'] });
+    fireEvent.click(screen.getByLabelText('Print language'));
+    fireEvent.click(screen.getByText('Français'));
+    expect(props.onLangChange).toHaveBeenCalledWith('fr');
   });
 });

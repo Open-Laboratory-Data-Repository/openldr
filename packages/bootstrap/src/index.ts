@@ -259,6 +259,22 @@ function assertParamFormats(design: ReportDesign, values: Record<string, unknown
 function createDataDrivenReporting(deps: ReportingDataDrivenDeps) {
   const valuesOf = (rawParams: unknown) => (rawParams ?? {}) as Record<string, unknown>;
 
+  /** The run's PRINT LANGUAGE, split off the raw query before anything binds.
+   *
+   *  `lang` is RESERVED, not a report parameter. It is removed from `values` so it can never
+   *  reach a stored query as a filter, and so a design that happens to declare its own `lang`
+   *  parameter keeps binding its own value. An absent or non-string `lang` prints the authored
+   *  text, which is what every existing caller (the scheduler, the CLI, an old bookmark) does. */
+  const splitLang = (design: ReportDesign, rawParams: unknown): { lang?: string; rest: Record<string, unknown> } => {
+    const all = valuesOf(rawParams);
+    // A design that DECLARES a parameter named `lang` keeps it: its query filters on it, and
+    // silently eating that value would render the report with no filter at all. Such a design
+    // simply cannot be translated per run, which is the safe half of the collision.
+    if (design.parameters.some((prm) => prm.key === 'lang')) return { rest: all };
+    const { lang, ...rest } = all;
+    return { lang: typeof lang === 'string' && lang.trim() ? lang.trim() : undefined, rest };
+  };
+
   async function runDataDriven(id: string, rawParams: unknown): Promise<ReportResult> {
     const def = (await deps.reportDefs.get(id))!;
     const design = await deps.reportDesigns.get(def.designId);
@@ -278,7 +294,8 @@ function createDataDrivenReporting(deps: ReportingDataDrivenDeps) {
     const def = (await deps.reportDefs.get(id))!;
     const design = await deps.reportDesigns.get(def.designId);
     if (!design) throw new ReportNotFoundError(def.designId);
-    const values = { ...designDefaults(design), ...valuesOf(rawParams) };
+    const { lang, rest } = splitLang(design, rawParams);
+    const values = { ...designDefaults(design), ...rest };
     assertParamFormats(design, values);
     // ⛔ resolveDesignTables MUST see the RAW (coded) values — the design's bound queries filter
     // on the code (e.g. `dr.performer = {{param.facility}}`). If a resolved display label ever
@@ -303,7 +320,7 @@ function createDataDrivenReporting(deps: ReportingDataDrivenDeps) {
     }
     const identity = await deps.labIdentity?.tokens();
     const displayValues = await withDisplayLabels(id, def, design, values);
-    return deps.renderReportDesignPdf(design, resolved, { identity, values: displayValues });
+    return deps.renderReportDesignPdf(design, resolved, { identity, values: displayValues, lang });
   }
 
   /** Scope-panel display copy of `values`: each `paramOptions`-backed select parameter's raw code

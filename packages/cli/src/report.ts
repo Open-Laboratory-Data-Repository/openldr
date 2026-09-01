@@ -33,11 +33,15 @@ export async function runReportList(opts: { json: boolean }): Promise<number> {
   }
 }
 
-export async function runReportRun(id: string, opts: RunOpts & { format?: string; out?: string }): Promise<number> {
+export async function runReportRun(id: string, opts: RunOpts & { format?: string; out?: string; lang?: string }): Promise<number> {
   const ctx = await createAppContext(loadConfig());
   try {
     if (opts.format === 'pdf') {
-      const buf = await ctx.reporting.renderPdf(id, parseParams(opts.param));
+      // `lang` is a reserved run key, not a report parameter (see `splitLang` in
+      // @openldr/bootstrap). Written FIRST so an explicit `--param lang=...` still wins, which is
+      // the only way to feed a design that declares its own `lang` parameter.
+      const params = { ...(opts.lang ? { lang: opts.lang } : {}), ...parseParams(opts.param) };
+      const buf = await ctx.reporting.renderPdf(id, params);
       const out = opts.out ?? `${id}.pdf`;
       writeFileSync(out, buf);
       process.stdout.write(`wrote ${out} (${buf.length} bytes)\n`);

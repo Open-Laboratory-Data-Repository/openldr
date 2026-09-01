@@ -253,3 +253,22 @@ export function updateElements(tpl: ReportTemplate, ids: string[], patch: Partia
     })),
   };
 }
+
+/** Set (or clear) one printed translation on the design.
+ *
+ *  ⛔ The map is PRUNED on the way out: an empty string deletes the entry, an emptied language
+ *  deletes the language, and an emptied map deletes `i18n` itself. Without that, switching to
+ *  French, typing, and deleting again would leave `{ fr: { e1: '' } }` behind, and the renderer
+ *  would print a blank heading instead of falling back to the authored text. Deleting rather than
+ *  storing an empty string is what makes the fallback contract in `i18n.ts` hold. */
+export function setI18nText(tpl: ReportTemplate, lang: string, key: string, text: string): ReportTemplate {
+  const all = { ...(tpl.i18n ?? {}) };
+  const dict = { ...(all[lang] ?? {}) };
+  if (text === '') delete dict[key]; else dict[key] = text;
+  if (Object.keys(dict).length === 0) delete all[lang]; else all[lang] = dict;
+  if (Object.keys(all).length === 0) {
+    const { i18n: _drop, ...rest } = tpl;
+    return rest as ReportTemplate;
+  }
+  return { ...tpl, i18n: all };
+}

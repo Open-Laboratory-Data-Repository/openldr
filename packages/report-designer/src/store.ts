@@ -17,6 +17,7 @@ function toRow(d: ReportDesign) {
     // `?? null` not `?? false` — see migration 083. An unset flag must persist as NULL so it reads
     // back `undefined` and leaves the content hash unchanged.
     page_numbers: d.pageNumbers ?? null,
+    i18n: d.i18n ? JSON.stringify(d.i18n) : null,
     status: d.status ?? 'draft',
   };
 }
@@ -37,6 +38,7 @@ function toVersionRow(design: ReportDesign, version: number, publishedBy: string
     parameters: JSON.stringify(design.parameters),
     margins: design.margins ? JSON.stringify(design.margins) : null,
     page_numbers: design.pageNumbers ?? null,
+    i18n: design.i18n ? JSON.stringify(design.i18n) : null,
     published_by: publishedBy,
   };
 }
@@ -52,6 +54,7 @@ function fromRow(r: Record<string, unknown>): ReportDesign {
     parameters: parse(r.parameters, []),
     margins: r.margins == null ? undefined : parse(r.margins, undefined),
     pageNumbers: r.page_numbers == null ? undefined : Boolean(r.page_numbers),
+    i18n: r.i18n == null ? undefined : parse(r.i18n, undefined),
     status: r.status === 'published' ? 'published' : 'draft',
     createdAt: r.created_at ? String(r.created_at) : undefined,
     updatedAt: r.updated_at ? String(r.updated_at) : undefined,
@@ -90,6 +93,9 @@ function hashOf(d: ReportDesign): string {
     // This field was previously absent here: a page-numbers toggle produced an unchanged hash, so
     // the de-dupe in recordReferenceChange suppressed it and the change never reached a lab.
     pageNumbers: d.pageNumbers,
+    // Same reason `pageNumbers` is here: a translation edit that left the hash unchanged would
+    // be de-duped by recordReferenceChange and never reach a lab.
+    i18n: d.i18n,
   });
 }
 

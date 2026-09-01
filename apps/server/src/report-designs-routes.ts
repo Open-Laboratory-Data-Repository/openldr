@@ -172,7 +172,13 @@ export function registerReportDesignRoutes(
 
     // Resolved fresh per preview so a Settings ▸ Laboratory edit shows up on the next render
     // without a restart — the same contract the other app-settings-backed services have.
-    const pdf = await renderReportDesignPdf(design, resolved, { identity: await ctx.labIdentity.tokens() });
+    // `?lang=` previews the design's translations for one language. Absent (the ordinary case)
+    // it renders the authored text, so an existing preview call is unchanged.
+    const { lang } = req.query as { lang?: string };
+    const pdf = await renderReportDesignPdf(design, resolved, {
+      identity: await ctx.labIdentity.tokens(),
+      lang: typeof lang === 'string' && lang.trim() ? lang.trim() : undefined,
+    });
     reply.header('content-type', 'application/pdf');
     reply.header('content-disposition', 'inline; filename="report-design.pdf"');
     return reply.send(pdf);

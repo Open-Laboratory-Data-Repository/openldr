@@ -108,6 +108,7 @@ interface ReportDesignBody {
   parameters?: unknown[];
   margins?: unknown | null;
   pageNumbers?: boolean;
+  i18n?: Record<string, Record<string, string>>;
 }
 function reportDesignRow(id: string, body: unknown) {
   const d = body as ReportDesignBody;
@@ -122,6 +123,7 @@ function reportDesignRow(id: string, body: unknown) {
     // `?? null` not `?? false` — writing `false` for an unset flag would drift the lab's row away
     // from central's `undefined` and change its content hash (see packages/report-designer/src/store.ts hashOf).
     page_numbers: d.pageNumbers ?? null,
+    i18n: d.i18n ? JSON.stringify(d.i18n) : null,
     // A constant, not `d.status`: packages/bootstrap/src/sync-serve.ts only ever serves a PUBLISHED
     // design (a draft returns null there and arrives as a delete), so anything reaching this applier
     // is published by construction. Omitting the key was the bug — migration 084 defaults the column

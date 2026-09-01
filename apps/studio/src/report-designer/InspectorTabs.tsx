@@ -22,11 +22,15 @@ interface Props {
   /** Move an element to this ARRAY index within its page (array order is z-order). */
   onReorder(id: string, targetIndex: number): void;
   onPatchGroup(groupId: string, patch: { locked?: boolean; hidden?: boolean }): void;
+  /** The language being authored in the Properties tab, '' (the default) for the design's own text. */
+  lang?: string;
+  onLangChange?(lang: string): void;
+  onSetI18nText?(lang: string, key: string, text: string): void;
   onUngroup(groupId: string): void;
   onClose?(): void;
 }
 
-export function InspectorTabs({ template, selectedIds, onSelect, onPatchElement, onPatchPage, onPatchElements, onPatchParameters, onReorder, onPatchGroup, onUngroup, onClose }: Props): JSX.Element {
+export function InspectorTabs({ template, selectedIds, onSelect, onPatchElement, onPatchPage, onPatchElements, onPatchParameters, onReorder, onPatchGroup, onUngroup, lang, onLangChange, onSetI18nText, onClose }: Props): JSX.Element {
   const { t } = useTranslation();
   const [tab, setTab] = useState<TabKey>('properties');
   // Binding is a single-selection action; for 0/multi selection pass undefined so the tab shows its hint.
@@ -69,11 +73,12 @@ export function InspectorTabs({ template, selectedIds, onSelect, onPatchElement,
       {/* overflow-x-hidden: an inspector pane must never scroll sideways. A native date input's
           intrinsic minimum width once pushed the whole Data tab into a horizontal scrollbar. */}
       <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
-        {tab === 'properties' && <PropertiesTab template={template} selectedIds={selectedIds} onPatchElement={onPatchElement} onPatchPage={onPatchPage} onPatchElements={onPatchElements} />}
+        {tab === 'properties' && <PropertiesTab template={template} selectedIds={selectedIds} onPatchElement={onPatchElement} onPatchPage={onPatchPage} onPatchElements={onPatchElements} lang={lang} onLangChange={onLangChange} onSetI18nText={onSetI18nText} />}
         {tab === 'layers' && <LayersTab template={template} selectedIds={selectedIds} onSelect={onSelect}
           onPatchElement={onPatchElement} onReorder={onReorder}
           onPatchGroup={onPatchGroup} onUngroup={onUngroup} />}
-        {tab === 'data' && <DataTab element={selectedElement} parameters={template.parameters} onPatchElement={onPatchElement} onPatchParameters={onPatchParameters} />}
+        {tab === 'data' && <DataTab element={selectedElement} parameters={template.parameters} onPatchElement={onPatchElement} onPatchParameters={onPatchParameters}
+          lang={lang} i18nOfLang={lang ? template.i18n?.[lang] : undefined} onSetI18nText={onSetI18nText} />}
       </div>
     </div>
   );

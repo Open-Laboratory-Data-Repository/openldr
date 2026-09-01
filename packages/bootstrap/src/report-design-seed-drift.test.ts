@@ -25,6 +25,7 @@ beforeEach(async () => {
     .addColumn('pages', 'jsonb').addColumn('parameters', 'jsonb')
     .addColumn('margins', 'jsonb')
     .addColumn('page_numbers', 'boolean')
+    .addColumn('i18n', 'jsonb')
     .addColumn('status', 'text')
     .addColumn('created_at', 'text').addColumn('updated_at', 'text').execute();
 
@@ -35,7 +36,7 @@ beforeEach(async () => {
     .addColumn('design_id', 'text').addColumn('version', 'integer')
     .addColumn('name', 'text').addColumn('paper', 'text').addColumn('orientation', 'text')
     .addColumn('pages', 'jsonb').addColumn('parameters', 'jsonb')
-    .addColumn('margins', 'jsonb').addColumn('page_numbers', 'boolean')
+    .addColumn('margins', 'jsonb').addColumn('page_numbers', 'boolean').addColumn('i18n', 'jsonb')
     .addColumn('published_at', 'text').addColumn('published_by', 'text').execute();
 });
 
