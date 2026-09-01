@@ -20,7 +20,9 @@ import { createReportDesign, deleteReportDesign, downloadReportDesignPdf, fetchL
 import { addElement, allElements, newElement, paperSize, removeElements, updateElement, updateElementRects, updateElements } from './model';
 import { clampRectToPage } from './geometry';
 import { exportDesignToExcel } from './exportExcel';
-import type { ElementKind, Rect, ReportDesign, ReportTemplate } from './types';
+import { PageStrip } from './PageStrip';
+import { fetchResolvedTables, designPageCounts } from './pageCounts';
+import type { ElementKind, Rect, ReportDesign, ReportTemplate, ResolvedTable } from './types';
 
 const ZOOMS = [0.5, 0.75, 1, 1.25];
 const AUTOSAVE_MS = 1200;
@@ -92,8 +94,32 @@ export function ReportDesignerPage(): JSX.Element {
   const selectedIdRef = useRef<string | null>(null);
   // The last id loaded from / persisted to the API — guards the :id effect from re-loading over local edits.
   const loadedIdRef = useRef<string | null>(null);
+  // Page-strip snapshot: bound rows loaded on demand, and the design JSON they were computed for.
+  const [resolvedData, setResolvedData] = useState<Map<string, ResolvedTable> | null>(null);
+  const [countsLoading, setCountsLoading] = useState(false);
+  const countsJsonRef = useRef<string>('');
 
   const template = templates.find((tpl) => tpl.id === selectedId) ?? null;
+
+  // A different design means a different snapshot; drop the old one rather than show its counts.
+  useEffect(() => { setResolvedData(null); countsJsonRef.current = ''; }, [selectedId]);
+
+  const loadPages = async () => {
+    if (!template) return;
+    setCountsLoading(true);
+    const snapshotJson = stableJson(template);
+    try {
+      const resolved = await fetchResolvedTables(template);
+      // A late resolve for a design that is no longer open must not clobber the new one's strip.
+      if (selectedIdRef.current !== template.id) return;
+      countsJsonRef.current = snapshotJson;
+      setResolvedData(resolved);
+    } catch (e) {
+      fail(e);
+    } finally {
+      setCountsLoading(false);
+    }
+  };
 
   const fail = (e: unknown) => {
     const msg = e instanceof Error ? e.message : String(e);
@@ -475,9 +501,14 @@ export function ReportDesignerPage(): JSX.Element {
                 status={template?.status} onPublishRevision={() => void onPublishRevision()}
                 onToggleInspector={() => setInspectorOpen((o) => !o)}
                 onDuplicate={duplicateTemplate} onDelete={() => setConfirmDeleteOpen(true)} />
+              <PageStrip
+                counts={resolvedData ? designPageCounts(template, resolvedData) : null}
+                loading={countsLoading}
+                stale={resolvedData != null && stableJson(template) !== countsJsonRef.current}
+                onLoad={() => { void loadPages(); }} />
               <PageCanvas template={template} zoom={zoom} selectedIds={selectedIds} onSelect={setSelectedIds} onCommitRects={commitRects}
                 editingId={editingId} onEditStart={startEdit} onEditChange={editChange} onEditEnd={endEdit}
-                identity={labIdentity} />
+                identity={labIdentity} resolved={resolvedData} />
             </div>
             {/* The inspector is a right-side overlay drawer below lg (toggled from the header and
                 auto-opened on selection) and a static column at lg+ where there's room for all three

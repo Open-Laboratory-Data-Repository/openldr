@@ -2,7 +2,7 @@ import type { BoundColumn, CellEmphasis, CellStatus, ColumnKind, DesignElement, 
 import { CELL_STATUSES } from '../schema';
 import { encodeCode128, encodeQr, QR_QUIET_ZONE } from '../encode';
 import { toPt, PX_TO_PT } from './units';
-import type { ResolvedTable } from './index';
+import type { ResolvedTable } from './pagination';
 import { formatDisplayDate, formatDisplayDateOf } from './format-date';
 import {
   CELL_SIZE, CELL_GAP, GROUP_GAP, CELL_ROW_H, CELL_COL_GAP, CELL_HEAD_H, CELL_LABEL_W,
@@ -10,7 +10,12 @@ import {
   stripWidth as stripWidthOf,
 } from './cellgrid';
 
-type Doc = PDFKit.PDFDocument;
+// Type-only, so this stays runtime-pdfkit-free (the pure barrel re-exports this module's math into
+// the browser). The AMBIENT `PDFKit.PDFDocument` spelling broke the studio's tsc, which compiles
+// this file through /pure without @types/pdfkit in its own program; an explicit type import
+// resolves from THIS package instead.
+import type PDFDocument from 'pdfkit';
+type Doc = typeof PDFDocument;
 type Box = { x: number; y: number; w: number; h: number };
 
 const TEXT_COLOR = '#262626';
@@ -89,7 +94,7 @@ export const HEAD_LINE_H = 8;
  *  `HEAD_LINE_H` to the second, and one 8pt line (9.25pt of advance) below it. */
 export const STACKED_HEAD_H = ROW_H + HEAD_LINE_H; // 24pt
 /** Body rows that fit in a box of height `hPt` (pt), reserving `headH` for the header band. */
-const maxRowsFor = (hPt: number, headH: number = ROW_H): number => Math.floor((hPt - headH) / ROW_H);
+export const maxRowsFor = (hPt: number, headH: number = ROW_H): number => Math.floor((hPt - headH) / ROW_H);
 
 /** Vertical padding above the text inside a row; also the space left below it. */
 const CELL_PAD = 4;

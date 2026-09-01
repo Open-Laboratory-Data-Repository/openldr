@@ -42,6 +42,7 @@ The template saves and appears in the left explorer. Preview renders a PDF using
 
 ## Advanced web usage
 
+- The strip above the canvas shows how many physical pages the design prints as. Choose **Load pages** to run the bound queries and get a real count — the count is a snapshot, and the strip says when the design has been edited past it. An overflowing table also gets a dashed line on the canvas where its first page ends.
 - The **Flow** section in the Properties tab controls how blocks behave when a table or grid runs onto extra pages: **Place below** pins an element under another and moves it up when the block above finishes early, **Gap after** sets the space between them, **First page only** stops a summary band from repeating on continuation pages, **Show with** ties a heading to its table so the two appear and disappear together, and **Fill to bottom of box** lets a cell grid grow to its declared bottom edge.
 - Turn on **Page numbers** in the page settings to add a footer to every page.
 - A template can span several pages — add and arrange elements independently on each one.

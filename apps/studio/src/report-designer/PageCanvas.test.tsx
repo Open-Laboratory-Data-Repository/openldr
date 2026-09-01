@@ -45,6 +45,31 @@ describe('PageCanvas', () => {
     expect(tag).toHaveTextContent('Resistance table');
   });
 
+  it('draws a dashed page-break line where an overflowing bound table ends its first page', () => {
+    const el: DesignElement = {
+      id: 'big', kind: 'table', name: 'Big', rect: { x: 48, y: 48, w: 400, h: 120 },
+      dataSource: { kind: 'custom-query', queryId: 'q' }, boundColumns: [{ key: 'a', label: 'A' }],
+    };
+    const tpl: ReportTemplate = { id: 't', name: 't', paper: 'A4', orientation: 'portrait', status: 'draft', parameters: [], pages: [{ id: 'p1', elements: [el] }] };
+    const resolved = new Map([['big', { columns: [{ key: 'a', label: 'A' }], rows: Array.from({ length: 40 }, (_, i) => ({ a: String(i) })) }]]);
+    render(<PageCanvas template={tpl} zoom={1} selectedIds={[]} onSelect={vi.fn()} onCommitRects={vi.fn()} resolved={resolved} />);
+    const line = screen.getByTestId('break-big');
+    expect(line).toHaveTextContent('Page 2 starts here');
+  });
+
+  it('draws no break line without loaded data or when the table fits', () => {
+    const el: DesignElement = {
+      id: 'big', kind: 'table', name: 'Big', rect: { x: 48, y: 48, w: 400, h: 400 },
+      dataSource: { kind: 'custom-query', queryId: 'q' }, boundColumns: [{ key: 'a', label: 'A' }],
+    };
+    const tpl: ReportTemplate = { id: 't', name: 't', paper: 'A4', orientation: 'portrait', status: 'draft', parameters: [], pages: [{ id: 'p1', elements: [el] }] };
+    const { rerender } = render(<PageCanvas template={tpl} zoom={1} selectedIds={[]} onSelect={vi.fn()} onCommitRects={vi.fn()} />);
+    expect(screen.queryByTestId('break-big')).toBeNull();
+    const fits = new Map([['big', { columns: [{ key: 'a', label: 'A' }], rows: [{ a: '1' }] }]]);
+    rerender(<PageCanvas template={tpl} zoom={1} selectedIds={[]} onSelect={vi.fn()} onCommitRects={vi.fn()} resolved={fits} />);
+    expect(screen.queryByTestId('break-big')).toBeNull();
+  });
+
   it('shows no tag when nothing is selected and none per element in a multi-selection', () => {
     const { rerender } = render(
       <PageCanvas template={MOCK_TEMPLATES[0]} zoom={0.75} selectedIds={[]} onSelect={vi.fn()} onCommitRects={vi.fn()} />,
