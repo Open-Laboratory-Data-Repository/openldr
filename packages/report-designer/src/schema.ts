@@ -84,6 +84,10 @@ export const BoundColumnSchema = z.object({
   emphasis: z.enum(['fill', 'text', 'chip']).optional(),
   /** Drives alignment/width policy only. `range` and `units` never right-align. */
   kind: z.enum(['value', 'range', 'units', 'flag', 'label']).optional(),
+  /** Draw this column's value as a miniature trend line instead of text. The query supplies a
+   *  delimited numeric string (`4,6,9,7`); anything that is not two or more clean numbers prints
+   *  as text instead, so a query that changes shape degrades to a readable cell. */
+  spark: z.boolean().optional(),
   /** Fixed decimal places for values that parse as numbers (`65` and `23.7` in one column read as
    *  a mistake). Renderer-side because number-to-string SQL is where the three dialects stop
    *  agreeing (the transmission seed's own lesson). Non-numbers pass through untouched. */

@@ -9,8 +9,9 @@ import {
   cellFill, groupBreaks, splitCellGridRows, cellGridLift, cellGridRowSchedule, cellGridChunkStart,
   stripWidth as stripWidthOf,
 } from './cellgrid';
-import { drawChart } from './chart';
+import { drawChart, CHART_COLORS } from './chart';
 import { letterheadElements } from './letterhead';
+import { sparkValues, sparkPoints } from './spark';
 
 // Type-only, so this stays runtime-pdfkit-free (the pure barrel re-exports this module's math into
 // the browser). The AMBIENT `PDFKit.PDFDocument` spelling broke the studio's tsc, which compiles
@@ -81,6 +82,9 @@ const CELL_CHIP_TEXT = '#ffffff';
  * ⚠ The inset must stay strictly inside `ROW_H`: pagination (`maxRowsFor`, `elementChunkCount`) and
  * the fixed `y = r.y + headH + ri * ROW_H` advance all assume a chip can never affect row pitch.
  */
+/** A spark's vertical inset inside its row, pt. Leaves the line clear of the zebra edges. */
+const SPARK_INSET_Y = 3;
+const SPARK_LINE_W = 0.75;
 const CHIP_INSET_X = 1;
 const CHIP_INSET_Y = 1.5;
 export const ROW_H = 16; // pt
@@ -258,7 +262,10 @@ export function isNumericColumn(rows: string[][], ci: number): boolean {
  *  — "3.5" as a unit, or a range column holding a lone bound — and ranging it right would align it
  *  against the values it qualifies. `kind` therefore overrides the numeric test, and only ever
  *  toward the left; a column with no `kind` behaves exactly as it did before this feature. */
-export function isRightAligned(rows: string[][], ci: number, kind: ColumnKind | undefined): boolean {
+export function isRightAligned(rows: string[][], ci: number, kind: ColumnKind | undefined, spark = false): boolean {
+  // A spark column holds a delimited series, not a figure. Right-aligning it (its cells parse as
+  // "numeric" often enough) would drag the line to the cell's right edge.
+  if (spark) return false;
   if (kind === 'units' || kind === 'range') return false;
   return isNumericColumn(rows, ci);
 }
@@ -1210,7 +1217,8 @@ function drawTable(doc: Doc, el: DesignElement, r: Box, resolved: ResolvedTable 
   const cols = el.boundColumns ?? [];
   const emphasis = cols.map((c) => c.emphasis ?? 'text');
   const kinds = cols.map((c) => c.kind);
-  drawGrid(doc, r, headers, allRows, chunk, statuses, emphasis, kinds, headerBandHeight(el), Boolean(el.totals));
+  drawGrid(doc, r, headers, allRows, chunk, statuses, emphasis, kinds, headerBandHeight(el), Boolean(el.totals),
+    cols.map((c) => Boolean(c.spark)));
 }
 
 /**
@@ -1350,6 +1358,8 @@ function drawGrid(
   // `bodyRowsFor` already APPENDED the totals row; this only says the absolute-last row gets the
   // bold face and its closing rule. It lands on whatever chunk the slice puts it on.
   totals = false,
+  /** Per column: draw the value as a sparkline rather than text. */
+  sparks: boolean[] = [],
 ): void {
   const n = Math.max(headers.length, 1);
   // ⛔ Derived from the band this table actually reserves, never a constant. `headerBandHeight`
@@ -1368,7 +1378,7 @@ function drawGrid(
     return doc.widthOfString(text);
   }, maxHeadLines);
   const xOf = (ci: number): number => r.x + widths.slice(0, ci).reduce((a, b) => a + b, 0);
-  const numeric = headers.map((_, ci) => isRightAligned(allRows, ci, kinds[ci]));
+  const numeric = headers.map((_, ci) => isRightAligned(allRows, ci, kinds[ci], sparks[ci]));
 
   doc.save().rect(r.x, r.y, r.w, r.h).clip();
 
@@ -1432,9 +1442,24 @@ function drawGrid(
       } else {
         setFill(st ? STATUS_TEXT_COLOR[st] : BODY_TEXT);
       }
-      doc.text(cell, xOf(ci) + CELL_PAD, y + CELL_PAD, {
-        ...cellTextOptions(widths[ci] - CELL_PAD * 2), align: numeric[ci] ? 'right' : 'left',
-      });
+      // A spark column draws its shape; anything unparseable falls through to its text.
+      const series = sparks[ci] ? sparkValues(cell) : null;
+      if (series) {
+        const pts = sparkPoints({
+          x: xOf(ci) + CELL_PAD, y: y + SPARK_INSET_Y,
+          w: Math.max(1, widths[ci] - CELL_PAD * 2), h: Math.max(1, ROW_H - SPARK_INSET_Y * 2),
+        }, series);
+        doc.save().lineWidth(SPARK_LINE_W).strokeColor(CHART_COLORS[0]);
+        pts.forEach((pt, i) => (i === 0 ? doc.moveTo(pt.x, pt.y) : doc.lineTo(pt.x, pt.y)));
+        doc.stroke().restore();
+        // `rect(...).fill()` and stroking both leave the doc's colour changed; re-assert on the
+        // next cell rather than trusting `lastFill`, which tracks fills only.
+        lastFill = undefined;
+      } else {
+        doc.text(cell, xOf(ci) + CELL_PAD, y + CELL_PAD, {
+          ...cellTextOptions(widths[ci] - CELL_PAD * 2), align: numeric[ci] ? 'right' : 'left',
+        });
+      }
     });
   });
 
