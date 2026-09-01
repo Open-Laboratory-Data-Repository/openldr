@@ -227,16 +227,24 @@ export function ReportDesignerPage(): JSX.Element {
   const redo = () => applyHistory(history.redo());
 
   const commitRects = (rects: Map<string, Rect>) => { if (template) pushTemplate(updateElementRects(template, rects)); };
+  // Locked elements refuse mutation but not selection, so both delete and nudge act on the
+  // unlocked subset of the selection rather than refusing the whole gesture.
+  const unlockedSelected = () =>
+    template ? allElements(template).filter((el) => selectedIds.includes(el.id) && !el.locked).map((el) => el.id) : [];
   const deleteSelected = () => {
-    if (!template || selectedIds.length === 0) return;
-    pushTemplate(removeElements(template, new Set(selectedIds)));
-    setSelectedIds([]);
+    if (!template) return;
+    const ids = unlockedSelected();
+    if (ids.length === 0) return;
+    pushTemplate(removeElements(template, new Set(ids)));
+    setSelectedIds(selectedIds.filter((id) => !ids.includes(id)));
   };
   const nudge = (dx: number, dy: number) => {
-    if (!template || selectedIds.length === 0) return;
+    if (!template) return;
+    const ids = unlockedSelected();
+    if (ids.length === 0) return;
     const size = paperSize(template.paper, template.orientation);
     const rects = new Map<string, Rect>();
-    for (const el of allElements(template)) if (selectedIds.includes(el.id)) rects.set(el.id, clampRectToPage({ ...el.rect, x: el.rect.x + dx, y: el.rect.y + dy }, size));
+    for (const el of allElements(template)) if (ids.includes(el.id)) rects.set(el.id, clampRectToPage({ ...el.rect, x: el.rect.x + dx, y: el.rect.y + dy }, size));
     updateTemplate(updateElementRects(template, rects)); // coalesced
   };
 

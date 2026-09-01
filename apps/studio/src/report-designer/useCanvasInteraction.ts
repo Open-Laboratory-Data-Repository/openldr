@@ -126,8 +126,11 @@ export function useCanvasInteraction(args: Args): CanvasInteraction {
     }
     const ids = selectedIds.includes(id) ? selectedIds : [id];
     if (!selectedIds.includes(id)) onSelect([id]);
+    // Locked elements stay selectable (that is how you reach the unlock control) but never move:
+    // they are simply left out of the drag base, so a mixed drag moves the unlocked members only.
     const base = new Map<string, Rect>();
-    for (const el of page.elements) if (ids.includes(el.id)) base.set(el.id, el.rect);
+    for (const el of page.elements) if (ids.includes(el.id) && !el.locked) base.set(el.id, el.rect);
+    if (base.size === 0) return; // everything under the pointer is locked — selection only
     begin({ mode: 'move', sx: e.clientX, sy: e.clientY, base });
   };
 
@@ -135,7 +138,7 @@ export function useCanvasInteraction(args: Args): CanvasInteraction {
     if (e.button !== 0) return;
     e.stopPropagation();
     const el = latest.current.page.elements.find((x) => x.id === id);
-    if (!el) return;
+    if (!el || el.locked) return;
     begin({ mode: 'resize', sx: e.clientX, sy: e.clientY, id, handle, base: el.rect });
   };
 
@@ -148,7 +151,7 @@ export function useCanvasInteraction(args: Args): CanvasInteraction {
     if (e.button !== 0) return;
     e.stopPropagation();
     const { page, selectedIds } = latest.current;
-    const sel = page.elements.filter((el) => selectedIds.includes(el.id));
+    const sel = page.elements.filter((el) => selectedIds.includes(el.id) && !el.locked);
     if (sel.length < 2) return;
     const b = new Map(sel.map((el) => [el.id, el.rect] as const));
     const box = boundingBox([...b.values()]);

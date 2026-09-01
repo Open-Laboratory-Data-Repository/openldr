@@ -45,6 +45,43 @@ describe('PageCanvas', () => {
     expect(tag).toHaveTextContent('Resistance table');
   });
 
+  it('renders no box for a hidden element', () => {
+    const el: DesignElement = { id: 'gh', kind: 'text', name: 'Ghost', rect: { x: 0, y: 0, w: 100, h: 20 }, hidden: true };
+    const tpl: ReportTemplate = { id: 't', name: 't', paper: 'A4', orientation: 'portrait', status: 'draft', parameters: [], pages: [{ id: 'p1', elements: [el] }] };
+    render(<PageCanvas template={tpl} zoom={1} selectedIds={[]} onSelect={vi.fn()} onCommitRects={vi.fn()} />);
+    expect(screen.queryByTestId('el-gh')).toBeNull();
+  });
+
+  it('a locked element selects but shows no handles and refuses a drag', () => {
+    const el: DesignElement = { id: 'lk', kind: 'text', name: 'Locked', rect: { x: 10, y: 10, w: 100, h: 20 }, locked: true };
+    const tpl: ReportTemplate = { id: 't', name: 't', paper: 'A4', orientation: 'portrait', status: 'draft', parameters: [], pages: [{ id: 'p1', elements: [el] }] };
+    const onSelect = vi.fn();
+    const onCommitRects = vi.fn();
+    const { rerender } = render(<PageCanvas template={tpl} zoom={1} selectedIds={[]} onSelect={onSelect} onCommitRects={onCommitRects} />);
+    pd(screen.getByTestId('el-lk'), 20, 20);
+    expect(onSelect).toHaveBeenCalledWith(['lk']);
+    fireEvent.pointerMove(window, { clientX: 60, clientY: 60 });
+    fireEvent.pointerUp(window, { clientX: 60, clientY: 60 });
+    expect(onCommitRects).not.toHaveBeenCalled();
+    rerender(<PageCanvas template={tpl} zoom={1} selectedIds={['lk']} onSelect={onSelect} onCommitRects={onCommitRects} />);
+    expect(screen.getByTestId('el-lk').querySelector('[data-testid="handle-se"]')).toBeNull();
+  });
+
+  it('a mixed drag moves only the unlocked members', () => {
+    const locked: DesignElement = { id: 'lk', kind: 'text', name: 'L', rect: { x: 10, y: 10, w: 50, h: 20 }, locked: true };
+    const free: DesignElement = { id: 'fr', kind: 'text', name: 'F', rect: { x: 100, y: 10, w: 50, h: 20 } };
+    const tpl: ReportTemplate = { id: 't', name: 't', paper: 'A4', orientation: 'portrait', status: 'draft', parameters: [], pages: [{ id: 'p1', elements: [locked, free] }] };
+    const onCommitRects = vi.fn();
+    render(<PageCanvas template={tpl} zoom={1} selectedIds={['lk', 'fr']} onSelect={vi.fn()} onCommitRects={onCommitRects} />);
+    pd(screen.getByTestId('el-fr'), 110, 20);
+    fireEvent.pointerMove(window, { clientX: 140, clientY: 20 });
+    fireEvent.pointerUp(window, { clientX: 140, clientY: 20 });
+    expect(onCommitRects).toHaveBeenCalledTimes(1);
+    const rects = onCommitRects.mock.calls[0][0] as Map<string, unknown>;
+    expect(rects.has('fr')).toBe(true);
+    expect(rects.has('lk')).toBe(false);
+  });
+
   it('draws a dashed page-break line where an overflowing bound table ends its first page', () => {
     const el: DesignElement = {
       id: 'big', kind: 'table', name: 'Big', rect: { x: 48, y: 48, w: 400, h: 120 },
