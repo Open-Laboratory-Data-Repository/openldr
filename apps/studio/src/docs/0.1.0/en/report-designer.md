@@ -46,6 +46,8 @@ The template saves and appears in the left explorer. Preview renders a PDF using
 - The **Flow** section in the Properties tab controls how blocks behave when a table or grid runs onto extra pages: **Place below** pins an element under another and moves it up when the block above finishes early, **Gap after** sets the space between them, **First page only** stops a summary band from repeating on continuation pages, **Show with** ties a heading to its table so the two appear and disappear together, and **Fill to bottom of box** lets a cell grid grow to its declared bottom edge.
 - Turn on **Page numbers** in the page settings to add a footer to every page.
 - A template can span several pages — add and arrange elements independently on each one.
+- In the **Layers** tab, the eye hides an element (it leaves the canvas and the PDF; the block below a hidden element moves up), the lock keeps it selectable but immovable, and rows reorder by drag or the raise and lower buttons.
+- **Ctrl+D** duplicates the selected elements, **Ctrl+C** and **Ctrl+V** copy and paste them. Clones arrive slightly offset, selected, and never locked.
 - Use **⋯ → Duplicate** to branch a new template from an existing layout, and **⋯ → Delete** to remove one you no longer need.
 - From [Reports](/docs/reports), managers can jump straight back into a published report's template with **Edit template**.
 - Use **Undo/Redo** and the zoom controls while arranging elements precisely.

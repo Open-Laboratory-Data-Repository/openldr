@@ -17,12 +17,12 @@ import { InspectorTabs } from './InspectorTabs';
 import { PreviewReportDesignDialog } from './PreviewReportDesignDialog';
 import { NewReportSheet } from '../reports/NewReportSheet';
 import { createReportDesign, deleteReportDesign, downloadReportDesignPdf, fetchLabIdentity, getReportDesign, listReportDesigns, publishReportDesign, updateReportDesign } from '../api';
-import { addElement, allElements, newElement, paperSize, removeElements, updateElement, updateElementRects, updateElements } from './model';
+import { addElement, allElements, duplicateElements, moveElementTo, newElement, newElementId, paperSize, removeElements, updateElement, updateElementRects, updateElements } from './model';
 import { clampRectToPage } from './geometry';
 import { exportDesignToExcel } from './exportExcel';
 import { PageStrip } from './PageStrip';
 import { fetchResolvedTables, designPageCounts } from './pageCounts';
-import type { ElementKind, Rect, ReportDesign, ReportTemplate, ResolvedTable } from './types';
+import type { DesignElement, ElementKind, Rect, ReportDesign, ReportTemplate, ResolvedTable } from './types';
 
 const ZOOMS = [0.5, 0.75, 1, 1.25];
 const AUTOSAVE_MS = 1200;
@@ -94,6 +94,9 @@ export function ReportDesignerPage(): JSX.Element {
   const selectedIdRef = useRef<string | null>(null);
   // The last id loaded from / persisted to the API — guards the :id effect from re-loading over local edits.
   const loadedIdRef = useRef<string | null>(null);
+  // In-app element clipboard for Ctrl+C / Ctrl+V. Deliberately NOT the OS clipboard: elements are
+  // design JSON, and putting them there would clobber whatever the operator actually copied.
+  const clipboardRef = useRef<DesignElement[]>([]);
   // Page-strip snapshot: bound rows loaded on demand, and the design JSON they were computed for.
   const [resolvedData, setResolvedData] = useState<Map<string, ResolvedTable> | null>(null);
   const [countsLoading, setCountsLoading] = useState(false);
@@ -227,17 +230,60 @@ export function ReportDesignerPage(): JSX.Element {
   const redo = () => applyHistory(history.redo());
 
   const commitRects = (rects: Map<string, Rect>) => { if (template) pushTemplate(updateElementRects(template, rects)); };
+  // Locked elements refuse mutation but not selection, so both delete and nudge act on the
+  // unlocked subset of the selection rather than refusing the whole gesture.
+  const unlockedSelected = () =>
+    template ? allElements(template).filter((el) => selectedIds.includes(el.id) && !el.locked).map((el) => el.id) : [];
   const deleteSelected = () => {
-    if (!template || selectedIds.length === 0) return;
-    pushTemplate(removeElements(template, new Set(selectedIds)));
-    setSelectedIds([]);
+    if (!template) return;
+    const ids = unlockedSelected();
+    if (ids.length === 0) return;
+    pushTemplate(removeElements(template, new Set(ids)));
+    setSelectedIds(selectedIds.filter((id) => !ids.includes(id)));
   };
   const nudge = (dx: number, dy: number) => {
-    if (!template || selectedIds.length === 0) return;
+    if (!template) return;
+    const ids = unlockedSelected();
+    if (ids.length === 0) return;
     const size = paperSize(template.paper, template.orientation);
     const rects = new Map<string, Rect>();
-    for (const el of allElements(template)) if (selectedIds.includes(el.id)) rects.set(el.id, clampRectToPage({ ...el.rect, x: el.rect.x + dx, y: el.rect.y + dy }, size));
+    for (const el of allElements(template)) if (ids.includes(el.id)) rects.set(el.id, clampRectToPage({ ...el.rect, x: el.rect.x + dx, y: el.rect.y + dy }, size));
     updateTemplate(updateElementRects(template, rects)); // coalesced
+  };
+
+  const duplicateSelected = () => {
+    if (!template || selectedIds.length === 0) return;
+    const { template: next, newIds } = duplicateElements(template, selectedIds);
+    if (newIds.length === 0) return;
+    pushTemplate(next); // one discrete undo step
+    setSelectedIds(newIds);
+  };
+  const copySelected = () => {
+    if (!template || selectedIds.length === 0) return;
+    clipboardRef.current = allElements(template)
+      .filter((el) => selectedIds.includes(el.id))
+      .map((el) => JSON.parse(JSON.stringify(el)) as DesignElement);
+  };
+  const pasteClipboard = () => {
+    if (!template || clipboardRef.current.length === 0) return;
+    // Paste re-materialises the copies onto page 0 of the OPEN design with fresh ids and the same
+    // clamped offset a duplicate gets. Cross-page paste waits for active-page tracking (a known
+    // deferred gap; Insert has the same limit). `locked` is stripped the same way duplicate does it.
+    const size = paperSize(template.paper, template.orientation);
+    const clones = clipboardRef.current.map((el) => {
+      const { locked: _drop, ...rest } = el;
+      return {
+        ...rest, id: newElementId(),
+        rect: {
+          ...el.rect,
+          x: Math.max(0, Math.min(el.rect.x + 12, size.w - el.rect.w)),
+          y: Math.max(0, Math.min(el.rect.y + 12, size.h - el.rect.h)),
+        },
+      };
+    });
+    const next = { ...template, pages: template.pages.map((p, i) => (i === 0 ? { ...p, elements: [...p.elements, ...clones] } : p)) };
+    pushTemplate(next);
+    setSelectedIds(clones.map((c) => c.id));
   };
 
   const patchElement = (id: string, patch: Partial<import('./types').DesignElement>, opts?: { discrete?: boolean }) => {
@@ -432,6 +478,9 @@ export function ReportDesignerPage(): JSX.Element {
       if (mod && e.key.toLowerCase() === 'z') { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
       if (mod && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); return; }
       if (mod && e.key.toLowerCase() === 'a') { e.preventDefault(); if (template) setSelectedIds(allElements(template).map((x) => x.id)); return; }
+      if (mod && e.key.toLowerCase() === 'd') { e.preventDefault(); duplicateSelected(); return; }
+      if (mod && e.key.toLowerCase() === 'c') { copySelected(); return; } // no preventDefault: an OS copy of page text stays possible
+      if (mod && e.key.toLowerCase() === 'v') { pasteClipboard(); return; }
       if (e.key === 'Escape') { setSelectedIds([]); return; }
       if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); deleteSelected(); return; }
       const step = e.shiftKey ? 10 : 1;
@@ -528,6 +577,7 @@ export function ReportDesignerPage(): JSX.Element {
             >
               <InspectorTabs template={template} selectedIds={selectedIds} onSelect={setSelectedIds}
                 onPatchElement={patchElement} onPatchPage={patchPage} onPatchElements={patchElements} onPatchParameters={patchParameters}
+                onReorder={(id, targetIndex) => pushTemplate(moveElementTo(template, id, targetIndex))}
                 onClose={() => setInspectorOpen(false)} />
             </div>
           </>

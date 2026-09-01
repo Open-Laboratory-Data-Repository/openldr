@@ -102,11 +102,14 @@ function PageSurface({ page, zoom, pageSize, margins, selectedIds, onSelect, onC
     <div ref={ref} data-testid={`page-surface-${page.id}`} onPointerDown={ix.onSurfacePointerDown}
       className="relative bg-white shadow-md ring-1 ring-border" style={{ width: pageSize.w * zoom, height: pageSize.h * zoom }}>
       {page.elements.map((el) => {
+        // Hidden means absent, on canvas exactly as in the PDF. Layers is where it comes back.
+        if (el.hidden) return null;
         const rect = ix.preview?.get(el.id) ?? el.rect;
         return (
           <ElementBox key={el.id} el={el} rect={rect} zoom={zoom}
             selected={selectedIds.includes(el.id)}
-            showHandles={selectedIds.length === 1 && selectedIds[0] === el.id}
+            showTag={selectedIds.length === 1 && selectedIds[0] === el.id}
+            showHandles={selectedIds.length === 1 && selectedIds[0] === el.id && !el.locked}
             editing={editingId === el.id}
             onPointerDown={(e) => ix.onElementPointerDown(e, el.id)}
             onHandlePointerDown={(e, h) => ix.onHandlePointerDown(e, el.id, h)}
@@ -159,8 +162,8 @@ const HANDLE_CLASS: Record<Handle, string> = {
   sw: '-left-1 -bottom-1 cursor-nesw-resize', w: '-left-1 top-1/2 -translate-y-1/2 cursor-ew-resize',
 };
 
-function ElementBox({ el, rect, zoom, selected, showHandles, editing, onPointerDown, onHandlePointerDown, onDoubleClick, onEditChange, onEditEnd, identity }: {
-  el: DesignElement; rect: Rect; zoom: number; selected: boolean; showHandles: boolean; editing: boolean;
+function ElementBox({ el, rect, zoom, selected, showTag, showHandles, editing, onPointerDown, onHandlePointerDown, onDoubleClick, onEditChange, onEditEnd, identity }: {
+  el: DesignElement; rect: Rect; zoom: number; selected: boolean; showTag: boolean; showHandles: boolean; editing: boolean;
   onPointerDown(e: ReactPointerEvent): void; onHandlePointerDown(e: ReactPointerEvent, h: Handle): void;
   onDoubleClick(): void; onEditChange(text: string): void; onEditEnd(): void;
   identity?: Record<string, string>;
@@ -186,9 +189,11 @@ function ElementBox({ el, rect, zoom, selected, showHandles, editing, onPointerD
       ) : (
         <ElementContent el={el} zoom={zoom} identity={identity} />
       )}
-      {showHandles && !editing && (
+      {showTag && !editing && (
         // The name tag rides the selection, not the hover: hover tags flicker while dragging and
-        // hide the guide lines. pointer-events-none so it never steals the drag from the box under it.
+        // hide the guide lines. pointer-events-none so it never steals the drag from the box under
+        // it. Locked elements keep the tag even though their handles are gone — the name is how you
+        // know what you selected before you go unlock it.
         <span data-testid={`el-tag-${el.id}`} aria-hidden
           className="pointer-events-none absolute -top-7 left-0 max-w-full truncate rounded-t rounded-br bg-primary px-2 py-0.5 text-[10px] font-semibold leading-4 text-primary-foreground whitespace-nowrap">
           {el.name}

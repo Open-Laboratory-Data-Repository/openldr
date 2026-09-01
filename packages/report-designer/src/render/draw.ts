@@ -444,6 +444,8 @@ export function headerTexts(labels: string[], headerRow: string[] | undefined): 
 export function drawsOnChunk(
   el: DesignElement, page: DesignPage, resolved: Map<string, ResolvedTable>, chunk: number,
 ): boolean {
+  // Hidden means ABSENT, on every chunk, before any other rule gets a say.
+  if (el.hidden) return false;
   // ⛔ FIRST, before the table/cellgrid short-circuit below. A bound element answers that question
   // from its own chunk count and would never reach this line, and a bound calendar is exactly the
   // element `showOn` exists for. See its doc comment in `schema.ts`.
@@ -915,6 +917,8 @@ function elementHeight(el: DesignElement, chunk: number, flow?: FlowContext): nu
 export function elementChunkCount(
   el: DesignElement, resolved: ResolvedTable | undefined, flow?: FlowContext,
 ): number {
+  // A hidden element never extends the page run, however many rows its query returns.
+  if (el.hidden) return 1;
   if (el.kind === 'cellgrid') return cellGridScheduleFor(el, resolved, flow).length;
   if (el.kind !== 'table') return 1;
   const maxRows = maxRowsFor(toPt(el.rect).h, headerBandHeight(el));
@@ -963,6 +967,9 @@ export function drawnHeight(
   // `showWithTable` target, whose visibility depends on the follower whose height is being measured.
   // See `showOn` in `schema.ts`.
   if (el.showOn === 'first-chunk' && chunk > 0) return 0;
+  // Hidden draws nothing anywhere, so a follower takes its place — same shape as the showOn rule
+  // above, and safe here for the same reason: hidden consults no other element's visibility.
+  if (el.hidden) return 0;
   // The box the element actually paints into: its declared height, or the filled one when it
   // declares `fillTo`. The error placeholder below fills that box, whichever it is.
   const boxH = elementHeight(el, chunk, flow);
