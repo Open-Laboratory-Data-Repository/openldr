@@ -102,7 +102,7 @@ describe('DataTab table binding', () => {
     });
     await loadColumns();
     fireEvent.click(screen.getByLabelText('Status column for Organism'));
-    fireEvent.click(await screen.findByText('None'));
+    fireEvent.click(await screen.findByRole('option', { name: 'None' }));
     expect(onPatchElement).toHaveBeenLastCalledWith(
       't',
       { boundColumns: [{ key: 'org', label: 'Organism' }] },
@@ -419,5 +419,27 @@ describe('totals editor', () => {
     expect(withTotals.onPatchElement).toHaveBeenCalledWith('t', { totals: { label: 'Total', columns: ['count'] } }, { discrete: true });
     fireEvent.change(screen.getAllByLabelText('Totals label')[1], { target: { value: '' } });
     expect(withTotals.onPatchElement).toHaveBeenLastCalledWith('t', { totals: undefined });
+  });
+});
+
+describe('rule editor', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it('picking an op creates a default rule, and None removes it (discrete)', () => {
+    const { onPatchElement } = setup({
+      dataSource: { kind: 'custom-query', queryId: 'cq_1' },
+      boundColumns: [{ key: 'silent', label: 'Silent' }],
+    });
+    fireEvent.click(screen.getByLabelText('Rule for Silent'));
+    fireEvent.click(screen.getByRole('option', { name: '≥' }));
+    expect(onPatchElement).toHaveBeenCalledWith('t',
+      { boundColumns: [{ key: 'silent', label: 'Silent', rule: { op: 'gte', value: '', status: 'critical' } }] }, { discrete: true });
+    const withRule = setup({
+      dataSource: { kind: 'custom-query', queryId: 'cq_1' },
+      boundColumns: [{ key: 'silent', label: 'Silent', rule: { op: 'gte', value: '10', status: 'critical' } }],
+    });
+    fireEvent.change(screen.getAllByLabelText('Rule value for Silent')[0], { target: { value: '12' } });
+    expect(withRule.onPatchElement).toHaveBeenCalledWith('t',
+      { boundColumns: [{ key: 'silent', label: 'Silent', rule: { op: 'gte', value: '12', status: 'critical' } }] }, { discrete: true });
   });
 });

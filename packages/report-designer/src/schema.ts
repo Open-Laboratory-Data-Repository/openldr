@@ -60,11 +60,26 @@ export type CellStatus = (typeof CELL_STATUSES)[number];
 export type CellEmphasis = 'fill' | 'text' | 'chip';
 export type ColumnKind = 'value' | 'range' | 'units' | 'flag' | 'label';
 
+/** A conditional-formatting rule an author writes WITHOUT SQL: "when this column's value passes
+ *  `op value`, mark it `status`". Compiled into the same presentational status tokens `statusKey`
+ *  delivers, at projection — the drawing paths never change, and one mechanism serves both
+ *  authoring routes. `statusKey` WINS when both exist: data that already carries judgment is not
+ *  second-guessed by a display rule. Numeric compare when both sides parse as numbers, else string
+ *  equality. The threshold is authored per design, never hardcoded in source (AGENTS.md §8). */
+export const ColumnRuleSchema = z.object({
+  op: z.enum(['gte', 'lte', 'eq', 'neq']),
+  value: z.string(),
+  status: z.enum(CELL_STATUSES),
+});
+export type ColumnRule = z.infer<typeof ColumnRuleSchema>;
+
 export const BoundColumnSchema = z.object({
   key: z.string(),
   label: z.string(),
   /** Name of ANOTHER column in the same query result carrying a CellStatus token. */
   statusKey: z.string().optional(),
+  /** See ColumnRuleSchema. One rule per column; more thresholds wait for a symptom. */
+  rule: ColumnRuleSchema.optional(),
   /** How status is shown: a filled chip, or just coloured text. Defaults to 'text'. */
   emphasis: z.enum(['fill', 'text', 'chip']).optional(),
   /** Drives alignment/width policy only. `range` and `units` never right-align. */
@@ -105,6 +120,8 @@ export const TrailingColumnSchema = z.object({
   /** Points. Declared so the element's total width is knowable without a Doc. */
   width: z.number().positive(),
   statusKey: z.string().optional(),
+  /** See ColumnRuleSchema on BoundColumnSchema — same contract, statusKey wins. */
+  rule: ColumnRuleSchema.optional(),
   emphasis: z.enum(['fill', 'text', 'chip']).optional(),
 });
 export type TrailingColumn = z.infer<typeof TrailingColumnSchema>;

@@ -520,6 +520,26 @@ function elementDrawsOnChunk(
   return chunk < elementChunkCount(el, resolved, flow);
 }
 
+/** One column's status for one row: `statusKey` wins (data carrying judgment is not second-guessed
+ *  by a display rule); else the authored rule evaluates against the column's OWN value — numeric
+ *  compare when both sides parse, string equality otherwise. */
+export function statusOf(
+  c: { key: string; statusKey?: string; rule?: { op: 'gte' | 'lte' | 'eq' | 'neq'; value: string; status: CellStatus } },
+  row: Record<string, unknown>,
+): CellStatus | undefined {
+  if (c.statusKey) return asCellStatus(row[c.statusKey]);
+  if (!c.rule) return undefined;
+  const raw = row[c.key];
+  const a = Number(raw);
+  const b = Number(c.rule.value);
+  const numeric = Number.isFinite(a) && Number.isFinite(b) && String(raw).trim() !== '';
+  const hit = c.rule.op === 'gte' ? (numeric ? a >= b : false)
+    : c.rule.op === 'lte' ? (numeric ? a <= b : false)
+    : c.rule.op === 'eq' ? (numeric ? a === b : String(raw ?? '') === c.rule.value)
+    : (numeric ? a !== b : String(raw ?? '') !== c.rule.value);
+  return hit ? c.rule.status : undefined;
+}
+
 /** Parse a status token from a query cell. Unrecognised values become `undefined` — a report must
  *  never colour a cell on a token it does not understand. */
 export function asCellStatus(v: unknown): CellStatus | undefined {
@@ -543,8 +563,8 @@ export function cellStatusesFor(
   if (el.kind !== 'table' || !el.dataSource) return [];
   if (!resolved || 'error' in resolved) return [];
   const cols = el.boundColumns ?? [];
-  if (!cols.some((c) => c.statusKey)) return [];
-  return resolved.rows.map((row) => cols.map((c) => (c.statusKey ? asCellStatus(row[c.statusKey]) : undefined)));
+  if (!cols.some((c) => c.statusKey || c.rule)) return [];
+  return resolved.rows.map((row) => cols.map((c) => statusOf(c, row)));
 }
 
 /**
@@ -568,9 +588,9 @@ export function cellGridTrailingStatusesFor(
   if (el.kind !== 'cellgrid' || !el.dataSource) return [];
   if (!resolved || 'error' in resolved) return [];
   const cols = el.trailingColumns ?? [];
-  if (!cols.some((c) => c.statusKey)) return [];
+  if (!cols.some((c) => c.statusKey || c.rule)) return [];
   const lift = cellGridLift(el.groupBoundary === 'token-change');
-  return resolved.rows.slice(lift).map((row) => cols.map((c) => (c.statusKey ? asCellStatus(row[c.statusKey]) : undefined)));
+  return resolved.rows.slice(lift).map((row) => cols.map((c) => statusOf(c, row)));
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -633,7 +653,7 @@ export function keyValuePairs(el: DesignElement, resolved: ResolvedTable | undef
       return {
         label: bc.label,
         value: row ? String(row[bc.key] ?? '') : '',
-        status: row && bc.statusKey ? asCellStatus(row[bc.statusKey]) : undefined,
+        status: row ? statusOf(bc, row) : undefined,
         emphasis: bc.emphasis ?? 'text',
       };
     });
