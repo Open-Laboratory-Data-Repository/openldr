@@ -1077,11 +1077,14 @@ export function drawElement(
       // in the PDF. That is why `lab.logo` is validated as a data URI at WRITE time rather than
       // here: by the time we are drawing, there is nobody left to tell.
       const src = el.src ? interpolate(el.src, tokens) : '';
-      if (src) {
-        doc.save();
-        try { doc.image(src, r.x, r.y, { fit: [r.w, r.h] }); doc.restore(); return; }
-        catch { doc.restore(); /* fall through to placeholder */ }
-      }
+      // An UNSET slot prints nothing: every install without a configured logo used to stamp a
+      // dashed rectangle onto the letterhead of every report, which a reader takes as "something
+      // failed". Empty-after-interpolation means "this install has no logo", not a defect. The
+      // canvas keeps its placeholder — authoring still needs to see the slot.
+      if (!src) return;
+      doc.save();
+      try { doc.image(src, r.x, r.y, { fit: [r.w, r.h] }); doc.restore(); return; }
+      catch { doc.restore(); /* a src that RESOLVED but cannot draw is a real defect — show it */ }
       doc.save().lineWidth(1).strokeColor(RECT_BORDER).dash(3, { space: 2 })
         .rect(r.x, r.y, r.w, r.h).stroke().undash().restore();
       return;

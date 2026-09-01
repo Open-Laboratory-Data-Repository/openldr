@@ -92,7 +92,7 @@ function normalisePdf(b: Buffer): string {
 }
 
 /** Recorded at `428a7766`, BEFORE `headerRow`/`showWithTable` existed. */
-const GOLDEN_DIGEST = '6fcfee5c1935f04af41791480ac8e589cad9ba3fa58b82938179b406faf2d8ff';
+const GOLDEN_DIGEST = '6c68df4bf6ff8cec3d2c6b4d3122ebaeeb28834d0273fe0ab674fd64c46fac3a'; // re-recorded for T1: an unset logo slot no longer prints a dashed box
 
 async function goldenDigest(): Promise<string> {
   const buf = await renderReportDesignPdf(goldenDesign(), goldenResolved(), {
