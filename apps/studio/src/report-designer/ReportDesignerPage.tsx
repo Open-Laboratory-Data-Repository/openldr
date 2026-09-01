@@ -100,12 +100,15 @@ export function ReportDesignerPage(): JSX.Element {
   // Page-strip snapshot: bound rows loaded on demand, and the design JSON they were computed for.
   const [resolvedData, setResolvedData] = useState<Map<string, ResolvedTable> | null>(null);
   const [countsLoading, setCountsLoading] = useState(false);
+  // View-only: fill bound elements with the strip's snapshot. Never persisted, never rendered
+  // into the PDF, and reset with the design because the snapshot resets with it.
+  const [showData, setShowData] = useState(false);
   const countsJsonRef = useRef<string>('');
 
   const template = templates.find((tpl) => tpl.id === selectedId) ?? null;
 
   // A different design means a different snapshot; drop the old one rather than show its counts.
-  useEffect(() => { setResolvedData(null); countsJsonRef.current = ''; }, [selectedId]);
+  useEffect(() => { setResolvedData(null); countsJsonRef.current = ''; setShowData(false); }, [selectedId]);
 
   const loadPages = async () => {
     if (!template) return;
@@ -549,6 +552,8 @@ export function ReportDesignerPage(): JSX.Element {
                 onPublishAsReport={onPublishAsReport}
                 status={template?.status} onPublishRevision={() => void onPublishRevision()}
                 onToggleInspector={() => setInspectorOpen((o) => !o)}
+                showData={showData} hasData={!!resolvedData}
+                onToggleShowData={() => setShowData((v) => !v)}
                 onDuplicate={duplicateTemplate} onDelete={() => setConfirmDeleteOpen(true)} />
               <PageStrip
                 counts={resolvedData ? designPageCounts(template, resolvedData) : null}
@@ -557,7 +562,7 @@ export function ReportDesignerPage(): JSX.Element {
                 onLoad={() => { void loadPages(); }} />
               <PageCanvas template={template} zoom={zoom} selectedIds={selectedIds} onSelect={setSelectedIds} onCommitRects={commitRects}
                 editingId={editingId} onEditStart={startEdit} onEditChange={editChange} onEditEnd={endEdit}
-                identity={labIdentity} resolved={resolvedData} />
+                identity={labIdentity} resolved={resolvedData} showData={showData} />
             </div>
             {/* The inspector is a right-side overlay drawer below lg (toggled from the header and
                 auto-opened on selection) and a static column at lg+ where there's room for all three

@@ -1305,6 +1305,8 @@ export const en = {
     printsAsPages_other: 'Prints as {{count}} pages',
     printsAsAtLeastOne: 'Prints as at least 1 page',
     pageCountStale: 'Edited since the last load',
+    showData: 'Show data',
+    showDataNeedsLoad: 'Load pages first to see real data',
     loadPages: 'Load pages',
     physicalPage: 'Physical page',
     ruleWhen: 'When',

@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Image as ImageIcon } from 'lucide-react';
 import { cn } from '@/lib/cn';
 import type { DesignElement, DesignPage, Margins, Rect, ReportTemplate, ResolvedTable } from './types';
-import { encodeCode128, encodeQr, QR_QUIET_ZONE, elementChunkCount, headerBandHeight, maxRowsFor, ROW_H, toPt, PX_TO_PT, LETTERHEAD } from './types';
+import { encodeCode128, encodeQr, QR_QUIET_ZONE, elementChunkCount, headerBandHeight, maxRowsFor, rowsFor, ROW_H, toPt, PX_TO_PT, LETTERHEAD } from './types';
 import { paperSize } from './model';
 import { HANDLES, boundingBox, type Handle } from './geometry';
 import { useCanvasInteraction } from './useCanvasInteraction';
@@ -40,10 +40,13 @@ interface Props {
    *  overflowing table ends its first physical page. Absent, it draws no break line: the position
    *  depends on data, and a guessed line is worse than none. */
   resolved?: Map<string, ResolvedTable> | null;
+  /** Fill bound elements with `resolved` instead of placeholders. The break line does NOT depend
+   *  on this: where a page ends is structural, while showing its data is a view preference. */
+  showData?: boolean;
 }
 
 export function PageCanvas({ template, zoom, selectedIds, onSelect, onCommitRects,
-  editingId = null, onEditStart, onEditChange, onEditEnd, identity, resolved }: Props): JSX.Element {
+  editingId = null, onEditStart, onEditChange, onEditEnd, identity, resolved, showData }: Props): JSX.Element {
   const { t } = useTranslation();
   const size = paperSize(template.paper, template.orientation);
   return (
@@ -54,7 +57,7 @@ export function PageCanvas({ template, zoom, selectedIds, onSelect, onCommitRect
           <PageSurface page={page} zoom={zoom} pageSize={size} margins={template.margins}
             selectedIds={selectedIds} onSelect={onSelect} onCommitRects={onCommitRects}
             editingId={editingId} onEditStart={onEditStart} onEditChange={onEditChange} onEditEnd={onEditEnd}
-            identity={identity} resolved={resolved} />
+            identity={identity} resolved={resolved} showData={showData} />
           <span className="text-[11px] text-neutral-600 dark:text-neutral-300">
             {t('reportDesigner.pageOf', { n: i + 1, total: template.pages.length })}
           </span>
@@ -65,7 +68,7 @@ export function PageCanvas({ template, zoom, selectedIds, onSelect, onCommitRect
 }
 
 function PageSurface({ page, zoom, pageSize, margins, selectedIds, onSelect, onCommitRects,
-  editingId = null, onEditStart, onEditChange, onEditEnd, identity, resolved }: {
+  editingId = null, onEditStart, onEditChange, onEditEnd, identity, resolved, showData }: {
   page: DesignPage; zoom: number; pageSize: { w: number; h: number }; margins?: Margins;
   selectedIds: string[]; onSelect(ids: string[]): void; onCommitRects(rects: Map<string, Rect>): void;
   editingId?: string | null;
@@ -74,6 +77,7 @@ function PageSurface({ page, zoom, pageSize, margins, selectedIds, onSelect, onC
   onEditEnd?(): void;
   identity?: Record<string, string>;
   resolved?: Map<string, ResolvedTable> | null;
+  showData?: boolean;
 }): JSX.Element {
   const { t } = useTranslation();
   const ref = useRef<HTMLDivElement>(null);
@@ -116,7 +120,7 @@ function PageSurface({ page, zoom, pageSize, margins, selectedIds, onSelect, onC
             onDoubleClick={() => onEditStart?.(el.id)}
             onEditChange={(text) => onEditChange?.(el.id, text)}
             onEditEnd={() => onEditEnd?.()}
-            identity={identity} />
+            identity={identity} resolved={showData ? resolved : null} />
         );
       })}
       {breaks.map((b) => (
@@ -162,11 +166,12 @@ const HANDLE_CLASS: Record<Handle, string> = {
   sw: '-left-1 -bottom-1 cursor-nesw-resize', w: '-left-1 top-1/2 -translate-y-1/2 cursor-ew-resize',
 };
 
-function ElementBox({ el, rect, zoom, selected, showTag, showHandles, editing, onPointerDown, onHandlePointerDown, onDoubleClick, onEditChange, onEditEnd, identity }: {
+function ElementBox({ el, rect, zoom, selected, showTag, showHandles, editing, onPointerDown, onHandlePointerDown, onDoubleClick, onEditChange, onEditEnd, identity, resolved }: {
   el: DesignElement; rect: Rect; zoom: number; selected: boolean; showTag: boolean; showHandles: boolean; editing: boolean;
   onPointerDown(e: ReactPointerEvent): void; onHandlePointerDown(e: ReactPointerEvent, h: Handle): void;
   onDoubleClick(): void; onEditChange(text: string): void; onEditEnd(): void;
   identity?: Record<string, string>;
+  resolved?: Map<string, ResolvedTable> | null;
 }): JSX.Element {
   const editRef = useRef<HTMLTextAreaElement>(null);
   useEffect(() => { if (editing) { editRef.current?.focus(); editRef.current?.select(); } }, [editing]);
@@ -187,7 +192,7 @@ function ElementBox({ el, rect, zoom, selected, showTag, showHandles, editing, o
           className="absolute inset-0 resize-none overflow-hidden border-0 bg-transparent p-0 leading-tight outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
           style={textStyle(el, zoom)} />
       ) : (
-        <ElementContent el={el} zoom={zoom} identity={identity} />
+        <ElementContent el={el} zoom={zoom} identity={identity} resolved={resolved} />
       )}
       {showTag && !editing && (
         // The name tag rides the selection, not the hover: hover tags flicker while dragging and
@@ -362,7 +367,10 @@ function ChartPreview({ el }: { el: DesignElement }): JSX.Element {
   );
 }
 
-function ElementContent({ el, zoom, identity }: { el: DesignElement; zoom: number; identity?: Record<string, string> }): JSX.Element {
+function ElementContent({ el, zoom, identity, resolved }: {
+  el: DesignElement; zoom: number; identity?: Record<string, string>;
+  resolved?: Map<string, ResolvedTable> | null;
+}): JSX.Element {
   const s = el.style ?? {};
   switch (el.kind) {
     case 'text':
@@ -392,9 +400,9 @@ function ElementContent({ el, zoom, identity }: { el: DesignElement; zoom: numbe
     case 'qrcode':
       return <SymbolPreview el={el} identity={identity} />;
     case 'table':
-      return <TablePreview el={el} />;
+      return <TablePreview el={el} resolved={resolved} />;
     case 'cellgrid':
-      return <CellGridPreview el={el} />;
+      return <CellGridPreview el={el} resolved={resolved} />;
     case 'chart':
       return <ChartPreview el={el} />;
     case 'letterhead':
@@ -414,22 +422,47 @@ function ElementContent({ el, zoom, identity }: { el: DesignElement; zoom: numbe
  * by value rather than imported: that constant is internal to the render path and not exported at
  * the package boundary, and widening the boundary for a preview tint is the wrong trade.
  */
-function CellGridPreview({ el }: { el: DesignElement }): JSX.Element {
+
+/**
+ * The projected rows the FIRST page actually holds, or null when nothing has been loaded.
+ *
+ * ⛔ Capped with the SAME `maxRowsFor` the renderer and the break line use. Showing every loaded
+ * row would re-create the exact defect this feature exists to remove: a canvas that promises more
+ * than the PDF prints. One projection (`rowsFor`) and one capacity rule, shared with the renderer.
+ */
+function firstPageRows(el: DesignElement, resolved?: Map<string, ResolvedTable> | null): string[][] | null {
+  const rt = resolved?.get(el.id);
+  if (!rt || 'error' in rt) return null;
+  const cap = maxRowsFor(toPt(el.rect).h, headerBandHeight(el));
+  return rowsFor(el, rt).slice(0, Math.max(0, cap));
+}
+
+function CellGridPreview({ el, resolved }: {
+  el: DesignElement; resolved?: Map<string, ResolvedTable> | null;
+}): JSX.Element {
   const { t } = useTranslation();
   const cellCount = el.cellColumns?.length ?? 0;
   const trailing = el.trailingColumns ?? [];
-  // Three body rows is enough to read as a grid. The real row count is one per record and is not
-  // knowable here, which is what the marker underneath says.
-  const rows = [0, 1, 2];
+  // With data loaded the grid shows its REAL labels and which cells are filled. Without it,
+  // three placeholder rows read as a grid; the real row count is one per record and is not
+  // knowable, which is what the marker underneath says.
+  const live = firstPageRows(el, resolved);
+  const rows = live ? live.map((_, i) => i) : [0, 1, 2];
   return (
     <div className="flex h-full w-full flex-col gap-[2px] overflow-hidden text-[7px] text-neutral-500">
       {rows.map((r) => (
         <div key={r} className="flex items-center gap-[3px]">
-          {el.labelColumn ? <div className="h-[5px] w-8 shrink-0 rounded-[1px] bg-neutral-200" /> : null}
+          {el.labelColumn
+            ? (live
+              ? <span className="w-14 shrink-0 truncate">{live[r]?.[0] ?? ''}</span>
+              : <div className="h-[5px] w-8 shrink-0 rounded-[1px] bg-neutral-200" />)
+            : null}
           <div className="flex gap-[1px]">
-            {Array.from({ length: cellCount }, (_, i) => (
-              <div key={i} className="h-[5px] w-[5px] shrink-0 bg-slate-300" />
-            ))}
+            {Array.from({ length: cellCount }, (_, i) => {
+              // `cellGridRowsFor` projects label first (when declared), then the cells in order.
+              const filled = live ? Boolean(live[r]?.[(el.labelColumn ? 1 : 0) + i]) : true;
+              return <div key={i} className={cn('h-[5px] w-[5px] shrink-0', filled ? 'bg-slate-500' : 'bg-slate-200')} />;
+            })}
           </div>
           {r === 0
             ? trailing.map((c) => (
@@ -438,7 +471,7 @@ function CellGridPreview({ el }: { el: DesignElement }): JSX.Element {
             : null}
         </div>
       ))}
-      <span className="mt-[2px] italic text-neutral-400">{t('reportDesigner.rowsAtRender')}</span>
+      {live ? null : <span className="mt-[2px] italic text-neutral-400">{t('reportDesigner.rowsAtRender')}</span>}
     </div>
   );
 }
@@ -454,8 +487,11 @@ function CellGridPreview({ el }: { el: DesignElement }): JSX.Element {
  *  query. The audit's minimum bar ("show its boundColumns headers") is a no-op for exactly the
  *  table it most criticises, the cumulative antibiogram. We show the one header we do know and
  *  mark the rest as data-derived rather than inventing plausible names. */
-function TablePreview({ el }: { el: DesignElement }): JSX.Element {
+function TablePreview({ el, resolved }: {
+  el: DesignElement; resolved?: Map<string, ResolvedTable> | null;
+}): JSX.Element {
   const { t } = useTranslation();
+  const live = firstPageRows(el, resolved);
   const bound = Boolean(el.dataSource);
   const headerCell = 'border border-neutral-300 bg-neutral-100 px-1 py-0.5 text-left font-medium';
 
@@ -511,11 +547,21 @@ function TablePreview({ el }: { el: DesignElement }): JSX.Element {
           ))}</tr>
         </thead>
         <tbody>
-          <tr>
-            <td colSpan={cols.length} className="px-1 py-0.5 italic text-neutral-400">
-              {t('reportDesigner.rowsAtRender')}
-            </td>
-          </tr>
+          {live
+            ? live.map((row, ri) => (
+              <tr key={ri} data-testid={`canvas-row-${el.id}-${ri}`}>
+                {cols.map((c, ci) => (
+                  <td key={c.key} className="border border-neutral-200 px-1 py-0.5 truncate">{row[ci] ?? ''}</td>
+                ))}
+              </tr>
+            ))
+            : (
+              <tr>
+                <td colSpan={cols.length} className="px-1 py-0.5 italic text-neutral-400">
+                  {t('reportDesigner.rowsAtRender')}
+                </td>
+              </tr>
+            )}
         </tbody>
       </table>
     );

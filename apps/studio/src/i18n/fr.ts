@@ -1223,6 +1223,8 @@ export const fr: EnShape = {
     printsAsPages_other: 'S’imprime sur {{count}} pages',
     printsAsAtLeastOne: 'S’imprime sur au moins 1 page',
     pageCountStale: 'Modifié depuis le dernier chargement',
+    showData: 'Afficher les données',
+    showDataNeedsLoad: 'Chargez les pages pour voir les données réelles',
     loadPages: 'Charger les pages',
     physicalPage: 'Page physique',
     ruleWhen: 'Quand',
