@@ -1,6 +1,18 @@
 {
-  "generatedAt": "2026-09-01",
+  "generatedAt": "2026-09-02",
   "days": [
+    {
+      "date": "2026-09-02",
+      "version": null,
+      "entries": [
+        {
+          "hash": "4401e72d",
+          "type": "feat",
+          "scope": "report-designer",
+          "title": "Translate a panel's static pairs"
+        }
+      ]
+    },
     {
       "date": "2026-09-01",
       "version": null,
