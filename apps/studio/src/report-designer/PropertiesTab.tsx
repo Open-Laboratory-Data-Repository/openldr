@@ -10,6 +10,7 @@ import { cn } from '@/lib/cn';
 import type { DesignElement, Margins, Orientation, Paper, Rect, ReportTemplate, TextAlign } from './types';
 import { encodeCode128, encodeQr, maxCode128Chars, minWidthPxFor, moduleWidthMm, MIN_MODULE_MM, QR_QUIET_ZONE, ELEMENT_IMAGE_MAX_BYTES, ELEMENT_IMAGE_MIME, validateImageSrc } from './types';
 import { findElement, flowTargets, paperSize } from './model';
+import { i18nKeyForPair } from './types';
 import { clampRectToPage } from './geometry';
 import { ColorField } from './ColorField';
 import { SUPPORTED_LANGUAGES } from '@/i18n/language';
@@ -196,12 +197,54 @@ function ImageSource({ el, onPatch }: { el: DesignElement; onPatch: (patch: Part
   );
 }
 
-function KindControls({ el, onPatch, lang = '', i18nText, onSetI18nText = () => {} }: {
+/** Translations for a panel's STATIC pairs, shown only while a language is selected.
+ *
+ *  ⛔ Translation only, never a pair editor. The repo's standing decision is that an unbound panel
+ *  shows sample pairs and is made real by binding a query; the seeded scope panels are the
+ *  exception, because a bound value is never interpolated and only a static pair can carry
+ *  `{{param.*}}` or `{{date}}` (simple-design.ts:124). So the authored text stays read-only here
+ *  and each half gets an override field beside it.
+ *
+ *  The authored text is the PLACEHOLDER, tokens included, so an author can see what to keep: a
+ *  translated value may hold the same tokens in a different order, and interpolation still runs. */
+function StaticPairTranslations({ el, lang, dict, onSetI18nText }: {
+  el: import('./types').DesignElement;
+  lang: string;
+  dict?: Record<string, string>;
+  onSetI18nText(lang: string, key: string, text: string): void;
+}): JSX.Element | null {
+  const { t } = useTranslation();
+  // Nothing to translate on a BOUND panel: its labels are column labels, edited in the Data tab.
+  if (!lang || el.dataSource || !el.rows?.length) return null;
+  return (
+    <div>
+      <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">{t('reportDesigner.pairTranslations')}</div>
+      <div className="flex flex-col gap-2">
+        {el.rows.map((row, i) => (
+          <div key={i} className="flex flex-col gap-1">
+            <Input aria-label={`${t('reportDesigner.pairLabel')} ${i + 1}`}
+              value={dict?.[i18nKeyForPair(el.id, i, 'label')] ?? ''} placeholder={row[0] || '—'}
+              onChange={(e) => onSetI18nText(lang, i18nKeyForPair(el.id, i, 'label'), e.target.value)}
+              className="h-7 text-xs" />
+            <Input aria-label={`${t('reportDesigner.pairValue')} ${i + 1}`}
+              value={dict?.[i18nKeyForPair(el.id, i, 'value')] ?? ''} placeholder={row[1] || '—'}
+              onChange={(e) => onSetI18nText(lang, i18nKeyForPair(el.id, i, 'value'), e.target.value)}
+              className="h-7 text-xs" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function KindControls({ el, onPatch, lang = '', i18nText, i18nDict, onSetI18nText = () => {} }: {
   el: import('./types').DesignElement;
   onPatch(patch: Partial<import('./types').DesignElement>, opts?: PatchOpts): void;
   lang?: string;
   /** The stored override for `lang`, or undefined when there is none (prints the authored text). */
   i18nText?: string;
+  /** Every stored override for `lang`, for the keys a single element owns more than one of. */
+  i18nDict?: Record<string, string>;
   onSetI18nText?(lang: string, key: string, text: string): void;
 }): JSX.Element | null {
   const { t } = useTranslation();
@@ -320,8 +363,11 @@ function KindControls({ el, onPatch, lang = '', i18nText, onSetI18nText = () => 
       <div className="flex flex-col gap-3">
         <div>
           <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">{t('reportDesigner.panelTitle')}</div>
-          <Input aria-label={t('reportDesigner.panelTitle')} value={el.text ?? ''} placeholder="—"
-            onChange={(e) => onPatch({ text: e.target.value })} className="h-8 text-xs" />
+          {lang
+            ? <Input aria-label={t('reportDesigner.panelTitle')} value={i18nText ?? ''} placeholder={el.text || '—'}
+                onChange={(e) => onSetI18nText(lang, el.id, e.target.value)} className="h-8 text-xs" />
+            : <Input aria-label={t('reportDesigner.panelTitle')} value={el.text ?? ''} placeholder="—"
+                onChange={(e) => onPatch({ text: e.target.value })} className="h-8 text-xs" />}
         </div>
         <div>
           <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">{t('reportDesigner.panelTitleFill')}</div>
@@ -346,6 +392,7 @@ function KindControls({ el, onPatch, lang = '', i18nText, onSetI18nText = () => 
             onChange={(c, opts) => style({ strokeColor: c === 'none' ? undefined : c }, !!opts?.discrete)}
             aria-label={t('reportDesigner.strokeColor')} />
         </div>
+        <StaticPairTranslations el={el} lang={lang} dict={i18nDict} onSetI18nText={onSetI18nText} />
       </div>
     );
   }
@@ -737,7 +784,8 @@ function PropertiesBody({ template, selectedIds, onPatchElement, onPatchPage, on
         {t('reportDesigner.elementLabel')} · {t(`reportDesigner.element.${selected.kind}`)}
       </div>
       <KindControls el={selected} onPatch={(patch, opts) => onPatchElement(selected.id, patch, opts)}
-        lang={lang} i18nText={lang ? template.i18n?.[lang]?.[selected.id] : undefined} onSetI18nText={onSetI18nText} />
+        lang={lang} i18nText={lang ? template.i18n?.[lang]?.[selected.id] : undefined}
+        i18nDict={lang ? template.i18n?.[lang] : undefined} onSetI18nText={onSetI18nText} />
       <FlowSection template={template} el={selected} onPatch={(patch, opts) => onPatchElement(selected.id, patch, opts)} />
       <div>
         <div className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">{t('reportDesigner.positionSize')}</div>

@@ -589,3 +589,49 @@ describe('PropertiesTab print language', () => {
     expect(props.onLangChange).toHaveBeenCalledWith('fr');
   });
 });
+
+describe('PropertiesTab static pair translations', () => {
+  const panel: DesignElement = {
+    id: 'scope', kind: 'keyvalue', name: 'Scope', rect: { x: 0, y: 0, w: 300, h: 60 }, text: 'Report scope',
+    rows: [['Reporting period', '{{param.from}} – {{param.to}}'], ['Metric', 'Tested and %R per antibiotic']],
+  };
+
+  it('shows no pair fields until a language is picked', () => {
+    setup({ template: tplWithEl(panel), selectedIds: ['scope'] });
+    expect(screen.queryByLabelText('Pair label 1')).not.toBeInTheDocument();
+  });
+
+  it('writes a pair label and a pair value into the override map', () => {
+    const props = setup({ template: tplWithEl(panel), selectedIds: ['scope'], lang: 'fr' });
+    fireEvent.change(screen.getByLabelText('Pair label 2'), { target: { value: 'Indicateur' } });
+    expect(props.onSetI18nText).toHaveBeenCalledWith('fr', 'scope.kv.1.label', 'Indicateur');
+    fireEvent.change(screen.getByLabelText('Pair value 2'), { target: { value: 'Testés et %R par antibiotique' } });
+    expect(props.onSetI18nText).toHaveBeenCalledWith('fr', 'scope.kv.1.value', 'Testés et %R par antibiotique');
+    // ⛔ Translation only: the authored pairs never move.
+    expect(props.onPatchElement).not.toHaveBeenCalled();
+  });
+
+  // The authored value is the placeholder, tokens included, so an author can see what to keep.
+  it('shows the authored halves as placeholders and the stored overrides as values', () => {
+    const template = { ...tplWithEl(panel), i18n: { fr: { 'scope.kv.0.label': 'Période' } } };
+    setup({ template, selectedIds: ['scope'], lang: 'fr' });
+    expect(screen.getByLabelText('Pair label 1')).toHaveValue('Période');
+    expect(screen.getByLabelText('Pair value 1')).toHaveValue('');
+    expect(screen.getByLabelText('Pair value 1')).toHaveAttribute('placeholder', '{{param.from}} – {{param.to}}');
+  });
+
+  // A bound panel's labels are column labels, edited per language in the Data tab instead.
+  it('shows no pair fields for a BOUND panel', () => {
+    const boundPanel: DesignElement = { ...panel, dataSource: { kind: 'custom-query', queryId: 'q' } };
+    setup({ template: tplWithEl(boundPanel), selectedIds: ['scope'], lang: 'fr' });
+    expect(screen.queryByLabelText('Pair label 1')).not.toBeInTheDocument();
+  });
+
+  it('the panel title field edits the override too', () => {
+    const props = setup({ template: tplWithEl(panel), selectedIds: ['scope'], lang: 'fr' });
+    const title = screen.getByLabelText('Panel title');
+    expect(title).toHaveAttribute('placeholder', 'Report scope');
+    fireEvent.change(title, { target: { value: 'Portée du rapport' } });
+    expect(props.onSetI18nText).toHaveBeenCalledWith('fr', 'scope', 'Portée du rapport');
+  });
+});

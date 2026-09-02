@@ -33,6 +33,26 @@ export function i18nKeyForColumn(elementId: string, columnKey: string): string {
   return `${elementId}.col.${columnKey}`;
 }
 
+/** The i18n key for one half of one STATIC keyvalue pair, addressed by position.
+ *
+ *  Static rows carry the scope panel on every seeded design, and they are not a legacy shape: a
+ *  BOUND panel's value is deliberately never interpolated, so an unbound pair is the only pair
+ *  that can hold `{{param.*}}` or `{{date}}` (see `interpolatedPairValues` in render/draw.ts, and
+ *  `simple-design.ts:124`). They cannot be rewritten as bound columns, so they get keys of their
+ *  own.
+ *
+ *  Positional because a static row has no key of its own, and nothing in the studio reorders one.
+ *  A row that later moves takes its neighbour's translation, the same way a renamed column key
+ *  orphans a `.col.` entry — recoverable by retyping, and never a wrong-language mix, because the
+ *  authored text is what shows when an entry is missing.
+ *
+ *  Both halves are translatable. A value holding a token is NOT special-cased: interpolation runs
+ *  after resolution, so a French override can keep the tokens and reorder the words around them
+ *  ("du {{param.from}} au {{param.to}}"), exactly as an authored text element already can. */
+export function i18nKeyForPair(elementId: string, index: number, part: 'label' | 'value'): string {
+  return `${elementId}.kv.${index}.${part}`;
+}
+
 /** The design as it should PRINT in `lang`. Returns the input untouched when there is nothing to
  *  apply, so the common single-language case allocates nothing. */
 export function resolveI18n(design: ReportDesign, lang: string | undefined): ReportDesign {
@@ -49,12 +69,25 @@ export function resolveI18n(design: ReportDesign, lang: string | undefined): Rep
         return label === undefined ? c : { ...c, label };
       });
       const colsChanged = Boolean(cols && el.boundColumns && cols.some((c, i) => c !== el.boundColumns![i]));
-      if (text === undefined && !colsChanged) return el;
+      // Static pairs, on a keyvalue panel only. A `rows` array on any other kind is sample data the
+      // renderer replaces with the query's own rows, so translating it would put authored text
+      // where data belongs.
+      const rows = el.kind === 'keyvalue'
+        ? el.rows?.map((r, i) => {
+          const label = dict[i18nKeyForPair(el.id, i, 'label')];
+          const value = dict[i18nKeyForPair(el.id, i, 'value')];
+          if (label === undefined && value === undefined) return r;
+          return [label ?? r[0], value ?? r[1]] as typeof r;
+        })
+        : undefined;
+      const rowsChanged = Boolean(rows && el.rows && rows.some((r, i) => r !== el.rows![i]));
+      if (text === undefined && !colsChanged && !rowsChanged) return el;
       pageChanged = true;
       return {
         ...el,
         ...(text === undefined ? {} : { text }),
         ...(colsChanged ? { boundColumns: cols } : {}),
+        ...(rowsChanged ? { rows } : {}),
       };
     });
     if (!pageChanged) return page;
