@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { resolveI18n, i18nKeyForColumn } from './i18n';
+import { resolveI18n, i18nKeyForColumn, i18nKeyForPair } from './i18n';
 import type { ReportDesign } from './schema';
 
 const design = (i18n?: ReportDesign['i18n']): ReportDesign => ({
@@ -12,6 +12,10 @@ const design = (i18n?: ReportDesign['i18n']): ReportDesign => ({
     { id: 'tbl', kind: 'table', name: 'T', rect: { x: 0, y: 120, w: 200, h: 60 },
       dataSource: { kind: 'custom-query', queryId: 'q' },
       boundColumns: [{ key: 'lab', label: 'Laboratory' }, { key: 'n', label: 'Count' }] },
+    // The seeded scope panel's shape: STATIC pairs, one prose value and two token values
+    // (see simple-design.ts:124 for why a scope panel cannot be bound instead).
+    { id: 'scope', kind: 'keyvalue', name: 'Scope', rect: { x: 0, y: 200, w: 300, h: 60 },
+      rows: [['Reporting period', '{{param.from}} – {{param.to}}'], ['Metric', 'Tested and %R per antibiotic'], ['Generated', '{{date}}']] },
   ] }],
 });
 
@@ -81,5 +85,48 @@ describe('a rendered PDF in another language', () => {
     const sw = await renderReportDesignPdf(d, new Map(), { now: NOW, lang: 'sw' });
     const authored = await renderReportDesignPdf(d, new Map(), { now: NOW });
     expect(norm(sw)).toBe(norm(authored));
+  });
+});
+
+describe('resolveI18n, static keyvalue pairs', () => {
+  const scopeOf = (d: ReportDesign) => d.pages[0].elements.find((e) => e.id === 'scope')!;
+
+  it('translates a static pair’s label and its prose value', () => {
+    const out = resolveI18n(design({ fr: {
+      [i18nKeyForPair('scope', 1, 'label')]: 'Indicateur',
+      [i18nKeyForPair('scope', 1, 'value')]: 'Testés et %R par antibiotique',
+    } }), 'fr');
+    expect(scopeOf(out).rows![1]).toEqual(['Indicateur', 'Testés et %R par antibiotique']);
+  });
+
+  it('falls back per half, so a label-only entry keeps the authored value', () => {
+    const out = resolveI18n(design({ fr: { [i18nKeyForPair('scope', 0, 'label')]: 'Période' } }), 'fr');
+    expect(scopeOf(out).rows![0]).toEqual(['Période', '{{param.from}} – {{param.to}}']);
+    // Untouched rows keep their identity, so nothing downstream re-renders for nothing.
+    expect(scopeOf(out).rows![2]).toEqual(['Generated', '{{date}}']);
+  });
+
+  // Tokens are NOT special-cased: interpolation runs after resolution, so a translated value may
+  // keep them and reorder the words around them. That is the whole point for a date range.
+  it('keeps tokens working inside a translated value', () => {
+    const out = resolveI18n(design({ fr: {
+      [i18nKeyForPair('scope', 0, 'value')]: 'du {{param.from}} au {{param.to}}',
+    } }), 'fr');
+    expect(scopeOf(out).rows![0][1]).toBe('du {{param.from}} au {{param.to}}');
+  });
+
+  // ⛔ `rows` on a table is SAMPLE data the query replaces. Translating it would put authored text
+  // where query data belongs.
+  it('never touches a non-keyvalue element’s sample rows', () => {
+    const d = design({ fr: { [i18nKeyForPair('sample', 0, 'label')]: 'Non' } });
+    d.pages[0].elements.push({ id: 'sample', kind: 'table', name: 'S', rect: { x: 0, y: 300, w: 100, h: 40 },
+      columns: ['A'], rows: [['one'], ['two']] });
+    expect(resolveI18n(d, 'fr').pages[0].elements.find((e) => e.id === 'sample')!.rows).toEqual([['one'], ['two']]);
+  });
+
+  it('leaves the original rows array untouched', () => {
+    const d = design({ fr: { [i18nKeyForPair('scope', 0, 'label')]: 'Période' } });
+    resolveI18n(d, 'fr');
+    expect(scopeOf(d).rows![0][0]).toBe('Reporting period');
   });
 });
