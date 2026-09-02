@@ -130,3 +130,33 @@ describe('resolveI18n, static keyvalue pairs', () => {
     expect(scopeOf(d).rows![0][0]).toBe('Reporting period');
   });
 });
+
+describe('the run language reaches the DATE tokens', () => {
+  const NOW = new Date('2026-09-01T10:00:00Z');
+  const dated: ReportDesign = {
+    id: 'd', name: 'D', paper: 'A4', orientation: 'portrait', status: 'published',
+    parameters: [{ key: 'dateRange', label: 'Range', type: 'daterange', value: { from: '2026-01-01', to: '2026-06-30' } }],
+    pages: [{ id: 'p1', elements: [
+      { id: 'when', kind: 'text', name: 'When', rect: { x: 0, y: 0, w: 300, h: 20 }, text: '{{param.from}} · {{param.to}} · {{date}}' },
+    ] }],
+  };
+
+  it('prints French month names in a date range and in {{date}}', async () => {
+    const { renderReportDesignPdf } = await import('./render/index');
+    const { pdfTextOf } = await import('./render/test-text');
+    const fr = pdfTextOf(await renderReportDesignPdf(dated, new Map(), { now: NOW, lang: 'fr' }));
+    expect(fr).toContain('1 janv. 2026');
+    expect(fr).toContain('30 juin 2026');
+  });
+
+  it('with no language asked for, the bytes are exactly what they were', async () => {
+    const { renderReportDesignPdf } = await import('./render/index');
+    // Same normalisation as above: pdfkit stamps a real-clock CreationDate and a random /ID into
+    // every render, so raw bytes never match even for identical drawing.
+    const norm = (b: Buffer) => b.toString('latin1')
+      .replace(/\(D:\d+Z?\)/g, '(D:X)').replace(/\/ID \[<[0-9a-f]+> <[0-9a-f]+>\]/g, '/ID [X]');
+    const a = await renderReportDesignPdf(dated, new Map(), { now: NOW });
+    const b = await renderReportDesignPdf(dated, new Map(), { now: NOW, lang: 'en' });
+    expect(norm(a)).toBe(norm(b));
+  });
+});

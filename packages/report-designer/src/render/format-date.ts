@@ -10,6 +10,31 @@
  */
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'] as const;
 
+/**
+ * Month names per print language, spelled out for the same reason English is: nothing may fall
+ * back to the host's ICU data.
+ *
+ * ⛔ The ORDER never changes, only the names. English, French and Portuguese all write day before
+ * month, so `2 sept. 2026` reads correctly in all three and the ambiguous-numeric defect this file
+ * exists to prevent cannot come back through a locale that reorders the parts.
+ *
+ * Portuguese takes the compact `2 set. 2026` rather than the formal `2 de set. de 2026`: the
+ * strings land in fixed-width panel cells and table columns sized against the English width, and
+ * six extra characters clip. Correct and short beats correct and cut off.
+ */
+const MONTHS_BY_LANG: Record<string, readonly string[]> = {
+  en: MONTHS,
+  fr: ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'],
+  pt: ['jan.', 'fev.', 'mar.', 'abr.', 'mai.', 'jun.', 'jul.', 'ago.', 'set.', 'out.', 'nov.', 'dez.'],
+};
+
+/** The month table for a print language. An unknown or absent language prints English, which is
+ *  also what makes an un-translated design byte-identical to before this existed. `en-GB` and
+ *  `pt-BR` resolve by their base tag, since only the month NAMES vary here. */
+function monthsFor(lang: string | undefined): readonly string[] {
+  return (lang && MONTHS_BY_LANG[lang.slice(0, 2).toLowerCase()]) || MONTHS;
+}
+
 const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
 /** Days in `month` (1-12) of `year`, by the full Gregorian leap rule. */
@@ -29,7 +54,7 @@ function daysInMonth(year: number, month: number): number {
  * two-digit years onto 1900+, so a validity probe built on `Date.UTC(Number('0026'), …)` would be
  * checking the year 1926.
  */
-export function formatDisplayDate(value: string): string {
+export function formatDisplayDate(value: string, lang?: string): string {
   const m = ISO_DATE.exec(value);
   if (!m) return value;
   const year = Number(m[1]);
@@ -37,7 +62,7 @@ export function formatDisplayDate(value: string): string {
   const day = Number(m[3]);
   if (month < 1 || month > 12) return value;
   if (day < 1 || day > daysInMonth(year, month)) return value;
-  return `${day} ${MONTHS[month - 1]} ${m[1]}`;
+  return `${day} ${monthsFor(lang)[month - 1]} ${m[1]}`;
 }
 
 /**
@@ -54,7 +79,7 @@ export function formatDisplayDate(value: string): string {
  * declared-but-unset parameter — the literal is repeated here rather than imported to avoid a
  * circular dependency, since `draw.ts` already imports this module.
  */
-export function formatDisplayDateOf(d: Date): string {
+export function formatDisplayDateOf(d: Date, lang?: string): string {
   if (Number.isNaN(d.getTime())) return '—';
-  return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+  return `${d.getDate()} ${monthsFor(lang)[d.getMonth()]} ${d.getFullYear()}`;
 }

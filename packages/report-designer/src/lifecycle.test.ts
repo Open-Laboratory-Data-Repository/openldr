@@ -47,3 +47,25 @@ describe('designContentChanged', () => {
     expect(designContentFingerprint(base)).toBe(designContentFingerprint(reordered));
   });
 });
+
+// ⛔ Two silent failures live behind this one line. The boot seeder rewrites a built-in only when
+// the fingerprint differs (report-seeds.ts:5233), so a translation outside it can never reach an
+// install that already has the design. And the store's un-publish check uses the same function, so
+// a studio edit that changed only a translation would leave a published design printing new words.
+describe('designContentFingerprint covers printed translations', () => {
+  const base: ReportDesign = {
+    id: 'd', name: 'D', paper: 'A4', orientation: 'portrait', status: 'published', parameters: [],
+    pages: [{ id: 'p', elements: [{ id: 'e', kind: 'text', name: 'T', rect: { x: 0, y: 0, w: 10, h: 10 }, text: 'Report' }] }],
+  };
+
+  it('a translation-only difference is a content change', () => {
+    const translated = { ...base, i18n: { fr: { e: 'Rapport' } } };
+    expect(designContentChanged(base, translated)).toBe(true);
+    expect(designContentChanged(translated, { ...translated, i18n: { fr: { e: 'Bulletin' } } })).toBe(true);
+    expect(designContentChanged(translated, { ...translated, i18n: { fr: { e: 'Rapport' }, pt: { e: 'Relatório' } } })).toBe(true);
+  });
+
+  it('never-set and cleared are the same content, so neither rewrites the other', () => {
+    expect(designContentChanged(base, { ...base, i18n: undefined })).toBe(false);
+  });
+});

@@ -1,7 +1,9 @@
 /// <reference types="vitest" />
 import { defineConfig, loadEnv, type Plugin } from 'vite';
-import { fileURLToPath, URL } from 'node:url';
+import { fileURLToPath, pathToFileURL, URL } from 'node:url';
 import { createRequire } from 'node:module';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 
@@ -29,6 +31,43 @@ function redirectStudioBase(): Plugin {
   };
 }
 
+/**
+ * Serves and ships pdfjs's STANDARD FONT DATA under `<base>/standard_fonts/`.
+ *
+ * A report PDF references Helvetica and Helvetica-Bold and embeds neither: they are two of the
+ * 14 standard PDF fonts a viewer is expected to supply. pdfjs supplies them from this directory
+ * (LiberationSans, metrically compatible), and WITHOUT it silently substitutes a fallback with
+ * the wrong metrics — the letters space out and the page looks broken, which is what every
+ * in-app preview did until now. Acrobat and the browser's own PDF viewer were always fine, so
+ * the downloaded file never showed it.
+ *
+ * The WHOLE directory, not the two files Helvetica needs today: pdfjs decides which file it
+ * wants from its own font map, so hand-picking would turn a future `Times-Roman` back into the
+ * broken fallback with no error. 800K of assets fetched only on demand.
+ */
+function pdfjsStandardFonts(): Plugin {
+  const dir = fileURLToPath(new URL('standard_fonts/', pathToFileURL(
+    createRequire(import.meta.url).resolve('pdfjs-dist/package.json'))));
+  const files = () => readdirSync(dir);
+  return {
+    name: 'pdfjs-standard-fonts',
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const name = (req.url ?? '').split('?')[0].replace(/^\/studio\/standard_fonts\//, '');
+        // Exact filename only: no path separators reach `join`, so this cannot walk out of `dir`.
+        if (name === req.url?.split('?')[0] || name.includes('/') || !files().includes(name)) return next();
+        res.setHeader('content-type', name.endsWith('.ttf') ? 'font/ttf' : 'application/octet-stream');
+        res.end(readFileSync(join(dir, name)));
+      });
+    },
+    generateBundle() {
+      for (const name of files()) {
+        this.emitFile({ type: 'asset', fileName: `standard_fonts/${name}`, source: readFileSync(join(dir, name)) });
+      }
+    },
+  };
+}
+
 export default defineConfig(({ mode }) => {
   // Dev-only: Vite binds to localhost, so the dev server is unreachable from another device
   // (e.g. a phone on the same tailnet). DEV_HOST overrides the bind address. It's read from the
@@ -48,7 +87,7 @@ export default defineConfig(({ mode }) => {
 
   return {
     base: '/studio/',
-    plugins: [react(), tailwindcss(), redirectStudioBase()],
+    plugins: [react(), tailwindcss(), redirectStudioBase(), pdfjsStandardFonts()],
     resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
     // react-grid-layout / react-draggable / react-resizable reference `process.env.NODE_ENV`
     // at runtime; without this define, `process` is undefined in the dev browser and the
