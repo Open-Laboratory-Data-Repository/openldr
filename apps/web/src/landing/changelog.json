@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "6725c79b",
+          "type": "feat",
+          "scope": "report-designer",
+          "title": "Ship the built-ins in French and Portuguese, and fix preview fonts"
+        },
+        {
           "hash": "4401e72d",
           "type": "feat",
           "scope": "report-designer",
