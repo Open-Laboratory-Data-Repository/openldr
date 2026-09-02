@@ -69,3 +69,37 @@ describe('formatDisplayDateOf', () => {
     expect(formatDisplayDateOf(new Date('nonsense'))).toBe('—');
   });
 });
+
+// ⛔ The month NAMES vary by print language; the ORDER never does. English, French and Portuguese
+// all write the day first, so the ambiguous-numeric defect this module exists to prevent
+// (`07/08/2026`) cannot come back through a locale that reorders the parts.
+describe('formatDisplayDate per print language', () => {
+  it('prints French and Portuguese month names', () => {
+    expect(formatDisplayDate('2026-09-02', 'fr')).toBe('2 sept. 2026');
+    expect(formatDisplayDate('2026-09-02', 'pt')).toBe('2 set. 2026');
+    expect(formatDisplayDate('2026-08-12', 'fr')).toBe('12 août 2026');
+  });
+
+  it('an absent, unknown or English language prints exactly what it always did', () => {
+    expect(formatDisplayDate('2026-09-02')).toBe('2 Sep 2026');
+    expect(formatDisplayDate('2026-09-02', 'en')).toBe('2 Sep 2026');
+    expect(formatDisplayDate('2026-09-02', 'sw')).toBe('2 Sep 2026');
+  });
+
+  it('resolves a regional tag by its base language', () => {
+    expect(formatDisplayDate('2026-09-02', 'pt-BR')).toBe('2 set. 2026');
+    expect(formatDisplayDate('2026-09-02', 'en-GB')).toBe('2 Sep 2026');
+  });
+
+  it('is still a filter: a non-date passes through in every language', () => {
+    expect(formatDisplayDate('—', 'fr')).toBe('—');
+    expect(formatDisplayDate('2026-02-30', 'fr')).toBe('2026-02-30');
+    expect(formatDisplayDate('BAMAA', 'pt')).toBe('BAMAA');
+  });
+
+  it('formatDisplayDateOf follows the same language', () => {
+    expect(formatDisplayDateOf(new Date(2026, 8, 2), 'fr')).toBe('2 sept. 2026');
+    expect(formatDisplayDateOf(new Date(2026, 8, 2))).toBe('2 Sep 2026');
+    expect(formatDisplayDateOf(new Date(NaN), 'fr')).toBe('—');
+  });
+});

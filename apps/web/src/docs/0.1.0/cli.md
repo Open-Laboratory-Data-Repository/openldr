@@ -150,8 +150,9 @@ Run a report:
 ./openldr report run <id> --format pdf --lang fr --out rapport.pdf
 ```
 
-`--lang` prints the translations stored on the design. Text with no translation for that language
-prints as authored, and data is never translated.
+`--lang` prints the translations stored on the design, including the dates. The built-in reports
+ship with French and Portuguese, so this works on them with no setup. Text with no translation for
+that language prints as authored, and data is never translated.
 
 Enroll a lab on the central server, then connect a lab to it:
 

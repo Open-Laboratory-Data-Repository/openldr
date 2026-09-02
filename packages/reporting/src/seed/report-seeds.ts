@@ -2,6 +2,7 @@ import type { NewCustomQuery, ReportRecord, CustomQueryStore, ReportStore, Conne
 import type { ReportDesign, ReportDesignStore } from '@openldr/report-designer';
 import { designContentFingerprint } from '@openldr/report-designer/pure';
 import { simpleTableDesign } from './simple-design';
+import { applySeedTranslations } from './design-translations';
 
 // NOTE on why this isn't `import type { SqlDialect } from '@openldr/dashboards'` (as the plan
 // sketch suggested): `@openldr/dashboards` already depends on `@openldr/reporting` (for the
@@ -4481,7 +4482,10 @@ const TG_SIG_W = 180; // measured 145.23, +34.77 headroom
 const TG_SIG_X = 48 + TG_CONTENT_W - TG_SIG_W;
 
 /** Report-designer page designs, one table bound to a `SEED_QUERIES` entry (via `simpleTableDesign`). */
-export const SEED_DESIGNS: ReportDesign[] = [
+/** The built-in designs, each with its French and Portuguese filled in from
+ *  `SEED_DESIGN_TEXT`. Authored here in English only: the translations are generated so nine
+ *  designs cannot drift apart on the labels they share. */
+export const SEED_DESIGNS: ReportDesign[] = ([
   simpleTableDesign({
     id: 'rt-amr-resistance',
     name: 'AMR Resistance Rate',
@@ -4935,7 +4939,7 @@ export const SEED_DESIGNS: ReportDesign[] = [
     ] }],
     pageNumbers: true,
   },
-];
+] as ReportDesign[]).map(applySeedTranslations);
 
 /** `reports` records linking a `SEED_DESIGNS` design to its `SEED_QUERIES` primary query. */
 export const SEED_REPORT_DEFS: ReportRecord[] = [

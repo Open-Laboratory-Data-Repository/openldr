@@ -71,7 +71,7 @@ export function renderReportDesignPdf(
   // design whose text happens to be in the run's language, so no drawing code knows languages
   // exist — the same discipline `resolveGroups` follows on the next line.
   const design = resolveI18n(rawDesign, opts.lang);
-  const tokens = paramMap(design, now, opts.identity, opts.values);
+  const tokens = paramMap(design, now, opts.identity, opts.values, opts.lang);
   // ⛔ Groups resolved ONCE, here, before anything counts or draws. Downstream every function sees
   // plain `hidden`/`locked` element flags and needs no knowledge of groups — which is what stops
   // the chunk count and the drawing loop from ever disagreeing about a hidden group.

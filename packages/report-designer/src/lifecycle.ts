@@ -30,6 +30,12 @@ export function designContentFingerprint(d: ReportDesign): string {
     pageNumbers: d.pageNumbers ?? false,
     parameters: d.parameters ?? [],
     pages: d.pages ?? [],
+    // ⛔ Printed translations are CONTENT. Leaving them out gave two silent failures at once: the
+    // boot seeder saw no drift, so a shipped translation could never reach an install that already
+    // had the design; and a studio edit that changed only a translation did not count as a change,
+    // so a published design kept printing new words without being re-published. `?? null` for the
+    // same reason `margins` has it — never-set and cleared are one content.
+    i18n: d.i18n ?? null,
   });
 }
 

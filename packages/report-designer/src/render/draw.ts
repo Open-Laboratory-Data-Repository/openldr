@@ -280,6 +280,9 @@ const UNSET = '—';
 
 export function paramMap(
   design: ReportDesign, now: Date, identity?: Record<string, string>, values?: Record<string, unknown>,
+  /** The run's print language, for month names only. Absent prints English, so an untranslated
+   *  design is byte-identical to before this existed. */
+  lang?: string,
 ): Map<string, string> {
   const m = new Map<string, string>();
   for (const p of design.parameters) {
@@ -292,8 +295,8 @@ export function paramMap(
       // Formatted for the page, not left as raw ISO — the audit called the ISO range mechanical.
       // `formatDisplayDate` passes anything that is not a plain ISO date through untouched, so the
       // UNSET em dash below survives as an em dash.
-      m.set('from', formatDisplayDate((values?.from as string) || dflt.from || UNSET));
-      m.set('to', formatDisplayDate((values?.to as string) || dflt.to || UNSET));
+      m.set('from', formatDisplayDate((values?.from as string) || dflt.from || UNSET, lang));
+      m.set('to', formatDisplayDate((values?.to as string) || dflt.to || UNSET, lang));
       continue;
     }
     // Every other parameter is keyed by its own name in both places. The RUN's value wins over the
@@ -308,9 +311,9 @@ export function paramMap(
     // function is a filter, not a parser: it returns its input unchanged unless the value is
     // exactly `YYYY-MM-DD` and a real calendar date, so a code, a GLASS year, or a
     // `Name (CODE)` label built by `withDisplayLabels` passes through untouched.
-    m.set(p.key, typeof v === 'string' && v !== '' ? formatDisplayDate(v) : UNSET);
+    m.set(p.key, typeof v === 'string' && v !== '' ? formatDisplayDate(v, lang) : UNSET);
   }
-  m.set('date', formatDisplayDateOf(now));
+  m.set('date', formatDisplayDateOf(now, lang));
   // Namespaced, and added LAST so a design parameter can never shadow the lab's own identity —
   // a report whose letterhead could be overwritten by a parameter value is a forgery risk, not a
   // convenience.

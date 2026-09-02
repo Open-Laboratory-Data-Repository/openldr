@@ -36,7 +36,16 @@ export function PdfCanvasViewer({ blob, fileName, onDownload }: Props) {
       .then(() => blob.arrayBuffer())
       .then((buf) => {
         if (cancelled) return;
-        const task = pdfjs.getDocument({ data: new Uint8Array(buf) });
+        // ⛔ `standardFontDataUrl` is not optional here. A report PDF references Helvetica and
+        // Helvetica-Bold and embeds neither — they are standard PDF fonts the VIEWER supplies.
+        // Without this pdfjs falls back to a substitute with the wrong metrics and every preview
+        // renders with the letters spaced apart, while the same file opens correctly in Acrobat
+        // or the browser's own viewer. The directory is served by `pdfjsStandardFonts` in
+        // vite.config.ts. Trailing slash required: pdfjs appends the filename to it.
+        const task = pdfjs.getDocument({
+          data: new Uint8Array(buf),
+          standardFontDataUrl: `${import.meta.env.BASE_URL}standard_fonts/`,
+        });
         loadingTaskRef.current = task;
         return task.promise.then((doc) => {
           if (cancelled) return;
