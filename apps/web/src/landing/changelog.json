@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "23e15c41",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Delete facilities in bulk, scoped by the table's filter"
+        },
+        {
           "hash": "f0cf7176",
           "type": "fix",
           "scope": "facilities",
