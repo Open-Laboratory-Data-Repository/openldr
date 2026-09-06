@@ -6,6 +6,78 @@
       "version": null,
       "entries": [
         {
+          "hash": "02d7f6fd",
+          "type": "fix",
+          "scope": "i18n",
+          "title": "Shorten the French mapping step so the strip fits at 375"
+        },
+        {
+          "hash": "7f88982a",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Gate the step action and explain an empty mapping step"
+        },
+        {
+          "hash": "c96c4e55",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Retreat to Mapping from any step when the column map is refused"
+        },
+        {
+          "hash": "3bc604a2",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "One action button, and keep a refused map fixable in place"
+        },
+        {
+          "hash": "c155a4aa",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Let Continue actually advance the import sheet"
+        },
+        {
+          "hash": "56a222be",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "State the register requirement where it blocks the import"
+        },
+        {
+          "hash": "bc36719e",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "One visible primary action per import step"
+        },
+        {
+          "hash": "0c2079cf",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Gate the import sheet body by step"
+        },
+        {
+          "hash": "c405fea1",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Land the step model import updates"
+        },
+        {
+          "hash": "40e4b65e",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Rename the step model so it stops colliding with the component"
+        },
+        {
+          "hash": "d3031586",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "A step indicator for the import sheet"
+        },
+        {
+          "hash": "303bc5d0",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "A step model for the import sheet"
+        },
+        {
           "hash": "23e15c41",
           "type": "feat",
           "scope": "facilities",
