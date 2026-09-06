@@ -662,7 +662,7 @@ The fix for "you cannot start". A fresh install has no register, and today the o
     });
 
     it('goes back to the ordinary Continue action once a register exists', async () => {
-      // A bare array, NOT `{ rows }` — that is this client's actual shape, and the file's own
+      // A bare array, NOT `{ rows }`. That is this client's actual shape, and the file's own
       // HFR_SOURCE fixture is the same. Getting it wrong makes `sources.length === 0` stay true and
       // the test passes for the wrong reason.
       mocked(api.listFacilityImportSources).mockResolvedValue([HFR_SOURCE]);
