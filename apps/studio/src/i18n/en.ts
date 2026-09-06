@@ -893,6 +893,13 @@ export const en = {
     import: {
       menuItem: 'Import facilities',
       actions: 'Import actions',
+      steps: {
+        label: 'Import steps',
+        source: 'Source',
+        mapping: 'Mapping',
+        review: 'Review',
+        position: 'Step {{current}} of 3',
+      },
       title: 'Import facilities',
       description: 'Upload a CSV export from a national facility register and preview it before writing anything.',
       fileLabel: 'File',

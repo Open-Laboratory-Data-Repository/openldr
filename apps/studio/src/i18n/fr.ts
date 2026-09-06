@@ -880,6 +880,13 @@ export const fr: EnShape = {
     import: {
       menuItem: 'Importer des établissements',
       actions: 'Actions d’importation',
+      steps: {
+        label: "Étapes de l'import",
+        source: "Source",
+        mapping: "Correspondance",
+        review: "Vérification",
+        position: "Étape {{current}} sur 3",
+      },
       title: 'Importer des établissements',
       description: 'Téléversez un export CSV d’un registre national d’établissements et prévisualisez-le avant toute écriture.',
       fileLabel: 'Fichier',

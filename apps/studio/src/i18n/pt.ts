@@ -880,6 +880,13 @@ export const pt: EnShape = {
     import: {
       menuItem: 'Importar unidades',
       actions: 'Ações de importação',
+      steps: {
+        label: "Passos da importação",
+        source: "Origem",
+        mapping: "Mapeamento",
+        review: "Revisão",
+        position: "Passo {{current}} de 3",
+      },
       title: 'Importar unidades',
       description: 'Carregue uma exportação CSV de um registo nacional de unidades e pré-visualize-a antes de escrever seja o que for.',
       fileLabel: 'Ficheiro',
