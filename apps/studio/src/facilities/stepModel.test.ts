@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { furthestStep, clampStep, canGoBack, type StepGate } from './importSteps';
+import { furthestStep, clampStep, canGoBack, type StepGate } from './stepModel';
 
 const gate = (over: Partial<StepGate> = {}): StepGate => ({
   hasFile: false, hasRegister: false, hasReview: false, runActive: false, ...over,

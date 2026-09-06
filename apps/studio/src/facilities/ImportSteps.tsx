@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/cn';
 import { Button } from '@/components/ui/button';
-import type { ImportStep } from './importSteps';
+import type { ImportStep } from './stepModel';
 
 const STEPS: { step: ImportStep; key: string }[] = [
   { step: 1, key: 'facilities.import.steps.source' },
