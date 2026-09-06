@@ -1003,6 +1003,9 @@ describe('ImportFacilitiesSheet', () => {
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
     await pickFileAndSystem();
+    // Task 3: format/complete-release/release-version live on Source (step 1); picking a file and a
+    // register already advanced past it — go back to reach them.
+    fireEvent.click(screen.getByRole('button', { name: /1\s*Source/ }));
 
     fireEvent.click(screen.getByRole('combobox', { name: /file format/i }));
     fireEvent.click(await screen.findByRole('option', { name: /jsonl release/i }));
@@ -1162,6 +1165,9 @@ describe('ImportFacilitiesSheet', () => {
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
     await pickFileAndSystem();
+    // Task 3: format/release-version live on Source (step 1); go back to reach them — see the
+    // "sends format/completeRelease/releaseVersion" test above for the same fix.
+    fireEvent.click(screen.getByRole('button', { name: /1\s*Source/ }));
     fireEvent.click(screen.getByRole('combobox', { name: /file format/i }));
     fireEvent.click(await screen.findByRole('option', { name: /jsonl release/i }));
     fireEvent.change(screen.getByLabelText('Release version'), { target: { value: 'r7' } });
@@ -1506,6 +1512,8 @@ describe('ImportFacilitiesSheet', () => {
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
     await pickFileAndSystem();
+    // Task 3: the complete-release checkbox lives on Source (step 1) — go back to reach it.
+    fireEvent.click(screen.getByRole('button', { name: /1\s*Source/ }));
     fireEvent.click(screen.getByRole('checkbox', { name: /this file is a complete release/i }));
     await uploadNow();
 
@@ -1918,10 +1926,15 @@ describe('ImportFacilitiesSheet', () => {
     await pickFileAndSystem('MFL Code,Name\n1835,Namatindi RHC\n');
     expect(await screen.findByLabelText('MFL Code')).toHaveTextContent('national_code');
 
+    // Task 3: the File input lives on Source (step 1); picking a file and a register already
+    // advanced past it. Go back to Source to pick a different file, then forward again to see the
+    // mapping panel react to it.
+    fireEvent.click(screen.getByRole('button', { name: /1\s*Source/ }));
     // Pick a DIFFERENT file — headers the first file's mapping decisions know nothing about.
     fireEvent.change(screen.getByLabelText('File'), {
       target: { files: [csvFile('Code,Facility Name\nX,Y\n')] },
     });
+    fireEvent.click(screen.getByRole('button', { name: /2\s*Mapping/ }));
 
     expect(await screen.findByLabelText('Code')).toHaveTextContent('Not mapped');
     expect(screen.queryByLabelText('MFL Code')).not.toBeInTheDocument();
@@ -1964,6 +1977,11 @@ describe('ImportFacilitiesSheet', () => {
     expect(await screen.findByText(
       /"MFL Code 2" and "MFL Code" both map to "national_code"/,
     )).toBeInTheDocument();
+
+    // Task 3: a column-map refusal still counts as reviewed (`hasReview`), so the sheet auto-advances
+    // to Review (step 3), where the refusal text above now lives. The panel that fixes it moved to
+    // Mapping (step 2) — go back to reach it.
+    fireEvent.click(screen.getByRole('button', { name: /2\s*Mapping/ }));
 
     // ⛔ THE OTHER HALF OF THE FIX: before it, `ColumnMapStep` unmounted the instant `reviewResult`
     // existed (its own render gate read `!reviewResult`), so the very panel needed to fix the
@@ -2067,6 +2085,11 @@ describe('ImportFacilitiesSheet', () => {
     await uploadNow();
 
     expect(await screen.findByText(/"zone" and "Province" both map to "zone"/)).toBeInTheDocument();
+
+    // Task 3: an uploaded run counts as reviewed the instant it exists (`runId`), so the sheet is
+    // already on Review (step 3) here — go back to Mapping (step 2) to reach the panel.
+    fireEvent.click(screen.getByRole('button', { name: /2\s*Mapping/ }));
+
     // The panel the operator needs is still on screen, exactly as it is on the inline door.
     expect(screen.getByLabelText('Province')).toBeInTheDocument();
     expect(screen.getByLabelText('Zone')).toBeInTheDocument();
@@ -2105,6 +2128,10 @@ describe('ImportFacilitiesSheet', () => {
     await uploadNow();
     await screen.findByText(/both map to "zone"/);
 
+    // Task 3: go back to Mapping (step 2) to reach the panel — see the "keeps ColumnMapStep mounted"
+    // test above for why the sheet is on Review (step 3) at this point.
+    fireEvent.click(screen.getByRole('button', { name: /2\s*Mapping/ }));
+
     // Fix it in place: send Zone to extras, which is what actually releases its passthrough claim.
     fireEvent.click(screen.getByLabelText('Zone'));
     fireEvent.click(await screen.findByRole('option', { name: 'Not mapped' }));
@@ -2115,5 +2142,61 @@ describe('ImportFacilitiesSheet', () => {
     expect(mocked(api.uploadFacilityImport).mock.calls[1][0]).toEqual(
       expect.objectContaining({ columnMap: expect.objectContaining({ extras: ['Zone'] }) }),
     );
+  });
+
+  describe('the step shell', () => {
+    it('starts on Source and does not show the mapping panel yet', async () => {
+      mocked(api.suggestColumnMap).mockResolvedValue({ headers: [], columns: [] });
+      render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+      expect(await screen.findByRole('button', { name: /1\s*Source/ }))
+        .toHaveAttribute('aria-current', 'step');
+      expect(screen.getByRole('button', { name: /2\s*Mapping/ })).toBeDisabled();
+    });
+
+    it('opens Mapping once a file and a register are chosen, and shows the column map there', async () => {
+      mocked(api.suggestColumnMap).mockResolvedValueOnce({
+        headers: ['MFL Code'],
+        columns: [{ header: 'MFL Code', candidates: [] }],
+      });
+      render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+      await pickFileAndSystem();
+
+      // Task 3: picking a file and a register already earns Mapping (`furthestStep` does not require
+      // a review), so the sheet auto-advances there on its own — there is no Continue button yet in
+      // this task (Task 4 adds it). This asserts the panel arrived without one.
+      expect(await screen.findByLabelText('MFL Code')).toBeInTheDocument();
+    });
+
+    // The register picker and the file input belong to step 1 and must not be on screen at step 2:
+    // leaving them there is what made five stages read as one scrolling surface.
+    it('hides the source inputs once past Source', async () => {
+      mocked(api.suggestColumnMap).mockResolvedValueOnce({
+        headers: ['MFL Code'],
+        columns: [{ header: 'MFL Code', candidates: [] }],
+      });
+      render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+      await pickFileAndSystem();
+      await screen.findByLabelText('MFL Code');
+
+      expect(screen.queryByLabelText('File')).not.toBeInTheDocument();
+      expect(screen.queryByRole('combobox', { name: 'National system' })).not.toBeInTheDocument();
+    });
+
+    it('goes back to Source and shows those inputs again', async () => {
+      mocked(api.suggestColumnMap).mockResolvedValueOnce({
+        headers: ['MFL Code'],
+        columns: [{ header: 'MFL Code', candidates: [] }],
+      });
+      render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+      await pickFileAndSystem();
+      await screen.findByLabelText('MFL Code');
+      fireEvent.click(screen.getByRole('button', { name: /1\s*Source/ }));
+
+      expect(await screen.findByLabelText('File')).toBeInTheDocument();
+    });
   });
 });

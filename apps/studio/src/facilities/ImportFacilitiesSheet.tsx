@@ -35,7 +35,9 @@ import {
   type FacilityRegisterSource,
 } from '@/api';
 import { ColumnMapStep, CONTRACT_FIELDS } from './ColumnMapStep';
+import { ImportSteps } from './ImportSteps';
 import { RegisterSourceDialog } from './RegisterSourceDialog';
+import { canGoBack, clampStep, furthestStep, type ImportStep } from './stepModel';
 import { ValueMapPanel } from './ValueMapPanel';
 
 // CT-3 (whole-branch review): `FacilityImportResult.unmapped`/`notValidated` are keyed by this
@@ -645,6 +647,10 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   const { t } = useTranslation();
 
   const [file, setFile] = useState<File | null>(null);
+  /** ⛔ REQUESTED, not effective. `clampStep` below is what actually renders, so a step the operator
+   *  has not earned can never be shown even if this holds a stale value: picking a different file
+   *  drops `hasReview` and the view falls back on its own, with no extra reset to remember. */
+  const [requestedStep, setRequestedStep] = useState<ImportStep>(1);
   const [csv, setCsv] = useState<string | null>(null);
   // B1 Task 9: holds the CHOSEN SOURCE'S URI, and only ever that — see `handleNationalSystemChange`
   // and the `Select` below. Before this task it was a free-text box hashed straight into every
@@ -1273,6 +1279,31 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   const appliedSummary: FacilityImportResult | null =
     applyResult ?? (run && run.status === 'applied' ? run.summary : null);
 
+  // Task 3: the three-step shell. Placed here, after `appliedSummary`, because `stepGate` reads it —
+  // any earlier and the derivation below would use a value that does not exist yet.
+  //
+  // ⛔ `hasReview` ALSO CHECKS `runId`, not just `reviewResult`/`appliedSummary`. An upload sets
+  // `runId` the instant it resolves, but `reviewResult` (which reads `awaitingSummary`, which reads
+  // `run`) stays null until the FIRST POLL answers. Without `runId` here, the operator who just
+  // uploaded a file would sit on Mapping — nothing rendered there once `run` mounts and hides
+  // `ColumnMapStep` — watching nothing happen until that poll came back.
+  const stepGate = {
+    hasFile: !!file,
+    hasRegister: nationalSystem.trim() !== '',
+    hasReview: reviewResult !== null || appliedSummary !== null || runId !== null,
+    runActive,
+  };
+  const furthest = furthestStep(stepGate);
+  const step = clampStep(requestedStep, stepGate);
+  const showBack = canGoBack(step, stepGate);
+
+  // Auto-advance ONLY forward, and only to a step the operator has earned. Without this, uploading
+  // from Mapping would leave them on Mapping staring at a panel while the summary rendered below
+  // the fold. Never rewinds: `clampStep` already handles falling back when a file is swapped.
+  useEffect(() => {
+    setRequestedStep((prev) => (furthest > prev ? furthest : prev));
+  }, [furthest]);
+
   // F5 fix: `!csv` covers "still reading" AND "0-byte file" identically (both leave `csv` falsy),
   // so a genuinely empty file left Preview disabled forever with nothing on screen explaining why.
   // `csv === ''` (as opposed to `null`) only ever happens once `File.text()` has actually resolved
@@ -1362,7 +1393,8 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
           <SheetDescription>{t('facilities.import.description')}</SheetDescription>
         </SheetHeader>
 
-        <div className="flex items-center justify-end px-6 py-3">
+        <div className="flex items-center justify-between gap-2 px-6 py-3">
+          <ImportSteps current={step} furthest={furthest} onSelect={setRequestedStep} />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" aria-label={t('facilities.import.actions')}>
@@ -1470,6 +1502,11 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
             <div className="mx-6 mt-4 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</div>
           ) : null}
 
+          {/* Task 3: the source inputs — File, National system, File format, complete release and
+              Release version — belong to Source (step 1) alone. Leaving them on screen at every step
+              is what made five stages read as one scrolling surface; gone once the operator has
+              picked a file and a register, back the moment they navigate to Source again. */}
+          {step === 1 && (
           <div className="grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-3 px-6 py-4 border-b border-border">
             <Label htmlFor="facility-import-file" className="whitespace-nowrap">{t('facilities.import.fileLabel')}</Label>
             <div>
@@ -1583,6 +1620,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
               disabled={inputsDisabled}
             />
           </div>
+          )}
 
           {/* A2b: the run's own state. PHASE-FIRST and deliberately so — `total`/`processed` are
               published only for an apply of at least 5 000 rows (the worker's measured
@@ -1598,11 +1636,13 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
           )}
           {/* ⚠ `!error` matters: the poll's catch STOPS the chain and leaves `run` null, so without
               it this line went on claiming an activity that had already given up — underneath the
-              error box explaining that it had. */}
-          {runId && !run && !error && (
+              error box explaining that it had. Task 3: gated to Review (step 3) with the rest of the
+              run status blocks below — `hasReview` (and so `step === 3`) is already true the instant
+              `runId` is set, so this shows exactly when it used to. */}
+          {step === 3 && runId && !run && !error && (
             <p className="mx-6 mt-4 text-sm text-muted-foreground">{t('facilities.import.runLoading')}</p>
           )}
-          {run && RUN_ACTIVE_STATUSES.includes(run.status) && (
+          {step === 3 && run && RUN_ACTIVE_STATUSES.includes(run.status) && (
             <div className="mx-6 mt-4 rounded-md border border-border px-3 py-2 text-xs space-y-1">
               <p className="font-medium">{t(`facilities.import.runStatus.${run.status}`)}</p>
               {run.phase && <p className="text-muted-foreground">{t('facilities.import.runPhase', { phase: run.phase })}</p>}
@@ -1620,14 +1660,14 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
               operator it was "cancelled" would be a claim about a national register that the server
               never made. Only the 200 `cancelled` answer — a run in a state no worker claims, which
               the route terminated itself — may say so. */}
-          {cancelOutcome && run && !RUN_TERMINAL_STATUSES.includes(run.status) && (
+          {step === 3 && cancelOutcome && run && !RUN_TERMINAL_STATUSES.includes(run.status) && (
             <div className="mx-6 mt-4 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700">
               {cancelOutcome === 'requested'
                 ? t('facilities.import.cancelRequestedNotice')
                 : t('facilities.import.cancelledNotice')}
             </div>
           )}
-          {run?.status === 'cancelled' && (
+          {step === 3 && run?.status === 'cancelled' && (
             <div className="mx-6 mt-4 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700">
               {t('facilities.import.cancelledNotice')}
             </div>
@@ -1636,7 +1676,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
               newer upload of the same register can take the run over and it ends here instead. The
               operator sees that only because the sheet kept polling — which is why this block
               exists at all rather than the run simply vanishing from the screen. */}
-          {run?.status === 'failed' && (
+          {step === 3 && run?.status === 'failed' && (
             <div className="mx-6 mt-4 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
               <p className="font-medium">{t('facilities.import.runFailedTitle')}</p>
               {run.error && <p className="text-xs">{run.error}</p>}
@@ -1651,7 +1691,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
               on screen (`!reviewResult`): the design's own flow maps columns exactly once, before
               the file ever leaves this tab, and the operator cannot edit it again afterwards — see
               `columnMap`'s own reset-on-file-swap comment for why it must not persist past that. */}
-          {format === 'csv' && columnMapHeaders.length > 0 && !appliedSummary
+          {step === 2 && format === 'csv' && columnMapHeaders.length > 0 && !appliedSummary
             // ⛔ `!run` alone would unmount the panel the instant an upload resolves — see
             // `columnMapRefused` for the field report that cost. A run still hides it for every
             // OTHER state (validating, applying, a clean summary), preserving the "map columns
@@ -1685,7 +1725,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
             </div>
           )}
 
-          {reviewResult && !appliedSummary && (
+          {step === 3 && reviewResult && !appliedSummary && (
             <ReconciliationSummary
               result={reviewResult}
               nationalSystem={nationalSystem.trim()}
@@ -1715,7 +1755,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
             />
           )}
 
-          {appliedSummary && (
+          {step === 3 && appliedSummary && (
             <div className="mx-6 mt-4 space-y-2 text-sm">
               {/* ⛔ A file that produced NO ROWS is not a completed import, and saying so in green
                   is how the Zambia team read "Import complete. Created 0, updated 0, skipped 0."
