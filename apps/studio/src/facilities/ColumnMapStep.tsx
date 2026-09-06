@@ -330,7 +330,12 @@ export function ColumnMapStep({
                   id={`column-map-constant-${field}`}
                   value={value.constants?.[field] ?? ''}
                   onChange={(e) => setConstant(field, e.target.value)}
-                  placeholder={t('facilities.import.columnMap.constantPlaceholder')}
+                  // One shared placeholder used to put "e.g. ZMB" on every row, so region,
+                  // council, village, address and phone all suggested a country code. The ISO
+                  // example belongs to `country` and nowhere else.
+                  placeholder={field === 'country'
+                    ? t('facilities.import.columnMap.constantPlaceholderCountry')
+                    : t('facilities.import.columnMap.constantPlaceholder')}
                 />
               </Fragment>
             ))}

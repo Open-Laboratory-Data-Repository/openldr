@@ -1,6 +1,6 @@
 import * as React from 'react';
 import * as SelectPrimitive from '@radix-ui/react-select';
-import { Check, ChevronDown } from 'lucide-react';
+import { Check, ChevronDown, ChevronUp } from 'lucide-react';
 import { cn } from '@/lib/cn';
 
 export const Select = SelectPrimitive.Root;
@@ -30,6 +30,49 @@ export const SelectTrigger = React.forwardRef<
 ));
 SelectTrigger.displayName = 'SelectTrigger';
 
+/** ⛔ A LONG LIST USED TO BE UNREACHABLE, and both halves of the fix are load-bearing.
+ *
+ *  This had `overflow-hidden` and NO height bound at all, so a Select with more items than fit on
+ *  screen simply grew past the viewport and had its overflow clipped away. Measured on the facility
+ *  import column map, whose Select carries the 16 contract fields plus "Not mapped": on a phone the
+ *  list opened part-way down its own contents and the first several fields could not be reached by
+ *  any means. `--radix-select-content-available-height` is Radix's own measurement of the room
+ *  between the trigger and the viewport edge, so the list now bounds itself to what actually fits.
+ *
+ *  ⚠ THE SCROLL BUTTONS ARE NOT DECORATION. Select content is PORTALLED, and inside a Sheet or a
+ *  Dialog `react-remove-scroll` permits scrolling only within that surface's own subtree, so a
+ *  portalled list gets no wheel or touch scrolling. The same trap already bit a `PopoverContent`
+ *  inside a Sheet in this app. Radix's scroll buttons move the viewport programmatically and are
+ *  therefore the only thing that reaches the hidden items from inside a Sheet. `overflow-y-auto`
+ *  below covers the ordinary page case where native scrolling does work. */
+export const SelectScrollUpButton = React.forwardRef<
+  React.ElementRef<typeof SelectPrimitive.ScrollUpButton>,
+  React.ComponentPropsWithoutRef<typeof SelectPrimitive.ScrollUpButton>
+>(({ className, ...props }, ref) => (
+  <SelectPrimitive.ScrollUpButton
+    ref={ref}
+    className={cn('flex cursor-default items-center justify-center py-1', className)}
+    {...props}
+  >
+    <ChevronUp className="h-4 w-4" />
+  </SelectPrimitive.ScrollUpButton>
+));
+SelectScrollUpButton.displayName = 'SelectScrollUpButton';
+
+export const SelectScrollDownButton = React.forwardRef<
+  React.ElementRef<typeof SelectPrimitive.ScrollDownButton>,
+  React.ComponentPropsWithoutRef<typeof SelectPrimitive.ScrollDownButton>
+>(({ className, ...props }, ref) => (
+  <SelectPrimitive.ScrollDownButton
+    ref={ref}
+    className={cn('flex cursor-default items-center justify-center py-1', className)}
+    {...props}
+  >
+    <ChevronDown className="h-4 w-4" />
+  </SelectPrimitive.ScrollDownButton>
+));
+SelectScrollDownButton.displayName = 'SelectScrollDownButton';
+
 export const SelectContent = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitive.Content>
@@ -39,12 +82,17 @@ export const SelectContent = React.forwardRef<
       ref={ref}
       position={position}
       className={cn(
-        'relative z-50 min-w-[8rem] overflow-hidden rounded-md border border-border bg-popover text-popover-foreground shadow-md',
+        'relative z-50 max-h-[var(--radix-select-content-available-height)] min-w-[8rem]',
+        'overflow-hidden rounded-md border border-border bg-popover text-popover-foreground shadow-md',
         className,
       )}
       {...props}
     >
-      <SelectPrimitive.Viewport className="p-1">{children}</SelectPrimitive.Viewport>
+      <SelectScrollUpButton />
+      <SelectPrimitive.Viewport className="max-h-[inherit] overflow-y-auto p-1">
+        {children}
+      </SelectPrimitive.Viewport>
+      <SelectScrollDownButton />
     </SelectPrimitive.Content>
   </SelectPrimitive.Portal>
 ));
