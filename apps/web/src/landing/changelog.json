@@ -6,6 +6,30 @@
       "version": null,
       "entries": [
         {
+          "hash": "87b00a9a",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "Say what was kept instead of warning about it"
+        },
+        {
+          "hash": "e9554a8f",
+          "type": "fix",
+          "scope": "cli",
+          "title": "A column map decides for the CLI door too"
+        },
+        {
+          "hash": "6f33bf76",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "The blocked verdict follows the parse it describes"
+        },
+        {
+          "hash": "c22e30d0",
+          "type": "feat",
+          "scope": "facilities",
+          "title": "A column map is the decision about every column"
+        },
+        {
           "hash": "89c896f5",
           "type": "fix",
           "scope": "ui",
