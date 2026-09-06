@@ -6,6 +6,12 @@
       "version": null,
       "entries": [
         {
+          "hash": "6ee01fd2",
+          "type": "fix",
+          "scope": "facilities",
+          "title": "Pin the import step action to the bottom of the sheet"
+        },
+        {
           "hash": "02d7f6fd",
           "type": "fix",
           "scope": "i18n",
