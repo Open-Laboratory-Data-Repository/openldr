@@ -251,16 +251,21 @@ export function ColumnMapStep({
           // Naturally absent for a colliding header: a collision is never auto-selected, so
           // `selected` there is `Not mapped`, never `top.target`.
           const showBadge = top?.confidence === 'likely' && selected === top.target;
-          // "Kept as extra" used to leave no trace on screen at all — the Select simply read
-          // "Not mapped", identical to a header nobody had touched, even though the two mean very
-          // different things to the parser. This badge is that difference, made visible.
-          const inExtras = (value.extras ?? []).includes(header);
           return (
             <Fragment key={header}>
-              <Label className="whitespace-nowrap" title={header}>{header}</Label>
-              <div className="flex items-center gap-2">
+              {/* ⛔ NOT `whitespace-nowrap`. Every label shares one `auto` grid column, so the
+                  longest header sized the whole column: "Catchment population head count" alone
+                  pushed this grid to 409px inside a 289px container at 375, and the panel scrolled
+                  sideways at desktop width too. Letting the text wrap lets `auto` shrink to the room
+                  it actually has. `title` still carries the full header for a hover. */}
+              <Label className="break-words" title={header}>{header}</Label>
+              {/* `min-w-0` on BOTH: a grid item and a flex child each default to a min-width of
+                  auto, so without it neither can shrink below its content and the row pins the
+                  column open. The trigger already truncates its own label ([&>span]:truncate in
+                  select.tsx); this is what lets that truncation actually engage. */}
+              <div className="flex min-w-0 items-center gap-2">
                 <Select value={selected} onValueChange={(v) => setColumn(header, v)}>
-                  <SelectTrigger aria-label={header} className="h-9 flex-1">
+                  <SelectTrigger aria-label={header} className="h-9 min-w-0 flex-1">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -273,21 +278,6 @@ export function ColumnMapStep({
                 {showBadge && (
                   <Badge variant="outline" className="shrink-0">
                     {t('facilities.import.columnMap.checkThisBadge')}
-                  </Badge>
-                )}
-                {/* ⚠ Measured at 375px: this grid's min-content width is 409px against a 289px
-                    container BEFORE any badge renders, because every `Label` here is
-                    `whitespace-nowrap` and "Catchment population head count" sizes the whole `auto`
-                    column at 217px. So the panel already scrolls sideways on a phone. This badge
-                    adds 117px to that scroll on the rows that carry it. Making the badge shrinkable
-                    does NOT help: `grid-cols-[auto_1fr]`'s 1fr track has a min-content floor, so
-                    the track stays wide however the badge is styled. `minmax(0,1fr)` takes it to
-                    428px, still over 289px, and deviates from the form-grid class AGENTS.md §5
-                    mandates. The real fix is the label column, which belongs to the mobile pass,
-                    not here. Kept identical to the `checkThisBadge` above it in the meantime. */}
-                {inExtras && (
-                  <Badge variant="secondary" className="shrink-0">
-                    {t('facilities.import.columnMap.keptAsExtraBadge')}
                   </Badge>
                 )}
                 <DropdownMenu>
@@ -325,7 +315,7 @@ export function ColumnMapStep({
           <div className="grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-3">
             {constantFields.map((field) => (
               <Fragment key={field}>
-                <Label htmlFor={`column-map-constant-${field}`} className="whitespace-nowrap">{field}</Label>
+                <Label htmlFor={`column-map-constant-${field}`} className="break-words">{field}</Label>
                 <Input
                   id={`column-map-constant-${field}`}
                   value={value.constants?.[field] ?? ''}
