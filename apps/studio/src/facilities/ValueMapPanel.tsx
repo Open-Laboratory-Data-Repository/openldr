@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   suggestValueMappings, writeFacilityValueMappings,
-  type ControlledField, type ValueMappingEntry, type ValueSuggestion,
+  type ControlledField, type ValueMappingEntry, type ValueSetOption, type ValueSuggestion,
 } from '@/api';
 
 // CT-3 (whole-branch review): mirrors `@openldr/bootstrap`'s `CONTROLLED_FIELDS` — same "mirrored,
@@ -61,6 +61,16 @@ export function ValueMapPanel({ nationalSystem, unmapped, onSaved }: ValueMapPan
   );
 
   const [candidatesByKey, setCandidatesByKey] = useState<Map<string, Candidates>>(new Map());
+  /** The field's WHOLE value set, which is what the operator picks from when the ranker offers
+   *  nothing. Keyed by field, not by row: every row of a field picks from the same set. */
+  const [optionsByField, setOptionsByField] = useState<Map<ControlledField, ValueSetOption[]>>(new Map());
+  /** Fields whose value set is not seeded on this install. The route already reported this as
+   *  `notValidated`; the panel used to ignore it and render pickers with nothing in them. */
+  const [unseededFields, setUnseededFields] = useState<Set<ControlledField>>(new Set());
+  /** Fields whose suggestion request FAILED. Distinct from `unseededFields` on purpose: "we could
+   *  not ask" and "there is nothing to ask about" look identical on screen otherwise, which is
+   *  exactly what made an operator's empty pickers unexplainable. */
+  const [failedFields, setFailedFields] = useState<Set<ControlledField>>(new Set());
   const [choices, setChoices] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [savedCount, setSavedCount] = useState<number | null>(null);
@@ -80,11 +90,22 @@ export function ValueMapPanel({ nationalSystem, unmapped, onSaved }: ValueMapPan
     seededRef.current = signature;
     setSavedCount(null);
     setError(null);
+    setUnseededFields(new Set());
+    setFailedFields(new Set());
     let cancelled = false;
     const seeded: Record<string, string> = {};
     void Promise.all(fields.map(async (field) => {
-      const res = await suggestValueMappings(field, unmapped[field]).catch(() => null);
-      if (cancelled || !res) return;
+      // ⛔ NOT `.catch(() => null)`. That swallow made a failed request indistinguishable from a
+      // value set with nothing in it: the panel rendered pickers offering only "Not mapped", with
+      // no error anywhere, and an operator reasonably read it as "there are no options".
+      const res = await suggestValueMappings(field, unmapped[field]).catch(() => 'failed' as const);
+      if (cancelled) return;
+      if (res === 'failed') {
+        setFailedFields((prev) => new Set(prev).add(field));
+        return;
+      }
+      setOptionsByField((prev) => new Map(prev).set(field, res.options ?? []));
+      if (res.notValidated) setUnseededFields((prev) => new Set(prev).add(field));
       setCandidatesByKey((prev) => {
         const next = new Map(prev);
         for (const v of res.values) next.set(rowKey(field, v.value), v.candidates);
@@ -176,6 +197,16 @@ export function ValueMapPanel({ nationalSystem, unmapped, onSaved }: ValueMapPan
       {fields.map((field) => (
         <div key={field} className="space-y-2">
           <p className="font-medium text-foreground">{t(`facilities.filters.${field}Label`)}</p>
+          {/* ⛔ TWO DIFFERENT CAUSES, ONE OLD SYMPTOM. Before this, a field whose value set was
+              missing and a field whose request failed both rendered pickers containing nothing but
+              "Not mapped", with no explanation, and an operator could not tell either from a value
+              set that simply had no close match. Each now says which it is. */}
+          {failedFields.has(field) && (
+            <p className="text-destructive">{t('facilities.import.valueMap.loadFailed')}</p>
+          )}
+          {!failedFields.has(field) && unseededFields.has(field) && (
+            <p className="text-muted-foreground">{t('facilities.import.valueMap.noValueSet')}</p>
+          )}
           <div className="grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-2">
             {unmapped[field].map((value) => {
               const key = rowKey(field, value);
@@ -193,11 +224,22 @@ export function ValueMapPanel({ nationalSystem, unmapped, onSaved }: ValueMapPan
                       <SelectTrigger aria-label={value} className="h-8 flex-1 text-xs">
                         <SelectValue />
                       </SelectTrigger>
+                      {/* ⛔ RANKED FIRST, THEN THE REST OF THE SET. `candidates` is what the ranker
+                          thinks this value looks like and is legitimately empty when nothing
+                          resembles it. Listing only those left `Functional` with no way to reach
+                          `active`, because it resembles none of active/suspended/inactive. The
+                          ranking still earns the top slots; the rest of the set is what makes a
+                          human judgement expressible at all. */}
                       <SelectContent>
                         <SelectItem value={UNMAPPED}>{t('facilities.import.valueMap.notMapped')}</SelectItem>
                         {candidates.map((c) => (
                           <SelectItem key={c.target} value={c.target}>{c.display ?? c.target}</SelectItem>
                         ))}
+                        {(optionsByField.get(field) ?? [])
+                          .filter((o) => !candidates.some((c) => c.target === o.code))
+                          .map((o) => (
+                            <SelectItem key={o.code} value={o.code}>{o.display ?? o.code}</SelectItem>
+                          ))}
                       </SelectContent>
                     </Select>
                     {showBadge && (

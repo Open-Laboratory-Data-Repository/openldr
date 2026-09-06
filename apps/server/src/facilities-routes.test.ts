@@ -3214,6 +3214,48 @@ describe('POST /api/facilities/import/suggest-values', () => {
     expect(byValue['Temporarily closure']).toEqual([]);
   });
 
+  // ⛔ THE WHOLE VALUE SET, not just what the ranker liked. The test above says it exactly right:
+  // "Mapping them is a human judgement, and the engine says so by offering nothing." The engine is
+  // correct to offer nothing, but the studio rendered ONLY those candidates, so a human handed a
+  // judgement to make had no way to make it: `Functional` scores against none of active/suspended/
+  // inactive, and the picker came up empty. Reported by an operator on the real Zambia export.
+  it('returns the field\'s whole value set, so a human can decide where the ranker cannot', async () => {
+    const internalDb = await makeMigratedDb();
+    const app = await appWith(fakeCreateCtx(internalDb));
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities/import/suggest-values',
+      payload: { field: 'status', values: ['Functional'] },
+    });
+
+    expect(res.statusCode).toBe(200);
+    // Still no candidate, which is the honest ranking...
+    expect(res.json().values[0].candidates).toEqual([]);
+    // ...and the three codes are offered anyway, so `Functional -> active` is expressible.
+    expect(res.json().options.map((o: any) => o.code).sort())
+      .toEqual(['active', 'inactive', 'suspended']);
+    expect(res.json().options.find((o: any) => o.code === 'active').display).toBe('Active');
+  });
+
+  it('returns no options when the field has no value set, alongside notValidated', async () => {
+    // The panel needs to tell "nothing matched" apart from "there is nothing to match against".
+    const internalDb = await makeMigratedDb();
+    const ctx = fakeCreateCtx(internalDb);
+    const realGetByUrl = ctx.terminology.admin.valueSets.getByUrl.bind(ctx.terminology.admin.valueSets);
+    ctx.terminology.admin.valueSets.getByUrl = (async (url: string) => (
+      url === 'urn:openldr:valueset:location-status' ? null : realGetByUrl(url)
+    )) as typeof ctx.terminology.admin.valueSets.getByUrl;
+    const app = await appWith(ctx);
+
+    const res = await app.inject({
+      method: 'POST', url: '/api/facilities/import/suggest-values',
+      payload: { field: 'status', values: ['Functional'] },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json().notValidated).toBe(true);
+    expect(res.json().options).toEqual([]);
+  });
+
   it('refuses suggest-values for a field that is not controlled', async () => {
     const app = await appWith(fakeCtx());
     const res = await app.inject({

@@ -1098,6 +1098,8 @@ export const en = {
         saveAction: 'Save mappings',
         saving: 'Saving…',
         notMapped: 'Not mapped',
+        loadFailed: 'The options for this field could not be loaded. Check the connection and reopen this panel.',
+        noValueSet: 'This field has no value set on this install, so there is nothing to map onto yet. Add one under Terminology.',
         savedCount: '{{count}} mapping(s) written.',
       },
     },

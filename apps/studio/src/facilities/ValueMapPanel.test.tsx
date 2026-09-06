@@ -151,4 +151,53 @@ describe('ValueMapPanel', () => {
       'urn:zm:mfl', [{ field: 'level', rawValue: 'Health Centre', toCode: 'health-post' }],
     ));
   });
+
+  // ── The dead end an operator hit on the real Zambia export. Reported as "what do i do with
+  // level/status warning ... I dont see any options". ──────────────────────────────────────────────
+
+  it('⛔ offers the whole value set, so a value the ranker cannot place is still mappable', async () => {
+    // `Functional` resembles none of active/suspended/inactive, so the ranker honestly returns no
+    // candidates. The panel used to render ONLY candidates, so the single most obvious mapping in
+    // the file could not be expressed at all.
+    mocked(api.suggestValueMappings).mockResolvedValue({
+      values: [{ value: 'Functional', candidates: [] }],
+      options: [
+        { code: 'active', display: 'Active' },
+        { code: 'suspended', display: 'Suspended' },
+        { code: 'inactive', display: 'Inactive' },
+      ],
+      notValidated: false,
+    });
+    render(<ValueMapPanel nationalSystem="urn:zm:mfl"
+      unmapped={{ level: [], status: ['Functional'], country: [] }} onSaved={() => {}} />);
+
+    await waitFor(() => expect(screen.getByLabelText('Functional')).toBeInTheDocument());
+    fireEvent.click(screen.getByLabelText('Functional'));
+    fireEvent.click(await screen.findByRole('option', { name: 'Active' }));
+    expect(screen.getByLabelText('Functional')).toHaveTextContent('Active');
+  });
+
+  it('⛔ says the request failed instead of looking like there is nothing to pick', async () => {
+    // `.catch(() => null)` made a failed fetch indistinguishable from "no options": the operator
+    // saw twenty-three pickers offering only "Not mapped" and no explanation anywhere.
+    mocked(api.suggestValueMappings).mockRejectedValue(new Error('network down'));
+    render(<ValueMapPanel nationalSystem="urn:zm:mfl"
+      unmapped={{ level: ['Health Centre'], status: [], country: [] }} onSaved={() => {}} />);
+
+    expect(await screen.findByText(/could not be loaded/i)).toBeInTheDocument();
+  });
+
+  it('⛔ says so when the field has no value set at all', async () => {
+    // A different cause with an identical symptom before this: nothing to map ONTO, rather than
+    // nothing that matched. The route already reported it; the panel ignored it.
+    mocked(api.suggestValueMappings).mockResolvedValue({
+      values: [{ value: 'Health Centre', candidates: [] }],
+      options: [],
+      notValidated: true,
+    });
+    render(<ValueMapPanel nationalSystem="urn:zm:mfl"
+      unmapped={{ level: ['Health Centre'], status: [], country: [] }} onSaved={() => {}} />);
+
+    expect(await screen.findByText(/no value set/i)).toBeInTheDocument();
+  });
 });

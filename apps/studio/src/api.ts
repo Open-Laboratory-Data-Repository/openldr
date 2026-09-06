@@ -1317,11 +1317,24 @@ export interface ValueSuggestion {
  *  the value set is not seeded on this install, so nothing exists to rank against at all — every
  *  entry in `values` comes back with `candidates: []`, and that emptiness must be read as "could not
  *  be checked", never as "the engine tried and found nothing" (see `ColumnSuggestion`'s own note). */
+/** One code from a controlled field's bound value set. */
+export interface ValueSetOption {
+  code: string;
+  display: string | null;
+}
+
+/** ⛔ `options` and `candidates` are NOT the same list. `candidates` is what the ranker thinks a
+ *  raw value looks like, and it is legitimately EMPTY when nothing resembles it: `Functional`
+ *  scores against none of active/suspended/inactive. `options` is the whole value set, which is
+ *  what an operator picks from when the ranker has nothing to say. Rendering only candidates left
+ *  the most obvious mapping in a national export unexpressible. */
 export const suggestValueMappings = (
   field: ControlledField, values: string[],
-): Promise<{ values: ValueSuggestion[]; notValidated: boolean }> =>
+): Promise<{ values: ValueSuggestion[]; options: ValueSetOption[]; notValidated: boolean }> =>
   authFetch('/api/facilities/import/suggest-values', jbody({ field, values }, 'POST'))
-    .then((r) => okJson<{ values: ValueSuggestion[]; notValidated: boolean }>(r, 'suggest value mappings'));
+    .then((r) => okJson<{
+      values: ValueSuggestion[]; options: ValueSetOption[]; notValidated: boolean;
+    }>(r, 'suggest value mappings'));
 
 /** Mirrors the server's `ValueMappingEntry` (packages/bootstrap/src/facility-value-mappings.ts) — one
  *  raw-string -> canonical-code decision. */
