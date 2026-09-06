@@ -274,11 +274,19 @@ describe('ColumnMapStep', () => {
       expect(screen.queryByText(/both claim zone/i)).not.toBeInTheDocument();
     });
 
-    it('badges a header sitting in extras so the decision is visible', () => {
+    // ⛔ THE BADGE IS GONE, and this test moved with it rather than being deleted. It was added
+    // when the option still read "Not mapped", which said nothing about where the column went, so a
+    // header in `extras` needed a second element to distinguish it from one nobody had touched. The
+    // option now reads "Keep as extra data" itself, so the badge repeated it word for word on the
+    // same row. What still matters is the distinction it existed for, and the Select alone now
+    // carries it: this asserts that.
+    it('shows a header sitting in extras as kept, not as untouched', () => {
       render(<Controlled headers={['Zone']} suggestions={[zambia[1]]}
         initial={{ columns: {}, constants: {}, extras: ['Zone'] }} />);
       expect(screen.getByLabelText('Zone')).toHaveTextContent('Keep as extra data');
-      expect(screen.getByText(/kept as extra data/i)).toBeInTheDocument();
+      // ...and it is NOT still claiming the contract field it spells, which is what `extras` released.
+      expect(screen.getByLabelText('Zone')).not.toHaveTextContent('zone');
+      expect(screen.queryByText(/both claim zone/i)).not.toBeInTheDocument();
     });
   });
 
