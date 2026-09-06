@@ -1297,11 +1297,13 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   const step = clampStep(requestedStep, stepGate);
   const showBack = canGoBack(step, stepGate);
 
-  // Auto-advance ONLY forward, and only to a step the operator has earned. Without this, uploading
-  // from Mapping would leave them on Mapping staring at a panel while the summary rendered below
-  // the fold. Never rewinds: `clampStep` already handles falling back when a file is swapped.
+  // Auto-advance carries the operator to Review and NOWHERE else: after Upload and validate there
+  // is no button for them to press, so the sheet has to move itself. It must NOT skip step 1, which
+  // would make Continue unpressable and hide the source inputs the moment a register was picked.
+  // Never rewinds: `clampStep` already handles falling back when a file is swapped.
   useEffect(() => {
-    setRequestedStep((prev) => (furthest > prev ? furthest : prev));
+    if (furthest < 3) return;
+    setRequestedStep((prev) => (prev < 3 ? 3 : prev));
   }, [furthest]);
 
   /** Task 5: a fresh install has NO register: migration 082's back-fill seeds only from

@@ -1004,10 +1004,8 @@ describe('ImportFacilitiesSheet', () => {
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
     await pickFileAndSystem();
-    // Task 3: format/complete-release/release-version live on Source (step 1); picking a file and a
-    // register already advanced past it — go back to reach them.
-    fireEvent.click(screen.getByRole('button', { name: /1\s*Source/ }));
-
+    // Continue advances to Mapping — Source, format/complete-release/release-version, is where the
+    // sheet stays until the operator presses it. Set these before ever leaving Source.
     fireEvent.click(screen.getByRole('combobox', { name: /file format/i }));
     fireEvent.click(await screen.findByRole('option', { name: /jsonl release/i }));
     fireEvent.click(screen.getByRole('checkbox', { name: /this file is a complete release/i }));
@@ -1166,9 +1164,7 @@ describe('ImportFacilitiesSheet', () => {
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
     await pickFileAndSystem();
-    // Task 3: format/release-version live on Source (step 1); go back to reach them — see the
-    // "sends format/completeRelease/releaseVersion" test above for the same fix.
-    fireEvent.click(screen.getByRole('button', { name: /1\s*Source/ }));
+    // format/release-version live on Source — set them before Continue ever moves the sheet on.
     fireEvent.click(screen.getByRole('combobox', { name: /file format/i }));
     fireEvent.click(await screen.findByRole('option', { name: /jsonl release/i }));
     fireEvent.change(screen.getByLabelText('Release version'), { target: { value: 'r7' } });
@@ -1513,8 +1509,7 @@ describe('ImportFacilitiesSheet', () => {
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
     await pickFileAndSystem();
-    // Task 3: the complete-release checkbox lives on Source (step 1) — go back to reach it.
-    fireEvent.click(screen.getByRole('button', { name: /1\s*Source/ }));
+    // The complete-release checkbox lives on Source — set it before Continue ever moves the sheet on.
     fireEvent.click(screen.getByRole('checkbox', { name: /this file is a complete release/i }));
     await uploadNow();
 
@@ -1894,6 +1889,8 @@ describe('ImportFacilitiesSheet', () => {
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
     await pickFileAndSystem('MFL Code,Name\n1835,Namatindi RHC\n');
+    // The column map lives on Mapping (step 2) — Continue to reach it.
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
     // If the sheet fed `onChange` into anything OTHER than `columnMap` state directly — a debounce,
     // a batched update, a dropped call — the seed `ColumnMapStep` computes on mount would never land
     // back in `value`, and both rows would still read "Not mapped" here (this is exactly the bug
@@ -1929,17 +1926,17 @@ describe('ImportFacilitiesSheet', () => {
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
     await pickFileAndSystem('MFL Code,Name\n1835,Namatindi RHC\n');
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
     expect(await screen.findByLabelText('MFL Code')).toHaveTextContent('national_code');
 
-    // Task 3: the File input lives on Source (step 1); picking a file and a register already
-    // advanced past it. Go back to Source to pick a different file, then forward again to see the
-    // mapping panel react to it.
+    // The File input lives on Source, not Mapping — go back to reach it, pick a DIFFERENT file
+    // (headers the first file's mapping decisions know nothing about), then Continue again to see
+    // the mapping panel react to it.
     fireEvent.click(screen.getByRole('button', { name: /1\s*Source/ }));
-    // Pick a DIFFERENT file — headers the first file's mapping decisions know nothing about.
     fireEvent.change(screen.getByLabelText('File'), {
       target: { files: [csvFile('Code,Facility Name\nX,Y\n')] },
     });
-    fireEvent.click(screen.getByRole('button', { name: /2\s*Mapping/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
 
     expect(await screen.findByLabelText('Code')).toHaveTextContent('Not mapped');
     expect(screen.queryByLabelText('MFL Code')).not.toBeInTheDocument();
@@ -2034,6 +2031,8 @@ describe('ImportFacilitiesSheet', () => {
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
     await pickFileAndSystem('Code,Facility Name\nA,B\nC,D\n');
+    // The row-count hint and the notice both live in ColumnMapStep, on Mapping (step 2).
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
 
     // rowCount wired: 2 data rows in the picked file.
     expect(await screen.findByText(/applies to 2 facilities/i)).toBeInTheDocument();
@@ -2057,6 +2056,7 @@ describe('ImportFacilitiesSheet', () => {
     render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
     await pickFileAndSystem('MFL Code,Name\n1835,Namatindi RHC\n');
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
     await screen.findByLabelText('MFL Code');
     expect(screen.queryByText(/still preview or upload/i)).not.toBeInTheDocument();
   });
@@ -2159,7 +2159,7 @@ describe('ImportFacilitiesSheet', () => {
       expect(screen.getByRole('button', { name: /2\s*Mapping/ })).toBeDisabled();
     });
 
-    it('opens Mapping once a file and a register are chosen, and shows the column map there', async () => {
+    it('opens Mapping once Continue is pressed, and shows the column map there', async () => {
       mocked(api.suggestColumnMap).mockResolvedValueOnce({
         headers: ['MFL Code'],
         columns: [{ header: 'MFL Code', candidates: [] }],
@@ -2167,9 +2167,11 @@ describe('ImportFacilitiesSheet', () => {
       render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
       await pickFileAndSystem();
+      // Picking a file and a register earns Mapping, but Continue is the operator's own move —
+      // still on Source until they press it.
+      expect(screen.queryByLabelText('MFL Code')).not.toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
 
-      // Task 3: picking a file and a register already earns Mapping (`furthestStep` does not require
-      // a review), so the sheet auto-advances there on its own — no click is needed to arrive.
       expect(await screen.findByLabelText('MFL Code')).toBeInTheDocument();
     });
 
@@ -2183,6 +2185,7 @@ describe('ImportFacilitiesSheet', () => {
       render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
       await pickFileAndSystem();
+      fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
       await screen.findByLabelText('MFL Code');
 
       expect(screen.queryByLabelText('File')).not.toBeInTheDocument();
@@ -2197,6 +2200,7 @@ describe('ImportFacilitiesSheet', () => {
       render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
       await pickFileAndSystem();
+      fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
       await screen.findByLabelText('MFL Code');
       fireEvent.click(screen.getByRole('button', { name: /1\s*Source/ }));
 
@@ -2212,12 +2216,13 @@ describe('ImportFacilitiesSheet', () => {
       });
       render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
-      // Task 3: picking a file and a register already advances the sheet to Mapping on its own, so
-      // Continue is only on screen up to that point — checked here before it disappears, rather than
-      // clicked (a click on a button already gone would just time out).
       expect(await screen.findByRole('button', { name: 'Continue' })).toBeInTheDocument();
 
       await pickFileAndSystem();
+      // Picking a file and a register earns Mapping, but does not move the sheet there — Continue
+      // is still the visible action, on Source, until it is pressed.
+      expect(screen.getByRole('button', { name: 'Continue' })).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
 
       expect(await screen.findByRole('button', { name: 'Upload and validate' })).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Continue' })).not.toBeInTheDocument();
@@ -2233,8 +2238,7 @@ describe('ImportFacilitiesSheet', () => {
       render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
 
       await pickFileAndSystem();
-      // Task 3: no Continue click needed — picking a file and a register already advanced the sheet
-      // to Mapping, where Upload and validate is the primary action.
+      fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
       await screen.findByRole('button', { name: 'Upload and validate' });
 
       expect(screen.queryByRole('button', { name: /^Preview$/ })).not.toBeInTheDocument();
