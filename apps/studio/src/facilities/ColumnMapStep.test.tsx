@@ -136,7 +136,14 @@ describe('ColumnMapStep', () => {
       ];
       render(<Controlled headers={['Province', 'Zone']} suggestions={colliding} initial={emptyMap} />);
       expect(screen.getByLabelText('Province')).toHaveTextContent('Not mapped');
-      expect(screen.getByLabelText('Zone')).toHaveTextContent('Not mapped');
+      // ⛔ `Zone` reads `zone` — NOT because the seed picked it (it did not, which is what this
+      // test is about) but because the header spells the field, so the parser's passthrough rule
+      // claims it. Asserting "Not mapped" here is what this panel used to do, and it was untrue:
+      // the server then refused `Province → zone` with `duplicate_target`. See the passthrough
+      // block below for that rule on its own.
+      expect(screen.getByLabelText('Zone')).toHaveTextContent('zone');
+      // The seed genuinely wrote nothing: with the claim released, the row falls back to unmapped.
+      expect(screen.queryByText(/both claim zone/i)).not.toBeInTheDocument();
     });
 
     it('pre-selects NEITHER Ownership nor Ownership type when both suggest `ownership`', () => {
@@ -145,7 +152,9 @@ describe('ColumnMapStep', () => {
         { header: 'Ownership type', candidates: [{ target: 'ownership', display: null, score: 1, confidence: 'exact' }] },
       ];
       render(<Controlled headers={['Ownership', 'Ownership type']} suggestions={colliding} initial={emptyMap} />);
-      expect(screen.getByLabelText('Ownership')).toHaveTextContent('Not mapped');
+      // Same split as Province/Zone above: neither is SEEDED, but `Ownership` spells the field and
+      // therefore claims it. `Ownership type` spells nothing and stays genuinely unmapped.
+      expect(screen.getByLabelText('Ownership')).toHaveTextContent('ownership');
       expect(screen.getByLabelText('Ownership type')).toHaveTextContent('Not mapped');
     });
 
@@ -200,5 +209,89 @@ describe('ColumnMapStep', () => {
       value={{ columns: { Province: 'zone' }, constants: { national_code: 'X', name: 'Y' }, extras: [] }}
       onChange={() => {}} onValidityChange={onValidityChange} />);
     expect(onValidityChange).toHaveBeenLastCalledWith(true);
+  });
+
+  describe('⛔ passthrough — a header that already spells a contract field claims it', () => {
+    // The parser's rule, not this panel's invention: `validateColumnMap`
+    // (packages/terminology/src/facility-csv.ts) walks the file's own headers and lets any header
+    // spelling a contract field claim that field unless an explicit `extras` entry releases it.
+    // The panel used to show such a header as "Not mapped", which is simply untrue — the Zambia
+    // team hit it as a `duplicate_target` refusal on a map the panel had called safe.
+    const zambia: ColumnSuggestion[] = [
+      { header: 'Province', candidates: [{ target: 'zone', display: null, score: 1, confidence: 'exact' }] },
+      { header: 'Zone', candidates: [{ target: 'zone', display: null, score: 1, confidence: 'exact' }] },
+    ];
+
+    it('shows the field it claims, not "Not mapped"', () => {
+      render(<Controlled headers={['Province', 'Zone']} suggestions={zambia} initial={emptyMap} />);
+      expect(screen.getByLabelText('Zone')).toHaveTextContent('zone');
+    });
+
+    it('satisfies a required field on its own, with no blocking summary', () => {
+      // Neither header is mapped and there is no constant anywhere. The server would accept this
+      // file; before the fix the panel claimed both required fields were missing.
+      render(<Controlled headers={['national_code', 'name']} suggestions={[]} initial={emptyMap} />);
+      expect(screen.queryByText(/is not mapped/i)).not.toBeInTheDocument();
+    });
+
+    it('names both claimants when a mapped column collides with a passthrough header', () => {
+      render(<Controlled headers={['Province', 'Zone']} suggestions={zambia}
+        initial={{ columns: { Province: 'zone' }, constants: {}, extras: [] }} />);
+      expect(screen.getByText(/both claim zone/i)).toBeInTheDocument();
+    });
+
+    it('reports a collision as invalid through onValidityChange', () => {
+      const onValidityChange = vi.fn();
+      render(<Controlled headers={['Province', 'Zone']} suggestions={zambia}
+        initial={{ columns: { Province: 'zone' }, constants: { national_code: 'X', name: 'Y' }, extras: [] }}
+        onValidityChange={onValidityChange} />);
+      expect(onValidityChange).toHaveBeenLastCalledWith(false);
+    });
+
+    it('names both claimants when a fixed value collides with a passthrough header', () => {
+      // The second error the Zambia team saw, and the reason it was unfixable: `Ownership` and
+      // `Ownership type` both suggest `ownership`, so the collision rule leaves BOTH unmapped —
+      // yet `Ownership` still claims the field by spelling it. The panel therefore offered a fixed
+      // value for `ownership` that could only ever collide.
+      render(<Controlled headers={['Ownership', 'Ownership type']} suggestions={[]}
+        initial={{ columns: {}, constants: { ownership: 'PUBLIC' }, extras: [] }} />);
+      expect(screen.getByText(/both claim ownership/i)).toBeInTheDocument();
+    });
+
+    it('releases the claim when the operator picks Not mapped', async () => {
+      const onChange = vi.fn();
+      render(<Controlled headers={['Province', 'Zone']} suggestions={zambia}
+        initial={{ columns: { Province: 'zone' }, constants: {}, extras: [] }} onChangeSpy={onChange} />);
+      fireEvent.click(screen.getByLabelText('Zone'));
+      fireEvent.click(await screen.findByRole('option', { name: 'Not mapped' }));
+      expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ extras: ['Zone'] }));
+      expect(screen.queryByText(/both claim zone/i)).not.toBeInTheDocument();
+    });
+
+    it('badges a header sitting in extras so the decision is visible', () => {
+      render(<Controlled headers={['Zone']} suggestions={[zambia[1]]}
+        initial={{ columns: {}, constants: {}, extras: ['Zone'] }} />);
+      expect(screen.getByLabelText('Zone')).toHaveTextContent('Not mapped');
+      expect(screen.getByText(/kept as extra data/i)).toBeInTheDocument();
+    });
+  });
+
+  describe('⛔ fixed values — the box must survive being typed in', () => {
+    it('keeps the box on screen after a value is typed', () => {
+      // A non-empty constant claims its field, and the section used to render only UNCLAIMED
+      // fields — so the first keystroke unmounted the very input being typed into, and the value
+      // it had just stored was displayed nowhere at all.
+      render(<Controlled headers={[]} suggestions={[]} initial={emptyMap} />);
+      fireEvent.change(screen.getByLabelText('country'), { target: { value: 'Z' } });
+      expect(screen.getByLabelText('country')).toHaveValue('Z');
+    });
+
+    it('lets a typed value be cleared again', () => {
+      render(<Controlled headers={[]} suggestions={[]}
+        initial={{ columns: {}, constants: { country: 'ZMB' }, extras: [] }} />);
+      expect(screen.getByLabelText('country')).toHaveValue('ZMB');
+      fireEvent.change(screen.getByLabelText('country'), { target: { value: '' } });
+      expect(screen.getByLabelText('country')).toHaveValue('');
+    });
   });
 });

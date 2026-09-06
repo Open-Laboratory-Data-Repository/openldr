@@ -71,7 +71,7 @@ one fix pass repairs the file:
 
 | Reason | Meaning | Repair |
 | --- | --- | --- |
-| `duplicate_target` | Two headers map to the same contract field. | Keep one mapping; move the other header to a fixed value or `extras`. |
+| `duplicate_target` | Two headers claim the same contract field — by being mapped to it, **or just by spelling it** (a `Zone` column claims `zone` even when shown as `Not mapped`). | Keep one; set the other to `Not mapped`, which moves its values to `extras`. |
 | `constant_collision` | A fixed value and a mapped (or already-matching) header both claim the same field. | Keep only the fixed value or the column mapping for that field, not both. |
 | `unknown_target` | A header maps to a name outside the contract. | Fix the target name, or route it to `extras` if it truly does not belong. |
 | `missing_required` | `national_code` or `name` has neither a column nor a fixed value. | Map a column, or add a `constants` entry, for the missing required field. |

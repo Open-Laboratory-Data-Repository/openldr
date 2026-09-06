@@ -287,6 +287,36 @@ describe('parseFacilityCsv with a column map', () => {
   // checked the map against itself, so this passed with `columnMapErrors: []` and silently overwrote
   // the mapped column's value with the passthrough header's — and `nationalCode` feeds `idFor`,
   // which derives a facility's PERMANENT id, so a silent overwrite here is a wrong identity.
+  // ── The exact shape `ColumnMapStep` (apps/studio) now emits for the real Zambia MFL export.
+  // That panel used to render `Zone` as "Not mapped" while this parser had it claiming `zone` all
+  // along, so the studio called a map safe that this function refuses. These two pin the contract
+  // between them: the refusal the panel now predicts, and the release it now writes. ──────────────
+
+  it('⛔ refuses Province → zone while an untouched `Zone` header also claims zone', () => {
+    const r = parseFacilityCsv('MFL Code,Name,Province,Zone\n1835,Namatindi RHC,Western,Kanyama\n', {
+      nationalSystem: HFR,
+      columnMap: { columns: { 'MFL Code': 'national_code', Name: 'name', Province: 'zone' } },
+    });
+    expect(r.columnMapErrors).toEqual([
+      { reason: 'duplicate_target', subject: 'zone', target: 'zone', other: 'Province' },
+    ]);
+  });
+
+  it('accepts the same file once `Zone` is released to extras, keeping both values', () => {
+    const r = parseFacilityCsv('MFL Code,Name,Province,Zone\n1835,Namatindi RHC,Western,Kanyama\n', {
+      nationalSystem: HFR,
+      columnMap: {
+        columns: { 'MFL Code': 'national_code', Name: 'name', Province: 'zone' },
+        extras: ['Zone'],
+      },
+    });
+    expect(r.columnMapErrors).toEqual([]);
+    // The contract field takes the column the operator chose...
+    expect(r.records[0].zone).toBe('Western');
+    // ...and the released column's own values are kept rather than dropped, keyed by its header.
+    expect(r.records[0].extras).toEqual({ zone: 'Kanyama' });
+  });
+
   it('⛔ refuses a mapped field that collides with an untouched header spelling the same field', () => {
     const r = parseFacilityCsv('MFL Code,national_code,name\n1835,LEGACY-9,Namatindi RHC\n', {
       nationalSystem: HFR,

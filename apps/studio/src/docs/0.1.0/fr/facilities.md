@@ -74,10 +74,16 @@ découvrir les erreurs une par une. Quatre choses peuvent mal tourner :
 
 | Raison | Ce que cela signifie | Comment le corriger |
 |---|---|---|
-| `duplicate_target` | Deux en-têtes correspondent au même champ du contrat. | Décidez quel en-tête est correct pour ce champ et déplacez l'autre vers une valeur fixe ou une donnée supplémentaire. |
+| `duplicate_target` | Deux en-têtes revendiquent le même champ du contrat. Un en-tête revendique un champ en y étant mappé, **ou simplement en portant son nom** — une colonne nommée `Zone` revendique `zone` même si le panneau affiche `Non mappé`. | Décidez quel en-tête est correct pour ce champ, puis mettez l'autre sur `Non mappé`, ce qui conserve ses valeurs en donnée supplémentaire. |
 | `constant_collision` | Une valeur fixe et un en-tête mappé (ou laissé tel quel et déjà correspondant) réclament tous deux le même champ. | Gardez un seul des deux, la valeur fixe ou la correspondance de colonne, pour ce champ. |
 | `unknown_target` | Un en-tête est mappé vers un nom qui n'est pas l'un des champs du contrat. | Corrigez la faute de frappe, ou faites-le correspondre à une donnée supplémentaire s'il n'appartient pas du tout au contrat. |
 | `missing_required` | `national_code` ou `name` n'a ni colonne mappée ni valeur fixe. | Mappez une colonne, ou fournissez une valeur fixe, pour le champ obligatoire manquant. |
+
+> **Une colonne qui porte le nom d'un champ du contrat le revendique.** Un fichier contenant à la
+> fois `Province` et `Zone` est refusé si vous mappez `Province` vers `zone`, car `Zone` le
+> revendique déjà par son nom. Mettez `Zone` sur `Non mappé` pour libérer la revendication. Ses
+> valeurs sont conservées en donnée supplémentaire, jamais perdues. Il en va de même pour
+> `Ownership`, `Ward`, `District`, `Latitude` et `Longitude`.
 
 ## La distinction qui pose souvent problème
 

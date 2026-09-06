@@ -1001,6 +1001,7 @@ export const en = {
       // which is exactly what that refusal asks for.
       reuploadUnknownColumnsAction: 'Re-upload keeping unrecognised columns',
       reuploadInvalidCoordinatesAction: 'Re-upload keeping rows with an invalid coordinate',
+        reuploadColumnMapAction: 'Re-upload with the corrected map',
       overrideNeedsReupload: 'This option changes how the file is read, so it has to be set before validation. Use the actions menu above to upload this file again with it — the summary you review will then be the one that gets applied.',
       overrideAppliedToRun: 'This validation already ran with that option on, so the summary below is what will be applied.',
       runLoading: 'Checking the import run…',
@@ -1057,6 +1058,9 @@ export const en = {
         missingRequiredTitle: 'Required fields still need a column or a fixed value',
         missingRequired: '{{field}} is not mapped.',
         rowCountHint: 'This map applies to {{count}} facilities in this file.',
+        keptAsExtraBadge: 'Kept as extra data',
+        collisionTitle: 'This column map cannot be used',
+        collision: '“{{a}}” and “{{b}}” both claim {{field}} — only one may.',
       },
       // Task 8: the value-mapping panel — one row per unmapped raw value (level/status/country),
       // grouped by field, each with a ranked Select over that field's own value set. An unmapped

@@ -62,10 +62,15 @@ pass repairs the file, rather than discovering issues one at a time. Four things
 
 | Reason | What it means | How to repair it |
 |---|---|---|
-| `duplicate_target` | Two headers map to the same contract field. | Decide which header is correct for that field and move the other one to a fixed value or extra data. |
+| `duplicate_target` | Two headers claim the same contract field. A header claims a field by being mapped to it, **or just by spelling it** — a column called `Zone` claims `zone` even when the panel shows it as `Not mapped`. | Decide which header is correct for that field, and set the other one to `Not mapped`, which keeps its values as extra data. |
 | `constant_collision` | A fixed value and a mapped (or untouched, already-matching) header both claim the same field. | Keep only one of the two — either the fixed value or the column mapping — for that field. |
 | `unknown_target` | A header is mapped to a name that is not one of the contract fields. | Fix the typo, or map it to extra data instead if it does not belong to the contract at all. |
 | `missing_required` | `national_code` or `name` has neither a mapped column nor a fixed value. | Map a column, or supply a fixed value, for whichever required field is missing. |
+
+> **A column that spells a contract field claims it.** A file with both `Province` and `Zone` is
+> refused if you map `Province` to `zone`, because `Zone` already claims it by name. Set `Zone` to
+> `Not mapped` to release the claim. Its values are kept as extra data, not dropped. The same
+> applies to `Ownership`, `Ward`, `District`, `Latitude` and `Longitude`.
 
 ## The distinction that trips people up
 

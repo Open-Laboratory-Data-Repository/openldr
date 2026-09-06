@@ -1993,4 +1993,83 @@ describe('ImportFacilitiesSheet', () => {
     await screen.findByLabelText('MFL Code');
     expect(screen.queryByText(/still preview or upload/i)).not.toBeInTheDocument();
   });
+
+  // ── Zambia field report 3: the background door lost the mapping panel entirely. The inline door's
+  // 'column-map' exception above was gated behind a bare `!run`, which any upload makes false — so
+  // an operator whose UPLOADED map was refused saw the refusal with no panel and no way back. Large
+  // files take this door, which is the door the Zambia team is on. ────────────────────────────────
+
+  it('⛔ keeps ColumnMapStep mounted when an UPLOADED map is refused, and offers the re-upload', async () => {
+    mocked(api.suggestColumnMap).mockResolvedValueOnce({
+      headers: ['Province', 'Zone'],
+      columns: [
+        { header: 'Province', candidates: [{ target: 'zone', display: null, score: 1, confidence: 'exact' }] },
+        { header: 'Zone', candidates: [{ target: 'zone', display: null, score: 1, confidence: 'exact' }] },
+      ],
+    });
+    mocked(api.uploadFacilityImport).mockResolvedValue({ runId: 'run-b1' });
+    mocked(api.getFacilityImportRun).mockResolvedValue(runView({
+      status: 'awaiting_confirmation',
+      summary: baseResult({
+        blocked: true, blockedReason: 'column-map',
+        columnMapErrors: [
+          { reason: 'duplicate_target', subject: 'zone', target: 'zone', other: 'Province' },
+        ],
+      }),
+    }));
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    await pickFileAndSystem();
+    await uploadNow();
+
+    expect(await screen.findByText(/"zone" and "Province" both map to "zone"/)).toBeInTheDocument();
+    // The panel the operator needs is still on screen, exactly as it is on the inline door.
+    expect(screen.getByLabelText('Province')).toBeInTheDocument();
+    expect(screen.getByLabelText('Zone')).toBeInTheDocument();
+
+    openMenu();
+    expect(screen.getByRole('menuitem', { name: 'Re-upload with the corrected map' })).toBeInTheDocument();
+  });
+
+  it('⛔ re-uploads the corrected map, so the validate reviewed is the one the operator fixed', async () => {
+    mocked(api.suggestColumnMap).mockResolvedValueOnce({
+      headers: ['Province', 'Zone'],
+      columns: [
+        { header: 'Province', candidates: [{ target: 'zone', display: null, score: 1, confidence: 'exact' }] },
+        { header: 'Zone', candidates: [{ target: 'zone', display: null, score: 1, confidence: 'exact' }] },
+      ],
+    });
+    mocked(api.uploadFacilityImport)
+      .mockResolvedValueOnce({ runId: 'run-b1' })
+      .mockResolvedValueOnce({ runId: 'run-b2' });
+    mocked(api.getFacilityImportRun)
+      .mockResolvedValueOnce(runView({
+        id: 'run-b1', status: 'awaiting_confirmation',
+        summary: baseResult({
+          blocked: true, blockedReason: 'column-map',
+          columnMapErrors: [
+            { reason: 'duplicate_target', subject: 'zone', target: 'zone', other: 'Province' },
+          ],
+        }),
+      }))
+      // Same discipline as the unknown-columns re-upload test above: the second run never answers,
+      // so nothing but the sheet's own `setRun(null)` can clear the superseded summary.
+      .mockReturnValue(new Promise<never>(() => { /* never settles */ }));
+    render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+    await pickFileAndSystem();
+    await uploadNow();
+    await screen.findByText(/both map to "zone"/);
+
+    // Fix it in place: send Zone to extras, which is what actually releases its passthrough claim.
+    fireEvent.click(screen.getByLabelText('Zone'));
+    fireEvent.click(await screen.findByRole('option', { name: 'Not mapped' }));
+
+    clickMenuItem('Re-upload with the corrected map');
+
+    await waitFor(() => expect(api.uploadFacilityImport).toHaveBeenCalledTimes(2));
+    expect(mocked(api.uploadFacilityImport).mock.calls[1][0]).toEqual(
+      expect.objectContaining({ columnMap: expect.objectContaining({ extras: ['Zone'] }) }),
+    );
+  });
 });
