@@ -1330,9 +1330,20 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   // ever refused to ADVANCE would never see this, and the operator would stay stranded on Review with
   // no way to fix the very thing that put them there. This branch un-does that specific move, and
   // only that one: any OTHER step the operator had already reached (never past Mapping) is untouched.
+  //
+  // ⛔ ROUND-3 FIX: retreats from ANY step, not only from Review. The dropdown's Preview item has no
+  // `step` gate at all (only `previewDisabled` and `!applyResult && !run` — see that item's own
+  // comment), so it is reachable from Source with the sheet never having been past step 1. On the
+  // inline door `setPreviewResult(result)` makes `columnMapRefused` true in the SAME render as the
+  // response lands, with no poll delay to wait out — unlike the background door's two-hop
+  // transition described above. A guard that only fired for `prev === 3` did nothing for that path:
+  // `requestedStep` was still 1, so the sheet stayed on Source with neither `ColumnMapErrorsNotice`
+  // site mounted (both live behind `step === 2` or `step === 3`) and the operator saw no refusal at
+  // all. A column-map refusal means the Mapping panel is the only place that can help, regardless of
+  // which step the operator was on when they triggered it.
   useEffect(() => {
     if (columnMapRefused) {
-      setRequestedStep((prev) => (prev === 3 ? 2 : prev));
+      setRequestedStep((prev) => (prev !== 2 ? 2 : prev));
       return;
     }
     if (furthest < 3) return;

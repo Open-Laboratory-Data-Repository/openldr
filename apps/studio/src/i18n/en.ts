@@ -901,7 +901,6 @@ export const en = {
         position: 'Step {{current}} of 3',
       },
       continueAction: 'Continue',
-      backAction: 'Back',
       title: 'Import facilities',
       description: 'Upload a CSV export from a national facility register and preview it before writing anything.',
       fileLabel: 'File',

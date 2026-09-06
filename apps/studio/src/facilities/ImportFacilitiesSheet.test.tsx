@@ -2225,6 +2225,43 @@ describe('ImportFacilitiesSheet', () => {
 
       expect(await screen.findByLabelText('File')).toBeInTheDocument();
     });
+
+    // Round-3 fix: the dropdown's Preview item has no `step` gate at all — only `previewDisabled`
+    // and `!applyResult && !run` (see that item's own comment) — so it is reachable straight from
+    // Source, before Continue is ever pressed. On the inline door, `setPreviewResult(result)` makes
+    // `columnMapRefused` true in the SAME render the response lands, with no poll delay to wait
+    // out. The retreat effect used to fire only for `prev === 3`, so a refusal triggered from step 1
+    // (`requestedStep` still 1) did nothing: `clampStep(1, ...)` returns 1, the sheet stayed on
+    // Source, and neither `ColumnMapErrorsNotice` site mounted (both live behind step 2 or 3) — the
+    // operator saw no refusal at all.
+    it('Preview from the dropdown with no prior Continue click still lands on Mapping when the map is refused', async () => {
+      mocked(api.suggestColumnMap).mockResolvedValueOnce({
+        headers: ['MFL Code', 'MFL Code 2'],
+        columns: [
+          { header: 'MFL Code', candidates: [] },
+          { header: 'MFL Code 2', candidates: [] },
+        ],
+      });
+      (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockResolvedValue(baseResult({
+        blocked: true, blockedReason: 'column-map',
+        columnMapErrors: [
+          { reason: 'duplicate_target', subject: 'MFL Code 2', target: 'national_code', other: 'MFL Code' },
+        ],
+      }));
+      render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+      await pickFileAndSystem('MFL Code,MFL Code 2\n1,2\n');
+      // Deliberately no Continue click here — file and register are chosen, and Preview is driven
+      // straight from the ⋯ menu while the sheet is still showing Source.
+      await previewNow();
+
+      expect(await screen.findByText(
+        /"MFL Code 2" and "MFL Code" both map to "national_code"/,
+      )).toBeInTheDocument();
+      expect(screen.getByLabelText('MFL Code')).toBeInTheDocument();
+      expect(screen.getByLabelText('MFL Code 2')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /2\s*Mapping/ })).toHaveAttribute('aria-current', 'step');
+    });
   });
 
   describe('the primary action', () => {

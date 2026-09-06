@@ -888,7 +888,6 @@ export const fr: EnShape = {
         position: 'Étape {{current}} sur 3',
       },
       continueAction: 'Continuer',
-      backAction: 'Retour',
       title: 'Importer des établissements',
       description: 'Téléversez un export CSV d’un registre national d’établissements et prévisualisez-le avant toute écriture.',
       fileLabel: 'Fichier',
