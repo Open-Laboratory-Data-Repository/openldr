@@ -885,7 +885,6 @@ export const fr: EnShape = {
         source: 'Source',
         mapping: 'Correspondance',
         review: 'Vérification',
-        position: 'Étape {{current}} sur 3',
       },
       continueAction: 'Continuer',
       title: 'Importer des établissements',
@@ -1017,6 +1016,8 @@ export const fr: EnShape = {
       columnMapErrorUnknownTarget: '« {{subject}} » est mappé vers « {{target}} », qui ne fait pas partie des {{count}} champs du contrat.',
       columnMapErrorMissingRequired: 'Le champ obligatoire « {{target}} » n’a ni colonne ni valeur fixe qui lui soit mappée.',
       columnMapIncompleteHint: 'Vous pouvez tout de même prévisualiser ou téléverser avec ce mappage incomplet — l’import expliquera précisément ce qu’il reste à mapper.',
+      columnMapNotApplicableJsonl: 'Un fichier de publication utilise déjà les noms de champs du contrat, il n’y a donc aucune correspondance de colonnes à définir.',
+      columnMapAlreadySent: 'La correspondance de colonnes de ce fichier a déjà été envoyée avec le téléversement et ne peut plus être modifiée.',
       columnMap: {
         notMapped: 'Non mappé',
         checkThisBadge: 'À vérifier',

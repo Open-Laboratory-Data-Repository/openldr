@@ -898,7 +898,6 @@ export const en = {
         source: 'Source',
         mapping: 'Mapping',
         review: 'Review',
-        position: 'Step {{current}} of 3',
       },
       continueAction: 'Continue',
       title: 'Import facilities',
@@ -1064,6 +1063,11 @@ export const en = {
       // Non-blocking — shown beside the panel while a required field is still unmapped, but Preview
       // and Upload stay available either way; the server's own refusal (above) is authoritative.
       columnMapIncompleteHint: 'You can still preview or upload with this map incomplete — the import will explain exactly what still needs to be mapped.',
+      // Whole-branch review, FINDING 2: step 2 with nothing else on it — a JSONL release, an applied
+      // run, or a summary that is not a column-map refusal all leave the mapping panel unmounted, and
+      // this says why instead of leaving the pane blank.
+      columnMapNotApplicableJsonl: 'A release file already uses the contract’s own field names, so there is no column map to set.',
+      columnMapAlreadySent: 'This file’s column map has already been sent with the upload and cannot be changed now.',
       // Task 7: the column-mapping panel — one row per file header, a Select over the 16 contract
       // fields, and a constants section for a field no column carries (`country` is the case that
       // forced it).

@@ -885,7 +885,6 @@ export const pt: EnShape = {
         source: 'Origem',
         mapping: 'Mapeamento',
         review: 'Revisão',
-        position: 'Passo {{current}} de 3',
       },
       continueAction: 'Continuar',
       title: 'Importar unidades',
@@ -1017,6 +1016,8 @@ export const pt: EnShape = {
       columnMapErrorUnknownTarget: '«{{subject}}» está mapeado para «{{target}}», que não é um dos {{count}} campos do contrato.',
       columnMapErrorMissingRequired: 'O campo obrigatório «{{target}}» não tem coluna nem valor fixo mapeado para ele.',
       columnMapIncompleteHint: 'Ainda pode pré-visualizar ou carregar com este mapeamento incompleto — a importação explicará exatamente o que falta mapear.',
+      columnMapNotApplicableJsonl: 'Um ficheiro de lançamento já usa os próprios nomes de campo do contrato, por isso não há mapeamento de colunas a definir.',
+      columnMapAlreadySent: 'O mapeamento de colunas deste ficheiro já foi enviado com o carregamento e não pode ser alterado agora.',
       columnMap: {
         notMapped: 'Não mapeado',
         checkThisBadge: 'Verificar',

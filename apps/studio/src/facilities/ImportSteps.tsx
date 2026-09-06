@@ -23,7 +23,7 @@ export interface ImportStepsProps {
 }
 
 /** The "where am I" strip. Presentational only: it holds no state and decides nothing about what is
- *  reachable, which is `importSteps.ts`'s job and is tested there as arithmetic. */
+ *  reachable, which is `stepModel.ts`'s job and is tested there as arithmetic. */
 export function ImportSteps({ current, furthest, allowBack, onSelect }: ImportStepsProps): JSX.Element {
   const { t } = useTranslation();
   return (

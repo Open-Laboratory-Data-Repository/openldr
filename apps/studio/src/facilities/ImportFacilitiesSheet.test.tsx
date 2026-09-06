@@ -1621,6 +1621,9 @@ describe('ImportFacilitiesSheet', () => {
 
     // The premise, asserted rather than assumed: the amber notice really IS rendered at `parsed: 0`.
     expect(await screen.findByText(/ward_code/)).toBeInTheDocument();
+    // This refusal is not a column-map one, so the sheet's own retreat effect never fires — the run
+    // reaching Review on its own, proven only indirectly by the assertions below until now.
+    expect(screen.getByRole('button', { name: /3\s*Review/ })).toHaveAttribute('aria-current', 'step');
     // ⛔ …and the tick that could only 409 is gone, replaced by the path that actually works.
     expect(screen.queryByRole('checkbox', { name: /keeping unrecognised columns/i })).not.toBeInTheDocument();
     expect(screen.getByText(/has to be set before validation/i)).toBeInTheDocument();
@@ -2025,8 +2028,13 @@ describe('ImportFacilitiesSheet', () => {
 
     await screen.findByText(/facility row\(s\) will be created/i);
     expect(screen.queryByText(/both map to/)).not.toBeInTheDocument();
-    // The design's ordinary flow: the panel maps columns exactly once, then gets out of the way —
-    // unaffected by the fix, which only keeps it mounted for the 'column-map' refusal specifically.
+    // Whole-branch review, FINDING 5: this used to credit the panel's own render gate for the
+    // absence below, but that is not what is happening here. This test never clicks Continue, so
+    // the preview runs from Source and the clean result auto-advances the sheet straight to Review
+    // (step 3) — `queryByLabelText('MFL Code')` is absent because `step !== 2`, not because
+    // `columnMapPanelShown`'s own `!reviewResult` clause excluded it while still on Mapping. The
+    // "keeps ColumnMapStep mounted through a refusal" tests above are the ones that actually
+    // exercise that clause, by staying on step 2 the whole time.
     expect(screen.queryByLabelText('MFL Code')).not.toBeInTheDocument();
   });
 
@@ -2264,6 +2272,49 @@ describe('ImportFacilitiesSheet', () => {
     });
   });
 
+  // Whole-branch review, FINDING 2: `ColumnMapStep` is the only thing gated to step 2, so every
+  // state that hides it — a JSONL release, or a map that has already been sent and cannot be
+  // changed here any more — left Mapping a blank pane with no explanation at all.
+  describe('when Mapping has nothing to show', () => {
+    it('says a JSONL release has no column map to set', async () => {
+      render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+      await pickFileAndSystem();
+      fireEvent.click(screen.getByRole('combobox', { name: /file format/i }));
+      fireEvent.click(await screen.findByRole('option', { name: /jsonl release/i }));
+      fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+
+      expect(await screen.findByText(/no column map to set/i)).toBeInTheDocument();
+      expect(screen.queryByLabelText('MFL Code')).not.toBeInTheDocument();
+    });
+
+    it('says a CSV file\'s map was already sent, once a clean preview has moved past Mapping', async () => {
+      mocked(api.suggestColumnMap).mockResolvedValueOnce({
+        headers: ['MFL Code', 'Name'],
+        columns: [
+          { header: 'MFL Code', candidates: [{ target: 'national_code', display: null, score: 1, confidence: 'exact' }] },
+          { header: 'Name', candidates: [{ target: 'name', display: null, score: 1, confidence: 'exact' }] },
+        ],
+      });
+      (api.importFacilitiesCsv as ReturnType<typeof vi.fn>).mockResolvedValue(cleanPreview);
+      render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+      await pickFileAndSystem('MFL Code,Name\n1835,Namatindi RHC\n');
+      fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+      await screen.findByLabelText('MFL Code');
+
+      await previewNow();
+      await screen.findByText(/facility row\(s\) will be created/i);
+
+      // The clean preview auto-advances to Review (step 3) — go back to Mapping, which no longer has
+      // the panel to show, and check it explains why instead of sitting blank.
+      fireEvent.click(screen.getByRole('button', { name: /2\s*Mapping/ }));
+
+      expect(screen.queryByLabelText('MFL Code')).not.toBeInTheDocument();
+      expect(screen.getByText(/already been sent with the upload/i)).toBeInTheDocument();
+    });
+  });
+
   describe('the primary action', () => {
     it('offers Continue on Source and Upload and validate on Mapping', async () => {
       mocked(api.suggestColumnMap).mockResolvedValueOnce({
@@ -2305,6 +2356,62 @@ describe('ImportFacilitiesSheet', () => {
     it('Continue stays disabled until a file and a register are both chosen', async () => {
       render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
       expect(await screen.findByRole('button', { name: 'Continue' })).toBeDisabled();
+    });
+
+    // Whole-branch review, FINDING 1(a): this button used to check only `uploadDisabled`, unlike
+    // the dropdown's own Upload item (`!applyResult && !runId`). Once a run reaches a terminal
+    // state `runActive` goes false and the step strip lets the operator click back to Mapping — this
+    // proves the button the dropdown would never offer is not there for them to click either.
+    it('does not offer Upload and validate again on Mapping once the run has finished', async () => {
+      mocked(api.uploadFacilityImport).mockResolvedValue({ runId: 'run-b1' });
+      mocked(api.getFacilityImportRun).mockResolvedValue(runView({
+        status: 'applied', summary: baseResult({ parsed: 3, written: { created: 3, updated: 0, retired: 0 } }),
+      }));
+      render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+      await pickFileAndSystem();
+      await uploadNow();
+      await screen.findByText(/import complete/i);
+
+      // The run finished, so Back is offered again (`canGoBack`) and the step strip reopens.
+      fireEvent.click(screen.getByRole('button', { name: /2\s*Mapping/ }));
+
+      expect(screen.queryByRole('button', { name: 'Upload and validate' })).not.toBeInTheDocument();
+    });
+
+    // Whole-branch review, FINDING 1(b): the gate above would otherwise leave Mapping with no
+    // action at all in the one case an operator most needs one — a column-map refusal parks them
+    // here with `runId` already set. The primary action becomes the same re-upload the dropdown
+    // already offers as `reuploadColumnMapAction`, reusing its label and handler.
+    it('offers the corrected-map re-upload as Mapping\'s primary action on a column-map refusal', async () => {
+      mocked(api.suggestColumnMap).mockResolvedValueOnce({
+        headers: ['MFL Code', 'MFL Code 2'],
+        columns: [
+          { header: 'MFL Code', candidates: [] },
+          { header: 'MFL Code 2', candidates: [] },
+        ],
+      });
+      mocked(api.uploadFacilityImport).mockResolvedValue({ runId: 'run-b1' });
+      mocked(api.getFacilityImportRun).mockResolvedValue(runView({
+        status: 'awaiting_confirmation',
+        summary: baseResult({
+          blocked: true, blockedReason: 'column-map',
+          columnMapErrors: [
+            { reason: 'duplicate_target', subject: 'MFL Code 2', target: 'national_code', other: 'MFL Code' },
+          ],
+        }),
+      }));
+      render(<ImportFacilitiesSheet open onOpenChange={vi.fn()} onImported={vi.fn()} />);
+
+      await pickFileAndSystem('MFL Code,MFL Code 2\n1,2\n');
+      await uploadNow();
+
+      await waitFor(() => {
+        expect(screen.getByText(/"MFL Code 2" and "MFL Code" both map to "national_code"/)).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /2\s*Mapping/ })).toHaveAttribute('aria-current', 'step');
+      });
+      expect(screen.getByRole('button', { name: 'Re-upload with the corrected map' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Upload and validate' })).not.toBeInTheDocument();
     });
   });
 

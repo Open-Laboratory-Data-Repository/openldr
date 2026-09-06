@@ -32,7 +32,8 @@ Preview, the three re-upload options, Cancel, and Close, stays in the page's `â‹
 
 You cannot click a step you have not reached yet, and you cannot go back to an earlier step while
 a background check is running. After you upload a file on Mapping, the wizard moves you to Review
-on its own once the check finishes. If the check finds a problem with the column map, the wizard
+on its own as soon as the upload starts, before the check itself finishes. If the check finds a
+problem with the column map, the wizard
 sends you back to Mapping and shows the errors there, so you can fix the map in place.
 
 ## What a column map is

@@ -1425,6 +1425,14 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
   const columnMapRowCount = csv
     ? csv.split(/\r?\n/).filter((line, i) => i > 0 && line.trim() !== '').length
     : undefined;
+  /** Whole-branch review, FINDING 2: is `ColumnMapStep` actually on screen? Read by the panel's own
+   *  render gate below AND by the empty-state note beside it, so the two can never drift apart —
+   *  the note is exactly "step 2, and this is false". Before this fix only the panel had a gate: a
+   *  JSONL release, an applied run, a run or a summary that is not a column-map refusal, and the
+   *  brief window while `File.text()` resolves all left step 2 completely blank, with nothing on
+   *  screen to say why. */
+  const columnMapPanelShown = step === 2 && format === 'csv' && columnMapHeaders.length > 0
+    && !appliedSummary && (!run || columnMapRefused) && (!reviewResult || columnMapRefused);
   // While a run holds the register, the inputs it was uploaded with must not drift out from under
   // it — the run is for THAT file under THAT national system, and nothing here can retract it.
   const inputsDisabled = applying || uploading || runActive;
@@ -1570,11 +1578,31 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
               {t('facilities.import.continueAction')}
             </Button>
           ))}
-          {step === 2 && (
-            <Button size="sm" disabled={uploadDisabled} onClick={() => void handleUpload()}>
-              {uploading ? uploadLabel : t('facilities.import.uploadAction')}
+          {/* Whole-branch review, FINDING 1: this button used to check only `uploadDisabled` — the
+              dropdown's own Upload item ALSO checks `!applyResult && !runId` (see that item's own
+              comment for why: a second upload either supersedes the run this sheet is watching or
+              409s). Once a run reaches a terminal state `runActive` goes false, the step strip
+              reopens, and an operator who clicks back to Mapping saw this button enabled and could
+              fire a second upload the dropdown itself would never offer. Mirrors that same gate.
+              (b) That gate alone would leave Mapping with no action in the one case an operator most
+              needs one: a column-map refusal parks them here with `runId` already set. So the
+              refusal gets its own branch first, reusing the exact action (and label) the dropdown's
+              `canReuploadForColumnMap` item already offers — no new copy, no new handler. */}
+          {step === 2 && (columnMapRefused ? (
+            <Button
+              size="sm"
+              disabled={uploadDisabled || confirming || cancelling}
+              onClick={() => void handleUpload()}
+            >
+              {uploading ? uploadLabel : t('facilities.import.reuploadColumnMapAction')}
             </Button>
-          )}
+          ) : (
+            !applyResult && !runId && (
+              <Button size="sm" disabled={uploadDisabled} onClick={() => void handleUpload()}>
+                {uploading ? uploadLabel : t('facilities.import.uploadAction')}
+              </Button>
+            )
+          ))}
           {step === 3 && canConfirmRun && (
             <Button size="sm" disabled={confirming || cancelling} onClick={() => void handleConfirmRun()}>
               {confirming ? t('facilities.import.confirming') : t('facilities.import.confirmAction')}
@@ -1784,19 +1812,7 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
               on screen (`!reviewResult`): the design's own flow maps columns exactly once, before
               the file ever leaves this tab, and the operator cannot edit it again afterwards — see
               `columnMap`'s own reset-on-file-swap comment for why it must not persist past that. */}
-          {step === 2 && format === 'csv' && columnMapHeaders.length > 0 && !appliedSummary
-            // ⛔ `!run` alone would unmount the panel the instant an upload resolves — see
-            // `columnMapRefused` for the field report that cost. A run still hides it for every
-            // OTHER state (validating, applying, a clean summary), preserving the "map columns
-            // exactly once" flow; only the refusal the panel itself can fix keeps it on screen.
-            && (!run || columnMapRefused)
-            // ⛔ Fix pass (whole-branch review, MUST FIX 3): kept mounted THROUGH a 'column-map'
-            // refusal, not just before any `reviewResult` exists — before this, the panel unmounted
-            // the instant a preview came back (any `reviewResult`), so the operator who most needed
-            // it (the one whose map the server just refused) lost it at the same moment the refusal
-            // appeared, with no way to fix it in place. Still gone once a DIFFERENT block reason
-            // exists (or none), preserving the original "map columns exactly once" flow.
-            && (!reviewResult || columnMapRefused) && (
+          {columnMapPanelShown && (
             <div className="mx-6 mt-4">
               <ColumnMapStep
                 headers={columnMapHeaders}
@@ -1827,6 +1843,22 @@ export function ImportFacilitiesSheet({ open, onOpenChange, onImported }: Import
                 </div>
               )}
             </div>
+          )}
+
+          {/* Whole-branch review, FINDING 2: step 2 with nothing on it. `columnMapPanelShown`
+              covers five distinct states with one gate — a JSONL release, an applied run, a run or a
+              summary that is not a column-map refusal, and the brief window while `File.text()` is
+              still resolving — and every one of them left this step a blank pane, most visibly for a
+              first, ordinary JSONL upload: Continue from Source landed on a step labelled Mapping
+              with nothing on it at all. Two messages, not five: JSONL has no column map to set at
+              all; every other case's map already went out with the upload and cannot be changed
+              from here now. */}
+          {step === 2 && !columnMapPanelShown && (
+            <p className="mx-6 mt-4 text-sm text-muted-foreground">
+              {format === 'jsonl'
+                ? t('facilities.import.columnMapNotApplicableJsonl')
+                : t('facilities.import.columnMapAlreadySent')}
+            </p>
           )}
 
           {step === 3 && reviewResult && !appliedSummary && (

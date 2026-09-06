@@ -35,8 +35,9 @@ Pré-visualizar, as três opções de reenvio, Cancelar e Fechar, fica no menu `
 
 Não pode clicar num passo que ainda não alcançou, nem voltar a um passo anterior enquanto uma
 verificação em segundo plano está a decorrer. Depois de carregar um ficheiro no Mapeamento, o
-assistente leva-o à Revisão sozinho assim que a verificação terminar. Se a verificação encontrar um
-problema no mapeamento de colunas, o assistente devolve-o ao Mapeamento e mostra os erros ali, para
+assistente leva-o à Revisão sozinho assim que o carregamento começa, antes de a verificação
+terminar. Se a verificação encontrar um problema no mapeamento de colunas, o assistente devolve-o
+ao Mapeamento e mostra os erros ali, para
 que possa corrigir o mapeamento no mesmo sítio.
 
 ## O que é um mapeamento de colunas

@@ -37,8 +37,9 @@ trois options de réenvoi, Annuler et Fermer, reste dans le menu `⋯` de la pag
 
 Vous ne pouvez pas cliquer sur une étape que vous n'avez pas encore atteinte, ni revenir à une
 étape antérieure pendant qu'une vérification en arrière-plan est en cours. Après un import de
-fichier à l'étape Correspondance, l'assistant vous amène tout seul à Révision une fois la
-vérification terminée. Si la vérification trouve un problème dans la correspondance de colonnes,
+fichier à l'étape Correspondance, l'assistant vous amène tout seul à Vérification dès que l'envoi
+démarre, avant même que le contrôle ne se termine. Si la vérification trouve un problème dans la
+correspondance de colonnes,
 l'assistant vous ramène à Correspondance et affiche les erreurs à cet endroit, pour que vous
 puissiez corriger la correspondance sur place.
 
